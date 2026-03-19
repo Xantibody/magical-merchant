@@ -41,6 +41,7 @@
           programs.nixfmt.enable = true;
           programs.rustfmt.enable = true;
           programs.taplo.enable = true;
+          programs.prettier.enable = true;
         };
       in
       {
@@ -50,6 +51,9 @@
           buildInputs = with pkgs; [
             rustToolchain
             just
+            nodejs_22
+            pnpm
+            cargo-tauri
           ];
         };
       }

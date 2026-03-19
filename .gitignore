@@ -21,3 +21,10 @@ target
 /target
 
 # .mcp.json
+
+# Node
+node_modules/
+dist/
+
+# Tauri
+tauri-app/src-tauri/gen/
