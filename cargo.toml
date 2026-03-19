@@ -1,0 +1,10 @@
+[lints.rust]
+unsafe_op_in_unsafe_fn = "warn"
+invalid_reference_casting = "deny"
+
+[lints.clippy]
+mod_module_files = "warn"
+excessive_precision = "warn"
+impl_trait_in_params = "warn"
+float_cmp = "warn"
+redundant_field_names = "warn"
