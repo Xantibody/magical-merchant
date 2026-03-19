@@ -28,12 +28,20 @@
         overlays = [ (import rust-overlay) ];
         pkgs = import nixpkgs {
           inherit system overlays;
+          config.allowUnfree = true;
+          config.android_sdk.accept_license = true;
         };
         rustToolchain = pkgs.rust-bin.stable.latest.default.override {
           extensions = [
             "rust-src"
             "clippy"
             "rust-analyzer"
+          ];
+          targets = [
+            "aarch64-linux-android"
+            "armv7-linux-androideabi"
+            "i686-linux-android"
+            "x86_64-linux-android"
           ];
         };
         treefmtEval = treefmt-nix.lib.evalModule pkgs {
@@ -43,6 +51,16 @@
           programs.taplo.enable = true;
           programs.prettier.enable = true;
         };
+        androidComposition = pkgs.androidenv.composeAndroidPackages {
+          platformVersions = [ "36" ];
+          buildToolsVersions = [ "36.0.0" ];
+          includeNDK = true;
+          ndkVersions = [ "29.0.14206865" ];
+          includeSources = false;
+          includeSystemImages = false;
+          includeEmulator = false;
+        };
+        androidSdk = androidComposition.androidsdk;
       in
       {
         formatter = treefmtEval.config.build.wrapper;
@@ -54,7 +72,27 @@
             nodejs_22
             pnpm
             cargo-tauri
+            jdk17
+            androidSdk
           ];
+          ANDROID_HOME = "${androidSdk}/libexec/android-sdk";
+          NDK_HOME = "${androidSdk}/libexec/android-sdk/ndk/29.0.14206865";
+          TAURI_ANDROID_PROJECT_PATH = "";
+          shellHook = ''
+            # Create a rustup shim that no-ops for tauri android init
+            mkdir -p "$PWD/.nix-shims"
+            cat > "$PWD/.nix-shims/rustup" << 'SHIM'
+            #!/usr/bin/env bash
+            # Nix manages Rust targets, so rustup calls are no-ops
+            if [[ "$1" == "target" && "$2" == "add" ]]; then
+              echo "info: target '$3' is already installed (managed by Nix)"
+              exit 0
+            fi
+            exec "$@"
+            SHIM
+            chmod +x "$PWD/.nix-shims/rustup"
+            export PATH="$PWD/.nix-shims:$PATH"
+          '';
         };
       }
     );

@@ -28,3 +28,6 @@ dist/
 
 # Tauri
 tauri-app/src-tauri/gen/
+
+# Nix shims
+.nix-shims/
