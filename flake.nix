@@ -53,7 +53,10 @@
         };
         androidComposition = pkgs.androidenv.composeAndroidPackages {
           platformVersions = [ "36" ];
-          buildToolsVersions = [ "36.0.0" ];
+          buildToolsVersions = [
+            "35.0.0"
+            "36.0.0"
+          ];
           includeNDK = true;
           ndkVersions = [ "29.0.14206865" ];
           includeSources = false;
@@ -77,7 +80,6 @@
           ];
           ANDROID_HOME = "${androidSdk}/libexec/android-sdk";
           NDK_HOME = "${androidSdk}/libexec/android-sdk/ndk/29.0.14206865";
-          TAURI_ANDROID_PROJECT_PATH = "";
           shellHook = ''
             # Create a rustup shim that no-ops for tauri android init
             mkdir -p "$PWD/.nix-shims"
