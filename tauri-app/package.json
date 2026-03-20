@@ -10,18 +10,26 @@
     "tauri": "tauri"
   },
   "dependencies": {
+    "@codemirror/lang-markdown": "^6.3.0",
+    "@codemirror/language": "^6.12.2",
+    "@lezer/highlight": "^1.2.3",
     "@tauri-apps/api": "^2",
     "@uiw/react-codemirror": "^4.23.0",
-    "@codemirror/lang-markdown": "^6.3.0",
     "lucide-react": "^0.460.0",
+    "markdown-it": "^14.1.1",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "shiki": "^4.0.2"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"]
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   },
   "devDependencies": {
+    "@tailwindcss/typography": "^0.5.19",
     "@tauri-apps/cli": "^2",
+    "@types/markdown-it": "^14.1.2",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.0",

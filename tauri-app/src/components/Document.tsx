@@ -1,37 +1,99 @@
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import CodeMirror from "@uiw/react-codemirror";
 import { markdown } from "@codemirror/lang-markdown";
-import { Save } from "lucide-react";
+import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
+import { tags } from "@lezer/highlight";
+import { Check } from "lucide-react";
+
+const markdownHighlight = syntaxHighlighting(
+  HighlightStyle.define([
+    { tag: tags.heading1, fontSize: "1.6em", fontWeight: "bold" },
+    { tag: tags.heading2, fontSize: "1.4em", fontWeight: "bold" },
+    { tag: tags.heading3, fontSize: "1.2em", fontWeight: "bold" },
+    { tag: tags.heading4, fontSize: "1.1em", fontWeight: "bold" },
+    { tag: tags.strong, fontWeight: "bold" },
+    { tag: tags.emphasis, fontStyle: "italic" },
+    { tag: tags.strikethrough, textDecoration: "line-through" },
+    {
+      tag: tags.monospace,
+      fontFamily: "monospace",
+      backgroundColor: "rgba(0,0,0,0.06)",
+      borderRadius: "3px",
+      padding: "0 3px",
+    },
+    { tag: tags.link, color: "#2563eb", textDecoration: "underline" },
+    { tag: tags.url, color: "#6b7280" },
+    { tag: tags.quote, color: "#6b7280", fontStyle: "italic" },
+  ]),
+);
 
 function Document() {
   const [body, setBody] = useState("");
   const [tagsInput, setTagsInput] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
+  const [draftPath, setDraftPath] = useState<string | null>(null);
+  const [status, setStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const handleSave = async () => {
-    const trimmedBody = body.trim();
-    if (!trimmedBody) return;
+  const parseTags = useCallback(
+    () =>
+      tagsInput
+        .split(",")
+        .map((t) => t.trim())
+        .filter((t) => t.length > 0),
+    [tagsInput],
+  );
 
-    const tags = tagsInput
-      .split(",")
-      .map((t) => t.trim())
-      .filter((t) => t.length > 0);
+  const autoSave = useCallback(
+    async (currentBody: string) => {
+      if (!currentBody.trim()) return;
+      const currentTags = parseTags();
+      setStatus("saving");
+      try {
+        if (draftPath) {
+          await invoke("update_draft", {
+            filePath: draftPath,
+            body: currentBody,
+            tags: currentTags,
+          });
+        } else {
+          const path = await invoke<string>("create_draft", {
+            body: currentBody,
+            tags: currentTags,
+          });
+          setDraftPath(path);
+        }
+        setStatus("saved");
+      } catch {
+        setStatus("idle");
+      }
+    },
+    [draftPath, parseTags],
+  );
 
-    setSaving(true);
-    setMessage("");
-    try {
-      await invoke("save_document", { body: trimmedBody, tags });
-      setBody("");
-      setTagsInput("");
-      setMessage("Saved!");
-      setTimeout(() => setMessage(""), 2000);
-    } catch (e) {
-      setMessage(`Error: ${e}`);
-    } finally {
-      setSaving(false);
-    }
+  useEffect(() => {
+    if (!body.trim()) return;
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => autoSave(body), 1000);
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [body, autoSave]);
+
+  useEffect(() => {
+    if (!tagsInput || !draftPath) return;
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => autoSave(body), 1000);
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [tagsInput, draftPath, body, autoSave]);
+
+  const handleDone = () => {
+    setBody("");
+    setTagsInput("");
+    setDraftPath(null);
+    setStatus("idle");
   };
 
   return (
@@ -47,21 +109,24 @@ function Document() {
         <CodeMirror
           value={body}
           height="100%"
-          extensions={[markdown()]}
+          extensions={[markdown(), markdownHighlight]}
           onChange={(value) => setBody(value)}
           placeholder="Write your note in Markdown..."
           className="h-full"
         />
       </div>
       <div className="flex items-center justify-between">
-        <span className="text-sm text-green-600">{message}</span>
+        <span className="text-sm text-gray-500">
+          {status === "saving" && "Saving..."}
+          {status === "saved" && "Saved"}
+        </span>
         <button
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg disabled:opacity-50"
-          onClick={handleSave}
-          disabled={saving || !body.trim()}
+          onClick={handleDone}
+          disabled={!draftPath}
         >
-          <Save size={16} />
-          Save
+          <Check size={16} />
+          Done
         </button>
       </div>
     </div>
