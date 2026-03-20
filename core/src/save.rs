@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::Path;
 
-use chrono::Local;
+use chrono::{Local, NaiveDate};
 
 use crate::error::CoreError;
 use crate::format::{format_note_markdown, format_timeline_line, DeviceContext};
@@ -54,6 +54,20 @@ pub fn save_note(
     let content = format_note_markdown(body, tags, now, context);
     fs::write(&file_path, content)?;
     Ok(())
+}
+
+pub fn read_timeline(base_dir: &Path, date: NaiveDate) -> Result<Vec<String>, CoreError> {
+    let file_path = timeline_file_path(base_dir, date);
+    if !file_path.exists() {
+        return Ok(Vec::new());
+    }
+    let content = fs::read_to_string(&file_path)?;
+    let lines = content
+        .lines()
+        .filter(|l| !l.is_empty())
+        .map(String::from)
+        .collect();
+    Ok(lines)
 }
 
 #[cfg(test)]
@@ -123,5 +137,26 @@ mod tests {
         let files: Vec<_> = fs::read_dir(&notes_dir).unwrap().collect();
         let content = fs::read_to_string(files[0].as_ref().unwrap().path()).unwrap();
         assert!(content.contains("tags: []"));
+    }
+
+    #[test]
+    fn test_read_timeline_empty() {
+        let tmp = TempDir::new().unwrap();
+        let today = Local::now().date_naive();
+        let lines = read_timeline(tmp.path(), today).unwrap();
+        assert!(lines.is_empty());
+    }
+
+    #[test]
+    fn test_read_timeline_returns_entries() {
+        let tmp = TempDir::new().unwrap();
+        save_timeline_entry(tmp.path(), "first", &mock_context()).unwrap();
+        save_timeline_entry(tmp.path(), "second", &mock_context()).unwrap();
+
+        let today = Local::now().date_naive();
+        let lines = read_timeline(tmp.path(), today).unwrap();
+        assert_eq!(lines.len(), 2);
+        assert!(lines[0].contains("first"));
+        assert!(lines[1].contains("second"));
     }
 }
