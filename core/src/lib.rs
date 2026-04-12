@@ -12,5 +12,7 @@ pub use path::{
     active_tasks_dir, done_tasks_dir, note_file_path, project_dir, project_file_path,
     projects_dir, timeline_file_path,
 };
-pub use project::{ProjectSummary, TaskSummary};
+pub use project::{
+    create_project, list_projects, read_project, ProjectSummary, TaskSummary,
+};
 pub use save::{read_timeline, save_note, save_timeline_entry};
