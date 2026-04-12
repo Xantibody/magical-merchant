@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use chrono::Local;
+use chrono::{DateTime, FixedOffset, Local, NaiveDate};
 use serde::Serialize;
 
 use crate::error::CoreError;
@@ -314,6 +314,56 @@ pub fn read_project(base_dir: &Path, slug: &str) -> Result<ProjectSummary, CoreE
     })
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct ProjectActivitySummary {
+    pub slug: String,
+    pub name: String,
+    pub completed_tasks: Vec<TaskSummary>,
+    pub active_task_count: usize,
+}
+
+pub fn get_project_activity_summary(
+    base_dir: &Path,
+    start: NaiveDate,
+    end: NaiveDate,
+) -> Result<Vec<ProjectActivitySummary>, CoreError> {
+    let projects = list_projects(base_dir)?;
+    let mut result = Vec::new();
+
+    for project in projects {
+        let done_tasks = list_done_tasks(base_dir, &project.slug)?;
+        let filtered: Vec<TaskSummary> = done_tasks
+            .into_iter()
+            .filter(|task| {
+                task.completed
+                    .as_ref()
+                    .and_then(|c| DateTime::parse_from_str(c, "%Y-%m-%dT%H:%M:%S%:z").ok())
+                    .or_else(|| {
+                        task.completed.as_ref().and_then(|c| {
+                            DateTime::<FixedOffset>::parse_from_rfc3339(c).ok()
+                        })
+                    })
+                    .map(|dt| {
+                        let date = dt.date_naive();
+                        date >= start && date <= end
+                    })
+                    .unwrap_or(false)
+            })
+            .collect();
+
+        if !filtered.is_empty() || project.active_task_count > 0 {
+            result.push(ProjectActivitySummary {
+                slug: project.slug,
+                name: project.name,
+                completed_tasks: filtered,
+                active_task_count: project.active_task_count,
+            });
+        }
+    }
+
+    Ok(result)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -524,5 +574,63 @@ mod tests {
 
         let summary = read_project(tmp.path(), "proj").unwrap();
         assert_eq!(summary.active_task_count, 1);
+    }
+
+    fn write_done_task(tmp: &TempDir, slug: &str, filename: &str, completed: &str) {
+        let done_dir = path::done_tasks_dir(tmp.path(), slug);
+        fs::write(
+            done_dir.join(filename),
+            format!("---\ntitle: \"Task\"\ncreated: \"2026-01-01T12:00:00+09:00\"\ncompleted: \"{completed}\"\ntags: []\n---\nbody"),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn test_activity_summary_date_filter() {
+        let tmp = TempDir::new().unwrap();
+        create_project(tmp.path(), "proj", "Proj", "Desc").unwrap();
+
+        write_done_task(&tmp, "proj", "20260101_120000.md", "2026-01-15T12:00:00+09:00");
+        write_done_task(&tmp, "proj", "20260201_120000.md", "2026-02-15T12:00:00+09:00");
+        write_done_task(&tmp, "proj", "20260301_120000.md", "2026-03-15T12:00:00+09:00");
+
+        let start = NaiveDate::from_ymd_opt(2026, 1, 1).unwrap();
+        let end = NaiveDate::from_ymd_opt(2026, 2, 28).unwrap();
+        let result = get_project_activity_summary(tmp.path(), start, end).unwrap();
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].completed_tasks.len(), 2);
+    }
+
+    #[test]
+    fn test_activity_summary_multiple_projects() {
+        let tmp = TempDir::new().unwrap();
+        create_project(tmp.path(), "alpha", "Alpha", "A").unwrap();
+        create_project(tmp.path(), "beta", "Beta", "B").unwrap();
+
+        write_done_task(&tmp, "alpha", "20260101_120000.md", "2026-01-15T12:00:00+09:00");
+        write_done_task(&tmp, "beta", "20260101_120000.md", "2026-01-20T12:00:00+09:00");
+
+        let start = NaiveDate::from_ymd_opt(2026, 1, 1).unwrap();
+        let end = NaiveDate::from_ymd_opt(2026, 1, 31).unwrap();
+        let result = get_project_activity_summary(tmp.path(), start, end).unwrap();
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].completed_tasks.len(), 1);
+        assert_eq!(result[1].completed_tasks.len(), 1);
+    }
+
+    #[test]
+    fn test_activity_summary_empty_result() {
+        let tmp = TempDir::new().unwrap();
+        create_project(tmp.path(), "proj", "Proj", "Desc").unwrap();
+
+        write_done_task(&tmp, "proj", "20260101_120000.md", "2026-01-15T12:00:00+09:00");
+
+        let start = NaiveDate::from_ymd_opt(2026, 6, 1).unwrap();
+        let end = NaiveDate::from_ymd_opt(2026, 6, 30).unwrap();
+        let result = get_project_activity_summary(tmp.path(), start, end).unwrap();
+
+        assert!(result.is_empty());
     }
 }
