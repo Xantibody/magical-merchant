@@ -36,9 +36,7 @@ fn is_valid_slug(slug: &str) -> bool {
 }
 
 fn format_project_md(name: &str, description: &str, created: &str) -> String {
-    format!(
-        "---\nname: \"{name}\"\ncreated: \"{created}\"\ndescription: \"{description}\"\n---\n"
-    )
+    format!("---\nname: \"{name}\"\ncreated: \"{created}\"\ndescription: \"{description}\"\n---\n")
 }
 
 fn parse_project_frontmatter(content: &str) -> (String, String, String) {
@@ -183,9 +181,7 @@ pub fn create_task(
 ) -> Result<PathBuf, CoreError> {
     let active_dir = path::active_tasks_dir(base_dir, project_slug);
     if !active_dir.exists() {
-        return Err(CoreError::NotFound(format!(
-            "project: {project_slug}"
-        )));
+        return Err(CoreError::NotFound(format!("project: {project_slug}")));
     }
 
     let now = Local::now();
@@ -230,18 +226,11 @@ pub fn list_active_tasks(
     list_tasks_in_dir(&path::active_tasks_dir(base_dir, project_slug))
 }
 
-pub fn list_done_tasks(
-    base_dir: &Path,
-    project_slug: &str,
-) -> Result<Vec<TaskSummary>, CoreError> {
+pub fn list_done_tasks(base_dir: &Path, project_slug: &str) -> Result<Vec<TaskSummary>, CoreError> {
     list_tasks_in_dir(&path::done_tasks_dir(base_dir, project_slug))
 }
 
-pub fn complete_task(
-    base_dir: &Path,
-    project_slug: &str,
-    filename: &str,
-) -> Result<(), CoreError> {
+pub fn complete_task(base_dir: &Path, project_slug: &str, filename: &str) -> Result<(), CoreError> {
     let active_path = path::active_tasks_dir(base_dir, project_slug).join(filename);
     if !active_path.exists() {
         return Err(CoreError::NotFound(format!(
@@ -339,9 +328,9 @@ pub fn get_project_activity_summary(
                     .as_ref()
                     .and_then(|c| DateTime::parse_from_str(c, "%Y-%m-%dT%H:%M:%S%:z").ok())
                     .or_else(|| {
-                        task.completed.as_ref().and_then(|c| {
-                            DateTime::<FixedOffset>::parse_from_rfc3339(c).ok()
-                        })
+                        task.completed
+                            .as_ref()
+                            .and_then(|c| DateTime::<FixedOffset>::parse_from_rfc3339(c).ok())
                     })
                     .map(|dt| {
                         let date = dt.date_naive();
@@ -394,8 +383,7 @@ mod tests {
         assert!(path::active_tasks_dir(tmp.path(), "my-proj").exists());
         assert!(path::done_tasks_dir(tmp.path(), "my-proj").exists());
 
-        let content =
-            fs::read_to_string(path::project_file_path(tmp.path(), "my-proj")).unwrap();
+        let content = fs::read_to_string(path::project_file_path(tmp.path(), "my-proj")).unwrap();
         assert!(content.contains("name: \"My Project\""));
         assert!(content.contains("description: \"A test project\""));
     }
@@ -550,7 +538,15 @@ mod tests {
         .unwrap();
 
         let new_tags = vec!["updated".to_string()];
-        update_task(tmp.path(), "proj", filename, "New Title", &new_tags, "new body").unwrap();
+        update_task(
+            tmp.path(),
+            "proj",
+            filename,
+            "New Title",
+            &new_tags,
+            "new body",
+        )
+        .unwrap();
 
         let content = fs::read_to_string(active_dir.join(filename)).unwrap();
         assert!(content.contains("title: \"New Title\""));
@@ -590,9 +586,24 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         create_project(tmp.path(), "proj", "Proj", "Desc").unwrap();
 
-        write_done_task(&tmp, "proj", "20260101_120000.md", "2026-01-15T12:00:00+09:00");
-        write_done_task(&tmp, "proj", "20260201_120000.md", "2026-02-15T12:00:00+09:00");
-        write_done_task(&tmp, "proj", "20260301_120000.md", "2026-03-15T12:00:00+09:00");
+        write_done_task(
+            &tmp,
+            "proj",
+            "20260101_120000.md",
+            "2026-01-15T12:00:00+09:00",
+        );
+        write_done_task(
+            &tmp,
+            "proj",
+            "20260201_120000.md",
+            "2026-02-15T12:00:00+09:00",
+        );
+        write_done_task(
+            &tmp,
+            "proj",
+            "20260301_120000.md",
+            "2026-03-15T12:00:00+09:00",
+        );
 
         let start = NaiveDate::from_ymd_opt(2026, 1, 1).unwrap();
         let end = NaiveDate::from_ymd_opt(2026, 2, 28).unwrap();
@@ -608,8 +619,18 @@ mod tests {
         create_project(tmp.path(), "alpha", "Alpha", "A").unwrap();
         create_project(tmp.path(), "beta", "Beta", "B").unwrap();
 
-        write_done_task(&tmp, "alpha", "20260101_120000.md", "2026-01-15T12:00:00+09:00");
-        write_done_task(&tmp, "beta", "20260101_120000.md", "2026-01-20T12:00:00+09:00");
+        write_done_task(
+            &tmp,
+            "alpha",
+            "20260101_120000.md",
+            "2026-01-15T12:00:00+09:00",
+        );
+        write_done_task(
+            &tmp,
+            "beta",
+            "20260101_120000.md",
+            "2026-01-20T12:00:00+09:00",
+        );
 
         let start = NaiveDate::from_ymd_opt(2026, 1, 1).unwrap();
         let end = NaiveDate::from_ymd_opt(2026, 1, 31).unwrap();
@@ -625,7 +646,12 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         create_project(tmp.path(), "proj", "Proj", "Desc").unwrap();
 
-        write_done_task(&tmp, "proj", "20260101_120000.md", "2026-01-15T12:00:00+09:00");
+        write_done_task(
+            &tmp,
+            "proj",
+            "20260101_120000.md",
+            "2026-01-15T12:00:00+09:00",
+        );
 
         let start = NaiveDate::from_ymd_opt(2026, 6, 1).unwrap();
         let end = NaiveDate::from_ymd_opt(2026, 6, 30).unwrap();

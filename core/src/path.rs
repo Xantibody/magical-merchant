@@ -78,10 +78,7 @@ mod tests {
     #[test]
     fn test_active_tasks_dir() {
         let path = active_tasks_dir(Path::new("/app"), "my-project");
-        assert_eq!(
-            path,
-            PathBuf::from("/app/data/projects/my-project/active")
-        );
+        assert_eq!(path, PathBuf::from("/app/data/projects/my-project/active"));
     }
 
     #[test]

@@ -58,9 +58,8 @@ fn create_project(
     description: String,
 ) -> Result<String, String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    let path =
-        magical_merchant_core::create_project(&base_dir, &slug, &name, &description)
-            .map_err(|e| e.to_string())?;
+    let path = magical_merchant_core::create_project(&base_dir, &slug, &name, &description)
+        .map_err(|e| e.to_string())?;
     Ok(path.to_string_lossy().to_string())
 }
 
@@ -79,38 +78,25 @@ fn create_task(
     body: String,
 ) -> Result<String, String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    let path =
-        magical_merchant_core::create_task(&base_dir, &project_slug, &title, &tags, &body)
-            .map_err(|e| e.to_string())?;
+    let path = magical_merchant_core::create_task(&base_dir, &project_slug, &title, &tags, &body)
+        .map_err(|e| e.to_string())?;
     Ok(path.to_string_lossy().to_string())
 }
 
 #[tauri::command]
-fn list_active_tasks(
-    handle: AppHandle,
-    project_slug: String,
-) -> Result<Vec<TaskSummary>, String> {
+fn list_active_tasks(handle: AppHandle, project_slug: String) -> Result<Vec<TaskSummary>, String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    magical_merchant_core::list_active_tasks(&base_dir, &project_slug)
-        .map_err(|e| e.to_string())
+    magical_merchant_core::list_active_tasks(&base_dir, &project_slug).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn list_done_tasks(
-    handle: AppHandle,
-    project_slug: String,
-) -> Result<Vec<TaskSummary>, String> {
+fn list_done_tasks(handle: AppHandle, project_slug: String) -> Result<Vec<TaskSummary>, String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    magical_merchant_core::list_done_tasks(&base_dir, &project_slug)
-        .map_err(|e| e.to_string())
+    magical_merchant_core::list_done_tasks(&base_dir, &project_slug).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn complete_task(
-    handle: AppHandle,
-    project_slug: String,
-    filename: String,
-) -> Result<(), String> {
+fn complete_task(handle: AppHandle, project_slug: String, filename: String) -> Result<(), String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
     magical_merchant_core::complete_task(&base_dir, &project_slug, &filename)
         .map_err(|e| e.to_string())

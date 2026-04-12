@@ -5,15 +5,18 @@ use clap::Parser;
 use rmcp::handler::server::tool::ToolRouter;
 use rmcp::handler::server::wrapper::{Json, Parameters};
 use rmcp::model::{
-    CallToolRequestParams, CallToolResult, ListToolsResult, PaginatedRequestParams, ServerInfo,
-    ServerCapabilities,
+    CallToolRequestParams, CallToolResult, ListToolsResult, PaginatedRequestParams,
+    ServerCapabilities, ServerInfo,
 };
 use rmcp::service::RequestContext;
 use rmcp::{schemars, tool, tool_router, ErrorData, RoleServer, ServerHandler, ServiceExt};
 use serde::{Deserialize, Serialize};
 
 #[derive(Parser)]
-#[command(name = "magical-merchant-mcp", about = "MCP server for magical-merchant")]
+#[command(
+    name = "magical-merchant-mcp",
+    about = "MCP server for magical-merchant"
+)]
 struct Cli {
     #[arg(long, env = "MAGICAL_MERCHANT_DATA_DIR")]
     data_dir: PathBuf,
@@ -129,9 +132,8 @@ impl McpServer {
         &self,
         Parameters(param): Parameters<ProjectSlugParam>,
     ) -> Json<TaskListOutput> {
-        let tasks =
-            magical_merchant_core::list_active_tasks(&self.data_dir, &param.project_slug)
-                .unwrap_or_default();
+        let tasks = magical_merchant_core::list_active_tasks(&self.data_dir, &param.project_slug)
+            .unwrap_or_default();
         Json(TaskListOutput {
             tasks: tasks.iter().map(task_to_info).collect(),
         })
