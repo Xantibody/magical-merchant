@@ -13,6 +13,7 @@ pub use path::{
     projects_dir, timeline_file_path,
 };
 pub use project::{
-    create_project, list_projects, read_project, ProjectSummary, TaskSummary,
+    complete_task, create_project, create_task, list_active_tasks, list_done_tasks, list_projects,
+    read_project, update_task, ProjectSummary, TaskSummary,
 };
 pub use save::{read_timeline, save_note, save_timeline_entry};

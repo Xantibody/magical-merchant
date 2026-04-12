@@ -109,6 +109,183 @@ pub fn list_projects(base_dir: &Path) -> Result<Vec<ProjectSummary>, CoreError> 
     Ok(projects)
 }
 
+fn format_task_md(title: &str, tags: &[String], created: &str, body: &str) -> String {
+    let tags_str = tags
+        .iter()
+        .map(|t| format!("\"{t}\""))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!("---\ntitle: \"{title}\"\ncreated: \"{created}\"\ntags: [{tags_str}]\n---\n{body}")
+}
+
+fn format_completed_task_md(
+    title: &str,
+    tags: &[String],
+    created: &str,
+    completed: &str,
+    body: &str,
+) -> String {
+    let tags_str = tags
+        .iter()
+        .map(|t| format!("\"{t}\""))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!("---\ntitle: \"{title}\"\ncreated: \"{created}\"\ncompleted: \"{completed}\"\ntags: [{tags_str}]\n---\n{body}")
+}
+
+fn parse_task_frontmatter(content: &str) -> TaskSummary {
+    let mut title = String::new();
+    let mut created = String::new();
+    let mut completed = None;
+    let mut tags = Vec::new();
+    let mut body = content.to_string();
+
+    if let Some(stripped) = content.strip_prefix("---\n") {
+        if let Some(end) = stripped.find("\n---\n") {
+            let frontmatter = &stripped[..end];
+            body = stripped[end + 5..].to_string();
+
+            for line in frontmatter.lines() {
+                if let Some(v) = line.strip_prefix("title: ") {
+                    title = v.trim_matches('"').to_string();
+                } else if let Some(v) = line.strip_prefix("created: ") {
+                    created = v.trim_matches('"').to_string();
+                } else if let Some(v) = line.strip_prefix("completed: ") {
+                    completed = Some(v.trim_matches('"').to_string());
+                } else if let Some(v) = line.strip_prefix("tags: [") {
+                    let v = v.trim_end_matches(']');
+                    tags = v
+                        .split(", ")
+                        .map(|s| s.trim_matches('"').to_string())
+                        .filter(|s| !s.is_empty())
+                        .collect();
+                }
+            }
+        }
+    }
+
+    TaskSummary {
+        filename: String::new(),
+        title,
+        created,
+        completed,
+        tags,
+        body,
+    }
+}
+
+pub fn create_task(
+    base_dir: &Path,
+    project_slug: &str,
+    title: &str,
+    tags: &[String],
+    body: &str,
+) -> Result<PathBuf, CoreError> {
+    let active_dir = path::active_tasks_dir(base_dir, project_slug);
+    if !active_dir.exists() {
+        return Err(CoreError::NotFound(format!(
+            "project: {project_slug}"
+        )));
+    }
+
+    let now = Local::now();
+    let filename = format!("{}.md", now.format("%Y%m%d_%H%M%S"));
+    let file_path = active_dir.join(&filename);
+    let created = now.format("%Y-%m-%dT%H:%M:%S%:z").to_string();
+    let content = format_task_md(title, tags, &created, body);
+    fs::write(&file_path, content)?;
+
+    Ok(file_path)
+}
+
+fn list_tasks_in_dir(dir: &Path) -> Result<Vec<TaskSummary>, CoreError> {
+    if !dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut entries: Vec<_> = fs::read_dir(dir)?
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "md"))
+        .collect();
+    entries.sort_by_key(|e| std::cmp::Reverse(e.file_name()));
+
+    let tasks = entries
+        .into_iter()
+        .map(|entry| {
+            let filename = entry.file_name().to_string_lossy().to_string();
+            let content = fs::read_to_string(entry.path()).unwrap_or_default();
+            let mut task = parse_task_frontmatter(&content);
+            task.filename = filename;
+            task
+        })
+        .collect();
+
+    Ok(tasks)
+}
+
+pub fn list_active_tasks(
+    base_dir: &Path,
+    project_slug: &str,
+) -> Result<Vec<TaskSummary>, CoreError> {
+    list_tasks_in_dir(&path::active_tasks_dir(base_dir, project_slug))
+}
+
+pub fn list_done_tasks(
+    base_dir: &Path,
+    project_slug: &str,
+) -> Result<Vec<TaskSummary>, CoreError> {
+    list_tasks_in_dir(&path::done_tasks_dir(base_dir, project_slug))
+}
+
+pub fn complete_task(
+    base_dir: &Path,
+    project_slug: &str,
+    filename: &str,
+) -> Result<(), CoreError> {
+    let active_path = path::active_tasks_dir(base_dir, project_slug).join(filename);
+    if !active_path.exists() {
+        return Err(CoreError::NotFound(format!(
+            "task: {project_slug}/{filename}"
+        )));
+    }
+
+    let content = fs::read_to_string(&active_path)?;
+    let task = parse_task_frontmatter(&content);
+
+    let now = Local::now().format("%Y-%m-%dT%H:%M:%S%:z").to_string();
+    let new_content =
+        format_completed_task_md(&task.title, &task.tags, &task.created, &now, &task.body);
+
+    let done_path = path::done_tasks_dir(base_dir, project_slug).join(filename);
+    fs::write(&done_path, new_content)?;
+    fs::remove_file(&active_path)?;
+
+    Ok(())
+}
+
+pub fn update_task(
+    base_dir: &Path,
+    project_slug: &str,
+    filename: &str,
+    title: &str,
+    tags: &[String],
+    body: &str,
+) -> Result<(), CoreError> {
+    let active_path = path::active_tasks_dir(base_dir, project_slug).join(filename);
+    if !active_path.exists() {
+        return Err(CoreError::NotFound(format!(
+            "task: {project_slug}/{filename}"
+        )));
+    }
+
+    let content = fs::read_to_string(&active_path)?;
+    let task = parse_task_frontmatter(&content);
+    let new_content = format_task_md(title, tags, &task.created, body);
+    fs::write(&active_path, new_content)?;
+
+    Ok(())
+}
+
 pub fn read_project(base_dir: &Path, slug: &str) -> Result<ProjectSummary, CoreError> {
     let file_path = path::project_file_path(base_dir, slug);
     if !file_path.exists() {
@@ -216,5 +393,136 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let result = read_project(tmp.path(), "nonexistent");
         assert!(matches!(result, Err(CoreError::NotFound(_))));
+    }
+
+    #[test]
+    fn test_create_task() {
+        let tmp = TempDir::new().unwrap();
+        create_project(tmp.path(), "proj", "Proj", "Desc").unwrap();
+
+        let tags = vec!["rust".to_string(), "test".to_string()];
+        let path = create_task(tmp.path(), "proj", "My Task", &tags, "Task body").unwrap();
+        assert!(path.exists());
+
+        let content = fs::read_to_string(&path).unwrap();
+        assert!(content.contains("title: \"My Task\""));
+        assert!(content.contains("tags: [\"rust\", \"test\"]"));
+        assert!(content.contains("Task body"));
+    }
+
+    #[test]
+    fn test_create_task_nonexistent_project() {
+        let tmp = TempDir::new().unwrap();
+        let result = create_task(tmp.path(), "nonexistent", "Task", &[], "body");
+        assert!(matches!(result, Err(CoreError::NotFound(_))));
+    }
+
+    #[test]
+    fn test_list_active_tasks_empty() {
+        let tmp = TempDir::new().unwrap();
+        create_project(tmp.path(), "proj", "Proj", "Desc").unwrap();
+        let tasks = list_active_tasks(tmp.path(), "proj").unwrap();
+        assert!(tasks.is_empty());
+    }
+
+    #[test]
+    fn test_list_active_tasks_multiple() {
+        let tmp = TempDir::new().unwrap();
+        create_project(tmp.path(), "proj", "Proj", "Desc").unwrap();
+
+        // Create tasks with different filenames by writing directly
+        let active_dir = path::active_tasks_dir(tmp.path(), "proj");
+        fs::write(
+            active_dir.join("20260101_120000.md"),
+            "---\ntitle: \"First\"\ncreated: \"2026-01-01\"\ntags: []\n---\nbody1",
+        )
+        .unwrap();
+        fs::write(
+            active_dir.join("20260102_120000.md"),
+            "---\ntitle: \"Second\"\ncreated: \"2026-01-02\"\ntags: []\n---\nbody2",
+        )
+        .unwrap();
+
+        let tasks = list_active_tasks(tmp.path(), "proj").unwrap();
+        assert_eq!(tasks.len(), 2);
+        // Reverse sorted, so newer first
+        assert_eq!(tasks[0].title, "Second");
+        assert_eq!(tasks[1].title, "First");
+    }
+
+    #[test]
+    fn test_complete_task() {
+        let tmp = TempDir::new().unwrap();
+        create_project(tmp.path(), "proj", "Proj", "Desc").unwrap();
+
+        let active_dir = path::active_tasks_dir(tmp.path(), "proj");
+        let filename = "20260101_120000.md";
+        fs::write(
+            active_dir.join(filename),
+            "---\ntitle: \"Task\"\ncreated: \"2026-01-01T12:00:00+09:00\"\ntags: [\"a\"]\n---\nbody",
+        )
+        .unwrap();
+
+        complete_task(tmp.path(), "proj", filename).unwrap();
+
+        // Active file should be gone
+        assert!(!active_dir.join(filename).exists());
+
+        // Done file should exist with completed field
+        let done_path = path::done_tasks_dir(tmp.path(), "proj").join(filename);
+        assert!(done_path.exists());
+        let content = fs::read_to_string(&done_path).unwrap();
+        assert!(content.contains("completed: \""));
+        assert!(content.contains("title: \"Task\""));
+        assert!(content.contains("tags: [\"a\"]"));
+        assert!(content.contains("body"));
+    }
+
+    #[test]
+    fn test_complete_task_not_found() {
+        let tmp = TempDir::new().unwrap();
+        create_project(tmp.path(), "proj", "Proj", "Desc").unwrap();
+        let result = complete_task(tmp.path(), "proj", "nonexistent.md");
+        assert!(matches!(result, Err(CoreError::NotFound(_))));
+    }
+
+    #[test]
+    fn test_update_task() {
+        let tmp = TempDir::new().unwrap();
+        create_project(tmp.path(), "proj", "Proj", "Desc").unwrap();
+
+        let active_dir = path::active_tasks_dir(tmp.path(), "proj");
+        let filename = "20260101_120000.md";
+        fs::write(
+            active_dir.join(filename),
+            "---\ntitle: \"Old\"\ncreated: \"2026-01-01T12:00:00+09:00\"\ntags: []\n---\nold body",
+        )
+        .unwrap();
+
+        let new_tags = vec!["updated".to_string()];
+        update_task(tmp.path(), "proj", filename, "New Title", &new_tags, "new body").unwrap();
+
+        let content = fs::read_to_string(active_dir.join(filename)).unwrap();
+        assert!(content.contains("title: \"New Title\""));
+        assert!(content.contains("tags: [\"updated\"]"));
+        assert!(content.contains("new body"));
+        // Preserve original created timestamp
+        assert!(content.contains("created: \"2026-01-01T12:00:00+09:00\""));
+    }
+
+    #[test]
+    fn test_read_project_with_active_tasks() {
+        let tmp = TempDir::new().unwrap();
+        create_project(tmp.path(), "proj", "Proj", "Desc").unwrap();
+
+        let active_dir = path::active_tasks_dir(tmp.path(), "proj");
+        fs::write(
+            active_dir.join("20260101_120000.md"),
+            "---\ntitle: \"T\"\ncreated: \"2026\"\ntags: []\n---\n",
+        )
+        .unwrap();
+
+        let summary = read_project(tmp.path(), "proj").unwrap();
+        assert_eq!(summary.active_task_count, 1);
     }
 }
