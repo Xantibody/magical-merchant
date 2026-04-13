@@ -99,8 +99,8 @@ fn task_to_info(t: &magical_merchant_core::TaskSummary) -> TaskInfo {
     TaskInfo {
         filename: t.filename.clone(),
         title: t.title.clone(),
-        created: t.created.clone(),
-        completed: t.completed.clone(),
+        created: t.created.to_rfc3339(),
+        completed: t.completed.map(|dt| dt.to_rfc3339()),
         tags: t.tags.clone(),
         body: t.body.clone(),
     }
