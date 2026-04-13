@@ -1,11 +1,12 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use chrono::Local;
+use chrono::{DateTime, FixedOffset, Local};
 use serde::Serialize;
 
 use crate::error::CoreError;
 use crate::format::{format_note_markdown, DeviceContext};
+use crate::frontmatter::{self, NoteFrontmatter};
 use crate::path::note_file_path;
 
 fn ensure_dir(path: &Path) -> Result<(), CoreError> {
@@ -25,7 +26,7 @@ pub fn create_draft_note(
     let file_path = note_file_path(base_dir, now);
     ensure_dir(&file_path)?;
 
-    let content = format_note_markdown(body, tags, now, context);
+    let content = format_note_markdown(body, tags, now, context)?;
     fs::write(&file_path, content)?;
     Ok(file_path)
 }
@@ -37,7 +38,7 @@ pub fn update_note(
     context: &DeviceContext,
 ) -> Result<(), CoreError> {
     let now = Local::now();
-    let content = format_note_markdown(body, tags, now, context);
+    let content = format_note_markdown(body, tags, now, context)?;
     fs::write(file_path, content)?;
     Ok(())
 }
@@ -46,7 +47,7 @@ pub fn update_note(
 pub struct NoteSummary {
     pub path: PathBuf,
     pub filename: String,
-    pub time: Option<String>,
+    pub time: Option<DateTime<FixedOffset>>,
     pub tags: Vec<String>,
     pub preview: String,
 }
@@ -70,7 +71,7 @@ pub fn list_notes(base_dir: &Path) -> Result<Vec<NoteSummary>, CoreError> {
             let path = entry.path();
             let filename = entry.file_name().to_string_lossy().to_string();
             let content = fs::read_to_string(&path).unwrap_or_default();
-            let (time, tags, preview) = parse_frontmatter(&content);
+            let (time, tags, preview) = parse_note_content(&content);
             NoteSummary {
                 path,
                 filename,
@@ -88,33 +89,17 @@ pub fn read_note(file_path: &Path) -> Result<String, CoreError> {
     Ok(fs::read_to_string(file_path)?)
 }
 
-fn parse_frontmatter(content: &str) -> (Option<String>, Vec<String>, String) {
-    let mut time = None;
-    let mut tags = Vec::new();
-    let mut body = content;
-
-    if let Some(stripped) = content.strip_prefix("---\n") {
-        if let Some(end) = stripped.find("\n---\n") {
-            let frontmatter = &stripped[..end];
-            body = &stripped[end + 5..];
-
-            for line in frontmatter.lines() {
-                if let Some(t) = line.strip_prefix("time: ") {
-                    time = Some(t.trim_matches('"').to_string());
-                } else if let Some(t) = line.strip_prefix("tags: [") {
-                    let t = t.trim_end_matches(']');
-                    tags = t
-                        .split(", ")
-                        .map(|s| s.trim_matches('"').to_string())
-                        .filter(|s| !s.is_empty())
-                        .collect();
-                }
-            }
+fn parse_note_content(content: &str) -> (Option<DateTime<FixedOffset>>, Vec<String>, String) {
+    match frontmatter::parse::<NoteFrontmatter>(content) {
+        Ok((fm, body)) => {
+            let preview: String = body.chars().take(100).collect();
+            (Some(fm.time), fm.tags, preview)
+        }
+        Err(_) => {
+            let preview: String = content.chars().take(100).collect();
+            (None, Vec::new(), preview)
         }
     }
-
-    let preview: String = body.chars().take(100).collect();
-    (time, tags, preview)
 }
 
 #[cfg(test)]
@@ -188,10 +173,22 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_frontmatter() {
-        let content = "---\ntime: \"2026-03-20T14:30:45+09:00\"\ntags: [\"a\", \"b\"]\ncontext:\n  battery: 50\n  is_charging: false\n---\n# Title\nBody";
-        let (time, tags, preview) = parse_frontmatter(content);
-        assert_eq!(time.unwrap(), "2026-03-20T14:30:45+09:00");
+    fn test_parse_note_content() {
+        use chrono::TimeZone;
+        let fm = NoteFrontmatter {
+            time: FixedOffset::east_opt(9 * 3600)
+                .unwrap()
+                .with_ymd_and_hms(2026, 3, 20, 14, 30, 45)
+                .unwrap(),
+            tags: vec!["a".to_string(), "b".to_string()],
+            context: Some(crate::frontmatter::ContextMeta {
+                battery: 50,
+                is_charging: false,
+            }),
+        };
+        let content = frontmatter::render(&fm, "# Title\nBody").unwrap();
+        let (time, tags, preview) = parse_note_content(&content);
+        assert!(time.is_some());
         assert_eq!(tags, vec!["a", "b"]);
         assert!(preview.contains("# Title"));
     }

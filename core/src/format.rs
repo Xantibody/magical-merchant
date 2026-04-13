@@ -1,5 +1,8 @@
-use chrono::{DateTime, Local};
+use chrono::{DateTime, FixedOffset, Local};
 use serde::Serialize;
+
+use crate::error::CoreError;
+use crate::frontmatter::{self, ContextMeta, NoteFrontmatter};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct DeviceContext {
@@ -34,23 +37,23 @@ pub fn format_note_markdown(
     tags: &[String],
     timestamp: DateTime<Local>,
     context: &DeviceContext,
-) -> String {
-    let time_str = timestamp.format("%Y-%m-%dT%H:%M:%S%:z").to_string();
-    let tags_str = tags
-        .iter()
-        .map(|t| format!("\"{t}\""))
-        .collect::<Vec<_>>()
-        .join(", ");
-    format!(
-        "---\ntime: \"{time_str}\"\ntags: [{tags_str}]\ncontext:\n  battery: {battery}\n  is_charging: {is_charging}\n---\n{body}",
-        battery = context.battery,
-        is_charging = context.is_charging,
-    )
+) -> Result<String, CoreError> {
+    let time: DateTime<FixedOffset> = timestamp.into();
+    let fm = NoteFrontmatter {
+        time,
+        tags: tags.to_vec(),
+        context: Some(ContextMeta {
+            battery: context.battery,
+            is_charging: context.is_charging,
+        }),
+    };
+    frontmatter::render(&fm, body)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::frontmatter::NoteFrontmatter;
     use chrono::TimeZone;
 
     fn fixed_timestamp() -> DateTime<Local> {
@@ -90,20 +93,24 @@ mod tests {
     fn test_format_note_markdown() {
         let tags = vec!["rust".to_string(), "memo".to_string()];
         let result =
-            format_note_markdown("# Hello\nWorld", &tags, fixed_timestamp(), &test_context());
+            format_note_markdown("# Hello\nWorld", &tags, fixed_timestamp(), &test_context())
+                .unwrap();
 
-        assert!(result.starts_with("---\n"));
-        assert!(result.contains("time: \"2026-03-20T14:30:45"));
-        assert!(result.contains("tags: [\"rust\", \"memo\"]"));
-        assert!(result.contains("battery: 82"));
-        assert!(result.contains("is_charging: false"));
-        assert!(result.ends_with("---\n# Hello\nWorld"));
+        let (fm, body): (NoteFrontmatter, String) = frontmatter::parse(&result).unwrap();
+        assert_eq!(fm.tags, vec!["rust", "memo"]);
+        assert!(fm.context.is_some());
+        let ctx = fm.context.unwrap();
+        assert_eq!(ctx.battery, 82);
+        assert!(!ctx.is_charging);
+        assert_eq!(body, "# Hello\nWorld");
     }
 
     #[test]
     fn test_format_note_markdown_empty_tags() {
-        let result = format_note_markdown("body", &[], fixed_timestamp(), &test_context());
-        assert!(result.contains("tags: []"));
+        let result =
+            format_note_markdown("body", &[], fixed_timestamp(), &test_context()).unwrap();
+        let (fm, _body): (NoteFrontmatter, String) = frontmatter::parse(&result).unwrap();
+        assert!(fm.tags.is_empty());
     }
 
     #[test]
@@ -112,8 +119,10 @@ mod tests {
             battery: 100,
             is_charging: true,
         };
-        let result = format_note_markdown("body", &[], fixed_timestamp(), &ctx);
-        assert!(result.contains("battery: 100"));
-        assert!(result.contains("is_charging: true"));
+        let result = format_note_markdown("body", &[], fixed_timestamp(), &ctx).unwrap();
+        let (fm, _body): (NoteFrontmatter, String) = frontmatter::parse(&result).unwrap();
+        let context = fm.context.unwrap();
+        assert_eq!(context.battery, 100);
+        assert!(context.is_charging);
     }
 }
