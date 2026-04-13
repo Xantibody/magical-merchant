@@ -36,6 +36,17 @@ fn is_valid_slug(slug: &str) -> bool {
         && !slug.ends_with('-')
 }
 
+fn validate_filename(filename: &str) -> Result<(), CoreError> {
+    if filename.contains('/')
+        || filename.contains('\\')
+        || filename.contains('\0')
+        || filename.contains("..")
+    {
+        return Err(CoreError::PathTraversal(filename.to_string()));
+    }
+    Ok(())
+}
+
 pub fn create_project(
     base_dir: &Path,
     slug: &str,
@@ -44,6 +55,11 @@ pub fn create_project(
 ) -> Result<PathBuf, CoreError> {
     if !is_valid_slug(slug) {
         return Err(CoreError::InvalidSlug(slug.to_string()));
+    }
+
+    let file_path = path::project_file_path(base_dir, slug);
+    if file_path.exists() {
+        return Err(CoreError::AlreadyExists(format!("project: {slug}")));
     }
 
     let proj_dir = path::project_dir(base_dir, slug);
@@ -99,7 +115,7 @@ pub fn create_task(
     }
 
     let now: DateTime<FixedOffset> = Local::now().into();
-    let filename = format!("{}.md", now.format("%Y%m%d_%H%M%S"));
+    let filename = format!("{}.md", now.format("%Y%m%d_%H%M%S_%3f"));
     let file_path = active_dir.join(&filename);
     let fm = TaskFrontmatter {
         title: title.to_string(),
@@ -152,14 +168,23 @@ pub fn list_active_tasks(
     base_dir: &Path,
     project_slug: &str,
 ) -> Result<Vec<TaskSummary>, CoreError> {
+    let project_file = path::project_file_path(base_dir, project_slug);
+    if !project_file.exists() {
+        return Err(CoreError::NotFound(format!("project: {project_slug}")));
+    }
     list_tasks_in_dir(&path::active_tasks_dir(base_dir, project_slug))
 }
 
 pub fn list_done_tasks(base_dir: &Path, project_slug: &str) -> Result<Vec<TaskSummary>, CoreError> {
+    let project_file = path::project_file_path(base_dir, project_slug);
+    if !project_file.exists() {
+        return Err(CoreError::NotFound(format!("project: {project_slug}")));
+    }
     list_tasks_in_dir(&path::done_tasks_dir(base_dir, project_slug))
 }
 
 pub fn complete_task(base_dir: &Path, project_slug: &str, filename: &str) -> Result<(), CoreError> {
+    validate_filename(filename)?;
     let active_path = path::active_tasks_dir(base_dir, project_slug).join(filename);
     if !active_path.exists() {
         return Err(CoreError::NotFound(format!(
@@ -194,6 +219,7 @@ pub fn update_task(
     tags: &[String],
     body: &str,
 ) -> Result<(), CoreError> {
+    validate_filename(filename)?;
     let active_path = path::active_tasks_dir(base_dir, project_slug).join(filename);
     if !active_path.exists() {
         return Err(CoreError::NotFound(format!(
@@ -673,5 +699,43 @@ mod tests {
         let result = get_project_activity_summary(tmp.path(), start, end).unwrap();
 
         assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_create_project_already_exists() {
+        let tmp = TempDir::new().unwrap();
+        create_project(tmp.path(), "proj", "Proj", "Desc").unwrap();
+        let result = create_project(tmp.path(), "proj", "Proj2", "Desc2");
+        assert!(matches!(result, Err(CoreError::AlreadyExists(_))));
+    }
+
+    #[test]
+    fn test_complete_task_path_traversal() {
+        let tmp = TempDir::new().unwrap();
+        create_project(tmp.path(), "proj", "Proj", "Desc").unwrap();
+        let result = complete_task(tmp.path(), "proj", "../../../etc/passwd");
+        assert!(matches!(result, Err(CoreError::PathTraversal(_))));
+    }
+
+    #[test]
+    fn test_update_task_path_traversal() {
+        let tmp = TempDir::new().unwrap();
+        create_project(tmp.path(), "proj", "Proj", "Desc").unwrap();
+        let result = update_task(tmp.path(), "proj", "../evil.md", "T", &[], "b");
+        assert!(matches!(result, Err(CoreError::PathTraversal(_))));
+    }
+
+    #[test]
+    fn test_list_active_tasks_nonexistent_project() {
+        let tmp = TempDir::new().unwrap();
+        let result = list_active_tasks(tmp.path(), "nonexistent");
+        assert!(matches!(result, Err(CoreError::NotFound(_))));
+    }
+
+    #[test]
+    fn test_list_done_tasks_nonexistent_project() {
+        let tmp = TempDir::new().unwrap();
+        let result = list_done_tasks(tmp.path(), "nonexistent");
+        assert!(matches!(result, Err(CoreError::NotFound(_))));
     }
 }
