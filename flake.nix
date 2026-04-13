@@ -69,17 +69,26 @@
         formatter = treefmtEval.config.build.wrapper;
         checks.formatting = treefmtEval.config.build.check;
         devShells.default = pkgs.mkShell {
-          buildInputs = with pkgs; [
-            rustToolchain
-            just
-            nodejs_22
-            pnpm
-            cargo-tauri
-            jdk17
-            androidSdk
-            oxlint
-            typescript-go
-          ];
+          buildInputs =
+            with pkgs;
+            [
+              rustToolchain
+              just
+              nodejs_22
+              pnpm
+              cargo-tauri
+              jdk17
+              androidSdk
+              oxlint
+              typescript-go
+            ]
+            ++ lib.optionals stdenv.isLinux [
+              webkitgtk_4_1.dev
+              libappindicator-gtk3.dev
+              librsvg.dev
+              patchelf
+              pkg-config
+            ];
           ANDROID_HOME = "${androidSdk}/libexec/android-sdk";
           NDK_HOME = "${androidSdk}/libexec/android-sdk/ndk/29.0.14206865";
           shellHook = ''

@@ -12,11 +12,6 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: nixbuild/nix-quick-install-action@v34
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev \
-            libappindicator3-dev librsvg2-dev patchelf
       - run: nix develop --command just check
       - run: nix fmt -- --fail-on-change
     timeout-minutes: 15
@@ -26,10 +21,5 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: nixbuild/nix-quick-install-action@v34
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev \
-            libappindicator3-dev librsvg2-dev patchelf
       - run: nix develop --command just test
     timeout-minutes: 15
