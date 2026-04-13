@@ -1,0 +1,11 @@
+set working-directory := ".."
+
+[private]
+default:
+  @just --list
+
+check:
+  cargo clippy --workspace -- -D warnings
+
+test:
+  cargo test --workspace
