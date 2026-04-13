@@ -78,6 +78,7 @@
             jdk17
             androidSdk
             oxlint
+            typescript-go
           ];
           ANDROID_HOME = "${androidSdk}/libexec/android-sdk";
           NDK_HOME = "${androidSdk}/libexec/android-sdk/ndk/29.0.14206865";

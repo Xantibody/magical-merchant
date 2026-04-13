@@ -1,0 +1,26 @@
+[private]
+default:
+  @just --list
+
+[private]
+setup:
+  pnpm install
+
+assets: setup
+  pnpm run build
+
+check: setup
+  oxlint src/
+  tsgo -b --noEmit
+
+dev:
+  pnpm tauri dev
+
+android-init:
+  pnpm tauri android init
+
+android-dev:
+  pnpm tauri android dev
+
+android-build:
+  pnpm tauri android build
