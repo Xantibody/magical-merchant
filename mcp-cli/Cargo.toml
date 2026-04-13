@@ -4,6 +4,14 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+magical-merchant-core = { path = "../core" }
+rmcp = { version = "1", features = ["server", "macros", "transport-io", "schemars"] }
+schemars = "0.8"
+serde = { version = "1", features = ["derive"] }
+chrono = { version = "0.4", features = ["serde"] }
+tokio = { version = "1", features = ["full"] }
+clap = { version = "4", features = ["derive", "env"] }
+anyhow = "1"
 
 [lints]
 workspace = true

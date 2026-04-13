@@ -1,4 +1,4 @@
-use magical_merchant_core::{DeviceContext, NoteSummary};
+use magical_merchant_core::{DeviceContext, NoteSummary, ProjectSummary, TaskSummary};
 use tauri::{AppHandle, Manager};
 
 #[tauri::command]
@@ -50,6 +50,72 @@ fn read_timeline(handle: AppHandle) -> Result<Vec<String>, String> {
     magical_merchant_core::read_timeline(&base_dir, today).map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn create_project(
+    handle: AppHandle,
+    slug: String,
+    name: String,
+    description: String,
+) -> Result<String, String> {
+    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let path = magical_merchant_core::create_project(&base_dir, &slug, &name, &description)
+        .map_err(|e| e.to_string())?;
+    Ok(path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+fn list_projects(handle: AppHandle) -> Result<Vec<ProjectSummary>, String> {
+    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    magical_merchant_core::list_projects(&base_dir).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn create_task(
+    handle: AppHandle,
+    project_slug: String,
+    title: String,
+    tags: Vec<String>,
+    body: String,
+) -> Result<String, String> {
+    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let path = magical_merchant_core::create_task(&base_dir, &project_slug, &title, &tags, &body)
+        .map_err(|e| e.to_string())?;
+    Ok(path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+fn list_active_tasks(handle: AppHandle, project_slug: String) -> Result<Vec<TaskSummary>, String> {
+    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    magical_merchant_core::list_active_tasks(&base_dir, &project_slug).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn list_done_tasks(handle: AppHandle, project_slug: String) -> Result<Vec<TaskSummary>, String> {
+    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    magical_merchant_core::list_done_tasks(&base_dir, &project_slug).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn complete_task(handle: AppHandle, project_slug: String, filename: String) -> Result<(), String> {
+    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    magical_merchant_core::complete_task(&base_dir, &project_slug, &filename)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn update_task(
+    handle: AppHandle,
+    project_slug: String,
+    filename: String,
+    title: String,
+    tags: Vec<String>,
+    body: String,
+) -> Result<(), String> {
+    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    magical_merchant_core::update_task(&base_dir, &project_slug, &filename, &title, &tags, &body)
+        .map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -61,6 +127,13 @@ pub fn run() {
             list_notes,
             read_note,
             read_timeline,
+            create_project,
+            list_projects,
+            create_task,
+            list_active_tasks,
+            list_done_tasks,
+            complete_task,
+            update_task,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

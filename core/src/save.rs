@@ -51,7 +51,7 @@ pub fn save_note(
     let file_path = note_file_path(base_dir, now);
     ensure_dir(&file_path)?;
 
-    let content = format_note_markdown(body, tags, now, context);
+    let content = format_note_markdown(body, tags, now, context)?;
     fs::write(&file_path, content)?;
     Ok(())
 }
@@ -124,8 +124,10 @@ mod tests {
 
         let content = fs::read_to_string(files[0].as_ref().unwrap().path()).unwrap();
         assert!(content.contains("---"));
-        assert!(content.contains("tags: [\"test\"]"));
-        assert!(content.contains("# Title\nBody"));
+        let (fm, body): (crate::frontmatter::NoteFrontmatter, String) =
+            crate::frontmatter::parse(&content).unwrap();
+        assert_eq!(fm.tags, vec!["test"]);
+        assert_eq!(body, "# Title\nBody");
     }
 
     #[test]
@@ -136,7 +138,9 @@ mod tests {
         let notes_dir = tmp.path().join("data/notes");
         let files: Vec<_> = fs::read_dir(&notes_dir).unwrap().collect();
         let content = fs::read_to_string(files[0].as_ref().unwrap().path()).unwrap();
-        assert!(content.contains("tags: []"));
+        let (fm, _body): (crate::frontmatter::NoteFrontmatter, String) =
+            crate::frontmatter::parse(&content).unwrap();
+        assert!(fm.tags.is_empty());
     }
 
     #[test]
