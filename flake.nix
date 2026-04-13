@@ -49,7 +49,7 @@
           programs.nixfmt.enable = true;
           programs.rustfmt.enable = true;
           programs.taplo.enable = true;
-          programs.prettier.enable = true;
+          programs.oxfmt.enable = true;
         };
         androidComposition = pkgs.androidenv.composeAndroidPackages {
           platformVersions = [ "36" ];
@@ -77,6 +77,7 @@
             cargo-tauri
             jdk17
             androidSdk
+            oxlint
           ];
           ANDROID_HOME = "${androidSdk}/libexec/android-sdk";
           NDK_HOME = "${androidSdk}/libexec/android-sdk/ndk/29.0.14206865";
