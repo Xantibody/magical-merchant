@@ -5,13 +5,14 @@ use chrono::{DateTime, FixedOffset, Local, NaiveDate};
 use serde::Serialize;
 
 use crate::error::CoreError;
+use crate::frontmatter::{self, ProjectFrontmatter, TaskFrontmatter};
 use crate::path;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ProjectSummary {
     pub slug: String,
     pub name: String,
-    pub created: String,
+    pub created: DateTime<FixedOffset>,
     pub description: String,
     pub active_task_count: usize,
 }
@@ -20,8 +21,8 @@ pub struct ProjectSummary {
 pub struct TaskSummary {
     pub filename: String,
     pub title: String,
-    pub created: String,
-    pub completed: Option<String>,
+    pub created: DateTime<FixedOffset>,
+    pub completed: Option<DateTime<FixedOffset>>,
     pub tags: Vec<String>,
     pub body: String,
 }
@@ -33,33 +34,6 @@ fn is_valid_slug(slug: &str) -> bool {
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
         && !slug.starts_with('-')
         && !slug.ends_with('-')
-}
-
-fn format_project_md(name: &str, description: &str, created: &str) -> String {
-    format!("---\nname: \"{name}\"\ncreated: \"{created}\"\ndescription: \"{description}\"\n---\n")
-}
-
-fn parse_project_frontmatter(content: &str) -> (String, String, String) {
-    let mut name = String::new();
-    let mut created = String::new();
-    let mut description = String::new();
-
-    if let Some(stripped) = content.strip_prefix("---\n") {
-        if let Some(end) = stripped.find("\n---") {
-            let frontmatter = &stripped[..end];
-            for line in frontmatter.lines() {
-                if let Some(v) = line.strip_prefix("name: ") {
-                    name = v.trim_matches('"').to_string();
-                } else if let Some(v) = line.strip_prefix("created: ") {
-                    created = v.trim_matches('"').to_string();
-                } else if let Some(v) = line.strip_prefix("description: ") {
-                    description = v.trim_matches('"').to_string();
-                }
-            }
-        }
-    }
-
-    (name, created, description)
 }
 
 pub fn create_project(
@@ -76,8 +50,13 @@ pub fn create_project(
     fs::create_dir_all(path::active_tasks_dir(base_dir, slug))?;
     fs::create_dir_all(path::done_tasks_dir(base_dir, slug))?;
 
-    let now = Local::now().format("%Y-%m-%dT%H:%M:%S%:z").to_string();
-    let content = format_project_md(name, description, &now);
+    let now: DateTime<FixedOffset> = Local::now().into();
+    let fm = ProjectFrontmatter {
+        name: name.to_string(),
+        created: now,
+        description: description.to_string(),
+    };
+    let content = frontmatter::render(&fm, "")?;
     let file_path = path::project_file_path(base_dir, slug);
     fs::write(&file_path, content)?;
 
@@ -107,71 +86,6 @@ pub fn list_projects(base_dir: &Path) -> Result<Vec<ProjectSummary>, CoreError> 
     Ok(projects)
 }
 
-fn format_task_md(title: &str, tags: &[String], created: &str, body: &str) -> String {
-    let tags_str = tags
-        .iter()
-        .map(|t| format!("\"{t}\""))
-        .collect::<Vec<_>>()
-        .join(", ");
-    format!("---\ntitle: \"{title}\"\ncreated: \"{created}\"\ntags: [{tags_str}]\n---\n{body}")
-}
-
-fn format_completed_task_md(
-    title: &str,
-    tags: &[String],
-    created: &str,
-    completed: &str,
-    body: &str,
-) -> String {
-    let tags_str = tags
-        .iter()
-        .map(|t| format!("\"{t}\""))
-        .collect::<Vec<_>>()
-        .join(", ");
-    format!("---\ntitle: \"{title}\"\ncreated: \"{created}\"\ncompleted: \"{completed}\"\ntags: [{tags_str}]\n---\n{body}")
-}
-
-fn parse_task_frontmatter(content: &str) -> TaskSummary {
-    let mut title = String::new();
-    let mut created = String::new();
-    let mut completed = None;
-    let mut tags = Vec::new();
-    let mut body = content.to_string();
-
-    if let Some(stripped) = content.strip_prefix("---\n") {
-        if let Some(end) = stripped.find("\n---\n") {
-            let frontmatter = &stripped[..end];
-            body = stripped[end + 5..].to_string();
-
-            for line in frontmatter.lines() {
-                if let Some(v) = line.strip_prefix("title: ") {
-                    title = v.trim_matches('"').to_string();
-                } else if let Some(v) = line.strip_prefix("created: ") {
-                    created = v.trim_matches('"').to_string();
-                } else if let Some(v) = line.strip_prefix("completed: ") {
-                    completed = Some(v.trim_matches('"').to_string());
-                } else if let Some(v) = line.strip_prefix("tags: [") {
-                    let v = v.trim_end_matches(']');
-                    tags = v
-                        .split(", ")
-                        .map(|s| s.trim_matches('"').to_string())
-                        .filter(|s| !s.is_empty())
-                        .collect();
-                }
-            }
-        }
-    }
-
-    TaskSummary {
-        filename: String::new(),
-        title,
-        created,
-        completed,
-        tags,
-        body,
-    }
-}
-
 pub fn create_task(
     base_dir: &Path,
     project_slug: &str,
@@ -184,14 +98,31 @@ pub fn create_task(
         return Err(CoreError::NotFound(format!("project: {project_slug}")));
     }
 
-    let now = Local::now();
+    let now: DateTime<FixedOffset> = Local::now().into();
     let filename = format!("{}.md", now.format("%Y%m%d_%H%M%S"));
     let file_path = active_dir.join(&filename);
-    let created = now.format("%Y-%m-%dT%H:%M:%S%:z").to_string();
-    let content = format_task_md(title, tags, &created, body);
+    let fm = TaskFrontmatter {
+        title: title.to_string(),
+        created: now,
+        completed: None,
+        tags: tags.to_vec(),
+    };
+    let content = frontmatter::render(&fm, body)?;
     fs::write(&file_path, content)?;
 
     Ok(file_path)
+}
+
+fn parse_task_file(content: &str) -> Result<TaskSummary, CoreError> {
+    let (fm, body): (TaskFrontmatter, String) = frontmatter::parse(content)?;
+    Ok(TaskSummary {
+        filename: String::new(),
+        title: fm.title,
+        created: fm.created,
+        completed: fm.completed,
+        tags: fm.tags,
+        body,
+    })
 }
 
 fn list_tasks_in_dir(dir: &Path) -> Result<Vec<TaskSummary>, CoreError> {
@@ -205,16 +136,14 @@ fn list_tasks_in_dir(dir: &Path) -> Result<Vec<TaskSummary>, CoreError> {
         .collect();
     entries.sort_by_key(|e| std::cmp::Reverse(e.file_name()));
 
-    let tasks = entries
-        .into_iter()
-        .map(|entry| {
-            let filename = entry.file_name().to_string_lossy().to_string();
-            let content = fs::read_to_string(entry.path()).unwrap_or_default();
-            let mut task = parse_task_frontmatter(&content);
-            task.filename = filename;
-            task
-        })
-        .collect();
+    let mut tasks = Vec::new();
+    for entry in entries {
+        let filename = entry.file_name().to_string_lossy().to_string();
+        let content = fs::read_to_string(entry.path())?;
+        let mut task = parse_task_file(&content)?;
+        task.filename = filename;
+        tasks.push(task);
+    }
 
     Ok(tasks)
 }
@@ -239,11 +168,16 @@ pub fn complete_task(base_dir: &Path, project_slug: &str, filename: &str) -> Res
     }
 
     let content = fs::read_to_string(&active_path)?;
-    let task = parse_task_frontmatter(&content);
+    let task = parse_task_file(&content)?;
 
-    let now = Local::now().format("%Y-%m-%dT%H:%M:%S%:z").to_string();
-    let new_content =
-        format_completed_task_md(&task.title, &task.tags, &task.created, &now, &task.body);
+    let now: DateTime<FixedOffset> = Local::now().into();
+    let fm = TaskFrontmatter {
+        title: task.title,
+        created: task.created,
+        completed: Some(now),
+        tags: task.tags,
+    };
+    let new_content = frontmatter::render(&fm, &task.body)?;
 
     let done_path = path::done_tasks_dir(base_dir, project_slug).join(filename);
     fs::write(&done_path, new_content)?;
@@ -268,8 +202,14 @@ pub fn update_task(
     }
 
     let content = fs::read_to_string(&active_path)?;
-    let task = parse_task_frontmatter(&content);
-    let new_content = format_task_md(title, tags, &task.created, body);
+    let task = parse_task_file(&content)?;
+    let fm = TaskFrontmatter {
+        title: title.to_string(),
+        created: task.created,
+        completed: None,
+        tags: tags.to_vec(),
+    };
+    let new_content = frontmatter::render(&fm, body)?;
     fs::write(&active_path, new_content)?;
 
     Ok(())
@@ -282,7 +222,7 @@ pub fn read_project(base_dir: &Path, slug: &str) -> Result<ProjectSummary, CoreE
     }
 
     let content = fs::read_to_string(&file_path)?;
-    let (name, created, description) = parse_project_frontmatter(&content);
+    let (fm, _body): (ProjectFrontmatter, String) = frontmatter::parse(&content)?;
 
     let active_dir = path::active_tasks_dir(base_dir, slug);
     let active_task_count = if active_dir.exists() {
@@ -296,9 +236,9 @@ pub fn read_project(base_dir: &Path, slug: &str) -> Result<ProjectSummary, CoreE
 
     Ok(ProjectSummary {
         slug: slug.to_string(),
-        name,
-        created,
-        description,
+        name: fm.name,
+        created: fm.created,
+        description: fm.description,
         active_task_count,
     })
 }
@@ -325,13 +265,6 @@ pub fn get_project_activity_summary(
             .into_iter()
             .filter(|task| {
                 task.completed
-                    .as_ref()
-                    .and_then(|c| DateTime::parse_from_str(c, "%Y-%m-%dT%H:%M:%S%:z").ok())
-                    .or_else(|| {
-                        task.completed
-                            .as_ref()
-                            .and_then(|c| DateTime::<FixedOffset>::parse_from_rfc3339(c).ok())
-                    })
                     .map(|dt| {
                         let date = dt.date_naive();
                         date >= start && date <= end
@@ -356,7 +289,36 @@ pub fn get_project_activity_summary(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::TimeZone;
     use tempfile::TempDir;
+
+    fn fixed_offset() -> FixedOffset {
+        FixedOffset::east_opt(9 * 3600).unwrap()
+    }
+
+    fn sample_datetime(
+        year: i32,
+        month: u32,
+        day: u32,
+        hour: u32,
+        min: u32,
+        sec: u32,
+    ) -> DateTime<FixedOffset> {
+        fixed_offset()
+            .with_ymd_and_hms(year, month, day, hour, min, sec)
+            .unwrap()
+    }
+
+    fn write_task_file(dir: &Path, filename: &str, fm: &TaskFrontmatter, body: &str) {
+        let content = frontmatter::render(fm, body).unwrap();
+        fs::write(dir.join(filename), content).unwrap();
+    }
+
+    fn write_done_task(tmp: &TempDir, slug: &str, filename: &str, fm: &TaskFrontmatter) {
+        let done_dir = path::done_tasks_dir(tmp.path(), slug);
+        let content = frontmatter::render(fm, "body").unwrap();
+        fs::write(done_dir.join(filename), content).unwrap();
+    }
 
     #[test]
     fn test_is_valid_slug() {
@@ -383,9 +345,9 @@ mod tests {
         assert!(path::active_tasks_dir(tmp.path(), "my-proj").exists());
         assert!(path::done_tasks_dir(tmp.path(), "my-proj").exists());
 
-        let content = fs::read_to_string(path::project_file_path(tmp.path(), "my-proj")).unwrap();
-        assert!(content.contains("name: \"My Project\""));
-        assert!(content.contains("description: \"A test project\""));
+        let summary = read_project(tmp.path(), "my-proj").unwrap();
+        assert_eq!(summary.name, "My Project");
+        assert_eq!(summary.description, "A test project");
     }
 
     #[test]
@@ -443,9 +405,10 @@ mod tests {
         assert!(path.exists());
 
         let content = fs::read_to_string(&path).unwrap();
-        assert!(content.contains("title: \"My Task\""));
-        assert!(content.contains("tags: [\"rust\", \"test\"]"));
-        assert!(content.contains("Task body"));
+        let (fm, body): (TaskFrontmatter, String) = frontmatter::parse(&content).unwrap();
+        assert_eq!(fm.title, "My Task");
+        assert_eq!(fm.tags, vec!["rust", "test"]);
+        assert_eq!(body, "Task body");
     }
 
     #[test]
@@ -468,22 +431,32 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         create_project(tmp.path(), "proj", "Proj", "Desc").unwrap();
 
-        // Create tasks with different filenames by writing directly
         let active_dir = path::active_tasks_dir(tmp.path(), "proj");
-        fs::write(
-            active_dir.join("20260101_120000.md"),
-            "---\ntitle: \"First\"\ncreated: \"2026-01-01\"\ntags: []\n---\nbody1",
-        )
-        .unwrap();
-        fs::write(
-            active_dir.join("20260102_120000.md"),
-            "---\ntitle: \"Second\"\ncreated: \"2026-01-02\"\ntags: []\n---\nbody2",
-        )
-        .unwrap();
+        write_task_file(
+            &active_dir,
+            "20260101_120000.md",
+            &TaskFrontmatter {
+                title: "First".to_string(),
+                created: sample_datetime(2026, 1, 1, 12, 0, 0),
+                completed: None,
+                tags: vec![],
+            },
+            "body1",
+        );
+        write_task_file(
+            &active_dir,
+            "20260102_120000.md",
+            &TaskFrontmatter {
+                title: "Second".to_string(),
+                created: sample_datetime(2026, 1, 2, 12, 0, 0),
+                completed: None,
+                tags: vec![],
+            },
+            "body2",
+        );
 
         let tasks = list_active_tasks(tmp.path(), "proj").unwrap();
         assert_eq!(tasks.len(), 2);
-        // Reverse sorted, so newer first
         assert_eq!(tasks[0].title, "Second");
         assert_eq!(tasks[1].title, "First");
     }
@@ -495,25 +468,30 @@ mod tests {
 
         let active_dir = path::active_tasks_dir(tmp.path(), "proj");
         let filename = "20260101_120000.md";
-        fs::write(
-            active_dir.join(filename),
-            "---\ntitle: \"Task\"\ncreated: \"2026-01-01T12:00:00+09:00\"\ntags: [\"a\"]\n---\nbody",
-        )
-        .unwrap();
+        write_task_file(
+            &active_dir,
+            filename,
+            &TaskFrontmatter {
+                title: "Task".to_string(),
+                created: sample_datetime(2026, 1, 1, 12, 0, 0),
+                completed: None,
+                tags: vec!["a".to_string()],
+            },
+            "body",
+        );
 
         complete_task(tmp.path(), "proj", filename).unwrap();
 
-        // Active file should be gone
         assert!(!active_dir.join(filename).exists());
 
-        // Done file should exist with completed field
         let done_path = path::done_tasks_dir(tmp.path(), "proj").join(filename);
         assert!(done_path.exists());
         let content = fs::read_to_string(&done_path).unwrap();
-        assert!(content.contains("completed: \""));
-        assert!(content.contains("title: \"Task\""));
-        assert!(content.contains("tags: [\"a\"]"));
-        assert!(content.contains("body"));
+        let (fm, body): (TaskFrontmatter, String) = frontmatter::parse(&content).unwrap();
+        assert_eq!(fm.title, "Task");
+        assert!(fm.completed.is_some());
+        assert_eq!(fm.tags, vec!["a"]);
+        assert_eq!(body, "body");
     }
 
     #[test]
@@ -531,11 +509,18 @@ mod tests {
 
         let active_dir = path::active_tasks_dir(tmp.path(), "proj");
         let filename = "20260101_120000.md";
-        fs::write(
-            active_dir.join(filename),
-            "---\ntitle: \"Old\"\ncreated: \"2026-01-01T12:00:00+09:00\"\ntags: []\n---\nold body",
-        )
-        .unwrap();
+        let original_created = sample_datetime(2026, 1, 1, 12, 0, 0);
+        write_task_file(
+            &active_dir,
+            filename,
+            &TaskFrontmatter {
+                title: "Old".to_string(),
+                created: original_created,
+                completed: None,
+                tags: vec![],
+            },
+            "old body",
+        );
 
         let new_tags = vec!["updated".to_string()];
         update_task(
@@ -549,11 +534,11 @@ mod tests {
         .unwrap();
 
         let content = fs::read_to_string(active_dir.join(filename)).unwrap();
-        assert!(content.contains("title: \"New Title\""));
-        assert!(content.contains("tags: [\"updated\"]"));
-        assert!(content.contains("new body"));
-        // Preserve original created timestamp
-        assert!(content.contains("created: \"2026-01-01T12:00:00+09:00\""));
+        let (fm, body): (TaskFrontmatter, String) = frontmatter::parse(&content).unwrap();
+        assert_eq!(fm.title, "New Title");
+        assert_eq!(fm.tags, vec!["updated"]);
+        assert_eq!(body, "new body");
+        assert_eq!(fm.created, original_created);
     }
 
     #[test]
@@ -562,23 +547,20 @@ mod tests {
         create_project(tmp.path(), "proj", "Proj", "Desc").unwrap();
 
         let active_dir = path::active_tasks_dir(tmp.path(), "proj");
-        fs::write(
-            active_dir.join("20260101_120000.md"),
-            "---\ntitle: \"T\"\ncreated: \"2026\"\ntags: []\n---\n",
-        )
-        .unwrap();
+        write_task_file(
+            &active_dir,
+            "20260101_120000.md",
+            &TaskFrontmatter {
+                title: "T".to_string(),
+                created: sample_datetime(2026, 1, 1, 12, 0, 0),
+                completed: None,
+                tags: vec![],
+            },
+            "",
+        );
 
         let summary = read_project(tmp.path(), "proj").unwrap();
         assert_eq!(summary.active_task_count, 1);
-    }
-
-    fn write_done_task(tmp: &TempDir, slug: &str, filename: &str, completed: &str) {
-        let done_dir = path::done_tasks_dir(tmp.path(), slug);
-        fs::write(
-            done_dir.join(filename),
-            format!("---\ntitle: \"Task\"\ncreated: \"2026-01-01T12:00:00+09:00\"\ncompleted: \"{completed}\"\ntags: []\n---\nbody"),
-        )
-        .unwrap();
     }
 
     #[test]
@@ -586,23 +568,39 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         create_project(tmp.path(), "proj", "Proj", "Desc").unwrap();
 
+        let created = sample_datetime(2026, 1, 1, 12, 0, 0);
         write_done_task(
             &tmp,
             "proj",
             "20260101_120000.md",
-            "2026-01-15T12:00:00+09:00",
+            &TaskFrontmatter {
+                title: "Task".to_string(),
+                created,
+                completed: Some(sample_datetime(2026, 1, 15, 12, 0, 0)),
+                tags: vec![],
+            },
         );
         write_done_task(
             &tmp,
             "proj",
             "20260201_120000.md",
-            "2026-02-15T12:00:00+09:00",
+            &TaskFrontmatter {
+                title: "Task".to_string(),
+                created,
+                completed: Some(sample_datetime(2026, 2, 15, 12, 0, 0)),
+                tags: vec![],
+            },
         );
         write_done_task(
             &tmp,
             "proj",
             "20260301_120000.md",
-            "2026-03-15T12:00:00+09:00",
+            &TaskFrontmatter {
+                title: "Task".to_string(),
+                created,
+                completed: Some(sample_datetime(2026, 3, 15, 12, 0, 0)),
+                tags: vec![],
+            },
         );
 
         let start = NaiveDate::from_ymd_opt(2026, 1, 1).unwrap();
@@ -619,17 +617,28 @@ mod tests {
         create_project(tmp.path(), "alpha", "Alpha", "A").unwrap();
         create_project(tmp.path(), "beta", "Beta", "B").unwrap();
 
+        let created = sample_datetime(2026, 1, 1, 12, 0, 0);
         write_done_task(
             &tmp,
             "alpha",
             "20260101_120000.md",
-            "2026-01-15T12:00:00+09:00",
+            &TaskFrontmatter {
+                title: "Task".to_string(),
+                created,
+                completed: Some(sample_datetime(2026, 1, 15, 12, 0, 0)),
+                tags: vec![],
+            },
         );
         write_done_task(
             &tmp,
             "beta",
             "20260101_120000.md",
-            "2026-01-20T12:00:00+09:00",
+            &TaskFrontmatter {
+                title: "Task".to_string(),
+                created,
+                completed: Some(sample_datetime(2026, 1, 20, 12, 0, 0)),
+                tags: vec![],
+            },
         );
 
         let start = NaiveDate::from_ymd_opt(2026, 1, 1).unwrap();
@@ -646,11 +655,17 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         create_project(tmp.path(), "proj", "Proj", "Desc").unwrap();
 
+        let created = sample_datetime(2026, 1, 1, 12, 0, 0);
         write_done_task(
             &tmp,
             "proj",
             "20260101_120000.md",
-            "2026-01-15T12:00:00+09:00",
+            &TaskFrontmatter {
+                title: "Task".to_string(),
+                created,
+                completed: Some(sample_datetime(2026, 1, 15, 12, 0, 0)),
+                tags: vec![],
+            },
         );
 
         let start = NaiveDate::from_ymd_opt(2026, 6, 1).unwrap();
