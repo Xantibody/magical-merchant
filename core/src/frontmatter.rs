@@ -1,0 +1,145 @@
+use chrono::{DateTime, FixedOffset};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+
+use crate::error::CoreError;
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct NoteFrontmatter {
+    pub time: DateTime<FixedOffset>,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default)]
+    pub context: Option<ContextMeta>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ContextMeta {
+    pub battery: u8,
+    pub is_charging: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ProjectFrontmatter {
+    pub name: String,
+    pub created: DateTime<FixedOffset>,
+    pub description: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TaskFrontmatter {
+    pub title: String,
+    pub created: DateTime<FixedOffset>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub completed: Option<DateTime<FixedOffset>>,
+    #[serde(default)]
+    pub tags: Vec<String>,
+}
+
+pub fn render<T: Serialize>(fm: &T, body: &str) -> Result<String, CoreError> {
+    let yaml = serde_yaml::to_string(fm).map_err(|e| CoreError::Parse(e.to_string()))?;
+    Ok(format!("---\n{yaml}---\n{body}"))
+}
+
+pub fn parse<T: DeserializeOwned>(content: &str) -> Result<(T, String), CoreError> {
+    let (fm, body) = markdown_frontmatter::parse::<T>(content)
+        .map_err(|e| CoreError::Parse(format!("{e:?}")))?;
+    Ok((fm, body.to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::TimeZone;
+
+    fn fixed_offset() -> FixedOffset {
+        FixedOffset::east_opt(9 * 3600).unwrap()
+    }
+
+    fn sample_datetime() -> DateTime<FixedOffset> {
+        fixed_offset()
+            .with_ymd_and_hms(2026, 3, 20, 14, 30, 45)
+            .unwrap()
+    }
+
+    #[test]
+    fn test_project_frontmatter_roundtrip() {
+        let fm = ProjectFrontmatter {
+            name: "My Project".to_string(),
+            created: sample_datetime(),
+            description: "A test project".to_string(),
+        };
+        let rendered = render(&fm, "").unwrap();
+        let (parsed, body): (ProjectFrontmatter, _) = parse(&rendered).unwrap();
+        assert_eq!(parsed, fm);
+        assert_eq!(body, "");
+    }
+
+    #[test]
+    fn test_task_frontmatter_roundtrip() {
+        let fm = TaskFrontmatter {
+            title: "My Task".to_string(),
+            created: sample_datetime(),
+            completed: None,
+            tags: vec!["rust".to_string(), "test".to_string()],
+        };
+        let rendered = render(&fm, "Task body here").unwrap();
+        let (parsed, body): (TaskFrontmatter, _) = parse(&rendered).unwrap();
+        assert_eq!(parsed, fm);
+        assert_eq!(body, "Task body here");
+    }
+
+    #[test]
+    fn test_task_frontmatter_with_completed_roundtrip() {
+        let fm = TaskFrontmatter {
+            title: "Done Task".to_string(),
+            created: sample_datetime(),
+            completed: Some(sample_datetime()),
+            tags: vec![],
+        };
+        let rendered = render(&fm, "body").unwrap();
+        let (parsed, body): (TaskFrontmatter, _) = parse(&rendered).unwrap();
+        assert_eq!(parsed, fm);
+        assert_eq!(body, "body");
+    }
+
+    #[test]
+    fn test_note_frontmatter_roundtrip() {
+        let fm = NoteFrontmatter {
+            time: sample_datetime(),
+            tags: vec!["memo".to_string()],
+            context: Some(ContextMeta {
+                battery: 82,
+                is_charging: false,
+            }),
+        };
+        let rendered = render(&fm, "# Hello\nWorld").unwrap();
+        let (parsed, body): (NoteFrontmatter, _) = parse(&rendered).unwrap();
+        assert_eq!(parsed, fm);
+        assert_eq!(body, "# Hello\nWorld");
+    }
+
+    #[test]
+    fn test_note_frontmatter_no_context() {
+        let fm = NoteFrontmatter {
+            time: sample_datetime(),
+            tags: vec![],
+            context: None,
+        };
+        let rendered = render(&fm, "body").unwrap();
+        let (parsed, _body): (NoteFrontmatter, _) = parse(&rendered).unwrap();
+        assert_eq!(parsed, fm);
+    }
+
+    #[test]
+    fn test_render_contains_delimiters() {
+        let fm = ProjectFrontmatter {
+            name: "Test".to_string(),
+            created: sample_datetime(),
+            description: "Desc".to_string(),
+        };
+        let rendered = render(&fm, "body").unwrap();
+        assert!(rendered.starts_with("---\n"));
+        assert!(rendered.contains("\n---\n"));
+        assert!(rendered.ends_with("body"));
+    }
+}

@@ -10,4 +10,7 @@ pub enum CoreError {
 
     #[error("Not found: {0}")]
     NotFound(String),
+
+    #[error("Parse error: {0}")]
+    Parse(String),
 }
