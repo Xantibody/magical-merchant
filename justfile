@@ -1,47 +1,25 @@
-tauri-app := "tauri-app"
+mod rust
+mod tauri_app 'tauri-app'
 
-# Run clippy for linting
-lint:
-    cargo clippy --workspace -- -D warnings
+[private]
+default:
+  @just --list
 
-# Run formatter
-format:
-    cargo fmt --all
+fmt:
+  nix fmt
 
-# Run formatter check (CI用)
-format-check:
-    cargo fmt --all --check
+check: rust::check tauri_app::check
 
-# Run tests
-test:
-    cargo test --workspace
+test: rust::test
 
-# Run all checks (lint + format-check + test)
-check: lint format-check test
+verify: fmt check test
 
-# Install frontend dependencies
-fe-install:
-    cd {{tauri-app}} && pnpm install
+# --- Dev shortcuts ---
 
-# Build frontend
-fe-build:
-    cd {{tauri-app}} && pnpm build
+dev: tauri_app::dev
 
-# Run tauri desktop dev
-dev:
-    cd {{tauri-app}} && pnpm tauri dev
+android-init: tauri_app::android-init
 
-# Run tauri android init
-android-init:
-    cd {{tauri-app}} && pnpm tauri android init
+android-dev: tauri_app::android-dev
 
-# Run tauri android dev (実機 or エミュレータ)
-android-dev:
-    cd {{tauri-app}} && pnpm tauri android dev
-
-# Run tauri android build (release APK)
-android-build:
-    cd {{tauri-app}} && pnpm tauri android build
-
-# Full verify: rust checks + frontend build
-verify: check fe-build
+android-build: tauri_app::android-build

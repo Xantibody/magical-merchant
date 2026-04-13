@@ -62,10 +62,7 @@ function QuickCapture() {
             .slice()
             .reverse()
             .map((entry, i) => (
-              <div
-                key={i}
-                className="p-2 bg-white border border-gray-200 rounded-lg text-sm"
-              >
+              <div key={i} className="p-2 bg-white border border-gray-200 rounded-lg text-sm">
                 {entry}
               </div>
             ))}
