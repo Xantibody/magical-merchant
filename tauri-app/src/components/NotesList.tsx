@@ -65,10 +65,7 @@ function NotesList() {
   if (selectedNote) {
     return (
       <div className="flex flex-col gap-3 h-full">
-        <button
-          className="flex items-center gap-1 text-sm text-blue-600"
-          onClick={handleBack}
-        >
+        <button className="flex items-center gap-1 text-sm text-blue-600" onClick={handleBack}>
           <ChevronLeft size={16} />
           Back
         </button>
@@ -104,11 +101,7 @@ function NotesList() {
     <div className="flex flex-col gap-3 h-full">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-medium text-gray-700">Saved Notes</h2>
-        <button
-          className="p-1 text-gray-500"
-          onClick={fetchNotes}
-          disabled={loading}
-        >
+        <button className="p-1 text-gray-500" onClick={fetchNotes} disabled={loading}>
           <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
         </button>
       </div>
@@ -122,9 +115,7 @@ function NotesList() {
               className="w-full text-left p-3 bg-white border border-gray-200 rounded-lg"
               onClick={() => handleSelect(note)}
             >
-              <div className="text-xs text-gray-500 mb-1">
-                {note.time ?? note.filename}
-              </div>
+              <div className="text-xs text-gray-500 mb-1">{note.time ?? note.filename}</div>
               {note.tags.length > 0 && (
                 <div className="flex gap-1 flex-wrap mb-1">
                   {note.tags.map((tag) => (

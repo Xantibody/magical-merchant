@@ -22,8 +22,7 @@ md.renderer.rules.fence = (tokens, idx, _options, env, _self) => {
 };
 
 export async function renderMarkdown(source: string): Promise<string> {
-  const env: { __shikiBlocks?: { id: string; code: string; lang: string }[] } =
-    {};
+  const env: { __shikiBlocks?: { id: string; code: string; lang: string }[] } = {};
   let html = md.render(source, env);
 
   const blocks = env.__shikiBlocks || [];
