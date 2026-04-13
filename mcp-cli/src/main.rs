@@ -109,9 +109,10 @@ fn task_to_info(t: &magical_merchant_core::TaskSummary) -> TaskInfo {
 #[tool_router]
 impl McpServer {
     #[tool(name = "list_projects", description = "List all projects")]
-    fn list_projects(&self) -> Json<ProjectListOutput> {
-        let projects = magical_merchant_core::list_projects(&self.data_dir).unwrap_or_default();
-        Json(ProjectListOutput {
+    fn list_projects(&self) -> Result<Json<ProjectListOutput>, String> {
+        let projects =
+            magical_merchant_core::list_projects(&self.data_dir).map_err(|e| e.to_string())?;
+        Ok(Json(ProjectListOutput {
             projects: projects
                 .into_iter()
                 .map(|p| ProjectInfo {
@@ -121,7 +122,7 @@ impl McpServer {
                     active_task_count: p.active_task_count,
                 })
                 .collect(),
-        })
+        }))
     }
 
     #[tool(
@@ -131,12 +132,12 @@ impl McpServer {
     fn list_active_tasks(
         &self,
         Parameters(param): Parameters<ProjectSlugParam>,
-    ) -> Json<TaskListOutput> {
+    ) -> Result<Json<TaskListOutput>, String> {
         let tasks = magical_merchant_core::list_active_tasks(&self.data_dir, &param.project_slug)
-            .unwrap_or_default();
-        Json(TaskListOutput {
+            .map_err(|e| e.to_string())?;
+        Ok(Json(TaskListOutput {
             tasks: tasks.iter().map(task_to_info).collect(),
-        })
+        }))
     }
 
     #[tool(
@@ -146,12 +147,12 @@ impl McpServer {
     fn list_completed_tasks(
         &self,
         Parameters(param): Parameters<ProjectSlugParam>,
-    ) -> Json<TaskListOutput> {
+    ) -> Result<Json<TaskListOutput>, String> {
         let tasks = magical_merchant_core::list_done_tasks(&self.data_dir, &param.project_slug)
-            .unwrap_or_default();
-        Json(TaskListOutput {
+            .map_err(|e| e.to_string())?;
+        Ok(Json(TaskListOutput {
             tasks: tasks.iter().map(task_to_info).collect(),
-        })
+        }))
     }
 
     #[tool(
@@ -161,17 +162,23 @@ impl McpServer {
     fn get_task_history(
         &self,
         Parameters(param): Parameters<DateRangeParam>,
-    ) -> Json<ActivityOutput> {
+    ) -> Result<Json<ActivityOutput>, String> {
         let start = NaiveDate::parse_from_str(&param.start_date, "%Y-%m-%d")
-            .unwrap_or(NaiveDate::from_ymd_opt(2000, 1, 1).unwrap());
+            .map_err(|e| format!("Invalid start_date '{}': {e}", param.start_date))?;
         let end = NaiveDate::parse_from_str(&param.end_date, "%Y-%m-%d")
-            .unwrap_or(NaiveDate::from_ymd_opt(2099, 12, 31).unwrap());
+            .map_err(|e| format!("Invalid end_date '{}': {e}", param.end_date))?;
+
+        if start > end {
+            return Err(format!(
+                "start_date ({start}) must not be after end_date ({end})"
+            ));
+        }
 
         let summaries =
             magical_merchant_core::get_project_activity_summary(&self.data_dir, start, end)
-                .unwrap_or_default();
+                .map_err(|e| e.to_string())?;
 
-        Json(ActivityOutput {
+        Ok(Json(ActivityOutput {
             summaries: summaries
                 .into_iter()
                 .map(|s| ActivityInfo {
@@ -181,7 +188,7 @@ impl McpServer {
                     active_task_count: s.active_task_count,
                 })
                 .collect(),
-        })
+        }))
     }
 }
 
