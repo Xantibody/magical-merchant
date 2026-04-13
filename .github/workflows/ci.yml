@@ -12,6 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: nixbuild/nix-quick-install-action@v34
+      - uses: DeterminateSystems/magic-nix-cache-action@v9
       - run: nix develop --command just check
       - run: nix fmt -- --fail-on-change
     timeout-minutes: 15
@@ -21,5 +22,6 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: nixbuild/nix-quick-install-action@v34
+      - uses: DeterminateSystems/magic-nix-cache-action@v9
       - run: nix develop --command just test
     timeout-minutes: 15
