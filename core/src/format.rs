@@ -107,8 +107,7 @@ mod tests {
 
     #[test]
     fn test_format_note_markdown_empty_tags() {
-        let result =
-            format_note_markdown("body", &[], fixed_timestamp(), &test_context()).unwrap();
+        let result = format_note_markdown("body", &[], fixed_timestamp(), &test_context()).unwrap();
         let (fm, _body): (NoteFrontmatter, String) = frontmatter::parse(&result).unwrap();
         assert!(fm.tags.is_empty());
     }
