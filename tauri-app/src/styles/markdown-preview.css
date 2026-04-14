@@ -1,0 +1,66 @@
+.markdown-preview {
+  font-family: var(--font-sans);
+  line-height: var(--font-lineheight-4);
+  color: var(--app-text);
+}
+
+.markdown-preview > * + * {
+  margin-top: var(--size-3);
+}
+
+.markdown-preview h1 {
+  font-size: var(--font-size-5);
+  font-weight: var(--font-weight-7);
+}
+
+.markdown-preview h2 {
+  font-size: var(--font-size-4);
+  font-weight: var(--font-weight-6);
+}
+
+.markdown-preview h3 {
+  font-size: var(--font-size-3);
+  font-weight: var(--font-weight-6);
+}
+
+.markdown-preview code {
+  font-family: var(--font-mono);
+  background: var(--app-surface-2);
+  padding: 0.1em 0.3em;
+  border-radius: var(--radius-1);
+  font-size: 0.9em;
+}
+
+.markdown-preview pre {
+  background: var(--app-surface-2);
+  padding: var(--size-3);
+  border-radius: var(--radius-2);
+  overflow-x: auto;
+}
+
+.markdown-preview pre code {
+  background: none;
+  padding: 0;
+}
+
+.markdown-preview blockquote {
+  border-left: 3px solid var(--app-border);
+  padding-left: var(--size-3);
+  color: var(--app-text-muted);
+}
+
+.markdown-preview ul,
+.markdown-preview ol {
+  padding-left: var(--size-5);
+}
+
+.markdown-preview a {
+  color: var(--app-accent);
+  text-decoration: underline;
+}
+
+.markdown-preview hr {
+  border: none;
+  border-top: 1px solid var(--app-border);
+  margin: var(--size-4) 0;
+}
