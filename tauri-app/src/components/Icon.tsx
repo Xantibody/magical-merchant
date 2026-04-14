@@ -1,4 +1,4 @@
-import { splitProps } from "solid-js";
+import { splitProps, createEffect } from "solid-js";
 import type { JSX } from "solid-js";
 
 const ICONS = {
@@ -22,25 +22,25 @@ export default function Icon(props: IconProps) {
   const [local, rest] = splitProps(props, ["name", "size"]);
   let ref: HTMLSpanElement | undefined;
 
-  const load = async () => {
-    let svg = cache.get(local.name);
+  createEffect(async () => {
+    const name = local.name;
+    const size = local.size ?? 24;
+    let svg = cache.get(name);
     if (!svg) {
-      const mod = await ICONS[local.name]();
+      const mod = await ICONS[name]();
       svg = mod.default as string;
-      cache.set(local.name, svg!);
+      cache.set(name, svg!);
     }
     if (ref) {
       ref.innerHTML = svg!;
       const svgEl = ref.querySelector("svg");
       if (svgEl) {
-        const s = `${local.size ?? 24}px`;
+        const s = `${size}px`;
         svgEl.setAttribute("width", s);
         svgEl.setAttribute("height", s);
       }
     }
-  };
-
-  load();
+  });
 
   return (
     <span

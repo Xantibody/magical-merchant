@@ -2,6 +2,7 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
+  position: relative;
 }
 
 .header {
@@ -37,6 +38,12 @@
   border-bottom: 1px solid var(--app-border);
   padding: var(--size-2) var(--size-3);
   gap: var(--size-1);
+  position: absolute;
+  top: var(--size-8);
+  left: 0;
+  right: 0;
+  z-index: 100;
+  box-shadow: var(--shadow-3);
 }
 
 .toggle-menu.open {
@@ -68,6 +75,10 @@
   overflow: auto;
   padding: var(--size-3);
   position: relative;
+}
+
+.view--flush {
+  padding: 0;
 }
 
 .memo-area {

@@ -3,6 +3,7 @@ import { Editor, rootCtx, defaultValueCtx } from "@milkdown/kit/core";
 import { commonmark } from "@milkdown/kit/preset/commonmark";
 import { listener, listenerCtx } from "@milkdown/kit/plugin/listener";
 import { shikiPlugin } from "../lib/shiki-plugin";
+import { exitCodeBlockPlugin } from "../lib/exit-code-block-plugin";
 
 interface MilkdownEditorProps {
   defaultValue?: string;
@@ -33,6 +34,7 @@ export default function MilkdownEditor(props: MilkdownEditorProps) {
       .use(commonmark)
       .use(listener)
       .use(shikiPlugin)
+      .use(exitCodeBlockPlugin)
       .create();
   });
 
@@ -40,11 +42,20 @@ export default function MilkdownEditor(props: MilkdownEditorProps) {
     editor?.destroy();
   });
 
+  const handleClick = (e: MouseEvent) => {
+    if (!ref) return;
+    const prosemirror = ref.querySelector(".ProseMirror") as HTMLElement | null;
+    if (prosemirror && e.target === ref) {
+      prosemirror.focus();
+    }
+  };
+
   return (
     <div
       ref={ref}
       class="milkdown-editor"
       data-placeholder={props.placeholder}
+      onClick={handleClick}
     />
   );
 }

@@ -2,16 +2,31 @@
   width: 100%;
   height: 100%;
   overflow-y: auto;
+  cursor: text;
+  border: none;
+  outline: none;
 }
 
-.milkdown-editor .milkdown {
-  outline: none;
-  padding: var(--size-3);
+.milkdown-editor .milkdown,
+.milkdown-editor .ProseMirror {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  flex: 1;
+  padding: var(--size-4) var(--size-5);
   font-family: var(--font-sans);
   font-size: var(--font-size-2);
   line-height: var(--font-lineheight-4);
   color: var(--app-text);
   min-height: 100%;
+  cursor: text;
+}
+
+.milkdown-editor .milkdown {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 0;
 }
 
 .milkdown-editor .milkdown > * + * {

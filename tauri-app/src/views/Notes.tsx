@@ -78,7 +78,7 @@ export default function Notes() {
   };
 
   return (
-    <div class="view">
+    <div class="view view--flush">
       <div class="notes-editor">
         <MilkdownEditor
           placeholder="Write your note in Markdown..."

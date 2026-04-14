@@ -5,5 +5,9 @@ interface ActionBarProps {
 }
 
 export default function ActionBar(props: ActionBarProps) {
-  return <div class="action-bar">{props.children}</div>;
+  return (
+    <div class="action-bar-zone">
+      <div class="action-bar">{props.children}</div>
+    </div>
+  );
 }

@@ -1,7 +1,11 @@
-.action-bar {
+.action-bar-zone {
   position: absolute;
-  bottom: var(--size-3);
-  right: var(--size-3);
+  bottom: 0;
+  right: 0;
+  padding: var(--size-5);
+}
+
+.action-bar {
   display: flex;
   gap: var(--size-2);
   opacity: 0;
@@ -9,7 +13,7 @@
   transition: opacity 150ms var(--ease-2);
 }
 
-.view:hover .action-bar,
+.action-bar-zone:hover .action-bar,
 .action-bar:focus-within {
   opacity: 1;
   pointer-events: auto;
