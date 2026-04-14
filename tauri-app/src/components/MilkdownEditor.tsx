@@ -1,11 +1,5 @@
 import { onCleanup, onMount } from "solid-js";
-import {
-  Editor,
-  rootCtx,
-  defaultValueCtx,
-  editorViewCtx,
-  serializerCtx,
-} from "@milkdown/kit/core";
+import { Editor, rootCtx, defaultValueCtx } from "@milkdown/kit/core";
 import { commonmark } from "@milkdown/kit/preset/commonmark";
 import { listener, listenerCtx } from "@milkdown/kit/plugin/listener";
 import { shikiPlugin } from "../lib/shiki-plugin";
@@ -45,15 +39,6 @@ export default function MilkdownEditor(props: MilkdownEditorProps) {
   onCleanup(() => {
     editor?.destroy();
   });
-
-  const getMarkdown = (): string => {
-    if (!editor) return "";
-    return editor.action((ctx) => {
-      const view = ctx.get(editorViewCtx);
-      const serializer = ctx.get(serializerCtx);
-      return serializer(view.state.doc);
-    });
-  };
 
   return (
     <div

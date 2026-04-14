@@ -16,7 +16,7 @@ export async function renderMarkdown(source: string): Promise<string> {
   } = {};
 
   const defaultFence = md.renderer.rules.fence;
-  md.renderer.rules.fence = (tokens, idx, options, renderEnv, self) => {
+  md.renderer.rules.fence = (tokens, idx, _options, renderEnv) => {
     const token = tokens[idx];
     const lang = token.info.trim();
     const code = token.content;

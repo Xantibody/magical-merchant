@@ -26,11 +26,11 @@ export default function Icon(props: IconProps) {
     let svg = cache.get(local.name);
     if (!svg) {
       const mod = await ICONS[local.name]();
-      svg = mod.default;
-      cache.set(local.name, svg);
+      svg = mod.default as string;
+      cache.set(local.name, svg!);
     }
     if (ref) {
-      ref.innerHTML = svg;
+      ref.innerHTML = svg!;
       const svgEl = ref.querySelector("svg");
       if (svgEl) {
         const s = `${local.size ?? 24}px`;
