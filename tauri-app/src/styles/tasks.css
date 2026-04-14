@@ -1,0 +1,101 @@
+.tasks-layout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-3);
+  height: 100%;
+}
+
+.project-selector {
+  display: flex;
+  gap: var(--size-2);
+  align-items: center;
+}
+
+.project-selector select {
+  flex: 1;
+  padding: var(--size-2);
+  border: 1px solid var(--app-border);
+  border-radius: var(--radius-2);
+  background: var(--app-surface);
+  color: var(--app-text);
+  font-size: var(--font-size-1);
+}
+
+.btn-small {
+  padding: var(--size-1) var(--size-2);
+  background: var(--app-surface-2);
+  border: 1px solid var(--app-border);
+  border-radius: var(--radius-2);
+  color: var(--app-text);
+  cursor: pointer;
+  font-size: var(--font-size-1);
+}
+
+.btn-small:hover {
+  background: var(--app-border);
+}
+
+.new-project-form,
+.new-task-form {
+  display: flex;
+  gap: var(--size-2);
+  align-items: center;
+}
+
+.new-project-form input,
+.new-task-form input {
+  flex: 1;
+  padding: var(--size-2);
+  border: 1px solid var(--app-border);
+  border-radius: var(--radius-2);
+  background: var(--app-surface);
+  color: var(--app-text);
+  font-size: var(--font-size-1);
+  outline: none;
+}
+
+.new-project-form input:focus,
+.new-task-form input:focus {
+  border-color: var(--app-accent);
+}
+
+.task-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-1);
+  flex: 1;
+  overflow-y: auto;
+}
+
+.task-item {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+  padding: var(--size-2) var(--size-3);
+  background: var(--app-surface-2);
+  border-radius: var(--radius-2);
+}
+
+.task-toggle {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--app-text-muted);
+  padding: 0;
+  display: flex;
+}
+
+.task-toggle:hover {
+  color: var(--app-accent);
+}
+
+.task-title {
+  font-size: var(--font-size-1);
+}
+
+.empty-state {
+  color: var(--app-text-muted);
+  font-size: var(--font-size-1);
+  text-align: center;
+  padding: var(--size-5);
+}
