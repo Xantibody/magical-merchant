@@ -1,0 +1,95 @@
+.milkdown-editor {
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.milkdown-editor .milkdown {
+  outline: none;
+  padding: var(--size-3);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-2);
+  line-height: var(--font-lineheight-4);
+  color: var(--app-text);
+  min-height: 100%;
+}
+
+.milkdown-editor .milkdown > * + * {
+  margin-top: var(--size-3);
+}
+
+.milkdown-editor h1 {
+  font-size: var(--font-size-5);
+  font-weight: var(--font-weight-7);
+  line-height: var(--font-lineheight-1);
+}
+
+.milkdown-editor h2 {
+  font-size: var(--font-size-4);
+  font-weight: var(--font-weight-6);
+  line-height: var(--font-lineheight-2);
+}
+
+.milkdown-editor h3 {
+  font-size: var(--font-size-3);
+  font-weight: var(--font-weight-6);
+  line-height: var(--font-lineheight-2);
+}
+
+.milkdown-editor strong {
+  font-weight: var(--font-weight-7);
+}
+
+.milkdown-editor em {
+  font-style: italic;
+}
+
+.milkdown-editor code {
+  font-family: var(--font-mono);
+  background: var(--app-surface-2);
+  padding: 0.1em 0.3em;
+  border-radius: var(--radius-1);
+  font-size: 0.9em;
+}
+
+.milkdown-editor pre {
+  background: var(--app-surface-2);
+  padding: var(--size-3);
+  border-radius: var(--radius-2);
+  overflow-x: auto;
+}
+
+.milkdown-editor pre code {
+  background: none;
+  padding: 0;
+}
+
+.milkdown-editor blockquote {
+  border-left: 3px solid var(--app-border);
+  padding-left: var(--size-3);
+  color: var(--app-text-muted);
+  font-style: italic;
+}
+
+.milkdown-editor ul,
+.milkdown-editor ol {
+  padding-left: var(--size-5);
+}
+
+.milkdown-editor a {
+  color: var(--app-accent);
+  text-decoration: underline;
+}
+
+.milkdown-editor hr {
+  border: none;
+  border-top: 1px solid var(--app-border);
+  margin: var(--size-4) 0;
+}
+
+.milkdown-editor p.empty-node::before {
+  content: attr(data-placeholder);
+  color: var(--app-text-muted);
+  pointer-events: none;
+  position: absolute;
+}

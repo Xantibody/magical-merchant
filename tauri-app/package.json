@@ -10,6 +10,7 @@
     "tauri": "tauri"
   },
   "dependencies": {
+    "@milkdown/kit": "^7.20.0",
     "@solidjs/router": "^0.16.1",
     "@tauri-apps/api": "^2",
     "markdown-it": "^14.1.1",
