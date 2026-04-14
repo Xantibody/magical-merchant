@@ -20,8 +20,12 @@
   border-color: var(--app-accent);
 }
 
-.save-status {
+.status-indicator {
+  position: absolute;
+  bottom: var(--size-3);
+  left: calc(var(--size-3) + 6em);
   font-size: var(--font-size-0);
   color: var(--app-text-muted);
   white-space: nowrap;
+  pointer-events: none;
 }

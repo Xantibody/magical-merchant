@@ -10,8 +10,17 @@
   --app-surface-2: var(--gray-1);
 }
 
+:root[data-theme="dark"] {
+  --app-surface: var(--gray-9);
+  --app-text: var(--gray-1);
+  --app-text-muted: var(--gray-5);
+  --app-accent: var(--blue-4);
+  --app-border: var(--gray-7);
+  --app-surface-2: var(--gray-8);
+}
+
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --app-surface: var(--gray-9);
     --app-text: var(--gray-1);
     --app-text-muted: var(--gray-5);

@@ -31,6 +31,18 @@
   background: var(--app-surface-2);
 }
 
+.mode-indicator {
+  position: absolute;
+  bottom: var(--size-3);
+  left: var(--size-3);
+  display: flex;
+  align-items: center;
+  gap: var(--size-1);
+  font-size: var(--font-size-0);
+  color: var(--app-text-muted);
+  pointer-events: none;
+}
+
 .toggle-menu {
   display: none;
   flex-direction: column;

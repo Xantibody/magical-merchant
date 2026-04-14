@@ -1,4 +1,4 @@
-import { createSignal, createEffect, on, onCleanup } from "solid-js";
+import { createSignal, createEffect, on, onCleanup, Show } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
 import MilkdownEditor from "../components/MilkdownEditor";
 import ActionBar from "../components/ActionBar";
@@ -81,6 +81,13 @@ export default function Notes() {
         <MilkdownEditor placeholder="Write your note in Markdown..." onChange={setBody} />
       </div>
 
+      <Show when={status() !== "idle"}>
+        <span class="status-indicator">
+          {status() === "saving" && "Saving..."}
+          {status() === "saved" && "Saved"}
+        </span>
+      </Show>
+
       <ActionBar>
         <input
           type="text"
@@ -89,10 +96,6 @@ export default function Notes() {
           value={tagsInput()}
           onInput={(e) => setTagsInput(e.currentTarget.value)}
         />
-        <span class="save-status">
-          {status() === "saving" && "Saving..."}
-          {status() === "saved" && "Saved"}
-        </span>
         <button type="button" onClick={handleDone} disabled={!draftPath()}>
           <Icon name="check-square" size={16} />
           Done

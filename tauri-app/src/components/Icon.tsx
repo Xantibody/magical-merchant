@@ -7,6 +7,10 @@ const ICONS = {
   "check-square": () => import("@phosphor-icons/core/assets/regular/check-square.svg?raw"),
   list: () => import("@phosphor-icons/core/assets/regular/list.svg?raw"),
   "paper-plane-tilt": () => import("@phosphor-icons/core/assets/regular/paper-plane-tilt.svg?raw"),
+  sun: () => import("@phosphor-icons/core/assets/regular/sun.svg?raw"),
+  moon: () => import("@phosphor-icons/core/assets/regular/moon.svg?raw"),
+  "caret-right": () => import("@phosphor-icons/core/assets/regular/caret-right.svg?raw"),
+  "caret-down": () => import("@phosphor-icons/core/assets/regular/caret-down.svg?raw"),
 } as const;
 
 export type IconName = keyof typeof ICONS;
