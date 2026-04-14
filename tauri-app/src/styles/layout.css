@@ -30,6 +30,39 @@
   background: var(--app-surface-2);
 }
 
+.toggle-menu {
+  display: none;
+  flex-direction: column;
+  background: var(--app-surface);
+  border-bottom: 1px solid var(--app-border);
+  padding: var(--size-2) var(--size-3);
+  gap: var(--size-1);
+}
+
+.toggle-menu.open {
+  display: flex;
+}
+
+.toggle-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+  padding: var(--size-2) var(--size-3);
+  border-radius: var(--radius-2);
+  color: var(--app-text);
+  text-decoration: none;
+  font-size: var(--font-size-1);
+}
+
+.toggle-menu-item:hover {
+  background: var(--app-surface-2);
+}
+
+.toggle-menu-item.active {
+  color: var(--app-accent);
+  font-weight: var(--font-weight-6);
+}
+
 .view {
   flex: 1;
   overflow: auto;

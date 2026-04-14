@@ -1,9 +1,15 @@
-function App() {
+import { Router, Route } from "@solidjs/router";
+import AppLayout from "./layouts/AppLayout";
+import Timeline from "./views/Timeline";
+import Notes from "./views/Notes";
+import Tasks from "./views/Tasks";
+
+export default function App() {
   return (
-    <div class="app">
-      <p>Magical Merchant</p>
-    </div>
+    <Router root={AppLayout}>
+      <Route path="/" component={Timeline} />
+      <Route path="/notes" component={Notes} />
+      <Route path="/tasks" component={Tasks} />
+    </Router>
   );
 }
-
-export default App;
