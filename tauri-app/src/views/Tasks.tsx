@@ -1,10 +1,4 @@
-import {
-  createSignal,
-  createResource,
-  For,
-  Show,
-  createEffect,
-} from "solid-js";
+import { createSignal, createResource, For, Show, createEffect } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
 import ActionBar from "../components/ActionBar";
 import Icon from "../components/Icon";
@@ -27,17 +21,13 @@ async function fetchProjects(): Promise<ProjectSummary[]> {
 
 export default function Tasks() {
   const [selectedProject, setSelectedProject] = createSignal<string>("");
-  const [projects, { refetch: refetchProjects }] =
-    createResource(fetchProjects);
-  const [tasks, { refetch: refetchTasks }] = createResource(
-    selectedProject,
-    (slug) => {
-      if (!slug) return Promise.resolve([]);
-      return invoke<TaskSummary[]>("list_active_tasks", {
-        projectSlug: slug,
-      });
-    },
-  );
+  const [projects, { refetch: refetchProjects }] = createResource(fetchProjects);
+  const [tasks, { refetch: refetchTasks }] = createResource(selectedProject, (slug) => {
+    if (!slug) return Promise.resolve([]);
+    return invoke<TaskSummary[]>("list_active_tasks", {
+      projectSlug: slug,
+    });
+  });
 
   const [showNewProject, setShowNewProject] = createSignal(false);
   const [newProjectSlug, setNewProjectSlug] = createSignal("");
@@ -107,9 +97,7 @@ export default function Tasks() {
             onChange={(e) => setSelectedProject(e.currentTarget.value)}
           >
             <option value="">Select project</option>
-            <For each={projects()}>
-              {(p) => <option value={p.slug}>{p.name}</option>}
-            </For>
+            <For each={projects()}>{(p) => <option value={p.slug}>{p.name}</option>}</For>
           </select>
           <button
             type="button"
@@ -142,10 +130,7 @@ export default function Tasks() {
 
         <Show when={selectedProject()}>
           <div class="task-list">
-            <For
-              each={tasks()}
-              fallback={<p class="empty-state">No active tasks</p>}
-            >
+            <For each={tasks()} fallback={<p class="empty-state">No active tasks</p>}>
               {(task) => (
                 <div class="task-item">
                   <button
@@ -183,10 +168,7 @@ export default function Tasks() {
 
       <ActionBar>
         <Show when={selectedProject()}>
-          <button
-            type="button"
-            onClick={() => setShowNewTask(!showNewTask())}
-          >
+          <button type="button" onClick={() => setShowNewTask(!showNewTask())}>
             <Icon name="note-pencil" size={16} />
             New Task
           </button>

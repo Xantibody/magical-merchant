@@ -14,15 +14,15 @@ If a dependency adds weight, it must justify itself against lightness.
 
 ## Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Core logic | Rust (`core/` crate, framework-independent) |
-| Desktop app | Tauri 2 + SolidJS |
-| Styling | Open Props (CSS custom properties) |
-| Icons | Phosphor Icons (SVG files) |
-| Editor | Milkdown (headless, SolidJS integration) |
-| Syntax highlight | Shiki |
-| Markdown | markdown-it + Shiki |
+| Layer            | Technology                                  |
+| ---------------- | ------------------------------------------- |
+| Core logic       | Rust (`core/` crate, framework-independent) |
+| Desktop app      | Tauri 2 + SolidJS                           |
+| Styling          | Open Props (CSS custom properties)          |
+| Icons            | Phosphor Icons (SVG files)                  |
+| Editor           | Milkdown (headless, SolidJS integration)    |
+| Syntax highlight | Shiki                                       |
+| Markdown         | markdown-it + Shiki                         |
 
 ## Editor Performance Principles
 

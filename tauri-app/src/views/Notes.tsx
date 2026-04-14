@@ -8,9 +8,7 @@ export default function Notes() {
   const [body, setBody] = createSignal("");
   const [tagsInput, setTagsInput] = createSignal("");
   const [draftPath, setDraftPath] = createSignal<string | null>(null);
-  const [status, setStatus] = createSignal<"idle" | "saving" | "saved">(
-    "idle",
-  );
+  const [status, setStatus] = createSignal<"idle" | "saving" | "saved">("idle");
 
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -80,10 +78,7 @@ export default function Notes() {
   return (
     <div class="view view--flush">
       <div class="notes-editor">
-        <MilkdownEditor
-          placeholder="Write your note in Markdown..."
-          onChange={setBody}
-        />
+        <MilkdownEditor placeholder="Write your note in Markdown..." onChange={setBody} />
       </div>
 
       <ActionBar>

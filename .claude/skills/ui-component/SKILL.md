@@ -51,15 +51,15 @@ Actions are hidden by default and revealed on interaction:
 
 ```css
 .action-bar {
-    opacity: 0;
-    transition: opacity 150ms var(--ease-2);
-    pointer-events: none;
+  opacity: 0;
+  transition: opacity 150ms var(--ease-2);
+  pointer-events: none;
 }
 
 .memo-area:hover .action-bar,
 .action-bar.visible {
-    opacity: 1;
-    pointer-events: auto;
+  opacity: 1;
+  pointer-events: auto;
 }
 ```
 
@@ -69,16 +69,16 @@ Full-width, borderless textarea that blends into the memo area:
 
 ```css
 .memo-input {
-    width: 100%;
-    height: 100%;
-    border: none;
-    outline: none;
-    resize: none;
-    font-family: var(--font-sans);
-    font-size: var(--font-size-2);
-    line-height: var(--font-lineheight-3);
-    background: transparent;
-    color: var(--text-1);
+  width: 100%;
+  height: 100%;
+  border: none;
+  outline: none;
+  resize: none;
+  font-family: var(--font-sans);
+  font-size: var(--font-size-2);
+  line-height: var(--font-lineheight-3);
+  background: transparent;
+  color: var(--text-1);
 }
 ```
 
@@ -88,16 +88,35 @@ Style with Open Props typography tokens:
 
 ```css
 .markdown-preview {
-    font-family: var(--font-sans);
-    line-height: var(--font-lineheight-4);
-    color: var(--text-1);
+  font-family: var(--font-sans);
+  line-height: var(--font-lineheight-4);
+  color: var(--text-1);
 }
 
-.markdown-preview h1 { font-size: var(--font-size-5); font-weight: var(--font-weight-7); }
-.markdown-preview h2 { font-size: var(--font-size-4); font-weight: var(--font-weight-6); }
-.markdown-preview h3 { font-size: var(--font-size-3); font-weight: var(--font-weight-6); }
-.markdown-preview code { font-family: var(--font-mono); background: var(--surface-2); padding: var(--size-1); border-radius: var(--radius-1); }
-.markdown-preview pre { background: var(--surface-2); padding: var(--size-3); border-radius: var(--radius-2); overflow-x: auto; }
+.markdown-preview h1 {
+  font-size: var(--font-size-5);
+  font-weight: var(--font-weight-7);
+}
+.markdown-preview h2 {
+  font-size: var(--font-size-4);
+  font-weight: var(--font-weight-6);
+}
+.markdown-preview h3 {
+  font-size: var(--font-size-3);
+  font-weight: var(--font-weight-6);
+}
+.markdown-preview code {
+  font-family: var(--font-mono);
+  background: var(--surface-2);
+  padding: var(--size-1);
+  border-radius: var(--radius-1);
+}
+.markdown-preview pre {
+  background: var(--surface-2);
+  padding: var(--size-3);
+  border-radius: var(--radius-2);
+  overflow-x: auto;
+}
 ```
 
 ## Priority Checklist

@@ -55,11 +55,10 @@ function getDecorations(doc: any, highlighter: Highlighter | null) {
 }
 
 async function initHighlighter(): Promise<Highlighter> {
-  const [{ createHighlighterCore }, { createJavaScriptRegexEngine }] =
-    await Promise.all([
-      import("shiki/core"),
-      import("shiki/engine/javascript"),
-    ]);
+  const [{ createHighlighterCore }, { createJavaScriptRegexEngine }] = await Promise.all([
+    import("shiki/core"),
+    import("shiki/engine/javascript"),
+  ]);
 
   return createHighlighterCore({
     themes: [import("shiki/themes/github-dark-default.mjs")],

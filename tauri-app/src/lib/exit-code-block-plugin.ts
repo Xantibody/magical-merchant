@@ -18,9 +18,7 @@ export const exitCodeBlockPlugin = $prose(() => {
       const tr = state.tr;
       const paragraphType = state.schema.nodes.paragraph;
       tr.insert(endOfBlock, paragraphType.create());
-      tr.setSelection(
-        TextSelection.near(tr.doc.resolve(endOfBlock + 1)),
-      );
+      tr.setSelection(TextSelection.near(tr.doc.resolve(endOfBlock + 1)));
       dispatch(tr);
       return true;
     },

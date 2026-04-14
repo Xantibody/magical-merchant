@@ -48,20 +48,14 @@ export default function Timeline() {
         <Show when={entries()?.length}>
           <div class="timeline-entries">
             <For each={entries()!.slice().reverse()}>
-              {(entry) => (
-                <div class="timeline-entry">{entry}</div>
-              )}
+              {(entry) => <div class="timeline-entry">{entry}</div>}
             </For>
           </div>
         </Show>
       </div>
 
       <ActionBar>
-        <button
-          type="button"
-          onClick={handleSend}
-          disabled={saving() || !text().trim()}
-        >
+        <button type="button" onClick={handleSend} disabled={saving() || !text().trim()}>
           <Icon name="paper-plane-tilt" size={16} />
           Send
         </button>

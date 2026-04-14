@@ -43,11 +43,6 @@ export default function Icon(props: IconProps) {
   });
 
   return (
-    <span
-      ref={ref}
-      class="icon"
-      style={{ display: "inline-flex", "line-height": 0 }}
-      {...rest}
-    />
+    <span ref={ref} class="icon" style={{ display: "inline-flex", "line-height": 0 }} {...rest} />
   );
 }

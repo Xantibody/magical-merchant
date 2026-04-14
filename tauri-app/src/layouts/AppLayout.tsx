@@ -17,18 +17,12 @@ export default function AppLayout(props: AppLayoutProps) {
   const [menuOpen, setMenuOpen] = createSignal(false);
   const location = useLocation();
 
-  const currentIcon = createMemo(
-    () => MODE_ICONS[location.pathname] ?? "lightning",
-  );
+  const currentIcon = createMemo(() => MODE_ICONS[location.pathname] ?? "lightning");
 
   return (
     <div class="app">
       <header class="header">
-        <button
-          type="button"
-          onClick={() => setMenuOpen(!menuOpen())}
-          aria-label="Toggle menu"
-        >
+        <button type="button" onClick={() => setMenuOpen(!menuOpen())} aria-label="Toggle menu">
           <Icon name="list" size={24} />
         </button>
         <Icon name={currentIcon()} size={20} />
