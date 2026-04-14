@@ -1,0 +1,35 @@
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-3);
+  height: 100%;
+}
+
+.timeline .memo-input {
+  width: 100%;
+  border: none;
+  outline: none;
+  resize: none;
+  font-family: var(--font-sans);
+  font-size: var(--font-size-2);
+  line-height: var(--font-lineheight-3);
+  background: transparent;
+  color: var(--app-text);
+  padding: var(--size-2);
+}
+
+.timeline-entries {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-1);
+  flex: 1;
+  overflow-y: auto;
+}
+
+.timeline-entry {
+  padding: var(--size-2) var(--size-3);
+  background: var(--app-surface-2);
+  border-radius: var(--radius-2);
+  font-size: var(--font-size-1);
+  line-height: var(--font-lineheight-3);
+}
