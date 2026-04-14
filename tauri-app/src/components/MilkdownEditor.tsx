@@ -8,6 +8,7 @@ import {
 } from "@milkdown/kit/core";
 import { commonmark } from "@milkdown/kit/preset/commonmark";
 import { listener, listenerCtx } from "@milkdown/kit/plugin/listener";
+import { shikiPlugin } from "../lib/shiki-plugin";
 
 interface MilkdownEditorProps {
   defaultValue?: string;
@@ -37,6 +38,7 @@ export default function MilkdownEditor(props: MilkdownEditorProps) {
       })
       .use(commonmark)
       .use(listener)
+      .use(shikiPlugin)
       .create();
   });
 
