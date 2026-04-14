@@ -1,0 +1,34 @@
+@import "open-props/style";
+@import "open-props/normalize";
+
+:root {
+  --app-surface: var(--gray-0);
+  --app-text: var(--gray-9);
+  --app-text-muted: var(--gray-6);
+  --app-accent: var(--blue-7);
+  --app-border: var(--gray-3);
+  --app-surface-2: var(--gray-1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --app-surface: var(--gray-9);
+    --app-text: var(--gray-1);
+    --app-text-muted: var(--gray-5);
+    --app-accent: var(--blue-4);
+    --app-border: var(--gray-7);
+    --app-surface-2: var(--gray-8);
+  }
+}
+
+html {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+body {
+  background: var(--app-surface);
+  color: var(--app-text);
+  font-family: var(--font-sans);
+  margin: 0;
+}

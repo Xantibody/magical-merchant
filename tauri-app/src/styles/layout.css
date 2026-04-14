@@ -1,0 +1,43 @@
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--size-2) var(--size-3);
+  background: var(--app-surface);
+  border-bottom: 1px solid var(--app-border);
+  min-height: var(--size-8);
+}
+
+.header button {
+  background: none;
+  border: none;
+  color: var(--app-text);
+  cursor: pointer;
+  padding: var(--size-1);
+  border-radius: var(--radius-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.header button:hover {
+  background: var(--app-surface-2);
+}
+
+.view {
+  flex: 1;
+  overflow: auto;
+  padding: var(--size-3);
+  position: relative;
+}
+
+.memo-area {
+  width: 100%;
+  height: 100%;
+}
