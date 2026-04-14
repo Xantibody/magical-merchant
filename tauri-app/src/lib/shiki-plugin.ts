@@ -1,17 +1,21 @@
 import { $prose } from "@milkdown/kit/utils";
 import { Plugin, PluginKey } from "@milkdown/kit/prose/state";
 import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
-import { createHighlighterCore } from "shiki/core";
-import { createJavaScriptRegExpEngine } from "shiki/engine/javascript";
 
 const shikiPluginKey = new PluginKey("shiki-highlight");
 
-function getDecorations(
-  doc: any,
-  highlighter: Awaited<ReturnType<typeof createHighlighterCore>> | null,
-) {
+type Highlighter = {
+  codeToTokens: (
+    code: string,
+    opts: { lang: string; theme: string },
+  ) => { tokens: { offset: number; content: string; color?: string }[][] };
+  getLoadedLanguages: () => string[];
+};
+
+function getDecorations(doc: any, highlighter: Highlighter | null) {
   if (!highlighter) return DecorationSet.empty;
 
+  const loadedLangs = highlighter.getLoadedLanguages();
   const decorations: Decoration[] = [];
 
   doc.descendants((node: any, pos: number) => {
@@ -19,10 +23,7 @@ function getDecorations(
 
     const lang = node.attrs?.language || "";
     const code = node.textContent;
-    if (!code) return;
-
-    const loadedLangs = highlighter.getLoadedLanguages();
-    if (!loadedLangs.includes(lang)) return;
+    if (!code || !loadedLangs.includes(lang)) return;
 
     try {
       const tokens = highlighter.codeToTokens(code, {
@@ -43,7 +44,7 @@ function getDecorations(
             );
           }
         }
-        offset += 1; // newline
+        offset += 1;
       }
     } catch {
       // skip if highlighting fails
@@ -53,11 +54,14 @@ function getDecorations(
   return DecorationSet.create(doc, decorations);
 }
 
-export const shikiPlugin = $prose(() => {
-  let highlighter: Awaited<ReturnType<typeof createHighlighterCore>> | null =
-    null;
+async function initHighlighter(): Promise<Highlighter> {
+  const [{ createHighlighterCore }, { createJavaScriptRegexEngine }] =
+    await Promise.all([
+      import("shiki/core"),
+      import("shiki/engine/javascript"),
+    ]);
 
-  createHighlighterCore({
+  return createHighlighterCore({
     themes: [import("shiki/themes/github-dark-default.mjs")],
     langs: [
       import("shiki/langs/javascript.mjs"),
@@ -69,8 +73,14 @@ export const shikiPlugin = $prose(() => {
       import("shiki/langs/markdown.mjs"),
       import("shiki/langs/bash.mjs"),
     ],
-    engine: createJavaScriptRegExpEngine(),
-  }).then((h) => {
+    engine: createJavaScriptRegexEngine(),
+  }) as unknown as Highlighter;
+}
+
+export const shikiPlugin = $prose(() => {
+  let highlighter: Highlighter | null = null;
+
+  initHighlighter().then((h) => {
     highlighter = h;
   });
 
