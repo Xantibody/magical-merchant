@@ -11,7 +11,11 @@ export function createPlaceholderPlugin(text: string) {
       props: {
         decorations(state) {
           const { doc } = state;
-          if (doc.childCount === 1 && doc.firstChild?.isTextblock && doc.firstChild.content.size === 0) {
+          if (
+            doc.childCount === 1 &&
+            doc.firstChild?.isTextblock &&
+            doc.firstChild.content.size === 0
+          ) {
             const placeholder = Decoration.node(0, doc.firstChild.nodeSize, {
               class: "empty-node",
               "data-placeholder": text,

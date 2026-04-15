@@ -73,7 +73,7 @@ export default function AppLayout(props: AppLayoutProps) {
   const themeIcon = () => {
     const t = theme();
     if (t === "system") return "lightning" as IconName;
-    return t === "dark" ? "sun" as IconName : "moon" as IconName;
+    return t === "dark" ? ("sun" as IconName) : ("moon" as IconName);
   };
 
   return (

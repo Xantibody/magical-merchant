@@ -85,13 +85,7 @@ export default function MilkdownEditor(props: MilkdownEditorProps) {
     }
   };
 
-  return (
-    <div
-      ref={ref}
-      class="milkdown-editor"
-      onClick={handleClick}
-    />
-  );
+  return <div ref={ref} class="milkdown-editor" onClick={handleClick} />;
 }
 
 export { type MilkdownEditorProps };

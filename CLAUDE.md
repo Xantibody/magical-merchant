@@ -26,20 +26,21 @@ If a dependency adds weight, it must justify itself against lightness.
 
 ## Milkdown Plugins
 
-| Category | Plugin | Import | Purpose |
-|----------|--------|--------|---------|
-| Built-in | `commonmark` | `@milkdown/kit/preset/commonmark` | Base Markdown |
-| Built-in | `listener` | `@milkdown/kit/plugin/listener` | onChange callback |
-| Built-in | `cursor` | `@milkdown/kit/plugin/cursor` | Gap cursor + drop cursor |
-| Built-in | `history` | `@milkdown/kit/plugin/history` | Undo/Redo |
-| Built-in | `clipboard` | `@milkdown/kit/plugin/clipboard` | Improved copy/paste |
-| Built-in | `trailing` | `@milkdown/kit/plugin/trailing` | Trailing paragraph |
-| Built-in | `linkTooltipPlugin` | `@milkdown/kit/component/link-tooltip` | Link preview/edit |
-| External | `highlight` | `@milkdown/plugin-highlight` | Shiki syntax highlighting |
-| Custom | `exitCodeBlockPlugin` | `src/lib/exit-code-block-plugin.ts` | Mod-Enter to exit code blocks |
-| Custom | `createPlaceholderPlugin` | `src/lib/placeholder-plugin.ts` | Empty document placeholder |
+| Category | Plugin                    | Import                                 | Purpose                       |
+| -------- | ------------------------- | -------------------------------------- | ----------------------------- |
+| Built-in | `commonmark`              | `@milkdown/kit/preset/commonmark`      | Base Markdown                 |
+| Built-in | `listener`                | `@milkdown/kit/plugin/listener`        | onChange callback             |
+| Built-in | `cursor`                  | `@milkdown/kit/plugin/cursor`          | Gap cursor + drop cursor      |
+| Built-in | `history`                 | `@milkdown/kit/plugin/history`         | Undo/Redo                     |
+| Built-in | `clipboard`               | `@milkdown/kit/plugin/clipboard`       | Improved copy/paste           |
+| Built-in | `trailing`                | `@milkdown/kit/plugin/trailing`        | Trailing paragraph            |
+| Built-in | `linkTooltipPlugin`       | `@milkdown/kit/component/link-tooltip` | Link preview/edit             |
+| External | `highlight`               | `@milkdown/plugin-highlight`           | Shiki syntax highlighting     |
+| Custom   | `exitCodeBlockPlugin`     | `src/lib/exit-code-block-plugin.ts`    | Mod-Enter to exit code blocks |
+| Custom   | `createPlaceholderPlugin` | `src/lib/placeholder-plugin.ts`        | Empty document placeholder    |
 
 Rejected plugins (with reasons):
+
 - `block` / `tooltip` / `slash` — add visible chrome, conflicts with "simple UI"
 - `code-block` component — requires CodeMirror (~150KB), conflicts with "lightweight"
 - `indent` / `upload` / `image-*` / `table-block` / `list-item-block` — no current feature need
