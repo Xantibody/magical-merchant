@@ -105,8 +105,7 @@ fn complete_task(handle: AppHandle, project_slug: String, filename: String) -> R
 #[tauri::command]
 fn list_timeline_dates(handle: AppHandle) -> Result<Vec<String>, String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    let dates =
-        magical_merchant_core::list_timeline_dates(&base_dir).map_err(|e| e.to_string())?;
+    let dates = magical_merchant_core::list_timeline_dates(&base_dir).map_err(|e| e.to_string())?;
     Ok(dates
         .iter()
         .map(|d| d.format("%Y-%m-%d").to_string())
@@ -116,8 +115,7 @@ fn list_timeline_dates(handle: AppHandle) -> Result<Vec<String>, String> {
 #[tauri::command]
 fn read_timeline_by_date(handle: AppHandle, date: String) -> Result<Vec<String>, String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    let naive =
-        chrono::NaiveDate::parse_from_str(&date, "%Y-%m-%d").map_err(|e| e.to_string())?;
+    let naive = chrono::NaiveDate::parse_from_str(&date, "%Y-%m-%d").map_err(|e| e.to_string())?;
     magical_merchant_core::read_timeline(&base_dir, naive).map_err(|e| e.to_string())
 }
 

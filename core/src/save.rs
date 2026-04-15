@@ -4,7 +4,7 @@ use std::path::Path;
 use chrono::{Local, NaiveDate};
 
 use crate::error::CoreError;
-use crate::format::{DeviceContext, format_note_markdown, format_timeline_line};
+use crate::format::{format_note_markdown, format_timeline_line, DeviceContext};
 use crate::path::{note_file_path, timeline_file_path};
 
 fn ensure_dir(path: &Path) -> Result<(), CoreError> {

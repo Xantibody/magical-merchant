@@ -241,11 +241,7 @@ pub fn update_task(
     Ok(())
 }
 
-pub fn delete_task(
-    base_dir: &Path,
-    project_slug: &str,
-    filename: &str,
-) -> Result<(), CoreError> {
+pub fn delete_task(base_dir: &Path, project_slug: &str, filename: &str) -> Result<(), CoreError> {
     if !is_valid_slug(project_slug) {
         return Err(CoreError::InvalidSlug(project_slug.to_string()));
     }

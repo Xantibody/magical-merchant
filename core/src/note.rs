@@ -5,7 +5,7 @@ use chrono::{DateTime, FixedOffset, Local};
 use serde::Serialize;
 
 use crate::error::CoreError;
-use crate::format::{DeviceContext, format_note_markdown};
+use crate::format::{format_note_markdown, DeviceContext};
 use crate::frontmatter::{self, NoteFrontmatter};
 use crate::path::note_file_path;
 
@@ -96,9 +96,7 @@ pub fn delete_note(file_path: &Path) -> Result<(), CoreError> {
         }
     }
     if !file_path.exists() {
-        return Err(CoreError::NotFound(
-            file_path.to_string_lossy().to_string(),
-        ));
+        return Err(CoreError::NotFound(file_path.to_string_lossy().to_string()));
     }
     fs::remove_file(file_path)?;
     Ok(())
