@@ -33,3 +33,50 @@
   font-size: var(--font-size-1);
   line-height: var(--font-lineheight-3);
 }
+
+/* Browse list (shared for date list) */
+
+.browse-list {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.browse-list-item {
+  display: block;
+  width: 100%;
+  padding: var(--size-2) var(--size-3);
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--app-border);
+  color: var(--app-text);
+  font-size: var(--font-size-1);
+  text-align: left;
+  cursor: pointer;
+}
+
+.browse-list-item:hover {
+  background: var(--app-surface-2);
+}
+
+.browse-list-item:last-child {
+  border-bottom: none;
+}
+
+/* Preview */
+
+.preview-date-header {
+  margin: 0;
+  padding: var(--size-2) var(--size-3);
+  font-size: var(--font-size-2);
+  font-weight: var(--font-weight-6);
+}
+
+.preview-entries {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-2);
+  flex: 1;
+  overflow-y: auto;
+}
