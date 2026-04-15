@@ -8,16 +8,21 @@ interface MarkdownPreviewProps {
 export default function MarkdownPreview(props: MarkdownPreviewProps) {
   const [html, setHtml] = createSignal("");
 
+  let renderVersion = 0;
+
   createEffect(
     on(
       () => props.source,
       async (source) => {
+        const currentVersion = ++renderVersion;
         if (!source) {
           setHtml("");
           return;
         }
         const rendered = await renderMarkdown(source);
-        setHtml(rendered);
+        if (currentVersion === renderVersion) {
+          setHtml(rendered);
+        }
       },
     ),
   );

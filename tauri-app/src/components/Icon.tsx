@@ -26,27 +26,38 @@ export default function Icon(props: IconProps) {
   const [local, rest] = splitProps(props, ["name", "size"]);
   let ref: HTMLSpanElement | undefined;
 
-  createEffect(async () => {
+  createEffect(() => {
     const name = local.name;
     const size = local.size ?? 24;
-    let svg = cache.get(name);
-    if (!svg) {
-      const mod = await ICONS[name]();
-      svg = mod.default as string;
-      cache.set(name, svg!);
+
+    const cached = cache.get(name);
+    if (cached) {
+      applyIcon(ref, cached, size);
+      return;
     }
-    if (ref) {
-      ref.innerHTML = svg!;
-      const svgEl = ref.querySelector("svg");
-      if (svgEl) {
-        const s = `${size}px`;
-        svgEl.setAttribute("width", s);
-        svgEl.setAttribute("height", s);
+
+    const currentName = name;
+    void ICONS[name]().then((mod) => {
+      const svg = mod.default as string;
+      cache.set(currentName, svg);
+      if (local.name === currentName && ref) {
+        applyIcon(ref, svg, size);
       }
-    }
+    });
   });
 
   return (
     <span ref={ref} class="icon" style={{ display: "inline-flex", "line-height": 0 }} {...rest} />
   );
+}
+
+function applyIcon(el: HTMLSpanElement | undefined, svg: string, size: number) {
+  if (!el) return;
+  el.innerHTML = svg;
+  const svgEl = el.querySelector("svg");
+  if (svgEl) {
+    const s = `${size}px`;
+    svgEl.setAttribute("width", s);
+    svgEl.setAttribute("height", s);
+  }
 }

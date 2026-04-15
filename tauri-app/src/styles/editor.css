@@ -102,7 +102,7 @@
   margin: var(--size-4) 0;
 }
 
-.milkdown-editor p.empty-node::before {
+.milkdown-editor .empty-node::before {
   content: attr(data-placeholder);
   color: var(--app-text-muted);
   pointer-events: none;

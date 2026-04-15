@@ -59,7 +59,7 @@ export default function Notes() {
 
   createEffect(
     on(tagsInput, () => {
-      if (draftPath() && tagsInput()) scheduleSave();
+      if (draftPath()) scheduleSave();
     }),
   );
 

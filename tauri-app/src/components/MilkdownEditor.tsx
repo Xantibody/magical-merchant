@@ -2,8 +2,12 @@ import { onCleanup, onMount } from "solid-js";
 import { Editor, rootCtx, defaultValueCtx } from "@milkdown/kit/core";
 import { commonmark } from "@milkdown/kit/preset/commonmark";
 import { listener, listenerCtx } from "@milkdown/kit/plugin/listener";
-import { shikiPlugin } from "../lib/shiki-plugin";
+import { highlight, highlightPluginConfig } from "@milkdown/plugin-highlight";
+import { createParser } from "@milkdown/plugin-highlight/shiki";
+import { createHighlighterCore } from "shiki/core";
+import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import { exitCodeBlockPlugin } from "../lib/exit-code-block-plugin";
+import { createPlaceholderPlugin } from "../lib/placeholder-plugin";
 
 interface MilkdownEditorProps {
   defaultValue?: string;
@@ -18,12 +22,32 @@ export default function MilkdownEditor(props: MilkdownEditorProps) {
   onMount(async () => {
     if (!ref) return;
 
+    const highlighter = await createHighlighterCore({
+      themes: [import("shiki/themes/github-dark-default.mjs")],
+      langs: [
+        import("shiki/langs/javascript.mjs"),
+        import("shiki/langs/typescript.mjs"),
+        import("shiki/langs/rust.mjs"),
+        import("shiki/langs/css.mjs"),
+        import("shiki/langs/html.mjs"),
+        import("shiki/langs/json.mjs"),
+        import("shiki/langs/markdown.mjs"),
+        import("shiki/langs/bash.mjs"),
+      ],
+      engine: createJavaScriptRegexEngine(),
+    });
+
+    const parser = createParser(highlighter as any, {
+      theme: "github-dark-default",
+    });
+
     editor = await Editor.make()
       .config((ctx) => {
         ctx.set(rootCtx, ref!);
         if (props.defaultValue) {
           ctx.set(defaultValueCtx, props.defaultValue);
         }
+        ctx.set(highlightPluginConfig.key, { parser });
         if (props.onChange) {
           const onChange = props.onChange;
           ctx.get(listenerCtx).markdownUpdated((_ctx, markdown) => {
@@ -33,8 +57,9 @@ export default function MilkdownEditor(props: MilkdownEditorProps) {
       })
       .use(commonmark)
       .use(listener)
-      .use(shikiPlugin)
+      .use(highlight)
       .use(exitCodeBlockPlugin)
+      .use(props.placeholder ? createPlaceholderPlugin(props.placeholder) : [])
       .create();
   });
 
@@ -54,7 +79,6 @@ export default function MilkdownEditor(props: MilkdownEditorProps) {
     <div
       ref={ref}
       class="milkdown-editor"
-      data-placeholder={props.placeholder}
       onClick={handleClick}
     />
   );

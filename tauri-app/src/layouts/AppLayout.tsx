@@ -1,4 +1,4 @@
-import { createSignal, createMemo } from "solid-js";
+import { createSignal, createEffect, onCleanup } from "solid-js";
 import { useLocation } from "@solidjs/router";
 import Icon, { type IconName } from "../components/Icon";
 import ToggleMenu from "../components/ToggleMenu";
@@ -19,16 +19,24 @@ const MODE_LABELS: Record<string, string> = {
   "/tasks": "Tasks",
 };
 
-type Theme = "light" | "dark";
+type Theme = "light" | "dark" | "system";
 
 function getInitialTheme(): Theme {
   const saved = localStorage.getItem("theme") as Theme | null;
-  if (saved) return saved;
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  if (saved === "light" || saved === "dark" || saved === "system") return saved;
+  return "system";
+}
+
+function getResolvedTheme(theme: Theme): "light" | "dark" {
+  if (theme === "system") {
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+  return theme;
 }
 
 function applyTheme(theme: Theme) {
-  document.documentElement.setAttribute("data-theme", theme);
+  const resolved = getResolvedTheme(theme);
+  document.documentElement.setAttribute("data-theme", resolved);
   localStorage.setItem("theme", theme);
 }
 
@@ -39,13 +47,33 @@ export default function AppLayout(props: AppLayoutProps) {
 
   applyTheme(theme());
 
-  const currentIcon = createMemo(() => MODE_ICONS[location.pathname] ?? "lightning");
-  const currentLabel = createMemo(() => MODE_LABELS[location.pathname] ?? "Timeline");
+  const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+  const handleMediaChange = () => {
+    if (theme() === "system") {
+      applyTheme("system");
+    }
+  };
+  mediaQuery.addEventListener("change", handleMediaChange);
+  onCleanup(() => mediaQuery.removeEventListener("change", handleMediaChange));
 
-  const toggleTheme = () => {
-    const next = theme() === "dark" ? "light" : "dark";
+  createEffect(() => {
+    applyTheme(theme());
+  });
+
+  const currentIcon = () => MODE_ICONS[location.pathname] ?? "lightning";
+  const currentLabel = () => MODE_LABELS[location.pathname] ?? "Timeline";
+
+  const cycleTheme = () => {
+    const order: Theme[] = ["system", "light", "dark"];
+    const idx = order.indexOf(theme());
+    const next = order[(idx + 1) % order.length];
     setTheme(next);
-    applyTheme(next);
+  };
+
+  const themeIcon = () => {
+    const t = theme();
+    if (t === "system") return "lightning" as IconName;
+    return t === "dark" ? "sun" as IconName : "moon" as IconName;
   };
 
   return (
@@ -54,8 +82,8 @@ export default function AppLayout(props: AppLayoutProps) {
         <button type="button" onClick={() => setMenuOpen(!menuOpen())} aria-label="Toggle menu">
           <Icon name="list" size={24} />
         </button>
-        <button type="button" onClick={toggleTheme} aria-label="Toggle theme">
-          <Icon name={theme() === "dark" ? "sun" : "moon"} size={20} />
+        <button type="button" onClick={cycleTheme} aria-label="Toggle theme">
+          <Icon name={themeIcon()} size={20} />
         </button>
       </header>
       <ToggleMenu isOpen={menuOpen} onClose={() => setMenuOpen(false)} />
