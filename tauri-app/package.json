@@ -12,9 +12,11 @@
   "dependencies": {
     "@milkdown/kit": "^7.20.0",
     "@milkdown/plugin-highlight": "^7.20.0",
+    "@phosphor-icons/core": "^2.1.1",
     "@solidjs/router": "^0.16.1",
     "@tauri-apps/api": "^2",
     "markdown-it": "^14.1.1",
+    "open-props": "^1.7.23",
     "shiki": "^4.0.2",
     "solid-js": "^1.9.12"
   },

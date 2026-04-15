@@ -1,5 +1,5 @@
-@import "open-props/style";
-@import "open-props/normalize";
+@import "open-props/open-props.min.css";
+@import "open-props/normalize.min.css";
 
 :root {
   --app-surface: var(--gray-0);
