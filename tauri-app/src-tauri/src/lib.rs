@@ -103,6 +103,38 @@ fn complete_task(handle: AppHandle, project_slug: String, filename: String) -> R
 }
 
 #[tauri::command]
+fn list_timeline_dates(handle: AppHandle) -> Result<Vec<String>, String> {
+    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let dates =
+        magical_merchant_core::list_timeline_dates(&base_dir).map_err(|e| e.to_string())?;
+    Ok(dates
+        .iter()
+        .map(|d| d.format("%Y-%m-%d").to_string())
+        .collect())
+}
+
+#[tauri::command]
+fn read_timeline_by_date(handle: AppHandle, date: String) -> Result<Vec<String>, String> {
+    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let naive =
+        chrono::NaiveDate::parse_from_str(&date, "%Y-%m-%d").map_err(|e| e.to_string())?;
+    magical_merchant_core::read_timeline(&base_dir, naive).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_note(file_path: String) -> Result<(), String> {
+    let path = std::path::PathBuf::from(&file_path);
+    magical_merchant_core::delete_note(&path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_task(handle: AppHandle, project_slug: String, filename: String) -> Result<(), String> {
+    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    magical_merchant_core::delete_task(&base_dir, &project_slug, &filename)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn update_task(
     handle: AppHandle,
     project_slug: String,
@@ -134,6 +166,10 @@ pub fn run() {
             list_done_tasks,
             complete_task,
             update_task,
+            list_timeline_dates,
+            read_timeline_by_date,
+            delete_note,
+            delete_task,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
