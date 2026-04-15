@@ -241,6 +241,33 @@ pub fn update_task(
     Ok(())
 }
 
+pub fn delete_task(
+    base_dir: &Path,
+    project_slug: &str,
+    filename: &str,
+) -> Result<(), CoreError> {
+    if !is_valid_slug(project_slug) {
+        return Err(CoreError::InvalidSlug(project_slug.to_string()));
+    }
+    validate_filename(filename)?;
+
+    let active_path = path::active_tasks_dir(base_dir, project_slug).join(filename);
+    if active_path.exists() {
+        fs::remove_file(&active_path)?;
+        return Ok(());
+    }
+
+    let done_path = path::done_tasks_dir(base_dir, project_slug).join(filename);
+    if done_path.exists() {
+        fs::remove_file(&done_path)?;
+        return Ok(());
+    }
+
+    Err(CoreError::NotFound(format!(
+        "task: {project_slug}/{filename}"
+    )))
+}
+
 pub fn read_project(base_dir: &Path, slug: &str) -> Result<ProjectSummary, CoreError> {
     let file_path = path::project_file_path(base_dir, slug);
     if !file_path.exists() {
@@ -730,6 +757,72 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let result = list_active_tasks(tmp.path(), "nonexistent");
         assert!(matches!(result, Err(CoreError::NotFound(_))));
+    }
+
+    #[test]
+    fn test_delete_active_task() {
+        let tmp = TempDir::new().unwrap();
+        create_project(tmp.path(), "proj", "Proj", "Desc").unwrap();
+        let active_dir = path::active_tasks_dir(tmp.path(), "proj");
+        let filename = "20260101_120000.md";
+        write_task_file(
+            &active_dir,
+            filename,
+            &TaskFrontmatter {
+                title: "Task".to_string(),
+                created: sample_datetime(2026, 1, 1, 12, 0, 0),
+                completed: None,
+                tags: vec![],
+            },
+            "body",
+        );
+        assert!(active_dir.join(filename).exists());
+        delete_task(tmp.path(), "proj", filename).unwrap();
+        assert!(!active_dir.join(filename).exists());
+    }
+
+    #[test]
+    fn test_delete_done_task() {
+        let tmp = TempDir::new().unwrap();
+        create_project(tmp.path(), "proj", "Proj", "Desc").unwrap();
+        write_done_task(
+            &tmp,
+            "proj",
+            "20260101_120000.md",
+            &TaskFrontmatter {
+                title: "Task".to_string(),
+                created: sample_datetime(2026, 1, 1, 12, 0, 0),
+                completed: Some(sample_datetime(2026, 1, 2, 12, 0, 0)),
+                tags: vec![],
+            },
+        );
+        let done_dir = path::done_tasks_dir(tmp.path(), "proj");
+        assert!(done_dir.join("20260101_120000.md").exists());
+        delete_task(tmp.path(), "proj", "20260101_120000.md").unwrap();
+        assert!(!done_dir.join("20260101_120000.md").exists());
+    }
+
+    #[test]
+    fn test_delete_task_not_found() {
+        let tmp = TempDir::new().unwrap();
+        create_project(tmp.path(), "proj", "Proj", "Desc").unwrap();
+        let result = delete_task(tmp.path(), "proj", "nonexistent.md");
+        assert!(matches!(result, Err(CoreError::NotFound(_))));
+    }
+
+    #[test]
+    fn test_delete_task_invalid_slug() {
+        let tmp = TempDir::new().unwrap();
+        let result = delete_task(tmp.path(), "Bad Slug", "file.md");
+        assert!(matches!(result, Err(CoreError::InvalidSlug(_))));
+    }
+
+    #[test]
+    fn test_delete_task_path_traversal() {
+        let tmp = TempDir::new().unwrap();
+        create_project(tmp.path(), "proj", "Proj", "Desc").unwrap();
+        let result = delete_task(tmp.path(), "proj", "../../../etc/passwd");
+        assert!(matches!(result, Err(CoreError::PathTraversal(_))));
     }
 
     #[test]

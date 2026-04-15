@@ -89,6 +89,21 @@ pub fn read_note(file_path: &Path) -> Result<String, CoreError> {
     Ok(fs::read_to_string(file_path)?)
 }
 
+pub fn delete_note(file_path: &Path) -> Result<(), CoreError> {
+    if let Some(name) = file_path.file_name().and_then(|n| n.to_str()) {
+        if name.contains("..") {
+            return Err(CoreError::PathTraversal(name.to_string()));
+        }
+    }
+    if !file_path.exists() {
+        return Err(CoreError::NotFound(
+            file_path.to_string_lossy().to_string(),
+        ));
+    }
+    fs::remove_file(file_path)?;
+    Ok(())
+}
+
 fn parse_note_content(content: &str) -> (Option<DateTime<FixedOffset>>, Vec<String>, String) {
     match frontmatter::parse::<NoteFrontmatter>(content) {
         Ok((fm, body)) => {
@@ -170,6 +185,23 @@ mod tests {
         let path = create_draft_note(tmp.path(), "full content", &[], &mock_context()).unwrap();
         let content = read_note(&path).unwrap();
         assert!(content.contains("full content"));
+    }
+
+    #[test]
+    fn test_delete_note_success() {
+        let tmp = TempDir::new().unwrap();
+        let path = create_draft_note(tmp.path(), "to delete", &[], &mock_context()).unwrap();
+        assert!(path.exists());
+        delete_note(&path).unwrap();
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn test_delete_note_not_found() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("data/notes/nonexistent.md");
+        let result = delete_note(&path);
+        assert!(matches!(result, Err(CoreError::NotFound(_))));
     }
 
     #[test]

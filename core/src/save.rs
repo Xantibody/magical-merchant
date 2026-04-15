@@ -56,6 +56,25 @@ pub fn save_note(
     Ok(())
 }
 
+pub fn list_timeline_dates(base_dir: &Path) -> Result<Vec<NaiveDate>, CoreError> {
+    let timeline_dir = base_dir.join("data").join("timeline");
+    if !timeline_dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut dates: Vec<NaiveDate> = fs::read_dir(&timeline_dir)?
+        .filter_map(|e| e.ok())
+        .filter_map(|e| {
+            let name = e.file_name().to_string_lossy().to_string();
+            let stem = name.strip_suffix(".md")?;
+            NaiveDate::parse_from_str(stem, "%Y-%m-%d").ok()
+        })
+        .collect();
+
+    dates.sort_by(|a, b| b.cmp(a));
+    Ok(dates)
+}
+
 pub fn read_timeline(base_dir: &Path, date: NaiveDate) -> Result<Vec<String>, CoreError> {
     let file_path = timeline_file_path(base_dir, date);
     if !file_path.exists() {
@@ -149,6 +168,43 @@ mod tests {
         let today = Local::now().date_naive();
         let lines = read_timeline(tmp.path(), today).unwrap();
         assert!(lines.is_empty());
+    }
+
+    #[test]
+    fn test_list_timeline_dates_empty() {
+        let tmp = TempDir::new().unwrap();
+        let dates = list_timeline_dates(tmp.path()).unwrap();
+        assert!(dates.is_empty());
+    }
+
+    #[test]
+    fn test_list_timeline_dates_returns_sorted_desc() {
+        let tmp = TempDir::new().unwrap();
+        let timeline_dir = tmp.path().join("data").join("timeline");
+        fs::create_dir_all(&timeline_dir).unwrap();
+        fs::write(timeline_dir.join("2026-01-15.md"), "entry").unwrap();
+        fs::write(timeline_dir.join("2026-03-01.md"), "entry").unwrap();
+        fs::write(timeline_dir.join("2026-02-10.md"), "entry").unwrap();
+
+        let dates = list_timeline_dates(tmp.path()).unwrap();
+        assert_eq!(dates.len(), 3);
+        assert_eq!(dates[0], NaiveDate::from_ymd_opt(2026, 3, 1).unwrap());
+        assert_eq!(dates[1], NaiveDate::from_ymd_opt(2026, 2, 10).unwrap());
+        assert_eq!(dates[2], NaiveDate::from_ymd_opt(2026, 1, 15).unwrap());
+    }
+
+    #[test]
+    fn test_list_timeline_dates_skips_invalid_filenames() {
+        let tmp = TempDir::new().unwrap();
+        let timeline_dir = tmp.path().join("data").join("timeline");
+        fs::create_dir_all(&timeline_dir).unwrap();
+        fs::write(timeline_dir.join("2026-01-15.md"), "entry").unwrap();
+        fs::write(timeline_dir.join("README.md"), "readme").unwrap();
+        fs::write(timeline_dir.join("not-a-date.md"), "invalid").unwrap();
+
+        let dates = list_timeline_dates(tmp.path()).unwrap();
+        assert_eq!(dates.len(), 1);
+        assert_eq!(dates[0], NaiveDate::from_ymd_opt(2026, 1, 15).unwrap());
     }
 
     #[test]
