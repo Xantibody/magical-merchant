@@ -2,6 +2,11 @@ import { onCleanup, onMount } from "solid-js";
 import { Editor, rootCtx, defaultValueCtx } from "@milkdown/kit/core";
 import { commonmark } from "@milkdown/kit/preset/commonmark";
 import { listener, listenerCtx } from "@milkdown/kit/plugin/listener";
+import { cursor } from "@milkdown/kit/plugin/cursor";
+import { history } from "@milkdown/kit/plugin/history";
+import { clipboard } from "@milkdown/kit/plugin/clipboard";
+import { trailing } from "@milkdown/kit/plugin/trailing";
+import { linkTooltipPlugin } from "@milkdown/kit/component/link-tooltip";
 import { highlight, highlightPluginConfig } from "@milkdown/plugin-highlight";
 import { createParser } from "@milkdown/plugin-highlight/shiki";
 import { createHighlighterCore } from "shiki/core";
@@ -58,6 +63,11 @@ export default function MilkdownEditor(props: MilkdownEditorProps) {
       .use(commonmark)
       .use(listener)
       .use(highlight)
+      .use(cursor)
+      .use(history)
+      .use(clipboard)
+      .use(trailing)
+      .use(linkTooltipPlugin)
       .use(exitCodeBlockPlugin)
       .use(props.placeholder ? createPlaceholderPlugin(props.placeholder) : [])
       .create();
