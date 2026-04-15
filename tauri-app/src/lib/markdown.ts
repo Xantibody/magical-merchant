@@ -1,4 +1,5 @@
 import MarkdownIt from "markdown-it";
+import { getShikiTheme } from "./theme";
 
 const md = MarkdownIt({
   html: false,
@@ -45,7 +46,7 @@ export async function renderMarkdown(source: string): Promise<string> {
       try {
         const highlighted = await codeToHtml(block.code, {
           lang: block.lang || "text",
-          theme: "github-dark-default",
+          theme: getShikiTheme(),
         });
         html = html.replace(
           `<div id="${block.id}" class="shiki-placeholder"><pre><code>${localMd.utils.escapeHtml(block.code)}</code></pre></div>`,

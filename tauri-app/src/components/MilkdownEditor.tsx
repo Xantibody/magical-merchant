@@ -13,6 +13,7 @@ import { createHighlighterCore } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import { exitCodeBlockPlugin } from "../lib/exit-code-block-plugin";
 import { createPlaceholderPlugin } from "../lib/placeholder-plugin";
+import { getShikiTheme } from "../lib/theme";
 
 interface MilkdownEditorProps {
   defaultValue?: string;
@@ -28,7 +29,10 @@ export default function MilkdownEditor(props: MilkdownEditorProps) {
     if (!ref) return;
 
     const highlighter = await createHighlighterCore({
-      themes: [import("shiki/themes/github-dark-default.mjs")],
+      themes: [
+        import("shiki/themes/github-dark-default.mjs"),
+        import("shiki/themes/github-light-default.mjs"),
+      ],
       langs: [
         import("shiki/langs/javascript.mjs"),
         import("shiki/langs/typescript.mjs"),
@@ -43,7 +47,7 @@ export default function MilkdownEditor(props: MilkdownEditorProps) {
     });
 
     const parser = createParser(highlighter as any, {
-      theme: "github-dark-default",
+      theme: getShikiTheme(),
     });
 
     editor = await Editor.make()

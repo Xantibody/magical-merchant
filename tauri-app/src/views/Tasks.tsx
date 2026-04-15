@@ -94,8 +94,12 @@ export default function Tasks() {
   const handleCompleteTask = async (filename: string) => {
     const slug = selectedProject();
     if (!slug) return;
-    await invoke("complete_task", { projectSlug: slug, filename });
-    refetchTasks();
+    try {
+      await invoke("complete_task", { projectSlug: slug, filename });
+      refetchTasks();
+    } catch (e) {
+      setError(String(e));
+    }
   };
 
   return (

@@ -41,7 +41,8 @@ export default function Icon(props: IconProps) {
       const svg = mod.default as string;
       cache.set(currentName, svg);
       if (local.name === currentName && ref) {
-        applyIcon(ref, svg, size);
+        const currentSize = local.size ?? 24;
+        applyIcon(ref, svg, currentSize);
       }
     });
   });

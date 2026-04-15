@@ -67,8 +67,11 @@ export default function Notes() {
     if (debounceTimer) clearTimeout(debounceTimer);
   });
 
-  const handleDone = () => {
+  const handleDone = async () => {
     if (debounceTimer) clearTimeout(debounceTimer);
+    if (draftPath() && body().trim()) {
+      await save();
+    }
     setBody("");
     setTagsInput("");
     setDraftPath(null);
