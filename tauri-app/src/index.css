@@ -1,8 +1,8 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-html {
-  padding-top: env(safe-area-inset-top, 0px);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-}
+@import "./styles/base.css";
+@import "./styles/layout.css";
+@import "./styles/action-bar.css";
+@import "./styles/timeline.css";
+@import "./styles/editor.css";
+@import "./styles/notes.css";
+@import "./styles/tasks.css";
+@import "./styles/markdown-preview.css";

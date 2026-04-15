@@ -25,6 +25,7 @@ target
 # Node
 node_modules/
 dist/
+*.tsbuildinfo
 
 # Tauri
 tauri-app/src-tauri/gen/

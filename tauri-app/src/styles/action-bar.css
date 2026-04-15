@@ -1,0 +1,44 @@
+.action-bar-zone {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  padding: var(--size-5);
+}
+
+.action-bar {
+  display: flex;
+  gap: var(--size-2);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms var(--ease-2);
+}
+
+.action-bar-zone:hover .action-bar,
+.action-bar:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.action-bar button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--size-1);
+  padding: var(--size-2) var(--size-3);
+  background: var(--app-accent);
+  color: var(--gray-0);
+  border: none;
+  border-radius: var(--radius-2);
+  cursor: pointer;
+  font-size: var(--font-size-0);
+  box-shadow: var(--shadow-2);
+}
+
+.action-bar button:hover {
+  filter: brightness(1.1);
+}
+
+.action-bar button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
