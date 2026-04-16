@@ -8,7 +8,10 @@ mod save;
 
 pub use error::CoreError;
 pub use format::{DeviceContext, format_note_markdown, format_timeline_line};
-pub use note::{NoteSummary, create_draft_note, delete_note, list_notes, read_note, update_note};
+pub use note::{
+    NoteSummary, create_draft_note, delete_note, list_notes, read_note, read_note_by_filename,
+    update_note,
+};
 pub use path::{
     active_tasks_dir, done_tasks_dir, note_file_path, project_dir, project_file_path, projects_dir,
     timeline_file_path,

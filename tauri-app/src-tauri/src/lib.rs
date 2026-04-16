@@ -39,8 +39,9 @@ fn list_notes(handle: AppHandle) -> Result<Vec<NoteSummary>, String> {
 }
 
 #[tauri::command]
-fn read_note(file_path: String) -> Result<String, String> {
-    magical_merchant_core::read_note(std::path::Path::new(&file_path)).map_err(|e| e.to_string())
+fn read_note(handle: AppHandle, filename: String) -> Result<String, String> {
+    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    magical_merchant_core::read_note_by_filename(&base_dir, &filename).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
