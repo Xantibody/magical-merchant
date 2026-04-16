@@ -11,6 +11,12 @@ const ICONS = {
   moon: () => import("@phosphor-icons/core/assets/regular/moon.svg?raw"),
   "caret-right": () => import("@phosphor-icons/core/assets/regular/caret-right.svg?raw"),
   "caret-down": () => import("@phosphor-icons/core/assets/regular/caret-down.svg?raw"),
+  "arrow-left": () => import("@phosphor-icons/core/assets/regular/arrow-left.svg?raw"),
+  "clock-counter-clockwise": () =>
+    import("@phosphor-icons/core/assets/regular/clock-counter-clockwise.svg?raw"),
+  pencil: () => import("@phosphor-icons/core/assets/regular/pencil.svg?raw"),
+  trash: () => import("@phosphor-icons/core/assets/regular/trash.svg?raw"),
+  plus: () => import("@phosphor-icons/core/assets/regular/plus.svg?raw"),
 } as const;
 
 export type IconName = keyof typeof ICONS;

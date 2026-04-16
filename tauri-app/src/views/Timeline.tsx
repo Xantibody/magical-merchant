@@ -1,16 +1,33 @@
-import { createSignal, createResource, For, Show } from "solid-js";
+import { createSignal, createResource, For, Show, Switch, Match } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
 import ActionBar from "../components/ActionBar";
 import Icon from "../components/Icon";
+import MarkdownPreview from "../components/MarkdownPreview";
+
+type ViewMode = "input" | "list" | "preview";
 
 async function fetchEntries(): Promise<string[]> {
   return invoke<string[]>("read_timeline");
+}
+
+async function fetchDates(): Promise<string[]> {
+  return invoke<string[]>("list_timeline_dates");
+}
+
+async function fetchEntriesByDate(date: string): Promise<string[]> {
+  return invoke<string[]>("read_timeline_by_date", { date });
 }
 
 export default function Timeline() {
   const [text, setText] = createSignal("");
   const [saving, setSaving] = createSignal(false);
   const [entries, { refetch }] = createResource(fetchEntries);
+  const [viewMode, setViewMode] = createSignal<ViewMode>("input");
+  const [selectedDate, setSelectedDate] = createSignal<string | null>(null);
+  const [dates, { refetch: refetchDates }] = createResource(fetchDates);
+  const [dateEntries] = createResource(selectedDate, (date) =>
+    date ? fetchEntriesByDate(date) : Promise.resolve([]),
+  );
 
   const handleSend = async () => {
     const trimmed = text().trim();
@@ -33,33 +50,104 @@ export default function Timeline() {
     }
   };
 
+  const openList = () => {
+    refetchDates();
+    setViewMode("list");
+  };
+
+  const openPreview = (date: string) => {
+    setSelectedDate(date);
+    setViewMode("preview");
+  };
+
+  const goBack = () => {
+    if (viewMode() === "preview") {
+      setSelectedDate(null);
+      setViewMode("list");
+    } else {
+      setViewMode("input");
+    }
+  };
+
   return (
     <div class="view">
-      <div class="timeline">
-        <textarea
-          class="memo-input"
-          rows={2}
-          placeholder="What's on your mind?"
-          value={text()}
-          onInput={(e) => setText(e.currentTarget.value)}
-          onKeyDown={handleKeyDown}
-        />
+      <Switch>
+        <Match when={viewMode() === "input"}>
+          <div class="timeline">
+            <textarea
+              class="memo-input"
+              rows={2}
+              placeholder="What's on your mind?"
+              value={text()}
+              onInput={(e) => setText(e.currentTarget.value)}
+              onKeyDown={handleKeyDown}
+            />
 
-        <Show when={entries()?.length}>
-          <div class="timeline-entries">
-            <For each={entries()!.slice().reverse()}>
-              {(entry) => <div class="timeline-entry">{entry}</div>}
-            </For>
+            <Show when={entries()?.length}>
+              <div class="timeline-entries">
+                <For each={entries()!.slice().reverse()}>
+                  {(entry) => <div class="timeline-entry">{entry}</div>}
+                </For>
+              </div>
+            </Show>
           </div>
-        </Show>
-      </div>
 
-      <ActionBar>
-        <button type="button" onClick={handleSend} disabled={saving() || !text().trim()}>
-          <Icon name="paper-plane-tilt" size={16} />
-          Send
-        </button>
-      </ActionBar>
+          <ActionBar>
+            <button type="button" onClick={handleSend} disabled={saving() || !text().trim()}>
+              <Icon name="paper-plane-tilt" size={16} />
+              Send
+            </button>
+            <button type="button" onClick={openList} aria-label="履歴を開く">
+              <Icon name="clock-counter-clockwise" size={16} />
+            </button>
+          </ActionBar>
+        </Match>
+
+        <Match when={viewMode() === "list"}>
+          <div class="timeline">
+            <div class="browse-list">
+              <Show when={dates()?.length} fallback={<p class="empty-state">履歴なし</p>}>
+                <For each={dates()}>
+                  {(date) => (
+                    <button class="browse-list-item" onClick={() => openPreview(date)}>
+                      {date}
+                    </button>
+                  )}
+                </For>
+              </Show>
+            </div>
+          </div>
+
+          <ActionBar>
+            <button type="button" onClick={goBack} aria-label="戻る">
+              <Icon name="arrow-left" size={16} />
+            </button>
+          </ActionBar>
+        </Match>
+
+        <Match when={viewMode() === "preview"}>
+          <div class="timeline">
+            <h3 class="preview-date-header">{selectedDate()}</h3>
+            <div class="preview-entries">
+              <Show when={dateEntries()?.length} fallback={<p class="empty-state">エントリなし</p>}>
+                <For each={dateEntries()}>
+                  {(entry) => (
+                    <div class="timeline-entry">
+                      <MarkdownPreview source={entry} />
+                    </div>
+                  )}
+                </For>
+              </Show>
+            </div>
+          </div>
+
+          <ActionBar>
+            <button type="button" onClick={goBack} aria-label="戻る">
+              <Icon name="arrow-left" size={16} />
+            </button>
+          </ActionBar>
+        </Match>
+      </Switch>
     </div>
   );
 }
