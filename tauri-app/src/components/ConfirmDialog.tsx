@@ -12,9 +12,13 @@ export default function ConfirmDialog(props: ConfirmDialogProps) {
   let dialogRef!: HTMLDialogElement;
 
   createEffect(() => {
+    if (!dialogRef) return;
+
     if (props.open) {
-      dialogRef.showModal();
-    } else {
+      if (!dialogRef.open) {
+        dialogRef.showModal();
+      }
+    } else if (dialogRef.open) {
       dialogRef.close();
     }
   });
