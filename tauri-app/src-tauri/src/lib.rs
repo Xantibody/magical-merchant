@@ -120,9 +120,9 @@ fn read_timeline_by_date(handle: AppHandle, date: String) -> Result<Vec<String>,
 }
 
 #[tauri::command]
-fn delete_note(file_path: String) -> Result<(), String> {
-    let path = std::path::PathBuf::from(&file_path);
-    magical_merchant_core::delete_note(&path).map_err(|e| e.to_string())
+fn delete_note(handle: AppHandle, filename: String) -> Result<(), String> {
+    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    magical_merchant_core::delete_note(&base_dir, &filename).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

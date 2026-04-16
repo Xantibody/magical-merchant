@@ -89,16 +89,37 @@ pub fn read_note(file_path: &Path) -> Result<String, CoreError> {
     Ok(fs::read_to_string(file_path)?)
 }
 
-pub fn delete_note(file_path: &Path) -> Result<(), CoreError> {
-    if let Some(name) = file_path.file_name().and_then(|n| n.to_str()) {
-        if name.contains("..") {
-            return Err(CoreError::PathTraversal(name.to_string()));
-        }
+fn validate_note_filename(filename: &str) -> Result<(), CoreError> {
+    let path = Path::new(filename);
+    if filename.is_empty()
+        || filename.contains("..")
+        || filename.contains('/')
+        || filename.contains('\\')
+        || filename.contains('\0')
+        || path.components().count() != 1
+    {
+        return Err(CoreError::PathTraversal(filename.to_string()));
     }
+    Ok(())
+}
+
+pub fn delete_note(base_dir: &Path, filename: &str) -> Result<(), CoreError> {
+    validate_note_filename(filename)?;
+
+    let notes_dir = base_dir.join("data").join("notes");
+    let file_path = notes_dir.join(filename);
+
     if !file_path.exists() {
         return Err(CoreError::NotFound(file_path.to_string_lossy().to_string()));
     }
-    fs::remove_file(file_path)?;
+
+    let canonical_notes_dir = fs::canonicalize(&notes_dir)?;
+    let canonical_file_path = fs::canonicalize(&file_path)?;
+    if !canonical_file_path.starts_with(&canonical_notes_dir) {
+        return Err(CoreError::PathTraversal(filename.to_string()));
+    }
+
+    fs::remove_file(canonical_file_path)?;
     Ok(())
 }
 
@@ -190,16 +211,32 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let path = create_draft_note(tmp.path(), "to delete", &[], &mock_context()).unwrap();
         assert!(path.exists());
-        delete_note(&path).unwrap();
+        let filename = path.file_name().unwrap().to_str().unwrap();
+        delete_note(tmp.path(), filename).unwrap();
         assert!(!path.exists());
     }
 
     #[test]
     fn test_delete_note_not_found() {
         let tmp = TempDir::new().unwrap();
-        let path = tmp.path().join("data/notes/nonexistent.md");
-        let result = delete_note(&path);
+        // Ensure notes dir exists so canonicalize doesn't fail before NotFound
+        fs::create_dir_all(tmp.path().join("data/notes")).unwrap();
+        let result = delete_note(tmp.path(), "nonexistent.md");
         assert!(matches!(result, Err(CoreError::NotFound(_))));
+    }
+
+    #[test]
+    fn test_delete_note_path_traversal() {
+        let tmp = TempDir::new().unwrap();
+        let result = delete_note(tmp.path(), "../etc/passwd");
+        assert!(matches!(result, Err(CoreError::PathTraversal(_))));
+    }
+
+    #[test]
+    fn test_delete_note_rejects_absolute_path() {
+        let tmp = TempDir::new().unwrap();
+        let result = delete_note(tmp.path(), "/tmp/evil.md");
+        assert!(matches!(result, Err(CoreError::PathTraversal(_))));
     }
 
     #[test]
