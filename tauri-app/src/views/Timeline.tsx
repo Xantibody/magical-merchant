@@ -97,7 +97,7 @@ export default function Timeline() {
               <Icon name="paper-plane-tilt" size={16} />
               Send
             </button>
-            <button type="button" onClick={openList}>
+            <button type="button" onClick={openList} aria-label="履歴を開く">
               <Icon name="clock-counter-clockwise" size={16} />
             </button>
           </ActionBar>
@@ -119,7 +119,7 @@ export default function Timeline() {
           </div>
 
           <ActionBar>
-            <button type="button" onClick={goBack}>
+            <button type="button" onClick={goBack} aria-label="戻る">
               <Icon name="arrow-left" size={16} />
             </button>
           </ActionBar>
@@ -145,7 +145,7 @@ export default function Timeline() {
           </div>
 
           <ActionBar>
-            <button type="button" onClick={goBack}>
+            <button type="button" onClick={goBack} aria-label="戻る">
               <Icon name="arrow-left" size={16} />
             </button>
           </ActionBar>
