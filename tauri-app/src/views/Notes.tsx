@@ -1,4 +1,14 @@
-import { createSignal, createEffect, createResource, on, onCleanup, For, Show, Switch, Match } from "solid-js";
+import {
+  createSignal,
+  createEffect,
+  createResource,
+  on,
+  onCleanup,
+  For,
+  Show,
+  Switch,
+  Match,
+} from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
 import MilkdownEditor from "../components/MilkdownEditor";
 import MarkdownPreview from "../components/MarkdownPreview";
@@ -218,7 +228,10 @@ export default function Notes() {
               <Show when={notes()?.length} fallback={<p class="empty-state">ノートなし</p>}>
                 <For each={notes()}>
                   {(note) => (
-                    <button class="browse-list-item note-list-item" onClick={() => openPreview(note)}>
+                    <button
+                      class="browse-list-item note-list-item"
+                      onClick={() => openPreview(note)}
+                    >
                       <span class="note-preview-text">{note.preview || "(empty)"}</span>
                       <span class="note-meta">
                         <Show when={note.time}>

@@ -341,10 +341,7 @@ export default function Tasks() {
               </div>
             </div>
             <div class="task-preview-body">
-              <Show
-                when={selectedTask()?.body}
-                fallback={<p class="empty-state">本文なし</p>}
-              >
+              <Show when={selectedTask()?.body} fallback={<p class="empty-state">本文なし</p>}>
                 <MarkdownPreview source={selectedTask()!.body} />
               </Show>
             </div>
