@@ -217,6 +217,10 @@ export default function Tasks() {
               </div>
             </Show>
 
+            <Show when={error()}>
+              <p class="error-text">{error()}</p>
+            </Show>
+
             {/* Task list */}
             <Show when={selectedProject()}>
               <div class="task-list">
@@ -347,15 +351,15 @@ export default function Tasks() {
           </div>
 
           <ActionBar>
-            <button type="button" onClick={goBack}>
+            <button type="button" onClick={goBack} aria-label="戻る">
               <Icon name="arrow-left" size={16} />
             </button>
             <Show when={selectedTask() && isActiveTask(selectedTask()!)}>
-              <button type="button" onClick={handleCompleteFromPreview}>
+              <button type="button" onClick={handleCompleteFromPreview} aria-label="タスクを完了">
                 <Icon name="check-square" size={16} />
               </button>
             </Show>
-            <button type="button" onClick={confirmDelete}>
+            <button type="button" onClick={confirmDelete} aria-label="タスクを削除">
               <Icon name="trash" size={16} />
             </button>
           </ActionBar>

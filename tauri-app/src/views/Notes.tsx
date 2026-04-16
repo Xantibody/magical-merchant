@@ -109,10 +109,14 @@ export default function Notes() {
   };
 
   const openPreview = async (note: NoteSummary) => {
-    setSelectedNote(note);
-    const content = await invoke<string>("read_note", { filePath: note.path });
-    setNoteContent(content);
-    setViewMode("preview");
+    try {
+      const content = await invoke<string>("read_note", { filePath: note.path });
+      setSelectedNote(note);
+      setNoteContent(content);
+      setViewMode("preview");
+    } catch (e) {
+      console.error("Failed to open note preview:", e);
+    }
   };
 
   const openEditor = () => {
@@ -139,11 +143,15 @@ export default function Notes() {
     const note = selectedNote();
     if (!note) return;
     setConfirmOpen(false);
-    await invoke("delete_note", { filePath: note.path });
-    setSelectedNote(null);
-    setNoteContent("");
-    refetchNotes();
-    setViewMode("list");
+    try {
+      await invoke("delete_note", { filename: note.filename });
+      setSelectedNote(null);
+      setNoteContent("");
+      refetchNotes();
+      setViewMode("list");
+    } catch (e) {
+      console.error("Failed to delete note:", e);
+    }
   };
 
   const goBack = () => {
@@ -198,7 +206,7 @@ export default function Notes() {
               <Icon name="check-square" size={16} />
               Done
             </button>
-            <button type="button" onClick={openList}>
+            <button type="button" onClick={openList} aria-label="ノート一覧を開く">
               <Icon name="list" size={16} />
             </button>
           </ActionBar>
@@ -228,7 +236,7 @@ export default function Notes() {
           </div>
 
           <ActionBar>
-            <button type="button" onClick={openEditor}>
+            <button type="button" onClick={openEditor} aria-label="新規ノート">
               <Icon name="plus" size={16} />
             </button>
           </ActionBar>
@@ -240,13 +248,13 @@ export default function Notes() {
           </div>
 
           <ActionBar>
-            <button type="button" onClick={goBack}>
+            <button type="button" onClick={goBack} aria-label="戻る">
               <Icon name="arrow-left" size={16} />
             </button>
-            <button type="button" onClick={editNote}>
+            <button type="button" onClick={editNote} aria-label="ノートを編集">
               <Icon name="pencil" size={16} />
             </button>
-            <button type="button" onClick={confirmDelete}>
+            <button type="button" onClick={confirmDelete} aria-label="ノートを削除">
               <Icon name="trash" size={16} />
             </button>
           </ActionBar>
