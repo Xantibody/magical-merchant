@@ -39,6 +39,7 @@ export default function Notes() {
   const [selectedNote, setSelectedNote] = createSignal<NoteSummary | null>(null);
   const [noteContent, setNoteContent] = createSignal("");
   const [confirmOpen, setConfirmOpen] = createSignal(false);
+  const [error, setError] = createSignal("");
   const [notes, { refetch: refetchNotes }] = createResource(fetchNotes);
 
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
@@ -120,12 +121,13 @@ export default function Notes() {
 
   const openPreview = async (note: NoteSummary) => {
     try {
-      const content = await invoke<string>("read_note", { filePath: note.path });
+      setError("");
+      const content = await invoke<string>("read_note", { filename: note.filename });
       setSelectedNote(note);
       setNoteContent(content);
       setViewMode("preview");
     } catch (e) {
-      console.error("Failed to open note preview:", e);
+      setError(String(e));
     }
   };
 
@@ -160,7 +162,7 @@ export default function Notes() {
       refetchNotes();
       setViewMode("list");
     } catch (e) {
-      console.error("Failed to delete note:", e);
+      setError(String(e));
     }
   };
 
@@ -224,6 +226,9 @@ export default function Notes() {
 
         <Match when={viewMode() === "list"}>
           <div class="notes-list-container">
+            <Show when={error()}>
+              <p class="error-text">{error()}</p>
+            </Show>
             <div class="browse-list">
               <Show when={notes()?.length} fallback={<p class="empty-state">ノートなし</p>}>
                 <For each={notes()}>
@@ -257,6 +262,9 @@ export default function Notes() {
 
         <Match when={viewMode() === "preview"}>
           <div class="note-preview-container">
+            <Show when={error()}>
+              <p class="error-text">{error()}</p>
+            </Show>
             <MarkdownPreview source={noteContent()} />
           </div>
 
