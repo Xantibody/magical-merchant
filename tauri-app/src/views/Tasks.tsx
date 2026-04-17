@@ -20,7 +20,7 @@ interface TaskSummary {
   body: string;
 }
 
-type ViewMode = "list" | "preview";
+type ViewMode = "list" | "edit" | "preview";
 
 function toSlug(name: string): string {
   return name
@@ -120,9 +120,9 @@ export default function Tasks() {
     }
   };
 
-  const openPreview = (task: TaskSummary) => {
+  const openTask = (task: TaskSummary) => {
     setSelectedTask(task);
-    setViewMode("preview");
+    setViewMode(isActiveTask(task) ? "edit" : "preview");
   };
 
   const goBack = () => {
@@ -239,7 +239,7 @@ export default function Tasks() {
                       <button
                         type="button"
                         class="task-title-btn"
-                        onClick={() => openPreview(task)}
+                        onClick={() => openTask(task)}
                       >
                         {task.title}
                       </button>
@@ -276,7 +276,7 @@ export default function Tasks() {
                           <button
                             type="button"
                             class="task-title-btn task-title-done"
-                            onClick={() => openPreview(task)}
+                            onClick={() => openTask(task)}
                           >
                             {task.title}
                           </button>
@@ -327,6 +327,47 @@ export default function Tasks() {
           </Show>
         </Match>
 
+        <Match when={viewMode() === "edit"}>
+          <div class="tasks-layout">
+            <div class="task-preview-header">
+              <h3 class="task-preview-title">{selectedTask()?.title}</h3>
+              <div class="task-preview-meta">
+                <Show when={selectedTask()?.created}>
+                  <span>{formatTime(selectedTask()?.created)}</span>
+                </Show>
+                <Show when={selectedTask()?.tags?.length}>
+                  <span>{selectedTask()?.tags.join(", ")}</span>
+                </Show>
+              </div>
+            </div>
+            <div class="task-preview-body">
+              <Show when={selectedTask()?.body} fallback={<p class="empty-state">本文なし</p>}>
+                <MarkdownPreview source={selectedTask()!.body} />
+              </Show>
+            </div>
+          </div>
+
+          <ActionBar>
+            <button type="button" onClick={goBack} aria-label="戻る">
+              <Icon name="arrow-left" size={16} />
+            </button>
+            <button type="button" onClick={handleCompleteFromPreview} aria-label="タスクを完了">
+              <Icon name="check-square" size={16} />
+            </button>
+            <button type="button" onClick={confirmDelete} aria-label="タスクを削除">
+              <Icon name="trash" size={16} />
+            </button>
+          </ActionBar>
+
+          <ConfirmDialog
+            open={confirmOpen()}
+            title="タスクを削除しますか？"
+            message="この操作は元に戻せません。"
+            onConfirm={handleDelete}
+            onCancel={() => setConfirmOpen(false)}
+          />
+        </Match>
+
         <Match when={viewMode() === "preview"}>
           <div class="tasks-layout">
             <div class="task-preview-header">
@@ -351,11 +392,6 @@ export default function Tasks() {
             <button type="button" onClick={goBack} aria-label="戻る">
               <Icon name="arrow-left" size={16} />
             </button>
-            <Show when={selectedTask() && isActiveTask(selectedTask()!)}>
-              <button type="button" onClick={handleCompleteFromPreview} aria-label="タスクを完了">
-                <Icon name="check-square" size={16} />
-              </button>
-            </Show>
             <button type="button" onClick={confirmDelete} aria-label="タスクを削除">
               <Icon name="trash" size={16} />
             </button>
