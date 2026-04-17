@@ -40,7 +40,7 @@ describe("renderMarkdownSync", () => {
     expect(html).not.toContain("<script>");
   });
 
-  it("returns empty paragraph for empty string", () => {
+  it("returns empty string for empty string", () => {
     const html = renderMarkdownSync("");
     expect(html.trim()).toBe("");
   });

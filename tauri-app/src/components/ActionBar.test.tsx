@@ -1,7 +1,9 @@
-import { render } from "@solidjs/testing-library";
+import { cleanup, render } from "@solidjs/testing-library";
 import { page } from "vitest/browser";
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect } from "vitest";
 import ActionBar from "./ActionBar";
+
+afterEach(() => cleanup());
 
 describe("ActionBar", () => {
   it("renders children", async () => {

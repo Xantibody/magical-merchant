@@ -23,7 +23,7 @@ describe("Icon", () => {
     expect(svg.getAttribute("height")).toBe("16px");
   });
 
-  it("uses cached SVG on second render (no additional fetch)", async () => {
+  it("renders correctly on second render with the same icon name", async () => {
     const { baseElement: first } = render(() => <Icon name="sun" />);
     const screen1 = page.elementLocator(first);
     await expect.element(screen1.locator(".icon svg")).toBeInTheDocument();

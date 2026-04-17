@@ -16,9 +16,9 @@ describe("ConfirmDialog", () => {
         onCancel={() => {}}
       />
     ));
+    const screen = page.elementLocator(baseElement);
 
-    const dialog = baseElement.querySelector("dialog") as HTMLDialogElement;
-    expect(dialog.open).toBe(true);
+    await expect.element(screen.locator("dialog[open]")).toBeInTheDocument();
   });
 
   it("does not show modal when open is false", async () => {
@@ -31,9 +31,9 @@ describe("ConfirmDialog", () => {
         onCancel={() => {}}
       />
     ));
+    const screen = page.elementLocator(baseElement);
 
-    const dialog = baseElement.querySelector("dialog") as HTMLDialogElement;
-    expect(dialog.open).toBe(false);
+    await expect.element(screen.locator("dialog:not([open])")).toBeInTheDocument();
   });
 
   it("calls onConfirm when delete button is clicked", async () => {
