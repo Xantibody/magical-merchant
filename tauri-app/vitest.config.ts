@@ -5,7 +5,7 @@ import { playwright } from "@vitest/browser-playwright";
 export default defineConfig({
   plugins: [solid()],
   optimizeDeps: {
-    include: ["markdown-it", "shiki"],
+    include: ["markdown-it", "shiki", "@solidjs/testing-library"],
   },
   test: {
     browser: {
