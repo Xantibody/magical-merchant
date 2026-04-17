@@ -4,6 +4,9 @@ import { playwright } from "@vitest/browser-playwright";
 
 export default defineConfig({
   plugins: [solid()],
+  optimizeDeps: {
+    include: ["markdown-it", "shiki"],
+  },
   test: {
     browser: {
       provider: playwright(),
