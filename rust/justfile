@@ -9,3 +9,17 @@ check:
 
 test:
   cargo test --workspace
+
+# --- Per-crate recipes ---
+
+check-core:
+  cargo clippy -p magical-merchant-core -p magical-merchant-app -- -D warnings
+
+test-core:
+  cargo test -p magical-merchant-core -p magical-merchant-app
+
+check-cli:
+  cargo clippy -p magical-merchant-mcp-cli -- -D warnings
+
+test-cli:
+  cargo test -p magical-merchant-mcp-cli

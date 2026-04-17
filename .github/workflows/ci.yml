@@ -11,31 +11,58 @@ permissions:
   pull-requests: read
 
 jobs:
-  rust:
+  core:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v3
+        if: github.event_name == 'pull_request'
         id: filter
         with:
           filters: |
-            rust:
+            core:
               - 'core/**'
-              - 'mcp-cli/**'
               - 'tauri-app/src-tauri/**'
               - 'Cargo.toml'
               - 'Cargo.lock'
               - 'rust/justfile'
-      - if: steps.filter.outputs.rust == 'true' || github.event_name != 'pull_request'
+      - if: steps.filter.outputs.core == 'true' || github.event_name != 'pull_request'
         uses: nixbuild/nix-quick-install-action@v34
-      - if: steps.filter.outputs.rust == 'true' || github.event_name != 'pull_request'
+      - if: steps.filter.outputs.core == 'true' || github.event_name != 'pull_request'
         uses: DeterminateSystems/magic-nix-cache-action@v9
       - name: check
-        if: steps.filter.outputs.rust == 'true' || github.event_name != 'pull_request'
-        run: nix develop --command just rust::check
+        if: steps.filter.outputs.core == 'true' || github.event_name != 'pull_request'
+        run: nix develop --command just rust::check-core
       - name: test
-        if: steps.filter.outputs.rust == 'true' || github.event_name != 'pull_request'
-        run: nix develop --command just rust::test
+        if: steps.filter.outputs.core == 'true' || github.event_name != 'pull_request'
+        run: nix develop --command just rust::test-core
+    timeout-minutes: 15
+
+  cli:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v3
+        if: github.event_name == 'pull_request'
+        id: filter
+        with:
+          filters: |
+            cli:
+              - 'core/**'
+              - 'mcp-cli/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'rust/justfile'
+      - if: steps.filter.outputs.cli == 'true' || github.event_name != 'pull_request'
+        uses: nixbuild/nix-quick-install-action@v34
+      - if: steps.filter.outputs.cli == 'true' || github.event_name != 'pull_request'
+        uses: DeterminateSystems/magic-nix-cache-action@v9
+      - name: check
+        if: steps.filter.outputs.cli == 'true' || github.event_name != 'pull_request'
+        run: nix develop --command just rust::check-cli
+      - name: test
+        if: steps.filter.outputs.cli == 'true' || github.event_name != 'pull_request'
+        run: nix develop --command just rust::test-cli
     timeout-minutes: 15
 
   frontend:
@@ -43,6 +70,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v3
+        if: github.event_name == 'pull_request'
         id: filter
         with:
           filters: |
@@ -58,15 +86,15 @@ jobs:
         uses: nixbuild/nix-quick-install-action@v34
       - if: steps.filter.outputs.frontend == 'true' || github.event_name != 'pull_request'
         uses: DeterminateSystems/magic-nix-cache-action@v9
+      - name: check
+        if: steps.filter.outputs.frontend == 'true' || github.event_name != 'pull_request'
+        run: nix develop --command just tauri_app::check
       - name: setup playwright browsers
         if: steps.filter.outputs.frontend == 'true' || github.event_name != 'pull_request'
         run: |
           path=$(nix build nixpkgs#playwright-driver.browsers --no-link --print-out-paths)
           echo "PLAYWRIGHT_BROWSERS_PATH=$path" >> "$GITHUB_ENV"
           echo "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1" >> "$GITHUB_ENV"
-      - name: check
-        if: steps.filter.outputs.frontend == 'true' || github.event_name != 'pull_request'
-        run: nix develop --command just tauri_app::check
       - name: test
         if: steps.filter.outputs.frontend == 'true' || github.event_name != 'pull_request'
         run: nix develop --command just tauri_app::test
