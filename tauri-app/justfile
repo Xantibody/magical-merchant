@@ -13,6 +13,9 @@ check: setup
   oxlint src/
   tsgo -b --noEmit
 
+test: setup
+  pnpm test
+
 dev:
   pnpm tauri dev
 
