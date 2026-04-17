@@ -10,7 +10,7 @@ fmt:
 
 check: rust::check tauri_app::check
 
-test: rust::test
+test: rust::test tauri_app::test
 
 verify: fmt check test
 
