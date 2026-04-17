@@ -7,21 +7,66 @@ on:
   workflow_dispatch:
 
 jobs:
-  check:
+  rust:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: nixbuild/nix-quick-install-action@v34
-      - uses: DeterminateSystems/magic-nix-cache-action@v9
-      - run: nix develop --command just check
-      - run: nix fmt -- --fail-on-change
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            rust:
+              - 'core/**'
+              - 'mcp-cli/**'
+              - 'tauri-app/src-tauri/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'rust/justfile'
+      - if: steps.filter.outputs.rust == 'true' || github.event_name != 'pull_request'
+        uses: nixbuild/nix-quick-install-action@v34
+      - if: steps.filter.outputs.rust == 'true' || github.event_name != 'pull_request'
+        uses: DeterminateSystems/magic-nix-cache-action@v9
+      - name: check
+        if: steps.filter.outputs.rust == 'true' || github.event_name != 'pull_request'
+        run: nix develop --command just rust::check
+      - name: test
+        if: steps.filter.outputs.rust == 'true' || github.event_name != 'pull_request'
+        run: nix develop --command just rust::test
     timeout-minutes: 15
 
-  test:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            frontend:
+              - 'tauri-app/src/**'
+              - 'tauri-app/package.json'
+              - 'tauri-app/pnpm-lock.yaml'
+              - 'tauri-app/tsconfig.json'
+              - 'tauri-app/vite.config.ts'
+              - 'tauri-app/vitest.config.ts'
+              - 'tauri-app/justfile'
+      - if: steps.filter.outputs.frontend == 'true' || github.event_name != 'pull_request'
+        uses: nixbuild/nix-quick-install-action@v34
+      - if: steps.filter.outputs.frontend == 'true' || github.event_name != 'pull_request'
+        uses: DeterminateSystems/magic-nix-cache-action@v9
+      - name: check
+        if: steps.filter.outputs.frontend == 'true' || github.event_name != 'pull_request'
+        run: nix develop --command just tauri_app::check
+      - name: test
+        if: steps.filter.outputs.frontend == 'true' || github.event_name != 'pull_request'
+        run: nix develop --command just tauri_app::test
+    timeout-minutes: 15
+
+  format:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: nixbuild/nix-quick-install-action@v34
       - uses: DeterminateSystems/magic-nix-cache-action@v9
-      - run: nix develop --command just test
-    timeout-minutes: 15
+      - run: nix fmt -- --fail-on-change
+    timeout-minutes: 5
