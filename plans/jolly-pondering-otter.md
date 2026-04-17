@@ -7,16 +7,17 @@
 ## Milkdown プラグイン調査結果
 
 既存の MilkdownEditor コンポーネントに必要なプラグインは全て含まれている:
+
 - `commonmark`, `listener`, `highlight`, `cursor`, `history`, `clipboard`, `trailing`, `linkTooltipPlugin`, `exitCodeBlockPlugin`, `placeholderPlugin`
 
 **新規プラグインは不要** — MilkdownEditor をそのまま再利用できる。
 
 ## 変更対象ファイル
 
-| ファイル | 変更内容 |
-|---------|---------|
-| `tauri-app/src/views/Tasks.tsx` | ViewMode拡張、editモード追加、自動保存 |
-| `tauri-app/src/styles/tasks.css` | タイトル入力の新規CSS (2クラスのみ) |
+| ファイル                         | 変更内容                               |
+| -------------------------------- | -------------------------------------- |
+| `tauri-app/src/views/Tasks.tsx`  | ViewMode拡張、editモード追加、自動保存 |
+| `tauri-app/src/styles/tasks.css` | タイトル入力の新規CSS (2クラスのみ)    |
 
 **変更なし**: `MilkdownEditor.tsx`, `ActionBar.tsx`, Rust backend (`update_task` は既存)
 

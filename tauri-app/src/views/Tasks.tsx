@@ -1,4 +1,14 @@
-import { createSignal, createResource, createEffect, on, onCleanup, For, Show, Switch, Match } from "solid-js";
+import {
+  createSignal,
+  createResource,
+  createEffect,
+  on,
+  onCleanup,
+  For,
+  Show,
+  Switch,
+  Match,
+} from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
 import Icon from "../components/Icon";
 import ActionBar from "../components/ActionBar";
@@ -93,11 +103,25 @@ export default function Tasks() {
     saveTimer = setTimeout(saveTask, 1000);
   };
 
-  createEffect(on(taskBody, () => { if (selectedTask()) scheduleSaveTask(); }));
-  createEffect(on(taskTitle, () => { if (selectedTask()) scheduleSaveTask(); }));
-  createEffect(on(taskTagsInput, () => { if (selectedTask()) scheduleSaveTask(); }));
+  createEffect(
+    on(taskBody, () => {
+      if (selectedTask()) scheduleSaveTask();
+    }),
+  );
+  createEffect(
+    on(taskTitle, () => {
+      if (selectedTask()) scheduleSaveTask();
+    }),
+  );
+  createEffect(
+    on(taskTagsInput, () => {
+      if (selectedTask()) scheduleSaveTask();
+    }),
+  );
 
-  onCleanup(() => { if (saveTimer) clearTimeout(saveTimer); });
+  onCleanup(() => {
+    if (saveTimer) clearTimeout(saveTimer);
+  });
 
   createEffect(() => {
     const list = projects();
@@ -293,11 +317,7 @@ export default function Tasks() {
                       >
                         <Icon name="check-square" size={18} />
                       </button>
-                      <button
-                        type="button"
-                        class="task-title-btn"
-                        onClick={() => openTask(task)}
-                      >
+                      <button type="button" class="task-title-btn" onClick={() => openTask(task)}>
                         {task.title}
                       </button>
                     </div>
