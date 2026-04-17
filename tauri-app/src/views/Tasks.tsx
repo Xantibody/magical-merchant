@@ -1,7 +1,8 @@
-import { createSignal, createResource, For, Show, Switch, Match, createEffect } from "solid-js";
+import { createSignal, createResource, createEffect, on, onCleanup, For, Show, Switch, Match } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
 import Icon from "../components/Icon";
 import ActionBar from "../components/ActionBar";
+import MilkdownEditor from "../components/MilkdownEditor";
 import MarkdownPreview from "../components/MarkdownPreview";
 import ConfirmDialog from "../components/ConfirmDialog";
 
@@ -54,6 +55,49 @@ export default function Tasks() {
   const [viewMode, setViewMode] = createSignal<ViewMode>("list");
   const [selectedTask, setSelectedTask] = createSignal<TaskSummary | null>(null);
   const [confirmOpen, setConfirmOpen] = createSignal(false);
+  const [taskBody, setTaskBody] = createSignal("");
+  const [taskTitle, setTaskTitle] = createSignal("");
+  const [taskTagsInput, setTaskTagsInput] = createSignal("");
+  const [saveStatus, setSaveStatus] = createSignal<"idle" | "saving" | "saved">("idle");
+
+  let saveTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const parseTaskTags = (): string[] =>
+    taskTagsInput()
+      .split(",")
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0);
+
+  const saveTask = async () => {
+    const task = selectedTask();
+    const slug = selectedProject();
+    if (!task || !slug) return;
+
+    setSaveStatus("saving");
+    try {
+      await invoke("update_task", {
+        projectSlug: slug,
+        filename: task.filename,
+        title: taskTitle(),
+        tags: parseTaskTags(),
+        body: taskBody(),
+      });
+      setSaveStatus("saved");
+    } catch {
+      setSaveStatus("idle");
+    }
+  };
+
+  const scheduleSaveTask = () => {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveTask, 1000);
+  };
+
+  createEffect(on(taskBody, () => { if (selectedTask()) scheduleSaveTask(); }));
+  createEffect(on(taskTitle, () => { if (selectedTask()) scheduleSaveTask(); }));
+  createEffect(on(taskTagsInput, () => { if (selectedTask()) scheduleSaveTask(); }));
+
+  onCleanup(() => { if (saveTimer) clearTimeout(saveTimer); });
 
   createEffect(() => {
     const list = projects();
@@ -122,12 +166,25 @@ export default function Tasks() {
 
   const openTask = (task: TaskSummary) => {
     setSelectedTask(task);
-    setViewMode(isActiveTask(task) ? "edit" : "preview");
+    if (isActiveTask(task)) {
+      setTaskBody(task.body);
+      setTaskTitle(task.title);
+      setTaskTagsInput(task.tags.join(", "));
+      setSaveStatus("idle");
+      setViewMode("edit");
+    } else {
+      setViewMode("preview");
+    }
   };
 
-  const goBack = () => {
+  const goBack = async () => {
+    if (saveTimer) clearTimeout(saveTimer);
+    if (viewMode() === "edit" && selectedTask()) {
+      await saveTask();
+    }
     setSelectedTask(null);
     setViewMode("list");
+    refetchTasks();
   };
 
   const confirmDelete = () => {
@@ -175,7 +232,7 @@ export default function Tasks() {
   };
 
   return (
-    <div class="view">
+    <div class="view" classList={{ "view--flush": viewMode() === "edit" }}>
       <Switch>
         <Match when={viewMode() === "list"}>
           <div class="tasks-layout">
@@ -328,26 +385,43 @@ export default function Tasks() {
         </Match>
 
         <Match when={viewMode() === "edit"}>
-          <div class="tasks-layout">
-            <div class="task-preview-header">
-              <h3 class="task-preview-title">{selectedTask()?.title}</h3>
-              <div class="task-preview-meta">
-                <Show when={selectedTask()?.created}>
-                  <span>{formatTime(selectedTask()?.created)}</span>
-                </Show>
-                <Show when={selectedTask()?.tags?.length}>
-                  <span>{selectedTask()?.tags.join(", ")}</span>
-                </Show>
-              </div>
-            </div>
-            <div class="task-preview-body">
-              <Show when={selectedTask()?.body} fallback={<p class="empty-state">本文なし</p>}>
-                <MarkdownPreview source={selectedTask()!.body} />
+          <div class="task-edit-header">
+            <input
+              type="text"
+              class="task-title-input"
+              value={taskTitle()}
+              onInput={(e) => setTaskTitle(e.currentTarget.value)}
+              placeholder="Task title"
+            />
+            <div class="task-preview-meta">
+              <Show when={selectedTask()?.created}>
+                <span>{formatTime(selectedTask()?.created)}</span>
               </Show>
             </div>
           </div>
+          <div class="notes-editor">
+            <MilkdownEditor
+              placeholder="Write task details..."
+              defaultValue={taskBody()}
+              onChange={setTaskBody}
+            />
+          </div>
+
+          <Show when={saveStatus() !== "idle"}>
+            <span class="status-indicator">
+              {saveStatus() === "saving" && "Saving..."}
+              {saveStatus() === "saved" && "Saved"}
+            </span>
+          </Show>
 
           <ActionBar>
+            <input
+              type="text"
+              class="tags-input"
+              placeholder="Tags (comma separated)"
+              value={taskTagsInput()}
+              onInput={(e) => setTaskTagsInput(e.currentTarget.value)}
+            />
             <button type="button" onClick={goBack} aria-label="戻る">
               <Icon name="arrow-left" size={16} />
             </button>
