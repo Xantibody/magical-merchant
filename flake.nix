@@ -69,48 +69,51 @@
       {
         formatter = treefmtEval.config.build.wrapper;
         checks.formatting = treefmtEval.config.build.check;
-        devShells.default = pkgs.mkShell ({
-          buildInputs =
-            with pkgs;
-            [
-              rustToolchain
-              just
-              nodejs_22
-              pnpm
-              cargo-tauri
-              jdk17
-              androidSdk
-              oxlint
-              typescript-go
-            ]
-            ++ lib.optionals stdenv.isLinux [
-              webkitgtk_4_1.dev
-              libappindicator-gtk3.dev
-              librsvg.dev
-              patchelf
-              pkg-config
-            ];
-          ANDROID_HOME = "${androidSdk}/libexec/android-sdk";
-          NDK_HOME = "${androidSdk}/libexec/android-sdk/ndk/29.0.14206865";
-          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = if pkgs.stdenv.isLinux then "1" else "0";
-          shellHook = ''
-            # Create a rustup shim that no-ops for tauri android init
-            mkdir -p "$PWD/.nix-shims"
-            cat > "$PWD/.nix-shims/rustup" << 'SHIM'
-            #!/usr/bin/env bash
-            # Nix manages Rust targets, so rustup calls are no-ops
-            if [[ "$1" == "target" && "$2" == "add" ]]; then
-              echo "info: target '$3' is already installed (managed by Nix)"
-              exit 0
-            fi
-            exec "$@"
-            SHIM
-            chmod +x "$PWD/.nix-shims/rustup"
-            export PATH="$PWD/.nix-shims:$PATH"
-          '';
-        } // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
-          PLAYWRIGHT_BROWSERS_PATH = "${playwrightBrowsers}";
-        });
+        devShells.default = pkgs.mkShell (
+          {
+            buildInputs =
+              with pkgs;
+              [
+                rustToolchain
+                just
+                nodejs_22
+                pnpm
+                cargo-tauri
+                jdk17
+                androidSdk
+                oxlint
+                typescript-go
+              ]
+              ++ lib.optionals stdenv.isLinux [
+                webkitgtk_4_1.dev
+                libappindicator-gtk3.dev
+                librsvg.dev
+                patchelf
+                pkg-config
+              ];
+            ANDROID_HOME = "${androidSdk}/libexec/android-sdk";
+            NDK_HOME = "${androidSdk}/libexec/android-sdk/ndk/29.0.14206865";
+            PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = if pkgs.stdenv.isLinux then "1" else "0";
+            shellHook = ''
+              # Create a rustup shim that no-ops for tauri android init
+              mkdir -p "$PWD/.nix-shims"
+              cat > "$PWD/.nix-shims/rustup" << 'SHIM'
+              #!/usr/bin/env bash
+              # Nix manages Rust targets, so rustup calls are no-ops
+              if [[ "$1" == "target" && "$2" == "add" ]]; then
+                echo "info: target '$3' is already installed (managed by Nix)"
+                exit 0
+              fi
+              exec "$@"
+              SHIM
+              chmod +x "$PWD/.nix-shims/rustup"
+              export PATH="$PWD/.nix-shims:$PATH"
+            '';
+          }
+          // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
+            PLAYWRIGHT_BROWSERS_PATH = "${playwrightBrowsers}";
+          }
+        );
       }
     );
 }
