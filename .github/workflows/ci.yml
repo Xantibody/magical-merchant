@@ -89,12 +89,6 @@ jobs:
       - name: check
         if: steps.filter.outputs.frontend == 'true' || github.event_name != 'pull_request'
         run: nix develop --command just tauri_app::check
-      - name: setup playwright browsers
-        if: steps.filter.outputs.frontend == 'true' || github.event_name != 'pull_request'
-        run: |
-          path=$(nix build nixpkgs#playwright-driver.browsers --no-link --print-out-paths)
-          echo "PLAYWRIGHT_BROWSERS_PATH=$path" >> "$GITHUB_ENV"
-          echo "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1" >> "$GITHUB_ENV"
       - name: test
         if: steps.filter.outputs.frontend == 'true' || github.event_name != 'pull_request'
         run: nix develop --command just tauri_app::test

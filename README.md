@@ -28,6 +28,17 @@ A minimal note-taking desktop app with a Rust core and a lightweight UI.
 - **Theme**: system / light / dark (syncs with OS setting)
 - **Editor principles**: Minimize DOM nodes, localized conversion only, preserve scroll & selection
 
+## Testing (Playwright)
+
+Browser tests use Vitest Browser Mode + Playwright.
+
+- **Linux (CI)**: Nix `playwright-driver.browsers` is configured automatically
+- **macOS (local)**: One-time browser install required
+
+```sh
+cd tauri-app && pnpm exec playwright install chromium
+```
+
 ## Build & Run
 
 ```sh
