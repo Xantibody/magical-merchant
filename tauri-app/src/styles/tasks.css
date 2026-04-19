@@ -265,6 +265,32 @@
   cursor: not-allowed;
 }
 
+/* Task editor */
+
+.task-edit-header {
+  padding: var(--size-2) var(--size-3);
+  border-bottom: 1px solid var(--app-border);
+}
+
+.task-title-input {
+  width: 100%;
+  padding: var(--size-1) 0;
+  border: none;
+  background: transparent;
+  color: var(--app-text);
+  font-size: var(--font-size-3);
+  font-weight: var(--font-weight-6);
+  outline: none;
+}
+
+.task-title-input:focus-visible {
+  border-bottom: 2px solid var(--app-accent);
+}
+
+.task-title-input::placeholder {
+  color: var(--app-text-muted);
+}
+
 /* Task preview */
 
 .task-preview-header {

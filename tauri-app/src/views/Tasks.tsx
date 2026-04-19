@@ -1,7 +1,18 @@
-import { createSignal, createResource, For, Show, Switch, Match, createEffect } from "solid-js";
+import {
+  createSignal,
+  createResource,
+  createEffect,
+  on,
+  onCleanup,
+  For,
+  Show,
+  Switch,
+  Match,
+} from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
 import Icon from "../components/Icon";
 import ActionBar from "../components/ActionBar";
+import MilkdownEditor from "../components/MilkdownEditor";
 import MarkdownPreview from "../components/MarkdownPreview";
 import ConfirmDialog from "../components/ConfirmDialog";
 
@@ -20,7 +31,7 @@ interface TaskSummary {
   body: string;
 }
 
-type ViewMode = "list" | "preview";
+type ViewMode = "list" | "edit" | "preview";
 
 function toSlug(name: string): string {
   return name
@@ -54,6 +65,64 @@ export default function Tasks() {
   const [viewMode, setViewMode] = createSignal<ViewMode>("list");
   const [selectedTask, setSelectedTask] = createSignal<TaskSummary | null>(null);
   const [confirmOpen, setConfirmOpen] = createSignal(false);
+  const [taskBody, setTaskBody] = createSignal("");
+  const [taskTitle, setTaskTitle] = createSignal("");
+  const [taskTagsInput, setTaskTagsInput] = createSignal("");
+  const [saveStatus, setSaveStatus] = createSignal<"idle" | "saving" | "saved">("idle");
+
+  let saveTimer: ReturnType<typeof setTimeout> | undefined;
+  let isHydrating = false;
+
+  const parseTaskTags = (): string[] =>
+    taskTagsInput()
+      .split(",")
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0);
+
+  const saveTask = async () => {
+    const task = selectedTask();
+    const slug = selectedProject();
+    if (!task || !slug) return;
+
+    setSaveStatus("saving");
+    try {
+      await invoke("update_task", {
+        projectSlug: slug,
+        filename: task.filename,
+        title: taskTitle(),
+        tags: parseTaskTags(),
+        body: taskBody(),
+      });
+      setSaveStatus("saved");
+    } catch {
+      setSaveStatus("idle");
+    }
+  };
+
+  const scheduleSaveTask = () => {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveTask, 1000);
+  };
+
+  createEffect(
+    on(taskBody, () => {
+      if (selectedTask() && !isHydrating) scheduleSaveTask();
+    }),
+  );
+  createEffect(
+    on(taskTitle, () => {
+      if (selectedTask() && !isHydrating) scheduleSaveTask();
+    }),
+  );
+  createEffect(
+    on(taskTagsInput, () => {
+      if (selectedTask() && !isHydrating) scheduleSaveTask();
+    }),
+  );
+
+  onCleanup(() => {
+    if (saveTimer) clearTimeout(saveTimer);
+  });
 
   createEffect(() => {
     const list = projects();
@@ -120,14 +189,33 @@ export default function Tasks() {
     }
   };
 
-  const openPreview = (task: TaskSummary) => {
+  const openTask = (task: TaskSummary) => {
     setSelectedTask(task);
-    setViewMode("preview");
+    if (isActiveTask(task)) {
+      isHydrating = true;
+      setTaskBody(task.body);
+      setTaskTitle(task.title);
+      setTaskTagsInput(task.tags.join(", "));
+      isHydrating = false;
+      setSaveStatus("idle");
+      setViewMode("edit");
+    } else {
+      setViewMode("preview");
+    }
   };
 
-  const goBack = () => {
+  const navigateToList = () => {
     setSelectedTask(null);
     setViewMode("list");
+    refetchTasks();
+  };
+
+  const goBack = async () => {
+    if (saveTimer) clearTimeout(saveTimer);
+    if (viewMode() === "edit" && selectedTask()) {
+      await saveTask();
+    }
+    navigateToList();
   };
 
   const confirmDelete = () => {
@@ -139,11 +227,12 @@ export default function Tasks() {
     const slug = selectedProject();
     if (!task || !slug) return;
     setConfirmOpen(false);
+    if (saveTimer) clearTimeout(saveTimer);
     try {
       await invoke("delete_task", { projectSlug: slug, filename: task.filename });
       refetchTasks();
       refetchDoneTasks();
-      goBack();
+      navigateToList();
     } catch (e) {
       setError(String(e));
     }
@@ -153,11 +242,15 @@ export default function Tasks() {
     const task = selectedTask();
     const slug = selectedProject();
     if (!task || !slug) return;
+    if (saveTimer) clearTimeout(saveTimer);
     try {
+      if (viewMode() === "edit") {
+        await saveTask();
+      }
       await invoke("complete_task", { projectSlug: slug, filename: task.filename });
       refetchTasks();
       refetchDoneTasks();
-      goBack();
+      navigateToList();
     } catch (e) {
       setError(String(e));
     }
@@ -175,7 +268,7 @@ export default function Tasks() {
   };
 
   return (
-    <div class="view">
+    <div class="view" classList={{ "view--flush": viewMode() === "edit" }}>
       <Switch>
         <Match when={viewMode() === "list"}>
           <div class="tasks-layout">
@@ -236,11 +329,7 @@ export default function Tasks() {
                       >
                         <Icon name="check-square" size={18} />
                       </button>
-                      <button
-                        type="button"
-                        class="task-title-btn"
-                        onClick={() => openPreview(task)}
-                      >
+                      <button type="button" class="task-title-btn" onClick={() => openTask(task)}>
                         {task.title}
                       </button>
                     </div>
@@ -276,7 +365,7 @@ export default function Tasks() {
                           <button
                             type="button"
                             class="task-title-btn task-title-done"
-                            onClick={() => openPreview(task)}
+                            onClick={() => openTask(task)}
                           >
                             {task.title}
                           </button>
@@ -327,6 +416,64 @@ export default function Tasks() {
           </Show>
         </Match>
 
+        <Match when={viewMode() === "edit"}>
+          <div class="task-edit-header">
+            <input
+              type="text"
+              class="task-title-input"
+              value={taskTitle()}
+              onInput={(e) => setTaskTitle(e.currentTarget.value)}
+              placeholder="Task title"
+            />
+            <div class="task-preview-meta">
+              <Show when={selectedTask()?.created}>
+                <span>{formatTime(selectedTask()?.created)}</span>
+              </Show>
+            </div>
+          </div>
+          <div class="notes-editor">
+            <MilkdownEditor
+              placeholder="Write task details..."
+              defaultValue={taskBody()}
+              onChange={setTaskBody}
+            />
+          </div>
+
+          <Show when={saveStatus() !== "idle"}>
+            <span class="status-indicator">
+              {saveStatus() === "saving" && "Saving..."}
+              {saveStatus() === "saved" && "Saved"}
+            </span>
+          </Show>
+
+          <ActionBar>
+            <input
+              type="text"
+              class="tags-input"
+              placeholder="Tags (comma separated)"
+              value={taskTagsInput()}
+              onInput={(e) => setTaskTagsInput(e.currentTarget.value)}
+            />
+            <button type="button" onClick={goBack} aria-label="戻る">
+              <Icon name="arrow-left" size={16} />
+            </button>
+            <button type="button" onClick={handleCompleteFromPreview} aria-label="タスクを完了">
+              <Icon name="check-square" size={16} />
+            </button>
+            <button type="button" onClick={confirmDelete} aria-label="タスクを削除">
+              <Icon name="trash" size={16} />
+            </button>
+          </ActionBar>
+
+          <ConfirmDialog
+            open={confirmOpen()}
+            title="タスクを削除しますか？"
+            message="この操作は元に戻せません。"
+            onConfirm={handleDelete}
+            onCancel={() => setConfirmOpen(false)}
+          />
+        </Match>
+
         <Match when={viewMode() === "preview"}>
           <div class="tasks-layout">
             <div class="task-preview-header">
@@ -351,11 +498,6 @@ export default function Tasks() {
             <button type="button" onClick={goBack} aria-label="戻る">
               <Icon name="arrow-left" size={16} />
             </button>
-            <Show when={selectedTask() && isActiveTask(selectedTask()!)}>
-              <button type="button" onClick={handleCompleteFromPreview} aria-label="タスクを完了">
-                <Icon name="check-square" size={16} />
-              </button>
-            </Show>
             <button type="button" onClick={confirmDelete} aria-label="タスクを削除">
               <Icon name="trash" size={16} />
             </button>

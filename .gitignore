@@ -32,3 +32,6 @@ tauri-app/src-tauri/gen/
 
 # Nix shims
 .nix-shims/
+
+# Plans
+plans/
