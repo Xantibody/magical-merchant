@@ -69,7 +69,7 @@
       {
         formatter = treefmtEval.config.build.wrapper;
         checks.formatting = treefmtEval.config.build.check;
-        devShells.default = pkgs.mkShell {
+        devShells.default = pkgs.mkShell ({
           buildInputs =
             with pkgs;
             [
@@ -92,8 +92,7 @@
             ];
           ANDROID_HOME = "${androidSdk}/libexec/android-sdk";
           NDK_HOME = "${androidSdk}/libexec/android-sdk/ndk/29.0.14206865";
-          PLAYWRIGHT_BROWSERS_PATH = "${playwrightBrowsers}";
-          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1";
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = if pkgs.stdenv.isLinux then "1" else "0";
           shellHook = ''
             # Create a rustup shim that no-ops for tauri android init
             mkdir -p "$PWD/.nix-shims"
@@ -109,7 +108,9 @@
             chmod +x "$PWD/.nix-shims/rustup"
             export PATH="$PWD/.nix-shims:$PATH"
           '';
-        };
+        } // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
+          PLAYWRIGHT_BROWSERS_PATH = "${playwrightBrowsers}";
+        });
       }
     );
 }
