@@ -71,6 +71,7 @@ export default function Tasks() {
   const [saveStatus, setSaveStatus] = createSignal<"idle" | "saving" | "saved">("idle");
 
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
+  let isHydrating = false;
 
   const parseTaskTags = (): string[] =>
     taskTagsInput()
@@ -105,17 +106,17 @@ export default function Tasks() {
 
   createEffect(
     on(taskBody, () => {
-      if (selectedTask()) scheduleSaveTask();
+      if (selectedTask() && !isHydrating) scheduleSaveTask();
     }),
   );
   createEffect(
     on(taskTitle, () => {
-      if (selectedTask()) scheduleSaveTask();
+      if (selectedTask() && !isHydrating) scheduleSaveTask();
     }),
   );
   createEffect(
     on(taskTagsInput, () => {
-      if (selectedTask()) scheduleSaveTask();
+      if (selectedTask() && !isHydrating) scheduleSaveTask();
     }),
   );
 
@@ -191,9 +192,11 @@ export default function Tasks() {
   const openTask = (task: TaskSummary) => {
     setSelectedTask(task);
     if (isActiveTask(task)) {
+      isHydrating = true;
       setTaskBody(task.body);
       setTaskTitle(task.title);
       setTaskTagsInput(task.tags.join(", "));
+      isHydrating = false;
       setSaveStatus("idle");
       setViewMode("edit");
     } else {
@@ -201,14 +204,18 @@ export default function Tasks() {
     }
   };
 
+  const navigateToList = () => {
+    setSelectedTask(null);
+    setViewMode("list");
+    refetchTasks();
+  };
+
   const goBack = async () => {
     if (saveTimer) clearTimeout(saveTimer);
     if (viewMode() === "edit" && selectedTask()) {
       await saveTask();
     }
-    setSelectedTask(null);
-    setViewMode("list");
-    refetchTasks();
+    navigateToList();
   };
 
   const confirmDelete = () => {
@@ -220,11 +227,12 @@ export default function Tasks() {
     const slug = selectedProject();
     if (!task || !slug) return;
     setConfirmOpen(false);
+    if (saveTimer) clearTimeout(saveTimer);
     try {
       await invoke("delete_task", { projectSlug: slug, filename: task.filename });
       refetchTasks();
       refetchDoneTasks();
-      goBack();
+      navigateToList();
     } catch (e) {
       setError(String(e));
     }
@@ -234,11 +242,15 @@ export default function Tasks() {
     const task = selectedTask();
     const slug = selectedProject();
     if (!task || !slug) return;
+    if (saveTimer) clearTimeout(saveTimer);
     try {
+      if (viewMode() === "edit") {
+        await saveTask();
+      }
       await invoke("complete_task", { projectSlug: slug, filename: task.filename });
       refetchTasks();
       refetchDoneTasks();
-      goBack();
+      navigateToList();
     } catch (e) {
       setError(String(e));
     }

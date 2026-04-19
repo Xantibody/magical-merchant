@@ -283,6 +283,10 @@
   outline: none;
 }
 
+.task-title-input:focus-visible {
+  border-bottom: 2px solid var(--app-accent);
+}
+
 .task-title-input::placeholder {
   color: var(--app-text-muted);
 }
