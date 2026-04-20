@@ -30,6 +30,58 @@ impl fmt::Display for Slug {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Filename(String);
+
+impl Filename {
+    pub fn parse(s: &str) -> Result<Self, CoreError> {
+        if s.contains('/') || s.contains('\\') || s.contains('\0') || s.contains("..") {
+            return Err(CoreError::PathTraversal(s.to_string()));
+        }
+        Ok(Self(s.to_string()))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for Filename {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NoteFilename(String);
+
+impl NoteFilename {
+    pub fn parse(s: &str) -> Result<Self, CoreError> {
+        let path = std::path::Path::new(s);
+        if s.is_empty()
+            || s.contains("..")
+            || s.contains('/')
+            || s.contains('\\')
+            || s.contains('\0')
+            || path.components().count() != 1
+            || path.extension().and_then(|ext| ext.to_str()) != Some("md")
+        {
+            return Err(CoreError::PathTraversal(s.to_string()));
+        }
+        Ok(Self(s.to_string()))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for NoteFilename {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -68,5 +120,65 @@ mod tests {
     fn test_slug_display() {
         let slug = Slug::parse("my-project").unwrap();
         assert_eq!(format!("{slug}"), "my-project");
+    }
+
+    // Filename tests
+
+    #[test]
+    fn test_filename_parse_valid() {
+        assert!(Filename::parse("20260101_120000.md").is_ok());
+        assert!(Filename::parse("task.md").is_ok());
+        assert!(Filename::parse("some-file.txt").is_ok());
+    }
+
+    #[test]
+    fn test_filename_parse_invalid() {
+        assert!(Filename::parse("../evil.md").is_err());
+        assert!(Filename::parse("foo/bar.md").is_err());
+        assert!(Filename::parse("foo\\bar.md").is_err());
+        assert!(Filename::parse("foo\0bar.md").is_err());
+        assert!(Filename::parse("../../etc/passwd").is_err());
+    }
+
+    #[test]
+    fn test_filename_parse_returns_path_traversal_error() {
+        let err = Filename::parse("../evil").unwrap_err();
+        assert!(matches!(err, CoreError::PathTraversal(_)));
+    }
+
+    #[test]
+    fn test_filename_as_str_roundtrip() {
+        let f = Filename::parse("task.md").unwrap();
+        assert_eq!(f.as_str(), "task.md");
+    }
+
+    // NoteFilename tests
+
+    #[test]
+    fn test_note_filename_parse_valid() {
+        assert!(NoteFilename::parse("20260101_120000.md").is_ok());
+        assert!(NoteFilename::parse("my-note.md").is_ok());
+    }
+
+    #[test]
+    fn test_note_filename_parse_invalid() {
+        assert!(NoteFilename::parse("").is_err());
+        assert!(NoteFilename::parse("../etc/passwd").is_err());
+        assert!(NoteFilename::parse("/tmp/evil.md").is_err());
+        assert!(NoteFilename::parse("evil.txt").is_err());
+        assert!(NoteFilename::parse("no-extension").is_err());
+        assert!(NoteFilename::parse("foo\0bar.md").is_err());
+    }
+
+    #[test]
+    fn test_note_filename_parse_returns_path_traversal_error() {
+        let err = NoteFilename::parse("../evil.md").unwrap_err();
+        assert!(matches!(err, CoreError::PathTraversal(_)));
+    }
+
+    #[test]
+    fn test_note_filename_as_str_roundtrip() {
+        let f = NoteFilename::parse("note.md").unwrap();
+        assert_eq!(f.as_str(), "note.md");
     }
 }

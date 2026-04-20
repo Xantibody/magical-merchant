@@ -23,4 +23,4 @@ pub use project::{
     list_projects, read_project, update_task,
 };
 pub use save::{list_timeline_dates, read_timeline, save_note, save_timeline_entry};
-pub use validated::Slug;
+pub use validated::{Filename, NoteFilename, Slug};
