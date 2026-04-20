@@ -133,7 +133,9 @@ impl McpServer {
         &self,
         Parameters(param): Parameters<ProjectSlugParam>,
     ) -> Result<Json<TaskListOutput>, String> {
-        let tasks = magical_merchant_core::list_active_tasks(&self.data_dir, &param.project_slug)
+        let slug =
+            magical_merchant_core::Slug::parse(&param.project_slug).map_err(|e| e.to_string())?;
+        let tasks = magical_merchant_core::list_active_tasks(&self.data_dir, &slug)
             .map_err(|e| e.to_string())?;
         Ok(Json(TaskListOutput {
             tasks: tasks.iter().map(task_to_info).collect(),
@@ -148,7 +150,9 @@ impl McpServer {
         &self,
         Parameters(param): Parameters<ProjectSlugParam>,
     ) -> Result<Json<TaskListOutput>, String> {
-        let tasks = magical_merchant_core::list_done_tasks(&self.data_dir, &param.project_slug)
+        let slug =
+            magical_merchant_core::Slug::parse(&param.project_slug).map_err(|e| e.to_string())?;
+        let tasks = magical_merchant_core::list_done_tasks(&self.data_dir, &slug)
             .map_err(|e| e.to_string())?;
         Ok(Json(TaskListOutput {
             tasks: tasks.iter().map(task_to_info).collect(),
