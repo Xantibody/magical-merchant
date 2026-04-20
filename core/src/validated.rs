@@ -35,7 +35,12 @@ pub struct Filename(String);
 
 impl Filename {
     pub fn parse(s: &str) -> Result<Self, CoreError> {
-        if s.contains('/') || s.contains('\\') || s.contains('\0') || s.contains("..") {
+        if s.is_empty()
+            || s.contains('/')
+            || s.contains('\\')
+            || s.contains('\0')
+            || s.contains("..")
+        {
             return Err(CoreError::PathTraversal(s.to_string()));
         }
         Ok(Self(s.to_string()))
@@ -133,6 +138,7 @@ mod tests {
 
     #[test]
     fn test_filename_parse_invalid() {
+        assert!(Filename::parse("").is_err());
         assert!(Filename::parse("../evil.md").is_err());
         assert!(Filename::parse("foo/bar.md").is_err());
         assert!(Filename::parse("foo\\bar.md").is_err());
