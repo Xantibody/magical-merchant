@@ -1,4 +1,6 @@
-use magical_merchant_core::{DeviceContext, NoteSummary, ProjectSummary, TaskSummary};
+use magical_merchant_core::{
+    DeviceContext, Filename, NoteFilename, NoteSummary, ProjectSummary, Slug, TaskSummary,
+};
 use tauri::{AppHandle, Manager};
 
 #[tauri::command]
@@ -41,6 +43,7 @@ fn list_notes(handle: AppHandle) -> Result<Vec<NoteSummary>, String> {
 #[tauri::command]
 fn read_note(handle: AppHandle, filename: String) -> Result<String, String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let filename = NoteFilename::parse(&filename).map_err(|e| e.to_string())?;
     magical_merchant_core::read_note_by_filename(&base_dir, &filename).map_err(|e| e.to_string())
 }
 
@@ -59,6 +62,7 @@ fn create_project(
     description: String,
 ) -> Result<String, String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let slug = Slug::parse(&slug).map_err(|e| e.to_string())?;
     let path = magical_merchant_core::create_project(&base_dir, &slug, &name, &description)
         .map_err(|e| e.to_string())?;
     Ok(path.to_string_lossy().to_string())
@@ -79,6 +83,7 @@ fn create_task(
     body: String,
 ) -> Result<String, String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let project_slug = Slug::parse(&project_slug).map_err(|e| e.to_string())?;
     let path = magical_merchant_core::create_task(&base_dir, &project_slug, &title, &tags, &body)
         .map_err(|e| e.to_string())?;
     Ok(path.to_string_lossy().to_string())
@@ -87,18 +92,22 @@ fn create_task(
 #[tauri::command]
 fn list_active_tasks(handle: AppHandle, project_slug: String) -> Result<Vec<TaskSummary>, String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let project_slug = Slug::parse(&project_slug).map_err(|e| e.to_string())?;
     magical_merchant_core::list_active_tasks(&base_dir, &project_slug).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn list_done_tasks(handle: AppHandle, project_slug: String) -> Result<Vec<TaskSummary>, String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let project_slug = Slug::parse(&project_slug).map_err(|e| e.to_string())?;
     magical_merchant_core::list_done_tasks(&base_dir, &project_slug).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn complete_task(handle: AppHandle, project_slug: String, filename: String) -> Result<(), String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let project_slug = Slug::parse(&project_slug).map_err(|e| e.to_string())?;
+    let filename = Filename::parse(&filename).map_err(|e| e.to_string())?;
     magical_merchant_core::complete_task(&base_dir, &project_slug, &filename)
         .map_err(|e| e.to_string())
 }
@@ -123,12 +132,15 @@ fn read_timeline_by_date(handle: AppHandle, date: String) -> Result<Vec<String>,
 #[tauri::command]
 fn delete_note(handle: AppHandle, filename: String) -> Result<(), String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let filename = NoteFilename::parse(&filename).map_err(|e| e.to_string())?;
     magical_merchant_core::delete_note(&base_dir, &filename).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn delete_task(handle: AppHandle, project_slug: String, filename: String) -> Result<(), String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let project_slug = Slug::parse(&project_slug).map_err(|e| e.to_string())?;
+    let filename = Filename::parse(&filename).map_err(|e| e.to_string())?;
     magical_merchant_core::delete_task(&base_dir, &project_slug, &filename)
         .map_err(|e| e.to_string())
 }
@@ -143,6 +155,8 @@ fn update_task(
     body: String,
 ) -> Result<(), String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let project_slug = Slug::parse(&project_slug).map_err(|e| e.to_string())?;
+    let filename = Filename::parse(&filename).map_err(|e| e.to_string())?;
     magical_merchant_core::update_task(&base_dir, &project_slug, &filename, &title, &tags, &body)
         .map_err(|e| e.to_string())
 }
