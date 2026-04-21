@@ -89,9 +89,6 @@ jobs:
       - name: check
         if: steps.filter.outputs.frontend == 'true' || github.event_name != 'pull_request'
         run: nix develop --command just tauri_app::check
-      - name: debug playwright browsers
-        if: steps.filter.outputs.frontend == 'true' || github.event_name != 'pull_request'
-        run: nix develop --command bash -c 'echo "PLAYWRIGHT_BROWSERS_PATH=$PLAYWRIGHT_BROWSERS_PATH" && ls -la $PLAYWRIGHT_BROWSERS_PATH/ && ls -la $PLAYWRIGHT_BROWSERS_PATH/chromium_headless_shell-1208/ && ls -la $PLAYWRIGHT_BROWSERS_PATH/chromium-1208/'
       - name: test
         if: steps.filter.outputs.frontend == 'true' || github.event_name != 'pull_request'
         run: nix develop --command just tauri_app::test
