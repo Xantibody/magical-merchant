@@ -32,6 +32,8 @@
           config.allowUnfree = true;
           config.android_sdk.accept_license = true;
         };
+        # Workaround: see nix/android-repo-fix.nix and #26
+        fixedRepoFile = import ./nix/android-repo-fix.nix { inherit pkgs; };
         rustToolchain = pkgs.rust-bin.stable.latest.default.override {
           extensions = [
             "rust-src"
@@ -53,6 +55,7 @@
           programs.oxfmt.enable = true;
         };
         androidComposition = pkgs.androidenv.composeAndroidPackages {
+          repoJson = fixedRepoFile;
           platformVersions = [ "36" ];
           buildToolsVersions = [
             "35.0.0"
