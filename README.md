@@ -67,6 +67,19 @@ just dev
 | Android  | JDK 17, Android SDK (API 36), NDK 29             |
 | Format   | nix fmt (treefmt: nixfmt, rustfmt, taplo, oxfmt) |
 
+## Build & Install (macOS)
+
+```sh
+# Build the .app bundle (Apple Silicon)
+just build
+
+# Copy to Applications
+cp -r "tauri-app/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Magical Merchant.app" /Applications/
+
+# Remove Gatekeeper quarantine (unsigned app)
+xattr -cr "/Applications/Magical Merchant.app"
+```
+
 ## Environment Variables
 
 | Variable                           | Description                            | Set by       |
@@ -110,6 +123,7 @@ Communicates via stdio transport and provides the following tools:
 | `just android-init`  | Initialize Android target           |     |
 | `just android-dev`   | Development on Android device       |     |
 | `just android-build` | Build Android APK                   |     |
+| `just build`         | Build macOS .app (Apple Silicon)    |     |
 
 ### Rust recipes (`rust::`)
 
