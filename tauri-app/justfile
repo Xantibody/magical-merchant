@@ -27,3 +27,6 @@ android-dev:
 
 android-build:
   pnpm tauri android build
+
+build:
+  pnpm tauri build --bundles app

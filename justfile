@@ -23,3 +23,5 @@ android-init: tauri_app::android-init
 android-dev: tauri_app::android-dev
 
 android-build: tauri_app::android-build
+
+build: tauri_app::build
