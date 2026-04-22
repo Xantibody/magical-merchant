@@ -1,0 +1,7 @@
+name = "magical-merchant-sync"
+main = "src/index.ts"
+compatibility_date = "2025-04-01"
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "magical-merchant-data"
