@@ -1,133 +1,126 @@
 interface Env {
-	BUCKET: R2Bucket;
+  BUCKET: R2Bucket;
 }
 
 interface FileEntry {
-	key: string;
-	lastModified: string;
-	size: number;
+  key: string;
+  lastModified: string;
+  size: number;
 }
 
 function jsonResponse(data: unknown, status = 200): Response {
-	return new Response(JSON.stringify(data), {
-		status,
-		headers: { "Content-Type": "application/json" },
-	});
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
 function errorResponse(message: string, status: number): Response {
-	return jsonResponse({ error: message }, status);
+  return jsonResponse({ error: message }, status);
 }
 
 function extractKey(pathname: string): string | null {
-	const prefix = "/files/";
-	if (!pathname.startsWith(prefix)) return null;
-	return decodeURIComponent(pathname.slice(prefix.length));
+  const prefix = "/files/";
+  if (!pathname.startsWith(prefix)) return null;
+  return decodeURIComponent(pathname.slice(prefix.length));
 }
 
 function containsTraversal(key: string): boolean {
-	return key.includes("..") || key.includes("\0");
+  return key.includes("..") || key.includes("\0");
 }
 
 async function listAllObjects(bucket: R2Bucket): Promise<FileEntry[]> {
-	const files: FileEntry[] = [];
-	let cursor: string | undefined;
+  const files: FileEntry[] = [];
+  let cursor: string | undefined;
 
-	do {
-		const listed = await bucket.list({
-			cursor,
-			limit: 1000,
-			include: ["customMetadata"],
-		});
-		for (const obj of listed.objects) {
-			const lastModified =
-				obj.customMetadata?.lastModified ?? obj.uploaded.toISOString();
-			files.push({
-				key: obj.key,
-				lastModified,
-				size: obj.size,
-			});
-		}
-		cursor = listed.truncated ? listed.cursor : undefined;
-	} while (cursor);
+  do {
+    const listed = await bucket.list({
+      cursor,
+      limit: 1000,
+      include: ["customMetadata"],
+    });
+    for (const obj of listed.objects) {
+      const lastModified = obj.customMetadata?.lastModified ?? obj.uploaded.toISOString();
+      files.push({
+        key: obj.key,
+        lastModified,
+        size: obj.size,
+      });
+    }
+    cursor = listed.truncated ? listed.cursor : undefined;
+  } while (cursor);
 
-	return files;
+  return files;
 }
 
 async function handleList(bucket: R2Bucket): Promise<Response> {
-	const files = await listAllObjects(bucket);
-	return jsonResponse({ files });
+  const files = await listAllObjects(bucket);
+  return jsonResponse({ files });
 }
 
 async function handleGet(bucket: R2Bucket, key: string): Promise<Response> {
-	const object = await bucket.get(key);
-	if (!object) {
-		return errorResponse("Not found", 404);
-	}
-	const lastModified =
-		object.customMetadata?.lastModified ?? object.uploaded.toISOString();
-	return new Response(object.body, {
-		headers: {
-			"Content-Type": "text/plain; charset=utf-8",
-			"X-Last-Modified": lastModified,
-		},
-	});
+  const object = await bucket.get(key);
+  if (!object) {
+    return errorResponse("Not found", 404);
+  }
+  const lastModified = object.customMetadata?.lastModified ?? object.uploaded.toISOString();
+  return new Response(object.body, {
+    headers: {
+      "Content-Type": "text/plain; charset=utf-8",
+      "X-Last-Modified": lastModified,
+    },
+  });
 }
 
-async function handlePut(
-	bucket: R2Bucket,
-	key: string,
-	request: Request,
-): Promise<Response> {
-	const body = await request.text();
-	const lastModified =
-		request.headers.get("X-Last-Modified") ?? new Date().toISOString();
+async function handlePut(bucket: R2Bucket, key: string, request: Request): Promise<Response> {
+  const body = await request.text();
+  const lastModified = request.headers.get("X-Last-Modified") ?? new Date().toISOString();
 
-	await bucket.put(key, body, {
-		customMetadata: { lastModified },
-	});
+  await bucket.put(key, body, {
+    customMetadata: { lastModified },
+  });
 
-	return jsonResponse({ key, lastModified }, 201);
+  return jsonResponse({ key, lastModified }, 201);
 }
 
 async function handleDelete(bucket: R2Bucket, key: string): Promise<Response> {
-	await bucket.delete(key);
-	return new Response(null, { status: 204 });
+  await bucket.delete(key);
+  return new Response(null, { status: 204 });
 }
 
 export default {
-	async fetch(request: Request, env: Env): Promise<Response> {
-		const jwt = request.headers.get("Cf-Access-Jwt-Assertion");
-		if (!jwt) {
-			return errorResponse("Unauthorized", 401);
-		}
+  async fetch(request: Request, env: Env): Promise<Response> {
+    const jwt = request.headers.get("Cf-Access-Jwt-Assertion");
+    if (!jwt) {
+      return errorResponse("Unauthorized", 401);
+    }
 
-		const url = new URL(request.url);
-		const { pathname } = url;
-		const method = request.method;
+    const url = new URL(request.url);
+    const { pathname } = url;
+    const method = request.method;
 
-		if (pathname === "/files" && method === "GET") {
-			return handleList(env.BUCKET);
-		}
+    if (pathname === "/files" && method === "GET") {
+      return handleList(env.BUCKET);
+    }
 
-		const key = extractKey(pathname);
-		if (!key || key.length === 0) {
-			return errorResponse("Invalid path", 400);
-		}
+    const key = extractKey(pathname);
+    if (!key || key.length === 0) {
+      return errorResponse("Invalid path", 400);
+    }
 
-		if (containsTraversal(key)) {
-			return errorResponse("Path traversal not allowed", 400);
-		}
+    if (containsTraversal(key)) {
+      return errorResponse("Path traversal not allowed", 400);
+    }
 
-		switch (method) {
-			case "GET":
-				return handleGet(env.BUCKET, key);
-			case "PUT":
-				return handlePut(env.BUCKET, key, request);
-			case "DELETE":
-				return handleDelete(env.BUCKET, key);
-			default:
-				return errorResponse("Method not allowed", 405);
-		}
-	},
+    switch (method) {
+      case "GET":
+        return handleGet(env.BUCKET, key);
+      case "PUT":
+        return handlePut(env.BUCKET, key, request);
+      case "DELETE":
+        return handleDelete(env.BUCKET, key);
+      default:
+        return errorResponse("Method not allowed", 405);
+    }
+  },
 } satisfies ExportedHandler<Env>;

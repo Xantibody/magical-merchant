@@ -1,10 +1,10 @@
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use chrono::{DateTime, Utc};
-use magical_merchant_core::sync::client::{RemoteFile, SyncClient};
-use magical_merchant_core::sync::SyncResult;
 use magical_merchant_core::CoreError;
+use magical_merchant_core::sync::SyncResult;
+use magical_merchant_core::sync::client::{RemoteFile, SyncClient};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
 

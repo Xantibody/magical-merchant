@@ -115,12 +115,7 @@ export default function Settings() {
           />
         </label>
 
-        <button
-          type="button"
-          class="settings-button"
-          onClick={handleSave}
-          disabled={saving()}
-        >
+        <button type="button" class="settings-button" onClick={handleSave} disabled={saving()}>
           {saving() ? "Saving..." : "Save"}
         </button>
       </div>

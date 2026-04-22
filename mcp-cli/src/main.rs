@@ -9,7 +9,7 @@ use rmcp::model::{
     ServerCapabilities, ServerInfo,
 };
 use rmcp::service::RequestContext;
-use rmcp::{schemars, tool, tool_router, ErrorData, RoleServer, ServerHandler, ServiceExt};
+use rmcp::{ErrorData, RoleServer, ServerHandler, ServiceExt, schemars, tool, tool_router};
 use serde::{Deserialize, Serialize};
 
 #[derive(Parser)]
