@@ -19,4 +19,13 @@ pub enum CoreError {
 
     #[error("Parse error: {0}")]
     Parse(String),
+
+    #[error("Sync error: {0}")]
+    Sync(String),
+
+    #[error("Not authenticated")]
+    NotAuthenticated,
+
+    #[error("Network error: {0}")]
+    Network(String),
 }
