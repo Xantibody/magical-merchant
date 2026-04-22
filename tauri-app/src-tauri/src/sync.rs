@@ -215,7 +215,7 @@ async fn do_sync(handle: &AppHandle) -> Result<SyncResult, String> {
 pub fn sync_status(state: State<'_, AppSyncState>) -> Result<SyncStatusInfo, String> {
     Ok(SyncStatusInfo {
         is_syncing: state.is_syncing.load(Ordering::SeqCst),
-        last_synced_at: state.last_synced_at.lock().unwrap().clone(),
+        last_synced_at: *state.last_synced_at.lock().unwrap(),
         last_error: state.last_error.lock().unwrap().clone(),
     })
 }
