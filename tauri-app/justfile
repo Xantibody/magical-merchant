@@ -29,4 +29,4 @@ android-build:
   pnpm tauri android build
 
 build:
-  pnpm tauri build --bundles app --target aarch64-apple-darwin
+  pnpm tauri build --bundles app
