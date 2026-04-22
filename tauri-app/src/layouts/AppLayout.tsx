@@ -1,6 +1,7 @@
 import { createSignal, createEffect, onCleanup } from "solid-js";
 import { useLocation } from "@solidjs/router";
 import Icon, { type IconName } from "../components/Icon";
+import SyncButton from "../components/SyncButton";
 import ToggleMenu from "../components/ToggleMenu";
 
 interface AppLayoutProps {
@@ -11,12 +12,14 @@ const MODE_ICONS: Record<string, IconName> = {
   "/": "lightning",
   "/notes": "note-pencil",
   "/tasks": "check-square",
+  "/settings": "gear",
 };
 
 const MODE_LABELS: Record<string, string> = {
   "/": "Timeline",
   "/notes": "Notes",
   "/tasks": "Tasks",
+  "/settings": "Settings",
 };
 
 type Theme = "light" | "dark" | "system";
@@ -82,9 +85,12 @@ export default function AppLayout(props: AppLayoutProps) {
         <button type="button" onClick={() => setMenuOpen(!menuOpen())} aria-label="Toggle menu">
           <Icon name="list" size={24} />
         </button>
-        <button type="button" onClick={cycleTheme} aria-label="Toggle theme">
-          <Icon name={themeIcon()} size={20} />
-        </button>
+        <div class="header-actions">
+          <SyncButton />
+          <button type="button" onClick={cycleTheme} aria-label="Toggle theme">
+            <Icon name={themeIcon()} size={20} />
+          </button>
+        </div>
       </header>
       <ToggleMenu isOpen={menuOpen} onClose={() => setMenuOpen(false)} />
       {props.children}

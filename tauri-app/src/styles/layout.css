@@ -31,6 +31,26 @@
   background: var(--app-surface-2);
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--size-1);
+}
+
+.sync-button.syncing .icon {
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
 .mode-indicator {
   position: absolute;
   bottom: var(--size-3);

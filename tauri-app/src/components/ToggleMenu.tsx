@@ -22,6 +22,10 @@ export default function ToggleMenu(props: ToggleMenuProps) {
         <Icon name="check-square" size={20} />
         Tasks
       </A>
+      <A href="/settings" class="toggle-menu-item" activeClass="active" onClick={props.onClose}>
+        <Icon name="gear" size={20} />
+        Settings
+      </A>
     </nav>
   );
 }
