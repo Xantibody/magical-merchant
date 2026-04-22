@@ -74,7 +74,7 @@ just dev
 just build
 
 # Copy to Applications
-cp -r "tauri-app/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Magical Merchant.app" /Applications/
+cp -r "target/release/bundle/macos/Magical Merchant.app" /Applications/
 
 # Remove Gatekeeper quarantine (unsigned app)
 xattr -cr "/Applications/Magical Merchant.app"
