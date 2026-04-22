@@ -12,9 +12,7 @@ pub struct RemoteFile {
 }
 
 pub trait SyncClient: Send + Sync {
-    fn list_remote(
-        &self,
-    ) -> impl Future<Output = Result<Vec<RemoteFile>, CoreError>> + Send;
+    fn list_remote(&self) -> impl Future<Output = Result<Vec<RemoteFile>, CoreError>> + Send;
 
     fn download(&self, key: &str) -> impl Future<Output = Result<Vec<u8>, CoreError>> + Send;
 

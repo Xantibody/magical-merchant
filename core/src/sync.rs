@@ -80,10 +80,7 @@ impl<C: SyncClient> SyncEngine<C> {
                 let local = local_map.get(key.as_str());
                 let remote = remote_map.get(key.as_str());
                 if let (Some(local), Some(remote)) = (local, remote) {
-                    match self
-                        .execute_conflict(key, local, remote, &mut state)
-                        .await
-                    {
+                    match self.execute_conflict(key, local, remote, &mut state).await {
                         Ok(()) => result.conflicts += 1,
                         Err(e) => result.errors.push(format!("conflict {key}: {e}")),
                     }

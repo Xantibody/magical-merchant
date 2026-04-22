@@ -120,8 +120,8 @@ fn action_key(action: &SyncAction) -> &str {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::state::FileSyncRecord;
+    use super::*;
     use chrono::{TimeZone, Utc};
 
     fn local(key: &str, hash: &str) -> LocalFile {
@@ -157,14 +157,24 @@ mod tests {
     fn local_only_no_state_uploads() {
         let local_files = vec![local("notes/a.md", "hash_a")];
         let actions = compute(&local_files, &[], &SyncState::default());
-        assert_eq!(actions, vec![SyncAction::UploadNew { key: "notes/a.md".into() }]);
+        assert_eq!(
+            actions,
+            vec![SyncAction::UploadNew {
+                key: "notes/a.md".into()
+            }]
+        );
     }
 
     #[test]
     fn remote_only_no_state_downloads() {
         let remote_files = vec![remote("notes/b.md", "2026-04-22T10:00:00Z")];
         let actions = compute(&[], &remote_files, &SyncState::default());
-        assert_eq!(actions, vec![SyncAction::DownloadNew { key: "notes/b.md".into() }]);
+        assert_eq!(
+            actions,
+            vec![SyncAction::DownloadNew {
+                key: "notes/b.md".into()
+            }]
+        );
     }
 
     #[test]
@@ -172,7 +182,12 @@ mod tests {
         let local_files = vec![local("notes/c.md", "hash_c")];
         let remote_files = vec![remote("notes/c.md", "2026-04-22T10:00:00Z")];
         let actions = compute(&local_files, &remote_files, &SyncState::default());
-        assert_eq!(actions, vec![SyncAction::Conflict { key: "notes/c.md".into() }]);
+        assert_eq!(
+            actions,
+            vec![SyncAction::Conflict {
+                key: "notes/c.md".into()
+            }]
+        );
     }
 
     #[test]
@@ -198,7 +213,12 @@ mod tests {
             record("old_hash", "2026-04-22T10:00:00Z"),
         );
         let actions = compute(&local_files, &remote_files, &state);
-        assert_eq!(actions, vec![SyncAction::UploadModified { key: "notes/e.md".into() }]);
+        assert_eq!(
+            actions,
+            vec![SyncAction::UploadModified {
+                key: "notes/e.md".into()
+            }]
+        );
     }
 
     #[test]
@@ -211,7 +231,12 @@ mod tests {
             record("hash_f", "2026-04-22T10:00:00Z"),
         );
         let actions = compute(&local_files, &remote_files, &state);
-        assert_eq!(actions, vec![SyncAction::DownloadModified { key: "notes/f.md".into() }]);
+        assert_eq!(
+            actions,
+            vec![SyncAction::DownloadModified {
+                key: "notes/f.md".into()
+            }]
+        );
     }
 
     #[test]
@@ -224,7 +249,12 @@ mod tests {
             record("old_hash", "2026-04-22T10:00:00Z"),
         );
         let actions = compute(&local_files, &remote_files, &state);
-        assert_eq!(actions, vec![SyncAction::Conflict { key: "notes/g.md".into() }]);
+        assert_eq!(
+            actions,
+            vec![SyncAction::Conflict {
+                key: "notes/g.md".into()
+            }]
+        );
     }
 
     #[test]
@@ -236,7 +266,12 @@ mod tests {
             record("hash_h", "2026-04-22T10:00:00Z"),
         );
         let actions = compute(&[], &remote_files, &state);
-        assert_eq!(actions, vec![SyncAction::DeleteRemote { key: "notes/h.md".into() }]);
+        assert_eq!(
+            actions,
+            vec![SyncAction::DeleteRemote {
+                key: "notes/h.md".into()
+            }]
+        );
     }
 
     #[test]
@@ -248,18 +283,30 @@ mod tests {
             record("hash_i", "2026-04-22T10:00:00Z"),
         );
         let actions = compute(&local_files, &[], &state);
-        assert_eq!(actions, vec![SyncAction::DeleteLocal { key: "notes/i.md".into() }]);
+        assert_eq!(
+            actions,
+            vec![SyncAction::DeleteLocal {
+                key: "notes/i.md".into()
+            }]
+        );
     }
 
     #[test]
     fn multiple_actions_sorted_by_key() {
-        let local_files = vec![
-            local("notes/z.md", "hash_z"),
-            local("notes/a.md", "hash_a"),
-        ];
+        let local_files = vec![local("notes/z.md", "hash_z"), local("notes/a.md", "hash_a")];
         let actions = compute(&local_files, &[], &SyncState::default());
         assert_eq!(actions.len(), 2);
-        assert_eq!(actions[0], SyncAction::UploadNew { key: "notes/a.md".into() });
-        assert_eq!(actions[1], SyncAction::UploadNew { key: "notes/z.md".into() });
+        assert_eq!(
+            actions[0],
+            SyncAction::UploadNew {
+                key: "notes/a.md".into()
+            }
+        );
+        assert_eq!(
+            actions[1],
+            SyncAction::UploadNew {
+                key: "notes/z.md".into()
+            }
+        );
     }
 }

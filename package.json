@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "open-props": "^1.7.23"
+  },
+  "devDependencies": {
+    "@phosphor-icons/core": "^2.1.1"
+  }
+}

@@ -34,10 +34,7 @@ fn walk_dir(root: &Path, current: &Path, files: &mut Vec<LocalFile>) -> Result<(
         if path.is_dir() {
             walk_dir(root, &path, files)?;
         } else if path.is_file() {
-            let file_name = path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("");
+            let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
             if is_excluded(file_name) {
                 continue;
@@ -52,10 +49,8 @@ fn walk_dir(root: &Path, current: &Path, files: &mut Vec<LocalFile>) -> Result<(
                 .to_string();
 
             let metadata = fs::metadata(&path)?;
-            let modified: DateTime<Utc> = metadata
-                .modified()
-                .unwrap_or(SystemTime::UNIX_EPOCH)
-                .into();
+            let modified: DateTime<Utc> =
+                metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH).into();
 
             let content = fs::read(&path)?;
             let hash = compute_hash(&content);

@@ -22,10 +22,7 @@ pub fn resolve(
 pub fn conflict_filename(key: &str, timestamp: DateTime<Utc>) -> String {
     let path = Path::new(key);
     let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("file");
-    let ext = path
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("md");
+    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("md");
     let parent = path.parent().and_then(|p| p.to_str()).unwrap_or("");
     let ts = timestamp.format("%Y%m%d-%H%M%S");
 

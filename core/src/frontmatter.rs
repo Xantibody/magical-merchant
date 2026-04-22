@@ -1,5 +1,5 @@
 use chrono::{DateTime, FixedOffset};
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use crate::error::CoreError;
 

@@ -118,9 +118,7 @@ pub async fn login_with_browser(config: &SyncConfig) -> Result<String, String> {
 
     let mut buf = vec![0u8; 4096];
     stream.readable().await.map_err(|e| e.to_string())?;
-    let n = stream
-        .try_read(&mut buf)
-        .map_err(|e| e.to_string())?;
+    let n = stream.try_read(&mut buf).map_err(|e| e.to_string())?;
     let request = String::from_utf8_lossy(&buf[..n]);
 
     // Extract token from query parameters
@@ -162,7 +160,10 @@ pub async fn auth_login(handle: AppHandle) -> Result<(), String> {
     let config = SyncConfig::load(&base_dir);
 
     if !config.is_configured() {
-        return Err("Sync not configured. Please set Workers URL, team domain, and app AUD in Settings.".to_string());
+        return Err(
+            "Sync not configured. Please set Workers URL, team domain, and app AUD in Settings."
+                .to_string(),
+        );
     }
 
     let token = login_with_browser(&config).await?;
@@ -234,20 +235,14 @@ mod tests {
     #[test]
     fn extract_token_from_callback() {
         let request = "GET /callback?token=my-jwt-token HTTP/1.1\r\nHost: localhost\r\n\r\n";
-        assert_eq!(
-            extract_token_from_request(request).unwrap(),
-            "my-jwt-token"
-        );
+        assert_eq!(extract_token_from_request(request).unwrap(), "my-jwt-token");
     }
 
     #[test]
     fn extract_cf_authorization_from_callback() {
         let request =
             "GET /callback?cf_authorization=my-cf-token HTTP/1.1\r\nHost: localhost\r\n\r\n";
-        assert_eq!(
-            extract_token_from_request(request).unwrap(),
-            "my-cf-token"
-        );
+        assert_eq!(extract_token_from_request(request).unwrap(), "my-cf-token");
     }
 
     #[test]

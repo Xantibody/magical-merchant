@@ -33,8 +33,8 @@ impl SyncState {
 
     pub fn save(&self, base_dir: &Path) -> Result<(), CoreError> {
         let path = base_dir.join(STATE_FILENAME);
-        let content = serde_json::to_string_pretty(self)
-            .map_err(|e| CoreError::Sync(e.to_string()))?;
+        let content =
+            serde_json::to_string_pretty(self).map_err(|e| CoreError::Sync(e.to_string()))?;
         fs::write(&path, content)?;
         Ok(())
     }
