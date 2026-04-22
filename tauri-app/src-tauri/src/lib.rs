@@ -1,3 +1,6 @@
+mod auth;
+mod sync;
+
 use magical_merchant_core::{
     DeviceContext, Filename, NoteFilename, NoteSummary, ProjectSummary, Slug, TaskSummary,
 };
@@ -164,6 +167,8 @@ fn update_task(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_shell::init())
+        .manage(sync::AppSyncState::default())
         .invoke_handler(tauri::generate_handler![
             save_quick_capture,
             save_document,
@@ -183,6 +188,13 @@ pub fn run() {
             read_timeline_by_date,
             delete_note,
             delete_task,
+            sync::sync_start,
+            sync::sync_status,
+            auth::auth_login,
+            auth::auth_status,
+            auth::auth_logout,
+            auth::get_sync_config,
+            auth::save_sync_config,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
