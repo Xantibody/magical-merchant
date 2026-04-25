@@ -28,8 +28,10 @@ jobs:
               - 'rust/justfile'
       - name: Free disk space
         if: steps.filter.outputs.core == 'true' || github.event_name != 'pull_request'
-        run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache
+        uses: jlumbroso/free-disk-space@v2
+        with:
+          tool-cache: false
+          large-packages: false
       - if: steps.filter.outputs.core == 'true' || github.event_name != 'pull_request'
         uses: nixbuild/nix-quick-install-action@v34
       - if: steps.filter.outputs.core == 'true' || github.event_name != 'pull_request'
