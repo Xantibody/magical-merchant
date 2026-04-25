@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::Path;
 
-use base64::prelude::*;
+use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
@@ -70,30 +70,25 @@ pub fn clear_token() -> Result<(), String> {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct Claims {
+    exp: i64,
+}
+
 pub fn is_token_valid(token: &str) -> bool {
-    let parts: Vec<&str> = token.split('.').collect();
-    if parts.len() != 3 {
-        return false;
-    }
+    let mut validation = Validation::new(Algorithm::RS256);
+    validation.insecure_disable_signature_validation();
+    validation.validate_exp = false;
+    validation.required_spec_claims.clear();
 
-    let payload = match BASE64_URL_SAFE_NO_PAD.decode(parts[1]) {
-        Ok(p) => p,
+    let token_data = match decode::<Claims>(token, &DecodingKey::from_secret(&[]), &validation) {
+        Ok(data) => data,
         Err(_) => return false,
-    };
-
-    let claims: serde_json::Value = match serde_json::from_slice(&payload) {
-        Ok(c) => c,
-        Err(_) => return false,
-    };
-
-    let exp = match claims.get("exp").and_then(|e| e.as_i64()) {
-        Some(e) => e,
-        None => return false,
     };
 
     let now = chrono::Utc::now().timestamp();
     // 5 minute buffer
-    exp > now + 300
+    token_data.claims.exp > now + 300
 }
 
 pub async fn login_with_browser(config: &SyncConfig) -> Result<String, String> {
@@ -199,12 +194,16 @@ pub fn save_sync_config(handle: AppHandle, config: SyncConfig) -> Result<(), Str
 #[cfg(test)]
 mod tests {
     use super::*;
+    use jsonwebtoken::{EncodingKey, Header, encode};
 
     fn make_jwt(exp: i64) -> String {
-        let header = BASE64_URL_SAFE_NO_PAD.encode(b"{}");
-        let payload = serde_json::json!({"exp": exp});
-        let payload_b64 = BASE64_URL_SAFE_NO_PAD.encode(payload.to_string().as_bytes());
-        format!("{header}.{payload_b64}.signature")
+        let claims = Claims { exp };
+        encode(
+            &Header::default(),
+            &claims,
+            &EncodingKey::from_secret(b"test-secret"),
+        )
+        .unwrap()
     }
 
     #[test]
