@@ -28,7 +28,7 @@ jobs:
               - 'rust/justfile'
       - name: Free disk space
         if: steps.filter.outputs.core == 'true' || github.event_name != 'pull_request'
-        uses: jlumbroso/free-disk-space@v2
+        uses: jlumbroso/free-disk-space@v1
         with:
           tool-cache: false
           large-packages: false
