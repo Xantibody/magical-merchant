@@ -4,14 +4,10 @@ import "../styles/settings.css";
 
 interface SyncConfig {
   workers_url: string;
-  team_domain: string;
-  app_aud: string;
 }
 
 export default function Settings() {
   const [workersUrl, setWorkersUrl] = createSignal("");
-  const [teamDomain, setTeamDomain] = createSignal("");
-  const [appAud, setAppAud] = createSignal("");
   const [authenticated, setAuthenticated] = createSignal(false);
   const [saving, setSaving] = createSignal(false);
   const [message, setMessage] = createSignal("");
@@ -20,8 +16,6 @@ export default function Settings() {
     try {
       const config = await invoke<SyncConfig>("get_sync_config");
       setWorkersUrl(config.workers_url);
-      setTeamDomain(config.team_domain);
-      setAppAud(config.app_aud);
     } catch {
       // Use defaults
     }
@@ -41,8 +35,6 @@ export default function Settings() {
       await invoke("save_sync_config", {
         config: {
           workers_url: workersUrl(),
-          team_domain: teamDomain(),
-          app_aud: appAud(),
         },
       });
       setMessage("Saved");
@@ -90,28 +82,6 @@ export default function Settings() {
             value={workersUrl()}
             onInput={(e) => setWorkersUrl(e.currentTarget.value)}
             placeholder="https://magical-merchant-sync.your-account.workers.dev"
-          />
-        </label>
-
-        <label class="settings-label">
-          Team Domain
-          <input
-            type="text"
-            class="settings-input"
-            value={teamDomain()}
-            onInput={(e) => setTeamDomain(e.currentTarget.value)}
-            placeholder="your-team"
-          />
-        </label>
-
-        <label class="settings-label">
-          App AUD
-          <input
-            type="text"
-            class="settings-input"
-            value={appAud()}
-            onInput={(e) => setAppAud(e.currentTarget.value)}
-            placeholder="aud-tag-from-cf-access"
           />
         </label>
 

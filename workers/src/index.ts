@@ -88,16 +88,40 @@ async function handleDelete(bucket: R2Bucket, key: string): Promise<Response> {
   return new Response(null, { status: 204 });
 }
 
+function getCookie(request: Request, name: string): string | null {
+  const cookie = request.headers.get("Cookie");
+  if (!cookie) return null;
+  const match = cookie.match(new RegExp(`(?:^|;\\s*)${name}=([^;]*)`));
+  return match ? match[1] : null;
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    const jwt = request.headers.get("Cf-Access-Jwt-Assertion");
-    if (!jwt) {
-      return errorResponse("Unauthorized", 401);
-    }
-
     const url = new URL(request.url);
     const { pathname } = url;
     const method = request.method;
+
+    // Auth endpoint: extract JWT from CF_Authorization cookie and redirect via deep link
+    if (pathname === "/auth/login" && method === "GET") {
+      const jwt = getCookie(request, "CF_Authorization");
+      if (!jwt) {
+        return errorResponse("Authentication failed", 401);
+      }
+      const redirectUrl = `magical-merchant://auth/callback?token=${encodeURIComponent(jwt)}`;
+      return new Response(
+        `<html><body><p>Redirecting to app...</p><script>window.location.href="${redirectUrl}";</script></body></html>`,
+        {
+          status: 200,
+          headers: { "Content-Type": "text/html; charset=utf-8" },
+        },
+      );
+    }
+
+    const jwt =
+      request.headers.get("Cf-Access-Jwt-Assertion") ?? getCookie(request, "CF_Authorization");
+    if (!jwt) {
+      return errorResponse("Unauthorized", 401);
+    }
 
     if (pathname === "/files" && method === "GET") {
       return handleList(env.BUCKET);
