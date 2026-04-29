@@ -1,13 +1,15 @@
 use magical_merchant_core::DeviceContext;
+use magical_merchant_core::utils::device::NetworkType;
 
 pub fn get_context() -> DeviceContext {
     let (battery, is_charging) = get_battery();
+    let (network_type, wifi_ssid) = get_network();
 
     DeviceContext {
         battery,
         is_charging,
-        network_type: None,
-        wifi_ssid: None,
+        network_type,
+        wifi_ssid,
         location: None,
     }
 }
@@ -38,5 +40,35 @@ fn get_battery() -> (Option<u8>, Option<bool>) {
 
 #[cfg(target_os = "android")]
 fn get_battery() -> (Option<u8>, Option<bool>) {
+    (None, None)
+}
+
+#[cfg(target_os = "macos")]
+fn get_network() -> (Option<NetworkType>, Option<String>) {
+    let output = match std::process::Command::new("networksetup")
+        .args(["-getairportnetwork", "en0"])
+        .output()
+    {
+        Ok(o) => o,
+        Err(_) => return (None, None),
+    };
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let trimmed = stdout.trim();
+
+    if let Some(ssid) = trimmed.strip_prefix("Current Wi-Fi Network: ") {
+        (Some(NetworkType::WiFi), Some(ssid.to_string()))
+    } else {
+        (Some(NetworkType::Offline), None)
+    }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "android")))]
+fn get_network() -> (Option<NetworkType>, Option<String>) {
+    (None, None)
+}
+
+#[cfg(target_os = "android")]
+fn get_network() -> (Option<NetworkType>, Option<String>) {
     (None, None)
 }
