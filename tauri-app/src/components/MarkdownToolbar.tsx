@@ -20,14 +20,20 @@ export default function MarkdownToolbar(props: MarkdownToolbarProps) {
     const vv = window.visualViewport;
     if (!vv) return;
 
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
     const update = () => {
-      const offset = window.innerHeight - vv.height - vv.offsetTop;
-      setBottomOffset(Math.max(0, offset));
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        const offset = window.innerHeight - vv.height - vv.offsetTop;
+        setBottomOffset(Math.max(0, offset));
+      }, 150);
     };
 
     vv.addEventListener("resize", update);
     onCleanup(() => {
       vv.removeEventListener("resize", update);
+      clearTimeout(timer);
     });
   });
 

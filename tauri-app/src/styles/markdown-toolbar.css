@@ -10,7 +10,7 @@
     bottom: 0;
     left: 0;
     right: 0;
-    z-index: 50;
+    z-index: 150;
     gap: var(--size-1);
     padding: var(--size-1) var(--size-2);
     background: var(--app-surface-2);
