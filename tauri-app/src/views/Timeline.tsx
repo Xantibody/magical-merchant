@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import ActionBar from "../components/ActionBar";
 import Icon from "../components/Icon";
 import MarkdownPreview from "../components/MarkdownPreview";
+import { getLocation } from "../lib/location";
 
 type ViewMode = "input" | "list" | "preview";
 
@@ -35,7 +36,12 @@ export default function Timeline() {
 
     setSaving(true);
     try {
-      await invoke("save_quick_capture", { text: trimmed });
+      const loc = await getLocation();
+      await invoke("save_quick_capture", {
+        text: trimmed,
+        latitude: loc?.latitude ?? null,
+        longitude: loc?.longitude ?? null,
+      });
       setText("");
       refetch();
     } finally {

@@ -1,7 +1,7 @@
 use magical_merchant_core::DeviceContext;
-use magical_merchant_core::utils::device::NetworkType;
+use magical_merchant_core::utils::device::{Location, NetworkType};
 
-pub fn get_context() -> DeviceContext {
+pub fn get_context(location: Option<Location>) -> DeviceContext {
     let (battery, is_charging) = get_battery();
     let (network_type, wifi_ssid) = get_network();
 
@@ -10,7 +10,7 @@ pub fn get_context() -> DeviceContext {
         is_charging,
         network_type,
         wifi_ssid,
-        location: None,
+        location,
     }
 }
 
