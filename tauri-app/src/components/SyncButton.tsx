@@ -1,6 +1,7 @@
 import { createSignal, onMount, onCleanup } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import { typedInvoke } from "../lib/commands";
+import { EVENTS } from "../lib/events";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import Icon, { type IconName } from "./Icon";
 
@@ -23,14 +24,14 @@ export default function SyncButton() {
     }
 
     unlisteners.push(
-      await listen("sync-complete", () => {
+      await listen(EVENTS.SYNC_COMPLETE, () => {
         setStatus("success");
         successTimer = setTimeout(() => setStatus("idle"), 3000);
       }),
     );
 
     unlisteners.push(
-      await listen("sync-error", () => {
+      await listen(EVENTS.SYNC_ERROR, () => {
         setStatus("error");
       }),
     );
