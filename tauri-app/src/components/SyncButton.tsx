@@ -2,6 +2,7 @@ import { createSignal, onMount, onCleanup } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import { typedInvoke } from "../lib/commands";
 import { EVENTS } from "../lib/events";
+import { ROUTES } from "../lib/routes";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import Icon, { type IconName } from "./Icon";
 
@@ -46,7 +47,7 @@ export default function SyncButton() {
     const s = status();
     if (s === "syncing") return;
     if (s === "not-configured") {
-      navigate("/settings");
+      navigate(ROUTES.SETTINGS);
       return;
     }
 

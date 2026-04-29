@@ -3,24 +3,11 @@ import { useLocation } from "@solidjs/router";
 import Icon, { type IconName } from "../components/Icon";
 import SyncButton from "../components/SyncButton";
 import ToggleMenu from "../components/ToggleMenu";
+import { MODE_ICONS, MODE_LABELS } from "../lib/routes";
 
 interface AppLayoutProps {
   children?: any;
 }
-
-const MODE_ICONS: Record<string, IconName> = {
-  "/": "lightning",
-  "/notes": "note-pencil",
-  "/tasks": "check-square",
-  "/settings": "gear",
-};
-
-const MODE_LABELS: Record<string, string> = {
-  "/": "Timeline",
-  "/notes": "Notes",
-  "/tasks": "Tasks",
-  "/settings": "Settings",
-};
 
 type Theme = "light" | "dark" | "system";
 
