@@ -2,22 +2,15 @@ use chrono::{DateTime, FixedOffset};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use crate::error::CoreError;
+use crate::utils::device::Context;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct NoteFrontmatter {
     pub time: DateTime<FixedOffset>,
     #[serde(default)]
     pub tags: Vec<String>,
-    #[serde(default)]
-    pub context: Option<ContextMeta>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct ContextMeta {
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub battery: Option<u8>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub is_charging: Option<bool>,
+    pub context: Option<Context>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -109,9 +102,12 @@ mod tests {
         let fm = NoteFrontmatter {
             time: sample_datetime(),
             tags: vec!["memo".to_string()],
-            context: Some(ContextMeta {
+            context: Some(Context {
                 battery: Some(82),
                 is_charging: Some(false),
+                network_type: None,
+                wifi_ssid: None,
+                location: None,
             }),
         };
         let rendered = render(&fm, "# Hello\nWorld").unwrap();
@@ -143,5 +139,17 @@ mod tests {
         assert!(rendered.starts_with("---\n"));
         assert!(rendered.contains("\n---\n"));
         assert!(rendered.ends_with("body"));
+    }
+
+    #[test]
+    fn test_note_frontmatter_old_format_compat() {
+        // Old format only had battery and is_charging
+        let yaml = "---\ntime: 2026-03-20T14:30:45+09:00\ntags: []\ncontext:\n  battery: 82\n  is_charging: false\n---\nbody";
+        let (fm, body): (NoteFrontmatter, String) = parse(yaml).unwrap();
+        let ctx = fm.context.unwrap();
+        assert_eq!(ctx.battery, Some(82));
+        assert_eq!(ctx.is_charging, Some(false));
+        assert_eq!(ctx.network_type, None);
+        assert_eq!(body, "body");
     }
 }

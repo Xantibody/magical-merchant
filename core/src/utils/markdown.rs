@@ -2,7 +2,7 @@ use chrono::{DateTime, FixedOffset, Local};
 
 use crate::error::CoreError;
 use crate::utils::device::Context;
-use crate::utils::frontmatter::{self, ContextMeta, NoteFrontmatter};
+use crate::utils::frontmatter::{self, NoteFrontmatter};
 
 pub fn format_timeline_line(text: &str, timestamp: DateTime<Local>, context: &Context) -> String {
     let time = timestamp.format("%H:%M:%S");
@@ -20,10 +20,7 @@ pub fn format_note_markdown(
     let fm = NoteFrontmatter {
         time,
         tags: tags.to_vec(),
-        context: Some(ContextMeta {
-            battery: context.battery,
-            is_charging: context.is_charging,
-        }),
+        context: Some(context.clone()),
     };
     frontmatter::render(&fm, body)
 }
