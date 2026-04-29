@@ -26,12 +26,10 @@ const ICONS = {
   "battery-medium": () => import("@phosphor-icons/core/assets/regular/battery-medium.svg?raw"),
   "battery-low": () => import("@phosphor-icons/core/assets/regular/battery-low.svg?raw"),
   "battery-empty": () => import("@phosphor-icons/core/assets/regular/battery-empty.svg?raw"),
-  "battery-charging": () =>
-    import("@phosphor-icons/core/assets/regular/battery-charging.svg?raw"),
+  "battery-charging": () => import("@phosphor-icons/core/assets/regular/battery-charging.svg?raw"),
   "wifi-high": () => import("@phosphor-icons/core/assets/regular/wifi-high.svg?raw"),
   "wifi-slash": () => import("@phosphor-icons/core/assets/regular/wifi-slash.svg?raw"),
-  "cell-signal-full": () =>
-    import("@phosphor-icons/core/assets/regular/cell-signal-full.svg?raw"),
+  "cell-signal-full": () => import("@phosphor-icons/core/assets/regular/cell-signal-full.svg?raw"),
   "map-pin": () => import("@phosphor-icons/core/assets/regular/map-pin.svg?raw"),
 } as const;
 

@@ -3,7 +3,9 @@ mod device;
 mod sync;
 
 use magical_merchant_core::utils::device::Location;
-use magical_merchant_core::{Filename, NoteFilename, NoteSummary, ProjectSummary, Slug, TaskSummary};
+use magical_merchant_core::{
+    Filename, NoteFilename, NoteSummary, ProjectSummary, Slug, TaskSummary,
+};
 use tauri::{AppHandle, Listener, Manager};
 
 fn make_location(latitude: Option<f64>, longitude: Option<f64>) -> Option<Location> {

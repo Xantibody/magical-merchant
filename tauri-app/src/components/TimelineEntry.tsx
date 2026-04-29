@@ -25,12 +25,8 @@ export default function TimelineEntry(props: TimelineEntryProps) {
       <Show when={parsed().context}>
         {(ctx) => (
           <div class="timeline-entry-context">
-            <Show when={getBatteryIcon(ctx())}>
-              {(icon) => <Icon name={icon()} size={14} />}
-            </Show>
-            <Show when={getNetworkIcon(ctx())}>
-              {(icon) => <Icon name={icon()} size={14} />}
-            </Show>
+            <Show when={getBatteryIcon(ctx())}>{(icon) => <Icon name={icon()} size={14} />}</Show>
+            <Show when={getNetworkIcon(ctx())}>{(icon) => <Icon name={icon()} size={14} />}</Show>
             <Show when={hasLocation(ctx())}>
               <Icon name="map-pin" size={14} />
             </Show>

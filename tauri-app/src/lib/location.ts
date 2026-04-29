@@ -12,10 +12,7 @@ interface Coordinates {
 export async function getLocation(): Promise<Coordinates | null> {
   try {
     let permissions = await checkPermissions();
-    if (
-      permissions.location === "prompt" ||
-      permissions.location === "prompt-with-rationale"
-    ) {
+    if (permissions.location === "prompt" || permissions.location === "prompt-with-rationale") {
       permissions = await requestPermissions(["location"]);
     }
 

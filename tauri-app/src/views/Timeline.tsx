@@ -136,9 +136,7 @@ export default function Timeline() {
             <h3 class="preview-date-header">{selectedDate()}</h3>
             <div class="preview-entries">
               <Show when={dateEntries()?.length} fallback={<p class="empty-state">エントリなし</p>}>
-                <For each={dateEntries()}>
-                  {(entry) => <TimelineEntry raw={entry} />}
-                </For>
+                <For each={dateEntries()}>{(entry) => <TimelineEntry raw={entry} />}</For>
               </Show>
             </div>
           </div>
