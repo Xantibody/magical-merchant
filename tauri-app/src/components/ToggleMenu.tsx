@@ -11,7 +11,13 @@ interface ToggleMenuProps {
 export default function ToggleMenu(props: ToggleMenuProps) {
   return (
     <nav class="toggle-menu" classList={{ open: props.isOpen() }}>
-      <A href={ROUTES.TIMELINE} class="toggle-menu-item" activeClass="active" end onClick={props.onClose}>
+      <A
+        href={ROUTES.TIMELINE}
+        class="toggle-menu-item"
+        activeClass="active"
+        end
+        onClick={props.onClose}
+      >
         <Icon name={MODE_ICONS[ROUTES.TIMELINE]} size={20} />
         {MODE_LABELS[ROUTES.TIMELINE]}
       </A>
@@ -23,7 +29,12 @@ export default function ToggleMenu(props: ToggleMenuProps) {
         <Icon name={MODE_ICONS[ROUTES.TASKS]} size={20} />
         {MODE_LABELS[ROUTES.TASKS]}
       </A>
-      <A href={ROUTES.SETTINGS} class="toggle-menu-item" activeClass="active" onClick={props.onClose}>
+      <A
+        href={ROUTES.SETTINGS}
+        class="toggle-menu-item"
+        activeClass="active"
+        onClick={props.onClose}
+      >
         <Icon name={MODE_ICONS[ROUTES.SETTINGS]} size={20} />
         {MODE_LABELS[ROUTES.SETTINGS]}
       </A>

@@ -5,8 +5,8 @@ use std::time::SystemTime;
 use chrono::{DateTime, Utc};
 use sha2::{Digest, Sha256};
 
-use crate::utils::paths;
 use crate::CoreError;
+use crate::utils::paths;
 
 #[derive(Debug, Clone)]
 pub struct LocalFile {
