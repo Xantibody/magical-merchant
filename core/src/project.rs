@@ -73,8 +73,8 @@ pub fn get_project_activity_summary(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::paths;
     use crate::utils::frontmatter::{self, TaskFrontmatter};
+    use crate::utils::paths;
     use chrono::{DateTime, FixedOffset, TimeZone};
     use std::fs;
     use tempfile::TempDir;

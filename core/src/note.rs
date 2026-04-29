@@ -2,8 +2,8 @@ pub mod error;
 pub mod repository;
 mod summary;
 
-pub use summary::Summary as NoteSummary;
 pub use repository::Notes;
+pub use summary::Summary as NoteSummary;
 
 use std::path::{Path, PathBuf};
 

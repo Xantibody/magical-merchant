@@ -5,8 +5,8 @@ use chrono::{DateTime, FixedOffset, Local};
 
 use crate::error::CoreError;
 use crate::utils;
-use crate::utils::paths;
 use crate::utils::frontmatter::{self, ProjectFrontmatter};
+use crate::utils::paths;
 use crate::utils::validated::Slug;
 
 use super::summary::Summary as ProjectSummary;
@@ -20,12 +20,7 @@ impl Projects {
         Self { base_dir }
     }
 
-    pub fn create(
-        &self,
-        slug: &Slug,
-        name: &str,
-        description: &str,
-    ) -> Result<PathBuf, CoreError> {
+    pub fn create(&self, slug: &Slug, name: &str, description: &str) -> Result<PathBuf, CoreError> {
         let file_path = paths::project_file_path(&self.base_dir, slug.as_str());
         if file_path.exists() {
             return Err(CoreError::AlreadyExists(format!("project: {slug}")));

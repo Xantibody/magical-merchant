@@ -4,10 +4,10 @@ use std::path::PathBuf;
 use chrono::{Local, NaiveDate};
 
 use crate::error::CoreError;
+use crate::utils::device::Context;
 use crate::utils::fs::ensure_dir;
 use crate::utils::markdown::format_timeline_line;
 use crate::utils::paths::timeline_file_path;
-use crate::utils::device::Context;
 
 pub struct Timeline {
     base_dir: PathBuf,

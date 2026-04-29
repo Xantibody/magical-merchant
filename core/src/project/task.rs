@@ -1,8 +1,8 @@
 pub mod repository;
 mod summary;
 
-pub use summary::Summary;
 pub use repository::Tasks;
+pub use summary::Summary;
 
 use std::path::{Path, PathBuf};
 
@@ -34,17 +34,11 @@ pub fn create_task(
     Tasks::new(base_dir.to_path_buf()).create(project_slug, title, tags, body)
 }
 
-pub fn list_active_tasks(
-    base_dir: &Path,
-    project_slug: &Slug,
-) -> Result<Vec<Summary>, CoreError> {
+pub fn list_active_tasks(base_dir: &Path, project_slug: &Slug) -> Result<Vec<Summary>, CoreError> {
     Tasks::new(base_dir.to_path_buf()).list_active(project_slug)
 }
 
-pub fn list_done_tasks(
-    base_dir: &Path,
-    project_slug: &Slug,
-) -> Result<Vec<Summary>, CoreError> {
+pub fn list_done_tasks(base_dir: &Path, project_slug: &Slug) -> Result<Vec<Summary>, CoreError> {
     Tasks::new(base_dir.to_path_buf()).list_done(project_slug)
 }
 

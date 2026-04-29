@@ -4,8 +4,8 @@ use std::path::PathBuf;
 use chrono::{DateTime, FixedOffset, Local};
 
 use crate::error::CoreError;
-use crate::utils::paths;
 use crate::utils::frontmatter::{self, TaskFrontmatter};
+use crate::utils::paths;
 use crate::utils::validated::{Filename, Slug};
 
 use super::list_tasks_in_dir;
@@ -47,10 +47,7 @@ impl Tasks {
         Ok(file_path)
     }
 
-    pub fn list_active(
-        &self,
-        project_slug: &Slug,
-    ) -> Result<Vec<Summary>, CoreError> {
+    pub fn list_active(&self, project_slug: &Slug) -> Result<Vec<Summary>, CoreError> {
         let slug_str = project_slug.as_str();
         let project_file = paths::project_file_path(&self.base_dir, slug_str);
         if !project_file.exists() {
@@ -59,10 +56,7 @@ impl Tasks {
         list_tasks_in_dir(&paths::active_tasks_dir(&self.base_dir, slug_str))
     }
 
-    pub fn list_done(
-        &self,
-        project_slug: &Slug,
-    ) -> Result<Vec<Summary>, CoreError> {
+    pub fn list_done(&self, project_slug: &Slug) -> Result<Vec<Summary>, CoreError> {
         let slug_str = project_slug.as_str();
         let project_file = paths::project_file_path(&self.base_dir, slug_str);
         if !project_file.exists() {
@@ -71,11 +65,7 @@ impl Tasks {
         list_tasks_in_dir(&paths::done_tasks_dir(&self.base_dir, slug_str))
     }
 
-    pub fn complete(
-        &self,
-        project_slug: &Slug,
-        filename: &Filename,
-    ) -> Result<(), CoreError> {
+    pub fn complete(&self, project_slug: &Slug, filename: &Filename) -> Result<(), CoreError> {
         let slug_str = project_slug.as_str();
         let fname = filename.as_str();
         let active_path = paths::active_tasks_dir(&self.base_dir, slug_str).join(fname);
@@ -130,11 +120,7 @@ impl Tasks {
         Ok(())
     }
 
-    pub fn delete(
-        &self,
-        project_slug: &Slug,
-        filename: &Filename,
-    ) -> Result<(), CoreError> {
+    pub fn delete(&self, project_slug: &Slug, filename: &Filename) -> Result<(), CoreError> {
         let slug_str = project_slug.as_str();
         let fname = filename.as_str();
         let active_path = paths::active_tasks_dir(&self.base_dir, slug_str).join(fname);

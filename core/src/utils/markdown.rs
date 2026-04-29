@@ -4,11 +4,7 @@ use crate::error::CoreError;
 use crate::utils::device::Context;
 use crate::utils::frontmatter::{self, ContextMeta, NoteFrontmatter};
 
-pub fn format_timeline_line(
-    text: &str,
-    timestamp: DateTime<Local>,
-    context: &Context,
-) -> String {
+pub fn format_timeline_line(text: &str, timestamp: DateTime<Local>, context: &Context) -> String {
     let time = timestamp.format("%H:%M:%S");
     format!(
         "- [{time}] {text} {{ \"battery\": {battery}, \"is_charging\": {is_charging} }}",
