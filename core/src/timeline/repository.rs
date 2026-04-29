@@ -7,7 +7,7 @@ use crate::error::CoreError;
 use crate::utils::device::Context;
 use crate::utils::fs::ensure_dir;
 use crate::utils::markdown::format_timeline_line;
-use crate::utils::paths::timeline_file_path;
+use crate::utils::paths::{self, timeline_file_path};
 
 pub struct Timeline {
     base_dir: PathBuf,
@@ -42,7 +42,7 @@ impl Timeline {
     }
 
     pub fn list_dates(&self) -> Result<Vec<NaiveDate>, CoreError> {
-        let timeline_dir = self.base_dir.join("data").join("timeline");
+        let timeline_dir = paths::data_dir(&self.base_dir).join(paths::TIMELINE_DIR);
         if !timeline_dir.exists() {
             return Ok(Vec::new());
         }

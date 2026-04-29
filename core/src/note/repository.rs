@@ -7,7 +7,7 @@ use crate::error::CoreError;
 use crate::utils::device::Context;
 use crate::utils::fs::{ensure_dir, list_md_files};
 use crate::utils::markdown::format_note_markdown;
-use crate::utils::paths::note_file_path;
+use crate::utils::paths::{note_file_path, notes_dir};
 use crate::utils::validated::NoteFilename;
 
 use super::summary::Summary as NoteSummary;
@@ -22,7 +22,7 @@ impl Notes {
     }
 
     fn notes_dir(&self) -> PathBuf {
-        self.base_dir.join("data").join("notes")
+        notes_dir(&self.base_dir)
     }
 
     pub fn create(
