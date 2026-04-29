@@ -5,6 +5,7 @@ mod note;
 mod path;
 mod project;
 mod save;
+pub mod sync;
 mod validated;
 
 pub use error::CoreError;

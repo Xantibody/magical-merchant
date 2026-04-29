@@ -13,16 +13,18 @@ describe("ToggleMenu", () => {
         <Route path="/" component={() => <div />} />
         <Route path="/notes" component={() => <div />} />
         <Route path="/tasks" component={() => <div />} />
+        <Route path="/settings" component={() => <div />} />
       </Router>
     ));
 
-  it("renders three navigation links", async () => {
+  it("renders four navigation links", async () => {
     const { baseElement } = renderMenu();
     const screen = page.elementLocator(baseElement);
 
     await expect.element(screen.getByText("Timeline")).toBeInTheDocument();
     await expect.element(screen.getByText("Notes")).toBeInTheDocument();
     await expect.element(screen.getByText("Tasks")).toBeInTheDocument();
+    await expect.element(screen.getByText("Settings")).toBeInTheDocument();
   });
 
   it("has correct href for each link", async () => {
@@ -32,6 +34,6 @@ describe("ToggleMenu", () => {
     await expect.element(screen.getByText("Timeline")).toBeInTheDocument();
     const links = baseElement.querySelectorAll("a.toggle-menu-item");
     const hrefs = Array.from(links).map((a) => a.getAttribute("href"));
-    expect(hrefs).toEqual(["/", "/notes", "/tasks"]);
+    expect(hrefs).toEqual(["/", "/notes", "/tasks", "/settings"]);
   });
 });

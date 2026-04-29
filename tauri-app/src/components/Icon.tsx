@@ -17,6 +17,10 @@ const ICONS = {
   pencil: () => import("@phosphor-icons/core/assets/regular/pencil.svg?raw"),
   trash: () => import("@phosphor-icons/core/assets/regular/trash.svg?raw"),
   plus: () => import("@phosphor-icons/core/assets/regular/plus.svg?raw"),
+  "cloud-check": () => import("@phosphor-icons/core/assets/regular/cloud-check.svg?raw"),
+  "cloud-arrow-up": () => import("@phosphor-icons/core/assets/regular/cloud-arrow-up.svg?raw"),
+  "cloud-slash": () => import("@phosphor-icons/core/assets/regular/cloud-slash.svg?raw"),
+  gear: () => import("@phosphor-icons/core/assets/regular/gear.svg?raw"),
 } as const;
 
 export type IconName = keyof typeof ICONS;

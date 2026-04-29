@@ -1,0 +1,77 @@
+.settings {
+  padding: var(--size-3);
+  max-width: 100%;
+  overflow-y: auto;
+  height: 100%;
+}
+
+.settings-title {
+  font-size: var(--font-size-3);
+  font-weight: var(--font-weight-6);
+  margin: 0 0 var(--size-3);
+}
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-2);
+  margin-bottom: var(--size-4);
+}
+
+.settings-label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-1);
+  font-size: var(--font-size-1);
+  color: var(--text-2);
+}
+
+.settings-input {
+  padding: var(--size-1) var(--size-2);
+  border: 1px solid var(--surface-3);
+  border-radius: var(--radius-2);
+  background: var(--surface-1);
+  color: var(--text-1);
+  font-size: var(--font-size-1);
+  font-family: inherit;
+}
+
+.settings-input:focus {
+  outline: 2px solid var(--link);
+  outline-offset: -1px;
+}
+
+.settings-button {
+  padding: var(--size-1) var(--size-3);
+  border: 1px solid var(--surface-3);
+  border-radius: var(--radius-2);
+  background: var(--surface-2);
+  color: var(--text-1);
+  font-size: var(--font-size-1);
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.settings-button:hover {
+  background: var(--surface-3);
+}
+
+.settings-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.settings-button.secondary {
+  background: transparent;
+}
+
+.settings-auth-status {
+  font-size: var(--font-size-1);
+  color: var(--text-2);
+}
+
+.settings-message {
+  font-size: var(--font-size-0);
+  color: var(--text-2);
+  margin-top: var(--size-2);
+}
