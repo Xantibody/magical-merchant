@@ -1,15 +1,17 @@
+mod model;
+
+pub use model::NoteSummary;
+
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use chrono::{DateTime, FixedOffset, Local};
-use serde::Serialize;
+use chrono::Local;
 
 use crate::error::CoreError;
 use crate::infra::fs_helpers::ensure_dir;
 use crate::infra::markdown::format_note_markdown;
 use crate::infra::paths::note_file_path;
 use crate::shared::context::DeviceContext;
-use crate::shared::frontmatter::{self, NoteFrontmatter};
 use crate::shared::validated::NoteFilename;
 
 pub fn create_draft_note(
@@ -39,15 +41,6 @@ pub fn update_note(
     Ok(())
 }
 
-#[derive(Debug, Clone, Serialize)]
-pub struct NoteSummary {
-    pub path: PathBuf,
-    pub filename: String,
-    pub time: Option<DateTime<FixedOffset>>,
-    pub tags: Vec<String>,
-    pub preview: String,
-}
-
 pub fn list_notes(base_dir: &Path) -> Result<Vec<NoteSummary>, CoreError> {
     let notes_dir = base_dir.join("data").join("notes");
     let entries = crate::infra::fs_helpers::list_md_files(&notes_dir)?;
@@ -58,14 +51,7 @@ pub fn list_notes(base_dir: &Path) -> Result<Vec<NoteSummary>, CoreError> {
             let path = entry.path();
             let filename = entry.file_name().to_string_lossy().to_string();
             let content = fs::read_to_string(&path).unwrap_or_default();
-            let (time, tags, preview) = parse_note_content(&content);
-            NoteSummary {
-                path,
-                filename,
-                time,
-                tags,
-                preview,
-            }
+            NoteSummary::from_file(path, filename, &content)
         })
         .collect();
 
@@ -114,19 +100,6 @@ pub fn delete_note(base_dir: &Path, filename: &NoteFilename) -> Result<(), CoreE
 
     fs::remove_file(canonical_file_path)?;
     Ok(())
-}
-
-fn parse_note_content(content: &str) -> (Option<DateTime<FixedOffset>>, Vec<String>, String) {
-    match frontmatter::parse::<NoteFrontmatter>(content) {
-        Ok((fm, body)) => {
-            let preview: String = body.chars().take(100).collect();
-            (Some(fm.time), fm.tags, preview)
-        }
-        Err(_) => {
-            let preview: String = content.chars().take(100).collect();
-            (None, Vec::new(), preview)
-        }
-    }
 }
 
 #[cfg(test)]
@@ -258,24 +231,4 @@ mod tests {
         assert!(NoteFilename::parse("evil.txt").is_err());
     }
 
-    #[test]
-    fn test_parse_note_content() {
-        use chrono::TimeZone;
-        let fm = NoteFrontmatter {
-            time: FixedOffset::east_opt(9 * 3600)
-                .unwrap()
-                .with_ymd_and_hms(2026, 3, 20, 14, 30, 45)
-                .unwrap(),
-            tags: vec!["a".to_string(), "b".to_string()],
-            context: Some(crate::shared::frontmatter::ContextMeta {
-                battery: 50,
-                is_charging: false,
-            }),
-        };
-        let content = frontmatter::render(&fm, "# Title\nBody").unwrap();
-        let (time, tags, preview) = parse_note_content(&content);
-        assert!(time.is_some());
-        assert_eq!(tags, vec!["a", "b"]);
-        assert!(preview.contains("# Title"));
-    }
 }

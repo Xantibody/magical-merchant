@@ -1,30 +1,22 @@
+mod model;
 pub mod task;
+
+pub use model::{ProjectActivitySummary, ProjectSummary};
+pub use task::{
+    TaskSummary, complete_task, create_task, delete_task, list_active_tasks, list_done_tasks,
+    update_task,
+};
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, FixedOffset, Local, NaiveDate};
-use serde::Serialize;
 
 use crate::error::CoreError;
 use crate::infra::fs_helpers;
 use crate::infra::paths;
 use crate::shared::frontmatter::{self, ProjectFrontmatter};
 use crate::shared::validated::Slug;
-
-pub use task::{
-    TaskSummary, complete_task, create_task, delete_task, list_active_tasks, list_done_tasks,
-    update_task,
-};
-
-#[derive(Debug, Clone, Serialize)]
-pub struct ProjectSummary {
-    pub slug: String,
-    pub name: String,
-    pub created: DateTime<FixedOffset>,
-    pub description: String,
-    pub active_task_count: usize,
-}
 
 pub fn create_project(
     base_dir: &Path,
@@ -93,21 +85,11 @@ pub fn read_project(base_dir: &Path, slug: &Slug) -> Result<ProjectSummary, Core
     let active_dir = paths::active_tasks_dir(base_dir, slug_str);
     let active_task_count = fs_helpers::count_md_files(&active_dir)?;
 
-    Ok(ProjectSummary {
-        slug: slug_str.to_string(),
-        name: fm.name,
-        created: fm.created,
-        description: fm.description,
+    Ok(ProjectSummary::from_frontmatter(
+        slug_str.to_string(),
+        fm,
         active_task_count,
-    })
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct ProjectActivitySummary {
-    pub slug: String,
-    pub name: String,
-    pub completed_tasks: Vec<TaskSummary>,
-    pub active_task_count: usize,
+    ))
 }
 
 pub fn get_project_activity_summary(

@@ -1,24 +1,17 @@
+mod model;
+
+pub use model::TaskSummary;
+
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, FixedOffset, Local};
-use serde::Serialize;
 
 use crate::error::CoreError;
 use crate::infra::fs_helpers;
 use crate::infra::paths;
 use crate::shared::frontmatter::{self, TaskFrontmatter};
 use crate::shared::validated::{Filename, Slug};
-
-#[derive(Debug, Clone, Serialize)]
-pub struct TaskSummary {
-    pub filename: String,
-    pub title: String,
-    pub created: DateTime<FixedOffset>,
-    pub completed: Option<DateTime<FixedOffset>>,
-    pub tags: Vec<String>,
-    pub body: String,
-}
 
 pub fn create_task(
     base_dir: &Path,
@@ -47,18 +40,6 @@ pub fn create_task(
     Ok(file_path)
 }
 
-pub(crate) fn parse_task_file(content: &str) -> Result<TaskSummary, CoreError> {
-    let (fm, body): (TaskFrontmatter, String) = frontmatter::parse(content)?;
-    Ok(TaskSummary {
-        filename: String::new(),
-        title: fm.title,
-        created: fm.created,
-        completed: fm.completed,
-        tags: fm.tags,
-        body,
-    })
-}
-
 pub(crate) fn list_tasks_in_dir(dir: &Path) -> Result<Vec<TaskSummary>, CoreError> {
     let entries = fs_helpers::list_md_files(dir)?;
 
@@ -66,8 +47,7 @@ pub(crate) fn list_tasks_in_dir(dir: &Path) -> Result<Vec<TaskSummary>, CoreErro
     for entry in entries {
         let filename = entry.file_name().to_string_lossy().to_string();
         let content = fs::read_to_string(entry.path())?;
-        let mut task = parse_task_file(&content)?;
-        task.filename = filename;
+        let task = TaskSummary::from_content(&filename, &content)?;
         tasks.push(task);
     }
 
@@ -113,15 +93,11 @@ pub fn complete_task(
     }
 
     let content = fs::read_to_string(&active_path)?;
-    let task = parse_task_file(&content)?;
+    let mut task = TaskSummary::from_content(fname, &content)?;
 
     let now: DateTime<FixedOffset> = Local::now().into();
-    let fm = TaskFrontmatter {
-        title: task.title,
-        created: task.created,
-        completed: Some(now),
-        tags: task.tags,
-    };
+    task.completed = Some(now);
+    let fm = task.to_frontmatter();
     let new_content = frontmatter::render(&fm, &task.body)?;
 
     let done_path = paths::done_tasks_dir(base_dir, slug_str).join(fname);
@@ -148,7 +124,7 @@ pub fn update_task(
     }
 
     let content = fs::read_to_string(&active_path)?;
-    let task = parse_task_file(&content)?;
+    let task = TaskSummary::from_content(filename.as_str(), &content)?;
     let fm = TaskFrontmatter {
         title: title.to_string(),
         created: task.created,
