@@ -8,8 +8,8 @@ use crate::infra::paths;
 use crate::shared::frontmatter::{self, TaskFrontmatter};
 use crate::shared::validated::{Filename, Slug};
 
-use super::model::TaskSummary;
 use super::list_tasks_in_dir;
+use super::model::TaskSummary;
 
 pub trait TaskRepository {
     fn create(
