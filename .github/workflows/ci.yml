@@ -26,6 +26,9 @@ jobs:
               - 'mcp-cli/**'
               - 'Cargo.toml'
               - 'Cargo.lock'
+              - 'flake.nix'
+              - 'flake.lock'
+              - 'justfile'
               - 'rust/justfile'
       - name: Free disk space
         if: steps.filter.outputs.rust == 'true' || github.event_name != 'pull_request'
@@ -34,7 +37,7 @@ jobs:
         if: steps.filter.outputs.rust == 'true' || github.event_name != 'pull_request'
         with:
           path: target
-          key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'flake.lock') }}
           restore-keys: |
             cargo-${{ runner.os }}-
       - if: steps.filter.outputs.rust == 'true' || github.event_name != 'pull_request'
