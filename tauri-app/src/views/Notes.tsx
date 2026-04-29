@@ -16,7 +16,7 @@ import ConfirmDialog from "../components/ConfirmDialog";
 import ActionBar from "../components/ActionBar";
 import Icon from "../components/Icon";
 
-interface NoteSummary {
+interface Note {
   path: string;
   filename: string;
   time?: string;
@@ -26,8 +26,8 @@ interface NoteSummary {
 
 type ViewMode = "editor" | "list" | "preview";
 
-async function fetchNotes(): Promise<NoteSummary[]> {
-  return invoke<NoteSummary[]>("list_notes");
+async function fetchNotes(): Promise<Note[]> {
+  return invoke<Note[]>("list_notes");
 }
 
 export default function Notes() {
@@ -36,7 +36,7 @@ export default function Notes() {
   const [draftPath, setDraftPath] = createSignal<string | null>(null);
   const [status, setStatus] = createSignal<"idle" | "saving" | "saved">("idle");
   const [viewMode, setViewMode] = createSignal<ViewMode>("editor");
-  const [selectedNote, setSelectedNote] = createSignal<NoteSummary | null>(null);
+  const [selectedNote, setSelectedNote] = createSignal<Note | null>(null);
   const [noteContent, setNoteContent] = createSignal("");
   const [confirmOpen, setConfirmOpen] = createSignal(false);
   const [error, setError] = createSignal("");
@@ -119,7 +119,7 @@ export default function Notes() {
     setViewMode("list");
   };
 
-  const openPreview = async (note: NoteSummary) => {
+  const openPreview = async (note: Note) => {
     try {
       setError("");
       const content = await invoke<string>("read_note", { filename: note.filename });
