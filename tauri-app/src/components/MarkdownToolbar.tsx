@@ -50,7 +50,11 @@ export default function MarkdownToolbar(props: MarkdownToolbarProps) {
           class="markdown-toolbar"
           role="toolbar"
           aria-label="Markdown formatting"
-          style={top() != null ? { top: `${top()}px`, bottom: "auto" } : undefined}
+          style={
+            top() != null
+              ? { top: `${top()}px`, bottom: "auto", transform: "translateY(-100%)" }
+              : undefined
+          }
           onPointerDown={(e) => e.preventDefault()}
         >
           <button
