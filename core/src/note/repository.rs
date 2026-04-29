@@ -10,7 +10,7 @@ use crate::utils::paths::note_file_path;
 use crate::utils::device::Context;
 use crate::utils::validated::NoteFilename;
 
-use super::NoteSummary;
+use super::summary::Summary as NoteSummary;
 
 pub struct Notes {
     base_dir: PathBuf,

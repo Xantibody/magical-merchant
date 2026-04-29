@@ -1,7 +1,7 @@
-mod model;
 pub mod repository;
+mod summary;
 
-pub use model::TaskSummary;
+pub use summary::Summary;
 pub use repository::Tasks;
 
 use std::path::{Path, PathBuf};
@@ -10,14 +10,14 @@ use crate::error::CoreError;
 use crate::utils;
 use crate::utils::validated::{Filename, Slug};
 
-pub(crate) fn list_tasks_in_dir(dir: &Path) -> Result<Vec<TaskSummary>, CoreError> {
+pub(crate) fn list_tasks_in_dir(dir: &Path) -> Result<Vec<Summary>, CoreError> {
     let entries = utils::fs::list_md_files(dir)?;
 
     let mut tasks = Vec::new();
     for entry in entries {
         let filename = entry.file_name().to_string_lossy().to_string();
         let content = std::fs::read_to_string(entry.path())?;
-        let task = TaskSummary::from_content(&filename, &content)?;
+        let task = Summary::from_content(&filename, &content)?;
         tasks.push(task);
     }
 
@@ -37,14 +37,14 @@ pub fn create_task(
 pub fn list_active_tasks(
     base_dir: &Path,
     project_slug: &Slug,
-) -> Result<Vec<TaskSummary>, CoreError> {
+) -> Result<Vec<Summary>, CoreError> {
     Tasks::new(base_dir.to_path_buf()).list_active(project_slug)
 }
 
 pub fn list_done_tasks(
     base_dir: &Path,
     project_slug: &Slug,
-) -> Result<Vec<TaskSummary>, CoreError> {
+) -> Result<Vec<Summary>, CoreError> {
     Tasks::new(base_dir.to_path_buf()).list_done(project_slug)
 }
 

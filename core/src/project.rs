@@ -1,13 +1,13 @@
 pub mod error;
-mod model;
 pub mod repository;
+mod summary;
 pub mod task;
 
-pub use model::{ProjectActivitySummary, ProjectSummary};
 pub use repository::Projects;
+pub use summary::{ActivitySummary as ProjectActivitySummary, Summary as ProjectSummary};
 pub use task::{
-    TaskSummary, complete_task, create_task, delete_task, list_active_tasks, list_done_tasks,
-    update_task,
+    Summary as TaskSummary, complete_task, create_task, delete_task, list_active_tasks,
+    list_done_tasks, update_task,
 };
 
 use std::path::{Path, PathBuf};

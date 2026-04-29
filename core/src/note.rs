@@ -1,8 +1,8 @@
 pub mod error;
-mod model;
 pub mod repository;
+mod summary;
 
-pub use model::NoteSummary;
+pub use summary::Summary as NoteSummary;
 pub use repository::Notes;
 
 use std::path::{Path, PathBuf};

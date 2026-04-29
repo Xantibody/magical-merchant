@@ -9,7 +9,7 @@ use crate::utils::paths;
 use crate::utils::frontmatter::{self, ProjectFrontmatter};
 use crate::utils::validated::Slug;
 
-use super::ProjectSummary;
+use super::summary::Summary as ProjectSummary;
 
 pub struct Projects {
     base_dir: PathBuf,

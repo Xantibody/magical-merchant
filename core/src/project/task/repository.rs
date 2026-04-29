@@ -9,7 +9,7 @@ use crate::utils::frontmatter::{self, TaskFrontmatter};
 use crate::utils::validated::{Filename, Slug};
 
 use super::list_tasks_in_dir;
-use super::model::TaskSummary;
+use super::summary::Summary;
 
 pub struct Tasks {
     base_dir: PathBuf,
@@ -50,7 +50,7 @@ impl Tasks {
     pub fn list_active(
         &self,
         project_slug: &Slug,
-    ) -> Result<Vec<TaskSummary>, CoreError> {
+    ) -> Result<Vec<Summary>, CoreError> {
         let slug_str = project_slug.as_str();
         let project_file = paths::project_file_path(&self.base_dir, slug_str);
         if !project_file.exists() {
@@ -62,7 +62,7 @@ impl Tasks {
     pub fn list_done(
         &self,
         project_slug: &Slug,
-    ) -> Result<Vec<TaskSummary>, CoreError> {
+    ) -> Result<Vec<Summary>, CoreError> {
         let slug_str = project_slug.as_str();
         let project_file = paths::project_file_path(&self.base_dir, slug_str);
         if !project_file.exists() {
@@ -86,7 +86,7 @@ impl Tasks {
         }
 
         let content = fs::read_to_string(&active_path)?;
-        let mut task = TaskSummary::from_content(fname, &content)?;
+        let mut task = Summary::from_content(fname, &content)?;
 
         let now: DateTime<FixedOffset> = Local::now().into();
         task.completed = Some(now);
@@ -117,7 +117,7 @@ impl Tasks {
         }
 
         let content = fs::read_to_string(&active_path)?;
-        let task = TaskSummary::from_content(filename.as_str(), &content)?;
+        let task = Summary::from_content(filename.as_str(), &content)?;
         let fm = TaskFrontmatter {
             title: title.to_string(),
             created: task.created,

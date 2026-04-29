@@ -6,7 +6,7 @@ use serde::Serialize;
 use crate::utils::frontmatter::{self, NoteFrontmatter};
 
 #[derive(Debug, Clone, Serialize)]
-pub struct NoteSummary {
+pub struct Summary {
     pub path: PathBuf,
     pub filename: String,
     pub time: Option<DateTime<FixedOffset>>,
@@ -14,7 +14,7 @@ pub struct NoteSummary {
     pub preview: String,
 }
 
-impl NoteSummary {
+impl Summary {
     pub fn from_file(path: PathBuf, filename: String, content: &str) -> Self {
         let (time, tags, preview) = match frontmatter::parse::<NoteFrontmatter>(content) {
             Ok((fm, body)) => {
@@ -58,7 +58,7 @@ mod tests {
             }),
         };
         let content = frontmatter::render(&fm, "# Title\nBody").unwrap();
-        let summary = NoteSummary::from_file(
+        let summary = Summary::from_file(
             PathBuf::from("/test/note.md"),
             "note.md".to_string(),
             &content,
@@ -70,7 +70,7 @@ mod tests {
 
     #[test]
     fn test_from_file_with_invalid_content() {
-        let summary = NoteSummary::from_file(
+        let summary = Summary::from_file(
             PathBuf::from("/test/note.md"),
             "note.md".to_string(),
             "no frontmatter here",

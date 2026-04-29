@@ -5,7 +5,7 @@ use crate::error::CoreError;
 use crate::utils::frontmatter::{self, TaskFrontmatter};
 
 #[derive(Debug, Clone, Serialize)]
-pub struct TaskSummary {
+pub struct Summary {
     pub filename: String,
     pub title: String,
     pub created: DateTime<FixedOffset>,
@@ -14,7 +14,7 @@ pub struct TaskSummary {
     pub body: String,
 }
 
-impl TaskSummary {
+impl Summary {
     pub fn from_content(filename: &str, content: &str) -> Result<Self, CoreError> {
         let (fm, body): (TaskFrontmatter, String) = frontmatter::parse(content)?;
         Ok(Self {
@@ -58,7 +58,7 @@ mod tests {
             tags: vec!["rust".to_string()],
         };
         let content = frontmatter::render(&fm, "task body").unwrap();
-        let task = TaskSummary::from_content("test.md", &content).unwrap();
+        let task = Summary::from_content("test.md", &content).unwrap();
         assert_eq!(task.filename, "test.md");
         assert_eq!(task.title, "My Task");
         assert_eq!(task.tags, vec!["rust"]);
@@ -68,7 +68,7 @@ mod tests {
 
     #[test]
     fn test_to_frontmatter() {
-        let task = TaskSummary {
+        let task = Summary {
             filename: "test.md".to_string(),
             title: "Task".to_string(),
             created: sample_datetime(),

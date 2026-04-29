@@ -3,10 +3,10 @@ use serde::Serialize;
 
 use crate::utils::frontmatter::ProjectFrontmatter;
 
-use super::task::TaskSummary;
+use super::task;
 
 #[derive(Debug, Clone, Serialize)]
-pub struct ProjectSummary {
+pub struct Summary {
     pub slug: String,
     pub name: String,
     pub created: DateTime<FixedOffset>,
@@ -14,7 +14,7 @@ pub struct ProjectSummary {
     pub active_task_count: usize,
 }
 
-impl ProjectSummary {
+impl Summary {
     pub fn from_frontmatter(
         slug: String,
         fm: ProjectFrontmatter,
@@ -31,9 +31,9 @@ impl ProjectSummary {
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct ProjectActivitySummary {
+pub struct ActivitySummary {
     pub slug: String,
     pub name: String,
-    pub completed_tasks: Vec<TaskSummary>,
+    pub completed_tasks: Vec<task::Summary>,
     pub active_task_count: usize,
 }
