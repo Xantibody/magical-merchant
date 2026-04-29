@@ -20,7 +20,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_device_context_mock() {
+    fn test_context_mock() {
         let ctx = Context::mock();
         assert_eq!(ctx.battery, 50);
         assert!(!ctx.is_charging);

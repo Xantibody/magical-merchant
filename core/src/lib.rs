@@ -22,9 +22,4 @@ pub use timeline::error::TimelineError;
 pub use timeline::{list_timeline_dates, read_timeline, save_timeline_entry};
 pub use utils::device::Context as DeviceContext;
 pub use utils::frontmatter;
-pub use utils::markdown::{format_note_markdown, format_timeline_line};
-pub use utils::paths::{
-    active_tasks_dir, done_tasks_dir, note_file_path, project_dir, project_file_path, projects_dir,
-    timeline_file_path,
-};
 pub use utils::validated::{Filename, NoteFilename, Slug};

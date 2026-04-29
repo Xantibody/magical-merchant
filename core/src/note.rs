@@ -26,14 +26,7 @@ pub fn update_note(
     tags: &[String],
     context: &Context,
 ) -> Result<(), CoreError> {
-    // update_note takes a file_path directly, so we use a dummy base_dir
-    // The repository's update method doesn't need base_dir for this operation
-    let base_dir = file_path
-        .parent()
-        .and_then(|p| p.parent())
-        .and_then(|p| p.parent())
-        .unwrap_or(Path::new("/"));
-    Notes::new(base_dir.to_path_buf()).update(file_path, body, tags, context)
+    Notes::new(PathBuf::new()).update(file_path, body, tags, context)
 }
 
 pub fn list_notes(base_dir: &Path) -> Result<Vec<NoteSummary>, CoreError> {
