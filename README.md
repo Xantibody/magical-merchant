@@ -95,7 +95,7 @@ Add the flake input and enable the module in your nix-darwin configuration:
         {
           services.magical-merchant = {
             enable = true;
-            workersUrl = "https://your-worker.example.workers.dev"; # R2 sync URL
+            workersUrl = "https://your-worker.example.workers.dev"; # R2 sync URL; must not end with a trailing slash, or sync requests may become `//files`
           };
         }
       ];
