@@ -2,15 +2,14 @@ use chrono::{DateTime, FixedOffset, Local};
 
 use crate::error::CoreError;
 use crate::utils::device::Context;
-use crate::utils::frontmatter::{self, ContextMeta, NoteFrontmatter};
+use crate::utils::frontmatter::{self, NoteFrontmatter};
 
 pub fn format_timeline_line(text: &str, timestamp: DateTime<Local>, context: &Context) -> String {
     let time = timestamp.format("%H:%M:%S");
-    format!(
-        "- [{time}] {text} {{ \"battery\": {battery}, \"is_charging\": {is_charging} }}",
-        battery = context.battery,
-        is_charging = context.is_charging,
-    )
+    match serde_json::to_string(context) {
+        Ok(json) if json != "{}" => format!("- [{time}] {text} {json}"),
+        _ => format!("- [{time}] {text}"),
+    }
 }
 
 pub fn format_note_markdown(
@@ -23,10 +22,7 @@ pub fn format_note_markdown(
     let fm = NoteFrontmatter {
         time,
         tags: tags.to_vec(),
-        context: Some(ContextMeta {
-            battery: context.battery,
-            is_charging: context.is_charging,
-        }),
+        context: Some(context.clone()),
     };
     frontmatter::render(&fm, body)
 }
@@ -43,18 +39,25 @@ mod tests {
 
     fn test_context() -> Context {
         Context {
-            battery: 82,
-            is_charging: false,
+            battery: Some(82),
+            is_charging: Some(false),
+            ..Context::default()
         }
     }
 
     #[test]
     fn test_format_timeline_line() {
         let result = format_timeline_line("hello world", fixed_timestamp(), &test_context());
-        assert_eq!(
-            result,
-            "- [14:30:45] hello world { \"battery\": 82, \"is_charging\": false }"
-        );
+        assert!(result.starts_with("- [14:30:45] hello world "));
+        assert!(result.contains("\"battery\":82"));
+        assert!(result.contains("\"is_charging\":false"));
+    }
+
+    #[test]
+    fn test_format_timeline_line_empty_context() {
+        let ctx = Context::default();
+        let result = format_timeline_line("text", fixed_timestamp(), &ctx);
+        assert_eq!(result, "- [14:30:45] text");
     }
 
     #[test]
@@ -74,8 +77,8 @@ mod tests {
         assert_eq!(fm.tags, vec!["rust", "memo"]);
         assert!(fm.context.is_some());
         let ctx = fm.context.unwrap();
-        assert_eq!(ctx.battery, 82);
-        assert!(!ctx.is_charging);
+        assert_eq!(ctx.battery, Some(82));
+        assert_eq!(ctx.is_charging, Some(false));
         assert_eq!(body, "# Hello\nWorld");
     }
 
@@ -89,13 +92,14 @@ mod tests {
     #[test]
     fn test_format_note_markdown_charging() {
         let ctx = Context {
-            battery: 100,
-            is_charging: true,
+            battery: Some(100),
+            is_charging: Some(true),
+            ..Context::default()
         };
         let result = format_note_markdown("body", &[], fixed_timestamp(), &ctx).unwrap();
         let (fm, _body): (NoteFrontmatter, String) = frontmatter::parse(&result).unwrap();
         let context = fm.context.unwrap();
-        assert_eq!(context.battery, 100);
-        assert!(context.is_charging);
+        assert_eq!(context.battery, Some(100));
+        assert_eq!(context.is_charging, Some(true));
     }
 }

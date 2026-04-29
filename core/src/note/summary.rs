@@ -40,7 +40,8 @@ impl Summary {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::frontmatter::{ContextMeta, NoteFrontmatter};
+    use crate::utils::device::Context;
+    use crate::utils::frontmatter::NoteFrontmatter;
     use chrono::{FixedOffset, TimeZone};
     use std::path::PathBuf;
 
@@ -52,9 +53,10 @@ mod tests {
                 .with_ymd_and_hms(2026, 3, 20, 14, 30, 45)
                 .unwrap(),
             tags: vec!["a".to_string(), "b".to_string()],
-            context: Some(ContextMeta {
-                battery: 50,
-                is_charging: false,
+            context: Some(Context {
+                battery: Some(50),
+                is_charging: Some(false),
+                ..Context::default()
             }),
         };
         let content = frontmatter::render(&fm, "# Title\nBody").unwrap();

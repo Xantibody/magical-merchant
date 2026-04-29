@@ -12,6 +12,7 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import MilkdownEditor from "../components/MilkdownEditor";
 import MarkdownPreview from "../components/MarkdownPreview";
+import { getLocation } from "../lib/location";
 import ConfirmDialog from "../components/ConfirmDialog";
 import ActionBar from "../components/ActionBar";
 import Icon from "../components/Icon";
@@ -64,11 +65,16 @@ export default function Notes() {
           filePath: path,
           body: currentBody,
           tags,
+          latitude: null,
+          longitude: null,
         });
       } else {
+        const loc = await getLocation();
         const newPath = await invoke<string>("create_draft", {
           body: currentBody,
           tags,
+          latitude: loc?.latitude ?? null,
+          longitude: loc?.longitude ?? null,
         });
         setDraftPath(newPath);
       }

@@ -2,7 +2,8 @@ import { createSignal, createResource, For, Show, Switch, Match } from "solid-js
 import { invoke } from "@tauri-apps/api/core";
 import ActionBar from "../components/ActionBar";
 import Icon from "../components/Icon";
-import MarkdownPreview from "../components/MarkdownPreview";
+import TimelineEntry from "../components/TimelineEntry";
+import { getLocation } from "../lib/location";
 
 type ViewMode = "input" | "list" | "preview";
 
@@ -35,7 +36,12 @@ export default function Timeline() {
 
     setSaving(true);
     try {
-      await invoke("save_quick_capture", { text: trimmed });
+      const loc = await getLocation();
+      await invoke("save_quick_capture", {
+        text: trimmed,
+        latitude: loc?.latitude ?? null,
+        longitude: loc?.longitude ?? null,
+      });
       setText("");
       refetch();
     } finally {
@@ -86,7 +92,7 @@ export default function Timeline() {
             <Show when={entries()?.length}>
               <div class="timeline-entries">
                 <For each={entries()!.slice().reverse()}>
-                  {(entry) => <div class="timeline-entry">{entry}</div>}
+                  {(entry) => <TimelineEntry raw={entry} />}
                 </For>
               </div>
             </Show>
@@ -130,13 +136,7 @@ export default function Timeline() {
             <h3 class="preview-date-header">{selectedDate()}</h3>
             <div class="preview-entries">
               <Show when={dateEntries()?.length} fallback={<p class="empty-state">エントリなし</p>}>
-                <For each={dateEntries()}>
-                  {(entry) => (
-                    <div class="timeline-entry">
-                      <MarkdownPreview source={entry} />
-                    </div>
-                  )}
-                </For>
+                <For each={dateEntries()}>{(entry) => <TimelineEntry raw={entry} markdown />}</For>
               </Show>
             </div>
           </div>

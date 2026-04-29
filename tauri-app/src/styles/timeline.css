@@ -34,6 +34,36 @@
   line-height: var(--font-lineheight-3);
 }
 
+.timeline-entry-content {
+  display: flex;
+  gap: var(--size-2);
+}
+
+.timeline-entry-time {
+  color: var(--app-text-2);
+  white-space: nowrap;
+}
+
+.timeline-entry-context {
+  display: flex;
+  gap: var(--size-2);
+  margin-top: var(--size-1);
+  color: var(--app-text-2);
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: var(--font-size-0);
+}
+
+.timeline-context-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.timeline-context-label {
+  opacity: 0.7;
+}
+
 /* Browse list (shared for date list) */
 
 .browse-list {

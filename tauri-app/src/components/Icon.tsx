@@ -21,6 +21,18 @@ const ICONS = {
   "cloud-arrow-up": () => import("@phosphor-icons/core/assets/regular/cloud-arrow-up.svg?raw"),
   "cloud-slash": () => import("@phosphor-icons/core/assets/regular/cloud-slash.svg?raw"),
   gear: () => import("@phosphor-icons/core/assets/regular/gear.svg?raw"),
+  "battery-full": () => import("@phosphor-icons/core/assets/regular/battery-full.svg?raw"),
+  "battery-high": () => import("@phosphor-icons/core/assets/regular/battery-high.svg?raw"),
+  "battery-medium": () => import("@phosphor-icons/core/assets/regular/battery-medium.svg?raw"),
+  "battery-low": () => import("@phosphor-icons/core/assets/regular/battery-low.svg?raw"),
+  "battery-empty": () => import("@phosphor-icons/core/assets/regular/battery-empty.svg?raw"),
+  "battery-charging": () => import("@phosphor-icons/core/assets/regular/battery-charging.svg?raw"),
+  "wifi-high": () => import("@phosphor-icons/core/assets/regular/wifi-high.svg?raw"),
+  "wifi-slash": () => import("@phosphor-icons/core/assets/regular/wifi-slash.svg?raw"),
+  "cell-signal-full": () => import("@phosphor-icons/core/assets/regular/cell-signal-full.svg?raw"),
+  "map-pin": () => import("@phosphor-icons/core/assets/regular/map-pin.svg?raw"),
+  laptop: () => import("@phosphor-icons/core/assets/regular/laptop.svg?raw"),
+  "device-mobile": () => import("@phosphor-icons/core/assets/regular/device-mobile.svg?raw"),
 } as const;
 
 export type IconName = keyof typeof ICONS;
