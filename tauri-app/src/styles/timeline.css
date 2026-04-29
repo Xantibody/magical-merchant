@@ -34,6 +34,24 @@
   line-height: var(--font-lineheight-3);
 }
 
+.timeline-entry-content {
+  display: flex;
+  gap: var(--size-2);
+}
+
+.timeline-entry-time {
+  color: var(--app-text-2);
+  white-space: nowrap;
+}
+
+.timeline-entry-context {
+  display: flex;
+  gap: var(--size-1);
+  margin-top: var(--size-1);
+  color: var(--app-text-2);
+  align-items: center;
+}
+
 /* Browse list (shared for date list) */
 
 .browse-list {

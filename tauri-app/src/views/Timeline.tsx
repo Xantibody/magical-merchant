@@ -2,7 +2,7 @@ import { createSignal, createResource, For, Show, Switch, Match } from "solid-js
 import { invoke } from "@tauri-apps/api/core";
 import ActionBar from "../components/ActionBar";
 import Icon from "../components/Icon";
-import MarkdownPreview from "../components/MarkdownPreview";
+import TimelineEntry from "../components/TimelineEntry";
 import { getLocation } from "../lib/location";
 
 type ViewMode = "input" | "list" | "preview";
@@ -92,7 +92,7 @@ export default function Timeline() {
             <Show when={entries()?.length}>
               <div class="timeline-entries">
                 <For each={entries()!.slice().reverse()}>
-                  {(entry) => <div class="timeline-entry">{entry}</div>}
+                  {(entry) => <TimelineEntry raw={entry} />}
                 </For>
               </div>
             </Show>
@@ -137,11 +137,7 @@ export default function Timeline() {
             <div class="preview-entries">
               <Show when={dateEntries()?.length} fallback={<p class="empty-state">エントリなし</p>}>
                 <For each={dateEntries()}>
-                  {(entry) => (
-                    <div class="timeline-entry">
-                      <MarkdownPreview source={entry} />
-                    </div>
-                  )}
+                  {(entry) => <TimelineEntry raw={entry} />}
                 </For>
               </Show>
             </div>
