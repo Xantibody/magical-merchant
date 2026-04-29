@@ -1,15 +1,14 @@
 mod auth;
+mod device;
 mod sync;
 
-use magical_merchant_core::{
-    DeviceContext, Filename, NoteFilename, NoteSummary, ProjectSummary, Slug, TaskSummary,
-};
+use magical_merchant_core::{Filename, NoteFilename, NoteSummary, ProjectSummary, Slug, TaskSummary};
 use tauri::{AppHandle, Listener, Manager};
 
 #[tauri::command]
 fn save_quick_capture(handle: AppHandle, text: String) -> Result<(), String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    let context = DeviceContext::mock();
+    let context = device::get_context();
     magical_merchant_core::save_timeline_entry(&base_dir, &text, &context)
         .map_err(|e| e.to_string())
 }
@@ -17,7 +16,7 @@ fn save_quick_capture(handle: AppHandle, text: String) -> Result<(), String> {
 #[tauri::command]
 fn save_document(handle: AppHandle, body: String, tags: Vec<String>) -> Result<(), String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    let context = DeviceContext::mock();
+    let context = device::get_context();
     magical_merchant_core::create_draft_note(&base_dir, &body, &tags, &context)
         .map_err(|e| e.to_string())?;
     Ok(())
@@ -26,7 +25,7 @@ fn save_document(handle: AppHandle, body: String, tags: Vec<String>) -> Result<(
 #[tauri::command]
 fn create_draft(handle: AppHandle, body: String, tags: Vec<String>) -> Result<String, String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    let context = DeviceContext::mock();
+    let context = device::get_context();
     let path = magical_merchant_core::create_draft_note(&base_dir, &body, &tags, &context)
         .map_err(|e| e.to_string())?;
     Ok(path.to_string_lossy().to_string())
@@ -34,7 +33,7 @@ fn create_draft(handle: AppHandle, body: String, tags: Vec<String>) -> Result<St
 
 #[tauri::command]
 fn update_draft(file_path: String, body: String, tags: Vec<String>) -> Result<(), String> {
-    let context = DeviceContext::mock();
+    let context = device::get_context();
     magical_merchant_core::update_note(std::path::Path::new(&file_path), &body, &tags, &context)
         .map_err(|e| e.to_string())
 }
