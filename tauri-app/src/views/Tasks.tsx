@@ -9,27 +9,12 @@ import {
   Switch,
   Match,
 } from "solid-js";
-import { invoke } from "@tauri-apps/api/core";
+import { typedInvoke, type Project, type Task } from "../lib/commands";
 import Icon from "../components/Icon";
 import ActionBar from "../components/ActionBar";
 import MilkdownEditor from "../components/MilkdownEditor";
 import MarkdownPreview from "../components/MarkdownPreview";
 import ConfirmDialog from "../components/ConfirmDialog";
-
-interface Project {
-  slug: string;
-  name: string;
-  description: string;
-}
-
-interface Task {
-  filename: string;
-  title: string;
-  created: string;
-  completed?: string;
-  tags: string[];
-  body: string;
-}
 
 type ViewMode = "list" | "edit" | "preview";
 
@@ -42,7 +27,7 @@ function toSlug(name: string): string {
 }
 
 async function fetchProjects(): Promise<Project[]> {
-  return invoke<Project[]>("list_projects");
+  return typedInvoke("list_projects");
 }
 
 export default function Tasks() {
@@ -50,11 +35,11 @@ export default function Tasks() {
   const [projects, { refetch: refetchProjects }] = createResource(fetchProjects);
   const [tasks, { refetch: refetchTasks }] = createResource(selectedProject, (slug) => {
     if (!slug) return Promise.resolve([]);
-    return invoke<Task[]>("list_active_tasks", { projectSlug: slug });
+    return typedInvoke("list_active_tasks", { projectSlug: slug });
   });
   const [doneTasks, { refetch: refetchDoneTasks }] = createResource(selectedProject, (slug) => {
     if (!slug) return Promise.resolve([]);
-    return invoke<Task[]>("list_done_tasks", { projectSlug: slug });
+    return typedInvoke("list_done_tasks", { projectSlug: slug });
   });
 
   const [showProjectPicker, setShowProjectPicker] = createSignal(false);
@@ -86,7 +71,7 @@ export default function Tasks() {
 
     setSaveStatus("saving");
     try {
-      await invoke("update_task", {
+      await typedInvoke("update_task", {
         projectSlug: slug,
         filename: task.filename,
         title: taskTitle(),
@@ -152,7 +137,7 @@ export default function Tasks() {
       return;
     }
     try {
-      await invoke("create_project", { slug, name, description: "" });
+      await typedInvoke("create_project", { slug, name, description: "" });
       setNewProjectName("");
       setError("");
       setShowNewProject(false);
@@ -169,7 +154,7 @@ export default function Tasks() {
     const slug = selectedProject();
     if (!title || !slug) return;
     try {
-      await invoke("create_task", { projectSlug: slug, title, tags: [], body: "" });
+      await typedInvoke("create_task", { projectSlug: slug, title, tags: [], body: "" });
       setNewTaskTitle("");
       refetchTasks();
     } catch (e) {
@@ -181,7 +166,7 @@ export default function Tasks() {
     const slug = selectedProject();
     if (!slug) return;
     try {
-      await invoke("complete_task", { projectSlug: slug, filename });
+      await typedInvoke("complete_task", { projectSlug: slug, filename });
       refetchTasks();
       refetchDoneTasks();
     } catch (e) {
@@ -229,7 +214,7 @@ export default function Tasks() {
     setConfirmOpen(false);
     if (saveTimer) clearTimeout(saveTimer);
     try {
-      await invoke("delete_task", { projectSlug: slug, filename: task.filename });
+      await typedInvoke("delete_task", { projectSlug: slug, filename: task.filename });
       refetchTasks();
       refetchDoneTasks();
       navigateToList();
@@ -247,7 +232,7 @@ export default function Tasks() {
       if (viewMode() === "edit") {
         await saveTask();
       }
-      await invoke("complete_task", { projectSlug: slug, filename: task.filename });
+      await typedInvoke("complete_task", { projectSlug: slug, filename: task.filename });
       refetchTasks();
       refetchDoneTasks();
       navigateToList();

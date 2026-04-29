@@ -1,5 +1,5 @@
 import { createSignal, createResource, For, Show, Switch, Match } from "solid-js";
-import { invoke } from "@tauri-apps/api/core";
+import { typedInvoke } from "../lib/commands";
 import ActionBar from "../components/ActionBar";
 import Icon from "../components/Icon";
 import TimelineEntry from "../components/TimelineEntry";
@@ -8,15 +8,15 @@ import { getLocation } from "../lib/location";
 type ViewMode = "input" | "list" | "preview";
 
 async function fetchEntries(): Promise<string[]> {
-  return invoke<string[]>("read_timeline");
+  return typedInvoke("read_timeline");
 }
 
 async function fetchDates(): Promise<string[]> {
-  return invoke<string[]>("list_timeline_dates");
+  return typedInvoke("list_timeline_dates");
 }
 
 async function fetchEntriesByDate(date: string): Promise<string[]> {
-  return invoke<string[]>("read_timeline_by_date", { date });
+  return typedInvoke("read_timeline_by_date", { date });
 }
 
 export default function Timeline() {
@@ -37,7 +37,7 @@ export default function Timeline() {
     setSaving(true);
     try {
       const loc = await getLocation();
-      await invoke("save_quick_capture", {
+      await typedInvoke("save_quick_capture", {
         text: trimmed,
         latitude: loc?.latitude ?? null,
         longitude: loc?.longitude ?? null,
