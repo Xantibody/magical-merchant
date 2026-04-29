@@ -11,9 +11,9 @@ pub fn get_context(location: Option<Location>) -> DeviceContext {
         network_type,
         wifi_ssid,
         location,
-        os: Some(std::env::consts::OS.to_string()),
+        os: std::env::consts::OS.to_string(),
         os_version: get_os_version(),
-        arch: Some(std::env::consts::ARCH.to_string()),
+        arch: std::env::consts::ARCH.to_string(),
         hostname: hostname::get().ok().and_then(|h| h.into_string().ok()),
         locale: get_locale(),
     }
@@ -25,6 +25,9 @@ fn get_os_version() -> Option<String> {
         .arg("-productVersion")
         .output()
         .ok()?;
+    if !output.status.success() {
+        return None;
+    }
     let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
     if version.is_empty() {
         None
@@ -39,8 +42,8 @@ fn get_os_version() -> Option<String> {
 }
 
 fn get_locale() -> Option<String> {
-    std::env::var("LANG")
-        .or_else(|_| std::env::var("LC_ALL"))
+    std::env::var("LC_ALL")
+        .or_else(|_| std::env::var("LANG"))
         .ok()
         .map(|l| l.split('.').next().unwrap_or(&l).to_string())
 }
@@ -61,7 +64,9 @@ fn get_battery() -> (Option<u8>, Option<bool>) {
 
     match batteries.next() {
         Some(Ok(bat)) => {
-            let percentage = (bat.state_of_charge().value * 100.0) as u8;
+            let percentage = (bat.state_of_charge().value * 100.0)
+                .round()
+                .clamp(0.0, 100.0) as u8;
             let charging = matches!(bat.state(), State::Charging | State::Full);
             (Some(percentage), Some(charging))
         }
@@ -76,7 +81,6 @@ fn get_battery() -> (Option<u8>, Option<bool>) {
 
 #[cfg(target_os = "macos")]
 fn get_network() -> (Option<NetworkType>, Option<String>) {
-    // networksetup -getairportnetwork is broken on recent macOS; use ipconfig instead
     let output = match std::process::Command::new("ipconfig")
         .args(["getsummary", "en0"])
         .output()
@@ -97,7 +101,9 @@ fn get_network() -> (Option<NetworkType>, Option<String>) {
         }
     }
 
-    (Some(NetworkType::Offline), None)
+    // No Wi-Fi SSID found — could be Ethernet, tethering, or truly offline.
+    // Return None rather than Offline to avoid false negatives.
+    (None, None)
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "android")))]

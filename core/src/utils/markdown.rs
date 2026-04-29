@@ -6,8 +6,10 @@ use crate::utils::frontmatter::{self, NoteFrontmatter};
 
 pub fn format_timeline_line(text: &str, timestamp: DateTime<Local>, context: &Context) -> String {
     let time = timestamp.format("%H:%M:%S");
-    let context_json = serde_json::to_string(context).unwrap_or_default();
-    format!("- [{time}] {text} {context_json}")
+    match serde_json::to_string(context) {
+        Ok(json) if json != "{}" => format!("- [{time}] {text} {json}"),
+        _ => format!("- [{time}] {text}"),
+    }
 }
 
 pub fn format_note_markdown(
@@ -52,11 +54,10 @@ mod tests {
     }
 
     #[test]
-    fn test_format_timeline_line_none_fields() {
+    fn test_format_timeline_line_empty_context() {
         let ctx = Context::default();
         let result = format_timeline_line("text", fixed_timestamp(), &ctx);
-        assert!(result.starts_with("- [14:30:45] text "));
-        assert!(!result.contains("battery"));
+        assert_eq!(result, "- [14:30:45] text");
     }
 
     #[test]

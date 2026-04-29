@@ -59,24 +59,22 @@ export default function Notes() {
     setStatus("saving");
 
     try {
-      const loc = await getLocation();
-      const locationArgs = {
-        latitude: loc?.latitude ?? null,
-        longitude: loc?.longitude ?? null,
-      };
       const path = draftPath();
       if (path) {
         await invoke("update_draft", {
           filePath: path,
           body: currentBody,
           tags,
-          ...locationArgs,
+          latitude: null,
+          longitude: null,
         });
       } else {
+        const loc = await getLocation();
         const newPath = await invoke<string>("create_draft", {
           body: currentBody,
           tags,
-          ...locationArgs,
+          latitude: loc?.latitude ?? null,
+          longitude: loc?.longitude ?? null,
         });
         setDraftPath(newPath);
       }

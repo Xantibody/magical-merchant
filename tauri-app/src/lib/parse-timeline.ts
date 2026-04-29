@@ -6,9 +6,9 @@ export interface DeviceContext {
   network_type?: "WiFi" | "Mobile" | "Offline";
   wifi_ssid?: string;
   location?: { latitude: number; longitude: number };
-  os?: string;
+  os: string;
   os_version?: string;
-  arch?: string;
+  arch: string;
   hostname?: string;
   locale?: string;
 }
@@ -20,29 +20,31 @@ export interface ParsedEntry {
 }
 
 export function parseTimelineEntry(raw: string): ParsedEntry {
-  // Format: "- [HH:MM:SS] text {json}"
-  const match = raw.match(/^- \[(\d{2}:\d{2}:\d{2})\] (.*?) (\{.*\})$/s);
-  if (!match) {
-    // Try without context JSON (old format or no context)
-    const timeMatch = raw.match(/^- \[(\d{2}:\d{2}:\d{2})\] (.*)$/s);
-    if (timeMatch) {
-      return { time: timeMatch[1], text: timeMatch[2], context: null };
-    }
+  // Match timestamp prefix: "- [HH:MM:SS] ..."
+  const timeMatch = raw.match(/^- \[(\d{2}:\d{2}:\d{2})\] /);
+  if (!timeMatch) {
     return { time: "", text: raw, context: null };
   }
 
-  let context: DeviceContext | null = null;
-  try {
-    context = JSON.parse(match[3]);
-  } catch {
-    // Invalid JSON, treat as part of text
+  const time = timeMatch[1];
+  const rest = raw.slice(timeMatch[0].length);
+
+  // Try to extract context JSON from the last " {" in the line
+  const lastBrace = rest.lastIndexOf(" {");
+  if (lastBrace >= 0) {
+    const jsonCandidate = rest.slice(lastBrace + 1);
+    try {
+      const parsed = JSON.parse(jsonCandidate);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        const context = Object.keys(parsed).length > 0 ? (parsed as DeviceContext) : null;
+        return { time, text: rest.slice(0, lastBrace), context };
+      }
+    } catch {
+      // Not valid JSON, treat entire rest as text
+    }
   }
 
-  return {
-    time: match[1],
-    text: context ? match[2] : `${match[2]} ${match[3]}`,
-    context,
-  };
+  return { time, text: rest, context: null };
 }
 
 export function getBatteryIcon(ctx: DeviceContext): IconName | null {

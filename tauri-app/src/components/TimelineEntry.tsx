@@ -1,5 +1,6 @@
-import { Show } from "solid-js";
+import { Show, createMemo } from "solid-js";
 import Icon from "./Icon";
+import MarkdownPreview from "./MarkdownPreview";
 import {
   parseTimelineEntry,
   getBatteryIcon,
@@ -10,10 +11,11 @@ import {
 
 interface TimelineEntryProps {
   raw: string;
+  markdown?: boolean;
 }
 
 export default function TimelineEntry(props: TimelineEntryProps) {
-  const parsed = () => parseTimelineEntry(props.raw);
+  const parsed = createMemo(() => parseTimelineEntry(props.raw));
 
   return (
     <div class="timeline-entry">
@@ -21,7 +23,14 @@ export default function TimelineEntry(props: TimelineEntryProps) {
         <Show when={parsed().time}>
           <span class="timeline-entry-time">{parsed().time}</span>
         </Show>
-        <span class="timeline-entry-text">{parsed().text}</span>
+        <Show
+          when={props.markdown}
+          fallback={<span class="timeline-entry-text">{parsed().text}</span>}
+        >
+          <span class="timeline-entry-text">
+            <MarkdownPreview source={parsed().text} />
+          </span>
+        </Show>
       </div>
       <Show when={parsed().context}>
         {(ctx) => (
