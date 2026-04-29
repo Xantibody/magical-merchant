@@ -2,7 +2,7 @@ mod model;
 pub mod repository;
 
 pub use model::TaskSummary;
-pub use repository::{FsTaskRepository, TaskRepository};
+pub use repository::Tasks;
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -32,21 +32,21 @@ pub fn create_task(
     tags: &[String],
     body: &str,
 ) -> Result<PathBuf, CoreError> {
-    FsTaskRepository::new(base_dir.to_path_buf()).create(project_slug, title, tags, body)
+    Tasks::new(base_dir.to_path_buf()).create(project_slug, title, tags, body)
 }
 
 pub fn list_active_tasks(
     base_dir: &Path,
     project_slug: &Slug,
 ) -> Result<Vec<TaskSummary>, CoreError> {
-    FsTaskRepository::new(base_dir.to_path_buf()).list_active(project_slug)
+    Tasks::new(base_dir.to_path_buf()).list_active(project_slug)
 }
 
 pub fn list_done_tasks(
     base_dir: &Path,
     project_slug: &Slug,
 ) -> Result<Vec<TaskSummary>, CoreError> {
-    FsTaskRepository::new(base_dir.to_path_buf()).list_done(project_slug)
+    Tasks::new(base_dir.to_path_buf()).list_done(project_slug)
 }
 
 pub fn complete_task(
@@ -54,7 +54,7 @@ pub fn complete_task(
     project_slug: &Slug,
     filename: &Filename,
 ) -> Result<(), CoreError> {
-    FsTaskRepository::new(base_dir.to_path_buf()).complete(project_slug, filename)
+    Tasks::new(base_dir.to_path_buf()).complete(project_slug, filename)
 }
 
 pub fn update_task(
@@ -65,7 +65,7 @@ pub fn update_task(
     tags: &[String],
     body: &str,
 ) -> Result<(), CoreError> {
-    FsTaskRepository::new(base_dir.to_path_buf()).update(project_slug, filename, title, tags, body)
+    Tasks::new(base_dir.to_path_buf()).update(project_slug, filename, title, tags, body)
 }
 
 pub fn delete_task(
@@ -73,7 +73,7 @@ pub fn delete_task(
     project_slug: &Slug,
     filename: &Filename,
 ) -> Result<(), CoreError> {
-    FsTaskRepository::new(base_dir.to_path_buf()).delete(project_slug, filename)
+    Tasks::new(base_dir.to_path_buf()).delete(project_slug, filename)
 }
 
 #[cfg(test)]

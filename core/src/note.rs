@@ -3,7 +3,7 @@ mod model;
 pub mod repository;
 
 pub use model::NoteSummary;
-pub use repository::{FsNoteRepository, NoteRepository};
+pub use repository::Notes;
 
 use std::path::{Path, PathBuf};
 
@@ -17,7 +17,7 @@ pub fn create_draft_note(
     tags: &[String],
     context: &DeviceContext,
 ) -> Result<PathBuf, CoreError> {
-    FsNoteRepository::new(base_dir.to_path_buf()).create(body, tags, context)
+    Notes::new(base_dir.to_path_buf()).create(body, tags, context)
 }
 
 pub fn update_note(
@@ -33,11 +33,11 @@ pub fn update_note(
         .and_then(|p| p.parent())
         .and_then(|p| p.parent())
         .unwrap_or(Path::new("/"));
-    FsNoteRepository::new(base_dir.to_path_buf()).update(file_path, body, tags, context)
+    Notes::new(base_dir.to_path_buf()).update(file_path, body, tags, context)
 }
 
 pub fn list_notes(base_dir: &Path) -> Result<Vec<NoteSummary>, CoreError> {
-    FsNoteRepository::new(base_dir.to_path_buf()).list()
+    Notes::new(base_dir.to_path_buf()).list()
 }
 
 pub fn read_note(file_path: &Path) -> Result<String, CoreError> {
@@ -48,11 +48,11 @@ pub fn read_note_by_filename(
     base_dir: &Path,
     filename: &NoteFilename,
 ) -> Result<String, CoreError> {
-    FsNoteRepository::new(base_dir.to_path_buf()).read(filename)
+    Notes::new(base_dir.to_path_buf()).read(filename)
 }
 
 pub fn delete_note(base_dir: &Path, filename: &NoteFilename) -> Result<(), CoreError> {
-    FsNoteRepository::new(base_dir.to_path_buf()).delete(filename)
+    Notes::new(base_dir.to_path_buf()).delete(filename)
 }
 
 #[cfg(test)]

@@ -9,24 +9,16 @@ use crate::infra::markdown::format_timeline_line;
 use crate::infra::paths::timeline_file_path;
 use crate::shared::context::DeviceContext;
 
-pub trait TimelineRepository {
-    fn save_entry(&self, text: &str, context: &DeviceContext) -> Result<(), CoreError>;
-    fn list_dates(&self) -> Result<Vec<NaiveDate>, CoreError>;
-    fn read(&self, date: NaiveDate) -> Result<Vec<String>, CoreError>;
-}
-
-pub struct FsTimelineRepository {
+pub struct Timeline {
     base_dir: PathBuf,
 }
 
-impl FsTimelineRepository {
+impl Timeline {
     pub fn new(base_dir: PathBuf) -> Self {
         Self { base_dir }
     }
-}
 
-impl TimelineRepository for FsTimelineRepository {
-    fn save_entry(&self, text: &str, context: &DeviceContext) -> Result<(), CoreError> {
+    pub fn save_entry(&self, text: &str, context: &DeviceContext) -> Result<(), CoreError> {
         let now = Local::now();
         let file_path = timeline_file_path(&self.base_dir, now.date_naive());
         ensure_dir(&file_path)?;
@@ -49,7 +41,7 @@ impl TimelineRepository for FsTimelineRepository {
         Ok(())
     }
 
-    fn list_dates(&self) -> Result<Vec<NaiveDate>, CoreError> {
+    pub fn list_dates(&self) -> Result<Vec<NaiveDate>, CoreError> {
         let timeline_dir = self.base_dir.join("data").join("timeline");
         if !timeline_dir.exists() {
             return Ok(Vec::new());
@@ -68,7 +60,7 @@ impl TimelineRepository for FsTimelineRepository {
         Ok(dates)
     }
 
-    fn read(&self, date: NaiveDate) -> Result<Vec<String>, CoreError> {
+    pub fn read(&self, date: NaiveDate) -> Result<Vec<String>, CoreError> {
         let file_path = timeline_file_path(&self.base_dir, date);
         if !file_path.exists() {
             return Ok(Vec::new());

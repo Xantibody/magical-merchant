@@ -4,7 +4,7 @@ pub mod repository;
 pub mod task;
 
 pub use model::{ProjectActivitySummary, ProjectSummary};
-pub use repository::{FsProjectRepository, ProjectRepository};
+pub use repository::Projects;
 pub use task::{
     TaskSummary, complete_task, create_task, delete_task, list_active_tasks, list_done_tasks,
     update_task,
@@ -23,15 +23,15 @@ pub fn create_project(
     name: &str,
     description: &str,
 ) -> Result<PathBuf, CoreError> {
-    FsProjectRepository::new(base_dir.to_path_buf()).create(slug, name, description)
+    Projects::new(base_dir.to_path_buf()).create(slug, name, description)
 }
 
 pub fn list_projects(base_dir: &Path) -> Result<Vec<ProjectSummary>, CoreError> {
-    FsProjectRepository::new(base_dir.to_path_buf()).list()
+    Projects::new(base_dir.to_path_buf()).list()
 }
 
 pub fn read_project(base_dir: &Path, slug: &Slug) -> Result<ProjectSummary, CoreError> {
-    FsProjectRepository::new(base_dir.to_path_buf()).read(slug)
+    Projects::new(base_dir.to_path_buf()).read(slug)
 }
 
 pub fn get_project_activity_summary(

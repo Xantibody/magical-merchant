@@ -11,40 +11,16 @@ use crate::shared::validated::{Filename, Slug};
 use super::list_tasks_in_dir;
 use super::model::TaskSummary;
 
-pub trait TaskRepository {
-    fn create(
-        &self,
-        project_slug: &Slug,
-        title: &str,
-        tags: &[String],
-        body: &str,
-    ) -> Result<PathBuf, CoreError>;
-    fn list_active(&self, project_slug: &Slug) -> Result<Vec<TaskSummary>, CoreError>;
-    fn list_done(&self, project_slug: &Slug) -> Result<Vec<TaskSummary>, CoreError>;
-    fn complete(&self, project_slug: &Slug, filename: &Filename) -> Result<(), CoreError>;
-    fn update(
-        &self,
-        project_slug: &Slug,
-        filename: &Filename,
-        title: &str,
-        tags: &[String],
-        body: &str,
-    ) -> Result<(), CoreError>;
-    fn delete(&self, project_slug: &Slug, filename: &Filename) -> Result<(), CoreError>;
-}
-
-pub struct FsTaskRepository {
+pub struct Tasks {
     base_dir: PathBuf,
 }
 
-impl FsTaskRepository {
+impl Tasks {
     pub fn new(base_dir: PathBuf) -> Self {
         Self { base_dir }
     }
-}
 
-impl TaskRepository for FsTaskRepository {
-    fn create(
+    pub fn create(
         &self,
         project_slug: &Slug,
         title: &str,
@@ -71,7 +47,10 @@ impl TaskRepository for FsTaskRepository {
         Ok(file_path)
     }
 
-    fn list_active(&self, project_slug: &Slug) -> Result<Vec<TaskSummary>, CoreError> {
+    pub fn list_active(
+        &self,
+        project_slug: &Slug,
+    ) -> Result<Vec<TaskSummary>, CoreError> {
         let slug_str = project_slug.as_str();
         let project_file = paths::project_file_path(&self.base_dir, slug_str);
         if !project_file.exists() {
@@ -80,7 +59,10 @@ impl TaskRepository for FsTaskRepository {
         list_tasks_in_dir(&paths::active_tasks_dir(&self.base_dir, slug_str))
     }
 
-    fn list_done(&self, project_slug: &Slug) -> Result<Vec<TaskSummary>, CoreError> {
+    pub fn list_done(
+        &self,
+        project_slug: &Slug,
+    ) -> Result<Vec<TaskSummary>, CoreError> {
         let slug_str = project_slug.as_str();
         let project_file = paths::project_file_path(&self.base_dir, slug_str);
         if !project_file.exists() {
@@ -89,7 +71,11 @@ impl TaskRepository for FsTaskRepository {
         list_tasks_in_dir(&paths::done_tasks_dir(&self.base_dir, slug_str))
     }
 
-    fn complete(&self, project_slug: &Slug, filename: &Filename) -> Result<(), CoreError> {
+    pub fn complete(
+        &self,
+        project_slug: &Slug,
+        filename: &Filename,
+    ) -> Result<(), CoreError> {
         let slug_str = project_slug.as_str();
         let fname = filename.as_str();
         let active_path = paths::active_tasks_dir(&self.base_dir, slug_str).join(fname);
@@ -114,7 +100,7 @@ impl TaskRepository for FsTaskRepository {
         Ok(())
     }
 
-    fn update(
+    pub fn update(
         &self,
         project_slug: &Slug,
         filename: &Filename,
@@ -144,7 +130,11 @@ impl TaskRepository for FsTaskRepository {
         Ok(())
     }
 
-    fn delete(&self, project_slug: &Slug, filename: &Filename) -> Result<(), CoreError> {
+    pub fn delete(
+        &self,
+        project_slug: &Slug,
+        filename: &Filename,
+    ) -> Result<(), CoreError> {
         let slug_str = project_slug.as_str();
         let fname = filename.as_str();
         let active_path = paths::active_tasks_dir(&self.base_dir, slug_str).join(fname);

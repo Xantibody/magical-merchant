@@ -1,7 +1,7 @@
 pub mod error;
 pub mod repository;
 
-pub use repository::{FsTimelineRepository, TimelineRepository};
+pub use repository::Timeline;
 
 use std::path::Path;
 
@@ -15,15 +15,15 @@ pub fn save_timeline_entry(
     text: &str,
     context: &DeviceContext,
 ) -> Result<(), CoreError> {
-    FsTimelineRepository::new(base_dir.to_path_buf()).save_entry(text, context)
+    Timeline::new(base_dir.to_path_buf()).save_entry(text, context)
 }
 
 pub fn list_timeline_dates(base_dir: &Path) -> Result<Vec<NaiveDate>, CoreError> {
-    FsTimelineRepository::new(base_dir.to_path_buf()).list_dates()
+    Timeline::new(base_dir.to_path_buf()).list_dates()
 }
 
 pub fn read_timeline(base_dir: &Path, date: NaiveDate) -> Result<Vec<String>, CoreError> {
-    FsTimelineRepository::new(base_dir.to_path_buf()).read(date)
+    Timeline::new(base_dir.to_path_buf()).read(date)
 }
 
 #[cfg(test)]

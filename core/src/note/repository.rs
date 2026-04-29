@@ -12,30 +12,11 @@ use crate::shared::validated::NoteFilename;
 
 use super::NoteSummary;
 
-pub trait NoteRepository {
-    fn create(
-        &self,
-        body: &str,
-        tags: &[String],
-        context: &DeviceContext,
-    ) -> Result<PathBuf, CoreError>;
-    fn list(&self) -> Result<Vec<NoteSummary>, CoreError>;
-    fn read(&self, filename: &NoteFilename) -> Result<String, CoreError>;
-    fn update(
-        &self,
-        path: &Path,
-        body: &str,
-        tags: &[String],
-        context: &DeviceContext,
-    ) -> Result<(), CoreError>;
-    fn delete(&self, filename: &NoteFilename) -> Result<(), CoreError>;
-}
-
-pub struct FsNoteRepository {
+pub struct Notes {
     base_dir: PathBuf,
 }
 
-impl FsNoteRepository {
+impl Notes {
     pub fn new(base_dir: PathBuf) -> Self {
         Self { base_dir }
     }
@@ -43,10 +24,8 @@ impl FsNoteRepository {
     fn notes_dir(&self) -> PathBuf {
         self.base_dir.join("data").join("notes")
     }
-}
 
-impl NoteRepository for FsNoteRepository {
-    fn create(
+    pub fn create(
         &self,
         body: &str,
         tags: &[String],
@@ -61,7 +40,7 @@ impl NoteRepository for FsNoteRepository {
         Ok(file_path)
     }
 
-    fn list(&self) -> Result<Vec<NoteSummary>, CoreError> {
+    pub fn list(&self) -> Result<Vec<NoteSummary>, CoreError> {
         let notes_dir = self.notes_dir();
         let entries = list_md_files(&notes_dir)?;
 
@@ -78,7 +57,7 @@ impl NoteRepository for FsNoteRepository {
         Ok(summaries)
     }
 
-    fn read(&self, filename: &NoteFilename) -> Result<String, CoreError> {
+    pub fn read(&self, filename: &NoteFilename) -> Result<String, CoreError> {
         let fname = filename.as_str();
         let notes_dir = self.notes_dir();
         let file_path = notes_dir.join(fname);
@@ -96,7 +75,7 @@ impl NoteRepository for FsNoteRepository {
         Ok(fs::read_to_string(canonical_file_path)?)
     }
 
-    fn update(
+    pub fn update(
         &self,
         path: &Path,
         body: &str,
@@ -109,7 +88,7 @@ impl NoteRepository for FsNoteRepository {
         Ok(())
     }
 
-    fn delete(&self, filename: &NoteFilename) -> Result<(), CoreError> {
+    pub fn delete(&self, filename: &NoteFilename) -> Result<(), CoreError> {
         let fname = filename.as_str();
         let notes_dir = self.notes_dir();
         let file_path = notes_dir.join(fname);

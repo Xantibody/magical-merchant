@@ -11,24 +11,21 @@ use crate::shared::validated::Slug;
 
 use super::ProjectSummary;
 
-pub trait ProjectRepository {
-    fn create(&self, slug: &Slug, name: &str, description: &str) -> Result<PathBuf, CoreError>;
-    fn list(&self) -> Result<Vec<ProjectSummary>, CoreError>;
-    fn read(&self, slug: &Slug) -> Result<ProjectSummary, CoreError>;
-}
-
-pub struct FsProjectRepository {
+pub struct Projects {
     base_dir: PathBuf,
 }
 
-impl FsProjectRepository {
+impl Projects {
     pub fn new(base_dir: PathBuf) -> Self {
         Self { base_dir }
     }
-}
 
-impl ProjectRepository for FsProjectRepository {
-    fn create(&self, slug: &Slug, name: &str, description: &str) -> Result<PathBuf, CoreError> {
+    pub fn create(
+        &self,
+        slug: &Slug,
+        name: &str,
+        description: &str,
+    ) -> Result<PathBuf, CoreError> {
         let file_path = paths::project_file_path(&self.base_dir, slug.as_str());
         if file_path.exists() {
             return Err(CoreError::AlreadyExists(format!("project: {slug}")));
@@ -52,7 +49,7 @@ impl ProjectRepository for FsProjectRepository {
         Ok(proj_dir)
     }
 
-    fn list(&self) -> Result<Vec<ProjectSummary>, CoreError> {
+    pub fn list(&self) -> Result<Vec<ProjectSummary>, CoreError> {
         let dir = paths::projects_dir(&self.base_dir);
         if !dir.exists() {
             return Ok(Vec::new());
@@ -77,7 +74,7 @@ impl ProjectRepository for FsProjectRepository {
         Ok(projects)
     }
 
-    fn read(&self, slug: &Slug) -> Result<ProjectSummary, CoreError> {
+    pub fn read(&self, slug: &Slug) -> Result<ProjectSummary, CoreError> {
         let slug_str = slug.as_str();
         let file_path = paths::project_file_path(&self.base_dir, slug_str);
         if !file_path.exists() {
