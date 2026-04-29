@@ -1,4 +1,4 @@
-import { Show } from "solid-js";
+import { Show, createSignal, onMount, onCleanup } from "solid-js";
 import type { Editor } from "@milkdown/kit/core";
 import { commandsCtx } from "@milkdown/kit/core";
 import {
@@ -14,6 +14,25 @@ interface MarkdownToolbarProps {
 }
 
 export default function MarkdownToolbar(props: MarkdownToolbarProps) {
+  const [bottomOffset, setBottomOffset] = createSignal(0);
+
+  onMount(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+
+    const update = () => {
+      const offset = window.innerHeight - vv.height - vv.offsetTop;
+      setBottomOffset(Math.max(0, offset));
+    };
+
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    onCleanup(() => {
+      vv.removeEventListener("resize", update);
+      vv.removeEventListener("scroll", update);
+    });
+  });
+
   const exec = (run: (editor: Editor) => void) => {
     const editor = props.editor;
     if (!editor) return;
@@ -24,7 +43,12 @@ export default function MarkdownToolbar(props: MarkdownToolbarProps) {
 
   return (
     <Show when={props.editor}>
-      <div class="markdown-toolbar" role="toolbar" aria-label="Markdown formatting">
+      <div
+        class="markdown-toolbar"
+        role="toolbar"
+        aria-label="Markdown formatting"
+        style={{ bottom: `${bottomOffset()}px` }}
+      >
         <button
           type="button"
           onClick={() =>

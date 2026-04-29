@@ -6,7 +6,11 @@
 @media (hover: none) {
   .markdown-toolbar {
     display: flex;
-    flex-shrink: 0;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
     gap: var(--size-1);
     padding: var(--size-1) var(--size-2);
     background: var(--app-surface-2);

@@ -1,7 +1,6 @@
 .milkdown-editor {
   width: 100%;
-  flex: 1;
-  min-height: 0;
+  height: 100%;
   overflow-y: auto;
   cursor: text;
   border: none;
