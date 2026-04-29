@@ -42,6 +42,9 @@ mod tests {
         Context {
             battery: Some(82),
             is_charging: Some(false),
+            network_type: None,
+            wifi_ssid: None,
+            location: None,
         }
     }
 
@@ -58,6 +61,9 @@ mod tests {
         let ctx = Context {
             battery: None,
             is_charging: None,
+            network_type: None,
+            wifi_ssid: None,
+            location: None,
         };
         let result = format_timeline_line("text", fixed_timestamp(), &ctx);
         assert!(result.starts_with("- [14:30:45] text "));
@@ -98,6 +104,9 @@ mod tests {
         let ctx = Context {
             battery: Some(100),
             is_charging: Some(true),
+            network_type: None,
+            wifi_ssid: None,
+            location: None,
         };
         let result = format_note_markdown("body", &[], fixed_timestamp(), &ctx).unwrap();
         let (fm, _body): (NoteFrontmatter, String) = frontmatter::parse(&result).unwrap();
