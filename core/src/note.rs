@@ -8,14 +8,14 @@ pub use repository::Notes;
 use std::path::{Path, PathBuf};
 
 use crate::error::CoreError;
-use crate::shared::context::DeviceContext;
-use crate::shared::validated::NoteFilename;
+use crate::utils::device::Context;
+use crate::utils::validated::NoteFilename;
 
 pub fn create_draft_note(
     base_dir: &Path,
     body: &str,
     tags: &[String],
-    context: &DeviceContext,
+    context: &Context,
 ) -> Result<PathBuf, CoreError> {
     Notes::new(base_dir.to_path_buf()).create(body, tags, context)
 }
@@ -24,7 +24,7 @@ pub fn update_note(
     file_path: &Path,
     body: &str,
     tags: &[String],
-    context: &DeviceContext,
+    context: &Context,
 ) -> Result<(), CoreError> {
     // update_note takes a file_path directly, so we use a dummy base_dir
     // The repository's update method doesn't need base_dir for this operation
@@ -61,8 +61,8 @@ mod tests {
     use std::fs;
     use tempfile::TempDir;
 
-    fn mock_context() -> DeviceContext {
-        DeviceContext::mock()
+    fn mock_context() -> Context {
+        Context::mock()
     }
 
     #[test]

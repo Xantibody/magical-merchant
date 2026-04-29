@@ -1,7 +1,7 @@
 use chrono::{DateTime, FixedOffset};
 use serde::Serialize;
 
-use crate::shared::frontmatter::ProjectFrontmatter;
+use crate::utils::frontmatter::ProjectFrontmatter;
 
 use super::task::TaskSummary;
 

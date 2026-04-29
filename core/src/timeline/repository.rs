@@ -4,10 +4,10 @@ use std::path::PathBuf;
 use chrono::{Local, NaiveDate};
 
 use crate::error::CoreError;
-use crate::infra::fs_helpers::ensure_dir;
-use crate::infra::markdown::format_timeline_line;
-use crate::infra::paths::timeline_file_path;
-use crate::shared::context::DeviceContext;
+use crate::utils::fs::ensure_dir;
+use crate::utils::markdown::format_timeline_line;
+use crate::utils::paths::timeline_file_path;
+use crate::utils::device::Context;
 
 pub struct Timeline {
     base_dir: PathBuf,
@@ -18,7 +18,7 @@ impl Timeline {
         Self { base_dir }
     }
 
-    pub fn save_entry(&self, text: &str, context: &DeviceContext) -> Result<(), CoreError> {
+    pub fn save_entry(&self, text: &str, context: &Context) -> Result<(), CoreError> {
         let now = Local::now();
         let file_path = timeline_file_path(&self.base_dir, now.date_naive());
         ensure_dir(&file_path)?;

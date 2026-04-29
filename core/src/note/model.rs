@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use chrono::{DateTime, FixedOffset};
 use serde::Serialize;
 
-use crate::shared::frontmatter::{self, NoteFrontmatter};
+use crate::utils::frontmatter::{self, NoteFrontmatter};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct NoteSummary {
@@ -40,7 +40,7 @@ impl NoteSummary {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::shared::frontmatter::{ContextMeta, NoteFrontmatter};
+    use crate::utils::frontmatter::{ContextMeta, NoteFrontmatter};
     use chrono::{FixedOffset, TimeZone};
     use std::path::PathBuf;
 

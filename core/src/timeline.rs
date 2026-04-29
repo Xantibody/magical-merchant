@@ -8,12 +8,12 @@ use std::path::Path;
 use chrono::NaiveDate;
 
 use crate::error::CoreError;
-use crate::shared::context::DeviceContext;
+use crate::utils::device::Context;
 
 pub fn save_timeline_entry(
     base_dir: &Path,
     text: &str,
-    context: &DeviceContext,
+    context: &Context,
 ) -> Result<(), CoreError> {
     Timeline::new(base_dir.to_path_buf()).save_entry(text, context)
 }
@@ -33,8 +33,8 @@ mod tests {
     use std::fs;
     use tempfile::TempDir;
 
-    fn mock_context() -> DeviceContext {
-        DeviceContext::mock()
+    fn mock_context() -> Context {
+        Context::mock()
     }
 
     #[test]

@@ -1,13 +1,13 @@
 use chrono::{DateTime, FixedOffset, Local};
 
 use crate::error::CoreError;
-use crate::shared::context::DeviceContext;
-use crate::shared::frontmatter::{self, ContextMeta, NoteFrontmatter};
+use crate::utils::device::Context;
+use crate::utils::frontmatter::{self, ContextMeta, NoteFrontmatter};
 
 pub fn format_timeline_line(
     text: &str,
     timestamp: DateTime<Local>,
-    context: &DeviceContext,
+    context: &Context,
 ) -> String {
     let time = timestamp.format("%H:%M:%S");
     format!(
@@ -21,7 +21,7 @@ pub fn format_note_markdown(
     body: &str,
     tags: &[String],
     timestamp: DateTime<Local>,
-    context: &DeviceContext,
+    context: &Context,
 ) -> Result<String, CoreError> {
     let time: DateTime<FixedOffset> = timestamp.into();
     let fm = NoteFrontmatter {
@@ -38,15 +38,15 @@ pub fn format_note_markdown(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::shared::frontmatter::NoteFrontmatter;
+    use crate::utils::frontmatter::NoteFrontmatter;
     use chrono::TimeZone;
 
     fn fixed_timestamp() -> DateTime<Local> {
         Local.with_ymd_and_hms(2026, 3, 20, 14, 30, 45).unwrap()
     }
 
-    fn test_context() -> DeviceContext {
-        DeviceContext {
+    fn test_context() -> Context {
+        Context {
             battery: 82,
             is_charging: false,
         }
@@ -92,7 +92,7 @@ mod tests {
 
     #[test]
     fn test_format_note_markdown_charging() {
-        let ctx = DeviceContext {
+        let ctx = Context {
             battery: 100,
             is_charging: true,
         };

@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use chrono::NaiveDate;
 
 use crate::error::CoreError;
-use crate::shared::validated::Slug;
+use crate::utils::validated::Slug;
 
 pub fn create_project(
     base_dir: &Path,
@@ -73,8 +73,8 @@ pub fn get_project_activity_summary(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::infra::paths;
-    use crate::shared::frontmatter::{self, TaskFrontmatter};
+    use crate::utils::paths;
+    use crate::utils::frontmatter::{self, TaskFrontmatter};
     use chrono::{DateTime, FixedOffset, TimeZone};
     use std::fs;
     use tempfile::TempDir;

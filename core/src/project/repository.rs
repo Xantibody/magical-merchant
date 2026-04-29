@@ -4,10 +4,10 @@ use std::path::PathBuf;
 use chrono::{DateTime, FixedOffset, Local};
 
 use crate::error::CoreError;
-use crate::infra::fs_helpers;
-use crate::infra::paths;
-use crate::shared::frontmatter::{self, ProjectFrontmatter};
-use crate::shared::validated::Slug;
+use crate::utils;
+use crate::utils::paths;
+use crate::utils::frontmatter::{self, ProjectFrontmatter};
+use crate::utils::validated::Slug;
 
 use super::ProjectSummary;
 
@@ -85,7 +85,7 @@ impl Projects {
         let (fm, _body): (ProjectFrontmatter, String) = frontmatter::parse(&content)?;
 
         let active_dir = paths::active_tasks_dir(&self.base_dir, slug_str);
-        let active_task_count = fs_helpers::count_md_files(&active_dir)?;
+        let active_task_count = utils::fs::count_md_files(&active_dir)?;
 
         Ok(ProjectSummary::from_frontmatter(
             slug_str.to_string(),

@@ -4,9 +4,9 @@ use std::path::PathBuf;
 use chrono::{DateTime, FixedOffset, Local};
 
 use crate::error::CoreError;
-use crate::infra::paths;
-use crate::shared::frontmatter::{self, TaskFrontmatter};
-use crate::shared::validated::{Filename, Slug};
+use crate::utils::paths;
+use crate::utils::frontmatter::{self, TaskFrontmatter};
+use crate::utils::validated::{Filename, Slug};
 
 use super::list_tasks_in_dir;
 use super::model::TaskSummary;

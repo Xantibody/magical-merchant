@@ -1,12 +1,12 @@
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
-pub struct DeviceContext {
+pub struct Context {
     pub battery: u8,
     pub is_charging: bool,
 }
 
-impl DeviceContext {
+impl Context {
     pub fn mock() -> Self {
         Self {
             battery: 50,
@@ -21,7 +21,7 @@ mod tests {
 
     #[test]
     fn test_device_context_mock() {
-        let ctx = DeviceContext::mock();
+        let ctx = Context::mock();
         assert_eq!(ctx.battery, 50);
         assert!(!ctx.is_charging);
     }

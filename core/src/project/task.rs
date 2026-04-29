@@ -4,20 +4,19 @@ pub mod repository;
 pub use model::TaskSummary;
 pub use repository::Tasks;
 
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::error::CoreError;
-use crate::infra::fs_helpers;
-use crate::shared::validated::{Filename, Slug};
+use crate::utils;
+use crate::utils::validated::{Filename, Slug};
 
 pub(crate) fn list_tasks_in_dir(dir: &Path) -> Result<Vec<TaskSummary>, CoreError> {
-    let entries = fs_helpers::list_md_files(dir)?;
+    let entries = utils::fs::list_md_files(dir)?;
 
     let mut tasks = Vec::new();
     for entry in entries {
         let filename = entry.file_name().to_string_lossy().to_string();
-        let content = fs::read_to_string(entry.path())?;
+        let content = std::fs::read_to_string(entry.path())?;
         let task = TaskSummary::from_content(&filename, &content)?;
         tasks.push(task);
     }
@@ -79,10 +78,11 @@ pub fn delete_task(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::infra::paths;
     use crate::project::create_project;
-    use crate::shared::frontmatter::{self, TaskFrontmatter};
+    use crate::utils::frontmatter::{self, TaskFrontmatter};
+    use crate::utils::paths;
     use chrono::{DateTime, FixedOffset, TimeZone};
+    use std::fs;
     use tempfile::TempDir;
 
     fn slug(s: &str) -> Slug {

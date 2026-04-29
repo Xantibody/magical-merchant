@@ -2,7 +2,7 @@ use chrono::{DateTime, FixedOffset};
 use serde::Serialize;
 
 use crate::error::CoreError;
-use crate::shared::frontmatter::{self, TaskFrontmatter};
+use crate::utils::frontmatter::{self, TaskFrontmatter};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct TaskSummary {

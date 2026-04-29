@@ -4,11 +4,11 @@ use std::path::{Path, PathBuf};
 use chrono::Local;
 
 use crate::error::CoreError;
-use crate::infra::fs_helpers::{ensure_dir, list_md_files};
-use crate::infra::markdown::format_note_markdown;
-use crate::infra::paths::note_file_path;
-use crate::shared::context::DeviceContext;
-use crate::shared::validated::NoteFilename;
+use crate::utils::fs::{ensure_dir, list_md_files};
+use crate::utils::markdown::format_note_markdown;
+use crate::utils::paths::note_file_path;
+use crate::utils::device::Context;
+use crate::utils::validated::NoteFilename;
 
 use super::NoteSummary;
 
@@ -29,7 +29,7 @@ impl Notes {
         &self,
         body: &str,
         tags: &[String],
-        context: &DeviceContext,
+        context: &Context,
     ) -> Result<PathBuf, CoreError> {
         let now = Local::now();
         let file_path = note_file_path(&self.base_dir, now);
@@ -80,7 +80,7 @@ impl Notes {
         path: &Path,
         body: &str,
         tags: &[String],
-        context: &DeviceContext,
+        context: &Context,
     ) -> Result<(), CoreError> {
         let now = Local::now();
         let content = format_note_markdown(body, tags, now, context)?;
