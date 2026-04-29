@@ -5,8 +5,8 @@ use chrono::{Local, NaiveDate};
 
 use crate::error::CoreError;
 use crate::infra::fs_helpers::ensure_dir;
-use crate::infra::markdown::{format_note_markdown, format_timeline_line};
-use crate::infra::paths::{note_file_path, timeline_file_path};
+use crate::infra::markdown::format_timeline_line;
+use crate::infra::paths::timeline_file_path;
 use crate::shared::context::DeviceContext;
 
 pub fn save_timeline_entry(
@@ -32,21 +32,6 @@ pub fn save_timeline_entry(
     content.push_str(&line);
     content.push('\n');
 
-    fs::write(&file_path, content)?;
-    Ok(())
-}
-
-pub fn save_note(
-    base_dir: &Path,
-    body: &str,
-    tags: &[String],
-    context: &DeviceContext,
-) -> Result<(), CoreError> {
-    let now = Local::now();
-    let file_path = note_file_path(base_dir, now);
-    ensure_dir(&file_path)?;
-
-    let content = format_note_markdown(body, tags, now, context)?;
     fs::write(&file_path, content)?;
     Ok(())
 }
@@ -122,39 +107,6 @@ mod tests {
         assert_eq!(lines.len(), 2);
         assert!(lines[0].contains("first"));
         assert!(lines[1].contains("second"));
-    }
-
-    #[test]
-    fn test_save_note_creates_file() {
-        let tmp = TempDir::new().unwrap();
-        let tags = vec!["test".to_string()];
-        save_note(tmp.path(), "# Title\nBody", &tags, &mock_context()).unwrap();
-
-        let notes_dir = tmp.path().join("data/notes");
-        assert!(notes_dir.exists());
-
-        let files: Vec<_> = fs::read_dir(&notes_dir).unwrap().collect();
-        assert_eq!(files.len(), 1);
-
-        let content = fs::read_to_string(files[0].as_ref().unwrap().path()).unwrap();
-        assert!(content.contains("---"));
-        let (fm, body): (crate::shared::frontmatter::NoteFrontmatter, String) =
-            crate::shared::frontmatter::parse(&content).unwrap();
-        assert_eq!(fm.tags, vec!["test"]);
-        assert_eq!(body, "# Title\nBody");
-    }
-
-    #[test]
-    fn test_save_note_empty_tags() {
-        let tmp = TempDir::new().unwrap();
-        save_note(tmp.path(), "body", &[], &mock_context()).unwrap();
-
-        let notes_dir = tmp.path().join("data/notes");
-        let files: Vec<_> = fs::read_dir(&notes_dir).unwrap().collect();
-        let content = fs::read_to_string(files[0].as_ref().unwrap().path()).unwrap();
-        let (fm, _body): (crate::shared::frontmatter::NoteFrontmatter, String) =
-            crate::shared::frontmatter::parse(&content).unwrap();
-        assert!(fm.tags.is_empty());
     }
 
     #[test]

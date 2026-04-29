@@ -2,9 +2,9 @@ mod error;
 mod infra;
 mod note;
 mod project;
-mod save;
 pub mod shared;
 pub mod sync;
+mod timeline;
 
 pub use error::CoreError;
 pub use infra::markdown::{format_note_markdown, format_timeline_line};
@@ -21,7 +21,7 @@ pub use project::{
     create_task, delete_task, get_project_activity_summary, list_active_tasks, list_done_tasks,
     list_projects, read_project, update_task,
 };
-pub use save::{list_timeline_dates, read_timeline, save_note, save_timeline_entry};
 pub use shared::context::DeviceContext;
 pub use shared::frontmatter;
 pub use shared::validated::{Filename, NoteFilename, Slug};
+pub use timeline::{list_timeline_dates, read_timeline, save_timeline_entry};
