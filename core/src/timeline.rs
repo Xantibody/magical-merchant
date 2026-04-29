@@ -34,7 +34,11 @@ mod tests {
     use tempfile::TempDir;
 
     fn mock_context() -> Context {
-        Context::mock()
+        Context {
+            battery: Some(50),
+            is_charging: Some(false),
+            ..Context::default()
+        }
     }
 
     #[test]

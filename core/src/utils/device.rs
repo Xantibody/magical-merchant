@@ -13,7 +13,7 @@ pub struct Location {
     pub longitude: f64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct Context {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub battery: Option<u8>,
@@ -27,27 +27,15 @@ pub struct Context {
     pub location: Option<Location>,
 }
 
-impl Context {
-    pub fn mock() -> Self {
-        Self {
-            battery: Some(50),
-            is_charging: Some(false),
-            network_type: None,
-            wifi_ssid: None,
-            location: None,
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_context_mock() {
-        let ctx = Context::mock();
-        assert_eq!(ctx.battery, Some(50));
-        assert_eq!(ctx.is_charging, Some(false));
+    fn test_context_default() {
+        let ctx = Context::default();
+        assert_eq!(ctx.battery, None);
+        assert_eq!(ctx.is_charging, None);
         assert_eq!(ctx.network_type, None);
         assert_eq!(ctx.wifi_ssid, None);
         assert_eq!(ctx.location, None);
@@ -55,13 +43,7 @@ mod tests {
 
     #[test]
     fn test_context_serialization_skips_none() {
-        let ctx = Context {
-            battery: None,
-            is_charging: None,
-            network_type: None,
-            wifi_ssid: None,
-            location: None,
-        };
+        let ctx = Context::default();
         let json = serde_json::to_string(&ctx).unwrap();
         assert_eq!(json, "{}");
     }
@@ -107,11 +89,8 @@ mod tests {
     #[test]
     fn test_network_type_serialization() {
         let ctx = Context {
-            battery: None,
-            is_charging: None,
             network_type: Some(NetworkType::Mobile),
-            wifi_ssid: None,
-            location: None,
+            ..Context::default()
         };
         let json = serde_json::to_string(&ctx).unwrap();
         assert_eq!(json, r#"{"network_type":"Mobile"}"#);

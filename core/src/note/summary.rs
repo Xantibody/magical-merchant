@@ -53,7 +53,11 @@ mod tests {
                 .with_ymd_and_hms(2026, 3, 20, 14, 30, 45)
                 .unwrap(),
             tags: vec!["a".to_string(), "b".to_string()],
-            context: Some(Context::mock()),
+            context: Some(Context {
+                battery: Some(50),
+                is_charging: Some(false),
+                ..Context::default()
+            }),
         };
         let content = frontmatter::render(&fm, "# Title\nBody").unwrap();
         let summary = Summary::from_file(

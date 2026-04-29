@@ -39,9 +39,7 @@ mod tests {
         Context {
             battery: Some(82),
             is_charging: Some(false),
-            network_type: None,
-            wifi_ssid: None,
-            location: None,
+            ..Context::default()
         }
     }
 
@@ -55,13 +53,7 @@ mod tests {
 
     #[test]
     fn test_format_timeline_line_none_fields() {
-        let ctx = Context {
-            battery: None,
-            is_charging: None,
-            network_type: None,
-            wifi_ssid: None,
-            location: None,
-        };
+        let ctx = Context::default();
         let result = format_timeline_line("text", fixed_timestamp(), &ctx);
         assert!(result.starts_with("- [14:30:45] text "));
         assert!(!result.contains("battery"));
@@ -101,9 +93,7 @@ mod tests {
         let ctx = Context {
             battery: Some(100),
             is_charging: Some(true),
-            network_type: None,
-            wifi_ssid: None,
-            location: None,
+            ..Context::default()
         };
         let result = format_note_markdown("body", &[], fixed_timestamp(), &ctx).unwrap();
         let (fm, _body): (NoteFrontmatter, String) = frontmatter::parse(&result).unwrap();
