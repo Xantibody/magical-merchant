@@ -1,8 +1,6 @@
 .markdown-toolbar {
   display: none;
 }
-
-/* Touch devices only */
 @media (hover: none) {
   .markdown-toolbar {
     display: flex;

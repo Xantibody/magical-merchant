@@ -19,7 +19,7 @@ interface MilkdownEditorProps {
   defaultValue?: string;
   onChange?: (markdown: string) => void;
   placeholder?: string;
-  onEditorReady?: (editor: Editor) => void;
+  onEditorReady?: (editor: Editor | undefined) => void;
 }
 
 export default function MilkdownEditor(props: MilkdownEditorProps) {
@@ -82,6 +82,7 @@ export default function MilkdownEditor(props: MilkdownEditorProps) {
 
   onCleanup(() => {
     editor?.destroy();
+    props.onEditorReady?.(undefined);
   });
 
   const handleClick = (e: MouseEvent) => {

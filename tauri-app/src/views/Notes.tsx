@@ -143,6 +143,7 @@ export default function Notes() {
     if (!note) return;
     const content = noteContent();
     const bodyText = extractBody(content);
+    setEditorInstance(undefined);
     setDraftPath(note.path);
     setBody(bodyText);
     setTagsInput(note.tags.join(", "));

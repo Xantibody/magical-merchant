@@ -1,7 +1,7 @@
 import { Show, createSignal, onMount, onCleanup } from "solid-js";
 import { Portal } from "solid-js/web";
 import type { Editor } from "@milkdown/kit/core";
-import { commandsCtx } from "@milkdown/kit/core";
+import { commandsCtx, rootCtx } from "@milkdown/kit/core";
 import {
   sinkListItemCommand,
   liftListItemCommand,
@@ -37,8 +37,11 @@ export default function MarkdownToolbar(props: MarkdownToolbarProps) {
     const editor = props.editor;
     if (!editor) return;
     run(editor);
-    const pm = document.querySelector(".ProseMirror") as HTMLElement | null;
-    pm?.focus();
+    editor.action((ctx) => {
+      const root = ctx.get(rootCtx) as HTMLElement;
+      const pm = root.querySelector(".ProseMirror") as HTMLElement | null;
+      pm?.focus();
+    });
   };
 
   const top = () => toolbarTop();
@@ -55,10 +58,10 @@ export default function MarkdownToolbar(props: MarkdownToolbarProps) {
               ? { top: `${top()}px`, bottom: "auto", transform: "translateY(-100%)" }
               : undefined
           }
-          onPointerDown={(e) => e.preventDefault()}
         >
           <button
             type="button"
+            onPointerDown={(e) => e.preventDefault()}
             onClick={() =>
               exec((e) => e.action((ctx) => ctx.get(commandsCtx).call(liftListItemCommand.key)))
             }
@@ -69,6 +72,7 @@ export default function MarkdownToolbar(props: MarkdownToolbarProps) {
           </button>
           <button
             type="button"
+            onPointerDown={(e) => e.preventDefault()}
             onClick={() =>
               exec((e) => e.action((ctx) => ctx.get(commandsCtx).call(sinkListItemCommand.key)))
             }
@@ -79,6 +83,7 @@ export default function MarkdownToolbar(props: MarkdownToolbarProps) {
           </button>
           <button
             type="button"
+            onPointerDown={(e) => e.preventDefault()}
             onClick={() =>
               exec((e) => e.action((ctx) => ctx.get(commandsCtx).call(createCodeBlockCommand.key)))
             }
@@ -89,6 +94,7 @@ export default function MarkdownToolbar(props: MarkdownToolbarProps) {
           </button>
           <button
             type="button"
+            onPointerDown={(e) => e.preventDefault()}
             onClick={() =>
               exec((e) => e.action((ctx) => ctx.get(commandsCtx).call(insertHrCommand.key)))
             }
