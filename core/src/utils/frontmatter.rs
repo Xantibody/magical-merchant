@@ -14,8 +14,10 @@ pub struct NoteFrontmatter {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ContextMeta {
-    pub battery: u8,
-    pub is_charging: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub battery: Option<u8>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub is_charging: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -108,8 +110,8 @@ mod tests {
             time: sample_datetime(),
             tags: vec!["memo".to_string()],
             context: Some(ContextMeta {
-                battery: 82,
-                is_charging: false,
+                battery: Some(82),
+                is_charging: Some(false),
             }),
         };
         let rendered = render(&fm, "# Hello\nWorld").unwrap();

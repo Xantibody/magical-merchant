@@ -53,8 +53,8 @@ mod tests {
                 .unwrap(),
             tags: vec!["a".to_string(), "b".to_string()],
             context: Some(ContextMeta {
-                battery: 50,
-                is_charging: false,
+                battery: Some(50),
+                is_charging: Some(false),
             }),
         };
         let content = frontmatter::render(&fm, "# Title\nBody").unwrap();
