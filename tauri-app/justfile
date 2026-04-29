@@ -28,5 +28,11 @@ android-dev:
 android-build:
   pnpm tauri android build
 
+android-build-debug:
+  pnpm tauri android build --debug --target aarch64
+
+android-install: android-build-debug
+  adb install src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
+
 build:
   pnpm tauri build --bundles app

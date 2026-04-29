@@ -24,4 +24,8 @@ android-dev: tauri_app::android-dev
 
 android-build: tauri_app::android-build
 
+android-build-debug: tauri_app::android-build-debug
+
+android-install: tauri_app::android-install
+
 build: tauri_app::build
