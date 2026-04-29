@@ -5,10 +5,11 @@ use chrono::{DateTime, FixedOffset, Local};
 use serde::Serialize;
 
 use crate::error::CoreError;
-use crate::format::{DeviceContext, format_note_markdown};
-use crate::frontmatter::{self, NoteFrontmatter};
+use crate::format::format_note_markdown;
 use crate::path::note_file_path;
-use crate::validated::NoteFilename;
+use crate::shared::context::DeviceContext;
+use crate::shared::frontmatter::{self, NoteFrontmatter};
+use crate::shared::validated::NoteFilename;
 
 fn ensure_dir(path: &Path) -> Result<(), CoreError> {
     if let Some(parent) = path.parent() {
@@ -281,7 +282,7 @@ mod tests {
                 .with_ymd_and_hms(2026, 3, 20, 14, 30, 45)
                 .unwrap(),
             tags: vec!["a".to_string(), "b".to_string()],
-            context: Some(crate::frontmatter::ContextMeta {
+            context: Some(crate::shared::frontmatter::ContextMeta {
                 battery: 50,
                 is_charging: false,
             }),

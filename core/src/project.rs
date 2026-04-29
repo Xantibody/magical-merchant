@@ -5,9 +5,9 @@ use chrono::{DateTime, FixedOffset, Local, NaiveDate};
 use serde::Serialize;
 
 use crate::error::CoreError;
-use crate::frontmatter::{self, ProjectFrontmatter, TaskFrontmatter};
 use crate::path;
-use crate::validated::{Filename, Slug};
+use crate::shared::frontmatter::{self, ProjectFrontmatter, TaskFrontmatter};
+use crate::shared::validated::{Filename, Slug};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ProjectSummary {
@@ -331,7 +331,7 @@ pub fn get_project_activity_summary(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::validated::Filename;
+    use crate::shared::validated::Filename;
     use chrono::TimeZone;
     use tempfile::TempDir;
 

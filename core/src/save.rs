@@ -4,8 +4,9 @@ use std::path::Path;
 use chrono::{Local, NaiveDate};
 
 use crate::error::CoreError;
-use crate::format::{DeviceContext, format_note_markdown, format_timeline_line};
+use crate::format::{format_note_markdown, format_timeline_line};
 use crate::path::{note_file_path, timeline_file_path};
+use crate::shared::context::DeviceContext;
 
 fn ensure_dir(path: &Path) -> Result<(), CoreError> {
     if let Some(parent) = path.parent() {
@@ -143,8 +144,8 @@ mod tests {
 
         let content = fs::read_to_string(files[0].as_ref().unwrap().path()).unwrap();
         assert!(content.contains("---"));
-        let (fm, body): (crate::frontmatter::NoteFrontmatter, String) =
-            crate::frontmatter::parse(&content).unwrap();
+        let (fm, body): (crate::shared::frontmatter::NoteFrontmatter, String) =
+            crate::shared::frontmatter::parse(&content).unwrap();
         assert_eq!(fm.tags, vec!["test"]);
         assert_eq!(body, "# Title\nBody");
     }
@@ -157,8 +158,8 @@ mod tests {
         let notes_dir = tmp.path().join("data/notes");
         let files: Vec<_> = fs::read_dir(&notes_dir).unwrap().collect();
         let content = fs::read_to_string(files[0].as_ref().unwrap().path()).unwrap();
-        let (fm, _body): (crate::frontmatter::NoteFrontmatter, String) =
-            crate::frontmatter::parse(&content).unwrap();
+        let (fm, _body): (crate::shared::frontmatter::NoteFrontmatter, String) =
+            crate::shared::frontmatter::parse(&content).unwrap();
         assert!(fm.tags.is_empty());
     }
 

@@ -1,15 +1,14 @@
 mod error;
 mod format;
-pub mod frontmatter;
 mod note;
 mod path;
 mod project;
 mod save;
+pub mod shared;
 pub mod sync;
-mod validated;
 
 pub use error::CoreError;
-pub use format::{DeviceContext, format_note_markdown, format_timeline_line};
+pub use format::{format_note_markdown, format_timeline_line};
 pub use note::{
     NoteSummary, create_draft_note, delete_note, list_notes, read_note, read_note_by_filename,
     update_note,
@@ -24,4 +23,6 @@ pub use project::{
     list_projects, read_project, update_task,
 };
 pub use save::{list_timeline_dates, read_timeline, save_note, save_timeline_entry};
-pub use validated::{Filename, NoteFilename, Slug};
+pub use shared::context::DeviceContext;
+pub use shared::frontmatter;
+pub use shared::validated::{Filename, NoteFilename, Slug};
