@@ -18,7 +18,9 @@ fn save_quick_capture(handle: AppHandle, text: String) -> Result<(), String> {
 fn save_document(handle: AppHandle, body: String, tags: Vec<String>) -> Result<(), String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
     let context = DeviceContext::mock();
-    magical_merchant_core::save_note(&base_dir, &body, &tags, &context).map_err(|e| e.to_string())
+    magical_merchant_core::create_draft_note(&base_dir, &body, &tags, &context)
+        .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 #[tauri::command]

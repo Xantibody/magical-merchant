@@ -1,102 +1,40 @@
-use std::fs;
+pub mod error;
+pub mod repository;
+
+pub use repository::Timeline;
+
 use std::path::Path;
 
-use chrono::{Local, NaiveDate};
+use chrono::NaiveDate;
 
 use crate::error::CoreError;
-use crate::format::{DeviceContext, format_note_markdown, format_timeline_line};
-use crate::path::{note_file_path, timeline_file_path};
-
-fn ensure_dir(path: &Path) -> Result<(), CoreError> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    Ok(())
-}
+use crate::utils::device::Context;
 
 pub fn save_timeline_entry(
     base_dir: &Path,
     text: &str,
-    context: &DeviceContext,
+    context: &Context,
 ) -> Result<(), CoreError> {
-    let now = Local::now();
-    let file_path = timeline_file_path(base_dir, now.date_naive());
-    ensure_dir(&file_path)?;
-
-    let line = format_timeline_line(text, now, context);
-
-    let mut content = if file_path.exists() {
-        fs::read_to_string(&file_path)?
-    } else {
-        String::new()
-    };
-
-    if !content.is_empty() && !content.ends_with('\n') {
-        content.push('\n');
-    }
-    content.push_str(&line);
-    content.push('\n');
-
-    fs::write(&file_path, content)?;
-    Ok(())
-}
-
-pub fn save_note(
-    base_dir: &Path,
-    body: &str,
-    tags: &[String],
-    context: &DeviceContext,
-) -> Result<(), CoreError> {
-    let now = Local::now();
-    let file_path = note_file_path(base_dir, now);
-    ensure_dir(&file_path)?;
-
-    let content = format_note_markdown(body, tags, now, context)?;
-    fs::write(&file_path, content)?;
-    Ok(())
+    Timeline::new(base_dir.to_path_buf()).save_entry(text, context)
 }
 
 pub fn list_timeline_dates(base_dir: &Path) -> Result<Vec<NaiveDate>, CoreError> {
-    let timeline_dir = base_dir.join("data").join("timeline");
-    if !timeline_dir.exists() {
-        return Ok(Vec::new());
-    }
-
-    let mut dates: Vec<NaiveDate> = fs::read_dir(&timeline_dir)?
-        .filter_map(|e| e.ok())
-        .filter_map(|e| {
-            let name = e.file_name().to_string_lossy().to_string();
-            let stem = name.strip_suffix(".md")?;
-            NaiveDate::parse_from_str(stem, "%Y-%m-%d").ok()
-        })
-        .collect();
-
-    dates.sort_by(|a, b| b.cmp(a));
-    Ok(dates)
+    Timeline::new(base_dir.to_path_buf()).list_dates()
 }
 
 pub fn read_timeline(base_dir: &Path, date: NaiveDate) -> Result<Vec<String>, CoreError> {
-    let file_path = timeline_file_path(base_dir, date);
-    if !file_path.exists() {
-        return Ok(Vec::new());
-    }
-    let content = fs::read_to_string(&file_path)?;
-    let lines = content
-        .lines()
-        .filter(|l| !l.is_empty())
-        .map(String::from)
-        .collect();
-    Ok(lines)
+    Timeline::new(base_dir.to_path_buf()).read(date)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::Local;
     use std::fs;
     use tempfile::TempDir;
 
-    fn mock_context() -> DeviceContext {
-        DeviceContext::mock()
+    fn mock_context() -> Context {
+        Context::mock()
     }
 
     #[test]
@@ -127,39 +65,6 @@ mod tests {
         assert_eq!(lines.len(), 2);
         assert!(lines[0].contains("first"));
         assert!(lines[1].contains("second"));
-    }
-
-    #[test]
-    fn test_save_note_creates_file() {
-        let tmp = TempDir::new().unwrap();
-        let tags = vec!["test".to_string()];
-        save_note(tmp.path(), "# Title\nBody", &tags, &mock_context()).unwrap();
-
-        let notes_dir = tmp.path().join("data/notes");
-        assert!(notes_dir.exists());
-
-        let files: Vec<_> = fs::read_dir(&notes_dir).unwrap().collect();
-        assert_eq!(files.len(), 1);
-
-        let content = fs::read_to_string(files[0].as_ref().unwrap().path()).unwrap();
-        assert!(content.contains("---"));
-        let (fm, body): (crate::frontmatter::NoteFrontmatter, String) =
-            crate::frontmatter::parse(&content).unwrap();
-        assert_eq!(fm.tags, vec!["test"]);
-        assert_eq!(body, "# Title\nBody");
-    }
-
-    #[test]
-    fn test_save_note_empty_tags() {
-        let tmp = TempDir::new().unwrap();
-        save_note(tmp.path(), "body", &[], &mock_context()).unwrap();
-
-        let notes_dir = tmp.path().join("data/notes");
-        let files: Vec<_> = fs::read_dir(&notes_dir).unwrap().collect();
-        let content = fs::read_to_string(files[0].as_ref().unwrap().path()).unwrap();
-        let (fm, _body): (crate::frontmatter::NoteFrontmatter, String) =
-            crate::frontmatter::parse(&content).unwrap();
-        assert!(fm.tags.is_empty());
     }
 
     #[test]

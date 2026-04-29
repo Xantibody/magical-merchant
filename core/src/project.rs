@@ -1,32 +1,21 @@
-use std::fs;
+pub mod error;
+pub mod repository;
+mod summary;
+pub mod task;
+
+pub use repository::Projects;
+pub use summary::{ActivitySummary as ProjectActivitySummary, Summary as ProjectSummary};
+pub use task::{
+    Summary as TaskSummary, complete_task, create_task, delete_task, list_active_tasks,
+    list_done_tasks, update_task,
+};
+
 use std::path::{Path, PathBuf};
 
-use chrono::{DateTime, FixedOffset, Local, NaiveDate};
-use serde::Serialize;
+use chrono::NaiveDate;
 
 use crate::error::CoreError;
-use crate::frontmatter::{self, ProjectFrontmatter, TaskFrontmatter};
-use crate::path;
-use crate::validated::{Filename, Slug};
-
-#[derive(Debug, Clone, Serialize)]
-pub struct ProjectSummary {
-    pub slug: String,
-    pub name: String,
-    pub created: DateTime<FixedOffset>,
-    pub description: String,
-    pub active_task_count: usize,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct TaskSummary {
-    pub filename: String,
-    pub title: String,
-    pub created: DateTime<FixedOffset>,
-    pub completed: Option<DateTime<FixedOffset>>,
-    pub tags: Vec<String>,
-    pub body: String,
-}
+use crate::utils::validated::Slug;
 
 pub fn create_project(
     base_dir: &Path,
@@ -34,262 +23,15 @@ pub fn create_project(
     name: &str,
     description: &str,
 ) -> Result<PathBuf, CoreError> {
-    let file_path = path::project_file_path(base_dir, slug.as_str());
-    if file_path.exists() {
-        return Err(CoreError::AlreadyExists(format!("project: {slug}")));
-    }
-
-    let slug_str = slug.as_str();
-    let proj_dir = path::project_dir(base_dir, slug_str);
-    fs::create_dir_all(path::active_tasks_dir(base_dir, slug_str))?;
-    fs::create_dir_all(path::done_tasks_dir(base_dir, slug_str))?;
-
-    let now: DateTime<FixedOffset> = Local::now().into();
-    let fm = ProjectFrontmatter {
-        name: name.to_string(),
-        created: now,
-        description: description.to_string(),
-    };
-    let content = frontmatter::render(&fm, "")?;
-    let file_path = path::project_file_path(base_dir, slug_str);
-    fs::write(&file_path, content)?;
-
-    Ok(proj_dir)
+    Projects::new(base_dir.to_path_buf()).create(slug, name, description)
 }
 
 pub fn list_projects(base_dir: &Path) -> Result<Vec<ProjectSummary>, CoreError> {
-    let dir = path::projects_dir(base_dir);
-    if !dir.exists() {
-        return Ok(Vec::new());
-    }
-
-    let mut projects = Vec::new();
-    let mut entries: Vec<_> = fs::read_dir(&dir)?
-        .filter_map(|e| e.ok())
-        .filter(|e| e.path().is_dir())
-        .collect();
-    entries.sort_by_key(|e| e.file_name());
-
-    for entry in entries {
-        let slug_str = entry.file_name().to_string_lossy().to_string();
-        if let Ok(slug) = Slug::parse(&slug_str) {
-            if let Ok(summary) = read_project(base_dir, &slug) {
-                projects.push(summary);
-            }
-        }
-    }
-
-    Ok(projects)
-}
-
-pub fn create_task(
-    base_dir: &Path,
-    project_slug: &Slug,
-    title: &str,
-    tags: &[String],
-    body: &str,
-) -> Result<PathBuf, CoreError> {
-    let active_dir = path::active_tasks_dir(base_dir, project_slug.as_str());
-    if !active_dir.exists() {
-        return Err(CoreError::NotFound(format!("project: {project_slug}")));
-    }
-
-    let now: DateTime<FixedOffset> = Local::now().into();
-    let filename = format!("{}.md", now.format("%Y%m%d_%H%M%S_%3f"));
-    let file_path = active_dir.join(&filename);
-    let fm = TaskFrontmatter {
-        title: title.to_string(),
-        created: now,
-        completed: None,
-        tags: tags.to_vec(),
-    };
-    let content = frontmatter::render(&fm, body)?;
-    fs::write(&file_path, content)?;
-
-    Ok(file_path)
-}
-
-fn parse_task_file(content: &str) -> Result<TaskSummary, CoreError> {
-    let (fm, body): (TaskFrontmatter, String) = frontmatter::parse(content)?;
-    Ok(TaskSummary {
-        filename: String::new(),
-        title: fm.title,
-        created: fm.created,
-        completed: fm.completed,
-        tags: fm.tags,
-        body,
-    })
-}
-
-fn list_tasks_in_dir(dir: &Path) -> Result<Vec<TaskSummary>, CoreError> {
-    if !dir.exists() {
-        return Ok(Vec::new());
-    }
-
-    let mut entries: Vec<_> = fs::read_dir(dir)?
-        .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().is_some_and(|ext| ext == "md"))
-        .collect();
-    entries.sort_by_key(|e| std::cmp::Reverse(e.file_name()));
-
-    let mut tasks = Vec::new();
-    for entry in entries {
-        let filename = entry.file_name().to_string_lossy().to_string();
-        let content = fs::read_to_string(entry.path())?;
-        let mut task = parse_task_file(&content)?;
-        task.filename = filename;
-        tasks.push(task);
-    }
-
-    Ok(tasks)
-}
-
-pub fn list_active_tasks(
-    base_dir: &Path,
-    project_slug: &Slug,
-) -> Result<Vec<TaskSummary>, CoreError> {
-    let slug_str = project_slug.as_str();
-    let project_file = path::project_file_path(base_dir, slug_str);
-    if !project_file.exists() {
-        return Err(CoreError::NotFound(format!("project: {project_slug}")));
-    }
-    list_tasks_in_dir(&path::active_tasks_dir(base_dir, slug_str))
-}
-
-pub fn list_done_tasks(
-    base_dir: &Path,
-    project_slug: &Slug,
-) -> Result<Vec<TaskSummary>, CoreError> {
-    let slug_str = project_slug.as_str();
-    let project_file = path::project_file_path(base_dir, slug_str);
-    if !project_file.exists() {
-        return Err(CoreError::NotFound(format!("project: {project_slug}")));
-    }
-    list_tasks_in_dir(&path::done_tasks_dir(base_dir, slug_str))
-}
-
-pub fn complete_task(
-    base_dir: &Path,
-    project_slug: &Slug,
-    filename: &Filename,
-) -> Result<(), CoreError> {
-    let slug_str = project_slug.as_str();
-    let fname = filename.as_str();
-    let active_path = path::active_tasks_dir(base_dir, slug_str).join(fname);
-    if !active_path.exists() {
-        return Err(CoreError::NotFound(format!(
-            "task: {project_slug}/{filename}"
-        )));
-    }
-
-    let content = fs::read_to_string(&active_path)?;
-    let task = parse_task_file(&content)?;
-
-    let now: DateTime<FixedOffset> = Local::now().into();
-    let fm = TaskFrontmatter {
-        title: task.title,
-        created: task.created,
-        completed: Some(now),
-        tags: task.tags,
-    };
-    let new_content = frontmatter::render(&fm, &task.body)?;
-
-    let done_path = path::done_tasks_dir(base_dir, slug_str).join(fname);
-    fs::write(&done_path, new_content)?;
-    fs::remove_file(&active_path)?;
-
-    Ok(())
-}
-
-pub fn update_task(
-    base_dir: &Path,
-    project_slug: &Slug,
-    filename: &Filename,
-    title: &str,
-    tags: &[String],
-    body: &str,
-) -> Result<(), CoreError> {
-    let active_path =
-        path::active_tasks_dir(base_dir, project_slug.as_str()).join(filename.as_str());
-    if !active_path.exists() {
-        return Err(CoreError::NotFound(format!(
-            "task: {project_slug}/{filename}"
-        )));
-    }
-
-    let content = fs::read_to_string(&active_path)?;
-    let task = parse_task_file(&content)?;
-    let fm = TaskFrontmatter {
-        title: title.to_string(),
-        created: task.created,
-        completed: None,
-        tags: tags.to_vec(),
-    };
-    let new_content = frontmatter::render(&fm, body)?;
-    fs::write(&active_path, new_content)?;
-
-    Ok(())
-}
-
-pub fn delete_task(
-    base_dir: &Path,
-    project_slug: &Slug,
-    filename: &Filename,
-) -> Result<(), CoreError> {
-    let slug_str = project_slug.as_str();
-    let fname = filename.as_str();
-    let active_path = path::active_tasks_dir(base_dir, slug_str).join(fname);
-    if active_path.exists() {
-        fs::remove_file(&active_path)?;
-        return Ok(());
-    }
-
-    let done_path = path::done_tasks_dir(base_dir, slug_str).join(fname);
-    if done_path.exists() {
-        fs::remove_file(&done_path)?;
-        return Ok(());
-    }
-
-    Err(CoreError::NotFound(format!(
-        "task: {project_slug}/{filename}"
-    )))
+    Projects::new(base_dir.to_path_buf()).list()
 }
 
 pub fn read_project(base_dir: &Path, slug: &Slug) -> Result<ProjectSummary, CoreError> {
-    let slug_str = slug.as_str();
-    let file_path = path::project_file_path(base_dir, slug_str);
-    if !file_path.exists() {
-        return Err(CoreError::NotFound(format!("project: {slug}")));
-    }
-
-    let content = fs::read_to_string(&file_path)?;
-    let (fm, _body): (ProjectFrontmatter, String) = frontmatter::parse(&content)?;
-
-    let active_dir = path::active_tasks_dir(base_dir, slug_str);
-    let active_task_count = if active_dir.exists() {
-        fs::read_dir(&active_dir)?
-            .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().is_some_and(|ext| ext == "md"))
-            .count()
-    } else {
-        0
-    };
-
-    Ok(ProjectSummary {
-        slug: slug_str.to_string(),
-        name: fm.name,
-        created: fm.created,
-        description: fm.description,
-        active_task_count,
-    })
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct ProjectActivitySummary {
-    pub slug: String,
-    pub name: String,
-    pub completed_tasks: Vec<TaskSummary>,
-    pub active_task_count: usize,
+    Projects::new(base_dir.to_path_buf()).read(slug)
 }
 
 pub fn get_project_activity_summary(
@@ -331,16 +73,14 @@ pub fn get_project_activity_summary(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::validated::Filename;
-    use chrono::TimeZone;
+    use crate::utils::frontmatter::{self, TaskFrontmatter};
+    use crate::utils::paths;
+    use chrono::{DateTime, FixedOffset, TimeZone};
+    use std::fs;
     use tempfile::TempDir;
 
     fn slug(s: &str) -> Slug {
         Slug::parse(s).unwrap()
-    }
-
-    fn filename(s: &str) -> Filename {
-        Filename::parse(s).unwrap()
     }
 
     fn fixed_offset() -> FixedOffset {
@@ -360,13 +100,8 @@ mod tests {
             .unwrap()
     }
 
-    fn write_task_file(dir: &Path, filename: &str, fm: &TaskFrontmatter, body: &str) {
-        let content = frontmatter::render(fm, body).unwrap();
-        fs::write(dir.join(filename), content).unwrap();
-    }
-
     fn write_done_task(tmp: &TempDir, slug: &str, filename: &str, fm: &TaskFrontmatter) {
-        let done_dir = path::done_tasks_dir(tmp.path(), slug);
+        let done_dir = paths::done_tasks_dir(tmp.path(), slug);
         let content = frontmatter::render(fm, "body").unwrap();
         fs::write(done_dir.join(filename), content).unwrap();
     }
@@ -380,9 +115,9 @@ mod tests {
 
         let proj_dir = result.unwrap();
         assert!(proj_dir.exists());
-        assert!(path::project_file_path(tmp.path(), "my-proj").exists());
-        assert!(path::active_tasks_dir(tmp.path(), "my-proj").exists());
-        assert!(path::done_tasks_dir(tmp.path(), "my-proj").exists());
+        assert!(paths::project_file_path(tmp.path(), "my-proj").exists());
+        assert!(paths::active_tasks_dir(tmp.path(), "my-proj").exists());
+        assert!(paths::done_tasks_dir(tmp.path(), "my-proj").exists());
 
         let summary = read_project(tmp.path(), &s).unwrap();
         assert_eq!(summary.name, "My Project");
@@ -434,175 +169,20 @@ mod tests {
     }
 
     #[test]
-    fn test_create_task() {
-        let tmp = TempDir::new().unwrap();
-        let s = slug("proj");
-        create_project(tmp.path(), &s, "Proj", "Desc").unwrap();
-
-        let tags = vec!["rust".to_string(), "test".to_string()];
-        let path = create_task(tmp.path(), &s, "My Task", &tags, "Task body").unwrap();
-        assert!(path.exists());
-
-        let content = fs::read_to_string(&path).unwrap();
-        let (fm, body): (TaskFrontmatter, String) = frontmatter::parse(&content).unwrap();
-        assert_eq!(fm.title, "My Task");
-        assert_eq!(fm.tags, vec!["rust", "test"]);
-        assert_eq!(body, "Task body");
-    }
-
-    #[test]
-    fn test_create_task_nonexistent_project() {
-        let tmp = TempDir::new().unwrap();
-        let result = create_task(tmp.path(), &slug("nonexistent"), "Task", &[], "body");
-        assert!(matches!(result, Err(CoreError::NotFound(_))));
-    }
-
-    #[test]
-    fn test_list_active_tasks_empty() {
-        let tmp = TempDir::new().unwrap();
-        let s = slug("proj");
-        create_project(tmp.path(), &s, "Proj", "Desc").unwrap();
-        let tasks = list_active_tasks(tmp.path(), &s).unwrap();
-        assert!(tasks.is_empty());
-    }
-
-    #[test]
-    fn test_list_active_tasks_multiple() {
-        let tmp = TempDir::new().unwrap();
-        let s = slug("proj");
-        create_project(tmp.path(), &s, "Proj", "Desc").unwrap();
-
-        let active_dir = path::active_tasks_dir(tmp.path(), "proj");
-        write_task_file(
-            &active_dir,
-            "20260101_120000.md",
-            &TaskFrontmatter {
-                title: "First".to_string(),
-                created: sample_datetime(2026, 1, 1, 12, 0, 0),
-                completed: None,
-                tags: vec![],
-            },
-            "body1",
-        );
-        write_task_file(
-            &active_dir,
-            "20260102_120000.md",
-            &TaskFrontmatter {
-                title: "Second".to_string(),
-                created: sample_datetime(2026, 1, 2, 12, 0, 0),
-                completed: None,
-                tags: vec![],
-            },
-            "body2",
-        );
-
-        let tasks = list_active_tasks(tmp.path(), &s).unwrap();
-        assert_eq!(tasks.len(), 2);
-        assert_eq!(tasks[0].title, "Second");
-        assert_eq!(tasks[1].title, "First");
-    }
-
-    #[test]
-    fn test_complete_task() {
-        let tmp = TempDir::new().unwrap();
-        let s = slug("proj");
-        create_project(tmp.path(), &s, "Proj", "Desc").unwrap();
-
-        let active_dir = path::active_tasks_dir(tmp.path(), "proj");
-        let fname = "20260101_120000.md";
-        write_task_file(
-            &active_dir,
-            fname,
-            &TaskFrontmatter {
-                title: "Task".to_string(),
-                created: sample_datetime(2026, 1, 1, 12, 0, 0),
-                completed: None,
-                tags: vec!["a".to_string()],
-            },
-            "body",
-        );
-
-        complete_task(tmp.path(), &s, &filename(fname)).unwrap();
-
-        assert!(!active_dir.join(fname).exists());
-
-        let done_path = path::done_tasks_dir(tmp.path(), "proj").join(fname);
-        assert!(done_path.exists());
-        let content = fs::read_to_string(&done_path).unwrap();
-        let (fm, body): (TaskFrontmatter, String) = frontmatter::parse(&content).unwrap();
-        assert_eq!(fm.title, "Task");
-        assert!(fm.completed.is_some());
-        assert_eq!(fm.tags, vec!["a"]);
-        assert_eq!(body, "body");
-    }
-
-    #[test]
-    fn test_complete_task_not_found() {
-        let tmp = TempDir::new().unwrap();
-        let s = slug("proj");
-        create_project(tmp.path(), &s, "Proj", "Desc").unwrap();
-        let result = complete_task(tmp.path(), &s, &filename("nonexistent.md"));
-        assert!(matches!(result, Err(CoreError::NotFound(_))));
-    }
-
-    #[test]
-    fn test_update_task() {
-        let tmp = TempDir::new().unwrap();
-        let s = slug("proj");
-        create_project(tmp.path(), &s, "Proj", "Desc").unwrap();
-
-        let active_dir = path::active_tasks_dir(tmp.path(), "proj");
-        let filename = "20260101_120000.md";
-        let original_created = sample_datetime(2026, 1, 1, 12, 0, 0);
-        write_task_file(
-            &active_dir,
-            filename,
-            &TaskFrontmatter {
-                title: "Old".to_string(),
-                created: original_created,
-                completed: None,
-                tags: vec![],
-            },
-            "old body",
-        );
-
-        let new_tags = vec!["updated".to_string()];
-        update_task(
-            tmp.path(),
-            &s,
-            &self::filename(filename),
-            "New Title",
-            &new_tags,
-            "new body",
-        )
-        .unwrap();
-
-        let content = fs::read_to_string(active_dir.join(filename)).unwrap();
-        let (fm, body): (TaskFrontmatter, String) = frontmatter::parse(&content).unwrap();
-        assert_eq!(fm.title, "New Title");
-        assert_eq!(fm.tags, vec!["updated"]);
-        assert_eq!(body, "new body");
-        assert_eq!(fm.created, original_created);
-    }
-
-    #[test]
     fn test_read_project_with_active_tasks() {
         let tmp = TempDir::new().unwrap();
         let s = slug("proj");
         create_project(tmp.path(), &s, "Proj", "Desc").unwrap();
 
-        let active_dir = path::active_tasks_dir(tmp.path(), "proj");
-        write_task_file(
-            &active_dir,
-            "20260101_120000.md",
-            &TaskFrontmatter {
-                title: "T".to_string(),
-                created: sample_datetime(2026, 1, 1, 12, 0, 0),
-                completed: None,
-                tags: vec![],
-            },
-            "",
-        );
+        let active_dir = paths::active_tasks_dir(tmp.path(), "proj");
+        let fm = TaskFrontmatter {
+            title: "T".to_string(),
+            created: sample_datetime(2026, 1, 1, 12, 0, 0),
+            completed: None,
+            tags: vec![],
+        };
+        let content = frontmatter::render(&fm, "").unwrap();
+        fs::write(active_dir.join("20260101_120000.md"), content).unwrap();
 
         let summary = read_project(tmp.path(), &s).unwrap();
         assert_eq!(summary.active_task_count, 1);
@@ -727,93 +307,5 @@ mod tests {
         create_project(tmp.path(), &s, "Proj", "Desc").unwrap();
         let result = create_project(tmp.path(), &s, "Proj2", "Desc2");
         assert!(matches!(result, Err(CoreError::AlreadyExists(_))));
-    }
-
-    #[test]
-    fn test_complete_task_path_traversal() {
-        assert!(Filename::parse("../../../etc/passwd").is_err());
-    }
-
-    #[test]
-    fn test_update_task_path_traversal() {
-        assert!(Filename::parse("../evil.md").is_err());
-    }
-
-    #[test]
-    fn test_list_active_tasks_nonexistent_project() {
-        let tmp = TempDir::new().unwrap();
-        let result = list_active_tasks(tmp.path(), &slug("nonexistent"));
-        assert!(matches!(result, Err(CoreError::NotFound(_))));
-    }
-
-    #[test]
-    fn test_delete_active_task() {
-        let tmp = TempDir::new().unwrap();
-        let s = slug("proj");
-        create_project(tmp.path(), &s, "Proj", "Desc").unwrap();
-        let active_dir = path::active_tasks_dir(tmp.path(), "proj");
-        let fname = "20260101_120000.md";
-        write_task_file(
-            &active_dir,
-            fname,
-            &TaskFrontmatter {
-                title: "Task".to_string(),
-                created: sample_datetime(2026, 1, 1, 12, 0, 0),
-                completed: None,
-                tags: vec![],
-            },
-            "body",
-        );
-        assert!(active_dir.join(fname).exists());
-        delete_task(tmp.path(), &s, &filename(fname)).unwrap();
-        assert!(!active_dir.join(fname).exists());
-    }
-
-    #[test]
-    fn test_delete_done_task() {
-        let tmp = TempDir::new().unwrap();
-        let s = slug("proj");
-        create_project(tmp.path(), &s, "Proj", "Desc").unwrap();
-        write_done_task(
-            &tmp,
-            "proj",
-            "20260101_120000.md",
-            &TaskFrontmatter {
-                title: "Task".to_string(),
-                created: sample_datetime(2026, 1, 1, 12, 0, 0),
-                completed: Some(sample_datetime(2026, 1, 2, 12, 0, 0)),
-                tags: vec![],
-            },
-        );
-        let done_dir = path::done_tasks_dir(tmp.path(), "proj");
-        assert!(done_dir.join("20260101_120000.md").exists());
-        delete_task(tmp.path(), &s, &filename("20260101_120000.md")).unwrap();
-        assert!(!done_dir.join("20260101_120000.md").exists());
-    }
-
-    #[test]
-    fn test_delete_task_not_found() {
-        let tmp = TempDir::new().unwrap();
-        let s = slug("proj");
-        create_project(tmp.path(), &s, "Proj", "Desc").unwrap();
-        let result = delete_task(tmp.path(), &s, &filename("nonexistent.md"));
-        assert!(matches!(result, Err(CoreError::NotFound(_))));
-    }
-
-    #[test]
-    fn test_delete_task_invalid_slug() {
-        assert!(Slug::parse("Bad Slug").is_err());
-    }
-
-    #[test]
-    fn test_delete_task_path_traversal() {
-        assert!(Filename::parse("../../../etc/passwd").is_err());
-    }
-
-    #[test]
-    fn test_list_done_tasks_nonexistent_project() {
-        let tmp = TempDir::new().unwrap();
-        let result = list_done_tasks(tmp.path(), &slug("nonexistent"));
-        assert!(matches!(result, Err(CoreError::NotFound(_))));
     }
 }

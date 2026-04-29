@@ -1,155 +1,61 @@
-use std::fs;
+pub mod error;
+pub mod repository;
+mod summary;
+
+pub use repository::Notes;
+pub use summary::Summary as NoteSummary;
+
 use std::path::{Path, PathBuf};
 
-use chrono::{DateTime, FixedOffset, Local};
-use serde::Serialize;
-
 use crate::error::CoreError;
-use crate::format::{DeviceContext, format_note_markdown};
-use crate::frontmatter::{self, NoteFrontmatter};
-use crate::path::note_file_path;
-use crate::validated::NoteFilename;
-
-fn ensure_dir(path: &Path) -> Result<(), CoreError> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    Ok(())
-}
+use crate::utils::device::Context;
+use crate::utils::validated::NoteFilename;
 
 pub fn create_draft_note(
     base_dir: &Path,
     body: &str,
     tags: &[String],
-    context: &DeviceContext,
+    context: &Context,
 ) -> Result<PathBuf, CoreError> {
-    let now = Local::now();
-    let file_path = note_file_path(base_dir, now);
-    ensure_dir(&file_path)?;
-
-    let content = format_note_markdown(body, tags, now, context)?;
-    fs::write(&file_path, content)?;
-    Ok(file_path)
+    Notes::new(base_dir.to_path_buf()).create(body, tags, context)
 }
 
 pub fn update_note(
     file_path: &Path,
     body: &str,
     tags: &[String],
-    context: &DeviceContext,
+    context: &Context,
 ) -> Result<(), CoreError> {
-    let now = Local::now();
-    let content = format_note_markdown(body, tags, now, context)?;
-    fs::write(file_path, content)?;
-    Ok(())
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct NoteSummary {
-    pub path: PathBuf,
-    pub filename: String,
-    pub time: Option<DateTime<FixedOffset>>,
-    pub tags: Vec<String>,
-    pub preview: String,
+    Notes::new(PathBuf::new()).update(file_path, body, tags, context)
 }
 
 pub fn list_notes(base_dir: &Path) -> Result<Vec<NoteSummary>, CoreError> {
-    let notes_dir = base_dir.join("data").join("notes");
-    if !notes_dir.exists() {
-        return Ok(Vec::new());
-    }
-
-    let mut entries: Vec<_> = fs::read_dir(&notes_dir)?
-        .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().is_some_and(|ext| ext == "md"))
-        .collect();
-
-    entries.sort_by_key(|e| std::cmp::Reverse(e.file_name()));
-
-    let summaries = entries
-        .into_iter()
-        .map(|entry| {
-            let path = entry.path();
-            let filename = entry.file_name().to_string_lossy().to_string();
-            let content = fs::read_to_string(&path).unwrap_or_default();
-            let (time, tags, preview) = parse_note_content(&content);
-            NoteSummary {
-                path,
-                filename,
-                time,
-                tags,
-                preview,
-            }
-        })
-        .collect();
-
-    Ok(summaries)
+    Notes::new(base_dir.to_path_buf()).list()
 }
 
 pub fn read_note(file_path: &Path) -> Result<String, CoreError> {
-    Ok(fs::read_to_string(file_path)?)
+    Ok(std::fs::read_to_string(file_path)?)
 }
 
 pub fn read_note_by_filename(
     base_dir: &Path,
     filename: &NoteFilename,
 ) -> Result<String, CoreError> {
-    let fname = filename.as_str();
-    let notes_dir = base_dir.join("data").join("notes");
-    let file_path = notes_dir.join(fname);
-
-    if !file_path.exists() {
-        return Err(CoreError::NotFound(file_path.to_string_lossy().to_string()));
-    }
-
-    let canonical_notes_dir = fs::canonicalize(&notes_dir)?;
-    let canonical_file_path = fs::canonicalize(&file_path)?;
-    if !canonical_file_path.starts_with(&canonical_notes_dir) {
-        return Err(CoreError::PathTraversal(fname.to_string()));
-    }
-
-    Ok(fs::read_to_string(canonical_file_path)?)
+    Notes::new(base_dir.to_path_buf()).read(filename)
 }
 
 pub fn delete_note(base_dir: &Path, filename: &NoteFilename) -> Result<(), CoreError> {
-    let fname = filename.as_str();
-    let notes_dir = base_dir.join("data").join("notes");
-    let file_path = notes_dir.join(fname);
-
-    if !file_path.exists() {
-        return Err(CoreError::NotFound(file_path.to_string_lossy().to_string()));
-    }
-
-    let canonical_notes_dir = fs::canonicalize(&notes_dir)?;
-    let canonical_file_path = fs::canonicalize(&file_path)?;
-    if !canonical_file_path.starts_with(&canonical_notes_dir) {
-        return Err(CoreError::PathTraversal(fname.to_string()));
-    }
-
-    fs::remove_file(canonical_file_path)?;
-    Ok(())
-}
-
-fn parse_note_content(content: &str) -> (Option<DateTime<FixedOffset>>, Vec<String>, String) {
-    match frontmatter::parse::<NoteFrontmatter>(content) {
-        Ok((fm, body)) => {
-            let preview: String = body.chars().take(100).collect();
-            (Some(fm.time), fm.tags, preview)
-        }
-        Err(_) => {
-            let preview: String = content.chars().take(100).collect();
-            (None, Vec::new(), preview)
-        }
-    }
+    Notes::new(base_dir.to_path_buf()).delete(filename)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
     use tempfile::TempDir;
 
-    fn mock_context() -> DeviceContext {
-        DeviceContext::mock()
+    fn mock_context() -> Context {
+        Context::mock()
     }
 
     #[test]
@@ -270,26 +176,5 @@ mod tests {
     #[test]
     fn test_validate_rejects_non_md_extension() {
         assert!(NoteFilename::parse("evil.txt").is_err());
-    }
-
-    #[test]
-    fn test_parse_note_content() {
-        use chrono::TimeZone;
-        let fm = NoteFrontmatter {
-            time: FixedOffset::east_opt(9 * 3600)
-                .unwrap()
-                .with_ymd_and_hms(2026, 3, 20, 14, 30, 45)
-                .unwrap(),
-            tags: vec!["a".to_string(), "b".to_string()],
-            context: Some(crate::frontmatter::ContextMeta {
-                battery: 50,
-                is_charging: false,
-            }),
-        };
-        let content = frontmatter::render(&fm, "# Title\nBody").unwrap();
-        let (time, tags, preview) = parse_note_content(&content);
-        assert!(time.is_some());
-        assert_eq!(tags, vec!["a", "b"]);
-        assert!(preview.contains("# Title"));
     }
 }

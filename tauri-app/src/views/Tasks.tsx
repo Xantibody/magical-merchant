@@ -16,13 +16,13 @@ import MilkdownEditor from "../components/MilkdownEditor";
 import MarkdownPreview from "../components/MarkdownPreview";
 import ConfirmDialog from "../components/ConfirmDialog";
 
-interface ProjectSummary {
+interface Project {
   slug: string;
   name: string;
   description: string;
 }
 
-interface TaskSummary {
+interface Task {
   filename: string;
   title: string;
   created: string;
@@ -41,8 +41,8 @@ function toSlug(name: string): string {
     .replace(/^-|-$/g, "");
 }
 
-async function fetchProjects(): Promise<ProjectSummary[]> {
-  return invoke<ProjectSummary[]>("list_projects");
+async function fetchProjects(): Promise<Project[]> {
+  return invoke<Project[]>("list_projects");
 }
 
 export default function Tasks() {
@@ -50,11 +50,11 @@ export default function Tasks() {
   const [projects, { refetch: refetchProjects }] = createResource(fetchProjects);
   const [tasks, { refetch: refetchTasks }] = createResource(selectedProject, (slug) => {
     if (!slug) return Promise.resolve([]);
-    return invoke<TaskSummary[]>("list_active_tasks", { projectSlug: slug });
+    return invoke<Task[]>("list_active_tasks", { projectSlug: slug });
   });
   const [doneTasks, { refetch: refetchDoneTasks }] = createResource(selectedProject, (slug) => {
     if (!slug) return Promise.resolve([]);
-    return invoke<TaskSummary[]>("list_done_tasks", { projectSlug: slug });
+    return invoke<Task[]>("list_done_tasks", { projectSlug: slug });
   });
 
   const [showProjectPicker, setShowProjectPicker] = createSignal(false);
@@ -63,7 +63,7 @@ export default function Tasks() {
   const [newTaskTitle, setNewTaskTitle] = createSignal("");
   const [error, setError] = createSignal("");
   const [viewMode, setViewMode] = createSignal<ViewMode>("list");
-  const [selectedTask, setSelectedTask] = createSignal<TaskSummary | null>(null);
+  const [selectedTask, setSelectedTask] = createSignal<Task | null>(null);
   const [confirmOpen, setConfirmOpen] = createSignal(false);
   const [taskBody, setTaskBody] = createSignal("");
   const [taskTitle, setTaskTitle] = createSignal("");
@@ -136,7 +136,7 @@ export default function Tasks() {
     return projects()?.find((p) => p.slug === slug);
   };
 
-  const isActiveTask = (task: TaskSummary) => !task.completed;
+  const isActiveTask = (task: Task) => !task.completed;
 
   const handleSelectProject = (slug: string) => {
     setSelectedProject(slug);
@@ -189,7 +189,7 @@ export default function Tasks() {
     }
   };
 
-  const openTask = (task: TaskSummary) => {
+  const openTask = (task: Task) => {
     setSelectedTask(task);
     if (isActiveTask(task)) {
       isHydrating = true;
