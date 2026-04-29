@@ -69,8 +69,47 @@ just dev
 
 ## Build & Install (macOS)
 
+### Option 1: Nix (Recommended)
+
 ```sh
-# Build the .app bundle (Apple Silicon)
+# Build the .app bundle from source
+nix build .#default
+
+# The app is at result/Applications/Magical Merchant.app
+open result/Applications/Magical\ Merchant.app
+```
+
+### Option 2: nix-darwin module
+
+Add the flake input and enable the module in your nix-darwin configuration:
+
+```nix
+# flake.nix
+{
+  inputs.magical-merchant.url = "github:Xantibody/magical-merchant";
+
+  outputs = { magical-merchant, ... }: {
+    darwinConfigurations.myMac = darwin.lib.darwinSystem {
+      modules = [
+        magical-merchant.darwinModules.default
+        {
+          services.magical-merchant = {
+            enable = true;
+            workersUrl = "https://your-worker.example.workers.dev"; # R2 sync URL
+          };
+        }
+      ];
+    };
+  };
+}
+```
+
+The module installs the app to `/Applications/Nix Apps/` and writes `sync-config.json` with the configured `workersUrl`.
+
+### Option 3: Manual build
+
+```sh
+# Build the .app bundle
 just build
 
 # Copy to Applications
