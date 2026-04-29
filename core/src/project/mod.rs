@@ -1,3 +1,4 @@
+pub mod error;
 mod model;
 pub mod repository;
 pub mod task;
