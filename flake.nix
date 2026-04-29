@@ -71,6 +71,7 @@
         playwrightBrowsers = pkgs.playwright-driver.browsers;
       in
       {
+        packages.default = pkgs.callPackage ./nix/package.nix { };
         formatter = treefmtEval.config.build.wrapper;
         checks.formatting = treefmtEval.config.build.check self;
         devShells.default = pkgs.mkShell (
@@ -119,5 +120,8 @@
           }
         );
       }
-    );
+    )
+    // {
+      darwinModules.default = import ./nix/darwin-module.nix;
+    };
 }
