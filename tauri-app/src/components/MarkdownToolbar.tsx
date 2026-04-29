@@ -1,4 +1,4 @@
-import { Show, createSignal, onMount, onCleanup } from "solid-js";
+import { Show } from "solid-js";
 import { Portal } from "solid-js/web";
 import type { Editor } from "@milkdown/kit/core";
 import { commandsCtx } from "@milkdown/kit/core";
@@ -15,29 +15,6 @@ interface MarkdownToolbarProps {
 }
 
 export default function MarkdownToolbar(props: MarkdownToolbarProps) {
-  const [keyboardHeight, setKeyboardHeight] = createSignal(0);
-
-  onMount(() => {
-    const vv = window.visualViewport;
-    if (!vv) return;
-
-    let timer: ReturnType<typeof setTimeout> | undefined;
-
-    const update = () => {
-      clearTimeout(timer);
-      timer = setTimeout(() => {
-        const kb = window.innerHeight - vv.height - vv.offsetTop;
-        setKeyboardHeight(Math.max(0, Math.round(kb)));
-      }, 150);
-    };
-
-    vv.addEventListener("resize", update);
-    onCleanup(() => {
-      vv.removeEventListener("resize", update);
-      clearTimeout(timer);
-    });
-  });
-
   const exec = (run: (editor: Editor) => void) => {
     const editor = props.editor;
     if (!editor) return;
@@ -49,12 +26,7 @@ export default function MarkdownToolbar(props: MarkdownToolbarProps) {
   return (
     <Show when={props.editor}>
       <Portal>
-        <div
-          class="markdown-toolbar"
-          role="toolbar"
-          aria-label="Markdown formatting"
-          style={{ bottom: `${keyboardHeight()}px` }}
-        >
+        <div class="markdown-toolbar" role="toolbar" aria-label="Markdown formatting">
           <button
             type="button"
             onClick={() =>
