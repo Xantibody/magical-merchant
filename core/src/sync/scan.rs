@@ -6,6 +6,7 @@ use chrono::{DateTime, Utc};
 use sha2::{Digest, Sha256};
 
 use crate::CoreError;
+use crate::utils::paths;
 
 #[derive(Debug, Clone)]
 pub struct LocalFile {
@@ -15,7 +16,7 @@ pub struct LocalFile {
 }
 
 pub fn scan_local_files(base_dir: &Path) -> Result<Vec<LocalFile>, CoreError> {
-    let data_dir = base_dir.join("data");
+    let data_dir = paths::data_dir(base_dir);
     if !data_dir.exists() {
         return Ok(Vec::new());
     }

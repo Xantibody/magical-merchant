@@ -1,22 +1,36 @@
 use chrono::{DateTime, Local, NaiveDate};
 use std::path::{Path, PathBuf};
 
+pub const DATA_DIR: &str = "data";
+pub const TIMELINE_DIR: &str = "timeline";
+pub const NOTES_DIR: &str = "notes";
+pub const PROJECTS_DIR: &str = "projects";
+pub const ACTIVE_DIR: &str = "active";
+pub const DONE_DIR: &str = "done";
+pub const PROJECT_FILE: &str = "project.md";
+
+pub fn data_dir(base_dir: &Path) -> PathBuf {
+    base_dir.join(DATA_DIR)
+}
+
 pub fn timeline_file_path(base_dir: &Path, date: NaiveDate) -> PathBuf {
-    base_dir
-        .join("data")
-        .join("timeline")
+    data_dir(base_dir)
+        .join(TIMELINE_DIR)
         .join(format!("{}.md", date.format("%Y-%m-%d")))
 }
 
 pub fn note_file_path(base_dir: &Path, timestamp: DateTime<Local>) -> PathBuf {
-    base_dir
-        .join("data")
-        .join("notes")
+    data_dir(base_dir)
+        .join(NOTES_DIR)
         .join(format!("{}.md", timestamp.format("%Y%m%d_%H%M%S")))
 }
 
+pub fn notes_dir(base_dir: &Path) -> PathBuf {
+    data_dir(base_dir).join(NOTES_DIR)
+}
+
 pub fn projects_dir(base_dir: &Path) -> PathBuf {
-    base_dir.join("data").join("projects")
+    data_dir(base_dir).join(PROJECTS_DIR)
 }
 
 pub fn project_dir(base_dir: &Path, slug: &str) -> PathBuf {
@@ -24,15 +38,15 @@ pub fn project_dir(base_dir: &Path, slug: &str) -> PathBuf {
 }
 
 pub fn project_file_path(base_dir: &Path, slug: &str) -> PathBuf {
-    project_dir(base_dir, slug).join("project.md")
+    project_dir(base_dir, slug).join(PROJECT_FILE)
 }
 
 pub fn active_tasks_dir(base_dir: &Path, slug: &str) -> PathBuf {
-    project_dir(base_dir, slug).join("active")
+    project_dir(base_dir, slug).join(ACTIVE_DIR)
 }
 
 pub fn done_tasks_dir(base_dir: &Path, slug: &str) -> PathBuf {
-    project_dir(base_dir, slug).join("done")
+    project_dir(base_dir, slug).join(DONE_DIR)
 }
 
 #[cfg(test)]

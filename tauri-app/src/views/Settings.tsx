@@ -1,10 +1,6 @@
 import { createSignal, onMount } from "solid-js";
-import { invoke } from "@tauri-apps/api/core";
+import { typedInvoke } from "../lib/commands";
 import "../styles/settings.css";
-
-interface SyncConfig {
-  workers_url: string;
-}
 
 export default function Settings() {
   const [workersUrl, setWorkersUrl] = createSignal("");
@@ -14,14 +10,14 @@ export default function Settings() {
 
   onMount(async () => {
     try {
-      const config = await invoke<SyncConfig>("get_sync_config");
+      const config = await typedInvoke("get_sync_config");
       setWorkersUrl(config.workers_url);
     } catch {
       // Use defaults
     }
 
     try {
-      const status = await invoke<boolean>("auth_status");
+      const status = await typedInvoke("auth_status");
       setAuthenticated(status);
     } catch {
       setAuthenticated(false);
@@ -32,7 +28,7 @@ export default function Settings() {
     setSaving(true);
     setMessage("");
     try {
-      await invoke("save_sync_config", {
+      await typedInvoke("save_sync_config", {
         config: {
           workers_url: workersUrl(),
         },
@@ -49,7 +45,7 @@ export default function Settings() {
   const handleLogin = async () => {
     setMessage("");
     try {
-      await invoke("auth_login");
+      await typedInvoke("auth_login");
       setAuthenticated(true);
       setMessage("Authenticated");
       setTimeout(() => setMessage(""), 2000);
@@ -60,7 +56,7 @@ export default function Settings() {
 
   const handleLogout = async () => {
     try {
-      await invoke("auth_logout");
+      await typedInvoke("auth_logout");
       setAuthenticated(false);
       setMessage("Logged out");
       setTimeout(() => setMessage(""), 2000);

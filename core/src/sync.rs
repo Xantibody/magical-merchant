@@ -245,7 +245,7 @@ impl<C: SyncClient> SyncEngine<C> {
     }
 
     fn data_path(&self, key: &str) -> PathBuf {
-        self.base_dir.join("data").join(key)
+        crate::utils::paths::data_dir(&self.base_dir).join(key)
     }
 }
 

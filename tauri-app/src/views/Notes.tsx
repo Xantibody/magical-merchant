@@ -9,7 +9,7 @@ import {
   Switch,
   Match,
 } from "solid-js";
-import { invoke } from "@tauri-apps/api/core";
+import { typedInvoke, type Note } from "../lib/commands";
 import MilkdownEditor from "../components/MilkdownEditor";
 import MarkdownPreview from "../components/MarkdownPreview";
 import { getLocation } from "../lib/location";
@@ -17,18 +17,10 @@ import ConfirmDialog from "../components/ConfirmDialog";
 import ActionBar from "../components/ActionBar";
 import Icon from "../components/Icon";
 
-interface Note {
-  path: string;
-  filename: string;
-  time?: string;
-  tags: string[];
-  preview: string;
-}
-
 type ViewMode = "editor" | "list" | "preview";
 
 async function fetchNotes(): Promise<Note[]> {
-  return invoke<Note[]>("list_notes");
+  return typedInvoke("list_notes");
 }
 
 export default function Notes() {
@@ -61,7 +53,7 @@ export default function Notes() {
     try {
       const path = draftPath();
       if (path) {
-        await invoke("update_draft", {
+        await typedInvoke("update_draft", {
           filePath: path,
           body: currentBody,
           tags,
@@ -70,7 +62,7 @@ export default function Notes() {
         });
       } else {
         const loc = await getLocation();
-        const newPath = await invoke<string>("create_draft", {
+        const newPath = await typedInvoke("create_draft", {
           body: currentBody,
           tags,
           latitude: loc?.latitude ?? null,
@@ -128,7 +120,7 @@ export default function Notes() {
   const openPreview = async (note: Note) => {
     try {
       setError("");
-      const content = await invoke<string>("read_note", { filename: note.filename });
+      const content = await typedInvoke("read_note", { filename: note.filename });
       setSelectedNote(note);
       setNoteContent(content);
       setViewMode("preview");
@@ -162,7 +154,7 @@ export default function Notes() {
     if (!note) return;
     setConfirmOpen(false);
     try {
-      await invoke("delete_note", { filename: note.filename });
+      await typedInvoke("delete_note", { filename: note.filename });
       setSelectedNote(null);
       setNoteContent("");
       refetchNotes();

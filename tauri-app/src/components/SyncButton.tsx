@@ -1,6 +1,8 @@
 import { createSignal, onMount, onCleanup } from "solid-js";
 import { useNavigate } from "@solidjs/router";
-import { invoke } from "@tauri-apps/api/core";
+import { typedInvoke } from "../lib/commands";
+import { EVENTS } from "../lib/events";
+import { ROUTES } from "../lib/routes";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import Icon, { type IconName } from "./Icon";
 
@@ -14,7 +16,7 @@ export default function SyncButton() {
 
   onMount(async () => {
     try {
-      const config = await invoke<{ workers_url: string }>("get_sync_config");
+      const config = await typedInvoke("get_sync_config");
       if (!config.workers_url) {
         setStatus("not-configured");
       }
@@ -23,14 +25,14 @@ export default function SyncButton() {
     }
 
     unlisteners.push(
-      await listen("sync-complete", () => {
+      await listen(EVENTS.SYNC_COMPLETE, () => {
         setStatus("success");
         successTimer = setTimeout(() => setStatus("idle"), 3000);
       }),
     );
 
     unlisteners.push(
-      await listen("sync-error", () => {
+      await listen(EVENTS.SYNC_ERROR, () => {
         setStatus("error");
       }),
     );
@@ -45,13 +47,13 @@ export default function SyncButton() {
     const s = status();
     if (s === "syncing") return;
     if (s === "not-configured") {
-      navigate("/settings");
+      navigate(ROUTES.SETTINGS);
       return;
     }
 
     setStatus("syncing");
     try {
-      await invoke("sync_start");
+      await typedInvoke("sync_start");
     } catch {
       setStatus("error");
     }

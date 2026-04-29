@@ -10,6 +10,9 @@ use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::auth;
 
+const EVENT_SYNC_COMPLETE: &str = "sync-complete";
+const EVENT_SYNC_ERROR: &str = "sync-error";
+
 #[derive(Debug, Clone, Serialize)]
 pub struct SyncStatusInfo {
     pub is_syncing: bool,
@@ -181,11 +184,11 @@ pub async fn sync_start(
         Ok(sync_result) => {
             *state.last_synced_at.lock().unwrap() = Some(Utc::now());
             *state.last_error.lock().unwrap() = None;
-            let _ = handle.emit("sync-complete", sync_result);
+            let _ = handle.emit(EVENT_SYNC_COMPLETE, sync_result);
         }
         Err(err) => {
             *state.last_error.lock().unwrap() = Some(err.clone());
-            let _ = handle.emit("sync-error", err);
+            let _ = handle.emit(EVENT_SYNC_ERROR, err);
         }
     }
 
