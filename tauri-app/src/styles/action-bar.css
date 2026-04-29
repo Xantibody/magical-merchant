@@ -13,10 +13,31 @@
   transition: opacity 150ms var(--ease-2);
 }
 
-.action-bar-zone:hover .action-bar,
+/* Keyboard accessibility — all devices */
 .action-bar:focus-within {
   opacity: 1;
   pointer-events: auto;
+}
+
+/* Desktop: show on hover */
+@media (hover: hover) {
+  .action-bar-zone:hover .action-bar {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+/* Touch devices: show via JS class */
+@media (hover: none) {
+  .action-bar-zone {
+    left: 0;
+    padding: var(--size-8) var(--size-5);
+  }
+
+  .action-bar--visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 .action-bar button {
