@@ -1,4 +1,4 @@
-import { Show, createSignal, onMount, onCleanup } from "solid-js";
+import { Show } from "solid-js";
 import { Portal } from "solid-js/web";
 import type { Editor } from "@milkdown/kit/core";
 import { commandsCtx } from "@milkdown/kit/core";
@@ -15,25 +15,6 @@ interface MarkdownToolbarProps {
 }
 
 export default function MarkdownToolbar(props: MarkdownToolbarProps) {
-  const [toolbarTop, setToolbarTop] = createSignal<number | undefined>();
-
-  onMount(() => {
-    const vv = window.visualViewport;
-    if (!vv) return;
-
-    const update = () => {
-      // Place toolbar at the bottom edge of the visual viewport
-      setToolbarTop(vv.offsetTop + vv.height);
-    };
-
-    vv.addEventListener("resize", update);
-    vv.addEventListener("scroll", update);
-    onCleanup(() => {
-      vv.removeEventListener("resize", update);
-      vv.removeEventListener("scroll", update);
-    });
-  });
-
   const exec = (run: (editor: Editor) => void) => {
     const editor = props.editor;
     if (!editor) return;
@@ -42,17 +23,10 @@ export default function MarkdownToolbar(props: MarkdownToolbarProps) {
     pm?.focus();
   };
 
-  const top = () => toolbarTop();
-
   return (
     <Show when={props.editor}>
       <Portal>
-        <div
-          class="markdown-toolbar"
-          role="toolbar"
-          aria-label="Markdown formatting"
-          style={top() != null ? { top: `${top()}px`, bottom: "auto" } : undefined}
-        >
+        <div class="markdown-toolbar" role="toolbar" aria-label="Markdown formatting">
           <button
             type="button"
             onClick={() =>
