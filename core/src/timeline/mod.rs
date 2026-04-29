@@ -1,12 +1,12 @@
-use std::fs;
+pub mod repository;
+
+pub use repository::{FsTimelineRepository, TimelineRepository};
+
 use std::path::Path;
 
-use chrono::{Local, NaiveDate};
+use chrono::NaiveDate;
 
 use crate::error::CoreError;
-use crate::infra::fs_helpers::ensure_dir;
-use crate::infra::markdown::format_timeline_line;
-use crate::infra::paths::timeline_file_path;
 use crate::shared::context::DeviceContext;
 
 pub fn save_timeline_entry(
@@ -14,64 +14,21 @@ pub fn save_timeline_entry(
     text: &str,
     context: &DeviceContext,
 ) -> Result<(), CoreError> {
-    let now = Local::now();
-    let file_path = timeline_file_path(base_dir, now.date_naive());
-    ensure_dir(&file_path)?;
-
-    let line = format_timeline_line(text, now, context);
-
-    let mut content = if file_path.exists() {
-        fs::read_to_string(&file_path)?
-    } else {
-        String::new()
-    };
-
-    if !content.is_empty() && !content.ends_with('\n') {
-        content.push('\n');
-    }
-    content.push_str(&line);
-    content.push('\n');
-
-    fs::write(&file_path, content)?;
-    Ok(())
+    FsTimelineRepository::new(base_dir.to_path_buf()).save_entry(text, context)
 }
 
 pub fn list_timeline_dates(base_dir: &Path) -> Result<Vec<NaiveDate>, CoreError> {
-    let timeline_dir = base_dir.join("data").join("timeline");
-    if !timeline_dir.exists() {
-        return Ok(Vec::new());
-    }
-
-    let mut dates: Vec<NaiveDate> = fs::read_dir(&timeline_dir)?
-        .filter_map(|e| e.ok())
-        .filter_map(|e| {
-            let name = e.file_name().to_string_lossy().to_string();
-            let stem = name.strip_suffix(".md")?;
-            NaiveDate::parse_from_str(stem, "%Y-%m-%d").ok()
-        })
-        .collect();
-
-    dates.sort_by(|a, b| b.cmp(a));
-    Ok(dates)
+    FsTimelineRepository::new(base_dir.to_path_buf()).list_dates()
 }
 
 pub fn read_timeline(base_dir: &Path, date: NaiveDate) -> Result<Vec<String>, CoreError> {
-    let file_path = timeline_file_path(base_dir, date);
-    if !file_path.exists() {
-        return Ok(Vec::new());
-    }
-    let content = fs::read_to_string(&file_path)?;
-    let lines = content
-        .lines()
-        .filter(|l| !l.is_empty())
-        .map(String::from)
-        .collect();
-    Ok(lines)
+    FsTimelineRepository::new(base_dir.to_path_buf()).read(date)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::Local;
     use std::fs;
     use tempfile::TempDir;
 

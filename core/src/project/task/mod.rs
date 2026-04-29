@@ -1,44 +1,15 @@
 mod model;
+pub mod repository;
 
 pub use model::TaskSummary;
+pub use repository::{FsTaskRepository, TaskRepository};
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use chrono::{DateTime, FixedOffset, Local};
-
 use crate::error::CoreError;
 use crate::infra::fs_helpers;
-use crate::infra::paths;
-use crate::shared::frontmatter::{self, TaskFrontmatter};
 use crate::shared::validated::{Filename, Slug};
-
-pub fn create_task(
-    base_dir: &Path,
-    project_slug: &Slug,
-    title: &str,
-    tags: &[String],
-    body: &str,
-) -> Result<PathBuf, CoreError> {
-    let active_dir = paths::active_tasks_dir(base_dir, project_slug.as_str());
-    if !active_dir.exists() {
-        return Err(CoreError::NotFound(format!("project: {project_slug}")));
-    }
-
-    let now: DateTime<FixedOffset> = Local::now().into();
-    let filename = format!("{}.md", now.format("%Y%m%d_%H%M%S_%3f"));
-    let file_path = active_dir.join(&filename);
-    let fm = TaskFrontmatter {
-        title: title.to_string(),
-        created: now,
-        completed: None,
-        tags: tags.to_vec(),
-    };
-    let content = frontmatter::render(&fm, body)?;
-    fs::write(&file_path, content)?;
-
-    Ok(file_path)
-}
 
 pub(crate) fn list_tasks_in_dir(dir: &Path) -> Result<Vec<TaskSummary>, CoreError> {
     let entries = fs_helpers::list_md_files(dir)?;
@@ -54,28 +25,28 @@ pub(crate) fn list_tasks_in_dir(dir: &Path) -> Result<Vec<TaskSummary>, CoreErro
     Ok(tasks)
 }
 
+pub fn create_task(
+    base_dir: &Path,
+    project_slug: &Slug,
+    title: &str,
+    tags: &[String],
+    body: &str,
+) -> Result<PathBuf, CoreError> {
+    FsTaskRepository::new(base_dir.to_path_buf()).create(project_slug, title, tags, body)
+}
+
 pub fn list_active_tasks(
     base_dir: &Path,
     project_slug: &Slug,
 ) -> Result<Vec<TaskSummary>, CoreError> {
-    let slug_str = project_slug.as_str();
-    let project_file = paths::project_file_path(base_dir, slug_str);
-    if !project_file.exists() {
-        return Err(CoreError::NotFound(format!("project: {project_slug}")));
-    }
-    list_tasks_in_dir(&paths::active_tasks_dir(base_dir, slug_str))
+    FsTaskRepository::new(base_dir.to_path_buf()).list_active(project_slug)
 }
 
 pub fn list_done_tasks(
     base_dir: &Path,
     project_slug: &Slug,
 ) -> Result<Vec<TaskSummary>, CoreError> {
-    let slug_str = project_slug.as_str();
-    let project_file = paths::project_file_path(base_dir, slug_str);
-    if !project_file.exists() {
-        return Err(CoreError::NotFound(format!("project: {project_slug}")));
-    }
-    list_tasks_in_dir(&paths::done_tasks_dir(base_dir, slug_str))
+    FsTaskRepository::new(base_dir.to_path_buf()).list_done(project_slug)
 }
 
 pub fn complete_task(
@@ -83,28 +54,7 @@ pub fn complete_task(
     project_slug: &Slug,
     filename: &Filename,
 ) -> Result<(), CoreError> {
-    let slug_str = project_slug.as_str();
-    let fname = filename.as_str();
-    let active_path = paths::active_tasks_dir(base_dir, slug_str).join(fname);
-    if !active_path.exists() {
-        return Err(CoreError::NotFound(format!(
-            "task: {project_slug}/{filename}"
-        )));
-    }
-
-    let content = fs::read_to_string(&active_path)?;
-    let mut task = TaskSummary::from_content(fname, &content)?;
-
-    let now: DateTime<FixedOffset> = Local::now().into();
-    task.completed = Some(now);
-    let fm = task.to_frontmatter();
-    let new_content = frontmatter::render(&fm, &task.body)?;
-
-    let done_path = paths::done_tasks_dir(base_dir, slug_str).join(fname);
-    fs::write(&done_path, new_content)?;
-    fs::remove_file(&active_path)?;
-
-    Ok(())
+    FsTaskRepository::new(base_dir.to_path_buf()).complete(project_slug, filename)
 }
 
 pub fn update_task(
@@ -115,26 +65,7 @@ pub fn update_task(
     tags: &[String],
     body: &str,
 ) -> Result<(), CoreError> {
-    let active_path =
-        paths::active_tasks_dir(base_dir, project_slug.as_str()).join(filename.as_str());
-    if !active_path.exists() {
-        return Err(CoreError::NotFound(format!(
-            "task: {project_slug}/{filename}"
-        )));
-    }
-
-    let content = fs::read_to_string(&active_path)?;
-    let task = TaskSummary::from_content(filename.as_str(), &content)?;
-    let fm = TaskFrontmatter {
-        title: title.to_string(),
-        created: task.created,
-        completed: None,
-        tags: tags.to_vec(),
-    };
-    let new_content = frontmatter::render(&fm, body)?;
-    fs::write(&active_path, new_content)?;
-
-    Ok(())
+    FsTaskRepository::new(base_dir.to_path_buf()).update(project_slug, filename, title, tags, body)
 }
 
 pub fn delete_task(
@@ -142,30 +73,16 @@ pub fn delete_task(
     project_slug: &Slug,
     filename: &Filename,
 ) -> Result<(), CoreError> {
-    let slug_str = project_slug.as_str();
-    let fname = filename.as_str();
-    let active_path = paths::active_tasks_dir(base_dir, slug_str).join(fname);
-    if active_path.exists() {
-        fs::remove_file(&active_path)?;
-        return Ok(());
-    }
-
-    let done_path = paths::done_tasks_dir(base_dir, slug_str).join(fname);
-    if done_path.exists() {
-        fs::remove_file(&done_path)?;
-        return Ok(());
-    }
-
-    Err(CoreError::NotFound(format!(
-        "task: {project_slug}/{filename}"
-    )))
+    FsTaskRepository::new(base_dir.to_path_buf()).delete(project_slug, filename)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::infra::paths;
     use crate::project::create_project;
-    use chrono::{FixedOffset, TimeZone};
+    use crate::shared::frontmatter::{self, TaskFrontmatter};
+    use chrono::{DateTime, FixedOffset, TimeZone};
     use tempfile::TempDir;
 
     fn slug(s: &str) -> Slug {

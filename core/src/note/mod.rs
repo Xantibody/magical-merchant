@@ -1,16 +1,12 @@
 mod model;
+pub mod repository;
 
 pub use model::NoteSummary;
+pub use repository::{FsNoteRepository, NoteRepository};
 
-use std::fs;
 use std::path::{Path, PathBuf};
 
-use chrono::Local;
-
 use crate::error::CoreError;
-use crate::infra::fs_helpers::ensure_dir;
-use crate::infra::markdown::format_note_markdown;
-use crate::infra::paths::note_file_path;
 use crate::shared::context::DeviceContext;
 use crate::shared::validated::NoteFilename;
 
@@ -20,13 +16,7 @@ pub fn create_draft_note(
     tags: &[String],
     context: &DeviceContext,
 ) -> Result<PathBuf, CoreError> {
-    let now = Local::now();
-    let file_path = note_file_path(base_dir, now);
-    ensure_dir(&file_path)?;
-
-    let content = format_note_markdown(body, tags, now, context)?;
-    fs::write(&file_path, content)?;
-    Ok(file_path)
+    FsNoteRepository::new(base_dir.to_path_buf()).create(body, tags, context)
 }
 
 pub fn update_note(
@@ -35,76 +25,39 @@ pub fn update_note(
     tags: &[String],
     context: &DeviceContext,
 ) -> Result<(), CoreError> {
-    let now = Local::now();
-    let content = format_note_markdown(body, tags, now, context)?;
-    fs::write(file_path, content)?;
-    Ok(())
+    // update_note takes a file_path directly, so we use a dummy base_dir
+    // The repository's update method doesn't need base_dir for this operation
+    let base_dir = file_path
+        .parent()
+        .and_then(|p| p.parent())
+        .and_then(|p| p.parent())
+        .unwrap_or(Path::new("/"));
+    FsNoteRepository::new(base_dir.to_path_buf()).update(file_path, body, tags, context)
 }
 
 pub fn list_notes(base_dir: &Path) -> Result<Vec<NoteSummary>, CoreError> {
-    let notes_dir = base_dir.join("data").join("notes");
-    let entries = crate::infra::fs_helpers::list_md_files(&notes_dir)?;
-
-    let summaries = entries
-        .into_iter()
-        .map(|entry| {
-            let path = entry.path();
-            let filename = entry.file_name().to_string_lossy().to_string();
-            let content = fs::read_to_string(&path).unwrap_or_default();
-            NoteSummary::from_file(path, filename, &content)
-        })
-        .collect();
-
-    Ok(summaries)
+    FsNoteRepository::new(base_dir.to_path_buf()).list()
 }
 
 pub fn read_note(file_path: &Path) -> Result<String, CoreError> {
-    Ok(fs::read_to_string(file_path)?)
+    Ok(std::fs::read_to_string(file_path)?)
 }
 
 pub fn read_note_by_filename(
     base_dir: &Path,
     filename: &NoteFilename,
 ) -> Result<String, CoreError> {
-    let fname = filename.as_str();
-    let notes_dir = base_dir.join("data").join("notes");
-    let file_path = notes_dir.join(fname);
-
-    if !file_path.exists() {
-        return Err(CoreError::NotFound(file_path.to_string_lossy().to_string()));
-    }
-
-    let canonical_notes_dir = fs::canonicalize(&notes_dir)?;
-    let canonical_file_path = fs::canonicalize(&file_path)?;
-    if !canonical_file_path.starts_with(&canonical_notes_dir) {
-        return Err(CoreError::PathTraversal(fname.to_string()));
-    }
-
-    Ok(fs::read_to_string(canonical_file_path)?)
+    FsNoteRepository::new(base_dir.to_path_buf()).read(filename)
 }
 
 pub fn delete_note(base_dir: &Path, filename: &NoteFilename) -> Result<(), CoreError> {
-    let fname = filename.as_str();
-    let notes_dir = base_dir.join("data").join("notes");
-    let file_path = notes_dir.join(fname);
-
-    if !file_path.exists() {
-        return Err(CoreError::NotFound(file_path.to_string_lossy().to_string()));
-    }
-
-    let canonical_notes_dir = fs::canonicalize(&notes_dir)?;
-    let canonical_file_path = fs::canonicalize(&file_path)?;
-    if !canonical_file_path.starts_with(&canonical_notes_dir) {
-        return Err(CoreError::PathTraversal(fname.to_string()));
-    }
-
-    fs::remove_file(canonical_file_path)?;
-    Ok(())
+    FsNoteRepository::new(base_dir.to_path_buf()).delete(filename)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
     use tempfile::TempDir;
 
     fn mock_context() -> DeviceContext {
@@ -230,5 +183,4 @@ mod tests {
     fn test_validate_rejects_non_md_extension() {
         assert!(NoteFilename::parse("evil.txt").is_err());
     }
-
 }
