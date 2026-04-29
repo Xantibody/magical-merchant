@@ -33,6 +33,10 @@ const ICONS = {
   "map-pin": () => import("@phosphor-icons/core/assets/regular/map-pin.svg?raw"),
   laptop: () => import("@phosphor-icons/core/assets/regular/laptop.svg?raw"),
   "device-mobile": () => import("@phosphor-icons/core/assets/regular/device-mobile.svg?raw"),
+  "text-indent": () => import("@phosphor-icons/core/assets/regular/text-indent.svg?raw"),
+  "text-outdent": () => import("@phosphor-icons/core/assets/regular/text-outdent.svg?raw"),
+  "code-block": () => import("@phosphor-icons/core/assets/regular/code-block.svg?raw"),
+  minus: () => import("@phosphor-icons/core/assets/regular/minus.svg?raw"),
 } as const;
 
 export type IconName = keyof typeof ICONS;

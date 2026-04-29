@@ -9,9 +9,11 @@ import {
   Switch,
   Match,
 } from "solid-js";
+import type { Editor } from "@milkdown/kit/core";
 import { typedInvoke, type Note } from "../lib/commands";
 import MilkdownEditor from "../components/MilkdownEditor";
 import MarkdownPreview from "../components/MarkdownPreview";
+import MarkdownToolbar from "../components/MarkdownToolbar";
 import { getLocation } from "../lib/location";
 import ConfirmDialog from "../components/ConfirmDialog";
 import ActionBar from "../components/ActionBar";
@@ -33,6 +35,7 @@ export default function Notes() {
   const [noteContent, setNoteContent] = createSignal("");
   const [confirmOpen, setConfirmOpen] = createSignal(false);
   const [error, setError] = createSignal("");
+  const [editorInstance, setEditorInstance] = createSignal<Editor | undefined>();
   const [notes, { refetch: refetchNotes }] = createResource(fetchNotes);
 
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
@@ -110,6 +113,7 @@ export default function Notes() {
     setTagsInput("");
     setDraftPath(null);
     setStatus("idle");
+    setEditorInstance(undefined);
   };
 
   const openList = () => {
@@ -194,8 +198,11 @@ export default function Notes() {
               placeholder="Write your note in Markdown..."
               defaultValue={body()}
               onChange={setBody}
+              onEditorReady={setEditorInstance}
             />
           </div>
+
+          <MarkdownToolbar editor={editorInstance()} />
 
           <Show when={status() !== "idle"}>
             <span class="status-indicator">
