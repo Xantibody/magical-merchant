@@ -3,7 +3,7 @@ import { useLocation } from "@solidjs/router";
 import Icon, { type IconName } from "../components/Icon";
 import SyncButton from "../components/SyncButton";
 import ToggleMenu from "../components/ToggleMenu";
-import { MODE_ICONS, MODE_LABELS } from "../lib/routes";
+import { MODE_ICONS, MODE_LABELS, type RoutePath } from "../lib/routes";
 
 interface AppLayoutProps {
   children?: any;
@@ -50,8 +50,8 @@ export default function AppLayout(props: AppLayoutProps) {
     applyTheme(theme());
   });
 
-  const currentIcon = () => MODE_ICONS[location.pathname] ?? "lightning";
-  const currentLabel = () => MODE_LABELS[location.pathname] ?? "Timeline";
+  const currentIcon = () => MODE_ICONS[location.pathname as RoutePath] ?? "lightning";
+  const currentLabel = () => MODE_LABELS[location.pathname as RoutePath] ?? "Timeline";
 
   const cycleTheme = () => {
     const order: Theme[] = ["system", "light", "dark"];

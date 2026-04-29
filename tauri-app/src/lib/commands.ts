@@ -84,5 +84,9 @@ export async function typedInvoke<K extends CommandName>(
   cmd: K,
   ...args: CommandMap[K]["args"] extends void ? [] : [CommandMap[K]["args"]]
 ): Promise<CommandMap[K]["result"]> {
+  if (args.length === 0) {
+    return invoke<CommandMap[K]["result"]>(cmd);
+  }
+
   return invoke<CommandMap[K]["result"]>(cmd, args[0] as Record<string, unknown>);
 }

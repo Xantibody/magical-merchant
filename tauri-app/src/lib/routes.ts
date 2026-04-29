@@ -7,14 +7,16 @@ export const ROUTES = {
   SETTINGS: "/settings",
 } as const;
 
-export const MODE_ICONS: Record<string, IconName> = {
+export type RoutePath = (typeof ROUTES)[keyof typeof ROUTES];
+
+export const MODE_ICONS: Record<RoutePath, IconName> = {
   [ROUTES.TIMELINE]: "lightning",
   [ROUTES.NOTES]: "note-pencil",
   [ROUTES.TASKS]: "check-square",
   [ROUTES.SETTINGS]: "gear",
 };
 
-export const MODE_LABELS: Record<string, string> = {
+export const MODE_LABELS: Record<RoutePath, string> = {
   [ROUTES.TIMELINE]: "Timeline",
   [ROUTES.NOTES]: "Notes",
   [ROUTES.TASKS]: "Tasks",
