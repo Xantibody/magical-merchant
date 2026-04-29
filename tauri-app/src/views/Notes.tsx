@@ -200,9 +200,8 @@ export default function Notes() {
               onChange={setBody}
               onEditorReady={setEditorInstance}
             />
+            <MarkdownToolbar editor={editorInstance()} />
           </div>
-
-          <MarkdownToolbar editor={editorInstance()} />
 
           <Show when={status() !== "idle"}>
             <span class="status-indicator">
