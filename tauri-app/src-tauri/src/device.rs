@@ -45,8 +45,9 @@ fn get_battery() -> (Option<u8>, Option<bool>) {
 
 #[cfg(target_os = "macos")]
 fn get_network() -> (Option<NetworkType>, Option<String>) {
-    let output = match std::process::Command::new("networksetup")
-        .args(["-getairportnetwork", "en0"])
+    // networksetup -getairportnetwork is broken on recent macOS; use ipconfig instead
+    let output = match std::process::Command::new("ipconfig")
+        .args(["getsummary", "en0"])
         .output()
     {
         Ok(o) => o,
@@ -54,13 +55,18 @@ fn get_network() -> (Option<NetworkType>, Option<String>) {
     };
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let trimmed = stdout.trim();
 
-    if let Some(ssid) = trimmed.strip_prefix("Current Wi-Fi Network: ") {
-        (Some(NetworkType::WiFi), Some(ssid.to_string()))
-    } else {
-        (Some(NetworkType::Offline), None)
+    for line in stdout.lines() {
+        let trimmed = line.trim();
+        if let Some(ssid) = trimmed.strip_prefix("SSID : ") {
+            let ssid = ssid.trim();
+            if !ssid.is_empty() {
+                return (Some(NetworkType::WiFi), Some(ssid.to_string()));
+            }
+        }
     }
+
+    (Some(NetworkType::Offline), None)
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "android")))]
