@@ -26,10 +26,8 @@ export default function MarkdownToolbar(props: MarkdownToolbarProps) {
     };
 
     vv.addEventListener("resize", update);
-    vv.addEventListener("scroll", update);
     onCleanup(() => {
       vv.removeEventListener("resize", update);
-      vv.removeEventListener("scroll", update);
     });
   });
 
