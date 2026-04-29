@@ -12,10 +12,10 @@ test:
 
 # --- Per-crate recipes ---
 
-check-core:
+check-app:
   cargo clippy -p magical-merchant-core -p magical-merchant-app -- -D warnings
 
-test-core:
+test-app:
   cargo test -p magical-merchant-core -p magical-merchant-app
 
 check-cli:
