@@ -25,6 +25,16 @@ pub struct Context {
     pub wifi_ssid: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub location: Option<Location>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub os: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub os_version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub arch: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hostname: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub locale: Option<String>,
 }
 
 #[cfg(test)]
@@ -59,12 +69,19 @@ mod tests {
                 latitude: 35.6762,
                 longitude: 139.6503,
             }),
+            os: Some("macos".to_string()),
+            os_version: Some("15.3".to_string()),
+            arch: Some("aarch64".to_string()),
+            hostname: Some("MacBook".to_string()),
+            locale: Some("ja_JP".to_string()),
         };
         let json = serde_json::to_string(&ctx).unwrap();
         assert!(json.contains("\"battery\":82"));
         assert!(json.contains("\"network_type\":\"WiFi\""));
         assert!(json.contains("\"wifi_ssid\":\"MyNetwork\""));
         assert!(json.contains("\"latitude\":35.6762"));
+        assert!(json.contains("\"os\":\"macos\""));
+        assert!(json.contains("\"hostname\":\"MacBook\""));
     }
 
     #[test]

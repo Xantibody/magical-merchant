@@ -105,9 +105,7 @@ mod tests {
             context: Some(Context {
                 battery: Some(82),
                 is_charging: Some(false),
-                network_type: None,
-                wifi_ssid: None,
-                location: None,
+                ..Context::default()
             }),
         };
         let rendered = render(&fm, "# Hello\nWorld").unwrap();

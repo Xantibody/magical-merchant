@@ -11,7 +11,38 @@ pub fn get_context(location: Option<Location>) -> DeviceContext {
         network_type,
         wifi_ssid,
         location,
+        os: Some(std::env::consts::OS.to_string()),
+        os_version: get_os_version(),
+        arch: Some(std::env::consts::ARCH.to_string()),
+        hostname: hostname::get().ok().and_then(|h| h.into_string().ok()),
+        locale: get_locale(),
     }
+}
+
+#[cfg(target_os = "macos")]
+fn get_os_version() -> Option<String> {
+    let output = std::process::Command::new("sw_vers")
+        .arg("-productVersion")
+        .output()
+        .ok()?;
+    let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if version.is_empty() {
+        None
+    } else {
+        Some(version)
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn get_os_version() -> Option<String> {
+    None
+}
+
+fn get_locale() -> Option<String> {
+    std::env::var("LANG")
+        .or_else(|_| std::env::var("LC_ALL"))
+        .ok()
+        .map(|l| l.split('.').next().unwrap_or(&l).to_string())
 }
 
 #[cfg(not(target_os = "android"))]

@@ -4,6 +4,7 @@ import {
   parseTimelineEntry,
   getBatteryIcon,
   getNetworkIcon,
+  getOsLabel,
   hasLocation,
 } from "../lib/parse-timeline";
 
@@ -26,9 +27,29 @@ export default function TimelineEntry(props: TimelineEntryProps) {
         {(ctx) => (
           <div class="timeline-entry-context">
             <Show when={getBatteryIcon(ctx())}>{(icon) => <Icon name={icon()} size={14} />}</Show>
-            <Show when={getNetworkIcon(ctx())}>{(icon) => <Icon name={icon()} size={14} />}</Show>
+            <Show when={getNetworkIcon(ctx())}>
+              {(icon) => (
+                <span class="timeline-context-item">
+                  <Icon name={icon()} size={14} />
+                  <Show when={ctx().wifi_ssid}>
+                    <span class="timeline-context-label">{ctx().wifi_ssid}</span>
+                  </Show>
+                </span>
+              )}
+            </Show>
             <Show when={hasLocation(ctx())}>
               <Icon name="map-pin" size={14} />
+            </Show>
+            <Show when={getOsLabel(ctx())}>
+              {(label) => (
+                <span class="timeline-context-item">
+                  <Icon name={ctx().os === "android" ? "device-mobile" : "laptop"} size={14} />
+                  <span class="timeline-context-label">{label()}</span>
+                </span>
+              )}
+            </Show>
+            <Show when={ctx().hostname}>
+              {(name) => <span class="timeline-context-label">{name()}</span>}
             </Show>
           </div>
         )}

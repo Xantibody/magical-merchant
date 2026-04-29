@@ -31,6 +31,8 @@ const ICONS = {
   "wifi-slash": () => import("@phosphor-icons/core/assets/regular/wifi-slash.svg?raw"),
   "cell-signal-full": () => import("@phosphor-icons/core/assets/regular/cell-signal-full.svg?raw"),
   "map-pin": () => import("@phosphor-icons/core/assets/regular/map-pin.svg?raw"),
+  laptop: () => import("@phosphor-icons/core/assets/regular/laptop.svg?raw"),
+  "device-mobile": () => import("@phosphor-icons/core/assets/regular/device-mobile.svg?raw"),
 } as const;
 
 export type IconName = keyof typeof ICONS;

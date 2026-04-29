@@ -1,11 +1,16 @@
 import type { IconName } from "../components/Icon";
 
-interface DeviceContext {
+export interface DeviceContext {
   battery?: number;
   is_charging?: boolean;
   network_type?: "WiFi" | "Mobile" | "Offline";
   wifi_ssid?: string;
   location?: { latitude: number; longitude: number };
+  os?: string;
+  os_version?: string;
+  arch?: string;
+  hostname?: string;
+  locale?: string;
 }
 
 export interface ParsedEntry {
@@ -66,4 +71,12 @@ export function getNetworkIcon(ctx: DeviceContext): IconName | null {
 
 export function hasLocation(ctx: DeviceContext): boolean {
   return ctx.location != null;
+}
+
+export function getOsLabel(ctx: DeviceContext): string | null {
+  if (!ctx.os) return null;
+  const parts: string[] = [ctx.os];
+  if (ctx.os_version) parts.push(ctx.os_version);
+  if (ctx.arch) parts.push(ctx.arch);
+  return parts.join(" ");
 }
