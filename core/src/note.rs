@@ -5,18 +5,12 @@ use chrono::{DateTime, FixedOffset, Local};
 use serde::Serialize;
 
 use crate::error::CoreError;
-use crate::format::format_note_markdown;
-use crate::path::note_file_path;
+use crate::infra::fs_helpers::ensure_dir;
+use crate::infra::markdown::format_note_markdown;
+use crate::infra::paths::note_file_path;
 use crate::shared::context::DeviceContext;
 use crate::shared::frontmatter::{self, NoteFrontmatter};
 use crate::shared::validated::NoteFilename;
-
-fn ensure_dir(path: &Path) -> Result<(), CoreError> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    Ok(())
-}
 
 pub fn create_draft_note(
     base_dir: &Path,
@@ -56,16 +50,7 @@ pub struct NoteSummary {
 
 pub fn list_notes(base_dir: &Path) -> Result<Vec<NoteSummary>, CoreError> {
     let notes_dir = base_dir.join("data").join("notes");
-    if !notes_dir.exists() {
-        return Ok(Vec::new());
-    }
-
-    let mut entries: Vec<_> = fs::read_dir(&notes_dir)?
-        .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().is_some_and(|ext| ext == "md"))
-        .collect();
-
-    entries.sort_by_key(|e| std::cmp::Reverse(e.file_name()));
+    let entries = crate::infra::fs_helpers::list_md_files(&notes_dir)?;
 
     let summaries = entries
         .into_iter()

@@ -4,16 +4,10 @@ use std::path::Path;
 use chrono::{Local, NaiveDate};
 
 use crate::error::CoreError;
-use crate::format::{format_note_markdown, format_timeline_line};
-use crate::path::{note_file_path, timeline_file_path};
+use crate::infra::fs_helpers::ensure_dir;
+use crate::infra::markdown::{format_note_markdown, format_timeline_line};
+use crate::infra::paths::{note_file_path, timeline_file_path};
 use crate::shared::context::DeviceContext;
-
-fn ensure_dir(path: &Path) -> Result<(), CoreError> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    Ok(())
-}
 
 pub fn save_timeline_entry(
     base_dir: &Path,
