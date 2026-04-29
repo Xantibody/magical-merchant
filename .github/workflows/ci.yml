@@ -11,7 +11,7 @@ permissions:
   pull-requests: read
 
 jobs:
-  app:
+  rust:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -20,52 +20,33 @@ jobs:
         id: filter
         with:
           filters: |
-            app:
+            rust:
               - 'core/**'
               - 'tauri-app/src-tauri/**'
-              - 'Cargo.toml'
-              - 'Cargo.lock'
-              - 'rust/justfile'
-      - name: Free disk space
-        if: steps.filter.outputs.app == 'true' || github.event_name != 'pull_request'
-        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache
-      - if: steps.filter.outputs.app == 'true' || github.event_name != 'pull_request'
-        uses: nixbuild/nix-quick-install-action@v34
-      - if: steps.filter.outputs.app == 'true' || github.event_name != 'pull_request'
-        uses: DeterminateSystems/magic-nix-cache-action@v9
-      - name: check
-        if: steps.filter.outputs.app == 'true' || github.event_name != 'pull_request'
-        run: nix develop --command just rust::check-app
-      - name: test
-        if: steps.filter.outputs.app == 'true' || github.event_name != 'pull_request'
-        run: nix develop --command just rust::test-app
-    timeout-minutes: 15
-
-  cli:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dorny/paths-filter@v3
-        if: github.event_name == 'pull_request'
-        id: filter
-        with:
-          filters: |
-            cli:
-              - 'core/**'
               - 'mcp-cli/**'
               - 'Cargo.toml'
               - 'Cargo.lock'
               - 'rust/justfile'
-      - if: steps.filter.outputs.cli == 'true' || github.event_name != 'pull_request'
+      - name: Free disk space
+        if: steps.filter.outputs.rust == 'true' || github.event_name != 'pull_request'
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache
+      - uses: actions/cache@v4
+        if: steps.filter.outputs.rust == 'true' || github.event_name != 'pull_request'
+        with:
+          path: target
+          key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-
+      - if: steps.filter.outputs.rust == 'true' || github.event_name != 'pull_request'
         uses: nixbuild/nix-quick-install-action@v34
-      - if: steps.filter.outputs.cli == 'true' || github.event_name != 'pull_request'
+      - if: steps.filter.outputs.rust == 'true' || github.event_name != 'pull_request'
         uses: DeterminateSystems/magic-nix-cache-action@v9
       - name: check
-        if: steps.filter.outputs.cli == 'true' || github.event_name != 'pull_request'
-        run: nix develop --command just rust::check-cli
+        if: steps.filter.outputs.rust == 'true' || github.event_name != 'pull_request'
+        run: nix develop --command just rust::check
       - name: test
-        if: steps.filter.outputs.cli == 'true' || github.event_name != 'pull_request'
-        run: nix develop --command just rust::test-cli
+        if: steps.filter.outputs.rust == 'true' || github.event_name != 'pull_request'
+        run: nix develop --command just rust::test
     timeout-minutes: 15
 
   frontend:
@@ -89,6 +70,18 @@ jobs:
         uses: nixbuild/nix-quick-install-action@v34
       - if: steps.filter.outputs.frontend == 'true' || github.event_name != 'pull_request'
         uses: DeterminateSystems/magic-nix-cache-action@v9
+      - name: Get pnpm store directory
+        if: steps.filter.outputs.frontend == 'true' || github.event_name != 'pull_request'
+        id: pnpm-cache
+        shell: bash
+        run: echo "STORE_PATH=$(nix develop --command pnpm store path)" >> $GITHUB_OUTPUT
+      - uses: actions/cache@v4
+        if: steps.filter.outputs.frontend == 'true' || github.event_name != 'pull_request'
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: pnpm-${{ runner.os }}-${{ hashFiles('tauri-app/pnpm-lock.yaml') }}
+          restore-keys: |
+            pnpm-${{ runner.os }}-
       - name: check
         if: steps.filter.outputs.frontend == 'true' || github.event_name != 'pull_request'
         run: nix develop --command just tauri_app::check
