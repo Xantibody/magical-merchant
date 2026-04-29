@@ -1,0 +1,37 @@
+.markdown-toolbar {
+  display: none;
+}
+@media (hover: none) {
+  .markdown-toolbar {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 150;
+    gap: var(--size-1);
+    padding: var(--size-1) var(--size-2);
+    background: var(--app-surface-2);
+    border-top: 1px solid var(--app-border);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .markdown-toolbar button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    padding: var(--size-2) var(--size-3);
+    background: none;
+    border: none;
+    border-radius: var(--radius-2);
+    color: var(--app-text-muted);
+    cursor: pointer;
+  }
+
+  .markdown-toolbar button:active {
+    color: var(--app-text);
+    background: var(--app-surface);
+  }
+}
