@@ -1,6 +1,9 @@
-# Magical Merchant
-
-A minimal note-taking desktop app with a Rust core and a lightweight UI.
+<div align="center">
+  <img src="tauri-app/src-tauri/icons/icon.svg" width="128" height="128" alt="Magical Merchant">
+  <h1>Magical Merchant</h1>
+  <p>A minimal note-taking desktop app with a Rust core and a lightweight UI.</p>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License"></a>
+</div>
 
 ## Tech Stack
 
