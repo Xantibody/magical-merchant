@@ -2,6 +2,7 @@
 name = "magical-merchant-app"
 version = "0.1.0"
 edition = "2021"
+license.workspace = true
 
 [lib]
 name = "magical_merchant_app_lib"

@@ -2,6 +2,7 @@
   "name": "magical-merchant-sync",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
