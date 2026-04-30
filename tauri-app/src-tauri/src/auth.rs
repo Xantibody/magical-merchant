@@ -4,6 +4,7 @@ use std::path::Path;
 use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
+use tauri_plugin_opener::OpenerExt;
 
 const KEYCHAIN_SERVICE: &str = "com.magical-merchant.app";
 const KEYCHAIN_ACCOUNT: &str = "cf-access-jwt";
@@ -88,9 +89,12 @@ pub fn is_token_valid(token: &str) -> bool {
     token_data.claims.exp > now + 300
 }
 
-pub fn open_login_page(config: &SyncConfig) -> Result<(), String> {
+pub fn open_login_page(handle: &AppHandle, config: &SyncConfig) -> Result<(), String> {
     let auth_url = format!("{}/auth/login", config.workers_url.trim_end_matches('/'));
-    open::that(&auth_url).map_err(|e| format!("Failed to open browser: {e}"))?;
+    handle
+        .opener()
+        .open_url(&auth_url, None::<&str>)
+        .map_err(|e| format!("Failed to open browser: {e}"))?;
     Ok(())
 }
 
@@ -105,7 +109,7 @@ pub fn auth_login(handle: AppHandle) -> Result<(), String> {
         return Err("Sync not configured. Please set Workers URL in Settings.".to_string());
     }
 
-    open_login_page(&config)
+    open_login_page(&handle, &config)
 }
 
 #[tauri::command]
