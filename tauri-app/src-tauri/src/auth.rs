@@ -146,7 +146,7 @@ pub fn save_sync_config(handle: AppHandle, config: SyncConfig) -> Result<(), Str
     #[cfg(not(mobile))]
     {
         let _ = (handle, config);
-        return Err("Config is read-only on desktop. Use nix-darwin config.".to_string());
+        Err("Config is read-only on desktop. Use nix-darwin config.".to_string())
     }
     #[cfg(mobile)]
     {
