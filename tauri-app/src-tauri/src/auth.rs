@@ -8,10 +8,7 @@ use tauri_plugin_opener::OpenerExt;
 
 const KEYCHAIN_SERVICE: &str = "com.magical-merchant.app";
 const KEYCHAIN_ACCOUNT: &str = "cf-access-jwt";
-#[cfg(mobile)]
 const SYNC_CONFIG_FILENAME: &str = "sync-config.json";
-#[cfg(not(mobile))]
-const SYNC_CONFIG_PATH: &str = "/etc/magical-merchant/sync-config.json";
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct SyncConfig {
@@ -20,14 +17,16 @@ pub struct SyncConfig {
 }
 
 impl SyncConfig {
-    pub fn load(base_dir: &Path) -> Self {
-        #[cfg(not(mobile))]
-        let _ = base_dir;
-        #[cfg(not(mobile))]
-        let path = std::path::PathBuf::from(SYNC_CONFIG_PATH);
-        #[cfg(mobile)]
-        let path = base_dir.join(SYNC_CONFIG_FILENAME);
+    fn config_path(base_dir: &Path) -> std::path::PathBuf {
+        if cfg!(mobile) {
+            base_dir.join(SYNC_CONFIG_FILENAME)
+        } else {
+            std::path::PathBuf::from("/etc/magical-merchant").join(SYNC_CONFIG_FILENAME)
+        }
+    }
 
+    pub fn load(base_dir: &Path) -> Self {
+        let path = Self::config_path(base_dir);
         if !path.exists() {
             return Self::default();
         }
@@ -37,9 +36,11 @@ impl SyncConfig {
             .unwrap_or_default()
     }
 
-    #[cfg(mobile)]
-    fn save(&self, base_dir: &Path) -> Result<(), String> {
-        let path = base_dir.join(SYNC_CONFIG_FILENAME);
+    pub fn save(&self, base_dir: &Path) -> Result<(), String> {
+        if !cfg!(mobile) {
+            return Err("Config is read-only on desktop. Use nix-darwin config.".to_string());
+        }
+        let path = Self::config_path(base_dir);
         let content = serde_json::to_string_pretty(self).map_err(|e| e.to_string())?;
         fs::write(&path, content).map_err(|e| e.to_string())?;
         Ok(())
@@ -143,16 +144,8 @@ pub fn get_sync_config(handle: AppHandle) -> Result<SyncConfig, String> {
 
 #[tauri::command]
 pub fn save_sync_config(handle: AppHandle, config: SyncConfig) -> Result<(), String> {
-    #[cfg(not(mobile))]
-    {
-        let _ = (handle, config);
-        Err("Config is read-only on desktop. Use nix-darwin config.".to_string())
-    }
-    #[cfg(mobile)]
-    {
-        let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-        config.save(&base_dir)
-    }
+    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    config.save(&base_dir)
 }
 
 #[tauri::command]
