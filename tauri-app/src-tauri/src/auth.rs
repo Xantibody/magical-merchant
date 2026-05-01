@@ -3,11 +3,14 @@ use std::path::Path;
 
 use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode};
 use serde::{Deserialize, Serialize};
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 use tauri_plugin_opener::OpenerExt;
 
 const KEYCHAIN_SERVICE: &str = "com.magical-merchant.app";
 const KEYCHAIN_ACCOUNT: &str = "cf-access-jwt";
+#[cfg(mobile)]
+const SYNC_CONFIG_FILENAME: &str = "sync-config.json";
+#[cfg(not(mobile))]
 const SYNC_CONFIG_PATH: &str = "/etc/magical-merchant/sync-config.json";
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
@@ -17,15 +20,29 @@ pub struct SyncConfig {
 }
 
 impl SyncConfig {
-    pub fn load() -> Self {
-        let path = Path::new(SYNC_CONFIG_PATH);
+    pub fn load(base_dir: &Path) -> Self {
+        #[cfg(not(mobile))]
+        let _ = base_dir;
+        #[cfg(not(mobile))]
+        let path = std::path::PathBuf::from(SYNC_CONFIG_PATH);
+        #[cfg(mobile)]
+        let path = base_dir.join(SYNC_CONFIG_FILENAME);
+
         if !path.exists() {
             return Self::default();
         }
-        fs::read_to_string(path)
+        fs::read_to_string(&path)
             .ok()
             .and_then(|s| serde_json::from_str(&s).ok())
             .unwrap_or_default()
+    }
+
+    #[cfg(mobile)]
+    fn save(&self, base_dir: &Path) -> Result<(), String> {
+        let path = base_dir.join(SYNC_CONFIG_FILENAME);
+        let content = serde_json::to_string_pretty(self).map_err(|e| e.to_string())?;
+        fs::write(&path, content).map_err(|e| e.to_string())?;
+        Ok(())
     }
 
     pub fn is_configured(&self) -> bool {
@@ -95,10 +112,11 @@ pub fn open_login_page(handle: &AppHandle, config: &SyncConfig) -> Result<(), St
 
 #[tauri::command]
 pub fn auth_login(handle: AppHandle) -> Result<(), String> {
-    let config = SyncConfig::load();
+    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let config = SyncConfig::load(&base_dir);
 
     if !config.is_configured() {
-        return Err("Sync not configured. Set workersUrl in nix-darwin config.".to_string());
+        return Err("Sync not configured".to_string());
     }
 
     open_login_page(&handle, &config)
@@ -118,8 +136,28 @@ pub fn auth_logout() -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn get_sync_config() -> Result<SyncConfig, String> {
-    Ok(SyncConfig::load())
+pub fn get_sync_config(handle: AppHandle) -> Result<SyncConfig, String> {
+    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    Ok(SyncConfig::load(&base_dir))
+}
+
+#[tauri::command]
+pub fn save_sync_config(handle: AppHandle, config: SyncConfig) -> Result<(), String> {
+    #[cfg(not(mobile))]
+    {
+        let _ = (handle, config);
+        return Err("Config is read-only on desktop. Use nix-darwin config.".to_string());
+    }
+    #[cfg(mobile)]
+    {
+        let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+        config.save(&base_dir)
+    }
+}
+
+#[tauri::command]
+pub fn is_sync_config_editable() -> bool {
+    cfg!(mobile)
 }
 
 #[cfg(test)]
@@ -178,7 +216,8 @@ mod tests {
 
     #[test]
     fn sync_config_load_missing_file() {
-        let config = SyncConfig::load();
+        let dir = tempfile::tempdir().unwrap();
+        let config = SyncConfig::load(dir.path());
         assert_eq!(config, SyncConfig::default());
     }
 

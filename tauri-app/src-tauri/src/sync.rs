@@ -197,7 +197,7 @@ pub async fn sync_start(
 
 async fn do_sync(handle: &AppHandle) -> Result<SyncResult, String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    let config = auth::SyncConfig::load();
+    let config = auth::SyncConfig::load(&base_dir);
 
     if !config.is_configured() {
         return Err("Sync not configured".to_string());

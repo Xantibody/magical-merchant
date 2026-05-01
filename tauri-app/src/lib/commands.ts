@@ -75,6 +75,8 @@ type CommandMap = {
   auth_status: { args: void; result: boolean };
   auth_logout: { args: void; result: void };
   get_sync_config: { args: void; result: SyncConfig };
+  save_sync_config: { args: { config: SyncConfig }; result: void };
+  is_sync_config_editable: { args: void; result: boolean };
 };
 
 export type CommandName = keyof CommandMap;
