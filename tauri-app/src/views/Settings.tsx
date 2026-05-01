@@ -5,7 +5,6 @@ import "../styles/settings.css";
 export default function Settings() {
   const [workersUrl, setWorkersUrl] = createSignal("");
   const [authenticated, setAuthenticated] = createSignal(false);
-  const [saving, setSaving] = createSignal(false);
   const [message, setMessage] = createSignal("");
 
   onMount(async () => {
@@ -23,24 +22,6 @@ export default function Settings() {
       setAuthenticated(false);
     }
   });
-
-  const handleSave = async () => {
-    setSaving(true);
-    setMessage("");
-    try {
-      await typedInvoke("save_sync_config", {
-        config: {
-          workers_url: workersUrl(),
-        },
-      });
-      setMessage("Saved");
-      setTimeout(() => setMessage(""), 2000);
-    } catch (e) {
-      setMessage(`Error: ${e}`);
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const handleLogin = async () => {
     setMessage("");
@@ -70,20 +51,10 @@ export default function Settings() {
       <h2 class="settings-title">Sync Settings</h2>
 
       <div class="settings-section">
-        <label class="settings-label">
+        <div class="settings-label">
           Workers URL
-          <input
-            type="url"
-            class="settings-input"
-            value={workersUrl()}
-            onInput={(e) => setWorkersUrl(e.currentTarget.value)}
-            placeholder="https://magical-merchant-sync.your-account.workers.dev"
-          />
-        </label>
-
-        <button type="button" class="settings-button" onClick={handleSave} disabled={saving()}>
-          {saving() ? "Saving..." : "Save"}
-        </button>
+          <span class="settings-value">{workersUrl() || "Not configured"}</span>
+        </div>
       </div>
 
       <div class="settings-section">

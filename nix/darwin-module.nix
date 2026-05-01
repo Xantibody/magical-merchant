@@ -23,14 +23,10 @@ in
   config = lib.mkIf cfg.enable {
     environment.systemPackages = [ cfg.package ];
 
-    system.activationScripts.postUserActivation.text = lib.mkAfter (
-      lib.optionalString (cfg.workersUrl != "") ''
-        SYNC_DIR="$HOME/Library/Application Support/com.magical-merchant.app"
-        mkdir -p "$SYNC_DIR"
-        printf '%s\n' ${
-          lib.escapeShellArg (builtins.toJSON { workers_url = cfg.workersUrl; })
-        } > "$SYNC_DIR/sync-config.json"
-      ''
-    );
+    environment.etc = lib.mkIf (cfg.workersUrl != "") {
+      "magical-merchant/sync-config.json".text = builtins.toJSON {
+        workers_url = cfg.workersUrl;
+      };
+    };
   };
 }

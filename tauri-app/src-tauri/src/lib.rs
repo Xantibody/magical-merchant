@@ -250,7 +250,6 @@ pub fn run() {
             auth::auth_status,
             auth::auth_logout,
             auth::get_sync_config,
-            auth::save_sync_config,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
