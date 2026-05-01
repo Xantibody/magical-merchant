@@ -17,24 +17,10 @@ pub struct SyncConfig {
 }
 
 impl SyncConfig {
-    pub fn is_configured(&self) -> bool {
-        !self.workers_url.is_empty()
-    }
-}
-
-pub trait SyncConfigOps {
-    fn load(base_dir: &Path) -> SyncConfig;
-    fn save(base_dir: &Path, config: &SyncConfig) -> Result<(), String>;
-    fn is_editable() -> bool;
-}
-
-pub struct DesktopSyncConfig;
-
-impl SyncConfigOps for DesktopSyncConfig {
-    fn load(_base_dir: &Path) -> SyncConfig {
-        let path = Path::new("/etc/magical-merchant").join(SYNC_CONFIG_FILENAME);
+    pub fn load(base_dir: &Path) -> Self {
+        let path = base_dir.join(SYNC_CONFIG_FILENAME);
         if !path.exists() {
-            return SyncConfig::default();
+            return Self::default();
         }
         fs::read_to_string(&path)
             .ok()
@@ -42,47 +28,25 @@ impl SyncConfigOps for DesktopSyncConfig {
             .unwrap_or_default()
     }
 
-    fn save(_base_dir: &Path, _config: &SyncConfig) -> Result<(), String> {
-        Err("Config is read-only on desktop. Use nix-darwin config.".to_string())
-    }
-
-    fn is_editable() -> bool {
-        false
-    }
-}
-
-#[cfg(any(mobile, test))]
-pub struct MobileSyncConfig;
-
-#[cfg(any(mobile, test))]
-impl SyncConfigOps for MobileSyncConfig {
-    fn load(base_dir: &Path) -> SyncConfig {
+    pub fn save(&self, base_dir: &Path) -> Result<(), String> {
         let path = base_dir.join(SYNC_CONFIG_FILENAME);
-        if !path.exists() {
-            return SyncConfig::default();
-        }
-        fs::read_to_string(&path)
-            .ok()
-            .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_default()
-    }
-
-    fn save(base_dir: &Path, config: &SyncConfig) -> Result<(), String> {
-        let path = base_dir.join(SYNC_CONFIG_FILENAME);
-        let content = serde_json::to_string_pretty(config).map_err(|e| e.to_string())?;
+        let content = serde_json::to_string_pretty(self).map_err(|e| e.to_string())?;
         fs::write(&path, content).map_err(|e| e.to_string())?;
         Ok(())
     }
 
-    fn is_editable() -> bool {
-        true
+    pub fn is_editable(base_dir: &Path) -> bool {
+        let path = base_dir.join(SYNC_CONFIG_FILENAME);
+        if !path.exists() {
+            return true;
+        }
+        !path.metadata().is_ok_and(|m| m.permissions().readonly())
+    }
+
+    pub fn is_configured(&self) -> bool {
+        !self.workers_url.is_empty()
     }
 }
-
-#[cfg(not(mobile))]
-pub type PlatformSyncConfig = DesktopSyncConfig;
-#[cfg(mobile)]
-pub type PlatformSyncConfig = MobileSyncConfig;
 
 pub fn store_token(token: &str) -> Result<(), String> {
     let entry =
@@ -147,7 +111,7 @@ pub fn open_login_page(handle: &AppHandle, config: &SyncConfig) -> Result<(), St
 #[tauri::command]
 pub fn auth_login(handle: AppHandle) -> Result<(), String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    let config = PlatformSyncConfig::load(&base_dir);
+    let config = SyncConfig::load(&base_dir);
 
     if !config.is_configured() {
         return Err("Sync not configured".to_string());
@@ -172,18 +136,19 @@ pub fn auth_logout() -> Result<(), String> {
 #[tauri::command]
 pub fn get_sync_config(handle: AppHandle) -> Result<SyncConfig, String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    Ok(PlatformSyncConfig::load(&base_dir))
+    Ok(SyncConfig::load(&base_dir))
 }
 
 #[tauri::command]
 pub fn save_sync_config(handle: AppHandle, config: SyncConfig) -> Result<(), String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    PlatformSyncConfig::save(&base_dir, &config)
+    config.save(&base_dir)
 }
 
 #[tauri::command]
-pub fn is_sync_config_editable() -> bool {
-    PlatformSyncConfig::is_editable()
+pub fn is_sync_config_editable(handle: AppHandle) -> Result<bool, String> {
+    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    Ok(SyncConfig::is_editable(&base_dir))
 }
 
 #[cfg(test)]
@@ -241,34 +206,43 @@ mod tests {
     }
 
     #[test]
-    fn desktop_sync_config_load_missing_file() {
-        let dir = tempfile::tempdir().unwrap();
-        let config = DesktopSyncConfig::load(dir.path());
-        assert_eq!(config, SyncConfig::default());
-    }
-
-    #[test]
-    fn mobile_sync_config_save_and_load() {
+    fn sync_config_save_and_load() {
         let dir = tempfile::tempdir().unwrap();
         let config = SyncConfig {
             workers_url: "https://sync.example.com".to_string(),
         };
-        MobileSyncConfig::save(dir.path(), &config).unwrap();
-        let loaded = MobileSyncConfig::load(dir.path());
+        config.save(dir.path()).unwrap();
+        let loaded = SyncConfig::load(dir.path());
         assert_eq!(loaded.workers_url, "https://sync.example.com");
     }
 
     #[test]
-    fn desktop_sync_config_save_is_rejected() {
+    fn sync_config_load_missing_file() {
         let dir = tempfile::tempdir().unwrap();
-        let config = SyncConfig::default();
-        assert!(DesktopSyncConfig::save(dir.path(), &config).is_err());
+        assert_eq!(SyncConfig::load(dir.path()), SyncConfig::default());
     }
 
     #[test]
-    fn sync_config_deserialize() {
-        let json = r#"{"workers_url":"https://sync.example.com"}"#;
-        let config: SyncConfig = serde_json::from_str(json).unwrap();
-        assert_eq!(config.workers_url, "https://sync.example.com");
+    fn sync_config_editable_when_missing() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(SyncConfig::is_editable(dir.path()));
+    }
+
+    #[test]
+    fn sync_config_editable_when_writable() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = SyncConfig::default();
+        config.save(dir.path()).unwrap();
+        assert!(SyncConfig::is_editable(dir.path()));
+    }
+
+    #[test]
+    fn sync_config_not_editable_when_readonly() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(SYNC_CONFIG_FILENAME);
+        fs::write(&path, "{}").unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o444)).unwrap();
+        assert!(!SyncConfig::is_editable(dir.path()));
     }
 }
