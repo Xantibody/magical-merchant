@@ -8,7 +8,7 @@ use magical_merchant_core::sync::client::{RemoteFile, SyncClient};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
 
-use crate::auth;
+use crate::auth::{self, SyncConfigOps};
 
 const EVENT_SYNC_COMPLETE: &str = "sync-complete";
 const EVENT_SYNC_ERROR: &str = "sync-error";
@@ -197,7 +197,7 @@ pub async fn sync_start(
 
 async fn do_sync(handle: &AppHandle) -> Result<SyncResult, String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    let config = auth::SyncConfig::load(&base_dir);
+    let config = auth::PlatformSyncConfig::load(&base_dir);
 
     if !config.is_configured() {
         return Err("Sync not configured".to_string());

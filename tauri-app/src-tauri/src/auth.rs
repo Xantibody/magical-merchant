@@ -17,18 +17,24 @@ pub struct SyncConfig {
 }
 
 impl SyncConfig {
-    fn config_path(base_dir: &Path) -> std::path::PathBuf {
-        if cfg!(mobile) {
-            base_dir.join(SYNC_CONFIG_FILENAME)
-        } else {
-            std::path::PathBuf::from("/etc/magical-merchant").join(SYNC_CONFIG_FILENAME)
-        }
+    pub fn is_configured(&self) -> bool {
+        !self.workers_url.is_empty()
     }
+}
 
-    pub fn load(base_dir: &Path) -> Self {
-        let path = Self::config_path(base_dir);
+pub trait SyncConfigOps {
+    fn load(base_dir: &Path) -> SyncConfig;
+    fn save(base_dir: &Path, config: &SyncConfig) -> Result<(), String>;
+    fn is_editable() -> bool;
+}
+
+pub struct DesktopSyncConfig;
+
+impl SyncConfigOps for DesktopSyncConfig {
+    fn load(_base_dir: &Path) -> SyncConfig {
+        let path = Path::new("/etc/magical-merchant").join(SYNC_CONFIG_FILENAME);
         if !path.exists() {
-            return Self::default();
+            return SyncConfig::default();
         }
         fs::read_to_string(&path)
             .ok()
@@ -36,20 +42,47 @@ impl SyncConfig {
             .unwrap_or_default()
     }
 
-    pub fn save(&self, base_dir: &Path) -> Result<(), String> {
-        if !cfg!(mobile) {
-            return Err("Config is read-only on desktop. Use nix-darwin config.".to_string());
+    fn save(_base_dir: &Path, _config: &SyncConfig) -> Result<(), String> {
+        Err("Config is read-only on desktop. Use nix-darwin config.".to_string())
+    }
+
+    fn is_editable() -> bool {
+        false
+    }
+}
+
+#[cfg(any(mobile, test))]
+pub struct MobileSyncConfig;
+
+#[cfg(any(mobile, test))]
+impl SyncConfigOps for MobileSyncConfig {
+    fn load(base_dir: &Path) -> SyncConfig {
+        let path = base_dir.join(SYNC_CONFIG_FILENAME);
+        if !path.exists() {
+            return SyncConfig::default();
         }
-        let path = Self::config_path(base_dir);
-        let content = serde_json::to_string_pretty(self).map_err(|e| e.to_string())?;
+        fs::read_to_string(&path)
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default()
+    }
+
+    fn save(base_dir: &Path, config: &SyncConfig) -> Result<(), String> {
+        let path = base_dir.join(SYNC_CONFIG_FILENAME);
+        let content = serde_json::to_string_pretty(config).map_err(|e| e.to_string())?;
         fs::write(&path, content).map_err(|e| e.to_string())?;
         Ok(())
     }
 
-    pub fn is_configured(&self) -> bool {
-        !self.workers_url.is_empty()
+    fn is_editable() -> bool {
+        true
     }
 }
+
+#[cfg(not(mobile))]
+pub type PlatformSyncConfig = DesktopSyncConfig;
+#[cfg(mobile)]
+pub type PlatformSyncConfig = MobileSyncConfig;
 
 pub fn store_token(token: &str) -> Result<(), String> {
     let entry =
@@ -114,7 +147,7 @@ pub fn open_login_page(handle: &AppHandle, config: &SyncConfig) -> Result<(), St
 #[tauri::command]
 pub fn auth_login(handle: AppHandle) -> Result<(), String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    let config = SyncConfig::load(&base_dir);
+    let config = PlatformSyncConfig::load(&base_dir);
 
     if !config.is_configured() {
         return Err("Sync not configured".to_string());
@@ -139,18 +172,18 @@ pub fn auth_logout() -> Result<(), String> {
 #[tauri::command]
 pub fn get_sync_config(handle: AppHandle) -> Result<SyncConfig, String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    Ok(SyncConfig::load(&base_dir))
+    Ok(PlatformSyncConfig::load(&base_dir))
 }
 
 #[tauri::command]
 pub fn save_sync_config(handle: AppHandle, config: SyncConfig) -> Result<(), String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    config.save(&base_dir)
+    PlatformSyncConfig::save(&base_dir, &config)
 }
 
 #[tauri::command]
 pub fn is_sync_config_editable() -> bool {
-    cfg!(mobile)
+    PlatformSyncConfig::is_editable()
 }
 
 #[cfg(test)]
@@ -208,10 +241,28 @@ mod tests {
     }
 
     #[test]
-    fn sync_config_load_missing_file() {
+    fn desktop_sync_config_load_missing_file() {
         let dir = tempfile::tempdir().unwrap();
-        let config = SyncConfig::load(dir.path());
+        let config = DesktopSyncConfig::load(dir.path());
         assert_eq!(config, SyncConfig::default());
+    }
+
+    #[test]
+    fn mobile_sync_config_save_and_load() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = SyncConfig {
+            workers_url: "https://sync.example.com".to_string(),
+        };
+        MobileSyncConfig::save(dir.path(), &config).unwrap();
+        let loaded = MobileSyncConfig::load(dir.path());
+        assert_eq!(loaded.workers_url, "https://sync.example.com");
+    }
+
+    #[test]
+    fn desktop_sync_config_save_is_rejected() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = SyncConfig::default();
+        assert!(DesktopSyncConfig::save(dir.path(), &config).is_err());
     }
 
     #[test]
