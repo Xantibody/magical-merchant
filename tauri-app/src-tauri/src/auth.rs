@@ -10,7 +10,7 @@ const KEYCHAIN_SERVICE: &str = "com.magical-merchant.app";
 const KEYCHAIN_ACCOUNT: &str = "cf-access-jwt";
 const SYNC_CONFIG_FILENAME: &str = "sync-config.json";
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct SyncConfig {
     #[serde(default)]
     pub workers_url: String,
@@ -28,11 +28,19 @@ impl SyncConfig {
             .unwrap_or_default()
     }
 
-    fn save(&self, base_dir: &Path) -> Result<(), String> {
+    pub fn save(&self, base_dir: &Path) -> Result<(), String> {
         let path = base_dir.join(SYNC_CONFIG_FILENAME);
         let content = serde_json::to_string_pretty(self).map_err(|e| e.to_string())?;
         fs::write(&path, content).map_err(|e| e.to_string())?;
         Ok(())
+    }
+
+    pub fn is_editable(base_dir: &Path) -> bool {
+        let path = base_dir.join(SYNC_CONFIG_FILENAME);
+        if !path.exists() {
+            return true;
+        }
+        !path.metadata().is_ok_and(|m| m.permissions().readonly())
     }
 
     pub fn is_configured(&self) -> bool {
@@ -106,7 +114,7 @@ pub fn auth_login(handle: AppHandle) -> Result<(), String> {
     let config = SyncConfig::load(&base_dir);
 
     if !config.is_configured() {
-        return Err("Sync not configured. Please set Workers URL in Settings.".to_string());
+        return Err("Sync not configured".to_string());
     }
 
     open_login_page(&handle, &config)
@@ -135,6 +143,12 @@ pub fn get_sync_config(handle: AppHandle) -> Result<SyncConfig, String> {
 pub fn save_sync_config(handle: AppHandle, config: SyncConfig) -> Result<(), String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
     config.save(&base_dir)
+}
+
+#[tauri::command]
+pub fn is_sync_config_editable(handle: AppHandle) -> Result<bool, String> {
+    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    Ok(SyncConfig::is_editable(&base_dir))
 }
 
 #[cfg(test)]
@@ -200,5 +214,35 @@ mod tests {
         config.save(dir.path()).unwrap();
         let loaded = SyncConfig::load(dir.path());
         assert_eq!(loaded.workers_url, "https://sync.example.com");
+    }
+
+    #[test]
+    fn sync_config_load_missing_file() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(SyncConfig::load(dir.path()), SyncConfig::default());
+    }
+
+    #[test]
+    fn sync_config_editable_when_missing() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(SyncConfig::is_editable(dir.path()));
+    }
+
+    #[test]
+    fn sync_config_editable_when_writable() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = SyncConfig::default();
+        config.save(dir.path()).unwrap();
+        assert!(SyncConfig::is_editable(dir.path()));
+    }
+
+    #[test]
+    fn sync_config_not_editable_when_readonly() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(SYNC_CONFIG_FILENAME);
+        fs::write(&path, "{}").unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o444)).unwrap();
+        assert!(!SyncConfig::is_editable(dir.path()));
     }
 }
