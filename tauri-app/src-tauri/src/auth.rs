@@ -7,7 +7,7 @@ use tauri::{AppHandle, Manager};
 use tauri_plugin_opener::OpenerExt;
 
 const KEYCHAIN_SERVICE: &str = "com.magical-merchant.app";
-const KEYCHAIN_ACCOUNT: &str = "cf-access-jwt";
+const KEYCHAIN_ACCOUNT: &str = "auth-jwt";
 const SYNC_CONFIG_FILENAME: &str = "sync-config.json";
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
@@ -81,7 +81,7 @@ struct Claims {
 }
 
 pub fn is_token_valid(token: &str) -> bool {
-    let mut validation = Validation::new(Algorithm::RS256);
+    let mut validation = Validation::new(Algorithm::HS256);
     validation.insecure_disable_signature_validation();
     validation.validate_exp = false;
     validation.validate_aud = false;
@@ -98,7 +98,7 @@ pub fn is_token_valid(token: &str) -> bool {
 }
 
 pub fn open_login_page(handle: &AppHandle, config: &SyncConfig) -> Result<(), String> {
-    let auth_url = format!("{}/auth/login", config.workers_url.trim_end_matches('/'));
+    let auth_url = format!("{}/auth/google", config.workers_url.trim_end_matches('/'));
     handle
         .opener()
         .open_url(&auth_url, None::<&str>)

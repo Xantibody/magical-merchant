@@ -111,7 +111,7 @@ export default function Settings() {
           </button>
         ) : (
           <button type="button" class="settings-button" onClick={handleLogin}>
-            Login with Cloudflare Access
+            Login with Google
           </button>
         )}
       </div>
