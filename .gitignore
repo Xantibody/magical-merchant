@@ -35,3 +35,6 @@ tauri-app/src-tauri/gen/
 
 # Plans
 plans/
+
+# Wrangler local secrets
+.dev.vars
