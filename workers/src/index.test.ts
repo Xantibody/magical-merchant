@@ -1,14 +1,41 @@
-import { env, createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
-import { describe, it, expect } from "vitest";
+import { env, createExecutionContext, waitOnExecutionContext, fetchMock } from "cloudflare:test";
+import { describe, it, expect, beforeAll, afterEach } from "vitest";
+import { SignJWT } from "jose";
 import worker from "./index";
 
-const AUTH_HEADER = { "Cf-Access-Jwt-Assertion": "test-jwt-token" };
+const TEST_SECRET = "test-jwt-secret-for-development-only";
+
+async function makeJwt(
+  payload: { sub: string; email: string; exp: number },
+  secret = TEST_SECRET,
+): Promise<string> {
+  const key = new TextEncoder().encode(secret);
+  return new SignJWT({ email: payload.email })
+    .setProtectedHeader({ alg: "HS256" })
+    .setSubject(payload.sub)
+    .setExpirationTime(payload.exp)
+    .sign(key);
+}
+
+let validToken: string;
+
+beforeAll(async () => {
+  validToken = await makeJwt({
+    sub: "user-123",
+    email: "test@example.com",
+    exp: Math.floor(Date.now() / 1000) + 3600,
+  });
+});
+
+function authHeader(): Record<string, string> {
+  return { Authorization: `Bearer ${validToken}` };
+}
 
 function request(
   path: string,
   options: RequestInit & { headers?: Record<string, string> } = {},
 ): Request {
-  const headers = { ...AUTH_HEADER, ...options.headers };
+  const headers = { ...authHeader(), ...options.headers };
   return new Request(`http://localhost${path}`, { ...options, headers });
 }
 
@@ -18,7 +45,7 @@ async function jsonBody<T>(response: Response): Promise<T> {
 
 describe("Workers R2 Proxy", () => {
   describe("Authentication", () => {
-    it("rejects requests without CF Access JWT", async () => {
+    it("rejects requests without Authorization header", async () => {
       const req = new Request("http://localhost/files");
       const ctx = createExecutionContext();
       const res = await worker.fetch(req, env, ctx);
@@ -29,13 +56,209 @@ describe("Workers R2 Proxy", () => {
       expect(body.error).toBe("Unauthorized");
     });
 
-    it("accepts requests with CF Access JWT", async () => {
+    it("rejects requests with invalid JWT", async () => {
+      const req = new Request("http://localhost/files", {
+        headers: { Authorization: "Bearer invalid-token" },
+      });
+      const ctx = createExecutionContext();
+      const res = await worker.fetch(req, env, ctx);
+      await waitOnExecutionContext(ctx);
+
+      expect(res.status).toBe(401);
+    });
+
+    it("rejects expired JWT", async () => {
+      const expiredToken = await makeJwt({
+        sub: "user-123",
+        email: "test@example.com",
+        exp: Math.floor(Date.now() / 1000) - 100,
+      });
+      const req = new Request("http://localhost/files", {
+        headers: { Authorization: `Bearer ${expiredToken}` },
+      });
+      const ctx = createExecutionContext();
+      const res = await worker.fetch(req, env, ctx);
+      await waitOnExecutionContext(ctx);
+
+      expect(res.status).toBe(401);
+    });
+
+    it("rejects JWT signed with wrong secret", async () => {
+      const badToken = await makeJwt(
+        {
+          sub: "user-123",
+          email: "test@example.com",
+          exp: Math.floor(Date.now() / 1000) + 3600,
+        },
+        "wrong-secret",
+      );
+      const req = new Request("http://localhost/files", {
+        headers: { Authorization: `Bearer ${badToken}` },
+      });
+      const ctx = createExecutionContext();
+      const res = await worker.fetch(req, env, ctx);
+      await waitOnExecutionContext(ctx);
+
+      expect(res.status).toBe(401);
+    });
+
+    it("accepts requests with valid Bearer token", async () => {
       const req = request("/files");
       const ctx = createExecutionContext();
       const res = await worker.fetch(req, env, ctx);
       await waitOnExecutionContext(ctx);
 
       expect(res.status).toBe(200);
+    });
+  });
+
+  describe("GET /auth/google", () => {
+    it("redirects to Google OAuth with state cookie", async () => {
+      const req = new Request("http://localhost/auth/google");
+      const ctx = createExecutionContext();
+      const res = await worker.fetch(req, env, ctx);
+      await waitOnExecutionContext(ctx);
+
+      expect(res.status).toBe(302);
+      const location = res.headers.get("Location")!;
+      expect(location).toContain("accounts.google.com/o/oauth2/v2/auth");
+      expect(location).toContain("client_id=test-client-id");
+      expect(location).toContain("scope=openid+email");
+      expect(location).toContain("redirect_uri=http%3A%2F%2Flocalhost%2Fauth%2Fcallback");
+
+      const cookies = res.headers.getSetCookie();
+      expect(cookies.some((c) => c.includes("__oauth_state="))).toBe(true);
+    });
+
+    it("stores app_redirect in cookie", async () => {
+      const req = new Request(
+        "http://localhost/auth/google?app_redirect=http%3A%2F%2F127.0.0.1%3A12345%2Fcallback",
+      );
+      const ctx = createExecutionContext();
+      const res = await worker.fetch(req, env, ctx);
+      await waitOnExecutionContext(ctx);
+
+      expect(res.status).toBe(302);
+      const cookies = res.headers.getSetCookie();
+      expect(cookies.some((c) => c.includes("__oauth_app_redirect="))).toBe(true);
+    });
+  });
+
+  describe("GET /auth/callback", () => {
+    beforeAll(() => {
+      fetchMock.activate();
+    });
+
+    afterEach(() => {
+      fetchMock.assertNoPendingInterceptors();
+    });
+
+    it("returns 400 when code is missing", async () => {
+      const req = new Request("http://localhost/auth/callback");
+      const ctx = createExecutionContext();
+      const res = await worker.fetch(req, env, ctx);
+      await waitOnExecutionContext(ctx);
+
+      expect(res.status).toBe(400);
+    });
+
+    it("returns 403 when state does not match cookie", async () => {
+      const req = new Request("http://localhost/auth/callback?code=test-code&state=abc", {
+        headers: { Cookie: "__oauth_state=different-state" },
+      });
+      const ctx = createExecutionContext();
+      const res = await worker.fetch(req, env, ctx);
+      await waitOnExecutionContext(ctx);
+
+      expect(res.status).toBe(403);
+    });
+
+    it("returns 403 when state cookie is missing", async () => {
+      const req = new Request("http://localhost/auth/callback?code=test-code&state=abc");
+      const ctx = createExecutionContext();
+      const res = await worker.fetch(req, env, ctx);
+      await waitOnExecutionContext(ctx);
+
+      expect(res.status).toBe(403);
+    });
+
+    it("exchanges code and redirects via deep link", async () => {
+      fetchMock
+        .get("https://oauth2.googleapis.com")
+        .intercept({ path: "/token", method: "POST" })
+        .reply(200, JSON.stringify({ access_token: "google-access-token" }), {
+          headers: { "Content-Type": "application/json" },
+        });
+
+      fetchMock
+        .get("https://openidconnect.googleapis.com")
+        .intercept({ path: "/v1/userinfo" })
+        .reply(200, JSON.stringify({ sub: "google-user-123", email: "user@gmail.com" }), {
+          headers: { "Content-Type": "application/json" },
+        });
+
+      const req = new Request(
+        "http://localhost/auth/callback?code=test-auth-code&state=valid-state",
+        {
+          headers: { Cookie: "__oauth_state=valid-state" },
+        },
+      );
+      const ctx = createExecutionContext();
+      const res = await worker.fetch(req, env, ctx);
+      await waitOnExecutionContext(ctx);
+
+      expect(res.status).toBe(200);
+      const body = await res.text();
+      expect(body).toContain("magical-merchant://auth/callback?token=");
+    });
+
+    it("redirects via 302 for loopback app_redirect", async () => {
+      fetchMock
+        .get("https://oauth2.googleapis.com")
+        .intercept({ path: "/token", method: "POST" })
+        .reply(200, JSON.stringify({ access_token: "google-access-token" }), {
+          headers: { "Content-Type": "application/json" },
+        });
+
+      fetchMock
+        .get("https://openidconnect.googleapis.com")
+        .intercept({ path: "/v1/userinfo" })
+        .reply(200, JSON.stringify({ sub: "google-user-123", email: "user@gmail.com" }), {
+          headers: { "Content-Type": "application/json" },
+        });
+
+      const appRedirect = encodeURIComponent("http://127.0.0.1:12345/callback");
+      const req = new Request(
+        "http://localhost/auth/callback?code=test-auth-code&state=valid-state",
+        {
+          headers: {
+            Cookie: `__oauth_state=valid-state; __oauth_app_redirect=${appRedirect}`,
+          },
+        },
+      );
+      const ctx = createExecutionContext();
+      const res = await worker.fetch(req, env, ctx);
+      await waitOnExecutionContext(ctx);
+
+      expect(res.status).toBe(302);
+      const location = res.headers.get("Location")!;
+      expect(location).toContain("http://127.0.0.1:12345/callback?token=");
+    });
+
+    it("returns 502 when token exchange fails", async () => {
+      fetchMock
+        .get("https://oauth2.googleapis.com")
+        .intercept({ path: "/token", method: "POST" })
+        .reply(400, JSON.stringify({ error: "invalid_grant" }));
+
+      const req = new Request("http://localhost/auth/callback?code=bad-code&state=valid-state", {
+        headers: { Cookie: "__oauth_state=valid-state" },
+      });
+      const ctx = createExecutionContext();
+      const res = await worker.fetch(req, env, ctx);
+      await waitOnExecutionContext(ctx);
+
+      expect(res.status).toBe(502);
     });
   });
 
