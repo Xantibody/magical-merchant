@@ -130,6 +130,17 @@ describe("Workers R2 Proxy", () => {
       expect(cookies.some((c) => c.includes("__oauth_state="))).toBe(true);
     });
 
+    it("rejects invalid app_redirect", async () => {
+      const req = new Request(
+        "http://localhost/auth/google?app_redirect=https%3A%2F%2Fevil.com%2Fsteal",
+      );
+      const ctx = createExecutionContext();
+      const res = await worker.fetch(req, env, ctx);
+      await waitOnExecutionContext(ctx);
+
+      expect(res.status).toBe(400);
+    });
+
     it("stores app_redirect in cookie", async () => {
       const req = new Request(
         "http://localhost/auth/google?app_redirect=http%3A%2F%2F127.0.0.1%3A12345%2Fcallback",

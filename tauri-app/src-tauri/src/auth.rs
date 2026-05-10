@@ -123,10 +123,11 @@ async fn login_with_loopback(handle: &AppHandle, config: &SyncConfig) -> Result<
         .open_url(&auth_url, None::<&str>)
         .map_err(|e| format!("Failed to open browser: {e}"))?;
 
-    let (mut stream, _) = listener
-        .accept()
-        .await
-        .map_err(|e| format!("Failed to accept connection: {e}"))?;
+    let (mut stream, _) =
+        tokio::time::timeout(std::time::Duration::from_secs(300), listener.accept())
+            .await
+            .map_err(|_| "Login timed out. Please try again.".to_string())?
+            .map_err(|e| format!("Failed to accept connection: {e}"))?;
 
     let mut buf = vec![0u8; 4096];
     let n = stream

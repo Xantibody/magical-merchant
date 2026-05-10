@@ -142,6 +142,10 @@ function getCookie(request: Request, name: string): string | null {
   return match ? match[1] : null;
 }
 
+function isAllowedRedirect(redirect: string): boolean {
+  return redirect.startsWith("magical-merchant://") || redirect.startsWith("http://127.0.0.1:");
+}
+
 function getJwtExpiry(env: Env): number {
   if (env.JWT_EXPIRY_SECONDS) {
     const parsed = parseInt(env.JWT_EXPIRY_SECONDS, 10);
@@ -161,6 +165,9 @@ export default {
       const state = generateState();
       const appRedirect =
         url.searchParams.get("app_redirect") ?? "magical-merchant://auth/callback";
+      if (!isAllowedRedirect(appRedirect)) {
+        return errorResponse("Invalid app_redirect", 400);
+      }
       const redirectUri = `${url.origin}/auth/callback`;
       const params = new URLSearchParams({
         client_id: env.GOOGLE_CLIENT_ID,
@@ -218,6 +225,9 @@ export default {
       }
 
       const tokenData = (await tokenResp.json()) as GoogleTokenResponse;
+      if (!tokenData.access_token) {
+        return errorResponse("Missing access token in Google response", 502);
+      }
 
       // Get user info
       const userinfoResp = await fetch("https://openidconnect.googleapis.com/v1/userinfo", {
@@ -229,6 +239,9 @@ export default {
       }
 
       const userinfo = (await userinfoResp.json()) as GoogleUserInfo;
+      if (!userinfo.sub || !userinfo.email) {
+        return errorResponse("Missing user info in Google response", 502);
+      }
 
       // Issue JWT
       const expiry = getJwtExpiry(env);
@@ -245,6 +258,9 @@ export default {
       const appRedirect = appRedirectCookie
         ? decodeURIComponent(appRedirectCookie)
         : "magical-merchant://auth/callback";
+      if (!isAllowedRedirect(appRedirect)) {
+        return errorResponse("Invalid redirect", 400);
+      }
       const separator = appRedirect.includes("?") ? "&" : "?";
       const redirectUrl = `${appRedirect}${separator}token=${encodeURIComponent(jwt)}`;
 
