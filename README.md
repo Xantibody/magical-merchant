@@ -26,6 +26,7 @@ magical-merchant/
 ├── tauri-app/
 │   ├── src/        # SolidJS frontend (TypeScript)
 │   └── src-tauri/  # Tauri 2 backend (Rust)
+├── workers/        # Cloudflare Workers (R2 sync backend)
 ├── rust/           # Shared Rust just recipes
 ├── nix/            # Nix configuration helpers
 └── plans/          # Implementation plans
@@ -121,6 +122,65 @@ cp -r "target/release/bundle/macos/Magical Merchant.app" /Applications/
 # Remove Gatekeeper quarantine (unsigned app)
 xattr -cr "/Applications/Magical Merchant.app"
 ```
+
+## Sync Backend (Cloudflare Workers)
+
+The `workers/` directory contains a Cloudflare Workers backend that syncs data via R2. Authentication uses Google OAuth with self-issued JWTs.
+
+### 1. Deploy the Worker
+
+```sh
+cd workers
+pnpm install
+wrangler login
+wrangler deploy
+```
+
+### 2. Custom Domain (Optional)
+
+If you want to use a custom domain instead of the default `*.workers.dev` URL:
+
+1. Go to **Cloudflare Dashboard** → **Workers & Pages** → **magical-merchant-sync**
+2. **Settings** → **Domains & Routes** → **Add** → **Custom Domain**
+
+### 3. Google OAuth Setup
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create or select a project
+3. **Google Auth Platform** → **Overview** → Create branding (External, testing mode)
+4. **Clients** → **Create OAuth client ID**
+   - Application type: **Web application**
+   - Authorized redirect URIs: `https://<your-worker-url>/auth/callback`
+5. Copy the Client ID and Client Secret
+
+### 4. Set Secrets
+
+```sh
+cd workers
+
+# Google OAuth credentials
+wrangler secret put GOOGLE_CLIENT_ID
+wrangler secret put GOOGLE_CLIENT_SECRET
+
+# Random signing key for JWTs (generate with: openssl rand -base64 32)
+wrangler secret put JWT_SECRET
+```
+
+### 5. Configuration
+
+| Variable               | Location           | Description                      | Default           |
+| ---------------------- | ------------------ | -------------------------------- | ----------------- |
+| `GOOGLE_CLIENT_ID`     | Secret             | Google OAuth Client ID           | —                 |
+| `GOOGLE_CLIENT_SECRET` | Secret             | Google OAuth Client Secret       | —                 |
+| `JWT_SECRET`           | Secret             | HMAC-SHA256 signing key for JWTs | —                 |
+| `JWT_EXPIRY_SECONDS`   | Secret or `[vars]` | Token lifetime in seconds        | `259200` (3 days) |
+
+### 6. App Configuration
+
+1. Open the app → Settings
+2. Enter the Workers URL (e.g., `https://magical-merchant-sync.example.workers.dev`)
+3. Click **Login with Google**
+4. After authentication, sync is available
 
 ## Environment Variables
 

@@ -88,6 +88,7 @@
                 androidSdk
                 oxlint
                 typescript-go
+                wrangler
               ]
               ++ lib.optionals stdenv.isLinux [
                 webkitgtk_4_1.dev
