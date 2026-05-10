@@ -25,7 +25,13 @@
     "deep-link": {
       "desktop": {
         "schemes": ["magical-merchant"]
-      }
+      },
+      "mobile": [
+        {
+          "scheme": ["magical-merchant"],
+          "host": "auth"
+        }
+      ]
     }
   },
   "bundle": {
