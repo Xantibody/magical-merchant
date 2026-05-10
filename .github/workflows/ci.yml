@@ -93,6 +93,29 @@ jobs:
         run: nix develop --command just tauri_app::test
     timeout-minutes: 15
 
+  workers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v3
+        if: github.event_name == 'pull_request'
+        id: filter
+        with:
+          filters: |
+            workers:
+              - 'workers/**'
+      - if: steps.filter.outputs.workers == 'true' || github.event_name != 'pull_request'
+        uses: nixbuild/nix-quick-install-action@v34
+      - if: steps.filter.outputs.workers == 'true' || github.event_name != 'pull_request'
+        uses: DeterminateSystems/magic-nix-cache-action@v9
+      - name: check
+        if: steps.filter.outputs.workers == 'true' || github.event_name != 'pull_request'
+        run: nix develop --command just workers::check
+      - name: test
+        if: steps.filter.outputs.workers == 'true' || github.event_name != 'pull_request'
+        run: nix develop --command just workers::test
+    timeout-minutes: 10
+
   format:
     runs-on: ubuntu-latest
     steps:
