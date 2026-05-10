@@ -5,9 +5,10 @@ use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 use tauri_plugin_opener::OpenerExt;
+use url::Url;
 
 const KEYCHAIN_SERVICE: &str = "com.magical-merchant.app";
-const KEYCHAIN_ACCOUNT: &str = "cf-access-jwt";
+const KEYCHAIN_ACCOUNT: &str = "auth-jwt";
 const SYNC_CONFIG_FILENAME: &str = "sync-config.json";
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
@@ -81,7 +82,7 @@ struct Claims {
 }
 
 pub fn is_token_valid(token: &str) -> bool {
-    let mut validation = Validation::new(Algorithm::RS256);
+    let mut validation = Validation::new(Algorithm::HS256);
     validation.insecure_disable_signature_validation();
     validation.validate_exp = false;
     validation.validate_aud = false;
@@ -97,19 +98,76 @@ pub fn is_token_valid(token: &str) -> bool {
     token_data.claims.exp > now + 300
 }
 
-pub fn open_login_page(handle: &AppHandle, config: &SyncConfig) -> Result<(), String> {
-    let auth_url = format!("{}/auth/login", config.workers_url.trim_end_matches('/'));
+fn build_auth_url(workers_url: &str, app_redirect: &str) -> String {
+    format!(
+        "{}/auth/google?app_redirect={}",
+        workers_url.trim_end_matches('/'),
+        urlencoding::encode(app_redirect)
+    )
+}
+
+#[cfg(not(target_os = "android"))]
+async fn login_with_loopback(handle: &AppHandle, config: &SyncConfig) -> Result<(), String> {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .map_err(|e| format!("Failed to bind loopback: {e}"))?;
+    let port = listener.local_addr().map_err(|e| e.to_string())?.port();
+
+    let app_redirect = format!("http://127.0.0.1:{port}/callback");
+    let auth_url = build_auth_url(&config.workers_url, &app_redirect);
+
     handle
         .opener()
         .open_url(&auth_url, None::<&str>)
         .map_err(|e| format!("Failed to open browser: {e}"))?;
+
+    let (mut stream, _) =
+        tokio::time::timeout(std::time::Duration::from_secs(300), listener.accept())
+            .await
+            .map_err(|_| "Login timed out. Please try again.".to_string())?
+            .map_err(|e| format!("Failed to accept connection: {e}"))?;
+
+    let mut buf = vec![0u8; 4096];
+    let n = stream
+        .read(&mut buf)
+        .await
+        .map_err(|e| format!("Failed to read: {e}"))?;
+    let request_str = String::from_utf8_lossy(&buf[..n]);
+
+    let request_line = request_str.lines().next().unwrap_or("");
+    let path = request_line.split_whitespace().nth(1).unwrap_or("");
+    let full_url = format!("http://127.0.0.1:{port}{path}");
+
+    let response_body = if let Ok(url) = Url::parse(&full_url) {
+        let token = url
+            .query_pairs()
+            .find(|(k, _)| k == "token")
+            .map(|(_, v)| v.to_string());
+
+        if let Some(token) = token {
+            store_token(&token)?;
+            "<html><body><p>Login successful. You can close this tab.</p></body></html>"
+        } else {
+            "<html><body><p>Login failed: no token received.</p></body></html>"
+        }
+    } else {
+        "<html><body><p>Login failed: invalid callback.</p></body></html>"
+    };
+
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nConnection: close\r\n\r\n{response_body}"
+    );
+    let _ = stream.write_all(response.as_bytes()).await;
+
     Ok(())
 }
 
 // Tauri commands
 
 #[tauri::command]
-pub fn auth_login(handle: AppHandle) -> Result<(), String> {
+pub async fn auth_login(handle: AppHandle) -> Result<(), String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
     let config = SyncConfig::load(&base_dir);
 
@@ -117,7 +175,20 @@ pub fn auth_login(handle: AppHandle) -> Result<(), String> {
         return Err("Sync not configured".to_string());
     }
 
-    open_login_page(&handle, &config)
+    #[cfg(not(target_os = "android"))]
+    {
+        login_with_loopback(&handle, &config).await
+    }
+
+    #[cfg(target_os = "android")]
+    {
+        let auth_url = build_auth_url(&config.workers_url, "magical-merchant://auth/callback");
+        handle
+            .opener()
+            .open_url(&auth_url, None::<&str>)
+            .map_err(|e| format!("Failed to open browser: {e}"))?;
+        Ok(())
+    }
 }
 
 #[tauri::command]

@@ -1,5 +1,6 @@
 mod rust
 mod tauri_app 'tauri-app'
+mod workers
 
 [private]
 default:
@@ -8,9 +9,9 @@ default:
 fmt:
   nix fmt
 
-check: rust::check tauri_app::check
+check: rust::check tauri_app::check workers::check
 
-test: rust::test tauri_app::test
+test: rust::test tauri_app::test workers::test
 
 verify: fmt check test
 

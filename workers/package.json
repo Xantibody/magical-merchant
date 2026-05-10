@@ -9,6 +9,9 @@
     "test": "vitest run",
     "test:watch": "vitest"
   },
+  "dependencies": {
+    "jose": "^6.2.3"
+  },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.8",
     "@cloudflare/workers-types": "^4",

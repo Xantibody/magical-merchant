@@ -70,7 +70,7 @@ impl SyncClient for R2SyncClient {
         let resp = self
             .http
             .get(format!("{}/files", self.base_url))
-            .header("Cookie", format!("CF_Authorization={}", self.token))
+            .header("Authorization", format!("Bearer {}", self.token))
             .send()
             .await
             .map_err(|e| CoreError::Network(e.to_string()))?;
@@ -104,7 +104,7 @@ impl SyncClient for R2SyncClient {
         let resp = self
             .http
             .get(format!("{}/files/{}", self.base_url, key))
-            .header("Cookie", format!("CF_Authorization={}", self.token))
+            .header("Authorization", format!("Bearer {}", self.token))
             .send()
             .await
             .map_err(|e| CoreError::Network(e.to_string()))?;
@@ -132,7 +132,7 @@ impl SyncClient for R2SyncClient {
         let resp = self
             .http
             .put(format!("{}/files/{}", self.base_url, key))
-            .header("Cookie", format!("CF_Authorization={}", self.token))
+            .header("Authorization", format!("Bearer {}", self.token))
             .header("X-Last-Modified", last_modified.to_rfc3339())
             .body(content.to_vec())
             .send()
@@ -150,7 +150,7 @@ impl SyncClient for R2SyncClient {
         let resp = self
             .http
             .delete(format!("{}/files/{}", self.base_url, key))
-            .header("Cookie", format!("CF_Authorization={}", self.token))
+            .header("Authorization", format!("Bearer {}", self.token))
             .send()
             .await
             .map_err(|e| CoreError::Network(e.to_string()))?;

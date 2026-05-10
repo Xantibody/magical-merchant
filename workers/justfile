@@ -1,0 +1,14 @@
+[private]
+default:
+  @just --list
+
+[private]
+setup:
+  pnpm install
+
+check: setup
+  oxlint src/
+  tsgo -p tsconfig.check.json --noEmit
+
+test: setup
+  pnpm test
