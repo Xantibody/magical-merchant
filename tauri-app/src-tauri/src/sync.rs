@@ -1,10 +1,13 @@
 use std::fs;
+use std::path::PathBuf;
+use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
+use tokio::task::JoinSet;
 
 use crate::auth;
 
@@ -258,11 +261,17 @@ async fn do_sync(handle: &AppHandle) -> Result<SyncResult, String> {
         return Err("Token expired. Please re-authenticate.".to_string());
     }
 
-    let client = HttpSyncClient::new(config.workers_url, token);
+    let client = Arc::new(HttpSyncClient::new(config.workers_url, token));
 
     // Scan local files
     let local_files = magical_merchant_core::sync::scan::scan_local_files(&base_dir)
         .map_err(|e| e.to_string())?;
+
+    // Build lookup for local file timestamps
+    let local_modified: std::collections::HashMap<String, String> = local_files
+        .iter()
+        .map(|f| (f.key.clone(), f.last_modified.to_rfc3339()))
+        .collect();
 
     // Build request
     let client_files: Vec<ClientFileEntry> = local_files
@@ -277,190 +286,74 @@ async fn do_sync(handle: &AppHandle) -> Result<SyncResult, String> {
     // Phase 1: Request sync plan from server (read-only, no state mutation)
     let plan = client.request_sync_plan(client_files).await?;
 
-    // Phase 2: Execute the plan
+    // Phase 2: Execute all actions concurrently
     let data_dir = magical_merchant_core::utils::paths::data_dir(&base_dir);
-    let mut result = SyncResult::default();
+    let mut tasks: JoinSet<ActionResult> = JoinSet::new();
 
-    for action in &plan.actions {
+    for action in plan.actions {
         if !is_safe_key(&action.key) {
-            result
-                .errors
-                .push(format!("unsafe key rejected: {}", action.key));
+            tasks.spawn(async move {
+                ActionResult::Error(format!("unsafe key rejected: {}", action.key))
+            });
             continue;
         }
-        if let Some(ck) = &action.conflict_key {
+        if let Some(ref ck) = action.conflict_key {
             if !is_safe_key(ck) {
-                result
-                    .errors
-                    .push(format!("unsafe conflict key rejected: {ck}"));
+                let ck = ck.clone();
+                tasks.spawn(async move {
+                    ActionResult::Error(format!("unsafe conflict key rejected: {ck}"))
+                });
                 continue;
             }
         }
 
+        let c = Arc::clone(&client);
+        let dd = data_dir.clone();
+        let lm = local_modified.clone();
+
         match action.action_type.as_str() {
             "upload" => {
-                let path = data_dir.join(&action.key);
-                match fs::read(&path) {
-                    Ok(content) => {
-                        let local = local_files.iter().find(|f| f.key == action.key);
-                        let last_modified = local
-                            .map(|f| f.last_modified.to_rfc3339())
-                            .unwrap_or_else(|| Utc::now().to_rfc3339());
-                        match client.upload(&action.key, &content, &last_modified).await {
-                            Ok(()) => result.uploaded += 1,
-                            Err(e) => result.errors.push(format!("upload {}: {e}", action.key)),
-                        }
-                    }
-                    Err(e) => result.errors.push(format!("read {}: {e}", action.key)),
-                }
+                tasks.spawn(async move { execute_upload(&c, &dd, &lm, &action.key).await });
             }
-            "download" => match client.download(&action.key).await {
-                Ok(content) => {
-                    let path = data_dir.join(&action.key);
-                    if let Some(parent) = path.parent() {
-                        fs::create_dir_all(parent)
-                            .map_err(|e| format!("mkdir {}: {e}", action.key))?;
-                    }
-                    match fs::write(&path, &content) {
-                        Ok(()) => result.downloaded += 1,
-                        Err(e) => {
-                            result.errors.push(format!("write {}: {e}", action.key));
-                        }
-                    }
-                }
-                Err(e) => result.errors.push(format!("download {}: {e}", action.key)),
-            },
+            "download" => {
+                tasks.spawn(async move { execute_download(&c, &dd, &action.key).await });
+            }
             "delete_local" => {
-                let path = data_dir.join(&action.key);
-                if path.exists() {
-                    if let Err(e) = fs::remove_file(&path) {
-                        result
-                            .errors
-                            .push(format!("delete_local {}: {e}", action.key));
-                    } else {
-                        result.deleted_local += 1;
-                    }
-                } else {
-                    result.deleted_local += 1;
-                }
+                tasks.spawn(async move { execute_delete_local(&dd, &action.key) });
             }
-            "delete_remote" => match client.delete(&action.key).await {
-                Ok(()) => result.deleted_remote += 1,
-                Err(e) => result
-                    .errors
-                    .push(format!("delete_remote {}: {e}", action.key)),
-            },
+            "delete_remote" => {
+                tasks.spawn(async move { execute_delete_remote(&c, &action.key).await });
+            }
             "conflict" => {
-                let resolution = action.resolution.as_deref().unwrap_or("keep_remote");
-                let conflict_key = action.conflict_key.as_deref().unwrap_or("");
-
-                match resolution {
-                    "keep_local" => {
-                        // Download remote as conflict copy, upload local
-                        match client.download(&action.key).await {
-                            Ok(remote_content) => {
-                                if !conflict_key.is_empty() {
-                                    let conflict_path = data_dir.join(conflict_key);
-                                    if let Some(parent) = conflict_path.parent() {
-                                        if let Err(e) = fs::create_dir_all(parent) {
-                                            result.errors.push(format!(
-                                                "conflict mkdir {conflict_key}: {e}"
-                                            ));
-                                        }
-                                    }
-                                    if let Err(e) = fs::write(&conflict_path, &remote_content) {
-                                        result
-                                            .errors
-                                            .push(format!("conflict write {conflict_key}: {e}"));
-                                    }
-                                }
-                            }
-                            Err(e) => {
-                                result
-                                    .errors
-                                    .push(format!("conflict download {}: {e}", action.key));
-                            }
-                        }
-                        let path = data_dir.join(&action.key);
-                        match fs::read(&path) {
-                            Ok(content) => {
-                                let local = local_files.iter().find(|f| f.key == action.key);
-                                let last_modified = local
-                                    .map(|f| f.last_modified.to_rfc3339())
-                                    .unwrap_or_else(|| Utc::now().to_rfc3339());
-                                if let Err(e) =
-                                    client.upload(&action.key, &content, &last_modified).await
-                                {
-                                    result
-                                        .errors
-                                        .push(format!("conflict upload {}: {e}", action.key));
-                                }
-                            }
-                            Err(e) => {
-                                result
-                                    .errors
-                                    .push(format!("conflict read {}: {e}", action.key));
-                            }
-                        }
-                        result.conflicts += 1;
-                    }
-                    _ => {
-                        // keep_remote: save local as conflict copy, download remote
-                        let path = data_dir.join(&action.key);
-                        if !conflict_key.is_empty() {
-                            match fs::read(&path) {
-                                Ok(local_content) => {
-                                    let conflict_path = data_dir.join(conflict_key);
-                                    if let Some(parent) = conflict_path.parent() {
-                                        if let Err(e) = fs::create_dir_all(parent) {
-                                            result.errors.push(format!(
-                                                "conflict mkdir {conflict_key}: {e}"
-                                            ));
-                                        }
-                                    }
-                                    if let Err(e) = fs::write(&conflict_path, &local_content) {
-                                        result
-                                            .errors
-                                            .push(format!("conflict write {conflict_key}: {e}"));
-                                    }
-                                }
-                                Err(e) => {
-                                    result
-                                        .errors
-                                        .push(format!("conflict read {}: {e}", action.key));
-                                }
-                            }
-                        }
-                        match client.download(&action.key).await {
-                            Ok(remote_content) => {
-                                if let Some(parent) = path.parent() {
-                                    if let Err(e) = fs::create_dir_all(parent) {
-                                        result
-                                            .errors
-                                            .push(format!("conflict mkdir {}: {e}", action.key));
-                                    }
-                                }
-                                if let Err(e) = fs::write(&path, &remote_content) {
-                                    result
-                                        .errors
-                                        .push(format!("conflict write {}: {e}", action.key));
-                                }
-                            }
-                            Err(e) => {
-                                result
-                                    .errors
-                                    .push(format!("conflict download {}: {e}", action.key));
-                            }
-                        }
-                        result.conflicts += 1;
-                    }
-                }
+                tasks.spawn(async move {
+                    execute_conflict(
+                        &c,
+                        &dd,
+                        &lm,
+                        &action.key,
+                        action.conflict_key.as_deref().unwrap_or(""),
+                        action.resolution.as_deref().unwrap_or("keep_remote"),
+                    )
+                    .await
+                });
             }
             unknown => {
-                result
-                    .errors
-                    .push(format!("unknown action type: {unknown}"));
+                let msg = format!("unknown action type: {unknown}");
+                tasks.spawn(async move { ActionResult::Error(msg) });
             }
+        }
+    }
+
+    let mut result = SyncResult::default();
+    while let Some(join_result) = tasks.join_next().await {
+        match join_result {
+            Ok(ActionResult::Uploaded) => result.uploaded += 1,
+            Ok(ActionResult::Downloaded) => result.downloaded += 1,
+            Ok(ActionResult::DeletedLocal) => result.deleted_local += 1,
+            Ok(ActionResult::DeletedRemote) => result.deleted_remote += 1,
+            Ok(ActionResult::Conflict) => result.conflicts += 1,
+            Ok(ActionResult::Error(e)) => result.errors.push(e),
+            Err(e) => result.errors.push(format!("task panic: {e}")),
         }
     }
 
@@ -504,4 +397,153 @@ pub fn sync_status(state: State<'_, AppSyncState>) -> Result<SyncStatusInfo, Str
         last_synced_at: *state.last_synced_at.lock().unwrap(),
         last_error: state.last_error.lock().unwrap().clone(),
     })
+}
+
+enum ActionResult {
+    Uploaded,
+    Downloaded,
+    DeletedLocal,
+    DeletedRemote,
+    Conflict,
+    Error(String),
+}
+
+async fn execute_upload(
+    client: &HttpSyncClient,
+    data_dir: &PathBuf,
+    local_modified: &std::collections::HashMap<String, String>,
+    key: &str,
+) -> ActionResult {
+    let path = data_dir.join(key);
+    let content = match fs::read(&path) {
+        Ok(c) => c,
+        Err(e) => return ActionResult::Error(format!("read {key}: {e}")),
+    };
+    let last_modified = local_modified
+        .get(key)
+        .cloned()
+        .unwrap_or_else(|| Utc::now().to_rfc3339());
+    match client.upload(key, &content, &last_modified).await {
+        Ok(()) => ActionResult::Uploaded,
+        Err(e) => ActionResult::Error(format!("upload {key}: {e}")),
+    }
+}
+
+async fn execute_download(client: &HttpSyncClient, data_dir: &PathBuf, key: &str) -> ActionResult {
+    let content = match client.download(key).await {
+        Ok(c) => c,
+        Err(e) => return ActionResult::Error(format!("download {key}: {e}")),
+    };
+    let path = data_dir.join(key);
+    if let Some(parent) = path.parent() {
+        if let Err(e) = fs::create_dir_all(parent) {
+            return ActionResult::Error(format!("mkdir {key}: {e}"));
+        }
+    }
+    match fs::write(&path, &content) {
+        Ok(()) => ActionResult::Downloaded,
+        Err(e) => ActionResult::Error(format!("write {key}: {e}")),
+    }
+}
+
+fn execute_delete_local(data_dir: &PathBuf, key: &str) -> ActionResult {
+    let path = data_dir.join(key);
+    if path.exists() {
+        if let Err(e) = fs::remove_file(&path) {
+            return ActionResult::Error(format!("delete_local {key}: {e}"));
+        }
+    }
+    ActionResult::DeletedLocal
+}
+
+async fn execute_delete_remote(client: &HttpSyncClient, key: &str) -> ActionResult {
+    match client.delete(key).await {
+        Ok(()) => ActionResult::DeletedRemote,
+        Err(e) => ActionResult::Error(format!("delete_remote {key}: {e}")),
+    }
+}
+
+async fn execute_conflict(
+    client: &HttpSyncClient,
+    data_dir: &PathBuf,
+    local_modified: &std::collections::HashMap<String, String>,
+    key: &str,
+    conflict_key: &str,
+    resolution: &str,
+) -> ActionResult {
+    let mut errors = Vec::new();
+
+    match resolution {
+        "keep_local" => {
+            // Download remote as conflict copy, upload local
+            match client.download(key).await {
+                Ok(remote_content) => {
+                    if !conflict_key.is_empty() {
+                        let conflict_path = data_dir.join(conflict_key);
+                        if let Some(parent) = conflict_path.parent() {
+                            if let Err(e) = fs::create_dir_all(parent) {
+                                errors.push(format!("conflict mkdir {conflict_key}: {e}"));
+                            }
+                        }
+                        if let Err(e) = fs::write(&conflict_path, &remote_content) {
+                            errors.push(format!("conflict write {conflict_key}: {e}"));
+                        }
+                    }
+                }
+                Err(e) => errors.push(format!("conflict download {key}: {e}")),
+            }
+            let path = data_dir.join(key);
+            match fs::read(&path) {
+                Ok(content) => {
+                    let last_modified = local_modified
+                        .get(key)
+                        .cloned()
+                        .unwrap_or_else(|| Utc::now().to_rfc3339());
+                    if let Err(e) = client.upload(key, &content, &last_modified).await {
+                        errors.push(format!("conflict upload {key}: {e}"));
+                    }
+                }
+                Err(e) => errors.push(format!("conflict read {key}: {e}")),
+            }
+        }
+        _ => {
+            // keep_remote: save local as conflict copy, download remote
+            let path = data_dir.join(key);
+            if !conflict_key.is_empty() {
+                match fs::read(&path) {
+                    Ok(local_content) => {
+                        let conflict_path = data_dir.join(conflict_key);
+                        if let Some(parent) = conflict_path.parent() {
+                            if let Err(e) = fs::create_dir_all(parent) {
+                                errors.push(format!("conflict mkdir {conflict_key}: {e}"));
+                            }
+                        }
+                        if let Err(e) = fs::write(&conflict_path, &local_content) {
+                            errors.push(format!("conflict write {conflict_key}: {e}"));
+                        }
+                    }
+                    Err(e) => errors.push(format!("conflict read {key}: {e}")),
+                }
+            }
+            match client.download(key).await {
+                Ok(remote_content) => {
+                    if let Some(parent) = path.parent() {
+                        if let Err(e) = fs::create_dir_all(parent) {
+                            errors.push(format!("conflict mkdir {key}: {e}"));
+                        }
+                    }
+                    if let Err(e) = fs::write(&path, &remote_content) {
+                        errors.push(format!("conflict write {key}: {e}"));
+                    }
+                }
+                Err(e) => errors.push(format!("conflict download {key}: {e}")),
+            }
+        }
+    }
+
+    if errors.is_empty() {
+        ActionResult::Conflict
+    } else {
+        ActionResult::Error(errors.join("; "))
+    }
 }
