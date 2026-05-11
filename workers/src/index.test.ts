@@ -435,6 +435,30 @@ describe("Workers R2 Proxy", () => {
 
       expect(res.status).toBe(400);
     });
+
+    it("denies access to _sync-state/ keys", async () => {
+      const req = request("/files/_sync-state/user.json", { method: "GET" });
+      const ctx = createExecutionContext();
+      const res = await worker.fetch(req, env, ctx);
+      await waitOnExecutionContext(ctx);
+
+      expect(res.status).toBe(403);
+      const body = await jsonBody<{ error: string }>(res);
+      expect(body.error).toBe("Access denied");
+    });
+
+    it("denies PUT to _sync-state/ keys", async () => {
+      const req = request("/files/_sync-state/user.json", {
+        method: "PUT",
+        body: "malicious",
+        headers: { "X-Last-Modified": new Date().toISOString() },
+      });
+      const ctx = createExecutionContext();
+      const res = await worker.fetch(req, env, ctx);
+      await waitOnExecutionContext(ctx);
+
+      expect(res.status).toBe(403);
+    });
   });
 
   describe("Method handling", () => {

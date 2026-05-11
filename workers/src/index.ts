@@ -85,7 +85,7 @@ async function listAllObjects(bucket: R2Bucket): Promise<FileEntry[]> {
 }
 
 async function handleList(bucket: R2Bucket): Promise<Response> {
-  const files = await listAllObjects(bucket);
+  const files = (await listAllObjects(bucket)).filter((f) => !f.key.startsWith("_sync-state/"));
   return jsonResponse({ files });
 }
 
@@ -355,6 +355,10 @@ export default {
 
     if (containsTraversal(key)) {
       return errorResponse("Path traversal not allowed", 400);
+    }
+
+    if (key.startsWith("_sync-state/")) {
+      return errorResponse("Access denied", 403);
     }
 
     switch (method) {
