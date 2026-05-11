@@ -3,11 +3,9 @@ import { describe, it, expect, beforeAll, afterEach } from "vitest";
 import { SignJWT } from "jose";
 import worker from "./index";
 
-const TEST_SECRET = "test-jwt-secret-for-development-only";
-
 async function makeJwt(
   payload: { sub: string; email: string; exp: number },
-  secret = TEST_SECRET,
+  secret = env.JWT_SECRET,
 ): Promise<string> {
   const key = new TextEncoder().encode(secret);
   return new SignJWT({ email: payload.email })
