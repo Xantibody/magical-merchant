@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   computeSyncPlan,
-  buildUpdatedState,
+  buildAckState,
   type ClientFile,
   type RemoteFile,
   type SyncState,
@@ -48,7 +48,7 @@ describe("computeSyncPlan", () => {
     expect(actions[0].type).toBe("conflict");
     expect(actions[0].key).toBe("notes/c.md");
     expect(actions[0].resolution).toBe("keep_remote");
-    expect(actions[0].conflict_key).toContain("sync-conflict");
+    expect(actions[0].conflict_key).toMatch(/sync-conflict-\d{8}-\d{6}/);
   });
 
   it("no action when nothing changed", () => {
@@ -88,19 +88,19 @@ describe("computeSyncPlan", () => {
     expect(actions[0].resolution).toBe("keep_local");
   });
 
-  it("deletes remote when local was deleted (previously synced)", () => {
+  it("deletes local when remote was deleted (previously synced)", () => {
     const actions = computeSyncPlan(
+      [client("notes/h.md", "hash_h")],
       [],
-      [remote("notes/h.md", "2026-05-01T12:00:00Z")],
       stateWith({ "notes/h.md": { hash: "hash_h", last_modified: "2026-05-01T12:00:00Z" } }),
     );
     expect(actions).toEqual([{ type: "delete_local", key: "notes/h.md" }]);
   });
 
-  it("deletes local when remote was deleted (previously synced)", () => {
+  it("deletes remote when local was deleted (previously synced)", () => {
     const actions = computeSyncPlan(
-      [client("notes/i.md", "hash_i")],
       [],
+      [remote("notes/i.md", "2026-05-01T12:00:00Z")],
       stateWith({ "notes/i.md": { hash: "hash_i", last_modified: "2026-05-01T12:00:00Z" } }),
     );
     expect(actions).toEqual([{ type: "delete_remote", key: "notes/i.md" }]);
@@ -124,37 +124,28 @@ describe("computeSyncPlan", () => {
   });
 });
 
-describe("buildUpdatedState", () => {
-  it("records uploaded files", () => {
-    const state: SyncState = { files: {}, last_sync: null };
-    const actions = [{ type: "upload" as const, key: "notes/a.md" }];
-    const clientFiles = [client("notes/a.md", "hash_a", "2026-05-01T12:00:00Z")];
+describe("buildAckState", () => {
+  it("builds state from client-reported files", () => {
+    const files = [
+      client("notes/a.md", "hash_a", "2026-05-01T12:00:00Z"),
+      client("notes/b.md", "hash_b", "2026-05-01T14:00:00Z"),
+    ];
 
-    const updated = buildUpdatedState(state, actions, clientFiles, []);
-    expect(updated.files["notes/a.md"]).toEqual({
+    const state = buildAckState(files);
+    expect(state.files["notes/a.md"]).toEqual({
       hash: "hash_a",
       last_modified: "2026-05-01T12:00:00Z",
     });
-    expect(updated.last_sync).toBeTruthy();
-  });
-
-  it("records downloaded files", () => {
-    const state: SyncState = { files: {}, last_sync: null };
-    const actions = [{ type: "download" as const, key: "notes/b.md" }];
-    const remoteFiles = [remote("notes/b.md", "2026-05-01T14:00:00Z")];
-
-    const updated = buildUpdatedState(state, actions, [], remoteFiles);
-    expect(updated.files["notes/b.md"]).toEqual({
-      hash: "",
+    expect(state.files["notes/b.md"]).toEqual({
+      hash: "hash_b",
       last_modified: "2026-05-01T14:00:00Z",
     });
+    expect(state.last_sync).toBeTruthy();
   });
 
-  it("removes deleted files from state", () => {
-    const state = stateWith({ "notes/x.md": { hash: "h", last_modified: "2026-05-01T12:00:00Z" } });
-    const actions = [{ type: "delete_remote" as const, key: "notes/x.md" }];
-
-    const updated = buildUpdatedState(state, actions, [], []);
-    expect(updated.files["notes/x.md"]).toBeUndefined();
+  it("returns empty files for empty input", () => {
+    const state = buildAckState([]);
+    expect(state.files).toEqual({});
+    expect(state.last_sync).toBeTruthy();
   });
 });

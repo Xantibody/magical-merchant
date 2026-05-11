@@ -54,14 +54,18 @@ struct ClientFileEntry {
 #[derive(Serialize)]
 struct SyncRequest {
     files: Vec<ClientFileEntry>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    last_sync: Option<String>,
+}
+
+#[derive(Serialize)]
+struct SyncAckRequest {
+    files: Vec<ClientFileEntry>,
+    etag: Option<String>,
 }
 
 #[derive(Deserialize)]
 struct SyncPlanResponse {
     actions: Vec<SyncActionResponse>,
-    sync_token: String,
+    etag: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -79,11 +83,15 @@ struct HttpSyncClient {
     token: String,
 }
 
+fn is_safe_key(key: &str) -> bool {
+    !key.contains("..") && !key.contains('\0') && !key.starts_with('/')
+}
+
 impl HttpSyncClient {
     fn new(base_url: String, token: String) -> Self {
         Self {
             http: reqwest::Client::new(),
-            base_url,
+            base_url: base_url.trim_end_matches('/').to_string(),
             token,
         }
     }
@@ -95,9 +103,8 @@ impl HttpSyncClient {
     async fn request_sync_plan(
         &self,
         files: Vec<ClientFileEntry>,
-        last_sync: Option<String>,
     ) -> Result<SyncPlanResponse, String> {
-        let body = SyncRequest { files, last_sync };
+        let body = SyncRequest { files };
         let resp = self
             .http
             .post(format!("{}/sync", self.base_url))
@@ -110,9 +117,6 @@ impl HttpSyncClient {
         if resp.status() == reqwest::StatusCode::UNAUTHORIZED {
             return Err("Not authenticated".to_string());
         }
-        if resp.status() == reqwest::StatusCode::CONFLICT {
-            return Err("Sync conflict: please retry".to_string());
-        }
         if !resp.status().is_success() {
             let status = resp.status();
             let text = resp.text().await.unwrap_or_default();
@@ -122,6 +126,36 @@ impl HttpSyncClient {
         resp.json()
             .await
             .map_err(|e| format!("Failed to parse sync response: {e}"))
+    }
+
+    async fn send_ack(
+        &self,
+        files: Vec<ClientFileEntry>,
+        etag: Option<String>,
+    ) -> Result<(), String> {
+        let body = SyncAckRequest { files, etag };
+        let resp = self
+            .http
+            .post(format!("{}/sync/ack", self.base_url))
+            .header("Authorization", self.auth_header())
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| format!("Network error: {e}"))?;
+
+        if resp.status() == reqwest::StatusCode::UNAUTHORIZED {
+            return Err("Not authenticated".to_string());
+        }
+        if resp.status() == reqwest::StatusCode::CONFLICT {
+            return Err("Sync state conflict: please retry".to_string());
+        }
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let text = resp.text().await.unwrap_or_default();
+            return Err(format!("Sync ack failed ({status}): {text}"));
+        }
+
+        Ok(())
     }
 
     async fn download(&self, key: &str) -> Result<Vec<u8>, String> {
@@ -230,10 +264,6 @@ async fn do_sync(handle: &AppHandle) -> Result<SyncResult, String> {
     let local_files = magical_merchant_core::sync::scan::scan_local_files(&base_dir)
         .map_err(|e| e.to_string())?;
 
-    // Load local sync state for last_sync timestamp
-    let local_state = magical_merchant_core::sync::state::SyncState::load(&base_dir)
-        .map_err(|e| e.to_string())?;
-
     // Build request
     let client_files: Vec<ClientFileEntry> = local_files
         .iter()
@@ -244,16 +274,29 @@ async fn do_sync(handle: &AppHandle) -> Result<SyncResult, String> {
         })
         .collect();
 
-    let last_sync = local_state.last_sync.map(|t| t.to_rfc3339());
+    // Phase 1: Request sync plan from server (read-only, no state mutation)
+    let plan = client.request_sync_plan(client_files).await?;
 
-    // Request sync plan from server
-    let plan = client.request_sync_plan(client_files, last_sync).await?;
-
-    // Execute the plan
+    // Phase 2: Execute the plan
     let data_dir = magical_merchant_core::utils::paths::data_dir(&base_dir);
     let mut result = SyncResult::default();
 
     for action in &plan.actions {
+        if !is_safe_key(&action.key) {
+            result
+                .errors
+                .push(format!("unsafe key rejected: {}", action.key));
+            continue;
+        }
+        if let Some(ck) = &action.conflict_key {
+            if !is_safe_key(ck) {
+                result
+                    .errors
+                    .push(format!("unsafe conflict key rejected: {ck}"));
+                continue;
+            }
+        }
+
         match action.action_type.as_str() {
             "upload" => {
                 let path = data_dir.join(&action.key);
@@ -275,7 +318,8 @@ async fn do_sync(handle: &AppHandle) -> Result<SyncResult, String> {
                 Ok(content) => {
                     let path = data_dir.join(&action.key);
                     if let Some(parent) = path.parent() {
-                        let _ = fs::create_dir_all(parent);
+                        fs::create_dir_all(parent)
+                            .map_err(|e| format!("mkdir {}: {e}", action.key))?;
                     }
                     match fs::write(&path, &content) {
                         Ok(()) => result.downloaded += 1,
@@ -313,22 +357,50 @@ async fn do_sync(handle: &AppHandle) -> Result<SyncResult, String> {
                 match resolution {
                     "keep_local" => {
                         // Download remote as conflict copy, upload local
-                        if let Ok(remote_content) = client.download(&action.key).await {
-                            if !conflict_key.is_empty() {
-                                let conflict_path = data_dir.join(conflict_key);
-                                if let Some(parent) = conflict_path.parent() {
-                                    let _ = fs::create_dir_all(parent);
+                        match client.download(&action.key).await {
+                            Ok(remote_content) => {
+                                if !conflict_key.is_empty() {
+                                    let conflict_path = data_dir.join(conflict_key);
+                                    if let Some(parent) = conflict_path.parent() {
+                                        if let Err(e) = fs::create_dir_all(parent) {
+                                            result.errors.push(format!(
+                                                "conflict mkdir {conflict_key}: {e}"
+                                            ));
+                                        }
+                                    }
+                                    if let Err(e) = fs::write(&conflict_path, &remote_content) {
+                                        result
+                                            .errors
+                                            .push(format!("conflict write {conflict_key}: {e}"));
+                                    }
                                 }
-                                let _ = fs::write(&conflict_path, &remote_content);
+                            }
+                            Err(e) => {
+                                result
+                                    .errors
+                                    .push(format!("conflict download {}: {e}", action.key));
                             }
                         }
                         let path = data_dir.join(&action.key);
-                        if let Ok(content) = fs::read(&path) {
-                            let local = local_files.iter().find(|f| f.key == action.key);
-                            let last_modified = local
-                                .map(|f| f.last_modified.to_rfc3339())
-                                .unwrap_or_else(|| Utc::now().to_rfc3339());
-                            let _ = client.upload(&action.key, &content, &last_modified).await;
+                        match fs::read(&path) {
+                            Ok(content) => {
+                                let local = local_files.iter().find(|f| f.key == action.key);
+                                let last_modified = local
+                                    .map(|f| f.last_modified.to_rfc3339())
+                                    .unwrap_or_else(|| Utc::now().to_rfc3339());
+                                if let Err(e) =
+                                    client.upload(&action.key, &content, &last_modified).await
+                                {
+                                    result
+                                        .errors
+                                        .push(format!("conflict upload {}: {e}", action.key));
+                                }
+                            }
+                            Err(e) => {
+                                result
+                                    .errors
+                                    .push(format!("conflict read {}: {e}", action.key));
+                            }
                         }
                         result.conflicts += 1;
                     }
@@ -336,48 +408,89 @@ async fn do_sync(handle: &AppHandle) -> Result<SyncResult, String> {
                         // keep_remote: save local as conflict copy, download remote
                         let path = data_dir.join(&action.key);
                         if !conflict_key.is_empty() {
-                            if let Ok(local_content) = fs::read(&path) {
-                                let conflict_path = data_dir.join(conflict_key);
-                                if let Some(parent) = conflict_path.parent() {
-                                    let _ = fs::create_dir_all(parent);
+                            match fs::read(&path) {
+                                Ok(local_content) => {
+                                    let conflict_path = data_dir.join(conflict_key);
+                                    if let Some(parent) = conflict_path.parent() {
+                                        if let Err(e) = fs::create_dir_all(parent) {
+                                            result.errors.push(format!(
+                                                "conflict mkdir {conflict_key}: {e}"
+                                            ));
+                                        }
+                                    }
+                                    if let Err(e) = fs::write(&conflict_path, &local_content) {
+                                        result
+                                            .errors
+                                            .push(format!("conflict write {conflict_key}: {e}"));
+                                    }
                                 }
-                                let _ = fs::write(&conflict_path, &local_content);
+                                Err(e) => {
+                                    result
+                                        .errors
+                                        .push(format!("conflict read {}: {e}", action.key));
+                                }
                             }
                         }
-                        if let Ok(remote_content) = client.download(&action.key).await {
-                            if let Some(parent) = path.parent() {
-                                let _ = fs::create_dir_all(parent);
+                        match client.download(&action.key).await {
+                            Ok(remote_content) => {
+                                if let Some(parent) = path.parent() {
+                                    if let Err(e) = fs::create_dir_all(parent) {
+                                        result
+                                            .errors
+                                            .push(format!("conflict mkdir {}: {e}", action.key));
+                                    }
+                                }
+                                if let Err(e) = fs::write(&path, &remote_content) {
+                                    result
+                                        .errors
+                                        .push(format!("conflict write {}: {e}", action.key));
+                                }
                             }
-                            let _ = fs::write(&path, &remote_content);
+                            Err(e) => {
+                                result
+                                    .errors
+                                    .push(format!("conflict download {}: {e}", action.key));
+                            }
                         }
                         result.conflicts += 1;
                     }
                 }
             }
-            _ => {}
+            unknown => {
+                result
+                    .errors
+                    .push(format!("unknown action type: {unknown}"));
+            }
         }
     }
 
-    // Update local sync state
-    let mut new_state = local_state;
-    new_state.last_sync = Some(
-        plan.sync_token
-            .parse::<DateTime<Utc>>()
-            .unwrap_or_else(|_| Utc::now()),
-    );
-    // Re-scan to update file hashes after sync
-    if let Ok(updated_files) = magical_merchant_core::sync::scan::scan_local_files(&base_dir) {
-        use magical_merchant_core::sync::state::FileSyncRecord;
-        new_state.files.clear();
-        for f in &updated_files {
-            new_state.files.insert(
-                f.key.clone(),
-                FileSyncRecord {
-                    last_synced_modified: f.last_modified,
-                    content_hash: f.content_hash.clone(),
-                },
-            );
-        }
+    // Phase 3: Ack — re-scan and report actual state to server
+    let updated_files = magical_merchant_core::sync::scan::scan_local_files(&base_dir)
+        .map_err(|e| e.to_string())?;
+
+    let ack_files: Vec<ClientFileEntry> = updated_files
+        .iter()
+        .map(|f| ClientFileEntry {
+            key: f.key.clone(),
+            hash: f.content_hash.clone(),
+            last_modified: f.last_modified.to_rfc3339(),
+        })
+        .collect();
+
+    client.send_ack(ack_files, plan.etag).await?;
+
+    // Update local sync state to match what we acked
+    use magical_merchant_core::sync::state::FileSyncRecord;
+    let mut new_state = magical_merchant_core::sync::state::SyncState::default();
+    new_state.last_sync = Some(Utc::now());
+    for f in &updated_files {
+        new_state.files.insert(
+            f.key.clone(),
+            FileSyncRecord {
+                last_synced_modified: f.last_modified,
+                content_hash: f.content_hash.clone(),
+            },
+        );
     }
     new_state.save(&base_dir).map_err(|e| e.to_string())?;
 

@@ -31,7 +31,7 @@ export interface SyncAction {
 
 export interface SyncPlan {
   actions: SyncAction[];
-  sync_token: string;
+  etag: string | null;
 }
 
 const SYNC_STATE_PREFIX = "_sync-state/";
@@ -110,9 +110,11 @@ export function computeSyncPlan(
     } else if (!client && remote && !record) {
       actions.push({ type: "download", key });
     } else if (client && !remote && record) {
-      actions.push({ type: "delete_remote", key });
-    } else if (!client && remote && record) {
+      // Remote was deleted by another device → delete local copy
       actions.push({ type: "delete_local", key });
+    } else if (!client && remote && record) {
+      // Client deleted it → delete remote copy
+      actions.push({ type: "delete_remote", key });
     }
   }
 
@@ -129,11 +131,8 @@ function resolveConflict(
 
 function generateConflictKey(key: string): string {
   const now = new Date();
-  const ts = now
-    .toISOString()
-    .replace(/[-:T]/g, "")
-    .slice(0, 15)
-    .replace(/(\d{8})(\d{6})/, "$1-$2");
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const ts = `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}-${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}`;
 
   const lastDot = key.lastIndexOf(".");
   const lastSlash = key.lastIndexOf("/");
@@ -145,52 +144,10 @@ function generateConflictKey(key: string): string {
   return `${key}.sync-conflict-${ts}`;
 }
 
-export function buildUpdatedState(
-  state: SyncState,
-  actions: SyncAction[],
-  clientFiles: ClientFile[],
-  remoteFiles: RemoteFile[],
-): SyncState {
-  const clientMap = new Map(clientFiles.map((f) => [f.key, f]));
-  const remoteMap = new Map(remoteFiles.map((f) => [f.key, f]));
-  const newFiles = { ...state.files };
-
-  for (const action of actions) {
-    switch (action.type) {
-      case "upload": {
-        const client = clientMap.get(action.key);
-        if (client) {
-          newFiles[action.key] = { hash: client.hash, last_modified: client.last_modified };
-        }
-        break;
-      }
-      case "download": {
-        const remote = remoteMap.get(action.key);
-        if (remote) {
-          newFiles[action.key] = { hash: "", last_modified: remote.lastModified };
-        }
-        break;
-      }
-      case "delete_local":
-      case "delete_remote":
-        delete newFiles[action.key];
-        break;
-      case "conflict": {
-        if (action.resolution === "keep_local") {
-          const client = clientMap.get(action.key);
-          if (client) {
-            newFiles[action.key] = { hash: client.hash, last_modified: client.last_modified };
-          }
-        } else {
-          const remote = remoteMap.get(action.key);
-          if (remote) {
-            newFiles[action.key] = { hash: "", last_modified: remote.lastModified };
-          }
-        }
-        break;
-      }
-    }
+export function buildAckState(ackFiles: ClientFile[]): SyncState {
+  const files: Record<string, FileSyncRecord> = {};
+  for (const f of ackFiles) {
+    files[f.key] = { hash: f.hash, last_modified: f.last_modified };
   }
-
-  return { files: newFiles, last_sync: new Date().toISOString() };
+  return { files, last_sync: new Date().toISOString() };
 }
