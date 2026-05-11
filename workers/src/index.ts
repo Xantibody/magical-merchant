@@ -1,4 +1,12 @@
 import { SignJWT, jwtVerify } from "jose";
+import {
+  type ClientFile,
+  type SyncPlan,
+  buildUpdatedState,
+  computeSyncPlan,
+  loadSyncState,
+  saveSyncState,
+} from "./sync";
 
 interface Env {
   BUCKET: R2Bucket;
@@ -109,6 +117,38 @@ async function handlePut(bucket: R2Bucket, key: string, request: Request): Promi
 async function handleDelete(bucket: R2Bucket, key: string): Promise<Response> {
   await bucket.delete(key);
   return new Response(null, { status: 204 });
+}
+
+interface SyncRequest {
+  files: ClientFile[];
+  last_sync?: string;
+}
+
+async function handleSync(bucket: R2Bucket, userId: string, request: Request): Promise<Response> {
+  const body = (await request.json()) as SyncRequest;
+  if (!Array.isArray(body.files)) {
+    return errorResponse("Invalid request: files must be an array", 400);
+  }
+
+  const { state, etag } = await loadSyncState(bucket, userId);
+  const remoteFiles = (await listAllObjects(bucket)).filter(
+    (f) => !f.key.startsWith("_sync-state/"),
+  );
+
+  const actions = computeSyncPlan(body.files, remoteFiles, state);
+  const updatedState = buildUpdatedState(state, actions, body.files, remoteFiles);
+
+  const saved = await saveSyncState(bucket, userId, updatedState, etag);
+  if (!saved) {
+    return errorResponse("Sync conflict: state was modified concurrently, please retry", 409);
+  }
+
+  const plan: SyncPlan = {
+    actions,
+    sync_token: updatedState.last_sync!,
+  };
+
+  return jsonResponse(plan);
 }
 
 async function signJwt(payload: JwtPayload, secret: string): Promise<string> {
@@ -298,6 +338,10 @@ export default {
     const claims = await verifyJwt(token, env.JWT_SECRET);
     if (!claims) {
       return errorResponse("Unauthorized", 401);
+    }
+
+    if (pathname === "/sync" && method === "POST") {
+      return handleSync(env.BUCKET, claims.sub, request);
     }
 
     if (pathname === "/files" && method === "GET") {
