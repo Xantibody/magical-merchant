@@ -1,8 +1,8 @@
 pub mod client;
 pub mod conflict;
 pub mod diff;
-mod scan;
-mod state;
+pub mod scan;
+pub mod state;
 
 use std::fs;
 use std::path::PathBuf;
