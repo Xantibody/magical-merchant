@@ -494,8 +494,10 @@ fn apply_downloads(
 
 fn save_local_state(base_dir: &Path) -> Result<(), String> {
     let updated_files = scan::scan_local_files(base_dir).map_err(|e| e.to_string())?;
-    let mut new_state = SyncState::default();
-    new_state.last_sync = Some(Utc::now());
+    let mut new_state = SyncState {
+        last_sync: Some(Utc::now()),
+        ..Default::default()
+    };
     for f in &updated_files {
         new_state.files.insert(
             f.key.clone(),
