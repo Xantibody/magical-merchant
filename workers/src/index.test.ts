@@ -1,4 +1,4 @@
-import { env, createExecutionContext, waitOnExecutionContext, fetchMock } from "cloudflare:test";
+import { env, createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import { describe, it, expect, beforeAll, afterEach } from "vitest";
 import { SignJWT } from "jose";
 import worker from "./index";
@@ -41,22 +41,39 @@ async function jsonBody<T>(response: Response): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-describe("Workers R2 Proxy", () => {
+function b64(s: string): string {
+  return btoa(s);
+}
+
+function b64Decode(s: string): string {
+  return atob(s);
+}
+
+async function clearBucket(): Promise<void> {
+  const listed = await env.BUCKET.list({ limit: 1000 });
+  if (listed.objects.length > 0) {
+    await env.BUCKET.delete(listed.objects.map((o) => o.key));
+  }
+}
+
+describe("Workers Sync API", () => {
+  afterEach(async () => {
+    await clearBucket();
+  });
+
   describe("Authentication", () => {
     it("rejects requests without Authorization header", async () => {
-      const req = new Request("http://localhost/files");
+      const req = new Request("http://localhost/sync-state");
       const ctx = createExecutionContext();
       const res = await worker.fetch(req, env, ctx);
       await waitOnExecutionContext(ctx);
 
       expect(res.status).toBe(401);
-      const body = await jsonBody<{ error: string }>(res);
-      expect(body.error).toBe("Unauthorized");
     });
 
-    it("rejects requests with invalid JWT", async () => {
-      const req = new Request("http://localhost/files", {
-        headers: { Authorization: "Bearer invalid-token" },
+    it("rejects invalid JWT", async () => {
+      const req = new Request("http://localhost/sync-state", {
+        headers: { Authorization: "Bearer invalid" },
       });
       const ctx = createExecutionContext();
       const res = await worker.fetch(req, env, ctx);
@@ -71,7 +88,7 @@ describe("Workers R2 Proxy", () => {
         email: "test@example.com",
         exp: Math.floor(Date.now() / 1000) - 100,
       });
-      const req = new Request("http://localhost/files", {
+      const req = new Request("http://localhost/sync-state", {
         headers: { Authorization: `Bearer ${expiredToken}` },
       });
       const ctx = createExecutionContext();
@@ -80,393 +97,343 @@ describe("Workers R2 Proxy", () => {
 
       expect(res.status).toBe(401);
     });
-
-    it("rejects JWT signed with wrong secret", async () => {
-      const badToken = await makeJwt(
-        {
-          sub: "user-123",
-          email: "test@example.com",
-          exp: Math.floor(Date.now() / 1000) + 3600,
-        },
-        "wrong-secret",
-      );
-      const req = new Request("http://localhost/files", {
-        headers: { Authorization: `Bearer ${badToken}` },
-      });
-      const ctx = createExecutionContext();
-      const res = await worker.fetch(req, env, ctx);
-      await waitOnExecutionContext(ctx);
-
-      expect(res.status).toBe(401);
-    });
-
-    it("accepts requests with valid Bearer token", async () => {
-      const req = request("/files");
-      const ctx = createExecutionContext();
-      const res = await worker.fetch(req, env, ctx);
-      await waitOnExecutionContext(ctx);
-
-      expect(res.status).toBe(200);
-    });
   });
 
-  describe("GET /auth/google", () => {
-    it("redirects to Google OAuth with state cookie", async () => {
-      const req = new Request("http://localhost/auth/google");
-      const ctx = createExecutionContext();
-      const res = await worker.fetch(req, env, ctx);
-      await waitOnExecutionContext(ctx);
-
-      expect(res.status).toBe(302);
-      const location = res.headers.get("Location")!;
-      expect(location).toContain("accounts.google.com/o/oauth2/v2/auth");
-      expect(location).toContain("client_id=test-client-id");
-      expect(location).toContain("scope=openid+email");
-      expect(location).toContain("redirect_uri=http%3A%2F%2Flocalhost%2Fauth%2Fcallback");
-
-      const cookies = res.headers.getSetCookie();
-      expect(cookies.some((c) => c.includes("__oauth_state="))).toBe(true);
-    });
-
-    it("rejects invalid app_redirect", async () => {
-      const req = new Request(
-        "http://localhost/auth/google?app_redirect=https%3A%2F%2Fevil.com%2Fsteal",
-      );
-      const ctx = createExecutionContext();
-      const res = await worker.fetch(req, env, ctx);
-      await waitOnExecutionContext(ctx);
-
-      expect(res.status).toBe(400);
-    });
-
-    it("stores app_redirect in cookie", async () => {
-      const req = new Request(
-        "http://localhost/auth/google?app_redirect=http%3A%2F%2F127.0.0.1%3A12345%2Fcallback",
-      );
-      const ctx = createExecutionContext();
-      const res = await worker.fetch(req, env, ctx);
-      await waitOnExecutionContext(ctx);
-
-      expect(res.status).toBe(302);
-      const cookies = res.headers.getSetCookie();
-      expect(cookies.some((c) => c.includes("__oauth_app_redirect="))).toBe(true);
-    });
-  });
-
-  describe("GET /auth/callback", () => {
-    beforeAll(() => {
-      fetchMock.activate();
-    });
-
-    afterEach(() => {
-      fetchMock.assertNoPendingInterceptors();
-    });
-
-    it("returns 400 when code is missing", async () => {
-      const req = new Request("http://localhost/auth/callback");
-      const ctx = createExecutionContext();
-      const res = await worker.fetch(req, env, ctx);
-      await waitOnExecutionContext(ctx);
-
-      expect(res.status).toBe(400);
-    });
-
-    it("returns 403 when state does not match cookie", async () => {
-      const req = new Request("http://localhost/auth/callback?code=test-code&state=abc", {
-        headers: { Cookie: "__oauth_state=different-state" },
-      });
-      const ctx = createExecutionContext();
-      const res = await worker.fetch(req, env, ctx);
-      await waitOnExecutionContext(ctx);
-
-      expect(res.status).toBe(403);
-    });
-
-    it("returns 403 when state cookie is missing", async () => {
-      const req = new Request("http://localhost/auth/callback?code=test-code&state=abc");
-      const ctx = createExecutionContext();
-      const res = await worker.fetch(req, env, ctx);
-      await waitOnExecutionContext(ctx);
-
-      expect(res.status).toBe(403);
-    });
-
-    it("exchanges code and redirects via deep link", async () => {
-      fetchMock
-        .get("https://oauth2.googleapis.com")
-        .intercept({ path: "/token", method: "POST" })
-        .reply(200, JSON.stringify({ access_token: "google-access-token" }), {
-          headers: { "Content-Type": "application/json" },
-        });
-
-      fetchMock
-        .get("https://openidconnect.googleapis.com")
-        .intercept({ path: "/v1/userinfo" })
-        .reply(200, JSON.stringify({ sub: "google-user-123", email: "user@gmail.com" }), {
-          headers: { "Content-Type": "application/json" },
-        });
-
-      const req = new Request(
-        "http://localhost/auth/callback?code=test-auth-code&state=valid-state",
-        {
-          headers: { Cookie: "__oauth_state=valid-state" },
-        },
-      );
-      const ctx = createExecutionContext();
-      const res = await worker.fetch(req, env, ctx);
-      await waitOnExecutionContext(ctx);
-
-      expect(res.status).toBe(200);
-      const body = await res.text();
-      expect(body).toContain("magical-merchant://auth/callback?token=");
-    });
-
-    it("redirects via 302 for loopback app_redirect", async () => {
-      fetchMock
-        .get("https://oauth2.googleapis.com")
-        .intercept({ path: "/token", method: "POST" })
-        .reply(200, JSON.stringify({ access_token: "google-access-token" }), {
-          headers: { "Content-Type": "application/json" },
-        });
-
-      fetchMock
-        .get("https://openidconnect.googleapis.com")
-        .intercept({ path: "/v1/userinfo" })
-        .reply(200, JSON.stringify({ sub: "google-user-123", email: "user@gmail.com" }), {
-          headers: { "Content-Type": "application/json" },
-        });
-
-      const appRedirect = encodeURIComponent("http://127.0.0.1:12345/callback");
-      const req = new Request(
-        "http://localhost/auth/callback?code=test-auth-code&state=valid-state",
-        {
-          headers: {
-            Cookie: `__oauth_state=valid-state; __oauth_app_redirect=${appRedirect}`,
-          },
-        },
-      );
-      const ctx = createExecutionContext();
-      const res = await worker.fetch(req, env, ctx);
-      await waitOnExecutionContext(ctx);
-
-      expect(res.status).toBe(302);
-      const location = res.headers.get("Location")!;
-      expect(location).toContain("http://127.0.0.1:12345/callback?token=");
-    });
-
-    it("returns 502 when token exchange fails", async () => {
-      fetchMock
-        .get("https://oauth2.googleapis.com")
-        .intercept({ path: "/token", method: "POST" })
-        .reply(400, JSON.stringify({ error: "invalid_grant" }));
-
-      const req = new Request("http://localhost/auth/callback?code=bad-code&state=valid-state", {
-        headers: { Cookie: "__oauth_state=valid-state" },
-      });
-      const ctx = createExecutionContext();
-      const res = await worker.fetch(req, env, ctx);
-      await waitOnExecutionContext(ctx);
-
-      expect(res.status).toBe(502);
-    });
-  });
-
-  describe("GET /files", () => {
-    it("returns empty list when bucket is empty", async () => {
-      const req = request("/files");
-      const ctx = createExecutionContext();
-      const res = await worker.fetch(req, env, ctx);
-      await waitOnExecutionContext(ctx);
-
-      expect(res.status).toBe(200);
-      const body = await jsonBody<{ files: unknown[] }>(res);
-      expect(body.files).toEqual([]);
-    });
-
-    it("lists uploaded files with metadata", async () => {
-      const putReq = request("/files/notes/test.md", {
-        method: "PUT",
-        body: "hello",
-        headers: { "X-Last-Modified": "2026-04-22T10:00:00Z" },
-      });
-      const putCtx = createExecutionContext();
-      await worker.fetch(putReq, env, putCtx);
-      await waitOnExecutionContext(putCtx);
-
-      const req = request("/files");
+  describe("GET /sync-state", () => {
+    it("returns empty state for new user", async () => {
+      const req = request("/sync-state");
       const ctx = createExecutionContext();
       const res = await worker.fetch(req, env, ctx);
       await waitOnExecutionContext(ctx);
 
       expect(res.status).toBe(200);
       const body = await jsonBody<{
-        files: { key: string; lastModified: string; size: number }[];
+        files: Record<string, unknown>;
+        last_sync: string | null;
+        etag: string | null;
       }>(res);
-      expect(body.files).toHaveLength(1);
-      expect(body.files[0].key).toBe("notes/test.md");
-      expect(body.files[0].lastModified).toBe("2026-04-22T10:00:00Z");
-      expect(body.files[0].size).toBe(5);
+      expect(body.files).toEqual({});
+      expect(body.last_sync).toBeNull();
+      expect(body.etag).toBeNull();
+    });
+
+    it("returns saved state with etag", async () => {
+      // First, save some state via bulk
+      const bulkReq = request("/sync/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          uploads: [
+            {
+              key: "notes/a.md",
+              content_base64: b64("hello"),
+              last_modified: "2026-05-12T10:00:00Z",
+            },
+          ],
+          downloads: [],
+          delete_remote: [],
+          conflicts: [],
+          new_state: {
+            files: { "notes/a.md": { hash: "h1", last_modified: "2026-05-12T10:00:00Z" } },
+            last_sync: "2026-05-12T10:00:00Z",
+          },
+          expected_etag: null,
+        }),
+      });
+      const ctx = createExecutionContext();
+      const res = await worker.fetch(bulkReq, env, ctx);
+      await waitOnExecutionContext(ctx);
+      expect(res.status).toBe(200);
+
+      // Now read state
+      const stateReq = request("/sync-state");
+      const ctx2 = createExecutionContext();
+      const stateRes = await worker.fetch(stateReq, env, ctx2);
+      await waitOnExecutionContext(ctx2);
+
+      expect(stateRes.status).toBe(200);
+      const state = await jsonBody<{
+        files: Record<string, { hash: string }>;
+        etag: string | null;
+      }>(stateRes);
+      expect(state.files["notes/a.md"].hash).toBe("h1");
+      expect(state.etag).toBeTruthy();
     });
   });
 
-  describe("GET /files/:key", () => {
-    it("returns file content and X-Last-Modified header", async () => {
-      const putReq = request("/files/timeline/2026-04-22.md", {
-        method: "PUT",
-        body: "# Timeline",
-        headers: { "X-Last-Modified": "2026-04-22T12:00:00Z" },
+  describe("POST /sync/bulk", () => {
+    it("uploads files to R2", async () => {
+      const req = request("/sync/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          uploads: [
+            {
+              key: "notes/up.md",
+              content_base64: b64("uploaded content"),
+              last_modified: "2026-05-12T10:00:00Z",
+            },
+          ],
+          downloads: [],
+          delete_remote: [],
+          conflicts: [],
+          new_state: {
+            files: { "notes/up.md": { hash: "h", last_modified: "2026-05-12T10:00:00Z" } },
+            last_sync: "2026-05-12T10:00:00Z",
+          },
+          expected_etag: null,
+        }),
       });
-      const putCtx = createExecutionContext();
-      await worker.fetch(putReq, env, putCtx);
-      await waitOnExecutionContext(putCtx);
-
-      const req = request("/files/timeline/2026-04-22.md");
       const ctx = createExecutionContext();
       const res = await worker.fetch(req, env, ctx);
       await waitOnExecutionContext(ctx);
 
       expect(res.status).toBe(200);
-      expect(await res.text()).toBe("# Timeline");
-      expect(res.headers.get("X-Last-Modified")).toBe("2026-04-22T12:00:00Z");
+      const obj = await env.BUCKET.get("notes/up.md");
+      expect(obj).not.toBeNull();
+      expect(await obj!.text()).toBe("uploaded content");
     });
 
-    it("returns 404 for missing file", async () => {
-      const req = request("/files/missing.md");
+    it("downloads files from R2", async () => {
+      // Pre-populate
+      await env.BUCKET.put("notes/down.md", "remote content", {
+        customMetadata: { lastModified: "2026-05-12T11:00:00Z" },
+      });
+
+      const req = request("/sync/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          uploads: [],
+          downloads: ["notes/down.md"],
+          delete_remote: [],
+          conflicts: [],
+          new_state: { files: {}, last_sync: "2026-05-12T10:00:00Z" },
+          expected_etag: null,
+        }),
+      });
+      const ctx = createExecutionContext();
+      const res = await worker.fetch(req, env, ctx);
+      await waitOnExecutionContext(ctx);
+
+      expect(res.status).toBe(200);
+      const body = await jsonBody<{
+        downloads: { key: string; content_base64: string; last_modified: string }[];
+      }>(res);
+      expect(body.downloads).toHaveLength(1);
+      expect(body.downloads[0].key).toBe("notes/down.md");
+      expect(b64Decode(body.downloads[0].content_base64)).toBe("remote content");
+    });
+
+    it("deletes remote files", async () => {
+      await env.BUCKET.put("notes/del.md", "to delete");
+
+      const req = request("/sync/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          uploads: [],
+          downloads: [],
+          delete_remote: ["notes/del.md"],
+          conflicts: [],
+          new_state: { files: {}, last_sync: "2026-05-12T10:00:00Z" },
+          expected_etag: null,
+        }),
+      });
+      const ctx = createExecutionContext();
+      const res = await worker.fetch(req, env, ctx);
+      await waitOnExecutionContext(ctx);
+
+      expect(res.status).toBe(200);
+      const obj = await env.BUCKET.get("notes/del.md");
+      expect(obj).toBeNull();
+    });
+
+    it("handles conflict with keep_local: writes conflict copy + new content", async () => {
+      await env.BUCKET.put("notes/c.md", "remote version", {
+        customMetadata: { lastModified: "2026-05-12T10:00:00Z" },
+      });
+
+      const req = request("/sync/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          uploads: [],
+          downloads: [],
+          delete_remote: [],
+          conflicts: [
+            {
+              key: "notes/c.md",
+              conflict_key: "notes/c.sync-conflict-20260512-120000.md",
+              resolution: "keep_local",
+              content_base64: b64("local version"),
+            },
+          ],
+          new_state: { files: {}, last_sync: "2026-05-12T12:00:00Z" },
+          expected_etag: null,
+        }),
+      });
+      const ctx = createExecutionContext();
+      const res = await worker.fetch(req, env, ctx);
+      await waitOnExecutionContext(ctx);
+
+      expect(res.status).toBe(200);
+
+      const conflict = await env.BUCKET.get("notes/c.sync-conflict-20260512-120000.md");
+      expect(conflict).not.toBeNull();
+      expect(await conflict!.text()).toBe("remote version");
+
+      const main = await env.BUCKET.get("notes/c.md");
+      expect(await main!.text()).toBe("local version");
+    });
+
+    it("handles conflict with keep_remote: returns remote content for client to save", async () => {
+      await env.BUCKET.put("notes/c.md", "remote wins", {
+        customMetadata: { lastModified: "2026-05-12T10:00:00Z" },
+      });
+
+      const req = request("/sync/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          uploads: [],
+          downloads: [],
+          delete_remote: [],
+          conflicts: [
+            {
+              key: "notes/c.md",
+              conflict_key: "notes/c.sync-conflict-x.md",
+              resolution: "keep_remote",
+            },
+          ],
+          new_state: { files: {}, last_sync: "2026-05-12T12:00:00Z" },
+          expected_etag: null,
+        }),
+      });
+      const ctx = createExecutionContext();
+      const res = await worker.fetch(req, env, ctx);
+      await waitOnExecutionContext(ctx);
+
+      expect(res.status).toBe(200);
+      const body = await jsonBody<{ downloads: { key: string; content_base64: string }[] }>(res);
+      expect(body.downloads).toHaveLength(1);
+      expect(body.downloads[0].key).toBe("notes/c.md");
+      expect(b64Decode(body.downloads[0].content_base64)).toBe("remote wins");
+    });
+
+    it("rejects unsafe keys (path traversal)", async () => {
+      const req = request("/sync/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          uploads: [{ key: "../etc/passwd", content_base64: b64("evil"), last_modified: "x" }],
+          downloads: [],
+          delete_remote: [],
+          conflicts: [],
+          new_state: { files: {}, last_sync: "2026-05-12T12:00:00Z" },
+          expected_etag: null,
+        }),
+      });
+      const ctx = createExecutionContext();
+      const res = await worker.fetch(req, env, ctx);
+      await waitOnExecutionContext(ctx);
+
+      expect(res.status).toBe(400);
+    });
+
+    it("rejects _sync-state/ prefix", async () => {
+      const req = request("/sync/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          uploads: [{ key: "_sync-state/evil.json", content_base64: b64("x"), last_modified: "x" }],
+          downloads: [],
+          delete_remote: [],
+          conflicts: [],
+          new_state: { files: {}, last_sync: "2026-05-12T12:00:00Z" },
+          expected_etag: null,
+        }),
+      });
+      const ctx = createExecutionContext();
+      const res = await worker.fetch(req, env, ctx);
+      await waitOnExecutionContext(ctx);
+
+      expect(res.status).toBe(400);
+    });
+
+    it("returns 409 on etag mismatch", async () => {
+      // First write
+      const req1 = request("/sync/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          uploads: [],
+          downloads: [],
+          delete_remote: [],
+          conflicts: [],
+          new_state: { files: {}, last_sync: "2026-05-12T10:00:00Z" },
+          expected_etag: null,
+        }),
+      });
+      const ctx1 = createExecutionContext();
+      await worker.fetch(req1, env, ctx1);
+      await waitOnExecutionContext(ctx1);
+
+      // Second write with stale etag (null when state exists)
+      const req2 = request("/sync/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          uploads: [],
+          downloads: [],
+          delete_remote: [],
+          conflicts: [],
+          new_state: { files: {}, last_sync: "2026-05-12T11:00:00Z" },
+          expected_etag: null,
+        }),
+      });
+      const ctx2 = createExecutionContext();
+      const res2 = await worker.fetch(req2, env, ctx2);
+      await waitOnExecutionContext(ctx2);
+
+      expect(res2.status).toBe(409);
+    });
+
+    it("rejects invalid JSON", async () => {
+      const req = request("/sync/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "not json",
+      });
+      const ctx = createExecutionContext();
+      const res = await worker.fetch(req, env, ctx);
+      await waitOnExecutionContext(ctx);
+
+      expect(res.status).toBe(400);
+    });
+
+    it("rejects missing required fields", async () => {
+      const req = request("/sync/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ uploads: [] }),
+      });
+      const ctx = createExecutionContext();
+      const res = await worker.fetch(req, env, ctx);
+      await waitOnExecutionContext(ctx);
+
+      expect(res.status).toBe(400);
+    });
+  });
+
+  describe("Unknown routes", () => {
+    it("returns 404 for unknown paths", async () => {
+      const req = request("/unknown");
       const ctx = createExecutionContext();
       const res = await worker.fetch(req, env, ctx);
       await waitOnExecutionContext(ctx);
 
       expect(res.status).toBe(404);
-    });
-  });
-
-  describe("PUT /files/:key", () => {
-    it("creates a new file with custom lastModified", async () => {
-      const putReq = request("/files/notes/new.md", {
-        method: "PUT",
-        body: "# New Note",
-        headers: { "X-Last-Modified": "2026-04-22T14:00:00Z" },
-      });
-      const putCtx = createExecutionContext();
-      const putRes = await worker.fetch(putReq, env, putCtx);
-      await waitOnExecutionContext(putCtx);
-      expect(putRes.status).toBe(201);
-
-      const getReq = request("/files/notes/new.md");
-      const getCtx = createExecutionContext();
-      const getRes = await worker.fetch(getReq, env, getCtx);
-      await waitOnExecutionContext(getCtx);
-
-      expect(getRes.status).toBe(200);
-      expect(await getRes.text()).toBe("# New Note");
-      expect(getRes.headers.get("X-Last-Modified")).toBe("2026-04-22T14:00:00Z");
-    });
-
-    it("uses current time if X-Last-Modified is missing", async () => {
-      const putReq = request("/files/notes/auto.md", {
-        method: "PUT",
-        body: "content",
-      });
-      const putCtx = createExecutionContext();
-      const putRes = await worker.fetch(putReq, env, putCtx);
-      await waitOnExecutionContext(putCtx);
-      expect(putRes.status).toBe(201);
-
-      const body = await jsonBody<{ lastModified: string }>(putRes);
-      expect(body.lastModified).toBeDefined();
-    });
-  });
-
-  describe("DELETE /files/:key", () => {
-    it("deletes an existing file", async () => {
-      const putReq = request("/files/notes/delete-me.md", {
-        method: "PUT",
-        body: "bye",
-        headers: { "X-Last-Modified": "2026-04-22T10:00:00Z" },
-      });
-      const putCtx = createExecutionContext();
-      await worker.fetch(putReq, env, putCtx);
-      await waitOnExecutionContext(putCtx);
-
-      const delReq = request("/files/notes/delete-me.md", {
-        method: "DELETE",
-      });
-      const delCtx = createExecutionContext();
-      const delRes = await worker.fetch(delReq, env, delCtx);
-      await waitOnExecutionContext(delCtx);
-      expect(delRes.status).toBe(204);
-
-      const getReq = request("/files/notes/delete-me.md");
-      const getCtx = createExecutionContext();
-      const getRes = await worker.fetch(getReq, env, getCtx);
-      await waitOnExecutionContext(getCtx);
-      expect(getRes.status).toBe(404);
-    });
-
-    it("returns 204 even for non-existent file", async () => {
-      const req = request("/files/missing.md", { method: "DELETE" });
-      const ctx = createExecutionContext();
-      const res = await worker.fetch(req, env, ctx);
-      await waitOnExecutionContext(ctx);
-
-      expect(res.status).toBe(204);
-    });
-  });
-
-  describe("Security", () => {
-    it("rejects path traversal with ..", async () => {
-      const req = request("/files/notes/..%2Fsecret.md");
-      const ctx = createExecutionContext();
-      const res = await worker.fetch(req, env, ctx);
-      await waitOnExecutionContext(ctx);
-
-      expect(res.status).toBe(400);
-      const body = await jsonBody<{ error: string }>(res);
-      expect(body.error).toBe("Path traversal not allowed");
-    });
-
-    it("rejects empty key", async () => {
-      const req = request("/files/");
-      const ctx = createExecutionContext();
-      const res = await worker.fetch(req, env, ctx);
-      await waitOnExecutionContext(ctx);
-
-      expect(res.status).toBe(400);
-    });
-
-    it("denies access to _sync-state/ keys", async () => {
-      const req = request("/files/_sync-state/user.json", { method: "GET" });
-      const ctx = createExecutionContext();
-      const res = await worker.fetch(req, env, ctx);
-      await waitOnExecutionContext(ctx);
-
-      expect(res.status).toBe(403);
-      const body = await jsonBody<{ error: string }>(res);
-      expect(body.error).toBe("Access denied");
-    });
-
-    it("denies PUT to _sync-state/ keys", async () => {
-      const req = request("/files/_sync-state/user.json", {
-        method: "PUT",
-        body: "malicious",
-        headers: { "X-Last-Modified": new Date().toISOString() },
-      });
-      const ctx = createExecutionContext();
-      const res = await worker.fetch(req, env, ctx);
-      await waitOnExecutionContext(ctx);
-
-      expect(res.status).toBe(403);
-    });
-  });
-
-  describe("Method handling", () => {
-    it("returns 405 for unsupported methods", async () => {
-      const req = request("/files/test.md", { method: "PATCH" });
-      const ctx = createExecutionContext();
-      const res = await worker.fetch(req, env, ctx);
-      await waitOnExecutionContext(ctx);
-
-      expect(res.status).toBe(405);
     });
   });
 });

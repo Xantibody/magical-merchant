@@ -8,30 +8,30 @@ export interface SyncState {
   last_sync: string | null;
 }
 
-export interface ClientFile {
+export interface FileContent {
   key: string;
-  hash: string;
+  content_base64: string;
   last_modified: string;
 }
 
-export interface RemoteFile {
+export interface ConflictOp {
   key: string;
-  lastModified: string;
-  size: number;
+  conflict_key: string;
+  resolution: "keep_local" | "keep_remote";
+  content_base64?: string;
 }
 
-export type SyncActionType = "upload" | "download" | "delete_local" | "delete_remote" | "conflict";
-
-export interface SyncAction {
-  type: SyncActionType;
-  key: string;
-  conflict_key?: string;
-  resolution?: "keep_local" | "keep_remote";
+export interface BulkRequest {
+  uploads: FileContent[];
+  downloads: string[];
+  delete_remote: string[];
+  conflicts: ConflictOp[];
+  new_state: SyncState;
+  expected_etag: string | null;
 }
 
-export interface SyncPlan {
-  actions: SyncAction[];
-  etag: string | null;
+export interface BulkResponse {
+  downloads: FileContent[];
 }
 
 const SYNC_STATE_PREFIX = "_sync-state/";
@@ -69,85 +69,110 @@ export async function saveSyncState(
   return true;
 }
 
-export function computeSyncPlan(
-  clientFiles: ClientFile[],
-  remoteFiles: RemoteFile[],
-  state: SyncState,
-): SyncAction[] {
-  const actions: SyncAction[] = [];
+function base64Encode(bytes: ArrayBuffer): string {
+  const arr = new Uint8Array(bytes);
+  let binary = "";
+  for (let i = 0; i < arr.length; i++) binary += String.fromCharCode(arr[i]);
+  return btoa(binary);
+}
 
-  const clientMap = new Map(clientFiles.map((f) => [f.key, f]));
-  const remoteMap = new Map(remoteFiles.map((f) => [f.key, f]));
+function base64Decode(s: string): Uint8Array {
+  const binary = atob(s);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
 
-  const allKeys = new Set([...clientMap.keys(), ...remoteMap.keys()]);
+export function isUnsafeKey(key: string): boolean {
+  return (
+    key.includes("..") ||
+    key.includes("\0") ||
+    key.startsWith("/") ||
+    key.startsWith(SYNC_STATE_PREFIX)
+  );
+}
 
-  for (const key of allKeys) {
-    if (key.startsWith(SYNC_STATE_PREFIX)) continue;
+async function executeUpload(bucket: R2Bucket, f: FileContent): Promise<void> {
+  if (isUnsafeKey(f.key)) throw new Error(`unsafe key: ${f.key}`);
+  const body = base64Decode(f.content_base64);
+  await bucket.put(f.key, body, {
+    customMetadata: { lastModified: f.last_modified },
+  });
+}
 
-    const client = clientMap.get(key);
-    const remote = remoteMap.get(key);
-    const record = state.files[key];
+async function executeDownload(bucket: R2Bucket, key: string): Promise<FileContent> {
+  if (isUnsafeKey(key)) throw new Error(`unsafe key: ${key}`);
+  const obj = await bucket.get(key);
+  if (!obj) throw new Error(`not found: ${key}`);
+  const lastModified = obj.customMetadata?.lastModified ?? obj.uploaded.toISOString();
+  const buf = await obj.arrayBuffer();
+  return {
+    key,
+    content_base64: base64Encode(buf),
+    last_modified: lastModified,
+  };
+}
 
-    if (client && remote && record) {
-      const clientChanged = client.hash !== record.hash;
-      const remoteChanged = remote.lastModified !== record.last_modified;
+async function executeConflict(bucket: R2Bucket, c: ConflictOp): Promise<FileContent | null> {
+  if (isUnsafeKey(c.key) || isUnsafeKey(c.conflict_key)) {
+    throw new Error(`unsafe key: ${c.key} or ${c.conflict_key}`);
+  }
 
-      if (clientChanged && remoteChanged) {
-        const resolution = resolveConflict(client.last_modified, remote.lastModified);
-        const conflictKey = generateConflictKey(key);
-        actions.push({ type: "conflict", key, resolution, conflict_key: conflictKey });
-      } else if (clientChanged) {
-        actions.push({ type: "upload", key });
-      } else if (remoteChanged) {
-        actions.push({ type: "download", key });
-      }
-    } else if (client && remote && !record) {
-      const resolution = resolveConflict(client.last_modified, remote.lastModified);
-      const conflictKey = generateConflictKey(key);
-      actions.push({ type: "conflict", key, resolution, conflict_key: conflictKey });
-    } else if (client && !remote && !record) {
-      actions.push({ type: "upload", key });
-    } else if (!client && remote && !record) {
-      actions.push({ type: "download", key });
-    } else if (client && !remote && record) {
-      // Remote was deleted by another device → delete local copy
-      actions.push({ type: "delete_local", key });
-    } else if (!client && remote && record) {
-      // Client deleted it → delete remote copy
-      actions.push({ type: "delete_remote", key });
+  if (c.resolution === "keep_local") {
+    // Save current remote content under conflict_key, then overwrite with local
+    const remote = await bucket.get(c.key);
+    if (remote) {
+      const remoteLm = remote.customMetadata?.lastModified ?? remote.uploaded.toISOString();
+      await bucket.put(c.conflict_key, remote.body, {
+        customMetadata: { lastModified: remoteLm },
+      });
     }
+    if (c.content_base64 !== undefined) {
+      const body = base64Decode(c.content_base64);
+      await bucket.put(c.key, body, {
+        customMetadata: { lastModified: new Date().toISOString() },
+      });
+    }
+    return null;
+  } else {
+    // keep_remote: client will save local as conflict copy locally,
+    // and downloads remote content. We just return remote content so client can write both.
+    const obj = await bucket.get(c.key);
+    if (!obj) throw new Error(`conflict download not found: ${c.key}`);
+    const lastModified = obj.customMetadata?.lastModified ?? obj.uploaded.toISOString();
+    const buf = await obj.arrayBuffer();
+    return {
+      key: c.key,
+      content_base64: base64Encode(buf),
+      last_modified: lastModified,
+    };
   }
-
-  actions.sort((a, b) => a.key.localeCompare(b.key));
-  return actions;
 }
 
-function resolveConflict(
-  clientModified: string,
-  remoteModified: string,
-): "keep_local" | "keep_remote" {
-  return new Date(clientModified) >= new Date(remoteModified) ? "keep_local" : "keep_remote";
-}
-
-function generateConflictKey(key: string): string {
-  const now = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const ts = `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}-${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}`;
-
-  const lastDot = key.lastIndexOf(".");
-  const lastSlash = key.lastIndexOf("/");
-  if (lastDot > lastSlash) {
-    const stem = key.slice(0, lastDot);
-    const ext = key.slice(lastDot);
-    return `${stem}.sync-conflict-${ts}${ext}`;
+export async function executeBulk(bucket: R2Bucket, req: BulkRequest): Promise<BulkResponse> {
+  // Validate all keys upfront
+  for (const u of req.uploads) {
+    if (isUnsafeKey(u.key)) throw new Error(`unsafe upload key: ${u.key}`);
   }
-  return `${key}.sync-conflict-${ts}`;
-}
-
-export function buildAckState(ackFiles: ClientFile[]): SyncState {
-  const files: Record<string, FileSyncRecord> = {};
-  for (const f of ackFiles) {
-    files[f.key] = { hash: f.hash, last_modified: f.last_modified };
+  for (const d of req.downloads) {
+    if (isUnsafeKey(d)) throw new Error(`unsafe download key: ${d}`);
   }
-  return { files, last_sync: new Date().toISOString() };
+  for (const d of req.delete_remote) {
+    if (isUnsafeKey(d)) throw new Error(`unsafe delete key: ${d}`);
+  }
+
+  // Run all R2 operations concurrently
+  const [, downloads, conflictDownloads] = await Promise.all([
+    Promise.all(req.uploads.map((f) => executeUpload(bucket, f))),
+    Promise.all(req.downloads.map((k) => executeDownload(bucket, k))),
+    Promise.all(req.conflicts.map((c) => executeConflict(bucket, c))),
+    req.delete_remote.length > 0 ? bucket.delete(req.delete_remote) : Promise.resolve(),
+  ]);
+
+  const allDownloads: FileContent[] = [
+    ...downloads,
+    ...conflictDownloads.filter((d): d is FileContent => d !== null),
+  ];
+
+  return { downloads: allDownloads };
 }
