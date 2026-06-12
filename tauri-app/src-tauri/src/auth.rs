@@ -30,6 +30,8 @@ impl SyncConfig {
     }
 
     pub fn save(&self, base_dir: &Path) -> Result<(), String> {
+        // 初回起動時は app_data_dir がまだ存在しないことがある
+        fs::create_dir_all(base_dir).map_err(|e| e.to_string())?;
         let path = base_dir.join(SYNC_CONFIG_FILENAME);
         let content = serde_json::to_string_pretty(self).map_err(|e| e.to_string())?;
         fs::write(&path, content).map_err(|e| e.to_string())?;
@@ -47,6 +49,21 @@ impl SyncConfig {
     pub fn is_configured(&self) -> bool {
         !self.workers_url.is_empty()
     }
+}
+
+/// Workers URL を保存前に正規化・検証する。
+/// 末尾スラッシュは API パスが "//files" になり Worker 側で 400 になるため除去する。
+fn normalize_workers_url(input: &str) -> Result<String, String> {
+    let trimmed = input.trim().trim_end_matches('/');
+    if trimmed.is_empty() {
+        return Ok(String::new());
+    }
+    let parsed = url::Url::parse(trimmed)
+        .map_err(|_| "Invalid URL. Expected e.g. https://example.workers.dev".to_string())?;
+    if parsed.scheme() != "https" && parsed.scheme() != "http" {
+        return Err("URL must start with https:// or http://".to_string());
+    }
+    Ok(trimmed.to_string())
 }
 
 pub fn store_token(token: &str) -> Result<(), String> {
@@ -213,6 +230,9 @@ pub fn get_sync_config(handle: AppHandle) -> Result<SyncConfig, String> {
 #[tauri::command]
 pub fn save_sync_config(handle: AppHandle, config: SyncConfig) -> Result<(), String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let config = SyncConfig {
+        workers_url: normalize_workers_url(&config.workers_url)?,
+    };
     config.save(&base_dir)
 }
 
@@ -274,6 +294,40 @@ mod tests {
             workers_url: "https://sync.example.com".to_string(),
         };
         assert!(config.is_configured());
+    }
+
+    #[test]
+    fn sync_config_save_creates_missing_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        // 初回起動時は app_data_dir 自体がまだ存在しない
+        let base = dir.path().join("not-yet-created");
+        let config = SyncConfig {
+            workers_url: "https://sync.example.com".to_string(),
+        };
+        config.save(&base).unwrap();
+        let loaded = SyncConfig::load(&base);
+        assert_eq!(loaded.workers_url, "https://sync.example.com");
+    }
+
+    #[test]
+    fn normalize_workers_url_trims_trailing_slash_and_whitespace() {
+        assert_eq!(
+            normalize_workers_url(" https://sync.example.com/ ").unwrap(),
+            "https://sync.example.com"
+        );
+    }
+
+    #[test]
+    fn normalize_workers_url_allows_empty_for_unconfigured() {
+        assert_eq!(normalize_workers_url("").unwrap(), "");
+        assert_eq!(normalize_workers_url("   ").unwrap(), "");
+    }
+
+    #[test]
+    fn normalize_workers_url_rejects_invalid_scheme() {
+        assert!(normalize_workers_url("ftp://example.com").is_err());
+        assert!(normalize_workers_url("not a url").is_err());
+        assert!(normalize_workers_url("example.workers.dev").is_err());
     }
 
     #[test]

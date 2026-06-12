@@ -6,7 +6,7 @@ use magical_merchant_core::utils::device::Location;
 use magical_merchant_core::{
     Filename, NoteFilename, NoteSummary, ProjectSummary, Slug, TaskSummary,
 };
-use tauri::{AppHandle, Listener, Manager};
+use tauri::{AppHandle, Emitter, Listener, Manager};
 
 fn make_location(latitude: Option<f64>, longitude: Option<f64>) -> Option<Location> {
     match (latitude, longitude) {
@@ -209,13 +209,23 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .manage(sync::AppSyncState::default())
         .setup(|app| {
+            let handle = app.handle().clone();
             app.listen("deep-link://new-url", move |event| {
                 if let Ok(urls) = serde_json::from_str::<Vec<String>>(event.payload()) {
                     for url_str in urls {
                         if let Ok(url) = url::Url::parse(&url_str) {
                             for (key, value) in url.query_pairs() {
                                 if key == "token" {
-                                    let _ = auth::store_token(&value);
+                                    // 保存結果をフロントに通知しないと、ログイン完了が
+                                    // UI に反映されず失敗も握りつぶされてしまう
+                                    match auth::store_token(&value) {
+                                        Ok(()) => {
+                                            let _ = handle.emit("auth-success", ());
+                                        }
+                                        Err(e) => {
+                                            let _ = handle.emit("auth-error", e);
+                                        }
+                                    }
                                     return;
                                 }
                             }
