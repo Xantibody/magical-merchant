@@ -44,6 +44,13 @@
   white-space: nowrap;
 }
 
+/* Shift+Enter による複数行エントリの改行を保持する */
+.timeline-entry-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
 .timeline-entry-context {
   display: flex;
   gap: var(--size-2);
