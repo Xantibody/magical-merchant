@@ -60,10 +60,11 @@ export default function AppLayout(props: AppLayoutProps) {
     setTheme(next);
   };
 
-  const themeIcon = () => {
+  // 現在のテーマを表すアイコンを表示する
+  const themeIcon = (): IconName => {
     const t = theme();
-    if (t === "system") return "lightning" as IconName;
-    return t === "dark" ? ("sun" as IconName) : ("moon" as IconName);
+    if (t === "system") return "circle-half";
+    return t === "dark" ? "moon" : "sun";
   };
 
   return (
@@ -74,7 +75,12 @@ export default function AppLayout(props: AppLayoutProps) {
         </button>
         <div class="header-actions">
           <SyncButton />
-          <button type="button" onClick={cycleTheme} aria-label="Toggle theme">
+          <button
+            type="button"
+            onClick={cycleTheme}
+            aria-label={`Theme: ${theme()}`}
+            title={`Theme: ${theme()}`}
+          >
             <Icon name={themeIcon()} size={20} />
           </button>
         </div>
