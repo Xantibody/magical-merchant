@@ -75,3 +75,9 @@
   color: var(--text-2);
   margin-top: var(--size-2);
 }
+
+.settings-hint {
+  font-size: var(--font-size-0);
+  color: var(--app-text-muted);
+  margin: var(--size-1) 0 0;
+}

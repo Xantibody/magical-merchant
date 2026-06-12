@@ -165,6 +165,8 @@ async fn login_with_loopback(handle: &AppHandle, config: &SyncConfig) -> Result<
 
         if let Some(token) = token {
             store_token(&token)?;
+            // SyncButton などが認証状態を即時反映できるよう通知する
+            let _ = tauri::Emitter::emit(handle, "auth-success", ());
             "<html><body><p>Login successful. You can close this tab.</p></body></html>"
         } else {
             "<html><body><p>Login failed: no token received.</p></body></html>"
