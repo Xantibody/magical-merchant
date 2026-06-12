@@ -41,6 +41,18 @@
   animation: pulse 1.2s ease-in-out infinite;
 }
 
+.sync-button.error .icon {
+  color: var(--red-7);
+}
+
+.sync-button.success .icon {
+  color: var(--green-7);
+}
+
+.sync-button.needs-setup .icon {
+  color: var(--app-text-muted);
+}
+
 @keyframes pulse {
   0%,
   100% {
@@ -49,6 +61,42 @@
   50% {
     opacity: 0.4;
   }
+}
+
+/* 同期状態のトースト: ヘッダー直下に表示し、クリックで閉じる */
+.sync-toast {
+  position: absolute;
+  top: calc(var(--size-8) + var(--size-2));
+  right: var(--size-3);
+  z-index: 90;
+  max-width: min(280px, calc(100vw - 2 * var(--size-3)));
+  padding: var(--size-2) var(--size-3);
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-left: 3px solid var(--app-border);
+  border-radius: var(--radius-2);
+  box-shadow: var(--shadow-3);
+  font-size: var(--font-size-0);
+  line-height: var(--font-lineheight-2);
+  color: var(--app-text);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.sync-toast[data-status="error"] {
+  border-left-color: var(--red-7);
+}
+
+.sync-toast[data-status="success"] {
+  border-left-color: var(--green-7);
+}
+
+.sync-toast[data-status="needs-setup"] {
+  border-left-color: var(--yellow-7);
+}
+
+.sync-toast[data-status="syncing"] {
+  cursor: default;
 }
 
 .mode-indicator {
