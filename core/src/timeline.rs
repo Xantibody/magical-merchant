@@ -117,6 +117,19 @@ mod tests {
     }
 
     #[test]
+    fn test_read_timeline_groups_multiline_entries() {
+        let tmp = TempDir::new().unwrap();
+        save_timeline_entry(tmp.path(), "line1\nline2", &mock_context()).unwrap();
+        save_timeline_entry(tmp.path(), "second", &mock_context()).unwrap();
+
+        let today = Local::now().date_naive();
+        let entries = read_timeline(tmp.path(), today).unwrap();
+        assert_eq!(entries.len(), 2);
+        assert!(entries[0].contains("line1\nline2"));
+        assert!(entries[1].contains("second"));
+    }
+
+    #[test]
     fn test_read_timeline_returns_entries() {
         let tmp = TempDir::new().unwrap();
         save_timeline_entry(tmp.path(), "first", &mock_context()).unwrap();
