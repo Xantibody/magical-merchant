@@ -39,6 +39,9 @@ export default function Notes() {
   const [notes, { refetch: refetchNotes }] = createResource(fetchNotes);
 
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+  let isHydrating = false;
+  // 直列化しないと create_draft が二重実行されて重複ノートができる
+  let saveChain: Promise<void> = Promise.resolve();
 
   const parseTags = () =>
     tagsInput()
@@ -46,7 +49,7 @@ export default function Notes() {
       .map((t) => t.trim())
       .filter((t) => t.length > 0);
 
-  const save = async () => {
+  const doSave = async () => {
     const currentBody = body();
     if (!currentBody.trim()) return;
 
@@ -79,6 +82,11 @@ export default function Notes() {
     }
   };
 
+  const save = () => {
+    saveChain = saveChain.then(doSave);
+    return saveChain;
+  };
+
   const scheduleSave = () => {
     if (debounceTimer) clearTimeout(debounceTimer);
     debounceTimer = setTimeout(save, 1000);
@@ -86,23 +94,26 @@ export default function Notes() {
 
   createEffect(
     on(body, () => {
-      if (body().trim()) scheduleSave();
+      if (body().trim() && !isHydrating) scheduleSave();
     }),
   );
 
   createEffect(
     on(tagsInput, () => {
-      if (draftPath()) scheduleSave();
+      if (draftPath() && !isHydrating) scheduleSave();
     }),
   );
 
   onCleanup(() => {
-    if (debounceTimer) clearTimeout(debounceTimer);
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+      if (body().trim()) void save();
+    }
   });
 
   const handleDone = async () => {
     if (debounceTimer) clearTimeout(debounceTimer);
-    if (draftPath() && body().trim()) {
+    if (body().trim()) {
       await save();
     }
     resetEditor();
@@ -144,9 +155,12 @@ export default function Notes() {
     const content = noteContent();
     const bodyText = extractBody(content);
     setEditorInstance(undefined);
+    // 開いただけで再保存されないようにする（保存はユーザーの編集後のみ）
+    isHydrating = true;
     setDraftPath(note.path);
     setBody(bodyText);
     setTagsInput(note.tags.join(", "));
+    isHydrating = false;
     setViewMode("editor");
   };
 
@@ -219,7 +233,7 @@ export default function Notes() {
               value={tagsInput()}
               onInput={(e) => setTagsInput(e.currentTarget.value)}
             />
-            <button type="button" onClick={handleDone} disabled={!draftPath()}>
+            <button type="button" onClick={handleDone} disabled={!draftPath() && !body().trim()}>
               <Icon name="check-square" size={16} />
               Done
             </button>
