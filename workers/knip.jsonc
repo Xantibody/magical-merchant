@@ -1,0 +1,6 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  // `cloudflare:test` is a virtual module supplied by
+  // @cloudflare/vitest-pool-workers; knip reads it as a `cloudflare` package.
+  "ignoreDependencies": ["cloudflare"],
+}

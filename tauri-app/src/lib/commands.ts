@@ -23,7 +23,7 @@ export interface Task {
   body: string;
 }
 
-export interface SyncConfig {
+interface SyncConfig {
   workers_url: string;
 }
 

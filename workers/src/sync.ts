@@ -8,13 +8,13 @@ export interface SyncState {
   last_sync: string | null;
 }
 
-export interface FileContent {
+interface FileContent {
   key: string;
   content_base64: string;
   last_modified: string;
 }
 
-export interface ConflictOp {
+interface ConflictOp {
   key: string;
   conflict_key: string;
   resolution: "keep_local" | "keep_remote";

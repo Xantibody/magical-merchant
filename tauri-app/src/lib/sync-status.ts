@@ -7,7 +7,7 @@ export interface SyncResultPayload {
   errors: string[];
 }
 
-export interface SyncErrorInfo {
+interface SyncErrorInfo {
   kind: string;
   message: string;
 }
