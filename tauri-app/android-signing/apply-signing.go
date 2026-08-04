@@ -23,6 +23,14 @@ import (
 
 const gradlePath = "src-tauri/gen/android/app/build.gradle.kts"
 
+// keystorePath is where the Gradle script looks the file up, and therefore the
+// only place it may live. `rootProject.file` resolves against the Android
+// project root; plain `file` would resolve against the :app module instead, and
+// a keystore.properties one directory up would be silently ignored — the build
+// then runs for minutes before failing with "missing required property
+// storeFile".
+const keystorePath = "src-tauri/gen/android/keystore.properties"
+
 // injection describes one marker-delimited region to insert into the build
 // script. body holds the Kotlin source (already indented); anchor is a literal
 // substring of the original file used as the insertion point.
@@ -41,7 +49,7 @@ var injections = []injection{
 		anchor: "android {",
 		after:  false,
 		body: `val keystoreProperties = Properties().apply {
-    val propFile = file("keystore.properties")
+    val propFile = rootProject.file("keystore.properties")
     if (propFile.exists()) {
         propFile.inputStream().use { load(it) }
     }
@@ -85,6 +93,12 @@ func run() error {
 	}
 	content := string(raw)
 
+	// Gradle only notices a bad keystore once it signs the APK, which is
+	// minutes of Rust and R8 later. Say so now instead.
+	if err := checkKeystore(); err != nil {
+		return err
+	}
+
 	// Strip any previously injected regions so re-runs are idempotent.
 	for _, inj := range injections {
 		content = removeBlock(content, inj.id)
@@ -108,6 +122,56 @@ func run() error {
 		return fmt.Errorf("write %s: %w", gradlePath, err)
 	}
 	fmt.Printf("apply-signing: signing config injected into %s\n", gradlePath)
+	return nil
+}
+
+// readProperties parses the `key=value` subset of the Java properties format
+// that keystore.properties uses. Values are taken verbatim, so a password
+// containing '=' survives.
+func readProperties(path string) (map[string]string, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	props := map[string]string{}
+	for _, line := range strings.Split(string(raw), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "!") {
+			continue
+		}
+		key, value, found := strings.Cut(line, "=")
+		if !found {
+			continue
+		}
+		props[strings.TrimSpace(key)] = strings.TrimSpace(value)
+	}
+	return props, nil
+}
+
+// checkKeystore rejects the states Gradle would only report at signing time:
+// a missing file, an unfilled template, or a keystore path that does not exist.
+func checkKeystore() error {
+	props, err := readProperties(keystorePath)
+	if err != nil {
+		return fmt.Errorf("no %s: copy android-signing/keystore.properties.example there "+
+			"and fill it in (see android-signing/README.md)", keystorePath)
+	}
+
+	for _, key := range []string{"storeFile", "storePassword", "keyAlias", "keyPassword"} {
+		if props[key] == "" {
+			return fmt.Errorf("%s: %s is empty", keystorePath, key)
+		}
+	}
+
+	store := props["storeFile"]
+	// Gradle's file() does not expand ~, so it would look for a literal "~" dir.
+	if strings.HasPrefix(store, "~") {
+		return fmt.Errorf("%s: storeFile must be an absolute path, not %q", keystorePath, store)
+	}
+	if _, err := os.Stat(store); err != nil {
+		return fmt.Errorf("%s: storeFile %q does not exist "+
+			"(the example ships a placeholder path — replace it)", keystorePath, store)
+	}
 	return nil
 }
 

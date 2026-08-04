@@ -115,15 +115,17 @@
   color: var(--app-text-muted);
 }
 
-/* Shiki dual theme: data-theme に応じて CSS 変数で配色を切り替える */
+/* Shiki dual theme: data-theme に応じて CSS 変数で配色を切り替える。
+   下地は Shiki のテーマ色ではなく .markdown-preview pre の --app-surface-2 に
+   任せる。インラインコードや mermaid の図と同じ下地に揃える (#75) */
 .markdown-preview .shiki,
 .markdown-preview .shiki span {
   color: var(--shiki-light);
-  background-color: var(--shiki-light-bg);
+  background-color: transparent;
 }
 
 [data-theme="dark"] .markdown-preview .shiki,
 [data-theme="dark"] .markdown-preview .shiki span {
   color: var(--shiki-dark);
-  background-color: var(--shiki-dark-bg);
+  background-color: transparent;
 }
