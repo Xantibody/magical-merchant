@@ -11,9 +11,7 @@ mod device;
 mod sync;
 
 use magical_merchant_core::utils::device::Location;
-use magical_merchant_core::{
-    Filename, NoteFilename, NoteSummary, ProjectSummary, SearchHit, Slug, TaskSummary,
-};
+use magical_merchant_core::{NoteFilename, NoteSummary, SearchHit};
 use tauri::{AppHandle, Emitter, Listener, Manager};
 
 const fn make_location(latitude: Option<f64>, longitude: Option<f64>) -> Option<Location> {
@@ -103,64 +101,6 @@ fn read_timeline(handle: AppHandle) -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
-fn create_project(
-    handle: AppHandle,
-    slug: String,
-    name: String,
-    description: String,
-) -> Result<String, String> {
-    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    let slug = Slug::parse(&slug).map_err(|e| e.to_string())?;
-    let path = magical_merchant_core::create_project(&base_dir, &slug, &name, &description)
-        .map_err(|e| e.to_string())?;
-    Ok(path.to_string_lossy().to_string())
-}
-
-#[tauri::command]
-fn list_projects(handle: AppHandle) -> Result<Vec<ProjectSummary>, String> {
-    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    magical_merchant_core::list_projects(&base_dir).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn create_task(
-    handle: AppHandle,
-    project_slug: String,
-    title: String,
-    tags: Vec<String>,
-    body: String,
-) -> Result<String, String> {
-    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    let project_slug = Slug::parse(&project_slug).map_err(|e| e.to_string())?;
-    let path = magical_merchant_core::create_task(&base_dir, &project_slug, &title, &tags, &body)
-        .map_err(|e| e.to_string())?;
-    Ok(path.to_string_lossy().to_string())
-}
-
-#[tauri::command]
-fn list_active_tasks(handle: AppHandle, project_slug: String) -> Result<Vec<TaskSummary>, String> {
-    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    let project_slug = Slug::parse(&project_slug).map_err(|e| e.to_string())?;
-    magical_merchant_core::list_active_tasks(&base_dir, &project_slug).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn list_done_tasks(handle: AppHandle, project_slug: String) -> Result<Vec<TaskSummary>, String> {
-    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    let project_slug = Slug::parse(&project_slug).map_err(|e| e.to_string())?;
-    magical_merchant_core::list_done_tasks(&base_dir, &project_slug).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn complete_task(handle: AppHandle, project_slug: String, filename: String) -> Result<(), String> {
-    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    let project_slug = Slug::parse(&project_slug).map_err(|e| e.to_string())?;
-    let filename = Filename::parse(&filename).map_err(|e| e.to_string())?;
-    magical_merchant_core::complete_task(&base_dir, &project_slug, &filename)
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
 fn list_timeline_dates(handle: AppHandle) -> Result<Vec<String>, String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
     let dates = magical_merchant_core::list_timeline_dates(&base_dir).map_err(|e| e.to_string())?;
@@ -210,31 +150,6 @@ fn delete_note(handle: AppHandle, filename: String) -> Result<(), String> {
     magical_merchant_core::delete_note(&base_dir, &filename).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
-fn delete_task(handle: AppHandle, project_slug: String, filename: String) -> Result<(), String> {
-    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    let project_slug = Slug::parse(&project_slug).map_err(|e| e.to_string())?;
-    let filename = Filename::parse(&filename).map_err(|e| e.to_string())?;
-    magical_merchant_core::delete_task(&base_dir, &project_slug, &filename)
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn update_task(
-    handle: AppHandle,
-    project_slug: String,
-    filename: String,
-    title: String,
-    tags: Vec<String>,
-    body: String,
-) -> Result<(), String> {
-    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    let project_slug = Slug::parse(&project_slug).map_err(|e| e.to_string())?;
-    let filename = Filename::parse(&filename).map_err(|e| e.to_string())?;
-    magical_merchant_core::update_task(&base_dir, &project_slug, &filename, &title, &tags, &body)
-        .map_err(|e| e.to_string())
-}
-
 // `mobile_entry_point` fixes the signature to `fn run()`, so a failed startup
 // has nowhere to be returned to — panicking is the only way to report it.
 #[allow(clippy::expect_used)]
@@ -280,20 +195,12 @@ pub fn run() {
             list_notes,
             read_note,
             read_timeline,
-            create_project,
-            list_projects,
-            create_task,
-            list_active_tasks,
-            list_done_tasks,
-            complete_task,
-            update_task,
             list_timeline_dates,
             read_timeline_by_date,
             update_timeline_entry,
             delete_timeline_entry,
             search_all,
             delete_note,
-            delete_task,
             sync::sync_start,
             sync::sync_status,
             auth::auth_login,
