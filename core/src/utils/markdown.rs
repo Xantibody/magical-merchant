@@ -105,7 +105,7 @@ mod tests {
             format_note_markdown("# Hello\nWorld", &tags, fixed_timestamp(), &test_context())
                 .unwrap();
 
-        let (fm, body): (NoteFrontmatter, String) = frontmatter::parse(&result).unwrap();
+        let (fm, body): (NoteFrontmatter, &str) = frontmatter::parse(&result).unwrap();
         assert_eq!(fm.tags, vec!["rust", "memo"]);
         assert!(fm.context.is_some());
         let ctx = fm.context.unwrap();
@@ -117,7 +117,7 @@ mod tests {
     #[test]
     fn test_format_note_markdown_empty_tags() {
         let result = format_note_markdown("body", &[], fixed_timestamp(), &test_context()).unwrap();
-        let (fm, _body): (NoteFrontmatter, String) = frontmatter::parse(&result).unwrap();
+        let (fm, _body): (NoteFrontmatter, &str) = frontmatter::parse(&result).unwrap();
         assert!(fm.tags.is_empty());
     }
 
@@ -129,7 +129,7 @@ mod tests {
             ..Context::default()
         };
         let result = format_note_markdown("body", &[], fixed_timestamp(), &ctx).unwrap();
-        let (fm, _body): (NoteFrontmatter, String) = frontmatter::parse(&result).unwrap();
+        let (fm, _body): (NoteFrontmatter, &str) = frontmatter::parse(&result).unwrap();
         let context = fm.context.unwrap();
         assert_eq!(context.battery, Some(100));
         assert_eq!(context.is_charging, Some(true));
