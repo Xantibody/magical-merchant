@@ -3,8 +3,10 @@ use std::path::Path;
 use serde::Serialize;
 
 use crate::error::CoreError;
+use crate::timeline::Timeline;
+use crate::timeline::repository::split_entries;
 use crate::utils::markdown::strip_timeline_prefix;
-use crate::{list_notes, list_timeline_dates, read_timeline};
+use crate::{list_notes, list_timeline_dates};
 
 /// 検索結果がどちらの保管場所から来たか。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -42,18 +44,32 @@ pub fn search_all(base_dir: &Path, query: &str) -> Result<Vec<SearchHit>, CoreEr
     }
 
     let mut hits = Vec::new();
+    let timeline = Timeline::new(base_dir.to_path_buf());
+    // 改行をまたぐ needle だけは日単位の足切りが使えない。CRLF のファイルでは
+    // エントリ内の改行が "\n" に正規化され、ファイル本文の部分文字列にならない。
+    let day_filter_applies = !needle.contains('\n');
 
     for date in list_timeline_dates(base_dir)? {
+        let Some(content) = timeline.read_raw(date)? else {
+            continue;
+        };
+        // エントリ本文はその日のファイルの部分文字列なので、ファイル全体に無いなら
+        // どのエントリにも無い。分割もコンテキスト JSON の判定も丸ごと省ける。
+        if day_filter_applies && !content.to_lowercase().contains(&needle) {
+            continue;
+        }
+
         let formatted = date.format("%Y-%m-%d").to_string();
-        for (index, entry) in read_timeline(base_dir, date)?.into_iter().enumerate() {
+        for (index, entry) in split_entries(&content).into_iter().enumerate() {
             let text = strip_timeline_prefix(&entry);
-            if !text.to_lowercase().contains(&needle) {
+            let lowered = text.to_lowercase();
+            if !lowered.contains(&needle) {
                 continue;
             }
             hits.push(SearchHit {
                 kind: HitKind::Timeline,
                 title: first_line(text).to_string(),
-                snippet: snippet(text, &needle),
+                snippet: snippet(text, &lowered, &needle),
                 date: formatted.clone(),
                 filename: None,
                 index: Some(index),
@@ -62,15 +78,23 @@ pub fn search_all(base_dir: &Path, query: &str) -> Result<Vec<SearchHit>, CoreEr
         }
     }
 
+    let mut haystack = String::new();
     for note in list_notes(base_dir)? {
-        let haystack = format!("{} {}", note.preview, note.tags.join(" "));
+        // format! + join だとノート 1 件につき 2 回余分に確保する。
+        haystack.clear();
+        haystack.push_str(&note.preview);
+        for tag in &note.tags {
+            haystack.push(' ');
+            haystack.push_str(tag);
+        }
         if !haystack.to_lowercase().contains(&needle) {
             continue;
         }
+        let lowered = note.preview.to_lowercase();
         hits.push(SearchHit {
             kind: HitKind::Note,
             title: first_line(&note.preview).to_string(),
-            snippet: snippet(&note.preview, &needle),
+            snippet: snippet(&note.preview, &lowered, &needle),
             date: note
                 .time
                 .map(|t| t.format("%Y-%m-%d").to_string())
@@ -91,28 +115,33 @@ fn first_line(text: &str) -> &str {
 }
 
 /// ヒット位置の前後 `SNIPPET_CONTEXT` 文字を、文字境界を壊さずに切り出す。
-fn snippet(text: &str, needle: &str) -> String {
-    let chars: Vec<char> = text.chars().collect();
-    let lowered: Vec<char> = text.to_lowercase().chars().collect();
-    let needle_chars: Vec<char> = needle.chars().collect();
-
+/// `lowered` は照合に使った `text` の小文字版。作り直さず受け取るのは、
+/// ここが 1 ヒットごとに走るため。
+fn snippet(text: &str, lowered: &str, needle: &str) -> String {
+    // ヒットしたのが本文以外（ノートのタグなど）なら先頭から切り出す。
     let at = lowered
-        .windows(needle_chars.len().max(1))
-        .position(|w| w == needle_chars.as_slice())
-        .unwrap_or(0);
-
+        .find(needle)
+        .map_or(0, |byte| lowered[..byte].chars().count());
+    let end = at + needle.chars().count() + SNIPPET_CONTEXT;
     let start = at.saturating_sub(SNIPPET_CONTEXT);
-    let end = (at + needle_chars.len() + SNIPPET_CONTEXT).min(chars.len());
 
     let mut out = String::new();
     if start > 0 {
         out.push('…');
     }
-    out.extend(&chars[start..end]);
-    if end < chars.len() {
+    // Vec<char> を 3 本作らずに 1 度だけ走査する。
+    let mut chars = text.chars().skip(start);
+    for _ in start..end {
+        match chars.next() {
+            Some('\n') => out.push(' '),
+            Some(c) => out.push(c),
+            None => return out,
+        }
+    }
+    if chars.next().is_some() {
         out.push('…');
     }
-    out.replace('\n', " ")
+    out
 }
 
 #[cfg(test)]
@@ -202,6 +231,41 @@ mod tests {
         assert!(hits[0].snippet.starts_with('…'));
         assert!(hits[0].snippet.ends_with('…'));
         assert!(hits[0].snippet.contains("NEEDLE"));
+    }
+
+    #[test]
+    fn finds_a_needle_on_a_later_line_of_a_multiline_entry() {
+        let tmp = TempDir::new().unwrap();
+        save_timeline_entry(tmp.path(), "一行目\n二行目にリトライ", &context()).unwrap();
+
+        let hits = search_all(tmp.path(), "リトライ").unwrap();
+
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].title, "一行目");
+        assert!(hits[0].snippet.contains("二行目にリトライ"));
+    }
+
+    #[test]
+    fn a_tag_only_hit_shows_the_start_of_the_body() {
+        let tmp = TempDir::new().unwrap();
+        let body = "本文はタグと無関係で長い".repeat(10);
+        create_draft_note(tmp.path(), &body, &["sync".to_string()], &context()).unwrap();
+
+        let hits = search_all(tmp.path(), "sync").unwrap();
+
+        assert_eq!(hits.len(), 1);
+        assert!(hits[0].snippet.starts_with("本文はタグと無関係で長い"));
+        assert!(!hits[0].snippet.starts_with('…'));
+    }
+
+    #[test]
+    fn a_snippet_keeps_the_body_on_one_line() {
+        let tmp = TempDir::new().unwrap();
+        save_timeline_entry(tmp.path(), "needle のあと\n改行", &context()).unwrap();
+
+        let hits = search_all(tmp.path(), "needle").unwrap();
+
+        assert_eq!(hits[0].snippet, "needle のあと 改行");
     }
 
     #[test]

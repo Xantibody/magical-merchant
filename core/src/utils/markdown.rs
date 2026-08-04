@@ -1,4 +1,5 @@
 use chrono::{DateTime, FixedOffset, Local};
+use serde::de::IgnoredAny;
 
 use crate::error::CoreError;
 use crate::utils::device::Context;
@@ -28,9 +29,11 @@ pub(crate) fn split_time_prefix(entry: &str) -> Option<(&str, &str)> {
 pub(crate) fn split_context_json(rest: &str) -> Option<&str> {
     let start = rest.rfind(" {")?;
     let candidate = &rest[start + 1..];
-    serde_json::from_str::<serde_json::Value>(candidate)
+    // `Value` を組み立てて is_object を見ない: candidate は必ず `{` で始まるので、
+    // 構文として通れば JSON オブジェクト以外にはなり得ない。`IgnoredAny` なら
+    // 検証だけを行い、Map も String も確保しない。
+    serde_json::from_str::<IgnoredAny>(candidate)
         .ok()
-        .filter(serde_json::Value::is_object)
         .map(|_| candidate)
 }
 
@@ -102,7 +105,7 @@ mod tests {
             format_note_markdown("# Hello\nWorld", &tags, fixed_timestamp(), &test_context())
                 .unwrap();
 
-        let (fm, body): (NoteFrontmatter, String) = frontmatter::parse(&result).unwrap();
+        let (fm, body): (NoteFrontmatter, &str) = frontmatter::parse(&result).unwrap();
         assert_eq!(fm.tags, vec!["rust", "memo"]);
         assert!(fm.context.is_some());
         let ctx = fm.context.unwrap();
@@ -114,7 +117,7 @@ mod tests {
     #[test]
     fn test_format_note_markdown_empty_tags() {
         let result = format_note_markdown("body", &[], fixed_timestamp(), &test_context()).unwrap();
-        let (fm, _body): (NoteFrontmatter, String) = frontmatter::parse(&result).unwrap();
+        let (fm, _body): (NoteFrontmatter, &str) = frontmatter::parse(&result).unwrap();
         assert!(fm.tags.is_empty());
     }
 
@@ -126,7 +129,7 @@ mod tests {
             ..Context::default()
         };
         let result = format_note_markdown("body", &[], fixed_timestamp(), &ctx).unwrap();
-        let (fm, _body): (NoteFrontmatter, String) = frontmatter::parse(&result).unwrap();
+        let (fm, _body): (NoteFrontmatter, &str) = frontmatter::parse(&result).unwrap();
         let context = fm.context.unwrap();
         assert_eq!(context.battery, Some(100));
         assert_eq!(context.is_charging, Some(true));
