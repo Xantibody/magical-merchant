@@ -12,12 +12,12 @@ use crate::utils::validated::NoteFilename;
 
 use super::summary::Summary as NoteSummary;
 
-pub struct Notes {
+pub(crate) struct Notes {
     base_dir: PathBuf,
 }
 
 impl Notes {
-    pub fn new(base_dir: PathBuf) -> Self {
+    pub(crate) const fn new(base_dir: PathBuf) -> Self {
         Self { base_dir }
     }
 
@@ -25,7 +25,7 @@ impl Notes {
         notes_dir(&self.base_dir)
     }
 
-    pub fn create(
+    pub(crate) fn create(
         &self,
         body: &str,
         tags: &[String],
@@ -35,12 +35,12 @@ impl Notes {
         let file_path = note_file_path(&self.base_dir, now);
         ensure_dir(&file_path)?;
 
-        let content = format_note_markdown(body, tags, now, context)?;
-        fs::write(&file_path, content)?;
+        let markdown = format_note_markdown(body, tags, now, context)?;
+        fs::write(&file_path, markdown)?;
         Ok(file_path)
     }
 
-    pub fn list(&self) -> Result<Vec<NoteSummary>, CoreError> {
+    pub(crate) fn list(&self) -> Result<Vec<NoteSummary>, CoreError> {
         let notes_dir = self.notes_dir();
         let entries = list_md_files(&notes_dir)?;
 
@@ -57,7 +57,7 @@ impl Notes {
         Ok(summaries)
     }
 
-    pub fn read(&self, filename: &NoteFilename) -> Result<String, CoreError> {
+    pub(crate) fn read(&self, filename: &NoteFilename) -> Result<String, CoreError> {
         let fname = filename.as_str();
         let notes_dir = self.notes_dir();
         let file_path = notes_dir.join(fname);
@@ -75,20 +75,19 @@ impl Notes {
         Ok(fs::read_to_string(canonical_file_path)?)
     }
 
-    pub fn update(
-        &self,
+    pub(crate) fn update(
         path: &Path,
         body: &str,
         tags: &[String],
         context: &Context,
     ) -> Result<(), CoreError> {
         let now = Local::now();
-        let content = format_note_markdown(body, tags, now, context)?;
-        fs::write(path, content)?;
+        let markdown = format_note_markdown(body, tags, now, context)?;
+        fs::write(path, markdown)?;
         Ok(())
     }
 
-    pub fn delete(&self, filename: &NoteFilename) -> Result<(), CoreError> {
+    pub(crate) fn delete(&self, filename: &NoteFilename) -> Result<(), CoreError> {
         let fname = filename.as_str();
         let notes_dir = self.notes_dir();
         let file_path = notes_dir.join(fname);

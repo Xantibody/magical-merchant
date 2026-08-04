@@ -8,13 +8,13 @@ export interface SyncState {
   last_sync: string | null;
 }
 
-export interface FileContent {
+interface FileContent {
   key: string;
   content_base64: string;
   last_modified: string;
 }
 
-export interface ConflictOp {
+interface ConflictOp {
   key: string;
   conflict_key: string;
   resolution: "keep_local" | "keep_remote";
@@ -72,14 +72,18 @@ export async function saveSyncState(
 function base64Encode(bytes: ArrayBuffer): string {
   const arr = new Uint8Array(bytes);
   let binary = "";
-  for (let i = 0; i < arr.length; i++) binary += String.fromCharCode(arr[i]);
+  for (const byte of arr) {
+    binary += String.fromCodePoint(byte);
+  }
   return btoa(binary);
 }
 
 function base64Decode(s: string): Uint8Array {
   const binary = atob(s);
   const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.codePointAt(i) ?? 0;
+  }
   return bytes;
 }
 
@@ -93,7 +97,9 @@ export function isUnsafeKey(key: string): boolean {
 }
 
 async function executeUpload(bucket: R2Bucket, f: FileContent): Promise<void> {
-  if (isUnsafeKey(f.key)) throw new Error(`unsafe key: ${f.key}`);
+  if (isUnsafeKey(f.key)) {
+    throw new Error(`unsafe key: ${f.key}`);
+  }
   const body = base64Decode(f.content_base64);
   await bucket.put(f.key, body, {
     customMetadata: { lastModified: f.last_modified },
@@ -101,9 +107,13 @@ async function executeUpload(bucket: R2Bucket, f: FileContent): Promise<void> {
 }
 
 async function executeDownload(bucket: R2Bucket, key: string): Promise<FileContent> {
-  if (isUnsafeKey(key)) throw new Error(`unsafe key: ${key}`);
+  if (isUnsafeKey(key)) {
+    throw new Error(`unsafe key: ${key}`);
+  }
   const obj = await bucket.get(key);
-  if (!obj) throw new Error(`not found: ${key}`);
+  if (!obj) {
+    throw new Error(`not found: ${key}`);
+  }
   const lastModified = obj.customMetadata?.lastModified ?? obj.uploaded.toISOString();
   const buf = await obj.arrayBuffer();
   return {
@@ -134,31 +144,38 @@ async function executeConflict(bucket: R2Bucket, c: ConflictOp): Promise<FileCon
       });
     }
     return null;
-  } else {
-    // keep_remote: client will save local as conflict copy locally,
-    // and downloads remote content. We just return remote content so client can write both.
-    const obj = await bucket.get(c.key);
-    if (!obj) throw new Error(`conflict download not found: ${c.key}`);
-    const lastModified = obj.customMetadata?.lastModified ?? obj.uploaded.toISOString();
-    const buf = await obj.arrayBuffer();
-    return {
-      key: c.key,
-      content_base64: base64Encode(buf),
-      last_modified: lastModified,
-    };
   }
+  // keep_remote: client will save local as conflict copy locally,
+  // and downloads remote content. We just return remote content so client can write both.
+  const obj = await bucket.get(c.key);
+  if (!obj) {
+    throw new Error(`conflict download not found: ${c.key}`);
+  }
+  const lastModified = obj.customMetadata?.lastModified ?? obj.uploaded.toISOString();
+  const buf = await obj.arrayBuffer();
+  return {
+    key: c.key,
+    content_base64: base64Encode(buf),
+    last_modified: lastModified,
+  };
 }
 
 export async function executeBulk(bucket: R2Bucket, req: BulkRequest): Promise<BulkResponse> {
   // Validate all keys upfront
   for (const u of req.uploads) {
-    if (isUnsafeKey(u.key)) throw new Error(`unsafe upload key: ${u.key}`);
+    if (isUnsafeKey(u.key)) {
+      throw new Error(`unsafe upload key: ${u.key}`);
+    }
   }
   for (const d of req.downloads) {
-    if (isUnsafeKey(d)) throw new Error(`unsafe download key: ${d}`);
+    if (isUnsafeKey(d)) {
+      throw new Error(`unsafe download key: ${d}`);
+    }
   }
   for (const d of req.delete_remote) {
-    if (isUnsafeKey(d)) throw new Error(`unsafe delete key: ${d}`);
+    if (isUnsafeKey(d)) {
+      throw new Error(`unsafe delete key: ${d}`);
+    }
   }
 
   // Run all R2 operations concurrently

@@ -45,6 +45,8 @@ jobs:
               - 'rust/justfile'
             frontend:
               - 'tauri-app/src/**'
+              - '.oxlintrc.json'
+              - 'tauri-app/.oxlintrc.json'
               - 'tauri-app/package.json'
               - 'tauri-app/pnpm-lock.yaml'
               - 'tauri-app/tsconfig.json'
@@ -55,6 +57,7 @@ jobs:
               - 'flake.lock'
             workers:
               - 'workers/**'
+              - '.oxlintrc.json'
               - 'flake.nix'
               - 'flake.lock'
 

@@ -15,17 +15,16 @@ pub struct Summary {
 }
 
 impl Summary {
+    #[must_use]
     pub fn from_file(path: PathBuf, filename: String, content: &str) -> Self {
-        let (time, tags, preview) = match frontmatter::parse::<NoteFrontmatter>(content) {
-            Ok((fm, body)) => {
+        let (time, tags, preview) =
+            if let Ok((fm, body)) = frontmatter::parse::<NoteFrontmatter>(content) {
                 let preview: String = body.chars().take(100).collect();
                 (Some(fm.time), fm.tags, preview)
-            }
-            Err(_) => {
+            } else {
                 let preview: String = content.chars().take(100).collect();
                 (None, Vec::new(), preview)
-            }
-        };
+            };
 
         Self {
             path,

@@ -5,6 +5,14 @@ import ActionBar from "./ActionBar";
 
 afterEach(() => cleanup());
 
+function requireElement(root: ParentNode, selector: string): Element {
+  const element = root.querySelector(selector);
+  if (!element) {
+    throw new Error(`expected an element matching ${selector}`);
+  }
+  return element;
+}
+
 function makeTouch(target: Element, clientY: number): Touch {
   return new Touch({ identifier: 0, target, clientY, clientX: 0 });
 }
@@ -51,7 +59,7 @@ describe("ActionBar", () => {
     await expect.element(screen.getByText("Test Action")).toBeInTheDocument();
   });
 
-  it("has action-bar-zone and action-bar classes", async () => {
+  it("has action-bar-zone and action-bar classes", () => {
     const { baseElement } = render(() => (
       <ActionBar>
         <span>content</span>
@@ -69,8 +77,8 @@ describe("ActionBar", () => {
           <button>Action</button>
         </ActionBar>
       ));
-      const zone = baseElement.querySelector(".action-bar-zone")!;
-      const bar = baseElement.querySelector(".action-bar")!;
+      const zone = requireElement(baseElement, ".action-bar-zone");
+      const bar = requireElement(baseElement, ".action-bar");
 
       flick(zone, 300, 250); // upward: deltaY = -50
 
@@ -83,8 +91,8 @@ describe("ActionBar", () => {
           <button>Action</button>
         </ActionBar>
       ));
-      const zone = baseElement.querySelector(".action-bar-zone")!;
-      const bar = baseElement.querySelector(".action-bar")!;
+      const zone = requireElement(baseElement, ".action-bar-zone");
+      const bar = requireElement(baseElement, ".action-bar");
 
       // First show it
       flick(zone, 300, 250);
@@ -102,8 +110,8 @@ describe("ActionBar", () => {
           <button>Action</button>
         </ActionBar>
       ));
-      const zone = baseElement.querySelector(".action-bar-zone")!;
-      const bar = baseElement.querySelector(".action-bar")!;
+      const zone = requireElement(baseElement, ".action-bar-zone");
+      const bar = requireElement(baseElement, ".action-bar");
 
       flick(zone, 300, 290); // deltaY = -10, below 30px threshold
 
@@ -116,8 +124,8 @@ describe("ActionBar", () => {
           <button>Action</button>
         </ActionBar>
       ));
-      const zone = baseElement.querySelector(".action-bar-zone")!;
-      const bar = baseElement.querySelector(".action-bar")!;
+      const zone = requireElement(baseElement, ".action-bar-zone");
+      const bar = requireElement(baseElement, ".action-bar");
 
       // Show it first
       flick(zone, 300, 250);
@@ -135,15 +143,15 @@ describe("ActionBar", () => {
           <button>Action</button>
         </ActionBar>
       ));
-      const zone = baseElement.querySelector(".action-bar-zone")!;
-      const bar = baseElement.querySelector(".action-bar")!;
+      const zone = requireElement(baseElement, ".action-bar-zone");
+      const bar = requireElement(baseElement, ".action-bar");
 
       // Show it first
       flick(zone, 300, 250);
       expect(bar.classList.contains("action-bar--visible")).toBe(true);
 
       // Tap inside the bar
-      const button = bar.querySelector("button")!;
+      const button = requireElement(bar, "button");
       tap(button);
 
       expect(bar.classList.contains("action-bar--visible")).toBe(true);

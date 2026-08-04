@@ -3,13 +3,17 @@ import { useNavigate } from "@solidjs/router";
 import { typedInvoke } from "../lib/commands";
 import { EVENTS } from "../lib/events";
 import { ROUTES } from "../lib/routes";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import Icon, { type IconName } from "./Icon";
-import { describeSyncError, describeSyncResult, type SyncResultPayload } from "../lib/sync-status";
+import { listen } from "@tauri-apps/api/event";
+import type { UnlistenFn } from "@tauri-apps/api/event";
+import Icon from "./Icon";
+import type { IconName } from "./Icon";
+import { describeSyncError, describeSyncResult } from "../lib/sync-status";
+import type { SyncResultPayload } from "../lib/sync-status";
+import type { JSX } from "solid-js";
 
 type SyncStatus = "idle" | "syncing" | "success" | "error" | "needs-setup";
 
-export default function SyncButton() {
+export default function SyncButton(): JSX.Element {
   const [status, setStatus] = createSignal<SyncStatus>("idle");
   const [message, setMessage] = createSignal("");
   const navigate = useNavigate();
@@ -17,7 +21,9 @@ export default function SyncButton() {
   const unlisteners: UnlistenFn[] = [];
 
   const clearResetTimer = () => {
-    if (resetTimer) clearTimeout(resetTimer);
+    if (resetTimer) {
+      clearTimeout(resetTimer);
+    }
     resetTimer = undefined;
   };
 
@@ -62,7 +68,9 @@ export default function SyncButton() {
 
   const applyError = (err: unknown) => {
     const ui = describeSyncError(err);
-    if (!ui) return;
+    if (!ui) {
+      return;
+    }
     showPersistent(ui.status, ui.message);
   };
 
@@ -92,12 +100,16 @@ export default function SyncButton() {
 
   onCleanup(() => {
     clearResetTimer();
-    for (const unlisten of unlisteners) unlisten();
+    for (const unlisten of unlisteners) {
+      unlisten();
+    }
   });
 
   const handleClick = async () => {
     const s = status();
-    if (s === "syncing") return;
+    if (s === "syncing") {
+      return;
+    }
     if (s === "needs-setup") {
       navigate(ROUTES.SETTINGS);
       return;
@@ -107,32 +119,45 @@ export default function SyncButton() {
     try {
       await typedInvoke("sync_start");
       // 結果表示は sync-complete / sync-error イベント側で行う
-    } catch (e) {
-      applyError(e);
+    } catch (error) {
+      applyError(error);
     }
   };
 
   const iconName = (): IconName => {
     switch (status()) {
-      case "syncing":
+      case "syncing": {
         return "cloud-arrow-up";
-      case "error":
+      }
+      case "error": {
         return "cloud-warning";
-      case "needs-setup":
+      }
+      case "needs-setup": {
         return "cloud-slash";
-      default:
+      }
+      default: {
         return "cloud-check";
+      }
     }
   };
 
   const tooltip = () => {
     switch (status()) {
-      case "error":
+      case "error": {
         return `${message()} — click to retry`;
-      case "syncing":
+      }
+      case "syncing": {
         return "Syncing...";
-      default:
+      }
+      default: {
         return message() || "Sync now";
+      }
+    }
+  };
+
+  const dismissToast = (): void => {
+    if (status() !== "syncing") {
+      setMessage("");
     }
   };
 
@@ -154,16 +179,15 @@ export default function SyncButton() {
         <Icon name={iconName()} size={18} />
       </button>
       <Show when={message()}>
-        <div
+        <button
+          type="button"
           class="sync-toast"
           data-status={status()}
-          role="status"
-          onClick={() => {
-            if (status() !== "syncing") setMessage("");
-          }}
+          aria-live="polite"
+          onClick={dismissToast}
         >
           {message()}
-        </div>
+        </button>
       </Show>
     </>
   );

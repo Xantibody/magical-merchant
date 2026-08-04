@@ -1,10 +1,12 @@
 import { createSignal, onMount, onCleanup, Show } from "solid-js";
 import { typedInvoke } from "../lib/commands";
 import { EVENTS } from "../lib/events";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { listen } from "@tauri-apps/api/event";
+import type { UnlistenFn } from "@tauri-apps/api/event";
 import "../styles/settings.css";
+import type { JSX } from "solid-js";
 
-export default function Settings() {
+export default function Settings(): JSX.Element {
   const [workersUrl, setWorkersUrl] = createSignal("");
   const [authenticated, setAuthenticated] = createSignal(false);
   const [editable, setEditable] = createSignal(false);
@@ -51,7 +53,9 @@ export default function Settings() {
   });
 
   onCleanup(() => {
-    for (const unlisten of unlisteners) unlisten();
+    for (const unlisten of unlisteners) {
+      unlisten();
+    }
   });
 
   const handleSave = async () => {
@@ -63,8 +67,8 @@ export default function Settings() {
       });
       setMessage("Saved");
       setTimeout(() => setMessage(""), 2000);
-    } catch (e) {
-      setMessage(`Error: ${e}`);
+    } catch (error) {
+      setMessage(`Error: ${error}`);
     } finally {
       setSaving(false);
     }
@@ -82,8 +86,8 @@ export default function Settings() {
         setMessage("Authenticated");
         setTimeout(() => setMessage(""), 2000);
       }
-    } catch (e) {
-      setMessage(`Auth error: ${e}`);
+    } catch (error) {
+      setMessage(`Auth error: ${error}`);
     }
   };
 
@@ -93,8 +97,8 @@ export default function Settings() {
       setAuthenticated(false);
       setMessage("Logged out");
       setTimeout(() => setMessage(""), 2000);
-    } catch (e) {
-      setMessage(`Error: ${e}`);
+    } catch (error) {
+      setMessage(`Error: ${error}`);
     }
   };
 

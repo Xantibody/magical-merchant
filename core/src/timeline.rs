@@ -1,7 +1,7 @@
-pub mod error;
-pub mod repository;
+pub(crate) mod error;
+pub(crate) mod repository;
 
-pub use repository::Timeline;
+pub(crate) use repository::Timeline;
 
 use std::path::Path;
 

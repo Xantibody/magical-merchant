@@ -1,8 +1,8 @@
-pub mod error;
-pub mod repository;
+pub(crate) mod error;
+pub(crate) mod repository;
 mod summary;
 
-pub use repository::Notes;
+pub(crate) use repository::Notes;
 pub use summary::Summary as NoteSummary;
 
 use std::path::{Path, PathBuf};
@@ -26,7 +26,7 @@ pub fn update_note(
     tags: &[String],
     context: &Context,
 ) -> Result<(), CoreError> {
-    Notes::new(PathBuf::new()).update(file_path, body, tags, context)
+    Notes::update(file_path, body, tags, context)
 }
 
 pub fn list_notes(base_dir: &Path) -> Result<Vec<NoteSummary>, CoreError> {

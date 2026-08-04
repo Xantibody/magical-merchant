@@ -1,3 +1,7 @@
+// A panicking assertion is the point of a test; only production code has to
+// prove it handles the error case.
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
+
 mod note;
 mod project;
 pub mod sync;

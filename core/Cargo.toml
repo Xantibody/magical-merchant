@@ -2,7 +2,12 @@
 name = "magical-merchant-core"
 version = "0.1.0"
 edition = "2021"
+description = "Framework-independent core logic for the Magical Merchant note-taking app"
 license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [dependencies]
 chrono = { version = "0.4", features = ["serde"] }

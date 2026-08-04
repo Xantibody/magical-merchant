@@ -8,6 +8,7 @@ pub enum ConflictResolution {
     KeepRemote,
 }
 
+#[must_use]
 pub fn resolve(
     local_modified: DateTime<Utc>,
     remote_modified: DateTime<Utc>,
@@ -19,6 +20,7 @@ pub fn resolve(
     }
 }
 
+#[must_use]
 pub fn conflict_filename(key: &str, timestamp: DateTime<Utc>) -> String {
     let path = Path::new(key);
     let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("file");

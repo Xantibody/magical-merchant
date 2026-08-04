@@ -13,7 +13,7 @@ describe("parseTimelineEntry", () => {
     const result = parseTimelineEntry(raw);
     expect(result.time).toBe("14:30:45");
     expect(result.text).toBe("hello world");
-    expect(result.context).toEqual({ battery: 82, is_charging: false });
+    expect(result.context).toStrictEqual({ battery: 82, is_charging: false });
   });
 
   it("parses entry without context (old format)", () => {
@@ -29,7 +29,7 @@ describe("parseTimelineEntry", () => {
     const result = parseTimelineEntry(raw);
     expect(result.time).toBe("14:30:45");
     expect(result.text).toBe("code {foo}");
-    expect(result.context).toEqual({ battery: 50 });
+    expect(result.context).toStrictEqual({ battery: 50 });
   });
 
   it("normalizes empty object {} to null", () => {
@@ -57,10 +57,11 @@ describe("parseTimelineEntry", () => {
   });
 });
 
-describe("getBatteryIcon", () => {
-  const ctx = (battery: number, charging = false) =>
-    ({ battery, is_charging: charging, os: "", arch: "" }) as const;
+function ctx(battery: number, charging = false) {
+  return { battery, is_charging: charging, os: "", arch: "" } as const;
+}
 
+describe("getBatteryIcon", () => {
   it("returns battery-charging when charging", () => {
     expect(getBatteryIcon(ctx(50, true))).toBe("battery-charging");
   });

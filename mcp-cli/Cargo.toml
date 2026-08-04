@@ -2,7 +2,12 @@
 name = "magical-merchant-mcp-cli"
 version = "0.1.0"
 edition = "2021"
+description = "MCP server exposing Magical Merchant notes to AI agents"
 license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [dependencies]
 magical-merchant-core = { path = "../core" }

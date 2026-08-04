@@ -5,7 +5,7 @@ default:
   @just --list
 
 check:
-  cargo clippy --workspace -- -D warnings
+  cargo clippy --workspace --all-targets -- -D warnings
 
 test:
   cargo test --workspace
@@ -13,13 +13,13 @@ test:
 # --- Per-crate recipes ---
 
 check-app:
-  cargo clippy -p magical-merchant-core -p magical-merchant-app -- -D warnings
+  cargo clippy -p magical-merchant-core -p magical-merchant-app --all-targets -- -D warnings
 
 test-app:
   cargo test -p magical-merchant-core -p magical-merchant-app
 
 check-cli:
-  cargo clippy -p magical-merchant-mcp-cli -- -D warnings
+  cargo clippy -p magical-merchant-mcp-cli --all-targets -- -D warnings
 
 test-cli:
   cargo test -p magical-merchant-mcp-cli
