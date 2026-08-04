@@ -3,31 +3,37 @@
 
 :root {
   --app-surface: var(--gray-0);
+  --app-surface-2: var(--gray-1);
   --app-text: var(--gray-9);
   --app-text-muted: var(--gray-6);
-  --app-accent: var(--blue-7);
+  --app-text-faint: var(--gray-5);
   --app-border: var(--gray-3);
-  --app-surface-2: var(--gray-1);
+  --app-accent: var(--gray-8);
+  /* チップ・選択行・ハイライトの下地。accent をほんの少しだけ混ぜる */
+  --app-accent-soft: color-mix(in oklab, var(--app-accent) 9%, var(--gray-0));
+  --app-input-bg: white;
+  --app-ok: var(--green-7);
+  --app-danger: var(--red-7);
+  --app-undo: var(--blue-3);
+  --app-toast-bg: var(--gray-9);
+  --app-toast-text: var(--gray-0);
 }
 
 :root[data-theme="dark"] {
   --app-surface: var(--gray-9);
+  --app-surface-2: var(--gray-8);
   --app-text: var(--gray-1);
   --app-text-muted: var(--gray-5);
-  --app-accent: var(--blue-4);
+  --app-text-faint: var(--gray-6);
   --app-border: var(--gray-7);
-  --app-surface-2: var(--gray-8);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --app-surface: var(--gray-9);
-    --app-text: var(--gray-1);
-    --app-text-muted: var(--gray-5);
-    --app-accent: var(--blue-4);
-    --app-border: var(--gray-7);
-    --app-surface-2: var(--gray-8);
-  }
+  --app-accent: var(--gray-4);
+  --app-accent-soft: color-mix(in oklab, var(--app-accent) 16%, var(--gray-9));
+  --app-input-bg: var(--gray-8);
+  --app-ok: var(--green-4);
+  --app-danger: var(--red-4);
+  --app-undo: var(--blue-3);
+  --app-toast-bg: var(--gray-7);
+  --app-toast-text: var(--gray-0);
 }
 
 html {
@@ -40,4 +46,31 @@ body {
   color: var(--app-text);
   font-family: var(--font-sans);
   margin: 0;
+}
+
+/* ポップオーバー・パレット・トーストで共有する土台 */
+.popover {
+  position: absolute;
+  z-index: 120;
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-3);
+}
+
+.icon-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--size-1);
+  background: none;
+  border: none;
+  border-radius: var(--radius-2);
+  color: var(--app-text);
+  cursor: pointer;
+}
+
+.icon-button:hover,
+.icon-button[aria-expanded="true"] {
+  background: var(--app-surface-2);
 }

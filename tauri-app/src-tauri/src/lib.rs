@@ -12,7 +12,7 @@ mod sync;
 
 use magical_merchant_core::utils::device::Location;
 use magical_merchant_core::{
-    Filename, NoteFilename, NoteSummary, ProjectSummary, Slug, TaskSummary,
+    Filename, NoteFilename, NoteSummary, ProjectSummary, SearchHit, Slug, TaskSummary,
 };
 use tauri::{AppHandle, Emitter, Listener, Manager};
 
@@ -178,6 +178,32 @@ fn read_timeline_by_date(handle: AppHandle, date: String) -> Result<Vec<String>,
 }
 
 #[tauri::command]
+fn update_timeline_entry(
+    handle: AppHandle,
+    date: String,
+    index: usize,
+    text: String,
+) -> Result<(), String> {
+    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let naive = chrono::NaiveDate::parse_from_str(&date, "%Y-%m-%d").map_err(|e| e.to_string())?;
+    magical_merchant_core::update_timeline_entry(&base_dir, naive, index, &text)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_timeline_entry(handle: AppHandle, date: String, index: usize) -> Result<(), String> {
+    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let naive = chrono::NaiveDate::parse_from_str(&date, "%Y-%m-%d").map_err(|e| e.to_string())?;
+    magical_merchant_core::delete_timeline_entry(&base_dir, naive, index).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn search_all(handle: AppHandle, query: String) -> Result<Vec<SearchHit>, String> {
+    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    magical_merchant_core::search_all(&base_dir, &query).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn delete_note(handle: AppHandle, filename: String) -> Result<(), String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
     let filename = NoteFilename::parse(&filename).map_err(|e| e.to_string())?;
@@ -263,6 +289,9 @@ pub fn run() {
             update_task,
             list_timeline_dates,
             read_timeline_by_date,
+            update_timeline_entry,
+            delete_timeline_entry,
+            search_all,
             delete_note,
             delete_task,
             sync::sync_start,

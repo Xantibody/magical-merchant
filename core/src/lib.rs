@@ -9,6 +9,7 @@ mod timeline;
 pub mod utils;
 
 mod error;
+pub mod search;
 
 pub use error::CoreError;
 pub use note::error::NoteError;
@@ -22,8 +23,12 @@ pub use project::{
     create_task, delete_task, get_project_activity_summary, list_active_tasks, list_done_tasks,
     list_projects, read_project, update_task,
 };
+pub use search::{HitKind, SearchHit, search_all};
 pub use timeline::error::TimelineError;
-pub use timeline::{list_timeline_dates, read_timeline, save_timeline_entry};
+pub use timeline::{
+    delete_timeline_entry, list_timeline_dates, read_timeline, save_timeline_entry,
+    update_timeline_entry,
+};
 pub use utils::device::Context as DeviceContext;
 pub use utils::frontmatter;
 pub use utils::validated::{Filename, NoteFilename, Slug};
