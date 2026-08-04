@@ -16,14 +16,14 @@ pub struct Summary {
 
 impl Summary {
     pub fn from_content(filename: &str, content: &str) -> Result<Self, CoreError> {
-        let (fm, body): (TaskFrontmatter, String) = frontmatter::parse(content)?;
+        let (fm, body): (TaskFrontmatter, &str) = frontmatter::parse(content)?;
         Ok(Self {
             filename: filename.to_string(),
             title: fm.title,
             created: fm.created,
             completed: fm.completed,
             tags: fm.tags,
-            body,
+            body: body.to_string(),
         })
     }
 
