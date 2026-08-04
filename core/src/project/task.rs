@@ -126,7 +126,7 @@ mod tests {
         assert!(path.exists());
 
         let content = fs::read_to_string(&path).unwrap();
-        let (fm, body): (TaskFrontmatter, String) = frontmatter::parse(&content).unwrap();
+        let (fm, body): (TaskFrontmatter, &str) = frontmatter::parse(&content).unwrap();
         assert_eq!(fm.title, "My Task");
         assert_eq!(fm.tags, vec!["rust", "test"]);
         assert_eq!(body, "Task body");
@@ -211,7 +211,7 @@ mod tests {
         let done_path = paths::done_tasks_dir(tmp.path(), "proj").join(fname);
         assert!(done_path.exists());
         let content = fs::read_to_string(&done_path).unwrap();
-        let (fm, body): (TaskFrontmatter, String) = frontmatter::parse(&content).unwrap();
+        let (fm, body): (TaskFrontmatter, &str) = frontmatter::parse(&content).unwrap();
         assert_eq!(fm.title, "Task");
         assert!(fm.completed.is_some());
         assert_eq!(fm.tags, vec!["a"]);
@@ -260,7 +260,7 @@ mod tests {
         .unwrap();
 
         let content = fs::read_to_string(active_dir.join(fname)).unwrap();
-        let (fm, body): (TaskFrontmatter, String) = frontmatter::parse(&content).unwrap();
+        let (fm, body): (TaskFrontmatter, &str) = frontmatter::parse(&content).unwrap();
         assert_eq!(fm.title, "New Title");
         assert_eq!(fm.tags, vec!["updated"]);
         assert_eq!(body, "new body");

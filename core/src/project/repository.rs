@@ -82,7 +82,7 @@ impl Projects {
         }
 
         let content = fs::read_to_string(&file_path)?;
-        let (fm, _body): (ProjectFrontmatter, String) = frontmatter::parse(&content)?;
+        let (fm, _body): (ProjectFrontmatter, &str) = frontmatter::parse(&content)?;
 
         let active_dir = paths::active_tasks_dir(&self.base_dir, slug_str);
         let active_task_count = utils::fs::count_md_files(&active_dir)?;

@@ -35,10 +35,10 @@ pub fn render<T: Serialize>(fm: &T, body: &str) -> Result<String, CoreError> {
     Ok(format!("---\n{yaml}---\n{body}"))
 }
 
-pub fn parse<T: DeserializeOwned>(content: &str) -> Result<(T, String), CoreError> {
-    let (fm, body) = markdown_frontmatter::parse::<T>(content)
-        .map_err(|e| CoreError::Parse(format!("{e:?}")))?;
-    Ok((fm, body.to_string()))
+/// 本文は `content` を借りて返す。呼び出し側の多くは先頭だけしか使わないので、
+/// ここで所有権を持たせると読み捨てるぶんまで丸ごと複製することになる。
+pub fn parse<T: DeserializeOwned>(content: &str) -> Result<(T, &str), CoreError> {
+    markdown_frontmatter::parse::<T>(content).map_err(|e| CoreError::Parse(format!("{e:?}")))
 }
 
 #[cfg(test)]
@@ -143,7 +143,7 @@ mod tests {
     fn test_note_frontmatter_old_format_compat() {
         // Old format only had battery and is_charging
         let yaml = "---\ntime: 2026-03-20T14:30:45+09:00\ntags: []\ncontext:\n  battery: 82\n  is_charging: false\n---\nbody";
-        let (fm, body): (NoteFrontmatter, String) = parse(yaml).unwrap();
+        let (fm, body): (NoteFrontmatter, &str) = parse(yaml).unwrap();
         let ctx = fm.context.unwrap();
         assert_eq!(ctx.battery, Some(82));
         assert_eq!(ctx.is_charging, Some(false));

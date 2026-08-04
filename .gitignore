@@ -43,3 +43,6 @@ plans/
 
 # Wrangler local secrets
 .dev.vars
+
+# Profiling artifacts
+profiles/
