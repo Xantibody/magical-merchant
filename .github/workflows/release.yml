@@ -80,6 +80,7 @@ jobs:
       - name: Collect the APK
         id: apk
         run: |
+          # --target aarch64 でも Tauri は出力名を universal のままにする
           src=tauri-app/src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
           out="magical-merchant-${{ steps.version.outputs.version }}.apk"
           cp "$src" "$out"
