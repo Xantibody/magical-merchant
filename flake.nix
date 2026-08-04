@@ -69,6 +69,29 @@
         };
         androidSdk = androidComposition.androidsdk;
         playwrightBrowsers = pkgs.playwright-driver.browsers;
+
+        # CI 用の最小構成。Android クロスターゲットと rust-analyzer / rust-src は
+        # cache.nixos.org に無くソースビルドになるため、含めると CI が十数分伸びる
+        rustToolchainCI = pkgs.rust-bin.stable.latest.default.override {
+          extensions = [ "clippy" ];
+        };
+        linuxTauriDeps = pkgs.lib.optionals pkgs.stdenv.isLinux (
+          with pkgs;
+          [
+            webkitgtk_4_1.dev
+            libappindicator-gtk3.dev
+            librsvg.dev
+            patchelf
+            pkg-config
+          ]
+        );
+        jsToolchain = with pkgs; [
+          nodejs_22
+          pnpm
+          oxlint
+          typescript-go
+          just
+        ];
       in
       {
         packages.default = pkgs.callPackage ./nix/package.nix { };
@@ -77,8 +100,7 @@
         devShells.default = pkgs.mkShell (
           {
             buildInputs =
-              with pkgs;
-              [
+              (with pkgs; [
                 rustToolchain
                 just
                 nodejs_22
@@ -89,14 +111,8 @@
                 oxlint
                 typescript-go
                 wrangler
-              ]
-              ++ lib.optionals stdenv.isLinux [
-                webkitgtk_4_1.dev
-                libappindicator-gtk3.dev
-                librsvg.dev
-                patchelf
-                pkg-config
-              ];
+              ])
+              ++ linuxTauriDeps;
             ANDROID_HOME = "${androidSdk}/libexec/android-sdk";
             NDK_HOME = "${androidSdk}/libexec/android-sdk/ndk/29.0.14206865";
             PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1";
@@ -120,6 +136,28 @@
             PLAYWRIGHT_BROWSERS_PATH = "${playwrightBrowsers}";
           }
         );
+
+        # CI 専用の shell。default は Android SDK/NDK と Rust クロスターゲットを含み、
+        # それらは毎回ソースビルドされるため CI で使うとジョブが timeout する
+        devShells.rust = pkgs.mkShell {
+          buildInputs = [
+            rustToolchainCI
+            pkgs.just
+          ]
+          ++ linuxTauriDeps;
+        };
+
+        devShells.frontend = pkgs.mkShell {
+          buildInputs = jsToolchain;
+          # vitest が browser mode (chromium) なのでブラウザ本体が要る
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1";
+          PLAYWRIGHT_BROWSERS_PATH = "${playwrightBrowsers}";
+        };
+
+        # wrangler は workers/package.json の devDependency なので nix 版は不要
+        devShells.workers = pkgs.mkShell {
+          buildInputs = jsToolchain;
+        };
       }
     )
     // {
