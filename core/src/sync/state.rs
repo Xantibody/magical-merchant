@@ -55,8 +55,10 @@ mod tests {
     #[test]
     fn save_and_load_roundtrip() {
         let dir = tempfile::tempdir().unwrap();
-        let mut state = SyncState::default();
-        state.last_sync = Some(Utc::now());
+        let mut state = SyncState {
+            last_sync: Some(Utc::now()),
+            ..SyncState::default()
+        };
         state.files.insert(
             "notes/test.md".to_string(),
             FileSyncRecord {

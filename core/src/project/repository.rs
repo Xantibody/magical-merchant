@@ -11,16 +11,21 @@ use crate::utils::validated::Slug;
 
 use super::summary::Summary as ProjectSummary;
 
-pub struct Projects {
+pub(crate) struct Projects {
     base_dir: PathBuf,
 }
 
 impl Projects {
-    pub fn new(base_dir: PathBuf) -> Self {
+    pub(crate) const fn new(base_dir: PathBuf) -> Self {
         Self { base_dir }
     }
 
-    pub fn create(&self, slug: &Slug, name: &str, description: &str) -> Result<PathBuf, CoreError> {
+    pub(crate) fn create(
+        &self,
+        slug: &Slug,
+        name: &str,
+        description: &str,
+    ) -> Result<PathBuf, CoreError> {
         let file_path = paths::project_file_path(&self.base_dir, slug.as_str());
         if file_path.exists() {
             return Err(CoreError::AlreadyExists(format!("project: {slug}")));
@@ -44,7 +49,7 @@ impl Projects {
         Ok(proj_dir)
     }
 
-    pub fn list(&self) -> Result<Vec<ProjectSummary>, CoreError> {
+    pub(crate) fn list(&self) -> Result<Vec<ProjectSummary>, CoreError> {
         let dir = paths::projects_dir(&self.base_dir);
         if !dir.exists() {
             return Ok(Vec::new());
@@ -52,10 +57,10 @@ impl Projects {
 
         let mut projects = Vec::new();
         let mut entries: Vec<_> = fs::read_dir(&dir)?
-            .filter_map(|e| e.ok())
+            .filter_map(Result::ok)
             .filter(|e| e.path().is_dir())
             .collect();
-        entries.sort_by_key(|e| e.file_name());
+        entries.sort_by_key(fs::DirEntry::file_name);
 
         for entry in entries {
             let slug_str = entry.file_name().to_string_lossy().to_string();
@@ -69,7 +74,7 @@ impl Projects {
         Ok(projects)
     }
 
-    pub fn read(&self, slug: &Slug) -> Result<ProjectSummary, CoreError> {
+    pub(crate) fn read(&self, slug: &Slug) -> Result<ProjectSummary, CoreError> {
         let slug_str = slug.as_str();
         let file_path = paths::project_file_path(&self.base_dir, slug_str);
         if !file_path.exists() {

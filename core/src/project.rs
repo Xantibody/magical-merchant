@@ -1,9 +1,9 @@
-pub mod error;
-pub mod repository;
+pub(crate) mod error;
+pub(crate) mod repository;
 mod summary;
-pub mod task;
+pub(crate) mod task;
 
-pub use repository::Projects;
+pub(crate) use repository::Projects;
 pub use summary::{ActivitySummary as ProjectActivitySummary, Summary as ProjectSummary};
 pub use task::{
     Summary as TaskSummary, complete_task, create_task, delete_task, list_active_tasks,
@@ -43,17 +43,15 @@ pub fn get_project_activity_summary(
     let mut result = Vec::new();
 
     for project in projects {
-        let slug = Slug::parse(&project.slug).expect("already validated by list_projects");
+        let slug = Slug::parse(&project.slug)?;
         let done_tasks = list_done_tasks(base_dir, &slug)?;
         let filtered: Vec<TaskSummary> = done_tasks
             .into_iter()
             .filter(|task| {
-                task.completed
-                    .map(|dt| {
-                        let date = dt.date_naive();
-                        date >= start && date <= end
-                    })
-                    .unwrap_or(false)
+                task.completed.is_some_and(|dt| {
+                    let date = dt.date_naive();
+                    date >= start && date <= end
+                })
             })
             .collect();
 

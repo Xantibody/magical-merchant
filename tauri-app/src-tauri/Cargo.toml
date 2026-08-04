@@ -2,7 +2,12 @@
 name = "magical-merchant-app"
 version = "0.1.0"
 edition = "2021"
+description = "Tauri desktop and mobile shell for the Magical Merchant note-taking app"
 license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [lib]
 name = "magical_merchant_app_lib"

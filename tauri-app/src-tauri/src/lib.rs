@@ -1,3 +1,11 @@
+// A panicking assertion is the point of a test; only production code has to
+// prove it handles the error case.
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
+// `#[tauri::command]` arguments arrive by value: serde deserializes them out of
+// the IPC payload, and `AppHandle` / `State` are injected owned. Borrowing them
+// is not an option this crate has.
+#![allow(clippy::needless_pass_by_value)]
+
 mod auth;
 mod device;
 mod sync;
@@ -8,7 +16,7 @@ use magical_merchant_core::{
 };
 use tauri::{AppHandle, Emitter, Listener, Manager};
 
-fn make_location(latitude: Option<f64>, longitude: Option<f64>) -> Option<Location> {
+const fn make_location(latitude: Option<f64>, longitude: Option<f64>) -> Option<Location> {
     match (latitude, longitude) {
         (Some(lat), Some(lng)) => Some(Location {
             latitude: lat,
@@ -201,6 +209,9 @@ fn update_task(
         .map_err(|e| e.to_string())
 }
 
+// `mobile_entry_point` fixes the signature to `fn run()`, so a failed startup
+// has nowhere to be returned to — panicking is the only way to report it.
+#[allow(clippy::expect_used)]
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()

@@ -9,42 +9,51 @@ pub const ACTIVE_DIR: &str = "active";
 pub const DONE_DIR: &str = "done";
 pub const PROJECT_FILE: &str = "project.md";
 
+#[must_use]
 pub fn data_dir(base_dir: &Path) -> PathBuf {
     base_dir.join(DATA_DIR)
 }
 
+#[must_use]
 pub fn timeline_file_path(base_dir: &Path, date: NaiveDate) -> PathBuf {
     data_dir(base_dir)
         .join(TIMELINE_DIR)
         .join(format!("{}.md", date.format("%Y-%m-%d")))
 }
 
+#[must_use]
 pub fn note_file_path(base_dir: &Path, timestamp: DateTime<Local>) -> PathBuf {
     data_dir(base_dir)
         .join(NOTES_DIR)
         .join(format!("{}.md", timestamp.format("%Y%m%d_%H%M%S")))
 }
 
+#[must_use]
 pub fn notes_dir(base_dir: &Path) -> PathBuf {
     data_dir(base_dir).join(NOTES_DIR)
 }
 
+#[must_use]
 pub fn projects_dir(base_dir: &Path) -> PathBuf {
     data_dir(base_dir).join(PROJECTS_DIR)
 }
 
+#[must_use]
 pub fn project_dir(base_dir: &Path, slug: &str) -> PathBuf {
     projects_dir(base_dir).join(slug)
 }
 
+#[must_use]
 pub fn project_file_path(base_dir: &Path, slug: &str) -> PathBuf {
     project_dir(base_dir, slug).join(PROJECT_FILE)
 }
 
+#[must_use]
 pub fn active_tasks_dir(base_dir: &Path, slug: &str) -> PathBuf {
     project_dir(base_dir, slug).join(ACTIVE_DIR)
 }
 
+#[must_use]
 pub fn done_tasks_dir(base_dir: &Path, slug: &str) -> PathBuf {
     project_dir(base_dir, slug).join(DONE_DIR)
 }

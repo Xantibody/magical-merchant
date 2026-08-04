@@ -16,7 +16,7 @@ pub fn list_md_files(dir: &Path) -> Result<Vec<DirEntry>, CoreError> {
     }
 
     let mut entries: Vec<_> = fs::read_dir(dir)?
-        .filter_map(|e| e.ok())
+        .filter_map(Result::ok)
         .filter(|e| e.path().extension().is_some_and(|ext| ext == "md"))
         .collect();
 
@@ -30,7 +30,7 @@ pub fn count_md_files(dir: &Path) -> Result<usize, CoreError> {
     }
 
     Ok(fs::read_dir(dir)?
-        .filter_map(|e| e.ok())
+        .filter_map(Result::ok)
         .filter(|e| e.path().extension().is_some_and(|ext| ext == "md"))
         .count())
 }

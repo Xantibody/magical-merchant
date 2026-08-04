@@ -15,6 +15,7 @@ pub struct Summary {
 }
 
 impl Summary {
+    #[must_use]
     pub fn from_frontmatter(
         slug: String,
         fm: ProjectFrontmatter,

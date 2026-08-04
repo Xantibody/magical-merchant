@@ -4,6 +4,7 @@ use crate::error::CoreError;
 use crate::utils::device::Context;
 use crate::utils::frontmatter::{self, NoteFrontmatter};
 
+#[must_use]
 pub fn format_timeline_line(text: &str, timestamp: DateTime<Local>, context: &Context) -> String {
     let time = timestamp.format("%H:%M:%S");
     match serde_json::to_string(context) {

@@ -1,3 +1,7 @@
+// A panicking assertion is the point of a test; only production code has to
+// prove it handles the error case.
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
+
 use std::path::PathBuf;
 
 use chrono::NaiveDate;
@@ -229,7 +233,7 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let server = McpServer::new(cli.data_dir);
     let transport = rmcp::transport::io::stdio();
-    let _server = server.serve(transport).await?;
-    _server.waiting().await?;
+    let running = server.serve(transport).await?;
+    running.waiting().await?;
     Ok(())
 }
