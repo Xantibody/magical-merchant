@@ -1,4 +1,5 @@
 import { SignJWT, jwtVerify } from "jose";
+import { type BulkRequest, executeBulk, loadSyncState, saveSyncState } from "./sync";
 
 interface Env {
   BUCKET: R2Bucket;
@@ -6,12 +7,6 @@ interface Env {
   GOOGLE_CLIENT_SECRET: string;
   JWT_SECRET: string;
   JWT_EXPIRY_SECONDS?: string;
-}
-
-interface FileEntry {
-  key: string;
-  lastModified: string;
-  size: number;
 }
 
 interface JwtPayload {
@@ -42,73 +37,54 @@ function errorResponse(message: string, status: number): Response {
   return jsonResponse({ error: message }, status);
 }
 
-function extractKey(pathname: string): string | null {
-  const prefix = "/files/";
-  if (!pathname.startsWith(prefix)) return null;
-  return decodeURIComponent(pathname.slice(prefix.length));
+async function handleSyncState(bucket: R2Bucket, userId: string): Promise<Response> {
+  const { state, etag } = await loadSyncState(bucket, userId);
+  return jsonResponse({ ...state, etag });
 }
 
-function containsTraversal(key: string): boolean {
-  return key.includes("..") || key.includes("\0");
-}
-
-async function listAllObjects(bucket: R2Bucket): Promise<FileEntry[]> {
-  const files: FileEntry[] = [];
-  let cursor: string | undefined;
-
-  do {
-    const listed = await bucket.list({
-      cursor,
-      limit: 1000,
-      include: ["customMetadata"],
-    });
-    for (const obj of listed.objects) {
-      const lastModified = obj.customMetadata?.lastModified ?? obj.uploaded.toISOString();
-      files.push({
-        key: obj.key,
-        lastModified,
-        size: obj.size,
-      });
-    }
-    cursor = listed.truncated ? listed.cursor : undefined;
-  } while (cursor);
-
-  return files;
-}
-
-async function handleList(bucket: R2Bucket): Promise<Response> {
-  const files = await listAllObjects(bucket);
-  return jsonResponse({ files });
-}
-
-async function handleGet(bucket: R2Bucket, key: string): Promise<Response> {
-  const object = await bucket.get(key);
-  if (!object) {
-    return errorResponse("Not found", 404);
+async function handleSyncBulk(
+  bucket: R2Bucket,
+  userId: string,
+  request: Request,
+): Promise<Response> {
+  let body: BulkRequest;
+  try {
+    body = (await request.json()) as BulkRequest;
+  } catch {
+    return errorResponse("Invalid JSON", 400);
   }
-  const lastModified = object.customMetadata?.lastModified ?? object.uploaded.toISOString();
-  return new Response(object.body, {
-    headers: {
-      "Content-Type": "text/plain; charset=utf-8",
-      "X-Last-Modified": lastModified,
-    },
-  });
-}
+  if (
+    !Array.isArray(body.uploads) ||
+    !Array.isArray(body.downloads) ||
+    !Array.isArray(body.delete_remote) ||
+    !Array.isArray(body.conflicts) ||
+    typeof body.new_state !== "object" ||
+    body.new_state === null
+  ) {
+    return errorResponse("Invalid request: missing or malformed fields", 400);
+  }
 
-async function handlePut(bucket: R2Bucket, key: string, request: Request): Promise<Response> {
-  const body = await request.text();
-  const lastModified = request.headers.get("X-Last-Modified") ?? new Date().toISOString();
+  // CAS check
+  const { etag: currentEtag } = await loadSyncState(bucket, userId);
+  if (currentEtag !== body.expected_etag) {
+    return errorResponse("Sync state changed concurrently, please retry", 409);
+  }
 
-  await bucket.put(key, body, {
-    customMetadata: { lastModified },
-  });
+  let result;
+  try {
+    result = await executeBulk(bucket, body);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return errorResponse(`Bulk execution failed: ${msg}`, 400);
+  }
 
-  return jsonResponse({ key, lastModified }, 201);
-}
+  // Save new state with CAS
+  const saved = await saveSyncState(bucket, userId, body.new_state, body.expected_etag);
+  if (!saved) {
+    return errorResponse("Sync state changed concurrently, please retry", 409);
+  }
 
-async function handleDelete(bucket: R2Bucket, key: string): Promise<Response> {
-  await bucket.delete(key);
-  return new Response(null, { status: 204 });
+  return jsonResponse(result);
 }
 
 async function signJwt(payload: JwtPayload, secret: string): Promise<string> {
@@ -300,28 +276,14 @@ export default {
       return errorResponse("Unauthorized", 401);
     }
 
-    if (pathname === "/files" && method === "GET") {
-      return handleList(env.BUCKET);
+    if (pathname === "/sync-state" && method === "GET") {
+      return handleSyncState(env.BUCKET, claims.sub);
     }
 
-    const key = extractKey(pathname);
-    if (!key || key.length === 0) {
-      return errorResponse("Invalid path", 400);
+    if (pathname === "/sync/bulk" && method === "POST") {
+      return handleSyncBulk(env.BUCKET, claims.sub, request);
     }
 
-    if (containsTraversal(key)) {
-      return errorResponse("Path traversal not allowed", 400);
-    }
-
-    switch (method) {
-      case "GET":
-        return handleGet(env.BUCKET, key);
-      case "PUT":
-        return handlePut(env.BUCKET, key, request);
-      case "DELETE":
-        return handleDelete(env.BUCKET, key);
-      default:
-        return errorResponse("Method not allowed", 405);
-    }
+    return errorResponse("Not found", 404);
   },
 } satisfies ExportedHandler<Env>;

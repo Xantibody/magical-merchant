@@ -1,8 +1,16 @@
 use std::collections::HashSet;
 
-use super::client::RemoteFile;
+use chrono::{DateTime, Utc};
+
 use super::scan::LocalFile;
 use super::state::SyncState;
+
+#[derive(Debug, Clone)]
+pub struct RemoteFile {
+    pub key: String,
+    pub last_modified: DateTime<Utc>,
+    pub content_hash: String,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SyncAction {
@@ -136,7 +144,7 @@ mod tests {
         RemoteFile {
             key: key.to_string(),
             last_modified: modified.parse().unwrap(),
-            size: 100,
+            content_hash: String::new(),
         }
     }
 
