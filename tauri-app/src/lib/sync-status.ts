@@ -32,8 +32,12 @@ export function describeSyncResult(result: SyncResultPayload): SyncUiState {
   }
 
   const parts: string[] = [];
-  if (result.uploaded) parts.push(`↑${result.uploaded}`);
-  if (result.downloaded) parts.push(`↓${result.downloaded}`);
+  if (result.uploaded) {
+    parts.push(`↑${result.uploaded}`);
+  }
+  if (result.downloaded) {
+    parts.push(`↓${result.downloaded}`);
+  }
   if (result.deleted_remote + result.deleted_local) {
     parts.push(`−${result.deleted_remote + result.deleted_local}`);
   }
@@ -51,7 +55,9 @@ export function describeSyncError(err: unknown): SyncUiState | null {
       ? (err as SyncErrorInfo)
       : { kind: "other", message: String(err) };
 
-  if (info.kind === "busy") return null;
+  if (info.kind === "busy") {
+    return null;
+  }
   if (info.kind === "notConfigured" || info.kind === "notAuthenticated") {
     return { status: "needs-setup", message: info.message };
   }

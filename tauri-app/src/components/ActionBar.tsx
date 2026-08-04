@@ -1,4 +1,5 @@
-import { type JSX, createSignal, onMount, onCleanup } from "solid-js";
+import { createSignal, onMount, onCleanup } from "solid-js";
+import type { JSX } from "solid-js";
 
 interface ActionBarProps {
   children: JSX.Element;
@@ -7,7 +8,7 @@ interface ActionBarProps {
 const FLICK_DISTANCE = 30;
 const FLICK_MAX_DURATION = 300;
 
-export default function ActionBar(props: ActionBarProps) {
+export default function ActionBar(props: ActionBarProps): JSX.Element {
   const [visible, setVisible] = createSignal(false);
   let barRef!: HTMLDivElement;
 

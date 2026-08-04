@@ -33,7 +33,7 @@ describe("ToggleMenu", () => {
 
     await expect.element(screen.getByText("Timeline")).toBeInTheDocument();
     const links = baseElement.querySelectorAll("a.toggle-menu-item");
-    const hrefs = Array.from(links).map((a) => a.getAttribute("href"));
-    expect(hrefs).toEqual(["/", "/notes", "/tasks", "/settings"]);
+    const hrefs = [...links].map((a) => a.getAttribute("href"));
+    expect(hrefs).toStrictEqual(["/", "/notes", "/tasks", "/settings"]);
   });
 });

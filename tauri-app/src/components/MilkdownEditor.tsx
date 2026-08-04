@@ -13,36 +13,43 @@ import { getHighlighter } from "../lib/highlighter";
 import { exitCodeBlockPlugin } from "../lib/exit-code-block-plugin";
 import { createPlaceholderPlugin } from "../lib/placeholder-plugin";
 import { getShikiTheme } from "../lib/theme";
+import type { JSX } from "solid-js";
 
 interface MilkdownEditorProps {
   defaultValue?: string;
   onChange?: (markdown: string) => void;
   placeholder?: string;
-  onEditorReady?: (editor: Editor | undefined) => void;
+  onEditorReady?: (editor?: Editor) => void;
 }
 
-export default function MilkdownEditor(props: MilkdownEditorProps) {
+export default function MilkdownEditor(props: MilkdownEditorProps): JSX.Element {
   let ref: HTMLDivElement | undefined;
   let editor: Editor | undefined;
 
   onMount(async () => {
-    if (!ref) return;
+    const root = ref;
+    if (!root) {
+      return;
+    }
 
     const highlighter = await getHighlighter();
 
-    const parser = createParser(highlighter as any, {
+    // Shiki's Highlighter type is structurally compatible but comes from a
+    // different copy of the package than the one @milkdown/plugin-highlight
+    // resolves, so the nominal types do not line up.
+    const parser = createParser(highlighter as Parameters<typeof createParser>[0], {
       theme: getShikiTheme(),
     });
 
     editor = await Editor.make()
       .config((ctx) => {
-        ctx.set(rootCtx, ref!);
+        ctx.set(rootCtx, root);
         if (props.defaultValue) {
           ctx.set(defaultValueCtx, props.defaultValue);
         }
         ctx.set(highlightPluginConfig.key, { parser });
         if (props.onChange) {
-          const onChange = props.onChange;
+          const { onChange } = props;
           ctx.get(listenerCtx).markdownUpdated((_ctx, markdown) => {
             onChange(markdown);
           });
@@ -65,18 +72,20 @@ export default function MilkdownEditor(props: MilkdownEditorProps) {
 
   onCleanup(() => {
     editor?.destroy();
-    props.onEditorReady?.(undefined);
+    props.onEditorReady?.();
   });
 
   const handleClick = (e: MouseEvent) => {
-    if (!ref) return;
+    if (!ref) {
+      return;
+    }
     const prosemirror = ref.querySelector(".ProseMirror") as HTMLElement | null;
     if (prosemirror && e.target === ref) {
       prosemirror.focus();
     }
   };
 
-  return <div ref={ref} class="milkdown-editor" onClick={handleClick} />;
+  return <div ref={ref} class="milkdown-editor" role="presentation" onClick={handleClick} />;
 }
 
 export { type MilkdownEditorProps };

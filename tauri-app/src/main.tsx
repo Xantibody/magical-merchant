@@ -2,4 +2,9 @@ import { render } from "solid-js/web";
 import App from "./App";
 import "./index.css";
 
-render(() => <App />, document.getElementById("root")!);
+const root = document.querySelector("#root");
+if (!root) {
+  throw new Error("missing #root element");
+}
+
+render(() => <App />, root);

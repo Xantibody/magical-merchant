@@ -4,22 +4,23 @@ import ActionBar from "../components/ActionBar";
 import Icon from "../components/Icon";
 import TimelineEntry from "../components/TimelineEntry";
 import { getLocation } from "../lib/location";
+import type { JSX } from "solid-js";
 
 type ViewMode = "input" | "list" | "preview";
 
-async function fetchEntries(): Promise<string[]> {
+function fetchEntries(): Promise<string[]> {
   return typedInvoke("read_timeline");
 }
 
-async function fetchDates(): Promise<string[]> {
+function fetchDates(): Promise<string[]> {
   return typedInvoke("list_timeline_dates");
 }
 
-async function fetchEntriesByDate(date: string): Promise<string[]> {
+function fetchEntriesByDate(date: string): Promise<string[]> {
   return typedInvoke("read_timeline_by_date", { date });
 }
 
-export default function Timeline() {
+export default function Timeline(): JSX.Element {
   const [text, setText] = createSignal("");
   const [saving, setSaving] = createSignal(false);
   const [sendError, setSendError] = createSignal("");
@@ -33,7 +34,9 @@ export default function Timeline() {
 
   const handleSend = async () => {
     const trimmed = text().trim();
-    if (!trimmed) return;
+    if (!trimmed) {
+      return;
+    }
 
     setSaving(true);
     setSendError("");
@@ -46,8 +49,8 @@ export default function Timeline() {
       });
       setText("");
       refetch();
-    } catch (e) {
-      setSendError(String(e));
+    } catch (error) {
+      setSendError(String(error));
     } finally {
       setSaving(false);
     }
@@ -99,7 +102,7 @@ export default function Timeline() {
 
             <Show when={entries()?.length}>
               <div class="timeline-entries">
-                <For each={entries()!.slice().reverse()}>
+                <For each={[...(entries() ?? [])].toReversed()}>
                   {(entry) => <TimelineEntry raw={entry} />}
                 </For>
               </div>

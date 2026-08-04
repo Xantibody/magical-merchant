@@ -18,7 +18,10 @@ describe("Icon", () => {
     const screen = page.elementLocator(baseElement);
 
     await expect.element(screen.locator(".icon svg")).toBeInTheDocument();
-    const svg = baseElement.querySelector(".icon svg")!;
+    const svg = baseElement.querySelector(".icon svg");
+    if (!svg) {
+      throw new Error("expected the icon to render an svg");
+    }
     expect(svg.getAttribute("width")).toBe("16px");
     expect(svg.getAttribute("height")).toBe("16px");
   });

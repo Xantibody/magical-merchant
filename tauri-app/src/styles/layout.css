@@ -65,6 +65,9 @@
 
 /* 同期状態のトースト: ヘッダー直下に表示し、クリックで閉じる */
 .sync-toast {
+  appearance: none;
+  font-family: inherit;
+  text-align: start;
   position: absolute;
   top: calc(var(--size-8) + var(--size-2));
   right: var(--size-3);

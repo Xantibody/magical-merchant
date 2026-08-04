@@ -9,17 +9,20 @@ import {
   insertHrCommand,
 } from "@milkdown/kit/preset/commonmark";
 import Icon from "./Icon";
+import type { JSX } from "solid-js";
 
 interface MarkdownToolbarProps {
   editor: Editor | undefined;
 }
 
-export default function MarkdownToolbar(props: MarkdownToolbarProps) {
+export default function MarkdownToolbar(props: MarkdownToolbarProps): JSX.Element {
   const [toolbarTop, setToolbarTop] = createSignal<number | undefined>();
 
   onMount(() => {
     const vv = window.visualViewport;
-    if (!vv) return;
+    if (!vv) {
+      return;
+    }
 
     const update = () => {
       setToolbarTop(vv.offsetTop + vv.height);
@@ -34,8 +37,10 @@ export default function MarkdownToolbar(props: MarkdownToolbarProps) {
   });
 
   const exec = (run: (editor: Editor) => void) => {
-    const editor = props.editor;
-    if (!editor) return;
+    const { editor } = props;
+    if (!editor) {
+      return;
+    }
     run(editor);
     editor.action((ctx) => {
       const root = ctx.get(rootCtx) as HTMLElement;
@@ -54,9 +59,9 @@ export default function MarkdownToolbar(props: MarkdownToolbarProps) {
           role="toolbar"
           aria-label="Markdown formatting"
           style={
-            top() != null
-              ? { top: `${top()}px`, bottom: "auto", transform: "translateY(-100%)" }
-              : undefined
+            top() === undefined
+              ? undefined
+              : { top: `${top()}px`, bottom: "auto", transform: "translateY(-100%)" }
           }
         >
           <button

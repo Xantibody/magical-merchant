@@ -1,4 +1,5 @@
 import { createEffect, onCleanup } from "solid-js";
+import type { JSX } from "solid-js";
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -8,11 +9,13 @@ interface ConfirmDialogProps {
   onCancel: () => void;
 }
 
-export default function ConfirmDialog(props: ConfirmDialogProps) {
+export default function ConfirmDialog(props: ConfirmDialogProps): JSX.Element {
   let dialogRef!: HTMLDialogElement;
 
   createEffect(() => {
-    if (!dialogRef) return;
+    if (!dialogRef) {
+      return;
+    }
 
     if (props.open) {
       if (!dialogRef.open) {

@@ -6,7 +6,7 @@ import MarkdownToolbar from "./MarkdownToolbar";
 
 function createMockEditor(): Editor {
   return {
-    action: vi.fn(),
+    action: vi.fn<(callback: unknown) => unknown>(),
   } as unknown as Editor;
 }
 
@@ -43,7 +43,7 @@ describe("MarkdownToolbar", () => {
 
     fireEvent.click(screen.getByLabelText("Outdent"));
 
-    expect(editor.action).toHaveBeenCalled();
+    expect(editor.action).toHaveBeenCalledWith(expect.any(Function));
   });
 
   it("hides toolbar when editor becomes undefined", () => {
