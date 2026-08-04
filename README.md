@@ -230,14 +230,14 @@ Communicates via stdio transport and provides the following read-only tools:
 
 ### Rust recipes (`rust::`)
 
-| Command                 | Description                          | CI  |
-| ----------------------- | ------------------------------------ | --- |
-| `just rust::check`      | `cargo clippy` for all Rust crates   |     |
-| `just rust::test`       | `cargo test` for all Rust crates     |     |
-| `just rust::check-core` | `cargo clippy` for core + app crates | ✓   |
-| `just rust::test-core`  | `cargo test` for core + app crates   | ✓   |
-| `just rust::check-cli`  | `cargo clippy` for mcp-cli crate     | ✓   |
-| `just rust::test-cli`   | `cargo test` for mcp-cli crate       | ✓   |
+| Command                | Description                          | CI  |
+| ---------------------- | ------------------------------------ | --- |
+| `just rust::check`     | `cargo clippy` for all Rust crates   | ✓   |
+| `just rust::test`      | `cargo test` for all Rust crates     | ✓   |
+| `just rust::check-app` | `cargo clippy` for core + app crates |     |
+| `just rust::test-app`  | `cargo test` for core + app crates   |     |
+| `just rust::check-cli` | `cargo clippy` for mcp-cli crate     |     |
+| `just rust::test-cli`  | `cargo test` for mcp-cli crate       |     |
 
 ### Frontend recipes (`tauri_app::`)
 
