@@ -62,8 +62,10 @@ export default function Settings(): JSX.Element {
     setSaving(true);
     setMessage("");
     try {
+      // auto_sync は同期ポップオーバー側が持つ設定なので、現在値を保って書き戻す
+      const current = await typedInvoke("get_sync_config");
       await typedInvoke("save_sync_config", {
-        config: { workers_url: workersUrl() },
+        config: { ...current, workers_url: workersUrl() },
       });
       setMessage("Saved");
       setTimeout(() => setMessage(""), 2000);

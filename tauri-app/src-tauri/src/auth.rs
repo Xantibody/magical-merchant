@@ -15,6 +15,9 @@ const SYNC_CONFIG_FILENAME: &str = "sync-config.json";
 pub(crate) struct SyncConfig {
     #[serde(default)]
     pub workers_url: String,
+    /// 保存が成功したら自動で同期するか。既存の設定ファイルには無いので default。
+    #[serde(default)]
+    pub auto_sync: bool,
 }
 
 impl SyncConfig {
@@ -231,6 +234,7 @@ pub(crate) fn save_sync_config(handle: AppHandle, config: SyncConfig) -> Result<
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
     let config = SyncConfig {
         workers_url: normalize_workers_url(&config.workers_url)?,
+        auto_sync: config.auto_sync,
     };
     config.save(&base_dir)
 }
@@ -291,6 +295,7 @@ mod tests {
     fn sync_config_is_configured() {
         let config = SyncConfig {
             workers_url: "https://sync.example.com".to_string(),
+            ..SyncConfig::default()
         };
         assert!(config.is_configured());
     }
@@ -302,10 +307,33 @@ mod tests {
         let base = dir.path().join("not-yet-created");
         let config = SyncConfig {
             workers_url: "https://sync.example.com".to_string(),
+            ..SyncConfig::default()
         };
         config.save(&base).unwrap();
         let loaded = SyncConfig::load(&base);
         assert_eq!(loaded.workers_url, "https://sync.example.com");
+    }
+
+    #[test]
+    fn sync_config_round_trips_auto_sync() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = SyncConfig {
+            workers_url: "https://sync.example.com".to_string(),
+            auto_sync: true,
+        };
+        config.save(dir.path()).unwrap();
+        assert!(SyncConfig::load(dir.path()).auto_sync);
+    }
+
+    #[test]
+    fn sync_config_defaults_auto_sync_off_for_existing_files() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(
+            dir.path().join(SYNC_CONFIG_FILENAME),
+            r#"{"workers_url":"https://sync.example.com"}"#,
+        )
+        .unwrap();
+        assert!(!SyncConfig::load(dir.path()).auto_sync);
     }
 
     #[test]
@@ -334,6 +362,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let config = SyncConfig {
             workers_url: "https://sync.example.com".to_string(),
+            ..SyncConfig::default()
         };
         config.save(dir.path()).unwrap();
         let loaded = SyncConfig::load(dir.path());

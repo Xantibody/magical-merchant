@@ -1,0 +1,29 @@
+/* キャプチャバーに被らない高さに置く */
+.undo-toast {
+  position: absolute;
+  bottom: 76px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 130;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--app-toast-bg);
+  color: var(--app-toast-text);
+  border-radius: 8px;
+  padding: 10px 16px;
+  box-shadow: var(--shadow-4);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.undo-toast-action {
+  background: none;
+  border: none;
+  color: var(--app-undo);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  font-family: inherit;
+}

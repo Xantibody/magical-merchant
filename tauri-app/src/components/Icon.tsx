@@ -39,6 +39,13 @@ const ICONS = {
   "text-outdent": () => import("@phosphor-icons/core/assets/regular/text-outdent.svg?raw"),
   "code-block": () => import("@phosphor-icons/core/assets/regular/code-block.svg?raw"),
   minus: () => import("@phosphor-icons/core/assets/regular/minus.svg?raw"),
+  "magnifying-glass": () => import("@phosphor-icons/core/assets/regular/magnifying-glass.svg?raw"),
+  "calendar-blank": () => import("@phosphor-icons/core/assets/regular/calendar-blank.svg?raw"),
+  x: () => import("@phosphor-icons/core/assets/regular/x.svg?raw"),
+  check: () => import("@phosphor-icons/core/assets/regular/check.svg?raw"),
+  "check-circle": () => import("@phosphor-icons/core/assets/regular/check-circle.svg?raw"),
+  "file-text": () => import("@phosphor-icons/core/assets/regular/file-text.svg?raw"),
+  "caret-left": () => import("@phosphor-icons/core/assets/regular/caret-left.svg?raw"),
 } as const;
 
 export type IconName = keyof typeof ICONS;

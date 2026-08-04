@@ -1,0 +1,62 @@
+.tag-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-1);
+  font-size: 12px;
+  color: var(--app-accent);
+  background: var(--app-accent-soft);
+  border-radius: var(--radius-1);
+  padding: 3px 8px;
+}
+
+.tag-chip-remove {
+  display: flex;
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  opacity: 0.6;
+  cursor: pointer;
+}
+
+.tag-chip-remove:hover {
+  opacity: 1;
+}
+
+.tag-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--app-text-muted);
+  background: none;
+  border: 1px dashed var(--app-border);
+  border-radius: var(--radius-1);
+  padding: 2px 8px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.tag-add:hover {
+  background: var(--app-surface-2);
+}
+
+.tag-input {
+  font-size: 12px;
+  padding: 2px 8px;
+  border: 1px solid var(--app-accent);
+  border-radius: var(--radius-1);
+  background: var(--app-input-bg);
+  color: var(--app-text);
+  outline: none;
+  width: 8rem;
+  font-family: inherit;
+}

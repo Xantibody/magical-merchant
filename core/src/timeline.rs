@@ -26,6 +26,23 @@ pub fn read_timeline(base_dir: &Path, date: NaiveDate) -> Result<Vec<String>, Co
     Timeline::new(base_dir.to_path_buf()).read(date)
 }
 
+pub fn update_timeline_entry(
+    base_dir: &Path,
+    date: NaiveDate,
+    index: usize,
+    text: &str,
+) -> Result<(), CoreError> {
+    Timeline::new(base_dir.to_path_buf()).update_entry(date, index, text)
+}
+
+pub fn delete_timeline_entry(
+    base_dir: &Path,
+    date: NaiveDate,
+    index: usize,
+) -> Result<(), CoreError> {
+    Timeline::new(base_dir.to_path_buf()).delete_entry(date, index)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

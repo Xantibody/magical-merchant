@@ -1,0 +1,232 @@
+/* ---------------- sync ---------------- */
+
+.sync-popover {
+  width: 260px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-2);
+}
+
+.sync-popover-status {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+  font-size: 13px;
+  color: var(--app-text);
+}
+
+.sync-popover-status .icon {
+  color: var(--app-ok);
+}
+
+.sync-popover--problem .sync-popover-status .icon {
+  color: var(--app-danger);
+}
+
+.sync-popover-detail {
+  font-size: 12px;
+  color: var(--app-text-muted);
+}
+
+.sync-popover-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--app-text);
+  padding-top: 6px;
+  border-top: 1px solid var(--app-surface-2);
+  cursor: pointer;
+}
+
+/* チェックボックスは隠し、右のスイッチが状態を映す */
+.sync-popover-toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.switch {
+  width: 34px;
+  height: 20px;
+  border-radius: 10px;
+  background: var(--app-border);
+  position: relative;
+  display: inline-block;
+  transition: background 0.15s;
+}
+
+.switch::after {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: white;
+  transition: left 0.15s;
+}
+
+.sync-popover-toggle input:checked ~ .switch {
+  background: var(--app-accent);
+}
+
+.sync-popover-toggle input:checked ~ .switch::after {
+  left: 16px;
+}
+
+.link-button {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: var(--app-accent);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  font-family: inherit;
+}
+
+/* ---------------- theme ---------------- */
+
+.theme-menu {
+  width: 180px;
+  overflow: hidden;
+  padding: var(--size-1) 0;
+}
+
+.theme-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 14px;
+  background: none;
+  border: none;
+  font-size: 13px;
+  color: var(--app-text);
+  cursor: pointer;
+  text-align: start;
+  font-family: inherit;
+}
+
+.theme-menu-item:hover {
+  background: var(--app-surface-2);
+}
+
+.theme-menu-item .icon {
+  color: var(--app-text-muted);
+}
+
+.theme-menu-check {
+  margin-left: auto;
+  display: flex;
+  color: var(--app-accent);
+}
+
+/* ---------------- calendar ---------------- */
+
+.calendar-popover {
+  top: 38px;
+  right: 8px;
+  width: 248px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--app-text);
+}
+
+.calendar-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  font-size: 11.5px;
+  text-align: center;
+}
+
+.calendar-weekday {
+  color: var(--app-text-faint);
+  padding: 2px 0;
+}
+
+.calendar-day {
+  padding: 4px 0;
+  background: none;
+  border: none;
+  border-radius: var(--radius-2);
+  color: var(--app-text-faint);
+  cursor: pointer;
+  font-size: inherit;
+  font-family: inherit;
+}
+
+.calendar-day:hover {
+  background: var(--app-surface-2);
+}
+
+.calendar-day--outside {
+  color: var(--app-border);
+}
+
+/* 記録のある日だけ濃く出す。カレンダーが「どこに何かある」の地図になる */
+.calendar-day--recorded {
+  color: var(--app-text);
+  font-weight: 600;
+}
+
+.calendar-day--picked {
+  background: var(--app-surface-2);
+}
+
+.calendar-day--today {
+  background: var(--app-accent);
+  color: var(--gray-0);
+  font-weight: 600;
+}
+
+:root[data-theme="dark"] .calendar-day--today {
+  color: var(--gray-9);
+}
+
+.calendar-summary {
+  border-top: 1px solid var(--app-surface-2);
+  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-1);
+}
+
+.calendar-summary-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--app-text-faint);
+  letter-spacing: 0.04em;
+}
+
+.calendar-summary-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 11.5px;
+  color: var(--app-text-muted);
+}
+
+.calendar-summary-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
