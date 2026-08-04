@@ -35,6 +35,28 @@ pub struct SyncResult {
     pub errors: Vec<String>,
 }
 
+/// フロントが「設定へ誘導」「再試行」などを出し分けられるよう、
+/// エラーを kind 付きで返す
+#[derive(Debug, Clone, Serialize)]
+pub struct SyncErrorInfo {
+    pub kind: &'static str,
+    pub message: String,
+}
+
+impl SyncErrorInfo {
+    fn new(kind: &'static str, message: impl Into<String>) -> Self {
+        Self {
+            kind,
+            message: message.into(),
+        }
+    }
+
+    /// 分類できない内部エラー用。UI は汎用のエラー表示にフォールバックする
+    fn other(message: impl Into<String>) -> Self {
+        Self::new("other", message)
+    }
+}
+
 pub struct AppSyncState {
     pub is_syncing: AtomicBool,
     pub last_synced_at: Mutex<Option<DateTime<Utc>>>,
@@ -137,30 +159,23 @@ impl HttpClient {
         format!("Bearer {}", self.token)
     }
 
-    async fn get_sync_state(&self) -> Result<ServerSyncState, String> {
+    async fn get_sync_state(&self) -> Result<ServerSyncState, SyncErrorInfo> {
         let resp = self
             .http
             .get(format!("{}/sync-state", self.base_url))
             .header("Authorization", self.auth())
             .send()
             .await
-            .map_err(|e| format!("Network error: {e}"))?;
+            .map_err(|e| SyncErrorInfo::new("network", format!("Network error: {e}")))?;
 
-        if resp.status() == reqwest::StatusCode::UNAUTHORIZED {
-            return Err("Not authenticated".to_string());
-        }
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let text = resp.text().await.unwrap_or_default();
-            return Err(format!("get_sync_state failed ({status}): {text}"));
-        }
+        let resp = check_status(resp, "get_sync_state").await?;
 
         resp.json()
             .await
-            .map_err(|e| format!("Failed to parse sync state: {e}"))
+            .map_err(|e| SyncErrorInfo::other(format!("Failed to parse sync state: {e}")))
     }
 
-    async fn bulk(&self, req: BulkRequest) -> Result<BulkResponse, String> {
+    async fn bulk(&self, req: BulkRequest) -> Result<BulkResponse, SyncErrorInfo> {
         let resp = self
             .http
             .post(format!("{}/sync/bulk", self.base_url))
@@ -168,44 +183,72 @@ impl HttpClient {
             .json(&req)
             .send()
             .await
-            .map_err(|e| format!("Network error: {e}"))?;
+            .map_err(|e| SyncErrorInfo::new("network", format!("Network error: {e}")))?;
 
-        if resp.status() == reqwest::StatusCode::UNAUTHORIZED {
-            return Err("Not authenticated".to_string());
-        }
         if resp.status() == reqwest::StatusCode::CONFLICT {
-            return Err("Sync state changed concurrently, please retry".to_string());
+            return Err(SyncErrorInfo::new(
+                "conflict",
+                "Sync state changed concurrently, please retry",
+            ));
         }
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let text = resp.text().await.unwrap_or_default();
-            return Err(format!("bulk failed ({status}): {text}"));
-        }
+
+        let resp = check_status(resp, "bulk").await?;
 
         resp.json()
             .await
-            .map_err(|e| format!("Failed to parse bulk response: {e}"))
+            .map_err(|e| SyncErrorInfo::other(format!("Failed to parse bulk response: {e}")))
     }
 }
 
+/// 非成功ステータスを kind 付きエラーに変換する。
+/// これを怠ると失敗したアップロードを成功扱いで同期状態に記録したり、
+/// エラーレスポンスのボディをノート本文としてローカルに書き込んだりしてしまう。
+async fn check_status(
+    resp: reqwest::Response,
+    context: &str,
+) -> Result<reqwest::Response, SyncErrorInfo> {
+    let status = resp.status();
+    if status == reqwest::StatusCode::UNAUTHORIZED {
+        return Err(SyncErrorInfo::new(
+            "notAuthenticated",
+            "The server rejected the login. Log in again from Settings.",
+        ));
+    }
+    if !status.is_success() {
+        let text = resp.text().await.unwrap_or_default();
+        return Err(SyncErrorInfo::other(format!(
+            "{context} failed ({status}): {text}"
+        )));
+    }
+    Ok(resp)
+}
+
 // ──────────── Tauri commands ────────────
+
+/// panic やキャンセルでも is_syncing を確実に false へ戻すガード
+struct SyncingGuard<'a>(&'a AtomicBool);
+
+impl Drop for SyncingGuard<'_> {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::SeqCst);
+    }
+}
 
 #[tauri::command]
 pub async fn sync_start(
     handle: AppHandle,
     state: State<'_, AppSyncState>,
-) -> Result<SyncResult, String> {
+) -> Result<SyncResult, SyncErrorInfo> {
     if state
         .is_syncing
         .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
         .is_err()
     {
-        return Err("Sync already in progress".to_string());
+        return Err(SyncErrorInfo::new("busy", "Sync already in progress"));
     }
+    let _guard = SyncingGuard(&state.is_syncing);
 
     let result = do_sync(&handle).await;
-
-    state.is_syncing.store(false, Ordering::SeqCst);
 
     match &result {
         Ok(sync_result) => {
@@ -214,7 +257,7 @@ pub async fn sync_start(
             let _ = handle.emit(EVENT_SYNC_COMPLETE, sync_result);
         }
         Err(err) => {
-            *state.last_error.lock().unwrap() = Some(err.clone());
+            *state.last_error.lock().unwrap() = Some(err.message.clone());
             let _ = handle.emit(EVENT_SYNC_ERROR, err);
         }
     }
@@ -233,15 +276,28 @@ pub fn sync_status(state: State<'_, AppSyncState>) -> Result<SyncStatusInfo, Str
 
 // ──────────── Sync orchestration ────────────
 
-async fn do_sync(handle: &AppHandle) -> Result<SyncResult, String> {
-    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+async fn do_sync(handle: &AppHandle) -> Result<SyncResult, SyncErrorInfo> {
+    let base_dir = handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| SyncErrorInfo::other(e.to_string()))?;
     let config = auth::SyncConfig::load(&base_dir);
     if !config.is_configured() {
-        return Err("Sync not configured".to_string());
+        return Err(SyncErrorInfo::new(
+            "notConfigured",
+            "Sync is not set up. Add your Workers URL in Settings.",
+        ));
     }
-    let token = auth::get_token()?.ok_or("Not authenticated")?;
+    let token = auth::get_token()
+        .map_err(SyncErrorInfo::other)?
+        .ok_or_else(|| {
+            SyncErrorInfo::new("notAuthenticated", "Not logged in. Log in from Settings.")
+        })?;
     if !auth::is_token_valid(&token) {
-        return Err("Token expired. Please re-authenticate.".to_string());
+        return Err(SyncErrorInfo::new(
+            "notAuthenticated",
+            "Login expired. Log in again from Settings.",
+        ));
     }
 
     let client = HttpClient::new(config.workers_url, token);
@@ -250,8 +306,10 @@ async fn do_sync(handle: &AppHandle) -> Result<SyncResult, String> {
     let server_state = client.get_sync_state().await?;
 
     // 2. ローカルスキャン
-    let local_files = scan::scan_local_files(&base_dir).map_err(|e| e.to_string())?;
-    let local_state = SyncState::load(&base_dir).map_err(|e| e.to_string())?;
+    let local_files =
+        scan::scan_local_files(&base_dir).map_err(|e| SyncErrorInfo::other(e.to_string()))?;
+    let local_state =
+        SyncState::load(&base_dir).map_err(|e| SyncErrorInfo::other(e.to_string()))?;
 
     // 3. Rust core で diff 計算
     let remote_files = server_state_to_remote_files(&server_state);
@@ -266,16 +324,17 @@ async fn do_sync(handle: &AppHandle) -> Result<SyncResult, String> {
         &data_dir,
         server_state.etag.clone(),
         &mut result,
-    )?;
+    )
+    .map_err(SyncErrorInfo::other)?;
 
     // 5. 一括実行
     let bulk_resp = client.bulk(bulk_req).await?;
 
     // 6. downloads + conflict ローカル書き込み
-    apply_downloads(&bulk_resp, &actions, &data_dir, &mut result)?;
+    apply_downloads(&bulk_resp, &actions, &data_dir, &mut result).map_err(SyncErrorInfo::other)?;
 
     // 7. ローカル sync state 更新
-    save_local_state(&base_dir)?;
+    save_local_state(&base_dir).map_err(SyncErrorInfo::other)?;
 
     Ok(result)
 }
@@ -520,5 +579,32 @@ fn action_key(action: &SyncAction) -> &str {
         | SyncAction::DeleteRemote { key }
         | SyncAction::DeleteLocal { key }
         | SyncAction::Conflict { key } => key,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn busy_error_is_tagged_so_ui_can_ignore_it() {
+        let info = SyncErrorInfo::new("busy", "Sync already in progress");
+        assert_eq!(info.kind, "busy");
+    }
+
+    #[test]
+    fn other_errors_keep_message() {
+        let info = SyncErrorInfo::other("boom");
+        assert_eq!(info.kind, "other");
+        assert!(info.message.contains("boom"));
+    }
+
+    #[test]
+    fn syncing_guard_clears_flag_on_drop() {
+        let flag = AtomicBool::new(true);
+        {
+            let _guard = SyncingGuard(&flag);
+        }
+        assert!(!flag.load(Ordering::SeqCst));
     }
 }

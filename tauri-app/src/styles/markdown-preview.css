@@ -64,3 +64,16 @@
   border-top: 1px solid var(--app-border);
   margin: var(--size-4) 0;
 }
+
+/* Shiki dual theme: data-theme に応じて CSS 変数で配色を切り替える */
+.markdown-preview .shiki,
+.markdown-preview .shiki span {
+  color: var(--shiki-light);
+  background-color: var(--shiki-light-bg);
+}
+
+[data-theme="dark"] .markdown-preview .shiki,
+[data-theme="dark"] .markdown-preview .shiki span {
+  color: var(--shiki-dark);
+  background-color: var(--shiki-dark-bg);
+}

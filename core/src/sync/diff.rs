@@ -91,17 +91,31 @@ pub fn compute(
             }
 
             // Local exists, remote gone, was synced → remote deleted it
-            (Some(_), None, Some(_)) => {
-                actions.push(SyncAction::DeleteLocal {
-                    key: key.to_string(),
-                });
+            // ただしローカルに未同期の変更があれば、削除より変更を優先して復活させる
+            (Some(local), None, Some(record)) => {
+                if local.content_hash != record.content_hash {
+                    actions.push(SyncAction::UploadModified {
+                        key: key.to_string(),
+                    });
+                } else {
+                    actions.push(SyncAction::DeleteLocal {
+                        key: key.to_string(),
+                    });
+                }
             }
 
             // Remote exists, local gone, was synced → local deleted it
-            (None, Some(_), Some(_)) => {
-                actions.push(SyncAction::DeleteRemote {
-                    key: key.to_string(),
-                });
+            // ただしリモートに未取得の変更があれば、削除より変更を優先して復活させる
+            (None, Some(remote), Some(record)) => {
+                if remote.last_modified != record.last_synced_modified {
+                    actions.push(SyncAction::DownloadModified {
+                        key: key.to_string(),
+                    });
+                } else {
+                    actions.push(SyncAction::DeleteRemote {
+                        key: key.to_string(),
+                    });
+                }
             }
 
             // Neither exists (shouldn't happen since we iterate all_keys)
@@ -295,6 +309,42 @@ mod tests {
             actions,
             vec![SyncAction::DeleteLocal {
                 key: "notes/i.md".into()
+            }]
+        );
+    }
+
+    #[test]
+    fn remote_deleted_but_local_modified_uploads_instead_of_deleting() {
+        // リモートで削除されたが、ローカルに未同期の変更がある → 変更を優先して復活させる
+        let local_files = vec![local("notes/j.md", "new_hash")];
+        let mut state = SyncState::default();
+        state.files.insert(
+            "notes/j.md".to_string(),
+            record("old_hash", "2026-04-22T10:00:00Z"),
+        );
+        let actions = compute(&local_files, &[], &state);
+        assert_eq!(
+            actions,
+            vec![SyncAction::UploadModified {
+                key: "notes/j.md".into()
+            }]
+        );
+    }
+
+    #[test]
+    fn local_deleted_but_remote_modified_downloads_instead_of_deleting() {
+        // ローカルで削除されたが、リモートに未取得の変更がある → 変更を優先して復活させる
+        let remote_files = vec![remote("notes/k.md", "2026-04-22T14:00:00Z")];
+        let mut state = SyncState::default();
+        state.files.insert(
+            "notes/k.md".to_string(),
+            record("hash_k", "2026-04-22T10:00:00Z"),
+        );
+        let actions = compute(&[], &remote_files, &state);
+        assert_eq!(
+            actions,
+            vec![SyncAction::DownloadModified {
+                key: "notes/k.md".into()
             }]
         );
     }
