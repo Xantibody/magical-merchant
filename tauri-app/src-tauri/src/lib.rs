@@ -154,7 +154,11 @@ fn delete_note(handle: AppHandle, filename: String) -> Result<(), String> {
 /// OAuth のコールバックで返ってきた JWT を保存する。
 /// 保存結果をフロントに通知しないと、ログイン完了が UI に反映されず
 /// 失敗も握りつぶされてしまう。
-fn store_token_from_urls(handle: &AppHandle, urls: Vec<url::Url>) {
+///
+/// Android では `app_data_dir` がプラグインへの同期呼び出しで、その応答を運ぶ
+/// のはメインスレッド。deep link のイベントはそのメインスレッドで配送されるため、
+/// ここで直に呼ぶと自分の応答を待って Activity ごと固まる。必ず別スレッドに移す。
+fn store_token_from_urls(handle: &AppHandle, urls: &[url::Url]) {
     let Some(token) = urls
         .iter()
         .flat_map(url::Url::query_pairs)
@@ -164,20 +168,23 @@ fn store_token_from_urls(handle: &AppHandle, urls: Vec<url::Url>) {
         return;
     };
 
-    let stored = handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| e.to_string())
-        .and_then(|dir| auth::store_token(&dir, &token));
+    let handle = handle.clone();
+    std::thread::spawn(move || {
+        let stored = handle
+            .path()
+            .app_data_dir()
+            .map_err(|e| e.to_string())
+            .and_then(|dir| auth::store_token(&dir, &token));
 
-    match stored {
-        Ok(()) => {
-            let _ = handle.emit("auth-success", ());
+        match stored {
+            Ok(()) => {
+                let _ = handle.emit("auth-success", ());
+            }
+            Err(e) => {
+                let _ = handle.emit("auth-error", e);
+            }
         }
-        Err(e) => {
-            let _ = handle.emit("auth-error", e);
-        }
-    }
+    });
 }
 
 // `mobile_entry_point` fixes the signature to `fn run()`, so a failed startup
@@ -195,19 +202,17 @@ pub fn run() {
             // 起動 URL として届く。`new-url` イベントはアプリが生きていた場合に
             // しか飛ばないので、両方を見ないとログインが黙って失敗する。
             //
-            // get_current は Android プラグインへの同期呼び出しで、応答を運ぶ
-            // のは setup と同じメインスレッド。ここで直に待つと Activity ごと
-            // 固まる (pause / stop がタイムアウトする) ので別スレッドに逃がす。
+            // get_current も同期プラグイン呼び出しなので setup の中で待たない。
             let launch_handle = app.handle().clone();
             std::thread::spawn(move || {
                 if let Ok(Some(urls)) = launch_handle.deep_link().get_current() {
-                    store_token_from_urls(&launch_handle, urls);
+                    store_token_from_urls(&launch_handle, &urls);
                 }
             });
 
             let handle = app.handle().clone();
             app.deep_link()
-                .on_open_url(move |event| store_token_from_urls(&handle, event.urls()));
+                .on_open_url(move |event| store_token_from_urls(&handle, &event.urls()));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
