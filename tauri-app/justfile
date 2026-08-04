@@ -34,5 +34,19 @@ android-build-debug:
 android-install: android-build-debug
   adb install src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
 
+# Inject the release signing config into the generated build.gradle.kts
+# (idempotent; re-run after `tauri android init` regenerates gen/android).
+# See android-signing/README.md for one-time keystore setup.
+android-sign-setup:
+  go run android-signing/apply-signing.go
+
+# Build a signed release APK (universal). Requires keystore.properties.
+android-build-release: android-sign-setup
+  pnpm tauri android build --apk
+
+# Build and install the signed release APK onto a connected device (-r updates in place).
+android-install-release: android-build-release
+  adb install -r src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
+
 build:
   pnpm tauri build --bundles app
