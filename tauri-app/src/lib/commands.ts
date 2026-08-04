@@ -8,23 +8,21 @@ export interface Note {
   preview: string;
 }
 
-export interface Project {
-  slug: string;
-  name: string;
-  description: string;
-}
+type HitKind = "timeline" | "note";
 
-export interface Task {
-  filename: string;
+export interface SearchHit {
+  kind: HitKind;
   title: string;
-  created: string;
-  completed?: string;
+  snippet: string;
+  date: string;
+  filename: string | null;
+  index: number | null;
   tags: string[];
-  body: string;
 }
 
 interface SyncConfig {
   workers_url: string;
+  auto_sync: boolean;
 }
 
 interface LocationArgs {
@@ -37,6 +35,9 @@ interface CommandMap {
   read_timeline: { args: void; result: string[] };
   list_timeline_dates: { args: void; result: string[] };
   read_timeline_by_date: { args: { date: string }; result: string[] };
+  update_timeline_entry: { args: { date: string; index: number; text: string }; result: void };
+  delete_timeline_entry: { args: { date: string; index: number }; result: void };
+  search_all: { args: { query: string }; result: SearchHit[] };
   create_draft: { args: { body: string; tags: string[] } & LocationArgs; result: string };
   update_draft: {
     args: { filePath: string; body: string; tags: string[] } & LocationArgs;
@@ -46,29 +47,6 @@ interface CommandMap {
   read_note: { args: { filename: string }; result: string };
   delete_note: { args: { filename: string }; result: void };
   save_document: { args: { body: string; tags: string[] } & LocationArgs; result: void };
-  create_project: {
-    args: { slug: string; name: string; description: string };
-    result: string;
-  };
-  list_projects: { args: void; result: Project[] };
-  create_task: {
-    args: { projectSlug: string; title: string; tags: string[]; body: string };
-    result: string;
-  };
-  list_active_tasks: { args: { projectSlug: string }; result: Task[] };
-  list_done_tasks: { args: { projectSlug: string }; result: Task[] };
-  complete_task: { args: { projectSlug: string; filename: string }; result: void };
-  update_task: {
-    args: {
-      projectSlug: string;
-      filename: string;
-      title: string;
-      tags: string[];
-      body: string;
-    };
-    result: void;
-  };
-  delete_task: { args: { projectSlug: string; filename: string }; result: void };
   sync_start: { args: void; result: void };
   sync_status: { args: void; result: unknown };
   auth_login: { args: void; result: void };

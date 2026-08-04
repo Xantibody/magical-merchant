@@ -1,103 +1,223 @@
-import { createSignal, createEffect, onCleanup } from "solid-js";
-import { useLocation } from "@solidjs/router";
-import Icon from "../components/Icon";
-import type { IconName } from "../components/Icon";
-import SyncButton from "../components/SyncButton";
-import ToggleMenu from "../components/ToggleMenu";
-import { MODE_ICONS, MODE_LABELS } from "../lib/routes";
-import type { RoutePath } from "../lib/routes";
+import { createSignal, createEffect, onCleanup, onMount, For, Show } from "solid-js";
 import type { JSX } from "solid-js";
+import { useLocation, useNavigate, A } from "@solidjs/router";
+import Icon from "../components/Icon";
+import CommandPalette from "../components/CommandPalette";
+import SyncPopover from "../components/SyncPopover";
+import ThemeMenu from "../components/ThemeMenu";
+import UndoToast from "../components/UndoToast";
+import { ShellProvider, useShell } from "../lib/shell";
+import { createSyncState, syncIconName } from "../lib/sync";
+import { applyTheme, readStoredTheme, THEME_ICONS } from "../lib/theme";
+import type { Theme } from "../lib/theme";
+import { MODE_ICONS, MODE_LABELS, ROUTES } from "../lib/routes";
+import type { RoutePath } from "../lib/routes";
+import { typedInvoke } from "../lib/commands";
 
-interface AppLayoutProps {
-  children?: JSX.Element;
+const TABS: RoutePath[] = [ROUTES.TIMELINE, ROUTES.NOTES];
+const BOTTOM_TABS: RoutePath[] = [ROUTES.TIMELINE, ROUTES.NOTES, ROUTES.SETTINGS];
+
+function isMetaK(e: KeyboardEvent): boolean {
+  return (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k";
 }
 
-type Theme = "light" | "dark" | "system";
-
-function getInitialTheme(): Theme {
-  const saved = localStorage.getItem("theme") as Theme | null;
-  if (saved === "light" || saved === "dark" || saved === "system") {
-    return saved;
-  }
-  return "system";
+function isMetaN(e: KeyboardEvent): boolean {
+  return (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "n";
 }
 
-function getResolvedTheme(theme: Theme): "light" | "dark" {
-  if (theme === "system") {
-    return globalThis.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-  }
-  return theme;
-}
-
-function applyTheme(theme: Theme) {
-  const resolved = getResolvedTheme(theme);
-  document.documentElement.dataset.theme = resolved;
-  localStorage.setItem("theme", theme);
-}
-
-export default function AppLayout(props: AppLayoutProps): JSX.Element {
-  const [menuOpen, setMenuOpen] = createSignal(false);
-  const [theme, setTheme] = createSignal<Theme>(getInitialTheme());
+function Chrome(props: { children?: JSX.Element }): JSX.Element {
+  const shell = useShell();
   const location = useLocation();
+  const navigate = useNavigate();
+
+  const [theme, setTheme] = createSignal<Theme>(readStoredTheme());
+  const sync = createSyncState(() => shell.refreshData());
 
   applyTheme(theme());
+  createEffect(() => applyTheme(theme()));
 
-  const mediaQuery = globalThis.matchMedia("(prefers-color-scheme: dark)");
-  const handleMediaChange = () => {
+  const media = globalThis.matchMedia("(prefers-color-scheme: dark)");
+  const onSchemeChange = (): void => {
     if (theme() === "system") {
       applyTheme("system");
     }
   };
-  mediaQuery.addEventListener("change", handleMediaChange);
-  onCleanup(() => mediaQuery.removeEventListener("change", handleMediaChange));
+  media.addEventListener("change", onSchemeChange);
+  onCleanup(() => media.removeEventListener("change", onSchemeChange));
 
+  // エラーは黙って消さず、同期ポップオーバーを開いて知らせる
   createEffect(() => {
-    applyTheme(theme());
+    if (sync.alertVersion() > 0) {
+      shell.togglePopover("sync");
+    }
   });
 
-  const currentIcon = () => MODE_ICONS[location.pathname as RoutePath] ?? "lightning";
-  const currentLabel = () => MODE_LABELS[location.pathname as RoutePath] ?? "Timeline";
-
-  const cycleTheme = () => {
-    const order: Theme[] = ["system", "light", "dark"];
-    const idx = order.indexOf(theme());
-    const next = order[(idx + 1) % order.length];
-    setTheme(next);
+  const newNote = (): void => {
+    shell.closePalette();
+    void (async () => {
+      await typedInvoke("create_draft", {
+        body: "",
+        tags: [],
+        latitude: null,
+        longitude: null,
+      });
+      shell.refreshData();
+      navigate(ROUTES.NOTES);
+    })();
   };
 
-  // 現在のテーマを表すアイコンを表示する
-  const themeIcon = (): IconName => {
-    const t = theme();
-    if (t === "system") {
-      return "circle-half";
-    }
-    return t === "dark" ? "moon" : "sun";
-  };
+  onMount(() => {
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (isMetaK(e)) {
+        e.preventDefault();
+        shell.openPalette();
+        return;
+      }
+      if (isMetaN(e)) {
+        e.preventDefault();
+        newNote();
+        return;
+      }
+      if (e.key === "Escape") {
+        shell.closePopovers();
+        shell.closePalette();
+      }
+    };
+    globalThis.addEventListener("keydown", onKeyDown);
+    onCleanup(() => globalThis.removeEventListener("keydown", onKeyDown));
+
+    // ポップオーバーの外側をクリックしたら閉じる。ルート要素の onClick では
+    // ポータルや overlay の外に出たクリックを取りこぼす
+    const onPointerDown = (e: MouseEvent): void => {
+      const target = e.target instanceof Element ? e.target : null;
+      if (!target?.closest(".popover, .header-action, .calendar-button")) {
+        shell.closePopovers();
+      }
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    onCleanup(() => document.removeEventListener("pointerdown", onPointerDown));
+  });
+
+  const isActive = (path: RoutePath): boolean => location.pathname === path;
 
   return (
     <div class="app">
       <header class="header">
-        <button type="button" onClick={() => setMenuOpen(!menuOpen())} aria-label="Toggle menu">
-          <Icon name="list" size={24} />
+        <nav class="header-tabs">
+          <For each={TABS}>
+            {(path) => (
+              <A
+                href={path}
+                class="header-tab"
+                classList={{ "header-tab--active": isActive(path) }}
+              >
+                <Icon name={MODE_ICONS[path]} size={16} />
+                {MODE_LABELS[path]}
+              </A>
+            )}
+          </For>
+        </nav>
+
+        <button type="button" class="search-field" onClick={() => shell.openPalette()}>
+          <Icon name="magnifying-glass" size={15} />
+          <span class="search-field-label">検索・コマンド…</span>
+          <span class="key-badge">⌘K</span>
         </button>
+
         <div class="header-actions">
-          <SyncButton />
           <button
             type="button"
-            onClick={cycleTheme}
-            aria-label={`Theme: ${theme()}`}
-            title={`Theme: ${theme()}`}
+            class="icon-button header-action"
+            title="同期"
+            aria-label="同期"
+            aria-expanded={shell.popover() === "sync"}
+            onClick={() => shell.togglePopover("sync")}
           >
-            <Icon name={themeIcon()} size={20} />
+            <Icon name={syncIconName(sync.status())} size={18} />
           </button>
+          <button
+            type="button"
+            class="icon-button header-action"
+            title="テーマ"
+            aria-label="テーマ"
+            aria-expanded={shell.popover() === "theme"}
+            onClick={() => shell.togglePopover("theme")}
+          >
+            <Icon name={THEME_ICONS[theme()]} size={18} />
+          </button>
+          <A href={ROUTES.SETTINGS} class="icon-button header-action" title="Settings">
+            <Icon name="gear" size={18} />
+          </A>
         </div>
+
+        <Show when={shell.popover() === "sync"}>
+          <div class="popover-anchor popover-anchor--sync">
+            <SyncPopover sync={sync} onClose={() => shell.closePopovers()} />
+          </div>
+        </Show>
+        <Show when={shell.popover() === "theme"}>
+          <div class="popover-anchor popover-anchor--theme">
+            <ThemeMenu
+              theme={theme}
+              onSelect={(next) => {
+                setTheme(next);
+                shell.closePopovers();
+              }}
+            />
+          </div>
+        </Show>
       </header>
-      <ToggleMenu isOpen={menuOpen} onClose={() => setMenuOpen(false)} />
-      {props.children}
-      <div class="mode-indicator">
-        <Icon name={currentIcon()} size={14} />
-        <span>{currentLabel()}</span>
-      </div>
+
+      <main class="app-main">{props.children}</main>
+
+      <nav class="bottom-tabs">
+        <For each={BOTTOM_TABS}>
+          {(path) => (
+            <A href={path} class="bottom-tab" classList={{ "bottom-tab--active": isActive(path) }}>
+              <Icon name={MODE_ICONS[path]} size={22} />
+              {MODE_LABELS[path]}
+            </A>
+          )}
+        </For>
+      </nav>
+
+      <UndoToast />
+
+      <Show when={shell.paletteOpen()}>
+        <CommandPalette
+          commands={[
+            {
+              id: "new-note",
+              label: "新規ノート",
+              icon: "note-pencil",
+              shortcut: "⌘N",
+              run: newNote,
+            },
+            {
+              id: "sync-now",
+              label: "今すぐ同期",
+              icon: "cloud-arrow-up",
+              run: () => {
+                shell.closePalette();
+                void sync.syncNow();
+              },
+            },
+          ]}
+          onSelectHit={(hit) => {
+            shell.closePalette();
+            navigate(hit.kind === "note" ? ROUTES.NOTES : ROUTES.TIMELINE);
+          }}
+          onClose={() => shell.closePalette()}
+        />
+      </Show>
     </div>
+  );
+}
+
+export default function AppLayout(props: { children?: JSX.Element }): JSX.Element {
+  return (
+    <ShellProvider>
+      <Chrome>{props.children}</Chrome>
+    </ShellProvider>
   );
 }

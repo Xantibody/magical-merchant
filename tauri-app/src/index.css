@@ -1,10 +1,11 @@
 @import "./styles/base.css";
 @import "./styles/layout.css";
-@import "./styles/action-bar.css";
-@import "./styles/timeline.css";
+@import "./styles/workspace.css";
+@import "./styles/popover.css";
+@import "./styles/palette.css";
+@import "./styles/toast.css";
+@import "./styles/tags.css";
 @import "./styles/editor.css";
-@import "./styles/notes.css";
-@import "./styles/tasks.css";
 @import "./styles/markdown-preview.css";
-@import "./styles/confirm-dialog.css";
 @import "./styles/markdown-toolbar.css";
+@import "./styles/settings.css";
