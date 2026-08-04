@@ -23,6 +23,7 @@ pub enum SyncAction {
     Conflict { key: String },
 }
 
+#[must_use]
 pub fn compute(
     local_files: &[LocalFile],
     remote_files: &[RemoteFile],
@@ -93,12 +94,12 @@ pub fn compute(
             // Local exists, remote gone, was synced → remote deleted it
             // ただしローカルに未同期の変更があれば、削除より変更を優先して復活させる
             (Some(local), None, Some(record)) => {
-                if local.content_hash != record.content_hash {
-                    actions.push(SyncAction::UploadModified {
+                if local.content_hash == record.content_hash {
+                    actions.push(SyncAction::DeleteLocal {
                         key: key.to_string(),
                     });
                 } else {
-                    actions.push(SyncAction::DeleteLocal {
+                    actions.push(SyncAction::UploadModified {
                         key: key.to_string(),
                     });
                 }
@@ -107,12 +108,12 @@ pub fn compute(
             // Remote exists, local gone, was synced → local deleted it
             // ただしリモートに未取得の変更があれば、削除より変更を優先して復活させる
             (None, Some(remote), Some(record)) => {
-                if remote.last_modified != record.last_synced_modified {
-                    actions.push(SyncAction::DownloadModified {
+                if remote.last_modified == record.last_synced_modified {
+                    actions.push(SyncAction::DeleteRemote {
                         key: key.to_string(),
                     });
                 } else {
-                    actions.push(SyncAction::DeleteRemote {
+                    actions.push(SyncAction::DownloadModified {
                         key: key.to_string(),
                     });
                 }

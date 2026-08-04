@@ -27,6 +27,7 @@ impl Summary {
         })
     }
 
+    #[must_use]
     pub fn to_frontmatter(&self) -> TaskFrontmatter {
         TaskFrontmatter {
             title: self.title.clone(),

@@ -1,7 +1,7 @@
-pub mod repository;
+pub(crate) mod repository;
 mod summary;
 
-pub use repository::Tasks;
+pub(crate) use repository::Tasks;
 pub use summary::Summary;
 
 use std::path::{Path, PathBuf};

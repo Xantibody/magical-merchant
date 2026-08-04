@@ -9,46 +9,46 @@ use crate::utils::fs::ensure_dir;
 use crate::utils::markdown::format_timeline_line;
 use crate::utils::paths::{self, timeline_file_path};
 
-pub struct Timeline {
+pub(crate) struct Timeline {
     base_dir: PathBuf,
 }
 
 impl Timeline {
-    pub fn new(base_dir: PathBuf) -> Self {
+    pub(crate) const fn new(base_dir: PathBuf) -> Self {
         Self { base_dir }
     }
 
-    pub fn save_entry(&self, text: &str, context: &Context) -> Result<(), CoreError> {
+    pub(crate) fn save_entry(&self, text: &str, context: &Context) -> Result<(), CoreError> {
         let now = Local::now();
         let file_path = timeline_file_path(&self.base_dir, now.date_naive());
         ensure_dir(&file_path)?;
 
         let line = format_timeline_line(text, now, context);
 
-        let mut content = if file_path.exists() {
+        let mut day_log = if file_path.exists() {
             fs::read_to_string(&file_path)?
         } else {
             String::new()
         };
 
-        if !content.is_empty() && !content.ends_with('\n') {
-            content.push('\n');
+        if !day_log.is_empty() && !day_log.ends_with('\n') {
+            day_log.push('\n');
         }
-        content.push_str(&line);
-        content.push('\n');
+        day_log.push_str(&line);
+        day_log.push('\n');
 
-        fs::write(&file_path, content)?;
+        fs::write(&file_path, day_log)?;
         Ok(())
     }
 
-    pub fn list_dates(&self) -> Result<Vec<NaiveDate>, CoreError> {
+    pub(crate) fn list_dates(&self) -> Result<Vec<NaiveDate>, CoreError> {
         let timeline_dir = paths::data_dir(&self.base_dir).join(paths::TIMELINE_DIR);
         if !timeline_dir.exists() {
             return Ok(Vec::new());
         }
 
         let mut dates: Vec<NaiveDate> = fs::read_dir(&timeline_dir)?
-            .filter_map(|e| e.ok())
+            .filter_map(Result::ok)
             .filter_map(|e| {
                 let name = e.file_name().to_string_lossy().to_string();
                 let stem = name.strip_suffix(".md")?;
@@ -60,7 +60,7 @@ impl Timeline {
         Ok(dates)
     }
 
-    pub fn read(&self, date: NaiveDate) -> Result<Vec<String>, CoreError> {
+    pub(crate) fn read(&self, date: NaiveDate) -> Result<Vec<String>, CoreError> {
         let file_path = timeline_file_path(&self.base_dir, date);
         if !file_path.exists() {
             return Ok(Vec::new());

@@ -11,14 +11,14 @@ const KEYCHAIN_SERVICE: &str = "com.magical-merchant.app";
 const KEYCHAIN_ACCOUNT: &str = "auth-jwt";
 const SYNC_CONFIG_FILENAME: &str = "sync-config.json";
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
-pub struct SyncConfig {
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+pub(crate) struct SyncConfig {
     #[serde(default)]
     pub workers_url: String,
 }
 
 impl SyncConfig {
-    pub fn load(base_dir: &Path) -> Self {
+    pub(crate) fn load(base_dir: &Path) -> Self {
         let path = base_dir.join(SYNC_CONFIG_FILENAME);
         if !path.exists() {
             return Self::default();
@@ -29,7 +29,7 @@ impl SyncConfig {
             .unwrap_or_default()
     }
 
-    pub fn save(&self, base_dir: &Path) -> Result<(), String> {
+    pub(crate) fn save(&self, base_dir: &Path) -> Result<(), String> {
         // 初回起動時は app_data_dir がまだ存在しないことがある
         fs::create_dir_all(base_dir).map_err(|e| e.to_string())?;
         let path = base_dir.join(SYNC_CONFIG_FILENAME);
@@ -38,7 +38,7 @@ impl SyncConfig {
         Ok(())
     }
 
-    pub fn is_editable(base_dir: &Path) -> bool {
+    pub(crate) fn is_editable(base_dir: &Path) -> bool {
         let path = base_dir.join(SYNC_CONFIG_FILENAME);
         if !path.exists() {
             return true;
@@ -46,7 +46,7 @@ impl SyncConfig {
         !path.metadata().is_ok_and(|m| m.permissions().readonly())
     }
 
-    pub fn is_configured(&self) -> bool {
+    pub(crate) const fn is_configured(&self) -> bool {
         !self.workers_url.is_empty()
     }
 }
@@ -58,7 +58,7 @@ fn normalize_workers_url(input: &str) -> Result<String, String> {
     if trimmed.is_empty() {
         return Ok(String::new());
     }
-    let parsed = url::Url::parse(trimmed)
+    let parsed = Url::parse(trimmed)
         .map_err(|_| "Invalid URL. Expected e.g. https://example.workers.dev".to_string())?;
     if parsed.scheme() != "https" && parsed.scheme() != "http" {
         return Err("URL must start with https:// or http://".to_string());
@@ -66,14 +66,14 @@ fn normalize_workers_url(input: &str) -> Result<String, String> {
     Ok(trimmed.to_string())
 }
 
-pub fn store_token(token: &str) -> Result<(), String> {
+pub(crate) fn store_token(token: &str) -> Result<(), String> {
     let entry =
         keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT).map_err(|e| e.to_string())?;
     entry.set_password(token).map_err(|e| e.to_string())?;
     Ok(())
 }
 
-pub fn get_token() -> Result<Option<String>, String> {
+pub(crate) fn get_token() -> Result<Option<String>, String> {
     let entry =
         keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT).map_err(|e| e.to_string())?;
     match entry.get_password() {
@@ -83,12 +83,12 @@ pub fn get_token() -> Result<Option<String>, String> {
     }
 }
 
-pub fn clear_token() -> Result<(), String> {
+pub(crate) fn clear_token() -> Result<(), String> {
     let entry =
         keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT).map_err(|e| e.to_string())?;
     match entry.delete_credential() {
-        Ok(()) => Ok(()),
-        Err(keyring::Error::NoEntry) => Ok(()),
+        // Deleting a credential that was never stored leaves the desired state.
+        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
         Err(e) => Err(e.to_string()),
     }
 }
@@ -98,16 +98,16 @@ struct Claims {
     exp: i64,
 }
 
-pub fn is_token_valid(token: &str) -> bool {
+pub(crate) fn is_token_valid(token: &str) -> bool {
     let mut validation = Validation::new(Algorithm::HS256);
     validation.insecure_disable_signature_validation();
     validation.validate_exp = false;
     validation.validate_aud = false;
     validation.required_spec_claims.clear();
 
-    let token_data = match decode::<Claims>(token, &DecodingKey::from_secret(&[]), &validation) {
-        Ok(data) => data,
-        Err(_) => return false,
+    let Ok(token_data) = decode::<Claims>(token, &DecodingKey::from_secret(&[]), &validation)
+    else {
+        return false;
     };
 
     let now = chrono::Utc::now().timestamp();
@@ -186,7 +186,7 @@ async fn login_with_loopback(handle: &AppHandle, config: &SyncConfig) -> Result<
 // Tauri commands
 
 #[tauri::command]
-pub async fn auth_login(handle: AppHandle) -> Result<(), String> {
+pub(crate) async fn auth_login(handle: AppHandle) -> Result<(), String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
     let config = SyncConfig::load(&base_dir);
 
@@ -211,26 +211,23 @@ pub async fn auth_login(handle: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn auth_status() -> Result<bool, String> {
-    match get_token()? {
-        Some(token) => Ok(is_token_valid(&token)),
-        None => Ok(false),
-    }
+pub(crate) fn auth_status() -> Result<bool, String> {
+    Ok(get_token()?.is_some_and(|token| is_token_valid(&token)))
 }
 
 #[tauri::command]
-pub fn auth_logout() -> Result<(), String> {
+pub(crate) fn auth_logout() -> Result<(), String> {
     clear_token()
 }
 
 #[tauri::command]
-pub fn get_sync_config(handle: AppHandle) -> Result<SyncConfig, String> {
+pub(crate) fn get_sync_config(handle: AppHandle) -> Result<SyncConfig, String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
     Ok(SyncConfig::load(&base_dir))
 }
 
 #[tauri::command]
-pub fn save_sync_config(handle: AppHandle, config: SyncConfig) -> Result<(), String> {
+pub(crate) fn save_sync_config(handle: AppHandle, config: SyncConfig) -> Result<(), String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
     let config = SyncConfig {
         workers_url: normalize_workers_url(&config.workers_url)?,
@@ -239,7 +236,7 @@ pub fn save_sync_config(handle: AppHandle, config: SyncConfig) -> Result<(), Str
 }
 
 #[tauri::command]
-pub fn is_sync_config_editable(handle: AppHandle) -> Result<bool, String> {
+pub(crate) fn is_sync_config_editable(handle: AppHandle) -> Result<bool, String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
     Ok(SyncConfig::is_editable(&base_dir))
 }

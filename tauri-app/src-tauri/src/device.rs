@@ -1,7 +1,7 @@
 use magical_merchant_core::DeviceContext;
 use magical_merchant_core::utils::device::{Location, NetworkType};
 
-pub fn get_context(location: Option<Location>) -> DeviceContext {
+pub(crate) fn get_context(location: Option<Location>) -> DeviceContext {
     let (battery, is_charging) = get_battery();
     let (network_type, wifi_ssid) = get_network();
 
@@ -52,18 +52,19 @@ fn get_locale() -> Option<String> {
 fn get_battery() -> (Option<u8>, Option<bool>) {
     use battery::State;
 
-    let manager = match battery::Manager::new() {
-        Ok(m) => m,
-        Err(_) => return (None, None),
+    let Ok(manager) = battery::Manager::new() else {
+        return (None, None);
     };
 
-    let mut batteries = match manager.batteries() {
-        Ok(b) => b,
-        Err(_) => return (None, None),
+    let Ok(mut batteries) = manager.batteries() else {
+        return (None, None);
     };
 
     match batteries.next() {
         Some(Ok(bat)) => {
+            // clamp() keeps the value inside u8 range, so the cast cannot
+            // truncate or lose a sign.
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
             let percentage = (bat.state_of_charge().value * 100.0)
                 .round()
                 .clamp(0.0, 100.0) as u8;
@@ -81,12 +82,11 @@ fn get_battery() -> (Option<u8>, Option<bool>) {
 
 #[cfg(target_os = "macos")]
 fn get_network() -> (Option<NetworkType>, Option<String>) {
-    let output = match std::process::Command::new("ipconfig")
+    let Ok(output) = std::process::Command::new("ipconfig")
         .args(["getsummary", "en0"])
         .output()
-    {
-        Ok(o) => o,
-        Err(_) => return (None, None),
+    else {
+        return (None, None);
     };
 
     let stdout = String::from_utf8_lossy(&output.stdout);
