@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { SHIKI_SLOT, renderMarkdown, renderMarkdownSync } from "./markdown";
+import { FENCE_SLOT, renderMarkdown, renderMarkdownSync } from "./markdown";
 
 describe("renderMarkdownSync", () => {
   it("converts a heading", () => {
@@ -63,18 +63,18 @@ describe("renderMarkdown", () => {
     const html = await renderMarkdown(source);
 
     expect(html).not.toContain("shiki-placeholder");
-    expect(html).not.toContain(SHIKI_SLOT);
+    expect(html).not.toContain(FENCE_SLOT);
     expect(html.split('<pre class="shiki').length - 1).toBe(1);
   });
 
   it("does not let the source forge a slot marker", async () => {
     // markdown-it が U+0000 を U+FFFD に潰すことに寄りかかっている。潰れなければ
     // 本文がハイライト結果の差し込み位置を偽装できてしまう。
-    const source = [`${SHIKI_SLOT} は本文`, "", "```text", SHIKI_SLOT, "```"].join("\n");
+    const source = [`${FENCE_SLOT} は本文`, "", "```text", FENCE_SLOT, "```"].join("\n");
 
     const html = await renderMarkdown(source);
 
-    expect(html).not.toContain(SHIKI_SLOT);
+    expect(html).not.toContain(FENCE_SLOT);
     expect(html.split('<pre class="shiki').length - 1).toBe(1);
   });
 

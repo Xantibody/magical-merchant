@@ -11,13 +11,13 @@ export function renderMarkdownSync(source: string): string {
   return md.render(source);
 }
 
-interface ShikiBlock {
+interface FenceBlock {
   code: string;
   lang: string;
 }
 
 interface RenderEnv {
-  __shikiBlocks?: ShikiBlock[];
+  __fenceBlocks?: FenceBlock[];
 }
 
 const fenceMd = new MarkdownIt({
@@ -27,24 +27,24 @@ const fenceMd = new MarkdownIt({
 });
 
 /**
- * ハイライト結果を差し込む目印。markdown-it は CommonMark どおり入力中の U+0000 を
+ * フェンスの描画結果を差し込む目印。markdown-it は CommonMark どおり入力中の U+0000 を
  * U+FFFD に潰すので、本文がこの形を作ることはない。
  * リテラルに直接書くと制御文字が混ざるため、コード側で組み立てる。
  */
 const NUL = String.fromCodePoint(0);
-export const SHIKI_SLOT = `${NUL}shiki${NUL}`;
+export const FENCE_SLOT = `${NUL}fence${NUL}`;
 
 fenceMd.renderer.rules.fence = (tokens, idx, _options, renderEnv: RenderEnv) => {
   const token = tokens[idx];
-  (renderEnv.__shikiBlocks ??= []).push({ code: token.content, lang: token.info.trim() });
-  return SHIKI_SLOT;
+  (renderEnv.__fenceBlocks ??= []).push({ code: token.content, lang: token.info.trim() });
+  return FENCE_SLOT;
 };
 
 function plainBlock(code: string): string {
   return `<pre><code>${fenceMd.utils.escapeHtml(code)}</code></pre>`;
 }
 
-async function highlightBlocks(blocks: ShikiBlock[]): Promise<string[]> {
+async function highlightBlocks(blocks: FenceBlock[]): Promise<string[]> {
   let highlighter;
   try {
     highlighter = await getHighlighter();
@@ -72,19 +72,24 @@ async function highlightBlocks(blocks: ShikiBlock[]): Promise<string[]> {
   });
 }
 
+/**
+ * 目印を描画結果で埋める。ブロックごとに replace すると、そのたびに文書全体を
+ * 走査して作り直すうえ、置換文字列の "$&" などが置換パターンとして解かれて
+ * 目印そのものが出力に混ざる。スロットは本文の出現順に積まれている。
+ */
+function fillSlots(html: string, rendered: string[]): string {
+  const parts = html.split(FENCE_SLOT);
+  return parts.map((part, index) => (index === 0 ? part : rendered[index - 1] + part)).join("");
+}
+
 export async function renderMarkdown(source: string): Promise<string> {
   const env: RenderEnv = {};
   const html = fenceMd.render(source, env);
 
-  const blocks = env.__shikiBlocks;
+  const blocks = env.__fenceBlocks;
   if (!blocks || blocks.length === 0) {
     return html;
   }
 
-  const highlighted = await highlightBlocks(blocks);
-  // 分割して隙間を埋める。ブロックごとに replace すると、そのたびに文書全体を
-  // 走査して作り直すうえ、置換文字列の "$&" などが置換パターンとして解かれて
-  // 目印そのものが出力に混ざる。スロットは本文の出現順に積まれている。
-  const parts = html.split(SHIKI_SLOT);
-  return parts.map((part, index) => (index === 0 ? part : highlighted[index - 1] + part)).join("");
+  return fillSlots(html, await highlightBlocks(blocks));
 }
