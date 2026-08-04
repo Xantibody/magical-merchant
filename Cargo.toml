@@ -51,3 +51,8 @@ missing_panics_doc = "allow"
 # `pub` inside private modules, the other wants the opposite. `unreachable_pub`
 # wins because it describes the crate's real API surface.
 redundant_pub_crate = "allow"
+
+# Flame graphs need symbols; this profile is bench-only so the shipped
+# release binary stays untouched.
+[profile.bench]
+debug = true

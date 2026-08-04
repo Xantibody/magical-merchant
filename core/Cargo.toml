@@ -8,6 +8,9 @@ repository.workspace = true
 readme.workspace = true
 keywords.workspace = true
 categories.workspace = true
+# benches/fixture.rs はモジュールであってベンチ本体ではない。自動検出に任せると
+# 単独ターゲットとしてもビルドされ、全項目が dead_code になる。
+autobenches = false
 
 [dependencies]
 chrono = { version = "0.4", features = ["serde"] }
@@ -19,8 +22,18 @@ sha2 = "0.10"
 thiserror = "2"
 
 [dev-dependencies]
+criterion = { version = "0.8.2", default-features = false, features = ["cargo_bench_support"] }
 tempfile = "3"
 tokio = { version = "1", features = ["rt", "macros"] }
+
+[lib]
+# libtest のハーネスは criterion の --save-baseline 等を解さないので、
+# `cargo bench` がベンチ対象にしないようにする。
+bench = false
+
+[[bench]]
+name = "core_paths"
+harness = false
 
 [lints]
 workspace = true
