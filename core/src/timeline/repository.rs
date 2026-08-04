@@ -1,4 +1,5 @@
 use std::fs;
+use std::io;
 use std::path::PathBuf;
 
 use chrono::{Local, NaiveDate};
@@ -61,11 +62,22 @@ impl Timeline {
     }
 
     pub(crate) fn read(&self, date: NaiveDate) -> Result<Vec<String>, CoreError> {
-        let file_path = timeline_file_path(&self.base_dir, date);
-        if !file_path.exists() {
-            return Ok(Vec::new());
+        Ok(self
+            .read_raw(date)?
+            .as_deref()
+            .map(split_entries)
+            .unwrap_or_default())
+    }
+
+    /// その日のファイルをそのまま返す。存在しなければ `None`。
+    /// 先に `exists()` を挟まないのは、読めるかどうかは開いてみれば分かるからで、
+    /// 全日付を舐める検索では stat の 1 回が日数ぶん積み上がる。
+    pub(crate) fn read_raw(&self, date: NaiveDate) -> Result<Option<String>, CoreError> {
+        match fs::read_to_string(timeline_file_path(&self.base_dir, date)) {
+            Ok(content) => Ok(Some(content)),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e.into()),
         }
-        Ok(split_entries(&fs::read_to_string(&file_path)?))
     }
 
     pub(crate) fn update_entry(
@@ -118,7 +130,7 @@ impl Timeline {
 }
 
 /// エントリは "- [" で始まる行から次の "- [" まで（本文に改行を含み得る）
-fn split_entries(content: &str) -> Vec<String> {
+pub(crate) fn split_entries(content: &str) -> Vec<String> {
     let mut entries: Vec<String> = Vec::new();
     for line in content.lines() {
         if line.starts_with("- [") || entries.is_empty() {
@@ -131,10 +143,11 @@ fn split_entries(content: &str) -> Vec<String> {
             last.push_str(line);
         }
     }
+    // 末尾を落とすのに to_string() を挟むと 1 エントリにつきもう 1 回確保する。
+    for entry in &mut entries {
+        entry.truncate(entry.trim_end().len());
+    }
     entries
-        .into_iter()
-        .map(|e| e.trim_end().to_string())
-        .collect()
 }
 
 /// 本文だけを差し替え、時刻プレフィックスと末尾のコンテキスト JSON は元のまま残す。
