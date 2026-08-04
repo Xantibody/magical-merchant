@@ -153,13 +153,13 @@ mod tests {
     fn scan_walks_nested_directories() {
         let dir = tempfile::tempdir().unwrap();
         let data = dir.path().join("data");
-        let active = data.join("projects").join("my-proj").join("active");
-        fs::create_dir_all(&active).unwrap();
-        fs::write(active.join("task.md"), "task content").unwrap();
+        let nested = data.join("notes").join("archive").join("2026");
+        fs::create_dir_all(&nested).unwrap();
+        fs::write(nested.join("note.md"), "note content").unwrap();
 
         let files = scan_local_files(dir.path()).unwrap();
         assert_eq!(files.len(), 1);
-        assert_eq!(files[0].key, "projects/my-proj/active/task.md");
+        assert_eq!(files[0].key, "notes/archive/2026/note.md");
     }
 
     #[test]
