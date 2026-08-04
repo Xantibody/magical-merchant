@@ -1,0 +1,105 @@
+name: Release
+
+# 個人利用のテスト配信。Play Store には出さず、署名済み APK を
+# GitHub Release に添付する（端末側で「提供元不明のアプリ」を許可して入れる）。
+# macOS は Nix 経由で配るのでここではビルドしない (README の Install を参照)。
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g. v0.1.0). Must already exist."
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      # tauri.conf.json の version が Android の versionCode の元になる。
+      # タグとずれていると、更新のつもりが上書きインストールできない APK になる
+      - name: Check the tag matches tauri.conf.json
+        id: version
+        run: |
+          tag="${{ inputs.tag || github.ref_name }}"
+          version=$(jq -r .version tauri-app/src-tauri/tauri.conf.json)
+          if [ "$tag" != "v$version" ]; then
+            echo "::error::tag $tag does not match tauri.conf.json version $version"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Free disk space
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache
+
+      - uses: nixbuild/nix-quick-install-action@v35
+      - uses: nix-community/cache-nix-action@v7
+        with:
+          primary-key: nix-${{ runner.os }}-android-${{ hashFiles('flake.lock', 'flake.nix') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-android-
+          gc-max-store-size-linux: 6G
+
+      - name: Generate the Android project
+        run: nix develop .#android --command just tauri_app::android-init
+
+      - name: Restore the signing keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::secret ANDROID_KEYSTORE_BASE64 is not set (see tauri-app/android-signing/README.md)"
+            exit 1
+          fi
+          keystore="$RUNNER_TEMP/release.jks"
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$keystore"
+          # gen/android は gitignore 済み。パスワードはこのファイルにしか書かない
+          cat > tauri-app/src-tauri/gen/android/keystore.properties <<EOF
+          storeFile=$keystore
+          storePassword=$STORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          EOF
+
+      - name: Inject the signing config
+        run: nix develop .#android --command just tauri_app::android-sign-setup
+
+      - name: Build the signed APK
+        run: nix develop .#android --command just tauri_app::android-release-build
+
+      - name: Collect the APK
+        id: apk
+        run: |
+          src=tauri-app/src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
+          out="magical-merchant-${{ steps.version.outputs.version }}.apk"
+          cp "$src" "$out"
+          echo "path=$out" >> "$GITHUB_OUTPUT"
+
+      - name: Remove the signing material
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks" tauri-app/src-tauri/gen/android/keystore.properties
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          files: ${{ steps.apk.outputs.path }}
+          fail_on_unmatched_files: true
+          body: |
+            テスト配信ビルドです。Play Store 経由ではないので、端末側で
+            「提供元不明のアプリのインストール」を許可してから APK を開いてください。
+
+            macOS は Nix から入れてください:
+
+            ```sh
+            nix profile install github:Xantibody/magical-merchant/${{ inputs.tag || github.ref_name }}
+            ```

@@ -106,6 +106,36 @@
           just
         ];
 
+        # `tauri android init` は rustup 前提。Nix がターゲットを持っているので no-op にする
+        rustupShimHook = ''
+          mkdir -p "$PWD/.nix-shims"
+          cat > "$PWD/.nix-shims/rustup" << 'SHIM'
+          #!/usr/bin/env bash
+          # Nix manages Rust targets, so rustup calls are no-ops
+          if [[ "$1" == "target" && "$2" == "add" ]]; then
+            echo "info: target '$3' is already installed (managed by Nix)"
+            exit 0
+          fi
+          exec "$@"
+          SHIM
+          chmod +x "$PWD/.nix-shims/rustup"
+          export PATH="$PWD/.nix-shims:$PATH"
+        '';
+
+        androidEnv = {
+          ANDROID_HOME = androidSdkRoot;
+          NDK_HOME = "${androidSdkRoot}/ndk/${androidNdkVersion}";
+        };
+
+        # apply-signing.go (`just android-sign-setup`) と cargo-tauri の android サブコマンド
+        androidToolchain = [
+          rustToolchain
+          androidSdk
+          pkgs.cargo-tauri
+          pkgs.jdk17
+          pkgs.go
+        ];
+
         treefmtEval = treefmt-nix.lib.evalModule pkgs {
           projectRootFile = "flake.nix";
           programs.nixfmt.enable = true;
@@ -115,39 +145,37 @@
         };
       in
       {
-        packages.default = pkgs.callPackage ./nix/package.nix { };
+        packages = rec {
+          default = pkgs.callPackage ./nix/package.nix { };
+          # pnpm-lock.yaml を変えると package.nix の hash が黙って腐り、
+          # nix build (= macOS の配布経路) だけが後から壊れる。CI で単体で検証できるよう出す
+          pnpm-deps = default.pnpmDeps;
+        };
         formatter = treefmtEval.config.build.wrapper;
         checks.formatting = treefmtEval.config.build.check self;
         devShells.default = pkgs.mkShell (
           playwrightEnv
+          // androidEnv
           // {
-            buildInputs = [
-              rustToolchain
-              androidSdk
-              pkgs.cargo-tauri
-              pkgs.jdk17
-              pkgs.wrangler
-              pkgs.agent-browser
-            ]
-            ++ jsToolchain
-            ++ linuxTauriDeps;
-            ANDROID_HOME = androidSdkRoot;
-            NDK_HOME = "${androidSdkRoot}/ndk/${androidNdkVersion}";
-            shellHook = ''
-              # Create a rustup shim that no-ops for tauri android init
-              mkdir -p "$PWD/.nix-shims"
-              cat > "$PWD/.nix-shims/rustup" << 'SHIM'
-              #!/usr/bin/env bash
-              # Nix manages Rust targets, so rustup calls are no-ops
-              if [[ "$1" == "target" && "$2" == "add" ]]; then
-                echo "info: target '$3' is already installed (managed by Nix)"
-                exit 0
-              fi
-              exec "$@"
-              SHIM
-              chmod +x "$PWD/.nix-shims/rustup"
-              export PATH="$PWD/.nix-shims:$PATH"
-            '';
+            buildInputs =
+              androidToolchain
+              ++ [
+                pkgs.wrangler
+                pkgs.agent-browser
+              ]
+              ++ jsToolchain
+              ++ linuxTauriDeps;
+            shellHook = rustupShimHook;
+          }
+        );
+
+        # リリース用 APK をビルドする最小構成。default から Playwright と
+        # ブラウザ自動化を落としたぶん、CI の取得量が小さい
+        devShells.android = pkgs.mkShell (
+          androidEnv
+          // {
+            buildInputs = androidToolchain ++ jsToolchain;
+            shellHook = rustupShimHook;
           }
         );
 
@@ -170,6 +198,15 @@
       }
     )
     // {
-      darwinModules.default = import ./nix/darwin-module.nix;
+      # このフレークのパッケージを既定値として差し込む。nixpkgs には無いので
+      # mkPackageOption の既定値のままでは評価に失敗する
+      darwinModules.default =
+        { pkgs, lib, ... }:
+        {
+          imports = [ ./nix/darwin-module.nix ];
+          services.magical-merchant.package =
+            lib.mkDefault
+              self.packages.${pkgs.stdenv.hostPlatform.system}.default;
+        };
     };
 }

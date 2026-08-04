@@ -26,6 +26,7 @@ jobs:
       rust: ${{ steps.filter.outputs.rust || 'true' }}
       frontend: ${{ steps.filter.outputs.frontend || 'true' }}
       workers: ${{ steps.filter.outputs.workers || 'true' }}
+      nix-package: ${{ steps.filter.outputs.nix-package || 'true' }}
     steps:
       - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v3
@@ -58,6 +59,12 @@ jobs:
             workers:
               - 'workers/**'
               - '.oxlintrc.json'
+              - 'flake.nix'
+              - 'flake.lock'
+            nix-package:
+              - 'tauri-app/pnpm-lock.yaml'
+              - 'tauri-app/package.json'
+              - 'nix/package.nix'
               - 'flake.nix'
               - 'flake.lock'
 
@@ -140,6 +147,24 @@ jobs:
         run: nix develop .#workers --command just workers::check
       - name: test
         run: nix develop .#workers --command just workers::test
+
+  # pnpm-lock.yaml を変えると nix/package.nix の pnpmDeps.hash が黙って腐る。
+  # 気付くのが macOS 配布 (nix build) の時では遅い
+  nix-package:
+    needs: changes
+    if: needs.changes.outputs.nix-package == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: nixbuild/nix-quick-install-action@v35
+      - uses: nix-community/cache-nix-action@v7
+        with:
+          primary-key: nix-${{ runner.os }}-pnpmdeps-${{ hashFiles('flake.lock', 'flake.nix', 'tauri-app/pnpm-lock.yaml') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-pnpmdeps-
+          gc-max-store-size-linux: 2G
+      - name: pnpm deps hash is current
+        run: nix build .#pnpm-deps --no-link
 
   format:
     runs-on: ubuntu-latest
