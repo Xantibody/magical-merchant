@@ -170,7 +170,12 @@ pub fn run() {
                                 if key == "token" {
                                     // 保存結果をフロントに通知しないと、ログイン完了が
                                     // UI に反映されず失敗も握りつぶされてしまう
-                                    match auth::store_token(&value) {
+                                    let stored = handle
+                                        .path()
+                                        .app_data_dir()
+                                        .map_err(|e| e.to_string())
+                                        .and_then(|dir| auth::store_token(&dir, &value));
+                                    match stored {
                                         Ok(()) => {
                                             let _ = handle.emit("auth-success", ());
                                         }
