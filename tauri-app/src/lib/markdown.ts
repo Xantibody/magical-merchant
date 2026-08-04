@@ -1,5 +1,6 @@
 import MarkdownIt from "markdown-it";
 import { getHighlighter } from "./highlighter";
+import { renderDiagrams } from "./mermaid";
 
 const md = new MarkdownIt({
   html: false,
@@ -72,6 +73,34 @@ async function highlightBlocks(blocks: FenceBlock[]): Promise<string[]> {
   });
 }
 
+function isDiagram(block: FenceBlock): boolean {
+  return block.lang.toLowerCase() === "mermaid";
+}
+
+/**
+ * フェンスを種類ごとに描く。図は mermaid、それ以外は Shiki に回し、
+ * 描けなかった図はソースが読める素のコードブロックに落とす。
+ */
+async function renderFences(blocks: FenceBlock[]): Promise<string[]> {
+  const diagrams = blocks.filter((block) => isDiagram(block));
+  const code = blocks.filter((block) => !isDiagram(block));
+
+  const [svgs, highlighted] = await Promise.all([
+    renderDiagrams(diagrams.map((block) => block.code)),
+    code.length > 0 ? highlightBlocks(code) : [],
+  ]);
+
+  let diagramIndex = 0;
+  let codeIndex = 0;
+  return blocks.map((block) => {
+    if (!isDiagram(block)) {
+      return highlighted[codeIndex++];
+    }
+    const svg = svgs[diagramIndex++];
+    return svg ? `<div class="mermaid-block">${svg}</div>` : plainBlock(block.code);
+  });
+}
+
 /**
  * 目印を描画結果で埋める。ブロックごとに replace すると、そのたびに文書全体を
  * 走査して作り直すうえ、置換文字列の "$&" などが置換パターンとして解かれて
@@ -91,5 +120,5 @@ export async function renderMarkdown(source: string): Promise<string> {
     return html;
   }
 
-  return fillSlots(html, await highlightBlocks(blocks));
+  return fillSlots(html, await renderFences(blocks));
 }

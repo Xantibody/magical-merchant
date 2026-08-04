@@ -84,3 +84,43 @@ describe("renderMarkdown", () => {
     expect(html).toContain("<h1>Hello</h1>");
   });
 });
+
+describe("renderMarkdown with mermaid", () => {
+  const FLOWCHART = ["```mermaid", "flowchart TD", "  A[Start] --> B[End]", "```"].join("\n");
+
+  it("draws a mermaid fence as a diagram instead of code", async () => {
+    const html = await renderMarkdown(FLOWCHART);
+
+    expect(html).toContain('class="mermaid-block"');
+    expect(html).toContain("<svg");
+    expect(html).not.toContain('<pre class="shiki');
+  });
+
+  it("keeps the source readable when the diagram does not parse", async () => {
+    const source = ["```mermaid", "これは図ではない {{{", "```"].join("\n");
+
+    const html = await renderMarkdown(source);
+
+    expect(html).not.toContain("<svg");
+    expect(html).toContain("これは図ではない");
+  });
+
+  it("gives every diagram its own id so their styles do not collide", async () => {
+    const html = await renderMarkdown(`${FLOWCHART}\n\n${FLOWCHART}`);
+
+    const ids = [...html.matchAll(/<svg[^>]*\sid="([^"]+)"/g)].map((match) => match[1]);
+    expect(ids).toHaveLength(2);
+    expect(new Set(ids).size).toBe(2);
+  });
+
+  it("keeps diagrams and code blocks in source order", async () => {
+    const source = [FLOWCHART, "", "```ts", "const a = 1;", "```", "", FLOWCHART].join("\n");
+
+    const html = await renderMarkdown(source);
+
+    const kinds = [...html.matchAll(/class="(mermaid-block|shiki[^"]*)"/g)].map((match) =>
+      match[1].startsWith("shiki") ? "code" : "diagram",
+    );
+    expect(kinds).toEqual(["diagram", "code", "diagram"]);
+  });
+});
