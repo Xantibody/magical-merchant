@@ -65,6 +65,56 @@
   margin: var(--size-4) 0;
 }
 
+/* Mermaid: 図は本文のように折り返せないので、幅に合わせて縮めて置く。
+   mermaid が SVG に付ける max-width が原寸なので、拡大はされない */
+.markdown-preview .mermaid-block {
+  display: flex;
+  justify-content: center;
+  margin-block: var(--size-4);
+  cursor: zoom-in;
+}
+
+.markdown-preview .mermaid-block svg {
+  height: auto;
+}
+
+/* 縮んだ図を原寸で読むための全画面。はみ出した分はスクロールで追う */
+.mermaid-zoom {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  overflow: auto;
+  /* 端まで来たときに背後のノートが動き出さないようにする */
+  overscroll-behavior: contain;
+  background: var(--app-surface);
+  padding: calc(env(safe-area-inset-top, 0px) + var(--size-3)) var(--size-3)
+    calc(env(safe-area-inset-bottom, 0px) + var(--size-3));
+}
+
+/* 幅は原寸を JS から受け取る。flex + margin auto なら、はみ出しても
+   左上が切り落とされない */
+.mermaid-zoom-canvas {
+  margin: auto;
+  flex: none;
+}
+
+.mermaid-zoom-canvas svg {
+  width: 100%;
+  max-width: none;
+  height: auto;
+}
+
+/* 図をスクロールしても流れていかないよう、絶対配置ではなく画面に固定する */
+.mermaid-zoom-close {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + var(--size-2));
+  right: var(--size-2);
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  color: var(--app-text-muted);
+}
+
 /* Shiki dual theme: data-theme に応じて CSS 変数で配色を切り替える */
 .markdown-preview .shiki,
 .markdown-preview .shiki span {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { SHIKI_SLOT, renderMarkdown, renderMarkdownSync } from "./markdown";
+import { FENCE_SLOT, renderMarkdown, renderMarkdownSync } from "./markdown";
 
 describe("renderMarkdownSync", () => {
   it("converts a heading", () => {
@@ -63,18 +63,18 @@ describe("renderMarkdown", () => {
     const html = await renderMarkdown(source);
 
     expect(html).not.toContain("shiki-placeholder");
-    expect(html).not.toContain(SHIKI_SLOT);
+    expect(html).not.toContain(FENCE_SLOT);
     expect(html.split('<pre class="shiki').length - 1).toBe(1);
   });
 
   it("does not let the source forge a slot marker", async () => {
     // markdown-it が U+0000 を U+FFFD に潰すことに寄りかかっている。潰れなければ
     // 本文がハイライト結果の差し込み位置を偽装できてしまう。
-    const source = [`${SHIKI_SLOT} は本文`, "", "```text", SHIKI_SLOT, "```"].join("\n");
+    const source = [`${FENCE_SLOT} は本文`, "", "```text", FENCE_SLOT, "```"].join("\n");
 
     const html = await renderMarkdown(source);
 
-    expect(html).not.toContain(SHIKI_SLOT);
+    expect(html).not.toContain(FENCE_SLOT);
     expect(html.split('<pre class="shiki').length - 1).toBe(1);
   });
 
@@ -82,5 +82,45 @@ describe("renderMarkdown", () => {
     const html = await renderMarkdown("# Hello");
 
     expect(html).toContain("<h1>Hello</h1>");
+  });
+});
+
+describe("renderMarkdown with mermaid", () => {
+  const FLOWCHART = ["```mermaid", "flowchart TD", "  A[Start] --> B[End]", "```"].join("\n");
+
+  it("draws a mermaid fence as a diagram instead of code", async () => {
+    const html = await renderMarkdown(FLOWCHART);
+
+    expect(html).toContain('class="mermaid-block"');
+    expect(html).toContain("<svg");
+    expect(html).not.toContain('<pre class="shiki');
+  });
+
+  it("keeps the source readable when the diagram does not parse", async () => {
+    const source = ["```mermaid", "これは図ではない {{{", "```"].join("\n");
+
+    const html = await renderMarkdown(source);
+
+    expect(html).not.toContain("<svg");
+    expect(html).toContain("これは図ではない");
+  });
+
+  it("gives every diagram its own id so their styles do not collide", async () => {
+    const html = await renderMarkdown(`${FLOWCHART}\n\n${FLOWCHART}`);
+
+    const ids = [...html.matchAll(/<svg[^>]*\sid="([^"]+)"/g)].map((match) => match[1]);
+    expect(ids).toHaveLength(2);
+    expect(new Set(ids).size).toBe(2);
+  });
+
+  it("keeps diagrams and code blocks in source order", async () => {
+    const source = [FLOWCHART, "", "```ts", "const a = 1;", "```", "", FLOWCHART].join("\n");
+
+    const html = await renderMarkdown(source);
+
+    const kinds = [...html.matchAll(/class="(mermaid-block|shiki[^"]*)"/g)].map((match) =>
+      match[1].startsWith("shiki") ? "code" : "diagram",
+    );
+    expect(kinds).toEqual(["diagram", "code", "diagram"]);
   });
 });
