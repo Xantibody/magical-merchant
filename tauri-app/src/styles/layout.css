@@ -1,7 +1,10 @@
 .app {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  /* html が safe-area ぶんの padding を持つので、100dvh のままだとその合計だけ
+     画面下にはみ出し、下タブと入力バーが Android のナビゲーションバーの
+     向こう側へ消える。dvh は端末側のバーの出入りにも追従する */
+  height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
   position: relative;
   overflow: hidden;
 }
