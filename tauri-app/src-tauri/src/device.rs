@@ -37,7 +37,7 @@ fn get_os_version() -> Option<String> {
 }
 
 #[cfg(not(target_os = "macos"))]
-fn get_os_version() -> Option<String> {
+const fn get_os_version() -> Option<String> {
     None
 }
 
@@ -76,7 +76,7 @@ fn get_battery() -> (Option<u8>, Option<bool>) {
 }
 
 #[cfg(target_os = "android")]
-fn get_battery() -> (Option<u8>, Option<bool>) {
+const fn get_battery() -> (Option<u8>, Option<bool>) {
     (None, None)
 }
 
@@ -107,11 +107,11 @@ fn get_network() -> (Option<NetworkType>, Option<String>) {
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "android")))]
-fn get_network() -> (Option<NetworkType>, Option<String>) {
+const fn get_network() -> (Option<NetworkType>, Option<String>) {
     (None, None)
 }
 
 #[cfg(target_os = "android")]
-fn get_network() -> (Option<NetworkType>, Option<String>) {
+const fn get_network() -> (Option<NetworkType>, Option<String>) {
     (None, None)
 }
