@@ -36,9 +36,16 @@
   --app-toast-text: var(--gray-0);
 }
 
+/* システムバーの実寸。env() を直に散らすとテストから固定できず、Android の
+   はみ出しが実機を触るまで分からない。ここ一箇所で受けて変数に流す */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
 html {
-  padding-top: env(safe-area-inset-top, 0px);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-top: var(--safe-top);
+  padding-bottom: var(--safe-bottom);
 }
 
 body {
