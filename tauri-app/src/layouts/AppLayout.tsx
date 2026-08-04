@@ -118,6 +118,10 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
           </For>
         </nav>
 
+        <span class="header-title">
+          {MODE_LABELS[location.pathname as RoutePath] ?? "Timeline"}
+        </span>
+
         <button type="button" class="search-field" onClick={() => shell.openPalette()}>
           <Icon name="magnifying-glass" size={15} />
           <span class="search-field-label">検索・コマンド…</span>
@@ -125,6 +129,16 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
         </button>
 
         <div class="header-actions">
+          {/* 幅が狭いと検索フィールドが隠れるので、代わりの入口を用意する */}
+          <button
+            type="button"
+            class="icon-button header-action header-action--search"
+            title="検索"
+            aria-label="検索"
+            onClick={() => shell.openPalette()}
+          >
+            <Icon name="magnifying-glass" size={18} />
+          </button>
           <button
             type="button"
             class="icon-button header-action"
@@ -145,7 +159,11 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
           >
             <Icon name={THEME_ICONS[theme()]} size={18} />
           </button>
-          <A href={ROUTES.SETTINGS} class="icon-button header-action" title="Settings">
+          <A
+            href={ROUTES.SETTINGS}
+            class="icon-button header-action header-action--settings"
+            title="Settings"
+          >
             <Icon name="gear" size={18} />
           </A>
         </div>
