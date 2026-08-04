@@ -86,7 +86,5 @@ export async function renderMarkdown(source: string): Promise<string> {
   // 走査して作り直すうえ、置換文字列の "$&" などが置換パターンとして解かれて
   // 目印そのものが出力に混ざる。スロットは本文の出現順に積まれている。
   const parts = html.split(SHIKI_SLOT);
-  return parts
-    .map((part, index) => (index === 0 ? part : highlighted[index - 1] + part))
-    .join("");
+  return parts.map((part, index) => (index === 0 ? part : highlighted[index - 1] + part)).join("");
 }
