@@ -13,23 +13,6 @@ pub struct NoteFrontmatter {
     pub context: Option<Context>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ProjectFrontmatter {
-    pub name: String,
-    pub created: DateTime<FixedOffset>,
-    pub description: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct TaskFrontmatter {
-    pub title: String,
-    pub created: DateTime<FixedOffset>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub completed: Option<DateTime<FixedOffset>>,
-    #[serde(default)]
-    pub tags: Vec<String>,
-}
-
 pub fn render<T: Serialize>(fm: &T, body: &str) -> Result<String, CoreError> {
     let yaml = serde_yaml::to_string(fm).map_err(|e| CoreError::Parse(e.to_string()))?;
     Ok(format!("---\n{yaml}---\n{body}"))
@@ -54,47 +37,6 @@ mod tests {
         fixed_offset()
             .with_ymd_and_hms(2026, 3, 20, 14, 30, 45)
             .unwrap()
-    }
-
-    #[test]
-    fn test_project_frontmatter_roundtrip() {
-        let fm = ProjectFrontmatter {
-            name: "My Project".to_string(),
-            created: sample_datetime(),
-            description: "A test project".to_string(),
-        };
-        let rendered = render(&fm, "").unwrap();
-        let (parsed, body): (ProjectFrontmatter, _) = parse(&rendered).unwrap();
-        assert_eq!(parsed, fm);
-        assert_eq!(body, "");
-    }
-
-    #[test]
-    fn test_task_frontmatter_roundtrip() {
-        let fm = TaskFrontmatter {
-            title: "My Task".to_string(),
-            created: sample_datetime(),
-            completed: None,
-            tags: vec!["rust".to_string(), "test".to_string()],
-        };
-        let rendered = render(&fm, "Task body here").unwrap();
-        let (parsed, body): (TaskFrontmatter, _) = parse(&rendered).unwrap();
-        assert_eq!(parsed, fm);
-        assert_eq!(body, "Task body here");
-    }
-
-    #[test]
-    fn test_task_frontmatter_with_completed_roundtrip() {
-        let fm = TaskFrontmatter {
-            title: "Done Task".to_string(),
-            created: sample_datetime(),
-            completed: Some(sample_datetime()),
-            tags: vec![],
-        };
-        let rendered = render(&fm, "body").unwrap();
-        let (parsed, body): (TaskFrontmatter, _) = parse(&rendered).unwrap();
-        assert_eq!(parsed, fm);
-        assert_eq!(body, "body");
     }
 
     #[test]
@@ -128,10 +70,10 @@ mod tests {
 
     #[test]
     fn test_render_contains_delimiters() {
-        let fm = ProjectFrontmatter {
-            name: "Test".to_string(),
-            created: sample_datetime(),
-            description: "Desc".to_string(),
+        let fm = NoteFrontmatter {
+            time: sample_datetime(),
+            tags: vec![],
+            context: None,
         };
         let rendered = render(&fm, "body").unwrap();
         assert!(rendered.starts_with("---\n"));

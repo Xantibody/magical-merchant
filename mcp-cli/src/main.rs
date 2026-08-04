@@ -43,160 +43,168 @@ impl McpServer {
 // --- Parameter types ---
 
 #[derive(Deserialize, schemars::JsonSchema)]
-struct ProjectSlugParam {
-    /// The project slug identifier
-    project_slug: String,
+struct FilenameParam {
+    /// The note filename, e.g. `20260320_143045.md`
+    filename: String,
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
-struct DateRangeParam {
-    /// Start date in YYYY-MM-DD format
-    start_date: String,
-    /// End date in YYYY-MM-DD format
-    end_date: String,
+struct QueryParam {
+    /// Substring to look for; matching ignores case
+    query: String,
+}
+
+#[derive(Deserialize, schemars::JsonSchema)]
+struct DateParam {
+    /// The day to read, in YYYY-MM-DD format
+    date: String,
 }
 
 // --- Output types ---
 
 #[derive(Serialize, schemars::JsonSchema)]
-struct ProjectListOutput {
-    projects: Vec<ProjectInfo>,
+struct NoteListOutput {
+    notes: Vec<NoteInfo>,
 }
 
 #[derive(Serialize, schemars::JsonSchema)]
-struct ProjectInfo {
-    slug: String,
-    name: String,
-    description: String,
-    active_task_count: usize,
-}
-
-#[derive(Serialize, schemars::JsonSchema)]
-struct TaskListOutput {
-    tasks: Vec<TaskInfo>,
-}
-
-#[derive(Serialize, schemars::JsonSchema)]
-struct TaskInfo {
+struct NoteInfo {
     filename: String,
-    title: String,
-    created: String,
-    completed: Option<String>,
+    time: Option<String>,
     tags: Vec<String>,
-    body: String,
+    preview: String,
 }
 
 #[derive(Serialize, schemars::JsonSchema)]
-struct ActivityOutput {
-    summaries: Vec<ActivityInfo>,
+struct NoteOutput {
+    content: String,
 }
 
 #[derive(Serialize, schemars::JsonSchema)]
-struct ActivityInfo {
-    slug: String,
-    name: String,
-    completed_tasks: Vec<TaskInfo>,
-    active_task_count: usize,
+struct SearchOutput {
+    hits: Vec<SearchHitInfo>,
 }
 
-fn task_to_info(t: &magical_merchant_core::TaskSummary) -> TaskInfo {
-    TaskInfo {
-        filename: t.filename.clone(),
-        title: t.title.clone(),
-        created: t.created.to_rfc3339(),
-        completed: t.completed.map(|dt| dt.to_rfc3339()),
-        tags: t.tags.clone(),
-        body: t.body.clone(),
+#[derive(Serialize, schemars::JsonSchema)]
+struct SearchHitInfo {
+    /// Which store the hit came from: `timeline` or `note`.
+    kind: String,
+    title: String,
+    snippet: String,
+    date: String,
+    /// Set for note hits; the argument to pass to `read_note`.
+    filename: Option<String>,
+    /// Set for timeline hits; the entry's position within its day.
+    index: Option<usize>,
+    tags: Vec<String>,
+}
+
+#[derive(Serialize, schemars::JsonSchema)]
+struct TimelineDatesOutput {
+    dates: Vec<String>,
+}
+
+#[derive(Serialize, schemars::JsonSchema)]
+struct TimelineOutput {
+    entries: Vec<String>,
+}
+
+fn note_to_info(n: magical_merchant_core::NoteSummary) -> NoteInfo {
+    NoteInfo {
+        filename: n.filename,
+        time: n.time.map(|t| t.to_rfc3339()),
+        tags: n.tags,
+        preview: n.preview,
+    }
+}
+
+fn hit_to_info(h: magical_merchant_core::SearchHit) -> SearchHitInfo {
+    let kind = match h.kind {
+        magical_merchant_core::HitKind::Timeline => "timeline",
+        magical_merchant_core::HitKind::Note => "note",
+    };
+    SearchHitInfo {
+        kind: kind.to_string(),
+        title: h.title,
+        snippet: h.snippet,
+        date: h.date,
+        filename: h.filename,
+        index: h.index,
+        tags: h.tags,
     }
 }
 
 #[tool_router]
 impl McpServer {
-    #[tool(name = "list_projects", description = "List all projects")]
-    fn list_projects(&self) -> Result<Json<ProjectListOutput>, String> {
-        let projects =
-            magical_merchant_core::list_projects(&self.data_dir).map_err(|e| e.to_string())?;
-        Ok(Json(ProjectListOutput {
-            projects: projects
-                .into_iter()
-                .map(|p| ProjectInfo {
-                    slug: p.slug,
-                    name: p.name,
-                    description: p.description,
-                    active_task_count: p.active_task_count,
-                })
+    #[tool(
+        name = "list_notes",
+        description = "List all notes, newest first, with their tags and a short preview"
+    )]
+    fn list_notes(&self) -> Result<Json<NoteListOutput>, String> {
+        let notes = magical_merchant_core::list_notes(&self.data_dir).map_err(|e| e.to_string())?;
+        Ok(Json(NoteListOutput {
+            notes: notes.into_iter().map(note_to_info).collect(),
+        }))
+    }
+
+    #[tool(
+        name = "read_note",
+        description = "Read the full Markdown source of a note by its filename"
+    )]
+    fn read_note(
+        &self,
+        Parameters(param): Parameters<FilenameParam>,
+    ) -> Result<Json<NoteOutput>, String> {
+        let filename = magical_merchant_core::NoteFilename::parse(&param.filename)
+            .map_err(|e| e.to_string())?;
+        let content = magical_merchant_core::read_note_by_filename(&self.data_dir, &filename)
+            .map_err(|e| e.to_string())?;
+        Ok(Json(NoteOutput { content }))
+    }
+
+    #[tool(
+        name = "search",
+        description = "Search notes and timeline entries for a substring, ignoring case"
+    )]
+    fn search(
+        &self,
+        Parameters(param): Parameters<QueryParam>,
+    ) -> Result<Json<SearchOutput>, String> {
+        let hits = magical_merchant_core::search_all(&self.data_dir, &param.query)
+            .map_err(|e| e.to_string())?;
+        Ok(Json(SearchOutput {
+            hits: hits.into_iter().map(hit_to_info).collect(),
+        }))
+    }
+
+    #[tool(
+        name = "list_timeline_dates",
+        description = "List the dates (YYYY-MM-DD) that have timeline entries, newest first"
+    )]
+    fn list_timeline_dates(&self) -> Result<Json<TimelineDatesOutput>, String> {
+        let dates = magical_merchant_core::list_timeline_dates(&self.data_dir)
+            .map_err(|e| e.to_string())?;
+        Ok(Json(TimelineDatesOutput {
+            dates: dates
+                .iter()
+                .map(|d| d.format("%Y-%m-%d").to_string())
                 .collect(),
         }))
     }
 
     #[tool(
-        name = "list_active_tasks",
-        description = "List active (in-progress) tasks for a project"
+        name = "read_timeline",
+        description = "Read all timeline entries for a single day (YYYY-MM-DD)"
     )]
-    fn list_active_tasks(
+    fn read_timeline(
         &self,
-        Parameters(param): Parameters<ProjectSlugParam>,
-    ) -> Result<Json<TaskListOutput>, String> {
-        let slug =
-            magical_merchant_core::Slug::parse(&param.project_slug).map_err(|e| e.to_string())?;
-        let tasks = magical_merchant_core::list_active_tasks(&self.data_dir, &slug)
+        Parameters(param): Parameters<DateParam>,
+    ) -> Result<Json<TimelineOutput>, String> {
+        let date = NaiveDate::parse_from_str(&param.date, "%Y-%m-%d")
+            .map_err(|e| format!("Invalid date '{}': {e}", param.date))?;
+        let entries = magical_merchant_core::read_timeline(&self.data_dir, date)
             .map_err(|e| e.to_string())?;
-        Ok(Json(TaskListOutput {
-            tasks: tasks.iter().map(task_to_info).collect(),
-        }))
-    }
-
-    #[tool(
-        name = "list_completed_tasks",
-        description = "List completed tasks for a project"
-    )]
-    fn list_completed_tasks(
-        &self,
-        Parameters(param): Parameters<ProjectSlugParam>,
-    ) -> Result<Json<TaskListOutput>, String> {
-        let slug =
-            magical_merchant_core::Slug::parse(&param.project_slug).map_err(|e| e.to_string())?;
-        let tasks = magical_merchant_core::list_done_tasks(&self.data_dir, &slug)
-            .map_err(|e| e.to_string())?;
-        Ok(Json(TaskListOutput {
-            tasks: tasks.iter().map(task_to_info).collect(),
-        }))
-    }
-
-    #[tool(
-        name = "get_task_history",
-        description = "Get completed task history across all projects within a date range (YYYY-MM-DD)"
-    )]
-    fn get_task_history(
-        &self,
-        Parameters(param): Parameters<DateRangeParam>,
-    ) -> Result<Json<ActivityOutput>, String> {
-        let start = NaiveDate::parse_from_str(&param.start_date, "%Y-%m-%d")
-            .map_err(|e| format!("Invalid start_date '{}': {e}", param.start_date))?;
-        let end = NaiveDate::parse_from_str(&param.end_date, "%Y-%m-%d")
-            .map_err(|e| format!("Invalid end_date '{}': {e}", param.end_date))?;
-
-        if start > end {
-            return Err(format!(
-                "start_date ({start}) must not be after end_date ({end})"
-            ));
-        }
-
-        let summaries =
-            magical_merchant_core::get_project_activity_summary(&self.data_dir, start, end)
-                .map_err(|e| e.to_string())?;
-
-        Ok(Json(ActivityOutput {
-            summaries: summaries
-                .into_iter()
-                .map(|s| ActivityInfo {
-                    slug: s.slug,
-                    name: s.name,
-                    completed_tasks: s.completed_tasks.iter().map(task_to_info).collect(),
-                    active_task_count: s.active_task_count,
-                })
-                .collect(),
-        }))
+        Ok(Json(TimelineOutput { entries }))
     }
 }
 
@@ -205,7 +213,7 @@ impl ServerHandler for McpServer {
         let mut info = ServerInfo::new(ServerCapabilities::default());
         info.server_info.name = "magical-merchant".into();
         info.server_info.version = "0.1.0".into();
-        info.instructions = Some("Magical Merchant project and task management server".into());
+        info.instructions = Some("Magical Merchant note and timeline server".into());
         info
     }
 

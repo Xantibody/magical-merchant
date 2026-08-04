@@ -200,14 +200,15 @@ wrangler secret put JWT_SECRET
 magical_merchant_mcp_cli --data-dir /path/to/data
 ```
 
-Communicates via stdio transport and provides the following tools:
+Communicates via stdio transport and provides the following read-only tools:
 
-| Tool                   | Description                              |
-| ---------------------- | ---------------------------------------- |
-| `list_projects`        | List all projects                        |
-| `list_active_tasks`    | List active tasks for a project          |
-| `list_completed_tasks` | List completed tasks for a project       |
-| `get_task_history`     | Get completed task history by date range |
+| Tool                  | Description                                  |
+| --------------------- | -------------------------------------------- |
+| `list_notes`          | List all notes with tags and a short preview |
+| `read_note`           | Read a note's full Markdown source           |
+| `search`              | Search notes and timeline entries            |
+| `list_timeline_dates` | List the dates that have timeline entries    |
+| `read_timeline`       | Read all timeline entries for a single day   |
 
 ## Task Runner (just)
 
@@ -229,14 +230,14 @@ Communicates via stdio transport and provides the following tools:
 
 ### Rust recipes (`rust::`)
 
-| Command                 | Description                          | CI  |
-| ----------------------- | ------------------------------------ | --- |
-| `just rust::check`      | `cargo clippy` for all Rust crates   |     |
-| `just rust::test`       | `cargo test` for all Rust crates     |     |
-| `just rust::check-core` | `cargo clippy` for core + app crates | ✓   |
-| `just rust::test-core`  | `cargo test` for core + app crates   | ✓   |
-| `just rust::check-cli`  | `cargo clippy` for mcp-cli crate     | ✓   |
-| `just rust::test-cli`   | `cargo test` for mcp-cli crate       | ✓   |
+| Command                | Description                          | CI  |
+| ---------------------- | ------------------------------------ | --- |
+| `just rust::check`     | `cargo clippy` for all Rust crates   | ✓   |
+| `just rust::test`      | `cargo test` for all Rust crates     | ✓   |
+| `just rust::check-app` | `cargo clippy` for core + app crates |     |
+| `just rust::test-app`  | `cargo test` for core + app crates   |     |
+| `just rust::check-cli` | `cargo clippy` for mcp-cli crate     |     |
+| `just rust::test-cli`  | `cargo test` for mcp-cli crate       |     |
 
 ### Frontend recipes (`tauri_app::`)
 

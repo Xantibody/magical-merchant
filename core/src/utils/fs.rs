@@ -33,17 +33,6 @@ pub fn list_md_files(dir: &Path) -> Result<Vec<DirEntry>, CoreError> {
     Ok(entries)
 }
 
-pub fn count_md_files(dir: &Path) -> Result<usize, CoreError> {
-    if !dir.exists() {
-        return Ok(0);
-    }
-
-    Ok(fs::read_dir(dir)?
-        .filter_map(Result::ok)
-        .filter(is_md)
-        .count())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -77,7 +66,6 @@ mod tests {
         let tmp = seed(&[".md"]);
 
         assert!(list_md_files(tmp.path()).unwrap().is_empty());
-        assert_eq!(count_md_files(tmp.path()).unwrap(), 0);
     }
 
     #[test]
@@ -86,6 +74,5 @@ mod tests {
         let missing = tmp.path().join("nope");
 
         assert!(list_md_files(&missing).unwrap().is_empty());
-        assert_eq!(count_md_files(&missing).unwrap(), 0);
     }
 }

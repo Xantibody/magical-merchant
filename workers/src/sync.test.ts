@@ -21,7 +21,7 @@ describe("isUnsafeKey", () => {
 
   it("accepts normal keys", () => {
     expect(isUnsafeKey("notes/a.md")).toBe(false);
-    expect(isUnsafeKey("projects/foo/active/task.md")).toBe(false);
+    expect(isUnsafeKey("notes/archive/2026/note.md")).toBe(false);
     expect(isUnsafeKey("notes/file.sync-conflict-20260512-120000.md")).toBe(false);
   });
 });
