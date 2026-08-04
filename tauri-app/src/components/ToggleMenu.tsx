@@ -1,4 +1,4 @@
-import { type Accessor } from "solid-js";
+import type { Accessor, JSX } from "solid-js";
 import { A } from "@solidjs/router";
 import Icon from "./Icon";
 import { ROUTES, MODE_ICONS, MODE_LABELS } from "../lib/routes";
@@ -8,7 +8,7 @@ interface ToggleMenuProps {
   onClose: () => void;
 }
 
-export default function ToggleMenu(props: ToggleMenuProps) {
+export default function ToggleMenu(props: ToggleMenuProps): JSX.Element {
   return (
     <nav class="toggle-menu" classList={{ open: props.isOpen() }}>
       <A

@@ -1,5 +1,16 @@
 {
+  "extends": ["../.oxlintrc.json"],
   "rules": {
+    // The frontend is SolidJS. oxlint's `react` plugin is not enabled at all:
+    // its rules assume the React runtime (`react-in-jsx-scope`), React's DOM
+    // prop names (`no-unknown-property` rejects Solid's `class`/`classList`)
+    // and React's reconciler.
+
+    // Solid components are PascalCase files next to kebab-case modules.
+    "unicorn/filename-case": ["error", { "cases": { "kebabCase": true, "pascalCase": true } }],
+
+    // Solid assigns `ref` bindings out of band, so the declaration really does
+    // stay unassigned in the source the linter can see.
     "no-unassigned-vars": "off"
   }
 }

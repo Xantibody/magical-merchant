@@ -10,7 +10,8 @@ import {
   Match,
 } from "solid-js";
 import type { Editor } from "@milkdown/kit/core";
-import { typedInvoke, type Note } from "../lib/commands";
+import { typedInvoke } from "../lib/commands";
+import type { Note } from "../lib/commands";
 import MilkdownEditor from "../components/MilkdownEditor";
 import MarkdownPreview from "../components/MarkdownPreview";
 import MarkdownToolbar from "../components/MarkdownToolbar";
@@ -18,14 +19,33 @@ import { getLocation } from "../lib/location";
 import ConfirmDialog from "../components/ConfirmDialog";
 import ActionBar from "../components/ActionBar";
 import Icon from "../components/Icon";
+import type { JSX } from "solid-js";
 
 type ViewMode = "editor" | "list" | "preview";
 
-async function fetchNotes(): Promise<Note[]> {
+function fetchNotes(): Promise<Note[]> {
   return typedInvoke("list_notes");
 }
 
-export default function Notes() {
+function extractBody(content: string): string {
+  const match = content.match(/^---\n[\s\S]*?\n---\n([\s\S]*)$/);
+  return match ? match[1].trim() : content;
+}
+
+function formatTime(time?: string): string {
+  if (!time) {
+    return "";
+  }
+  const d = new Date(time);
+  return d.toLocaleString("ja-JP", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+export default function Notes(): JSX.Element {
   const [body, setBody] = createSignal("");
   const [tagsInput, setTagsInput] = createSignal("");
   const [draftPath, setDraftPath] = createSignal<string | null>(null);
@@ -34,7 +54,7 @@ export default function Notes() {
   const [selectedNote, setSelectedNote] = createSignal<Note | null>(null);
   const [noteContent, setNoteContent] = createSignal("");
   const [confirmOpen, setConfirmOpen] = createSignal(false);
-  const [error, setError] = createSignal("");
+  const [errorMessage, setErrorMessage] = createSignal("");
   const [editorInstance, setEditorInstance] = createSignal<Editor | undefined>();
   const [notes, { refetch: refetchNotes }] = createResource(fetchNotes);
 
@@ -51,7 +71,9 @@ export default function Notes() {
 
   const doSave = async () => {
     const currentBody = body();
-    if (!currentBody.trim()) return;
+    if (!currentBody.trim()) {
+      return;
+    }
 
     const tags = parseTags();
     setStatus("saving");
@@ -82,42 +104,46 @@ export default function Notes() {
     }
   };
 
-  const save = () => {
-    saveChain = saveChain.then(doSave);
+  const save = (): Promise<void> => {
+    const previous = saveChain;
+    saveChain = (async () => {
+      await previous;
+      await doSave();
+    })();
     return saveChain;
   };
 
   const scheduleSave = () => {
-    if (debounceTimer) clearTimeout(debounceTimer);
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+    }
     debounceTimer = setTimeout(save, 1000);
   };
 
   createEffect(
     on(body, () => {
-      if (body().trim() && !isHydrating) scheduleSave();
+      if (body().trim() && !isHydrating) {
+        scheduleSave();
+      }
     }),
   );
 
   createEffect(
     on(tagsInput, () => {
-      if (draftPath() && !isHydrating) scheduleSave();
+      if (draftPath() && !isHydrating) {
+        scheduleSave();
+      }
     }),
   );
 
   onCleanup(() => {
     if (debounceTimer) {
       clearTimeout(debounceTimer);
-      if (body().trim()) void save();
+      if (body().trim()) {
+        void save();
+      }
     }
   });
-
-  const handleDone = async () => {
-    if (debounceTimer) clearTimeout(debounceTimer);
-    if (body().trim()) {
-      await save();
-    }
-    resetEditor();
-  };
 
   const resetEditor = () => {
     setBody("");
@@ -127,6 +153,16 @@ export default function Notes() {
     setEditorInstance(undefined);
   };
 
+  const handleDone = async () => {
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+    }
+    if (body().trim()) {
+      await save();
+    }
+    resetEditor();
+  };
+
   const openList = () => {
     refetchNotes();
     setViewMode("list");
@@ -134,13 +170,13 @@ export default function Notes() {
 
   const openPreview = async (note: Note) => {
     try {
-      setError("");
+      setErrorMessage("");
       const content = await typedInvoke("read_note", { filename: note.filename });
       setSelectedNote(note);
       setNoteContent(content);
       setViewMode("preview");
-    } catch (e) {
-      setError(String(e));
+    } catch (error) {
+      setErrorMessage(String(error));
     }
   };
 
@@ -151,7 +187,9 @@ export default function Notes() {
 
   const editNote = () => {
     const note = selectedNote();
-    if (!note) return;
+    if (!note) {
+      return;
+    }
     const content = noteContent();
     const bodyText = extractBody(content);
     setEditorInstance(undefined);
@@ -170,7 +208,9 @@ export default function Notes() {
 
   const handleDelete = async () => {
     const note = selectedNote();
-    if (!note) return;
+    if (!note) {
+      return;
+    }
     setConfirmOpen(false);
     try {
       await typedInvoke("delete_note", { filename: note.filename });
@@ -178,8 +218,8 @@ export default function Notes() {
       setNoteContent("");
       refetchNotes();
       setViewMode("list");
-    } catch (e) {
-      setError(String(e));
+    } catch (error) {
+      setErrorMessage(String(error));
     }
   };
 
@@ -191,17 +231,6 @@ export default function Notes() {
     } else {
       setViewMode("editor");
     }
-  };
-
-  const formatTime = (time?: string) => {
-    if (!time) return "";
-    const d = new Date(time);
-    return d.toLocaleString("ja-JP", {
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
   };
 
   return (
@@ -245,8 +274,8 @@ export default function Notes() {
 
         <Match when={viewMode() === "list"}>
           <div class="notes-list-container">
-            <Show when={error()}>
-              <p class="error-text">{error()}</p>
+            <Show when={errorMessage()}>
+              <p class="error-text">{errorMessage()}</p>
             </Show>
             <div class="browse-list">
               <Show when={notes()?.length} fallback={<p class="empty-state">ノートなし</p>}>
@@ -281,8 +310,8 @@ export default function Notes() {
 
         <Match when={viewMode() === "preview"}>
           <div class="note-preview-container">
-            <Show when={error()}>
-              <p class="error-text">{error()}</p>
+            <Show when={errorMessage()}>
+              <p class="error-text">{errorMessage()}</p>
             </Show>
             <MarkdownPreview source={noteContent()} />
           </div>
@@ -310,9 +339,4 @@ export default function Notes() {
       </Switch>
     </div>
   );
-}
-
-function extractBody(content: string): string {
-  const match = content.match(/^---\n[\s\S]*?\n---\n([\s\S]*)$/);
-  return match ? match[1].trim() : content;
 }

@@ -1,11 +1,12 @@
 import { createSignal, createEffect, on } from "solid-js";
 import { renderMarkdown } from "../lib/markdown";
+import type { JSX } from "solid-js";
 
 interface MarkdownPreviewProps {
   source: string;
 }
 
-export default function MarkdownPreview(props: MarkdownPreviewProps) {
+export default function MarkdownPreview(props: MarkdownPreviewProps): JSX.Element {
   const [html, setHtml] = createSignal("");
 
   let renderVersion = 0;

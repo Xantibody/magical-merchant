@@ -9,12 +9,14 @@ import {
   Switch,
   Match,
 } from "solid-js";
-import { typedInvoke, type Project, type Task } from "../lib/commands";
+import { typedInvoke } from "../lib/commands";
+import type { Project, Task } from "../lib/commands";
 import Icon from "../components/Icon";
 import ActionBar from "../components/ActionBar";
 import MilkdownEditor from "../components/MilkdownEditor";
 import MarkdownPreview from "../components/MarkdownPreview";
 import ConfirmDialog from "../components/ConfirmDialog";
+import type { JSX } from "solid-js";
 
 type ViewMode = "list" | "edit" | "preview";
 
@@ -22,23 +24,44 @@ function toSlug(name: string): string {
   return name
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
+    .replaceAll(/[^a-z0-9]+/g, "-")
+    .replaceAll(/^-|-$/g, "");
 }
 
-async function fetchProjects(): Promise<Project[]> {
+function fetchProjects(): Promise<Project[]> {
   return typedInvoke("list_projects");
 }
 
-export default function Tasks() {
+function isActiveTask(task: Task): boolean {
+  return !task.completed;
+}
+
+function formatTime(time?: string): string {
+  if (!time) {
+    return "";
+  }
+  const d = new Date(time);
+  return d.toLocaleString("ja-JP", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+export default function Tasks(): JSX.Element {
   const [selectedProject, setSelectedProject] = createSignal<string>("");
   const [projects, { refetch: refetchProjects }] = createResource(fetchProjects);
   const [tasks, { refetch: refetchTasks }] = createResource(selectedProject, (slug) => {
-    if (!slug) return Promise.resolve([]);
+    if (!slug) {
+      return Promise.resolve([]);
+    }
     return typedInvoke("list_active_tasks", { projectSlug: slug });
   });
   const [doneTasks, { refetch: refetchDoneTasks }] = createResource(selectedProject, (slug) => {
-    if (!slug) return Promise.resolve([]);
+    if (!slug) {
+      return Promise.resolve([]);
+    }
     return typedInvoke("list_done_tasks", { projectSlug: slug });
   });
 
@@ -46,7 +69,7 @@ export default function Tasks() {
   const [showNewProject, setShowNewProject] = createSignal(false);
   const [newProjectName, setNewProjectName] = createSignal("");
   const [newTaskTitle, setNewTaskTitle] = createSignal("");
-  const [error, setError] = createSignal("");
+  const [errorMessage, setErrorMessage] = createSignal("");
   const [viewMode, setViewMode] = createSignal<ViewMode>("list");
   const [selectedTask, setSelectedTask] = createSignal<Task | null>(null);
   const [confirmOpen, setConfirmOpen] = createSignal(false);
@@ -69,7 +92,9 @@ export default function Tasks() {
   const doSaveTask = async () => {
     const task = selectedTask();
     const slug = selectedProject();
-    if (!task || !slug) return;
+    if (!task || !slug) {
+      return;
+    }
 
     setSaveStatus("saving");
     try {
@@ -86,29 +111,41 @@ export default function Tasks() {
     }
   };
 
-  const saveTask = () => {
-    saveChain = saveChain.then(doSaveTask);
+  const saveTask = (): Promise<void> => {
+    const previous = saveChain;
+    saveChain = (async () => {
+      await previous;
+      await doSaveTask();
+    })();
     return saveChain;
   };
 
   const scheduleSaveTask = () => {
-    if (saveTimer) clearTimeout(saveTimer);
+    if (saveTimer) {
+      clearTimeout(saveTimer);
+    }
     saveTimer = setTimeout(saveTask, 1000);
   };
 
   createEffect(
     on(taskBody, () => {
-      if (selectedTask() && !isHydrating) scheduleSaveTask();
+      if (selectedTask() && !isHydrating) {
+        scheduleSaveTask();
+      }
     }),
   );
   createEffect(
     on(taskTitle, () => {
-      if (selectedTask() && !isHydrating) scheduleSaveTask();
+      if (selectedTask() && !isHydrating) {
+        scheduleSaveTask();
+      }
     }),
   );
   createEffect(
     on(taskTagsInput, () => {
-      if (selectedTask() && !isHydrating) scheduleSaveTask();
+      if (selectedTask() && !isHydrating) {
+        scheduleSaveTask();
+      }
     }),
   );
 
@@ -116,7 +153,9 @@ export default function Tasks() {
     if (saveTimer) {
       clearTimeout(saveTimer);
       // 未保存の編集を破棄せずフラッシュする
-      if (selectedTask() && viewMode() === "edit") void saveTask();
+      if (selectedTask() && viewMode() === "edit") {
+        void saveTask();
+      }
     }
   });
 
@@ -132,8 +171,6 @@ export default function Tasks() {
     return projects()?.find((p) => p.slug === slug);
   };
 
-  const isActiveTask = (task: Task) => !task.completed;
-
   const handleSelectProject = (slug: string) => {
     setSelectedProject(slug);
     setShowProjectPicker(false);
@@ -141,47 +178,53 @@ export default function Tasks() {
 
   const handleCreateProject = async () => {
     const name = newProjectName().trim();
-    if (!name) return;
+    if (!name) {
+      return;
+    }
     const slug = toSlug(name);
     if (!slug) {
-      setError("Invalid name");
+      setErrorMessage("Invalid name");
       return;
     }
     try {
       await typedInvoke("create_project", { slug, name, description: "" });
       setNewProjectName("");
-      setError("");
+      setErrorMessage("");
       setShowNewProject(false);
       refetchProjects();
       setSelectedProject(slug);
       setShowProjectPicker(false);
-    } catch (e) {
-      setError(String(e));
+    } catch (error) {
+      setErrorMessage(String(error));
     }
   };
 
   const handleCreateTask = async () => {
     const title = newTaskTitle().trim();
     const slug = selectedProject();
-    if (!title || !slug) return;
+    if (!title || !slug) {
+      return;
+    }
     try {
       await typedInvoke("create_task", { projectSlug: slug, title, tags: [], body: "" });
       setNewTaskTitle("");
       refetchTasks();
-    } catch (e) {
-      setError(String(e));
+    } catch (error) {
+      setErrorMessage(String(error));
     }
   };
 
   const handleCompleteTask = async (filename: string) => {
     const slug = selectedProject();
-    if (!slug) return;
+    if (!slug) {
+      return;
+    }
     try {
       await typedInvoke("complete_task", { projectSlug: slug, filename });
       refetchTasks();
       refetchDoneTasks();
-    } catch (e) {
-      setError(String(e));
+    } catch (error) {
+      setErrorMessage(String(error));
     }
   };
 
@@ -207,7 +250,9 @@ export default function Tasks() {
   };
 
   const goBack = async () => {
-    if (saveTimer) clearTimeout(saveTimer);
+    if (saveTimer) {
+      clearTimeout(saveTimer);
+    }
     if (viewMode() === "edit" && selectedTask()) {
       await saveTask();
     }
@@ -221,24 +266,32 @@ export default function Tasks() {
   const handleDelete = async () => {
     const task = selectedTask();
     const slug = selectedProject();
-    if (!task || !slug) return;
+    if (!task || !slug) {
+      return;
+    }
     setConfirmOpen(false);
-    if (saveTimer) clearTimeout(saveTimer);
+    if (saveTimer) {
+      clearTimeout(saveTimer);
+    }
     try {
       await typedInvoke("delete_task", { projectSlug: slug, filename: task.filename });
       refetchTasks();
       refetchDoneTasks();
       navigateToList();
-    } catch (e) {
-      setError(String(e));
+    } catch (error) {
+      setErrorMessage(String(error));
     }
   };
 
   const handleCompleteFromPreview = async () => {
     const task = selectedTask();
     const slug = selectedProject();
-    if (!task || !slug) return;
-    if (saveTimer) clearTimeout(saveTimer);
+    if (!task || !slug) {
+      return;
+    }
+    if (saveTimer) {
+      clearTimeout(saveTimer);
+    }
     try {
       if (viewMode() === "edit") {
         await saveTask();
@@ -247,20 +300,9 @@ export default function Tasks() {
       refetchTasks();
       refetchDoneTasks();
       navigateToList();
-    } catch (e) {
-      setError(String(e));
+    } catch (error) {
+      setErrorMessage(String(error));
     }
-  };
-
-  const formatTime = (time?: string) => {
-    if (!time) return "";
-    const d = new Date(time);
-    return d.toLocaleString("ja-JP", {
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
   };
 
   return (
@@ -306,8 +348,8 @@ export default function Tasks() {
               </div>
             </Show>
 
-            <Show when={error()}>
-              <p class="error-text">{error()}</p>
+            <Show when={errorMessage()}>
+              <p class="error-text">{errorMessage()}</p>
             </Show>
 
             {/* Task list */}
@@ -344,7 +386,9 @@ export default function Tasks() {
                     value={newTaskTitle()}
                     onInput={(e) => setNewTaskTitle(e.currentTarget.value)}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter") handleCreateTask();
+                      if (e.key === "Enter") {
+                        handleCreateTask();
+                      }
                     }}
                   />
                 </div>
@@ -376,8 +420,12 @@ export default function Tasks() {
 
           {/* Project creation dialog */}
           <Show when={showNewProject()}>
-            <div class="dialog-overlay" onClick={() => setShowNewProject(false)}>
-              <div class="dialog" onClick={(e) => e.stopPropagation()}>
+            <div
+              class="dialog-overlay"
+              role="presentation"
+              onClick={() => setShowNewProject(false)}
+            >
+              <div class="dialog" role="presentation" onClick={(e) => e.stopPropagation()}>
                 <h3 class="dialog-title">New Project</h3>
                 <input
                   type="text"
@@ -386,13 +434,17 @@ export default function Tasks() {
                   value={newProjectName()}
                   onInput={(e) => setNewProjectName(e.currentTarget.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") handleCreateProject();
-                    if (e.key === "Escape") setShowNewProject(false);
+                    if (e.key === "Enter") {
+                      handleCreateProject();
+                    }
+                    if (e.key === "Escape") {
+                      setShowNewProject(false);
+                    }
                   }}
                   autofocus
                 />
-                <Show when={error()}>
-                  <p class="error-text">{error()}</p>
+                <Show when={errorMessage()}>
+                  <p class="error-text">{errorMessage()}</p>
                 </Show>
                 <div class="dialog-actions">
                   <button type="button" class="btn-small" onClick={() => setShowNewProject(false)}>
@@ -485,7 +537,7 @@ export default function Tasks() {
             </div>
             <div class="task-preview-body">
               <Show when={selectedTask()?.body} fallback={<p class="empty-state">本文なし</p>}>
-                <MarkdownPreview source={selectedTask()!.body} />
+                {(body) => <MarkdownPreview source={body()} />}
               </Show>
             </div>
           </div>

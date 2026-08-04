@@ -1,0 +1,128 @@
+{
+  // Shared oxlint baseline. `tauri-app` and `workers` extend this file.
+  //
+  // Every category oxlint ships is enabled at "error", including `nursery`.
+  // `restriction` is the one category left out as a group: its lints exist to
+  // ban language features and contradict each other by design (e.g.
+  // `no-default-export` vs `prefer-default-export`). The valuable ones are
+  // opted into individually under "rules".
+  //
+  // Every rule turned off below states why. Nothing is disabled for being noisy.
+  //
+  // `vitest` is missing from "plugins" on purpose: its rules (require-hook,
+  // require-top-level-describe, …) treat every file as a test file, so it is
+  // enabled per-glob in "overrides" instead.
+  "plugins": ["typescript", "unicorn", "oxc", "import", "promise", "node", "jsx-a11y"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error",
+    "pedantic": "error",
+    "perf": "error",
+    "style": "error",
+    "nursery": "error"
+  },
+  "rules": {
+    // --- opted in from `restriction` ---
+    "typescript/no-explicit-any": "error",
+    "typescript/no-non-null-assertion": "error",
+    "typescript/no-import-type-side-effects": "error",
+    "typescript/explicit-module-boundary-types": "error",
+    "no-eq-null": "error",
+    "no-use-before-define": "error",
+
+    // --- configured, not weakened ---
+    // `void promise` as a statement is the explicit "I am intentionally not
+    // awaiting this" marker; `void` inside an expression stays banned.
+    "no-void": ["error", { "allowAsStatement": true }],
+    // A bare `import "./styles.css"` has no binding to assign by definition.
+    "import/no-unassigned-import": ["error", { "allow": ["**/*.css"] }],
+
+    // --- off: contradicts another enabled rule ---
+    // `import/no-default-export` is the convention here; these three demand the
+    // opposite module shape.
+    "import/prefer-default-export": "off",
+    "import/no-named-export": "off",
+    "import/group-exports": "off",
+    // Wants every export at the bottom of the file, which fights colocating an
+    // export with its definition.
+    "import/exports-last": "off",
+    // A value import and a fully-erased `import type` from the same module is
+    // the shape `import/consistent-type-specifier-style` and
+    // `typescript/no-import-type-side-effects` both require; this rule cannot
+    // tell the two statements apart and calls it a duplicate.
+    "no-duplicate-imports": "off",
+
+    // --- off: wrong target environment ---
+    // These ban ES2015+ syntax for old-browser support. The Tauri webview and
+    // workerd both ship modern V8.
+    "oxc/no-async-await": "off",
+    "oxc/no-optional-chaining": "off",
+    "oxc/no-rest-spread-properties": "off",
+    // TypeScript already resolves every identifier; this rule only has value in
+    // untyped JS and misreports type-only and platform globals.
+    "no-undef": "off",
+
+    // --- off: conflicts with project conventions ---
+    // CLAUDE.md assigns "why not" to comments; JSDoc-on-everything is a
+    // different documentation model.
+    "jsdoc/require-param": "off",
+    "jsdoc/require-returns": "off",
+    "no-inline-comments": "off",
+    // Comments here are written in Japanese, which has no letter case.
+    "capitalized-comments": "off",
+
+    // --- off: arbitrary thresholds, not defects ---
+    "max-lines": "off",
+    "max-lines-per-function": "off",
+    "max-statements": "off",
+    "max-params": "off",
+    "max-depth": "off",
+    "max-nested-callbacks": "off",
+    "import/max-dependencies": "off",
+    "no-magic-numbers": "off",
+
+    // --- off: style opinions a formatter or reviewer owns ---
+    // Ordering rules that fight each other and the grouping used here.
+    "sort-imports": "off",
+    "sort-keys": "off",
+    // Bans `i`, `e`, `id` and other idiomatic short names.
+    "id-length": "off",
+    // Ternaries are how JSX expresses a branch.
+    "no-ternary": "off",
+    // Forcing one of declaration/expression everywhere has no defect behind it.
+    "func-style": "off",
+    // `let x; if (…) x = …` is a legitimate shape.
+    "init-declarations": "off",
+    "no-plusplus": "off",
+    // DOM and JSON interop hands us `null`; pretending otherwise adds casts.
+    "unicorn/no-null": "off"
+  },
+  "overrides": [
+    {
+      "files": ["**/*.test.ts", "**/*.test.tsx", "**/__mocks__/**"],
+      "plugins": ["vitest"],
+      "rules": {
+        // A top-level `describe` names the component or module under test, so
+        // it keeps that identifier's casing; nested titles stay lowercase.
+        "jest/prefer-lowercase-title": ["error", { "ignoreTopLevelDescribe": true }],
+        // Test names describe behaviour, not the function under test.
+        "vitest/prefer-describe-function-title": "off",
+        // Importing `describe`/`it` explicitly is deliberate: no magic globals.
+        "vitest/no-importing-vitest-globals": "off",
+        // A missing timeout means "use the configured default", not a bug.
+        "vitest/require-test-timeout": "off",
+        // Fixture setup in a hook is the pattern this suite uses.
+        "jest/no-hooks": "off",
+        // An arbitrary threshold, like the other max-* rules above.
+        "jest/max-expects": "off",
+        // Exact opposites of `vitest/prefer-strict-boolean-matchers`, which
+        // stays on: asserting `toBe(true)` is stricter than truthiness.
+        "vitest/prefer-to-be-truthy": "off",
+        "vitest/prefer-to-be-falsy": "off",
+        // Exact opposite of `vitest/prefer-called-times`, which stays on:
+        // `toHaveBeenCalledTimes(n)` is one spelling for every n.
+        "vitest/prefer-called-once": "off"
+      }
+    }
+  ]
+}

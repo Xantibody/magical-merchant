@@ -32,7 +32,7 @@ interface LocationArgs {
   longitude: number | null;
 }
 
-type CommandMap = {
+interface CommandMap {
   save_quick_capture: { args: { text: string } & LocationArgs; result: void };
   read_timeline: { args: void; result: string[] };
   list_timeline_dates: { args: void; result: string[] };
@@ -77,11 +77,11 @@ type CommandMap = {
   get_sync_config: { args: void; result: SyncConfig };
   save_sync_config: { args: { config: SyncConfig }; result: void };
   is_sync_config_editable: { args: void; result: boolean };
-};
+}
 
 export type CommandName = keyof CommandMap;
 
-export async function typedInvoke<K extends CommandName>(
+export function typedInvoke<K extends CommandName>(
   cmd: K,
   ...args: CommandMap[K]["args"] extends void ? [] : [CommandMap[K]["args"]]
 ): Promise<CommandMap[K]["result"]> {

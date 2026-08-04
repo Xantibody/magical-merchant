@@ -1,7 +1,7 @@
 import MarkdownIt from "markdown-it";
 import { getHighlighter } from "./highlighter";
 
-const md = MarkdownIt({
+const md = new MarkdownIt({
   html: false,
   linkify: true,
   typographer: true,
@@ -21,7 +21,7 @@ interface RenderEnv {
   __shikiBlocks?: ShikiBlock[];
 }
 
-const fenceMd = MarkdownIt({
+const fenceMd = new MarkdownIt({
   html: false,
   linkify: true,
   typographer: true,

@@ -1,43 +1,48 @@
 import { createSignal, createEffect, onCleanup } from "solid-js";
 import { useLocation } from "@solidjs/router";
-import Icon, { type IconName } from "../components/Icon";
+import Icon from "../components/Icon";
+import type { IconName } from "../components/Icon";
 import SyncButton from "../components/SyncButton";
 import ToggleMenu from "../components/ToggleMenu";
-import { MODE_ICONS, MODE_LABELS, type RoutePath } from "../lib/routes";
+import { MODE_ICONS, MODE_LABELS } from "../lib/routes";
+import type { RoutePath } from "../lib/routes";
+import type { JSX } from "solid-js";
 
 interface AppLayoutProps {
-  children?: any;
+  children?: JSX.Element;
 }
 
 type Theme = "light" | "dark" | "system";
 
 function getInitialTheme(): Theme {
   const saved = localStorage.getItem("theme") as Theme | null;
-  if (saved === "light" || saved === "dark" || saved === "system") return saved;
+  if (saved === "light" || saved === "dark" || saved === "system") {
+    return saved;
+  }
   return "system";
 }
 
 function getResolvedTheme(theme: Theme): "light" | "dark" {
   if (theme === "system") {
-    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    return globalThis.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   }
   return theme;
 }
 
 function applyTheme(theme: Theme) {
   const resolved = getResolvedTheme(theme);
-  document.documentElement.setAttribute("data-theme", resolved);
+  document.documentElement.dataset.theme = resolved;
   localStorage.setItem("theme", theme);
 }
 
-export default function AppLayout(props: AppLayoutProps) {
+export default function AppLayout(props: AppLayoutProps): JSX.Element {
   const [menuOpen, setMenuOpen] = createSignal(false);
   const [theme, setTheme] = createSignal<Theme>(getInitialTheme());
   const location = useLocation();
 
   applyTheme(theme());
 
-  const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+  const mediaQuery = globalThis.matchMedia("(prefers-color-scheme: dark)");
   const handleMediaChange = () => {
     if (theme() === "system") {
       applyTheme("system");
@@ -63,7 +68,9 @@ export default function AppLayout(props: AppLayoutProps) {
   // 現在のテーマを表すアイコンを表示する
   const themeIcon = (): IconName => {
     const t = theme();
-    if (t === "system") return "circle-half";
+    if (t === "system") {
+      return "circle-half";
+    }
     return t === "dark" ? "moon" : "sun";
   };
 
