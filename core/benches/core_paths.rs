@@ -1,6 +1,10 @@
 //! UI 操作ごとに走る core の経路を測る。ここに出てくる関数は Tauri コマンド
 //! から直接呼ばれるので、そのまま体感レイテンシになる。
-#![allow(clippy::unwrap_used, clippy::expect_used, missing_debug_implementations)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    missing_debug_implementations
+)]
 
 mod fixture;
 
@@ -16,8 +20,7 @@ fn search(c: &mut Criterion) {
 
     let mut group = c.benchmark_group("search_all");
     group.throughput(Throughput::Elements(
-        u64::try_from(fixture::DAYS).unwrap()
-            * u64::try_from(fixture::ENTRIES_PER_DAY).unwrap(),
+        u64::try_from(fixture::DAYS).unwrap() * u64::try_from(fixture::ENTRIES_PER_DAY).unwrap(),
     ));
     for (label, needle) in [
         ("miss", fixture::MISS_NEEDLE),
