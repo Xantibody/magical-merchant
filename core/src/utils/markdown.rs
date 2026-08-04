@@ -1,4 +1,5 @@
 use chrono::{DateTime, FixedOffset, Local};
+use serde::de::IgnoredAny;
 
 use crate::error::CoreError;
 use crate::utils::device::Context;
@@ -28,9 +29,11 @@ pub(crate) fn split_time_prefix(entry: &str) -> Option<(&str, &str)> {
 pub(crate) fn split_context_json(rest: &str) -> Option<&str> {
     let start = rest.rfind(" {")?;
     let candidate = &rest[start + 1..];
-    serde_json::from_str::<serde_json::Value>(candidate)
+    // `Value` を組み立てて is_object を見ない: candidate は必ず `{` で始まるので、
+    // 構文として通れば JSON オブジェクト以外にはなり得ない。`IgnoredAny` なら
+    // 検証だけを行い、Map も String も確保しない。
+    serde_json::from_str::<IgnoredAny>(candidate)
         .ok()
-        .filter(serde_json::Value::is_object)
         .map(|_| candidate)
 }
 
