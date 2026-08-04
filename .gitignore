@@ -30,6 +30,11 @@ dist/
 # Tauri
 tauri-app/src-tauri/gen/
 
+# Android signing — never commit secrets
+*.jks
+*.keystore
+keystore.properties
+
 # Nix shims
 .nix-shims/
 
