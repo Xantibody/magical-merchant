@@ -214,8 +214,11 @@ note. Conflict copies are excluded from scanning, so they never sync back.
 cd workers
 pnpm install
 wrangler login
-wrangler deploy
+pnpm run deploy:worker
 ```
+
+> The script is not called `deploy` because `pnpm deploy` resolves to pnpm's
+> own workspace command and never runs the script.
 
 ### 2. Custom Domain (Optional)
 
