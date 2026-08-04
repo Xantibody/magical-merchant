@@ -9,8 +9,7 @@ import { trailing } from "@milkdown/kit/plugin/trailing";
 import { linkTooltipPlugin } from "@milkdown/kit/component/link-tooltip";
 import { highlight, highlightPluginConfig } from "@milkdown/plugin-highlight";
 import { createParser } from "@milkdown/plugin-highlight/shiki";
-import { createHighlighterCore } from "shiki/core";
-import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
+import { getHighlighter } from "../lib/highlighter";
 import { exitCodeBlockPlugin } from "../lib/exit-code-block-plugin";
 import { createPlaceholderPlugin } from "../lib/placeholder-plugin";
 import { getShikiTheme } from "../lib/theme";
@@ -29,23 +28,7 @@ export default function MilkdownEditor(props: MilkdownEditorProps) {
   onMount(async () => {
     if (!ref) return;
 
-    const highlighter = await createHighlighterCore({
-      themes: [
-        import("shiki/themes/github-dark-default.mjs"),
-        import("shiki/themes/github-light-default.mjs"),
-      ],
-      langs: [
-        import("shiki/langs/javascript.mjs"),
-        import("shiki/langs/typescript.mjs"),
-        import("shiki/langs/rust.mjs"),
-        import("shiki/langs/css.mjs"),
-        import("shiki/langs/html.mjs"),
-        import("shiki/langs/json.mjs"),
-        import("shiki/langs/markdown.mjs"),
-        import("shiki/langs/bash.mjs"),
-      ],
-      engine: createJavaScriptRegexEngine(),
-    });
+    const highlighter = await getHighlighter();
 
     const parser = createParser(highlighter as any, {
       theme: getShikiTheme(),

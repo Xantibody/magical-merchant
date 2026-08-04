@@ -66,11 +66,22 @@ impl Timeline {
             return Ok(Vec::new());
         }
         let content = fs::read_to_string(&file_path)?;
-        let lines = content
-            .lines()
-            .filter(|l| !l.is_empty())
-            .map(String::from)
-            .collect();
-        Ok(lines)
+        // エントリは "- [" で始まる行から次の "- [" まで（本文に改行を含み得る）
+        let mut entries: Vec<String> = Vec::new();
+        for line in content.lines() {
+            if line.starts_with("- [") || entries.is_empty() {
+                if line.is_empty() {
+                    continue;
+                }
+                entries.push(line.to_string());
+            } else if let Some(last) = entries.last_mut() {
+                last.push('\n');
+                last.push_str(line);
+            }
+        }
+        Ok(entries
+            .into_iter()
+            .map(|e| e.trim_end().to_string())
+            .collect())
     }
 }

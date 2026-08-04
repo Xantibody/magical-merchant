@@ -22,6 +22,7 @@ async function fetchEntriesByDate(date: string): Promise<string[]> {
 export default function Timeline() {
   const [text, setText] = createSignal("");
   const [saving, setSaving] = createSignal(false);
+  const [sendError, setSendError] = createSignal("");
   const [entries, { refetch }] = createResource(fetchEntries);
   const [viewMode, setViewMode] = createSignal<ViewMode>("input");
   const [selectedDate, setSelectedDate] = createSignal<string | null>(null);
@@ -35,6 +36,7 @@ export default function Timeline() {
     if (!trimmed) return;
 
     setSaving(true);
+    setSendError("");
     try {
       const loc = await getLocation();
       await typedInvoke("save_quick_capture", {
@@ -44,6 +46,8 @@ export default function Timeline() {
       });
       setText("");
       refetch();
+    } catch (e) {
+      setSendError(String(e));
     } finally {
       setSaving(false);
     }
@@ -88,6 +92,10 @@ export default function Timeline() {
               onInput={(e) => setText(e.currentTarget.value)}
               onKeyDown={handleKeyDown}
             />
+
+            <Show when={sendError()}>
+              <p class="error-text">{sendError()}</p>
+            </Show>
 
             <Show when={entries()?.length}>
               <div class="timeline-entries">

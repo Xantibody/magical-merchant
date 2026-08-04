@@ -57,6 +57,8 @@ export default function Tasks() {
 
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
   let isHydrating = false;
+  // 保存を直列化して書き込み順序の入れ替わりを防ぐ
+  let saveChain: Promise<void> = Promise.resolve();
 
   const parseTaskTags = (): string[] =>
     taskTagsInput()
@@ -64,7 +66,7 @@ export default function Tasks() {
       .map((t) => t.trim())
       .filter((t) => t.length > 0);
 
-  const saveTask = async () => {
+  const doSaveTask = async () => {
     const task = selectedTask();
     const slug = selectedProject();
     if (!task || !slug) return;
@@ -82,6 +84,11 @@ export default function Tasks() {
     } catch {
       setSaveStatus("idle");
     }
+  };
+
+  const saveTask = () => {
+    saveChain = saveChain.then(doSaveTask);
+    return saveChain;
   };
 
   const scheduleSaveTask = () => {
@@ -106,7 +113,11 @@ export default function Tasks() {
   );
 
   onCleanup(() => {
-    if (saveTimer) clearTimeout(saveTimer);
+    if (saveTimer) {
+      clearTimeout(saveTimer);
+      // 未保存の編集を破棄せずフラッシュする
+      if (selectedTask() && viewMode() === "edit") void saveTask();
+    }
   });
 
   createEffect(() => {

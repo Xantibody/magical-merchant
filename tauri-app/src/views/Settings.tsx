@@ -1,5 +1,7 @@
-import { createSignal, onMount, Show } from "solid-js";
+import { createSignal, onMount, onCleanup, Show } from "solid-js";
 import { typedInvoke } from "../lib/commands";
+import { EVENTS } from "../lib/events";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import "../styles/settings.css";
 
 export default function Settings() {
@@ -8,6 +10,8 @@ export default function Settings() {
   const [editable, setEditable] = createSignal(false);
   const [saving, setSaving] = createSignal(false);
   const [message, setMessage] = createSignal("");
+
+  const unlisteners: UnlistenFn[] = [];
 
   onMount(async () => {
     try {
@@ -29,6 +33,25 @@ export default function Settings() {
     } catch {
       setAuthenticated(false);
     }
+
+    // Android はディープリンク経由で認証が完了するので、イベントで状態を反映する
+    unlisteners.push(
+      await listen(EVENTS.AUTH_SUCCESS, () => {
+        setAuthenticated(true);
+        setMessage("Authenticated");
+        setTimeout(() => setMessage(""), 2000);
+      }),
+    );
+    unlisteners.push(
+      await listen<string>(EVENTS.AUTH_ERROR, (e) => {
+        setAuthenticated(false);
+        setMessage(`Auth error: ${e.payload}`);
+      }),
+    );
+  });
+
+  onCleanup(() => {
+    for (const unlisten of unlisteners) unlisten();
   });
 
   const handleSave = async () => {
@@ -48,12 +71,17 @@ export default function Settings() {
   };
 
   const handleLogin = async () => {
-    setMessage("");
+    setMessage("Continue login in your browser...");
     try {
+      // デスクトップ(ループバック)はコマンド完了時点でトークン保存済み。
+      // Android はブラウザを開くだけで、完了はディープリンクの auth-success で通知される
       await typedInvoke("auth_login");
-      setAuthenticated(true);
-      setMessage("Authenticated");
-      setTimeout(() => setMessage(""), 2000);
+      const status = await typedInvoke("auth_status");
+      setAuthenticated(status);
+      if (status) {
+        setMessage("Authenticated");
+        setTimeout(() => setMessage(""), 2000);
+      }
     } catch (e) {
       setMessage(`Auth error: ${e}`);
     }
@@ -110,9 +138,19 @@ export default function Settings() {
             Logout
           </button>
         ) : (
-          <button type="button" class="settings-button" onClick={handleLogin}>
-            Login with Google
-          </button>
+          <>
+            <button
+              type="button"
+              class="settings-button"
+              onClick={handleLogin}
+              disabled={!workersUrl().trim()}
+            >
+              Login with Google
+            </button>
+            {!workersUrl().trim() && (
+              <p class="settings-hint">Save the Workers URL above to enable login.</p>
+            )}
+          </>
         )}
       </div>
 

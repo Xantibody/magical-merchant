@@ -424,6 +424,52 @@ describe("Workers Sync API", () => {
 
       expect(res.status).toBe(400);
     });
+
+    it("rejects an upload with an unparsable last_modified", async () => {
+      const req = request("/sync/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          uploads: [
+            { key: "notes/bad.md", content_base64: b64("content"), last_modified: "not-a-date" },
+          ],
+          downloads: [],
+          delete_remote: [],
+          conflicts: [],
+          new_state: { files: {}, last_sync: "2026-05-12T10:00:00Z" },
+          expected_etag: null,
+        }),
+      });
+      const ctx = createExecutionContext();
+      const res = await worker.fetch(req, env, ctx);
+      await waitOnExecutionContext(ctx);
+
+      // 保存すると、それを読んだ全クライアントでこのファイルが sync 対象から静かに消える
+      expect(res.status).toBe(400);
+    });
+
+    it("rejects new_state carrying an unparsable last_modified", async () => {
+      const req = request("/sync/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          uploads: [],
+          downloads: [],
+          delete_remote: [],
+          conflicts: [],
+          new_state: {
+            files: { "notes/bad.md": { hash: "abc", last_modified: "not-a-date" } },
+            last_sync: "2026-05-12T10:00:00Z",
+          },
+          expected_etag: null,
+        }),
+      });
+      const ctx = createExecutionContext();
+      const res = await worker.fetch(req, env, ctx);
+      await waitOnExecutionContext(ctx);
+
+      expect(res.status).toBe(400);
+    });
   });
 
   describe("Unknown routes", () => {

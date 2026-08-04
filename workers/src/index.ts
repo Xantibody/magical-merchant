@@ -1,7 +1,7 @@
 import { SignJWT, jwtVerify } from "jose";
 import { type BulkRequest, executeBulk, loadSyncState, saveSyncState } from "./sync";
 
-interface Env {
+export interface Env {
   BUCKET: R2Bucket;
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
@@ -42,6 +42,17 @@ async function handleSyncState(bucket: R2Bucket, userId: string): Promise<Respon
   return jsonResponse({ ...state, etag });
 }
 
+// 不正なタイムスタンプを保存すると、それを読んだ全クライアントで
+// そのファイルが sync 対象から静かに消える
+function hasInvalidTimestamp(body: BulkRequest): boolean {
+  const invalid = (value: unknown) => typeof value !== "string" || Number.isNaN(Date.parse(value));
+
+  if (body.uploads.some((u) => invalid(u.last_modified))) return true;
+  const files = body.new_state.files;
+  if (typeof files !== "object" || files === null) return true;
+  return Object.values(files).some((rec) => invalid(rec?.last_modified));
+}
+
 async function handleSyncBulk(
   bucket: R2Bucket,
   userId: string,
@@ -62,6 +73,9 @@ async function handleSyncBulk(
     body.new_state === null
   ) {
     return errorResponse("Invalid request: missing or malformed fields", 400);
+  }
+  if (hasInvalidTimestamp(body)) {
+    return errorResponse("Invalid last_modified timestamp", 400);
   }
 
   // CAS check
@@ -131,7 +145,7 @@ function getJwtExpiry(env: Env): number {
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const { pathname } = url;
     const method = request.method;
@@ -231,9 +245,15 @@ export default {
       );
 
       const appRedirectCookie = getCookie(request, "__oauth_app_redirect");
-      const appRedirect = appRedirectCookie
-        ? decodeURIComponent(appRedirectCookie)
-        : "magical-merchant://auth/callback";
+      let appRedirect: string;
+      try {
+        appRedirect = appRedirectCookie
+          ? decodeURIComponent(appRedirectCookie)
+          : "magical-merchant://auth/callback";
+      } catch {
+        // 不正な %-エンコーディングで例外 → 500 になるのを防ぐ
+        return errorResponse("Invalid redirect", 400);
+      }
       if (!isAllowedRedirect(appRedirect)) {
         return errorResponse("Invalid redirect", 400);
       }
