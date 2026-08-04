@@ -13,6 +13,34 @@ pub fn format_timeline_line(text: &str, timestamp: DateTime<Local>, context: &Co
     }
 }
 
+/// `- [HH:MM:SS] ` を prefix として切り出す。
+pub(crate) fn split_time_prefix(entry: &str) -> Option<(&str, &str)> {
+    let rest = entry.strip_prefix("- [")?;
+    let close = rest.find("] ")?;
+    let time = &rest[..close];
+    if time.len() != 8 || !time.chars().all(|c| c.is_ascii_digit() || c == ':') {
+        return None;
+    }
+    Some(entry.split_at("- [".len() + close + "] ".len()))
+}
+
+/// 末尾のコンテキスト JSON（最後の " {" 以降が JSON オブジェクトなら）を返す。
+pub(crate) fn split_context_json(rest: &str) -> Option<&str> {
+    let start = rest.rfind(" {")?;
+    let candidate = &rest[start + 1..];
+    serde_json::from_str::<serde_json::Value>(candidate)
+        .ok()
+        .filter(serde_json::Value::is_object)
+        .map(|_| candidate)
+}
+
+/// 時刻プレフィックスと記録時コンテキストを取り除き、ユーザーが書いた本文だけを返す。
+#[must_use]
+pub fn strip_timeline_prefix(entry: &str) -> &str {
+    let rest = split_time_prefix(entry).map_or(entry, |(_, rest)| rest);
+    split_context_json(rest).map_or(rest, |json| rest[..rest.len() - json.len()].trim_end())
+}
+
 pub fn format_note_markdown(
     body: &str,
     tags: &[String],
