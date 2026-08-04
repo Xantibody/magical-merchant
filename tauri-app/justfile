@@ -45,6 +45,12 @@ android-sign-setup:
 android-build-release: android-sign-setup
   pnpm tauri android build --apk
 
+# Same, but from a checkout with no gen/android yet (CI). keystore.properties
+# has to be written after android-init, so this recipe does not build on its own —
+# see .github/workflows/release.yml.
+android-release-build: setup
+  pnpm tauri android build --apk
+
 # Build and install the signed release APK onto a connected device (-r updates in place).
 android-install-release: android-build-release
   adb install -r src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk

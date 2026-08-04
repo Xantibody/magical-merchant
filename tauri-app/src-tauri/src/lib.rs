@@ -12,7 +12,8 @@ mod sync;
 
 use magical_merchant_core::utils::device::Location;
 use magical_merchant_core::{NoteFilename, NoteSummary, SearchHit};
-use tauri::{AppHandle, Emitter, Listener, Manager};
+use tauri::{AppHandle, Emitter, Manager};
+use tauri_plugin_deep_link::DeepLinkExt as _;
 
 const fn make_location(latitude: Option<f64>, longitude: Option<f64>) -> Option<Location> {
     match (latitude, longitude) {
@@ -150,6 +151,42 @@ fn delete_note(handle: AppHandle, filename: String) -> Result<(), String> {
     magical_merchant_core::delete_note(&base_dir, &filename).map_err(|e| e.to_string())
 }
 
+/// OAuth のコールバックで返ってきた JWT を保存する。
+/// 保存結果をフロントに通知しないと、ログイン完了が UI に反映されず
+/// 失敗も握りつぶされてしまう。
+///
+/// Android では `app_data_dir` がプラグインへの同期呼び出しで、その応答を運ぶ
+/// のはメインスレッド。deep link のイベントはそのメインスレッドで配送されるため、
+/// ここで直に呼ぶと自分の応答を待って Activity ごと固まる。必ず別スレッドに移す。
+fn store_token_from_urls(handle: &AppHandle, urls: &[url::Url]) {
+    let Some(token) = urls
+        .iter()
+        .flat_map(url::Url::query_pairs)
+        .find(|(key, _)| key == "token")
+        .map(|(_, value)| value.into_owned())
+    else {
+        return;
+    };
+
+    let handle = handle.clone();
+    std::thread::spawn(move || {
+        let stored = handle
+            .path()
+            .app_data_dir()
+            .map_err(|e| e.to_string())
+            .and_then(|dir| auth::store_token(&dir, &token));
+
+        match stored {
+            Ok(()) => {
+                let _ = handle.emit("auth-success", ());
+            }
+            Err(e) => {
+                let _ = handle.emit("auth-error", e);
+            }
+        }
+    });
+}
+
 // `mobile_entry_point` fixes the signature to `fn run()`, so a failed startup
 // has nowhere to be returned to — panicking is the only way to report it.
 #[allow(clippy::expect_used)]
@@ -161,30 +198,21 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .manage(sync::AppSyncState::default())
         .setup(|app| {
-            let handle = app.handle().clone();
-            app.listen("deep-link://new-url", move |event| {
-                if let Ok(urls) = serde_json::from_str::<Vec<String>>(event.payload()) {
-                    for url_str in urls {
-                        if let Ok(url) = url::Url::parse(&url_str) {
-                            for (key, value) in url.query_pairs() {
-                                if key == "token" {
-                                    // 保存結果をフロントに通知しないと、ログイン完了が
-                                    // UI に反映されず失敗も握りつぶされてしまう
-                                    match auth::store_token(&value) {
-                                        Ok(()) => {
-                                            let _ = handle.emit("auth-success", ());
-                                        }
-                                        Err(e) => {
-                                            let _ = handle.emit("auth-error", e);
-                                        }
-                                    }
-                                    return;
-                                }
-                            }
-                        }
-                    }
+            // ブラウザで認証している間に OS がアプリを回収すると、トークンは
+            // 起動 URL として届く。`new-url` イベントはアプリが生きていた場合に
+            // しか飛ばないので、両方を見ないとログインが黙って失敗する。
+            //
+            // get_current も同期プラグイン呼び出しなので setup の中で待たない。
+            let launch_handle = app.handle().clone();
+            std::thread::spawn(move || {
+                if let Ok(Some(urls)) = launch_handle.deep_link().get_current() {
+                    store_token_from_urls(&launch_handle, &urls);
                 }
             });
+
+            let handle = app.handle().clone();
+            app.deep_link()
+                .on_open_url(move |event| store_token_from_urls(&handle, &event.urls()));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

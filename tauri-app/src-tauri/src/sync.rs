@@ -75,61 +75,58 @@ impl Default for AppSyncState {
 
 // ──────────── HTTP wire types ────────────
 
-#[derive(Deserialize)]
+/// 同期状態はサーバーが持つ。クライアントは受け取った状態をそのまま保存するだけで、
+/// 自分で組み立てて送り返さない（送り返すと、まだ手元に無いファイルが状態から
+/// 抜け落ち、次の同期で全端末がそれを「削除された」と解釈してしまう）
+#[derive(Debug, Clone, Deserialize)]
 struct ServerSyncState {
     files: std::collections::HashMap<String, ServerFileRecord>,
     #[allow(dead_code)]
     last_sync: Option<String>,
+    /// bulk レスポンスの `new_state` には付かない
+    #[serde(default)]
     etag: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 struct ServerFileRecord {
     hash: String,
     last_modified: String,
 }
 
 #[derive(Serialize)]
-struct WireSyncState {
-    files: std::collections::HashMap<String, WireFileRecord>,
-    last_sync: String,
+struct WireUpload {
+    key: String,
+    content_base64: String,
+    last_modified: String,
+    hash: String,
 }
 
+/// 競合は常にローカル優先。上書きされるリモート側は `conflict_key` に退避され、
+/// レスポンスでも返ってくるのでローカルにも競合コピーとして残す
 #[derive(Serialize)]
-struct WireFileRecord {
+struct WireConflictOp {
+    key: String,
+    conflict_key: String,
+    content_base64: String,
     hash: String,
     last_modified: String,
 }
 
 #[derive(Serialize)]
-struct WireFileContent {
-    key: String,
-    content_base64: String,
-    last_modified: String,
-}
-
-#[derive(Serialize)]
-struct WireConflictOp {
-    key: String,
-    conflict_key: String,
-    resolution: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    content_base64: Option<String>,
-}
-
-#[derive(Serialize)]
 struct BulkRequest {
-    uploads: Vec<WireFileContent>,
+    uploads: Vec<WireUpload>,
     downloads: Vec<String>,
     delete_remote: Vec<String>,
     conflicts: Vec<WireConflictOp>,
-    new_state: WireSyncState,
     expected_etag: Option<String>,
 }
 
 #[derive(Deserialize)]
 struct BulkResponse {
     downloads: Vec<DownloadedFile>,
+    conflict_downloads: Vec<DownloadedFile>,
+    new_state: ServerSyncState,
 }
 
 #[derive(Deserialize)]
@@ -304,7 +301,7 @@ async fn do_sync(handle: &AppHandle) -> Result<SyncResult, SyncErrorInfo> {
             "Sync is not set up. Add your Workers URL in Settings.",
         ));
     }
-    let token = auth::get_token()
+    let token = auth::get_token(&base_dir)
         .map_err(SyncErrorInfo::other)?
         .ok_or_else(|| {
             SyncErrorInfo::new("notAuthenticated", "Not logged in. Log in from Settings.")
@@ -318,21 +315,38 @@ async fn do_sync(handle: &AppHandle) -> Result<SyncResult, SyncErrorInfo> {
 
     let client = HttpClient::new(config.workers_url, token);
 
+    // 他端末と同時に同期すると CAS で弾かれる。ユーザーに再試行させる理由はないので
+    // 取得し直して自動でやり直す
+    for attempt in 1..=MAX_SYNC_ATTEMPTS {
+        let outcome = sync_once(&client, &base_dir).await;
+        let retryable =
+            matches!(&outcome, Err(err) if err.kind == "conflict") && attempt < MAX_SYNC_ATTEMPTS;
+        if !retryable {
+            return outcome;
+        }
+    }
+    unreachable!("the loop returns on its last attempt")
+}
+
+const MAX_SYNC_ATTEMPTS: usize = 3;
+
+async fn sync_once(client: &HttpClient, base_dir: &Path) -> Result<SyncResult, SyncErrorInfo> {
     // 1. Server state を1リクエストで取得
     let server_state = client.get_sync_state().await?;
 
     // 2. ローカルスキャン
     let local_files =
-        scan::scan_local_files(&base_dir).map_err(|e| SyncErrorInfo::other(e.to_string()))?;
-    let local_state =
-        SyncState::load(&base_dir).map_err(|e| SyncErrorInfo::other(e.to_string()))?;
+        scan::scan_local_files(base_dir).map_err(|e| SyncErrorInfo::other(e.to_string()))?;
+    let local_state = SyncState::load(base_dir).map_err(|e| SyncErrorInfo::other(e.to_string()))?;
 
     // 3. Rust core で diff 計算
     let remote_files = server_state_to_remote_files(&server_state);
     let actions = diff::compute(&local_files, &remote_files, &local_state);
 
+    refuse_wholesale_local_deletion(&actions, &local_files)?;
+
     // 4. アクションを bulk request に変換
-    let data_dir = magical_merchant_core::utils::paths::data_dir(&base_dir);
+    let data_dir = magical_merchant_core::utils::paths::data_dir(base_dir);
     let mut result = SyncResult::default();
     let bulk_req = build_bulk_request(
         &actions,
@@ -346,13 +360,44 @@ async fn do_sync(handle: &AppHandle) -> Result<SyncResult, SyncErrorInfo> {
     // 5. 一括実行
     let bulk_resp = client.bulk(bulk_req).await?;
 
-    // 6. downloads + conflict ローカル書き込み
-    apply_downloads(&bulk_resp, &actions, &data_dir, &mut result).map_err(SyncErrorInfo::other)?;
+    // 6. downloads + conflict コピー + ローカル削除を反映
+    apply_response(&bulk_resp, &actions, &data_dir, &mut result).map_err(SyncErrorInfo::other)?;
 
-    // 7. ローカル sync state 更新
-    save_local_state(&base_dir).map_err(SyncErrorInfo::other)?;
+    // 7. サーバーが確定させた状態をそのままローカルにも記録する。
+    //    ここでローカルを再スキャンして組み直すと、ダウンロード直後の mtime が
+    //    サーバーの版と食い違い、同じファイルを永久に再取得し続ける
+    save_local_state(base_dir, &bulk_resp.new_state, &data_dir).map_err(SyncErrorInfo::other)?;
 
     Ok(result)
+}
+
+/// これ以下ならユーザーが本当に消したと考えて素通しする。
+/// 1〜2件の全消しは事故が起きても取り返しがつく
+const WHOLESALE_DELETION_THRESHOLD: usize = 3;
+
+/// サーバーの同期状態が壊れて空になっていると、差分計算にはローカル全消しに見える。
+/// 1回の同期で手元のノートが全部消えるのはまず意図された結果ではないので止める。
+fn refuse_wholesale_local_deletion(
+    actions: &[SyncAction],
+    local_files: &[LocalFile],
+) -> Result<(), SyncErrorInfo> {
+    if local_files.len() < WHOLESALE_DELETION_THRESHOLD {
+        return Ok(());
+    }
+    let deletions = actions
+        .iter()
+        .filter(|a| matches!(a, SyncAction::DeleteLocal { .. }))
+        .count();
+    if deletions < local_files.len() {
+        return Ok(());
+    }
+    Err(SyncErrorInfo::new(
+        "unsafeDeletion",
+        format!(
+            "Sync stopped: the server reports every one of your {deletions} local files as deleted. \
+             If that is really what you want, delete .sync-state.json in the app data directory and sync again."
+        ),
+    ))
 }
 
 fn server_state_to_remote_files(state: &ServerSyncState) -> Vec<RemoteFile> {
@@ -384,7 +429,7 @@ fn build_bulk_request(
     let local_map: std::collections::HashMap<&str, &LocalFile> =
         local_files.iter().map(|f| (f.key.as_str(), f)).collect();
 
-    let mut uploads: Vec<WireFileContent> = Vec::new();
+    let mut uploads: Vec<WireUpload> = Vec::new();
     let mut downloads: Vec<String> = Vec::new();
     let mut delete_remote: Vec<String> = Vec::new();
     let mut conflicts: Vec<WireConflictOp> = Vec::new();
@@ -403,10 +448,11 @@ fn build_bulk_request(
                     .ok_or_else(|| format!("missing local file for upload: {key}"))?;
                 let content =
                     fs::read(data_dir.join(key)).map_err(|e| format!("read {key}: {e}"))?;
-                uploads.push(WireFileContent {
+                uploads.push(WireUpload {
                     key: key.clone(),
                     content_base64: B64.encode(&content),
                     last_modified: local.last_modified.to_rfc3339(),
+                    hash: local.content_hash.clone(),
                 });
             }
             SyncAction::DownloadNew { key } | SyncAction::DownloadModified { key } => {
@@ -419,46 +465,22 @@ fn build_bulk_request(
                 // ローカル削除は client 側だけで完結（bulk request には含めない）
             }
             SyncAction::Conflict { key } => {
-                // conflict 解決ロジック: LWW
-                let local = local_map.get(key.as_str());
-                // remote の last_modified は server_state から…
-                // 簡略化: local があれば last_modified を local 側として比較できないので
-                // 単純に local 優先（後で改善余地あり）
-                let conflict_key = conflict::conflict_filename(key, Utc::now());
-
-                if local.is_some() {
-                    let content = fs::read(data_dir.join(key))
-                        .map_err(|e| format!("read conflict {key}: {e}"))?;
-                    conflicts.push(WireConflictOp {
-                        key: key.clone(),
-                        conflict_key,
-                        resolution: "keep_local".to_string(),
-                        content_base64: Some(B64.encode(&content)),
-                    });
-                } else {
-                    conflicts.push(WireConflictOp {
-                        key: key.clone(),
-                        conflict_key,
-                        resolution: "keep_remote".to_string(),
-                        content_base64: None,
-                    });
-                }
+                // 双方が変わっていたらローカルを採用する。捨てたほうも競合コピーとして
+                // 残るので、どちらの編集も失われない
+                let local = local_map
+                    .get(key.as_str())
+                    .ok_or_else(|| format!("missing local file for conflict: {key}"))?;
+                let content = fs::read(data_dir.join(key))
+                    .map_err(|e| format!("read conflict {key}: {e}"))?;
+                conflicts.push(WireConflictOp {
+                    key: key.clone(),
+                    conflict_key: conflict::conflict_filename(key, Utc::now()),
+                    content_base64: B64.encode(&content),
+                    hash: local.content_hash.clone(),
+                    last_modified: local.last_modified.to_rfc3339(),
+                });
             }
         }
-    }
-
-    // new_state: ローカルの現在のファイル一覧（upload 後の状態を仮想的に表現）
-    // 実際は bulk が成功した後にローカル scan + state 保存するが、
-    // ここでは local_files をそのまま new_state として送る（簡易版）
-    let mut new_files_map = std::collections::HashMap::new();
-    for f in local_files {
-        new_files_map.insert(
-            f.key.clone(),
-            WireFileRecord {
-                hash: f.content_hash.clone(),
-                last_modified: f.last_modified.to_rfc3339(),
-            },
-        );
     }
 
     Ok(BulkRequest {
@@ -466,71 +488,43 @@ fn build_bulk_request(
         downloads,
         delete_remote,
         conflicts,
-        new_state: WireSyncState {
-            files: new_files_map,
-            last_sync: Utc::now().to_rfc3339(),
-        },
         expected_etag,
     })
 }
 
-fn apply_downloads(
+fn write_under(data_dir: &Path, key: &str, content: &[u8]) -> Result<(), String> {
+    if !is_safe_key(key) {
+        return Err(format!("unsafe key from server: {key}"));
+    }
+    let path = data_dir.join(key);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("mkdir {key}: {e}"))?;
+    }
+    fs::write(&path, content).map_err(|e| format!("write {key}: {e}"))
+}
+
+fn decode(file: &DownloadedFile) -> Result<Vec<u8>, String> {
+    B64.decode(&file.content_base64)
+        .map_err(|e| format!("base64 decode {}: {e}", file.key))
+}
+
+fn apply_response(
     bulk_resp: &BulkResponse,
     actions: &[SyncAction],
     data_dir: &Path,
     result: &mut SyncResult,
 ) -> Result<(), String> {
-    // action map for distinguishing normal download vs conflict (keep_remote)
-    let conflict_keys: std::collections::HashSet<String> = actions
-        .iter()
-        .filter_map(|a| match a {
-            SyncAction::Conflict { key } => Some(key.clone()),
-            _ => None,
-        })
-        .collect();
-
-    // For conflicts where we chose keep_remote, the server returned remote content.
-    // We need to first save current local as conflict_key, then overwrite with remote.
-    // For uploads, we don't get downloads back.
-    // For normal downloads, just write.
-
-    let now = Utc::now();
     for d in &bulk_resp.downloads {
-        let content = B64
-            .decode(&d.content_base64)
-            .map_err(|e| format!("base64 decode {}: {e}", d.key))?;
-        let path = data_dir.join(&d.key);
-
-        if conflict_keys.contains(&d.key) {
-            // Save current local content as conflict copy before overwriting
-            if path.exists() {
-                let local_content =
-                    fs::read(&path).map_err(|e| format!("read local conflict {}: {e}", d.key))?;
-                let conflict_key = conflict::conflict_filename(&d.key, now);
-                let conflict_path = data_dir.join(&conflict_key);
-                if let Some(parent) = conflict_path.parent() {
-                    fs::create_dir_all(parent)
-                        .map_err(|e| format!("mkdir conflict {conflict_key}: {e}"))?;
-                }
-                fs::write(&conflict_path, &local_content)
-                    .map_err(|e| format!("write conflict {conflict_key}: {e}"))?;
-            }
-            // Overwrite with remote content
-            if let Some(parent) = path.parent() {
-                fs::create_dir_all(parent).map_err(|e| format!("mkdir {}: {e}", d.key))?;
-            }
-            fs::write(&path, &content).map_err(|e| format!("write {}: {e}", d.key))?;
-            result.conflicts += 1;
-        } else {
-            if let Some(parent) = path.parent() {
-                fs::create_dir_all(parent).map_err(|e| format!("mkdir {}: {e}", d.key))?;
-            }
-            fs::write(&path, &content).map_err(|e| format!("write {}: {e}", d.key))?;
-            result.downloaded += 1;
-        }
+        write_under(data_dir, &d.key, &decode(d)?)?;
+        result.downloaded += 1;
     }
 
-    // Count uploads, deletes, and apply delete_local
+    // 競合で負けたリモート側。`.sync-conflict-` はスキャン対象外なので、
+    // ローカルに置いても同期ループにはならない
+    for d in &bulk_resp.conflict_downloads {
+        write_under(data_dir, &d.key, &decode(d)?)?;
+    }
+
     for action in actions {
         match action {
             SyncAction::UploadNew { .. } | SyncAction::UploadModified { .. } => {
@@ -538,6 +532,9 @@ fn apply_downloads(
             }
             SyncAction::DeleteRemote { .. } => {
                 result.deleted_remote += 1;
+            }
+            SyncAction::Conflict { .. } => {
+                result.conflicts += 1;
             }
             SyncAction::DeleteLocal { key } => {
                 let path = data_dir.join(key);
@@ -551,39 +548,46 @@ fn apply_downloads(
                     result.deleted_local += 1;
                 }
             }
-            SyncAction::Conflict { key } => {
-                // For keep_local conflicts, the server processed it; count here
-                // For keep_remote conflicts, counted already in download loop above
-                // To avoid double-count, only count if not in downloads
-                let in_downloads = bulk_resp.downloads.iter().any(|d| &d.key == key);
-                if !in_downloads {
-                    result.conflicts += 1;
-                }
-            }
-            _ => {}
+            SyncAction::DownloadNew { .. } | SyncAction::DownloadModified { .. } => {}
         }
     }
 
     Ok(())
 }
 
-fn save_local_state(base_dir: &Path) -> Result<(), String> {
-    let updated_files = scan::scan_local_files(base_dir).map_err(|e| e.to_string())?;
-    let mut new_state = SyncState {
+/// サーバーが確定させた状態を、実際に手元にあるファイルだけに絞って保存する。
+/// 手元に無いものを「同期済み」と記録すると、次の同期でリモート側を消してしまう。
+fn to_local_state(server_state: &ServerSyncState, data_dir: &Path) -> SyncState {
+    let mut state = SyncState {
         last_sync: Some(Utc::now()),
         ..Default::default()
     };
-    for f in &updated_files {
-        new_state.files.insert(
-            f.key.clone(),
+    for (key, record) in &server_state.files {
+        let Ok(last_synced_modified) = record.last_modified.parse() else {
+            continue;
+        };
+        if !is_safe_key(key) || !data_dir.join(key).exists() {
+            continue;
+        }
+        state.files.insert(
+            key.clone(),
             FileSyncRecord {
-                last_synced_modified: f.last_modified,
-                content_hash: f.content_hash.clone(),
+                last_synced_modified,
+                content_hash: record.hash.clone(),
             },
         );
     }
-    new_state.save(base_dir).map_err(|e| e.to_string())?;
-    Ok(())
+    state
+}
+
+fn save_local_state(
+    base_dir: &Path,
+    server_state: &ServerSyncState,
+    data_dir: &Path,
+) -> Result<(), String> {
+    to_local_state(server_state, data_dir)
+        .save(base_dir)
+        .map_err(|e| e.to_string())
 }
 
 fn action_key(action: &SyncAction) -> &str {
@@ -622,5 +626,200 @@ mod tests {
             let _guard = SyncingGuard(&flag);
         }
         assert!(!flag.load(Ordering::SeqCst));
+    }
+
+    fn local_file(key: &str, hash: &str) -> LocalFile {
+        LocalFile {
+            key: key.to_string(),
+            last_modified: "2026-08-05T00:00:00Z".parse().unwrap(),
+            content_hash: hash.to_string(),
+        }
+    }
+
+    fn server_state(entries: &[(&str, &str, &str)]) -> ServerSyncState {
+        ServerSyncState {
+            files: entries
+                .iter()
+                .map(|(key, hash, last_modified)| {
+                    (
+                        (*key).to_string(),
+                        ServerFileRecord {
+                            hash: (*hash).to_string(),
+                            last_modified: (*last_modified).to_string(),
+                        },
+                    )
+                })
+                .collect(),
+            last_sync: None,
+            etag: None,
+        }
+    }
+
+    fn seed(data_dir: &Path, key: &str, content: &str) {
+        let path = data_dir.join(key);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, content).unwrap();
+    }
+
+    /// ハッシュが欠けたアップロードはサーバーが 400 で弾く
+    #[test]
+    fn upload_carries_the_local_content_hash() {
+        let dir = tempfile::tempdir().unwrap();
+        seed(dir.path(), "notes/a.md", "hello");
+        let locals = vec![local_file("notes/a.md", "deadbeef")];
+        let actions = vec![SyncAction::UploadNew {
+            key: "notes/a.md".to_string(),
+        }];
+
+        let mut result = SyncResult::default();
+        let req = build_bulk_request(&actions, &locals, dir.path(), None, &mut result).unwrap();
+
+        assert_eq!(req.uploads.len(), 1);
+        assert_eq!(req.uploads[0].hash, "deadbeef");
+        assert_eq!(req.uploads[0].content_base64, B64.encode(b"hello"));
+    }
+
+    #[test]
+    fn conflict_sends_local_content_so_the_local_edit_wins() {
+        let dir = tempfile::tempdir().unwrap();
+        seed(dir.path(), "notes/a.md", "local edit");
+        let locals = vec![local_file("notes/a.md", "hash-local")];
+        let actions = vec![SyncAction::Conflict {
+            key: "notes/a.md".to_string(),
+        }];
+
+        let mut result = SyncResult::default();
+        let req = build_bulk_request(&actions, &locals, dir.path(), None, &mut result).unwrap();
+
+        assert_eq!(req.conflicts.len(), 1);
+        assert_eq!(req.conflicts[0].hash, "hash-local");
+        assert_eq!(req.conflicts[0].content_base64, B64.encode(b"local edit"));
+        assert!(req.conflicts[0].conflict_key.contains(".sync-conflict-"));
+    }
+
+    #[test]
+    fn local_state_mirrors_what_the_server_recorded() {
+        let dir = tempfile::tempdir().unwrap();
+        seed(dir.path(), "notes/a.md", "content");
+        let state = server_state(&[("notes/a.md", "hash-a", "2026-08-05T00:00:00Z")]);
+
+        let local = to_local_state(&state, dir.path());
+
+        let record = &local.files["notes/a.md"];
+        assert_eq!(record.content_hash, "hash-a");
+        assert_eq!(
+            record.last_synced_modified,
+            "2026-08-05T00:00:00Z".parse::<DateTime<Utc>>().unwrap()
+        );
+    }
+
+    /// 手元に無いファイルを「同期済み」と記録すると、次の同期で
+    /// リモート側が削除扱いになって消える
+    #[test]
+    fn local_state_drops_files_that_are_not_on_disk() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = server_state(&[("notes/missing.md", "hash-a", "2026-08-05T00:00:00Z")]);
+
+        assert!(to_local_state(&state, dir.path()).files.is_empty());
+    }
+
+    #[test]
+    fn local_state_drops_unsafe_keys() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = server_state(&[("../escape.md", "hash-a", "2026-08-05T00:00:00Z")]);
+
+        assert!(to_local_state(&state, dir.path()).files.is_empty());
+    }
+
+    #[test]
+    fn applying_the_response_writes_downloads_and_conflict_copies() {
+        let dir = tempfile::tempdir().unwrap();
+        let resp = BulkResponse {
+            downloads: vec![DownloadedFile {
+                key: "notes/a.md".to_string(),
+                content_base64: B64.encode(b"remote"),
+            }],
+            conflict_downloads: vec![DownloadedFile {
+                key: "notes/a.sync-conflict-20260805-000000.md".to_string(),
+                content_base64: B64.encode(b"other device"),
+            }],
+            new_state: server_state(&[]),
+        };
+
+        let mut result = SyncResult::default();
+        apply_response(&resp, &[], dir.path(), &mut result).unwrap();
+
+        assert_eq!(
+            fs::read_to_string(dir.path().join("notes/a.md")).unwrap(),
+            "remote"
+        );
+        assert_eq!(
+            fs::read_to_string(dir.path().join("notes/a.sync-conflict-20260805-000000.md"))
+                .unwrap(),
+            "other device"
+        );
+        assert_eq!(result.downloaded, 1);
+    }
+
+    fn delete_local(key: &str) -> SyncAction {
+        SyncAction::DeleteLocal {
+            key: key.to_string(),
+        }
+    }
+
+    /// サーバーの同期状態が壊れて空になったときに、それを「全部削除された」と
+    /// 解釈してノートを消してしまうのを防ぐ
+    #[test]
+    fn refuses_a_sync_that_would_delete_every_local_file() {
+        let locals = vec![
+            local_file("notes/a.md", "h1"),
+            local_file("notes/b.md", "h2"),
+            local_file("notes/c.md", "h3"),
+        ];
+        let actions = vec![
+            delete_local("notes/a.md"),
+            delete_local("notes/b.md"),
+            delete_local("notes/c.md"),
+        ];
+
+        let err = refuse_wholesale_local_deletion(&actions, &locals).unwrap_err();
+        assert_eq!(err.kind, "unsafeDeletion");
+    }
+
+    #[test]
+    fn allows_deleting_some_of_the_local_files() {
+        let locals = vec![
+            local_file("notes/a.md", "h1"),
+            local_file("notes/b.md", "h2"),
+            local_file("notes/c.md", "h3"),
+        ];
+        let actions = vec![delete_local("notes/a.md"), delete_local("notes/b.md")];
+
+        assert!(refuse_wholesale_local_deletion(&actions, &locals).is_ok());
+    }
+
+    /// 数件しか無いうちは取り返しがつくので素通しする
+    #[test]
+    fn allows_clearing_a_tiny_workspace() {
+        let locals = vec![local_file("notes/a.md", "h1")];
+        let actions = vec![delete_local("notes/a.md")];
+
+        assert!(refuse_wholesale_local_deletion(&actions, &locals).is_ok());
+    }
+
+    #[test]
+    fn applying_the_response_rejects_a_traversal_key_from_the_server() {
+        let dir = tempfile::tempdir().unwrap();
+        let resp = BulkResponse {
+            downloads: vec![DownloadedFile {
+                key: "../escaped.md".to_string(),
+                content_base64: B64.encode(b"evil"),
+            }],
+            conflict_downloads: Vec::new(),
+            new_state: server_state(&[]),
+        };
+
+        let mut result = SyncResult::default();
+        assert!(apply_response(&resp, &[], dir.path(), &mut result).is_err());
     }
 }
