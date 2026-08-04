@@ -82,8 +82,8 @@ mod tests {
     fn conflict_filename_nested_path() {
         let ts = Utc.with_ymd_and_hms(2026, 4, 22, 12, 0, 0).unwrap();
         assert_eq!(
-            conflict_filename("projects/my-proj/active/task.md", ts),
-            "projects/my-proj/active/task.sync-conflict-20260422-120000.md"
+            conflict_filename("notes/archive/2026/note.md", ts),
+            "notes/archive/2026/note.sync-conflict-20260422-120000.md"
         );
     }
 }
