@@ -1,5 +1,5 @@
 {
-  description = "Rust development environment";
+  description = "Magical Merchant: Rust core, Tauri app, and Cloudflare Workers sync";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
@@ -34,26 +34,37 @@
         };
         # Workaround: see nix/android-repo-fix.nix and #26
         fixedRepoFile = import ./nix/android-repo-fix.nix { inherit pkgs; };
-        rustToolchain = pkgs.rust-bin.stable.latest.default.override {
+
+        # Rust の入手経路はここ一箇所。shell ごとに override を書き分けると
+        # バージョンが静かにずれる
+        mkRustToolchain =
+          {
+            extensions ? [ ],
+            targets ? [ ],
+          }:
+          pkgs.rust-bin.stable.latest.default.override { inherit extensions targets; };
+
+        androidRustTargets = [
+          "aarch64-linux-android"
+          "armv7-linux-androideabi"
+          "i686-linux-android"
+          "x86_64-linux-android"
+        ];
+
+        rustToolchain = mkRustToolchain {
           extensions = [
             "rust-src"
             "clippy"
             "rust-analyzer"
           ];
-          targets = [
-            "aarch64-linux-android"
-            "armv7-linux-androideabi"
-            "i686-linux-android"
-            "x86_64-linux-android"
-          ];
+          targets = androidRustTargets;
         };
-        treefmtEval = treefmt-nix.lib.evalModule pkgs {
-          projectRootFile = "flake.nix";
-          programs.nixfmt.enable = true;
-          programs.rustfmt.enable = true;
-          programs.taplo.enable = true;
-          programs.oxfmt.enable = true;
-        };
+
+        # CI 用の最小構成。Android クロスターゲットと rust-analyzer / rust-src は
+        # cache.nixos.org に無くソースビルドになるため、含めると CI が十数分伸びる
+        rustToolchainCI = mkRustToolchain { extensions = [ "clippy" ]; };
+
+        androidNdkVersion = "29.0.14206865";
         androidComposition = pkgs.androidenv.composeAndroidPackages {
           repoJson = fixedRepoFile;
           platformVersions = [ "36" ];
@@ -62,19 +73,21 @@
             "36.0.0"
           ];
           includeNDK = true;
-          ndkVersions = [ "29.0.14206865" ];
+          ndkVersions = [ androidNdkVersion ];
           includeSources = false;
           includeSystemImages = false;
           includeEmulator = false;
         };
         androidSdk = androidComposition.androidsdk;
-        playwrightBrowsers = pkgs.playwright-driver.browsers;
+        androidSdkRoot = "${androidSdk}/libexec/android-sdk";
 
-        # CI 用の最小構成。Android クロスターゲットと rust-analyzer / rust-src は
-        # cache.nixos.org に無くソースビルドになるため、含めると CI が十数分伸びる
-        rustToolchainCI = pkgs.rust-bin.stable.latest.default.override {
-          extensions = [ "clippy" ];
+        # vitest が browser mode (chromium) なのでブラウザ本体が要る
+        playwrightBrowsers = pkgs.playwright-driver.browsers;
+        playwrightEnv = {
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1";
+          PLAYWRIGHT_BROWSERS_PATH = "${playwrightBrowsers}";
         };
+
         linuxTauriDeps = pkgs.lib.optionals pkgs.stdenv.isLinux (
           with pkgs;
           [
@@ -92,30 +105,34 @@
           typescript-go
           just
         ];
+
+        treefmtEval = treefmt-nix.lib.evalModule pkgs {
+          projectRootFile = "flake.nix";
+          programs.nixfmt.enable = true;
+          programs.rustfmt.enable = true;
+          programs.taplo.enable = true;
+          programs.oxfmt.enable = true;
+        };
       in
       {
         packages.default = pkgs.callPackage ./nix/package.nix { };
         formatter = treefmtEval.config.build.wrapper;
         checks.formatting = treefmtEval.config.build.check self;
         devShells.default = pkgs.mkShell (
-          {
-            buildInputs =
-              (with pkgs; [
-                rustToolchain
-                just
-                nodejs_22
-                pnpm
-                cargo-tauri
-                jdk17
-                androidSdk
-                oxlint
-                typescript-go
-                wrangler
-              ])
-              ++ linuxTauriDeps;
-            ANDROID_HOME = "${androidSdk}/libexec/android-sdk";
-            NDK_HOME = "${androidSdk}/libexec/android-sdk/ndk/29.0.14206865";
-            PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1";
+          playwrightEnv
+          // {
+            buildInputs = [
+              rustToolchain
+              androidSdk
+              pkgs.cargo-tauri
+              pkgs.jdk17
+              pkgs.wrangler
+              pkgs.agent-browser
+            ]
+            ++ jsToolchain
+            ++ linuxTauriDeps;
+            ANDROID_HOME = androidSdkRoot;
+            NDK_HOME = "${androidSdkRoot}/ndk/${androidNdkVersion}";
             shellHook = ''
               # Create a rustup shim that no-ops for tauri android init
               mkdir -p "$PWD/.nix-shims"
@@ -132,9 +149,6 @@
               export PATH="$PWD/.nix-shims:$PATH"
             '';
           }
-          // {
-            PLAYWRIGHT_BROWSERS_PATH = "${playwrightBrowsers}";
-          }
         );
 
         # CI 専用の shell。default は Android SDK/NDK と Rust クロスターゲットを含み、
@@ -147,12 +161,7 @@
           ++ linuxTauriDeps;
         };
 
-        devShells.frontend = pkgs.mkShell {
-          buildInputs = jsToolchain;
-          # vitest が browser mode (chromium) なのでブラウザ本体が要る
-          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1";
-          PLAYWRIGHT_BROWSERS_PATH = "${playwrightBrowsers}";
-        };
+        devShells.frontend = pkgs.mkShell (playwrightEnv // { buildInputs = jsToolchain; });
 
         # wrangler は workers/package.json の devDependency なので nix 版は不要
         devShells.workers = pkgs.mkShell {

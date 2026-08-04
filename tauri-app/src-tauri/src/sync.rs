@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::Path;
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Mutex, PoisonError};
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as B64;
@@ -19,14 +19,14 @@ const EVENT_SYNC_COMPLETE: &str = "sync-complete";
 const EVENT_SYNC_ERROR: &str = "sync-error";
 
 #[derive(Debug, Clone, Serialize)]
-pub struct SyncStatusInfo {
+pub(crate) struct SyncStatusInfo {
     pub is_syncing: bool,
     pub last_synced_at: Option<DateTime<Utc>>,
     pub last_error: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
-pub struct SyncResult {
+pub(crate) struct SyncResult {
     pub uploaded: usize,
     pub downloaded: usize,
     pub deleted_remote: usize,
@@ -38,7 +38,7 @@ pub struct SyncResult {
 /// フロントが「設定へ誘導」「再試行」などを出し分けられるよう、
 /// エラーを kind 付きで返す
 #[derive(Debug, Clone, Serialize)]
-pub struct SyncErrorInfo {
+pub(crate) struct SyncErrorInfo {
     pub kind: &'static str,
     pub message: String,
 }
@@ -57,7 +57,7 @@ impl SyncErrorInfo {
     }
 }
 
-pub struct AppSyncState {
+pub(crate) struct AppSyncState {
     pub is_syncing: AtomicBool,
     pub last_synced_at: Mutex<Option<DateTime<Utc>>>,
     pub last_error: Mutex<Option<String>>,
@@ -225,7 +225,7 @@ async fn check_status(
 
 // ──────────── Tauri commands ────────────
 
-/// panic やキャンセルでも is_syncing を確実に false へ戻すガード
+/// panic やキャンセルでも `is_syncing` を確実に false へ戻すガード
 struct SyncingGuard<'a>(&'a AtomicBool);
 
 impl Drop for SyncingGuard<'_> {
@@ -235,7 +235,7 @@ impl Drop for SyncingGuard<'_> {
 }
 
 #[tauri::command]
-pub async fn sync_start(
+pub(crate) async fn sync_start(
     handle: AppHandle,
     state: State<'_, AppSyncState>,
 ) -> Result<SyncResult, SyncErrorInfo> {
@@ -252,12 +252,21 @@ pub async fn sync_start(
 
     match &result {
         Ok(sync_result) => {
-            *state.last_synced_at.lock().unwrap() = Some(Utc::now());
-            *state.last_error.lock().unwrap() = None;
+            *state
+                .last_synced_at
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner) = Some(Utc::now());
+            *state
+                .last_error
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner) = None;
             let _ = handle.emit(EVENT_SYNC_COMPLETE, sync_result);
         }
         Err(err) => {
-            *state.last_error.lock().unwrap() = Some(err.message.clone());
+            *state
+                .last_error
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner) = Some(err.message.clone());
             let _ = handle.emit(EVENT_SYNC_ERROR, err);
         }
     }
@@ -266,12 +275,19 @@ pub async fn sync_start(
 }
 
 #[tauri::command]
-pub fn sync_status(state: State<'_, AppSyncState>) -> Result<SyncStatusInfo, String> {
-    Ok(SyncStatusInfo {
+pub(crate) fn sync_status(state: State<'_, AppSyncState>) -> SyncStatusInfo {
+    SyncStatusInfo {
         is_syncing: state.is_syncing.load(Ordering::SeqCst),
-        last_synced_at: *state.last_synced_at.lock().unwrap(),
-        last_error: state.last_error.lock().unwrap().clone(),
-    })
+        last_synced_at: *state
+            .last_synced_at
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner),
+        last_error: state
+            .last_error
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone(),
+    }
 }
 
 // ──────────── Sync orchestration ────────────

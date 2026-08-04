@@ -50,12 +50,25 @@ interface IconProps extends JSX.HTMLAttributes<HTMLSpanElement> {
 
 const cache = new Map<IconName, string>();
 
-export default function Icon(props: IconProps) {
+function applyIcon(el: HTMLSpanElement | undefined, svg: string, size: number) {
+  if (!el) {
+    return;
+  }
+  el.innerHTML = svg;
+  const svgEl = el.querySelector("svg");
+  if (svgEl) {
+    const s = `${size}px`;
+    svgEl.setAttribute("width", s);
+    svgEl.setAttribute("height", s);
+  }
+}
+
+export default function Icon(props: IconProps): JSX.Element {
   const [local, rest] = splitProps(props, ["name", "size"]);
   let ref: HTMLSpanElement | undefined;
 
   createEffect(() => {
-    const name = local.name;
+    const { name } = local;
     const size = local.size ?? 24;
 
     const cached = cache.get(name);
@@ -65,28 +78,17 @@ export default function Icon(props: IconProps) {
     }
 
     const currentName = name;
-    void ICONS[name]().then((mod) => {
+    void (async () => {
+      const mod = await ICONS[currentName]();
       const svg = mod.default as string;
       cache.set(currentName, svg);
       if (local.name === currentName && ref) {
-        const currentSize = local.size ?? 24;
-        applyIcon(ref, svg, currentSize);
+        applyIcon(ref, svg, local.size ?? 24);
       }
-    });
+    })();
   });
 
   return (
     <span ref={ref} class="icon" style={{ display: "inline-flex", "line-height": 0 }} {...rest} />
   );
-}
-
-function applyIcon(el: HTMLSpanElement | undefined, svg: string, size: number) {
-  if (!el) return;
-  el.innerHTML = svg;
-  const svgEl = el.querySelector("svg");
-  if (svgEl) {
-    const s = `${size}px`;
-    svgEl.setAttribute("width", s);
-    svgEl.setAttribute("height", s);
-  }
 }

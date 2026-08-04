@@ -26,12 +26,12 @@ export function parseTimelineEntry(raw: string): ParsedEntry {
     return { time: "", text: raw, context: null };
   }
 
-  const time = timeMatch[1];
+  const [, time] = timeMatch;
   const rest = raw.slice(timeMatch[0].length);
 
   // Try to extract context JSON from the last " {" in the line
   const lastBrace = rest.lastIndexOf(" {");
-  if (lastBrace >= 0) {
+  if (lastBrace !== -1) {
     const jsonCandidate = rest.slice(lastBrace + 1);
     try {
       const parsed = JSON.parse(jsonCandidate);
@@ -48,37 +48,61 @@ export function parseTimelineEntry(raw: string): ParsedEntry {
 }
 
 export function getBatteryIcon(ctx: DeviceContext): IconName | null {
-  if (ctx.battery == null) return null;
-  if (ctx.is_charging) return "battery-charging";
-  if (ctx.battery >= 75) return "battery-full";
-  if (ctx.battery >= 50) return "battery-high";
-  if (ctx.battery >= 25) return "battery-medium";
-  if (ctx.battery >= 5) return "battery-low";
+  if (ctx.battery === undefined) {
+    return null;
+  }
+  if (ctx.is_charging) {
+    return "battery-charging";
+  }
+  if (ctx.battery >= 75) {
+    return "battery-full";
+  }
+  if (ctx.battery >= 50) {
+    return "battery-high";
+  }
+  if (ctx.battery >= 25) {
+    return "battery-medium";
+  }
+  if (ctx.battery >= 5) {
+    return "battery-low";
+  }
   return "battery-empty";
 }
 
 export function getNetworkIcon(ctx: DeviceContext): IconName | null {
-  if (!ctx.network_type) return null;
+  if (!ctx.network_type) {
+    return null;
+  }
   switch (ctx.network_type) {
-    case "WiFi":
+    case "WiFi": {
       return "wifi-high";
-    case "Mobile":
+    }
+    case "Mobile": {
       return "cell-signal-full";
-    case "Offline":
+    }
+    case "Offline": {
       return "wifi-slash";
-    default:
+    }
+    default: {
       return null;
+    }
   }
 }
 
 export function hasLocation(ctx: DeviceContext): boolean {
-  return ctx.location != null;
+  return ctx.location !== undefined;
 }
 
 export function getOsLabel(ctx: DeviceContext): string | null {
-  if (!ctx.os) return null;
+  if (!ctx.os) {
+    return null;
+  }
   const parts: string[] = [ctx.os];
-  if (ctx.os_version) parts.push(ctx.os_version);
-  if (ctx.arch) parts.push(ctx.arch);
+  if (ctx.os_version) {
+    parts.push(ctx.os_version);
+  }
+  if (ctx.arch) {
+    parts.push(ctx.arch);
+  }
   return parts.join(" ");
 }

@@ -4,14 +4,50 @@ members = ["core", "mcp-cli", "tauri-app/src-tauri"]
 
 [workspace.package]
 license = "MIT"
+repository = "https://github.com/Xantibody/magical-merchant"
+readme = "README.md"
+keywords = ["notes", "markdown", "tauri"]
+categories = ["text-editors"]
 
 [workspace.lints.rust]
-unsafe_op_in_unsafe_fn = "warn"
+# Lint groups. priority = -1 so individual lints below can override them.
+future_incompatible = { level = "deny", priority = -1 }
+nonstandard_style = { level = "deny", priority = -1 }
+rust_2018_idioms = { level = "deny", priority = -1 }
+unused = { level = "deny", priority = -1 }
+
+missing_debug_implementations = "deny"
+trivial_casts = "deny"
+trivial_numeric_casts = "deny"
+unreachable_pub = "deny"
+unsafe_op_in_unsafe_fn = "deny"
+unused_qualifications = "deny"
 invalid_reference_casting = "deny"
 
 [workspace.lints.clippy]
-mod_module_files = "warn"
-excessive_precision = "warn"
-impl_trait_in_params = "warn"
-float_cmp = "warn"
-redundant_field_names = "warn"
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+nursery = { level = "deny", priority = -1 }
+cargo = { level = "deny", priority = -1 }
+
+# Hand-picked from `restriction`, which is not enabled as a group because its
+# lints contradict each other by design.
+mod_module_files = "deny"
+impl_trait_in_params = "deny"
+undocumented_unsafe_blocks = "deny"
+unwrap_used = "deny"
+expect_used = "deny"
+
+# Versions of transitive dependencies are not ours to unify.
+multiple_crate_versions = "allow"
+
+# Doc-comment mandates are off by project policy: CLAUDE.md assigns "how" to the
+# code and "why not" to comments, so a doc comment on every item is noise.
+# `missing_docs` (rustc) is omitted above for the same reason.
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+
+# Contradicts rustc's `unreachable_pub`: one wants `pub(crate)` narrowed to
+# `pub` inside private modules, the other wants the opposite. `unreachable_pub`
+# wins because it describes the crate's real API surface.
+redundant_pub_crate = "allow"

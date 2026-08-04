@@ -19,6 +19,7 @@ impl Slug {
         Ok(Self(s.to_string()))
     }
 
+    #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -46,6 +47,7 @@ impl Filename {
         Ok(Self(s.to_string()))
     }
 
+    #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -76,6 +78,7 @@ impl NoteFilename {
         Ok(Self(s.to_string()))
     }
 
+    #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }

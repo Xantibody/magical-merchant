@@ -37,7 +37,7 @@ describe("ConfirmDialog", () => {
   });
 
   it("calls onConfirm when delete button is clicked", async () => {
-    const onConfirm = vi.fn();
+    const onConfirm = vi.fn<() => void>();
     const { baseElement } = render(() => (
       <ConfirmDialog
         open={true}
@@ -50,11 +50,11 @@ describe("ConfirmDialog", () => {
     const screen = page.elementLocator(baseElement);
 
     await userEvent.click(screen.getByRole("button", { name: "削除" }));
-    expect(onConfirm).toHaveBeenCalledOnce();
+    expect(onConfirm).toHaveBeenCalledTimes(1);
   });
 
   it("calls onCancel when cancel button is clicked", async () => {
-    const onCancel = vi.fn();
+    const onCancel = vi.fn<() => void>();
     const { baseElement } = render(() => (
       <ConfirmDialog
         open={true}
@@ -67,6 +67,6 @@ describe("ConfirmDialog", () => {
     const screen = page.elementLocator(baseElement);
 
     await userEvent.click(screen.getByRole("button", { name: "キャンセル" }));
-    expect(onCancel).toHaveBeenCalledOnce();
+    expect(onCancel).toHaveBeenCalledTimes(1);
   });
 });

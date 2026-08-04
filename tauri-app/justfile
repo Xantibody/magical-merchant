@@ -12,6 +12,7 @@ assets: setup
 check: setup
   oxlint src/
   tsgo -b --noEmit
+  pnpm knip
 
 test: setup
   pnpm test

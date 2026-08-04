@@ -13,14 +13,14 @@ pub struct NoteFrontmatter {
     pub context: Option<Context>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ProjectFrontmatter {
     pub name: String,
     pub created: DateTime<FixedOffset>,
     pub description: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TaskFrontmatter {
     pub title: String,
     pub created: DateTime<FixedOffset>,

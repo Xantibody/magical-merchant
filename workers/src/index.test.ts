@@ -3,7 +3,7 @@ import { describe, it, expect, beforeAll, afterEach } from "vitest";
 import { SignJWT } from "jose";
 import worker from "./index";
 
-async function makeJwt(
+function makeJwt(
   payload: { sub: string; email: string; exp: number },
   secret = env.JWT_SECRET,
 ): Promise<string> {
@@ -37,8 +37,15 @@ function request(
   return new Request(`http://localhost${path}`, { ...options, headers });
 }
 
-async function jsonBody<T>(response: Response): Promise<T> {
+function jsonBody<T>(response: Response): Promise<T> {
   return response.json() as Promise<T>;
+}
+
+function objectText(object: R2ObjectBody | null): Promise<string> {
+  if (!object) {
+    throw new Error("expected the object to exist in R2");
+  }
+  return object.text();
 }
 
 function b64(s: string): string {
@@ -61,7 +68,7 @@ describe("Workers Sync API", () => {
     await clearBucket();
   });
 
-  describe("Authentication", () => {
+  describe("authentication", () => {
     it("rejects requests without Authorization header", async () => {
       const req = new Request("http://localhost/sync-state");
       const ctx = createExecutionContext();
@@ -99,7 +106,7 @@ describe("Workers Sync API", () => {
     });
   });
 
-  describe("GET /sync-state", () => {
+  describe("gET /sync-state", () => {
     it("returns empty state for new user", async () => {
       const req = request("/sync-state");
       const ctx = createExecutionContext();
@@ -157,11 +164,11 @@ describe("Workers Sync API", () => {
         etag: string | null;
       }>(stateRes);
       expect(state.files["notes/a.md"].hash).toBe("h1");
-      expect(state.etag).toBeTruthy();
+      expect(state.etag.length).toBeGreaterThan(0);
     });
   });
 
-  describe("POST /sync/bulk", () => {
+  describe("pOST /sync/bulk", () => {
     it("uploads files to R2", async () => {
       const req = request("/sync/bulk", {
         method: "POST",
@@ -191,7 +198,7 @@ describe("Workers Sync API", () => {
       expect(res.status).toBe(200);
       const obj = await env.BUCKET.get("notes/up.md");
       expect(obj).not.toBeNull();
-      expect(await obj!.text()).toBe("uploaded content");
+      expect(await objectText(obj)).toBe("uploaded content");
     });
 
     it("downloads files from R2", async () => {
@@ -281,10 +288,10 @@ describe("Workers Sync API", () => {
 
       const conflict = await env.BUCKET.get("notes/c.sync-conflict-20260512-120000.md");
       expect(conflict).not.toBeNull();
-      expect(await conflict!.text()).toBe("remote version");
+      expect(await objectText(conflict)).toBe("remote version");
 
       const main = await env.BUCKET.get("notes/c.md");
-      expect(await main!.text()).toBe("local version");
+      expect(await objectText(main)).toBe("local version");
     });
 
     it("handles conflict with keep_remote: returns remote content for client to save", async () => {
@@ -472,7 +479,7 @@ describe("Workers Sync API", () => {
     });
   });
 
-  describe("Unknown routes", () => {
+  describe("unknown routes", () => {
     it("returns 404 for unknown paths", async () => {
       const req = request("/unknown");
       const ctx = createExecutionContext();

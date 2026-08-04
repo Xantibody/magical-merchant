@@ -1,4 +1,5 @@
 import { Show, createMemo } from "solid-js";
+import type { JSX } from "solid-js";
 import Icon from "./Icon";
 import MarkdownPreview from "./MarkdownPreview";
 import {
@@ -14,7 +15,7 @@ interface TimelineEntryProps {
   markdown?: boolean;
 }
 
-export default function TimelineEntry(props: TimelineEntryProps) {
+export default function TimelineEntry(props: TimelineEntryProps): JSX.Element {
   const parsed = createMemo(() => parseTimelineEntry(props.raw));
 
   return (

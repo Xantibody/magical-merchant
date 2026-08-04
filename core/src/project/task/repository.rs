@@ -11,16 +11,16 @@ use crate::utils::validated::{Filename, Slug};
 use super::list_tasks_in_dir;
 use super::summary::Summary;
 
-pub struct Tasks {
+pub(crate) struct Tasks {
     base_dir: PathBuf,
 }
 
 impl Tasks {
-    pub fn new(base_dir: PathBuf) -> Self {
+    pub(crate) const fn new(base_dir: PathBuf) -> Self {
         Self { base_dir }
     }
 
-    pub fn create(
+    pub(crate) fn create(
         &self,
         project_slug: &Slug,
         title: &str,
@@ -47,7 +47,7 @@ impl Tasks {
         Ok(file_path)
     }
 
-    pub fn list_active(&self, project_slug: &Slug) -> Result<Vec<Summary>, CoreError> {
+    pub(crate) fn list_active(&self, project_slug: &Slug) -> Result<Vec<Summary>, CoreError> {
         let slug_str = project_slug.as_str();
         let project_file = paths::project_file_path(&self.base_dir, slug_str);
         if !project_file.exists() {
@@ -56,7 +56,7 @@ impl Tasks {
         list_tasks_in_dir(&paths::active_tasks_dir(&self.base_dir, slug_str))
     }
 
-    pub fn list_done(&self, project_slug: &Slug) -> Result<Vec<Summary>, CoreError> {
+    pub(crate) fn list_done(&self, project_slug: &Slug) -> Result<Vec<Summary>, CoreError> {
         let slug_str = project_slug.as_str();
         let project_file = paths::project_file_path(&self.base_dir, slug_str);
         if !project_file.exists() {
@@ -65,7 +65,11 @@ impl Tasks {
         list_tasks_in_dir(&paths::done_tasks_dir(&self.base_dir, slug_str))
     }
 
-    pub fn complete(&self, project_slug: &Slug, filename: &Filename) -> Result<(), CoreError> {
+    pub(crate) fn complete(
+        &self,
+        project_slug: &Slug,
+        filename: &Filename,
+    ) -> Result<(), CoreError> {
         let slug_str = project_slug.as_str();
         let fname = filename.as_str();
         let active_path = paths::active_tasks_dir(&self.base_dir, slug_str).join(fname);
@@ -90,7 +94,7 @@ impl Tasks {
         Ok(())
     }
 
-    pub fn update(
+    pub(crate) fn update(
         &self,
         project_slug: &Slug,
         filename: &Filename,
@@ -120,7 +124,7 @@ impl Tasks {
         Ok(())
     }
 
-    pub fn delete(&self, project_slug: &Slug, filename: &Filename) -> Result<(), CoreError> {
+    pub(crate) fn delete(&self, project_slug: &Slug, filename: &Filename) -> Result<(), CoreError> {
         let slug_str = project_slug.as_str();
         let fname = filename.as_str();
         let active_path = paths::active_tasks_dir(&self.base_dir, slug_str).join(fname);
