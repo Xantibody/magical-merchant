@@ -1,3 +1,4 @@
+import { createSignal } from "solid-js";
 import type { IconName } from "../components/Icon";
 
 export type ShikiTheme = "github-dark-default" | "github-light-default";
@@ -36,8 +37,20 @@ function resolveTheme(theme: Theme): "light" | "dark" {
   return theme;
 }
 
+/**
+ * 実際に当たっているテーマ。CSS 変数で追従できない描画（mermaid は配色を SVG に
+ * 焼き込む）は、これを読んで描き直す。
+ */
+const [resolvedTheme, setResolvedTheme] = createSignal<"light" | "dark">(
+  document.documentElement.dataset.theme === "dark" ? "dark" : "light",
+);
+
+export { resolvedTheme };
+
 export function applyTheme(theme: Theme): void {
-  document.documentElement.dataset.theme = resolveTheme(theme);
+  const resolved = resolveTheme(theme);
+  document.documentElement.dataset.theme = resolved;
+  setResolvedTheme(resolved);
   localStorage.setItem(STORAGE_KEY, theme);
 }
 
