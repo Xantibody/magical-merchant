@@ -5,7 +5,10 @@
   .markdown-toolbar {
     display: flex;
     position: fixed;
-    bottom: 0;
+    /* position: fixed は html の padding を無視するので、0 だと Android の
+       ナビゲーションバーの裏に入る。キーボードが開いている間は JS が top を
+       打つので、この値は使われない */
+    bottom: var(--safe-bottom, 0px);
     left: 0;
     right: 0;
     z-index: 150;
