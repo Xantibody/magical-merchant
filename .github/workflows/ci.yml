@@ -10,9 +10,22 @@ permissions:
   contents: read
   pull-requests: read
 
+# 連続 push で古い run を走らせ続けない
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  rust:
+  # 変更検出を1ジョブに集約し、各ジョブをジョブ単位で gate する。
+  # ステップ単位の if だと、走らないジョブでも runner と checkout の時間を消費する
+  changes:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      # push / workflow_dispatch では filter を回さないので空になる → 全ジョブ実行
+      rust: ${{ steps.filter.outputs.rust || 'true' }}
+      frontend: ${{ steps.filter.outputs.frontend || 'true' }}
+      workers: ${{ steps.filter.outputs.workers || 'true' }}
     steps:
       - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v3
@@ -30,37 +43,6 @@ jobs:
               - 'flake.lock'
               - 'justfile'
               - 'rust/justfile'
-      - name: Free disk space
-        if: steps.filter.outputs.rust == 'true' || github.event_name != 'pull_request'
-        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache
-      - uses: actions/cache@v4
-        if: steps.filter.outputs.rust == 'true' || github.event_name != 'pull_request'
-        with:
-          path: target
-          key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'flake.lock') }}
-          restore-keys: |
-            cargo-${{ runner.os }}-
-      - if: steps.filter.outputs.rust == 'true' || github.event_name != 'pull_request'
-        uses: nixbuild/nix-quick-install-action@v34
-      - if: steps.filter.outputs.rust == 'true' || github.event_name != 'pull_request'
-        uses: DeterminateSystems/magic-nix-cache-action@v9
-      - name: check
-        if: steps.filter.outputs.rust == 'true' || github.event_name != 'pull_request'
-        run: nix develop --command just rust::check
-      - name: test
-        if: steps.filter.outputs.rust == 'true' || github.event_name != 'pull_request'
-        run: nix develop --command just rust::test
-    timeout-minutes: 15
-
-  frontend:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dorny/paths-filter@v3
-        if: github.event_name == 'pull_request'
-        id: filter
-        with:
-          filters: |
             frontend:
               - 'tauri-app/src/**'
               - 'tauri-app/package.json'
@@ -69,58 +51,102 @@ jobs:
               - 'tauri-app/vite.config.ts'
               - 'tauri-app/vitest.config.ts'
               - 'tauri-app/justfile'
-      - if: steps.filter.outputs.frontend == 'true' || github.event_name != 'pull_request'
-        uses: nixbuild/nix-quick-install-action@v34
-      - if: steps.filter.outputs.frontend == 'true' || github.event_name != 'pull_request'
-        uses: DeterminateSystems/magic-nix-cache-action@v9
-      - name: Get pnpm store directory
-        if: steps.filter.outputs.frontend == 'true' || github.event_name != 'pull_request'
-        id: pnpm-cache
-        shell: bash
-        run: echo "STORE_PATH=$(nix develop --command pnpm store path)" >> $GITHUB_OUTPUT
+              - 'flake.nix'
+              - 'flake.lock'
+            workers:
+              - 'workers/**'
+              - 'flake.nix'
+              - 'flake.lock'
+
+  rust:
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - name: Free disk space
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache
+      - uses: nixbuild/nix-quick-install-action@v35
+      - uses: nix-community/cache-nix-action@v7
+        with:
+          primary-key: nix-${{ runner.os }}-rust-${{ hashFiles('flake.lock', 'flake.nix') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-rust-
+          gc-max-store-size-linux: 3G
       - uses: actions/cache@v4
-        if: steps.filter.outputs.frontend == 'true' || github.event_name != 'pull_request'
+        with:
+          path: target
+          key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'flake.lock') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-
+      - name: check
+        run: nix develop .#rust --command just rust::check
+      - name: test
+        run: nix develop .#rust --command just rust::test
+
+  frontend:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: nixbuild/nix-quick-install-action@v35
+      - uses: nix-community/cache-nix-action@v7
+        with:
+          primary-key: nix-${{ runner.os }}-frontend-${{ hashFiles('flake.lock', 'flake.nix') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-frontend-
+          gc-max-store-size-linux: 3G
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        run: echo "STORE_PATH=$(nix develop .#frontend --command pnpm store path)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
         with:
           path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
           key: pnpm-${{ runner.os }}-${{ hashFiles('tauri-app/pnpm-lock.yaml') }}
           restore-keys: |
             pnpm-${{ runner.os }}-
       - name: check
-        if: steps.filter.outputs.frontend == 'true' || github.event_name != 'pull_request'
-        run: nix develop --command just tauri_app::check
+        run: nix develop .#frontend --command just tauri_app::check
       - name: test
-        if: steps.filter.outputs.frontend == 'true' || github.event_name != 'pull_request'
-        run: nix develop --command just tauri_app::test
-    timeout-minutes: 15
+        run: nix develop .#frontend --command just tauri_app::test
 
   workers:
+    needs: changes
+    if: needs.changes.outputs.workers == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
-      - uses: dorny/paths-filter@v3
-        if: github.event_name == 'pull_request'
-        id: filter
+      - uses: nixbuild/nix-quick-install-action@v35
+      - uses: nix-community/cache-nix-action@v7
         with:
-          filters: |
-            workers:
-              - 'workers/**'
-      - if: steps.filter.outputs.workers == 'true' || github.event_name != 'pull_request'
-        uses: nixbuild/nix-quick-install-action@v34
-      - if: steps.filter.outputs.workers == 'true' || github.event_name != 'pull_request'
-        uses: DeterminateSystems/magic-nix-cache-action@v9
+          primary-key: nix-${{ runner.os }}-workers-${{ hashFiles('flake.lock', 'flake.nix') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-workers-
+          gc-max-store-size-linux: 2G
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        run: echo "STORE_PATH=$(nix develop .#workers --command pnpm store path)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: pnpm-workers-${{ runner.os }}-${{ hashFiles('workers/pnpm-lock.yaml') }}
+          restore-keys: |
+            pnpm-workers-${{ runner.os }}-
       - name: check
-        if: steps.filter.outputs.workers == 'true' || github.event_name != 'pull_request'
-        run: nix develop --command just workers::check
+        run: nix develop .#workers --command just workers::check
       - name: test
-        if: steps.filter.outputs.workers == 'true' || github.event_name != 'pull_request'
-        run: nix develop --command just workers::test
-    timeout-minutes: 10
+        run: nix develop .#workers --command just workers::test
 
   format:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
-      - uses: nixbuild/nix-quick-install-action@v34
-      - uses: DeterminateSystems/magic-nix-cache-action@v9
+      - uses: nixbuild/nix-quick-install-action@v35
+      - uses: nix-community/cache-nix-action@v7
+        with:
+          primary-key: nix-${{ runner.os }}-format-${{ hashFiles('flake.lock', 'flake.nix') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-format-
+          gc-max-store-size-linux: 2G
       - run: nix fmt -- --fail-on-change
-    timeout-minutes: 5
