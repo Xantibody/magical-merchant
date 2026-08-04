@@ -38,6 +38,10 @@ keystore.properties
 # Nix shims
 .nix-shims/
 
+# Nix build output symlink
+/result
+/result-*
+
 # Plans
 plans/
 

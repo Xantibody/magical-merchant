@@ -18,6 +18,12 @@ in
       default = "";
       description = "Cloudflare Workers URL for R2 sync.";
     };
+
+    autoSync = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = "Sync automatically after each successful save.";
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -30,7 +36,12 @@ in
         SYNC_DIR="$USER_HOME/Library/Application Support/com.magical-merchant.app"
         mkdir -p "$SYNC_DIR"
         printf '%s\n' ${
-          lib.escapeShellArg (builtins.toJSON { workers_url = cfg.workersUrl; })
+          lib.escapeShellArg (
+            builtins.toJSON {
+              workers_url = cfg.workersUrl;
+              auto_sync = cfg.autoSync;
+            }
+          )
         } > "$SYNC_DIR/sync-config.json"
         chmod 444 "$SYNC_DIR/sync-config.json"
         chown "$CONSOLE_USER" "$SYNC_DIR" "$SYNC_DIR/sync-config.json"
