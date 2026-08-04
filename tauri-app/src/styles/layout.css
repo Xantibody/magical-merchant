@@ -70,6 +70,17 @@
   font-size: 13px;
 }
 
+/* 幅の広いときはタブが現在地を示すので、タイトルは要らない */
+.header-title {
+  display: none;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.header-action--search {
+  display: none;
+}
+
 .key-badge {
   margin-left: auto;
   font-size: 11px;
@@ -149,12 +160,24 @@
 
 @media (max-width: 767px) {
   .header-tabs,
-  .search-field {
+  .search-field,
+  /* Settings は下タブにあるので、ヘッダーで重複させない */
+  .header-action--settings {
     display: none;
+  }
+
+  .header-title,
+  .header-action--search {
+    display: flex;
   }
 
   .header-actions {
     margin-left: auto;
+  }
+
+  /* 指で押せる大きさにする */
+  .header-actions .icon-button {
+    padding: 10px;
   }
 
   .bottom-tabs {

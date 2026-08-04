@@ -255,12 +255,25 @@
 /* ---------------- mobile: one pane at a time ---------------- */
 
 @media (max-width: 767px) {
+  .workspace {
+    flex-direction: column;
+  }
+
   .list-pane {
     width: 100%;
     border-right: none;
+    /* 残り高さを埋めないとキャプチャバーが宙に浮く */
+    flex: 1;
   }
 
+  /* 一覧を見ている間も記録はできる。キャプチャバーだけ残して詳細を畳む */
   .detail-pane {
+    flex: 0 0 auto;
+  }
+
+  .detail-meta-bar,
+  .detail-body,
+  .detail-empty {
     display: none;
   }
 
@@ -269,7 +282,16 @@
   }
 
   .workspace--detail .detail-pane {
+    flex: 1;
+  }
+
+  .workspace--detail .detail-meta-bar,
+  .workspace--detail .detail-body {
     display: flex;
+  }
+
+  .workspace--detail .detail-body {
+    display: block;
   }
 
   .detail-back {
