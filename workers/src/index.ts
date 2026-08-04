@@ -1,5 +1,6 @@
 import { SignJWT, jwtVerify } from "jose";
-import { type BulkRequest, executeBulk, loadSyncState, saveSyncState } from "./sync";
+import { executeBulk, loadSyncState, saveSyncState } from "./sync";
+import type { BulkRequest } from "./sync";
 
 export interface Env {
   BUCKET: R2Bucket;
@@ -24,13 +25,10 @@ interface GoogleUserInfo {
   email: string;
 }
 
-const DEFAULT_JWT_EXPIRY_SECONDS = 259200; // 3 days
+const DEFAULT_JWT_EXPIRY_SECONDS = 259_200; // 3 days
 
 function jsonResponse(data: unknown, status = 200): Response {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
+  return Response.json(data, { status });
 }
 
 function errorResponse(message: string, status: number): Response {
@@ -44,13 +42,19 @@ async function handleSyncState(bucket: R2Bucket, userId: string): Promise<Respon
 
 // 不正なタイムスタンプを保存すると、それを読んだ全クライアントで
 // そのファイルが sync 対象から静かに消える
-function hasInvalidTimestamp(body: BulkRequest): boolean {
-  const invalid = (value: unknown) => typeof value !== "string" || Number.isNaN(Date.parse(value));
+function isInvalidTimestamp(value: unknown): boolean {
+  return typeof value !== "string" || Number.isNaN(Date.parse(value));
+}
 
-  if (body.uploads.some((u) => invalid(u.last_modified))) return true;
-  const files = body.new_state.files;
-  if (typeof files !== "object" || files === null) return true;
-  return Object.values(files).some((rec) => invalid(rec?.last_modified));
+function hasInvalidTimestamp(body: BulkRequest): boolean {
+  if (body.uploads.some((u) => isInvalidTimestamp(u.last_modified))) {
+    return true;
+  }
+  const { files } = body.new_state;
+  if (typeof files !== "object" || files === null) {
+    return true;
+  }
+  return Object.values(files).some((rec) => isInvalidTimestamp(rec?.last_modified));
 }
 
 async function handleSyncBulk(
@@ -87,8 +91,8 @@ async function handleSyncBulk(
   let result;
   try {
     result = await executeBulk(bucket, body);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
     return errorResponse(`Bulk execution failed: ${msg}`, 400);
   }
 
@@ -101,7 +105,7 @@ async function handleSyncBulk(
   return jsonResponse(result);
 }
 
-async function signJwt(payload: JwtPayload, secret: string): Promise<string> {
+function signJwt(payload: JwtPayload, secret: string): Promise<string> {
   const key = new TextEncoder().encode(secret);
   return new SignJWT({ email: payload.email })
     .setProtectedHeader({ alg: "HS256" })
@@ -114,8 +118,14 @@ async function verifyJwt(token: string, secret: string): Promise<JwtPayload | nu
   try {
     const key = new TextEncoder().encode(secret);
     const { payload } = await jwtVerify(token, key);
-    if (typeof payload.sub !== "string" || typeof payload.email !== "string") return null;
-    return { sub: payload.sub, email: payload.email as string, exp: payload.exp! };
+    if (
+      typeof payload.sub !== "string" ||
+      typeof payload.email !== "string" ||
+      typeof payload.exp !== "number"
+    ) {
+      return null;
+    }
+    return { sub: payload.sub, email: payload.email, exp: payload.exp };
   } catch {
     return null;
   }
@@ -127,7 +137,9 @@ function generateState(): string {
 
 function getCookie(request: Request, name: string): string | null {
   const cookie = request.headers.get("Cookie");
-  if (!cookie) return null;
+  if (!cookie) {
+    return null;
+  }
   const match = cookie.match(new RegExp(`(?:^|;\\s*)${name}=([^;]*)`));
   return match ? match[1] : null;
 }
@@ -139,7 +151,9 @@ function isAllowedRedirect(redirect: string): boolean {
 function getJwtExpiry(env: Env): number {
   if (env.JWT_EXPIRY_SECONDS) {
     const parsed = parseInt(env.JWT_EXPIRY_SECONDS, 10);
-    if (!isNaN(parsed) && parsed > 0) return parsed;
+    if (!isNaN(parsed) && parsed > 0) {
+      return parsed;
+    }
   }
   return DEFAULT_JWT_EXPIRY_SECONDS;
 }
@@ -148,7 +162,7 @@ export default {
   async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const { pathname } = url;
-    const method = request.method;
+    const { method } = request;
 
     // OAuth: redirect to Google
     if (pathname === "/auth/google" && method === "GET") {
