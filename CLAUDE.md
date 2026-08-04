@@ -23,6 +23,7 @@ If a dependency adds weight, it must justify itself against lightness.
 | Editor           | Milkdown (headless, SolidJS integration)    |
 | Syntax highlight | Shiki                                       |
 | Markdown         | markdown-it + Shiki                         |
+| Diagrams         | Mermaid (dynamic import, preview only)      |
 
 ## Milkdown Plugins
 
