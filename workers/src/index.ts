@@ -1,6 +1,6 @@
 import { SignJWT, jwtVerify } from "jose";
-import { executeBulk, loadSyncState, saveSyncState } from "./sync";
-import type { BulkRequest } from "./sync";
+import { deriveState, executeBulk, isValidHash, loadSyncState, saveSyncState } from "./sync";
+import type { BulkRequest, BulkResponse } from "./sync";
 
 export interface Env {
   BUCKET: R2Bucket;
@@ -46,15 +46,50 @@ function isInvalidTimestamp(value: unknown): boolean {
   return typeof value !== "string" || Number.isNaN(Date.parse(value));
 }
 
-function hasInvalidTimestamp(body: BulkRequest): boolean {
-  if (body.uploads.some((u) => isInvalidTimestamp(u.last_modified))) {
-    return true;
+/// リクエストの形をここで弾いておかないと、壊れた値が新しい同期状態に
+/// そのまま焼き込まれ、全端末に伝播する
+function validateBulkRequest(body: BulkRequest): string | null {
+  if (
+    !Array.isArray(body.uploads) ||
+    !Array.isArray(body.downloads) ||
+    !Array.isArray(body.delete_remote) ||
+    !Array.isArray(body.conflicts)
+  ) {
+    return "Invalid request: missing or malformed fields";
   }
-  const { files } = body.new_state;
-  if (typeof files !== "object" || files === null) {
-    return true;
+  if (body.downloads.some((k) => typeof k !== "string")) {
+    return "Invalid download key";
   }
-  return Object.values(files).some((rec) => isInvalidTimestamp(rec?.last_modified));
+  if (body.delete_remote.some((k) => typeof k !== "string")) {
+    return "Invalid delete key";
+  }
+  for (const u of body.uploads) {
+    if (typeof u?.key !== "string" || typeof u.content_base64 !== "string") {
+      return "Invalid upload entry";
+    }
+    if (isInvalidTimestamp(u.last_modified)) {
+      return "Invalid last_modified timestamp";
+    }
+    if (!isValidHash(u.hash)) {
+      return `Invalid content hash for ${u.key}`;
+    }
+  }
+  for (const c of body.conflicts) {
+    if (
+      typeof c?.key !== "string" ||
+      typeof c.conflict_key !== "string" ||
+      typeof c.content_base64 !== "string"
+    ) {
+      return "Invalid conflict entry";
+    }
+    if (isInvalidTimestamp(c.last_modified)) {
+      return "Invalid last_modified timestamp";
+    }
+    if (!isValidHash(c.hash)) {
+      return `Invalid content hash for ${c.key}`;
+    }
+  }
+  return null;
 }
 
 async function handleSyncBulk(
@@ -68,41 +103,33 @@ async function handleSyncBulk(
   } catch {
     return errorResponse("Invalid JSON", 400);
   }
-  if (
-    !Array.isArray(body.uploads) ||
-    !Array.isArray(body.downloads) ||
-    !Array.isArray(body.delete_remote) ||
-    !Array.isArray(body.conflicts) ||
-    typeof body.new_state !== "object" ||
-    body.new_state === null
-  ) {
-    return errorResponse("Invalid request: missing or malformed fields", 400);
-  }
-  if (hasInvalidTimestamp(body)) {
-    return errorResponse("Invalid last_modified timestamp", 400);
+  const invalid = validateBulkRequest(body);
+  if (invalid) {
+    return errorResponse(invalid, 400);
   }
 
   // CAS check
-  const { etag: currentEtag } = await loadSyncState(bucket, userId);
+  const { state: currentState, etag: currentEtag } = await loadSyncState(bucket, userId);
   if (currentEtag !== body.expected_etag) {
     return errorResponse("Sync state changed concurrently, please retry", 409);
   }
 
-  let result;
+  let outcome;
   try {
-    result = await executeBulk(bucket, body);
+    outcome = await executeBulk(bucket, body);
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     return errorResponse(`Bulk execution failed: ${msg}`, 400);
   }
 
-  // Save new state with CAS
-  const saved = await saveSyncState(bucket, userId, body.new_state, body.expected_etag);
+  const newState = deriveState(currentState, body, Date.now());
+  const saved = await saveSyncState(bucket, userId, newState, body.expected_etag);
   if (!saved) {
     return errorResponse("Sync state changed concurrently, please retry", 409);
   }
 
-  return jsonResponse(result);
+  const response: BulkResponse = { ...outcome, new_state: newState };
+  return jsonResponse(response);
 }
 
 function signJwt(payload: JwtPayload, secret: string): Promise<string> {
@@ -146,6 +173,45 @@ function getCookie(request: Request, name: string): string | null {
 
 function isAllowedRedirect(redirect: string): boolean {
   return redirect.startsWith("magical-merchant://") || redirect.startsWith("http://127.0.0.1:");
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+/// Android Chrome はユーザー操作を伴わないカスタムスキームへの遷移を捨てる。
+/// 自動遷移だけだとアプリに戻れないので、必ずタップできるリンクを残す。
+export function deepLinkPage(redirectUrl: string): string {
+  const href = escapeHtml(redirectUrl);
+  return `<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Magical Merchant</title>
+<style>
+:root { color-scheme: light dark; }
+body { font-family: system-ui, sans-serif; display: grid; place-items: center;
+       min-height: 100dvh; margin: 0; gap: 1.5rem; text-align: center; padding: 1rem; }
+a.open { display: inline-block; padding: .9rem 1.6rem; border-radius: .6rem;
+         background: #4c6ef5; color: #fff; text-decoration: none; font-weight: 600; }
+p { margin: 0; opacity: .75; }
+</style>
+</head>
+<body>
+<p>ログインが完了しました。</p>
+<a id="open" class="open" href="${href}">アプリを開く</a>
+<script>
+  // 自動遷移が許可される環境（デスクトップ等）ではワンタップを省く。
+  // URL は href から読む。スクリプトに URL を埋め込むと閉じタグで抜け出される
+  location.href = document.getElementById("open").href;
+</script>
+</body>
+</html>`;
 }
 
 function getJwtExpiry(env: Env): number {
@@ -292,10 +358,7 @@ export default {
         return new Response(null, { status: 302, headers: clearCookies });
       }
 
-      return new Response(
-        `<html><body><p>Redirecting to app...</p><script>window.location.href="${redirectUrl}";</script></body></html>`,
-        { status: 200, headers: clearCookies },
-      );
+      return new Response(deepLinkPage(redirectUrl), { status: 200, headers: clearCookies });
     }
 
     // Bearer token authentication

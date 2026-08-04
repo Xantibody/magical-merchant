@@ -7,8 +7,6 @@ use tauri::{AppHandle, Manager};
 use tauri_plugin_opener::OpenerExt;
 use url::Url;
 
-const KEYCHAIN_SERVICE: &str = "com.magical-merchant.app";
-const KEYCHAIN_ACCOUNT: &str = "auth-jwt";
 const SYNC_CONFIG_FILENAME: &str = "sync-config.json";
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
@@ -69,31 +67,91 @@ fn normalize_workers_url(input: &str) -> Result<String, String> {
     Ok(trimmed.to_string())
 }
 
-pub(crate) fn store_token(token: &str) -> Result<(), String> {
-    let entry =
-        keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT).map_err(|e| e.to_string())?;
-    entry.set_password(token).map_err(|e| e.to_string())?;
-    Ok(())
-}
+// ──────────── Token storage ────────────
+//
+// keyring クレートは Android にストアを持たず、既定でプロセス内 mock に落ちる。
+// mock は Entry ごとに空の入れ物を作るので、保存したトークンは二度と読めない
+// （ログイン直後から「未ログイン」のまま）。Android だけアプリ専用ディレクトリの
+// ファイルに置く。OS がアプリ間のアクセスを遮断しているので、他アプリからは読めない。
 
-pub(crate) fn get_token() -> Result<Option<String>, String> {
-    let entry =
-        keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT).map_err(|e| e.to_string())?;
-    match entry.get_password() {
-        Ok(token) => Ok(Some(token)),
-        Err(keyring::Error::NoEntry) => Ok(None),
-        Err(e) => Err(e.to_string()),
+#[cfg(target_os = "android")]
+mod token_store {
+    use std::fs;
+    use std::os::unix::fs::PermissionsExt as _;
+    use std::path::{Path, PathBuf};
+
+    const TOKEN_FILENAME: &str = "auth-token";
+
+    fn path(base_dir: &Path) -> PathBuf {
+        base_dir.join(TOKEN_FILENAME)
+    }
+
+    pub(super) fn store(base_dir: &Path, token: &str) -> Result<(), String> {
+        fs::create_dir_all(base_dir).map_err(|e| e.to_string())?;
+        let path = path(base_dir);
+        fs::write(&path, token).map_err(|e| e.to_string())?;
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).map_err(|e| e.to_string())
+    }
+
+    pub(super) fn get(base_dir: &Path) -> Result<Option<String>, String> {
+        match fs::read_to_string(path(base_dir)) {
+            Ok(token) => Ok(Some(token.trim().to_string()).filter(|t| !t.is_empty())),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e.to_string()),
+        }
+    }
+
+    pub(super) fn clear(base_dir: &Path) -> Result<(), String> {
+        match fs::remove_file(path(base_dir)) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(e.to_string()),
+        }
     }
 }
 
-pub(crate) fn clear_token() -> Result<(), String> {
-    let entry =
-        keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT).map_err(|e| e.to_string())?;
-    match entry.delete_credential() {
-        // Deleting a credential that was never stored leaves the desired state.
-        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
-        Err(e) => Err(e.to_string()),
+#[cfg(not(target_os = "android"))]
+mod token_store {
+    use std::path::Path;
+
+    const KEYCHAIN_SERVICE: &str = "com.magical-merchant.app";
+    const KEYCHAIN_ACCOUNT: &str = "auth-jwt";
+
+    fn entry() -> Result<keyring::Entry, String> {
+        keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT).map_err(|e| e.to_string())
     }
+
+    pub(super) fn store(_base_dir: &Path, token: &str) -> Result<(), String> {
+        entry()?.set_password(token).map_err(|e| e.to_string())
+    }
+
+    pub(super) fn get(_base_dir: &Path) -> Result<Option<String>, String> {
+        match entry()?.get_password() {
+            Ok(token) => Ok(Some(token)),
+            Err(keyring::Error::NoEntry) => Ok(None),
+            Err(e) => Err(e.to_string()),
+        }
+    }
+
+    pub(super) fn clear(_base_dir: &Path) -> Result<(), String> {
+        match entry()?.delete_credential() {
+            // Deleting a credential that was never stored leaves the desired state.
+            Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+            Err(e) => Err(e.to_string()),
+        }
+    }
+}
+
+pub(crate) fn store_token(base_dir: &Path, token: &str) -> Result<(), String> {
+    token_store::store(base_dir, token)
+}
+
+pub(crate) fn get_token(base_dir: &Path) -> Result<Option<String>, String> {
+    token_store::get(base_dir)
+}
+
+pub(crate) fn clear_token(base_dir: &Path) -> Result<(), String> {
+    token_store::clear(base_dir)
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -127,7 +185,11 @@ fn build_auth_url(workers_url: &str, app_redirect: &str) -> String {
 }
 
 #[cfg(not(target_os = "android"))]
-async fn login_with_loopback(handle: &AppHandle, config: &SyncConfig) -> Result<(), String> {
+async fn login_with_loopback(
+    handle: &AppHandle,
+    base_dir: &Path,
+    config: &SyncConfig,
+) -> Result<(), String> {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
@@ -167,7 +229,7 @@ async fn login_with_loopback(handle: &AppHandle, config: &SyncConfig) -> Result<
             .map(|(_, v)| v.to_string());
 
         if let Some(token) = token {
-            store_token(&token)?;
+            store_token(base_dir, &token)?;
             // SyncButton などが認証状態を即時反映できるよう通知する
             let _ = tauri::Emitter::emit(handle, "auth-success", ());
             "<html><body><p>Login successful. You can close this tab.</p></body></html>"
@@ -199,7 +261,7 @@ pub(crate) async fn auth_login(handle: AppHandle) -> Result<(), String> {
 
     #[cfg(not(target_os = "android"))]
     {
-        login_with_loopback(&handle, &config).await
+        login_with_loopback(&handle, &base_dir, &config).await
     }
 
     #[cfg(target_os = "android")]
@@ -214,13 +276,15 @@ pub(crate) async fn auth_login(handle: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub(crate) fn auth_status() -> Result<bool, String> {
-    Ok(get_token()?.is_some_and(|token| is_token_valid(&token)))
+pub(crate) fn auth_status(handle: AppHandle) -> Result<bool, String> {
+    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    Ok(get_token(&base_dir)?.is_some_and(|token| is_token_valid(&token)))
 }
 
 #[tauri::command]
-pub(crate) fn auth_logout() -> Result<(), String> {
-    clear_token()
+pub(crate) fn auth_logout(handle: AppHandle) -> Result<(), String> {
+    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    clear_token(&base_dir)
 }
 
 #[tauri::command]
