@@ -2,13 +2,16 @@ import { createSignal, onMount, onCleanup } from "solid-js";
 import type { Accessor } from "solid-js";
 import { listen } from "@tauri-apps/api/event";
 import type { UnlistenFn } from "@tauri-apps/api/event";
-import { typedInvoke } from "./commands";
+import { onLocalMutation, typedInvoke } from "./commands";
 import { EVENTS } from "./events";
 import { describeSyncError, describeSyncResult } from "./sync-status";
 import type { SyncResultPayload } from "./sync-status";
 import type { IconName } from "../components/Icon";
 
 export type SyncStatus = "idle" | "syncing" | "success" | "error" | "needs-setup";
+
+/** 自動保存 (1秒 debounce) の連打をまとめてから同期する。 */
+const AUTO_SYNC_DEBOUNCE_MS = 5000;
 
 export interface SyncState {
   status: Accessor<SyncStatus>;
@@ -95,8 +98,35 @@ export function createSyncState(onSynced: () => void): SyncState {
     setAlertVersion((v) => v + 1);
   };
 
+  const syncNow = async (): Promise<void> => {
+    if (status() === "syncing") {
+      return;
+    }
+    setStatus("syncing");
+    setMessage("同期中…");
+    try {
+      await typedInvoke("sync_start");
+      // 結果は sync-complete / sync-error イベントで反映する
+    } catch (error) {
+      applyError(error);
+    }
+  };
+
+  let autoSyncTimer: ReturnType<typeof setTimeout> | undefined;
+  const scheduleAutoSync = (): void => {
+    if (!autoSync() || status() === "needs-setup") {
+      return;
+    }
+    if (autoSyncTimer) {
+      clearTimeout(autoSyncTimer);
+    }
+    autoSyncTimer = setTimeout(() => void syncNow(), AUTO_SYNC_DEBOUNCE_MS);
+  };
+
   onMount(async () => {
     await checkReadiness();
+
+    unlisteners.push(onLocalMutation(scheduleAutoSync));
 
     unlisteners.push(
       await listen<SyncResultPayload>(EVENTS.SYNC_COMPLETE, (e) => {
@@ -118,24 +148,13 @@ export function createSyncState(onSynced: () => void): SyncState {
   });
 
   onCleanup(() => {
+    if (autoSyncTimer) {
+      clearTimeout(autoSyncTimer);
+    }
     for (const unlisten of unlisteners) {
       unlisten();
     }
   });
-
-  const syncNow = async (): Promise<void> => {
-    if (status() === "syncing") {
-      return;
-    }
-    setStatus("syncing");
-    setMessage("同期中…");
-    try {
-      await typedInvoke("sync_start");
-      // 結果は sync-complete / sync-error イベントで反映する
-    } catch (error) {
-      applyError(error);
-    }
-  };
 
   const setAutoSync = async (on: boolean): Promise<void> => {
     setAutoSyncSignal(on);

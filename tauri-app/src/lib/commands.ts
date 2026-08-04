@@ -59,13 +59,44 @@ interface CommandMap {
 
 export type CommandName = keyof CommandMap;
 
+/** ノート/タイムラインのファイルを書き換えるコマンド。 */
+const MUTATING: ReadonlySet<CommandName> = new Set<CommandName>([
+  "save_quick_capture",
+  "update_timeline_entry",
+  "delete_timeline_entry",
+  "create_draft",
+  "update_draft",
+  "delete_note",
+  "save_document",
+]);
+
+const mutationListeners = new Set<() => void>();
+
+/**
+ * 書き込みコマンドが成功するたびに呼ばれる。
+ * 呼び出し側ごとに通知を書くと必ずどこかで漏れるので、ここ一箇所に寄せる。
+ */
+export function onLocalMutation(listener: () => void): () => void {
+  mutationListeners.add(listener);
+  return () => mutationListeners.delete(listener);
+}
+
 export function typedInvoke<K extends CommandName>(
   cmd: K,
   ...args: CommandMap[K]["args"] extends void ? [] : [CommandMap[K]["args"]]
 ): Promise<CommandMap[K]["result"]> {
-  if (args.length === 0) {
-    return invoke<CommandMap[K]["result"]>(cmd);
-  }
+  const call =
+    args.length === 0
+      ? invoke<CommandMap[K]["result"]>(cmd)
+      : invoke<CommandMap[K]["result"]>(cmd, args[0] as Record<string, unknown>);
 
-  return invoke<CommandMap[K]["result"]>(cmd, args[0] as Record<string, unknown>);
+  if (!MUTATING.has(cmd)) {
+    return call;
+  }
+  return call.then((result) => {
+    for (const listener of mutationListeners) {
+      listener();
+    }
+    return result;
+  });
 }
