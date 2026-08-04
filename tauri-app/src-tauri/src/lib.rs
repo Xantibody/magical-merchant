@@ -193,10 +193,17 @@ pub fn run() {
         .setup(|app| {
             // ブラウザで認証している間に OS がアプリを回収すると、トークンは
             // 起動 URL として届く。`new-url` イベントはアプリが生きていた場合に
-            // しか飛ばないので、両方を見ないとログインが黙って失敗する
-            if let Ok(Some(urls)) = app.deep_link().get_current() {
-                store_token_from_urls(app.handle(), urls);
-            }
+            // しか飛ばないので、両方を見ないとログインが黙って失敗する。
+            //
+            // get_current は Android プラグインへの同期呼び出しで、応答を運ぶ
+            // のは setup と同じメインスレッド。ここで直に待つと Activity ごと
+            // 固まる (pause / stop がタイムアウトする) ので別スレッドに逃がす。
+            let launch_handle = app.handle().clone();
+            std::thread::spawn(move || {
+                if let Ok(Some(urls)) = launch_handle.deep_link().get_current() {
+                    store_token_from_urls(&launch_handle, urls);
+                }
+            });
 
             let handle = app.handle().clone();
             app.deep_link()
