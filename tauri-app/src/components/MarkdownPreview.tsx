@@ -91,9 +91,7 @@ export default function MarkdownPreview(props: MarkdownPreviewProps): JSX.Elemen
       <div class="markdown-preview" innerHTML={html()} onClick={openZoom} role="presentation" />
 
       <Show when={zoomed()}>
-        {(diagram) => (
-          <DiagramZoom diagram={diagram()} onClose={() => setZoomed(undefined)} />
-        )}
+        {(diagram) => <DiagramZoom diagram={diagram()} onClose={() => setZoomed(undefined)} />}
       </Show>
     </>
   );
