@@ -1,0 +1,8 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  // tsgo comes from the nix devShell (typescript-go), not from node_modules.
+  "ignoreBinaries": ["tsgo"],
+  // open-props is consumed by `@import` in src/styles/base.css, which knip
+  // does not parse.
+  "ignoreDependencies": ["open-props"],
+}
