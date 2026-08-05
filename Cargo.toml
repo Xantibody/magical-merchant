@@ -52,6 +52,14 @@ missing_panics_doc = "allow"
 # wins because it describes the crate's real API surface.
 redundant_pub_crate = "allow"
 
+# 配布物のサイズは Android で直に効く。既定のままだとシンボル付き・LTO なしで、
+# .so だけで 13MB あった。opt-level は下げない: ローカルスキャンと SHA-256 が
+# 同期処理でエディタの応答に乗るため、速度を落とす取引はしない。
+[profile.release]
+strip = true
+lto = "thin"
+codegen-units = 1
+
 # Flame graphs need symbols; this profile is bench-only so the shipped
 # release binary stays untouched.
 [profile.bench]

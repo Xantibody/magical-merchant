@@ -41,15 +41,17 @@ android-install: android-build-debug
 android-sign-setup:
   go run android-signing/apply-signing.go
 
-# Build a signed release APK (universal). Requires keystore.properties.
+# Build a signed release APK. Requires keystore.properties.
+# arm64 のみ: x86 系はエミュレータ専用で実機には要らず、universal だと
+# 4 ABI ぶんの .so で APK が 52MB まで膨らむ。
 android-build-release: android-sign-setup
-  pnpm tauri android build --apk
+  pnpm tauri android build --apk --target aarch64
 
 # Same, but from a checkout with no gen/android yet (CI). keystore.properties
 # has to be written after android-init, so this recipe does not build on its own —
 # see .github/workflows/release.yml.
 android-release-build: setup
-  pnpm tauri android build --apk
+  pnpm tauri android build --apk --target aarch64
 
 # Build and install the signed release APK onto a connected device (-r updates in place).
 android-install-release: android-build-release
