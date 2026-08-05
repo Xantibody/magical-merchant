@@ -15,6 +15,26 @@ interface MarkdownToolbarProps {
   editor: Editor | undefined;
 }
 
+/** これ以下の縮みはスクロールバーや URL バーの誤差で、キーボードとは見なさない。 */
+const KEYBOARD_MIN_HEIGHT = 100;
+
+/**
+ * キーボードの上端。閉じているあいだは `undefined` を返し、CSS の
+ * `bottom: var(--safe-bottom)` に任せる。
+ *
+ * Android では閉じていても `visualViewport.height` がナビゲーションバーを含んだ
+ * 全高になるため、その値で `top` を固定するとツールバーがバーの裏に潜り込む。
+ */
+export function keyboardTop(
+  viewport: { offsetTop: number; height: number },
+  windowHeight: number,
+): number | undefined {
+  if (viewport.height >= windowHeight - KEYBOARD_MIN_HEIGHT) {
+    return undefined;
+  }
+  return viewport.offsetTop + viewport.height;
+}
+
 export default function MarkdownToolbar(props: MarkdownToolbarProps): JSX.Element {
   const [toolbarTop, setToolbarTop] = createSignal<number | undefined>();
 
@@ -25,7 +45,7 @@ export default function MarkdownToolbar(props: MarkdownToolbarProps): JSX.Elemen
     }
 
     const update = () => {
-      setToolbarTop(vv.offsetTop + vv.height);
+      setToolbarTop(keyboardTop(vv, window.innerHeight));
     };
 
     vv.addEventListener("resize", update);
