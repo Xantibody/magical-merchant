@@ -139,6 +139,19 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
           >
             <Icon name="magnifying-glass" size={18} />
           </button>
+          {/* ポップオーバー本体は Timeline が持つ。記録のある日を知っているのは向こう */}
+          <Show when={isActive(ROUTES.TIMELINE)}>
+            <button
+              type="button"
+              class="icon-button header-action"
+              title="日付ジャンプ"
+              aria-label="日付ジャンプ"
+              aria-expanded={shell.popover() === "calendar"}
+              onClick={() => shell.togglePopover("calendar")}
+            >
+              <Icon name="calendar-blank" size={18} />
+            </button>
+          </Show>
           <button
             type="button"
             class="icon-button header-action"

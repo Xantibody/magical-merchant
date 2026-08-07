@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   toTimelineItems,
   toNoteItems,
-  groupTimeline,
+  groupTimelineByDay,
   groupNotes,
   itemMeta,
   itemTitle,
@@ -67,19 +67,19 @@ describe("toNoteItems", () => {
   });
 });
 
-describe("groupTimeline", () => {
+describe("groupTimelineByDay", () => {
   it("groups consecutive entries from the same day", () => {
     const items = [
       ...toTimelineItems("2026-08-04", ["- [09:00:00] a", "- [10:00:00] b"]),
       ...toTimelineItems("2026-08-03", ["- [11:00:00] c"]),
     ];
-    const groups = groupTimeline(items, TODAY);
-    expect(groups.map((g) => g.label)).toStrictEqual(["今日 — 8/4", "昨日 — 8/3"]);
-    expect(groups[0].items).toHaveLength(2);
+    const days = groupTimelineByDay(items);
+    expect(days.map((d) => d.date)).toStrictEqual(["2026-08-04", "2026-08-03"]);
+    expect(days[0].items).toHaveLength(2);
   });
 
   it("returns nothing for an empty timeline", () => {
-    expect(groupTimeline([], TODAY)).toStrictEqual([]);
+    expect(groupTimelineByDay([])).toStrictEqual([]);
   });
 });
 

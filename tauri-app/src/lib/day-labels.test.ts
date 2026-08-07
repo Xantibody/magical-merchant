@@ -3,7 +3,7 @@ import {
   parseIsoDate,
   toIsoDate,
   daysBetween,
-  formatDayLabel,
+  formatDayHeading,
   formatNoteGroupLabel,
   formatDateTime,
 } from "./day-labels";
@@ -46,21 +46,31 @@ describe("daysBetween", () => {
   });
 });
 
-describe("formatDayLabel", () => {
-  it("names today", () => {
-    expect(formatDayLabel("2026-08-04", TODAY)).toBe("今日 — 8/4");
+describe("formatDayHeading", () => {
+  it("names today and dates it", () => {
+    expect(formatDayHeading("2026-08-04", TODAY)).toEqual({
+      label: "今日",
+      date: "8月4日 火曜日",
+    });
   });
 
   it("names yesterday", () => {
-    expect(formatDayLabel("2026-08-03", TODAY)).toBe("昨日 — 8/3");
+    expect(formatDayHeading("2026-08-03", TODAY)).toEqual({
+      label: "昨日",
+      date: "8月3日 月曜日",
+    });
   });
 
-  it("falls back to a plain date further back", () => {
-    expect(formatDayLabel("2026-07-29", TODAY)).toBe("7月29日");
+  // 「3日前」より日付そのもののほうが手がかりになる距離。
+  it("uses the date itself as the label further back", () => {
+    expect(formatDayHeading("2026-07-29", TODAY)).toEqual({
+      label: "7月29日",
+      date: "水曜日",
+    });
   });
 
   it("passes unparsable input through untouched", () => {
-    expect(formatDayLabel("garbage", TODAY)).toBe("garbage");
+    expect(formatDayHeading("garbage", TODAY)).toEqual({ label: "garbage", date: "" });
   });
 });
 

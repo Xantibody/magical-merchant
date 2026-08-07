@@ -1,5 +1,5 @@
 import type { Note } from "./commands";
-import { formatDayLabel, formatNoteGroupLabel } from "./day-labels";
+import { formatNoteGroupLabel } from "./day-labels";
 import { parseTimelineEntry } from "./parse-timeline";
 import type { DeviceContext } from "./parse-timeline";
 
@@ -85,8 +85,27 @@ function groupBy(items: Item[], labelOf: (item: Item) => string): ItemGroup[] {
   return groups;
 }
 
-export function groupTimeline(items: TimelineItem[], today: Date): ItemGroup[] {
-  return groupBy(items, (item) => formatDayLabel(item.date, today));
+export interface TimelineDay {
+  /** `YYYY-MM-DD`。見出しの文字は表示側で作る。 */
+  date: string;
+  items: TimelineItem[];
+}
+
+/**
+ * 暦日でまとめる。見出しの文字ではなく日付そのもので束ねるのは、
+ * 「7月29日」のように見出しが日付から作られる日が複数あるため。
+ */
+export function groupTimelineByDay(items: TimelineItem[]): TimelineDay[] {
+  const days: TimelineDay[] = [];
+  for (const item of items) {
+    const last = days.at(-1);
+    if (last?.date === item.date) {
+      last.items.push(item);
+    } else {
+      days.push({ date: item.date, items: [item] });
+    }
+  }
+  return days;
 }
 
 export function groupNotes(items: NoteItem[], today: Date): ItemGroup[] {
