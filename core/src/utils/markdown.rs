@@ -1,12 +1,19 @@
 use chrono::{DateTime, FixedOffset, Local};
+use serde::Serialize;
 use serde::de::IgnoredAny;
 
 use crate::error::CoreError;
 use crate::utils::device::Context;
 use crate::utils::frontmatter::{self, NoteFrontmatter};
 
+/// 行末に載せるものは `Context` そのものとは限らない。日ファイルでは
+/// 端末情報を先頭に追い出した縮約版を書く。
 #[must_use]
-pub fn format_timeline_line(text: &str, timestamp: DateTime<Local>, context: &Context) -> String {
+pub fn format_timeline_line<C: Serialize>(
+    text: &str,
+    timestamp: DateTime<Local>,
+    context: &C,
+) -> String {
     let time = timestamp.format("%H:%M:%S");
     match serde_json::to_string(context) {
         Ok(json) if json != "{}" => format!("- [{time}] {text} {json}"),
