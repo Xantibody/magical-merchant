@@ -15,7 +15,7 @@ import MarkdownPreview from "../components/MarkdownPreview";
 import MilkdownEditor from "../components/MilkdownEditor";
 import TagChips from "../components/TagChips";
 import { typedInvoke } from "../lib/commands";
-import { getLocation } from "../lib/location";
+import { getClientContext, getDeviceSignals } from "../lib/client-context";
 import { useShell } from "../lib/shell";
 import { formatDateTime } from "../lib/day-labels";
 import {
@@ -124,12 +124,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
 
   // ---- 記録 ----
   const capture = async (text: string): Promise<void> => {
-    const loc = await getLocation();
-    await typedInvoke("save_quick_capture", {
-      text,
-      latitude: loc?.latitude ?? null,
-      longitude: loc?.longitude ?? null,
-    });
+    await typedInvoke("save_quick_capture", { text, client: await getClientContext() });
     await refetchTimeline();
   };
 
@@ -160,8 +155,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
             filePath: item.path,
             body,
             tags: item.tags,
-            latitude: null,
-            longitude: null,
+            client: await getDeviceSignals(),
           });
           await refetchNotes();
         }
@@ -212,8 +206,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
         filePath: item.path,
         body: noteBody(),
         tags,
-        latitude: null,
-        longitude: null,
+        client: await getDeviceSignals(),
       });
       await refetchNotes();
     })();
@@ -251,8 +244,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       await typedInvoke("create_draft", {
         body: item.text,
         tags: [],
-        latitude: null,
-        longitude: null,
+        client: await getDeviceSignals(),
       });
       await typedInvoke("delete_timeline_entry", { date: item.date, index: item.index });
       await Promise.all([refetchTimeline(), refetchNotes()]);

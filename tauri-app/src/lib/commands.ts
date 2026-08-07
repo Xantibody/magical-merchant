@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import type { ClientContext } from "./client-context";
 
 export interface Note {
   path: string;
@@ -25,28 +26,28 @@ interface SyncConfig {
   auto_sync: boolean;
 }
 
-interface LocationArgs {
-  latitude: number | null;
-  longitude: number | null;
+/** 記録時の実行環境。ネイティブから見えないぶんを WebView 側が埋めて渡す。 */
+interface ClientArgs {
+  client: ClientContext;
 }
 
 interface CommandMap {
-  save_quick_capture: { args: { text: string } & LocationArgs; result: void };
+  save_quick_capture: { args: { text: string } & ClientArgs; result: void };
   read_timeline: { args: void; result: string[] };
   list_timeline_dates: { args: void; result: string[] };
   read_timeline_by_date: { args: { date: string }; result: string[] };
   update_timeline_entry: { args: { date: string; index: number; text: string }; result: void };
   delete_timeline_entry: { args: { date: string; index: number }; result: void };
   search_all: { args: { query: string }; result: SearchHit[] };
-  create_draft: { args: { body: string; tags: string[] } & LocationArgs; result: string };
+  create_draft: { args: { body: string; tags: string[] } & ClientArgs; result: string };
   update_draft: {
-    args: { filePath: string; body: string; tags: string[] } & LocationArgs;
+    args: { filePath: string; body: string; tags: string[] } & ClientArgs;
     result: void;
   };
   list_notes: { args: void; result: Note[] };
   read_note: { args: { filename: string }; result: string };
   delete_note: { args: { filename: string }; result: void };
-  save_document: { args: { body: string; tags: string[] } & LocationArgs; result: void };
+  save_document: { args: { body: string; tags: string[] } & ClientArgs; result: void };
   sync_start: { args: void; result: void };
   sync_status: { args: void; result: unknown };
   auth_login: { args: void; result: void };
