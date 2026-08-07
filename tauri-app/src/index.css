@@ -1,6 +1,7 @@
 @import "./styles/base.css";
 @import "./styles/layout.css";
 @import "./styles/workspace.css";
+@import "./styles/timeline.css";
 @import "./styles/popover.css";
 @import "./styles/palette.css";
 @import "./styles/toast.css";
