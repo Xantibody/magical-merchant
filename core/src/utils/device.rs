@@ -37,9 +37,125 @@ pub struct Context {
     pub locale: Option<String>,
 }
 
+/// 同じ端末で書いている限り 1 日を通して変わらない部分。
+///
+/// 日ファイルの先頭にまとめて置き、各エントリの行末からは省く。エントリ 1 件
+/// あたり 100 文字を超えるこれらを全行で繰り返すと、本文が数文字のエントリでは
+/// メタデータのほうが桁で長くなり、Markdown として読めたものではなくなる。
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DeviceIdentity {
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub os: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub os_version: Option<String>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub arch: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hostname: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub locale: Option<String>,
+}
+
+impl Context {
+    /// 日ファイルの先頭に移す部分。
+    #[must_use]
+    pub fn identity(&self) -> DeviceIdentity {
+        DeviceIdentity {
+            os: self.os.clone(),
+            os_version: self.os_version.clone(),
+            arch: self.arch.clone(),
+            hostname: self.hostname.clone(),
+            locale: self.locale.clone(),
+        }
+    }
+
+    /// 記録のたびに変わりうる部分だけを残したもの。行末に書くのはこちら。
+    #[must_use]
+    pub fn volatile(&self) -> Self {
+        Self {
+            battery: self.battery,
+            is_charging: self.is_charging,
+            network_type: self.network_type.clone(),
+            wifi_ssid: self.wifi_ssid.clone(),
+            location: self.location.clone(),
+            ..Self::default()
+        }
+    }
+
+    /// 分けて保存したものを 1 つに戻す。読み出し側から見た形は分割前と変わらない。
+    #[must_use]
+    pub fn with_identity(mut self, identity: &DeviceIdentity) -> Self {
+        self.os.clone_from(&identity.os);
+        self.os_version.clone_from(&identity.os_version);
+        self.arch.clone_from(&identity.arch);
+        self.hostname.clone_from(&identity.hostname);
+        self.locale.clone_from(&identity.locale);
+        self
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn full_context() -> Context {
+        Context {
+            battery: Some(82),
+            is_charging: Some(false),
+            network_type: Some(NetworkType::WiFi),
+            wifi_ssid: Some("MyNetwork".to_string()),
+            location: Some(Location {
+                latitude: 35.6762,
+                longitude: 139.6503,
+            }),
+            os: "macos".to_string(),
+            os_version: Some("15.3".to_string()),
+            arch: "aarch64".to_string(),
+            hostname: Some("MacBook".to_string()),
+            locale: Some("ja_JP".to_string()),
+        }
+    }
+
+    #[test]
+    fn identity_keeps_only_what_lasts_the_day() {
+        let identity = full_context().identity();
+
+        assert_eq!(identity.os, "macos");
+        assert_eq!(identity.os_version.as_deref(), Some("15.3"));
+        assert_eq!(identity.arch, "aarch64");
+        assert_eq!(identity.hostname.as_deref(), Some("MacBook"));
+        assert_eq!(identity.locale.as_deref(), Some("ja_JP"));
+    }
+
+    #[test]
+    fn volatile_keeps_only_what_changes_per_entry() {
+        let volatile = full_context().volatile();
+
+        assert_eq!(volatile.battery, Some(82));
+        assert_eq!(volatile.network_type, Some(NetworkType::WiFi));
+        assert!(volatile.location.is_some());
+        assert_eq!(volatile.os, "");
+        assert_eq!(volatile.os_version, None);
+        assert_eq!(volatile.hostname, None);
+    }
+
+    #[test]
+    fn splitting_and_rejoining_round_trips() {
+        let context = full_context();
+
+        let rejoined = context.volatile().with_identity(&context.identity());
+
+        assert_eq!(rejoined, context);
+    }
+
+    #[test]
+    fn a_volatile_context_serializes_without_the_identity_keys() {
+        let json = serde_json::to_string(&full_context().volatile()).unwrap();
+
+        assert!(json.contains("\"battery\":82"));
+        assert!(!json.contains("\"os\""));
+        assert!(!json.contains("\"hostname\""));
+    }
 
     #[test]
     fn test_context_default() {
