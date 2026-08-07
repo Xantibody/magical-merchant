@@ -10,30 +10,19 @@ mod auth;
 mod device;
 mod sync;
 
-use magical_merchant_core::utils::device::Location;
+use device::ClientContext;
 use magical_merchant_core::{NoteFilename, NoteSummary, SearchHit};
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_deep_link::DeepLinkExt as _;
-
-const fn make_location(latitude: Option<f64>, longitude: Option<f64>) -> Option<Location> {
-    match (latitude, longitude) {
-        (Some(lat), Some(lng)) => Some(Location {
-            latitude: lat,
-            longitude: lng,
-        }),
-        _ => None,
-    }
-}
 
 #[tauri::command]
 fn save_quick_capture(
     handle: AppHandle,
     text: String,
-    latitude: Option<f64>,
-    longitude: Option<f64>,
+    client: ClientContext,
 ) -> Result<(), String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    let context = device::get_context(make_location(latitude, longitude));
+    let context = device::get_context(client);
     magical_merchant_core::save_timeline_entry(&base_dir, &text, &context)
         .map_err(|e| e.to_string())
 }
@@ -43,11 +32,10 @@ fn save_document(
     handle: AppHandle,
     body: String,
     tags: Vec<String>,
-    latitude: Option<f64>,
-    longitude: Option<f64>,
+    client: ClientContext,
 ) -> Result<(), String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    let context = device::get_context(make_location(latitude, longitude));
+    let context = device::get_context(client);
     magical_merchant_core::create_draft_note(&base_dir, &body, &tags, &context)
         .map_err(|e| e.to_string())?;
     Ok(())
@@ -58,11 +46,10 @@ fn create_draft(
     handle: AppHandle,
     body: String,
     tags: Vec<String>,
-    latitude: Option<f64>,
-    longitude: Option<f64>,
+    client: ClientContext,
 ) -> Result<String, String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    let context = device::get_context(make_location(latitude, longitude));
+    let context = device::get_context(client);
     let path = magical_merchant_core::create_draft_note(&base_dir, &body, &tags, &context)
         .map_err(|e| e.to_string())?;
     Ok(path.to_string_lossy().to_string())
@@ -73,10 +60,9 @@ fn update_draft(
     file_path: String,
     body: String,
     tags: Vec<String>,
-    latitude: Option<f64>,
-    longitude: Option<f64>,
+    client: ClientContext,
 ) -> Result<(), String> {
-    let context = device::get_context(make_location(latitude, longitude));
+    let context = device::get_context(client);
     magical_merchant_core::update_note(std::path::Path::new(&file_path), &body, &tags, &context)
         .map_err(|e| e.to_string())
 }
