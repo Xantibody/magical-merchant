@@ -15,12 +15,17 @@ export default function Settings(): JSX.Element {
 
   const unlisteners: UnlistenFn[] = [];
 
+  const flash = (text: string): void => {
+    setMessage(text);
+    setTimeout(() => setMessage(""), 2000);
+  };
+
   onMount(async () => {
     try {
       const config = await typedInvoke("get_sync_config");
       setWorkersUrl(config.workers_url);
     } catch {
-      // Use defaults
+      // 未設定のまま開いた場合。空欄で始める
     }
 
     try {
@@ -30,8 +35,7 @@ export default function Settings(): JSX.Element {
     }
 
     try {
-      const status = await typedInvoke("auth_status");
-      setAuthenticated(status);
+      setAuthenticated(await typedInvoke("auth_status"));
     } catch {
       setAuthenticated(false);
     }
@@ -40,14 +44,13 @@ export default function Settings(): JSX.Element {
     unlisteners.push(
       await listen(EVENTS.AUTH_SUCCESS, () => {
         setAuthenticated(true);
-        setMessage("Authenticated");
-        setTimeout(() => setMessage(""), 2000);
+        flash("ログインしました");
       }),
     );
     unlisteners.push(
       await listen<string>(EVENTS.AUTH_ERROR, (e) => {
         setAuthenticated(false);
-        setMessage(`Auth error: ${e.payload}`);
+        setMessage(`ログインに失敗しました: ${e.payload}`);
       }),
     );
   });
@@ -58,7 +61,7 @@ export default function Settings(): JSX.Element {
     }
   });
 
-  const handleSave = async () => {
+  const save = async (): Promise<void> => {
     setSaving(true);
     setMessage("");
     try {
@@ -67,17 +70,16 @@ export default function Settings(): JSX.Element {
       await typedInvoke("save_sync_config", {
         config: { ...current, workers_url: workersUrl() },
       });
-      setMessage("Saved");
-      setTimeout(() => setMessage(""), 2000);
+      flash("保存しました");
     } catch (error) {
-      setMessage(`Error: ${error}`);
+      setMessage(`保存できませんでした: ${error}`);
     } finally {
       setSaving(false);
     }
   };
 
-  const handleLogin = async () => {
-    setMessage("Continue login in your browser...");
+  const login = async (): Promise<void> => {
+    setMessage("ブラウザで続けてください…");
     try {
       // デスクトップ(ループバック)はコマンド完了時点でトークン保存済み。
       // Android はブラウザを開くだけで、完了はディープリンクの auth-success で通知される
@@ -85,82 +87,99 @@ export default function Settings(): JSX.Element {
       const status = await typedInvoke("auth_status");
       setAuthenticated(status);
       if (status) {
-        setMessage("Authenticated");
-        setTimeout(() => setMessage(""), 2000);
+        flash("ログインしました");
       }
     } catch (error) {
-      setMessage(`Auth error: ${error}`);
+      setMessage(`ログインに失敗しました: ${error}`);
     }
   };
 
-  const handleLogout = async () => {
+  const logout = async (): Promise<void> => {
     try {
       await typedInvoke("auth_logout");
       setAuthenticated(false);
-      setMessage("Logged out");
-      setTimeout(() => setMessage(""), 2000);
+      flash("ログアウトしました");
     } catch (error) {
-      setMessage(`Error: ${error}`);
+      setMessage(`ログアウトできませんでした: ${error}`);
     }
   };
 
   return (
-    <div class="settings">
-      <h2 class="settings-title">Sync Settings</h2>
+    <div class="settings-scroll">
+      <div class="settings">
+        <h1 class="settings-title">設定</h1>
 
-      <div class="settings-section">
-        <Show
-          when={editable()}
-          fallback={
-            <div class="settings-label">
-              Workers URL
-              <span class="settings-value">{workersUrl() || "Not configured"}</span>
+        <section class="settings-section">
+          <h2 class="settings-section-label">SERVER</h2>
+          <Show
+            when={editable()}
+            fallback={
+              <p class="settings-readonly">
+                Workers URL
+                <span>{workersUrl() || "未設定"}</span>
+              </p>
+            }
+          >
+            <label class="settings-field">
+              <span class="settings-field-label">Workers URL</span>
+              <input
+                type="url"
+                class="settings-input"
+                value={workersUrl()}
+                onInput={(e) => setWorkersUrl(e.currentTarget.value)}
+                placeholder="https://....workers.dev"
+              />
+            </label>
+            <div class="settings-actions">
+              <button
+                type="button"
+                class="button-primary"
+                onClick={() => void save()}
+                disabled={saving()}
+              >
+                {saving() ? "保存中…" : "保存"}
+              </button>
             </div>
-          }
-        >
-          <label class="settings-label">
-            Workers URL
-            <input
-              type="url"
-              class="settings-input"
-              value={workersUrl()}
-              onInput={(e) => setWorkersUrl(e.currentTarget.value)}
-              placeholder="https://magical-merchant-sync.your-account.workers.dev"
-            />
-          </label>
-          <button type="button" class="settings-button" onClick={handleSave} disabled={saving()}>
-            {saving() ? "Saving..." : "Save"}
-          </button>
+          </Show>
+        </section>
+
+        <section class="settings-section">
+          <h2 class="settings-section-label">ACCOUNT</h2>
+
+          <p class="settings-status">
+            <span class="settings-dot" classList={{ "settings-dot--on": authenticated() }} />
+            {authenticated() ? "ログイン済み" : "未ログイン"}
+          </p>
+
+          <div class="settings-actions">
+            <Show
+              when={authenticated()}
+              fallback={
+                <button
+                  type="button"
+                  class="button-primary"
+                  onClick={() => void login()}
+                  disabled={!workersUrl().trim()}
+                >
+                  Google でログイン
+                </button>
+              }
+            >
+              <button type="button" class="button-secondary" onClick={() => void logout()}>
+                ログアウト
+              </button>
+            </Show>
+          </div>
+
+          <Show when={!authenticated() && !workersUrl().trim()}>
+            <p class="settings-hint">ログインするには、先に Workers URL を保存してください。</p>
+          </Show>
+        </section>
+
+        <Show when={message()}>
+          <p class="settings-message">{message()}</p>
         </Show>
       </div>
-
-      <div class="settings-section">
-        <div class="settings-auth-status">
-          Status: {authenticated() ? "Authenticated" : "Not authenticated"}
-        </div>
-
-        {authenticated() ? (
-          <button type="button" class="settings-button secondary" onClick={handleLogout}>
-            Logout
-          </button>
-        ) : (
-          <>
-            <button
-              type="button"
-              class="settings-button"
-              onClick={handleLogin}
-              disabled={!workersUrl().trim()}
-            >
-              Login with Google
-            </button>
-            {!workersUrl().trim() && (
-              <p class="settings-hint">Save the Workers URL above to enable login.</p>
-            )}
-          </>
-        )}
-      </div>
-
-      {message() && <div class="settings-message">{message()}</div>}
     </div>
   );
 }

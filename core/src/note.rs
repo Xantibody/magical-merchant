@@ -20,13 +20,8 @@ pub fn create_draft_note(
     Notes::new(base_dir.to_path_buf()).create(body, tags, context)
 }
 
-pub fn update_note(
-    file_path: &Path,
-    body: &str,
-    tags: &[String],
-    context: &Context,
-) -> Result<(), CoreError> {
-    Notes::update(file_path, body, tags, context)
+pub fn update_note(file_path: &Path, body: &str, context: &Context) -> Result<(), CoreError> {
+    Notes::update(file_path, body, context)
 }
 
 pub fn list_notes(base_dir: &Path) -> Result<Vec<NoteSummary>, CoreError> {
@@ -74,19 +69,30 @@ mod tests {
     #[test]
     fn test_update_note_overwrites() {
         let tmp = TempDir::new().unwrap();
+        let path = create_draft_note(tmp.path(), "original", &[], &mock_context()).unwrap();
+
+        update_note(&path, "updated", &mock_context()).unwrap();
+
+        let content = fs::read_to_string(&path).unwrap();
+        assert!(content.contains("updated"));
+        assert!(!content.contains("original"));
+    }
+
+    /// タグ欄で付けていた頃のノートを編集しても、分類は消えてはいけない。
+    #[test]
+    fn update_note_keeps_tags_that_predate_the_hash_syntax() {
+        let tmp = TempDir::new().unwrap();
         let path = create_draft_note(
             tmp.path(),
             "original",
-            &["tag1".to_string()],
+            &["sync".to_string()],
             &mock_context(),
         )
         .unwrap();
 
-        update_note(&path, "updated", &["tag2".to_string()], &mock_context()).unwrap();
-        let content = fs::read_to_string(&path).unwrap();
-        assert!(content.contains("updated"));
-        assert!(content.contains("tag2"));
-        assert!(!content.contains("original"));
+        update_note(&path, "updated", &mock_context()).unwrap();
+
+        assert!(fs::read_to_string(&path).unwrap().contains("sync"));
     }
 
     #[test]

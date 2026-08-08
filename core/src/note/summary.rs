@@ -4,6 +4,7 @@ use chrono::{DateTime, FixedOffset};
 use serde::Serialize;
 
 use crate::utils::frontmatter::{self, NoteFrontmatter};
+use crate::utils::tags;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Summary {
@@ -17,14 +18,22 @@ pub struct Summary {
 impl Summary {
     #[must_use]
     pub fn from_file(path: PathBuf, filename: String, content: &str) -> Self {
-        let (time, tags, preview) =
+        let (time, mut tags, body) =
             if let Ok((fm, body)) = frontmatter::parse::<NoteFrontmatter>(content) {
-                let preview: String = body.chars().take(100).collect();
-                (Some(fm.time), fm.tags, preview)
+                (Some(fm.time), fm.tags, body)
             } else {
-                let preview: String = content.chars().take(100).collect();
-                (None, Vec::new(), preview)
+                (None, Vec::new(), content)
             };
+
+        // 本文に書かれた `#タグ` が今の入力方法。frontmatter に残っているのは
+        // タグ欄で付けていた頃のもので、消すと過去のノートから分類が消える。
+        for tag in tags::parse(body) {
+            if !tags.contains(&tag) {
+                tags.push(tag);
+            }
+        }
+
+        let preview: String = body.chars().take(100).collect();
 
         Self {
             path,
