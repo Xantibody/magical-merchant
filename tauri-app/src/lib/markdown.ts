@@ -1,12 +1,15 @@
 import MarkdownIt from "markdown-it";
 import { getHighlighter } from "./highlighter";
 import { renderDiagrams } from "./mermaid";
+import { tagPlugin } from "./tag-markdown";
 
 const md = new MarkdownIt({
   html: false,
   linkify: true,
   typographer: true,
 });
+
+md.use(tagPlugin);
 
 export function renderMarkdownSync(source: string): string {
   return md.render(source);
@@ -26,6 +29,8 @@ const fenceMd = new MarkdownIt({
   linkify: true,
   typographer: true,
 });
+
+fenceMd.use(tagPlugin);
 
 /**
  * フェンスの描画結果を差し込む目印。markdown-it は CommonMark どおり入力中の U+0000 を

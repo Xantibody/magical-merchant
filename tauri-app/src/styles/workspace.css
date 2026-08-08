@@ -8,11 +8,12 @@
 /* ---------------- list pane ---------------- */
 
 .list-pane {
-  width: 296px;
+  width: 300px;
+  background: var(--app-sidebar);
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  border-right: 1px solid var(--app-border);
+  border-right: 1px solid var(--app-hairline);
   position: relative;
   min-height: 0;
 }
@@ -21,14 +22,33 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px 6px;
+  padding: 14px 14px 8px;
+}
+
+.new-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 9px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--radius-2);
+  background: var(--app-input-bg);
+  color: var(--app-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.new-note:hover {
+  background: var(--app-surface-2);
 }
 
 .list-pane-title {
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 700;
   color: var(--app-text-faint);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.08em;
 }
 
 .calendar-button {
@@ -55,38 +75,42 @@
 }
 
 .list-group-label {
-  padding: 8px 12px 2px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--app-text-faint);
-  letter-spacing: 0.04em;
+  padding: 14px 14px 4px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--app-text-muted);
+}
+
+.list-scroll > .list-group-label:first-child {
+  padding-top: 6px;
+  color: var(--app-text);
 }
 
 .list-row {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  width: 100%;
+  gap: 3px;
+  width: calc(100% - 12px);
+  margin: 0 6px;
   text-align: start;
-  padding: 8px 12px;
+  padding: 8px 10px;
+  border-radius: var(--radius-3);
   background: none;
   border: none;
-  border-left: 2px solid transparent;
   cursor: pointer;
   font-family: inherit;
 }
 
 .list-row:hover {
-  background: var(--app-surface-2);
+  background: var(--app-hairline);
 }
 
 .list-row--selected {
   background: var(--app-accent-soft);
-  border-left-color: var(--app-accent);
 }
 
 .list-row-title {
-  font-size: 14px;
+  font-size: 13.5px;
   color: var(--app-text);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -94,9 +118,52 @@
   max-width: 100%;
 }
 
+.list-row--selected .list-row-title {
+  font-weight: 600;
+}
+
 .list-row-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
   font-size: 11px;
+  color: var(--app-text-faint);
+}
+
+/* ファイル名は識別子なので等幅で。日付と混ざって読めなくならないように */
+.list-row-file {
+  font-family: ui-monospace, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 12rem;
+}
+
+.notes-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 48px 20px;
+  text-align: center;
+}
+
+.notes-empty .icon {
+  color: var(--app-text-hint);
+}
+
+.notes-empty-title {
+  margin: 8px 0 0;
+  font-size: 15px;
+  font-weight: 600;
   color: var(--app-text-muted);
+}
+
+.notes-empty-body {
+  margin: 0;
+  font-size: 13px;
+  color: var(--app-text-faint);
 }
 
 .empty-state {
@@ -123,7 +190,16 @@
   justify-content: space-between;
   gap: var(--size-2);
   padding: 9px 20px;
-  border-bottom: 1px solid var(--app-surface-2);
+  border-bottom: 1px solid var(--app-hairline);
+}
+
+.detail-filename {
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+  color: var(--app-text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* 一覧に戻るボタンはモバイルの 1 ペイン時だけ意味がある */
@@ -170,9 +246,14 @@
 .detail-body {
   flex: 1;
   overflow-y: auto;
-  padding: 24px 28px;
-  font-size: 16px;
-  line-height: 1.75;
+  padding: 32px 28px 64px;
+  font-size: 15px;
+  line-height: 1.8;
+}
+
+.detail-body > * {
+  max-width: 640px;
+  margin-inline: auto;
 }
 
 .detail-plain {
@@ -213,6 +294,8 @@
   gap: var(--size-2);
   padding: 12px 20px 16px;
   border-top: 1px solid var(--app-border);
+  /* タグ補完はこのバーの上に出す。基準がないと画面の隅へ飛ぶ */
+  position: relative;
 }
 
 .capture-input {

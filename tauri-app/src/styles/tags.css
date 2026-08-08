@@ -1,62 +1,160 @@
-.tag-chips {
+/* 書くときは本文中の #記法、探すときは選択式のチップ */
+
+/* ---------------- 本文の中のタグ ---------------- */
+
+.tag-inline {
+  color: var(--app-text-muted);
+  background: var(--app-hairline);
+  border-radius: 5px;
+  padding: 1px 5px;
+  font-weight: 500;
+}
+
+/* ---------------- 絞り込みチップ ---------------- */
+
+.tag-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tag-filter-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--app-text-faint);
+  letter-spacing: 0.08em;
+}
+
+.tag-filter-chips {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-top: 20px;
   flex-wrap: wrap;
+  min-width: 0;
 }
 
 .tag-chip {
   display: inline-flex;
   align-items: center;
-  gap: var(--size-1);
-  font-size: 12px;
-  color: var(--app-accent);
-  background: var(--app-accent-soft);
-  border-radius: var(--radius-1);
-  padding: 3px 8px;
-}
-
-.tag-chip-remove {
-  display: flex;
-  background: none;
-  border: none;
-  padding: 0;
-  color: inherit;
-  opacity: 0.6;
-  cursor: pointer;
-}
-
-.tag-chip-remove:hover {
-  opacity: 1;
-}
-
-.tag-add {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  font-size: 12px;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--app-border);
+  background: var(--app-input-bg);
   color: var(--app-text-muted);
-  background: none;
-  border: 1px dashed var(--app-border);
-  border-radius: var(--radius-1);
-  padding: 2px 8px;
-  cursor: pointer;
+  font-size: 12.5px;
   font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
 }
 
-.tag-add:hover {
+.tag-chip:hover {
   background: var(--app-surface-2);
 }
 
-.tag-input {
+.tag-chip--active {
+  background: var(--app-accent);
+  border-color: var(--app-accent);
+  color: var(--app-surface);
+  font-weight: 600;
+}
+
+.tag-filter-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--app-text-faint);
+  white-space: nowrap;
+}
+
+/* ---------------- 入力補完 ---------------- */
+
+.tag-suggest {
+  position: absolute;
+  left: 8px;
+  bottom: calc(100% + 8px);
+  width: 240px;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid var(--app-border);
+  background: var(--app-surface);
+  box-shadow: 0 16px 40px -12px rgb(20 20 25 / 28%);
+  z-index: 130;
+}
+
+.tag-suggest-label {
+  padding: 4px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--app-text-faint);
+  letter-spacing: 0.08em;
+}
+
+.tag-suggest-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 8px;
+  border: none;
+  border-radius: var(--radius-2);
+  background: none;
+  color: var(--app-text);
+  font-size: 13px;
+  font-family: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.tag-suggest-row--active,
+.tag-suggest-row:hover {
+  background: var(--app-hairline);
+}
+
+.tag-suggest-count {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--app-text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 新しい語をそのまま確定する行。既存のタグとは別の重みで見せる */
+.tag-suggest-row--new {
+  color: var(--app-text-faint);
   font-size: 12px;
-  padding: 2px 8px;
-  border: 1px solid var(--app-accent);
+}
+
+/* ---------------- ノート一覧のタグ ---------------- */
+
+.tag-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 5px;
+  border: 1px solid var(--app-border);
   border-radius: var(--radius-1);
   background: var(--app-input-bg);
-  color: var(--app-text);
-  outline: none;
-  width: 8rem;
-  font-family: inherit;
+  font-size: 11px;
+  color: var(--app-text-muted);
+}
+
+@media (max-width: 767px) {
+  /* 横に流して、折り返しで一覧を押し下げない */
+  .tag-filter-chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .tag-chip {
+    padding: 6px 13px;
+  }
+
+  .tag-filter-status {
+    display: none;
+  }
 }
