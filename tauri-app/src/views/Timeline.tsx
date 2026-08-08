@@ -11,6 +11,8 @@ import type { JSX } from "solid-js";
 import Icon from "../components/Icon";
 import CaptureBar from "../components/CaptureBar";
 import CalendarPopover from "../components/CalendarPopover";
+import TagFilter from "../components/TagFilter";
+import TagText from "../components/TagText";
 import { typedInvoke } from "../lib/commands";
 import { getClientContext } from "../lib/client-context";
 import { useShell } from "../lib/shell";
@@ -18,6 +20,7 @@ import { formatDayHeading } from "../lib/day-labels";
 import { groupTimelineByDay, toTimelineItems } from "../lib/items";
 import type { TimelineItem } from "../lib/items";
 import { entryMeta } from "../lib/timeline-meta";
+import { countTags, parseTags } from "../lib/tags";
 import type { DeviceContext } from "../lib/parse-timeline";
 
 /** 一覧に最初から載せる日数。カレンダーで遡ったぶんは都度足す。 */
@@ -109,7 +112,7 @@ function Entry(props: EntryProps): JSX.Element {
           </div>
           {/* 本文そのものが編集の入口。button なのはキーボードから開けるようにするため */}
           <button type="button" class="entry-text" onClick={() => props.onEdit()}>
-            {props.item.text}
+            <TagText text={props.item.text} />
           </button>
           <Show when={meta().length}>
             <div class="entry-meta">
@@ -129,13 +132,19 @@ function Entry(props: EntryProps): JSX.Element {
   );
 }
 
-function EmptyTimeline(): JSX.Element {
+function EmptyTimeline(props: { filtered: boolean }): JSX.Element {
   return (
     <div class="timeline-empty">
       <span class="timeline-empty-rail" aria-hidden="true" />
       <div>
-        <p class="timeline-empty-title">今日はまだ何も記録していません。</p>
-        <p class="timeline-empty-hint">下の入力欄に書くと、時刻とともにここに並びます。</p>
+        <p class="timeline-empty-title">
+          {props.filtered ? "このタグの記録はまだありません。" : "今日はまだ何も記録していません。"}
+        </p>
+        <p class="timeline-empty-hint">
+          {props.filtered
+            ? "上のチップで絞り込みを外せます。"
+            : "下の入力欄に書くと、時刻とともにここに並びます。"}
+        </p>
       </div>
     </div>
   );
@@ -148,6 +157,8 @@ export default function Timeline(): JSX.Element {
   const [extraDates, setExtraDates] = createSignal<string[]>([]);
   /** カレンダーで選ばれた、これから見せたい日。表示できたら消す。 */
   const [jumpTo, setJumpTo] = createSignal<string | null>(null);
+  /** 絞り込み中のタグ。1 つだけ選べる。 */
+  const [tagFilter, setTagFilter] = createSignal<string | null>(null);
   const [editing, setEditing] = createSignal<TimelineItem | null>(null);
   const [draft, setDraft] = createSignal("");
   const [saved, setSaved] = createSignal(false);
@@ -161,7 +172,18 @@ export default function Timeline(): JSX.Element {
     void refetch();
   });
 
-  const days = createMemo(() => groupTimelineByDay(timeline() ?? []));
+  const entries = createMemo(() => timeline() ?? []);
+  const knownTags = createMemo(() => countTags(entries().map((item) => item.text)));
+
+  const visible = createMemo(() => {
+    const tag = tagFilter();
+    if (!tag) {
+      return entries();
+    }
+    return entries().filter((item) => parseTags(item.text).includes(tag));
+  });
+
+  const days = createMemo(() => groupTimelineByDay(visible()));
 
   /**
    * 日付を足すとデータを取り直すぶん行が作り直され、その場でスクロールしても
@@ -234,7 +256,14 @@ export default function Timeline(): JSX.Element {
     <div class="timeline">
       <div class="timeline-scroll">
         <div class="timeline-column">
-          <Show when={days().length} fallback={<EmptyTimeline />}>
+          <TagFilter
+            tags={knownTags()}
+            active={tagFilter()}
+            matched={visible().length}
+            onToggle={setTagFilter}
+          />
+
+          <Show when={days().length} fallback={<EmptyTimeline filtered={Boolean(tagFilter())} />}>
             <For each={days()}>
               {(day) => {
                 const heading = createMemo(() => formatDayHeading(day.date, today));
@@ -270,7 +299,7 @@ export default function Timeline(): JSX.Element {
       </div>
 
       <div class="capture-dock">
-        <CaptureBar onSend={capture} />
+        <CaptureBar onSend={capture} knownTags={knownTags()} />
       </div>
 
       <Show when={shell.popover() === "calendar"}>

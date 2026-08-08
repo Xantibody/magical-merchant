@@ -4,11 +4,11 @@ import { useLocation, useNavigate, A } from "@solidjs/router";
 import Icon from "../components/Icon";
 import CommandPalette from "../components/CommandPalette";
 import SyncPopover from "../components/SyncPopover";
-import ThemeMenu from "../components/ThemeMenu";
 import UndoToast from "../components/UndoToast";
+import FirstRunCard from "../components/FirstRunCard";
 import { ShellProvider, useShell } from "../lib/shell";
 import { createSyncState, syncIconName } from "../lib/sync";
-import { applyTheme, readStoredTheme, THEME_ICONS } from "../lib/theme";
+import { applyTheme, nextTheme, readStoredTheme, THEME_ICONS, THEME_LABELS } from "../lib/theme";
 import type { Theme } from "../lib/theme";
 import { MODE_ICONS, MODE_LABELS, ROUTES } from "../lib/routes";
 import type { RoutePath } from "../lib/routes";
@@ -162,15 +162,17 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
           >
             <Icon name={syncIconName(sync.status())} size={18} />
           </button>
+          {/* 3 つしかない選択肢にメニューを出すより、押すたびに次へ回るほうが速い */}
           <button
             type="button"
-            class="icon-button header-action"
-            title="テーマ"
-            aria-label="テーマ"
-            aria-expanded={shell.popover() === "theme"}
-            onClick={() => shell.togglePopover("theme")}
+            class="icon-button header-action header-action--theme"
+            aria-label={`テーマ: ${THEME_LABELS[theme()]}`}
+            onClick={() => setTheme(nextTheme(theme()))}
           >
             <Icon name={THEME_ICONS[theme()]} size={18} />
+            <span class="header-tooltip" aria-hidden="true">
+              {THEME_LABELS[theme()]}
+            </span>
           </button>
           <A
             href={ROUTES.SETTINGS}
@@ -184,17 +186,6 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
         <Show when={shell.popover() === "sync"}>
           <div class="popover-anchor popover-anchor--sync">
             <SyncPopover sync={sync} onClose={() => shell.closePopovers()} />
-          </div>
-        </Show>
-        <Show when={shell.popover() === "theme"}>
-          <div class="popover-anchor popover-anchor--theme">
-            <ThemeMenu
-              theme={theme}
-              onSelect={(next) => {
-                setTheme(next);
-                shell.closePopovers();
-              }}
-            />
           </div>
         </Show>
       </header>
@@ -213,6 +204,11 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
       </nav>
 
       <UndoToast />
+
+      <FirstRunCard
+        when={sync.status() === "needs-setup"}
+        onConnected={() => navigate(ROUTES.SETTINGS)}
+      />
 
       <Show when={shell.paletteOpen()}>
         <CommandPalette

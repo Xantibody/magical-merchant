@@ -41,7 +41,7 @@ interface CommandMap {
   search_all: { args: { query: string }; result: SearchHit[] };
   create_draft: { args: { body: string; tags: string[] } & ClientArgs; result: string };
   update_draft: {
-    args: { filePath: string; body: string; tags: string[] } & ClientArgs;
+    args: { filePath: string; body: string } & ClientArgs;
     result: void;
   };
   list_notes: { args: void; result: Note[] };

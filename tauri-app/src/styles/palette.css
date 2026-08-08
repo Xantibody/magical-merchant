@@ -9,16 +9,16 @@
 }
 
 .palette {
-  width: 520px;
+  width: 560px;
   max-width: calc(100vw - 2 * var(--size-3));
   height: fit-content;
   max-height: calc(100vh - 160px);
   display: flex;
   flex-direction: column;
   border: 1px solid var(--app-border);
-  border-radius: 10px;
+  border-radius: 14px;
   background: var(--app-surface);
-  box-shadow: var(--shadow-4);
+  box-shadow: 0 24px 56px -16px rgb(20 20 25 / 30%);
   overflow: hidden;
 }
 
@@ -27,8 +27,8 @@
   align-items: center;
   gap: var(--size-2);
   padding: 12px 14px;
-  border-bottom: 1px solid var(--app-surface-2);
-  color: var(--app-text-muted);
+  border-bottom: 1px solid var(--app-hairline);
+  color: var(--app-text-faint);
 }
 
 .palette-input {
@@ -48,19 +48,21 @@
 }
 
 .palette-section {
-  padding: 4px 14px 2px;
+  padding: 6px 16px 2px;
   font-size: 10px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--app-text-faint);
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
 }
 
 .palette-row {
   display: flex;
   align-items: center;
   gap: 10px;
-  width: 100%;
-  padding: 8px 14px;
+  width: calc(100% - 12px);
+  margin: 0 6px;
+  padding: 9px 10px;
+  border-radius: var(--radius-3);
   background: none;
   border: none;
   font-size: 14px;
@@ -70,13 +72,16 @@
   font-family: inherit;
 }
 
-.palette-row:hover,
-.palette-row--active {
+.palette-row:hover {
   background: var(--app-surface-2);
 }
 
+.palette-row--active {
+  background: var(--app-hairline);
+}
+
 .palette-row .icon {
-  color: var(--app-text-muted);
+  color: var(--app-text-faint);
   flex-shrink: 0;
 }
 
@@ -89,8 +94,9 @@
 .palette-row-meta {
   margin-left: auto;
   font-size: 11px;
-  color: var(--app-text-faint);
+  color: var(--app-text-hint);
   flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
 }
 
 .palette-empty {
