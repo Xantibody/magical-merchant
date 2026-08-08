@@ -26,6 +26,7 @@ describe("toNetworkType", () => {
 
   it("maps the Network Information API values", () => {
     expect(toNetworkType(true, "wifi")).toBe("WiFi");
+    expect(toNetworkType(true, "ethernet")).toBe("Ethernet");
     expect(toNetworkType(true, "cellular")).toBe("Mobile");
   });
 
@@ -36,7 +37,7 @@ describe("toNetworkType", () => {
   // 種別が分からないまま WiFi と決め打つと記録が嘘になる。
   it("returns null when the connection type is unknown or absent", () => {
     expect(toNetworkType(true)).toBeNull();
-    expect(toNetworkType(true, "ethernet")).toBeNull();
+    expect(toNetworkType(true, "bluetooth")).toBeNull();
   });
 });
 

@@ -4,7 +4,7 @@ import {
   getCurrentPosition,
 } from "@tauri-apps/plugin-geolocation";
 
-export type NetworkType = "WiFi" | "Mobile" | "Offline";
+export type NetworkType = "WiFi" | "Ethernet" | "Mobile" | "Offline";
 
 /**
  * ネイティブ側では取れない実行環境の情報。Android には `battery` クレートも
@@ -48,13 +48,16 @@ export function toNetworkType(online: boolean, connectionType?: string): Network
     case "wifi": {
       return "WiFi";
     }
+    case "ethernet": {
+      return "Ethernet";
+    }
     case "cellular": {
       return "Mobile";
     }
     case "none": {
       return "Offline";
     }
-    // ethernet / bluetooth / unknown、あるいは API 自体が無いブラウザ。
+    // bluetooth / wimax / unknown、あるいは API 自体が無いブラウザ。
     // 分からないものを WiFi に丸めると記録が嘘になるので黙って諦める。
     default: {
       return null;
