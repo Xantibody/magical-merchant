@@ -3,6 +3,7 @@ import {
   requestPermissions,
   getCurrentPosition,
 } from "@tauri-apps/plugin-geolocation";
+import { createLocationTracker } from "./location-tracker";
 
 export type NetworkType = "WiFi" | "Ethernet" | "Mobile" | "Offline";
 
@@ -82,22 +83,33 @@ async function readBattery(): Promise<Pick<ClientContext, "battery" | "isChargin
   }
 }
 
-async function readLocation(): Promise<Pick<ClientContext, "latitude" | "longitude">> {
-  try {
-    let permissions = await checkPermissions();
-    if (permissions.location === "prompt" || permissions.location === "prompt-with-rationale") {
-      permissions = await requestPermissions(["location"]);
-    }
+async function locationPermitted(request: boolean): Promise<boolean> {
+  let permissions = await checkPermissions();
+  if (
+    request &&
+    (permissions.location === "prompt" || permissions.location === "prompt-with-rationale")
+  ) {
+    permissions = await requestPermissions(["location"]);
+  }
+  return permissions.location === "granted";
+}
 
-    if (permissions.location !== "granted") {
-      return { latitude: null, longitude: null };
-    }
-
+/**
+ * Android の GPS はコールドスタートで数秒かかるので、保存のたびに測り直すと
+ * 送信がそのぶん止まる。手元の座標を使い回し、測位は裏で回して次に備える。
+ * macOS がネイティブ側で「起動と同時に受け取り始める」のと同じ理屈。
+ */
+const locationTracker = createLocationTracker({
+  permitted: locationPermitted,
+  position: async () => {
     const pos = await getCurrentPosition();
     return { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
-  } catch {
-    return { latitude: null, longitude: null };
-  }
+  },
+});
+
+/** 許可ダイアログを出さずに測位を始めておく。起動時に呼ぶ。 */
+export function warmLocation(): void {
+  locationTracker.warmUp();
 }
 
 /**
@@ -121,6 +133,6 @@ export async function getDeviceSignals(): Promise<ClientContext> {
 
 /** 端末情報に位置情報を足したもの。ユーザーが明示的に記録した瞬間だけ使う。 */
 export async function getClientContext(): Promise<ClientContext> {
-  const [signals, location] = await Promise.all([getDeviceSignals(), readLocation()]);
+  const [signals, location] = await Promise.all([getDeviceSignals(), locationTracker.read()]);
   return { ...signals, ...location };
 }

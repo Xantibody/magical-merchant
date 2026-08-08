@@ -14,8 +14,10 @@ const Settings = lazy(() => import("./views/Settings"));
 // 遅延にした代わりに、起動が落ち着いてから裏で読んでおく。
 // これが無いと Notes タブを初めて開いた瞬間に読み込み待ちが挟まる
 function prefetchLazyViews(): void {
-  const idle: (cb: () => void) => unknown =
-    typeof requestIdleCallback === "function" ? requestIdleCallback : (cb) => setTimeout(cb, 2000);
+  const idle: (task: () => void) => unknown =
+    typeof requestIdleCallback === "function"
+      ? requestIdleCallback
+      : (task) => setTimeout(task, 2000);
   idle(() => {
     void import("./views/Workspace");
     void import("./views/Settings");
