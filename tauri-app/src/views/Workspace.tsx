@@ -5,14 +5,18 @@ import {
   createEffect,
   For,
   Show,
+  lazy,
   onCleanup,
 } from "solid-js";
 import type { JSX } from "solid-js";
 import type { Editor } from "@milkdown/kit/core";
 import Icon from "../components/Icon";
 import MarkdownPreview from "../components/MarkdownPreview";
-import MilkdownEditor from "../components/MilkdownEditor";
-import MarkdownToolbar from "../components/MarkdownToolbar";
+
+// Milkdown + ProseMirror は編集を始めるまで要らない。一覧とプレビューだけの
+// 表示をこの重さから切り離す
+const MilkdownEditor = lazy(() => import("../components/MilkdownEditor"));
+const MarkdownToolbar = lazy(() => import("../components/MarkdownToolbar"));
 import { typedInvoke } from "../lib/commands";
 import { getDeviceSignals } from "../lib/client-context";
 import { useShell } from "../lib/shell";
@@ -305,8 +309,10 @@ export default function Workspace(): JSX.Element {
         </Show>
       </div>
 
-      {/* キーボードでは打ちにくい記法のための入り口。タッチ端末にだけ出る */}
-      <MarkdownToolbar editor={markdownEditor()} />
+      {/* キーボードでは打ちにくい記法のための入り口。タッチ端末にだけ出る。
+          lazy なので、無条件に描くと一覧を見ただけでエディタ一式を読み込んで
+          しまう。エディタが立ち上がってから初めて描く */}
+      <Show when={markdownEditor()}>{(editor) => <MarkdownToolbar editor={editor()} />}</Show>
     </div>
   );
 }
