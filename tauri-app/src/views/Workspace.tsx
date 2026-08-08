@@ -3,6 +3,7 @@ import {
   createResource,
   createMemo,
   createEffect,
+  on,
   For,
   Show,
   lazy,
@@ -61,11 +62,9 @@ export default function Workspace(): JSX.Element {
 
   const [notes, { refetch: refetchNotes }] = createResource(loadNotes);
 
-  // 同期やパレット操作の後にデータを取り直す
-  createEffect(() => {
-    shell.dataVersion();
-    void refetchNotes();
-  });
+  // 同期やパレット操作の後にデータを取り直す。初回は createResource が読むので
+  // defer しないと全ノートの読み直しがマウント直後に二重で走る
+  createEffect(on(shell.dataVersion, () => void refetchNotes(), { defer: true }));
 
   const visibleItems = createMemo<NoteItem[]>(() => {
     const dropped = new Set(hidden());

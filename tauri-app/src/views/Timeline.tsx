@@ -3,6 +3,7 @@ import {
   createResource,
   createMemo,
   createEffect,
+  on,
   For,
   Show,
   onCleanup,
@@ -167,10 +168,9 @@ export default function Timeline(): JSX.Element {
 
   const [timeline, { refetch }] = createResource(extraDates, loadTimeline);
 
-  createEffect(() => {
-    shell.dataVersion();
-    void refetch();
-  });
+  // 初回は createResource が読む。defer しないとマウント直後に同じ全読みを
+  // もう一度走らせ、起動時の IPC がまるごと倍になる
+  createEffect(on(shell.dataVersion, () => void refetch(), { defer: true }));
 
   const entries = createMemo(() => timeline() ?? []);
   const knownTags = createMemo(() => countTags(entries().map((item) => item.text)));
