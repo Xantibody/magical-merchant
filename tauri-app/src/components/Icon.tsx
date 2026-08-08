@@ -32,6 +32,7 @@ const ICONS = {
   "wifi-high": () => import("@phosphor-icons/core/assets/regular/wifi-high.svg?raw"),
   "wifi-slash": () => import("@phosphor-icons/core/assets/regular/wifi-slash.svg?raw"),
   "cell-signal-full": () => import("@phosphor-icons/core/assets/regular/cell-signal-full.svg?raw"),
+  network: () => import("@phosphor-icons/core/assets/regular/network.svg?raw"),
   "map-pin": () => import("@phosphor-icons/core/assets/regular/map-pin.svg?raw"),
   laptop: () => import("@phosphor-icons/core/assets/regular/laptop.svg?raw"),
   "device-mobile": () => import("@phosphor-icons/core/assets/regular/device-mobile.svg?raw"),

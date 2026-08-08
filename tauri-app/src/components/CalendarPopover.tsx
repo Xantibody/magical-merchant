@@ -10,6 +10,7 @@ import {
 } from "../lib/calendar";
 import type { DaySummary } from "../lib/calendar";
 import { toIsoDate } from "../lib/day-labels";
+import { getNetworkIcon } from "../lib/parse-timeline";
 import type { DeviceContext } from "../lib/parse-timeline";
 
 interface CalendarPopoverProps {
@@ -84,14 +85,24 @@ export default function CalendarPopover(props: CalendarPopoverProps): JSX.Elemen
         </span>
         <Show when={summary().count > 0}>
           <span class="calendar-summary-row">
-            <Show when={summary().places.length}>
+            <Show when={summary().located}>
               <span class="calendar-summary-item">
                 <Icon name="map-pin" size={13} />
-                {summary()
-                  .places.map((p) => `${p.label} ${p.count}`)
-                  .join(" · ")}
+                {summary().located}
               </span>
             </Show>
+            <For each={summary().networks}>
+              {(network) => (
+                <Show when={getNetworkIcon({ network_type: network.label } as DeviceContext)}>
+                  {(icon) => (
+                    <span class="calendar-summary-item">
+                      <Icon name={icon()} size={13} />
+                      {network.count}
+                    </span>
+                  )}
+                </Show>
+              )}
+            </For>
             <For each={summary().devices}>
               {(device) => (
                 <span class="calendar-summary-item">

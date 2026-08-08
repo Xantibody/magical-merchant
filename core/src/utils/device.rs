@@ -1,8 +1,13 @@
 use serde::{Deserialize, Serialize};
 
+/// どうやって外に繋がっていたか。
+///
+/// 回線の名前（SSID）は持たない。macOS 14 以降は位置情報の許可がないと
+/// 伏せられるうえ、どこで書いたかは位置情報のほうが正確に答える。
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum NetworkType {
     WiFi,
+    Ethernet,
     Mobile,
     Offline,
 }
@@ -21,8 +26,6 @@ pub struct Context {
     pub is_charging: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub network_type: Option<NetworkType>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub wifi_ssid: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub location: Option<Location>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -76,7 +79,6 @@ impl Context {
             battery: self.battery,
             is_charging: self.is_charging,
             network_type: self.network_type.clone(),
-            wifi_ssid: self.wifi_ssid.clone(),
             location: self.location.clone(),
             ..Self::default()
         }
@@ -103,7 +105,6 @@ mod tests {
             battery: Some(82),
             is_charging: Some(false),
             network_type: Some(NetworkType::WiFi),
-            wifi_ssid: Some("MyNetwork".to_string()),
             location: Some(Location {
                 latitude: 35.6762,
                 longitude: 139.6503,
@@ -163,7 +164,6 @@ mod tests {
         assert_eq!(ctx.battery, None);
         assert_eq!(ctx.is_charging, None);
         assert_eq!(ctx.network_type, None);
-        assert_eq!(ctx.wifi_ssid, None);
         assert_eq!(ctx.location, None);
     }
 
@@ -180,7 +180,6 @@ mod tests {
             battery: Some(82),
             is_charging: Some(false),
             network_type: Some(NetworkType::WiFi),
-            wifi_ssid: Some("MyNetwork".to_string()),
             location: Some(Location {
                 latitude: 35.6762,
                 longitude: 139.6503,
@@ -194,7 +193,6 @@ mod tests {
         let json = serde_json::to_string(&ctx).unwrap();
         assert!(json.contains("\"battery\":82"));
         assert!(json.contains("\"network_type\":\"WiFi\""));
-        assert!(json.contains("\"wifi_ssid\":\"MyNetwork\""));
         assert!(json.contains("\"latitude\":35.6762"));
         assert!(json.contains("\"os\":\"macos\""));
         assert!(json.contains("\"hostname\":\"MacBook\""));
@@ -207,7 +205,6 @@ mod tests {
         assert_eq!(ctx.battery, Some(82));
         assert_eq!(ctx.is_charging, Some(false));
         assert_eq!(ctx.network_type, None);
-        assert_eq!(ctx.wifi_ssid, None);
         assert_eq!(ctx.location, None);
     }
 

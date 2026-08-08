@@ -53,23 +53,11 @@ interface Tally {
 
 export interface DaySummary {
   count: number;
-  places: Tally[];
+  /** 座標が残っているエントリの数。 */
+  located: number;
+  /** ラベルは `NetworkType` そのもの。アイコンに直すのは表示側の仕事。 */
+  networks: Tally[];
   devices: Tally[];
-}
-
-const UNKNOWN_PLACE = "場所不明";
-
-function placeOf(context: DeviceContext | null): string | null {
-  if (!context) {
-    return null;
-  }
-  if (context.wifi_ssid) {
-    return context.wifi_ssid;
-  }
-  if (context.location) {
-    return UNKNOWN_PLACE;
-  }
-  return null;
 }
 
 function tally(values: (string | null)[]): Tally[] {
@@ -85,13 +73,16 @@ function tally(values: (string | null)[]): Tally[] {
 }
 
 /**
- * その日のエントリを場所と端末で数える。場所の名前は Wi-Fi SSID を使う:
- * 記録に含まれる中で人が地名として読める唯一の値がこれしかない。
+ * その日のエントリを回線と端末で数える。
+ *
+ * 場所は座標があるかどうかだけを数える。緯度経度をそのまま並べても地名には
+ * ならず、数えて意味が出るのは「その日どれだけ外で書いたか」のほう。
  */
 export function summarizeDay(contexts: (DeviceContext | null)[]): DaySummary {
   return {
     count: contexts.length,
-    places: tally(contexts.map((c) => placeOf(c))),
+    located: contexts.filter((c) => c?.location).length,
+    networks: tally(contexts.map((c) => c?.network_type ?? null)),
     devices: tally(contexts.map((c) => c?.os || null)),
   };
 }

@@ -53,25 +53,30 @@ describe("summarizeDay", () => {
     expect(summarizeDay([ctx(), null, ctx()]).count).toBe(3);
   });
 
-  it("names places by Wi-Fi SSID", () => {
+  it("counts how the day got online, most used first", () => {
     const summary = summarizeDay([
-      ctx({ wifi_ssid: "home" }),
-      ctx({ wifi_ssid: "office" }),
-      ctx({ wifi_ssid: "home" }),
+      ctx({ network_type: "WiFi" }),
+      ctx({ network_type: "Ethernet" }),
+      ctx({ network_type: "WiFi" }),
     ]);
-    expect(summary.places).toStrictEqual([
-      { label: "home", count: 2 },
-      { label: "office", count: 1 },
+    expect(summary.networks).toStrictEqual([
+      { label: "WiFi", count: 2 },
+      { label: "Ethernet", count: 1 },
     ]);
   });
 
-  it("falls back to a placeholder when only coordinates are known", () => {
-    const summary = summarizeDay([ctx({ location: { latitude: 35, longitude: 139 } })]);
-    expect(summary.places).toStrictEqual([{ label: "場所不明", count: 1 }]);
+  it("leaves the networks empty when the line was never recorded", () => {
+    expect(summarizeDay([ctx(), null]).networks).toStrictEqual([]);
   });
 
-  it("leaves places empty when nothing about location was recorded", () => {
-    expect(summarizeDay([ctx(), null]).places).toStrictEqual([]);
+  // 緯度経度を並べても地名にはならない。数えて意味が出るのは件数のほう。
+  it("counts the entries that kept their coordinates", () => {
+    const summary = summarizeDay([
+      ctx({ location: { latitude: 35, longitude: 139 } }),
+      ctx(),
+      ctx({ location: { latitude: 36, longitude: 140 } }),
+    ]);
+    expect(summary.located).toBe(2);
   });
 
   it("counts devices by os", () => {
