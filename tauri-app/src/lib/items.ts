@@ -85,6 +85,22 @@ function groupBy(items: Item[], labelOf: (item: Item) => string): ItemGroup[] {
   return groups;
 }
 
+/**
+ * 新しい順に並んだタイムラインの、1 日ぶんだけを差し替える。
+ * 記録のたびに全日を読み直すと保存 1 回に日数ぶんの IPC がかかるので、
+ * 書いた日だけ読み直してここで継ぎ合わせる。
+ */
+export function replaceDayItems(
+  items: TimelineItem[],
+  date: string,
+  dayItems: TimelineItem[],
+): TimelineItem[] {
+  const kept = items.filter((item) => item.date !== date);
+  const at = kept.findIndex((item) => item.date < date);
+  const insertAt = at === -1 ? kept.length : at;
+  return [...kept.slice(0, insertAt), ...dayItems, ...kept.slice(insertAt)];
+}
+
 export interface TimelineDay {
   /** `YYYY-MM-DD`。見出しの文字は表示側で作る。 */
   date: string;
