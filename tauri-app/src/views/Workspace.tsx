@@ -3,21 +3,26 @@ import {
   createResource,
   createMemo,
   createEffect,
+  on,
   For,
   Show,
+  lazy,
   onCleanup,
 } from "solid-js";
 import type { JSX } from "solid-js";
 import type { Editor } from "@milkdown/kit/core";
 import Icon from "../components/Icon";
 import MarkdownPreview from "../components/MarkdownPreview";
-import MilkdownEditor from "../components/MilkdownEditor";
-import MarkdownToolbar from "../components/MarkdownToolbar";
 import { typedInvoke } from "../lib/commands";
 import { getDeviceSignals } from "../lib/client-context";
 import { useShell } from "../lib/shell";
 import { groupNotes, itemTitle, toNoteItems } from "../lib/items";
 import type { ItemGroup, NoteItem } from "../lib/items";
+
+// Milkdown + ProseMirror は編集を始めるまで要らない。一覧とプレビューだけの
+// 表示をこの重さから切り離す
+const MilkdownEditor = lazy(() => import("../components/MilkdownEditor"));
+const MarkdownToolbar = lazy(() => import("../components/MarkdownToolbar"));
 
 const UNDO_MS = 5000;
 const SAVE_DEBOUNCE_MS = 1000;
@@ -57,11 +62,9 @@ export default function Workspace(): JSX.Element {
 
   const [notes, { refetch: refetchNotes }] = createResource(loadNotes);
 
-  // 同期やパレット操作の後にデータを取り直す
-  createEffect(() => {
-    shell.dataVersion();
-    void refetchNotes();
-  });
+  // 同期やパレット操作の後にデータを取り直す。初回は createResource が読むので
+  // defer しないと全ノートの読み直しがマウント直後に二重で走る
+  createEffect(on(shell.dataVersion, () => void refetchNotes(), { defer: true }));
 
   const visibleItems = createMemo<NoteItem[]>(() => {
     const dropped = new Set(hidden());
@@ -114,7 +117,9 @@ export default function Workspace(): JSX.Element {
           body,
           client: await getDeviceSignals(),
         });
-        await refetchNotes();
+        // 一覧はここでは読み直さない。1 秒おきの保存のたびに全ノートを
+        // 読み直すのは低スペック端末に重く、編集中は一覧が見えてもいない。
+        // 編集を終えるときに 1 回だけ読み直す。
         setSaveStatus("saved");
       } catch {
         setSaveStatus("idle");
@@ -152,7 +157,11 @@ export default function Workspace(): JSX.Element {
       saveTimer = undefined;
     }
     await flushSave();
+    // 書き終えた本文が真実。読み直しを待ってからプレビューを出すと
+    // 一瞬だけ編集前の本文が見える
+    setNoteBody(draft());
     setEditing(false);
+    await refetchNotes();
   };
 
   const createNote = async (): Promise<void> => {
@@ -305,8 +314,10 @@ export default function Workspace(): JSX.Element {
         </Show>
       </div>
 
-      {/* キーボードでは打ちにくい記法のための入り口。タッチ端末にだけ出る */}
-      <MarkdownToolbar editor={markdownEditor()} />
+      {/* キーボードでは打ちにくい記法のための入り口。タッチ端末にだけ出る。
+          lazy なので、無条件に描くと一覧を見ただけでエディタ一式を読み込んで
+          しまう。エディタが立ち上がってから初めて描く */}
+      <Show when={markdownEditor()}>{(editor) => <MarkdownToolbar editor={editor()} />}</Show>
     </div>
   );
 }
