@@ -21,20 +21,30 @@ pub(crate) struct ClientContext {
 /// ネイティブは OS に直接聞ける（macOS の battery クレートなど）ぶん確度が高い。
 pub(crate) fn get_context(client: ClientContext) -> DeviceContext {
     let (battery, is_charging) = get_battery();
-    let (network_type, wifi_ssid) = get_network();
 
     DeviceContext {
         battery: battery.or(client.battery),
         is_charging: is_charging.or(client.is_charging),
-        network_type: network_type.or(client.network_type),
-        wifi_ssid,
-        location: make_location(client.latitude, client.longitude),
+        network_type: get_network().or(client.network_type),
+        location: make_location(client.latitude, client.longitude).or_else(get_location),
         os: std::env::consts::OS.to_string(),
         os_version: get_os_version().or(client.os_version),
         arch: std::env::consts::ARCH.to_string(),
         hostname: get_hostname(),
         locale: get_locale().or(client.locale),
     }
+}
+
+/// `WebView` が座標を持たないときの取り直し。Android の geolocation プラグインは
+/// フロント側で答えを出しているので、こちらが要るのは macOS だけ。
+#[cfg(target_os = "macos")]
+fn get_location() -> Option<Location> {
+    crate::location::latest()
+}
+
+#[cfg(not(target_os = "macos"))]
+const fn get_location() -> Option<Location> {
+    None
 }
 
 const fn make_location(latitude: Option<f64>, longitude: Option<f64>) -> Option<Location> {
@@ -117,93 +127,143 @@ const fn get_battery() -> (Option<u8>, Option<bool>) {
     (None, None)
 }
 
+/// いま外に出ている経路が有線か無線かを、名前を聞かずに判定する。
+///
+/// 既定経路のインターフェース名を引き、それがどのハードウェアポートかを
+/// 名前で引き直す。SSID を読むのと違い、どちらのコマンドも位置情報の許可を
+/// 必要としない。
 #[cfg(target_os = "macos")]
-fn get_network() -> (Option<NetworkType>, Option<String>) {
-    let Ok(output) = std::process::Command::new("ipconfig")
-        .args(["getsummary", "en0"])
+fn get_network() -> Option<NetworkType> {
+    let route = std::process::Command::new("route")
+        .args(["-n", "get", "default"])
         .output()
-    else {
-        return (None, None);
+        .ok()?;
+    let Some(interface) = parse_default_interface(&String::from_utf8_lossy(&route.stdout)) else {
+        // 既定経路が無い = どこにも出られない。
+        return Some(NetworkType::Offline);
     };
 
-    parse_wifi_summary(&String::from_utf8_lossy(&output.stdout))
+    let ports = std::process::Command::new("networksetup")
+        .arg("-listallhardwareports")
+        .output()
+        .ok()?;
+    let port = parse_hardware_port(&String::from_utf8_lossy(&ports.stdout), &interface)?;
+
+    Some(classify_port(&port))
 }
 
-/// `ipconfig getsummary en0` の出力から Wi-Fi の状態を読む。
-///
-/// SSID 行があるだけで Wi-Fi 接続中だと分かるので、名前が読めなくても
-/// `NetworkType::WiFi` は返す。macOS 14 以降は位置情報の許可がないと
-/// SSID が `<redacted>` に伏せられ、これをそのまま保存すると
-/// 「SSID が取れている」ように見えるゴミが記録に残る。
+/// `route -n get default` の `interface:` 行。
 #[cfg(target_os = "macos")]
-fn parse_wifi_summary(stdout: &str) -> (Option<NetworkType>, Option<String>) {
+fn parse_default_interface(stdout: &str) -> Option<String> {
+    stdout.lines().find_map(|line| {
+        let name = line.trim().strip_prefix("interface: ")?.trim();
+        (!name.is_empty()).then(|| name.to_string())
+    })
+}
+
+/// `networksetup -listallhardwareports` から、その `Device` を持つ
+/// `Hardware Port` の名前を返す。ポート名と Device 行は必ずこの順で対になる。
+#[cfg(target_os = "macos")]
+fn parse_hardware_port(stdout: &str, interface: &str) -> Option<String> {
+    let mut port: Option<&str> = None;
     for line in stdout.lines() {
-        let Some(ssid) = line.trim().strip_prefix("SSID : ") else {
-            continue;
-        };
-        let ssid = ssid.trim();
-        if ssid.is_empty() {
-            continue;
+        let line = line.trim();
+        if let Some(name) = line.strip_prefix("Hardware Port: ") {
+            port = Some(name.trim());
+        } else if let Some(device) = line.strip_prefix("Device: ") {
+            if device.trim() == interface {
+                return port.map(str::to_string);
+            }
         }
-        let named = (!is_redacted(ssid)).then(|| ssid.to_string());
-        return (Some(NetworkType::WiFi), named);
     }
-
-    // SSID 行がない = Ethernet かテザリングか本当に圏外。切り分けられない以上、
-    // Offline と断定すると嘘になるので None のままにする。
-    (None, None)
+    None
 }
 
+/// ポート名から回線の種類を決める。
+///
+/// iPhone の USB テザリングは見た目こそ有線だが、出ていく先は携帯回線。
+/// 有線として記録すると、実際には電波の届く所でしか書けなかった記録が
+/// 机の上で書いたように見える。
 #[cfg(target_os = "macos")]
-fn is_redacted(value: &str) -> bool {
-    value.starts_with('<') && value.ends_with('>')
+fn classify_port(port: &str) -> NetworkType {
+    let lowered = port.to_lowercase();
+    if lowered.contains("wi-fi") || lowered.contains("airport") {
+        NetworkType::WiFi
+    } else if lowered.contains("iphone") || lowered.contains("ipad") {
+        NetworkType::Mobile
+    } else {
+        NetworkType::Ethernet
+    }
 }
 
-#[cfg(not(any(target_os = "macos", target_os = "android")))]
-const fn get_network() -> (Option<NetworkType>, Option<String>) {
-    (None, None)
-}
-
-#[cfg(target_os = "android")]
-const fn get_network() -> (Option<NetworkType>, Option<String>) {
-    (None, None)
+#[cfg(not(target_os = "macos"))]
+const fn get_network() -> Option<NetworkType> {
+    None
 }
 
 #[cfg(all(test, target_os = "macos"))]
 mod tests {
     use super::*;
 
-    const CONNECTED: &str = "  <dictionary> {\n  BSSID : 11:22:33:44:55:66\n  SSID : MyNetwork\n}";
+    /// 実機の `networksetup -listallhardwareports` の抜粋。
+    const PORTS: &str = "\n\
+        Hardware Port: Ethernet Adapter (en3)\n\
+        Device: en3\n\
+        Ethernet Address: 32:73:6f:a1:60:43\n\
+        \n\
+        Hardware Port: Thunderbolt Bridge\n\
+        Device: bridge0\n\
+        Ethernet Address: 36:c3:1a:6d:54:00\n\
+        \n\
+        Hardware Port: Wi-Fi\n\
+        Device: en0\n\
+        Ethernet Address: 10:9f:41:bf:3d:ff\n";
 
     #[test]
-    fn reads_the_ssid_when_macos_discloses_it() {
-        let (network, ssid) = parse_wifi_summary(CONNECTED);
+    fn reads_the_interface_the_default_route_uses() {
+        let stdout = "   route to: default\n    gateway: 192.168.3.1\n  interface: en0\n";
 
-        assert_eq!(network, Some(NetworkType::WiFi));
-        assert_eq!(ssid.as_deref(), Some("MyNetwork"));
+        assert_eq!(parse_default_interface(stdout).as_deref(), Some("en0"));
+    }
+
+    /// 既定経路が無いときの `route` はこの行を出さない。
+    #[test]
+    fn finds_no_interface_without_a_default_route() {
+        assert_eq!(
+            parse_default_interface("route: writing to routing socket: not in table"),
+            None
+        );
     }
 
     #[test]
-    fn keeps_wifi_but_drops_the_name_when_macos_redacts_it() {
-        let (network, ssid) = parse_wifi_summary("  BSSID : <redacted>\n  SSID : <redacted>");
-
-        assert_eq!(network, Some(NetworkType::WiFi));
-        assert_eq!(ssid, None);
+    fn matches_an_interface_to_its_hardware_port() {
+        assert_eq!(parse_hardware_port(PORTS, "en0").as_deref(), Some("Wi-Fi"));
+        assert_eq!(
+            parse_hardware_port(PORTS, "en3").as_deref(),
+            Some("Ethernet Adapter (en3)")
+        );
     }
 
     #[test]
-    fn reports_nothing_without_an_ssid_line() {
-        let (network, ssid) = parse_wifi_summary("  <dictionary> {\n  IPv4 : 192.168.0.2\n}");
-
-        assert_eq!(network, None);
-        assert_eq!(ssid, None);
+    fn finds_no_port_for_an_interface_that_is_not_listed() {
+        assert_eq!(parse_hardware_port(PORTS, "utun4"), None);
     }
 
     #[test]
-    fn skips_an_empty_ssid_line() {
-        let (network, ssid) = parse_wifi_summary("  SSID : \n");
+    fn tells_wireless_from_wired() {
+        assert_eq!(classify_port("Wi-Fi"), NetworkType::WiFi);
+        assert_eq!(classify_port("AirPort"), NetworkType::WiFi);
+        assert_eq!(
+            classify_port("Ethernet Adapter (en3)"),
+            NetworkType::Ethernet
+        );
+        assert_eq!(classify_port("Thunderbolt Bridge"), NetworkType::Ethernet);
+    }
 
-        assert_eq!(network, None);
-        assert_eq!(ssid, None);
+    /// USB で挿していても出ていく先は携帯回線。有線として記録すると、
+    /// 電波の届く所でしか書けなかった記録が机の上で書いたように見える。
+    #[test]
+    fn counts_a_tethered_phone_as_mobile() {
+        assert_eq!(classify_port("iPhone USB"), NetworkType::Mobile);
     }
 }

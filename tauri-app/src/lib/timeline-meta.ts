@@ -10,6 +10,7 @@ export interface MetaSegment {
 
 const NETWORK_LABELS = {
   WiFi: "Wi-Fi",
+  Ethernet: "有線",
   Mobile: "モバイル回線",
   Offline: "オフライン",
 } as const;
@@ -29,9 +30,7 @@ function networkSegment(ctx: DeviceContext): MetaSegment | null {
   if (!icon || !ctx.network_type) {
     return null;
   }
-  // SSID が分かるならそちらを出す。「Wi-Fi」より「自宅」のほうが、
-  // どこで書いたのかを思い出す手がかりになる。
-  return { icon, label: ctx.wifi_ssid ?? NETWORK_LABELS[ctx.network_type] };
+  return { icon, label: NETWORK_LABELS[ctx.network_type] };
 }
 
 function batterySegment(ctx: DeviceContext): MetaSegment | null {

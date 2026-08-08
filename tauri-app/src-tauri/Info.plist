@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- requestWhenInUseAuthorization はこのキーが無いと、許可を尋ねもせず
+       黙って何もしない。文言はそのまま許可ダイアログに出る。 -->
+  <key>NSLocationWhenInUseUsageDescription</key>
+  <string>記録した場所をメモと一緒に残すために使います。位置情報は端末の中だけに保存され、外には送りません。</string>
+  <!-- 古い macOS が見る旧キー。新しい API は参照しないが、あっても害はない。 -->
+  <key>NSLocationUsageDescription</key>
+  <string>記録した場所をメモと一緒に残すために使います。位置情報は端末の中だけに保存され、外には送りません。</string>
+</dict>
+</plist>

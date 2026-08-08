@@ -3,8 +3,7 @@ import type { IconName } from "../components/Icon";
 export interface DeviceContext {
   battery?: number;
   is_charging?: boolean;
-  network_type?: "WiFi" | "Mobile" | "Offline";
-  wifi_ssid?: string;
+  network_type?: "WiFi" | "Ethernet" | "Mobile" | "Offline";
   location?: { latitude: number; longitude: number };
   os: string;
   os_version?: string;
@@ -76,6 +75,9 @@ export function getNetworkIcon(ctx: DeviceContext): IconName | null {
   switch (ctx.network_type) {
     case "WiFi": {
       return "wifi-high";
+    }
+    case "Ethernet": {
+      return "network";
     }
     case "Mobile": {
       return "cell-signal-full";
