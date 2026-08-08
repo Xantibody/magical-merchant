@@ -8,9 +8,11 @@ import {
   onCleanup,
 } from "solid-js";
 import type { JSX } from "solid-js";
+import type { Editor } from "@milkdown/kit/core";
 import Icon from "../components/Icon";
 import MarkdownPreview from "../components/MarkdownPreview";
 import MilkdownEditor from "../components/MilkdownEditor";
+import MarkdownToolbar from "../components/MarkdownToolbar";
 import { typedInvoke } from "../lib/commands";
 import { getDeviceSignals } from "../lib/client-context";
 import { useShell } from "../lib/shell";
@@ -50,6 +52,8 @@ export default function Workspace(): JSX.Element {
   const [saveStatus, setSaveStatus] = createSignal<"idle" | "saving" | "saved">("idle");
   const [hidden, setHidden] = createSignal<string[]>([]);
   const [noteBody, setNoteBody] = createSignal("");
+  /** タッチ端末のツールバーが叩く先。編集をやめると undefined に戻る。 */
+  const [markdownEditor, setMarkdownEditor] = createSignal<Editor | undefined>();
 
   const [notes, { refetch: refetchNotes }] = createResource(loadNotes);
 
@@ -228,7 +232,12 @@ export default function Workspace(): JSX.Element {
                   type="button"
                   class="icon-button detail-back"
                   aria-label="一覧に戻る"
-                  onClick={() => setDetailOpen(false)}
+                  onClick={() => {
+                    // 編集したまま戻ると、一覧の上にツールバーだけが残る。
+                    // 見えなくなった編集対象に効くボタンが浮いていることになる。
+                    void stopEditing();
+                    setDetailOpen(false);
+                  }}
                 >
                   <Icon name="arrow-left" size={18} />
                 </button>
@@ -287,6 +296,7 @@ export default function Workspace(): JSX.Element {
                       setDraft(markdown);
                       scheduleSave();
                     }}
+                    onEditorReady={setMarkdownEditor}
                   />
                 </Show>
               </div>
@@ -294,6 +304,9 @@ export default function Workspace(): JSX.Element {
           )}
         </Show>
       </div>
+
+      {/* キーボードでは打ちにくい記法のための入り口。タッチ端末にだけ出る */}
+      <MarkdownToolbar editor={markdownEditor()} />
     </div>
   );
 }
