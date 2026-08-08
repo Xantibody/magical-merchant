@@ -6,6 +6,7 @@ import {
   groupNotes,
   itemMeta,
   itemTitle,
+  replaceDayItems,
 } from "./items";
 import type { Note } from "./commands";
 
@@ -118,5 +119,45 @@ describe("itemTitle", () => {
   it("labels an entry with no text", () => {
     const [item] = toTimelineItems("2026-08-04", ["- [09:00:00] "]);
     expect(itemTitle(item)).toBe("(空のメモ)");
+  });
+});
+
+describe("replaceDayItems", () => {
+  const day = (date: string, texts: string[]) =>
+    toTimelineItems(
+      date,
+      texts.map((t, i) => `- [${String(i + 9).padStart(2, "0")}:00:00] ${t}`),
+    );
+
+  it("swaps in the fresh entries for a day already on screen", () => {
+    const items = [...day("2026-08-04", ["today"]), ...day("2026-08-03", ["yesterday"])];
+
+    const updated = replaceDayItems(items, "2026-08-04", day("2026-08-04", ["today", "more"]));
+
+    expect(updated.map((i) => i.text)).toStrictEqual(["today", "more", "yesterday"]);
+  });
+
+  it("puts the first entry of a new day at the top", () => {
+    const items = day("2026-08-03", ["yesterday"]);
+
+    const updated = replaceDayItems(items, "2026-08-04", day("2026-08-04", ["first"]));
+
+    expect(updated.map((i) => i.date)).toStrictEqual(["2026-08-04", "2026-08-03"]);
+  });
+
+  it("slots an older day between its neighbours", () => {
+    const items = [...day("2026-08-04", ["a"]), ...day("2026-08-01", ["c"])];
+
+    const updated = replaceDayItems(items, "2026-08-02", day("2026-08-02", ["b"]));
+
+    expect(updated.map((i) => i.date)).toStrictEqual(["2026-08-04", "2026-08-02", "2026-08-01"]);
+  });
+
+  it("drops the day entirely when no entries remain", () => {
+    const items = [...day("2026-08-04", ["a"]), ...day("2026-08-03", ["b"])];
+
+    const updated = replaceDayItems(items, "2026-08-04", []);
+
+    expect(updated.map((i) => i.date)).toStrictEqual(["2026-08-03"]);
   });
 });

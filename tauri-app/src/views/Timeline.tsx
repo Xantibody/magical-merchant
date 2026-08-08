@@ -17,8 +17,8 @@ import TagText from "../components/TagText";
 import { typedInvoke } from "../lib/commands";
 import { getClientContext } from "../lib/client-context";
 import { useShell } from "../lib/shell";
-import { formatDayHeading } from "../lib/day-labels";
-import { groupTimelineByDay, toTimelineItems } from "../lib/items";
+import { formatDayHeading, toIsoDate } from "../lib/day-labels";
+import { groupTimelineByDay, replaceDayItems, toTimelineItems } from "../lib/items";
 import type { TimelineItem } from "../lib/items";
 import { entryMeta } from "../lib/timeline-meta";
 import { countTags, parseTags } from "../lib/tags";
@@ -166,7 +166,7 @@ export default function Timeline(): JSX.Element {
   /** 削除の取り消し待ち。5 秒経つまで本削除しないので、消えた跡だけ残す。 */
   const [pendingDelete, setPendingDelete] = createSignal<string[]>([]);
 
-  const [timeline, { refetch }] = createResource(extraDates, loadTimeline);
+  const [timeline, { refetch, mutate }] = createResource(extraDates, loadTimeline);
 
   // 初回は createResource が読む。defer しないとマウント直後に同じ全読みを
   // もう一度走らせ、起動時の IPC がまるごと倍になる
@@ -204,9 +204,15 @@ export default function Timeline(): JSX.Element {
 
   const isDeleting = (id: string): boolean => pendingDelete().includes(id);
 
+  /** 書いた日だけ読み直す。全日の読み直しは保存 1 回に日数ぶんの IPC を払う。 */
+  const reloadDay = async (date: string): Promise<void> => {
+    const items = toTimelineItems(date, await typedInvoke("read_timeline_by_date", { date }));
+    mutate((prev) => replaceDayItems(prev ?? [], date, items));
+  };
+
   const capture = async (text: string): Promise<void> => {
     await typedInvoke("save_quick_capture", { text, client: await getClientContext() });
-    await refetch();
+    await reloadDay(toIsoDate(new Date()));
   };
 
   // ---- その場編集（Esc / フォーカスを外すと確定）----
@@ -228,7 +234,7 @@ export default function Timeline(): JSX.Element {
     }
     await typedInvoke("update_timeline_entry", { date: item.date, index: item.index, text });
     setSaved(true);
-    await refetch();
+    await reloadDay(item.date);
   };
 
   // タブを切り替えても書きかけを捨てない。blur はアンマウントでは飛ばない。
@@ -241,7 +247,7 @@ export default function Timeline(): JSX.Element {
     const commit = setTimeout(() => {
       void (async () => {
         await typedInvoke("delete_timeline_entry", { date: item.date, index: item.index });
-        await refetch();
+        await reloadDay(item.date);
         setPendingDelete((ids) => ids.filter((id) => id !== item.id));
       })();
     }, UNDO_MS);
