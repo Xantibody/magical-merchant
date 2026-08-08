@@ -8,6 +8,8 @@
 
 mod auth;
 mod device;
+#[cfg(target_os = "macos")]
+mod location;
 mod sync;
 
 use device::ClientContext;
@@ -199,6 +201,12 @@ pub fn run() {
             let handle = app.handle().clone();
             app.deep_link()
                 .on_open_url(move |event| store_token_from_urls(&handle, &event.urls()));
+
+            // 測位は始めてから最初の 1 件が返るまでに間がある。保存のたびに
+            // 頼むのでは間に合わないので、起動と同時に受け取り始める。
+            #[cfg(target_os = "macos")]
+            location::start(app.handle());
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

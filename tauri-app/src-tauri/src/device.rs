@@ -26,13 +26,25 @@ pub(crate) fn get_context(client: ClientContext) -> DeviceContext {
         battery: battery.or(client.battery),
         is_charging: is_charging.or(client.is_charging),
         network_type: get_network().or(client.network_type),
-        location: make_location(client.latitude, client.longitude),
+        location: make_location(client.latitude, client.longitude).or_else(get_location),
         os: std::env::consts::OS.to_string(),
         os_version: get_os_version().or(client.os_version),
         arch: std::env::consts::ARCH.to_string(),
         hostname: get_hostname(),
         locale: get_locale().or(client.locale),
     }
+}
+
+/// `WebView` が座標を持たないときの取り直し。Android の geolocation プラグインは
+/// フロント側で答えを出しているので、こちらが要るのは macOS だけ。
+#[cfg(target_os = "macos")]
+fn get_location() -> Option<Location> {
+    crate::location::latest()
+}
+
+#[cfg(not(target_os = "macos"))]
+const fn get_location() -> Option<Location> {
+    None
 }
 
 const fn make_location(latitude: Option<f64>, longitude: Option<f64>) -> Option<Location> {
