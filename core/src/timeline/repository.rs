@@ -5,9 +5,10 @@ use std::path::PathBuf;
 use chrono::{Local, NaiveDate};
 
 use crate::error::CoreError;
+use crate::timeline::day::DayLog;
 use crate::utils::device::Context;
 use crate::utils::fs::ensure_dir;
-use crate::utils::markdown::{format_timeline_line, split_context_json, split_time_prefix};
+use crate::utils::markdown::{split_context_json, split_time_prefix};
 use crate::utils::paths::{self, timeline_file_path};
 
 pub(crate) struct Timeline {
@@ -24,21 +25,10 @@ impl Timeline {
         let file_path = timeline_file_path(&self.base_dir, now.date_naive());
         ensure_dir(&file_path)?;
 
-        let line = format_timeline_line(text, now, context);
+        let mut day = DayLog::parse(&self.read_raw(now.date_naive())?.unwrap_or_default());
+        day.push(text, now, context);
 
-        let mut day_log = if file_path.exists() {
-            fs::read_to_string(&file_path)?
-        } else {
-            String::new()
-        };
-
-        if !day_log.is_empty() && !day_log.ends_with('\n') {
-            day_log.push('\n');
-        }
-        day_log.push_str(&line);
-        day_log.push('\n');
-
-        fs::write(&file_path, day_log)?;
+        fs::write(&file_path, day.render()?)?;
         Ok(())
     }
 
@@ -64,8 +54,7 @@ impl Timeline {
     pub(crate) fn read(&self, date: NaiveDate) -> Result<Vec<String>, CoreError> {
         Ok(self
             .read_raw(date)?
-            .as_deref()
-            .map(split_entries)
+            .map(|content| DayLog::parse(&content).expanded())
             .unwrap_or_default())
     }
 
@@ -110,44 +99,21 @@ impl Timeline {
         F: FnOnce(&mut Vec<String>) -> Result<(), CoreError>,
     {
         let file_path = timeline_file_path(&self.base_dir, date);
-        if !file_path.exists() {
+        let Some(content) = self.read_raw(date)? else {
             return Err(CoreError::NotFound(file_path.to_string_lossy().to_string()));
-        }
+        };
 
-        let mut entries = split_entries(&fs::read_to_string(&file_path)?);
-        edit(&mut entries)?;
+        let mut day = DayLog::parse(&content);
+        edit(day.entries_mut())?;
 
-        if entries.is_empty() {
+        if day.is_empty() {
             fs::remove_file(&file_path)?;
             return Ok(());
         }
 
-        let mut day_log = entries.join("\n");
-        day_log.push('\n');
-        fs::write(&file_path, day_log)?;
+        fs::write(&file_path, day.render()?)?;
         Ok(())
     }
-}
-
-/// エントリは "- [" で始まる行から次の "- [" まで（本文に改行を含み得る）
-pub(crate) fn split_entries(content: &str) -> Vec<String> {
-    let mut entries: Vec<String> = Vec::new();
-    for line in content.lines() {
-        if line.starts_with("- [") || entries.is_empty() {
-            if line.is_empty() {
-                continue;
-            }
-            entries.push(line.to_string());
-        } else if let Some(last) = entries.last_mut() {
-            last.push('\n');
-            last.push_str(line);
-        }
-    }
-    // 末尾を落とすのに to_string() を挟むと 1 エントリにつきもう 1 回確保する。
-    for entry in &mut entries {
-        entry.truncate(entry.trim_end().len());
-    }
-    entries
 }
 
 /// 本文だけを差し替え、時刻プレフィックスと末尾のコンテキスト JSON は元のまま残す。
@@ -261,6 +227,76 @@ mod tests {
         let result = timeline.delete_entry(date(), 5);
 
         assert!(matches!(result, Err(CoreError::NotFound(_))));
+    }
+
+    /// 実際に保存されていた日（macOS と Android が同居し、行末に完全な
+    /// コンテキストが載った旧形式）に追記しても、既存の記録は 1 件も
+    /// 意味を変えてはならない。
+    #[test]
+    fn appending_to_a_legacy_day_leaves_every_old_entry_intact() {
+        let legacy = [
+            "- [00:21:05] うっざ {\"battery\":56,\"is_charging\":false,\"network_type\":\"WiFi\",\"os\":\"macos\",\"os_version\":\"26.3.1\",\"arch\":\"aarch64\",\"hostname\":\"MacBook\",\"locale\":\"ja_JP\"}",
+            "- [09:18:56] ストレス溜まってる {\"location\":{\"latitude\":35.6761403,\"longitude\":139.5465634},\"os\":\"android\",\"arch\":\"aarch64\"}",
+        ];
+        let (_tmp, timeline) = seed(&legacy);
+
+        timeline
+            .save_entry(
+                "あたらしい",
+                &Context {
+                    os: "macos".to_string(),
+                    arch: "aarch64".to_string(),
+                    ..Context::default()
+                },
+            )
+            .unwrap();
+
+        let today = Local::now().date_naive();
+        let entries = timeline.read(date()).unwrap();
+        assert_eq!(entries, legacy);
+        // 今日ぶんは別ファイルなので、上の日には増えていない。
+        assert_eq!(
+            timeline.read(today).unwrap().len(),
+            usize::from(today != date())
+        );
+    }
+
+    #[test]
+    fn editing_a_legacy_entry_keeps_its_recorded_context() {
+        let (_tmp, timeline) =
+            seed(&["- [09:00:00] old {\"battery\":80,\"os\":\"macos\",\"arch\":\"aarch64\"}"]);
+
+        timeline.update_entry(date(), 0, "edited").unwrap();
+
+        assert_eq!(
+            timeline.read(date()).unwrap(),
+            vec!["- [09:00:00] edited {\"battery\":80,\"os\":\"macos\",\"arch\":\"aarch64\"}"]
+        );
+    }
+
+    #[test]
+    fn editing_a_day_that_lists_its_devices_keeps_the_list() {
+        let tmp = TempDir::new().unwrap();
+        let timeline = Timeline::new(tmp.path().to_path_buf());
+        let context = Context {
+            battery: Some(56),
+            os: "macos".to_string(),
+            hostname: Some("MacBook".to_string()),
+            ..Context::default()
+        };
+        let path = timeline_file_path(tmp.path(), Local::now().date_naive());
+        ensure_dir(&path).unwrap();
+        timeline.save_entry("first", &context).unwrap();
+        timeline.save_entry("second", &context).unwrap();
+
+        let today = Local::now().date_naive();
+        timeline.update_entry(today, 0, "rewritten").unwrap();
+
+        let entries = timeline.read(today).unwrap();
+        assert_eq!(entries.len(), 2);
+        assert!(entries[0].contains("rewritten"));
+        assert!(entries[0].contains("\"hostname\":\"MacBook\""));
+        assert!(entries[1].contains("\"hostname\":\"MacBook\""));
     }
 
     #[test]

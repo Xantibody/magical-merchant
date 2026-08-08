@@ -4,7 +4,7 @@ use serde::Serialize;
 
 use crate::error::CoreError;
 use crate::timeline::Timeline;
-use crate::timeline::repository::split_entries;
+use crate::timeline::day::DayLog;
 use crate::utils::markdown::strip_timeline_prefix;
 use crate::{list_notes, list_timeline_dates};
 
@@ -60,7 +60,13 @@ pub fn search_all(base_dir: &Path, query: &str) -> Result<Vec<SearchHit>, CoreEr
         }
 
         let formatted = date.format("%Y-%m-%d").to_string();
-        for (index, entry) in split_entries(&content).into_iter().enumerate() {
+        // 生の行ではなくエントリを数える。日ファイルの先頭には端末情報が載って
+        // いることがあり、行で数えると index が呼び出し側の並びとずれる。
+        for (index, entry) in DayLog::parse(&content)
+            .into_entries()
+            .into_iter()
+            .enumerate()
+        {
             let text = strip_timeline_prefix(&entry);
             let lowered = text.to_lowercase();
             if !lowered.contains(&needle) {
@@ -183,6 +189,41 @@ mod tests {
         save_timeline_entry(tmp.path(), "Local-First Sync", &context()).unwrap();
 
         assert_eq!(search_all(tmp.path(), "local-first").unwrap().len(), 1);
+    }
+
+    /// 日ファイルの先頭に端末情報が載っている日でも、返す index は
+    /// エントリの並び順でなければならない。ここがずれると検索結果を
+    /// 開いたときに別のエントリが出る。
+    #[test]
+    fn an_index_counts_entries_not_lines_of_the_day_file() {
+        let tmp = TempDir::new().unwrap();
+        let ctx = Context {
+            os: "macos".to_string(),
+            arch: "aarch64".to_string(),
+            hostname: Some("MacBook".to_string()),
+            ..Context::default()
+        };
+        save_timeline_entry(tmp.path(), "first", &ctx).unwrap();
+        save_timeline_entry(tmp.path(), "second", &ctx).unwrap();
+
+        let hits = search_all(tmp.path(), "second").unwrap();
+
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].title, "second");
+        assert_eq!(hits[0].index, Some(1));
+    }
+
+    #[test]
+    fn the_device_list_is_not_searchable() {
+        let tmp = TempDir::new().unwrap();
+        let ctx = Context {
+            os: "macos".to_string(),
+            hostname: Some("MacBook".to_string()),
+            ..Context::default()
+        };
+        save_timeline_entry(tmp.path(), "plain text", &ctx).unwrap();
+
+        assert!(search_all(tmp.path(), "MacBook").unwrap().is_empty());
     }
 
     #[test]

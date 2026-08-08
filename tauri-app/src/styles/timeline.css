@@ -1,0 +1,427 @@
+/* 単欄のジャーナル。時刻レールに沿って一日を読み物として流す */
+
+.timeline {
+  flex: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+.timeline-scroll {
+  flex: 1;
+  overflow-y: auto;
+  /* 下端はフローティングの入力バーが覆う。その下に本文を残さない */
+  padding: 44px 32px 140px;
+}
+
+.timeline-column {
+  max-width: 680px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 36px;
+}
+
+/* ---------------- day group ---------------- */
+
+.day-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.day-group + .day-group .day-heading {
+  border-top: 1px solid var(--app-hairline);
+  padding-top: 28px;
+}
+
+.day-heading-label {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--app-text-muted);
+  letter-spacing: -0.01em;
+}
+
+/* 一番上の日はいま書いている日。ここだけ見出しを大きく取る */
+.day-group:first-child .day-heading-label {
+  font-size: 22px;
+  color: var(--app-text);
+}
+
+.day-heading-date {
+  font-size: 13px;
+  color: var(--app-text-faint);
+}
+
+.day-heading-count {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--app-text-hint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------- entry ---------------- */
+
+.entry {
+  display: grid;
+  grid-template-columns: 56px 28px 1fr;
+}
+
+.entry-time {
+  font-size: 13px;
+  color: var(--app-text-faint);
+  text-align: right;
+  padding-top: 3px;
+  font-variant-numeric: tabular-nums;
+}
+
+.entry--active .entry-time {
+  color: var(--app-text);
+  font-weight: 600;
+}
+
+.entry-rail {
+  position: relative;
+  display: block;
+}
+
+.entry-rail-line {
+  position: absolute;
+  left: 13px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--app-hairline);
+}
+
+.entry-rail-dot {
+  position: absolute;
+  left: 10px;
+  top: 6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--app-surface);
+  border: 2px solid var(--app-text-hint);
+  box-sizing: border-box;
+}
+
+.entry--active .entry-rail-dot {
+  left: 9px;
+  top: 5px;
+  width: 10px;
+  height: 10px;
+  background: var(--app-accent);
+  border: none;
+}
+
+/* 消えた跡はレールも途切れさせる。取り消せば元に戻る */
+.entry--deleting .entry-rail-line {
+  background: repeating-linear-gradient(to bottom, var(--app-border) 0 4px, transparent 4px 9px);
+}
+
+.entry--deleting .entry-rail-dot {
+  display: none;
+}
+
+.entry-body {
+  position: relative;
+  padding-bottom: 26px;
+  min-width: 0;
+}
+
+.entry-text {
+  display: block;
+  width: 100%;
+  /* ホバーで出るツールバーの下に本文が回り込まない幅。
+     1 行が長くなりすぎないという意味でも、この列はここで止めたい */
+  max-width: 552px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  text-align: start;
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1.75;
+  color: var(--app-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  cursor: text;
+  border-radius: var(--radius-2);
+}
+
+.entry-text:focus-visible {
+  outline: 2px solid var(--app-accent);
+  outline-offset: 2px;
+}
+
+.entry-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 11.5px;
+  color: var(--app-text-faint);
+}
+
+.entry-meta-part {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ---------------- hover actions ---------------- */
+
+.entry-tools {
+  position: absolute;
+  top: -6px;
+  right: 0;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--app-surface);
+  border: 1px solid var(--app-hairline);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px -6px rgb(20 20 25 / 20%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.entry:hover .entry-tools,
+.entry-tools:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.entry-tool {
+  display: flex;
+  padding: 6px;
+  border: none;
+  border-radius: var(--radius-2);
+  background: none;
+  color: var(--app-text-faint);
+  cursor: pointer;
+}
+
+.entry-tool:hover {
+  background: var(--app-hairline);
+  color: var(--app-text);
+}
+
+/* ---------------- in-place editor ---------------- */
+
+.entry-editor {
+  border: 1px solid var(--app-text-faint);
+  border-radius: 10px;
+  padding: 14px 16px 12px;
+  background: var(--app-input-bg);
+}
+
+.entry-editor:focus-within {
+  box-shadow: 0 0 0 3px var(--app-accent-soft);
+}
+
+.entry-editor-input {
+  display: block;
+  width: 100%;
+  min-height: 3lh;
+  border: none;
+  outline: none;
+  resize: none;
+  padding: 0;
+  background: none;
+  color: var(--app-text);
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1.75;
+  field-sizing: content;
+}
+
+.entry-editor-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--size-2);
+  margin-top: 8px;
+  font-size: 11.5px;
+  color: var(--app-text-faint);
+}
+
+.entry-tombstone {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px dashed var(--app-border);
+  border-radius: 10px;
+  font-size: 13px;
+  color: var(--app-text-faint);
+}
+
+/* ---------------- empty ---------------- */
+
+.timeline-empty {
+  display: grid;
+  grid-template-columns: 56px 28px 1fr;
+  padding-top: 8px;
+}
+
+.timeline-empty-rail {
+  grid-column: 2;
+  width: 2px;
+  min-height: 64px;
+  margin-left: 13px;
+  background: repeating-linear-gradient(to bottom, var(--app-border) 0 4px, transparent 4px 9px);
+}
+
+.timeline-empty-title {
+  margin: 0;
+  font-size: 15px;
+  color: var(--app-text-faint);
+}
+
+.timeline-empty-hint {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--app-text-hint);
+}
+
+/* ---------------- floating capture bar ---------------- */
+
+.capture-dock {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 24px;
+  display: flex;
+  justify-content: center;
+  /* バーの外側はスクロールに触らせる */
+  pointer-events: none;
+}
+
+.capture-dock .capture-bar {
+  width: 640px;
+  max-width: calc(100% - 48px);
+  padding: 10px 10px 10px 16px;
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-radius: 14px;
+  box-shadow: 0 12px 32px -8px rgb(20 20 25 / 18%);
+  pointer-events: auto;
+}
+
+.capture-dock .capture-input {
+  border: none;
+  background: none;
+  padding: 8px 0;
+}
+
+.capture-dock .capture-send {
+  width: 38px;
+  height: 38px;
+  justify-content: center;
+  border-radius: 10px;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.capture-dock .capture-send-label {
+  display: none;
+}
+
+/* ヘッダーのカレンダーボタンの真下に吊るす */
+.popover-anchor--calendar {
+  position: fixed;
+  top: calc(var(--safe-top) + 49px);
+  right: var(--size-3);
+  z-index: 120;
+}
+
+/* ---------------- mobile ---------------- */
+
+@media (max-width: 767px) {
+  .timeline-scroll {
+    padding: 12px 20px 96px;
+  }
+
+  .timeline-column {
+    gap: 22px;
+  }
+
+  .entry,
+  .timeline-empty {
+    grid-template-columns: 44px 24px 1fr;
+  }
+
+  .entry-rail-line,
+  .timeline-empty-rail {
+    left: 11px;
+    margin-left: 11px;
+  }
+
+  .entry-rail-dot {
+    left: 8px;
+  }
+
+  .entry--active .entry-rail-dot {
+    left: 7px;
+  }
+
+  .entry-time {
+    font-size: 12.5px;
+  }
+
+  .entry-body {
+    padding-bottom: 22px;
+  }
+
+  .entry-text {
+    line-height: 1.65;
+  }
+
+  .day-group:first-child .day-heading-label {
+    font-size: 20px;
+  }
+
+  .day-heading-label {
+    font-size: 16px;
+  }
+
+  /* 指の届く範囲に常に出す。モバイルには hover が無い。
+     出しっぱなしにするぶん、本文が下をくぐらないよう場所を空ける */
+  .entry-tools {
+    opacity: 1;
+    pointer-events: auto;
+    top: -4px;
+  }
+
+  .entry-text,
+  .entry-meta {
+    max-width: none;
+    padding-right: 34px;
+  }
+
+  .capture-dock {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+  }
+
+  .capture-dock .capture-bar {
+    width: 100%;
+    max-width: none;
+    border-radius: 16px;
+    padding: 8px 8px 8px 16px;
+  }
+
+  .capture-dock .capture-send {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+  }
+}
