@@ -13,16 +13,16 @@ import type { JSX } from "solid-js";
 import type { Editor } from "@milkdown/kit/core";
 import Icon from "../components/Icon";
 import MarkdownPreview from "../components/MarkdownPreview";
-
-// Milkdown + ProseMirror は編集を始めるまで要らない。一覧とプレビューだけの
-// 表示をこの重さから切り離す
-const MilkdownEditor = lazy(() => import("../components/MilkdownEditor"));
-const MarkdownToolbar = lazy(() => import("../components/MarkdownToolbar"));
 import { typedInvoke } from "../lib/commands";
 import { getDeviceSignals } from "../lib/client-context";
 import { useShell } from "../lib/shell";
 import { groupNotes, itemTitle, toNoteItems } from "../lib/items";
 import type { ItemGroup, NoteItem } from "../lib/items";
+
+// Milkdown + ProseMirror は編集を始めるまで要らない。一覧とプレビューだけの
+// 表示をこの重さから切り離す
+const MilkdownEditor = lazy(() => import("../components/MilkdownEditor"));
+const MarkdownToolbar = lazy(() => import("../components/MarkdownToolbar"));
 
 const UNDO_MS = 5000;
 const SAVE_DEBOUNCE_MS = 1000;

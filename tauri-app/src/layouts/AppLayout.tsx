@@ -13,7 +13,7 @@ import type { Theme } from "../lib/theme";
 import { MODE_ICONS, MODE_LABELS, ROUTES } from "../lib/routes";
 import type { RoutePath } from "../lib/routes";
 import { typedInvoke } from "../lib/commands";
-import { getDeviceSignals } from "../lib/client-context";
+import { getDeviceSignals, warmLocation } from "../lib/client-context";
 
 const TABS: RoutePath[] = [ROUTES.TIMELINE, ROUTES.NOTES];
 const BOTTOM_TABS: RoutePath[] = [ROUTES.TIMELINE, ROUTES.NOTES, ROUTES.SETTINGS];
@@ -67,6 +67,9 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
   };
 
   onMount(() => {
+    // 最初の記録が測位を待たされないよう、許可済みなら今のうちに測り始める
+    warmLocation();
+
     const onKeyDown = (e: KeyboardEvent): void => {
       if (isMetaK(e)) {
         e.preventDefault();
