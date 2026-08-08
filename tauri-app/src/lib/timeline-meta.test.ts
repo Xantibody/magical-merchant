@@ -19,17 +19,14 @@ describe("entryMeta", () => {
     expect(entryMeta(context({ os_version: "15.5" }))[0].label).toBe("macos 15.5");
   });
 
-  it("prefers the network name over its type", () => {
-    const meta = entryMeta(context({ network_type: "WiFi", wifi_ssid: "オフィスWi-Fi" }));
-
-    expect(meta[1]).toEqual({ icon: "wifi-high", label: "オフィスWi-Fi" });
-  });
-
-  // SSID は macOS の伏字対策で落ちることがある。Wi-Fi だと分かる以上は出す。
-  it("falls back to the network type when the name is unavailable", () => {
+  it("tells wired from wireless", () => {
     expect(entryMeta(context({ network_type: "WiFi" }))[1]).toEqual({
       icon: "wifi-high",
       label: "Wi-Fi",
+    });
+    expect(entryMeta(context({ network_type: "Ethernet" }))[1]).toEqual({
+      icon: "network",
+      label: "有線",
     });
     expect(entryMeta(context({ network_type: "Mobile" }))[1]).toEqual({
       icon: "cell-signal-full",
