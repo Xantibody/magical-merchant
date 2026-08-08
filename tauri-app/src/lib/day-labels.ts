@@ -21,21 +21,26 @@ export function daysBetween(from: Date, to: Date): number {
   return Math.round((b.getTime() - a.getTime()) / 86_400_000);
 }
 
-/** リストペインの日付グループ見出し。「今日 — 8/4」 */
-export function formatDayLabel(iso: string, today: Date): string {
+const WEEKDAYS = ["日曜日", "月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日"];
+
+/** 日グループの見出し。見出し語と、その下に添える日付に分けて返す。 */
+export function formatDayHeading(iso: string, today: Date): { label: string; date: string } {
   const date = parseIsoDate(iso);
   if (!date) {
-    return iso;
+    return { label: iso, date: "" };
   }
-  const short = `${date.getMonth() + 1}/${date.getDate()}`;
+  const day = `${date.getMonth() + 1}月${date.getDate()}日`;
+  const weekday = WEEKDAYS[date.getDay()];
   const diff = daysBetween(date, today);
+
   if (diff === 0) {
-    return `今日 — ${short}`;
+    return { label: "今日", date: `${day} ${weekday}` };
   }
   if (diff === 1) {
-    return `昨日 — ${short}`;
+    return { label: "昨日", date: `${day} ${weekday}` };
   }
-  return `${date.getMonth() + 1}月${date.getDate()}日`;
+  // ここまで来ると「N 日前」は数えないと分からない。日付を見出しに上げる。
+  return { label: day, date: weekday };
 }
 
 /** Notes のグループ見出し。「今週 / 先週 / それ以前」 */

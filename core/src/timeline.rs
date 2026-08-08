@@ -1,3 +1,4 @@
+pub(crate) mod day;
 pub(crate) mod error;
 pub(crate) mod repository;
 
