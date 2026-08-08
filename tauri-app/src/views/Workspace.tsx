@@ -117,7 +117,9 @@ export default function Workspace(): JSX.Element {
           body,
           client: await getDeviceSignals(),
         });
-        await refetchNotes();
+        // 一覧はここでは読み直さない。1 秒おきの保存のたびに全ノートを
+        // 読み直すのは低スペック端末に重く、編集中は一覧が見えてもいない。
+        // 編集を終えるときに 1 回だけ読み直す。
         setSaveStatus("saved");
       } catch {
         setSaveStatus("idle");
@@ -155,7 +157,11 @@ export default function Workspace(): JSX.Element {
       saveTimer = undefined;
     }
     await flushSave();
+    // 書き終えた本文が真実。読み直しを待ってからプレビューを出すと
+    // 一瞬だけ編集前の本文が見える
+    setNoteBody(draft());
     setEditing(false);
+    await refetchNotes();
   };
 
   const createNote = async (): Promise<void> => {
