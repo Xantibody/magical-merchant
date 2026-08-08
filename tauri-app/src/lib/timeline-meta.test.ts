@@ -57,9 +57,9 @@ describe("entryMeta", () => {
   });
 
   it("keeps the order device, network, battery", () => {
-    const meta = entryMeta(
-      context({ os: "android", network_type: "Mobile", battery: 30 }),
-    ).map((s) => s.label);
+    const meta = entryMeta(context({ os: "android", network_type: "Mobile", battery: 30 })).map(
+      (s) => s.label,
+    );
 
     expect(meta).toEqual(["android", "モバイル回線", "30%"]);
   });

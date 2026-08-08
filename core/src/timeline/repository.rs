@@ -255,14 +255,16 @@ mod tests {
         let entries = timeline.read(date()).unwrap();
         assert_eq!(entries, legacy);
         // 今日ぶんは別ファイルなので、上の日には増えていない。
-        assert_eq!(timeline.read(today).unwrap().len(), usize::from(today != date()));
+        assert_eq!(
+            timeline.read(today).unwrap().len(),
+            usize::from(today != date())
+        );
     }
 
     #[test]
     fn editing_a_legacy_entry_keeps_its_recorded_context() {
-        let (_tmp, timeline) = seed(&[
-            "- [09:00:00] old {\"battery\":80,\"os\":\"macos\",\"arch\":\"aarch64\"}",
-        ]);
+        let (_tmp, timeline) =
+            seed(&["- [09:00:00] old {\"battery\":80,\"os\":\"macos\",\"arch\":\"aarch64\"}"]);
 
         timeline.update_entry(date(), 0, "edited").unwrap();
 

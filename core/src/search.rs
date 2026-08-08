@@ -62,7 +62,11 @@ pub fn search_all(base_dir: &Path, query: &str) -> Result<Vec<SearchHit>, CoreEr
         let formatted = date.format("%Y-%m-%d").to_string();
         // 生の行ではなくエントリを数える。日ファイルの先頭には端末情報が載って
         // いることがあり、行で数えると index が呼び出し側の並びとずれる。
-        for (index, entry) in DayLog::parse(&content).into_entries().into_iter().enumerate() {
+        for (index, entry) in DayLog::parse(&content)
+            .into_entries()
+            .into_iter()
+            .enumerate()
+        {
             let text = strip_timeline_prefix(&entry);
             let lowered = text.to_lowercase();
             if !lowered.contains(&needle) {

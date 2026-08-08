@@ -126,8 +126,10 @@ impl DayLog {
 
         let text = &rest[..rest.len() - json.len()];
         let full = stored.context.with_identity(identity);
-        serde_json::to_string(&full)
-            .map_or_else(|_| entry.to_string(), |full| format!("{prefix}{text}{full}"))
+        serde_json::to_string(&full).map_or_else(
+            |_| entry.to_string(),
+            |full| format!("{prefix}{text}{full}"),
+        )
     }
 }
 
@@ -251,7 +253,10 @@ mod tests {
         let rendered = day.render().unwrap();
 
         assert_eq!(rendered, "- [09:00:00] bare\n");
-        assert_eq!(DayLog::parse(&rendered).expanded(), vec!["- [09:00:00] bare"]);
+        assert_eq!(
+            DayLog::parse(&rendered).expanded(),
+            vec!["- [09:00:00] bare"]
+        );
     }
 
     #[test]
