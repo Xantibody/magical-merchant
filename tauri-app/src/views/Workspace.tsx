@@ -274,10 +274,7 @@ export default function Workspace(): JSX.Element {
                   />
                 </Show>
 
-                <TagChips
-                  tags={item().tags}
-                  onChange={(tags) => updateTags(item(), tags)}
-                />
+                <TagChips tags={item().tags} onChange={(tags) => updateTags(item(), tags)} />
               </div>
             </>
           )}

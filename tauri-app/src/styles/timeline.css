@@ -121,11 +121,7 @@
 
 /* 消えた跡はレールも途切れさせる。取り消せば元に戻る */
 .entry--deleting .entry-rail-line {
-  background: repeating-linear-gradient(
-    to bottom,
-    var(--app-border) 0 4px,
-    transparent 4px 9px
-  );
+  background: repeating-linear-gradient(to bottom, var(--app-border) 0 4px, transparent 4px 9px);
 }
 
 .entry--deleting .entry-rail-dot {
@@ -280,11 +276,7 @@
   width: 2px;
   min-height: 64px;
   margin-left: 13px;
-  background: repeating-linear-gradient(
-    to bottom,
-    var(--app-border) 0 4px,
-    transparent 4px 9px
-  );
+  background: repeating-linear-gradient(to bottom, var(--app-border) 0 4px, transparent 4px 9px);
 }
 
 .timeline-empty-title {
