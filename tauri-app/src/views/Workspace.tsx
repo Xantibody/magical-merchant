@@ -11,12 +11,10 @@ import type { JSX } from "solid-js";
 import Icon from "../components/Icon";
 import MarkdownPreview from "../components/MarkdownPreview";
 import MilkdownEditor from "../components/MilkdownEditor";
-import TagChips from "../components/TagChips";
 import { typedInvoke } from "../lib/commands";
 import { getDeviceSignals } from "../lib/client-context";
 import { useShell } from "../lib/shell";
-import { formatDateTime } from "../lib/day-labels";
-import { groupNotes, itemMeta, itemTitle, toNoteItems } from "../lib/items";
+import { groupNotes, itemTitle, toNoteItems } from "../lib/items";
 import type { ItemGroup, NoteItem } from "../lib/items";
 
 const UNDO_MS = 5000;
@@ -24,6 +22,21 @@ const SAVE_DEBOUNCE_MS = 1000;
 
 async function loadNotes(): Promise<NoteItem[]> {
   return toNoteItems(await typedInvoke("list_notes"));
+}
+
+/** 一覧の 2 段目に出す更新日。「08/04」 */
+function noteDate(item: NoteItem): string {
+  return item.date ? item.date.slice(5).replace("-", "/") : "";
+}
+
+function EmptyNotes(): JSX.Element {
+  return (
+    <div class="notes-empty">
+      <Icon name="note-pencil" size={24} />
+      <p class="notes-empty-title">ノートがありません</p>
+      <p class="notes-empty-body">新規から始めると、ここに並びます。</p>
+    </div>
+  );
 }
 
 export default function Workspace(): JSX.Element {
@@ -95,7 +108,6 @@ export default function Workspace(): JSX.Element {
         await typedInvoke("update_draft", {
           filePath: item.path,
           body,
-          tags: item.tags,
           client: await getDeviceSignals(),
         });
         await refetchNotes();
@@ -139,16 +151,10 @@ export default function Workspace(): JSX.Element {
     setEditing(false);
   };
 
-  const updateTags = (item: NoteItem, tags: string[]): void => {
-    void (async () => {
-      await typedInvoke("update_draft", {
-        filePath: item.path,
-        body: noteBody(),
-        tags,
-        client: await getDeviceSignals(),
-      });
-      await refetchNotes();
-    })();
+  const createNote = async (): Promise<void> => {
+    await typedInvoke("create_draft", { body: "", tags: [], client: await getDeviceSignals() });
+    await refetchNotes();
+    setDetailOpen(true);
   };
 
   // ---- 削除 + Undo（5秒は tombstone、経過後に本削除）----
@@ -175,10 +181,14 @@ export default function Workspace(): JSX.Element {
       <div class="list-pane">
         <div class="list-pane-head">
           <span class="list-pane-title">NOTES</span>
+          <button type="button" class="new-note" onClick={() => void createNote()}>
+            <Icon name="plus" size={12} />
+            新規
+          </button>
         </div>
 
         <div class="list-scroll">
-          <Show when={groups().length} fallback={<p class="empty-state">まだノートがありません</p>}>
+          <Show when={groups().length} fallback={<EmptyNotes />}>
             <For each={groups()}>
               {(group) => (
                 <>
@@ -192,7 +202,13 @@ export default function Workspace(): JSX.Element {
                         onClick={() => select(item as NoteItem)}
                       >
                         <span class="list-row-title">{itemTitle(item)}</span>
-                        <span class="list-row-meta">{itemMeta(item)}</span>
+                        <span class="list-row-meta">
+                          {noteDate(item as NoteItem)}
+                          <span class="list-row-file">{(item as NoteItem).filename}</span>
+                          <For each={(item as NoteItem).tags}>
+                            {(tag) => <span class="tag-badge">#{tag}</span>}
+                          </For>
+                        </span>
                       </button>
                     )}
                   </For>
@@ -217,7 +233,7 @@ export default function Workspace(): JSX.Element {
                   <Icon name="arrow-left" size={18} />
                 </button>
                 <span class="detail-meta">
-                  {formatDateTime(item().date, item().time)}
+                  <span class="detail-filename">{item().filename}</span>
                   <Show when={editing() && saveStatus() !== "idle"}>
                     <span class="detail-save-status">
                       {saveStatus() === "saving" ? "保存中…" : "保存しました"}
@@ -273,8 +289,6 @@ export default function Workspace(): JSX.Element {
                     }}
                   />
                 </Show>
-
-                <TagChips tags={item().tags} onChange={(tags) => updateTags(item(), tags)} />
               </div>
             </>
           )}

@@ -5,7 +5,17 @@ export type ShikiTheme = "github-dark-default" | "github-light-default";
 
 export type Theme = "system" | "light" | "dark";
 
-export const THEMES: readonly Theme[] = ["system", "light", "dark"] as const;
+/**
+ * 切り替わっていく順。ライトから始めるのは、押した人がまず見たいのが
+ * 「今と違う見た目」で、システム追従はその後に戻る場所だから。
+ */
+const THEMES: readonly Theme[] = ["light", "dark", "system"] as const;
+
+/** アイコンを 1 回押したときの次のテーマ。メニューを出すほどの選択肢ではない。 */
+export function nextTheme(current: Theme): Theme {
+  const at = THEMES.indexOf(current);
+  return THEMES[(at + 1) % THEMES.length];
+}
 
 export const THEME_LABELS: Record<Theme, string> = {
   system: "システム",

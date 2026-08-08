@@ -10,6 +10,8 @@
   --app-border: var(--gray-3);
   /* 罫線より更に薄い、レールや日の区切りに使う線 */
   --app-hairline: var(--gray-1);
+  /* 一覧側の下地。本文側との段差をこれだけで作る */
+  --app-sidebar: color-mix(in oklab, var(--gray-0) 45%, white);
   /* 読ませるためではなく添えるだけの文字。件数・ヒント */
   --app-text-hint: var(--gray-4);
   --app-accent: var(--gray-8);
@@ -31,6 +33,7 @@
   --app-text-faint: var(--gray-6);
   --app-border: var(--gray-7);
   --app-hairline: var(--gray-8);
+  --app-sidebar: color-mix(in oklab, var(--gray-8) 35%, var(--gray-9));
   --app-text-hint: var(--gray-7);
   --app-accent: var(--gray-4);
   --app-accent-soft: color-mix(in oklab, var(--app-accent) 16%, var(--gray-9));
@@ -86,4 +89,116 @@ body {
 .icon-button:hover,
 .icon-button[aria-expanded="true"] {
   background: var(--app-surface-2);
+}
+
+/* ---------------- 共有ボタン ---------------- */
+
+.button-primary,
+.button-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 9px 18px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.button-primary {
+  background: var(--app-accent);
+  color: var(--app-surface);
+  border: 1px solid var(--app-accent);
+}
+
+.button-primary:hover:not(:disabled) {
+  background: var(--app-text);
+  border-color: var(--app-text);
+}
+
+.button-secondary {
+  background: var(--app-input-bg);
+  color: var(--app-text-muted);
+  border: 1px solid var(--app-border);
+}
+
+.button-secondary:hover {
+  background: var(--app-surface-2);
+}
+
+.button-primary:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* ---------------- 初回起動 ---------------- */
+
+.first-run-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--size-4);
+  background: rgb(20 20 25 / 28%);
+}
+
+.first-run {
+  width: 480px;
+  max-width: 100%;
+  padding: 28px 32px;
+  border-radius: 14px;
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  box-shadow: 0 24px 56px -16px rgb(20 20 25 / 30%);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.first-run .icon {
+  color: var(--app-text-faint);
+}
+
+.first-run-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.first-run-body {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: var(--app-text-faint);
+}
+
+.first-run-input {
+  padding: 10px 14px;
+  border: 1px solid var(--app-border);
+  border-radius: 9px;
+  background: var(--app-input-bg);
+  color: var(--app-text);
+  font-family: inherit;
+  font-size: 14px;
+  outline: none;
+  box-shadow: 0 1px 2px rgb(20 20 25 / 4%);
+}
+
+.first-run-input:focus {
+  box-shadow: 0 0 0 3px var(--app-accent-soft);
+}
+
+.first-run-error {
+  margin: 0;
+  font-size: 12px;
+  color: var(--app-danger);
+}
+
+.first-run-actions {
+  display: flex;
+  gap: var(--size-2);
+  margin-top: 4px;
 }
