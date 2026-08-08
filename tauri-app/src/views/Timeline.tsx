@@ -146,6 +146,8 @@ export default function Timeline(): JSX.Element {
   const today = new Date();
 
   const [extraDates, setExtraDates] = createSignal<string[]>([]);
+  /** カレンダーで選ばれた、これから見せたい日。表示できたら消す。 */
+  const [jumpTo, setJumpTo] = createSignal<string | null>(null);
   const [editing, setEditing] = createSignal<TimelineItem | null>(null);
   const [draft, setDraft] = createSignal("");
   const [saved, setSaved] = createSignal(false);
@@ -160,6 +162,19 @@ export default function Timeline(): JSX.Element {
   });
 
   const days = createMemo(() => groupTimelineByDay(timeline() ?? []));
+
+  /**
+   * 日付を足すとデータを取り直すぶん行が作り直され、その場でスクロールしても
+   * 描き直しで先頭に戻る。読み込みが終わってから動かす。
+   */
+  createEffect(() => {
+    const iso = jumpTo();
+    if (!iso || timeline.loading) {
+      return;
+    }
+    document.querySelector(`[data-day="${iso}"]`)?.scrollIntoView({ block: "start" });
+    setJumpTo(null);
+  });
   const recordedDates = createMemo(() => [...new Set((timeline() ?? []).map((i) => i.date))]);
 
   const contextsFor = (iso: string): (DeviceContext | null)[] =>
@@ -265,11 +280,8 @@ export default function Timeline(): JSX.Element {
             contextsFor={contextsFor}
             onPick={(iso) => {
               setExtraDates((dates) => (dates.includes(iso) ? dates : [...dates, iso]));
+              setJumpTo(iso);
               shell.closePopovers();
-              // 取り込み直後はまだ DOM に無い。描画を 1 フレーム待つ。
-              queueMicrotask(() =>
-                document.querySelector(`[data-day="${iso}"]`)?.scrollIntoView({ block: "start" }),
-              );
             }}
           />
         </div>
