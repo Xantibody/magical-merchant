@@ -30,6 +30,10 @@
         {
           "scheme": ["magical-merchant"],
           "host": "auth"
+        },
+        {
+          "scheme": ["magical-merchant"],
+          "host": "widget"
         }
       ]
     }
