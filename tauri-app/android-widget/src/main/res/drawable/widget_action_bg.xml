@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Trailing action square: 12dp radius on the accent fill (capture bar's send
+     button, notes bar's plus button). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/widget_accent" />
+    <corners android:radius="12dp" />
+</shape>

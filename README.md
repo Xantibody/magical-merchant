@@ -130,6 +130,15 @@ workflow needs these repository secrets:
 See [`tauri-app/android-signing/README.md`](tauri-app/android-signing/README.md)
 for creating the keystore and for building locally.
 
+### Android — home screen widgets
+
+Two 4×1 bars ship with the APK. The Timeline capture bar opens a sheet over the
+home screen and appends straight to today's timeline through a JNI call into
+`magical_merchant_core` — the app is never started. The "new note" bar opens the
+app on the `magical-merchant://widget/new-note` deep link. Sources live in
+[`tauri-app/android-widget/`](tauri-app/android-widget/README.md) and are
+injected into the generated Gradle project by `just android-widget-setup`.
+
 ### macOS — nix-darwin module
 
 Add the flake input and enable the module in your nix-darwin configuration:
@@ -318,11 +327,12 @@ Communicates via stdio transport and provides the following read-only tools:
 
 ### Android release recipes (`tauri_app::`)
 
-| Command                                   | Description                              |
-| ----------------------------------------- | ---------------------------------------- |
-| `just tauri_app::android-sign-setup`      | Re-inject the signing config into Gradle |
-| `just tauri_app::android-build-release`   | Build a signed release APK               |
-| `just tauri_app::android-install-release` | Build and install it over USB            |
+| Command                                   | Description                               |
+| ----------------------------------------- | ----------------------------------------- |
+| `just tauri_app::android-sign-setup`      | Re-inject the signing config into Gradle  |
+| `just tauri_app::android-widget-setup`    | Re-install the home screen widget sources |
+| `just tauri_app::android-build-release`   | Build a signed release APK                |
+| `just tauri_app::android-install-release` | Build and install it over USB             |
 
 ### Rust recipes (`rust::`)
 

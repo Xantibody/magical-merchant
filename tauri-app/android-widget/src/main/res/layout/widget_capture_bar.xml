@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 2a — Timeline capture bar (4x1).
+     Left: TIMELINE label over the current time. Then the timeline rail, the
+     capture placeholder, and a send square. Static RemoteViews: the whole bar
+     is one tap target, and TextClock keeps the minute fresh without a
+     scheduled update. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_capture_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_bar_bg"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="16dp"
+    android:paddingTop="8dp"
+    android:paddingEnd="8dp"
+    android:paddingBottom="8dp">
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:letterSpacing="0.08"
+            android:maxLines="1"
+            android:text="@string/widget_timeline_label"
+            android:textColor="@color/widget_muted"
+            android:textSize="9.5sp"
+            android:textStyle="bold" />
+
+        <!-- Both formats are pinned to HH:mm on purpose: leaving format12Hour
+             unset renders "h:mm AM" on 12-hour locales, which is wider than the
+             label above it and breaks the two-line rhythm. -->
+        <TextClock
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="1dp"
+            android:fontFeatureSettings="tnum"
+            android:format12Hour="HH:mm"
+            android:format24Hour="HH:mm"
+            android:textColor="@color/widget_text"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- ImageView, not View: RemoteViews only inflates a fixed set of widget
+         classes and plain View is not one of them. -->
+    <ImageView
+        android:layout_width="20dp"
+        android:layout_height="match_parent"
+        android:layout_marginStart="12dp"
+        android:layout_marginTop="4dp"
+        android:layout_marginEnd="12dp"
+        android:layout_marginBottom="4dp"
+        android:background="@drawable/widget_rail"
+        android:contentDescription="@null" />
+
+    <TextView
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:text="@string/widget_capture_placeholder"
+        android:textColor="@color/widget_muted"
+        android:textSize="14sp" />
+
+    <ImageView
+        android:layout_width="42dp"
+        android:layout_height="42dp"
+        android:layout_marginStart="8dp"
+        android:background="@drawable/widget_action_bg"
+        android:contentDescription="@string/widget_capture_bar_label"
+        android:padding="9dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/ic_paper_plane_tilt" />
+</LinearLayout>

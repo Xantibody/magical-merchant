@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Dark-theme widget tokens (design handoff section 2a). Same geometry as the
+     light theme; only the palette is swapped. -->
+<resources>
+    <color name="widget_bg">#212529</color>
+    <color name="widget_border">#495057</color>
+    <color name="widget_text">#F1F3F5</color>
+    <color name="widget_muted">#868E96</color>
+    <color name="widget_rail">#343A40</color>
+    <color name="widget_accent">#CED4DA</color>
+    <color name="widget_on_accent">#212529</color>
+</resources>
