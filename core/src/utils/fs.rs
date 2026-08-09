@@ -1,5 +1,6 @@
 use std::fs::{self, DirEntry};
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::error::CoreError;
 
@@ -7,6 +8,37 @@ pub fn ensure_dir(path: &Path) -> Result<(), CoreError> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
+    Ok(())
+}
+
+/// 同一プロセス内の一時ファイル名の衝突を避ける通し番号。
+static TMP_SEQ: AtomicU64 = AtomicU64::new(0);
+
+/// 同じディレクトリに一時ファイルを書いてから rename で置き換える。
+/// `fs::write` の直接上書きは、書いている途中でプロセスが落ちると
+/// 半分だけ書けたファイルを残す。タイムラインは追記のたびに 1 日ぶんを
+/// 丸ごと書き直すので、それはその日の記録全体の破損を意味する。
+/// rename は同一ファイルシステム内なら原子的で、読者は旧内容か新内容の
+/// どちらかしか見ない。
+///
+/// 名前が `.sync-tmp-` なのは、クラッシュで残っても同期スキャンの既存の
+/// 除外に一致し、`.md` を持たないのでノート一覧にも現れないため。
+/// 電源断への fsync までは踏み込まない: 保存のたびの fsync は
+/// モバイルの電池と引き換えになる。ここで防ぐのはプロセス死での破損。
+pub fn write_atomic<C: AsRef<[u8]>>(path: &Path, contents: C) -> Result<(), CoreError> {
+    let dir = match path.parent() {
+        Some(parent) if !parent.as_os_str().is_empty() => parent,
+        _ => Path::new("."),
+    };
+    let seq = TMP_SEQ.fetch_add(1, Ordering::Relaxed);
+    let tmp = dir.join(format!(".sync-tmp-{}-{seq}", std::process::id()));
+
+    fs::write(&tmp, contents)?;
+    fs::rename(&tmp, path).inspect_err(|_| {
+        // rename に失敗した一時ファイルを残すと次の書き込みの邪魔はしないが
+        // ゴミが積もる。消せなかったところで元のエラーのほうが重要。
+        let _ = fs::remove_file(&tmp);
+    })?;
     Ok(())
 }
 
@@ -74,5 +106,57 @@ mod tests {
         let missing = tmp.path().join("nope");
 
         assert!(list_md_files(&missing).unwrap().is_empty());
+    }
+
+    #[test]
+    fn write_atomic_writes_the_contents() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("note.md");
+
+        write_atomic(&path, "hello").unwrap();
+
+        assert_eq!(fs::read_to_string(&path).unwrap(), "hello");
+    }
+
+    #[test]
+    fn write_atomic_replaces_what_was_there() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("note.md");
+        fs::write(&path, "old").unwrap();
+
+        write_atomic(&path, "new").unwrap();
+
+        assert_eq!(fs::read_to_string(&path).unwrap(), "new");
+    }
+
+    /// 一時ファイルが残ると、名前次第でノート一覧や同期対象に化ける。
+    #[test]
+    fn write_atomic_leaves_no_temp_file_behind() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("note.md");
+
+        write_atomic(&path, "hello").unwrap();
+
+        let names: Vec<_> = fs::read_dir(tmp.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().to_string())
+            .collect();
+        assert_eq!(names, vec!["note.md"]);
+    }
+
+    /// クラッシュで万一残っても、`.md` でないのでノート一覧には現れず、
+    /// `.sync-tmp-` なので同期スキャンの既存の除外にも一致する。
+    #[test]
+    fn write_atomic_temp_names_are_invisible_to_md_listing() {
+        let tmp = TempDir::new().unwrap();
+        fs::write(tmp.path().join(".sync-tmp-999-0"), "orphan").unwrap();
+        fs::write(tmp.path().join("real.md"), "x").unwrap();
+
+        let names: Vec<_> = list_md_files(tmp.path())
+            .unwrap()
+            .iter()
+            .map(|e| e.file_name().to_string_lossy().to_string())
+            .collect();
+        assert_eq!(names, vec!["real.md"]);
     }
 }
