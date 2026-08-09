@@ -26,8 +26,17 @@ function note(overrides: Partial<Note> = {}): Note {
 describe("toTimelineItems", () => {
   it("addresses each entry by date and position", () => {
     const items = toTimelineItems("2026-08-04", ["- [09:00:00] one", "- [10:00:00] two"]);
-    expect(items.map((i) => i.id)).toStrictEqual(["2026-08-04#0", "2026-08-04#1"]);
-    expect(items[1].index).toBe(1);
+    expect(items.map((i) => i.id)).toStrictEqual(["2026-08-04#1", "2026-08-04#0"]);
+  });
+
+  it("puts the newest entry of the day first", () => {
+    const items = toTimelineItems("2026-08-04", ["- [09:00:00] one", "- [10:00:00] two"]);
+    expect(items.map((i) => i.text)).toStrictEqual(["two", "one"]);
+  });
+
+  it("keeps the file position as the index so an edit reaches the right line", () => {
+    const items = toTimelineItems("2026-08-04", ["- [09:00:00] one", "- [10:00:00] two"]);
+    expect(items.map((i) => i.index)).toStrictEqual([1, 0]);
   });
 
   it("splits the recorded context out of the raw line", () => {
@@ -134,7 +143,7 @@ describe("replaceDayItems", () => {
 
     const updated = replaceDayItems(items, "2026-08-04", day("2026-08-04", ["today", "more"]));
 
-    expect(updated.map((i) => i.text)).toStrictEqual(["today", "more", "yesterday"]);
+    expect(updated.map((i) => i.text)).toStrictEqual(["more", "today", "yesterday"]);
   });
 
   it("puts the first entry of a new day at the top", () => {

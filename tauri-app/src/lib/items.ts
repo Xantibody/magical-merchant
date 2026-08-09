@@ -40,20 +40,27 @@ function firstLine(text: string): string {
   return line?.replace(/^#+\s*/, "").trim() ?? "";
 }
 
+/**
+ * 1 日ぶんの行を、新しい順（画面と同じ並び）の TimelineItem にする。
+ * ファイルは追記なので行は古い順に並ぶ。index には元の行位置を残す。
+ * 更新・削除はこの index で行を指すので、並べ替えは index を振った後にやる。
+ */
 export function toTimelineItems(date: string, raws: string[]): TimelineItem[] {
-  return raws.map((raw, index) => {
-    const parsed = parseTimelineEntry(raw);
-    return {
-      kind: "timeline",
-      id: `${date}#${index}`,
-      date,
-      index,
-      raw,
-      text: parsed.text,
-      time: parsed.time,
-      context: parsed.context,
-    };
-  });
+  return raws
+    .map((raw, index) => {
+      const parsed = parseTimelineEntry(raw);
+      return {
+        kind: "timeline" as const,
+        id: `${date}#${index}`,
+        date,
+        index,
+        raw,
+        text: parsed.text,
+        time: parsed.time,
+        context: parsed.context,
+      };
+    })
+    .toReversed();
 }
 
 export function toNoteItems(notes: Note[]): NoteItem[] {
