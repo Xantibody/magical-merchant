@@ -17,6 +17,11 @@ mod sync;
 #[cfg(target_os = "android")]
 pub mod widget_bridge;
 mod widget_link;
+// Only the Android JNI bridge reads this, but it is built everywhere so its
+// tests run: CI has no Android target, and the parsing is the part worth
+// testing.
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+mod widget_summary;
 
 use device::ClientContext;
 use magical_merchant_core::{NoteFilename, NoteSummary, SearchHit};
