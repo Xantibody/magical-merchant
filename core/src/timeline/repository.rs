@@ -7,7 +7,7 @@ use chrono::{Local, NaiveDate};
 use crate::error::CoreError;
 use crate::timeline::day::DayLog;
 use crate::utils::device::Context;
-use crate::utils::fs::ensure_dir;
+use crate::utils::fs::{ensure_dir, write_atomic};
 use crate::utils::markdown::{split_context_json, split_time_prefix};
 use crate::utils::paths::{self, timeline_file_path};
 
@@ -28,7 +28,7 @@ impl Timeline {
         let mut day = DayLog::parse(&self.read_raw(now.date_naive())?.unwrap_or_default());
         day.push(text, now, context);
 
-        fs::write(&file_path, day.render()?)?;
+        write_atomic(&file_path, day.render()?)?;
         Ok(())
     }
 
@@ -111,7 +111,7 @@ impl Timeline {
             return Ok(());
         }
 
-        fs::write(&file_path, day.render()?)?;
+        write_atomic(&file_path, day.render()?)?;
         Ok(())
     }
 }

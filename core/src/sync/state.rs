@@ -6,6 +6,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::CoreError;
+use crate::utils::fs::write_atomic;
 
 const STATE_FILENAME: &str = ".sync-state.json";
 
@@ -35,7 +36,7 @@ impl SyncState {
         let path = base_dir.join(STATE_FILENAME);
         let content =
             serde_json::to_string_pretty(self).map_err(|e| CoreError::Sync(e.to_string()))?;
-        fs::write(&path, content)?;
+        write_atomic(&path, content)?;
         Ok(())
     }
 }
