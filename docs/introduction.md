@@ -111,7 +111,7 @@ sequenceDiagram
 
     User->>UI: Enter
     UI->>Ctx: getClientContext()
-    Note over Ctx: last known fix returned immediately;<br/>cold GPS waits at most 1.5s
+    Note over Ctx: last known fix returned immediately —<br/>cold GPS waits at most 1.5s
     UI->>Rust: save_quick_capture(text, context)
     Rust->>Core: save_timeline_entry
     Core->>Core: append to data/timeline/YYYY-MM-DD.md
