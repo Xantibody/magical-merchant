@@ -32,6 +32,10 @@ magical-merchant/
 └── plans/          # Implementation plans
 ```
 
+## Documentation
+
+- [Architecture](docs/introduction.md) — system overview, design decisions, and data flow (Mermaid diagrams)
+
 ## Getting Started
 
 ### Prerequisites
