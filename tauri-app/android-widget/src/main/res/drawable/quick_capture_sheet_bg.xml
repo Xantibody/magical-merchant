@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Sheet surface: 14dp radius, matching the app's floating capture bar rather
+     than the 24dp of the widget bars. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/widget_bg" />
+    <stroke
+        android:width="1dp"
+        android:color="@color/widget_border" />
+    <corners android:radius="14dp" />
+</shape>

@@ -5,6 +5,9 @@
     <string name="widget_capture_bar_label">タイムラインに記録</string>
     <string name="widget_capture_bar_description">ホーム画面からタイムラインに書き込みます</string>
 
+    <string name="quick_capture_send">記録する</string>
+    <string name="quick_capture_failed">保存できませんでした</string>
+
     <string name="widget_notes_label">NOTES</string>
     <string name="widget_notes_new_title">新しいノート</string>
     <string name="widget_notes_new_placeholder">タップして書き始める</string>

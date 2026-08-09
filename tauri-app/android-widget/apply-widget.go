@@ -30,10 +30,19 @@ const (
 
 const markerID = "widgets"
 
-// receivers is the manifest region. exported="false" is correct for app
-// widgets: the system's AppWidgetService is exempt from the export check, and
-// leaving them exported lets any app poke the providers.
-const receivers = `        <receiver
+// components is the manifest region: the two widget receivers and the capture
+// sheet they open. exported="false" throughout — the system's AppWidgetService
+// is exempt from the export check, and the sheet is only ever started through a
+// PendingIntent this app created, which carries this app's identity.
+const components = `        <activity
+            android:name=".widget.QuickCaptureActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:noHistory="true"
+            android:theme="@style/Theme.QuickCapture"
+            android:windowSoftInputMode="adjustResize|stateAlwaysVisible" />
+
+        <receiver
             android:name=".widget.CaptureBarWidgetProvider"
             android:exported="false"
             android:label="@string/widget_capture_bar_label">
@@ -118,9 +127,9 @@ func patchManifest() error {
 	}
 
 	content := removeBlock(string(raw), markerID)
-	block := markerBlock(markerID, "        ", receivers)
+	block := markerBlock(markerID, "        ", components)
 
-	// The receivers belong to the application, so they go just before its
+	// The components belong to the application, so they go just before its
 	// closing tag rather than after the last activity.
 	const anchor = "    </application>"
 	idx := strings.Index(content, anchor)
@@ -136,7 +145,7 @@ func patchManifest() error {
 	if err := os.WriteFile(manifestPath, []byte(content), 0o644); err != nil {
 		return fmt.Errorf("write %s: %w", manifestPath, err)
 	}
-	fmt.Printf("apply-widget: widget receivers registered in %s\n", manifestPath)
+	fmt.Printf("apply-widget: widget components registered in %s\n", manifestPath)
 	return nil
 }
 
