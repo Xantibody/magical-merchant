@@ -73,6 +73,12 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
   const runWidgetAction = (action: WidgetAction): void => {
     if (action.name === "new-note") {
       newNote();
+      return;
+    }
+    // ?file= はルーターに預ける。Workspace の選択状態を外から触れるように
+    // 引き上げるより、開きたいノートを URL に持たせるほうが素直
+    if (action.name === "note" && action.file) {
+      navigate(`${ROUTES.NOTES}?file=${encodeURIComponent(action.file)}`);
     }
   };
 
