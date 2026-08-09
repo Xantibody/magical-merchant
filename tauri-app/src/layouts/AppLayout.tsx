@@ -1,6 +1,8 @@
 import { createSignal, createEffect, onCleanup, onMount, For, Show } from "solid-js";
 import type { JSX } from "solid-js";
 import { useLocation, useNavigate, A } from "@solidjs/router";
+import { listen } from "@tauri-apps/api/event";
+import type { UnlistenFn } from "@tauri-apps/api/event";
 import Icon from "../components/Icon";
 import CommandPalette from "../components/CommandPalette";
 import SyncPopover from "../components/SyncPopover";
@@ -13,6 +15,8 @@ import type { Theme } from "../lib/theme";
 import { MODE_ICONS, MODE_LABELS, ROUTES } from "../lib/routes";
 import type { RoutePath } from "../lib/routes";
 import { typedInvoke } from "../lib/commands";
+import type { WidgetAction } from "../lib/commands";
+import { EVENTS } from "../lib/events";
 import { getDeviceSignals, warmLocation } from "../lib/client-context";
 
 const TABS: RoutePath[] = [ROUTES.TIMELINE, ROUTES.NOTES];
@@ -66,9 +70,29 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
     })();
   };
 
+  const runWidgetAction = (action: WidgetAction): void => {
+    if (action.name === "new-note") {
+      newNote();
+    }
+  };
+
   onMount(() => {
     // 最初の記録が測位を待たされないよう、許可済みなら今のうちに測り始める
     warmLocation();
+
+    // ウィジェットのタップはたいていアプリを冷えた状態から起こす。起動 URL は
+    // WebView が listen する前に捌かれてしまうので、置いてある分を引き取る。
+    let unlistenWidget: UnlistenFn | undefined;
+    void (async () => {
+      unlistenWidget = await listen<WidgetAction>(EVENTS.WIDGET_OPEN, (e) =>
+        runWidgetAction(e.payload),
+      );
+      const pending = await typedInvoke("take_widget_action");
+      if (pending) {
+        runWidgetAction(pending);
+      }
+    })();
+    onCleanup(() => unlistenWidget?.());
 
     const onKeyDown = (e: KeyboardEvent): void => {
       if (isMetaK(e)) {
