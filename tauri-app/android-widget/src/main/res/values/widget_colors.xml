@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Light-theme widget tokens, mirroring the app's design tokens
+     (design_handoff_timeline_redesign, 1b). The night variant lives in
+     values-night/widget_colors.xml. -->
+<resources>
+    <color name="widget_bg">#F8F9FA</color>
+    <color name="widget_border">#DEE2E6</color>
+    <color name="widget_text">#212529</color>
+    <color name="widget_muted">#ADB5BD</color>
+    <color name="widget_rail">#F1F3F5</color>
+    <color name="widget_accent">#343A40</color>
+    <color name="widget_on_accent">#FFFFFF</color>
+</resources>
