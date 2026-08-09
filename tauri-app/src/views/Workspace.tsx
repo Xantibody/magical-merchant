@@ -10,6 +10,7 @@ import {
   onCleanup,
 } from "solid-js";
 import type { JSX } from "solid-js";
+import { useSearchParams } from "@solidjs/router";
 import type { Editor } from "@milkdown/kit/core";
 import Icon from "../components/Icon";
 import MarkdownPreview from "../components/MarkdownPreview";
@@ -48,6 +49,7 @@ function EmptyNotes(): JSX.Element {
 
 export default function Workspace(): JSX.Element {
   const shell = useShell();
+  const [searchParams] = useSearchParams();
   const today = new Date();
 
   const [selectedId, setSelectedId] = createSignal<string | null>(null);
@@ -77,6 +79,20 @@ export default function Workspace(): JSX.Element {
     const items = visibleItems();
     return items.find((item) => item.id === selectedId()) ?? items[0];
   });
+
+  // ウィジェットの行から `?file=` 付きで来たときだけ、その 1 件を開く。
+  // 一覧が届く前に来ることがあるが、id はファイル名そのものなので先に置ける
+  createEffect(
+    on(
+      () => searchParams.file,
+      (file) => {
+        if (typeof file === "string" && file) {
+          setSelectedId(file);
+          setDetailOpen(true);
+        }
+      },
+    ),
+  );
 
   // ---- 選択中ノートの本文を読む ----
   createEffect(() => {

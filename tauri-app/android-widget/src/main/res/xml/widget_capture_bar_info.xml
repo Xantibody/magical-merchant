@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- updatePeriodMillis="0": the bar is static and TextClock ticks on its own,
-     so there is nothing for the system to poll. -->
+<!-- 30 minutes, the platform minimum. The clock ticks on its own, but the tail
+     of the day changes when the *app* writes an entry, and nothing tells the
+     widget about that. A capture from the sheet refreshes immediately; this
+     only catches up the rest. -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/widget_capture_bar_description"
     android:initialLayout="@layout/widget_capture_bar"
@@ -11,5 +13,5 @@
     android:resizeMode="horizontal"
     android:targetCellHeight="1"
     android:targetCellWidth="4"
-    android:updatePeriodMillis="0"
+    android:updatePeriodMillis="1800000"
     android:widgetCategory="home_screen" />

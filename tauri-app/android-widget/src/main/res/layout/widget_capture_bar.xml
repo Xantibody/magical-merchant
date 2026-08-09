@@ -58,15 +58,34 @@
         android:background="@drawable/widget_rail"
         android:contentDescription="@null" />
 
-    <TextView
+    <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"
-        android:ellipsize="end"
-        android:maxLines="1"
-        android:text="@string/widget_capture_placeholder"
-        android:textColor="@color/widget_muted"
-        android:textSize="14sp" />
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/widget_capture_prompt"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="@string/widget_capture_placeholder"
+            android:textColor="@color/widget_muted"
+            android:textSize="14sp" />
+
+        <!-- Gone until there is an entry: an empty line would push the prompt
+             off-centre in the bar for a day's first capture. -->
+        <TextView
+            android:id="@+id/widget_capture_last"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/widget_faint"
+            android:textSize="11.5sp"
+            android:visibility="gone" />
+    </LinearLayout>
 
     <ImageView
         android:layout_width="42dp"

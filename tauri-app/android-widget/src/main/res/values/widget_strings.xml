@@ -2,6 +2,7 @@
 <resources>
     <string name="widget_timeline_label">TIMELINE</string>
     <string name="widget_capture_placeholder">いま何してる?</string>
+    <string name="widget_capture_continue">続きを記録…</string>
     <string name="widget_capture_bar_label">タイムラインに記録</string>
     <string name="widget_capture_bar_description">ホーム画面からタイムラインに書き込みます</string>
 
@@ -13,4 +14,7 @@
     <string name="widget_notes_new_placeholder">タップして書き始める</string>
     <string name="widget_notes_new_widget_label">新しいノート</string>
     <string name="widget_notes_new_description">新しいノートを開いて書き始めます</string>
+    <string name="widget_notes_list_label">最近のノート</string>
+    <string name="widget_notes_list_description">最近のノートを開きます</string>
+    <string name="widget_notes_empty">ノートがありません</string>
 </resources>
