@@ -4,6 +4,7 @@ import Icon from "./Icon";
 import type { IconName } from "./Icon";
 import { typedInvoke } from "../lib/commands";
 import type { SearchHit } from "../lib/commands";
+import { createDebouncedAccessor } from "../lib/debounce";
 
 interface PaletteCommand {
   id: string;
@@ -31,10 +32,17 @@ function searchHits(query: string): Promise<SearchHit[]> {
   return typedInvoke("search_all", { query });
 }
 
+/**
+ * search_all は全タイムライン + 全ノートのファイル走査で、実機では 1 回
+ * 100ms を超えうる。打鍵ごとに発行せず、指が止まってからまとめて聞く。
+ * コマンドの絞り込みはメモリ内なので query を直に見て即時に効かせる。
+ */
+const SEARCH_DEBOUNCE_MS = 200;
+
 export default function CommandPalette(props: CommandPaletteProps): JSX.Element {
   const [query, setQuery] = createSignal("");
   const [cursor, setCursor] = createSignal(0);
-  const [hits] = createResource(query, searchHits);
+  const [hits] = createResource(createDebouncedAccessor(query, SEARCH_DEBOUNCE_MS), searchHits);
 
   let inputRef: HTMLInputElement | undefined;
   onMount(() => inputRef?.focus());
