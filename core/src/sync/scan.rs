@@ -1,9 +1,11 @@
+use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::Read as _;
 use std::path::Path;
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::CoreError;
@@ -16,18 +18,79 @@ pub struct LocalFile {
     pub content_hash: String,
 }
 
+const CACHE_FILENAME: &str = ".scan-cache.json";
+
+/// mtime がこれより新しいファイルはキャッシュに記録しない。
+/// mtime の粒度が粗いファイルシステムでは「記録した直後・同じ mtime のまま」の
+/// 書き換えにキャッシュが気づけない（git index と同じ racily-clean 問題）。
+/// できたてのファイルを対象外にしておけば、その窓は次のスキャンで必ず閉じる。
+const RACY_MARGIN: Duration = Duration::from_secs(2);
+
+/// 前回スキャンの結果。mtime と size が一致したファイルはハッシュを使い回し、
+/// 読み直しも SHA-256 もしない。同期は書き込みのたびに走るので、全ファイルの
+/// 再読込は端末の電池と同期の待ち時間にそのまま乗る。
+///
+/// キャッシュは正しさに関与しない: 壊れていれば捨てて全件ハッシュし直すだけ。
+/// data の外に置くのは、中に置くと自分自身が同期対象になるため。
+#[derive(Debug, Default, Serialize, Deserialize)]
+struct ScanCache {
+    files: HashMap<String, CachedHash>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct CachedHash {
+    /// UNIX epoch ミリ秒。文字列の日時より比較が速く、キャッシュも小さい。
+    mtime_ms: i64,
+    size: u64,
+    hash: String,
+}
+
+impl ScanCache {
+    fn load(base_dir: &Path) -> Self {
+        fs::read_to_string(base_dir.join(CACHE_FILENAME))
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default()
+    }
+
+    /// 書けなくても致命ではない。次のスキャンが全件ハッシュに戻るだけ。
+    fn save(&self, base_dir: &Path) {
+        if let Ok(content) = serde_json::to_string(self) {
+            let _ = fs::write(base_dir.join(CACHE_FILENAME), content);
+        }
+    }
+}
+
 pub fn scan_local_files(base_dir: &Path) -> Result<Vec<LocalFile>, CoreError> {
     let data_dir = paths::data_dir(base_dir);
     if !data_dir.exists() {
         return Ok(Vec::new());
     }
 
-    let mut files = Vec::new();
-    walk_dir(&data_dir, &data_dir, &mut files)?;
-    Ok(files)
+    let cached = ScanCache::load(base_dir);
+    let mut walk = Walk {
+        files: Vec::new(),
+        cached,
+        fresh: ScanCache::default(),
+        now: SystemTime::now(),
+    };
+    walk_dir(&data_dir, &data_dir, &mut walk)?;
+
+    // 変化が無ければ書かない。同期は頻繁に走るので、無駄な書き込みも積もる。
+    if walk.fresh.files != walk.cached.files {
+        walk.fresh.save(base_dir);
+    }
+    Ok(walk.files)
 }
 
-fn walk_dir(root: &Path, current: &Path, files: &mut Vec<LocalFile>) -> Result<(), CoreError> {
+struct Walk {
+    files: Vec<LocalFile>,
+    cached: ScanCache,
+    fresh: ScanCache,
+    now: SystemTime,
+}
+
+fn walk_dir(root: &Path, current: &Path, walk: &mut Walk) -> Result<(), CoreError> {
     let mut content = Vec::new();
     for entry in fs::read_dir(current)? {
         let entry = entry?;
@@ -47,7 +110,7 @@ fn walk_dir(root: &Path, current: &Path, files: &mut Vec<LocalFile>) -> Result<(
         };
 
         if metadata.is_dir() {
-            walk_dir(root, &path, files)?;
+            walk_dir(root, &path, walk)?;
             continue;
         }
         if !metadata.is_file() {
@@ -67,17 +130,41 @@ fn walk_dir(root: &Path, current: &Path, files: &mut Vec<LocalFile>) -> Result<(
             .ok_or_else(|| CoreError::Sync("non-UTF8 path".to_string()))?
             .to_string();
 
-        let modified: DateTime<Utc> = metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH).into();
+        let modified_at = metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH);
+        let modified: DateTime<Utc> = modified_at.into();
+        let mtime_ms = modified.timestamp_millis();
+        let size = metadata.len();
 
-        // バッファを使い回してファイル 1 件ごとの確保をなくす。
-        content.clear();
-        content.reserve(usize::try_from(metadata.len()).unwrap_or(0));
-        File::open(&path)?.read_to_end(&mut content)?;
+        let hash = match walk.cached.files.get(&key) {
+            Some(c) if c.mtime_ms == mtime_ms && c.size == size => c.hash.clone(),
+            _ => {
+                // バッファを使い回してファイル 1 件ごとの確保をなくす。
+                content.clear();
+                content.reserve(usize::try_from(size).unwrap_or(0));
+                File::open(&path)?.read_to_end(&mut content)?;
+                compute_hash(&content)
+            }
+        };
 
-        files.push(LocalFile {
+        let old_enough = walk
+            .now
+            .duration_since(modified_at)
+            .is_ok_and(|elapsed| elapsed >= RACY_MARGIN);
+        if old_enough {
+            walk.fresh.files.insert(
+                key.clone(),
+                CachedHash {
+                    mtime_ms,
+                    size,
+                    hash: hash.clone(),
+                },
+            );
+        }
+
+        walk.files.push(LocalFile {
             key,
             last_modified: modified,
-            content_hash: compute_hash(&content),
+            content_hash: hash,
         });
     }
     Ok(())
@@ -203,5 +290,123 @@ mod tests {
         std::os::unix::fs::symlink(dir.path().join("gone.md"), notes.join("dangling.md")).unwrap();
 
         assert!(scan_local_files(dir.path()).unwrap().is_empty());
+    }
+
+    // ──────────── ハッシュキャッシュ ────────────
+
+    use std::time::Duration;
+
+    fn seed_note(dir: &Path, name: &str, content: &str) -> std::path::PathBuf {
+        let notes = dir.join("data").join("notes");
+        fs::create_dir_all(&notes).unwrap();
+        let path = notes.join(name);
+        fs::write(&path, content).unwrap();
+        path
+    }
+
+    fn set_mtime(path: &Path, t: SystemTime) {
+        File::options()
+            .write(true)
+            .open(path)
+            .unwrap()
+            .set_modified(t)
+            .unwrap();
+    }
+
+    /// mtime を過去に倒し、その値を返す。書きたてのファイルは racily-clean
+    /// 対策でキャッシュされないので、テストでは十分に古くしてから測る。
+    /// 「同じ mtime」を再現する側は返り値をそのまま使う。`now() - 10s` を
+    /// 呼び直すとミリ秒がずれて、別の mtime になってしまう。
+    fn age(path: &Path, secs_ago: u64) -> SystemTime {
+        let t = SystemTime::now() - Duration::from_secs(secs_ago);
+        set_mtime(path, t);
+        t
+    }
+
+    /// mtime と size が変わっていなければ中身を読み直さない、が仕様。
+    /// それを観測するため、中身だけ同サイズで差し替えて mtime を戻す。
+    /// 旧ハッシュが返れば読んでいない証拠。
+    #[test]
+    fn an_unchanged_file_is_not_rehashed_on_the_next_scan() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = seed_note(dir.path(), "a.md", "hello");
+        let mtime = age(&path, 10);
+        let first = scan_local_files(dir.path()).unwrap();
+
+        fs::write(&path, "world").unwrap();
+        set_mtime(&path, mtime);
+        let second = scan_local_files(dir.path()).unwrap();
+
+        assert_eq!(second[0].content_hash, first[0].content_hash);
+        assert_eq!(second[0].content_hash, compute_hash(b"hello"));
+    }
+
+    #[test]
+    fn a_changed_mtime_invalidates_the_cached_hash() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = seed_note(dir.path(), "a.md", "hello");
+        age(&path, 10);
+        scan_local_files(dir.path()).unwrap();
+
+        fs::write(&path, "world").unwrap();
+        age(&path, 5);
+        let second = scan_local_files(dir.path()).unwrap();
+
+        assert_eq!(second[0].content_hash, compute_hash(b"world"));
+    }
+
+    #[test]
+    fn a_changed_size_invalidates_even_with_the_same_mtime() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = seed_note(dir.path(), "a.md", "hello");
+        let mtime = age(&path, 10);
+        scan_local_files(dir.path()).unwrap();
+
+        fs::write(&path, "hi").unwrap();
+        set_mtime(&path, mtime);
+        let second = scan_local_files(dir.path()).unwrap();
+
+        assert_eq!(second[0].content_hash, compute_hash(b"hi"));
+    }
+
+    /// git index と同じ racily-clean 対策。書きたてのファイルは mtime の
+    /// 粒度内で書き換わってもキャッシュが気づけないので、記録しない。
+    #[test]
+    fn a_freshly_written_file_is_rehashed_on_every_scan() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = seed_note(dir.path(), "a.md", "hello");
+        scan_local_files(dir.path()).unwrap();
+
+        // mtime を保ったまま同サイズで書き換える最悪ケース
+        let mtime = fs::metadata(&path).unwrap().modified().unwrap();
+        fs::write(&path, "world").unwrap();
+        set_mtime(&path, mtime);
+        let second = scan_local_files(dir.path()).unwrap();
+
+        assert_eq!(second[0].content_hash, compute_hash(b"world"));
+    }
+
+    #[test]
+    fn a_corrupt_cache_file_is_ignored_and_rebuilt() {
+        let dir = tempfile::tempdir().unwrap();
+        seed_note(dir.path(), "a.md", "hello");
+        fs::write(dir.path().join(".scan-cache.json"), "{not json").unwrap();
+
+        let files = scan_local_files(dir.path()).unwrap();
+
+        assert_eq!(files[0].content_hash, compute_hash(b"hello"));
+    }
+
+    /// キャッシュは data の外に置く。data 配下だと自分自身が同期対象になる。
+    #[test]
+    fn the_cache_file_never_appears_in_scan_results() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = seed_note(dir.path(), "a.md", "hello");
+        age(&path, 10);
+        scan_local_files(dir.path()).unwrap();
+        let second = scan_local_files(dir.path()).unwrap();
+
+        assert_eq!(second.len(), 1);
+        assert_eq!(second[0].key, "notes/a.md");
     }
 }
