@@ -11,6 +11,11 @@ mod device;
 #[cfg(target_os = "macos")]
 mod location;
 mod sync;
+// Public because it is a real external surface: the JNI symbol inside is what
+// the Android widget links against, and `unreachable_pub` is right that a
+// private module cannot hold one honestly.
+#[cfg(target_os = "android")]
+pub mod widget_bridge;
 
 use device::ClientContext;
 use magical_merchant_core::{NoteFilename, NoteSummary, SearchHit};
