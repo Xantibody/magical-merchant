@@ -41,6 +41,10 @@ base64 = "0.22"
 [target.'cfg(not(target_os = "android"))'.dependencies]
 battery = "0.7"
 
+[target.'cfg(target_os = "android")'.dependencies]
+# The home screen widget's capture sheet calls into the core through JNI.
+jni = "0.21"
+
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
 # 既定では全ヘッダと block2 / dispatch2 / contacts まで引き込む。使うのは
