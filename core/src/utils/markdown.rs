@@ -51,6 +51,15 @@ pub fn strip_timeline_prefix(entry: &str) -> &str {
     split_context_json(rest).map_or(rest, |json| rest[..rest.len() - json.len()].trim_end())
 }
 
+/// エントリの `HH:MM:SS`。プレフィックスが無い旧い行では `None`。
+#[must_use]
+pub fn timeline_entry_time(entry: &str) -> Option<&str> {
+    let (prefix, _) = split_time_prefix(entry)?;
+    prefix
+        .strip_prefix("- [")
+        .and_then(|t| t.strip_suffix("] "))
+}
+
 pub fn format_note_markdown(
     body: &str,
     tags: &[String],
@@ -103,6 +112,18 @@ mod tests {
     fn test_format_timeline_line_multiline() {
         let result = format_timeline_line("line1\nline2", fixed_timestamp(), &test_context());
         assert!(result.contains("line1\nline2"));
+    }
+
+    #[test]
+    fn test_timeline_entry_time() {
+        let line = format_timeline_line("hello", fixed_timestamp(), &test_context());
+        assert_eq!(timeline_entry_time(&line), Some("14:30:45"));
+    }
+
+    /// 時刻を持たない旧い行。落として扱う側に判断させる。
+    #[test]
+    fn test_timeline_entry_time_without_prefix() {
+        assert_eq!(timeline_entry_time("- plain bullet"), None);
     }
 
     #[test]
