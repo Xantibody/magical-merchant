@@ -500,7 +500,10 @@ fn write_under(data_dir: &Path, key: &str, content: &[u8]) -> Result<(), String>
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| format!("mkdir {key}: {e}"))?;
     }
-    fs::write(&path, content).map_err(|e| format!("write {key}: {e}"))
+    // 直接上書きだと、ダウンロード書き込み中のクラッシュで手元のメモが
+    // 半分だけ書けたファイルに置き換わる
+    magical_merchant_core::utils::fs::write_atomic(&path, content)
+        .map_err(|e| format!("write {key}: {e}"))
 }
 
 fn decode(file: &DownloadedFile) -> Result<Vec<u8>, String> {
