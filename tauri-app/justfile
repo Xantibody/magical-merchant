@@ -29,7 +29,7 @@ android-dev: setup
 android-build:
   pnpm tauri android build
 
-android-build-debug:
+android-build-debug: android-widget-setup
   pnpm tauri android build --debug --target aarch64
 
 android-install: android-build-debug
@@ -41,10 +41,16 @@ android-install: android-build-debug
 android-sign-setup:
   go run android-signing/apply-signing.go
 
+# Install the home screen widget sources into gen/android and register the
+# receivers in the generated manifest (idempotent; re-run after
+# `tauri android init`). See android-widget/README.md.
+android-widget-setup:
+  go run android-widget/apply-widget.go
+
 # Build a signed release APK. Requires keystore.properties.
 # arm64 のみ: x86 系はエミュレータ専用で実機には要らず、universal だと
 # 4 ABI ぶんの .so で APK が 52MB まで膨らむ。
-android-build-release: android-sign-setup
+android-build-release: android-widget-setup android-sign-setup
   pnpm tauri android build --apk --target aarch64
 
 # Same, but from a checkout with no gen/android yet (CI). keystore.properties

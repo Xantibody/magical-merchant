@@ -50,6 +50,9 @@ jobs:
       - name: Generate the Android project
         run: nix develop .#android --command just tauri_app::android-init
 
+      - name: Install the home screen widget sources
+        run: nix develop .#android --command just tauri_app::android-widget-setup
+
       - name: Restore the signing keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
