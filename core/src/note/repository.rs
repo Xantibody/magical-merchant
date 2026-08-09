@@ -6,7 +6,7 @@ use chrono::Local;
 use crate::error::CoreError;
 use crate::utils::device::Context;
 use crate::utils::frontmatter::{self, NoteFrontmatter};
-use crate::utils::fs::{ensure_dir, list_md_files};
+use crate::utils::fs::{ensure_dir, list_md_files, write_atomic};
 use crate::utils::markdown::format_note_markdown;
 use crate::utils::paths::{note_file_path, notes_dir};
 use crate::utils::validated::NoteFilename;
@@ -37,7 +37,7 @@ impl Notes {
         ensure_dir(&file_path)?;
 
         let markdown = format_note_markdown(body, tags, now, context)?;
-        fs::write(&file_path, markdown)?;
+        write_atomic(&file_path, markdown)?;
         Ok(file_path)
     }
 
@@ -90,7 +90,7 @@ impl Notes {
 
         let now = Local::now();
         let markdown = format_note_markdown(body, &tags, now, context)?;
-        fs::write(path, markdown)?;
+        write_atomic(path, markdown)?;
         Ok(())
     }
 

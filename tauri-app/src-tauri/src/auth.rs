@@ -35,7 +35,8 @@ impl SyncConfig {
         fs::create_dir_all(base_dir).map_err(|e| e.to_string())?;
         let path = base_dir.join(SYNC_CONFIG_FILENAME);
         let content = serde_json::to_string_pretty(self).map_err(|e| e.to_string())?;
-        fs::write(&path, content).map_err(|e| e.to_string())?;
+        magical_merchant_core::utils::fs::write_atomic(&path, content)
+            .map_err(|e| e.to_string())?;
         Ok(())
     }
 
@@ -89,7 +90,7 @@ mod token_store {
     pub(super) fn store(base_dir: &Path, token: &str) -> Result<(), String> {
         fs::create_dir_all(base_dir).map_err(|e| e.to_string())?;
         let path = path(base_dir);
-        fs::write(&path, token).map_err(|e| e.to_string())?;
+        magical_merchant_core::utils::fs::write_atomic(&path, token).map_err(|e| e.to_string())?;
         fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).map_err(|e| e.to_string())
     }
 
