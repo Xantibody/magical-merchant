@@ -20,7 +20,7 @@ test: setup
 dev: setup
   pnpm tauri dev
 
-android-init:
+android-init: setup
   pnpm tauri android init
 
 android-dev: setup
