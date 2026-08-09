@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The capture sheet (design 1b): a scrim over the home screen with a rounded
+     card pinned to the bottom, so `adjustResize` lifts it onto the IME. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/quick_capture_scrim"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/widget_scrim"
+    android:gravity="bottom"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:id="@+id/quick_capture_sheet"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_margin="12dp"
+        android:background="@drawable/quick_capture_sheet_bg"
+        android:gravity="bottom"
+        android:orientation="horizontal"
+        android:paddingStart="16dp"
+        android:paddingTop="10dp"
+        android:paddingEnd="10dp"
+        android:paddingBottom="10dp">
+
+        <EditText
+            android:id="@+id/quick_capture_input"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:background="@null"
+            android:gravity="top"
+            android:hint="@string/widget_capture_placeholder"
+            android:importantForAutofill="no"
+            android:inputType="textMultiLine|textCapSentences"
+            android:maxLines="6"
+            android:minHeight="38dp"
+            android:paddingEnd="8dp"
+            android:textColor="@color/widget_text"
+            android:textColorHint="@color/widget_muted"
+            android:textSize="15sp" />
+
+        <ImageButton
+            android:id="@+id/quick_capture_send"
+            android:layout_width="38dp"
+            android:layout_height="38dp"
+            android:background="@drawable/widget_action_bg"
+            android:contentDescription="@string/quick_capture_send"
+            android:padding="9dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_paper_plane_tilt" />
+    </LinearLayout>
+</LinearLayout>

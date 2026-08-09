@@ -1,17 +1,18 @@
 package com.magical_merchant.app.widget
 
+import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.Context
+import android.content.Intent
 import android.widget.RemoteViews
 import com.magical_merchant.app.R
 
 /**
  * 2a — the Timeline capture bar (4x1).
  *
- * Presentation only: the bar is static and the whole surface opens the app on
- * the Timeline. The in-place capture sheet (QuickCaptureActivity writing through
- * a JNI bridge into magical_merchant_core) is phase 2 and is not wired up here.
+ * The whole surface opens [QuickCaptureActivity] over the home screen; the app
+ * itself is never started, which is the point of the widget.
  */
 class CaptureBarWidgetProvider : AppWidgetProvider() {
     override fun onUpdate(
@@ -19,11 +20,17 @@ class CaptureBarWidgetProvider : AppWidgetProvider() {
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray,
     ) {
+        val sheet = Intent(context, QuickCaptureActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val pending = PendingIntent.getActivity(
+            context,
+            REQUEST_CODE,
+            sheet,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
         val views = RemoteViews(context.packageName, R.layout.widget_capture_bar).apply {
-            setOnClickPendingIntent(
-                R.id.widget_capture_root,
-                deepLinkPendingIntent(context, REQUEST_CODE, WidgetDeepLink.CAPTURE),
-            )
+            setOnClickPendingIntent(R.id.widget_capture_root, pending)
         }
         appWidgetIds.forEach { appWidgetManager.updateAppWidget(it, views) }
     }

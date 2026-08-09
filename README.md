@@ -132,10 +132,10 @@ for creating the keystore and for building locally.
 
 ### Android — home screen widgets
 
-Two 4×1 bars ship with the APK: a Timeline capture bar and a "new note" bar.
-Both are presentation-only for now — a tap opens the app through the
-`magical-merchant://widget/…` deep link; writing from the widget itself is not
-implemented. Sources live in
+Two 4×1 bars ship with the APK. The Timeline capture bar opens a sheet over the
+home screen and appends straight to today's timeline through a JNI call into
+`magical_merchant_core` — the app is never started. The "new note" bar opens the
+app on the `magical-merchant://widget/new-note` deep link. Sources live in
 [`tauri-app/android-widget/`](tauri-app/android-widget/README.md) and are
 injected into the generated Gradle project by `just android-widget-setup`.
 
