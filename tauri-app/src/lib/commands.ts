@@ -21,12 +21,6 @@ export interface SearchHit {
   tags: string[];
 }
 
-/** ホーム画面ウィジェットのタップ。 */
-export interface WidgetAction {
-  name: string;
-  file: string | null;
-}
-
 interface SyncConfig {
   workers_url: string;
   auto_sync: boolean;
@@ -62,7 +56,6 @@ interface CommandMap {
   get_sync_config: { args: void; result: SyncConfig };
   save_sync_config: { args: { config: SyncConfig }; result: void };
   is_sync_config_editable: { args: void; result: boolean };
-  take_widget_action: { args: void; result: WidgetAction | null };
 }
 
 export type CommandName = keyof CommandMap;

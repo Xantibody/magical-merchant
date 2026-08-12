@@ -16,7 +16,6 @@ mod sync;
 // private module cannot hold one honestly.
 #[cfg(target_os = "android")]
 pub mod widget_bridge;
-mod widget_link;
 // Only the Android JNI bridge reads this, but it is built everywhere so its
 // tests run: CI has no Android target, and the parsing is the part worth
 // testing.
@@ -191,7 +190,6 @@ pub fn run() {
         .plugin(tauri_plugin_geolocation::init())
         .plugin(tauri_plugin_opener::init())
         .manage(sync::AppSyncState::default())
-        .manage(widget_link::PendingWidgetAction::default())
         .setup(|app| {
             // ブラウザで認証している間に OS がアプリを回収すると、トークンは
             // 起動 URL として届く。`new-url` イベントはアプリが生きていた場合に
@@ -202,7 +200,6 @@ pub fn run() {
             std::thread::spawn(move || {
                 if let Ok(Some(urls)) = launch_handle.deep_link().get_current() {
                     store_token_from_urls(&launch_handle, &urls);
-                    widget_link::park(&launch_handle, &urls);
                 }
             });
 
@@ -210,7 +207,6 @@ pub fn run() {
             app.deep_link().on_open_url(move |event| {
                 let urls = event.urls();
                 store_token_from_urls(&handle, &urls);
-                widget_link::notify(&handle, &urls);
             });
 
             // 測位は始めてから最初の 1 件が返るまでに間がある。保存のたびに
@@ -242,7 +238,6 @@ pub fn run() {
             auth::get_sync_config,
             auth::save_sync_config,
             auth::is_sync_config_editable,
-            widget_link::take_widget_action,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
