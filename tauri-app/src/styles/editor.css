@@ -97,6 +97,27 @@
   pointer-events: none;
 }
 
+/* mermaid のエディタ内プレビュー: コードブロックの直下に描いた図をぶら下げる。
+   幅に合わせて縮め、mermaid が SVG に付ける max-width(原寸)以上には広げない */
+.milkdown-editor .mermaid-editor-preview {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--size-2);
+  user-select: none;
+}
+
+.milkdown-editor .mermaid-editor-preview svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* まだ一度も描けていないときだけ出す控えめな知らせ */
+.milkdown-editor .mermaid-editor-preview.is-error {
+  justify-content: flex-start;
+  font-size: var(--font-size-0);
+  color: var(--app-text-muted);
+}
+
 .milkdown-editor blockquote {
   border-left: 3px solid var(--app-border);
   padding-left: var(--size-3);
