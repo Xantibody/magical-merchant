@@ -48,6 +48,27 @@ pub fn delete_note(base_dir: &Path, filename: &NoteFilename) -> Result<(), CoreE
     Notes::new(base_dir.to_path_buf()).delete(filename)
 }
 
+/// frontmatter を 1 件ぶんそのまま返す。`NoteSummary` は一覧向けの要約
+/// (本文プレビュー入り・タグは本文の `#記法` と合流済み)で、こちらは
+/// メタデータ編集パネルが見る「ファイルに書いてある記録」そのもの。
+pub fn read_note_meta(
+    base_dir: &Path,
+    filename: &NoteFilename,
+) -> Result<frontmatter::NoteFrontmatter, CoreError> {
+    Notes::new(base_dir.to_path_buf()).read_meta(filename)
+}
+
+/// time と tags だけを差し替える。本文はもちろん、context も「どの端末で
+/// 書いたか」の記録なので編集の対象にしない。
+pub fn update_note_meta(
+    base_dir: &Path,
+    filename: &NoteFilename,
+    time: chrono::DateTime<chrono::FixedOffset>,
+    tags: &[String],
+) -> Result<(), CoreError> {
+    Notes::new(base_dir.to_path_buf()).update_meta(filename, time, tags)
+}
+
 /// 過去の編集で本文に混入した化けメタデータを直す。直したファイル数を返す。
 pub fn repair_notes(base_dir: &Path) -> Result<usize, CoreError> {
     repair::repair_all(&crate::utils::paths::notes_dir(base_dir))
@@ -257,5 +278,99 @@ mod tests {
     #[test]
     fn test_validate_rejects_non_md_extension() {
         assert!(NoteFilename::parse("evil.txt").is_err());
+    }
+
+    fn filename_of(path: &Path) -> NoteFilename {
+        NoteFilename::parse(path.file_name().unwrap().to_str().unwrap()).unwrap()
+    }
+
+    fn sample_time() -> chrono::DateTime<chrono::FixedOffset> {
+        use chrono::TimeZone as _;
+        chrono::FixedOffset::east_opt(9 * 3600)
+            .unwrap()
+            .with_ymd_and_hms(2026, 5, 3, 15, 39, 0)
+            .unwrap()
+    }
+
+    #[test]
+    fn read_note_meta_returns_time_tags_and_context() {
+        let tmp = TempDir::new().unwrap();
+        let path =
+            create_draft_note(tmp.path(), "body", &["sync".to_string()], &mock_context()).unwrap();
+
+        let meta = read_note_meta(tmp.path(), &filename_of(&path)).unwrap();
+
+        assert_eq!(meta.tags, vec!["sync"]);
+        assert_eq!(meta.context.unwrap().battery, Some(50));
+    }
+
+    #[test]
+    fn read_note_meta_not_found() {
+        let tmp = TempDir::new().unwrap();
+        fs::create_dir_all(tmp.path().join("data/notes")).unwrap();
+        let filename = NoteFilename::parse("nonexistent.md").unwrap();
+
+        let result = read_note_meta(tmp.path(), &filename);
+
+        assert!(matches!(result, Err(CoreError::NotFound(_))));
+    }
+
+    #[test]
+    fn update_note_meta_replaces_time_and_tags() {
+        let tmp = TempDir::new().unwrap();
+        let path =
+            create_draft_note(tmp.path(), "body", &["old".to_string()], &mock_context()).unwrap();
+        let filename = filename_of(&path);
+
+        update_note_meta(tmp.path(), &filename, sample_time(), &["log".to_string()]).unwrap();
+
+        let meta = read_note_meta(tmp.path(), &filename).unwrap();
+        assert_eq!(meta.time, sample_time());
+        assert_eq!(meta.tags, vec!["log"]);
+    }
+
+    /// メタデータの編集で本文が動いてはいけない。逆(本文編集がメタデータを
+    /// 保つ)は `update_note` 側のテストが見ている。
+    #[test]
+    fn update_note_meta_keeps_body_and_context() {
+        let tmp = TempDir::new().unwrap();
+        let path =
+            create_draft_note(tmp.path(), "# Title\nbody", &[], &mock_context()).unwrap();
+        let filename = filename_of(&path);
+
+        update_note_meta(tmp.path(), &filename, sample_time(), &[]).unwrap();
+
+        assert_eq!(read_note(&path).unwrap(), "# Title\nbody");
+        let meta = read_note_meta(tmp.path(), &filename).unwrap();
+        assert_eq!(meta.context.unwrap().battery, Some(50));
+    }
+
+    /// frontmatter が読めないファイルに time/tags をでっち上げて書き込むと、
+    /// 壊れた記録が正当なものに見えてしまう。書かずに断る。
+    #[test]
+    fn update_note_meta_rejects_broken_frontmatter() {
+        let tmp = TempDir::new().unwrap();
+        let notes_dir = tmp.path().join("data/notes");
+        fs::create_dir_all(&notes_dir).unwrap();
+        let broken = "---\ntime: [broken\n---\nbody";
+        fs::write(notes_dir.join("20260101_120000.md"), broken).unwrap();
+        let filename = NoteFilename::parse("20260101_120000.md").unwrap();
+
+        let result = update_note_meta(tmp.path(), &filename, sample_time(), &[]);
+
+        assert!(matches!(result, Err(CoreError::Parse(_))));
+        let content = fs::read_to_string(notes_dir.join("20260101_120000.md")).unwrap();
+        assert_eq!(content, broken);
+    }
+
+    #[test]
+    fn update_note_meta_not_found() {
+        let tmp = TempDir::new().unwrap();
+        fs::create_dir_all(tmp.path().join("data/notes")).unwrap();
+        let filename = NoteFilename::parse("nonexistent.md").unwrap();
+
+        let result = update_note_meta(tmp.path(), &filename, sample_time(), &[]);
+
+        assert!(matches!(result, Err(CoreError::NotFound(_))));
     }
 }

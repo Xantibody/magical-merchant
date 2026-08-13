@@ -108,6 +108,36 @@ impl Notes {
         Ok(())
     }
 
+    pub(crate) fn read_meta(&self, filename: &NoteFilename) -> Result<NoteFrontmatter, CoreError> {
+        let content = fs::read_to_string(self.existing_note_path(filename)?)?;
+        let (fm, _body) = frontmatter::parse::<NoteFrontmatter>(&content)?;
+        Ok(fm)
+    }
+
+    /// time と tags だけを差し替えて書き戻す。本文と context には触れない。
+    ///
+    /// frontmatter が読めないファイルは `update` と違って作り直さない。
+    /// 本文の保存は失敗させられないが、メタデータ編集はでっち上げた記録を
+    /// 書くくらいなら断ったほうがいい。
+    pub(crate) fn update_meta(
+        &self,
+        filename: &NoteFilename,
+        time: chrono::DateTime<chrono::FixedOffset>,
+        tags: &[String],
+    ) -> Result<(), CoreError> {
+        let path = self.existing_note_path(filename)?;
+        let content = fs::read_to_string(&path)?;
+        let (existing, body) = frontmatter::parse::<NoteFrontmatter>(&content)?;
+
+        let fm = NoteFrontmatter {
+            time,
+            tags: tags.to_vec(),
+            context: existing.context,
+        };
+        write_atomic(&path, frontmatter::render(&fm, body)?)?;
+        Ok(())
+    }
+
     pub(crate) fn delete(&self, filename: &NoteFilename) -> Result<(), CoreError> {
         fs::remove_file(self.existing_note_path(filename)?)?;
         Ok(())
