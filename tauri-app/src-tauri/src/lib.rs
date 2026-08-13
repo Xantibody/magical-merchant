@@ -16,6 +16,11 @@ mod sync;
 // private module cannot hold one honestly.
 #[cfg(target_os = "android")]
 pub mod widget_bridge;
+// Only the Android JNI bridge reads this, but it is built everywhere so its
+// tests run: CI has no Android target, and the parsing is the part worth
+// testing.
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+mod widget_summary;
 
 use device::ClientContext;
 use magical_merchant_core::{NoteFilename, NoteSummary, SearchHit};
@@ -199,8 +204,10 @@ pub fn run() {
             });
 
             let handle = app.handle().clone();
-            app.deep_link()
-                .on_open_url(move |event| store_token_from_urls(&handle, &event.urls()));
+            app.deep_link().on_open_url(move |event| {
+                let urls = event.urls();
+                store_token_from_urls(&handle, &urls);
+            });
 
             // 測位は始めてから最初の 1 件が返るまでに間がある。保存のたびに
             // 頼むのでは間に合わないので、起動と同時に受け取り始める。

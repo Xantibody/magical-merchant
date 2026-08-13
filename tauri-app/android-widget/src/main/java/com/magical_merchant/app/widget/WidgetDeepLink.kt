@@ -8,6 +8,7 @@ import android.net.Uri
 /** Deep links the widgets hand to the app. Hosts are declared in tauri.conf.json. */
 internal object WidgetDeepLink {
     const val NEW_NOTE = "magical-merchant://widget/new-note"
+    const val NOTE = "magical-merchant://widget/note"
 }
 
 /**

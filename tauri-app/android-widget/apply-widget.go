@@ -65,6 +65,25 @@ const components = `        <activity
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_notes_new_info" />
         </receiver>
+
+        <receiver
+            android:name=".widget.NotesListWidgetProvider"
+            android:exported="false"
+            android:label="@string/widget_notes_list_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_notes_list_info" />
+        </receiver>
+
+        <!-- BIND_REMOTEVIEWS is what makes exported="false" safe here: only the
+             system, which holds that permission, can bind the list. -->
+        <service
+            android:name=".widget.NotesRemoteViewsService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
 `
 
 func main() {
