@@ -44,6 +44,7 @@ const ICONS = {
   "calendar-blank": () => import("@phosphor-icons/core/assets/regular/calendar-blank.svg?raw"),
   x: () => import("@phosphor-icons/core/assets/regular/x.svg?raw"),
   check: () => import("@phosphor-icons/core/assets/regular/check.svg?raw"),
+  circle: () => import("@phosphor-icons/core/assets/regular/circle.svg?raw"),
   "check-circle": () => import("@phosphor-icons/core/assets/regular/check-circle.svg?raw"),
   "file-text": () => import("@phosphor-icons/core/assets/regular/file-text.svg?raw"),
   "caret-left": () => import("@phosphor-icons/core/assets/regular/caret-left.svg?raw"),
