@@ -1,6 +1,8 @@
 import { createSignal, createEffect, onCleanup, onMount, For, Show } from "solid-js";
 import type { JSX } from "solid-js";
 import { useLocation, useNavigate, A } from "@solidjs/router";
+import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
+import type { UnlistenFn } from "@tauri-apps/api/event";
 import Icon from "../components/Icon";
 import CommandPalette from "../components/CommandPalette";
 import SyncPopover from "../components/SyncPopover";
@@ -13,6 +15,8 @@ import type { Theme } from "../lib/theme";
 import { MODE_ICONS, MODE_LABELS, ROUTES } from "../lib/routes";
 import type { RoutePath } from "../lib/routes";
 import { typedInvoke } from "../lib/commands";
+import { firstWidgetAction } from "../lib/widget-actions";
+import type { WidgetAction } from "../lib/widget-actions";
 import { getDeviceSignals, warmLocation } from "../lib/client-context";
 
 const TABS: RoutePath[] = [ROUTES.TIMELINE, ROUTES.NOTES];
@@ -66,9 +70,38 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
     })();
   };
 
+  const runWidgetAction = (action: WidgetAction): void => {
+    if (action.name === "new-note") {
+      newNote();
+      return;
+    }
+    // ?file= はルーターに預ける。Workspace の選択状態を外から触れるように
+    // 引き上げるより、開きたいノートを URL に持たせるほうが素直
+    if (action.name === "note" && action.file) {
+      navigate(`${ROUTES.NOTES}?file=${encodeURIComponent(action.file)}`);
+    }
+  };
+
   onMount(() => {
     // 最初の記録が測位を待たされないよう、許可済みなら今のうちに測り始める
     warmLocation();
+
+    // ウィジェットのタップはたいていアプリを冷えた状態から起こす。onOpenUrl は
+    // 購読してからのぶんしか来ないので、起動時の URL は getCurrent で拾う。
+    let unlistenWidget: UnlistenFn | undefined;
+    void (async () => {
+      unlistenWidget = await onOpenUrl((urls) => {
+        const action = firstWidgetAction(urls);
+        if (action) {
+          runWidgetAction(action);
+        }
+      });
+      const launched = firstWidgetAction((await getCurrent()) ?? []);
+      if (launched) {
+        runWidgetAction(launched);
+      }
+    })();
+    onCleanup(() => unlistenWidget?.());
 
     const onKeyDown = (e: KeyboardEvent): void => {
       if (isMetaK(e)) {

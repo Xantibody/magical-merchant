@@ -7,6 +7,7 @@
     <color name="widget_text">#F1F3F5</color>
     <color name="widget_muted">#868E96</color>
     <color name="widget_rail">#343A40</color>
+    <color name="widget_faint">#495057</color>
     <color name="widget_accent">#CED4DA</color>
     <color name="widget_on_accent">#212529</color>
 </resources>

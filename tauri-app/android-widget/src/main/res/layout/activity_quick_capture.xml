@@ -15,38 +15,54 @@
         android:layout_height="wrap_content"
         android:layout_margin="12dp"
         android:background="@drawable/quick_capture_sheet_bg"
-        android:gravity="bottom"
-        android:orientation="horizontal"
+        android:orientation="vertical"
         android:paddingStart="16dp"
         android:paddingTop="10dp"
         android:paddingEnd="10dp"
         android:paddingBottom="10dp">
 
-        <EditText
-            android:id="@+id/quick_capture_input"
-            android:layout_width="0dp"
+        <!-- Filled from today's tags at runtime; gone on a day with none, so the
+             sheet does not reserve a blank strip above the input. -->
+        <LinearLayout
+            android:id="@+id/quick_capture_tags"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:background="@null"
-            android:gravity="top"
-            android:hint="@string/widget_capture_placeholder"
-            android:importantForAutofill="no"
-            android:inputType="textMultiLine|textCapSentences"
-            android:maxLines="6"
-            android:minHeight="38dp"
-            android:paddingEnd="8dp"
-            android:textColor="@color/widget_text"
-            android:textColorHint="@color/widget_muted"
-            android:textSize="15sp" />
+            android:layout_marginBottom="8dp"
+            android:orientation="horizontal"
+            android:visibility="gone" />
 
-        <ImageButton
-            android:id="@+id/quick_capture_send"
-            android:layout_width="38dp"
-            android:layout_height="38dp"
-            android:background="@drawable/widget_action_bg"
-            android:contentDescription="@string/quick_capture_send"
-            android:padding="9dp"
-            android:scaleType="fitCenter"
-            android:src="@drawable/ic_paper_plane_tilt" />
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="bottom"
+            android:orientation="horizontal">
+
+            <EditText
+                android:id="@+id/quick_capture_input"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="@null"
+                android:gravity="top"
+                android:hint="@string/widget_capture_placeholder"
+                android:importantForAutofill="no"
+                android:inputType="textMultiLine|textCapSentences"
+                android:maxLines="6"
+                android:minHeight="38dp"
+                android:paddingEnd="8dp"
+                android:textColor="@color/widget_text"
+                android:textColorHint="@color/widget_muted"
+                android:textSize="15sp" />
+
+            <ImageButton
+                android:id="@+id/quick_capture_send"
+                android:layout_width="38dp"
+                android:layout_height="38dp"
+                android:background="@drawable/widget_action_bg"
+                android:contentDescription="@string/quick_capture_send"
+                android:padding="9dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_paper_plane_tilt" />
+        </LinearLayout>
     </LinearLayout>
 </LinearLayout>

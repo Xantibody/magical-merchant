@@ -8,6 +8,7 @@
     <color name="widget_text">#212529</color>
     <color name="widget_muted">#ADB5BD</color>
     <color name="widget_rail">#F1F3F5</color>
+    <color name="widget_faint">#868E96</color>
     <color name="widget_accent">#343A40</color>
     <color name="widget_on_accent">#FFFFFF</color>
     <!-- The capture sheet's scrim. Drawn as the root view's background rather

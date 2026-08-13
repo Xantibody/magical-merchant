@@ -12,6 +12,7 @@ use jni::sys::{JNI_FALSE, JNI_TRUE, jboolean};
 use std::path::Path;
 
 use crate::device::{self, ClientContext};
+use crate::widget_summary;
 
 /// Appends `text` to today's timeline file under `base_dir`.
 ///
@@ -46,4 +47,48 @@ pub extern "system" fn Java_com_magical_1merchant_app_widget_WidgetBridge_saveQu
     );
 
     if saved.is_ok() { JNI_TRUE } else { JNI_FALSE }
+}
+
+/// Today's last entry and tags, as JSON. Reads one day file.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_magical_1merchant_app_widget_WidgetBridge_readCaptureData<
+    'local,
+>(
+    env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    base_dir: JString<'local>,
+) -> JString<'local> {
+    read_json(env, base_dir, widget_summary::collect_capture)
+}
+
+/// The most recent notes, as JSON. Reads the whole notes tree, which is why it
+/// is not folded into `readCaptureData`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_magical_1merchant_app_widget_WidgetBridge_readNotes<'local>(
+    env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    base_dir: JString<'local>,
+) -> JString<'local> {
+    read_json(env, base_dir, widget_summary::collect_notes)
+}
+
+/// Serializes whatever `collect` gathers under `base_dir`.
+///
+/// An unreadable path yields `{}`, not an exception: a Java exception crossing
+/// back through a widget callback would take the launcher's process with it.
+fn read_json<'local, T: serde::Serialize>(
+    mut env: JNIEnv<'local>,
+    base_dir: JString<'local>,
+    collect: impl Fn(&Path) -> T,
+) -> JString<'local> {
+    let json = env
+        .get_string(&base_dir)
+        .ok()
+        .map(|dir| collect(Path::new(&String::from(dir))))
+        .and_then(|data| serde_json::to_string(&data).ok())
+        .unwrap_or_else(|| "{}".to_string());
+
+    // A failed allocation leaves nothing to return but a null JString, which
+    // Kotlin sees as null and treats as "no data".
+    env.new_string(json).unwrap_or_default()
 }

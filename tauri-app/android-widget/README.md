@@ -1,12 +1,16 @@
 # Android Home Screen Widgets
 
-Two 4×1 bars for the home screen, taken from the widget design (`2a` = Timeline
-capture bar, `2b` top bar = new note):
+Three widgets from the design (`2a` = Timeline capture bar, `2b` = notes):
 
-| Widget                     | Look                                                                    | Tap                                                     |
-| -------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------- |
-| `CaptureBarWidgetProvider` | `TIMELINE` + current time, rail, 「いま何してる?」, send square         | `QuickCaptureActivity` — writes without opening the app |
-| `NotesNewWidgetProvider`   | `NOTES` + 「新しいノート」, rail, 「タップして書き始める」, plus square | `magical-merchant://widget/new-note`                    |
+| Widget                     | Size | Look                                                                        | Tap                                                      |
+| -------------------------- | ---- | --------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `CaptureBarWidgetProvider` | 4×1  | `TIMELINE` + clock, rail, prompt, and today's last entry once there is one  | `QuickCaptureActivity` — writes without opening the app  |
+| `NotesNewWidgetProvider`   | 4×1  | `NOTES` + 「新しいノート」, rail, 「タップして書き始める」, plus square     | `magical-merchant://widget/new-note`                     |
+| `NotesListWidgetProvider`  | 4×2  | `NOTES` header with a plus, then the four most recent notes and their dates | row → `…/widget/note?file=…`, plus → `…/widget/new-note` |
+
+Once the day has an entry the capture bar's prompt becomes 「続きを記録…」 with
+that entry's time and head below it, and the sheet grows chips for today's
+most-used tags, which insert at the caret.
 
 ## How the capture bar writes
 
@@ -27,18 +31,36 @@ Two names are load-bearing and fail only at runtime if they drift apart:
 
 - `System.loadLibrary("magical_merchant_app_lib")` must match `[lib] name` in
   `src-tauri/Cargo.toml`.
-- `Java_com_magical_1merchant_app_widget_WidgetBridge_saveQuickCapture` is the
-  JNI mangling of this package + object + method (`_` in a package component
-  escapes to `_1`). Renaming the Kotlin side means renaming the Rust symbol.
+- `Java_com_magical_1merchant_app_widget_WidgetBridge_saveQuickCapture` (and the
+  two read functions) is the JNI mangling of this package + object + method
+  (`_` in a package component escapes to `_1`). Renaming the Kotlin side means
+  renaming the Rust symbol.
 
 The base directory is `Context.getDataDir()`, **not** `filesDir` — Tauri's
 `PathPlugin` answers `getDataDir` with the former, and writing to `files/`
 would build a second timeline the app never reads.
 
-Not implemented yet: the recent-notes list (`RemoteViewsService`), the
-「続きを記録…」 last-entry preview, and tag chips in the sheet. Entries written
-from the widget also carry no battery/network/location — the sheet has no
-WebView to ask, and `Context` simply omits absent fields.
+Entries written from the widget carry no battery, network or location: the
+sheet has no WebView to ask, and `Context` omits absent fields, so they are
+shorter than in-app entries rather than wrong.
+
+## What the widgets read
+
+`readCaptureData` (today's last entry + tags) and `readNotes` (the recent list)
+are two calls on purpose, split along what each costs: the sheet reads one day
+file and has to open instantly, while the notes list reads every note. The
+notes read happens in `RemoteViewsFactory.onDataSetChanged`, which the platform
+calls off the main thread.
+
+Kotlin never takes a timeline line apart. `- [HH:MM:SS] text {json}` is parsed
+in [`../src-tauri/src/widget_summary.rs`](../src-tauri/src/widget_summary.rs)
+with the same core helpers the app uses.
+
+Both widgets set `updatePeriodMillis` to 30 minutes, the platform minimum. A
+capture from the sheet refreshes the bar immediately, but entries and notes
+written _in the app_ have no way to tell a widget, so the poll is what catches
+them up. It costs a native-library load in our own process per period; the
+alternative — a stale bar until the launcher happens to rebind — reads as a bug.
 
 ## Design tokens
 
@@ -51,6 +73,7 @@ mirroring the app's tokens so the widgets flip with the system theme:
 | `widget_border`    | `#DEE2E6` | `#495057` |
 | `widget_text`      | `#212529` | `#F1F3F5` |
 | `widget_muted`     | `#ADB5BD` | `#868E96` |
+| `widget_faint`     | `#868E96` | `#495057` |
 | `widget_rail`      | `#F1F3F5` | `#343A40` |
 | `widget_accent`    | `#343A40` | `#CED4DA` |
 | `widget_on_accent` | `#FFFFFF` | `#212529` |
@@ -64,9 +87,9 @@ placeholder 14sp, sheet input 15sp.
 
 `src-tauri/gen/android/` is gitignored and is recreated by `tauri android init`,
 so the sources live here instead. [`apply-widget.go`](apply-widget.go) copies
-`src/main/` into the generated project and registers the two `<receiver>`
-elements and the `<activity>` in `AndroidManifest.xml` behind idempotent marker
-comments — the same approach as
+`src/main/` into the generated project and registers the three `<receiver>`
+elements, the `<activity>` and the list `<service>` in `AndroidManifest.xml`
+behind idempotent marker comments — the same approach as
 [`../android-signing`](../android-signing/README.md).
 
 ```sh
