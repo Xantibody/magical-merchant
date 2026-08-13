@@ -22,7 +22,9 @@ impl Summary {
             if let Ok((fm, body)) = frontmatter::parse::<NoteFrontmatter>(content) {
                 (Some(fm.time), fm.tags, body)
             } else {
-                (None, Vec::new(), content)
+                // parse に失敗しても frontmatter の区切りは剥がす。壊れた
+                // メタデータを本文扱いすると、一覧のタイトルとプレビューに YAML が出る。
+                (None, Vec::new(), frontmatter::strip(content))
             };
 
         // 本文に書かれた `#タグ` が今の入力方法。frontmatter に残っているのは
@@ -76,6 +78,20 @@ mod tests {
         assert!(summary.time.is_some());
         assert_eq!(summary.tags, vec!["a", "b"]);
         assert!(summary.preview.contains("# Title"));
+    }
+
+    /// frontmatter が YAML として壊れているノート。時刻とタグは諦めるが、
+    /// メタデータをタイトル・プレビューに出してはいけない。
+    #[test]
+    fn broken_frontmatter_does_not_leak_into_preview() {
+        let content = "---\ntime: [broken\n---\n# Title\nbody";
+        let summary = Summary::from_file(
+            PathBuf::from("/test/note.md"),
+            "note.md".to_string(),
+            content,
+        );
+        assert!(summary.time.is_none());
+        assert_eq!(summary.preview, "# Title\nbody");
     }
 
     #[test]
