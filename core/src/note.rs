@@ -1,4 +1,5 @@
 pub(crate) mod error;
+mod repair;
 pub(crate) mod repository;
 mod summary;
 
@@ -9,6 +10,7 @@ use std::path::{Path, PathBuf};
 
 use crate::error::CoreError;
 use crate::utils::device::Context;
+use crate::utils::frontmatter;
 use crate::utils::validated::NoteFilename;
 
 pub fn create_draft_note(
@@ -28,8 +30,11 @@ pub fn list_notes(base_dir: &Path) -> Result<Vec<NoteSummary>, CoreError> {
     Notes::new(base_dir.to_path_buf()).list()
 }
 
+/// ノートの本文を返す。frontmatter は保存形式の都合であって、
+/// 読む側(プレビュー・エディタ・MCP)に見せるものではない。
 pub fn read_note(file_path: &Path) -> Result<String, CoreError> {
-    Ok(std::fs::read_to_string(file_path)?)
+    let content = std::fs::read_to_string(file_path)?;
+    Ok(frontmatter::strip(&content).to_string())
 }
 
 pub fn read_note_by_filename(
@@ -43,9 +48,15 @@ pub fn delete_note(base_dir: &Path, filename: &NoteFilename) -> Result<(), CoreE
     Notes::new(base_dir.to_path_buf()).delete(filename)
 }
 
+/// 過去の編集で本文に混入した化けメタデータを直す。直したファイル数を返す。
+pub fn repair_notes(base_dir: &Path) -> Result<usize, CoreError> {
+    repair::repair_all(&crate::utils::paths::notes_dir(base_dir))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::utils::frontmatter::NoteFrontmatter;
     use std::fs;
     use tempfile::TempDir;
 
@@ -76,6 +87,44 @@ mod tests {
         let content = fs::read_to_string(&path).unwrap();
         assert!(content.contains("updated"));
         assert!(!content.contains("original"));
+    }
+
+    /// time は作成時刻。一覧はファイル名(作成時刻)順に並ぶので、編集で
+    /// time が動くと日付グループと並び順が食い違う。
+    #[test]
+    fn update_note_keeps_the_creation_time() {
+        let tmp = TempDir::new().unwrap();
+        let path = create_draft_note(tmp.path(), "original", &[], &mock_context()).unwrap();
+        let original = fs::read_to_string(&path).unwrap();
+        let (fm_before, _) = frontmatter::parse::<NoteFrontmatter>(&original).unwrap();
+
+        update_note(&path, "updated", &mock_context()).unwrap();
+
+        let updated = fs::read_to_string(&path).unwrap();
+        let (fm_after, body) = frontmatter::parse::<NoteFrontmatter>(&updated).unwrap();
+        assert_eq!(fm_after.time, fm_before.time);
+        assert_eq!(body, "updated");
+    }
+
+    /// context は「どの端末で書いたか」の記録。別の端末で編集しても
+    /// 作成時の記録が上書きされてはいけない。
+    #[test]
+    fn update_note_keeps_the_creation_context() {
+        let tmp = TempDir::new().unwrap();
+        let path = create_draft_note(tmp.path(), "original", &[], &mock_context()).unwrap();
+
+        let other_device = Context {
+            battery: Some(1),
+            is_charging: Some(true),
+            ..Context::default()
+        };
+        update_note(&path, "updated", &other_device).unwrap();
+
+        let updated = fs::read_to_string(&path).unwrap();
+        let (fm, _) = frontmatter::parse::<NoteFrontmatter>(&updated).unwrap();
+        let ctx = fm.context.unwrap();
+        assert_eq!(ctx.battery, Some(50));
+        assert_eq!(ctx.is_charging, Some(false));
     }
 
     /// タグ欄で付けていた頃のノートを編集しても、分類は消えてはいけない。
@@ -127,6 +176,28 @@ mod tests {
         let path = create_draft_note(tmp.path(), "full content", &[], &mock_context()).unwrap();
         let content = read_note(&path).unwrap();
         assert!(content.contains("full content"));
+    }
+
+    /// 読み取りが返すのは本文だけ。frontmatter を返すと、そのまま
+    /// プレビューやエディタに流れてメタデータが画面に出る。
+    #[test]
+    fn read_note_returns_body_without_frontmatter() {
+        let tmp = TempDir::new().unwrap();
+        let path = create_draft_note(tmp.path(), "# Title\nbody", &[], &mock_context()).unwrap();
+
+        assert_eq!(read_note(&path).unwrap(), "# Title\nbody");
+    }
+
+    #[test]
+    fn read_note_by_filename_returns_body_without_frontmatter() {
+        let tmp = TempDir::new().unwrap();
+        let path = create_draft_note(tmp.path(), "# Title\nbody", &[], &mock_context()).unwrap();
+        let fname = path.file_name().unwrap().to_str().unwrap();
+        let note_filename = NoteFilename::parse(fname).unwrap();
+
+        let content = read_note_by_filename(tmp.path(), &note_filename).unwrap();
+
+        assert_eq!(content, "# Title\nbody");
     }
 
     #[test]

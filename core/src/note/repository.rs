@@ -73,23 +73,31 @@ impl Notes {
             return Err(CoreError::PathTraversal(fname.to_string()));
         }
 
-        Ok(fs::read_to_string(canonical_file_path)?)
+        let content = fs::read_to_string(canonical_file_path)?;
+        Ok(frontmatter::strip(&content).to_string())
     }
 
-    /// 本文だけを書き換える。
+    /// 本文だけを書き換える。frontmatter は作成時の記録なので手を付けない。
     ///
-    /// タグは本文の `#記法` から読むようになったので、UI から渡されることは
-    /// もう無い。frontmatter に残っている古いタグは、読み直してそのまま書き戻す。
-    /// 引数から消えたぶんを空で上書きすると、タグ欄で付けていた頃のノートから
-    /// 分類が消える。
+    /// - time: 作成時刻。一覧はファイル名(作成時刻)順に並ぶため、編集で
+    ///   動かすと日付グループと並び順が食い違う
+    /// - tags: 本文の `#記法` に移行済みだが、タグ欄で付けていた頃のぶんを
+    ///   空で上書きすると過去のノートから分類が消える
+    /// - context: どの端末で書いたかの記録。編集端末で上書きしない
+    ///
+    /// frontmatter が読めないファイルだけ、今この場の時刻と端末で作り直す。
     pub(crate) fn update(path: &Path, body: &str, context: &Context) -> Result<(), CoreError> {
         let existing = fs::read_to_string(path).unwrap_or_default();
-        let tags = frontmatter::parse::<NoteFrontmatter>(&existing)
-            .map(|(fm, _)| fm.tags)
-            .unwrap_or_default();
+        let fm = frontmatter::parse::<NoteFrontmatter>(&existing).map_or_else(
+            |_| NoteFrontmatter {
+                time: Local::now().into(),
+                tags: Vec::new(),
+                context: Some(context.clone()),
+            },
+            |(fm, _)| fm,
+        );
 
-        let now = Local::now();
-        let markdown = format_note_markdown(body, &tags, now, context)?;
+        let markdown = frontmatter::render(&fm, body)?;
         write_atomic(path, markdown)?;
         Ok(())
     }

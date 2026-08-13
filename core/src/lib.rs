@@ -14,7 +14,7 @@ pub use error::CoreError;
 pub use note::error::NoteError;
 pub use note::{
     NoteSummary, create_draft_note, delete_note, list_notes, read_note, read_note_by_filename,
-    update_note,
+    repair_notes, update_note,
 };
 pub use search::{HitKind, SearchHit, search_all};
 pub use timeline::error::TimelineError;
