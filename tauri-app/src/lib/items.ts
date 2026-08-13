@@ -145,6 +145,16 @@ export function itemMeta(item: Item): string {
   return [date, tags].filter(Boolean).join(" · ");
 }
 
+/**
+ * 詳細ヘッダの作成日時。「2026/05/03 15:39」
+ * ファイル名は同期やウィジェットが指す不変の ID であって、人に見せる
+ * ものではない。人が読むのはこちら。
+ */
+export function noteCreatedLabel(item: NoteItem): string {
+  const date = item.date.replaceAll("-", "/");
+  return [date, item.time].filter(Boolean).join(" ");
+}
+
 export function itemTitle(item: Item): string {
   return item.kind === "timeline" ? firstLine(item.text) || UNTITLED : item.title;
 }

@@ -17,7 +17,7 @@ import MarkdownPreview from "../components/MarkdownPreview";
 import { typedInvoke } from "../lib/commands";
 import { getDeviceSignals } from "../lib/client-context";
 import { useShell } from "../lib/shell";
-import { groupNotes, itemTitle, toNoteItems } from "../lib/items";
+import { groupNotes, itemTitle, noteCreatedLabel, toNoteItems } from "../lib/items";
 import type { ItemGroup, NoteItem } from "../lib/items";
 
 // Milkdown + ProseMirror は編集を始めるまで要らない。一覧とプレビューだけの
@@ -233,7 +233,6 @@ export default function Workspace(): JSX.Element {
                         <span class="list-row-title">{itemTitle(item)}</span>
                         <span class="list-row-meta">
                           {noteDate(item as NoteItem)}
-                          <span class="list-row-file">{(item as NoteItem).filename}</span>
                           <For each={(item as NoteItem).tags}>
                             {(tag) => <span class="tag-badge">#{tag}</span>}
                           </For>
@@ -267,7 +266,9 @@ export default function Workspace(): JSX.Element {
                   <Icon name="arrow-left" size={18} />
                 </button>
                 <span class="detail-meta">
-                  <span class="detail-filename">{item().filename}</span>
+                  {/* ファイル名は同期やウィジェットが指す ID であって人に見せる
+                      ものではない。人が読むのは作成日時 */}
+                  <span class="detail-created">{noteCreatedLabel(item())}</span>
                   <Show when={editing() && saveStatus() !== "idle"}>
                     <span class="detail-save-status">
                       {saveStatus() === "saving" ? "保存中…" : "保存しました"}
