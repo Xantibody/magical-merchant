@@ -79,6 +79,24 @@
   padding: 0;
 }
 
+/* 言語ラベル: code_block が pre に書き出す data-language を attr() で見せるだけ。
+   DOM ノードもプラグインも増やさない、いちばん軽い形 */
+.milkdown-editor pre[data-language] {
+  position: relative;
+}
+
+.milkdown-editor pre[data-language]::before {
+  content: attr(data-language);
+  position: absolute;
+  top: var(--size-1);
+  right: var(--size-2);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-0);
+  line-height: 1;
+  color: var(--app-text-muted);
+  pointer-events: none;
+}
+
 .milkdown-editor blockquote {
   border-left: 3px solid var(--app-border);
   padding-left: var(--size-3);
