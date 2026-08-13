@@ -42,6 +42,7 @@ const ICONS = {
   minus: () => import("@phosphor-icons/core/assets/regular/minus.svg?raw"),
   "magnifying-glass": () => import("@phosphor-icons/core/assets/regular/magnifying-glass.svg?raw"),
   "calendar-blank": () => import("@phosphor-icons/core/assets/regular/calendar-blank.svg?raw"),
+  info: () => import("@phosphor-icons/core/assets/regular/info.svg?raw"),
   x: () => import("@phosphor-icons/core/assets/regular/x.svg?raw"),
   check: () => import("@phosphor-icons/core/assets/regular/check.svg?raw"),
   "check-circle": () => import("@phosphor-icons/core/assets/regular/check-circle.svg?raw"),

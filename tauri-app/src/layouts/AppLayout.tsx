@@ -126,7 +126,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
     // ポータルや overlay の外に出たクリックを取りこぼす
     const onPointerDown = (e: MouseEvent): void => {
       const target = e.target instanceof Element ? e.target : null;
-      if (!target?.closest(".popover, .header-action, .calendar-button")) {
+      if (!target?.closest(".popover, .header-action, .calendar-button, .detail-meta-button")) {
         shell.closePopovers();
       }
     };

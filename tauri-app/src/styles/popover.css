@@ -126,6 +126,103 @@
   font-family: inherit;
 }
 
+/* ---------------- note metadata ---------------- */
+
+/* 詳細ペインの右上、ⓘ ボタンの真下に吊るす */
+.note-meta-popover {
+  top: 44px;
+  right: 12px;
+  width: 264px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.note-meta-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.note-meta-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--app-text-faint);
+}
+
+/* frontmatter のタグが本文の #タグ と別物であることを控えめに伝える */
+.note-meta-hint {
+  font-size: 11px;
+  color: var(--app-text-faint);
+}
+
+.note-meta-input {
+  font: inherit;
+  font-size: 12.5px;
+  padding: 5px 8px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--radius-2);
+  background: var(--app-surface);
+  color: var(--app-text);
+}
+
+.note-meta-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.note-meta-tags:empty {
+  display: none;
+}
+
+.note-meta-tags .tag-badge {
+  gap: 3px;
+}
+
+.note-meta-tag-remove {
+  display: inline-flex;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.note-meta-context {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  font-size: 11.5px;
+  color: var(--app-text-muted);
+}
+
+.note-meta-context-label {
+  color: var(--app-text-faint);
+}
+
+.note-meta-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--size-2);
+  border-top: 1px solid var(--app-surface-2);
+  padding-top: 8px;
+}
+
+.note-meta-save {
+  padding: 5px 14px;
+  font-size: 12px;
+}
+
+.note-meta-error {
+  margin: 0;
+  font-size: 12px;
+  color: var(--app-text-faint);
+}
+
 /* ---------------- calendar ---------------- */
 
 .calendar-popover {
