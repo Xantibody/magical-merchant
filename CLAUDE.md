@@ -46,6 +46,19 @@ Rejected plugins (with reasons):
 - `code-block` component — requires CodeMirror (~150KB), conflicts with "lightweight"
 - `indent` / `upload` / `image-*` / `table-block` / `list-item-block` — no current feature need
 
+## Note Storage
+
+- **Filename**: `YYYYMMDD_HHMMSS.md` — an immutable ID stamped at creation.
+  Never rename to match the title: Syncthing sync, widget deep links (`?file=`)
+  and list-row identity all point at the filename
+- **Title**: derived from the first non-empty line of the body (Typora/Bear
+  style). It is display-only — filename and title are independent by design
+- **Frontmatter** (`time` / `tags` / `context`): a record of creation, preserved
+  verbatim on every edit. `time` must stay the creation time because the list
+  sorts by filename (= creation order); a moving `time` breaks date grouping
+- **The editor and preview only ever see the body.** Frontmatter routed through
+  Milkdown gets serialized back as escaped plain text and corrupts the file
+
 ## Editor Performance Principles
 
 Three non-negotiable constraints for Markdown editor design:
