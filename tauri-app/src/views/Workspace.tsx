@@ -14,6 +14,7 @@ import { useSearchParams } from "@solidjs/router";
 import type { Editor } from "@milkdown/kit/core";
 import Icon from "../components/Icon";
 import MarkdownPreview from "../components/MarkdownPreview";
+import NoteMetaPopover from "../components/NoteMetaPopover";
 import { typedInvoke } from "../lib/commands";
 import { getDeviceSignals } from "../lib/client-context";
 import { useShell } from "../lib/shell";
@@ -277,6 +278,16 @@ export default function Workspace(): JSX.Element {
                 </span>
 
                 <div class="detail-actions">
+                  <button
+                    type="button"
+                    class="icon-button detail-meta-button"
+                    title="ノート情報"
+                    aria-label="ノート情報"
+                    aria-expanded={shell.popover() === "note-meta"}
+                    onClick={() => shell.togglePopover("note-meta")}
+                  >
+                    <Icon name="info" size={17} />
+                  </button>
                   <Show
                     when={editing()}
                     fallback={
@@ -312,6 +323,16 @@ export default function Workspace(): JSX.Element {
                   </button>
                 </div>
               </div>
+
+              <Show when={shell.popover() === "note-meta"}>
+                <NoteMetaPopover
+                  filename={item().filename}
+                  onSaved={async () => {
+                    await refetchNotes();
+                  }}
+                  onClose={() => shell.closePopovers()}
+                />
+              </Show>
 
               <div class="detail-body">
                 <Show when={editing()} fallback={<MarkdownPreview source={noteBody()} />}>
