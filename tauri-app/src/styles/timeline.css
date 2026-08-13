@@ -119,13 +119,9 @@
   border: none;
 }
 
-/* 消えた跡はレールも途切れさせる。取り消せば元に戻る */
-.entry--deleting .entry-rail-line {
-  background: repeating-linear-gradient(to bottom, var(--app-border) 0 4px, transparent 4px 9px);
-}
-
-.entry--deleting .entry-rail-dot {
-  display: none;
+.entry--selected .entry-rail-dot {
+  background: var(--app-accent);
+  border-color: var(--app-accent);
 }
 
 .entry-body {
@@ -176,42 +172,132 @@
   gap: 4px;
 }
 
-/* ---------------- hover actions ---------------- */
+/* ---------------- selection mode ---------------- */
 
-.entry-tools {
-  position: absolute;
-  top: -6px;
-  right: 0;
+/* 入口はリスト右上のテキストボタン 1 つだけ。普段は視界に入らない濃さに抑える */
+.timeline-toolbar {
   display: flex;
-  gap: 2px;
-  padding: 2px;
-  background: var(--app-surface);
-  border: 1px solid var(--app-hairline);
-  border-radius: 8px;
-  box-shadow: 0 4px 12px -6px rgb(20 20 25 / 20%);
-  opacity: 0;
-  pointer-events: none;
+  justify-content: flex-end;
+  align-items: center;
+  min-height: 24px;
+  margin-bottom: -24px;
 }
 
-.entry:hover .entry-tools,
-.entry-tools:focus-within {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.entry-tool {
-  display: flex;
-  padding: 6px;
+.timeline-toolbar-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
   border: none;
   border-radius: var(--radius-2);
   background: none;
+  font-size: 12px;
   color: var(--app-text-faint);
   cursor: pointer;
 }
 
-.entry-tool:hover {
+.timeline-toolbar-button:hover {
   background: var(--app-hairline);
   color: var(--app-text);
+}
+
+.timeline-toolbar-hint {
+  font-size: 12px;
+  color: var(--app-text-faint);
+}
+
+.entry-select {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  max-width: 552px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  text-align: start;
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1.75;
+  color: var(--app-text);
+  cursor: pointer;
+  border-radius: var(--radius-2);
+}
+
+.entry-select:focus-visible {
+  outline: 2px solid var(--app-accent);
+  outline-offset: 2px;
+}
+
+.entry-select .icon {
+  /* 1 行目の文字の中心に合わせる */
+  margin-top: 5px;
+  flex-shrink: 0;
+  color: var(--app-text-hint);
+}
+
+.entry--selected .entry-select .icon {
+  color: var(--app-accent);
+}
+
+.entry-select-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+/* 削除バーは入力バーと同じ場所に出す。画面に浮く箱を増やさない */
+.capture-dock .select-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 640px;
+  max-width: calc(100% - 48px);
+  padding: 10px 10px 10px 16px;
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-radius: 14px;
+  box-shadow: 0 12px 32px -8px rgb(20 20 25 / 18%);
+  pointer-events: auto;
+}
+
+.select-bar-label {
+  margin-right: auto;
+  font-size: 13px;
+  color: var(--app-text);
+}
+
+.select-bar-danger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: none;
+  border-radius: 10px;
+  background: var(--app-danger);
+  color: var(--gray-0);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.select-bar-danger:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.select-bar-plain {
+  padding: 8px 12px;
+  border: none;
+  border-radius: 10px;
+  background: none;
+  color: var(--app-text-muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.select-bar-plain:hover {
+  background: var(--app-hairline);
 }
 
 /* ---------------- in-place editor ---------------- */
@@ -249,17 +335,6 @@
   gap: var(--size-2);
   margin-top: 8px;
   font-size: 11.5px;
-  color: var(--app-text-faint);
-}
-
-.entry-tombstone {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 12px 14px;
-  border: 1px dashed var(--app-border);
-  border-radius: 10px;
-  font-size: 13px;
   color: var(--app-text-faint);
 }
 
@@ -392,18 +467,10 @@
     font-size: 16px;
   }
 
-  /* 指の届く範囲に常に出す。モバイルには hover が無い。
-     出しっぱなしにするぶん、本文が下をくぐらないよう場所を空ける */
-  .entry-tools {
-    opacity: 1;
-    pointer-events: auto;
-    top: -4px;
-  }
-
   .entry-text,
+  .entry-select,
   .entry-meta {
     max-width: none;
-    padding-right: 34px;
   }
 
   .capture-dock {
