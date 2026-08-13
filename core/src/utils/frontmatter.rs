@@ -24,6 +24,24 @@ pub fn parse<T: DeserializeOwned>(content: &str) -> Result<(T, &str), CoreError>
     markdown_frontmatter::parse::<T>(content).map_err(|e| CoreError::Parse(format!("{e:?}")))
 }
 
+/// frontmatter を捨てて本文だけを返す。`parse` と違い YAML の中身は見ないので、
+/// メタデータが壊れているファイルでも本文が画面に漏れ出さない。
+/// 区切りが閉じていなければ frontmatter とはみなさず全文を返す。
+#[must_use]
+pub fn strip(content: &str) -> &str {
+    let Some(rest) = content.strip_prefix("---\n") else {
+        return content;
+    };
+    if let Some(idx) = rest.find("\n---\n") {
+        return &rest[idx + "\n---\n".len()..];
+    }
+    if rest.ends_with("\n---") {
+        // 閉じ区切りがファイル末尾: 本文が空のノート
+        return "";
+    }
+    content
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -79,6 +97,33 @@ mod tests {
         assert!(rendered.starts_with("---\n"));
         assert!(rendered.contains("\n---\n"));
         assert!(rendered.ends_with("body"));
+    }
+
+    #[test]
+    fn strip_removes_frontmatter() {
+        assert_eq!(strip("---\ntime: x\n---\nbody line"), "body line");
+    }
+
+    #[test]
+    fn strip_returns_whole_content_without_frontmatter() {
+        assert_eq!(strip("just body"), "just body");
+    }
+
+    /// YAML として壊れていても、区切りの中身を本文に漏らさない。
+    #[test]
+    fn strip_drops_broken_yaml_frontmatter() {
+        assert_eq!(strip("---\n:{ not yaml ::\n---\nbody"), "body");
+    }
+
+    #[test]
+    fn strip_handles_empty_body() {
+        assert_eq!(strip("---\ntime: x\n---"), "");
+    }
+
+    /// 閉じ区切りが無いなら frontmatter ではない(本文先頭の水平線かもしれない)。
+    #[test]
+    fn strip_keeps_unclosed_delimiter() {
+        assert_eq!(strip("---\nno closing"), "---\nno closing");
     }
 
     #[test]

@@ -76,7 +76,17 @@ fn update_draft(file_path: String, body: String, client: ClientContext) -> Resul
 
 #[tauri::command]
 fn list_notes(handle: AppHandle) -> Result<Vec<NoteSummary>, String> {
+    // 過去の編集で本文に混入した化けメタデータを、最初の一覧より前に一度だけ直す。
+    // setup でやらないのは、Android の `app_data_dir` がメインスレッドから
+    // 呼べないのと、修復前の一覧が一瞬でも画面に出るのを避けるため。
+    // 修復に失敗してもノートが読めなくなるよりは、そのまま出すほうがいい。
+    static REPAIR: std::sync::Once = std::sync::Once::new();
+
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    REPAIR.call_once(|| {
+        let _ = magical_merchant_core::repair_notes(&base_dir);
+    });
+
     magical_merchant_core::list_notes(&base_dir).map_err(|e| e.to_string())
 }
 
