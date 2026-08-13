@@ -108,6 +108,32 @@ export function replaceDayItems(
   return [...kept.slice(0, insertAt), ...dayItems, ...kept.slice(insertAt)];
 }
 
+export interface DeleteTarget {
+  date: string;
+  index: number;
+}
+
+/**
+ * まとめて消すときの実行順を決める。delete_timeline_entry は date + index で
+ * 行を指すので、同じ日の中で小さい index から消すと残りの行が繰り上がって
+ * 後続の index が別の行を指してしまう。日ごとにまとめ、index の大きい順に
+ * 並べることでズレを起こさない。日どうしの順は選択順を尊重する。
+ */
+export function planBulkDelete(targets: DeleteTarget[]): DeleteTarget[] {
+  const byDate = new Map<string, number[]>();
+  for (const { date, index } of targets) {
+    const indexes = byDate.get(date);
+    if (indexes) {
+      indexes.push(index);
+    } else {
+      byDate.set(date, [index]);
+    }
+  }
+  return [...byDate].flatMap(([date, indexes]) =>
+    indexes.toSorted((a, b) => b - a).map((index) => ({ date, index })),
+  );
+}
+
 export interface TimelineDay {
   /** `YYYY-MM-DD`。見出しの文字は表示側で作る。 */
   date: string;
