@@ -58,7 +58,10 @@ impl Notes {
         Ok(summaries)
     }
 
-    pub(crate) fn read(&self, filename: &NoteFilename) -> Result<String, CoreError> {
+    /// 検証済みのノート名を実ファイルパスに解決する。名前の検証だけでは
+    /// シンボリックリンク越しに notes の外へ出られるので、canonicalize した
+    /// 実体が notes ディレクトリ配下にあることまで確かめる。
+    fn existing_note_path(&self, filename: &NoteFilename) -> Result<PathBuf, CoreError> {
         let fname = filename.as_str();
         let notes_dir = self.notes_dir();
         let file_path = notes_dir.join(fname);
@@ -72,8 +75,11 @@ impl Notes {
         if !canonical_file_path.starts_with(&canonical_notes_dir) {
             return Err(CoreError::PathTraversal(fname.to_string()));
         }
+        Ok(canonical_file_path)
+    }
 
-        let content = fs::read_to_string(canonical_file_path)?;
+    pub(crate) fn read(&self, filename: &NoteFilename) -> Result<String, CoreError> {
+        let content = fs::read_to_string(self.existing_note_path(filename)?)?;
         Ok(frontmatter::strip(&content).to_string())
     }
 
@@ -103,21 +109,7 @@ impl Notes {
     }
 
     pub(crate) fn delete(&self, filename: &NoteFilename) -> Result<(), CoreError> {
-        let fname = filename.as_str();
-        let notes_dir = self.notes_dir();
-        let file_path = notes_dir.join(fname);
-
-        if !file_path.exists() {
-            return Err(CoreError::NotFound(file_path.to_string_lossy().to_string()));
-        }
-
-        let canonical_notes_dir = fs::canonicalize(&notes_dir)?;
-        let canonical_file_path = fs::canonicalize(&file_path)?;
-        if !canonical_file_path.starts_with(&canonical_notes_dir) {
-            return Err(CoreError::PathTraversal(fname.to_string()));
-        }
-
-        fs::remove_file(canonical_file_path)?;
+        fs::remove_file(self.existing_note_path(filename)?)?;
         Ok(())
     }
 }
