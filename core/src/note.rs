@@ -1,4 +1,5 @@
 pub(crate) mod error;
+mod repair;
 pub(crate) mod repository;
 mod summary;
 
@@ -45,6 +46,11 @@ pub fn read_note_by_filename(
 
 pub fn delete_note(base_dir: &Path, filename: &NoteFilename) -> Result<(), CoreError> {
     Notes::new(base_dir.to_path_buf()).delete(filename)
+}
+
+/// 過去の編集で本文に混入した化けメタデータを直す。直したファイル数を返す。
+pub fn repair_notes(base_dir: &Path) -> Result<usize, CoreError> {
+    repair::repair_all(&crate::utils::paths::notes_dir(base_dir))
 }
 
 #[cfg(test)]
