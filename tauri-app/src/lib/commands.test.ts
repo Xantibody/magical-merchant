@@ -1,12 +1,22 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { invoke } from "@tauri-apps/api/core";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
+import type { ClientContext } from "./client-context";
 import { onLocalMutation, typedInvoke } from "./commands";
 
-vi.mock(import("@tauri-apps/api/core"), () => ({
-  invoke: vi.fn<(cmd: string, args?: unknown) => Promise<unknown>>(),
-}));
-
-const invokeMock = vi.mocked(invoke);
+// vi.mock("@tauri-apps/api/core") は使わない。browser mode のモジュールモックは
+// サーバー側の単一レジストリ越しに差し替えるため、並列実行下でモックが適用され
+// ないまま本物の invoke が渡ることがある (vitest-dev/vitest#8339)。CI だけで
+// 落ちる原因だった。mockIPC は window.__TAURI_INTERNALS__ を差し替えるだけで
+// モジュールグラフに触らないので、この競合と無縁。
+const CLIENT: ClientContext = {
+  latitude: null,
+  longitude: null,
+  battery: null,
+  isCharging: null,
+  networkType: null,
+  osVersion: null,
+  locale: null,
+};
 
 describe("typedInvoke local mutation notifications", () => {
   const seen: string[] = [];
@@ -14,46 +24,44 @@ describe("typedInvoke local mutation notifications", () => {
 
   beforeEach(() => {
     seen.length = 0;
-    invokeMock.mockReset();
-    invokeMock.mockResolvedValue(null);
+    mockIPC(() => null);
     stop = onLocalMutation(() => seen.push("mutated"));
   });
 
-  afterEach(() => stop());
+  afterEach(() => {
+    stop();
+    clearMocks();
+  });
 
   // 自動同期の合図。呼び出し側ごとに書くと必ず取りこぼす
   it("notifies after a write command succeeds", async () => {
-    await typedInvoke("update_draft", {
-      filePath: "a.md",
-      body: "x",
-      tags: [],
-      latitude: null,
-      longitude: null,
-    });
+    await typedInvoke("update_draft", { filePath: "a.md", body: "x", client: CLIENT });
     expect(seen).toHaveLength(1);
   });
 
   it("notifies for a quick capture", async () => {
-    await typedInvoke("save_quick_capture", { text: "hi", latitude: null, longitude: null });
+    await typedInvoke("save_quick_capture", { text: "hi", client: CLIENT });
     expect(seen).toHaveLength(1);
   });
 
   it("stays quiet for read-only commands", async () => {
-    invokeMock.mockResolvedValue([]);
+    mockIPC(() => []);
     await typedInvoke("list_notes");
     expect(seen).toHaveLength(0);
   });
 
   // 失敗した書き込みで同期すると、書けなかった内容を「同期済み」と見せてしまう
   it("stays quiet when the write fails", async () => {
-    invokeMock.mockRejectedValue(new Error("disk full"));
+    mockIPC(() => {
+      throw new Error("disk full");
+    });
     await expect(typedInvoke("delete_note", { filename: "a.md" })).rejects.toThrow("disk full");
     expect(seen).toHaveLength(0);
   });
 
   it("stops notifying once unsubscribed", async () => {
     stop();
-    await typedInvoke("save_document", { body: "x", tags: [], latitude: null, longitude: null });
+    await typedInvoke("save_document", { body: "x", tags: [], client: CLIENT });
     expect(seen).toHaveLength(0);
   });
 });
