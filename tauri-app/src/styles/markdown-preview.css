@@ -32,6 +32,10 @@
 }
 
 .markdown-preview pre {
+  /* normalize の max-content フィットを解除して本文幅に(editor.css と同じ理由)。
+     padding はタイムラインのカードが窮屈にならないよう既存のまま */
+  max-inline-size: none;
+  width: 100%;
   background: var(--app-surface-2);
   padding: var(--size-3);
   border-radius: var(--radius-2);

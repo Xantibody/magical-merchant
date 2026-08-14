@@ -27,19 +27,20 @@ If a dependency adds weight, it must justify itself against lightness.
 
 ## Milkdown Plugins
 
-| Category | Plugin                    | Import                                 | Purpose                       |
-| -------- | ------------------------- | -------------------------------------- | ----------------------------- |
-| Built-in | `commonmark`              | `@milkdown/kit/preset/commonmark`      | Base Markdown                 |
-| Built-in | `listener`                | `@milkdown/kit/plugin/listener`        | onChange callback             |
-| Built-in | `cursor`                  | `@milkdown/kit/plugin/cursor`          | Gap cursor + drop cursor      |
-| Built-in | `history`                 | `@milkdown/kit/plugin/history`         | Undo/Redo                     |
-| Built-in | `clipboard`               | `@milkdown/kit/plugin/clipboard`       | Improved copy/paste           |
-| Built-in | `trailing`                | `@milkdown/kit/plugin/trailing`        | Trailing paragraph            |
-| Built-in | `linkTooltipPlugin`       | `@milkdown/kit/component/link-tooltip` | Link preview/edit             |
-| External | `highlight`               | `@milkdown/plugin-highlight`           | Shiki syntax highlighting     |
-| Custom   | `exitCodeBlockPlugin`     | `src/lib/exit-code-block-plugin.ts`    | Mod-Enter to exit code blocks |
-| Custom   | `createPlaceholderPlugin` | `src/lib/placeholder-plugin.ts`        | Empty document placeholder    |
-| Custom   | `mermaidPreviewPlugin`    | `src/lib/mermaid-preview-plugin.ts`    | In-editor mermaid preview     |
+| Category | Plugin                    | Import                                 | Purpose                                              |
+| -------- | ------------------------- | -------------------------------------- | ---------------------------------------------------- |
+| Built-in | `commonmark`              | `@milkdown/kit/preset/commonmark`      | Base Markdown                                        |
+| Built-in | `listener`                | `@milkdown/kit/plugin/listener`        | onChange callback                                    |
+| Built-in | `cursor`                  | `@milkdown/kit/plugin/cursor`          | Gap cursor + drop cursor                             |
+| Built-in | `history`                 | `@milkdown/kit/plugin/history`         | Undo/Redo                                            |
+| Built-in | `clipboard`               | `@milkdown/kit/plugin/clipboard`       | Improved copy/paste                                  |
+| Built-in | `trailing`                | `@milkdown/kit/plugin/trailing`        | Trailing paragraph                                   |
+| Built-in | `linkTooltipPlugin`       | `@milkdown/kit/component/link-tooltip` | Link preview/edit                                    |
+| External | `highlight`               | `@milkdown/plugin-highlight`           | Shiki syntax highlighting                            |
+| Custom   | `exitCodeBlockPlugin`     | `src/lib/exit-code-block-plugin.ts`    | Mod-Enter to exit code blocks                        |
+| Custom   | `createPlaceholderPlugin` | `src/lib/placeholder-plugin.ts`        | Empty document placeholder                           |
+| Custom   | `codeBlockViewPlugin`     | `src/lib/code-block-view-plugin.ts`    | Language input + copy button + mermaid figure view   |
+| Custom   | `codeBlockActivePlugin`   | `src/lib/code-block-active-plugin.ts`  | is-active class on code blocks the selection touches |
 
 Rejected plugins (with reasons):
 
