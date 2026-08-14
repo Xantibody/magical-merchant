@@ -7,6 +7,7 @@ import {
   itemMeta,
   itemTitle,
   replaceDayItems,
+  planBulkDelete,
 } from "./items";
 import type { Note } from "./commands";
 
@@ -168,5 +169,41 @@ describe("replaceDayItems", () => {
     const updated = replaceDayItems(items, "2026-08-04", []);
 
     expect(updated.map((i) => i.date)).toStrictEqual(["2026-08-03"]);
+  });
+});
+
+const target = (date: string, index: number) => ({ date, index });
+
+describe("planBulkDelete", () => {
+  it("deletes within a day from the highest index so earlier deletes cannot shift later ones", () => {
+    const plan = planBulkDelete([
+      target("2026-08-04", 0),
+      target("2026-08-04", 2),
+      target("2026-08-04", 1),
+    ]);
+    expect(plan).toStrictEqual([
+      target("2026-08-04", 2),
+      target("2026-08-04", 1),
+      target("2026-08-04", 0),
+    ]);
+  });
+
+  it("keeps each day's deletes together while ordering indexes per day", () => {
+    const plan = planBulkDelete([
+      target("2026-08-04", 1),
+      target("2026-08-03", 0),
+      target("2026-08-04", 3),
+      target("2026-08-03", 2),
+    ]);
+    expect(plan).toStrictEqual([
+      target("2026-08-04", 3),
+      target("2026-08-04", 1),
+      target("2026-08-03", 2),
+      target("2026-08-03", 0),
+    ]);
+  });
+
+  it("returns nothing for an empty selection", () => {
+    expect(planBulkDelete([])).toStrictEqual([]);
   });
 });
