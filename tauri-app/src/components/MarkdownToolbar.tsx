@@ -40,6 +40,14 @@ export function keyboardTop(
 export default function MarkdownToolbar(props: MarkdownToolbarProps): JSX.Element {
   const [toolbarTop, setToolbarTop] = createSignal<number | undefined>();
 
+  // ツールバーが出ている間(=編集中)は下部タブを隠す。fixed のツールバーが
+  // タブに重なって Timeline / Notes が押せない・誤タップでモードが変わる、の
+  // 両方をここで断つ
+  onMount(() => {
+    document.body.classList.add("md-toolbar-open");
+    onCleanup(() => document.body.classList.remove("md-toolbar-open"));
+  });
+
   onMount(() => {
     const vv = window.visualViewport;
     if (!vv) {

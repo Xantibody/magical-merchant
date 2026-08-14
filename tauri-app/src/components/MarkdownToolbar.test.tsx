@@ -41,6 +41,15 @@ describe("MarkdownToolbar", () => {
     expect(screen.getByLabelText("ブロックを削除")).toBeDefined();
   });
 
+  it("hides the bottom tabs only while the toolbar is up", () => {
+    const editor = createMockEditor();
+    const { unmount } = render(() => <MarkdownToolbar editor={editor} />);
+
+    expect(document.body.classList.contains("md-toolbar-open")).toBe(true);
+    unmount();
+    expect(document.body.classList.contains("md-toolbar-open")).toBe(false);
+  });
+
   it("calls editor.action when a button is clicked", () => {
     const editor = createMockEditor();
     render(() => <MarkdownToolbar editor={editor} />);

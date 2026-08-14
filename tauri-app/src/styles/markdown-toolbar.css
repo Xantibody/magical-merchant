@@ -37,4 +37,10 @@
     color: var(--app-text);
     background: var(--app-surface);
   }
+
+  /* 編集中はツールバーが下端を使う。タブを残すと fixed のツールバーが上に
+     重なって押せないボタンが並ぶだけなので、場所ごと譲ってもらう */
+  body.md-toolbar-open .bottom-tabs {
+    display: none;
+  }
 }
