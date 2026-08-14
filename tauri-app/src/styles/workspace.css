@@ -397,3 +397,26 @@
     display: none;
   }
 }
+
+/* ---- マインドマップ表示 ---- */
+
+.mindmap-view {
+  height: 100%;
+}
+
+.mindmap-view svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* markmap は SVG の中に <style> を差し込む。色はカスタムプロパティで
+   開けてあるので、アプリのトークンをそこへ流し込む(セレクタは注入側の
+   `.markmap` より詳細度を上げておく) */
+.mindmap-view .markmap {
+  --markmap-text-color: var(--app-text);
+  --markmap-font: 400 14px/1.6 var(--font-sans);
+  --markmap-circle-open-bg: var(--app-surface);
+  --markmap-code-bg: var(--app-surface-2);
+  --markmap-code-color: var(--app-text);
+}

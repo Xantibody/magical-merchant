@@ -71,6 +71,7 @@ pub fn format_note_markdown(
         time,
         tags: tags.to_vec(),
         context: Some(context.clone()),
+        view: None,
     };
     frontmatter::render(&fm, body)
 }

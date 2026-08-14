@@ -30,6 +30,8 @@ interface NoteMeta {
   time: string;
   tags: string[];
   context?: NoteContext;
+  /** 表示モード。`"mindmap"` 以外の値の解釈は `note-view.ts` に寄せてある。 */
+  view?: string;
 }
 
 type HitKind = "timeline" | "note";
@@ -71,6 +73,7 @@ interface CommandMap {
   read_note: { args: { filename: string }; result: string };
   read_note_meta: { args: { filename: string }; result: NoteMeta };
   update_note_meta: { args: { filename: string; time: string; tags: string[] }; result: void };
+  set_note_view: { args: { filename: string; view: string | null }; result: void };
   delete_note: { args: { filename: string }; result: void };
   save_document: { args: { body: string; tags: string[] } & ClientArgs; result: void };
   sync_start: { args: void; result: void };
@@ -93,6 +96,7 @@ const MUTATING: ReadonlySet<CommandName> = new Set<CommandName>([
   "create_draft",
   "update_draft",
   "update_note_meta",
+  "set_note_view",
   "delete_note",
   "save_document",
 ]);

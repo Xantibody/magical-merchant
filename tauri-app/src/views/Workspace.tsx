@@ -20,11 +20,15 @@ import { getDeviceSignals } from "../lib/client-context";
 import { useShell } from "../lib/shell";
 import { groupNotes, itemTitle, noteCreatedLabel, toNoteItems } from "../lib/items";
 import type { ItemGroup, NoteItem } from "../lib/items";
+import { resolveNoteView, toggledView, viewToFrontmatter } from "../lib/note-view";
+import type { NoteView } from "../lib/note-view";
 
 // Milkdown + ProseMirror は編集を始めるまで要らない。一覧とプレビューだけの
 // 表示をこの重さから切り離す
 const MilkdownEditor = lazy(() => import("../components/MilkdownEditor"));
 const MarkdownToolbar = lazy(() => import("../components/MarkdownToolbar"));
+// markmap-view は d3 を連れてくる。マインドマップにしたノートを開くまで読まない
+const MindmapView = lazy(() => import("../components/MindmapView"));
 
 const UNDO_MS = 5000;
 const SAVE_DEBOUNCE_MS = 1000;
@@ -60,6 +64,7 @@ export default function Workspace(): JSX.Element {
   const [saveStatus, setSaveStatus] = createSignal<"idle" | "saving" | "saved">("idle");
   const [hidden, setHidden] = createSignal<string[]>([]);
   const [noteBody, setNoteBody] = createSignal("");
+  const [noteView, setNoteView] = createSignal<NoteView>("editor");
   /** タッチ端末のツールバーが叩く先。編集をやめると undefined に戻る。 */
   const [markdownEditor, setMarkdownEditor] = createSignal<Editor | undefined>();
 
@@ -95,17 +100,42 @@ export default function Workspace(): JSX.Element {
     ),
   );
 
-  // ---- 選択中ノートの本文を読む ----
+  // ---- 選択中ノートの本文と表示モードを読む ----
   createEffect(() => {
     const item = selected();
     if (!item) {
       setNoteBody("");
+      setNoteView("editor");
       return;
     }
     void (async () => {
       setNoteBody(await typedInvoke("read_note", { filename: item.filename }));
     })();
+    void (async () => {
+      try {
+        const meta = await typedInvoke("read_note_meta", { filename: item.filename });
+        setNoteView(resolveNoteView(meta.view));
+      } catch {
+        // frontmatter が読めないノートは既定のエディタ表示で開く
+        setNoteView("editor");
+      }
+    })();
   });
+
+  const toggleNoteView = async (item: NoteItem): Promise<void> => {
+    const next = toggledView(noteView());
+    // 保存を待たずに切り替える。書き込みは frontmatter が壊れたノートで
+    // 失敗し得るので、そのときは表示だけ戻す
+    setNoteView(next);
+    try {
+      await typedInvoke("set_note_view", {
+        filename: item.filename,
+        view: viewToFrontmatter(next),
+      });
+    } catch {
+      setNoteView(toggledView(next));
+    }
+  };
 
   const select = (item: NoteItem): void => {
     shell.closePopovers();
@@ -278,6 +308,23 @@ export default function Workspace(): JSX.Element {
                 </span>
 
                 <div class="detail-actions">
+                  <Show when={!editing()}>
+                    <button
+                      type="button"
+                      class="icon-button"
+                      title={noteView() === "mindmap" ? "エディタで表示" : "マインドマップで表示"}
+                      aria-label={
+                        noteView() === "mindmap" ? "エディタで表示" : "マインドマップで表示"
+                      }
+                      aria-pressed={noteView() === "mindmap"}
+                      onClick={() => void toggleNoteView(item())}
+                    >
+                      <Icon
+                        name={noteView() === "mindmap" ? "file-text" : "tree-structure"}
+                        size={17}
+                      />
+                    </button>
+                  </Show>
                   <button
                     type="button"
                     class="icon-button detail-meta-button"
@@ -335,7 +382,17 @@ export default function Workspace(): JSX.Element {
               </Show>
 
               <div class="detail-body">
-                <Show when={editing()} fallback={<MarkdownPreview source={noteBody()} />}>
+                <Show
+                  when={editing()}
+                  fallback={
+                    <Show
+                      when={noteView() === "mindmap"}
+                      fallback={<MarkdownPreview source={noteBody()} />}
+                    >
+                      <MindmapView source={noteBody()} />
+                    </Show>
+                  }
+                >
                   <MilkdownEditor
                     placeholder="ノートを書く…"
                     defaultValue={draft()}
