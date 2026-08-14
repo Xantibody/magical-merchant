@@ -74,6 +74,17 @@ Rejected plugins (with reasons):
   name written back into the entry would make the record depend on which
   device, language and network resolved it
 
+## Browser Verification Harness
+
+`just tauri_app::dev-browser` (or `pnpm run dev:browser`) starts Vite with a
+Tauri IPC mock (`tauri-app/dev/ipc-mock.js`) injected into `index.html`, so the
+full UI runs in a plain browser — drive it with `agent-browser` for layout/CLS
+checks and e2e-style verification. The mock holds deterministic in-memory
+fixtures (timeline days, notes with code/mermaid/mindmap, delayed
+`resolve_places`). It is injected only when `BROWSER_MOCK=1` and never reaches
+production builds. When adding a Tauri command, add a handler to the mock too —
+unknown commands throw so the gap is visible in the console.
+
 ## Editor Performance Principles
 
 Three non-negotiable constraints for Markdown editor design:
