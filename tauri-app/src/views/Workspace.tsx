@@ -4,6 +4,7 @@ import {
   createMemo,
   createEffect,
   on,
+  batch,
   For,
   Show,
   lazy,
@@ -20,7 +21,7 @@ import { getDeviceSignals } from "../lib/client-context";
 import { useShell } from "../lib/shell";
 import { groupNotes, itemTitle, noteCreatedLabel, toNoteItems } from "../lib/items";
 import type { ItemGroup, NoteItem } from "../lib/items";
-import { resolveNoteView, toggledView, viewToFrontmatter } from "../lib/note-view";
+import { readNoteContent, toggledView, viewToFrontmatter } from "../lib/note-view";
 import type { NoteView } from "../lib/note-view";
 
 // Milkdown + ProseMirror は編集を始めるまで要らない。一覧とプレビューだけの
@@ -109,15 +110,29 @@ export default function Workspace(): JSX.Element {
       return;
     }
     void (async () => {
-      setNoteBody(await typedInvoke("read_note", { filename: item.filename }));
-    })();
-    void (async () => {
       try {
-        const meta = await typedInvoke("read_note_meta", { filename: item.filename });
-        setNoteView(resolveNoteView(meta.view));
+        const content = await readNoteContent(
+          () => typedInvoke("read_note", { filename: item.filename }),
+          () => typedInvoke("read_note_meta", { filename: item.filename }),
+        );
+        // 一覧を素早くたどると、遅い読みが速い読みを追い越して届く。
+        // いま選ばれているノートへの答えだけを画面に出す
+        if (selected()?.id !== item.id) {
+          return;
+        }
+        // 本文とモードは対で出す。バラすと一瞬だけ違うモードで描かれる
+        batch(() => {
+          setNoteBody(content.body);
+          setNoteView(content.view);
+        });
       } catch {
-        // frontmatter が読めないノートは既定のエディタ表示で開く
-        setNoteView("editor");
+        // 読めないノートを選んだまま、前のノートの本文を出し続けない
+        if (selected()?.id === item.id) {
+          batch(() => {
+            setNoteBody("");
+            setNoteView("editor");
+          });
+        }
       }
     })();
   });
