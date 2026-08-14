@@ -1,30 +1,14 @@
 import { $prose } from "@milkdown/kit/utils";
-import { TextSelection } from "@milkdown/kit/prose/state";
 import { keymap } from "@milkdown/kit/prose/keymap";
+import { exitCodeBlock } from "./block-commands";
 
 /**
  * Exit a code block by pressing Mod+Enter (Cmd+Enter on Mac).
- * Inserts a new paragraph after the code block and moves the cursor there.
+ * The command itself lives in block-commands.ts so the touch toolbar,
+ * which has no modifier keys to offer, can call the same thing.
  */
 export const exitCodeBlockPlugin = $prose(() =>
   keymap({
-    "Mod-Enter": (state, dispatch) => {
-      const { $from } = state.selection;
-      const node = $from.node($from.depth);
-      if (node.type.name !== "code_block") {
-        return false;
-      }
-
-      if (!dispatch) {
-        return true;
-      }
-      const endOfBlock = $from.after($from.depth);
-      const { tr } = state;
-      const paragraphType = state.schema.nodes.paragraph;
-      tr.insert(endOfBlock, paragraphType.create());
-      tr.setSelection(TextSelection.near(tr.doc.resolve(endOfBlock + 1)));
-      dispatch(tr);
-      return true;
-    },
+    "Mod-Enter": exitCodeBlock,
   }),
 );

@@ -1,13 +1,15 @@
 import { Show, createSignal, onMount, onCleanup } from "solid-js";
 import { Portal } from "solid-js/web";
 import type { Editor } from "@milkdown/kit/core";
-import { commandsCtx, rootCtx } from "@milkdown/kit/core";
+import { commandsCtx, editorViewCtx, rootCtx } from "@milkdown/kit/core";
 import {
   sinkListItemCommand,
   liftListItemCommand,
   createCodeBlockCommand,
   insertHrCommand,
 } from "@milkdown/kit/preset/commonmark";
+import type { Command } from "@milkdown/kit/prose/state";
+import { deleteCurrentBlock, exitCodeBlock } from "../lib/block-commands";
 import Icon from "./Icon";
 import type { JSX } from "solid-js";
 
@@ -38,6 +40,14 @@ export function keyboardTop(
 export default function MarkdownToolbar(props: MarkdownToolbarProps): JSX.Element {
   const [toolbarTop, setToolbarTop] = createSignal<number | undefined>();
 
+  // ツールバーが出ている間(=編集中)は下部タブを隠す。fixed のツールバーが
+  // タブに重なって Timeline / Notes が押せない・誤タップでモードが変わる、の
+  // 両方をここで断つ
+  onMount(() => {
+    document.body.classList.add("md-toolbar-open");
+    onCleanup(() => document.body.classList.remove("md-toolbar-open"));
+  });
+
   onMount(() => {
     const vv = window.visualViewport;
     if (!vv) {
@@ -67,6 +77,16 @@ export default function MarkdownToolbar(props: MarkdownToolbarProps): JSX.Elemen
       const pm = root.querySelector(".ProseMirror") as HTMLElement | null;
       pm?.focus();
     });
+  };
+
+  /** Milkdown のコマンド登録を介さない、素の ProseMirror コマンドを撃つ。 */
+  const execCommand = (command: Command) => {
+    exec((e) =>
+      e.action((ctx) => {
+        const view = ctx.get(editorViewCtx);
+        command(view.state, view.dispatch);
+      }),
+    );
   };
 
   const top = () => toolbarTop();
@@ -127,6 +147,24 @@ export default function MarkdownToolbar(props: MarkdownToolbarProps): JSX.Elemen
             title="Horizontal rule"
           >
             <Icon name="minus" size={18} />
+          </button>
+          <button
+            type="button"
+            onPointerDown={(e) => e.preventDefault()}
+            onClick={() => execCommand(exitCodeBlock)}
+            aria-label="ブロックから抜ける"
+            title="ブロックから抜ける"
+          >
+            <Icon name="arrow-line-down" size={18} />
+          </button>
+          <button
+            type="button"
+            onPointerDown={(e) => e.preventDefault()}
+            onClick={() => execCommand(deleteCurrentBlock)}
+            aria-label="ブロックを削除"
+            title="ブロックを削除"
+          >
+            <Icon name="trash" size={18} />
           </button>
         </div>
       </Portal>
