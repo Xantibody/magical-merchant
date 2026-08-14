@@ -103,6 +103,9 @@
   font-size: var(--font-size-0);
   line-height: 1;
   color: var(--app-text-muted);
+  /* 幅は nodeView が scrollWidth で実測して当てる。placeholder「言語」の
+     ぶんだけは空でもクリックできるよう下限を持つ */
+  min-width: 5ch;
 }
 
 .milkdown-editor .code-language-input:focus {

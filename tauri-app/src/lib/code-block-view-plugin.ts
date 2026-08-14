@@ -6,7 +6,7 @@ import checkIcon from "@phosphor-icons/core/assets/regular/check.svg?raw";
 import { renderDiagrams } from "./mermaid";
 import { isMermaidLanguage, createDebouncedDiagramRenderer } from "./mermaid-preview";
 import { createCopyFeedback } from "./copy-feedback";
-import { LANGUAGE_DATALIST_ID, languageLabelWidth } from "./language-suggestions";
+import { LANGUAGE_DATALIST_ID } from "./language-suggestions";
 import type { Node } from "@milkdown/kit/prose/model";
 import type { EditorView, NodeView, ViewMutationRecord } from "@milkdown/kit/prose/view";
 
@@ -190,8 +190,11 @@ class CodeBlockPreviewView implements NodeView {
   }
 
   private resizeLanguageInput(): void {
-    // 入力はラベル扱いなので、値の長さちょうどに縮めておく(下限は placeholder 分)
-    this.languageInput.style.width = languageLabelWidth(this.languageInput.value);
+    // 入力はラベル扱いなので、値の実測幅ちょうどに縮めておく。ch 単位は
+    // --font-mono の先頭フォントが無い環境でフォールバックの実グリフ幅と
+    // ずれて末尾が欠けるため、scrollWidth で測る(下限は CSS の min-width)
+    this.languageInput.style.width = "0";
+    this.languageInput.style.width = `${this.languageInput.scrollWidth}px`;
   }
 
   private sync(node: Node, { initial }: { initial: boolean }): void {
