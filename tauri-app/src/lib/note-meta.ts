@@ -67,7 +67,10 @@ export function contextRows(ctx: NoteContext | undefined): ContextRow[] {
     });
   }
   if (ctx.network_type) {
-    rows.push({ label: "ネットワーク", value: NETWORK_LABELS[ctx.network_type] ?? ctx.network_type });
+    rows.push({
+      label: "ネットワーク",
+      value: NETWORK_LABELS[ctx.network_type] ?? ctx.network_type,
+    });
   }
   if (ctx.hostname) {
     rows.push({ label: "ホスト名", value: ctx.hostname });

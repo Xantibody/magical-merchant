@@ -70,10 +70,7 @@ export default function NoteMetaPopover(props: NoteMetaPopoverProps): JSX.Elemen
 
   return (
     <div class="popover note-meta-popover">
-      <Show
-        when={!meta.error}
-        fallback={<p class="note-meta-error">メタデータを読み取れません</p>}
-      >
+      <Show when={!meta.error} fallback={<p class="note-meta-error">メタデータを読み取れません</p>}>
         <Show when={meta()}>
           {(m) => (
             <>
