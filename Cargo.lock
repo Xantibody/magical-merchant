@@ -2420,14 +2420,17 @@ version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "battery",
+ "block2",
  "chrono",
  "hostname",
  "jni",
  "jsonwebtoken",
  "keyring",
  "magical-merchant-core",
+ "ndk-context",
  "objc2",
  "objc2-core-location",
+ "objc2-foundation",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
@@ -2754,6 +2757,7 @@ version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ca347214e24bc973fc025fd0d36ebb179ff30536ed1f80252706db19ee452009"
 dependencies = [
+ "block2",
  "objc2",
  "objc2-foundation",
 ]
