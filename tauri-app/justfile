@@ -20,6 +20,10 @@ test: setup
 dev: setup
   pnpm tauri dev
 
+# Tauri なしのブラウザ検証 (agent-browser 用)。IPC は dev/ipc-mock.js が受ける
+dev-browser: setup
+  pnpm run dev:browser
+
 android-init: setup
   pnpm tauri android init
 
