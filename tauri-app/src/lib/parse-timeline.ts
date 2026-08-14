@@ -91,10 +91,6 @@ export function getNetworkIcon(ctx: DeviceContext): IconName | null {
   }
 }
 
-export function hasLocation(ctx: DeviceContext): boolean {
-  return ctx.location !== undefined;
-}
-
 export function getOsLabel(ctx: DeviceContext): string | null {
   if (!ctx.os) {
     return null;

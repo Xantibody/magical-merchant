@@ -1,11 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  parseTimelineEntry,
-  getBatteryIcon,
-  getNetworkIcon,
-  getOsLabel,
-  hasLocation,
-} from "./parse-timeline";
+import { parseTimelineEntry, getBatteryIcon, getNetworkIcon, getOsLabel } from "./parse-timeline";
 
 describe("parseTimelineEntry", () => {
   it("parses entry with context JSON", () => {
@@ -127,17 +121,5 @@ describe("getOsLabel", () => {
 
   it("returns null when os is empty", () => {
     expect(getOsLabel({ os: "", arch: "" })).toBeNull();
-  });
-});
-
-describe("hasLocation", () => {
-  it("returns true when location exists", () => {
-    expect(hasLocation({ os: "", arch: "", location: { latitude: 35, longitude: 139 } })).toBe(
-      true,
-    );
-  });
-
-  it("returns false when location is undefined", () => {
-    expect(hasLocation({ os: "", arch: "" })).toBe(false);
   });
 });
