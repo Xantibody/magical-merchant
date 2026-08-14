@@ -275,9 +275,10 @@ export default function Timeline(): JSX.Element {
       const plan = planBulkDelete(entries().filter((item) => ids.has(item.id)));
       // 同じ日の index は前の削除で行が繰り上がると意味が変わるので、並列にせず順に消す
       for (const target of plan) {
+        // oxlint-disable-next-line no-await-in-loop
         await typedInvoke("delete_timeline_entry", { date: target.date, index: target.index });
       }
-      await Promise.all([...new Set(plan.map((t) => t.date))].map(reloadDay));
+      await Promise.all([...new Set(plan.map((t) => t.date))].map((date) => reloadDay(date)));
       exitSelecting();
       shell.showToast(`${plan.length}件のエントリを削除しました`);
     } finally {
@@ -301,8 +302,8 @@ export default function Timeline(): JSX.Element {
         exitSelecting();
       }
     };
-    window.addEventListener("keydown", onKey);
-    onCleanup(() => window.removeEventListener("keydown", onKey));
+    globalThis.addEventListener("keydown", onKey);
+    onCleanup(() => globalThis.removeEventListener("keydown", onKey));
   });
 
   return (
