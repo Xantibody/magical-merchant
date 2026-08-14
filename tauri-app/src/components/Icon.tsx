@@ -101,6 +101,18 @@ export default function Icon(props: IconProps): JSX.Element {
   });
 
   return (
-    <span ref={ref} class="icon" style={{ display: "inline-flex", "line-height": 0 }} {...rest} />
+    <span
+      ref={ref}
+      class="icon"
+      // SVG が動的 import で届く前から枠を予約しておく。空の span を 0px の
+      // ままにすると、届いた瞬間にヘッダやタブバーが育って画面全体が揺れる
+      style={{
+        display: "inline-flex",
+        "line-height": 0,
+        width: `${local.size ?? 24}px`,
+        height: `${local.size ?? 24}px`,
+      }}
+      {...rest}
+    />
   );
 }

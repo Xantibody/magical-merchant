@@ -21,3 +21,28 @@ export function toggledView(view: NoteView): NoteView {
 export function viewToFrontmatter(view: NoteView): string | null {
   return view === "mindmap" ? "mindmap" : null;
 }
+
+export interface NoteContent {
+  body: string;
+  view: NoteView;
+}
+
+/**
+ * 本文と表示モードを対で読む。別々に画面へ流すと、先に届いた本文が一瞬
+ * 違うモードで描かれる(マインドマップのノートが Markdown で光ってから
+ * 差し替わる)。メタの読み損ねは既定のエディタ表示に倒すが、本文の
+ * 読み損ねはごまかさない — 空のノートに見せるほうが害が大きい。
+ */
+export async function readNoteContent(
+  readBody: () => Promise<string>,
+  readMeta: () => Promise<{ view?: string }>,
+): Promise<NoteContent> {
+  const [body, view] = await Promise.all([
+    readBody(),
+    readMeta().then(
+      (meta) => resolveNoteView(meta.view),
+      () => "editor" as const,
+    ),
+  ]);
+  return { body, view };
+}
