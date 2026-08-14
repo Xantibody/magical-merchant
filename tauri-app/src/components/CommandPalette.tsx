@@ -5,6 +5,7 @@ import type { IconName } from "./Icon";
 import { typedInvoke } from "../lib/commands";
 import type { SearchHit } from "../lib/commands";
 import { createDebouncedAccessor } from "../lib/debounce";
+import { isImeComposing } from "../lib/ime";
 
 interface PaletteCommand {
   id: string;
@@ -81,7 +82,8 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
       setCursor(Math.max(clampedCursor() - 1, 0));
       return;
     }
-    if (e.key === "Enter") {
+    // 変換確定の Enter は IME のもの。行の実行には使わない (#102)
+    if (e.key === "Enter" && !isImeComposing(e)) {
       e.preventDefault();
       rows()[clampedCursor()]?.run();
     }

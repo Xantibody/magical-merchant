@@ -1,6 +1,7 @@
 import { createSignal, createMemo, For, Show } from "solid-js";
 import type { JSX } from "solid-js";
 import Icon from "./Icon";
+import { isImeComposing } from "../lib/ime";
 import { matchTagPrefix, tagDraftAt } from "../lib/tags";
 import type { TagCount } from "../lib/tags";
 
@@ -105,6 +106,10 @@ export default function CaptureBar(props: CaptureBarProps): JSX.Element {
   };
 
   const onKeyDown = (e: KeyboardEvent & { currentTarget: HTMLTextAreaElement }): void => {
+    // 変換確定の Enter は IME のもの。送信にもタグ確定にも使わない (#102)
+    if (e.key === "Enter" && isImeComposing(e)) {
+      return;
+    }
     if (rows() > 0) {
       if (e.key === "ArrowDown") {
         e.preventDefault();
