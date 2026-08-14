@@ -46,6 +46,35 @@ describe("renderMarkdownSync", () => {
   });
 });
 
+describe("Milkdown の空行 (<br /> 行)", () => {
+  it("単独行の <br /> は文字ではなく空の段落として描く", () => {
+    const html = renderMarkdownSync("一段落目\n\n<br />\n\n二段落目");
+    expect(html).not.toContain("&lt;br");
+    // 空行は 1 行ぶんの高さを持つ空の段落になる
+    expect(html).toContain("<p>\u00A0</p>");
+  });
+
+  it("文中の <br> はこれまでどおりエスケープした文字のまま", () => {
+    const html = renderMarkdownSync("前 <br> 後");
+    expect(html).toContain("&lt;br&gt;");
+  });
+
+  it("コードフェンスの中の <br /> はコードのまま", async () => {
+    const source = ["```html", "<br />", "```"].join("\n");
+    const html = await renderMarkdown(source);
+    // Shiki は < を &#x3C; にエスケープする。コードとして残っていればよい
+    expect(html).toMatch(/&(?:lt|#x3C);/);
+    expect(html).not.toContain("<p>\u00A0</p>");
+  });
+
+  it("フェンス差し込みつきの描画でも空行になる", async () => {
+    const source = ["```ts", "const a = 1;", "```", "", "<br />", "", "本文"].join("\n");
+    const html = await renderMarkdown(source);
+    expect(html).not.toContain("&lt;br");
+    expect(html).toContain("<p>\u00A0</p>");
+  });
+});
+
 describe("renderMarkdown", () => {
   it("highlights every code block", async () => {
     const source = ["```ts", "const a = 1;", "```", "", "```rust", "let b = 2;", "```"].join("\n");

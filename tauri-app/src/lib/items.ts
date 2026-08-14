@@ -1,6 +1,7 @@
 import type { Note } from "./commands";
 import { formatNoteGroupLabel } from "./day-labels";
 import { parseTimelineEntry } from "./parse-timeline";
+import { isPreservedEmptyLine } from "./preserved-empty-line";
 import type { DeviceContext } from "./parse-timeline";
 
 export interface TimelineItem {
@@ -36,7 +37,8 @@ export interface ItemGroup {
 const UNTITLED = "(空のメモ)";
 
 function firstLine(text: string): string {
-  const line = text.split("\n").find((l) => l.trim().length > 0);
+  // Milkdown は空行を <br /> 行として保存する。タイトルはそれも読み飛ばす
+  const line = text.split("\n").find((l) => l.trim().length > 0 && !isPreservedEmptyLine(l));
   return line?.replace(/^#+\s*/, "").trim() ?? "";
 }
 

@@ -66,6 +66,16 @@ describe("toNoteItems", () => {
     expect(toNoteItems([note({ preview: "   " })])[0].title).toBe("(空のメモ)");
   });
 
+  it("空行として保存された <br /> 行はタイトルに拾わない", () => {
+    // 本文の先頭で Enter を押したノートは <br /> 行から始まる。
+    // それをタイトルにすると一覧に「<br />」と並ぶ
+    expect(toNoteItems([note({ preview: "<br />\n見出し" })])[0].title).toBe("見出し");
+  });
+
+  it("空行 (<br />) しかないノートは空のメモ扱い", () => {
+    expect(toNoteItems([note({ preview: "<br />\n<br>" })])[0].title).toBe("(空のメモ)");
+  });
+
   it("splits the timestamp into a date and a time", () => {
     const [item] = toNoteItems([note()]);
     expect(item.date).toBe("2026-08-04");
