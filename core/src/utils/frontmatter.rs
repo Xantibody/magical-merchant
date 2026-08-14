@@ -11,6 +11,11 @@ pub struct NoteFrontmatter {
     pub tags: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub context: Option<Context>,
+    /// 表示モード(例: `mindmap`)。time/tags/context と違い「作成時の記録」では
+    /// なく閲覧の好みだが、ノート単位の設定はノートと一緒に同期されてほしいので
+    /// frontmatter に持つ。未指定・未知の値は読む側がエディタ表示に倒す。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub view: Option<String>,
 }
 
 pub fn render<T: Serialize>(fm: &T, body: &str) -> Result<String, CoreError> {
@@ -67,6 +72,7 @@ mod tests {
                 is_charging: Some(false),
                 ..Context::default()
             }),
+            view: None,
         };
         let rendered = render(&fm, "# Hello\nWorld").unwrap();
         let (parsed, body): (NoteFrontmatter, _) = parse(&rendered).unwrap();
@@ -75,11 +81,47 @@ mod tests {
     }
 
     #[test]
+    fn test_note_frontmatter_view_roundtrip() {
+        let fm = NoteFrontmatter {
+            time: sample_datetime(),
+            tags: vec![],
+            context: None,
+            view: Some("mindmap".to_string()),
+        };
+        let rendered = render(&fm, "body").unwrap();
+        let (parsed, _body): (NoteFrontmatter, _) = parse(&rendered).unwrap();
+        assert_eq!(parsed.view, Some("mindmap".to_string()));
+    }
+
+    /// view を持たないノートの frontmatter は今までと 1 バイトも変わらない。
+    /// 余計なキーを書くと、同期(Syncthing)が全ノートを転送し直すことになる。
+    #[test]
+    fn test_render_omits_absent_view() {
+        let fm = NoteFrontmatter {
+            time: sample_datetime(),
+            tags: vec![],
+            context: None,
+            view: None,
+        };
+        let rendered = render(&fm, "body").unwrap();
+        assert!(!rendered.contains("view"));
+    }
+
+    /// view キーを知らない版のアプリが書いたノートも今まで通り読める。
+    #[test]
+    fn test_parse_defaults_view_to_none() {
+        let yaml = "---\ntime: 2026-03-20T14:30:45+09:00\ntags: []\n---\nbody";
+        let (fm, _body): (NoteFrontmatter, &str) = parse(yaml).unwrap();
+        assert_eq!(fm.view, None);
+    }
+
+    #[test]
     fn test_note_frontmatter_no_context() {
         let fm = NoteFrontmatter {
             time: sample_datetime(),
             tags: vec![],
             context: None,
+            view: None,
         };
         let rendered = render(&fm, "body").unwrap();
         let (parsed, _body): (NoteFrontmatter, _) = parse(&rendered).unwrap();
@@ -92,6 +134,7 @@ mod tests {
             time: sample_datetime(),
             tags: vec![],
             context: None,
+            view: None,
         };
         let rendered = render(&fm, "body").unwrap();
         assert!(rendered.starts_with("---\n"));

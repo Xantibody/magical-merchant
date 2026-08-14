@@ -115,6 +115,7 @@ fn write_notes(base: &Path, rng: &mut Lcg) {
             time,
             tags: vec!["memo".to_string(), rng.pick(SUBJECTS).to_string()],
             context: None,
+            view: None,
         };
         // preview は先頭 100 文字しか読まれない。本文はそれより十分長くする。
         let mut text = String::new();

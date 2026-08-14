@@ -32,8 +32,7 @@ pub(crate) fn repair_all(notes_dir: &Path) -> Result<usize, CoreError> {
         let filename = entry.file_name().to_string_lossy().to_string();
         let fixed = NoteFrontmatter {
             time: filename_time(&filename).unwrap_or(fm.time),
-            tags: fm.tags,
-            context: fm.context,
+            ..fm
         };
         write_atomic(&path, frontmatter::render(&fixed, &clean_body)?)?;
         repaired += 1;
