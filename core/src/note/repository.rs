@@ -99,6 +99,7 @@ impl Notes {
                 time: Local::now().into(),
                 tags: Vec::new(),
                 context: Some(context.clone()),
+                view: None,
             },
             |(fm, _)| fm,
         );
@@ -133,6 +134,28 @@ impl Notes {
             time,
             tags: tags.to_vec(),
             context: existing.context,
+            view: existing.view,
+        };
+        write_atomic(&path, frontmatter::render(&fm, body)?)?;
+        Ok(())
+    }
+
+    /// 表示モードだけを差し替えて書き戻す。他のメタデータと本文には触れない。
+    ///
+    /// `update_meta` と同じく、frontmatter が読めないファイルには書かない。
+    /// 表示の好みのために壊れた記録を正当化するべきではない。
+    pub(crate) fn update_view(
+        &self,
+        filename: &NoteFilename,
+        view: Option<&str>,
+    ) -> Result<(), CoreError> {
+        let path = self.existing_note_path(filename)?;
+        let content = fs::read_to_string(&path)?;
+        let (existing, body) = frontmatter::parse::<NoteFrontmatter>(&content)?;
+
+        let fm = NoteFrontmatter {
+            view: view.map(str::to_string),
+            ..existing
         };
         write_atomic(&path, frontmatter::render(&fm, body)?)?;
         Ok(())

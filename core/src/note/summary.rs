@@ -68,6 +68,7 @@ mod tests {
                 is_charging: Some(false),
                 ..Context::default()
             }),
+            view: None,
         };
         let content = frontmatter::render(&fm, "# Title\nBody").unwrap();
         let summary = Summary::from_file(

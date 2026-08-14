@@ -69,6 +69,16 @@ pub fn update_note_meta(
     Notes::new(base_dir.to_path_buf()).update_meta(filename, time, tags)
 }
 
+/// 表示モードだけを差し替える。`None` で既定(エディタ)に戻す。
+/// time / tags / context / 本文には触れない。
+pub fn update_note_view(
+    base_dir: &Path,
+    filename: &NoteFilename,
+    view: Option<&str>,
+) -> Result<(), CoreError> {
+    Notes::new(base_dir.to_path_buf()).update_view(filename, view)
+}
+
 /// 過去の編集で本文に混入した化けメタデータを直す。直したファイル数を返す。
 pub fn repair_notes(base_dir: &Path) -> Result<usize, CoreError> {
     repair::repair_all(&crate::utils::paths::notes_dir(base_dir))
@@ -360,6 +370,85 @@ mod tests {
         assert!(matches!(result, Err(CoreError::Parse(_))));
         let content = fs::read_to_string(notes_dir.join("20260101_120000.md")).unwrap();
         assert_eq!(content, broken);
+    }
+
+    #[test]
+    fn update_note_view_sets_mindmap() {
+        let tmp = TempDir::new().unwrap();
+        let path = create_draft_note(tmp.path(), "body", &[], &mock_context()).unwrap();
+        let filename = filename_of(&path);
+
+        update_note_view(tmp.path(), &filename, Some("mindmap")).unwrap();
+
+        let meta = read_note_meta(tmp.path(), &filename).unwrap();
+        assert_eq!(meta.view, Some("mindmap".to_string()));
+    }
+
+    #[test]
+    fn update_note_view_none_clears_the_key() {
+        let tmp = TempDir::new().unwrap();
+        let path = create_draft_note(tmp.path(), "body", &[], &mock_context()).unwrap();
+        let filename = filename_of(&path);
+        update_note_view(tmp.path(), &filename, Some("mindmap")).unwrap();
+
+        update_note_view(tmp.path(), &filename, None).unwrap();
+
+        assert!(!fs::read_to_string(&path).unwrap().contains("view"));
+    }
+
+    /// 表示モードの切り替えで本文とメタデータの記録が動いてはいけない。
+    #[test]
+    fn update_note_view_keeps_body_time_and_context() {
+        let tmp = TempDir::new().unwrap();
+        let path = create_draft_note(tmp.path(), "# Title\nbody", &[], &mock_context()).unwrap();
+        let filename = filename_of(&path);
+        let before = read_note_meta(tmp.path(), &filename).unwrap();
+
+        update_note_view(tmp.path(), &filename, Some("mindmap")).unwrap();
+
+        assert_eq!(read_note(&path).unwrap(), "# Title\nbody");
+        let meta = read_note_meta(tmp.path(), &filename).unwrap();
+        assert_eq!(meta.time, before.time);
+        assert_eq!(meta.context.unwrap().battery, Some(50));
+    }
+
+    /// 本文の保存で表示モードが消えると、開き直すたびにエディタへ戻ってしまう。
+    #[test]
+    fn update_note_keeps_the_view_mode() {
+        let tmp = TempDir::new().unwrap();
+        let path = create_draft_note(tmp.path(), "original", &[], &mock_context()).unwrap();
+        let filename = filename_of(&path);
+        update_note_view(tmp.path(), &filename, Some("mindmap")).unwrap();
+
+        update_note(&path, "updated", &mock_context()).unwrap();
+
+        let meta = read_note_meta(tmp.path(), &filename).unwrap();
+        assert_eq!(meta.view, Some("mindmap".to_string()));
+    }
+
+    /// time/tags の編集でも表示モードは保たれる。
+    #[test]
+    fn update_note_meta_keeps_the_view_mode() {
+        let tmp = TempDir::new().unwrap();
+        let path = create_draft_note(tmp.path(), "body", &[], &mock_context()).unwrap();
+        let filename = filename_of(&path);
+        update_note_view(tmp.path(), &filename, Some("mindmap")).unwrap();
+
+        update_note_meta(tmp.path(), &filename, sample_time(), &[]).unwrap();
+
+        let meta = read_note_meta(tmp.path(), &filename).unwrap();
+        assert_eq!(meta.view, Some("mindmap".to_string()));
+    }
+
+    #[test]
+    fn update_note_view_not_found() {
+        let tmp = TempDir::new().unwrap();
+        fs::create_dir_all(tmp.path().join("data/notes")).unwrap();
+        let filename = NoteFilename::parse("nonexistent.md").unwrap();
+
+        let result = update_note_view(tmp.path(), &filename, Some("mindmap"));
+
+        assert!(matches!(result, Err(CoreError::NotFound(_))));
     }
 
     #[test]
