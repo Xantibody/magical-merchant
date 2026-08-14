@@ -29,6 +29,15 @@ pub fn notes_dir(base_dir: &Path) -> PathBuf {
     data_dir(base_dir).join(NOTES_DIR)
 }
 
+/// 地名キャッシュの置き場。
+///
+/// `data/` の外に置く。中身は座標から引き直せる派生物でしかなく、同期に
+/// 載せると端末ごとに違う言語のキャッシュが往復するだけになる。
+#[must_use]
+pub fn place_cache_path(base_dir: &Path) -> PathBuf {
+    base_dir.join("places.json")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -52,5 +61,14 @@ mod tests {
     fn test_notes_dir() {
         let path = notes_dir(Path::new("/app"));
         assert_eq!(path, PathBuf::from("/app/data/notes"));
+    }
+
+    /// 同期されるのは `data/` 以下だけ。派生物のキャッシュはその外に置く。
+    #[test]
+    fn the_place_cache_sits_outside_the_synced_tree() {
+        assert_eq!(
+            place_cache_path(Path::new("/app")),
+            PathBuf::from("/app/places.json")
+        );
     }
 }

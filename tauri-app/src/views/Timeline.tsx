@@ -21,6 +21,7 @@ import { formatDayHeading, toIsoDate } from "../lib/day-labels";
 import { groupTimelineByDay, planBulkDelete, replaceDayItems, toTimelineItems } from "../lib/items";
 import type { TimelineItem } from "../lib/items";
 import { entryMeta } from "../lib/timeline-meta";
+import { places } from "../lib/places";
 import { countTags, parseTags } from "../lib/tags";
 import type { DeviceContext } from "../lib/parse-timeline";
 
@@ -54,7 +55,7 @@ interface EntryProps {
 }
 
 function Entry(props: EntryProps): JSX.Element {
-  const meta = createMemo(() => entryMeta(props.item.context));
+  const meta = createMemo(() => entryMeta(props.item.context, places.nameOf));
 
   return (
     <article
@@ -175,6 +176,9 @@ export default function Timeline(): JSX.Element {
   createEffect(on(shell.dataVersion, () => void refetch(), { defer: true }));
 
   const entries = createMemo(() => timeline() ?? []);
+  // 地名は記録の一部ではないので、これを待って一覧を出さない。座標のまま先に
+  // 並べ、引けたものから名前に差し替わる。
+  createEffect(() => void places.load(entries().map((item) => item.context)));
   const knownTags = createMemo(() => countTags(entries().map((item) => item.text)));
 
   const visible = createMemo(() => {

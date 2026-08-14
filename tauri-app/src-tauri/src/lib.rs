@@ -10,6 +10,7 @@ mod auth;
 mod device;
 #[cfg(target_os = "macos")]
 mod location;
+mod place;
 mod sync;
 // Public because it is a real external surface: the JNI symbol inside is what
 // the Android widget links against, and `unreachable_pub` is right that a
@@ -173,6 +174,25 @@ fn delete_timeline_entry(handle: AppHandle, date: String, index: usize) -> Resul
     magical_merchant_core::delete_timeline_entry(&base_dir, naive, index).map_err(|e| e.to_string())
 }
 
+/// 座標を地名に直す。引けたものだけを `"緯度,経度"` のキー付きで返す。
+///
+/// 記録は座標のまま。返すのは読むときの言い換えで、引けなかった座標が
+/// 抜けていても呼び出し側は座標を出せばよい。
+///
+/// `async` なのはこれがメインスレッドで走ってはいけないため。同期コマンドは
+/// メインスレッドで実行され、ジオコーダの答えもメインキューに載る。そこで
+/// 待つと自分の返事を自分で塞ぎ、必ず時間切れになる。
+#[tauri::command]
+async fn resolve_places(
+    handle: AppHandle,
+    coordinates: Vec<(f64, f64)>,
+) -> Result<Vec<(String, String)>, String> {
+    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || place::resolve(&base_dir, &coordinates))
+        .await
+        .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn search_all(handle: AppHandle, query: String) -> Result<Vec<SearchHit>, String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
@@ -274,6 +294,7 @@ pub fn run() {
             update_timeline_entry,
             delete_timeline_entry,
             search_all,
+            resolve_places,
             delete_note,
             sync::sync_start,
             sync::sync_status,
