@@ -13,6 +13,7 @@ import { getHighlighter } from "../lib/highlighter";
 import { withKnownLanguages } from "../lib/highlight-parser";
 import { exitCodeBlockPlugin } from "../lib/exit-code-block-plugin";
 import { codeBlockViewPlugin } from "../lib/code-block-view-plugin";
+import { codeBlockActivePlugin } from "../lib/code-block-active-plugin";
 import { createPlaceholderPlugin } from "../lib/placeholder-plugin";
 import { getShikiTheme } from "../lib/theme";
 import type { JSX } from "solid-js";
@@ -71,6 +72,7 @@ export default function MilkdownEditor(props: MilkdownEditorProps): JSX.Element 
       .use(linkTooltipPlugin)
       .use(exitCodeBlockPlugin)
       .use(codeBlockViewPlugin)
+      .use(codeBlockActivePlugin)
       .use(props.placeholder ? createPlaceholderPlugin(props.placeholder) : [])
       .create();
 
