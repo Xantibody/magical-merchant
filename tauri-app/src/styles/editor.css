@@ -103,9 +103,12 @@
   font-size: var(--font-size-0);
   line-height: 1;
   color: var(--app-text-muted);
-  /* 幅は nodeView が scrollWidth で実測して当てる。placeholder「言語」の
-     ぶんだけは空でもクリックできるよう下限を持つ */
-  min-width: 5ch;
+  /* 背景も枠も無い透明なラベルなので、幅は文字にフィットさせず余裕を持たせる。
+     実測フィット(size 属性 / ch / scrollWidth / canvas)はどれもフォント
+     フォールバックや非表示中のレイアウトとずれて末尾が欠けた。上限は
+     右上のコピー ボタンに届かない幅 */
+  width: 10em;
+  max-width: calc(100% - var(--size-8));
 }
 
 .milkdown-editor .code-language-input:focus {

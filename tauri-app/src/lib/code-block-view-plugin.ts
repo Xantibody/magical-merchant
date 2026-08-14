@@ -158,9 +158,6 @@ class CodeBlockPreviewView implements NodeView {
     input.addEventListener("change", () => {
       this.commitLanguage(input.value);
     });
-    input.addEventListener("input", () => {
-      this.resizeLanguageInput();
-    });
     input.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         // change(コミット)を発火させてから、続けて書けるよう本文へ戻す
@@ -169,7 +166,6 @@ class CodeBlockPreviewView implements NodeView {
         this.focusSource();
       } else if (event.key === "Escape") {
         input.value = this.node.attrs.language as string;
-        this.resizeLanguageInput();
         input.blur();
       }
     });
@@ -189,14 +185,6 @@ class CodeBlockPreviewView implements NodeView {
     this.view.dispatch(state.tr.setNodeMarkup(pos, undefined, { ...this.node.attrs, language }));
   }
 
-  private resizeLanguageInput(): void {
-    // 入力はラベル扱いなので、値の実測幅ちょうどに縮めておく。ch 単位は
-    // --font-mono の先頭フォントが無い環境でフォールバックの実グリフ幅と
-    // ずれて末尾が欠けるため、scrollWidth で測る(下限は CSS の min-width)
-    this.languageInput.style.width = "0";
-    this.languageInput.style.width = `${this.languageInput.scrollWidth}px`;
-  }
-
   private sync(node: Node, { initial }: { initial: boolean }): void {
     this.node = node;
     const language = node.attrs.language as string;
@@ -212,7 +200,6 @@ class CodeBlockPreviewView implements NodeView {
     // 編集中の値をエディタ側の更新で潰さない
     if (document.activeElement !== this.languageInput) {
       this.languageInput.value = language;
-      this.resizeLanguageInput();
     }
 
     if (!isMermaidLanguage(language)) {
