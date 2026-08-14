@@ -6,8 +6,8 @@
 //! 自前の地名データは持たない。数 MB の辞書を同梱しても OS が既に持っている
 //! ものの劣化版にしかならず、住所の言い方は国ごとに違う。
 
-use magical_merchant_core::utils::place::{PlaceCache, place_key};
 use magical_merchant_core::utils::paths::place_cache_path;
+use magical_merchant_core::utils::place::{PlaceCache, place_key};
 use std::path::Path;
 
 /// 地名の分かった座標だけを、[`place_key`] 付きで返す。
@@ -106,25 +106,27 @@ mod platform {
 
         // ジオコーダ自身をブロックに持たせて、返事が来るまで生かしておく。
         let held = geocoder.clone();
-        let handler = RcBlock::new(move |placemarks: *mut NSArray<CLPlacemark>, _: *mut NSError| {
-            let _ = &held;
-            // SAFETY: CoreLocation が渡してくるのは自分の持ち物で、ブロックが
-            // 戻るまでは生きている。住所の各段を読むのもその間だけ。
-            let name = unsafe {
-                placemarks
-                    .as_ref()
-                    .and_then(NSArray::firstObject)
-                    .and_then(|mark| {
-                        coarsest_name(
-                            mark.locality().map(|s| s.to_string()),
-                            mark.subAdministrativeArea().map(|s| s.to_string()),
-                            mark.administrativeArea().map(|s| s.to_string()),
-                            mark.country().map(|s| s.to_string()),
-                        )
-                    })
-            };
-            let _ = tx.send(name);
-        });
+        let handler = RcBlock::new(
+            move |placemarks: *mut NSArray<CLPlacemark>, _: *mut NSError| {
+                let _ = &held;
+                // SAFETY: CoreLocation が渡してくるのは自分の持ち物で、ブロックが
+                // 戻るまでは生きている。住所の各段を読むのもその間だけ。
+                let name = unsafe {
+                    placemarks
+                        .as_ref()
+                        .and_then(NSArray::firstObject)
+                        .and_then(|mark| {
+                            coarsest_name(
+                                mark.locality().map(|s| s.to_string()),
+                                mark.subAdministrativeArea().map(|s| s.to_string()),
+                                mark.administrativeArea().map(|s| s.to_string()),
+                                mark.country().map(|s| s.to_string()),
+                            )
+                        })
+                };
+                let _ = tx.send(name);
+            },
+        );
 
         // SAFETY: 完了ブロックを渡すだけ。CLGeocoder は受け取ったブロックを自分で
         // 複製して持つので、時間切れでこちらが手放しても呼び出し先は生きている。
@@ -168,7 +170,12 @@ mod platform {
         longitude: f64,
     ) -> Option<String> {
         let locale = env
-            .call_static_method("java/util/Locale", "getDefault", "()Ljava/util/Locale;", &[])
+            .call_static_method(
+                "java/util/Locale",
+                "getDefault",
+                "()Ljava/util/Locale;",
+                &[],
+            )
             .ok()?
             .l()
             .ok()?;
@@ -195,12 +202,23 @@ mod platform {
             .ok()?
             .l()
             .ok()?;
-        if addresses.is_null() || env.call_method(&addresses, "size", "()I", &[]).ok()?.i().ok()? == 0
+        if addresses.is_null()
+            || env
+                .call_method(&addresses, "size", "()I", &[])
+                .ok()?
+                .i()
+                .ok()?
+                == 0
         {
             return None;
         }
         let address = env
-            .call_method(&addresses, "get", "(I)Ljava/lang/Object;", &[JValue::Int(0)])
+            .call_method(
+                &addresses,
+                "get",
+                "(I)Ljava/lang/Object;",
+                &[JValue::Int(0)],
+            )
             .ok()?
             .l()
             .ok()?;
