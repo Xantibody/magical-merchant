@@ -9,6 +9,29 @@ export interface Note {
   preview: string;
 }
 
+/**
+ * 記録時の端末情報。core の `Context` は空のフィールドを省いて
+ * シリアライズするので、全部が省略可能。
+ */
+export interface NoteContext {
+  battery?: number;
+  is_charging?: boolean;
+  network_type?: string;
+  location?: { latitude: number; longitude: number };
+  os?: string;
+  os_version?: string;
+  arch?: string;
+  hostname?: string;
+  locale?: string;
+}
+
+/** 1 件ぶんの frontmatter。`time` はオフセット付き RFC 3339。 */
+interface NoteMeta {
+  time: string;
+  tags: string[];
+  context?: NoteContext;
+}
+
 type HitKind = "timeline" | "note";
 
 export interface SearchHit {
@@ -46,6 +69,8 @@ interface CommandMap {
   };
   list_notes: { args: void; result: Note[] };
   read_note: { args: { filename: string }; result: string };
+  read_note_meta: { args: { filename: string }; result: NoteMeta };
+  update_note_meta: { args: { filename: string; time: string; tags: string[] }; result: void };
   delete_note: { args: { filename: string }; result: void };
   save_document: { args: { body: string; tags: string[] } & ClientArgs; result: void };
   sync_start: { args: void; result: void };
@@ -67,6 +92,7 @@ const MUTATING: ReadonlySet<CommandName> = new Set<CommandName>([
   "delete_timeline_entry",
   "create_draft",
   "update_draft",
+  "update_note_meta",
   "delete_note",
   "save_document",
 ]);
