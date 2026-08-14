@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import {
   buildLanguageSuggestions,
   ensureLanguageDatalist,
+  languageLabelWidth,
   LANGUAGE_DATALIST_ID,
 } from "./language-suggestions";
 
@@ -19,6 +20,19 @@ describe("buildLanguageSuggestions", () => {
   it("always offers mermaid even though the highlighter does not load it", () => {
     expect(buildLanguageSuggestions([])).toEqual(["mermaid"]);
     expect(buildLanguageSuggestions(["mermaid", "ts"])).toEqual(["mermaid", "ts"]);
+  });
+});
+
+describe("languageLabelWidth", () => {
+  // input の size 属性は平均文字幅ベースで、monospace でも "mermaid" が
+  // 「mermai」に欠けた。ch 単位+丸め誤差ぶんの余白で文字数に追従させる
+  it("gives every character a ch plus rounding slack", () => {
+    expect(languageLabelWidth("mermaid")).toBe("8ch");
+  });
+
+  it("keeps room for the placeholder when the value is short or empty", () => {
+    expect(languageLabelWidth("js")).toBe("5ch");
+    expect(languageLabelWidth("")).toBe("5ch");
   });
 });
 
