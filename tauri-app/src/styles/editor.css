@@ -97,6 +97,52 @@
   pointer-events: none;
 }
 
+/* コピー ボタン: 既定は非表示で、ブロックにホバーしている間だけ角に現れる
+   (アクションはホバーで出す家風)。visibility も切るのは、透明なままだと
+   見えないボタンがクリックを吸ってしまうから */
+.milkdown-editor .code-copy-button {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: inline-flex;
+  align-items: center;
+  padding: var(--size-1);
+  border: none;
+  border-radius: var(--radius-1);
+  background: none;
+  color: var(--app-text-muted);
+  cursor: pointer;
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.milkdown-editor pre:hover .code-copy-button {
+  visibility: visible;
+  opacity: 1;
+}
+
+.milkdown-editor .code-copy-button:hover {
+  color: var(--app-text);
+  background: var(--app-surface-3);
+}
+
+/* コピー直後のチェック表示。押した実感のための最小の変化 */
+.milkdown-editor .code-copy-button.is-copied {
+  color: var(--app-accent);
+}
+
+.milkdown-editor .code-copy-button svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+
+/* ホバー中の角はコピー操作に譲る。言語ラベルは情報なので一時退避 */
+.milkdown-editor pre[data-language]:hover::before {
+  opacity: 0;
+}
+
 /* mermaid のエディタ内プレビュー: コードブロックの直下に描いた図をぶら下げる。
    幅に合わせて縮め、mermaid が SVG に付ける max-width(原寸)以上には広げない */
 .milkdown-editor .mermaid-editor-preview {
