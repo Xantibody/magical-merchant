@@ -64,6 +64,8 @@ interface CommandMap {
   update_timeline_entry: { args: { date: string; index: number; text: string }; result: void };
   delete_timeline_entry: { args: { date: string; index: number }; result: void };
   search_all: { args: { query: string }; result: SearchHit[] };
+  /** 座標 → 地名。引けたものだけが `["緯度,経度", 地名]` で返る。 */
+  resolve_places: { args: { coordinates: [number, number][] }; result: [string, string][] };
   create_draft: { args: { body: string; tags: string[] } & ClientArgs; result: string };
   update_draft: {
     args: { filePath: string; body: string } & ClientArgs;
