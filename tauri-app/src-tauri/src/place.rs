@@ -84,6 +84,7 @@ mod platform {
     /// ジオコーダの返事を待つ上限。
     ///
     /// `CLGeocoder` は圏外でもすぐには諦めず、待たせたぶんだけ IPC が返らない。
+    /// 実測では 1 件 100ms を切るので、これを使い切るのは引けないときだけ。
     /// 座標のまま出す用意はあるので、待つより先に諦める。
     const TIMEOUT: Duration = Duration::from_secs(8);
 
@@ -92,8 +93,8 @@ mod platform {
     /// しない。返事が来なければ時間切れで `None` を返す。
     ///
     /// メインスレッドから呼んではいけない。`CLGeocoder` は完了ブロックを
-    /// メインキューに載せるので、そこで待つと自分の返事を自分で塞ぐ。
-    /// Tauri のコマンドは別スレッドで走るのでこの条件を満たす。
+    /// メインキューに載せるので、そこで待つと自分の返事を自分で塞ぎ、必ず
+    /// 時間切れになる。呼び出し元の `resolve_places` はそのために `async`。
     pub(super) fn geocode(latitude: f64, longitude: f64) -> Option<String> {
         // SAFETY: どちらもただのオブジェクト生成で、スレッドの制約を持たない。
         let (location, geocoder) = unsafe {
