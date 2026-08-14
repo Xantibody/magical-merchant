@@ -39,7 +39,7 @@ If a dependency adds weight, it must justify itself against lightness.
 | External | `highlight`               | `@milkdown/plugin-highlight`           | Shiki syntax highlighting     |
 | Custom   | `exitCodeBlockPlugin`     | `src/lib/exit-code-block-plugin.ts`    | Mod-Enter to exit code blocks |
 | Custom   | `createPlaceholderPlugin` | `src/lib/placeholder-plugin.ts`        | Empty document placeholder    |
-| Custom   | `mermaidPreviewPlugin`    | `src/lib/mermaid-preview-plugin.ts`    | In-editor mermaid preview     |
+| Custom   | `codeBlockViewPlugin`     | `src/lib/code-block-view-plugin.ts`    | In-editor mermaid preview     |
 
 Rejected plugins (with reasons):
 

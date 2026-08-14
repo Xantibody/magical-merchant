@@ -140,7 +140,7 @@ class CodeBlockPreviewView implements NodeView {
   }
 }
 
-export const mermaidPreviewPlugin = $view(
+export const codeBlockViewPlugin = $view(
   codeBlockSchema.node,
   () =>
     (node): NodeView =>
