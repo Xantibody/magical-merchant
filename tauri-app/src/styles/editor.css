@@ -171,6 +171,9 @@
 .milkdown-editor .mermaid-editor-preview svg {
   max-width: 100%;
   height: auto;
+  /* ソースを開くクリックはコンテナで受ける。SVG の内部要素(図形や
+     foreignObject のラベル)にヒットテストを食わせない */
+  pointer-events: none;
 }
 
 /* まだ一度も描けていないときだけ出す控えめな知らせ */
