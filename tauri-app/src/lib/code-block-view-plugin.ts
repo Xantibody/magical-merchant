@@ -6,6 +6,7 @@ import checkIcon from "@phosphor-icons/core/assets/regular/check.svg?raw";
 import { renderDiagrams } from "./mermaid";
 import { isMermaidLanguage, createDebouncedDiagramRenderer } from "./mermaid-preview";
 import { createCopyFeedback } from "./copy-feedback";
+import { LANGUAGE_DATALIST_ID } from "./language-suggestions";
 import type { Node } from "@milkdown/kit/prose/model";
 import type { EditorView, NodeView, ViewMutationRecord } from "@milkdown/kit/prose/view";
 
@@ -37,6 +38,7 @@ class CodeBlockPreviewView implements NodeView {
   private readonly getPos: () => number | undefined;
   private readonly pre: HTMLElement;
   private readonly copyButton: HTMLButtonElement;
+  private readonly languageInput: HTMLInputElement;
   private preview: HTMLElement | undefined;
   private node: Node;
   private lastSource: string | undefined;
@@ -66,7 +68,8 @@ class CodeBlockPreviewView implements NodeView {
     this.pre = document.createElement("pre");
     this.contentDOM = document.createElement("code");
     this.copyButton = this.createCopyButton();
-    this.pre.append(this.contentDOM, this.copyButton);
+    this.languageInput = this.createLanguageInput();
+    this.pre.append(this.contentDOM, this.languageInput, this.copyButton);
     this.dom.append(this.pre);
     this.sync(node, { initial: true });
   }
@@ -80,8 +83,9 @@ class CodeBlockPreviewView implements NodeView {
   }
 
   /**
-   * 編集ノードの外の部品(図・コピー ボタン)への操作は ProseMirror に
-   * 渡さない。渡すと図のクリックが node selection になったりする。
+   * 編集ノードの外の部品(図・コピー ボタン・言語入力)への操作は
+   * ProseMirror に渡さない。渡すと言語入力の打鍵をエディタの keymap が
+   * 拾ったり、図のクリックが node selection になったりする。
    * pre の余白クリック(カーソル配置)は通すため、部品だけに絞る
    */
   stopEvent(event: Event): boolean {
@@ -89,7 +93,11 @@ class CodeBlockPreviewView implements NodeView {
     if (!(target instanceof globalThis.Node)) {
       return false;
     }
-    return this.copyButton.contains(target) || (this.preview?.contains(target) ?? false);
+    return (
+      this.copyButton.contains(target) ||
+      this.languageInput.contains(target) ||
+      (this.preview?.contains(target) ?? false)
+    );
   }
 
   ignoreMutation(mutation: ViewMutationRecord): boolean {
@@ -132,16 +140,76 @@ class CodeBlockPreviewView implements NodeView {
     this.copyButton.innerHTML = copied ? checkIcon : copyIcon;
   }
 
+  /**
+   * 言語ラベルを兼ねる小さな入力。datalist(highlighter の読込済み言語+
+   * mermaid)から補完が出る。未知言語のハイライトを黙ってスキップする分
+   * (#101)、綴り違いに気づく場所はここになる
+   */
+  private createLanguageInput(): HTMLInputElement {
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "code-language-input";
+    input.setAttribute("list", LANGUAGE_DATALIST_ID);
+    input.setAttribute("aria-label", "言語");
+    input.placeholder = "言語";
+    input.spellcheck = false;
+    input.autocapitalize = "off";
+    input.tabIndex = -1;
+    input.addEventListener("change", () => {
+      this.commitLanguage(input.value);
+    });
+    input.addEventListener("input", () => {
+      this.resizeLanguageInput();
+    });
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        // change(コミット)を発火させてから、続けて書けるよう本文へ戻す
+        event.preventDefault();
+        input.blur();
+        this.focusSource();
+      } else if (event.key === "Escape") {
+        input.value = this.node.attrs.language as string;
+        this.resizeLanguageInput();
+        input.blur();
+      }
+    });
+    return input;
+  }
+
+  private commitLanguage(value: string): void {
+    const pos = this.getPos();
+    if (pos === undefined) {
+      return;
+    }
+    const language = value.trim();
+    if (language === (this.node.attrs.language as string)) {
+      return;
+    }
+    const { state } = this.view;
+    this.view.dispatch(state.tr.setNodeMarkup(pos, undefined, { ...this.node.attrs, language }));
+  }
+
+  private resizeLanguageInput(): void {
+    // 入力はラベル扱いなので、値の長さちょうどに縮めておく(下限は placeholder 分)
+    this.languageInput.size = Math.max(this.languageInput.value.length, 4);
+  }
+
   private sync(node: Node, { initial }: { initial: boolean }): void {
     this.node = node;
     const language = node.attrs.language as string;
 
-    // node view が立つと schema の toDOM は使われない。言語ラベルの CSS が
-    // 読む data-language はここで出し直す
+    // node view が立つと schema の toDOM は使われない。data-language は
+    // ここで出し直す(スタイルのフックとして残す)
     if (language) {
       this.pre.dataset.language = language;
     } else {
       delete this.pre.dataset.language;
+    }
+
+    // 編集中の値をエディタ側の更新で潰さない
+    if (document.activeElement !== this.languageInput) {
+      this.languageInput.value = language;
+      this.resizeLanguageInput();
     }
 
     if (!isMermaidLanguage(language)) {

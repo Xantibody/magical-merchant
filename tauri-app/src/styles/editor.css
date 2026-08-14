@@ -71,6 +71,7 @@
    width: 100% の箱に padding 24px 22px)。Open Props の normalize が
    pre を max-inline-size: max-content で内容にフィットさせるので解除する */
 .milkdown-editor pre {
+  position: relative;
   max-inline-size: none;
   width: 100%;
   background: var(--app-surface-2);
@@ -87,22 +88,34 @@
   min-height: 1em;
 }
 
-/* 言語ラベル: code_block が pre に書き出す data-language を attr() で見せるだけ。
-   DOM ノードもプラグインも増やさない、いちばん軽い形 */
-.milkdown-editor pre[data-language] {
-  position: relative;
-}
-
-.milkdown-editor pre[data-language]::before {
-  content: attr(data-language);
+/* 言語入力: ラベルの見た目のまま、クリックすると datalist 補完つきで
+   編集できる(Notion の言語ドロップダウン相当。位置も Notion に合わせ左上)。
+   言語が空のときは placeholder しかないので、ホバー中と編集中だけ見せる */
+.milkdown-editor .code-language-input {
   position: absolute;
   top: var(--size-1);
-  right: var(--size-2);
+  left: var(--size-2);
+  border: none;
+  background: none;
+  padding: 0;
+  outline: none;
   font-family: var(--font-mono);
   font-size: var(--font-size-0);
   line-height: 1;
   color: var(--app-text-muted);
-  pointer-events: none;
+}
+
+.milkdown-editor .code-language-input:focus {
+  color: var(--app-text);
+}
+
+.milkdown-editor .code-language-input:placeholder-shown {
+  opacity: 0;
+}
+
+.milkdown-editor pre:hover .code-language-input:placeholder-shown,
+.milkdown-editor .code-language-input:focus {
+  opacity: 1;
 }
 
 /* コピー ボタン: 既定は非表示で、ブロックにホバーしている間だけ角に現れる
@@ -144,11 +157,6 @@
   width: 14px;
   height: 14px;
   fill: currentColor;
-}
-
-/* ホバー中の角はコピー操作に譲る。言語ラベルは情報なので一時退避 */
-.milkdown-editor pre[data-language]:hover::before {
-  opacity: 0;
 }
 
 /* mermaid のエディタ内プレビュー: コードブロックの直下に描いた図をぶら下げる。
