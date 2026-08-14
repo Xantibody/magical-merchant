@@ -1,16 +1,23 @@
 import { $view } from "@milkdown/kit/utils";
 import { codeBlockSchema } from "@milkdown/kit/preset/commonmark";
+import copyIcon from "@phosphor-icons/core/assets/regular/copy.svg?raw";
+import checkIcon from "@phosphor-icons/core/assets/regular/check.svg?raw";
 import { renderDiagrams } from "./mermaid";
 import { isMermaidLanguage, createDebouncedDiagramRenderer } from "./mermaid-preview";
+import { createCopyFeedback } from "./copy-feedback";
 import type { Node } from "@milkdown/kit/prose/model";
 import type { NodeView, ViewMutationRecord } from "@milkdown/kit/prose/view";
 
 /** 打鍵が止まったと見なすまでの時間。短いと打鍵中の構文エラー描画が増えるだけ */
 const RENDER_DELAY_MS = 400;
 
+/** コピー後にチェック表示を戻すまでの時間。押した実感が持てる最短くらい */
+const COPY_RESET_MS = 1500;
+
 /**
- * code_block の node view。pre>code の既定構造は保ちつつ、mermaid のときだけ
- * 直下にレンダリング済みの図をぶら下げる。
+ * code_block の node view。pre>code の既定構造は保ちつつ、ホバーで現れる
+ * コピー ボタンを角に置き、mermaid のときだけ直下にレンダリング済みの図を
+ * ぶら下げる。
  *
  * widget decoration ではなく node view にしたのは、図の寿命がブロックの寿命と
  * 一致するから。decoration set はトランザクションごとに再計算・再マッピングが
@@ -23,9 +30,17 @@ class CodeBlockPreviewView implements NodeView {
   contentDOM: HTMLElement;
 
   private readonly pre: HTMLElement;
+  private readonly copyButton: HTMLButtonElement;
   private preview: HTMLElement | undefined;
+  private node: Node;
   private lastSource: string | undefined;
   private lastSvg: string | undefined;
+
+  private readonly copyFeedback = createCopyFeedback(
+    (text) => navigator.clipboard.writeText(text),
+    (copied) => this.applyCopyState(copied),
+    COPY_RESET_MS,
+  );
 
   private readonly renderer = createDebouncedDiagramRenderer(
     async (source) => {
@@ -37,11 +52,13 @@ class CodeBlockPreviewView implements NodeView {
   );
 
   constructor(node: Node) {
+    this.node = node;
     this.dom = document.createElement("div");
     this.dom.className = "code-block-view";
     this.pre = document.createElement("pre");
     this.contentDOM = document.createElement("code");
-    this.pre.append(this.contentDOM);
+    this.copyButton = this.createCopyButton();
+    this.pre.append(this.contentDOM, this.copyButton);
     this.dom.append(this.pre);
     this.sync(node, { initial: true });
   }
@@ -65,9 +82,37 @@ class CodeBlockPreviewView implements NodeView {
 
   destroy(): void {
     this.renderer.dispose();
+    this.copyFeedback.dispose();
+  }
+
+  /**
+   * ホバーで現れるコピー ボタン(表示制御は CSS)。編集ノードの外なので
+   * contentEditable を切り、mousedown を止めてカーソルと選択を守る
+   */
+  private createCopyButton(): HTMLButtonElement {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "code-copy-button";
+    button.contentEditable = "false";
+    button.tabIndex = -1;
+    button.setAttribute("aria-label", "コードをコピー");
+    button.innerHTML = copyIcon;
+    button.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+    });
+    button.addEventListener("click", () => {
+      this.copyFeedback.copy(this.node.textContent);
+    });
+    return button;
+  }
+
+  private applyCopyState(copied: boolean): void {
+    this.copyButton.classList.toggle("is-copied", copied);
+    this.copyButton.innerHTML = copied ? checkIcon : copyIcon;
   }
 
   private sync(node: Node, { initial }: { initial: boolean }): void {
+    this.node = node;
     const language = node.attrs.language as string;
 
     // node view が立つと schema の toDOM は使われない。言語ラベルの CSS が
