@@ -79,6 +79,45 @@
   padding: 0;
 }
 
+/* 言語ラベル: code_block が pre に書き出す data-language を attr() で見せるだけ。
+   DOM ノードもプラグインも増やさない、いちばん軽い形 */
+.milkdown-editor pre[data-language] {
+  position: relative;
+}
+
+.milkdown-editor pre[data-language]::before {
+  content: attr(data-language);
+  position: absolute;
+  top: var(--size-1);
+  right: var(--size-2);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-0);
+  line-height: 1;
+  color: var(--app-text-muted);
+  pointer-events: none;
+}
+
+/* mermaid のエディタ内プレビュー: コードブロックの直下に描いた図をぶら下げる。
+   幅に合わせて縮め、mermaid が SVG に付ける max-width(原寸)以上には広げない */
+.milkdown-editor .mermaid-editor-preview {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--size-2);
+  user-select: none;
+}
+
+.milkdown-editor .mermaid-editor-preview svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* まだ一度も描けていないときだけ出す控えめな知らせ */
+.milkdown-editor .mermaid-editor-preview.is-error {
+  justify-content: flex-start;
+  font-size: var(--font-size-0);
+  color: var(--app-text-muted);
+}
+
 .milkdown-editor blockquote {
   border-left: 3px solid var(--app-border);
   padding-left: var(--size-3);
