@@ -11,6 +11,16 @@ export function buildLanguageSuggestions(loadedLanguages: readonly string[]): st
 }
 
 /**
+ * 言語入力の表示幅。input の size 属性は「平均文字幅」ベースで、monospace
+ * でも "mermaid" が「mermai」に欠けた。ch 単位なら等幅で 1 文字 = 1ch なので、
+ * 文字数+丸め誤差ぶんの余白 1ch で追従させる。下限は placeholder
+ * 「言語」(全角 2 文字 ≈ 4ch)が収まる幅。
+ */
+export function languageLabelWidth(value: string): string {
+  return `${Math.max(value.length, 4) + 1}ch`;
+}
+
+/**
  * 全コードブロックの言語入力が共有する datalist を document に 1 つだけ置く。
  * nodeView はブロックごとに立つので、呼び出しは冪等にしておく。
  */
