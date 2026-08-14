@@ -172,9 +172,9 @@ describe("replaceDayItems", () => {
   });
 });
 
-describe("planBulkDelete", () => {
-  const target = (date: string, index: number) => ({ date, index });
+const target = (date: string, index: number) => ({ date, index });
 
+describe("planBulkDelete", () => {
   it("deletes within a day from the highest index so earlier deletes cannot shift later ones", () => {
     const plan = planBulkDelete([
       target("2026-08-04", 0),
