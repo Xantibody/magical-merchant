@@ -49,16 +49,42 @@ describe("entryMeta", () => {
     });
   });
 
+  it("names the place when the coordinate has been resolved", () => {
+    const meta = entryMeta(
+      context({ location: { latitude: 35.676_140_3, longitude: 139.546_563_4 } }),
+      () => "渋谷区",
+    );
+
+    expect(meta[1]).toEqual({ icon: "map-pin", label: "渋谷区" });
+  });
+
+  it("shows where the entry was written", () => {
+    expect(
+      entryMeta(context({ location: { latitude: 35.676_140_3, longitude: 139.546_563_4 } }))[1],
+    ).toEqual({ icon: "map-pin", label: "35.6761, 139.5466" });
+  });
+
+  it("keeps the sign of the southern and western hemispheres", () => {
+    expect(
+      entryMeta(context({ location: { latitude: -33.8688, longitude: -70.6693 } }))[1].label,
+    ).toBe("-33.8688, -70.6693");
+  });
+
   it("leaves out what was not recorded", () => {
     expect(entryMeta(context())).toEqual([{ icon: "laptop", label: "macos" }]);
   });
 
-  it("keeps the order device, network, battery", () => {
-    const meta = entryMeta(context({ os: "android", network_type: "Mobile", battery: 30 })).map(
-      (s) => s.label,
-    );
+  it("keeps the order device, location, network, battery", () => {
+    const meta = entryMeta(
+      context({
+        os: "android",
+        location: { latitude: 35.676_140_3, longitude: 139.546_563_4 },
+        network_type: "Mobile",
+        battery: 30,
+      }),
+    ).map((s) => s.label);
 
-    expect(meta).toEqual(["android", "モバイル回線", "30%"]);
+    expect(meta).toEqual(["android", "35.6761, 139.5466", "モバイル回線", "30%"]);
   });
 
   it("says nothing at all when there is no context", () => {
