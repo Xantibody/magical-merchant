@@ -67,9 +67,15 @@
   font-size: 0.9em;
 }
 
+/* コードブロックは内容量と無関係な一定サイズから始める(sample の Notion は
+   width: 100% の箱に padding 24px 22px)。Open Props の normalize が
+   pre を max-inline-size: max-content で内容にフィットさせるので解除する */
 .milkdown-editor pre {
+  position: relative;
+  max-inline-size: none;
+  width: 100%;
   background: var(--app-surface-2);
-  padding: var(--size-3);
+  padding: var(--size-5);
   border-radius: var(--radius-2);
   overflow-x: auto;
 }
@@ -77,24 +83,86 @@
 .milkdown-editor pre code {
   background: none;
   padding: 0;
+  /* 空のブロックでも 1 行分の高さを保つ(Notion の leaf と同じ min-height) */
+  display: block;
+  min-height: 1em;
 }
 
-/* 言語ラベル: code_block が pre に書き出す data-language を attr() で見せるだけ。
-   DOM ノードもプラグインも増やさない、いちばん軽い形 */
-.milkdown-editor pre[data-language] {
-  position: relative;
-}
-
-.milkdown-editor pre[data-language]::before {
-  content: attr(data-language);
+/* 言語入力: ラベルの見た目のまま、クリックすると datalist 補完つきで
+   編集できる(Notion の言語ドロップダウン相当。位置も Notion に合わせ左上)。
+   言語が空のときは placeholder しかないので、ホバー中と編集中だけ見せる */
+.milkdown-editor .code-language-input {
   position: absolute;
   top: var(--size-1);
-  right: var(--size-2);
+  left: var(--size-2);
+  border: none;
+  background: none;
+  padding: 0;
+  outline: none;
   font-family: var(--font-mono);
   font-size: var(--font-size-0);
   line-height: 1;
   color: var(--app-text-muted);
-  pointer-events: none;
+  /* 背景も枠も無い透明なラベルなので、幅は文字にフィットさせず余裕を持たせる。
+     実測フィット(size 属性 / ch / scrollWidth / canvas)はどれもフォント
+     フォールバックや非表示中のレイアウトとずれて末尾が欠けた。上限は
+     右上のコピー ボタンに届かない幅 */
+  width: 10em;
+  max-width: calc(100% - var(--size-8));
+}
+
+.milkdown-editor .code-language-input:focus {
+  color: var(--app-text);
+}
+
+.milkdown-editor .code-language-input:placeholder-shown {
+  opacity: 0;
+}
+
+.milkdown-editor pre:hover .code-language-input:placeholder-shown,
+.milkdown-editor .code-language-input:focus {
+  opacity: 1;
+}
+
+/* コピー ボタン: 既定は非表示で、ブロックにホバーしている間だけ角に現れる
+   (アクションはホバーで出す家風)。visibility も切るのは、透明なままだと
+   見えないボタンがクリックを吸ってしまうから */
+.milkdown-editor .code-copy-button {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: inline-flex;
+  align-items: center;
+  padding: var(--size-1);
+  border: none;
+  border-radius: var(--radius-1);
+  background: none;
+  color: var(--app-text-muted);
+  cursor: pointer;
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.milkdown-editor pre:hover .code-copy-button {
+  visibility: visible;
+  opacity: 1;
+}
+
+.milkdown-editor .code-copy-button:hover {
+  color: var(--app-text);
+  background: var(--app-surface-3);
+}
+
+/* コピー直後のチェック表示。押した実感のための最小の変化 */
+.milkdown-editor .code-copy-button.is-copied {
+  color: var(--app-accent);
+}
+
+.milkdown-editor .code-copy-button svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
 }
 
 /* mermaid のエディタ内プレビュー: コードブロックの直下に描いた図をぶら下げる。
@@ -109,6 +177,9 @@
 .milkdown-editor .mermaid-editor-preview svg {
   max-width: 100%;
   height: auto;
+  /* ソースを開くクリックはコンテナで受ける。SVG の内部要素(図形や
+     foreignObject のラベル)にヒットテストを食わせない */
+  pointer-events: none;
 }
 
 /* まだ一度も描けていないときだけ出す控えめな知らせ */
@@ -116,6 +187,19 @@
   justify-content: flex-start;
   font-size: var(--font-size-0);
   color: var(--app-text-muted);
+}
+
+/* mermaid は図がメイン(Slite 流)。カーソルがブロック外にある間はソースを
+   隠して図だけを見せる。is-active はカーソルが触れているブロックに
+   code-block-active-plugin が付け、has-diagram は最新ソースを描けている間
+   だけ nodeView が立てる — 描画に失敗した壊れたソースは隠れない */
+.milkdown-editor .code-block-view.has-diagram:not(.is-active) pre {
+  display: none;
+}
+
+.milkdown-editor .code-block-view.has-diagram:not(.is-active) .mermaid-editor-preview {
+  margin-top: 0;
+  cursor: pointer;
 }
 
 .milkdown-editor blockquote {

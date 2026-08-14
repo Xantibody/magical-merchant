@@ -10,8 +10,11 @@ import { linkTooltipPlugin } from "@milkdown/kit/component/link-tooltip";
 import { highlight, highlightPluginConfig } from "@milkdown/plugin-highlight";
 import { createParser } from "@milkdown/plugin-highlight/shiki";
 import { getHighlighter } from "../lib/highlighter";
+import { withKnownLanguages } from "../lib/highlight-parser";
+import { buildLanguageSuggestions, ensureLanguageDatalist } from "../lib/language-suggestions";
 import { exitCodeBlockPlugin } from "../lib/exit-code-block-plugin";
-import { mermaidPreviewPlugin } from "../lib/mermaid-preview-plugin";
+import { codeBlockViewPlugin } from "../lib/code-block-view-plugin";
+import { codeBlockActivePlugin } from "../lib/code-block-active-plugin";
 import { createPlaceholderPlugin } from "../lib/placeholder-plugin";
 import { getShikiTheme } from "../lib/theme";
 import type { JSX } from "solid-js";
@@ -38,9 +41,16 @@ export default function MilkdownEditor(props: MilkdownEditorProps): JSX.Element 
     // Shiki's Highlighter type is structurally compatible but comes from a
     // different copy of the package than the one @milkdown/plugin-highlight
     // resolves, so the nominal types do not line up.
-    const parser = createParser(highlighter as Parameters<typeof createParser>[0], {
-      theme: getShikiTheme(),
-    });
+    // 言語入力の補完候補(コードブロック共有の datalist)
+    ensureLanguageDatalist(document, buildLanguageSuggestions(highlighter.getLoadedLanguages()));
+
+    // 未読込の言語(mermaid など)は素通しにして ShikiError を防ぐ(#101)
+    const parser = withKnownLanguages(
+      createParser(highlighter as Parameters<typeof createParser>[0], {
+        theme: getShikiTheme(),
+      }),
+      highlighter.getLoadedLanguages(),
+    );
 
     editor = await Editor.make()
       .config((ctx) => {
@@ -65,7 +75,8 @@ export default function MilkdownEditor(props: MilkdownEditorProps): JSX.Element 
       .use(trailing)
       .use(linkTooltipPlugin)
       .use(exitCodeBlockPlugin)
-      .use(mermaidPreviewPlugin)
+      .use(codeBlockViewPlugin)
+      .use(codeBlockActivePlugin)
       .use(props.placeholder ? createPlaceholderPlugin(props.placeholder) : [])
       .create();
 
