@@ -2,6 +2,7 @@ import { createEffect, createResource, createSignal, For, Show } from "solid-js"
 import type { JSX } from "solid-js";
 import Icon from "./Icon";
 import { typedInvoke } from "../lib/commands";
+import { isImeComposing } from "../lib/ime";
 import { addTag, contextRows, resolveEditedTime, toDatetimeLocal } from "../lib/note-meta";
 
 interface NoteMetaPopoverProps {
@@ -110,7 +111,8 @@ export default function NoteMetaPopover(props: NoteMetaPopoverProps): JSX.Elemen
                   value={tagInput()}
                   onInput={(e) => setTagInput(e.currentTarget.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") {
+                    // 変換確定の Enter は IME のもの。タグ確定には使わない (#102)
+                    if (e.key === "Enter" && !isImeComposing(e)) {
                       e.preventDefault();
                       commitTagInput();
                     }

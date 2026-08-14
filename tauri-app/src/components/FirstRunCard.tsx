@@ -2,6 +2,7 @@ import { createSignal, Show } from "solid-js";
 import type { JSX } from "solid-js";
 import Icon from "./Icon";
 import { typedInvoke } from "../lib/commands";
+import { isImeComposing } from "../lib/ime";
 
 const DISMISSED_KEY = "first-run-dismissed";
 
@@ -70,7 +71,8 @@ export default function FirstRunCard(props: FirstRunCardProps): JSX.Element {
             placeholder="https://....workers.dev"
             onInput={(e) => setUrl(e.currentTarget.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") {
+              // 変換確定の Enter は IME のもの。接続には使わない (#102)
+              if (e.key === "Enter" && !isImeComposing(e)) {
                 e.preventDefault();
                 connect();
               }
