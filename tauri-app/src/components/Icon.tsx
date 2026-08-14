@@ -48,6 +48,7 @@ const ICONS = {
   circle: () => import("@phosphor-icons/core/assets/regular/circle.svg?raw"),
   "check-circle": () => import("@phosphor-icons/core/assets/regular/check-circle.svg?raw"),
   "file-text": () => import("@phosphor-icons/core/assets/regular/file-text.svg?raw"),
+  "tree-structure": () => import("@phosphor-icons/core/assets/regular/tree-structure.svg?raw"),
   "caret-left": () => import("@phosphor-icons/core/assets/regular/caret-left.svg?raw"),
 } as const;
 

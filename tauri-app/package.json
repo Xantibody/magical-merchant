@@ -21,6 +21,7 @@
     "@tauri-apps/plugin-deep-link": "^2.4.9",
     "@tauri-apps/plugin-geolocation": "^2.3.2",
     "markdown-it": "^14.1.1",
+    "markmap-view": "^0.18.12",
     "mermaid": "^11.16.0",
     "open-props": "^1.7.23",
     "shiki": "^4.0.2",
