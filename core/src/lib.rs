@@ -14,7 +14,7 @@ pub use error::CoreError;
 pub use note::error::NoteError;
 pub use note::{
     NoteSummary, create_draft_note, delete_note, list_notes, read_note, read_note_by_filename,
-    repair_notes, update_note,
+    read_note_meta, repair_notes, update_note, update_note_meta,
 };
 pub use search::{HitKind, SearchHit, search_all};
 pub use timeline::error::TimelineError;
@@ -24,4 +24,6 @@ pub use timeline::{
 };
 pub use utils::device::Context as DeviceContext;
 pub use utils::frontmatter;
+/// 1 件ぶんのノートメタデータ。中身は frontmatter そのもの。
+pub use utils::frontmatter::NoteFrontmatter as NoteMeta;
 pub use utils::validated::NoteFilename;

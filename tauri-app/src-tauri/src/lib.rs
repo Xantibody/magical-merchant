@@ -23,7 +23,7 @@ pub mod widget_bridge;
 mod widget_summary;
 
 use device::ClientContext;
-use magical_merchant_core::{NoteFilename, NoteSummary, SearchHit};
+use magical_merchant_core::{NoteFilename, NoteMeta, NoteSummary, SearchHit};
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_deep_link::DeepLinkExt as _;
 
@@ -95,6 +95,29 @@ fn read_note(handle: AppHandle, filename: String) -> Result<String, String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
     let filename = NoteFilename::parse(&filename).map_err(|e| e.to_string())?;
     magical_merchant_core::read_note_by_filename(&base_dir, &filename).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn read_note_meta(handle: AppHandle, filename: String) -> Result<NoteMeta, String> {
+    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let filename = NoteFilename::parse(&filename).map_err(|e| e.to_string())?;
+    magical_merchant_core::read_note_meta(&base_dir, &filename).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn update_note_meta(
+    handle: AppHandle,
+    filename: String,
+    time: String,
+    tags: Vec<String>,
+) -> Result<(), String> {
+    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let filename = NoteFilename::parse(&filename).map_err(|e| e.to_string())?;
+    // オフセット付きの RFC 3339 で受ける。素の日時にすると、端末のタイム
+    // ゾーンが変わっただけで同じ入力が別の時刻を指してしまう
+    let time = chrono::DateTime::parse_from_rfc3339(&time).map_err(|e| e.to_string())?;
+    magical_merchant_core::update_note_meta(&base_dir, &filename, time, &tags)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -233,6 +256,8 @@ pub fn run() {
             update_draft,
             list_notes,
             read_note,
+            read_note_meta,
+            update_note_meta,
             read_timeline,
             list_timeline_dates,
             read_timeline_by_date,

@@ -14,10 +14,11 @@ import { useSearchParams } from "@solidjs/router";
 import type { Editor } from "@milkdown/kit/core";
 import Icon from "../components/Icon";
 import MarkdownPreview from "../components/MarkdownPreview";
+import NoteMetaPopover from "../components/NoteMetaPopover";
 import { typedInvoke } from "../lib/commands";
 import { getDeviceSignals } from "../lib/client-context";
 import { useShell } from "../lib/shell";
-import { groupNotes, itemTitle, toNoteItems } from "../lib/items";
+import { groupNotes, itemTitle, noteCreatedLabel, toNoteItems } from "../lib/items";
 import type { ItemGroup, NoteItem } from "../lib/items";
 
 // Milkdown + ProseMirror は編集を始めるまで要らない。一覧とプレビューだけの
@@ -233,7 +234,6 @@ export default function Workspace(): JSX.Element {
                         <span class="list-row-title">{itemTitle(item)}</span>
                         <span class="list-row-meta">
                           {noteDate(item as NoteItem)}
-                          <span class="list-row-file">{(item as NoteItem).filename}</span>
                           <For each={(item as NoteItem).tags}>
                             {(tag) => <span class="tag-badge">#{tag}</span>}
                           </For>
@@ -267,7 +267,9 @@ export default function Workspace(): JSX.Element {
                   <Icon name="arrow-left" size={18} />
                 </button>
                 <span class="detail-meta">
-                  <span class="detail-filename">{item().filename}</span>
+                  {/* ファイル名は同期やウィジェットが指す ID であって人に見せる
+                      ものではない。人が読むのは作成日時 */}
+                  <span class="detail-created">{noteCreatedLabel(item())}</span>
                   <Show when={editing() && saveStatus() !== "idle"}>
                     <span class="detail-save-status">
                       {saveStatus() === "saving" ? "保存中…" : "保存しました"}
@@ -276,6 +278,16 @@ export default function Workspace(): JSX.Element {
                 </span>
 
                 <div class="detail-actions">
+                  <button
+                    type="button"
+                    class="icon-button detail-meta-button"
+                    title="ノート情報"
+                    aria-label="ノート情報"
+                    aria-expanded={shell.popover() === "note-meta"}
+                    onClick={() => shell.togglePopover("note-meta")}
+                  >
+                    <Icon name="info" size={17} />
+                  </button>
                   <Show
                     when={editing()}
                     fallback={
@@ -311,6 +323,16 @@ export default function Workspace(): JSX.Element {
                   </button>
                 </div>
               </div>
+
+              <Show when={shell.popover() === "note-meta"}>
+                <NoteMetaPopover
+                  filename={item().filename}
+                  onSaved={async () => {
+                    await refetchNotes();
+                  }}
+                  onClose={() => shell.closePopovers()}
+                />
+              </Show>
 
               <div class="detail-body">
                 <Show when={editing()} fallback={<MarkdownPreview source={noteBody()} />}>

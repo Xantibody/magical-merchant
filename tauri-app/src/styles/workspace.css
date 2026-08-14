@@ -131,15 +131,6 @@
   color: var(--app-text-faint);
 }
 
-/* ファイル名は識別子なので等幅で。日付と混ざって読めなくならないように */
-.list-row-file {
-  font-family: ui-monospace, monospace;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 12rem;
-}
-
 .notes-empty {
   display: flex;
   flex-direction: column;
@@ -193,12 +184,11 @@
   border-bottom: 1px solid var(--app-hairline);
 }
 
-.detail-filename {
-  font-family: ui-monospace, monospace;
+/* ファイル名は同期やウィジェットが指す ID なので画面には出さない。
+   ヘッダに出すのは人が読む作成日時 */
+.detail-created {
   font-size: 13px;
   color: var(--app-text-faint);
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
