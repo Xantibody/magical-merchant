@@ -68,6 +68,11 @@ Rejected plugins (with reasons):
   the frontmatter from that struct
 - **The editor and preview only ever see the body.** Frontmatter routed through
   Milkdown gets serialized back as escaped plain text and corrupts the file
+- **Place names** (`places.json`, deliberately outside `data/`): what the OS
+  geocoder answered for a coordinate, keyed by a ~1km grid. Purely derived and
+  display-only — the recorded `location` stays the raw coordinate, because a
+  name written back into the entry would make the record depend on which
+  device, language and network resolved it
 
 ## Editor Performance Principles
 
