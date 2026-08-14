@@ -67,9 +67,14 @@
   font-size: 0.9em;
 }
 
+/* コードブロックは内容量と無関係な一定サイズから始める(sample の Notion は
+   width: 100% の箱に padding 24px 22px)。Open Props の normalize が
+   pre を max-inline-size: max-content で内容にフィットさせるので解除する */
 .milkdown-editor pre {
+  max-inline-size: none;
+  width: 100%;
   background: var(--app-surface-2);
-  padding: var(--size-3);
+  padding: var(--size-5);
   border-radius: var(--radius-2);
   overflow-x: auto;
 }
@@ -77,6 +82,9 @@
 .milkdown-editor pre code {
   background: none;
   padding: 0;
+  /* 空のブロックでも 1 行分の高さを保つ(Notion の leaf と同じ min-height) */
+  display: block;
+  min-height: 1em;
 }
 
 /* 言語ラベル: code_block が pre に書き出す data-language を attr() で見せるだけ。
