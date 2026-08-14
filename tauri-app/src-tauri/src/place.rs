@@ -48,6 +48,10 @@ pub(crate) fn resolve(base_dir: &Path, coordinates: &[(f64, f64)]) -> Vec<(Strin
 ///
 /// 市区町村 → 郡 → 都道府県/州 → 国。市の付かない土地でも空にならないよう
 /// 上へ落としていく。
+///
+/// ジオコーダを持たない Linux では呼ぶ側が居なくなるが、ビルドは全 OS でする:
+/// CI は Linux で走り、どの段を選ぶかはここのテストが確かめている部分。
+#[cfg_attr(not(any(target_os = "macos", target_os = "android")), allow(dead_code))]
 fn coarsest_name(
     locality: Option<String>,
     sub_administrative_area: Option<String>,
