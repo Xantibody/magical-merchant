@@ -26,7 +26,7 @@ export interface NoteContext {
 }
 
 /** 1 件ぶんの frontmatter。`time` はオフセット付き RFC 3339。 */
-export interface NoteMeta {
+interface NoteMeta {
   time: string;
   tags: string[];
   context?: NoteContext;
