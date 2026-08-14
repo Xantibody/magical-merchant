@@ -13,6 +13,7 @@ const ICONS = {
   "caret-right": () => import("@phosphor-icons/core/assets/regular/caret-right.svg?raw"),
   "caret-down": () => import("@phosphor-icons/core/assets/regular/caret-down.svg?raw"),
   "arrow-left": () => import("@phosphor-icons/core/assets/regular/arrow-left.svg?raw"),
+  "arrow-line-down": () => import("@phosphor-icons/core/assets/regular/arrow-line-down.svg?raw"),
   "clock-counter-clockwise": () =>
     import("@phosphor-icons/core/assets/regular/clock-counter-clockwise.svg?raw"),
   pencil: () => import("@phosphor-icons/core/assets/regular/pencil.svg?raw"),
