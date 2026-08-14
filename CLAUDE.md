@@ -14,16 +14,17 @@ If a dependency adds weight, it must justify itself against lightness.
 
 ## Tech Stack
 
-| Layer            | Technology                                  |
-| ---------------- | ------------------------------------------- |
-| Core logic       | Rust (`core/` crate, framework-independent) |
-| Desktop app      | Tauri 2 + SolidJS                           |
-| Styling          | Open Props (CSS custom properties)          |
-| Icons            | Phosphor Icons (SVG files)                  |
-| Editor           | Milkdown (headless, SolidJS integration)    |
-| Syntax highlight | Shiki                                       |
-| Markdown         | markdown-it + Shiki                         |
-| Diagrams         | Mermaid (dynamic import)                    |
+| Layer            | Technology                                                           |
+| ---------------- | -------------------------------------------------------------------- |
+| Core logic       | Rust (`core/` crate, framework-independent)                          |
+| Desktop app      | Tauri 2 + SolidJS                                                    |
+| Styling          | Open Props (CSS custom properties)                                   |
+| Icons            | Phosphor Icons (SVG files)                                           |
+| Editor           | Milkdown (headless, SolidJS integration)                             |
+| Syntax highlight | Shiki                                                                |
+| Markdown         | markdown-it + Shiki                                                  |
+| Diagrams         | Mermaid (dynamic import)                                             |
+| Mindmap          | markmap-view (dynamic import) + own transform (`src/lib/mindmap.ts`) |
 
 ## Milkdown Plugins
 
@@ -58,6 +59,13 @@ Rejected plugins (with reasons):
 - **Frontmatter** (`time` / `tags` / `context`): a record of creation, preserved
   verbatim on every edit. `time` must stay the creation time because the list
   sorts by filename (= creation order); a moving `time` breaks date grouping
+- **Frontmatter `view`** (optional): per-note display mode (`mindmap`). Unlike
+  the keys above it is a viewing preference, not a record — but it lives in
+  frontmatter so the mode travels with the note across synced devices. The key
+  is omitted (not written as a default) so untouched notes stay byte-identical.
+  Any new frontmatter key must be a typed field on `NoteFrontmatter` in Rust
+  core: unknown keys are dropped on the next save because saving re-renders
+  the frontmatter from that struct
 - **The editor and preview only ever see the body.** Frontmatter routed through
   Milkdown gets serialized back as escaped plain text and corrupts the file
 

@@ -120,6 +120,15 @@ fn update_note_meta(
         .map_err(|e| e.to_string())
 }
 
+/// 表示モードだけを書き換える。`None` で既定(エディタ)に戻す。
+#[tauri::command]
+fn set_note_view(handle: AppHandle, filename: String, view: Option<String>) -> Result<(), String> {
+    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let filename = NoteFilename::parse(&filename).map_err(|e| e.to_string())?;
+    magical_merchant_core::update_note_view(&base_dir, &filename, view.as_deref())
+        .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn read_timeline(handle: AppHandle) -> Result<Vec<String>, String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
@@ -258,6 +267,7 @@ pub fn run() {
             read_note,
             read_note_meta,
             update_note_meta,
+            set_note_view,
             read_timeline,
             list_timeline_dates,
             read_timeline_by_date,
