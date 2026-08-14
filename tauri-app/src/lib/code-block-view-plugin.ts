@@ -1,12 +1,13 @@
 import { $view } from "@milkdown/kit/utils";
 import { codeBlockSchema } from "@milkdown/kit/preset/commonmark";
+import { TextSelection } from "@milkdown/kit/prose/state";
 import copyIcon from "@phosphor-icons/core/assets/regular/copy.svg?raw";
 import checkIcon from "@phosphor-icons/core/assets/regular/check.svg?raw";
 import { renderDiagrams } from "./mermaid";
 import { isMermaidLanguage, createDebouncedDiagramRenderer } from "./mermaid-preview";
 import { createCopyFeedback } from "./copy-feedback";
 import type { Node } from "@milkdown/kit/prose/model";
-import type { NodeView, ViewMutationRecord } from "@milkdown/kit/prose/view";
+import type { EditorView, NodeView, ViewMutationRecord } from "@milkdown/kit/prose/view";
 
 /** 打鍵が止まったと見なすまでの時間。短いと打鍵中の構文エラー描画が増えるだけ */
 const RENDER_DELAY_MS = 400;
@@ -17,7 +18,10 @@ const COPY_RESET_MS = 1500;
 /**
  * code_block の node view。pre>code の既定構造は保ちつつ、ホバーで現れる
  * コピー ボタンを角に置き、mermaid のときだけ直下にレンダリング済みの図を
- * ぶら下げる。
+ * ぶら下げる。図が最新ソースを描けている間は has-diagram クラスが立ち、
+ * カーソルがブロック外にあるとき CSS がソースを隠して図だけを見せる
+ * (Slite/Typora 流)。描画に失敗している間はクラスを下ろし、ソースを
+ * 隠さない — 隠すと壊れた図を直せなくなる。
  *
  * widget decoration ではなく node view にしたのは、図の寿命がブロックの寿命と
  * 一致するから。decoration set はトランザクションごとに再計算・再マッピングが
@@ -29,6 +33,8 @@ class CodeBlockPreviewView implements NodeView {
   dom: HTMLElement;
   contentDOM: HTMLElement;
 
+  private readonly view: EditorView;
+  private readonly getPos: () => number | undefined;
   private readonly pre: HTMLElement;
   private readonly copyButton: HTMLButtonElement;
   private preview: HTMLElement | undefined;
@@ -51,8 +57,10 @@ class CodeBlockPreviewView implements NodeView {
     RENDER_DELAY_MS,
   );
 
-  constructor(node: Node) {
+  constructor(node: Node, view: EditorView, getPos: () => number | undefined) {
     this.node = node;
+    this.view = view;
+    this.getPos = getPos;
     this.dom = document.createElement("div");
     this.dom.className = "code-block-view";
     this.pre = document.createElement("pre");
@@ -69,6 +77,19 @@ class CodeBlockPreviewView implements NodeView {
     }
     this.sync(node, { initial: false });
     return true;
+  }
+
+  /**
+   * 編集ノードの外の部品(図・コピー ボタン)への操作は ProseMirror に
+   * 渡さない。渡すと図のクリックが node selection になったりする。
+   * pre の余白クリック(カーソル配置)は通すため、部品だけに絞る
+   */
+  stopEvent(event: Event): boolean {
+    const { target } = event;
+    if (!(target instanceof globalThis.Node)) {
+      return false;
+    }
+    return this.copyButton.contains(target) || (this.preview?.contains(target) ?? false);
   }
 
   ignoreMutation(mutation: ViewMutationRecord): boolean {
@@ -146,7 +167,9 @@ class CodeBlockPreviewView implements NodeView {
   private applyResult(svg: string | null): void {
     if (svg === null) {
       // 打鍵の途中は書きかけの構文になるのが普通。最後に描けた図を残して
-      // 落ち着きを保ち、まだ一度も描けていないときだけ控えめに伝える
+      // 落ち着きを保ち、まだ一度も描けていないときだけ控えめに伝える。
+      // 描けていない間はソースを隠さない(隠すと直せない)
+      this.dom.classList.remove("has-diagram");
       if (!this.lastSvg) {
         this.showNotice("図を描画できません");
       }
@@ -156,6 +179,7 @@ class CodeBlockPreviewView implements NodeView {
     const preview = this.ensurePreview();
     preview.classList.remove("is-error");
     preview.innerHTML = svg;
+    this.dom.classList.add("has-diagram");
   }
 
   private showNotice(text: string): void {
@@ -170,9 +194,25 @@ class CodeBlockPreviewView implements NodeView {
       this.preview.className = "mermaid-editor-preview";
       // 図は読み取り専用。編集対象はあくまで上のコードブロック
       this.preview.contentEditable = "false";
+      // 図だけの表示のとき、図をクリックしたらソースを開いて編集に入る
+      this.preview.addEventListener("click", () => {
+        this.focusSource();
+      });
       this.dom.append(this.preview);
     }
     return this.preview;
+  }
+
+  /** カーソルをブロック末尾に置いて is-active(ソース表示)に入る */
+  private focusSource(): void {
+    const pos = this.getPos();
+    if (pos === undefined) {
+      return;
+    }
+    const { state } = this.view;
+    const end = pos + this.node.nodeSize - 1;
+    this.view.dispatch(state.tr.setSelection(TextSelection.create(state.doc, end)));
+    this.view.focus();
   }
 
   private resetPreview(): void {
@@ -182,12 +222,13 @@ class CodeBlockPreviewView implements NodeView {
     this.lastSvg = undefined;
     this.preview?.remove();
     this.preview = undefined;
+    this.dom.classList.remove("has-diagram");
   }
 }
 
 export const codeBlockViewPlugin = $view(
   codeBlockSchema.node,
   () =>
-    (node): NodeView =>
-      new CodeBlockPreviewView(node),
+    (node, view, getPos): NodeView =>
+      new CodeBlockPreviewView(node, view, getPos),
 );

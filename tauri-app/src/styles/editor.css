@@ -172,6 +172,19 @@
   color: var(--app-text-muted);
 }
 
+/* mermaid は図がメイン(Slite 流)。カーソルがブロック外にある間はソースを
+   隠して図だけを見せる。is-active はカーソルが触れているブロックに
+   code-block-active-plugin が付け、has-diagram は最新ソースを描けている間
+   だけ nodeView が立てる — 描画に失敗した壊れたソースは隠れない */
+.milkdown-editor .code-block-view.has-diagram:not(.is-active) pre {
+  display: none;
+}
+
+.milkdown-editor .code-block-view.has-diagram:not(.is-active) .mermaid-editor-preview {
+  margin-top: 0;
+  cursor: pointer;
+}
+
 .milkdown-editor blockquote {
   border-left: 3px solid var(--app-border);
   padding-left: var(--size-3);
