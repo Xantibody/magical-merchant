@@ -10,6 +10,7 @@ import { linkTooltipPlugin } from "@milkdown/kit/component/link-tooltip";
 import { highlight, highlightPluginConfig } from "@milkdown/plugin-highlight";
 import { createParser } from "@milkdown/plugin-highlight/shiki";
 import { getHighlighter } from "../lib/highlighter";
+import { withKnownLanguages } from "../lib/highlight-parser";
 import { exitCodeBlockPlugin } from "../lib/exit-code-block-plugin";
 import { mermaidPreviewPlugin } from "../lib/mermaid-preview-plugin";
 import { createPlaceholderPlugin } from "../lib/placeholder-plugin";
@@ -38,9 +39,13 @@ export default function MilkdownEditor(props: MilkdownEditorProps): JSX.Element 
     // Shiki's Highlighter type is structurally compatible but comes from a
     // different copy of the package than the one @milkdown/plugin-highlight
     // resolves, so the nominal types do not line up.
-    const parser = createParser(highlighter as Parameters<typeof createParser>[0], {
-      theme: getShikiTheme(),
-    });
+    // 未読込の言語(mermaid など)は素通しにして ShikiError を防ぐ(#101)
+    const parser = withKnownLanguages(
+      createParser(highlighter as Parameters<typeof createParser>[0], {
+        theme: getShikiTheme(),
+      }),
+      highlighter.getLoadedLanguages(),
+    );
 
     editor = await Editor.make()
       .config((ctx) => {
