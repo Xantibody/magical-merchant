@@ -26,6 +26,28 @@ describe("Icon", () => {
     expect(svg.getAttribute("height")).toBe("16px");
   });
 
+  it("reserves the icon box before the SVG arrives", () => {
+    // SVG は動的 import で遅れて届く。それまで span が 0px だと、届いた瞬間に
+    // 周りのレイアウトが育って画面全体が揺れる(起動時 CLS の主因だった)
+    const { baseElement } = render(() => <Icon name="caret-left" size={18} />);
+    const span = baseElement.querySelector<HTMLSpanElement>(".icon");
+    if (!span) {
+      throw new Error("expected the icon span to render");
+    }
+    expect(span.style.width).toBe("18px");
+    expect(span.style.height).toBe("18px");
+  });
+
+  it("reserves the default 24px box when no size is given", () => {
+    const { baseElement } = render(() => <Icon name="caret-right" />);
+    const span = baseElement.querySelector<HTMLSpanElement>(".icon");
+    if (!span) {
+      throw new Error("expected the icon span to render");
+    }
+    expect(span.style.width).toBe("24px");
+    expect(span.style.height).toBe("24px");
+  });
+
   it("renders correctly on second render with the same icon name", async () => {
     const { baseElement: first } = render(() => <Icon name="sun" />);
     const screen1 = page.elementLocator(first);
