@@ -178,13 +178,19 @@ fn delete_timeline_entry(handle: AppHandle, date: String, index: usize) -> Resul
 ///
 /// 記録は座標のまま。返すのは読むときの言い換えで、引けなかった座標が
 /// 抜けていても呼び出し側は座標を出せばよい。
+///
+/// `async` なのはこれがメインスレッドで走ってはいけないため。同期コマンドは
+/// メインスレッドで実行され、ジオコーダの答えもメインキューに載る。そこで
+/// 待つと自分の返事を自分で塞ぎ、必ず時間切れになる。
 #[tauri::command]
-fn resolve_places(
+async fn resolve_places(
     handle: AppHandle,
     coordinates: Vec<(f64, f64)>,
 ) -> Result<Vec<(String, String)>, String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    Ok(place::resolve(&base_dir, &coordinates))
+    tauri::async_runtime::spawn_blocking(move || place::resolve(&base_dir, &coordinates))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
