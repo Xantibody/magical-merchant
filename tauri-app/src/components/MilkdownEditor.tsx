@@ -12,7 +12,7 @@ import { createParser } from "@milkdown/plugin-highlight/shiki";
 import { getHighlighter } from "../lib/highlighter";
 import { withKnownLanguages } from "../lib/highlight-parser";
 import { exitCodeBlockPlugin } from "../lib/exit-code-block-plugin";
-import { mermaidPreviewPlugin } from "../lib/mermaid-preview-plugin";
+import { codeBlockViewPlugin } from "../lib/code-block-view-plugin";
 import { createPlaceholderPlugin } from "../lib/placeholder-plugin";
 import { getShikiTheme } from "../lib/theme";
 import type { JSX } from "solid-js";
@@ -70,7 +70,7 @@ export default function MilkdownEditor(props: MilkdownEditorProps): JSX.Element 
       .use(trailing)
       .use(linkTooltipPlugin)
       .use(exitCodeBlockPlugin)
-      .use(mermaidPreviewPlugin)
+      .use(codeBlockViewPlugin)
       .use(props.placeholder ? createPlaceholderPlugin(props.placeholder) : [])
       .create();
 
