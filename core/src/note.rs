@@ -334,8 +334,7 @@ mod tests {
     #[test]
     fn update_note_meta_keeps_body_and_context() {
         let tmp = TempDir::new().unwrap();
-        let path =
-            create_draft_note(tmp.path(), "# Title\nbody", &[], &mock_context()).unwrap();
+        let path = create_draft_note(tmp.path(), "# Title\nbody", &[], &mock_context()).unwrap();
         let filename = filename_of(&path);
 
         update_note_meta(tmp.path(), &filename, sample_time(), &[]).unwrap();

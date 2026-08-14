@@ -59,7 +59,7 @@ describe("contextRows", () => {
     const rows = contextRows({
       network_type: "WiFi",
       hostname: "MacBook",
-      location: { latitude: 35.67621, longitude: 139.65031 },
+      location: { latitude: 35.676_21, longitude: 139.650_31 },
     });
     expect(rows).toEqual([
       { label: "ネットワーク", value: "Wi-Fi" },
@@ -69,7 +69,7 @@ describe("contextRows", () => {
   });
 
   it("returns nothing for a missing context", () => {
-    expect(contextRows(undefined)).toEqual([]);
+    expect(contextRows()).toEqual([]);
     expect(contextRows({})).toEqual([]);
   });
 });
