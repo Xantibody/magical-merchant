@@ -1,7 +1,26 @@
 import MarkdownIt from "markdown-it";
 import { getHighlighter } from "./highlighter";
 import { renderDiagrams } from "./mermaid";
+import { isPreservedEmptyLine } from "./preserved-empty-line";
 import { tagPlugin } from "./tag-markdown";
+
+/**
+ * Milkdown が空行の保存に使う `<br />` 行を、1 行ぶんの高さを持つ空の段落に
+ * 変える。html: false のままだと文字どおり `<br />` と表示されてしまう。
+ * トークン列で見るのは、コードフェンスの中の同じ文字列を巻き込まないため。
+ */
+function preservedEmptyLinePlugin(markdownIt: MarkdownIt): void {
+  markdownIt.core.ruler.push("preserved_empty_line", (state) => {
+    for (const token of state.tokens) {
+      if (token.type === "inline" && isPreservedEmptyLine(token.content)) {
+        const space = new state.Token("text", "", 0);
+        // 普通の空白だと行ボックスが立たず、段落が高さ 0 に潰れるので nbsp
+        space.content = " ";
+        token.children = [space];
+      }
+    }
+  });
+}
 
 const md = new MarkdownIt({
   html: false,
@@ -10,6 +29,7 @@ const md = new MarkdownIt({
 });
 
 md.use(tagPlugin);
+md.use(preservedEmptyLinePlugin);
 
 export function renderMarkdownSync(source: string): string {
   return md.render(source);
@@ -31,6 +51,7 @@ const fenceMd = new MarkdownIt({
 });
 
 fenceMd.use(tagPlugin);
+fenceMd.use(preservedEmptyLinePlugin);
 
 /**
  * フェンスの描画結果を差し込む目印。markdown-it は CommonMark どおり入力中の U+0000 を
