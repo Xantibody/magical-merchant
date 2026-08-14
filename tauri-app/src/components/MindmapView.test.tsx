@@ -20,9 +20,7 @@ describe("MindmapView", () => {
   });
 
   it("本文が変わったら描き直す", async () => {
-    const [source, setSource] = await import("solid-js").then((m) =>
-      m.createSignal("# 前の本文"),
-    );
+    const [source, setSource] = await import("solid-js").then((m) => m.createSignal("# 前の本文"));
     const { baseElement } = render(() => <MindmapView source={source()} />);
     const screen = page.elementLocator(baseElement);
 

@@ -14,16 +14,16 @@ If a dependency adds weight, it must justify itself against lightness.
 
 ## Tech Stack
 
-| Layer            | Technology                                  |
-| ---------------- | ------------------------------------------- |
-| Core logic       | Rust (`core/` crate, framework-independent) |
-| Desktop app      | Tauri 2 + SolidJS                           |
-| Styling          | Open Props (CSS custom properties)          |
-| Icons            | Phosphor Icons (SVG files)                  |
-| Editor           | Milkdown (headless, SolidJS integration)    |
-| Syntax highlight | Shiki                                       |
-| Markdown         | markdown-it + Shiki                         |
-| Diagrams         | Mermaid (dynamic import)                    |
+| Layer            | Technology                                                           |
+| ---------------- | -------------------------------------------------------------------- |
+| Core logic       | Rust (`core/` crate, framework-independent)                          |
+| Desktop app      | Tauri 2 + SolidJS                                                    |
+| Styling          | Open Props (CSS custom properties)                                   |
+| Icons            | Phosphor Icons (SVG files)                                           |
+| Editor           | Milkdown (headless, SolidJS integration)                             |
+| Syntax highlight | Shiki                                                                |
+| Markdown         | markdown-it + Shiki                                                  |
+| Diagrams         | Mermaid (dynamic import)                                             |
 | Mindmap          | markmap-view (dynamic import) + own transform (`src/lib/mindmap.ts`) |
 
 ## Milkdown Plugins

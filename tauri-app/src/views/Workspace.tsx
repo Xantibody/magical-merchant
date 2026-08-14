@@ -319,7 +319,10 @@ export default function Workspace(): JSX.Element {
                       aria-pressed={noteView() === "mindmap"}
                       onClick={() => void toggleNoteView(item())}
                     >
-                      <Icon name={noteView() === "mindmap" ? "file-text" : "tree-structure"} size={17} />
+                      <Icon
+                        name={noteView() === "mindmap" ? "file-text" : "tree-structure"}
+                        size={17}
+                      />
                     </button>
                   </Show>
                   <button
