@@ -17,7 +17,7 @@ pub use note::{
     read_note_by_filename, read_note_meta, repair_notes, update_note, update_note_meta,
     update_note_view,
 };
-pub use search::{HitKind, SearchHit, search_all};
+pub use search::{HitKind, SearchHit, find_backlinks, search_all};
 pub use timeline::error::TimelineError;
 pub use timeline::{
     delete_timeline_entry, list_timeline_dates, read_timeline, save_timeline_entry,
