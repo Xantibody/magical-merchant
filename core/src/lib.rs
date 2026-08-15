@@ -13,8 +13,9 @@ pub mod search;
 pub use error::CoreError;
 pub use note::error::NoteError;
 pub use note::{
-    NoteSummary, create_draft_note, delete_note, list_notes, read_note, read_note_by_filename,
-    read_note_meta, repair_notes, update_note, update_note_meta, update_note_view,
+    NoteSummary, create_draft_note, create_note_from_entry, delete_note, list_notes, read_note,
+    read_note_by_filename, read_note_meta, repair_notes, update_note, update_note_meta,
+    update_note_view,
 };
 pub use search::{HitKind, SearchHit, search_all};
 pub use timeline::error::TimelineError;

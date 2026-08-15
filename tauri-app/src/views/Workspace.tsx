@@ -63,7 +63,7 @@ function EmptyNotes(): JSX.Element {
 
 export default function Workspace(): JSX.Element {
   const shell = useShell();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const today = new Date();
 
   const [selectedId, setSelectedId] = createSignal<string | null>(null);
@@ -74,6 +74,8 @@ export default function Workspace(): JSX.Element {
   const [hidden, setHidden] = createSignal<string[]>([]);
   const [noteBody, setNoteBody] = createSignal("");
   const [noteView, setNoteView] = createSignal<NoteView>("editor");
+  /** 本文の読み込みが済んでいるノートの id。`?edit=1` の自動編集開始が待つ。 */
+  const [loadedId, setLoadedId] = createSignal<string | null>(null);
   /** タッチ端末のツールバーが叩く先。編集をやめると undefined に戻る。 */
   const [markdownEditor, setMarkdownEditor] = createSignal<Editor | undefined>();
 
@@ -138,6 +140,7 @@ export default function Workspace(): JSX.Element {
         batch(() => {
           setNoteBody(content.body);
           setNoteView(content.view);
+          setLoadedId(item.id);
         });
       } catch {
         // 読めないノートを選んだまま、前のノートの本文を出し続けない
@@ -145,6 +148,7 @@ export default function Workspace(): JSX.Element {
           batch(() => {
             setNoteBody("");
             setNoteView("editor");
+            setLoadedId(item.id);
           });
         }
       }
@@ -277,6 +281,20 @@ export default function Workspace(): JSX.Element {
     await refetchNotes();
     shell.showToast("編集前の内容に戻しました");
   };
+
+  // タイムラインからの昇格 (?edit=1) は、本文が届き次第そのまま書き始める。
+  // パラメータは消費したら消す — 再読み込みのたびに編集へ放り込まない
+  createEffect(() => {
+    if (searchParams.edit !== "1") {
+      return;
+    }
+    const item = selected();
+    if (!item || item.filename !== searchParams.file || loadedId() !== item.id) {
+      return;
+    }
+    startEditing();
+    setSearchParams({ edit: undefined }, { replace: true });
+  });
 
   const revertable = createMemo<boolean>(() => {
     const item = selected();
