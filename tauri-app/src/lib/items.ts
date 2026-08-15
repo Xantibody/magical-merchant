@@ -25,6 +25,8 @@ export interface NoteItem {
   title: string;
   tags: string[];
   preview: string;
+  /** 昇格元エントリの日時。タイムラインのチップ表示が日付部分を使う。 */
+  origin?: string;
 }
 
 export type Item = TimelineItem | NoteItem;
@@ -76,7 +78,29 @@ export function toNoteItems(notes: Note[]): NoteItem[] {
     title: firstLine(note.preview) || UNTITLED,
     tags: note.tags,
     preview: note.preview,
+    origin: note.origin,
   }));
+}
+
+/**
+ * 昇格ノートを origin の暦日で引けるようにする。タイムラインの日毎の
+ * チップはここから導出する — エントリ側のファイルには何も書いていない
+ * ので、並び替えや行の増減でズレる心配がない。
+ */
+export function notesByOriginDate(items: NoteItem[]): Map<string, NoteItem[]> {
+  const map = new Map<string, NoteItem[]>();
+  for (const item of items) {
+    const date = item.origin?.slice(0, 10);
+    if (date) {
+      const notes = map.get(date);
+      if (notes) {
+        notes.push(item);
+      } else {
+        map.set(date, [item]);
+      }
+    }
+  }
+  return map;
 }
 
 /** 連続する同じラベルだけをまとめる。日付順は呼び出し側の並びを尊重する。 */

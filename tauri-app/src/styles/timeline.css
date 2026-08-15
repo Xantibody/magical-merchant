@@ -172,6 +172,64 @@
   gap: 4px;
 }
 
+/* エントリ単位の隠しアクション。ホバーでだけ現れる(タッチは長押し) */
+.entry-actions {
+  position: absolute;
+  top: -2px;
+  right: 0;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.entry:hover .entry-actions,
+.entry-actions:focus-within {
+  opacity: 1;
+}
+
+.entry-action {
+  color: var(--app-text-faint);
+  padding: 5px;
+}
+
+.entry-action:hover {
+  background: var(--app-surface-2);
+  color: var(--app-text);
+}
+
+/* その日のエントリから育ったノートへの入り口 */
+.origin-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 2px 0 10px;
+}
+
+.origin-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 4px 10px;
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  background: var(--app-surface);
+  color: var(--app-text-muted);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.origin-chip:hover {
+  background: var(--app-accent-soft);
+  color: var(--app-text);
+}
+
+.origin-chip-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ---------------- selection mode ---------------- */
 
 /* 入口はリスト右上のテキストボタン 1 つだけ。普段は視界に入らない濃さに抑える */
