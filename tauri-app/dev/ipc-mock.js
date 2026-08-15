@@ -156,6 +156,13 @@
   // バックリンク検証用: 昨日のエントリからも 短いメモ を指しておく
   timeline.get(isoDaysAgo(1))?.push(`- [21:00:00] 昨日の続きは [[20260813_083000]] にまとめた`);
 
+  // 週次ダイジェストの「1年前の今日」検証用
+  {
+    const yearAgo = new Date(today.getFullYear() - 1, today.getMonth(), today.getDate());
+    const iso = `${yearAgo.getFullYear()}-${pad(yearAgo.getMonth() + 1)}-${pad(yearAgo.getDate())}`;
+    timeline.set(iso, [`- [12:00:00] 一年前のきょうの記録`]);
+  }
+
   const noteList = () =>
     [...notes.entries()]
       .toSorted(([a], [b]) => b.localeCompare(a))

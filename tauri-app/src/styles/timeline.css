@@ -550,3 +550,89 @@
     border-radius: 12px;
   }
 }
+
+/* ---------------- 週次ダイジェスト ---------------- */
+
+.digest-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 14px 0 4px;
+  padding: 14px 16px;
+  border: 1px solid var(--app-hairline);
+  border-radius: var(--radius-3);
+  background: var(--app-surface-2);
+}
+
+.digest-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.digest-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--app-text-faint);
+}
+
+.digest-close {
+  color: var(--app-text-hint);
+  padding: 4px;
+}
+
+.digest-line {
+  margin: 0;
+  font-size: 14px;
+  color: var(--app-text);
+}
+
+.digest-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.digest-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  background: var(--app-surface);
+  color: var(--app-text-muted);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.digest-tag:hover {
+  background: var(--app-accent-soft);
+  color: var(--app-text);
+}
+
+.digest-tag-count {
+  font-size: 11px;
+  color: var(--app-text-hint);
+  font-variant-numeric: tabular-nums;
+}
+
+.digest-year-ago {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  padding: 2px 0;
+  border: none;
+  background: none;
+  color: var(--app-accent);
+  font-family: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.digest-year-ago:hover {
+  text-decoration: underline;
+}
