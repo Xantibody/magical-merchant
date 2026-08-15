@@ -241,6 +241,13 @@
   line-height: 1.8;
 }
 
+/* 本文はどこを押しても編集に入る。テキストカーソルでそれを示す */
+.detail-body .markdown-preview {
+  cursor: text;
+  /* 短い本文でも余白がタップの受け皿になるよう、プレビュー自身を伸ばす */
+  min-height: 100%;
+}
+
 .detail-body > * {
   max-width: 640px;
   margin-inline: auto;
