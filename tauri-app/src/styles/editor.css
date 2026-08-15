@@ -343,3 +343,61 @@
 .milkdown-link-edit .button.confirm:hover {
   opacity: 0.9;
 }
+
+/* ---- ノート間リンク [[ID]] ---- */
+
+/* カーソルが離れている間、保存形のテキストはチップの裏に隠れる。
+   display: none にしないのはカーソル移動の位置を壊さないため */
+.note-link-hidden {
+  font-size: 0;
+}
+
+/* カーソルが触れている間は保存形をそのまま見せる */
+.note-link-source {
+  background: var(--app-accent-soft);
+  border-radius: 3px;
+}
+
+.note-link-chip {
+  display: inline;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--app-accent-soft);
+  color: var(--app-accent);
+  cursor: pointer;
+}
+
+/* [[ を打っている間だけ出る補完候補 */
+.note-link-suggest {
+  position: fixed;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  max-width: 320px;
+  padding: 4px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--radius-2);
+  background: var(--app-surface);
+  box-shadow: var(--shadow-3);
+}
+
+.note-link-suggest-item {
+  padding: 6px 10px;
+  border: none;
+  border-radius: var(--radius-1);
+  background: none;
+  color: var(--app-text);
+  font-family: inherit;
+  font-size: 13px;
+  text-align: start;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note-link-suggest-item:hover,
+.note-link-suggest-item--active {
+  background: var(--app-accent-soft);
+}

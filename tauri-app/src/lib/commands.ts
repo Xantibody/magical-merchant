@@ -70,6 +70,8 @@ interface CommandMap {
   update_timeline_entry: { args: { date: string; index: number; text: string }; result: void };
   delete_timeline_entry: { args: { date: string; index: number }; result: void };
   search_all: { args: { query: string }; result: SearchHit[] };
+  /** このノートを `[[ID]]` で指している記録。開くたびに走査で導出される。 */
+  find_backlinks: { args: { filename: string }; result: SearchHit[] };
   /** 座標 → 地名。引けたものだけが `["緯度,経度", 地名]` で返る。 */
   resolve_places: { args: { coordinates: [number, number][] }; result: [string, string][] };
   create_draft: {

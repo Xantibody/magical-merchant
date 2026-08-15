@@ -427,3 +427,65 @@
   --markmap-code-bg: var(--app-surface-2);
   --markmap-code-color: var(--app-text);
 }
+
+/* ---- バックリンク(このノートを指している記録) ---- */
+
+.backlinks {
+  margin-top: 40px;
+  border-top: 1px solid var(--app-hairline);
+  padding-top: 10px;
+}
+
+.backlinks-summary {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--app-text-faint);
+  cursor: pointer;
+  user-select: none;
+}
+
+.backlinks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 6px;
+}
+
+.backlink-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: var(--radius-2);
+  background: none;
+  color: var(--app-text-muted);
+  font-family: inherit;
+  font-size: 13px;
+  text-align: start;
+  cursor: pointer;
+}
+
+.backlink-row:hover {
+  background: var(--app-surface-2);
+  color: var(--app-text);
+}
+
+.backlink-row .icon {
+  flex-shrink: 0;
+  color: var(--app-text-faint);
+}
+
+.backlink-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.backlink-date {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--app-text-hint);
+  font-variant-numeric: tabular-nums;
+}
