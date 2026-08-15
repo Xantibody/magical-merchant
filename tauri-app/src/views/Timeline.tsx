@@ -33,10 +33,19 @@ import { entryMeta } from "../lib/timeline-meta";
 import { places } from "../lib/places";
 import { ROUTES } from "../lib/routes";
 import { countTags, parseTags } from "../lib/tags";
+import {
+  digestWeekKey,
+  isDigestDismissed,
+  summarizeWeek,
+  yearAgoToday,
+} from "../lib/weekly-digest";
 import type { DeviceContext } from "../lib/parse-timeline";
 
 /** 一覧に最初から載せる日数。カレンダーで遡ったぶんは都度足す。 */
 const RECENT_DAYS = 14;
+
+/** 週次ダイジェストを閉じた週(月曜の日付)。端末ローカルの表示状態。 */
+const DIGEST_DISMISS_KEY = "weekly-digest-dismissed";
 
 async function loadTimeline(extraDates: string[]): Promise<TimelineItem[]> {
   const dates = await typedInvoke("list_timeline_dates");
@@ -214,6 +223,8 @@ export default function Timeline(): JSX.Element {
   const [notes, { refetch: refetchNotes }] = createResource(async () =>
     toNoteItems(await typedInvoke("list_notes")),
   );
+  // 「1年前の今日」の判定用。読み込むのは直近だけなので、全日付は別に聞く
+  const [allDates] = createResource(() => typedInvoke("list_timeline_dates"));
 
   // 初回は createResource が読む。defer しないとマウント直後に同じ全読みを
   // もう一度走らせ、起動時の IPC がまるごと倍になる
@@ -244,6 +255,31 @@ export default function Timeline(): JSX.Element {
 
   const days = createMemo(() => groupTimelineByDay(visible()));
   const originNotes = createMemo(() => notesByOriginDate(notes() ?? []));
+
+  // ---- 週次ダイジェスト(週に一度、閉じるまで先頭に出る)----
+  const [digestDismissed, setDigestDismissed] = createSignal(
+    localStorage.getItem(DIGEST_DISMISS_KEY),
+  );
+  const weekSummary = createMemo(() => summarizeWeek(entries(), today));
+  const yearAgo = createMemo(() => yearAgoToday(today, allDates() ?? []));
+  const digestVisible = createMemo(() => {
+    if (isDigestDismissed(digestDismissed(), today)) {
+      return false;
+    }
+    // 語ることが何も無い週に空のカードを出さない
+    return weekSummary().count > 0 || yearAgo() !== null;
+  });
+
+  const dismissDigest = (): void => {
+    const key = digestWeekKey(today);
+    localStorage.setItem(DIGEST_DISMISS_KEY, key);
+    setDigestDismissed(key);
+  };
+
+  const jumpToDay = (iso: string): void => {
+    setExtraDates((dates) => (dates.includes(iso) ? dates : [...dates, iso]));
+    setJumpTo(iso);
+  };
 
   // 検索やパレットからの着地 (?day=)。カレンダーで選んだときと同じ経路に
   // 流す — 直近 14 日より前ならデータを足し、その日の見出しまでスクロール
@@ -404,6 +440,52 @@ export default function Timeline(): JSX.Element {
     <div class="timeline">
       <div class="timeline-scroll">
         <div class="timeline-column">
+          <Show when={digestVisible()}>
+            <section class="digest-card" aria-label="今週のふりかえり">
+              <header class="digest-head">
+                <span class="digest-title">今週のふりかえり</span>
+                <button
+                  type="button"
+                  class="icon-button digest-close"
+                  title="今週は閉じる"
+                  aria-label="今週は閉じる"
+                  onClick={dismissDigest}
+                >
+                  <Icon name="x" size={14} />
+                </button>
+              </header>
+              <Show when={weekSummary().count > 0}>
+                <p class="digest-line">
+                  {weekSummary().days}日で{weekSummary().count}件を記録
+                </p>
+              </Show>
+              <Show when={weekSummary().topTags.length > 0}>
+                <div class="digest-tags">
+                  <For each={weekSummary().topTags}>
+                    {(tag) => (
+                      <button
+                        type="button"
+                        class="digest-tag"
+                        onClick={() => setTagFilter(tag.tag)}
+                      >
+                        #{tag.tag}
+                        <span class="digest-tag-count">{tag.count}</span>
+                      </button>
+                    )}
+                  </For>
+                </div>
+              </Show>
+              <Show when={yearAgo()}>
+                {(iso) => (
+                  <button type="button" class="digest-year-ago" onClick={() => jumpToDay(iso())}>
+                    <Icon name="clock-counter-clockwise" size={13} />
+                    1年前の今日の記録を見る
+                  </button>
+                )}
+              </Show>
+            </section>
+          </Show>
+
           <TagFilter
             tags={knownTags()}
             active={tagFilter()}
