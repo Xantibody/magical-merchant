@@ -268,7 +268,13 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
           ]}
           onSelectHit={(hit) => {
             shell.closePalette();
-            navigate(hit.kind === "note" ? ROUTES.NOTES : ROUTES.TIMELINE);
+            // モードの切り替えだけでは「見つけたのに探し直す」ことになる。
+            // ノートはその 1 件を、タイムラインはその日を URL で指す
+            if (hit.kind === "note" && hit.filename) {
+              navigate(`${ROUTES.NOTES}?file=${encodeURIComponent(hit.filename)}`);
+            } else {
+              navigate(`${ROUTES.TIMELINE}?day=${hit.date}`);
+            }
           }}
           onClose={() => shell.closePalette()}
         />
