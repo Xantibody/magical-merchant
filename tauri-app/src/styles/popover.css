@@ -203,6 +203,15 @@
   color: var(--app-text-faint);
 }
 
+.note-meta-revert {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  padding: 5px 12px;
+  font-size: 12px;
+}
+
 .note-meta-actions {
   display: flex;
   align-items: center;
