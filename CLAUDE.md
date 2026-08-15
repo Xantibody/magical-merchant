@@ -1,6 +1,8 @@
 # Magical Merchant
 
-A minimal note-taking desktop app with Rust core logic and a lightweight UI.
+A minimal note-taking app: Rust core + Tauri 2 + SolidJS. Two surfaces —
+**Timeline** (quick capture journal) and **Notes** (Markdown workspace) —
+plus Android home-screen widgets and R2 sync.
 
 ## Design Priorities (in order)
 
@@ -8,97 +10,58 @@ A minimal note-taking desktop app with Rust core logic and a lightweight UI.
 2. **Lightweight** — Small bundle, fast startup, no unnecessary dependencies
 3. **Stylish** — Clean aesthetics with design tokens (Open Props) and Phosphor Icons
 
-When making UI decisions, always evaluate against these priorities in order.
-If a feature adds visual complexity, it must justify itself against simplicity.
-If a dependency adds weight, it must justify itself against lightness.
+Every UI/dependency decision is evaluated against these, in order.
+North star: **minimize friction from capture to writing** — the app must be
+ready to record the moment it opens (widgets exist for exactly this).
 
 ## Tech Stack
 
-| Layer            | Technology                                                           |
-| ---------------- | -------------------------------------------------------------------- |
-| Core logic       | Rust (`core/` crate, framework-independent)                          |
-| Desktop app      | Tauri 2 + SolidJS                                                    |
-| Styling          | Open Props (CSS custom properties)                                   |
-| Icons            | Phosphor Icons (SVG files)                                           |
-| Editor           | Milkdown (headless, SolidJS integration)                             |
-| Syntax highlight | Shiki                                                                |
-| Markdown         | markdown-it + Shiki                                                  |
-| Diagrams         | Mermaid (dynamic import)                                             |
-| Mindmap          | markmap-view (dynamic import) + own transform (`src/lib/mindmap.ts`) |
+| Layer      | Technology                                          |
+| ---------- | --------------------------------------------------- |
+| Core logic | Rust (`core/` crate, framework-independent)         |
+| App        | Tauri 2 + SolidJS (`tauri-app/`)                    |
+| Styling    | Open Props via `--app-*` tokens (`styles/base.css`) |
+| Icons      | Phosphor Icons (SVG files, `components/Icon.tsx`)   |
+| Editor     | Milkdown (headless) + custom plugins                |
+| Markdown   | markdown-it + Shiki; Mermaid / markmap lazy         |
+| Sync       | Cloudflare Workers + R2 (`workers/`)                |
+| AI access  | MCP server (`mcp-cli/`, read-only tools)            |
 
-## Milkdown Plugins
+## UI Architecture (current)
 
-| Category | Plugin                    | Import                                 | Purpose                                              |
-| -------- | ------------------------- | -------------------------------------- | ---------------------------------------------------- |
-| Built-in | `commonmark`              | `@milkdown/kit/preset/commonmark`      | Base Markdown                                        |
-| Built-in | `listener`                | `@milkdown/kit/plugin/listener`        | onChange callback                                    |
-| Built-in | `cursor`                  | `@milkdown/kit/plugin/cursor`          | Gap cursor + drop cursor                             |
-| Built-in | `history`                 | `@milkdown/kit/plugin/history`         | Undo/Redo                                            |
-| Built-in | `clipboard`               | `@milkdown/kit/plugin/clipboard`       | Improved copy/paste                                  |
-| Built-in | `trailing`                | `@milkdown/kit/plugin/trailing`        | Trailing paragraph                                   |
-| Built-in | `linkTooltipPlugin`       | `@milkdown/kit/component/link-tooltip` | Link preview/edit                                    |
-| External | `highlight`               | `@milkdown/plugin-highlight`           | Shiki syntax highlighting                            |
-| Custom   | `exitCodeBlockPlugin`     | `src/lib/exit-code-block-plugin.ts`    | Mod-Enter to exit code blocks                        |
-| Custom   | `createPlaceholderPlugin` | `src/lib/placeholder-plugin.ts`        | Empty document placeholder                           |
-| Custom   | `codeBlockViewPlugin`     | `src/lib/code-block-view-plugin.ts`    | Language input + copy button + mermaid figure view   |
-| Custom   | `codeBlockActivePlugin`   | `src/lib/code-block-active-plugin.ts`  | is-active class on code blocks the selection touches |
+- **Header**: mode tabs (Timeline / Notes) + search field (⌘K palette) +
+  calendar jump (Timeline only) + sync + theme cycle + settings
+- **Bottom tabs** (mobile): Timeline / Notes / Settings
+- **Timeline**: single-column day-grouped journal, time rail, tag filter chips,
+  floating capture dock; in-place entry editing; select-mode bulk delete
+- **Notes (Workspace)**: list pane + detail pane; mobile shows one pane at a
+  time (`workspace--detail`); Milkdown editor is lazy-loaded on first edit;
+  per-note mindmap view via frontmatter `view`
+- **Command palette** (⌘K): in-memory commands + debounced `search_all`
+- There is **no Tasks mode**. Do not add one or reference it.
 
-Rejected plugins (with reasons):
+## Invariants (never break)
 
-- `block` / `tooltip` / `slash` — add visible chrome, conflicts with "simple UI"
-- `code-block` component — requires CodeMirror (~150KB), conflicts with "lightweight"
-- `indent` / `upload` / `image-*` / `table-block` / `list-item-block` — no current feature need
+- Note **filename is an immutable ID** (`YYYYMMDD_HHMMSS.md`); never rename
+- Frontmatter is **preserved verbatim**; any new key must be a typed field on
+  `NoteFrontmatter` in Rust core (unknown keys are dropped on save)
+- The **editor/preview only ever see the body**, never frontmatter
+- Sync clients **never upload their own state**; the Worker owns it
+- Every new Tauri command gets a handler in `tauri-app/dev/ipc-mock.js`
+- Keep the DOM small; never re-render whole documents via innerHTML
 
-## Note Storage
+## Workflow
 
-- **Filename**: `YYYYMMDD_HHMMSS.md` — an immutable ID stamped at creation.
-  Never rename to match the title: Syncthing sync, widget deep links (`?file=`)
-  and list-row identity all point at the filename
-- **Title**: derived from the first non-empty line of the body (Typora/Bear
-  style). It is display-only — filename and title are independent by design
-- **Frontmatter** (`time` / `tags` / `context`): a record of creation, preserved
-  verbatim on every edit. `time` must stay the creation time because the list
-  sorts by filename (= creation order); a moving `time` breaks date grouping
-- **Frontmatter `view`** (optional): per-note display mode (`mindmap`). Unlike
-  the keys above it is a viewing preference, not a record — but it lives in
-  frontmatter so the mode travels with the note across synced devices. The key
-  is omitted (not written as a default) so untouched notes stay byte-identical.
-  Any new frontmatter key must be a typed field on `NoteFrontmatter` in Rust
-  core: unknown keys are dropped on the next save because saving re-renders
-  the frontmatter from that struct
-- **The editor and preview only ever see the body.** Frontmatter routed through
-  Milkdown gets serialized back as escaped plain text and corrupts the file
-- **Place names** (`places.json`, deliberately outside `data/`): what the OS
-  geocoder answered for a coordinate, keyed by a ~1km grid. Purely derived and
-  display-only — the recorded `location` stays the raw coordinate, because a
-  name written back into the entry would make the record depend on which
-  device, language and network resolved it
+- `just dev` — Tauri dev; `just verify` = fmt → check → test (run before done)
+- `just tauri_app::dev-browser` — full UI in a plain browser with the IPC mock
+  (`BROWSER_MOCK=1`); use it for layout/CLS/e2e-style verification
+- Formatting is `nix fmt` (treefmt); CI fails on unformatted files
 
-## Browser Verification Harness
+## Skills (read before touching the area)
 
-`just tauri_app::dev-browser` (or `pnpm run dev:browser`) starts Vite with a
-Tauri IPC mock (`tauri-app/dev/ipc-mock.js`) injected into `index.html`, so the
-full UI runs in a plain browser — drive it with `agent-browser` for layout/CLS
-checks and e2e-style verification. The mock holds deterministic in-memory
-fixtures (timeline days, notes with code/mermaid/mindmap, delayed
-`resolve_places`). It is injected only when `BROWSER_MOCK=1` and never reaches
-production builds. When adding a Tauri command, add a handler to the mock too —
-unknown commands throw so the gap is visible in the console.
-
-## Editor Performance Principles
-
-Three non-negotiable constraints for Markdown editor design:
-
-1. **Keep the DOM small** — Virtualize or skip nodes outside the visible viewport. DOM node count must not grow linearly with document size
-2. **Localize conversion** — Never re-convert the entire Markdown to HTML and replace via innerHTML. Convert only the changed line/block and leverage Solid's fine-grained reactivity
-3. **Preserve scroll and selection** — Cursor position, text selection, and scroll offset must survive DOM updates. Full innerHTML replacement destroys these and is prohibited
-
-Reject any implementation that violates these principles, regardless of feature completeness.
-
-## UI Architecture
-
-- **Header**: Toggle button (menu open/close) + current mode icon only
-- **Toggle menu**: 3 modes — Timeline / Notes / Tasks
-- **Memo area**: Occupies the full screen
-- **Actions**: Hidden by default, shown on hover (PC) / flick (mobile)
-- **Editing**: Inline Markdown live conversion (Typora-style)
+| Area                                         | Skill                                  |
+| -------------------------------------------- | -------------------------------------- |
+| UI components, styling, layout, mobile rules | `.claude/skills/ui-design/SKILL.md`    |
+| Milkdown editor, plugins, IME, performance   | `.claude/skills/editor/SKILL.md`       |
+| Sync protocol, storage, widgets, deep links  | `.claude/skills/sync-storage/SKILL.md` |
+| Rust core, Tauri commands, MCP, testing      | `.claude/skills/rust-core/SKILL.md`    |
