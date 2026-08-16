@@ -7,6 +7,9 @@ import { addTag, contextRows, resolveEditedTime, toDatetimeLocal } from "../lib/
 
 interface NoteMetaPopoverProps {
   filename: string;
+  /** この端末に「編集前の本文」が残っているときだけ復元の行を出す。 */
+  revertable?: boolean;
+  onRevert?: () => void;
   /** 保存後に一覧を読み直させる。time を変えると日付グループも動く。 */
   onSaved: () => Promise<void>;
   onClose: () => void;
@@ -134,6 +137,23 @@ export default function NoteMetaPopover(props: NoteMetaPopoverProps): JSX.Elemen
                       )}
                     </For>
                   </div>
+                </div>
+              </Show>
+
+              <Show when={props.revertable}>
+                <div class="note-meta-field">
+                  <span class="note-meta-label">この端末のバックアップ</span>
+                  <button
+                    type="button"
+                    class="button-secondary note-meta-revert"
+                    onClick={() => props.onRevert?.()}
+                  >
+                    <Icon name="clock-counter-clockwise" size={14} />
+                    編集前に戻す
+                  </button>
+                  <span class="note-meta-hint">
+                    直前の編集で上書きした本文と入れ替える。もう一度押すと戻る
+                  </span>
                 </div>
               </Show>
 
