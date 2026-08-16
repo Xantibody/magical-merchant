@@ -23,6 +23,14 @@ import { groupNotes, itemTitle, noteCreatedLabel, toNoteItems } from "../lib/ite
 import type { ItemGroup, NoteItem } from "../lib/items";
 import { readNoteContent, toggledView, viewToFrontmatter } from "../lib/note-view";
 import type { NoteView } from "../lib/note-view";
+import {
+  beginEditSession,
+  readBackup,
+  recordSaved,
+  shouldSave,
+  writeBackup,
+} from "../lib/edit-backup";
+import type { CaretPoint } from "../components/MilkdownEditor";
 
 // Milkdown + ProseMirror は編集を始めるまで要らない。一覧とプレビューだけの
 // 表示をこの重さから切り離す
@@ -70,6 +78,12 @@ export default function Workspace(): JSX.Element {
   const [markdownEditor, setMarkdownEditor] = createSignal<Editor | undefined>();
 
   const [notes, { refetch: refetchNotes }] = createResource(loadNotes);
+
+  let detailBodyRef: HTMLDivElement | undefined;
+  /** プレビューで押された場所。エディタのマウント時に一度だけ読まれる。 */
+  const [tapCaret, setTapCaret] = createSignal<CaretPoint | undefined>();
+  /** いま開いている編集セッション。保存のスキップ判断とバックアップを持つ。 */
+  let session = beginEditSession("");
 
   // 同期やパレット操作の後にデータを取り直す。初回は createResource が読むので
   // defer しないと全ノートの読み直しがマウント直後に二重で走る
@@ -166,10 +180,13 @@ export default function Workspace(): JSX.Element {
   const flushSave = (): Promise<void> => {
     const item = selected();
     const body = draft();
+    const current = session;
     const previous = saveChain;
     saveChain = (async () => {
       await previous;
-      if (!item) {
+      // 触っていない誤タップのセッションを書き込みに変えない。書いても
+      // 内容が変わらないなら、ファイルの mtime を動かして同期を起こすだけ
+      if (!item || !shouldSave(current, body)) {
         return;
       }
       setSaveStatus("saving");
@@ -179,6 +196,7 @@ export default function Workspace(): JSX.Element {
           body,
           client: await getDeviceSignals(),
         });
+        recordSaved(localStorage, item.filename, current, body);
         // 一覧はここでは読み直さない。1 秒おきの保存のたびに全ノートを
         // 読み直すのは低スペック端末に重く、編集中は一覧が見えてもいない。
         // 編集を終えるときに 1 回だけ読み直す。
@@ -204,14 +222,71 @@ export default function Workspace(): JSX.Element {
     }
   });
 
-  const startEditing = (): void => {
+  const startEditing = (point?: CaretPoint): void => {
     if (!selected()) {
       return;
     }
+    session = beginEditSession(noteBody());
+    setTapCaret(point);
     setDraft(noteBody());
     setSaveStatus("idle");
     setEditing(true);
   };
+
+  /** プレビューのどこを押しても、その場所から書き始められる。 */
+  const onPreviewClick = (e: MouseEvent): void => {
+    if (editing() || noteView() !== "editor" || !selected()) {
+      return;
+    }
+    const target = e.target instanceof Element ? e.target : null;
+    // リンクは踏める・図はズームのまま。編集に化けさせない
+    if (target?.closest("a, button, .mermaid-block, .mermaid-zoom")) {
+      return;
+    }
+    // 本文をなぞってコピーしたいだけのときも編集へ切り替えない
+    const selection = document.getSelection();
+    if (selection && !selection.isCollapsed) {
+      return;
+    }
+    startEditing({ x: e.clientX, y: e.clientY, scrollTop: detailBodyRef?.scrollTop ?? 0 });
+  };
+
+  /**
+   * この端末に残した「編集前の本文」と今の本文を入れ替える。入れ替えなので
+   * もう一度押せば戻せる — 戻る先は常にちょうど 1 段。
+   */
+  const revertEdit = async (item: NoteItem): Promise<void> => {
+    const backup = readBackup(localStorage, item.filename);
+    const current = noteBody();
+    if (backup === null || backup === current) {
+      return;
+    }
+    try {
+      await typedInvoke("update_draft", {
+        filePath: item.path,
+        body: backup,
+        client: await getDeviceSignals(),
+      });
+    } catch {
+      shell.showToast("戻せませんでした");
+      return;
+    }
+    writeBackup(localStorage, item.filename, current);
+    setNoteBody(backup);
+    shell.closePopovers();
+    await refetchNotes();
+    shell.showToast("編集前の内容に戻しました");
+  };
+
+  const revertable = createMemo<boolean>(() => {
+    const item = selected();
+    // 編集中に戻すと、開いているエディタが次の自動保存で復元を上書きする
+    if (!item || editing()) {
+      return false;
+    }
+    const backup = readBackup(localStorage, item.filename);
+    return backup !== null && backup !== noteBody();
+  });
 
   const stopEditing = async (): Promise<void> => {
     if (saveTimer) {
@@ -350,20 +425,8 @@ export default function Workspace(): JSX.Element {
                   >
                     <Icon name="info" size={17} />
                   </button>
-                  <Show
-                    when={editing()}
-                    fallback={
-                      <button
-                        type="button"
-                        class="icon-button"
-                        title="編集"
-                        aria-label="編集"
-                        onClick={startEditing}
-                      >
-                        <Icon name="pencil" size={17} />
-                      </button>
-                    }
-                  >
+                  {/* 編集の入り口は本文タップ。鉛筆は出口だけ残す */}
+                  <Show when={editing()}>
                     <button
                       type="button"
                       class="icon-button"
@@ -389,6 +452,8 @@ export default function Workspace(): JSX.Element {
               <Show when={shell.popover() === "note-meta"}>
                 <NoteMetaPopover
                   filename={item().filename}
+                  revertable={revertable()}
+                  onRevert={() => void revertEdit(item())}
                   onSaved={async () => {
                     await refetchNotes();
                   }}
@@ -396,7 +461,14 @@ export default function Workspace(): JSX.Element {
                 />
               </Show>
 
-              <div class="detail-body">
+              {/* biome-ignore/eslint 対応: タップは編集開始の補助経路で、
+                  同じ操作はキーボードでは編集終了ボタンと Tab 移動で賄える */}
+              <div
+                class="detail-body"
+                ref={detailBodyRef}
+                role="presentation"
+                onClick={onPreviewClick}
+              >
                 <Show
                   when={editing()}
                   fallback={
@@ -410,6 +482,7 @@ export default function Workspace(): JSX.Element {
                 >
                   <MilkdownEditor
                     placeholder="ノートを書く…"
+                    caret={tapCaret()}
                     defaultValue={draft()}
                     onChange={(markdown) => {
                       setDraft(markdown);
