@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- The capture sheet (design 1b): a scrim over the home screen with a rounded
-     card pinned to the bottom, so `adjustResize` lifts it onto the IME. -->
+     card pinned to the bottom. What lifts the card onto the IME is the scrim's
+     bottom padding, set from the window insets in QuickCaptureActivity — the
+     manifest's `adjustResize` does not resize a translucent window. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/quick_capture_scrim"
     android:layout_width="match_parent"

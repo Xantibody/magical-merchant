@@ -1,6 +1,7 @@
 package com.magical_merchant.app.widget
 
 import android.app.Activity
+import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
@@ -10,6 +11,9 @@ import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import com.magical_merchant.app.R
 
 /**
@@ -33,11 +37,47 @@ class QuickCaptureActivity : Activity() {
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
 
         // The scrim dismisses; the sheet swallows the tap so it does not.
-        findViewById<View>(R.id.quick_capture_scrim).setOnClickListener { finish() }
+        val scrim = findViewById<View>(R.id.quick_capture_scrim)
+        scrim.setOnClickListener { finish() }
         findViewById<View>(R.id.quick_capture_sheet).setOnClickListener { }
         findViewById<ImageButton>(R.id.quick_capture_send).setOnClickListener { save(input) }
 
+        keepClearOfTheKeyboard(scrim)
         showTagChips(input)
+    }
+
+    /**
+     * Holds the sheet above the keyboard and the navigation bar.
+     *
+     * The manifest's `adjustResize` does not lift a translucent window: the
+     * sheet stays pinned to the bottom of the screen and the keyboard draws
+     * over it, leaving one line of the input peeking out (#125). Rather than
+     * hope the framework resizes, take the placing over — ask the decor to stop
+     * fitting the system windows and pad the scrim by the insets ourselves, so
+     * exactly one mechanism moves the sheet.
+     *
+     * IME insets only exist from API 30. Below it the framework's resize is all
+     * there is, so leave that path alone rather than swap it for nothing.
+     */
+    private fun keepClearOfTheKeyboard(scrim: View) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            return
+        }
+
+        // The decor would otherwise eat the insets before the scrim sees them,
+        // and it is what stops the framework from resizing the window under us.
+        // It also lets the scrim run under the status bar, which is what a scrim
+        // over the home screen should do anyway.
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+
+        ViewCompat.setOnApplyWindowInsetsListener(scrim) { view, insets ->
+            val ime = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom
+            // Not the sum: the IME already reaches the bottom of the screen, so
+            // adding the navigation bar to it would float the sheet.
+            view.setPadding(view.paddingLeft, view.paddingTop, view.paddingRight, maxOf(ime, bars))
+            insets
+        }
     }
 
     /**
