@@ -11,7 +11,7 @@ use jni::objects::{JClass, JString};
 use jni::sys::{JNI_FALSE, JNI_TRUE, jboolean};
 use std::path::Path;
 
-use crate::device::{self, ClientContext};
+use crate::device;
 use crate::widget_summary;
 
 /// Appends `text` to today's timeline file under `base_dir`.
@@ -22,6 +22,10 @@ use crate::widget_summary;
 /// Renaming the Kotlin package or object without renaming this function leaves
 /// the `external fun` unresolved until the first tap.
 ///
+/// `client_json` is what Kotlin could gather (`WidgetContext.collect`), in the
+/// same shape the `WebView` sends. Android's native side sees neither battery
+/// nor network, so without it a widget entry would carry only `os` and `arch`.
+///
 /// Returns false rather than throwing: the caller keeps the sheet open on
 /// failure so the typed text is not lost, and a Java exception crossing back
 /// through an `AppWidgetProvider` tap would take the launcher's process with it.
@@ -31,15 +35,19 @@ pub extern "system" fn Java_com_magical_1merchant_app_widget_WidgetBridge_saveQu
     _class: JClass<'_>,
     base_dir: JString<'_>,
     text: JString<'_>,
+    client_json: JString<'_>,
 ) -> jboolean {
     let (Ok(base_dir), Ok(text)) = (env.get_string(&base_dir), env.get_string(&text)) else {
         return JNI_FALSE;
     };
 
-    // The widget has no WebView to ask, so battery, network, and location stay
-    // empty here while the in-app bar fills them. Nothing downstream requires
-    // them — `Context` skips absent fields when it serializes.
-    let context = device::get_context(ClientContext::default());
+    // An unreadable string is the same as an unreadable JSON: the entry is
+    // saved without the metadata rather than not saved at all.
+    let client = env
+        .get_string(&client_json)
+        .map(|json| device::parse_client_context(&String::from(json)))
+        .unwrap_or_default();
+    let context = device::get_context(client);
     let saved = magical_merchant_core::save_timeline_entry(
         Path::new(&String::from(base_dir)),
         &String::from(text),

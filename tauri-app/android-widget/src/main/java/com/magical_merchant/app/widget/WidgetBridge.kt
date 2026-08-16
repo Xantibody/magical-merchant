@@ -33,8 +33,14 @@ internal object WidgetBridge {
         System.loadLibrary("magical_merchant_app_lib")
     }
 
-    /** Appends [text] to today's timeline file under [baseDir]. False on failure. */
-    external fun saveQuickCapture(baseDir: String, text: String): Boolean
+    /**
+     * Appends [text] to today's timeline file under [baseDir]. False on failure.
+     *
+     * [clientJson] is [WidgetContext]'s output — what Kotlin could see of the
+     * device. Call [saveCapture] rather than this: forgetting the JSON here
+     * still compiles and still saves, it just silently drops the metadata.
+     */
+    external fun saveQuickCapture(baseDir: String, text: String, clientJson: String): Boolean
 
     /** Today's last entry and tags, as JSON. Reads one day file. */
     external fun readCaptureData(baseDir: String): String?
@@ -52,6 +58,10 @@ internal object WidgetBridge {
      * never reads and sync never uploads.
      */
     fun baseDir(context: Context): String = context.applicationContext.dataDir.absolutePath
+
+    /** Saves [text] with everything [WidgetContext] could gather. False on failure. */
+    fun saveCapture(context: Context, text: String): Boolean =
+        saveQuickCapture(baseDir(context), text, WidgetContext.collect(context))
 
     /**
      * Reads and parses. Never throws: these run from widget callbacks that have
