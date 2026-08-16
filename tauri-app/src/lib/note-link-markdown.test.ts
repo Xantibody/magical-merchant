@@ -28,6 +28,29 @@ describe("note links in the preview", () => {
     expect(html).not.toContain("data-file");
   });
 
+  it("renders the display text instead of the title", () => {
+    const html = renderMarkdownSync("詳しくは [[20260813_083000|前の話]] を見る", TITLES);
+
+    expect(html).toContain('data-file="20260813_083000.md"');
+    expect(html).toContain("前の話");
+    expect(html).not.toContain("短いメモ");
+  });
+
+  // 表示文字が付いていても、指し先が無いなら「あるはずのノート」に
+  // 見せてはいけない
+  it("leaves an unresolvable link with display text as raw text", () => {
+    const html = renderMarkdownSync("[[20990101_000000|消えたノート]]", TITLES);
+
+    expect(html).toContain("[[20990101_000000|消えたノート]]");
+    expect(html).not.toContain("data-file");
+  });
+
+  it("escapes a hostile display text", () => {
+    const html = renderMarkdownSync('[[20260813_083000|<img src="x">]]', TITLES);
+
+    expect(html).not.toContain("<img");
+  });
+
   it("escapes a hostile title", () => {
     const titles = new Map([["20260813_083000", '<img src="x">']]);
     const html = renderMarkdownSync("[[20260813_083000]]", titles);
