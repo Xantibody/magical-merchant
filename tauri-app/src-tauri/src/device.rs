@@ -201,6 +201,66 @@ const fn get_network() -> Option<NetworkType> {
     None
 }
 
+/// ウィジェットが JSON 1 本で渡してくる実行環境。
+///
+/// `WebView` の無い経路なので構造体をそのまま渡せず、JNI の文字列に詰めて
+/// もらう。読めなければ既定値、つまり「何も分からなかった」に倒す。ここで
+/// 失敗させても打った文が消えるだけで、メタデータが無くてもキャプチャの
+/// 保存そのものは成立する。
+///
+/// 呼ぶのは Android の JNI ブリッジだけだが、ここに置いて全プラットフォームで
+/// ビルドする。CI に Android ターゲットは無く、テストする値打ちがあるのは
+/// パースの部分だから。
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub(crate) fn parse_client_context(json: &str) -> ClientContext {
+    serde_json::from_str(json).unwrap_or_default()
+}
+
+#[cfg(test)]
+mod client_context_tests {
+    use super::*;
+
+    #[test]
+    fn reads_every_field_the_widget_can_fill() {
+        let client = parse_client_context(
+            r#"{"latitude":35.68,"longitude":139.76,"battery":42,"isCharging":true,
+                "networkType":"WiFi","osVersion":"16","locale":"ja_JP"}"#,
+        );
+
+        assert_eq!(client.latitude, Some(35.68));
+        assert_eq!(client.longitude, Some(139.76));
+        assert_eq!(client.battery, Some(42));
+        assert_eq!(client.is_charging, Some(true));
+        assert_eq!(client.network_type, Some(NetworkType::WiFi));
+        assert_eq!(client.os_version.as_deref(), Some("16"));
+        assert_eq!(client.locale.as_deref(), Some("ja_JP"));
+    }
+
+    /// 位置情報だけは許可が下りていないことがある。欠けたキーは
+    /// 「分からなかった」であって、保存の失敗ではない。
+    #[test]
+    fn leaves_absent_keys_unknown() {
+        let client = parse_client_context(r#"{"battery":7,"networkType":"Offline"}"#);
+
+        assert_eq!(client.battery, Some(7));
+        assert_eq!(client.network_type, Some(NetworkType::Offline));
+        assert_eq!(client.latitude, None);
+        assert_eq!(client.longitude, None);
+        assert_eq!(client.os_version, None);
+    }
+
+    #[test]
+    fn falls_back_to_unknown_when_the_json_is_unreadable() {
+        for json in ["", "{", "null", "[]"] {
+            let client = parse_client_context(json);
+
+            assert_eq!(client.battery, None, "{json}");
+            assert_eq!(client.network_type, None, "{json}");
+            assert_eq!(client.locale, None, "{json}");
+        }
+    }
+}
+
 #[cfg(all(test, target_os = "macos"))]
 mod tests {
     use super::*;
