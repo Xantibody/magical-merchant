@@ -30,6 +30,11 @@ pub struct SearchHit {
     /// その日の何番目のエントリか。Note では `None`。
     pub index: Option<usize>,
     pub tags: Vec<String>,
+    /// `snippet` 内でクエリが一致し始める位置(文字数、省略記号込み)。
+    /// タグなど本文の外だけに一致したときは `None`。
+    pub match_start: Option<usize>,
+    /// 一致した長さ(文字数)。`match_start` と対で使う。
+    pub match_len: Option<usize>,
 }
 
 const SNIPPET_CONTEXT: usize = 40;
@@ -72,14 +77,17 @@ pub fn search_all(base_dir: &Path, query: &str) -> Result<Vec<SearchHit>, CoreEr
             if !lowered.contains(&needle) {
                 continue;
             }
+            let excerpt = snippet(text, &lowered, &needle);
             hits.push(SearchHit {
                 kind: HitKind::Timeline,
                 title: first_line(text).to_string(),
-                snippet: snippet(text, &lowered, &needle),
+                snippet: excerpt.text,
                 date: formatted.clone(),
                 filename: None,
                 index: Some(index),
                 tags: Vec::new(),
+                match_start: excerpt.match_start,
+                match_len: excerpt.match_start.map(|_| needle.chars().count()),
             });
         }
     }
@@ -97,10 +105,11 @@ pub fn search_all(base_dir: &Path, query: &str) -> Result<Vec<SearchHit>, CoreEr
             continue;
         }
         let lowered = note.preview.to_lowercase();
+        let excerpt = snippet(&note.preview, &lowered, &needle);
         hits.push(SearchHit {
             kind: HitKind::Note,
             title: first_line(&note.preview).to_string(),
-            snippet: snippet(&note.preview, &lowered, &needle),
+            snippet: excerpt.text,
             date: note
                 .time
                 .map(|t| t.format("%Y-%m-%d").to_string())
@@ -108,6 +117,8 @@ pub fn search_all(base_dir: &Path, query: &str) -> Result<Vec<SearchHit>, CoreEr
             filename: Some(note.filename),
             index: None,
             tags: note.tags,
+            match_start: excerpt.match_start,
+            match_len: excerpt.match_start.map(|_| needle.chars().count()),
         });
     }
 
@@ -120,14 +131,22 @@ fn first_line(text: &str) -> &str {
     text.lines().next().unwrap_or("").trim()
 }
 
+/// 切り出した抜粋と、その中でクエリが一致し始める位置(文字数)。
+struct Excerpt {
+    text: String,
+    /// 本文に一致がない(タグだけに当たった)ときは `None`。
+    match_start: Option<usize>,
+}
+
 /// ヒット位置の前後 `SNIPPET_CONTEXT` 文字を、文字境界を壊さずに切り出す。
 /// `lowered` は照合に使った `text` の小文字版。作り直さず受け取るのは、
 /// ここが 1 ヒットごとに走るため。
-fn snippet(text: &str, lowered: &str, needle: &str) -> String {
+fn snippet(text: &str, lowered: &str, needle: &str) -> Excerpt {
     // ヒットしたのが本文以外（ノートのタグなど）なら先頭から切り出す。
-    let at = lowered
+    let found = lowered
         .find(needle)
-        .map_or(0, |byte| lowered[..byte].chars().count());
+        .map(|byte| lowered[..byte].chars().count());
+    let at = found.unwrap_or(0);
     let end = at + needle.chars().count() + SNIPPET_CONTEXT;
     let start = at.saturating_sub(SNIPPET_CONTEXT);
 
@@ -135,19 +154,29 @@ fn snippet(text: &str, lowered: &str, needle: &str) -> String {
     if start > 0 {
         out.push('…');
     }
+    // 先頭の「…」も 1 文字。位置に入れないとハイライトが 1 文字ずれる
+    let match_start = found.map(|at| at - start + usize::from(start > 0));
     // Vec<char> を 3 本作らずに 1 度だけ走査する。
     let mut chars = text.chars().skip(start);
     for _ in start..end {
         match chars.next() {
             Some('\n') => out.push(' '),
             Some(c) => out.push(c),
-            None => return out,
+            None => {
+                return Excerpt {
+                    text: out,
+                    match_start,
+                };
+            }
         }
     }
     if chars.next().is_some() {
         out.push('…');
     }
-    out
+    Excerpt {
+        text: out,
+        match_start,
+    }
 }
 
 #[cfg(test)]
@@ -317,5 +346,59 @@ mod tests {
         let hits = search_all(tmp.path(), "needle").unwrap();
 
         assert_eq!(hits[0].snippet, "short needle here");
+    }
+
+    /// 抜粋のどこが一致したか。UI はこの位置でハイライトを塗るので、
+    /// ずれると無関係な文字が光る。
+    #[test]
+    fn a_hit_reports_where_the_match_sits_in_the_snippet() {
+        let tmp = TempDir::new().unwrap();
+        save_timeline_entry(tmp.path(), "short needle here", &context()).unwrap();
+
+        let hits = search_all(tmp.path(), "needle").unwrap();
+
+        assert_eq!(hits[0].match_start, Some(6));
+        assert_eq!(hits[0].match_len, Some(6));
+    }
+
+    /// 前が省略された抜粋では先頭に「…」が 1 文字入る。位置はそれ込みで
+    /// 返さないと、ハイライトが 1 文字ずれる。
+    #[test]
+    fn an_elided_snippet_counts_the_leading_ellipsis() {
+        let tmp = TempDir::new().unwrap();
+        let long = format!("{}NEEDLE{}", "a".repeat(80), "b".repeat(80));
+        save_timeline_entry(tmp.path(), &long, &context()).unwrap();
+
+        let hits = search_all(tmp.path(), "needle").unwrap();
+
+        let start = hits[0].match_start.unwrap();
+        let len = hits[0].match_len.unwrap();
+        let matched: String = hits[0].snippet.chars().skip(start).take(len).collect();
+        assert_eq!(matched, "NEEDLE");
+    }
+
+    /// マルチバイト文字圏でも位置は文字数で数える。バイト数で返すと
+    /// 日本語の本文で必ずずれる。
+    #[test]
+    fn a_match_position_counts_chars_not_bytes() {
+        let tmp = TempDir::new().unwrap();
+        save_timeline_entry(tmp.path(), "日本語の本文にリトライ", &context()).unwrap();
+
+        let hits = search_all(tmp.path(), "リトライ").unwrap();
+
+        assert_eq!(hits[0].match_start, Some(7));
+        assert_eq!(hits[0].match_len, Some(4));
+    }
+
+    /// タグだけに一致したときは本文に光らせる場所がない。
+    #[test]
+    fn a_tag_only_hit_has_no_match_position() {
+        let tmp = TempDir::new().unwrap();
+        create_draft_note(tmp.path(), "本文", &["sync".to_string()], &context()).unwrap();
+
+        let hits = search_all(tmp.path(), "sync").unwrap();
+
+        assert_eq!(hits[0].match_start, None);
+        assert_eq!(hits[0].match_len, None);
     }
 }
