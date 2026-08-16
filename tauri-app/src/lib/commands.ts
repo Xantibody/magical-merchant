@@ -74,8 +74,14 @@ interface CommandMap {
   search_all: { args: { query: string }; result: SearchHit[] };
   /** このノートを `[[ID]]` で指している記録。開くたびに走査で導出される。 */
   find_backlinks: { args: { filename: string }; result: SearchHit[] };
-  /** 座標 → 地名。引けたものだけが `["緯度,経度", 地名]` で返る。 */
-  resolve_places: { args: { coordinates: [number, number][] }; result: [string, string][] };
+  /**
+   * 座標 → 地名。引けたものだけが `["緯度,経度", 地名]` で返る。
+   * `locale` は OS のジオコーダに渡す言語(`ja` / `en`)。
+   */
+  resolve_places: {
+    args: { coordinates: [number, number][]; locale: string };
+    result: [string, string][];
+  };
   create_draft: {
     args: { body: string; tags: string[]; origin?: string } & ClientArgs;
     result: string;

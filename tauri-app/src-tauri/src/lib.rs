@@ -203,9 +203,10 @@ fn delete_timeline_entry(handle: AppHandle, date: String, index: usize) -> Resul
 async fn resolve_places(
     handle: AppHandle,
     coordinates: Vec<(f64, f64)>,
+    locale: String,
 ) -> Result<Vec<(String, String)>, String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    tauri::async_runtime::spawn_blocking(move || place::resolve(&base_dir, &coordinates))
+    tauri::async_runtime::spawn_blocking(move || place::resolve(&base_dir, &coordinates, &locale))
         .await
         .map_err(|e| e.to_string())
 }
