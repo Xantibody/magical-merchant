@@ -12,13 +12,15 @@
 - **Timeline journal** — a day-grouped capture log with tags, device/place
   context, a calendar jump, and a weekly digest (including _one year ago
   today_)
-- **Markdown notes** — a Typora-style Milkdown editor; tap anywhere in the
-  preview to edit, autosave with a local one-step revert, Shiki code
-  highlighting, Mermaid diagrams, and a per-note mindmap view
+- **Markdown notes** — a Typora-style Milkdown editor; a title field that is
+  the body's own `# heading`, tap anywhere in the preview to edit, autosave
+  with a local one-step revert, Shiki code highlighting, Mermaid diagrams,
+  and a per-note mindmap view
 - **Entries grow into notes** — promote a timeline entry into a note; the two
   stay linked through the note's `origin` frontmatter
 - **`[[links]]` and backlinks** — link notes by immutable file ID with
-  autocomplete; every note lists the records that point at it
+  autocomplete, optionally with `|display text`; every note lists the records
+  that point at it
 - **`⌘K` palette** — recent notes / today / tags before you type, full-text
   search with highlighted matches, exact landing on the note or day
 - **Optional sync** — Cloudflare Workers + R2, conflict-safe, with Android
