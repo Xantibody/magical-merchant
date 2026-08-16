@@ -13,10 +13,11 @@
 
   // ---- タイムラインのつくりもの ----
 
+  // 地名は OS が言語ごとに違う答えを返す。ハーネスでもそれを真似る
   const PLACES = [
-    { lat: 35.6812, lon: 139.7671, name: "千代田区丸の内" },
-    { lat: 35.659, lon: 139.7005, name: "渋谷区神南" },
-    { lat: 35.6284, lon: 139.7387, name: "品川区大崎" },
+    { lat: 35.6812, lon: 139.7671, ja: "千代田区丸の内", en: "Marunouchi, Chiyoda" },
+    { lat: 35.659, lon: 139.7005, ja: "渋谷区神南", en: "Jinnan, Shibuya" },
+    { lat: 35.6284, lon: 139.7387, ja: "品川区大崎", en: "Osaki, Shinagawa" },
   ];
 
   const TEXTS = [
@@ -204,13 +205,13 @@
       lines.splice(index, 1);
     },
     // 実機のジオコーダは即答しない。名前が後から届く画面を再現する
-    resolve_places: async ({ coordinates }) => {
+    resolve_places: async ({ coordinates, locale }) => {
       await delay(600);
       const answers = [];
       for (const [lat, lon] of coordinates) {
         const hit = PLACES.find((p) => placeKey(p.lat, p.lon) === placeKey(lat, lon));
         if (hit) {
-          answers.push([placeKey(lat, lon), hit.name]);
+          answers.push([placeKey(lat, lon), locale === "en" ? hit.en : hit.ja]);
         }
       }
       return answers;

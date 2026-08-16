@@ -30,7 +30,9 @@ description: Note/timeline storage invariants, sync protocol, widgets and deep l
   not scanned. The same rule lives twice: `core/src/utils/tags.rs` and
   `lib/tags.ts`; fix both
 - **Place names** (`places.json`, outside `data/`): derived geocoder cache,
-  display-only. The recorded `location` stays the raw coordinate
+  display-only. The recorded `location` stays the raw coordinate. Keyed by
+  `<locale>:<coordinate>` — the OS answers in whatever language it was asked,
+  so the language has to be part of the key
 
 ## Sync protocol (Workers + R2)
 

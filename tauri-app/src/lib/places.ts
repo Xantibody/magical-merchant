@@ -7,6 +7,7 @@
 
 import { createSignal } from "solid-js";
 import { typedInvoke } from "./commands";
+import { locale } from "./i18n";
 import type { DeviceContext } from "./parse-timeline";
 
 interface Coordinate {
@@ -36,11 +37,20 @@ export function createPlaceStore(): PlaceStore {
    * 次にアプリを開けばまた聞くので、取り逃しは 1 セッションで終わる。
    */
   const asked = new Set<string>();
+  /** いま持っている地名を引いた言語。変われば全部聞き直す。 */
+  let askedIn = locale();
 
   const nameOf = (location: Coordinate): string | undefined =>
     names().get(placeKey(location.latitude, location.longitude));
 
   const load = async (contexts: readonly (DeviceContext | null)[]): Promise<void> => {
+    // 地名は OS が言語ごとに違う答えを返す。前の言語で引いたものを残すと、
+    // 英語の画面に日本語の地名が並んだままになる
+    if (askedIn !== locale()) {
+      askedIn = locale();
+      asked.clear();
+      setNames(new Map());
+    }
     const pending: [number, number][] = [];
     for (const context of contexts) {
       const location = context?.location;
@@ -55,7 +65,10 @@ export function createPlaceStore(): PlaceStore {
     }
 
     try {
-      const resolved = await typedInvoke("resolve_places", { coordinates: pending });
+      const resolved = await typedInvoke("resolve_places", {
+        coordinates: pending,
+        locale: askedIn,
+      });
       if (resolved.length > 0) {
         setNames((known) => new Map([...known, ...resolved]));
       }

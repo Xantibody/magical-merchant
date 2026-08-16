@@ -13,7 +13,14 @@ use std::path::Path;
 /// 地名の分かった座標だけを、[`place_key`] 付きで返す。
 ///
 /// 引けなかった座標は結果に現れない。呼び出し側は座標のまま見せる。
-pub(crate) fn resolve(base_dir: &Path, coordinates: &[(f64, f64)]) -> Vec<(String, String)> {
+///
+/// `locale` は画面がいま使っている言語(`ja` / `en`)。OS は言語ごとに違う
+/// 名前を返すので、控えも言語ごとに分けて持つ。
+pub(crate) fn resolve(
+    base_dir: &Path,
+    coordinates: &[(f64, f64)],
+    locale: &str,
+) -> Vec<(String, String)> {
     let path = place_cache_path(base_dir);
     let mut cache = PlaceCache::load(&path);
     let mut resolved = Vec::new();
@@ -24,15 +31,18 @@ pub(crate) fn resolve(base_dir: &Path, coordinates: &[(f64, f64)]) -> Vec<(Strin
         if resolved.iter().any(|(k, _): &(String, String)| *k == key) {
             continue;
         }
-        if let Some(place) = cache.get(&key) {
+        // 返すのは座標だけのキー。画面が引き当てるのはそちらで、
+        // 言語を混ぜるのは控えの中だけに閉じる
+        let cached = cache_key(locale, &key);
+        if let Some(place) = cache.get(&cached) {
             resolved.push((key, place.to_string()));
             continue;
         }
         // 圏外なら全件そろって失敗する。1 件目で分かったことに 30 件つき合わせない。
-        let Some(place) = geocode(latitude, longitude) else {
+        let Some(place) = geocode(latitude, longitude, locale) else {
             break;
         };
-        cache.insert(key.clone(), place.clone());
+        cache.insert(cached, place.clone());
         asked = true;
         resolved.push((key, place));
     }
@@ -42,6 +52,16 @@ pub(crate) fn resolve(base_dir: &Path, coordinates: &[(f64, f64)]) -> Vec<(Strin
         let _ = cache.save(&path);
     }
     resolved
+}
+
+/// 控えの中でのキー。言語を変えると同じ座標に別の名前が付くので、
+/// 座標だけで引くと前の言語の名前をそのまま出してしまう。
+///
+/// この変更より前に書かれた控え(言語の付かないキー)はもう一致しない。
+/// 派生ファイルなので消しには行かず、次に同じ場所を通ったときに
+/// 言語付きで書き直されるに任せる。
+fn cache_key(locale: &str, place_key: &str) -> String {
+    format!("{locale}:{place_key}")
 }
 
 /// 住所の各段から、地図で指させるいちばん細かいものを選ぶ。
@@ -81,7 +101,7 @@ mod platform {
     use block2::RcBlock;
     use objc2::AnyThread as _;
     use objc2_core_location::{CLGeocoder, CLLocation, CLPlacemark};
-    use objc2_foundation::{NSArray, NSError};
+    use objc2_foundation::{NSArray, NSError, NSLocale, NSString};
     use std::sync::mpsc;
     use std::time::Duration;
 
@@ -99,7 +119,7 @@ mod platform {
     /// メインスレッドから呼んではいけない。`CLGeocoder` は完了ブロックを
     /// メインキューに載せるので、そこで待つと自分の返事を自分で塞ぎ、必ず
     /// 時間切れになる。呼び出し元の `resolve_places` はそのために `async`。
-    pub(super) fn geocode(latitude: f64, longitude: f64) -> Option<String> {
+    pub(super) fn geocode(latitude: f64, longitude: f64, locale: &str) -> Option<String> {
         // SAFETY: どちらもただのオブジェクト生成で、スレッドの制約を持たない。
         let (location, geocoder) = unsafe {
             (
@@ -107,6 +127,8 @@ mod platform {
                 CLGeocoder::new(),
             )
         };
+        // 言語を渡さないと OS の設定で返る。画面が英語でも地名だけ日本語になる
+        let preferred = NSLocale::localeWithLocaleIdentifier(&NSString::from_str(locale));
         let (tx, rx) = mpsc::channel();
 
         // ジオコーダ自身をブロックに持たせて、返事が来るまで生かしておく。
@@ -136,7 +158,11 @@ mod platform {
         // SAFETY: 完了ブロックを渡すだけ。CLGeocoder は受け取ったブロックを自分で
         // 複製して持つので、時間切れでこちらが手放しても呼び出し先は生きている。
         unsafe {
-            geocoder.reverseGeocodeLocation_completionHandler(&location, RcBlock::as_ptr(&handler));
+            geocoder.reverseGeocodeLocation_preferredLocale_completionHandler(
+                &location,
+                Some(&preferred),
+                RcBlock::as_ptr(&handler),
+            );
         }
 
         rx.recv_timeout(TIMEOUT).ok().flatten()
@@ -151,7 +177,7 @@ mod platform {
 
     /// `Geocoder` は端末の Context と結び付いているので、Rust から素で作れない。
     /// `ndk_context` が握っている VM と Activity を借りて Java 側を呼ぶ。
-    pub(super) fn geocode(latitude: f64, longitude: f64) -> Option<String> {
+    pub(super) fn geocode(latitude: f64, longitude: f64, locale: &str) -> Option<String> {
         let ctx = ndk_context::android_context();
         // SAFETY: tao がアプリ起動時に入れたポインタ。プロセスが生きている間有効。
         let vm = unsafe { JavaVM::from_raw(ctx.vm().cast()) }.ok()?;
@@ -159,7 +185,7 @@ mod platform {
         // SAFETY: 同上。Activity の参照で、借りている間だけ使う。
         let context = unsafe { JObject::from_raw(ctx.context().cast()) };
 
-        let name = lookup(&mut env, &context, latitude, longitude);
+        let name = lookup(&mut env, &context, latitude, longitude, locale);
         if name.is_none() {
             // 圏外の `getFromLocation` は IOException を投げる。積んだままにすると
             // 次に JNI を跨いだところで無関係な呼び出しが落ちる。
@@ -173,16 +199,17 @@ mod platform {
         context: &JObject<'_>,
         latitude: f64,
         longitude: f64,
+        language: &str,
     ) -> Option<String> {
+        // 端末の既定ではなく画面の言語で聞く。`Locale.getDefault()` だと、
+        // 英語にしたアプリの中で地名だけ端末の言語で返る
+        let tag = env.new_string(language).ok()?;
         let locale = env
-            .call_static_method(
+            .new_object(
                 "java/util/Locale",
-                "getDefault",
-                "()Ljava/util/Locale;",
-                &[],
+                "(Ljava/lang/String;)V",
+                &[JValue::Object(&tag)],
             )
-            .ok()?
-            .l()
             .ok()?;
         let geocoder = env
             .new_object(
@@ -254,7 +281,7 @@ mod platform {
 /// 座標のまま見せる道が残っているので、ここでは黙って諦める。
 #[cfg(not(any(target_os = "macos", target_os = "android")))]
 mod platform {
-    pub(super) const fn geocode(_latitude: f64, _longitude: f64) -> Option<String> {
+    pub(super) const fn geocode(_latitude: f64, _longitude: f64, _locale: &str) -> Option<String> {
         None
     }
 }
@@ -267,6 +294,16 @@ mod tests {
 
     /// 住所の 4 段を、無い段は `""` で。ジオコーダが空文字で返す段と
     /// そもそも返さない段は、どちらも「名乗れなかった」で区別しない。
+    /// 控えは言語ごとに分ける。座標だけで引くと、言語を変えても前の名前が出る。
+    #[test]
+    fn the_cache_remembers_which_language_it_asked_in() {
+        assert_eq!(cache_key("en", "35.68,139.55"), "en:35.68,139.55");
+        assert_ne!(
+            cache_key("en", "35.68,139.55"),
+            cache_key("ja", "35.68,139.55")
+        );
+    }
+
     fn named(areas: [&str; 4]) -> Option<String> {
         let [locality, sub, admin, country] =
             areas.map(|area| (!area.is_empty()).then(|| area.to_string()));
