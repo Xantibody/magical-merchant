@@ -209,8 +209,18 @@ fn extend_match_to_link_end(hit: &mut SearchHit) {
     }
 }
 
+/// 一覧に出す 1 行。ノートの題は本文先頭の `# 見出し` なので記号は落とす
+/// (一覧ペインの行も同じ形で出している)。
+///
+/// 落とすのは後ろに空白のある `#` だけ。タイムラインのエントリは `#タグ`
+/// で始まることがあり、そこまで削ると分類が題から消える。
 fn first_line(text: &str) -> &str {
-    text.lines().next().unwrap_or("").trim()
+    let line = text.lines().next().unwrap_or("").trim();
+    let rest = line.trim_start_matches('#');
+    if rest.len() == line.len() || !rest.starts_with([' ', '\t']) {
+        return line;
+    }
+    rest.trim_start()
 }
 
 /// 切り出した抜粋と、その中でクエリが一致し始める位置(文字数)。
@@ -270,6 +280,20 @@ mod tests {
 
     fn context() -> Context {
         Context::default()
+    }
+
+    /// 一覧ペインは `# ` を落とした題を出す。パレットとバックリンクだけ
+    /// 記号付きだと、同じノートが画面ごとに違う名前を名乗る。
+    #[test]
+    fn a_note_title_drops_the_heading_marker() {
+        assert_eq!(first_line("# 設計メモ\n本文"), "設計メモ");
+        assert_eq!(first_line("## 小見出し"), "小見出し");
+    }
+
+    /// エントリは `#タグ` で始まることがある。見出しの `# ` とは違う。
+    #[test]
+    fn an_entry_that_starts_with_a_tag_keeps_it() {
+        assert_eq!(first_line("#sync を直す"), "#sync を直す");
     }
 
     #[test]
