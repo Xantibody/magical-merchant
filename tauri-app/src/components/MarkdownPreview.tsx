@@ -6,6 +6,8 @@ import type { JSX } from "solid-js";
 
 interface MarkdownPreviewProps {
   source: string;
+  /** `[[ID]]` をタイトルで描くための解決表。無ければ保存形のまま出る。 */
+  noteTitles?: ReadonlyMap<string, string>;
 }
 
 interface ZoomedDiagram {
@@ -61,14 +63,14 @@ export default function MarkdownPreview(props: MarkdownPreviewProps): JSX.Elemen
   createEffect(
     on(
       // mermaid はテーマの色を SVG に焼き込むので、切り替えたら描き直すしかない
-      () => [props.source, resolvedTheme()] as const,
-      async ([source]) => {
+      () => [props.source, resolvedTheme(), props.noteTitles] as const,
+      async ([source, , noteTitles]) => {
         const currentVersion = ++renderVersion;
         if (!source) {
           setHtml("");
           return;
         }
-        const rendered = await renderMarkdown(source);
+        const rendered = await renderMarkdown(source, noteTitles);
         if (currentVersion === renderVersion) {
           setHtml(rendered);
         }

@@ -40,14 +40,8 @@ pub struct SearchHit {
 const SNIPPET_CONTEXT: usize = 40;
 const MAX_HITS: usize = 100;
 
-/// Timeline と Notes を横断して大文字小文字を無視した部分一致で検索する。
-/// 新しいものから順に返す。
-pub fn search_all(base_dir: &Path, query: &str) -> Result<Vec<SearchHit>, CoreError> {
-    let needle = query.trim().to_lowercase();
-    if needle.is_empty() {
-        return Ok(Vec::new());
-    }
-
+/// タイムライン全日を走査して needle(小文字化済み)に一致するエントリを集める。
+fn timeline_hits(base_dir: &Path, needle: &str) -> Result<Vec<SearchHit>, CoreError> {
     let mut hits = Vec::new();
     let timeline = Timeline::new(base_dir.to_path_buf());
     // 改行をまたぐ needle だけは日単位の足切りが使えない。CRLF のファイルでは
@@ -60,7 +54,7 @@ pub fn search_all(base_dir: &Path, query: &str) -> Result<Vec<SearchHit>, CoreEr
         };
         // エントリ本文はその日のファイルの部分文字列なので、ファイル全体に無いなら
         // どのエントリにも無い。分割もコンテキスト JSON の判定も丸ごと省ける。
-        if day_filter_applies && !content.to_lowercase().contains(&needle) {
+        if day_filter_applies && !content.to_lowercase().contains(needle) {
             continue;
         }
 
@@ -74,10 +68,10 @@ pub fn search_all(base_dir: &Path, query: &str) -> Result<Vec<SearchHit>, CoreEr
         {
             let text = strip_timeline_prefix(&entry);
             let lowered = text.to_lowercase();
-            if !lowered.contains(&needle) {
+            if !lowered.contains(needle) {
                 continue;
             }
-            let excerpt = snippet(text, &lowered, &needle);
+            let excerpt = snippet(text, &lowered, needle);
             hits.push(SearchHit {
                 kind: HitKind::Timeline,
                 title: first_line(text).to_string(),
@@ -91,6 +85,18 @@ pub fn search_all(base_dir: &Path, query: &str) -> Result<Vec<SearchHit>, CoreEr
             });
         }
     }
+    Ok(hits)
+}
+
+/// Timeline と Notes を横断して大文字小文字を無視した部分一致で検索する。
+/// 新しいものから順に返す。
+pub fn search_all(base_dir: &Path, query: &str) -> Result<Vec<SearchHit>, CoreError> {
+    let needle = query.trim().to_lowercase();
+    if needle.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut hits = timeline_hits(base_dir, &needle)?;
 
     let mut haystack = String::new();
     for note in list_notes(base_dir)? {
@@ -106,6 +112,54 @@ pub fn search_all(base_dir: &Path, query: &str) -> Result<Vec<SearchHit>, CoreEr
         }
         let lowered = note.preview.to_lowercase();
         let excerpt = snippet(&note.preview, &lowered, &needle);
+        hits.push(SearchHit {
+            kind: HitKind::Note,
+            title: first_line(&note.preview).to_string(),
+            snippet: excerpt.text,
+            date: note
+                .time
+                .map(|t| t.format("%Y-%m-%d").to_string())
+                .unwrap_or_default(),
+            filename: Some(note.filename),
+            index: None,
+            tags: note.tags,
+            match_start: excerpt.match_start,
+            match_len: excerpt.match_start.map(|_| needle.chars().count()),
+        });
+    }
+
+    hits.sort_by(|a, b| b.date.cmp(&a.date));
+    hits.truncate(MAX_HITS);
+    Ok(hits)
+}
+
+/// `target` へ `[[ID]]` で言及している記録(ノート・タイムライン)を集める。
+///
+/// インデックスは持たず、開かれるたびに走査で導出する。ノートは一覧の
+/// preview(先頭 100 文字)ではなく全文を読む — リンクは本文のどこにでも
+/// 書かれるため。
+pub fn find_backlinks(
+    base_dir: &Path,
+    target: &crate::utils::validated::NoteFilename,
+) -> Result<Vec<SearchHit>, CoreError> {
+    let stem = target.as_str().trim_end_matches(".md");
+    let needle = format!("[[{stem}]]");
+
+    let mut hits = timeline_hits(base_dir, &needle)?;
+
+    for note in list_notes(base_dir)? {
+        if note.filename == target.as_str() {
+            continue;
+        }
+        // 読めないノートはバックリンク欄から消えるだけ。開けない一覧を出すより良い
+        let Ok(body) = crate::read_note(&note.path) else {
+            continue;
+        };
+        if !body.contains(&needle) {
+            continue;
+        }
+        let lowered = body.to_lowercase();
+        let excerpt = snippet(&body, &lowered, &needle);
         hits.push(SearchHit {
             kind: HitKind::Note,
             title: first_line(&note.preview).to_string(),
@@ -400,5 +454,93 @@ mod tests {
 
         assert_eq!(hits[0].match_start, None);
         assert_eq!(hits[0].match_len, None);
+    }
+
+    fn filename_of(path: &Path) -> crate::utils::validated::NoteFilename {
+        crate::utils::validated::NoteFilename::parse(path.file_name().unwrap().to_str().unwrap())
+            .unwrap()
+    }
+
+    fn stem_of(path: &Path) -> String {
+        path.file_stem().unwrap().to_str().unwrap().to_string()
+    }
+
+    /// 2 件目のノートを固定名で直接書く。`create_draft_note` を同じ秒に
+    /// 2 回呼ぶとファイル名が衝突し、1 件目を上書きしてしまう。
+    fn write_second_note(base: &Path, filename: &str, body: &str) {
+        use crate::utils::frontmatter::{self, NoteFrontmatter};
+        use chrono::TimeZone;
+        let fm = NoteFrontmatter {
+            time: chrono::FixedOffset::east_opt(9 * 3600)
+                .unwrap()
+                .with_ymd_and_hms(2020, 1, 1, 0, 0, 0)
+                .unwrap(),
+            tags: vec![],
+            context: None,
+            view: None,
+            origin: None,
+        };
+        let path = crate::utils::paths::notes_dir(base).join(filename);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, frontmatter::render(&fm, body).unwrap()).unwrap();
+    }
+
+    #[test]
+    fn a_timeline_entry_that_links_a_note_is_a_backlink() {
+        let tmp = TempDir::new().unwrap();
+        let target = create_draft_note(tmp.path(), "指される側", &[], &context()).unwrap();
+        let link = format!("これ参照 [[{}]]", stem_of(&target));
+        save_timeline_entry(tmp.path(), &link, &context()).unwrap();
+
+        let hits = find_backlinks(tmp.path(), &filename_of(&target)).unwrap();
+
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].kind, HitKind::Timeline);
+        assert!(hits[0].snippet.contains("これ参照"));
+    }
+
+    /// 一覧の preview は先頭 100 文字しかない。リンクは本文のどこにでも
+    /// 書かれるので、全文を読まないと深い位置のリンクを見落とす。
+    #[test]
+    fn a_link_deep_in_a_long_note_is_still_found() {
+        let tmp = TempDir::new().unwrap();
+        let target = create_draft_note(tmp.path(), "指される側", &[], &context()).unwrap();
+        let body = format!("{}\n[[{}]]", "あ".repeat(300), stem_of(&target));
+        write_second_note(tmp.path(), "20200101_000000.md", &body);
+
+        let hits = find_backlinks(tmp.path(), &filename_of(&target)).unwrap();
+
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].kind, HitKind::Note);
+    }
+
+    /// 自分の中に自分へのリンクを書いても「リンクされている記録」ではない。
+    #[test]
+    fn a_note_is_not_its_own_backlink() {
+        let tmp = TempDir::new().unwrap();
+        let target =
+            create_draft_note(tmp.path(), "後で本文に自分を書く", &[], &context()).unwrap();
+        let stem = stem_of(&target);
+        crate::update_note(&target, &format!("自分 [[{stem}]]"), &context()).unwrap();
+
+        assert!(
+            find_backlinks(tmp.path(), &filename_of(&target))
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn no_links_means_no_backlinks() {
+        let tmp = TempDir::new().unwrap();
+        let target = create_draft_note(tmp.path(), "誰も指していない", &[], &context()).unwrap();
+        write_second_note(tmp.path(), "20200101_000000.md", "無関係なノート");
+        save_timeline_entry(tmp.path(), "無関係なエントリ", &context()).unwrap();
+
+        assert!(
+            find_backlinks(tmp.path(), &filename_of(&target))
+                .unwrap()
+                .is_empty()
+        );
     }
 }

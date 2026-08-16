@@ -133,3 +133,14 @@
   color: var(--shiki-dark);
   background-color: transparent;
 }
+
+/* ---- ノート間リンク。タイトルで描かれ、押すとそのノートが開く ---- */
+
+.markdown-preview .note-link {
+  color: var(--app-accent);
+  background: var(--app-accent-soft);
+  border-radius: 4px;
+  padding: 1px 4px;
+  cursor: pointer;
+  text-decoration: none;
+}
