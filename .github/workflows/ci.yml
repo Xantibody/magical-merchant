@@ -158,11 +158,11 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: nixbuild/nix-quick-install-action@v35
-      - uses: nix-community/cache-nix-action@v7
-        with:
-          primary-key: nix-${{ runner.os }}-pnpmdeps-${{ hashFiles('flake.lock', 'flake.nix', 'tauri-app/pnpm-lock.yaml') }}
-          restore-prefixes-first-match: nix-${{ runner.os }}-pnpmdeps-
-          gc-max-store-size-linux: 2G
+      # store キャッシュを張らない。FOD の出力パスは入力ではなく宣言した hash から
+      # 決まるので、hash が腐ったままでも前回の出力が復元されれば nix はそれを有効と
+      # 見なし、fetcher を一度も動かさないまま緑になる (実際 a1f8f48 がそうだった)。
+      # 空の store から始めれば取得は必ず走る。取得の検証がこのジョブの全部なので、
+      # ここでキャッシュが節約できるものは無い
       - name: pnpm deps hash is current
         run: nix build .#pnpm-deps --no-link
 
