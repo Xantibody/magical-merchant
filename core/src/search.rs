@@ -143,7 +143,9 @@ pub fn find_backlinks(
     target: &crate::utils::validated::NoteFilename,
 ) -> Result<Vec<SearchHit>, CoreError> {
     let stem = target.as_str().trim_end_matches(".md");
-    let needle = format!("[[{stem}]]");
+    // 閉じ括弧まで含めない。`[[ID]]` と `[[ID|表示文字]]` は同じ 1 本のリンクで、
+    // 書き方の違いでバックリンクが消えてはいけない
+    let needle = format!("[[{stem}");
 
     let mut hits = timeline_hits(base_dir, &needle)?;
 
@@ -176,9 +178,35 @@ pub fn find_backlinks(
         });
     }
 
+    for hit in &mut hits {
+        extend_match_to_link_end(hit);
+    }
     hits.sort_by(|a, b| b.date.cmp(&a.date));
     hits.truncate(MAX_HITS);
     Ok(hits)
+}
+
+/// 抜粋の強調をリンクの保存形の終わりまで伸ばす。
+///
+/// 一致に使う needle は `[[ID` までなので、そのままでは `|表示文字]]` が
+/// 地の文の色で残り、どこまでがリンクなのか読めない。
+fn extend_match_to_link_end(hit: &mut SearchHit) {
+    let (Some(start), Some(len)) = (hit.match_start, hit.match_len) else {
+        return;
+    };
+    let chars: Vec<char> = hit.snippet.chars().collect();
+    let mut at = start + len;
+    while at + 1 < chars.len() {
+        // 抜粋が途中で切れている・別のリンクが始まったなら伸ばさない
+        if chars[at] == '\n' || chars[at] == '[' {
+            return;
+        }
+        if chars[at] == ']' && chars[at + 1] == ']' {
+            hit.match_len = Some(at + 2 - start);
+            return;
+        }
+        at += 1;
+    }
 }
 
 fn first_line(text: &str) -> &str {
@@ -529,6 +557,26 @@ mod tests {
                 .unwrap()
                 .is_empty()
         );
+    }
+
+    /// 表示文字を付けたリンクも同じ 1 本のリンク。書き方でバックリンクが
+    /// 消えると、文中に自然に埋め込んだ参照だけが見えなくなる。
+    #[test]
+    fn a_link_with_display_text_is_a_backlink() {
+        let tmp = TempDir::new().unwrap();
+        let target = create_draft_note(tmp.path(), "指される側", &[], &context()).unwrap();
+        let body = format!("詳しくは [[{}|前の話]] を見る", stem_of(&target));
+        write_second_note(tmp.path(), "20200101_000000.md", &body);
+
+        let hits = find_backlinks(tmp.path(), &filename_of(&target)).unwrap();
+
+        assert_eq!(hits.len(), 1);
+        // 強調は保存形の終わりまで。`|前の話]]` が地の文の色で残ると、
+        // どこまでがリンクなのか読めない
+        let start = hits[0].match_start.unwrap();
+        let len = hits[0].match_len.unwrap();
+        let matched: String = hits[0].snippet.chars().skip(start).take(len).collect();
+        assert!(matched.ends_with("|前の話]]"), "matched: {matched}");
     }
 
     #[test]

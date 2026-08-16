@@ -17,6 +17,8 @@ interface LinkRange {
   from: number;
   to: number;
   id: string;
+  /** `|` の後ろに書かれた表示文字。チップはタイトルよりこちらを優先する。 */
+  alias: string | null;
 }
 
 /** 文書中の `[[ID]]` の位置を集める。 */
@@ -29,7 +31,12 @@ function linkRanges(doc: ProseNode): LinkRange[] {
     let offset = 0;
     for (const segment of splitNoteLinks(node.text)) {
       if (segment.id !== null) {
-        ranges.push({ from: pos + offset, to: pos + offset + segment.text.length, id: segment.id });
+        ranges.push({
+          from: pos + offset,
+          to: pos + offset + segment.text.length,
+          id: segment.id,
+          alias: segment.alias,
+        });
       }
       offset += segment.text.length;
     }
@@ -186,7 +193,8 @@ export function createNoteLinkPlugin(targets: () => NoteLinkTarget[]): MilkdownP
                     (view) => {
                       const chip = document.createElement("span");
                       chip.className = "note-link-chip";
-                      chip.textContent = titleOf(targets(), range.id) ?? `[[${range.id}]]`;
+                      chip.textContent =
+                        range.alias ?? titleOf(targets(), range.id) ?? `[[${range.id}]]`;
                       // 押すとカーソルが中に入り、保存形が現れて編集できる
                       chip.addEventListener("mousedown", (e) => {
                         e.preventDefault();
