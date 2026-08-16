@@ -1,0 +1,47 @@
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  extends: ["config:recommended", ":semanticCommitTypeAll(chore)"],
+  timezone: "Asia/Tokyo",
+  schedule: ["before 6am on monday"],
+  labels: ["dependencies"],
+
+  // nix manager は beta で既定が無効。flake.nix の入力を追うのに要る
+  nix: { enabled: true },
+
+  packageRules: [
+    {
+      description: "入力は 4 つとも branch 追従なので、個別に出すと毎週 digest bump が 4 本並ぶ",
+      matchManagers: ["nix"],
+      groupName: "flake inputs",
+    },
+    {
+      description: [
+        "tauri-app の JS 依存。pnpm-lock.yaml が動くと nix/package.nix の pnpmDeps.hash が必ず腐り、",
+        "取り直しは手作業になる (postUpgradeTasks は Mend hosted では使えない)。",
+        "1 PR にまとめて、その手間を更新ごとではなく週 1 回に閉じ込める",
+      ],
+      matchManagers: ["npm"],
+      matchFileNames: ["tauri-app/package.json"],
+      groupName: "tauri-app dependencies",
+      prBodyNotes: [
+        "この PR は `nix-package` が赤のままではマージできない。`nix/package.nix` の `pnpmDeps.hash` を `lib.fakeHash` に置き換えて `nix build .#pnpm-deps` を回し、エラーの `got:` の値を書き戻すこと。",
+      ],
+    },
+    {
+      description: "workers は nix ビルドに入らないので tauri-app と分ける",
+      matchManagers: ["npm"],
+      matchFileNames: ["workers/package.json"],
+      groupName: "workers dependencies",
+    },
+    {
+      description: "ワークスペース 3 crate ぶんが個別に出ると多い。major は config:recommended が切り出す",
+      matchManagers: ["cargo"],
+      matchUpdateTypes: ["minor", "patch"],
+      groupName: "cargo dependencies",
+    },
+    {
+      matchManagers: ["github-actions"],
+      groupName: "github actions",
+    },
+  ],
+}
