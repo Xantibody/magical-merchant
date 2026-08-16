@@ -46,6 +46,10 @@ export interface SearchHit {
   filename: string | null;
   index: number | null;
   tags: string[];
+  /** `snippet` 内の一致開始位置(文字数)。タグだけに当たったときは無い。 */
+  match_start?: number | null;
+  /** 一致の長さ(文字数)。`match_start` と対。 */
+  match_len?: number | null;
 }
 
 interface SyncConfig {

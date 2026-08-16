@@ -14,7 +14,7 @@ import CaptureBar from "../components/CaptureBar";
 import CalendarPopover from "../components/CalendarPopover";
 import TagFilter from "../components/TagFilter";
 import TagText from "../components/TagText";
-import { useNavigate } from "@solidjs/router";
+import { useNavigate, useSearchParams } from "@solidjs/router";
 import { typedInvoke } from "../lib/commands";
 import { getClientContext } from "../lib/client-context";
 import { useShell } from "../lib/shell";
@@ -189,6 +189,7 @@ function EmptyTimeline(props: { filtered: boolean }): JSX.Element {
 export default function Timeline(): JSX.Element {
   const shell = useShell();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const today = new Date();
 
   const [extraDates, setExtraDates] = createSignal<string[]>([]);
@@ -243,6 +244,18 @@ export default function Timeline(): JSX.Element {
 
   const days = createMemo(() => groupTimelineByDay(visible()));
   const originNotes = createMemo(() => notesByOriginDate(notes() ?? []));
+
+  // 検索やパレットからの着地 (?day=)。カレンダーで選んだときと同じ経路に
+  // 流す — 直近 14 日より前ならデータを足し、その日の見出しまでスクロール
+  createEffect(() => {
+    const { day } = searchParams;
+    if (typeof day !== "string" || !day) {
+      return;
+    }
+    setExtraDates((dates) => (dates.includes(day) ? dates : [...dates, day]));
+    setJumpTo(day);
+    setSearchParams({ day: undefined }, { replace: true });
+  });
 
   /**
    * 日付を足すとデータを取り直すぶん行が作り直され、その場でスクロールしても

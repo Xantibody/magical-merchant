@@ -193,7 +193,61 @@
       }
       return answers;
     },
-    search_all: () => [],
+    search_all: ({ query }) => {
+      const needle = query.trim().toLowerCase();
+      if (!needle) {
+        return [];
+      }
+      /** 本流(core)と同じ形: 一致の前後を含む抜粋と、文字数の一致位置。 */
+      const excerpt = (text) => {
+        const flat = text.replaceAll("\n", " ");
+        const at = flat.toLowerCase().indexOf(needle);
+        if (at === -1) {
+          return { snippet: flat.slice(0, 90), match_start: null, match_len: null };
+        }
+        const start = Math.max(0, at - 40);
+        const lead = start > 0 ? "…" : "";
+        const snippet = lead + flat.slice(start, at + needle.length + 40);
+        return {
+          snippet,
+          match_start: [...(lead + flat.slice(start, at))].length,
+          match_len: [...flat.slice(at, at + needle.length)].length,
+        };
+      };
+      const hits = [];
+      for (const [iso, lines] of timeline) {
+        lines.forEach((raw, index) => {
+          const text = raw.replace(/^- \[\d\d:\d\d:\d\d\] /, "").replace(/ \{.*\}$/, "");
+          if (!text.toLowerCase().includes(needle)) {
+            return;
+          }
+          hits.push({
+            kind: "timeline",
+            title: text.split("\n")[0],
+            date: iso,
+            filename: null,
+            index,
+            tags: [],
+            ...excerpt(text),
+          });
+        });
+      }
+      for (const [filename, note] of notes) {
+        if (!note.body.toLowerCase().includes(needle)) {
+          continue;
+        }
+        hits.push({
+          kind: "note",
+          title: note.body.split("\n")[0].replace(/^#+\s*/, ""),
+          date: note.time.slice(0, 10),
+          filename,
+          index: null,
+          tags: note.tags,
+          ...excerpt(note.body),
+        });
+      }
+      return hits.toSorted((a, b) => b.date.localeCompare(a.date)).slice(0, 100);
+    },
     list_notes: () => noteList(),
     read_note: async ({ filename }) => {
       // ディスク読みの往復ぶん。ノート切替の描画順の検証に効く
