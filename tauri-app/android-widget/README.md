@@ -40,9 +40,25 @@ The base directory is `Context.getDataDir()`, **not** `filesDir` — Tauri's
 `PathPlugin` answers `getDataDir` with the former, and writing to `files/`
 would build a second timeline the app never reads.
 
-Entries written from the widget carry no battery, network or location: the
-sheet has no WebView to ask, and `Context` omits absent fields, so they are
-shorter than in-app entries rather than wrong.
+### What the entry knows about the device
+
+The sheet has no WebView, and on Android the Rust side sees neither battery nor
+network, so `WidgetContext` gathers what Kotlin can and hands it over as the
+same JSON `ClientContext` takes from the app:
+
+| Field                    | Source                                       | Permission                       |
+| ------------------------ | -------------------------------------------- | -------------------------------- |
+| `battery` / `isCharging` | sticky `ACTION_BATTERY_CHANGED`              | none                             |
+| `networkType`            | `ConnectivityManager` transports             | `ACCESS_NETWORK_STATE` (already) |
+| `osVersion`              | `Build.VERSION.RELEASE`                      | none                             |
+| `locale`                 | `Locale.getDefault()`, normalized to `ja_JP` | none                             |
+| `latitude` / `longitude` | last known fix, **only if already granted**  | location, never requested here   |
+
+Nothing is measured or awaited. A permission dialog on the home screen, or a
+wait for a GPS fix, costs more than the value it buys in a sheet meant to be
+typed into the instant it opens — so an entry written before the app has ever
+been granted location simply carries none. `Context` omits absent fields, so a
+thinner entry is shorter than an in-app one rather than wrong.
 
 ## What the widgets read
 

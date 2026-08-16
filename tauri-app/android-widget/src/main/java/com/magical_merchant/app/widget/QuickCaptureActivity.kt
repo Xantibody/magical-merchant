@@ -89,7 +89,7 @@ class QuickCaptureActivity : Activity() {
 
         // The sheet stays open on failure: dismissing would throw away text the
         // user cannot retype from anywhere, and the widget has no drafts.
-        if (!WidgetBridge.saveQuickCapture(WidgetBridge.baseDir(this), text)) {
+        if (!WidgetBridge.saveCapture(this, text)) {
             Toast.makeText(this, R.string.quick_capture_failed, Toast.LENGTH_SHORT).show()
             return
         }
