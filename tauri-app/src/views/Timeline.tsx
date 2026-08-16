@@ -47,7 +47,18 @@ const RECENT_DAYS = 14;
 /** 週次ダイジェストを閉じた週(月曜の日付)。端末ローカルの表示状態。 */
 const DIGEST_DISMISS_KEY = "weekly-digest-dismissed";
 
-async function loadTimeline(extraDates: string[]): Promise<TimelineItem[]> {
+interface TimelineData {
+  items: TimelineItem[];
+  /** 記録のある全日付(新しい順)。ダイジェストの「1年前の今日」判定が使う。 */
+  dates: string[];
+}
+
+/**
+ * 直近の日々と全日付一覧を 1 つの値で返す。別々のリソースに分けると
+ * 描画が別フラッシュになり、先に出た日リストへ後からダイジェストが
+ * 割り込んでレイアウトシフトを起こす。
+ */
+async function loadTimeline(extraDates: string[]): Promise<TimelineData> {
   const dates = await typedInvoke("list_timeline_dates");
   const wanted = [...new Set([...dates.slice(0, RECENT_DAYS), ...extraDates])].toSorted((a, b) =>
     b.localeCompare(a),
@@ -57,7 +68,7 @@ async function loadTimeline(extraDates: string[]): Promise<TimelineItem[]> {
       toTimelineItems(date, await typedInvoke("read_timeline_by_date", { date })),
     ),
   );
-  return days.flat();
+  return { items: days.flat(), dates };
 }
 
 interface EntryProps {
@@ -223,8 +234,6 @@ export default function Timeline(): JSX.Element {
   const [notes, { refetch: refetchNotes }] = createResource(async () =>
     toNoteItems(await typedInvoke("list_notes")),
   );
-  // 「1年前の今日」の判定用。読み込むのは直近だけなので、全日付は別に聞く
-  const [allDates] = createResource(() => typedInvoke("list_timeline_dates"));
 
   // 初回は createResource が読む。defer しないとマウント直後に同じ全読みを
   // もう一度走らせ、起動時の IPC がまるごと倍になる
@@ -239,7 +248,7 @@ export default function Timeline(): JSX.Element {
     ),
   );
 
-  const entries = createMemo(() => timeline() ?? []);
+  const entries = createMemo(() => timeline()?.items ?? []);
   // 地名は記録の一部ではないので、これを待って一覧を出さない。座標のまま先に
   // 並べ、引けたものから名前に差し替わる。
   createEffect(() => void places.load(entries().map((item) => item.context)));
@@ -261,11 +270,13 @@ export default function Timeline(): JSX.Element {
     localStorage.getItem(DIGEST_DISMISS_KEY),
   );
   const weekSummary = createMemo(() => summarizeWeek(entries(), today));
-  const yearAgo = createMemo(() => yearAgoToday(today, allDates() ?? []));
+  const yearAgo = createMemo(() => yearAgoToday(today, timeline()?.dates ?? []));
   const digestVisible = createMemo(() => {
     if (isDigestDismissed(digestDismissed(), today)) {
       return false;
     }
+    // items と dates は同じリソースの 1 値なので、カードと日リストは
+    // 必ず同じフラッシュで描画される(後から割り込んで押し下げない)
     // 語ることが何も無い週に空のカードを出さない
     return weekSummary().count > 0 || yearAgo() !== null;
   });
@@ -305,15 +316,20 @@ export default function Timeline(): JSX.Element {
     document.querySelector(`[data-day="${iso}"]`)?.scrollIntoView({ block: "start" });
     setJumpTo(null);
   });
-  const recordedDates = createMemo(() => [...new Set((timeline() ?? []).map((i) => i.date))]);
+  const recordedDates = createMemo(() => [
+    ...new Set((timeline()?.items ?? []).map((i) => i.date)),
+  ]);
 
   const contextsFor = (iso: string): (DeviceContext | null)[] =>
-    (timeline() ?? []).filter((i) => i.date === iso).map((i) => i.context);
+    (timeline()?.items ?? []).filter((i) => i.date === iso).map((i) => i.context);
 
   /** 書いた日だけ読み直す。全日の読み直しは保存 1 回に日数ぶんの IPC を払う。 */
   const reloadDay = async (date: string): Promise<void> => {
     const items = toTimelineItems(date, await typedInvoke("read_timeline_by_date", { date }));
-    mutate((prev) => replaceDayItems(prev ?? [], date, items));
+    mutate((prev) => ({
+      items: replaceDayItems(prev?.items ?? [], date, items),
+      dates: prev?.dates ?? [],
+    }));
   };
 
   const capture = async (text: string): Promise<void> => {
@@ -440,6 +456,16 @@ export default function Timeline(): JSX.Element {
     <div class="timeline">
       <div class="timeline-scroll">
         <div class="timeline-column">
+          <TagFilter
+            tags={knownTags()}
+            active={tagFilter()}
+            matched={visible().length}
+            onToggle={setTagFilter}
+          />
+
+          {/* TagFilter より下に置く: 上に挿すと、データが遅れて届いたとき
+              最初の描画に存在した行が押し下げられてレイアウトシフトになる。
+              ここなら日リストと同じ「後から現れる領域」の先頭に収まる */}
           <Show when={digestVisible()}>
             <section class="digest-card" aria-label="今週のふりかえり">
               <header class="digest-head">
@@ -485,13 +511,6 @@ export default function Timeline(): JSX.Element {
               </Show>
             </section>
           </Show>
-
-          <TagFilter
-            tags={knownTags()}
-            active={tagFilter()}
-            matched={visible().length}
-            onToggle={setTagFilter}
-          />
 
           <Show when={days().length} fallback={<EmptyTimeline filtered={Boolean(tagFilter())} />}>
             <div class="timeline-toolbar">
