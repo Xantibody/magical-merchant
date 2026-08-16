@@ -166,6 +166,24 @@ jobs:
       - name: pnpm deps hash is current
         run: nix build .#pnpm-deps --no-link
 
+  # nix build .#default が macOS 配布そのもの。バンドラは codesign や xattr を
+  # 外部コマンドとして呼ぶので、ubuntu で緑でも darwin sandbox でだけ落ちる
+  nix-package-macos:
+    needs: changes
+    if: needs.changes.outputs.nix-package == 'true'
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+      - uses: nixbuild/nix-quick-install-action@v35
+      - uses: nix-community/cache-nix-action@v7
+        with:
+          primary-key: nix-${{ runner.os }}-package-${{ hashFiles('flake.lock', 'flake.nix', 'nix/package.nix', 'Cargo.lock', 'tauri-app/pnpm-lock.yaml') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-package-
+          gc-max-store-size-macos: 4G
+      - name: the .app bundle builds
+        run: nix build .#default --no-link
+
   format:
     runs-on: ubuntu-latest
     timeout-minutes: 10
