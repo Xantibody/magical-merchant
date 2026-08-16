@@ -8,6 +8,7 @@
 
 import type { SearchHit } from "./commands";
 import { toIsoDate } from "./day-labels";
+import { t } from "./i18n";
 import type { NoteItem } from "./items";
 import type { TagCount } from "./tags";
 
@@ -53,8 +54,8 @@ export function dayJumpHits(recordedDates: string[], today: Date): DayJump[] {
   const dates = new Set(recordedDates);
   const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
   const candidates: [string, string][] = [
-    ["今日", toIsoDate(today)],
-    ["昨日", toIsoDate(yesterday)],
+    [t().day.today, toIsoDate(today)],
+    [t().day.yesterday, toIsoDate(yesterday)],
   ];
   return candidates
     .filter(([, iso]) => dates.has(iso))

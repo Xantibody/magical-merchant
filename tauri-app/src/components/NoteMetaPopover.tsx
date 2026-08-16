@@ -2,6 +2,7 @@ import { createEffect, createResource, createSignal, For, Show } from "solid-js"
 import type { JSX } from "solid-js";
 import Icon from "./Icon";
 import { typedInvoke } from "../lib/commands";
+import { t } from "../lib/i18n";
 import { isImeComposing } from "../lib/ime";
 import {
   addTag,
@@ -80,12 +81,12 @@ export default function NoteMetaPopover(props: NoteMetaPopoverProps): JSX.Elemen
 
   return (
     <div class="popover note-meta-popover">
-      <Show when={!meta.error} fallback={<p class="note-meta-error">メタデータを読み取れません</p>}>
+      <Show when={!meta.error} fallback={<p class="note-meta-error">{t().meta.unreadable}</p>}>
         <Show when={meta()}>
           {(m) => (
             <>
               <label class="note-meta-field">
-                <span class="note-meta-label">作成日時</span>
+                <span class="note-meta-label">{t().meta.createdAt}</span>
                 <input
                   type="datetime-local"
                   class="note-meta-input"
@@ -99,14 +100,14 @@ export default function NoteMetaPopover(props: NoteMetaPopoverProps): JSX.Elemen
               <Show when={m().updated}>
                 {(updated) => (
                   <div class="note-meta-field">
-                    <span class="note-meta-label">更新日時</span>
+                    <span class="note-meta-label">{t().meta.updatedAt}</span>
                     <span class="note-meta-readonly">{formatRecordedAt(updated())}</span>
                   </div>
                 )}
               </Show>
 
               <div class="note-meta-field">
-                <span class="note-meta-label">タグ</span>
+                <span class="note-meta-label">{t().common.tags}</span>
                 <div class="note-meta-tags">
                   <For each={tags()}>
                     {(tag) => (
@@ -115,8 +116,10 @@ export default function NoteMetaPopover(props: NoteMetaPopoverProps): JSX.Elemen
                         <button
                           type="button"
                           class="note-meta-tag-remove"
-                          aria-label={`タグ ${tag} を外す`}
-                          onClick={() => setTags((current) => current.filter((t) => t !== tag))}
+                          aria-label={t().meta.removeTag(tag)}
+                          onClick={() =>
+                            setTags((current) => current.filter((kept) => kept !== tag))
+                          }
                         >
                           <Icon name="x" size={10} />
                         </button>
@@ -127,7 +130,7 @@ export default function NoteMetaPopover(props: NoteMetaPopoverProps): JSX.Elemen
                 <input
                   type="text"
                   class="note-meta-input"
-                  placeholder="タグを追加"
+                  placeholder={t().meta.addTag}
                   value={tagInput()}
                   onInput={(e) => setTagInput(e.currentTarget.value)}
                   onKeyDown={(e) => {
@@ -138,12 +141,12 @@ export default function NoteMetaPopover(props: NoteMetaPopoverProps): JSX.Elemen
                     }
                   }}
                 />
-                <span class="note-meta-hint">作成時の記録。本文の #タグ は本文側で編集</span>
+                <span class="note-meta-hint">{t().meta.tagsHint}</span>
               </div>
 
               <Show when={contextRows(m().context).length > 0}>
                 <div class="note-meta-field">
-                  <span class="note-meta-label">記録時の環境</span>
+                  <span class="note-meta-label">{t().meta.context}</span>
                   <div class="note-meta-context">
                     <For each={contextRows(m().context)}>
                       {(row) => (
@@ -159,24 +162,22 @@ export default function NoteMetaPopover(props: NoteMetaPopoverProps): JSX.Elemen
 
               <Show when={props.revertable}>
                 <div class="note-meta-field">
-                  <span class="note-meta-label">この端末のバックアップ</span>
+                  <span class="note-meta-label">{t().meta.backup}</span>
                   <button
                     type="button"
                     class="button-secondary note-meta-revert"
                     onClick={() => props.onRevert?.()}
                   >
                     <Icon name="clock-counter-clockwise" size={14} />
-                    編集前に戻す
+                    {t().meta.revert}
                   </button>
-                  <span class="note-meta-hint">
-                    直前の編集で上書きした本文と入れ替える。もう一度押すと戻る
-                  </span>
+                  <span class="note-meta-hint">{t().meta.revertHint}</span>
                 </div>
               </Show>
 
               <div class="note-meta-actions">
                 <Show when={failed()}>
-                  <span class="note-meta-error">保存できませんでした</span>
+                  <span class="note-meta-error">{t().meta.saveFailed}</span>
                 </Show>
                 <button
                   type="button"
@@ -184,7 +185,7 @@ export default function NoteMetaPopover(props: NoteMetaPopoverProps): JSX.Elemen
                   disabled={saving()}
                   onClick={() => void save()}
                 >
-                  保存
+                  {t().common.save}
                 </button>
               </div>
             </>

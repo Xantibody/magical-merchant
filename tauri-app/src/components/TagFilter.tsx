@@ -1,6 +1,7 @@
 import { For, Show } from "solid-js";
 import type { JSX } from "solid-js";
 import Icon from "./Icon";
+import { t } from "../lib/i18n";
 import type { TagCount } from "../lib/tags";
 
 interface TagFilterProps {
@@ -43,9 +44,9 @@ export default function TagFilter(props: TagFilterProps): JSX.Element {
         <Show when={props.active}>
           {(active) => (
             <span class="tag-filter-status">
-              #{active()} で絞り込み中 · {props.matched}件
+              {t().tagFilter.filtering(active(), props.matched)}
               <button type="button" class="link-button" onClick={() => props.onToggle(null)}>
-                すべて
+                {t().common.all}
               </button>
             </span>
           )}

@@ -1,5 +1,6 @@
 import { Show } from "solid-js";
 import type { JSX } from "solid-js";
+import { t } from "../lib/i18n";
 import { useShell } from "../lib/shell";
 
 export default function UndoToast(): JSX.Element {
@@ -20,7 +21,7 @@ export default function UndoToast(): JSX.Element {
                   undo()();
                 }}
               >
-                元に戻す
+                {t().common.undo}
               </button>
             )}
           </Show>

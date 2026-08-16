@@ -1,4 +1,5 @@
 import type { IconName } from "../components/Icon";
+import { t } from "./i18n";
 
 export interface DeviceContext {
   battery?: number;
@@ -87,6 +88,31 @@ export function getNetworkIcon(ctx: DeviceContext): IconName | null {
     }
     default: {
       return null;
+    }
+  }
+}
+
+/**
+ * 回線の呼び名。記録に残っているのは `WiFi` のような素の値で、これは
+ * 読むための言い換え。タイムラインの行にもメタデータパネルにも出る。
+ */
+export function networkLabel(type: string): string {
+  const labels = t().meta;
+  switch (type) {
+    case "WiFi": {
+      return labels.wifi;
+    }
+    case "Ethernet": {
+      return labels.ethernet;
+    }
+    case "Mobile": {
+      return labels.mobile;
+    }
+    case "Offline": {
+      return labels.offline;
+    }
+    default: {
+      return type;
     }
   }
 }

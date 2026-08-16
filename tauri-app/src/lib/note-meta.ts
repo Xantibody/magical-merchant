@@ -8,6 +8,8 @@
  */
 
 import type { NoteContext } from "./commands";
+import { t } from "./i18n";
+import { networkLabel } from "./parse-timeline";
 import { normalizeTag } from "./tags";
 
 /** RFC 3339 の time を datetime-local input の値(分まで)にする。 */
@@ -54,13 +56,6 @@ export function addTag(tags: string[], raw: string): string[] {
   return [...tags, tag];
 }
 
-const NETWORK_LABELS: Record<string, string> = {
-  WiFi: "Wi-Fi",
-  Ethernet: "有線",
-  Mobile: "モバイル回線",
-  Offline: "オフライン",
-};
-
 export interface ContextRow {
   label: string;
   value: string;
@@ -71,33 +66,31 @@ export function contextRows(ctx: NoteContext | undefined): ContextRow[] {
   if (!ctx) {
     return [];
   }
+  const labels = t().meta;
   const rows: ContextRow[] = [];
   if (ctx.os) {
-    rows.push({ label: "OS", value: [ctx.os, ctx.os_version].filter(Boolean).join(" ") });
+    rows.push({ label: labels.os, value: [ctx.os, ctx.os_version].filter(Boolean).join(" ") });
   }
   if (ctx.battery !== undefined) {
     rows.push({
-      label: "バッテリー",
-      value: `${ctx.battery}%${ctx.is_charging ? " (充電中)" : ""}`,
+      label: labels.battery,
+      value: `${ctx.battery}%${ctx.is_charging ? ` (${labels.charging})` : ""}`,
     });
   }
   if (ctx.network_type) {
-    rows.push({
-      label: "ネットワーク",
-      value: NETWORK_LABELS[ctx.network_type] ?? ctx.network_type,
-    });
+    rows.push({ label: labels.network, value: networkLabel(ctx.network_type) });
   }
   if (ctx.hostname) {
-    rows.push({ label: "ホスト名", value: ctx.hostname });
+    rows.push({ label: labels.hostname, value: ctx.hostname });
   }
   if (ctx.location) {
     rows.push({
-      label: "位置",
+      label: labels.location,
       value: `${ctx.location.latitude.toFixed(4)}, ${ctx.location.longitude.toFixed(4)}`,
     });
   }
   if (ctx.locale) {
-    rows.push({ label: "ロケール", value: ctx.locale });
+    rows.push({ label: labels.locale, value: ctx.locale });
   }
   return rows;
 }

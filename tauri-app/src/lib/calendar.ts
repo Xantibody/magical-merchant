@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import type { DeviceContext } from "./parse-timeline";
 
 export interface MonthCell {
@@ -7,7 +8,10 @@ export interface MonthCell {
   inMonth: boolean;
 }
 
-export const WEEKDAY_LABELS = ["月", "火", "水", "木", "金", "土", "日"] as const;
+/** 曜日の見出し。週の始まりは月曜で固定する。 */
+export function weekdayLabels(): readonly string[] {
+  return t().calendar.weekdays;
+}
 
 const DAYS_IN_GRID = 42;
 
@@ -43,7 +47,7 @@ export function shiftMonth(year: number, month: number, delta: number): [number,
 }
 
 export function formatMonthTitle(year: number, month: number): string {
-  return `${year}年${month + 1}月`;
+  return t().calendar.monthTitle(year, month);
 }
 
 interface Tally {

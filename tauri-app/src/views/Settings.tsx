@@ -1,6 +1,8 @@
-import { createSignal, onMount, onCleanup, Show } from "solid-js";
+import { createSignal, For, onMount, onCleanup, Show } from "solid-js";
 import { typedInvoke } from "../lib/commands";
 import { EVENTS } from "../lib/events";
+import { applyLocale, readStoredLocale, t } from "../lib/i18n";
+import type { LocalePreference } from "../lib/i18n";
 import { listen } from "@tauri-apps/api/event";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import "../styles/settings.css";
@@ -12,6 +14,13 @@ export default function Settings(): JSX.Element {
   const [editable, setEditable] = createSignal(false);
   const [saving, setSaving] = createSignal(false);
   const [message, setMessage] = createSignal("");
+  const [localePreference, setLocalePreference] =
+    createSignal<LocalePreference>(readStoredLocale());
+
+  const chooseLocale = (preference: LocalePreference): void => {
+    setLocalePreference(preference);
+    applyLocale(preference);
+  };
 
   const unlisteners: UnlistenFn[] = [];
 
@@ -44,13 +53,13 @@ export default function Settings(): JSX.Element {
     unlisteners.push(
       await listen(EVENTS.AUTH_SUCCESS, () => {
         setAuthenticated(true);
-        flash("ログインしました");
+        flash(t().settings.signedInMessage);
       }),
     );
     unlisteners.push(
       await listen<string>(EVENTS.AUTH_ERROR, (e) => {
         setAuthenticated(false);
-        setMessage(`ログインに失敗しました: ${e.payload}`);
+        setMessage(t().settings.signInFailed(String(e.payload)));
       }),
     );
   });
@@ -70,16 +79,16 @@ export default function Settings(): JSX.Element {
       await typedInvoke("save_sync_config", {
         config: { ...current, workers_url: workersUrl() },
       });
-      flash("保存しました");
+      flash(t().common.saved);
     } catch (error) {
-      setMessage(`保存できませんでした: ${error}`);
+      setMessage(t().settings.saveFailed(String(error)));
     } finally {
       setSaving(false);
     }
   };
 
   const login = async (): Promise<void> => {
-    setMessage("ブラウザで続けてください…");
+    setMessage(t().settings.continueInBrowser);
     try {
       // デスクトップ(ループバック)はコマンド完了時点でトークン保存済み。
       // Android はブラウザを開くだけで、完了はディープリンクの auth-success で通知される
@@ -87,10 +96,10 @@ export default function Settings(): JSX.Element {
       const status = await typedInvoke("auth_status");
       setAuthenticated(status);
       if (status) {
-        flash("ログインしました");
+        flash(t().settings.signedInMessage);
       }
     } catch (error) {
-      setMessage(`ログインに失敗しました: ${error}`);
+      setMessage(t().settings.signInFailed(String(error)));
     }
   };
 
@@ -98,16 +107,45 @@ export default function Settings(): JSX.Element {
     try {
       await typedInvoke("auth_logout");
       setAuthenticated(false);
-      flash("ログアウトしました");
+      flash(t().settings.signedOutMessage);
     } catch (error) {
-      setMessage(`ログアウトできませんでした: ${error}`);
+      setMessage(t().settings.signOutFailed(String(error)));
     }
   };
 
   return (
     <div class="settings-scroll">
       <div class="settings">
-        <h1 class="settings-title">設定</h1>
+        <h1 class="settings-title">{t().settings.title}</h1>
+
+        <section class="settings-section">
+          <h2 class="settings-section-label">LANGUAGE</h2>
+          {/* テーマと違い巡回では選べない。押すたびに読めない言語を通る */}
+          <div class="settings-choices" role="radiogroup" aria-label={t().settings.language}>
+            <For
+              each={
+                [
+                  ["system", t().settings.languageSystem],
+                  ["ja", t().settings.languageJa],
+                  ["en", t().settings.languageEn],
+                ] as [LocalePreference, string][]
+              }
+            >
+              {([preference, label]) => (
+                <button
+                  type="button"
+                  role="radio"
+                  class="settings-choice"
+                  classList={{ "settings-choice--on": localePreference() === preference }}
+                  aria-checked={localePreference() === preference}
+                  onClick={() => chooseLocale(preference)}
+                >
+                  {label}
+                </button>
+              )}
+            </For>
+          </div>
+        </section>
 
         <section class="settings-section">
           <h2 class="settings-section-label">SERVER</h2>
@@ -116,7 +154,7 @@ export default function Settings(): JSX.Element {
             fallback={
               <p class="settings-readonly">
                 Workers URL
-                <span>{workersUrl() || "未設定"}</span>
+                <span>{workersUrl() || t().settings.notSet}</span>
               </p>
             }
           >
@@ -137,7 +175,7 @@ export default function Settings(): JSX.Element {
                 onClick={() => void save()}
                 disabled={saving()}
               >
-                {saving() ? "保存中…" : "保存"}
+                {saving() ? t().common.saving : t().common.save}
               </button>
             </div>
           </Show>
@@ -148,7 +186,7 @@ export default function Settings(): JSX.Element {
 
           <p class="settings-status">
             <span class="settings-dot" classList={{ "settings-dot--on": authenticated() }} />
-            {authenticated() ? "ログイン済み" : "未ログイン"}
+            {authenticated() ? t().settings.signedIn : t().settings.notSignedIn}
           </p>
 
           <div class="settings-actions">
@@ -161,18 +199,18 @@ export default function Settings(): JSX.Element {
                   onClick={() => void login()}
                   disabled={!workersUrl().trim()}
                 >
-                  Google でログイン
+                  {t().settings.signInGoogle}
                 </button>
               }
             >
               <button type="button" class="button-secondary" onClick={() => void logout()}>
-                ログアウト
+                {t().settings.signOut}
               </button>
             </Show>
           </div>
 
           <Show when={!authenticated() && !workersUrl().trim()}>
-            <p class="settings-hint">ログインするには、先に Workers URL を保存してください。</p>
+            <p class="settings-hint">{t().settings.signInHint}</p>
           </Show>
         </section>
 
