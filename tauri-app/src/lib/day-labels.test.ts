@@ -7,8 +7,26 @@ import {
   formatNoteGroupLabel,
   formatDateTime,
 } from "./day-labels";
+import { setLocale } from "./i18n";
 
 const TODAY = new Date(2026, 7, 4); // 2026-08-04
+
+// 見出しは言語ごとに語も並びも変わる。日本語だけ見ていると、英語で
+// 「8月4日 Monday」のような混ざった行が出ても気付けない
+describe("in english", () => {
+  it("names the day in english", () => {
+    setLocale("en");
+    expect(formatDayHeading("2026-08-04", TODAY)).toStrictEqual({
+      label: "Today",
+      date: "Aug 4 Tuesday",
+    });
+  });
+
+  it("names the note group in english", () => {
+    setLocale("en");
+    expect(formatNoteGroupLabel("2026-07-20", TODAY)).toBe("Earlier");
+  });
+});
 
 describe("parseIsoDate", () => {
   it("reads the date in local time, not UTC", () => {

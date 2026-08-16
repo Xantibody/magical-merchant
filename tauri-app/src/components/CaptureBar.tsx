@@ -1,6 +1,7 @@
 import { createSignal, createMemo, For, Show } from "solid-js";
 import type { JSX } from "solid-js";
 import Icon from "./Icon";
+import { t } from "../lib/i18n";
 import { isImeComposing } from "../lib/ime";
 import { matchTagPrefix, tagDraftAt } from "../lib/tags";
 import type { TagCount } from "../lib/tags";
@@ -143,8 +144,8 @@ export default function CaptureBar(props: CaptureBarProps): JSX.Element {
   return (
     <div class="capture-bar">
       <Show when={rows() > 0}>
-        <div class="tag-suggest" role="listbox" aria-label="タグ候補">
-          <span class="tag-suggest-label">タグ</span>
+        <div class="tag-suggest" role="listbox" aria-label={t().capture.suggestLabel}>
+          <span class="tag-suggest-label">{t().common.tags}</span>
           <For each={suggestions()}>
             {(suggestion, i) => (
               <button
@@ -175,7 +176,7 @@ export default function CaptureBar(props: CaptureBarProps): JSX.Element {
                 complete(draft() ?? "");
               }}
             >
-              +「#{draft()}」を新規タグとして確定
+              {t().capture.newTag(draft() ?? "")}
             </button>
           </Show>
         </div>
@@ -185,7 +186,7 @@ export default function CaptureBar(props: CaptureBarProps): JSX.Element {
         ref={textareaRef}
         rows={1}
         class="capture-input"
-        placeholder="What's on your mind?"
+        placeholder={t().capture.placeholder}
         value={text()}
         onInput={(e) => {
           setText(e.currentTarget.value);

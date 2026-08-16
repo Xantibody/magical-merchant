@@ -24,6 +24,7 @@ import type { ItemGroup, NoteItem } from "../lib/items";
 import { readNoteContent, toggledView, viewToFrontmatter } from "../lib/note-view";
 import type { NoteView } from "../lib/note-view";
 import { joinTitle, splitTitle } from "../lib/note-title";
+import { t } from "../lib/i18n";
 import { isImeComposing } from "../lib/ime";
 import {
   beginEditSession,
@@ -61,8 +62,8 @@ function EmptyNotes(): JSX.Element {
   return (
     <div class="notes-empty">
       <Icon name="note-pencil" size={24} />
-      <p class="notes-empty-title">ノートがありません</p>
-      <p class="notes-empty-body">新規から始めると、ここに並びます。</p>
+      <p class="notes-empty-title">{t().notes.empty}</p>
+      <p class="notes-empty-body">{t().notes.emptyHint}</p>
     </div>
   );
 }
@@ -385,7 +386,7 @@ export default function Workspace(): JSX.Element {
         client: await getDeviceSignals(),
       });
     } catch {
-      shell.showToast("戻せませんでした");
+      shell.showToast(t().notes.revertFailed);
       return;
     }
     writeBackup(localStorage, item.filename, current);
@@ -396,7 +397,7 @@ export default function Workspace(): JSX.Element {
     });
     shell.closePopovers();
     await refetchNotes();
-    shell.showToast("編集前の内容に戻しました");
+    shell.showToast(t().notes.reverted);
   };
 
   // タイムラインからの昇格 (?edit=1) は、本文が届き次第そのまま書き始める。
@@ -467,7 +468,7 @@ export default function Workspace(): JSX.Element {
       })();
     }, UNDO_MS);
 
-    shell.showToast("ノートを削除しました", () => {
+    shell.showToast(t().notes.deleted, () => {
       clearTimeout(commit);
       setHidden((ids) => ids.filter((id) => id !== item.id));
     });
@@ -480,7 +481,7 @@ export default function Workspace(): JSX.Element {
           <span class="list-pane-title">NOTES</span>
           <button type="button" class="new-note" onClick={() => void createNote()}>
             <Icon name="plus" size={12} />
-            新規
+            {t().notes.new}
           </button>
         </div>
 
@@ -516,14 +517,14 @@ export default function Workspace(): JSX.Element {
       </div>
 
       <div class="detail-pane">
-        <Show when={selected()} fallback={<div class="detail-empty">項目がありません</div>}>
+        <Show when={selected()} fallback={<div class="detail-empty">{t().notes.noSelection}</div>}>
           {(item) => (
             <>
               <div class="detail-meta-bar">
                 <button
                   type="button"
                   class="icon-button detail-back"
-                  aria-label="一覧に戻る"
+                  aria-label={t().notes.backToList}
                   onClick={() => {
                     // 編集したまま戻ると、一覧の上にツールバーだけが残る。
                     // 見えなくなった編集対象に効くボタンが浮いていることになる。
@@ -539,7 +540,7 @@ export default function Workspace(): JSX.Element {
                   <span class="detail-created">{noteCreatedLabel(item())}</span>
                   <Show when={editing() && saveStatus() !== "idle"}>
                     <span class="detail-save-status">
-                      {saveStatus() === "saving" ? "保存中…" : "保存しました"}
+                      {saveStatus() === "saving" ? t().common.saving : t().common.saved}
                     </span>
                   </Show>
                 </span>
@@ -549,9 +550,11 @@ export default function Workspace(): JSX.Element {
                     <button
                       type="button"
                       class="icon-button"
-                      title={noteView() === "mindmap" ? "エディタで表示" : "マインドマップで表示"}
+                      title={
+                        noteView() === "mindmap" ? t().notes.showEditor : t().notes.showMindmap
+                      }
                       aria-label={
-                        noteView() === "mindmap" ? "エディタで表示" : "マインドマップで表示"
+                        noteView() === "mindmap" ? t().notes.showEditor : t().notes.showMindmap
                       }
                       aria-pressed={noteView() === "mindmap"}
                       onClick={() => void toggleNoteView(item())}
@@ -565,8 +568,8 @@ export default function Workspace(): JSX.Element {
                   <button
                     type="button"
                     class="icon-button detail-meta-button"
-                    title="ノート情報"
-                    aria-label="ノート情報"
+                    title={t().notes.info}
+                    aria-label={t().notes.info}
                     aria-expanded={shell.popover() === "note-meta"}
                     onClick={() => shell.togglePopover("note-meta")}
                   >
@@ -577,8 +580,8 @@ export default function Workspace(): JSX.Element {
                     <button
                       type="button"
                       class="icon-button"
-                      title="編集を終える"
-                      aria-label="編集を終える"
+                      title={t().notes.finishEditing}
+                      aria-label={t().notes.finishEditing}
                       onClick={() => void stopEditing()}
                     >
                       <Icon name="check" size={17} />
@@ -587,8 +590,8 @@ export default function Workspace(): JSX.Element {
                   <button
                     type="button"
                     class="icon-button"
-                    title="削除"
-                    aria-label="削除"
+                    title={t().common.delete}
+                    aria-label={t().common.delete}
                     onClick={() => remove(item())}
                   >
                     <Icon name="trash" size={17} />
@@ -614,8 +617,8 @@ export default function Workspace(): JSX.Element {
               <input
                 type="text"
                 class="note-title-input"
-                placeholder="タイトル"
-                aria-label="タイトル"
+                placeholder={t().notes.titlePlaceholder}
+                aria-label={t().notes.titlePlaceholder}
                 value={noteTitle()}
                 onInput={(e) => editTitle(e.currentTarget.value)}
                 onChange={() => void commitTitle()}
@@ -648,7 +651,7 @@ export default function Workspace(): JSX.Element {
                           <Show when={(backlinks() ?? []).length > 0}>
                             <details class="backlinks">
                               <summary class="backlinks-summary">
-                                リンクされている記録 ({(backlinks() ?? []).length})
+                                {t().notes.backlinks((backlinks() ?? []).length)}
                               </summary>
                               <div class="backlinks-list">
                                 <For each={backlinks()}>
@@ -682,7 +685,7 @@ export default function Workspace(): JSX.Element {
                   }
                 >
                   <MilkdownEditor
-                    placeholder="ノートを書く…"
+                    placeholder={t().notes.bodyPlaceholder}
                     caret={tapCaret()}
                     noteLinks={linkTargets}
                     defaultValue={draft()}

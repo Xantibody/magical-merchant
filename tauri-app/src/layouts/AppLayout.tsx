@@ -10,7 +10,8 @@ import UndoToast from "../components/UndoToast";
 import FirstRunCard from "../components/FirstRunCard";
 import { ShellProvider, useShell } from "../lib/shell";
 import { createSyncState, syncIconName } from "../lib/sync";
-import { applyTheme, nextTheme, readStoredTheme, THEME_ICONS, THEME_LABELS } from "../lib/theme";
+import { applyTheme, nextTheme, readStoredTheme, THEME_ICONS } from "../lib/theme";
+import { t } from "../lib/i18n";
 import type { Theme } from "../lib/theme";
 import { MODE_ICONS, MODE_LABELS, ROUTES } from "../lib/routes";
 import type { RoutePath } from "../lib/routes";
@@ -160,7 +161,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
 
         <button type="button" class="search-field" onClick={() => shell.openPalette()}>
           <Icon name="magnifying-glass" size={15} />
-          <span class="search-field-label">検索・コマンド…</span>
+          <span class="search-field-label">{t().header.searchPlaceholder}</span>
           <span class="key-badge">⌘K</span>
         </button>
 
@@ -169,8 +170,8 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
           <button
             type="button"
             class="icon-button header-action header-action--search"
-            title="検索"
-            aria-label="検索"
+            title={t().header.search}
+            aria-label={t().header.search}
             onClick={() => shell.openPalette()}
           >
             <Icon name="magnifying-glass" size={18} />
@@ -180,8 +181,8 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
             <button
               type="button"
               class="icon-button header-action"
-              title="日付ジャンプ"
-              aria-label="日付ジャンプ"
+              title={t().header.jumpToDate}
+              aria-label={t().header.jumpToDate}
               aria-expanded={shell.popover() === "calendar"}
               onClick={() => shell.togglePopover("calendar")}
             >
@@ -191,8 +192,8 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
           <button
             type="button"
             class="icon-button header-action"
-            title="同期"
-            aria-label="同期"
+            title={t().header.sync}
+            aria-label={t().header.sync}
             aria-expanded={shell.popover() === "sync"}
             onClick={() => shell.togglePopover("sync")}
           >
@@ -202,12 +203,12 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
           <button
             type="button"
             class="icon-button header-action header-action--theme"
-            aria-label={`テーマ: ${THEME_LABELS[theme()]}`}
+            aria-label={t().header.theme(t().theme[theme()])}
             onClick={() => setTheme(nextTheme(theme()))}
           >
             <Icon name={THEME_ICONS[theme()]} size={18} />
             <span class="header-tooltip" aria-hidden="true">
-              {THEME_LABELS[theme()]}
+              {t().theme[theme()]}
             </span>
           </button>
           <A
@@ -251,14 +252,14 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
           commands={[
             {
               id: "new-note",
-              label: "新規ノート",
+              label: t().palette.newNote,
               icon: "note-pencil",
               shortcut: "⌘N",
               run: newNote,
             },
             {
               id: "sync-now",
-              label: "今すぐ同期",
+              label: t().sync.now,
               icon: "cloud-arrow-up",
               run: () => {
                 shell.closePalette();

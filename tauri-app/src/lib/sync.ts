@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { onLocalMutation, typedInvoke } from "./commands";
 import { EVENTS } from "./events";
+import { t } from "./i18n";
 import { describeSyncError, describeSyncResult } from "./sync-status";
 import type { SyncResultPayload } from "./sync-status";
 import type { IconName } from "../components/Icon";
@@ -45,16 +46,16 @@ export function syncIconName(status: SyncStatus): IconName {
 export function formatRelativeTime(from: Date, now: Date): string {
   const minutes = Math.floor((now.getTime() - from.getTime()) / 60_000);
   if (minutes < 1) {
-    return "たった今";
+    return t().sync.justNow;
   }
   if (minutes < 60) {
-    return `${minutes}分前`;
+    return t().sync.minutesAgo(minutes);
   }
   const hours = Math.floor(minutes / 60);
   if (hours < 24) {
-    return `${hours}時間前`;
+    return t().sync.hoursAgo(hours);
   }
-  return `${Math.floor(hours / 24)}日前`;
+  return t().sync.daysAgo(Math.floor(hours / 24));
 }
 
 export function createSyncState(onSynced: () => void): SyncState {
@@ -72,19 +73,19 @@ export function createSyncState(onSynced: () => void): SyncState {
       setAutoSyncSignal(config.auto_sync);
       if (!config.workers_url) {
         setStatus("needs-setup");
-        setMessage("同期は未設定です");
+        setMessage(t().sync.notConfigured);
         return;
       }
       if (!(await typedInvoke("auth_status"))) {
         setStatus("needs-setup");
-        setMessage("ログインしていません");
+        setMessage(t().sync.notSignedIn);
         return;
       }
       setStatus("idle");
       setMessage("");
     } catch {
       setStatus("needs-setup");
-      setMessage("同期は未設定です");
+      setMessage(t().sync.notConfigured);
     }
   };
 
@@ -103,7 +104,7 @@ export function createSyncState(onSynced: () => void): SyncState {
       return;
     }
     setStatus("syncing");
-    setMessage("同期中…");
+    setMessage(t().sync.syncing);
     try {
       await typedInvoke("sync_start");
       // 結果は sync-complete / sync-error イベントで反映する

@@ -1,5 +1,6 @@
 import type { Note } from "./commands";
 import { formatNoteGroupLabel } from "./day-labels";
+import { t } from "./i18n";
 import { parseTimelineEntry } from "./parse-timeline";
 import { isPreservedEmptyLine } from "./preserved-empty-line";
 import type { DeviceContext } from "./parse-timeline";
@@ -36,7 +37,8 @@ export interface ItemGroup {
   items: Item[];
 }
 
-const UNTITLED = "(空のメモ)";
+/** 題を持たない記録の呼び名。一覧の行が空欄になるのを避けるためだけのもの。 */
+const untitled = (): string => t().notes.untitled;
 
 function firstLine(text: string): string {
   // Milkdown は空行を <br /> 行として保存する。タイトルはそれも読み飛ばす
@@ -75,7 +77,7 @@ export function toNoteItems(notes: Note[]): NoteItem[] {
     path: note.path,
     date: note.time?.slice(0, 10) ?? "",
     time: note.time?.slice(11, 16) ?? "",
-    title: firstLine(note.preview) || UNTITLED,
+    title: firstLine(note.preview) || untitled(),
     tags: note.tags,
     preview: note.preview,
     origin: note.origin,
@@ -193,7 +195,7 @@ export function itemMeta(item: Item): string {
     return [item.time.slice(0, 5), item.context?.os].filter(Boolean).join(" · ");
   }
   const date = item.date ? item.date.slice(5).replace("-", "/") : "";
-  const tags = item.tags.map((t) => `#${t}`).join(" ");
+  const tags = item.tags.map((tag) => `#${tag}`).join(" ");
   return [date, tags].filter(Boolean).join(" · ");
 }
 
@@ -208,5 +210,5 @@ export function noteCreatedLabel(item: NoteItem): string {
 }
 
 export function itemTitle(item: Item): string {
-  return item.kind === "timeline" ? firstLine(item.text) || UNTITLED : item.title;
+  return item.kind === "timeline" ? firstLine(item.text) || untitled() : item.title;
 }

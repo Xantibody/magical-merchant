@@ -1,3 +1,5 @@
+import { t } from "./i18n";
+
 /** `YYYY-MM-DD` を UTC ではなくローカル日付として読む。 */
 export function parseIsoDate(iso: string): Date | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
@@ -21,23 +23,21 @@ export function daysBetween(from: Date, to: Date): number {
   return Math.round((b.getTime() - a.getTime()) / 86_400_000);
 }
 
-const WEEKDAYS = ["日曜日", "月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日"];
-
 /** 日グループの見出し。見出し語と、その下に添える日付に分けて返す。 */
 export function formatDayHeading(iso: string, today: Date): { label: string; date: string } {
   const date = parseIsoDate(iso);
   if (!date) {
     return { label: iso, date: "" };
   }
-  const day = `${date.getMonth() + 1}月${date.getDate()}日`;
-  const weekday = WEEKDAYS[date.getDay()];
+  const day = t().day.monthDay(date.getMonth() + 1, date.getDate());
+  const weekday = t().day.weekdays[date.getDay()];
   const diff = daysBetween(date, today);
 
   if (diff === 0) {
-    return { label: "今日", date: `${day} ${weekday}` };
+    return { label: t().day.today, date: `${day} ${weekday}` };
   }
   if (diff === 1) {
-    return { label: "昨日", date: `${day} ${weekday}` };
+    return { label: t().day.yesterday, date: `${day} ${weekday}` };
   }
   // ここまで来ると「N 日前」は数えないと分からない。日付を見出しに上げる。
   return { label: day, date: weekday };
@@ -47,19 +47,19 @@ export function formatDayHeading(iso: string, today: Date): { label: string; dat
 export function formatNoteGroupLabel(iso: string, today: Date): string {
   const date = parseIsoDate(iso);
   if (!date) {
-    return "日付なし";
+    return t().day.noDate;
   }
   const diff = daysBetween(date, today);
   if (diff < 0) {
-    return "今週";
+    return t().day.thisWeek;
   }
   if (diff < 7) {
-    return "今週";
+    return t().day.thisWeek;
   }
   if (diff < 14) {
-    return "先週";
+    return t().day.lastWeek;
   }
-  return "それ以前";
+  return t().day.earlier;
 }
 
 /** 詳細ペインのメタバー。「2026-08-04 15:27」 */

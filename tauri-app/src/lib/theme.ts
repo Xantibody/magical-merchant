@@ -17,12 +17,6 @@ export function nextTheme(current: Theme): Theme {
   return THEMES[(at + 1) % THEMES.length];
 }
 
-export const THEME_LABELS: Record<Theme, string> = {
-  system: "システム",
-  light: "ライト",
-  dark: "ダーク",
-};
-
 export const THEME_ICONS: Record<Theme, IconName> = {
   system: "circle-half",
   light: "sun",

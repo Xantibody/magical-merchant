@@ -10,6 +10,7 @@ import {
 } from "@milkdown/kit/preset/commonmark";
 import type { Command } from "@milkdown/kit/prose/state";
 import { deleteCurrentBlock, exitCodeBlock } from "../lib/block-commands";
+import { t } from "../lib/i18n";
 import Icon from "./Icon";
 import type { JSX } from "solid-js";
 
@@ -152,8 +153,8 @@ export default function MarkdownToolbar(props: MarkdownToolbarProps): JSX.Elemen
             type="button"
             onPointerDown={(e) => e.preventDefault()}
             onClick={() => execCommand(exitCodeBlock)}
-            aria-label="ブロックから抜ける"
-            title="ブロックから抜ける"
+            aria-label={t().editor.exitBlock}
+            title={t().editor.exitBlock}
           >
             <Icon name="arrow-line-down" size={18} />
           </button>
@@ -161,8 +162,8 @@ export default function MarkdownToolbar(props: MarkdownToolbarProps): JSX.Elemen
             type="button"
             onPointerDown={(e) => e.preventDefault()}
             onClick={() => execCommand(deleteCurrentBlock)}
-            aria-label="ブロックを削除"
-            title="ブロックを削除"
+            aria-label={t().editor.deleteBlock}
+            title={t().editor.deleteBlock}
           >
             <Icon name="trash" size={18} />
           </button>
