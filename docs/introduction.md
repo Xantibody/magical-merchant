@@ -5,6 +5,10 @@ Markdown file written to the device; the network is only involved when the
 optional background sync runs. This page maps the moving parts and the
 decisions behind them.
 
+Other guides: [Feature tour](features.md) ·
+[Development](development.md) · [Install](install.md) ·
+[Sync backend](sync.md)
+
 ## System overview
 
 ```mermaid
