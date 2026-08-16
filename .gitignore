@@ -50,3 +50,12 @@ plans/
 
 # Profiling artifacts
 profiles/
+
+# macOS がディレクトリを開くたびに置いていくもの
+.DS_Store
+
+# 手元の下書き・受け取りもの。リポジトリに入れる前提のものではない
+/claude/
+/design_handoff_timeline_redesign/
+/plan-*.md
+*.zip
