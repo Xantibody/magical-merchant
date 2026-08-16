@@ -12,7 +12,7 @@
 }:
 stdenv.mkDerivation (finalAttrs: {
   pname = "magical-merchant";
-  version = "0.1.0";
+  version = "0.2.0";
 
   src = lib.fileset.toSource {
     root = ../.;
@@ -42,7 +42,7 @@ stdenv.mkDerivation (finalAttrs: {
     pnpm = pnpm_10;
     sourceRoot = "${finalAttrs.src.name}/tauri-app";
     fetcherVersion = 3;
-    hash = "sha256-MQ1tFmm80rItS5rl6zxU/Rxa7irTf7OoXbLjmpxte/o=";
+    hash = "sha256-t+83j0+oVZ/gMzo7sm7i8I+CTzoydBVsU9fzZK2l8jo=";
   };
 
   nativeBuildInputs = [
@@ -59,6 +59,10 @@ stdenv.mkDerivation (finalAttrs: {
   pnpmRoot = "tauri-app";
 
   env.tauriBundleType = "app";
+
+  # The sandbox has neither codesign nor xattr, and a Developer ID signature
+  # cannot exist in a nix build anyway; the linker's ad-hoc one is enough
+  tauriBuildFlags = [ "--no-sign" ];
 
   meta = {
     description = "Minimal note-taking desktop app";
