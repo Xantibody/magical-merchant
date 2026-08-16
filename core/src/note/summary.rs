@@ -74,6 +74,7 @@ mod tests {
             }),
             view: None,
             origin: None,
+            updated: None,
         };
         let content = frontmatter::render(&fm, "# Title\nBody").unwrap();
         let summary = Summary::from_file(
@@ -99,6 +100,7 @@ mod tests {
             context: None,
             view: None,
             origin: Some("2026-08-13T08:30:00".to_string()),
+            updated: None,
         };
         let content = frontmatter::render(&fm, "body").unwrap();
         let summary = Summary::from_file(

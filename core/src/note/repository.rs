@@ -93,17 +93,25 @@ impl Notes {
     /// - context: どの端末で書いたかの記録。編集端末で上書きしない
     ///
     /// frontmatter が読めないファイルだけ、今この場の時刻と端末で作り直す。
+    ///
+    /// 唯一ここが書き足すのが `updated`。本文を書き直したのはこの経路だけで、
+    /// メタデータや表示モードの差し替えは「書き直し」ではない。
     pub(crate) fn update(path: &Path, body: &str, context: &Context) -> Result<(), CoreError> {
         let existing = fs::read_to_string(path).unwrap_or_default();
+        let now = Local::now();
         let fm = frontmatter::parse::<NoteFrontmatter>(&existing).map_or_else(
             |_| NoteFrontmatter {
-                time: Local::now().into(),
+                time: now.into(),
                 tags: Vec::new(),
                 context: Some(context.clone()),
                 view: None,
                 origin: None,
+                updated: None,
             },
-            |(fm, _)| fm,
+            |(fm, _)| NoteFrontmatter {
+                updated: Some(now.into()),
+                ..fm
+            },
         );
 
         let markdown = frontmatter::render(&fm, body)?;
@@ -138,6 +146,7 @@ impl Notes {
             context: existing.context,
             view: existing.view,
             origin: existing.origin,
+            updated: existing.updated,
         };
         write_atomic(&path, frontmatter::render(&fm, body)?)?;
         Ok(())

@@ -21,6 +21,12 @@ pub struct NoteFrontmatter {
     /// この値から毎回導出する(エントリ側のファイルには何も書かない)。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub origin: Option<String>,
+    /// 本文を最後に書き直した時刻。`time` は作成時刻に固定されている(一覧が
+    /// ファイル名順に並ぶ)ので、書き直した事実はここにしか残らない。
+    /// 一度も編集していないノートには書かない — 既定値を書くと、触っても
+    /// いないノートの frontmatter が全部変わって同期が丸ごと走る。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub updated: Option<DateTime<FixedOffset>>,
 }
 
 pub fn render<T: Serialize>(fm: &T, body: &str) -> Result<String, CoreError> {
@@ -79,6 +85,7 @@ mod tests {
             }),
             view: None,
             origin: None,
+            updated: None,
         };
         let rendered = render(&fm, "# Hello\nWorld").unwrap();
         let (parsed, body): (NoteFrontmatter, _) = parse(&rendered).unwrap();
@@ -94,6 +101,7 @@ mod tests {
             context: None,
             view: Some("mindmap".to_string()),
             origin: None,
+            updated: None,
         };
         let rendered = render(&fm, "body").unwrap();
         let (parsed, _body): (NoteFrontmatter, _) = parse(&rendered).unwrap();
@@ -110,6 +118,7 @@ mod tests {
             context: None,
             view: None,
             origin: None,
+            updated: None,
         };
         let rendered = render(&fm, "body").unwrap();
         assert!(!rendered.contains("view"));
@@ -124,6 +133,45 @@ mod tests {
     }
 
     #[test]
+    fn test_note_frontmatter_updated_roundtrip() {
+        let fm = NoteFrontmatter {
+            time: sample_datetime(),
+            tags: vec![],
+            context: None,
+            view: None,
+            origin: None,
+            updated: Some(sample_datetime()),
+        };
+        let rendered = render(&fm, "body").unwrap();
+        let (parsed, _body): (NoteFrontmatter, _) = parse(&rendered).unwrap();
+        assert_eq!(parsed.updated, Some(sample_datetime()));
+    }
+
+    /// 一度も編集していないノートに更新日時は無い。空の値でも書けば、
+    /// 全ノートの frontmatter が書き換わって同期が丸ごと走る。
+    #[test]
+    fn test_render_omits_absent_updated() {
+        let fm = NoteFrontmatter {
+            time: sample_datetime(),
+            tags: vec![],
+            context: None,
+            view: None,
+            origin: None,
+            updated: None,
+        };
+        let rendered = render(&fm, "body").unwrap();
+        assert!(!rendered.contains("updated"));
+    }
+
+    /// updated キーを知らない版のアプリが書いたノートも今まで通り読める。
+    #[test]
+    fn test_parse_defaults_updated_to_none() {
+        let yaml = "---\ntime: 2026-03-20T14:30:45+09:00\ntags: []\n---\nbody";
+        let (fm, _body): (NoteFrontmatter, &str) = parse(yaml).unwrap();
+        assert_eq!(fm.updated, None);
+    }
+
+    #[test]
     fn test_note_frontmatter_origin_roundtrip() {
         let fm = NoteFrontmatter {
             time: sample_datetime(),
@@ -131,6 +179,7 @@ mod tests {
             context: None,
             view: None,
             origin: Some("2026-08-13T08:30:00".to_string()),
+            updated: None,
         };
         let rendered = render(&fm, "body").unwrap();
         let (parsed, _body): (NoteFrontmatter, _) = parse(&rendered).unwrap();
@@ -147,6 +196,7 @@ mod tests {
             context: None,
             view: None,
             origin: None,
+            updated: None,
         };
         let rendered = render(&fm, "body").unwrap();
         assert!(!rendered.contains("origin"));
@@ -168,6 +218,7 @@ mod tests {
             context: None,
             view: None,
             origin: None,
+            updated: None,
         };
         let rendered = render(&fm, "body").unwrap();
         let (parsed, _body): (NoteFrontmatter, _) = parse(&rendered).unwrap();
@@ -182,6 +233,7 @@ mod tests {
             context: None,
             view: None,
             origin: None,
+            updated: None,
         };
         let rendered = render(&fm, "body").unwrap();
         assert!(rendered.starts_with("---\n"));
