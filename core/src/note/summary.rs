@@ -32,6 +32,10 @@ impl Summary {
 
         // 本文に書かれた `#タグ` が今の入力方法。frontmatter に残っているのは
         // タグ欄で付けていた頃のもので、消すと過去のノートから分類が消える。
+        // 見せる形は本文側の規則に合わせる — ファイルの中身には手を付けない。
+        for tag in &mut tags {
+            tag.make_ascii_lowercase();
+        }
         for tag in tags::parse(body) {
             if !tags.contains(&tag) {
                 tags.push(tag);
@@ -74,6 +78,7 @@ mod tests {
             }),
             view: None,
             origin: None,
+            updated: None,
         };
         let content = frontmatter::render(&fm, "# Title\nBody").unwrap();
         let summary = Summary::from_file(
@@ -99,6 +104,7 @@ mod tests {
             context: None,
             view: None,
             origin: Some("2026-08-13T08:30:00".to_string()),
+            updated: None,
         };
         let content = frontmatter::render(&fm, "body").unwrap();
         let summary = Summary::from_file(
@@ -107,6 +113,30 @@ mod tests {
             &content,
         );
         assert_eq!(summary.origin, Some("2026-08-13T08:30:00".to_string()));
+    }
+
+    /// タグ欄で `Rust` と付けていた頃のノートに本文で `#rust` と書いたら、
+    /// 一覧に同じ分類が 2 つ並ぶ。同一性は本文側の規則(ASCII 小文字)で決める。
+    #[test]
+    fn frontmatter_tags_are_normalized_like_body_tags() {
+        let fm = NoteFrontmatter {
+            time: FixedOffset::east_opt(9 * 3600)
+                .unwrap()
+                .with_ymd_and_hms(2026, 3, 20, 14, 30, 45)
+                .unwrap(),
+            tags: vec!["Rust".to_string()],
+            context: None,
+            view: None,
+            origin: None,
+            updated: None,
+        };
+        let content = frontmatter::render(&fm, "本文 #rust").unwrap();
+        let summary = Summary::from_file(
+            PathBuf::from("/test/note.md"),
+            "note.md".to_string(),
+            &content,
+        );
+        assert_eq!(summary.tags, vec!["rust"]);
     }
 
     /// frontmatter が YAML として壊れているノート。時刻とタグは諦めるが、

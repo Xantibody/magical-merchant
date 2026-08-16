@@ -177,6 +177,54 @@ mod tests {
         assert_eq!(body, "updated");
     }
 
+    /// time が作成時刻に固定されている以上、書き直した事実はどこにも
+    /// 残らない。本文の保存だけが updated を打つ。
+    #[test]
+    fn update_note_stamps_the_updated_time() {
+        let tmp = TempDir::new().unwrap();
+        let path = create_draft_note(tmp.path(), "original", &[], &mock_context()).unwrap();
+        let filename = filename_of(&path);
+        assert_eq!(read_note_meta(tmp.path(), &filename).unwrap().updated, None);
+
+        update_note(&path, "updated", &mock_context()).unwrap();
+
+        let meta = read_note_meta(tmp.path(), &filename).unwrap();
+        assert!(meta.updated.is_some());
+        assert!(meta.updated.unwrap() >= meta.time);
+    }
+
+    /// メタデータや表示モードの差し替えは本文を書き直していない。
+    /// ここで updated を打つと「編集していないのに更新日が動く」ことになる。
+    #[test]
+    fn update_note_meta_and_view_do_not_stamp_updated() {
+        let tmp = TempDir::new().unwrap();
+        let path = create_draft_note(tmp.path(), "body", &[], &mock_context()).unwrap();
+        let filename = filename_of(&path);
+
+        update_note_meta(tmp.path(), &filename, sample_time(), &[]).unwrap();
+        update_note_view(tmp.path(), &filename, Some("mindmap")).unwrap();
+
+        assert_eq!(read_note_meta(tmp.path(), &filename).unwrap().updated, None);
+    }
+
+    /// 打たれた updated は、その後のメタデータ編集で消えてはいけない。
+    #[test]
+    fn update_note_meta_keeps_the_updated_time() {
+        let tmp = TempDir::new().unwrap();
+        let path = create_draft_note(tmp.path(), "body", &[], &mock_context()).unwrap();
+        let filename = filename_of(&path);
+        update_note(&path, "edited", &mock_context()).unwrap();
+        let stamped = read_note_meta(tmp.path(), &filename).unwrap().updated;
+
+        update_note_meta(tmp.path(), &filename, sample_time(), &[]).unwrap();
+        update_note_view(tmp.path(), &filename, Some("mindmap")).unwrap();
+
+        assert_eq!(
+            read_note_meta(tmp.path(), &filename).unwrap().updated,
+            stamped
+        );
+    }
+
     /// context は「どの端末で書いたか」の記録。別の端末で編集しても
     /// 作成時の記録が上書きされてはいけない。
     #[test]

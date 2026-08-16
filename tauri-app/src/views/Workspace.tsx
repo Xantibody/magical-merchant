@@ -23,6 +23,8 @@ import { groupNotes, itemTitle, noteCreatedLabel, toNoteItems } from "../lib/ite
 import type { ItemGroup, NoteItem } from "../lib/items";
 import { readNoteContent, toggledView, viewToFrontmatter } from "../lib/note-view";
 import type { NoteView } from "../lib/note-view";
+import { joinTitle, splitTitle } from "../lib/note-title";
+import { isImeComposing } from "../lib/ime";
 import {
   beginEditSession,
   readBackup,
@@ -30,6 +32,7 @@ import {
   shouldSave,
   writeBackup,
 } from "../lib/edit-backup";
+import type { EditSession } from "../lib/edit-backup";
 import type { CaretPoint } from "../components/MilkdownEditor";
 import type { NoteLinkTarget } from "../lib/note-link-plugin";
 import type { SearchHit } from "../lib/commands";
@@ -76,7 +79,10 @@ export default function Workspace(): JSX.Element {
   const [draft, setDraft] = createSignal("");
   const [saveStatus, setSaveStatus] = createSignal<"idle" | "saving" | "saved">("idle");
   const [hidden, setHidden] = createSignal<string[]>([]);
+  /** 先頭 H1 を切り離した本文。エディタとプレビューが見るのはこちら。 */
   const [noteBody, setNoteBody] = createSignal("");
+  /** 本文先頭の H1。タイトル欄が編集し、保存のたびに本文へ書き戻す。 */
+  const [noteTitle, setNoteTitle] = createSignal("");
   const [noteView, setNoteView] = createSignal<NoteView>("editor");
   /** 本文の読み込みが済んでいるノートの id。`?edit=1` の自動編集開始が待つ。 */
   const [loadedId, setLoadedId] = createSignal<string | null>(null);
@@ -90,6 +96,8 @@ export default function Workspace(): JSX.Element {
   const [tapCaret, setTapCaret] = createSignal<CaretPoint | undefined>();
   /** いま開いている編集セッション。保存のスキップ判断とバックアップを持つ。 */
   let session = beginEditSession("");
+  /** そのセッションがどのノートのものか。null なら開いていない。 */
+  let sessionFile: string | null = null;
 
   // 同期やパレット操作の後にデータを取り直す。初回は createResource が読むので
   // defer しないと全ノートの読み直しがマウント直後に二重で走る
@@ -106,6 +114,25 @@ export default function Workspace(): JSX.Element {
     const items = visibleItems();
     return items.find((item) => item.id === selectedId()) ?? items[0];
   });
+
+  /**
+   * ファイルに書く本文。タイトル欄とエディタは別々に見せているが、
+   * 保存・バックアップ・マインドマップが扱うのは常に結合した全文。
+   */
+  const fullBody = (): string => joinTitle(noteTitle(), editing() ? draft() : noteBody());
+
+  /**
+   * 書き換える直前の本文でセッションを開く。開いている間は開き直さない —
+   * タイトルを直してから本文を触っても、戻る先は「触る前」のまま。
+   */
+  const ensureSession = (): void => {
+    const item = selected();
+    if (!item || sessionFile === item.filename) {
+      return;
+    }
+    session = beginEditSession(fullBody());
+    sessionFile = item.filename;
+  };
 
   /** `[[ID]]` → タイトルの解決表。プレビューが毎回これを引いて描く。 */
   const noteTitles = createMemo<ReadonlyMap<string, string>>(
@@ -150,9 +177,15 @@ export default function Workspace(): JSX.Element {
   // ---- 選択中ノートの本文と表示モードを読む ----
   createEffect(() => {
     const item = selected();
+    // 別のノートに移ったら編集セッションは畳む。戻る先が前のノートの
+    // 本文のままだと、次の保存が他人のバックアップを潰す
+    sessionFile = null;
     if (!item) {
-      setNoteBody("");
-      setNoteView("editor");
+      batch(() => {
+        setNoteBody("");
+        setNoteTitle("");
+        setNoteView("editor");
+      });
       return;
     }
     void (async () => {
@@ -167,8 +200,10 @@ export default function Workspace(): JSX.Element {
           return;
         }
         // 本文とモードは対で出す。バラすと一瞬だけ違うモードで描かれる
+        const titled = splitTitle(content.body);
         batch(() => {
-          setNoteBody(content.body);
+          setNoteTitle(titled.title);
+          setNoteBody(titled.body);
           setNoteView(content.view);
           setLoadedId(item.id);
         });
@@ -176,6 +211,7 @@ export default function Workspace(): JSX.Element {
         // 読めないノートを選んだまま、前のノートの本文を出し続けない
         if (selected()?.id === item.id) {
           batch(() => {
+            setNoteTitle("");
             setNoteBody("");
             setNoteView("editor");
             setLoadedId(item.id);
@@ -211,26 +247,39 @@ export default function Workspace(): JSX.Element {
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
   let saveChain: Promise<void> = Promise.resolve();
 
-  const flushSave = (): Promise<void> => {
+  /**
+   * 保存 1 回ぶんの単位。「どのノートに・何を・どのセッションで」を
+   * 呼ばれた時点で固める。タイマーが起きる頃には別のノートが選ばれて
+   * いることがあり、そのとき画面の本文を読むと隣のノートへ書いてしまう。
+   */
+  interface PendingSave {
+    item: NoteItem;
+    body: string;
+    session: EditSession;
+  }
+
+  const snapshotSave = (): PendingSave | undefined => {
     const item = selected();
-    const body = draft();
-    const current = session;
+    return item ? { item, body: fullBody(), session } : undefined;
+  };
+
+  const flushSave = (pending = snapshotSave()): Promise<void> => {
     const previous = saveChain;
     saveChain = (async () => {
       await previous;
       // 触っていない誤タップのセッションを書き込みに変えない。書いても
       // 内容が変わらないなら、ファイルの mtime を動かして同期を起こすだけ
-      if (!item || !shouldSave(current, body)) {
+      if (!pending || !shouldSave(pending.session, pending.body)) {
         return;
       }
       setSaveStatus("saving");
       try {
         await typedInvoke("update_draft", {
-          filePath: item.path,
-          body,
+          filePath: pending.item.path,
+          body: pending.body,
           client: await getDeviceSignals(),
         });
-        recordSaved(localStorage, item.filename, current, body);
+        recordSaved(localStorage, pending.item.filename, pending.session, pending.body);
         // 一覧はここでは読み直さない。1 秒おきの保存のたびに全ノートを
         // 読み直すのは低スペック端末に重く、編集中は一覧が見えてもいない。
         // 編集を終えるときに 1 回だけ読み直す。
@@ -243,10 +292,12 @@ export default function Workspace(): JSX.Element {
   };
 
   const scheduleSave = (): void => {
+    // 打鍵ごとに取り直すので、実際に走るのは最後の打鍵の写し
+    const pending = snapshotSave();
     if (saveTimer) {
       clearTimeout(saveTimer);
     }
-    saveTimer = setTimeout(() => void flushSave(), SAVE_DEBOUNCE_MS);
+    saveTimer = setTimeout(() => void flushSave(pending), SAVE_DEBOUNCE_MS);
   };
 
   onCleanup(() => {
@@ -260,11 +311,35 @@ export default function Workspace(): JSX.Element {
     if (!selected()) {
       return;
     }
-    session = beginEditSession(noteBody());
+    ensureSession();
     setTapCaret(point);
     setDraft(noteBody());
     setSaveStatus("idle");
     setEditing(true);
+  };
+
+  /**
+   * タイトルは本文先頭の H1 そのもの。打つたびに本文と同じ自動保存に乗せる。
+   * 編集モードに入らないのは、エディタが持つのはタイトルを除いた本文だから。
+   */
+  const editTitle = (value: string): void => {
+    ensureSession();
+    setNoteTitle(value);
+    scheduleSave();
+  };
+
+  /**
+   * タイトル欄を離れたら、待っている保存を出しきって一覧を 1 度だけ
+   * 読み直す。行に出ている題は本文の先頭行から導かれるので、
+   * 読み直さないと一覧だけ古い題のまま残る。
+   */
+  const commitTitle = async (): Promise<void> => {
+    if (saveTimer) {
+      clearTimeout(saveTimer);
+      saveTimer = undefined;
+    }
+    await flushSave();
+    await refetchNotes();
   };
 
   /** プレビューのどこを押しても、その場所から書き始められる。 */
@@ -299,7 +374,7 @@ export default function Workspace(): JSX.Element {
    */
   const revertEdit = async (item: NoteItem): Promise<void> => {
     const backup = readBackup(localStorage, item.filename);
-    const current = noteBody();
+    const current = fullBody();
     if (backup === null || backup === current) {
       return;
     }
@@ -314,7 +389,11 @@ export default function Workspace(): JSX.Element {
       return;
     }
     writeBackup(localStorage, item.filename, current);
-    setNoteBody(backup);
+    const titled = splitTitle(backup);
+    batch(() => {
+      setNoteTitle(titled.title);
+      setNoteBody(titled.body);
+    });
     shell.closePopovers();
     await refetchNotes();
     shell.showToast("編集前の内容に戻しました");
@@ -341,7 +420,7 @@ export default function Workspace(): JSX.Element {
       return false;
     }
     const backup = readBackup(localStorage, item.filename);
-    return backup !== null && backup !== noteBody();
+    return backup !== null && backup !== fullBody();
   });
 
   const stopEditing = async (): Promise<void> => {
@@ -354,12 +433,24 @@ export default function Workspace(): JSX.Element {
     // 一瞬だけ編集前の本文が見える
     setNoteBody(draft());
     setEditing(false);
+    // 次に書き始めるときは新しいセッション。戻る先が 1 段ずつ進む
+    sessionFile = null;
     await refetchNotes();
   };
 
   const createNote = async (): Promise<void> => {
-    await typedInvoke("create_draft", { body: "", tags: [], client: await getDeviceSignals() });
+    const path = await typedInvoke("create_draft", {
+      body: "",
+      tags: [],
+      client: await getDeviceSignals(),
+    });
     await refetchNotes();
+    // 作ったノートを開く。選んだままにすると、そのまま題を打った人が
+    // 前に開いていたノートの題を書き換えることになる
+    const filename = path.split("/").at(-1);
+    if (filename) {
+      setSelectedId(filename);
+    }
     setDetailOpen(true);
   };
 
@@ -517,6 +608,26 @@ export default function Workspace(): JSX.Element {
                 />
               </Show>
 
+              {/* タイトルは本文先頭の H1 そのもの。ここで打ったものが
+                  `# 見出し` として本文に書き戻る(`note-title.ts`)ので、
+                  エディタとプレビューはタイトル行を持たない */}
+              <input
+                type="text"
+                class="note-title-input"
+                placeholder="タイトル"
+                aria-label="タイトル"
+                value={noteTitle()}
+                onInput={(e) => editTitle(e.currentTarget.value)}
+                onChange={() => void commitTitle()}
+                onKeyDown={(e) => {
+                  // 変換確定の Enter は IME のもの (#102)
+                  if (e.key === "Enter" && !isImeComposing(e)) {
+                    e.preventDefault();
+                    startEditing();
+                  }
+                }}
+              />
+
               {/* biome-ignore/eslint 対応: タップは編集開始の補助経路で、
                   同じ操作はキーボードでは編集終了ボタンと Tab 移動で賄える */}
               <div
@@ -564,7 +675,9 @@ export default function Workspace(): JSX.Element {
                         </>
                       }
                     >
-                      <MindmapView source={noteBody()} />
+                      {/* マインドマップの根は H1。タイトルを外した本文を
+                          渡すと、根の無い枝だけの図になる */}
+                      <MindmapView source={fullBody()} />
                     </Show>
                   }
                 >

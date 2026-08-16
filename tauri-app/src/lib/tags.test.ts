@@ -28,6 +28,15 @@ describe("parseTags", () => {
     expect(parseTags("C#")).toStrictEqual([]);
   });
 
+  // core の tags.rs と同じ約束。別々に数えると同じ分類が二重に並ぶ
+  it("normalizes ascii tags to lowercase", () => {
+    expect(parseTags("#Rust と #rust と #RUST")).toStrictEqual(["rust"]);
+  });
+
+  it("keeps japanese tags as written", () => {
+    expect(parseTags("#設計 #カタカナ")).toStrictEqual(["設計", "カタカナ"]);
+  });
+
   it("finds a tag at the start of a later line", () => {
     expect(parseTags("一行目\n#二行目")).toStrictEqual(["二行目"]);
   });

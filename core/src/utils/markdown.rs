@@ -74,6 +74,8 @@ pub fn format_note_markdown(
         context: Some(context.clone()),
         view: None,
         origin: origin.map(str::to_string),
+        // 作ったばかりのノートは書き直されていない
+        updated: None,
     };
     frontmatter::render(&fm, body)
 }
