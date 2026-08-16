@@ -19,7 +19,19 @@ pub fn create_draft_note(
     tags: &[String],
     context: &Context,
 ) -> Result<PathBuf, CoreError> {
-    Notes::new(base_dir.to_path_buf()).create(body, tags, context)
+    Notes::new(base_dir.to_path_buf()).create(body, tags, context, None)
+}
+
+/// タイムラインエントリを昇格させてノートを作る。frontmatter の `origin` に
+/// 元エントリの日時を刻む以外は `create_draft_note` と同じ。
+pub fn create_note_from_entry(
+    base_dir: &Path,
+    body: &str,
+    tags: &[String],
+    context: &Context,
+    origin: &str,
+) -> Result<PathBuf, CoreError> {
+    Notes::new(base_dir.to_path_buf()).create(body, tags, context, Some(origin))
 }
 
 pub fn update_note(file_path: &Path, body: &str, context: &Context) -> Result<(), CoreError> {
@@ -100,9 +112,37 @@ mod tests {
     }
 
     #[test]
+    fn test_create_note_from_entry_records_origin() {
+        let tmp = TempDir::new().unwrap();
+        let path = create_note_from_entry(
+            tmp.path(),
+            "エントリ本文 #memo",
+            &["memo".to_string()],
+            &mock_context(),
+            "2026-08-13T08:30:00",
+        )
+        .unwrap();
+
+        let meta = read_note_meta(
+            tmp.path(),
+            &NoteFilename::parse(path.file_name().unwrap().to_str().unwrap()).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(meta.origin, Some("2026-08-13T08:30:00".to_string()));
+
+        // 一覧にも乗る。タイムラインのチップはここから導出される
+        let listed = list_notes(tmp.path()).unwrap();
+        assert_eq!(listed[0].origin, Some("2026-08-13T08:30:00".to_string()));
+    }
+
+    #[test]
     fn test_create_draft_note_returns_path() {
         let tmp = TempDir::new().unwrap();
         let path = create_draft_note(tmp.path(), "draft body", &[], &mock_context()).unwrap();
+        let content = fs::read_to_string(&path).unwrap();
+        // origin はエントリ由来のノートだけの記録。普通の新規ノートに書くと
+        // 全ノートが「どこかのエントリから来た」ことになってしまう
+        assert!(!content.contains("origin"));
         assert!(path.exists());
         let content = fs::read_to_string(&path).unwrap();
         assert!(content.contains("draft body"));

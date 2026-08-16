@@ -7,6 +7,8 @@ export interface Note {
   time?: string;
   tags: string[];
   preview: string;
+  /** 昇格元エントリの日時(`YYYY-MM-DDTHH:MM:SS`)。エントリ由来のノートだけ持つ。 */
+  origin?: string;
 }
 
 /**
@@ -66,7 +68,10 @@ interface CommandMap {
   search_all: { args: { query: string }; result: SearchHit[] };
   /** 座標 → 地名。引けたものだけが `["緯度,経度", 地名]` で返る。 */
   resolve_places: { args: { coordinates: [number, number][] }; result: [string, string][] };
-  create_draft: { args: { body: string; tags: string[] } & ClientArgs; result: string };
+  create_draft: {
+    args: { body: string; tags: string[]; origin?: string } & ClientArgs;
+    result: string;
+  };
   update_draft: {
     args: { filePath: string; body: string } & ClientArgs;
     result: void;

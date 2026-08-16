@@ -7,6 +7,7 @@ import {
   itemMeta,
   itemTitle,
   noteCreatedLabel,
+  notesByOriginDate,
   replaceDayItems,
   planBulkDelete,
 } from "./items";
@@ -86,6 +87,28 @@ describe("toNoteItems", () => {
     const [item] = toNoteItems([note({ time: undefined })]);
     expect(item.date).toBe("");
     expect(item.time).toBe("");
+  });
+
+  it("carries the origin of a promoted note", () => {
+    const [item] = toNoteItems([note({ origin: "2026-08-03T08:30:00" })]);
+    expect(item.origin).toBe("2026-08-03T08:30:00");
+  });
+});
+
+describe("notesByOriginDate", () => {
+  it("returns an empty map when no note has an origin", () => {
+    expect(notesByOriginDate(toNoteItems([note()])).size).toBe(0);
+  });
+
+  it("groups promoted notes under the day of their origin entry", () => {
+    const items = toNoteItems([
+      note({ filename: "a.md", origin: "2026-08-03T08:30:00" }),
+      note({ filename: "b.md", origin: "2026-08-03T21:00:00" }),
+      note({ filename: "c.md", origin: "2026-08-01T07:00:00" }),
+    ]);
+    const map = notesByOriginDate(items);
+    expect(map.get("2026-08-03")?.map((n) => n.filename)).toEqual(["a.md", "b.md"]);
+    expect(map.get("2026-08-01")?.map((n) => n.filename)).toEqual(["c.md"]);
   });
 });
 

@@ -14,14 +14,24 @@ import CaptureBar from "../components/CaptureBar";
 import CalendarPopover from "../components/CalendarPopover";
 import TagFilter from "../components/TagFilter";
 import TagText from "../components/TagText";
+import { useNavigate } from "@solidjs/router";
 import { typedInvoke } from "../lib/commands";
 import { getClientContext } from "../lib/client-context";
 import { useShell } from "../lib/shell";
 import { formatDayHeading, toIsoDate } from "../lib/day-labels";
-import { groupTimelineByDay, planBulkDelete, replaceDayItems, toTimelineItems } from "../lib/items";
-import type { TimelineItem } from "../lib/items";
+import {
+  groupTimelineByDay,
+  notesByOriginDate,
+  planBulkDelete,
+  replaceDayItems,
+  toNoteItems,
+  toTimelineItems,
+} from "../lib/items";
+import type { NoteItem, TimelineItem } from "../lib/items";
+import { createLongPress } from "../lib/long-press";
 import { entryMeta } from "../lib/timeline-meta";
 import { places } from "../lib/places";
+import { ROUTES } from "../lib/routes";
 import { countTags, parseTags } from "../lib/tags";
 import type { DeviceContext } from "../lib/parse-timeline";
 
@@ -52,10 +62,13 @@ interface EntryProps {
   onEdit: () => void;
   onCommit: () => void;
   onToggle: () => void;
+  onPromote: () => void;
 }
 
 function Entry(props: EntryProps): JSX.Element {
   const meta = createMemo(() => entryMeta(props.item.context, places.nameOf));
+  // モバイルの入り口は長押し。タップは今まで通りその場編集
+  const press = createLongPress(() => props.onPromote());
 
   return (
     <article
@@ -110,7 +123,19 @@ function Entry(props: EntryProps): JSX.Element {
 
         <Show when={!props.editing && !props.selecting}>
           {/* 本文そのものが編集の入口。button なのはキーボードから開けるようにするため */}
-          <button type="button" class="entry-text" onClick={() => props.onEdit()}>
+          <button
+            type="button"
+            class="entry-text"
+            onPointerDown={(e) => press.onPointerDown(e)}
+            onPointerUp={() => press.onPointerUp()}
+            onPointerMove={() => press.onPointerMove()}
+            onPointerCancel={() => press.onPointerCancel()}
+            onClick={() => {
+              if (press.shouldClick()) {
+                props.onEdit();
+              }
+            }}
+          >
             <TagText text={props.item.text} />
           </button>
           <Show when={meta().length}>
@@ -125,6 +150,18 @@ function Entry(props: EntryProps): JSX.Element {
               </For>
             </div>
           </Show>
+          {/* PC の入り口。隠しアクションの流儀どおり、ホバーでだけ現れる */}
+          <div class="entry-actions">
+            <button
+              type="button"
+              class="icon-button entry-action"
+              title="ノートにする"
+              aria-label="ノートにする"
+              onClick={() => props.onPromote()}
+            >
+              <Icon name="note-pencil" size={15} />
+            </button>
+          </div>
         </Show>
       </div>
     </article>
@@ -151,6 +188,7 @@ function EmptyTimeline(props: { filtered: boolean }): JSX.Element {
 
 export default function Timeline(): JSX.Element {
   const shell = useShell();
+  const navigate = useNavigate();
   const today = new Date();
 
   const [extraDates, setExtraDates] = createSignal<string[]>([]);
@@ -170,10 +208,24 @@ export default function Timeline(): JSX.Element {
   const [deleting, setDeleting] = createSignal(false);
 
   const [timeline, { refetch, mutate }] = createResource(extraDates, loadTimeline);
+  // 昇格ノートのチップに使う。タイムラインの描画は待たない — ノート一覧が
+  // 届いてからチップだけ後から現れる
+  const [notes, { refetch: refetchNotes }] = createResource(async () =>
+    toNoteItems(await typedInvoke("list_notes")),
+  );
 
   // 初回は createResource が読む。defer しないとマウント直後に同じ全読みを
   // もう一度走らせ、起動時の IPC がまるごと倍になる
-  createEffect(on(shell.dataVersion, () => void refetch(), { defer: true }));
+  createEffect(
+    on(
+      shell.dataVersion,
+      () => {
+        void refetch();
+        void refetchNotes();
+      },
+      { defer: true },
+    ),
+  );
 
   const entries = createMemo(() => timeline() ?? []);
   // 地名は記録の一部ではないので、これを待って一覧を出さない。座標のまま先に
@@ -190,6 +242,7 @@ export default function Timeline(): JSX.Element {
   });
 
   const days = createMemo(() => groupTimelineByDay(visible()));
+  const originNotes = createMemo(() => notesByOriginDate(notes() ?? []));
 
   /**
    * 日付を足すとデータを取り直すぶん行が作り直され、その場でスクロールしても
@@ -240,6 +293,30 @@ export default function Timeline(): JSX.Element {
 
   // タブを切り替えても書きかけを捨てない。blur はアンマウントでは飛ばない。
   onCleanup(() => void commitEdit());
+
+  /**
+   * エントリを昇格させてノートを作り、そのまま書き始められる状態で開く。
+   * エントリ側のファイルには何も書かない — ノートの frontmatter `origin`
+   * だけが両者を繋ぎ、チップは毎回そこから導出される。
+   */
+  const promote = async (item: TimelineItem): Promise<void> => {
+    const path = await typedInvoke("create_draft", {
+      body: item.text,
+      tags: parseTags(item.text),
+      origin: `${item.date}T${item.time}`,
+      client: await getClientContext(),
+    });
+    const filename = path.split("/").at(-1);
+    if (!filename) {
+      return;
+    }
+    shell.refreshData();
+    navigate(`${ROUTES.NOTES}?file=${encodeURIComponent(filename)}&edit=1`);
+  };
+
+  const openNote = (note: NoteItem): void => {
+    navigate(`${ROUTES.NOTES}?file=${encodeURIComponent(note.filename)}`);
+  };
 
   // ---- まとめて削除（選択 → 確認 → 実行）----
   const startSelecting = (): void => {
@@ -345,6 +422,25 @@ export default function Timeline(): JSX.Element {
                       <span class="day-heading-count">{day.items.length}件</span>
                     </header>
 
+                    {/* この日のエントリから育ったノートへの入り口 */}
+                    <Show when={originNotes().get(day.date)?.length}>
+                      <div class="origin-chips">
+                        <For each={originNotes().get(day.date)}>
+                          {(note) => (
+                            <button
+                              type="button"
+                              class="origin-chip"
+                              onClick={() => openNote(note)}
+                            >
+                              <Icon name="file-text" size={13} />
+                              <span class="origin-chip-title">{note.title}</span>
+                              <span aria-hidden="true">→</span>
+                            </button>
+                          )}
+                        </For>
+                      </div>
+                    </Show>
+
                     <For each={day.items}>
                       {(item) => (
                         <Entry
@@ -358,6 +454,7 @@ export default function Timeline(): JSX.Element {
                           onEdit={() => startEditing(item)}
                           onCommit={() => void commitEdit()}
                           onToggle={() => toggleSelected(item.id)}
+                          onPromote={() => void promote(item)}
                         />
                       )}
                     </For>

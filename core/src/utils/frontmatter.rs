@@ -16,6 +16,11 @@ pub struct NoteFrontmatter {
     /// frontmatter に持つ。未指定・未知の値は読む側がエディタ表示に倒す。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub view: Option<String>,
+    /// 昇格元タイムラインエントリの日時(`YYYY-MM-DDTHH:MM:SS`)。エントリから
+    /// 作ったノートだけが持つ出自の記録で、タイムライン側のチップ表示は
+    /// この値から毎回導出する(エントリ側のファイルには何も書かない)。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin: Option<String>,
 }
 
 pub fn render<T: Serialize>(fm: &T, body: &str) -> Result<String, CoreError> {
@@ -73,6 +78,7 @@ mod tests {
                 ..Context::default()
             }),
             view: None,
+            origin: None,
         };
         let rendered = render(&fm, "# Hello\nWorld").unwrap();
         let (parsed, body): (NoteFrontmatter, _) = parse(&rendered).unwrap();
@@ -87,6 +93,7 @@ mod tests {
             tags: vec![],
             context: None,
             view: Some("mindmap".to_string()),
+            origin: None,
         };
         let rendered = render(&fm, "body").unwrap();
         let (parsed, _body): (NoteFrontmatter, _) = parse(&rendered).unwrap();
@@ -102,6 +109,7 @@ mod tests {
             tags: vec![],
             context: None,
             view: None,
+            origin: None,
         };
         let rendered = render(&fm, "body").unwrap();
         assert!(!rendered.contains("view"));
@@ -116,12 +124,50 @@ mod tests {
     }
 
     #[test]
+    fn test_note_frontmatter_origin_roundtrip() {
+        let fm = NoteFrontmatter {
+            time: sample_datetime(),
+            tags: vec![],
+            context: None,
+            view: None,
+            origin: Some("2026-08-13T08:30:00".to_string()),
+        };
+        let rendered = render(&fm, "body").unwrap();
+        let (parsed, _body): (NoteFrontmatter, _) = parse(&rendered).unwrap();
+        assert_eq!(parsed.origin, Some("2026-08-13T08:30:00".to_string()));
+    }
+
+    /// origin を持たないノートの frontmatter は今までと 1 バイトも変わらない。
+    /// view と同じ約束: 書いていないキーは書かない。
+    #[test]
+    fn test_render_omits_absent_origin() {
+        let fm = NoteFrontmatter {
+            time: sample_datetime(),
+            tags: vec![],
+            context: None,
+            view: None,
+            origin: None,
+        };
+        let rendered = render(&fm, "body").unwrap();
+        assert!(!rendered.contains("origin"));
+    }
+
+    /// origin キーを知らない版のアプリが書いたノートも今まで通り読める。
+    #[test]
+    fn test_parse_defaults_origin_to_none() {
+        let yaml = "---\ntime: 2026-03-20T14:30:45+09:00\ntags: []\n---\nbody";
+        let (fm, _body): (NoteFrontmatter, &str) = parse(yaml).unwrap();
+        assert_eq!(fm.origin, None);
+    }
+
+    #[test]
     fn test_note_frontmatter_no_context() {
         let fm = NoteFrontmatter {
             time: sample_datetime(),
             tags: vec![],
             context: None,
             view: None,
+            origin: None,
         };
         let rendered = render(&fm, "body").unwrap();
         let (parsed, _body): (NoteFrontmatter, _) = parse(&rendered).unwrap();
@@ -135,6 +181,7 @@ mod tests {
             tags: vec![],
             context: None,
             view: None,
+            origin: None,
         };
         let rendered = render(&fm, "body").unwrap();
         assert!(rendered.starts_with("---\n"));

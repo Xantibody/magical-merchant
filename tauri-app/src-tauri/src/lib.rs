@@ -60,10 +60,20 @@ fn create_draft(
     body: String,
     tags: Vec<String>,
     client: ClientContext,
+    origin: Option<String>,
 ) -> Result<String, String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
     let context = device::get_context(client);
-    let path = magical_merchant_core::create_draft_note(&base_dir, &body, &tags, &context)
+    // origin 付きはタイムラインエントリからの昇格。出自を frontmatter に刻む
+    let path = origin
+        .map_or_else(
+            || magical_merchant_core::create_draft_note(&base_dir, &body, &tags, &context),
+            |origin| {
+                magical_merchant_core::create_note_from_entry(
+                    &base_dir, &body, &tags, &context, &origin,
+                )
+            },
+        )
         .map_err(|e| e.to_string())?;
     Ok(path.to_string_lossy().to_string())
 }
