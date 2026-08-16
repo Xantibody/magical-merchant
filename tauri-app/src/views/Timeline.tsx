@@ -19,6 +19,7 @@ import { typedInvoke } from "../lib/commands";
 import { getClientContext } from "../lib/client-context";
 import { useShell } from "../lib/shell";
 import { formatDayHeading, toIsoDate } from "../lib/day-labels";
+import { t } from "../lib/i18n";
 import {
   groupTimelineByDay,
   notesByOriginDate,
@@ -118,9 +119,9 @@ function Entry(props: EntryProps): JSX.Element {
               }}
             />
             <div class="entry-editor-foot">
-              <span>クリックでそのまま編集 · Esc で確定</span>
+              <span>{t().timeline.editHint}</span>
               <Show when={props.saved()}>
-                <span>✓ 保存しました</span>
+                <span>{t().timeline.savedTick}</span>
               </Show>
             </div>
           </div>
@@ -175,8 +176,8 @@ function Entry(props: EntryProps): JSX.Element {
             <button
               type="button"
               class="icon-button entry-action"
-              title="ノートにする"
-              aria-label="ノートにする"
+              title={t().timeline.promote}
+              aria-label={t().timeline.promote}
               onClick={() => props.onPromote()}
             >
               <Icon name="note-pencil" size={15} />
@@ -194,12 +195,10 @@ function EmptyTimeline(props: { filtered: boolean }): JSX.Element {
       <span class="timeline-empty-rail" aria-hidden="true" />
       <div>
         <p class="timeline-empty-title">
-          {props.filtered ? "このタグの記録はまだありません。" : "今日はまだ何も記録していません。"}
+          {props.filtered ? t().timeline.emptyFiltered : t().timeline.emptyToday}
         </p>
         <p class="timeline-empty-hint">
-          {props.filtered
-            ? "上のチップで絞り込みを外せます。"
-            : "下の入力欄に書くと、時刻とともにここに並びます。"}
+          {props.filtered ? t().timeline.emptyFilteredHint : t().timeline.emptyHint}
         </p>
       </div>
     </div>
@@ -424,9 +423,11 @@ export default function Timeline(): JSX.Element {
         // oxlint-disable-next-line no-await-in-loop
         await typedInvoke("delete_timeline_entry", { date: target.date, index: target.index });
       }
-      await Promise.all([...new Set(plan.map((t) => t.date))].map((date) => reloadDay(date)));
+      await Promise.all(
+        [...new Set(plan.map((target) => target.date))].map((date) => reloadDay(date)),
+      );
       exitSelecting();
-      shell.showToast(`${plan.length}件のエントリを削除しました`);
+      shell.showToast(t().timeline.deleted(plan.length));
     } finally {
       setDeleting(false);
     }
@@ -467,14 +468,14 @@ export default function Timeline(): JSX.Element {
               最初の描画に存在した行が押し下げられてレイアウトシフトになる。
               ここなら日リストと同じ「後から現れる領域」の先頭に収まる */}
           <Show when={digestVisible()}>
-            <section class="digest-card" aria-label="今週のふりかえり">
+            <section class="digest-card" aria-label={t().timeline.digestTitle}>
               <header class="digest-head">
-                <span class="digest-title">今週のふりかえり</span>
+                <span class="digest-title">{t().timeline.digestTitle}</span>
                 <button
                   type="button"
                   class="icon-button digest-close"
-                  title="今週は閉じる"
-                  aria-label="今週は閉じる"
+                  title={t().timeline.digestClose}
+                  aria-label={t().timeline.digestClose}
                   onClick={dismissDigest}
                 >
                   <Icon name="x" size={14} />
@@ -482,7 +483,7 @@ export default function Timeline(): JSX.Element {
               </header>
               <Show when={weekSummary().count > 0}>
                 <p class="digest-line">
-                  {weekSummary().days}日で{weekSummary().count}件を記録
+                  {t().timeline.digestSummary(weekSummary().days, weekSummary().count)}
                 </p>
               </Show>
               <Show when={weekSummary().topTags.length > 0}>
@@ -505,7 +506,7 @@ export default function Timeline(): JSX.Element {
                 {(iso) => (
                   <button type="button" class="digest-year-ago" onClick={() => jumpToDay(iso())}>
                     <Icon name="clock-counter-clockwise" size={13} />
-                    1年前の今日の記録を見る
+                    {t().timeline.lastYear}
                   </button>
                 )}
               </Show>
@@ -516,11 +517,11 @@ export default function Timeline(): JSX.Element {
             <div class="timeline-toolbar">
               <Show
                 when={!selecting()}
-                fallback={<span class="timeline-toolbar-hint">消すエントリを選んでください</span>}
+                fallback={<span class="timeline-toolbar-hint">{t().timeline.selectHint}</span>}
               >
                 <button type="button" class="timeline-toolbar-button" onClick={startSelecting}>
                   <Icon name="check-square" size={14} />
-                  選択
+                  {t().timeline.select}
                 </button>
               </Show>
             </div>
@@ -533,7 +534,9 @@ export default function Timeline(): JSX.Element {
                     <header class="day-heading">
                       <h2 class="day-heading-label">{heading().label}</h2>
                       <span class="day-heading-date">{heading().date}</span>
-                      <span class="day-heading-count">{day.items.length}件</span>
+                      <span class="day-heading-count">
+                        {t().timeline.entryCount(day.items.length)}
+                      </span>
                     </header>
 
                     {/* この日のエントリから育ったノートへの入り口 */}
@@ -582,12 +585,14 @@ export default function Timeline(): JSX.Element {
 
       <div class="capture-dock">
         <Show when={selecting()} fallback={<CaptureBar onSend={capture} knownTags={knownTags()} />}>
-          <div class="select-bar" role="toolbar" aria-label="まとめて削除">
+          <div class="select-bar" role="toolbar" aria-label={t().timeline.bulkDelete}>
             <Show
               when={confirming()}
               fallback={
                 <>
-                  <span class="select-bar-label">{selected().size}件選択中</span>
+                  <span class="select-bar-label">
+                    {t().timeline.selectedCount(selected().size)}
+                  </span>
                   <button
                     type="button"
                     class="select-bar-danger"
@@ -595,27 +600,25 @@ export default function Timeline(): JSX.Element {
                     onClick={() => setConfirming(true)}
                   >
                     <Icon name="trash" size={14} />
-                    削除 ({selected().size}件)
+                    {t().timeline.deleteCount(selected().size)}
                   </button>
                   <button type="button" class="select-bar-plain" onClick={exitSelecting}>
-                    キャンセル
+                    {t().common.cancel}
                   </button>
                 </>
               }
             >
-              <span class="select-bar-label">
-                {selected().size}件のエントリを削除します。よろしいですか？
-              </span>
+              <span class="select-bar-label">{t().timeline.confirmDelete(selected().size)}</span>
               <button
                 type="button"
                 class="select-bar-danger"
                 disabled={deleting()}
                 onClick={() => void runDelete()}
               >
-                削除する
+                {t().timeline.confirmDeleteYes}
               </button>
               <button type="button" class="select-bar-plain" onClick={() => setConfirming(false)}>
-                戻る
+                {t().common.back}
               </button>
             </Show>
           </div>

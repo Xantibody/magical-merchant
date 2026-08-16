@@ -25,6 +25,8 @@
   search with highlighted matches, exact landing on the note or day
 - **Optional sync** — Cloudflare Workers + R2, conflict-safe, with Android
   home-screen widgets and a read-only MCP server for AI assistants
+- **Japanese and English** — the interface follows your system language and
+  can be pinned either way in Settings
 
 Everything is a plain Markdown file on disk. See the
 **[feature tour](docs/features.md)** for screenshots of each surface.

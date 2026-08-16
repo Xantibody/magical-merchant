@@ -1,5 +1,5 @@
 import type { IconName } from "../components/Icon";
-import { getBatteryIcon, getNetworkIcon } from "./parse-timeline";
+import { getBatteryIcon, getNetworkIcon, networkLabel } from "./parse-timeline";
 import type { DeviceContext } from "./parse-timeline";
 
 /** エントリ本文の下に並べる、記録時の状況ひとつ。 */
@@ -10,13 +10,6 @@ export interface MetaSegment {
 
 /** 座標に付ける地名を引くもの。まだ引けていなければ undefined。 */
 export type PlaceLookup = (location: { latitude: number; longitude: number }) => string | undefined;
-
-const NETWORK_LABELS = {
-  WiFi: "Wi-Fi",
-  Ethernet: "有線",
-  Mobile: "モバイル回線",
-  Offline: "オフライン",
-} as const;
 
 function deviceSegment(ctx: DeviceContext): MetaSegment | null {
   if (!ctx.os) {
@@ -53,7 +46,7 @@ function networkSegment(ctx: DeviceContext): MetaSegment | null {
   if (!icon || !ctx.network_type) {
     return null;
   }
-  return { icon, label: NETWORK_LABELS[ctx.network_type] };
+  return { icon, label: networkLabel(ctx.network_type) };
 }
 
 function batterySegment(ctx: DeviceContext): MetaSegment | null {
