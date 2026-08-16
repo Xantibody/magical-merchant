@@ -38,11 +38,22 @@ breaks the link.
 ## Notes — a Typora-style Markdown workspace
 
 Notes are plain Markdown files. The list pane groups them by date; the detail
-pane shows a rendered preview. **Tap anywhere in the preview to start
+pane shows a rendered preview with a **title field** above it. The title is
+the note's leading `# heading` — there is no separate title in the
+frontmatter, so the file stays readable in any Markdown tool and the heading
+can never drift from the title. Press Enter in the field to drop into the
+body. **Tap anywhere in the preview to start
 editing** — the caret lands on the character you tapped. Saving is automatic
 (debounced), and the first content-changing save of a session keeps the
 pre-edit body on the device, so ノート情報 → 編集前に戻す can undo an
 accidental edit — press it again to swap back.
+
+The ノート情報 panel is also where a note's records live: the creation time
+(editable), the tags, the device context it was captured on, and — once the
+body has been rewritten at least once — the **update time**. Creation time is
+pinned to the filename order, so the update time is the only place a rewrite
+shows up. Changing metadata or the view mode is not a rewrite and leaves it
+alone.
 
 ![Editor with note links](images/editor-links.png)
 
@@ -57,7 +68,10 @@ the heading/list structure into a markmap:
 Type `[[` in the editor and an autocomplete popup offers your notes. The
 stored form is `[[YYYYMMDD_HHMMSS]]` — the filename is an immutable ID, so
 links survive title changes. The editor and preview render links as the
-target's current title; click one to open the note.
+target's current title; click one to open the note. Write
+`[[YYYYMMDD_HHMMSS|display text]]` when the title does not fit the sentence —
+the link still points at the same note. A link whose target is gone stays
+visible as its raw stored form rather than pretending to be a note.
 
 ![Resolved note links](images/note-links.png)
 

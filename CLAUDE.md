@@ -35,7 +35,8 @@ ready to record the moment it opens (widgets exist for exactly this).
 - **Timeline**: single-column day-grouped journal, time rail, tag filter chips,
   floating capture dock; in-place entry editing; select-mode bulk delete
 - **Notes (Workspace)**: list pane + detail pane; mobile shows one pane at a
-  time (`workspace--detail`); Milkdown editor is lazy-loaded on first edit;
+  time (`workspace--detail`); title field above the body (it _is_ the body's
+  leading `# heading`); Milkdown editor is lazy-loaded on first edit;
   per-note mindmap view via frontmatter `view`
 - **Command palette** (⌘K): in-memory commands + debounced `search_all`
 - There is **no Tasks mode**. Do not add one or reference it.
@@ -45,7 +46,8 @@ ready to record the moment it opens (widgets exist for exactly this).
 - Note **filename is an immutable ID** (`YYYYMMDD_HHMMSS.md`); never rename
 - Frontmatter is **preserved verbatim**; any new key must be a typed field on
   `NoteFrontmatter` in Rust core (unknown keys are dropped on save)
-- The **editor/preview only ever see the body**, never frontmatter
+- The **editor/preview only ever see the body**, never frontmatter (and never
+  the title line — that lives in the title field, `note-title.ts`)
 - Sync clients **never upload their own state**; the Worker owns it
 - Every new Tauri command gets a handler in `tauri-app/dev/ipc-mock.js`
 - Keep the DOM small; never re-render whole documents via innerHTML

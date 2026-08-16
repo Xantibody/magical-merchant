@@ -7,6 +7,11 @@
  * 同じ規則が `core/src/utils/tags.rs` にもある。あちらはノート一覧を作るのに
  * 全文を読む必要があり（一覧の要約は先頭 100 文字しか持たない）、こちらは
  * 画面で本文をそのまま解釈する。片方を直したらもう片方も直すこと。
+ *
+ * ひとつだけ意図的に違う: core はコードフェンスとコードスパンを読み飛ばす。
+ * あちらが読むのは Markdown のノート全文で、`#include` を拾ってしまうため。
+ * こちらが読むのはタイムラインの 1 行で、ノートのプレビュー描画では
+ * markdown-it が先にコードを切り分けている(`tag-markdown.ts`)。
  */
 
 /**
@@ -30,13 +35,22 @@ export interface TagSegment {
   tag: boolean;
 }
 
+/**
+ * タグの同一性。大文字小文字の違いは書き手にとって同じタグなので ASCII だけ
+ * 小文字に寄せる(日本語に大文字小文字は無く、ロケール依存の変換も持ち込まない)。
+ * 本文に書かれた文字そのものは変えない — 色を付けて描くのは打ったとおりの形。
+ */
+export function normalizeTag(tag: string): string {
+  return tag.replaceAll(/[A-Z]/g, (c) => c.toLowerCase());
+}
+
 /** 本文の `#タグ` を、出てきた順に重複なく返す。 */
 export function parseTags(text: string): string[] {
   const seen = new Set<string>();
   for (const match of text.matchAll(TAG)) {
     const tag = match.groups?.tag;
     if (tag) {
-      seen.add(tag);
+      seen.add(normalizeTag(tag));
     }
   }
   return [...seen];

@@ -233,6 +233,39 @@
   color: var(--app-text);
 }
 
+/* タイトルは本文先頭の H1。枠を持たせず、大きな 1 行として本文の続きに
+   見えるようにする。スクロールする本文の外に置くので、長いノートでも
+   何を書いているノートなのかが消えない */
+.note-title-input {
+  flex: 0 0 auto;
+  width: 100%;
+  /* 本文と同じ 640px の段。左右の padding は .detail-body に合わせる */
+  max-width: calc(640px + 28px * 2);
+  margin-inline: auto;
+  padding: 20px 28px 0;
+  border: none;
+  background: none;
+  color: var(--app-text);
+  font-family: inherit;
+  font-size: 21px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.note-title-input::placeholder {
+  color: var(--app-text-hint);
+  font-weight: 500;
+}
+
+.note-title-input:focus {
+  outline: none;
+}
+
+/* タイトルを外に出したぶん、本文の上の余白は詰める */
+.note-title-input + .detail-body {
+  padding-top: 16px;
+}
+
 .detail-body {
   flex: 1;
   overflow-y: auto;
@@ -352,6 +385,7 @@
   }
 
   .detail-meta-bar,
+  .note-title-input,
   .detail-body,
   .detail-empty {
     display: none;
@@ -366,6 +400,7 @@
   }
 
   .workspace--detail .detail-meta-bar,
+  .workspace--detail .note-title-input,
   .workspace--detail .detail-body {
     display: flex;
   }
@@ -378,8 +413,23 @@
     display: flex;
   }
 
+  .workspace--detail .note-title-input {
+    display: block;
+  }
+
   .detail-body {
     padding: 16px 20px;
+  }
+
+  .note-title-input {
+    /* 指で押せる高さを確保する。詰めると本文との境目も分かりにくい */
+    min-height: 44px;
+    padding: 12px 20px 0;
+    font-size: 19px;
+  }
+
+  .note-title-input + .detail-body {
+    padding-top: 10px;
   }
 
   .capture-bar {

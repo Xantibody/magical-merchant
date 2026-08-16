@@ -6,6 +6,10 @@
 //! 同じ規則が `tauri-app/src/lib/tags.ts` にもある。あちらは画面で本文を
 //! そのまま解釈する必要があり（入力補完と色付け）、こちらは一覧を作るのに
 //! ノート全文を読む必要がある。片方を直したらもう片方も直すこと。
+//!
+//! ひとつだけ意図的に違う: コードフェンスとコードスパンを読み飛ばすのは
+//! こちらだけ。読む対象が Markdown のノート全文だからで、あちらが読むのは
+//! タイムラインの 1 行(コードの切り分けは markdown-it が先にやる)。
 
 /// タグに使える文字。日本語のタグも書けるよう `is_alphanumeric` で見る。
 fn is_tag_char(c: char) -> bool {
@@ -21,12 +25,65 @@ fn is_tag_char(c: char) -> bool {
 /// 「走った。#run」のような、ごく普通の書き方を取りこぼす。
 ///
 /// `# 見出し` は `#` の直後が空白なので、そもそも 1 文字も一致しない。
+///
+/// コードの中は読まない。`#include` や `#define` は書き手がタグのつもりで
+/// 打ったものではないし、プレビューもコードの中身には色を付けない。
 #[must_use]
 pub fn parse(text: &str) -> Vec<String> {
     let mut tags: Vec<String> = Vec::new();
+    let mut fence: Option<(char, usize)> = None;
+
+    for line in text.lines() {
+        if let Some((marker, len)) = fence {
+            // 開いたときより短い区切りでは閉じない
+            if fence_marker(line).is_some_and(|(m, l)| m == marker && l >= len) {
+                fence = None;
+            }
+            continue;
+        }
+        if let Some(open) = fence_marker(line) {
+            fence = Some(open);
+            continue;
+        }
+        collect_line(line, &mut tags);
+    }
+
+    tags
+}
+
+/// 行がコードフェンスの区切りなら、その記号と本数を返す。
+fn fence_marker(line: &str) -> Option<(char, usize)> {
+    let trimmed = line.trim_start();
+    let marker = trimmed.chars().next()?;
+    if marker != '`' && marker != '~' {
+        return None;
+    }
+    let len = trimmed.chars().take_while(|&c| c == marker).count();
+    (len >= 3).then_some((marker, len))
+}
+
+/// 1 行を、コードスパン(`` ` ``)の外側だけ読む。
+fn collect_line(line: &str, tags: &mut Vec<String>) {
+    let mut rest = line;
+    while let Some(start) = rest.find('`') {
+        collect_span(&rest[..start], tags);
+        let after = &rest[start..];
+        let ticks = after.chars().take_while(|&c| c == '`').count();
+        let (delim, body) = after.split_at(ticks);
+        // 閉じない `` ` `` はただの記号。以降は本文として読む
+        rest = body.find(delim).map_or(body, |end| &body[end + ticks..]);
+    }
+    collect_span(rest, tags);
+}
+
+/// コードの外にある一続きの文字列からタグを拾う。
+///
+/// 大文字小文字の違いは書き手にとって同じタグ。ASCII だけ小文字に寄せる
+/// (日本語に大文字小文字は無く、ロケール依存の変換も持ち込まない)。
+fn collect_span(span: &str, tags: &mut Vec<String>) {
     let mut at_boundary = true;
 
-    let mut chars = text.char_indices().peekable();
+    let mut chars = span.char_indices().peekable();
     while let Some((index, c)) = chars.next() {
         if c != '#' || !at_boundary {
             at_boundary = !is_tag_char(c);
@@ -41,16 +98,14 @@ pub fn parse(text: &str) -> Vec<String> {
         }
 
         if end > start {
-            let tag = &text[start..end];
-            if !tags.iter().any(|seen| seen == tag) {
-                tags.push(tag.to_string());
+            let tag = span[start..end].to_ascii_lowercase();
+            if !tags.contains(&tag) {
+                tags.push(tag);
             }
         }
         // タグを 1 つ読んだ直後の `#` は、直前がタグ文字なので境界ではない。
         at_boundary = end == start;
     }
-
-    tags
 }
 
 #[cfg(test)]
@@ -117,6 +172,44 @@ mod tests {
     fn stops_a_tag_at_punctuation() {
         assert_eq!(parse("#sync、あとで"), vec!["sync"]);
         assert_eq!(parse("#sync. done"), vec!["sync"]);
+    }
+
+    /// コードの中の `#` は書き手が打ったタグではない。プレビューも
+    /// コードの中身には色を付けない — 一覧のチップだけが拾っていた。
+    #[test]
+    fn ignores_hashes_inside_a_fenced_code_block() {
+        let text = "本文 #real\n\n```c\n#include <stdio.h>\n#define N 1\n```\n\n続き";
+        assert_eq!(parse(text), vec!["real"]);
+    }
+
+    #[test]
+    fn ignores_hashes_inside_an_inline_code_span() {
+        assert_eq!(parse("`#define` は展開される #memo"), vec!["memo"]);
+    }
+
+    /// フェンスを閉じた後の本文は普通に読む。
+    #[test]
+    fn resumes_after_the_fence_closes() {
+        assert_eq!(parse("```\n#skipped\n```\n#after"), vec!["after"]);
+    }
+
+    /// 閉じていないフェンスは、そこから先が全部コード。
+    #[test]
+    fn treats_an_unclosed_fence_as_code_to_the_end() {
+        assert_eq!(parse("#before\n```\n#skipped"), vec!["before"]);
+    }
+
+    /// `#Rust` と `#rust` は書き手にとって同じタグ。別々に数えると、
+    /// 同じ分類が一覧に二重に並ぶ。
+    #[test]
+    fn normalizes_ascii_tags_to_lowercase() {
+        assert_eq!(parse("#Rust と #rust と #RUST"), vec!["rust"]);
+    }
+
+    /// 日本語には大文字小文字が無い。壊さずそのまま返す。
+    #[test]
+    fn keeps_japanese_tags_as_written() {
+        assert_eq!(parse("#設計 #カタカナ"), vec!["設計", "カタカナ"]);
     }
 
     #[test]

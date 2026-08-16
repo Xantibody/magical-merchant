@@ -117,6 +117,7 @@ fn write_notes(base: &Path, rng: &mut Lcg) {
             context: None,
             view: None,
             origin: None,
+            updated: None,
         };
         // preview は先頭 100 文字しか読まれない。本文はそれより十分長くする。
         let mut text = String::new();

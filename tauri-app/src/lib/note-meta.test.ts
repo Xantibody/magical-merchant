@@ -1,5 +1,31 @@
 import { describe, it, expect } from "vitest";
-import { addTag, contextRows, resolveEditedTime, toDatetimeLocal } from "./note-meta";
+import {
+  addTag,
+  contextRows,
+  formatRecordedAt,
+  resolveEditedTime,
+  toDatetimeLocal,
+} from "./note-meta";
+
+describe("addTag", () => {
+  it("normalizes an ascii tag the same way the body syntax does", () => {
+    expect(addTag([], "#Rust")).toStrictEqual(["rust"]);
+  });
+
+  it("drops a tag that differs only in case", () => {
+    expect(addTag(["rust"], "RUST")).toStrictEqual(["rust"]);
+  });
+});
+
+describe("formatRecordedAt", () => {
+  it("shows the recorded wall-clock time", () => {
+    expect(formatRecordedAt("2026-05-03T15:39:45+09:00")).toBe("2026/05/03 15:39");
+  });
+
+  it("returns an empty string for a note that was never edited", () => {
+    expect(formatRecordedAt()).toBe("");
+  });
+});
 
 describe("toDatetimeLocal", () => {
   it("keeps the wall-clock time as recorded", () => {

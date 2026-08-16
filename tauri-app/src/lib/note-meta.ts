@@ -8,6 +8,7 @@
  */
 
 import type { NoteContext } from "./commands";
+import { normalizeTag } from "./tags";
 
 /** RFC 3339 の time を datetime-local input の値(分まで)にする。 */
 export function toDatetimeLocal(rfc3339: string): string {
@@ -30,9 +31,23 @@ export function resolveEditedTime(original: string, edited: string): string {
   return `${edited}:00${offset}`;
 }
 
-/** 入力をタグとして追加する。先頭の `#` は落とし、空と重複は無視する。 */
+/**
+ * 読み取り専用で見せる日時。「2026/05/03 15:39」
+ * time と同じく文字列のまま切り出す — 端末のタイムゾーンに換算しない。
+ */
+export function formatRecordedAt(rfc3339?: string): string {
+  if (!rfc3339) {
+    return "";
+  }
+  return `${rfc3339.slice(0, 10).replaceAll("-", "/")} ${rfc3339.slice(11, 16)}`;
+}
+
+/**
+ * 入力をタグとして追加する。先頭の `#` は落とし、空と重複は無視する。
+ * 同一性は本文の `#記法` と同じ規則で見る(`tags.ts`)。
+ */
 export function addTag(tags: string[], raw: string): string[] {
-  const tag = raw.trim().replace(/^#+/, "");
+  const tag = normalizeTag(raw.trim().replace(/^#+/, ""));
   if (!tag || tags.includes(tag)) {
     return tags;
   }
