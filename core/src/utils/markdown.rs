@@ -65,6 +65,7 @@ pub fn format_note_markdown(
     tags: &[String],
     timestamp: DateTime<Local>,
     context: &Context,
+    origin: Option<&str>,
 ) -> Result<String, CoreError> {
     let time: DateTime<FixedOffset> = timestamp.into();
     let fm = NoteFrontmatter {
@@ -72,6 +73,7 @@ pub fn format_note_markdown(
         tags: tags.to_vec(),
         context: Some(context.clone()),
         view: None,
+        origin: origin.map(str::to_string),
     };
     frontmatter::render(&fm, body)
 }
@@ -130,9 +132,14 @@ mod tests {
     #[test]
     fn test_format_note_markdown() {
         let tags = vec!["rust".to_string(), "memo".to_string()];
-        let result =
-            format_note_markdown("# Hello\nWorld", &tags, fixed_timestamp(), &test_context())
-                .unwrap();
+        let result = format_note_markdown(
+            "# Hello\nWorld",
+            &tags,
+            fixed_timestamp(),
+            &test_context(),
+            None,
+        )
+        .unwrap();
 
         let (fm, body): (NoteFrontmatter, &str) = frontmatter::parse(&result).unwrap();
         assert_eq!(fm.tags, vec!["rust", "memo"]);
@@ -145,7 +152,8 @@ mod tests {
 
     #[test]
     fn test_format_note_markdown_empty_tags() {
-        let result = format_note_markdown("body", &[], fixed_timestamp(), &test_context()).unwrap();
+        let result =
+            format_note_markdown("body", &[], fixed_timestamp(), &test_context(), None).unwrap();
         let (fm, _body): (NoteFrontmatter, &str) = frontmatter::parse(&result).unwrap();
         assert!(fm.tags.is_empty());
     }
@@ -157,7 +165,7 @@ mod tests {
             is_charging: Some(true),
             ..Context::default()
         };
-        let result = format_note_markdown("body", &[], fixed_timestamp(), &ctx).unwrap();
+        let result = format_note_markdown("body", &[], fixed_timestamp(), &ctx, None).unwrap();
         let (fm, _body): (NoteFrontmatter, &str) = frontmatter::parse(&result).unwrap();
         let context = fm.context.unwrap();
         assert_eq!(context.battery, Some(100));

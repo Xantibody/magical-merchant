@@ -73,6 +73,12 @@
 
   // ---- ノートのつくりもの ----
 
+  /** タイムラインは実時刻基準で作られるので、origin も同じ基準で合わせる。 */
+  const isoDaysAgo = (days) => {
+    const day = new Date(today.getFullYear(), today.getMonth(), today.getDate() - days);
+    return `${day.getFullYear()}-${pad(day.getMonth() + 1)}-${pad(day.getDate())}`;
+  };
+
   const codeSample = [
     "```typescript",
     "export function debounce<T extends unknown[]>(fn: (...args: T) => void, ms: number) {",
@@ -131,6 +137,8 @@
         tags: [],
         view: null,
         body: "# 短いメモ\n\n今日やることを 3 つだけ。",
+        // 昇格ノートのチップ検証用。3 日前のエントリから育ったことにする
+        origin: `${isoDaysAgo(3)}T08:00:00`,
       },
     ],
   ]);
@@ -144,6 +152,7 @@
         time: note.time,
         tags: note.tags,
         preview: note.body.slice(0, 120),
+        ...(note.origin ? { origin: note.origin } : {}),
       }));
 
   // ---- コマンド実装 ----
@@ -214,11 +223,17 @@
     delete_note: ({ filename }) => {
       notes.delete(filename);
     },
-    create_draft: ({ body }) => {
+    create_draft: ({ body, tags, origin }) => {
       const now = new Date();
       const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
       const filename = `${stamp}.md`;
-      notes.set(filename, { time: now.toISOString(), tags: [], view: null, body });
+      notes.set(filename, {
+        time: now.toISOString(),
+        tags: tags ?? [],
+        view: null,
+        body,
+        ...(origin ? { origin } : {}),
+      });
       return `/mock/data/${filename}`;
     },
     update_draft: ({ filePath, body }) => {

@@ -31,12 +31,13 @@ impl Notes {
         body: &str,
         tags: &[String],
         context: &Context,
+        origin: Option<&str>,
     ) -> Result<PathBuf, CoreError> {
         let now = Local::now();
         let file_path = note_file_path(&self.base_dir, now);
         ensure_dir(&file_path)?;
 
-        let markdown = format_note_markdown(body, tags, now, context)?;
+        let markdown = format_note_markdown(body, tags, now, context, origin)?;
         write_atomic(&file_path, markdown)?;
         Ok(file_path)
     }
@@ -100,6 +101,7 @@ impl Notes {
                 tags: Vec::new(),
                 context: Some(context.clone()),
                 view: None,
+                origin: None,
             },
             |(fm, _)| fm,
         );
@@ -135,6 +137,7 @@ impl Notes {
             tags: tags.to_vec(),
             context: existing.context,
             view: existing.view,
+            origin: existing.origin,
         };
         write_atomic(&path, frontmatter::render(&fm, body)?)?;
         Ok(())
