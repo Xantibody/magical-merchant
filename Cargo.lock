@@ -2416,7 +2416,7 @@ dependencies = [
 
 [[package]]
 name = "magical-merchant-app"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base64 0.22.1",
  "battery",
@@ -2448,7 +2448,7 @@ dependencies = [
 
 [[package]]
 name = "magical-merchant-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "chrono",
  "criterion",
@@ -2464,7 +2464,7 @@ dependencies = [
 
 [[package]]
 name = "magical-merchant-mcp-cli"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "chrono",
