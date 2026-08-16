@@ -109,6 +109,13 @@ fn read_note(handle: AppHandle, filename: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+fn find_backlinks(handle: AppHandle, filename: String) -> Result<Vec<SearchHit>, String> {
+    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let filename = NoteFilename::parse(&filename).map_err(|e| e.to_string())?;
+    magical_merchant_core::find_backlinks(&base_dir, &filename).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn read_note_meta(handle: AppHandle, filename: String) -> Result<NoteMeta, String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
     let filename = NoteFilename::parse(&filename).map_err(|e| e.to_string())?;
@@ -296,6 +303,7 @@ pub fn run() {
             list_notes,
             read_note,
             read_note_meta,
+            find_backlinks,
             update_note_meta,
             set_note_view,
             read_timeline,

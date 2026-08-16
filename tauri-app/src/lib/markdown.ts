@@ -1,6 +1,7 @@
 import MarkdownIt from "markdown-it";
 import { getHighlighter } from "./highlighter";
 import { renderDiagrams } from "./mermaid";
+import { noteLinkPlugin } from "./note-link-markdown";
 import { isPreservedEmptyLine } from "./preserved-empty-line";
 import { tagPlugin } from "./tag-markdown";
 
@@ -30,9 +31,13 @@ const md = new MarkdownIt({
 
 md.use(tagPlugin);
 md.use(preservedEmptyLinePlugin);
+md.use(noteLinkPlugin);
 
-export function renderMarkdownSync(source: string): string {
-  return md.render(source);
+export function renderMarkdownSync(
+  source: string,
+  noteTitles?: ReadonlyMap<string, string>,
+): string {
+  return md.render(source, { noteTitles });
 }
 
 interface FenceBlock {
@@ -42,6 +47,7 @@ interface FenceBlock {
 
 interface RenderEnv {
   __fenceBlocks?: FenceBlock[];
+  noteTitles?: ReadonlyMap<string, string>;
 }
 
 const fenceMd = new MarkdownIt({
@@ -52,6 +58,7 @@ const fenceMd = new MarkdownIt({
 
 fenceMd.use(tagPlugin);
 fenceMd.use(preservedEmptyLinePlugin);
+fenceMd.use(noteLinkPlugin);
 
 /**
  * フェンスの描画結果を差し込む目印。markdown-it は CommonMark どおり入力中の U+0000 を
@@ -137,8 +144,11 @@ function fillSlots(html: string, rendered: string[]): string {
   return parts.map((part, index) => (index === 0 ? part : rendered[index - 1] + part)).join("");
 }
 
-export async function renderMarkdown(source: string): Promise<string> {
-  const env: RenderEnv = {};
+export async function renderMarkdown(
+  source: string,
+  noteTitles?: ReadonlyMap<string, string>,
+): Promise<string> {
+  const env: RenderEnv = { noteTitles };
   const html = fenceMd.render(source, env);
 
   const blocks = env.__fenceBlocks;

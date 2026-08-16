@@ -131,6 +131,16 @@
       },
     ],
     [
+      "20260811_100000.md",
+      {
+        time: "2026-08-11T10:00:00+09:00",
+        tags: [],
+        view: null,
+        // [[リンク]] の解決とバックリンクの検証用
+        body: "# リンク集\n\nまず [[20260813_083000]] を読む。次に [[20260810_090000]]。",
+      },
+    ],
+    [
       "20260813_083000.md",
       {
         time: "2026-08-13T08:30:00+09:00",
@@ -142,6 +152,9 @@
       },
     ],
   ]);
+
+  // バックリンク検証用: 昨日のエントリからも 短いメモ を指しておく
+  timeline.get(isoDaysAgo(1))?.push(`- [21:00:00] 昨日の続きは [[20260813_083000]] にまとめた`);
 
   const noteList = () =>
     [...notes.entries()]
@@ -249,6 +262,45 @@
       return hits.toSorted((a, b) => b.date.localeCompare(a.date)).slice(0, 100);
     },
     list_notes: () => noteList(),
+    find_backlinks: ({ filename }) => {
+      const needle = `[[${filename.replace(/\.md$/, "")}]]`;
+      const hits = [];
+      for (const [iso, lines] of timeline) {
+        lines.forEach((raw, index) => {
+          const text = raw.replace(/^- \[\d\d:\d\d:\d\d\] /, "").replace(/ \{.*\}$/, "");
+          if (text.includes(needle)) {
+            hits.push({
+              kind: "timeline",
+              title: text.split("\n")[0],
+              snippet: text.slice(0, 90),
+              date: iso,
+              filename: null,
+              index,
+              tags: [],
+              match_start: null,
+              match_len: null,
+            });
+          }
+        });
+      }
+      for (const [name, note] of notes) {
+        if (name === filename || !note.body.includes(needle)) {
+          continue;
+        }
+        hits.push({
+          kind: "note",
+          title: note.body.split("\n")[0].replace(/^#+\s*/, ""),
+          snippet: note.body.slice(0, 90),
+          date: note.time.slice(0, 10),
+          filename: name,
+          index: null,
+          tags: note.tags,
+          match_start: null,
+          match_len: null,
+        });
+      }
+      return hits.toSorted((a, b) => b.date.localeCompare(a.date));
+    },
     read_note: async ({ filename }) => {
       // ディスク読みの往復ぶん。ノート切替の描画順の検証に効く
       await delay(30);

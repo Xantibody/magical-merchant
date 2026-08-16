@@ -11,7 +11,7 @@ import {
   onCleanup,
 } from "solid-js";
 import type { JSX } from "solid-js";
-import { useSearchParams } from "@solidjs/router";
+import { useNavigate, useSearchParams } from "@solidjs/router";
 import type { Editor } from "@milkdown/kit/core";
 import Icon from "../components/Icon";
 import MarkdownPreview from "../components/MarkdownPreview";
@@ -31,6 +31,9 @@ import {
   writeBackup,
 } from "../lib/edit-backup";
 import type { CaretPoint } from "../components/MilkdownEditor";
+import type { NoteLinkTarget } from "../lib/note-link-plugin";
+import type { SearchHit } from "../lib/commands";
+import { ROUTES } from "../lib/routes";
 
 // Milkdown + ProseMirror は編集を始めるまで要らない。一覧とプレビューだけの
 // 表示をこの重さから切り離す
@@ -63,6 +66,7 @@ function EmptyNotes(): JSX.Element {
 
 export default function Workspace(): JSX.Element {
   const shell = useShell();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const today = new Date();
 
@@ -102,6 +106,32 @@ export default function Workspace(): JSX.Element {
     const items = visibleItems();
     return items.find((item) => item.id === selectedId()) ?? items[0];
   });
+
+  /** `[[ID]]` → タイトルの解決表。プレビューが毎回これを引いて描く。 */
+  const noteTitles = createMemo<ReadonlyMap<string, string>>(
+    () => new Map(visibleItems().map((item) => [item.filename.replace(/\.md$/, ""), item.title])),
+  );
+
+  /** `[[` 補完の候補。自分自身へのリンクは出さない。 */
+  const linkTargets = (): NoteLinkTarget[] =>
+    visibleItems()
+      .filter((item) => item.id !== selected()?.id)
+      .map((item) => ({ id: item.filename.replace(/\.md$/, ""), title: item.title }));
+
+  // このノートを [[ID]] で指している記録。開くたびに走査で導出される
+  const [backlinks] = createResource(
+    () => selected()?.filename,
+    (filename) => typedInvoke("find_backlinks", { filename }),
+  );
+
+  const openBacklink = (hit: SearchHit): void => {
+    if (hit.kind === "note" && hit.filename) {
+      setSelectedId(hit.filename);
+      setDetailOpen(true);
+    } else {
+      navigate(`${ROUTES.TIMELINE}?day=${hit.date}`);
+    }
+  };
 
   // ウィジェットの行から `?file=` 付きで来たときだけ、その 1 件を開く。
   // 一覧が届く前に来ることがあるが、id はファイル名そのものなので先に置ける
@@ -243,8 +273,16 @@ export default function Workspace(): JSX.Element {
       return;
     }
     const target = e.target instanceof Element ? e.target : null;
-    // リンクは踏める・図はズームのまま。編集に化けさせない
-    if (target?.closest("a, button, .mermaid-block, .mermaid-zoom")) {
+    // ノートリンクはこのアプリの中で解決する。href の無い a なので自前で開く
+    const noteLink = target?.closest("a.note-link");
+    if (noteLink instanceof HTMLElement && noteLink.dataset.file) {
+      setSelectedId(noteLink.dataset.file);
+      setDetailOpen(true);
+      return;
+    }
+    // リンクは踏める・図はズームのまま・バックリンク欄は一覧のまま。
+    // 編集に化けさせない
+    if (target?.closest("a, button, .mermaid-block, .mermaid-zoom, .backlinks")) {
       return;
     }
     // 本文をなぞってコピーしたいだけのときも編集へ切り替えない
@@ -492,7 +530,39 @@ export default function Workspace(): JSX.Element {
                   fallback={
                     <Show
                       when={noteView() === "mindmap"}
-                      fallback={<MarkdownPreview source={noteBody()} />}
+                      fallback={
+                        <>
+                          <MarkdownPreview source={noteBody()} noteTitles={noteTitles()} />
+                          {/* このノートを指している記録。畳んだ 1 行以上の場所は取らない */}
+                          <Show when={(backlinks() ?? []).length > 0}>
+                            <details class="backlinks">
+                              <summary class="backlinks-summary">
+                                リンクされている記録 ({(backlinks() ?? []).length})
+                              </summary>
+                              <div class="backlinks-list">
+                                <For each={backlinks()}>
+                                  {(hit) => (
+                                    <button
+                                      type="button"
+                                      class="backlink-row"
+                                      onClick={() => openBacklink(hit)}
+                                    >
+                                      <Icon
+                                        name={hit.kind === "note" ? "file-text" : "lightning"}
+                                        size={14}
+                                      />
+                                      <span class="backlink-title">{hit.title || hit.snippet}</span>
+                                      <span class="backlink-date">
+                                        {hit.date.slice(5).replace("-", "/")}
+                                      </span>
+                                    </button>
+                                  )}
+                                </For>
+                              </div>
+                            </details>
+                          </Show>
+                        </>
+                      }
                     >
                       <MindmapView source={noteBody()} />
                     </Show>
@@ -501,6 +571,7 @@ export default function Workspace(): JSX.Element {
                   <MilkdownEditor
                     placeholder="ノートを書く…"
                     caret={tapCaret()}
+                    noteLinks={linkTargets}
                     defaultValue={draft()}
                     onChange={(markdown) => {
                       setDraft(markdown);
