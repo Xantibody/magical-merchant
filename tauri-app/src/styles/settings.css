@@ -39,6 +39,35 @@
   gap: 6px;
 }
 
+/* 3 つしかない選択肢。開いて選ぶメニューにするほどのものではない */
+.settings-choices {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.settings-choice {
+  padding: 7px 14px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--radius-2);
+  background: var(--app-input-bg);
+  color: var(--app-text-muted);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.settings-choice:hover {
+  background: var(--app-surface-2);
+}
+
+.settings-choice--on {
+  background: var(--app-accent-soft);
+  border-color: var(--app-accent);
+  color: var(--app-text);
+  font-weight: 600;
+}
+
 .settings-field-label {
   font-size: 13px;
   color: var(--app-text-muted);

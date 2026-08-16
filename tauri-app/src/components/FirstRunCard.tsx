@@ -2,6 +2,7 @@ import { createSignal, Show } from "solid-js";
 import type { JSX } from "solid-js";
 import Icon from "./Icon";
 import { typedInvoke } from "../lib/commands";
+import { t } from "../lib/i18n";
 import { isImeComposing } from "../lib/ime";
 
 const DISMISSED_KEY = "first-run-dismissed";
@@ -56,12 +57,12 @@ export default function FirstRunCard(props: FirstRunCardProps): JSX.Element {
         <div class="first-run" role="dialog" aria-modal="true" aria-labelledby="first-run-title">
           <Icon name="cloud-check" size={24} />
           <h2 id="first-run-title" class="first-run-title">
-            同期はあとからでも設定できます
+            {t().firstRun.title}
           </h2>
           <p class="first-run-body">
-            設定しなければ、書いたものはこの端末の中だけに残ります。それで困らないなら、このまま使い始めて構いません。
+            {t().firstRun.body}
             <br />
-            複数の端末で同じ記録を見たくなったら、Workers の URL をここか設定画面で入れてください。
+            {t().firstRun.hint}
           </p>
 
           <input
@@ -89,10 +90,10 @@ export default function FirstRunCard(props: FirstRunCardProps): JSX.Element {
               disabled={!url().trim() || saving()}
               onClick={connect}
             >
-              接続
+              {t().firstRun.connect}
             </button>
             <button type="button" class="button-secondary" onClick={close}>
-              あとで
+              {t().firstRun.later}
             </button>
           </div>
         </div>

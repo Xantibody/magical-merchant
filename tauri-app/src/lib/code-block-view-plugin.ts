@@ -3,6 +3,7 @@ import { codeBlockSchema } from "@milkdown/kit/preset/commonmark";
 import { TextSelection } from "@milkdown/kit/prose/state";
 import copyIcon from "@phosphor-icons/core/assets/regular/copy.svg?raw";
 import checkIcon from "@phosphor-icons/core/assets/regular/check.svg?raw";
+import { t } from "./i18n";
 import { renderDiagrams } from "./mermaid";
 import { isMermaidLanguage, createDebouncedDiagramRenderer } from "./mermaid-preview";
 import { createCopyFeedback } from "./copy-feedback";
@@ -124,7 +125,7 @@ class CodeBlockPreviewView implements NodeView {
     button.className = "code-copy-button";
     button.contentEditable = "false";
     button.tabIndex = -1;
-    button.setAttribute("aria-label", "コードをコピー");
+    button.setAttribute("aria-label", t().editor.copyCode);
     button.innerHTML = copyIcon;
     button.addEventListener("mousedown", (event) => {
       event.preventDefault();
@@ -150,8 +151,8 @@ class CodeBlockPreviewView implements NodeView {
     input.type = "text";
     input.className = "code-language-input";
     input.setAttribute("list", LANGUAGE_DATALIST_ID);
-    input.setAttribute("aria-label", "言語");
-    input.placeholder = "言語";
+    input.setAttribute("aria-label", t().editor.language);
+    input.placeholder = t().editor.language;
     input.spellcheck = false;
     input.autocapitalize = "off";
     input.tabIndex = -1;
@@ -229,7 +230,7 @@ class CodeBlockPreviewView implements NodeView {
       // 描けていない間はソースを隠さない(隠すと直せない)
       this.dom.classList.remove("has-diagram");
       if (!this.lastSvg) {
-        this.showNotice("図を描画できません");
+        this.showNotice(t().editor.diagramFailed);
       }
       return;
     }

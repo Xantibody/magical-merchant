@@ -3,6 +3,7 @@ import type { JSX } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import Icon from "./Icon";
 import type { IconName } from "./Icon";
+import { t } from "../lib/i18n";
 import { formatRelativeTime } from "../lib/sync";
 import type { SyncState } from "../lib/sync";
 import { ROUTES } from "../lib/routes";
@@ -22,12 +23,15 @@ const FACE_ICONS: Record<Face, IconName> = {
   failed: "cloud-warning",
 };
 
-const FACE_TITLES: Record<Face, string> = {
-  synced: "すべて同期済み",
-  syncing: "同期中…",
-  offline: "同期していません",
-  failed: "同期に失敗しました",
-};
+function faceTitle(face: Face): string {
+  const labels = t().sync;
+  return {
+    synced: labels.synced,
+    syncing: labels.syncing,
+    offline: labels.notSyncing,
+    failed: labels.failed,
+  }[face];
+}
 
 export default function SyncPopover(props: SyncPopoverProps): JSX.Element {
   const navigate = useNavigate();
@@ -53,13 +57,11 @@ export default function SyncPopover(props: SyncPopoverProps): JSX.Element {
     <div class="popover sync-popover" data-face={face()}>
       <div class="sync-popover-head">
         <Icon name={FACE_ICONS[face()]} size={16} />
-        <span class="sync-popover-title">{FACE_TITLES[face()]}</span>
+        <span class="sync-popover-title">{faceTitle(face())}</span>
       </div>
 
       <Show when={face() === "offline"}>
-        <p class="sync-popover-body">
-          書いたものはこの端末の中だけに残ります。他の端末と揃えたいときだけ設定してください。
-        </p>
+        <p class="sync-popover-body">{t().sync.localOnly}</p>
       </Show>
 
       {/* 失敗の理由は言い換えず、返ってきた文をそのまま見せる */}
@@ -68,12 +70,16 @@ export default function SyncPopover(props: SyncPopoverProps): JSX.Element {
       </Show>
 
       <Show when={props.sync.lastSyncedAt()}>
-        {(at) => <p class="sync-popover-detail">最終同期 {formatRelativeTime(at(), new Date())}</p>}
+        {(at) => (
+          <p class="sync-popover-detail">
+            {t().sync.lastSync(formatRelativeTime(at(), new Date()))}
+          </p>
+        )}
       </Show>
 
       <Show when={face() !== "offline"}>
         <label class="sync-popover-toggle">
-          <span>保存時に自動同期</span>
+          <span>{t().sync.autoSync}</span>
           <input
             type="checkbox"
             checked={props.sync.autoSync()}
@@ -95,7 +101,7 @@ export default function SyncPopover(props: SyncPopoverProps): JSX.Element {
                 void props.sync.syncNow();
               }}
             >
-              {face() === "failed" ? "再試行" : "今すぐ同期"}
+              {face() === "failed" ? t().sync.retry : t().sync.now}
             </button>
           }
         >
@@ -107,7 +113,7 @@ export default function SyncPopover(props: SyncPopoverProps): JSX.Element {
               navigate(ROUTES.SETTINGS);
             }}
           >
-            設定を開く
+            {t().sync.openSettings}
           </button>
         </Show>
       </div>

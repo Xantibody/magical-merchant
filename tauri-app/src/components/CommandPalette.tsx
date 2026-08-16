@@ -5,6 +5,7 @@ import type { IconName } from "./Icon";
 import { typedInvoke } from "../lib/commands";
 import type { SearchHit } from "../lib/commands";
 import { createDebouncedAccessor } from "../lib/debounce";
+import { t } from "../lib/i18n";
 import { isImeComposing } from "../lib/ime";
 import { toNoteItems } from "../lib/items";
 import { countNoteTags, dayJumpHits, recentNoteHits } from "../lib/palette-home";
@@ -121,7 +122,7 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
         key: `tag:${tag.tag}`,
         icon: "magnifying-glass",
         label: `#${tag.tag}`,
-        meta: `${tag.count}件`,
+        meta: t().palette.count(tag.count),
         run: () => {
           // タグは着地先が一つに決まらないので、検索として引き継ぐ
           setQuery(tag.tag);
@@ -129,10 +130,10 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
         },
       }));
       return [
-        { title: "コマンド", rows: commands },
-        { title: "日付", rows: days },
-        { title: "最近のノート", rows: recent },
-        { title: "タグ", rows: tags },
+        { title: t().palette.commands, rows: commands },
+        { title: t().palette.dates, rows: days },
+        { title: t().palette.recentNotes, rows: recent },
+        { title: t().common.tags, rows: tags },
       ].filter((section) => section.rows.length > 0);
     }
 
@@ -145,8 +146,8 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
       run: () => props.onSelectHit(hit),
     }));
     return [
-      { title: "コマンド", rows: commands },
-      { title: "ノート・エントリ", rows: hitRows },
+      { title: t().palette.commands, rows: commands },
+      { title: t().palette.hits, rows: hitRows },
     ].filter((section) => section.rows.length > 0);
   });
 
@@ -191,14 +192,14 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
         }
       }}
     >
-      <div class="palette" role="dialog" aria-modal="true" aria-label="検索・コマンド">
+      <div class="palette" role="dialog" aria-modal="true" aria-label={t().palette.dialogLabel}>
         <div class="palette-input-row">
           <Icon name="magnifying-glass" size={17} />
           <input
             ref={inputRef}
             type="text"
             class="palette-input"
-            placeholder="検索・コマンド…"
+            placeholder={t().header.searchPlaceholder}
             value={query()}
             onInput={(e) => {
               setQuery(e.currentTarget.value);
@@ -254,7 +255,7 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
           </For>
 
           <Show when={query().trim() && !hits.loading && !hits()?.length}>
-            <p class="palette-empty">一致するものがありません</p>
+            <p class="palette-empty">{t().palette.empty}</p>
           </Show>
         </div>
       </div>

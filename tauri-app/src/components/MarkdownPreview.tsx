@@ -1,4 +1,5 @@
 import { createSignal, createEffect, on, onCleanup, onMount, Show } from "solid-js";
+import { t } from "../lib/i18n";
 import { renderMarkdown } from "../lib/markdown";
 import { resolvedTheme } from "../lib/theme";
 import Icon from "./Icon";
@@ -44,8 +45,8 @@ function DiagramZoom(props: { diagram: ZoomedDiagram; onClose: () => void }): JS
       <button
         type="button"
         class="icon-button mermaid-zoom-close"
-        title="閉じる"
-        aria-label="閉じる"
+        title={t().common.close}
+        aria-label={t().common.close}
         onClick={() => props.onClose()}
       >
         <Icon name="x" size={18} />

@@ -5,11 +5,12 @@ import {
   buildMonthGrid,
   formatMonthTitle,
   shiftMonth,
-  WEEKDAY_LABELS,
+  weekdayLabels,
   summarizeDay,
 } from "../lib/calendar";
 import type { DaySummary } from "../lib/calendar";
 import { toIsoDate } from "../lib/day-labels";
+import { t } from "../lib/i18n";
 import { getNetworkIcon } from "../lib/parse-timeline";
 import type { DeviceContext } from "../lib/parse-timeline";
 
@@ -40,23 +41,33 @@ export default function CalendarPopover(props: CalendarPopoverProps): JSX.Elemen
 
   const pickedLabel = createMemo(() => {
     const [, m, d] = picked().split("-");
-    return `${Number(m)}月${Number(d)}日`;
+    return t().calendar.monthDay(Number(m), Number(d));
   });
 
   return (
     <div class="popover calendar-popover">
       <div class="calendar-header">
-        <button type="button" class="icon-button" aria-label="前の月" onClick={() => step(-1)}>
+        <button
+          type="button"
+          class="icon-button"
+          aria-label={t().calendar.prevMonth}
+          onClick={() => step(-1)}
+        >
           <Icon name="caret-left" size={14} />
         </button>
         <span class="calendar-title">{formatMonthTitle(year(), month())}</span>
-        <button type="button" class="icon-button" aria-label="次の月" onClick={() => step(1)}>
+        <button
+          type="button"
+          class="icon-button"
+          aria-label={t().calendar.nextMonth}
+          onClick={() => step(1)}
+        >
           <Icon name="caret-right" size={14} />
         </button>
       </div>
 
       <div class="calendar-grid">
-        <For each={WEEKDAY_LABELS}>{(label) => <span class="calendar-weekday">{label}</span>}</For>
+        <For each={weekdayLabels()}>{(label) => <span class="calendar-weekday">{label}</span>}</For>
         <For each={grid()}>
           {(cell) => (
             <button
@@ -81,7 +92,7 @@ export default function CalendarPopover(props: CalendarPopoverProps): JSX.Elemen
 
       <div class="calendar-summary">
         <span class="calendar-summary-title">
-          {pickedLabel()} — {summary().count}件
+          {pickedLabel()} — {t().timeline.entryCount(summary().count)}
         </span>
         <Show when={summary().count > 0}>
           <span class="calendar-summary-row">
