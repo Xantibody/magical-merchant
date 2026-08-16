@@ -39,6 +39,8 @@ ready to record the moment it opens (widgets exist for exactly this).
   leading `# heading`); Milkdown editor is lazy-loaded on first edit;
   per-note mindmap view via frontmatter `view`
 - **Command palette** (⌘K): in-memory commands + debounced `search_all`
+- **Language**: Japanese and English only, from one table (`lib/i18n.ts`).
+  Every user-visible string goes through `t()`; the choice lives in Settings
 - There is **no Tasks mode**. Do not add one or reference it.
 
 ## Invariants (never break)

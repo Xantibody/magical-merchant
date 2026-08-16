@@ -32,6 +32,11 @@ Spacing/typography/radius use Open Props (`var(--size-*)`, `var(--radius-*)`,
 - Toasts go through `shell.showToast(text, undo?)`; destructive actions get a
   5s undo tombstone (see Workspace.remove) rather than a confirm dialog
 - Comments in code explain _why_ (in Japanese, matching the codebase style)
+- **No user-visible string is written inline.** Add it to both tables in
+  `lib/i18n.ts` and read it with `t()` — inside JSX or a memo, so switching
+  the language redraws. Sentences with numbers are functions, not templates.
+  Tests run in Japanese (`src/test-setup.ts`); say `setLocale("en")` to see
+  the other side
 
 ## Layout rules
 

@@ -91,6 +91,13 @@ to that day.
 
 ![Command palette](images/palette.png)
 
+## Language
+
+The interface speaks Japanese or English. It follows the system language on
+first launch and can be pinned either way in Settings → LANGUAGE; the choice
+takes effect immediately, without a restart. Only the interface changes —
+what you wrote stays exactly as you wrote it, and so do your tags.
+
 ## Sync (optional)
 
 A Cloudflare Worker + R2 backend syncs the Markdown files across devices.
