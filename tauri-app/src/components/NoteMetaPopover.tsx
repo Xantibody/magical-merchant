@@ -3,7 +3,13 @@ import type { JSX } from "solid-js";
 import Icon from "./Icon";
 import { typedInvoke } from "../lib/commands";
 import { isImeComposing } from "../lib/ime";
-import { addTag, contextRows, resolveEditedTime, toDatetimeLocal } from "../lib/note-meta";
+import {
+  addTag,
+  contextRows,
+  formatRecordedAt,
+  resolveEditedTime,
+  toDatetimeLocal,
+} from "../lib/note-meta";
 
 interface NoteMetaPopoverProps {
   filename: string;
@@ -18,9 +24,9 @@ interface NoteMetaPopoverProps {
 /**
  * ノートの frontmatter を見せる小さなパネル。
  *
- * 編集できるのは time と tags だけ。context は「どの端末で書いたか」の
- * 記録なので読み取り専用で列挙する。ファイル名は同期とウィジェットが
- * 指す ID であり、ここにも出さない。
+ * 編集できるのは time と tags だけ。updated(書き直した時刻)と context
+ * (どの端末で書いたか)は記録なので読み取り専用で並べる。ファイル名は
+ * 同期とウィジェットが指す ID であり、ここにも出さない。
  */
 export default function NoteMetaPopover(props: NoteMetaPopoverProps): JSX.Element {
   const [meta] = createResource(
@@ -87,6 +93,17 @@ export default function NoteMetaPopover(props: NoteMetaPopoverProps): JSX.Elemen
                   onInput={(e) => setTimeValue(e.currentTarget.value)}
                 />
               </label>
+
+              {/* 作成日時は編集できるが、更新日時は「いつ書き直したか」の記録。
+                  手で動かせては記録にならないので読み取り専用で出す */}
+              <Show when={m().updated}>
+                {(updated) => (
+                  <div class="note-meta-field">
+                    <span class="note-meta-label">更新日時</span>
+                    <span class="note-meta-readonly">{formatRecordedAt(updated())}</span>
+                  </div>
+                )}
+              </Show>
 
               <div class="note-meta-field">
                 <span class="note-meta-label">タグ</span>

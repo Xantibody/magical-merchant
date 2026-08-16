@@ -34,6 +34,8 @@ interface NoteMeta {
   context?: NoteContext;
   /** 表示モード。`"mindmap"` 以外の値の解釈は `note-view.ts` に寄せてある。 */
   view?: string;
+  /** 本文を最後に書き直した時刻。一度も編集していないノートは持たない。 */
+  updated?: string;
 }
 
 type HitKind = "timeline" | "note";

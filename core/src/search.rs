@@ -479,6 +479,7 @@ mod tests {
             context: None,
             view: None,
             origin: None,
+            updated: None,
         };
         let path = crate::utils::paths::notes_dir(base).join(filename);
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();

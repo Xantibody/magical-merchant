@@ -1,5 +1,21 @@
 import { describe, it, expect } from "vitest";
-import { addTag, contextRows, resolveEditedTime, toDatetimeLocal } from "./note-meta";
+import {
+  addTag,
+  contextRows,
+  formatRecordedAt,
+  resolveEditedTime,
+  toDatetimeLocal,
+} from "./note-meta";
+
+describe("formatRecordedAt", () => {
+  it("shows the recorded wall-clock time", () => {
+    expect(formatRecordedAt("2026-05-03T15:39:45+09:00")).toBe("2026/05/03 15:39");
+  });
+
+  it("returns an empty string for a note that was never edited", () => {
+    expect(formatRecordedAt()).toBe("");
+  });
+});
 
 describe("toDatetimeLocal", () => {
   it("keeps the wall-clock time as recorded", () => {

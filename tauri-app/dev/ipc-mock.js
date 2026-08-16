@@ -136,6 +136,8 @@
         time: "2026-08-11T10:00:00+09:00",
         tags: [],
         view: null,
+        // 一度書き直したノート。メタデータパネルの更新日時の検証用
+        updated: "2026-08-14T22:10:00+09:00",
         // [[リンク]] の解決とバックリンクの検証用
         body: "# リンク集\n\nまず [[20260813_083000]] を読む。次に [[20260810_090000]]。",
       },
@@ -319,7 +321,12 @@
       if (!note) {
         throw new Error("note not found");
       }
-      return { time: note.time, tags: note.tags, ...(note.view ? { view: note.view } : {}) };
+      return {
+        time: note.time,
+        tags: note.tags,
+        ...(note.view ? { view: note.view } : {}),
+        ...(note.updated ? { updated: note.updated } : {}),
+      };
     },
     update_note_meta: ({ filename, time, tags }) => {
       const note = notes.get(filename);
@@ -354,6 +361,8 @@
       const note = notes.get(filename);
       if (note) {
         note.body = body;
+        // core と同じく、本文の保存だけが更新日時を打つ
+        note.updated = new Date().toISOString();
       }
     },
     save_document: () => {},
