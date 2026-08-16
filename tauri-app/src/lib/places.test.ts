@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
+import { setLocale } from "./i18n";
 import { createPlaceStore, placeKey } from "./places";
 import type { DeviceContext } from "./parse-timeline";
 
@@ -7,17 +8,23 @@ function at(latitude: number, longitude: number): DeviceContext {
   return { os: "android", arch: "aarch64", location: { latitude, longitude } };
 }
 
-/** `resolve_places` に渡された座標を控えつつ、`answers` を返す。 */
-function mockPlaces(answers: [string, string][]): { calls: [number, number][][] } {
+/** `resolve_places` に渡された引数を控えつつ、`answers` を返す。 */
+function mockPlaces(answers: [string, string][]): {
+  calls: [number, number][][];
+  locales: string[];
+} {
   const calls: [number, number][][] = [];
+  const locales: string[] = [];
   mockIPC((cmd, payload) => {
     if (cmd !== "resolve_places") {
       return null;
     }
-    calls.push((payload as { coordinates: [number, number][] }).coordinates);
+    const args = payload as { coordinates: [number, number][]; locale: string };
+    calls.push(args.coordinates);
+    locales.push(args.locale);
     return answers;
   });
-  return { calls };
+  return { calls, locales };
 }
 
 afterEach(() => clearMocks());
@@ -78,6 +85,34 @@ describe("createPlaceStore", () => {
     await store.load([at(35.6761, 139.5465)]);
 
     expect(calls).toHaveLength(1);
+  });
+
+  /** 地名は OS が言語ごとに違う答えを返す。どの言語で聞くかを渡す。 */
+  it("asks in the language the interface is in", async () => {
+    const store = createPlaceStore();
+    const { locales } = mockPlaces([["35.68,139.55", "Shibuya"]]);
+    setLocale("en");
+
+    await store.load([at(35.6761, 139.5465)]);
+
+    expect(locales).toStrictEqual(["en"]);
+  });
+
+  /**
+   * 言語を変えたら地名も変わる。前の言語の答えを残すと、英語の画面に
+   * 日本語の地名が並んだままになる。
+   */
+  it("forgets what it knows when the language changes", async () => {
+    const store = createPlaceStore();
+    mockPlaces([["35.68,139.55", "渋谷区"]]);
+    await store.load([at(35.6761, 139.5465)]);
+
+    setLocale("en");
+    const { calls } = mockPlaces([["35.68,139.55", "Shibuya"]]);
+    await store.load([at(35.6761, 139.5465)]);
+
+    expect(calls).toHaveLength(1);
+    expect(store.nameOf({ latitude: 35.6761, longitude: 139.5465 })).toBe("Shibuya");
   });
 
   it("has no name for a coordinate nobody asked about", () => {

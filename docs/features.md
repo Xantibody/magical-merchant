@@ -95,8 +95,11 @@ to that day.
 
 The interface speaks Japanese or English. It follows the system language on
 first launch and can be pinned either way in Settings → LANGUAGE; the choice
-takes effect immediately, without a restart. Only the interface changes —
-what you wrote stays exactly as you wrote it, and so do your tags.
+takes effect immediately, without a restart. Place names follow it too: the
+OS geocoder is asked in the chosen language, and the cache remembers which
+language each answer came from. Only the interface changes — what you wrote
+stays exactly as you wrote it, and so do your tags and the coordinates behind
+those place names.
 
 ## Sync (optional)
 

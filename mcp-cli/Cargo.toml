@@ -1,6 +1,6 @@
 [package]
 name = "magical-merchant-mcp-cli"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "MCP server exposing Magical Merchant notes to AI agents"
 license.workspace = true
