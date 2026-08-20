@@ -44,8 +44,6 @@ const ja = {
     dark: "ダーク",
   },
   timeline: {
-    editHint: "クリックでそのまま編集 · Esc で確定",
-    savedTick: "✓ 保存しました",
     promote: "ノートにする",
     emptyFiltered: "このタグの記録はまだありません。",
     emptyToday: "今日はまだ何も記録していません。",
@@ -244,8 +242,6 @@ const en: Messages = {
     dark: "Dark",
   },
   timeline: {
-    editHint: "Click to edit · Esc to commit",
-    savedTick: "✓ Saved",
     promote: "Turn into a note",
     emptyFiltered: "Nothing recorded with this tag yet.",
     emptyToday: "Nothing recorded today yet.",
