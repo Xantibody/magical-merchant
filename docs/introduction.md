@@ -32,8 +32,8 @@ flowchart LR
     end
 
     Shell -- "HTTPS: /sync-state, /sync/bulk" --> Worker
-    Browser["System browser"] -- "Google OAuth" --> Worker
-    Worker -- "JWT via deep link<br/>magical-merchant://auth" --> Shell
+    Login["Sign-in webview<br/>(in-app on desktop,<br/>system browser on Android)"] -- "Google OAuth" --> Worker
+    Worker -- "JWT via loopback / deep link<br/>magical-merchant://auth" --> Shell
 ```
 
 Three consumers share the same core crate: the desktop/mobile app, the MCP
