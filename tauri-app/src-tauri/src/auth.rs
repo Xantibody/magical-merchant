@@ -4,6 +4,7 @@ use std::path::Path;
 use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
+#[cfg(target_os = "android")]
 use tauri_plugin_opener::OpenerExt;
 use url::Url;
 
@@ -185,6 +186,52 @@ fn build_auth_url(workers_url: &str, app_redirect: &str) -> String {
     )
 }
 
+/// ログイン画面を出すアプリ内の窓。ラベルは 1 つだけ持ち、二度目からは
+/// 同じ窓を次の URL へ送る — `close()` はイベントループ越しなので、閉じた
+/// 直後に同じラベルで建て直すと衝突することがある。
+#[cfg(not(target_os = "android"))]
+const AUTH_WINDOW_LABEL: &str = "auth";
+
+/// ログインをアプリの中で完結させる。外部ブラウザに投げるとアプリが背面へ
+/// 回り、承認のあと自分で戻ってこないといけない。認証は始めた場所で終わる。
+#[cfg(not(target_os = "android"))]
+fn open_auth_window(handle: &AppHandle, auth_url: &str) -> Result<tauri::WebviewWindow, String> {
+    let url = Url::parse(auth_url).map_err(|e| format!("Invalid auth URL: {e}"))?;
+
+    if let Some(existing) = handle.get_webview_window(AUTH_WINDOW_LABEL) {
+        existing
+            .navigate(url)
+            .map_err(|e| format!("Failed to open the sign-in window: {e}"))?;
+        let _ = existing.set_focus();
+        return Ok(existing);
+    }
+
+    tauri::WebviewWindowBuilder::new(handle, AUTH_WINDOW_LABEL, tauri::WebviewUrl::External(url))
+        .title("Sign in")
+        .inner_size(520.0, 700.0)
+        .center()
+        .build()
+        .map_err(|e| format!("Failed to open the sign-in window: {e}"))
+}
+
+/// 窓が閉じられたことを一度だけ知らせる受け口。閉じたのに待ち続けると、
+/// やめたつもりの利用者を 5 分間のタイムアウトまで待たせることになる。
+#[cfg(not(target_os = "android"))]
+fn closed_signal(window: &tauri::WebviewWindow) -> tokio::sync::oneshot::Receiver<()> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    // on_window_event は Fn を求めるので、一度きりの送信側を包んで取り出す
+    let tx = std::sync::Mutex::new(Some(tx));
+    window.on_window_event(move |event| {
+        if !matches!(event, tauri::WindowEvent::Destroyed) {
+            return;
+        }
+        if let Some(tx) = tx.lock().ok().and_then(|mut slot| slot.take()) {
+            let _ = tx.send(());
+        }
+    });
+    rx
+}
+
 #[cfg(not(target_os = "android"))]
 async fn login_with_loopback(
     handle: &AppHandle,
@@ -201,16 +248,16 @@ async fn login_with_loopback(
     let app_redirect = format!("http://127.0.0.1:{port}/callback");
     let auth_url = build_auth_url(&config.workers_url, &app_redirect);
 
-    handle
-        .opener()
-        .open_url(&auth_url, None::<&str>)
-        .map_err(|e| format!("Failed to open browser: {e}"))?;
+    let window = open_auth_window(handle, &auth_url)?;
+    let closed = closed_signal(&window);
 
-    let (mut stream, _) =
-        tokio::time::timeout(std::time::Duration::from_secs(300), listener.accept())
-            .await
-            .map_err(|_| "Login timed out. Please try again.".to_string())?
-            .map_err(|e| format!("Failed to accept connection: {e}"))?;
+    let accepted = tokio::select! {
+        result = tokio::time::timeout(std::time::Duration::from_secs(300), listener.accept()) => result,
+        _ = closed => return Err("Login was cancelled.".to_string()),
+    };
+    let (mut stream, _) = accepted
+        .map_err(|_| "Login timed out. Please try again.".to_string())?
+        .map_err(|e| format!("Failed to accept connection: {e}"))?;
 
     let mut buf = vec![0u8; 4096];
     let n = stream
@@ -223,30 +270,32 @@ async fn login_with_loopback(
     let path = request_line.split_whitespace().nth(1).unwrap_or("");
     let full_url = format!("http://127.0.0.1:{port}{path}");
 
-    let response_body = if let Ok(url) = Url::parse(&full_url) {
-        let token = url
-            .query_pairs()
+    let token = Url::parse(&full_url).ok().and_then(|url| {
+        url.query_pairs()
             .find(|(k, _)| k == "token")
-            .map(|(_, v)| v.to_string());
+            .map(|(_, v)| v.to_string())
+    });
 
-        if let Some(token) = token {
-            store_token(base_dir, &token)?;
+    let outcome = match &token {
+        Some(token) => {
+            store_token(base_dir, token)?;
             // SyncButton などが認証状態を即時反映できるよう通知する
             let _ = tauri::Emitter::emit(handle, "auth-success", ());
-            "<html><body><p>Login successful. You can close this tab.</p></body></html>"
-        } else {
-            "<html><body><p>Login failed: no token received.</p></body></html>"
+            Ok(())
         }
-    } else {
-        "<html><body><p>Login failed: invalid callback.</p></body></html>"
+        None => Err("Login failed: no token received.".to_string()),
     };
 
+    // 窓は結果に関わらず畳む。成否は設定画面が伝えるので、たどり着いた
+    // コールバックの画面をアプリの手前に残しておく理由がない
+    let body = "<html><body><p>You can close this window.</p></body></html>";
     let response = format!(
-        "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nConnection: close\r\n\r\n{response_body}"
+        "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nConnection: close\r\n\r\n{body}"
     );
     let _ = stream.write_all(response.as_bytes()).await;
+    let _ = window.close();
 
-    Ok(())
+    outcome
 }
 
 // Tauri commands
