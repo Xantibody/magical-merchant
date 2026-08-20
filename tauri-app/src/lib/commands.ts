@@ -94,6 +94,8 @@ interface CommandMap {
   read_note_meta: { args: { filename: string }; result: NoteMeta };
   update_note_meta: { args: { filename: string; time: string; tags: string[] }; result: void };
   set_note_view: { args: { filename: string; view: string | null }; result: void };
+  /** 昇格元エントリとの繋がりを書き換える。`null` で関係を解く。 */
+  set_note_origin: { args: { filename: string; origin: string | null }; result: void };
   delete_note: { args: { filename: string }; result: void };
   save_document: { args: { body: string; tags: string[] } & ClientArgs; result: void };
   sync_start: { args: void; result: void };
@@ -116,6 +118,7 @@ const MUTATING: ReadonlySet<CommandName> = new Set<CommandName>([
   "update_draft",
   "update_note_meta",
   "set_note_view",
+  "set_note_origin",
   "delete_note",
   "save_document",
 ]);

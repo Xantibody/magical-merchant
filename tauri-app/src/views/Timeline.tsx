@@ -318,6 +318,26 @@ export default function Timeline(): JSX.Element {
     navigate(`${ROUTES.NOTES}?file=${encodeURIComponent(note.filename)}`);
   };
 
+  /**
+   * 昇格元エントリとの関係を解く。消えるのは繋がりの記録だけで、
+   * ノート本体には触れない。戻すときは同じ値を書き戻すだけなので、
+   * 削除と同じく確認ではなく Undo で受ける。
+   */
+  const unlinkNote = async (note: NoteItem): Promise<void> => {
+    const { origin } = note;
+    if (!origin) {
+      return;
+    }
+    await typedInvoke("set_note_origin", { filename: note.filename, origin: null });
+    await refetchNotes();
+    shell.showToast(t().timeline.unlinked, () => {
+      void (async () => {
+        await typedInvoke("set_note_origin", { filename: note.filename, origin });
+        await refetchNotes();
+      })();
+    });
+  };
+
   // ---- まとめて削除（選択 → 確認 → 実行）----
   const exitSelecting = (): void => {
     setSelecting(false);
@@ -477,17 +497,43 @@ export default function Timeline(): JSX.Element {
                     <Show when={originNotes().get(day.date)?.length}>
                       <div class="origin-chips">
                         <For each={originNotes().get(day.date)}>
-                          {(note) => (
-                            <button
-                              type="button"
-                              class="origin-chip"
-                              onClick={() => openNote(note)}
-                            >
-                              <Icon name="file-text" size={13} />
-                              <span class="origin-chip-title">{note.title}</span>
-                              <span aria-hidden="true">→</span>
-                            </button>
-                          )}
+                          {(note) => {
+                            // モバイルの解除は長押し。PC はホバーで出る × が受ける
+                            const press = createLongPress(() => void unlinkNote(note));
+                            return (
+                              <span class="origin-chip">
+                                <button
+                                  type="button"
+                                  class="origin-chip-open"
+                                  onClick={() => {
+                                    // 長押しで解除した直後の click で開かない
+                                    if (press.shouldClick()) {
+                                      openNote(note);
+                                    }
+                                  }}
+                                  onPointerDown={(e) => press.onPointerDown(e)}
+                                  onPointerUp={() => press.onPointerUp()}
+                                  onPointerMove={() => press.onPointerMove()}
+                                  onPointerCancel={() => press.onPointerCancel()}
+                                >
+                                  <Icon name="file-text" size={13} />
+                                  <span class="origin-chip-title">{note.title}</span>
+                                  <span class="origin-chip-arrow" aria-hidden="true">
+                                    →
+                                  </span>
+                                </button>
+                                <button
+                                  type="button"
+                                  class="origin-chip-unlink"
+                                  title={t().timeline.unlink(note.title)}
+                                  aria-label={t().timeline.unlink(note.title)}
+                                  onClick={() => void unlinkNote(note)}
+                                >
+                                  <Icon name="x" size={12} />
+                                </button>
+                              </span>
+                            );
+                          }}
                         </For>
                       </div>
                     </Show>

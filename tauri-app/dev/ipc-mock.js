@@ -334,6 +334,12 @@
         note.view = view;
       }
     },
+    set_note_origin: ({ filename, origin }) => {
+      const note = notes.get(filename);
+      if (note) {
+        note.origin = origin ?? undefined;
+      }
+    },
     delete_note: ({ filename }) => {
       notes.delete(filename);
     },
