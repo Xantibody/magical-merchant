@@ -74,28 +74,19 @@ async function loadTimeline(extraDates: string[]): Promise<TimelineData> {
 
 interface EntryProps {
   item: TimelineItem;
-  editing: boolean;
   selecting: boolean;
   selected: boolean;
-  draft: () => string;
-  saved: () => boolean;
-  onDraft: (text: string) => void;
-  onEdit: () => void;
-  onCommit: () => void;
   onToggle: () => void;
   onPromote: () => void;
 }
 
 function Entry(props: EntryProps): JSX.Element {
   const meta = createMemo(() => entryMeta(props.item.context, places.nameOf));
-  // モバイルの入り口は長押し。タップは今まで通りその場編集
+  // モバイルの入り口は長押し。タップには何も割り当てない
   const press = createLongPress(() => props.onPromote());
 
   return (
-    <article
-      class="entry"
-      classList={{ "entry--active": props.editing, "entry--selected": props.selected }}
-    >
+    <article class="entry" classList={{ "entry--selected": props.selected }}>
       <span class="entry-time">{props.item.time.slice(0, 5)}</span>
       <span class="entry-rail" aria-hidden="true">
         <span class="entry-rail-line" />
@@ -103,32 +94,8 @@ function Entry(props: EntryProps): JSX.Element {
       </span>
 
       <div class="entry-body">
-        <Show when={props.editing}>
-          <div class="entry-editor">
-            <textarea
-              class="entry-editor-input"
-              ref={(el) => queueMicrotask(() => el.focus())}
-              value={props.draft()}
-              onInput={(e) => props.onDraft(e.currentTarget.value)}
-              onBlur={() => props.onCommit()}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  e.preventDefault();
-                  e.currentTarget.blur();
-                }
-              }}
-            />
-            <div class="entry-editor-foot">
-              <span>{t().timeline.editHint}</span>
-              <Show when={props.saved()}>
-                <span>{t().timeline.savedTick}</span>
-              </Show>
-            </div>
-          </div>
-        </Show>
-
-        <Show when={!props.editing && props.selecting}>
-          {/* 選択モード中は本文クリックが編集ではなく選択のトグルになる */}
+        <Show when={props.selecting}>
+          {/* 選択モード中だけ本文がクリックできる。押すと選択のトグル */}
           <button
             type="button"
             class="entry-select"
@@ -142,23 +109,17 @@ function Entry(props: EntryProps): JSX.Element {
           </button>
         </Show>
 
-        <Show when={!props.editing && !props.selecting}>
-          {/* 本文そのものが編集の入口。button なのはキーボードから開けるようにするため */}
-          <button
-            type="button"
+        <Show when={!props.selecting}>
+          {/* 記録は書き換えない。本文は読むだけで、触れる先はノートへの昇格だけ */}
+          <p
             class="entry-text"
             onPointerDown={(e) => press.onPointerDown(e)}
             onPointerUp={() => press.onPointerUp()}
             onPointerMove={() => press.onPointerMove()}
             onPointerCancel={() => press.onPointerCancel()}
-            onClick={() => {
-              if (press.shouldClick()) {
-                props.onEdit();
-              }
-            }}
           >
             <TagText text={props.item.text} />
-          </button>
+          </p>
           <Show when={meta().length}>
             <div class="entry-meta">
               <For each={meta()}>
@@ -216,10 +177,7 @@ export default function Timeline(): JSX.Element {
   const [jumpTo, setJumpTo] = createSignal<string | null>(null);
   /** 絞り込み中のタグ。1 つだけ選べる。 */
   const [tagFilter, setTagFilter] = createSignal<string | null>(null);
-  const [editing, setEditing] = createSignal<TimelineItem | null>(null);
-  const [draft, setDraft] = createSignal("");
-  const [saved, setSaved] = createSignal(false);
-  /** 選択モード。入っている間は本文クリックが編集ではなく選択になる。 */
+  /** 選択モード。入っている間だけ本文がクリックで選択できる。 */
   const [selecting, setSelecting] = createSignal(false);
   const [selected, setSelected] = createSignal<ReadonlySet<string>>(new Set());
   /** 削除前のワンクッション。確認バーが出ている間だけ true。 */
@@ -336,28 +294,6 @@ export default function Timeline(): JSX.Element {
     await reloadDay(toIsoDate(new Date()));
   };
 
-  // ---- その場編集（Esc / フォーカスを外すと確定）----
-  const startEditing = (item: TimelineItem): void => {
-    setDraft(item.text);
-    setSaved(false);
-    setEditing(item);
-  };
-
-  const commitEdit = async (): Promise<void> => {
-    const item = editing();
-    const text = draft();
-    setEditing(null);
-    if (!item || text === item.text) {
-      return;
-    }
-    await typedInvoke("update_timeline_entry", { date: item.date, index: item.index, text });
-    setSaved(true);
-    await reloadDay(item.date);
-  };
-
-  // タブを切り替えても書きかけを捨てない。blur はアンマウントでは飛ばない。
-  onCleanup(() => void commitEdit());
-
   /**
    * エントリを昇格させてノートを作り、そのまま書き始められる状態で開く。
    * エントリ側のファイルには何も書かない — ノートの frontmatter `origin`
@@ -383,12 +319,6 @@ export default function Timeline(): JSX.Element {
   };
 
   // ---- まとめて削除（選択 → 確認 → 実行）----
-  const startSelecting = (): void => {
-    // 書きかけを確定してから入る。編集と選択が同時だと本文クリックの意味が曖昧になる
-    void commitEdit();
-    setSelecting(true);
-  };
-
   const exitSelecting = (): void => {
     setSelecting(false);
     setSelected(new Set<string>());
@@ -519,7 +449,11 @@ export default function Timeline(): JSX.Element {
                 when={!selecting()}
                 fallback={<span class="timeline-toolbar-hint">{t().timeline.selectHint}</span>}
               >
-                <button type="button" class="timeline-toolbar-button" onClick={startSelecting}>
+                <button
+                  type="button"
+                  class="timeline-toolbar-button"
+                  onClick={() => setSelecting(true)}
+                >
                   <Icon name="check-square" size={14} />
                   {t().timeline.select}
                 </button>
@@ -562,14 +496,8 @@ export default function Timeline(): JSX.Element {
                       {(item) => (
                         <Entry
                           item={item}
-                          editing={editing()?.id === item.id}
                           selecting={selecting()}
                           selected={selected().has(item.id)}
-                          draft={draft}
-                          saved={saved}
-                          onDraft={setDraft}
-                          onEdit={() => startEditing(item)}
-                          onCommit={() => void commitEdit()}
                           onToggle={() => toggleSelected(item.id)}
                           onPromote={() => void promote(item)}
                         />
