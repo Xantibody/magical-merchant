@@ -1,6 +1,11 @@
 {
   $schema: "https://docs.renovatebot.com/renovate-schema.json",
   extends: ["config:recommended", ":semanticCommitTypeAll(chore)"],
+
+  // Mend の App は All repositories でインストールすると silent (dryRun=lookup) で
+  // 起動し、PR も dependency dashboard も作らない。ここで明示的に打ち消す
+  mode: "full",
+
   timezone: "Asia/Tokyo",
   schedule: ["before 6am on monday"],
   labels: ["dependencies"],
