@@ -88,9 +88,9 @@ export default function Settings(): JSX.Element {
   };
 
   const login = async (): Promise<void> => {
-    setMessage(t().settings.continueInBrowser);
+    setMessage(t().settings.continueSignIn);
     try {
-      // デスクトップ(ループバック)はコマンド完了時点でトークン保存済み。
+      // デスクトップはアプリ内の窓でログインを終え、コマンド完了時点でトークン保存済み。
       // Android はブラウザを開くだけで、完了はディープリンクの auth-success で通知される
       await typedInvoke("auth_login");
       const status = await typedInvoke("auth_status");
