@@ -19,6 +19,8 @@ verify: fmt check test
 
 dev: tauri_app::dev
 
+icons: tauri_app::icons
+
 android-init: tauri_app::android-init
 
 android-dev: tauri_app::android-dev
