@@ -24,8 +24,20 @@ dev: setup
 dev-browser: setup
   pnpm run dev:browser
 
+# Regenerate every icon from the SVG sources in src-tauri/icons/icons.json.
+# 出力は 2 か所に分かれる: src-tauri/icons/ (デスクトップ・iOS、git 管理下) と
+# gen/android の mipmap。後者は gitignore なので init のたびに入れ直す。
+# PNG は同じ内容で書き直されるが icon.icns だけは毎回バイト列が変わるので、
+# 用が無いときに走らせると差分だけが残る。ビルドの依存には入れない。
+icons: setup
+  pnpm tauri icon src-tauri/icons/icons.json
+  cp src-tauri/icons/icon.svg public/icon.svg
+
+# gen/android は Tauri 既定のランチャーアイコンを持って生成される。
+# 入れ直さないと配信 APK が Tauri のロゴのままになるので、init と一続きにする。
 android-init: setup
   pnpm tauri android init
+  just icons
 
 android-dev: setup
   pnpm tauri android dev
