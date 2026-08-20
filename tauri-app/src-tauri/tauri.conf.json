@@ -13,8 +13,11 @@
     "windows": [
       {
         "title": "Magical Merchant",
-        "width": 400,
-        "height": 700
+        "width": 1080,
+        "height": 760,
+        "minWidth": 380,
+        "minHeight": 520,
+        "center": true
       }
     ],
     "security": {
