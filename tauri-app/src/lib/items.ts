@@ -26,7 +26,7 @@ export interface NoteItem {
   title: string;
   tags: string[];
   preview: string;
-  /** 昇格元エントリの日時。タイムラインのチップ表示が日付部分を使う。 */
+  /** 昇格元エントリの日時。タイムラインのチップ表示が使う。 */
   origin?: string;
 }
 
@@ -84,21 +84,53 @@ export function toNoteItems(notes: Note[]): NoteItem[] {
   }));
 }
 
+/** エントリを origin の書式（`YYYY-MM-DDTHH:MM:SS`）で指す鍵。昇格時と同じ組み立て。 */
+export function originKeyOf(item: TimelineItem): string {
+  return `${item.date}T${item.time}`;
+}
+
 /**
- * 昇格ノートを origin の暦日で引けるようにする。タイムラインの日毎の
- * チップはここから導出する — エントリ側のファイルには何も書いていない
- * ので、並び替えや行の増減でズレる心配がない。
+ * 昇格ノートを origin の日時そのもので引けるようにする。エントリ側の
+ * `originKeyOf` と同じ文字列が鍵なので、チップを元のエントリの真下に
+ * 出せる — エントリ側のファイルには何も書いていないので、並び替えや
+ * 行の増減でズレる心配がない。
  */
-export function notesByOriginDate(items: NoteItem[]): Map<string, NoteItem[]> {
+export function notesByOrigin(items: NoteItem[]): Map<string, NoteItem[]> {
   const map = new Map<string, NoteItem[]>();
   for (const item of items) {
-    const date = item.origin?.slice(0, 10);
-    if (date) {
-      const notes = map.get(date);
+    if (item.origin) {
+      const notes = map.get(item.origin);
       if (notes) {
         notes.push(item);
       } else {
-        map.set(date, [item]);
+        map.set(item.origin, [item]);
+      }
+    }
+  }
+  return map;
+}
+
+/**
+ * 昇格元のエントリがもう見つからないノートを、origin の暦日でまとめる。
+ * エントリを消してもノートは残るので、その入り口が消えないよう日の見出し
+ * 直下に避難させる。突き合わせるのは絞り込み前の全エントリ — タグで
+ * 隠れているだけのエントリを「消えた」と読むと、絞り込むたびに無関係な
+ * チップが見出しへ湧いてしまう。
+ */
+export function orphanNotesByDate(
+  notes: NoteItem[],
+  items: TimelineItem[],
+): Map<string, NoteItem[]> {
+  const known = new Set(items.map((item) => originKeyOf(item)));
+  const map = new Map<string, NoteItem[]>();
+  for (const note of notes) {
+    const date = note.origin?.slice(0, 10);
+    if (date && !known.has(note.origin ?? "")) {
+      const found = map.get(date);
+      if (found) {
+        found.push(note);
+      } else {
+        map.set(date, [note]);
       }
     }
   }
