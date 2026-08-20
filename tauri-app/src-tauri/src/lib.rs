@@ -172,19 +172,6 @@ fn read_timeline_by_date(handle: AppHandle, date: String) -> Result<Vec<String>,
 }
 
 #[tauri::command]
-fn update_timeline_entry(
-    handle: AppHandle,
-    date: String,
-    index: usize,
-    text: String,
-) -> Result<(), String> {
-    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    let naive = chrono::NaiveDate::parse_from_str(&date, "%Y-%m-%d").map_err(|e| e.to_string())?;
-    magical_merchant_core::update_timeline_entry(&base_dir, naive, index, &text)
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
 fn delete_timeline_entry(handle: AppHandle, date: String, index: usize) -> Result<(), String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
     let naive = chrono::NaiveDate::parse_from_str(&date, "%Y-%m-%d").map_err(|e| e.to_string())?;
@@ -310,7 +297,6 @@ pub fn run() {
             read_timeline,
             list_timeline_dates,
             read_timeline_by_date,
-            update_timeline_entry,
             delete_timeline_entry,
             search_all,
             resolve_places,

@@ -193,13 +193,6 @@
       const line = `- [${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}] ${text}`;
       timeline.set(iso, [...(timeline.get(iso) ?? []), line]);
     },
-    update_timeline_entry: ({ date, index, text }) => {
-      const lines = timeline.get(date) ?? [];
-      const raw = lines[index] ?? "";
-      const head = raw.match(/^- \[\d{2}:\d{2}:\d{2}\] /)?.[0] ?? "- [00:00:00] ";
-      const tail = raw.includes(" {") ? raw.slice(raw.lastIndexOf(" {")) : "";
-      lines[index] = `${head}${text}${tail}`;
-    },
     delete_timeline_entry: ({ date, index }) => {
       const lines = timeline.get(date) ?? [];
       lines.splice(index, 1);
