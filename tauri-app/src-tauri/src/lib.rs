@@ -147,6 +147,19 @@ fn set_note_view(handle: AppHandle, filename: String, view: Option<String>) -> R
         .map_err(|e| e.to_string())
 }
 
+/// 昇格元エントリとの繋がりだけを書き換える。`None` で関係を解く。
+#[tauri::command]
+fn set_note_origin(
+    handle: AppHandle,
+    filename: String,
+    origin: Option<String>,
+) -> Result<(), String> {
+    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let filename = NoteFilename::parse(&filename).map_err(|e| e.to_string())?;
+    magical_merchant_core::update_note_origin(&base_dir, &filename, origin.as_deref())
+        .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn read_timeline(handle: AppHandle) -> Result<Vec<String>, String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
@@ -293,6 +306,7 @@ pub fn run() {
             read_note_meta,
             find_backlinks,
             update_note_meta,
+            set_note_origin,
             set_note_view,
             read_timeline,
             list_timeline_dates,

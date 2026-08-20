@@ -179,29 +179,75 @@
 }
 
 .origin-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  background: var(--app-surface);
+  color: var(--app-text-muted);
+}
+
+.origin-chip:hover,
+.origin-chip:focus-within {
+  background: var(--app-accent-soft);
+  color: var(--app-text);
+}
+
+.origin-chip-open {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   max-width: 100%;
   padding: 4px 10px;
-  border: 1px solid var(--app-border);
-  border-radius: 999px;
-  background: var(--app-surface);
-  color: var(--app-text-muted);
+  border: none;
+  background: none;
+  color: inherit;
   font-family: inherit;
   font-size: 12px;
   cursor: pointer;
-}
-
-.origin-chip:hover {
-  background: var(--app-accent-soft);
-  color: var(--app-text);
 }
 
 .origin-chip-title {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 関係の解除。矢印の場所にホバーでだけ現れる、隠しアクションの流儀 */
+.origin-chip-unlink {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border: none;
+  border-radius: 999px;
+  background: none;
+  color: var(--app-text-faint);
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.origin-chip-unlink:hover {
+  color: var(--app-danger);
+}
+
+/* タッチ環境に × は出さない — チップの長押しが解除の入り口。
+   visibility で矢印の幅を残し、置き換えでチップ幅が動かないようにする */
+@media (hover: hover) {
+  .origin-chip:hover .origin-chip-arrow,
+  .origin-chip:focus-within .origin-chip-arrow {
+    visibility: hidden;
+  }
+
+  .origin-chip:hover .origin-chip-unlink,
+  .origin-chip:focus-within .origin-chip-unlink {
+    display: inline-flex;
+  }
 }
 
 /* ---------------- selection mode ---------------- */

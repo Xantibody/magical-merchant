@@ -173,6 +173,26 @@ impl Notes {
         Ok(())
     }
 
+    /// 昇格元エントリとの繋がりだけを差し替えて書き戻す。他のメタデータと
+    /// 本文には触れない。`update_view` と同じく、frontmatter が読めない
+    /// ファイルには書かない。
+    pub(crate) fn update_origin(
+        &self,
+        filename: &NoteFilename,
+        origin: Option<&str>,
+    ) -> Result<(), CoreError> {
+        let path = self.existing_note_path(filename)?;
+        let content = fs::read_to_string(&path)?;
+        let (existing, body) = frontmatter::parse::<NoteFrontmatter>(&content)?;
+
+        let fm = NoteFrontmatter {
+            origin: origin.map(str::to_string),
+            ..existing
+        };
+        write_atomic(&path, frontmatter::render(&fm, body)?)?;
+        Ok(())
+    }
+
     pub(crate) fn delete(&self, filename: &NoteFilename) -> Result<(), CoreError> {
         fs::remove_file(self.existing_note_path(filename)?)?;
         Ok(())
