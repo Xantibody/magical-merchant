@@ -79,11 +79,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-.entry--active .entry-time {
-  color: var(--app-text);
-  font-weight: 600;
-}
-
 .entry-rail {
   position: relative;
   display: block;
@@ -110,15 +105,6 @@
   box-sizing: border-box;
 }
 
-.entry--active .entry-rail-dot {
-  left: 9px;
-  top: 5px;
-  width: 10px;
-  height: 10px;
-  background: var(--app-accent);
-  border: none;
-}
-
 .entry--selected .entry-rail-dot {
   background: var(--app-accent);
   border-color: var(--app-accent);
@@ -137,23 +123,11 @@
      1 行が長くなりすぎないという意味でも、この列はここで止めたい */
   max-width: 552px;
   margin: 0;
-  padding: 0;
-  border: none;
-  background: none;
-  text-align: start;
-  font-family: inherit;
   font-size: 15px;
   line-height: 1.75;
   color: var(--app-text);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  cursor: text;
-  border-radius: var(--radius-2);
-}
-
-.entry-text:focus-visible {
-  outline: 2px solid var(--app-accent);
-  outline-offset: 2px;
 }
 
 .entry-meta {
@@ -358,44 +332,6 @@
   background: var(--app-hairline);
 }
 
-/* ---------------- in-place editor ---------------- */
-
-.entry-editor {
-  border: 1px solid var(--app-text-faint);
-  border-radius: 10px;
-  padding: 14px 16px 12px;
-  background: var(--app-input-bg);
-}
-
-.entry-editor:focus-within {
-  box-shadow: 0 0 0 3px var(--app-accent-soft);
-}
-
-.entry-editor-input {
-  display: block;
-  width: 100%;
-  min-height: 3lh;
-  border: none;
-  outline: none;
-  resize: none;
-  padding: 0;
-  background: none;
-  color: var(--app-text);
-  font-family: inherit;
-  font-size: 15px;
-  line-height: 1.75;
-  field-sizing: content;
-}
-
-.entry-editor-foot {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--size-2);
-  margin-top: 8px;
-  font-size: 11.5px;
-  color: var(--app-text-faint);
-}
-
 /* ---------------- empty ---------------- */
 
 .timeline-empty {
@@ -499,10 +435,6 @@
 
   .entry-rail-dot {
     left: 8px;
-  }
-
-  .entry--active .entry-rail-dot {
-    left: 7px;
   }
 
   .entry-time {

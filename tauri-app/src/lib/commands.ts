@@ -69,7 +69,6 @@ interface CommandMap {
   read_timeline: { args: void; result: string[] };
   list_timeline_dates: { args: void; result: string[] };
   read_timeline_by_date: { args: { date: string }; result: string[] };
-  update_timeline_entry: { args: { date: string; index: number; text: string }; result: void };
   delete_timeline_entry: { args: { date: string; index: number }; result: void };
   search_all: { args: { query: string }; result: SearchHit[] };
   /** このノートを `[[ID]]` で指している記録。開くたびに走査で導出される。 */
@@ -112,7 +111,6 @@ export type CommandName = keyof CommandMap;
 /** ノート/タイムラインのファイルを書き換えるコマンド。 */
 const MUTATING: ReadonlySet<CommandName> = new Set<CommandName>([
   "save_quick_capture",
-  "update_timeline_entry",
   "delete_timeline_entry",
   "create_draft",
   "update_draft",
