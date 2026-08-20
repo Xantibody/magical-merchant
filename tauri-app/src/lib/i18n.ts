@@ -45,6 +45,8 @@ const ja = {
   },
   timeline: {
     promote: "ノートにする",
+    unlink: (title: string) => `「${title}」との関係を解除`,
+    unlinked: "ノートとの関係を解除しました",
     emptyFiltered: "このタグの記録はまだありません。",
     emptyToday: "今日はまだ何も記録していません。",
     emptyFilteredHint: "上のチップで絞り込みを外せます。",
@@ -243,6 +245,8 @@ const en: Messages = {
   },
   timeline: {
     promote: "Turn into a note",
+    unlink: (title: string) => `Unlink “${title}”`,
+    unlinked: "Note unlinked from this day",
     emptyFiltered: "Nothing recorded with this tag yet.",
     emptyToday: "Nothing recorded today yet.",
     emptyFilteredHint: "Drop the filter with the chips above.",
