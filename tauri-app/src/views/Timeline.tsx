@@ -72,6 +72,52 @@ async function loadTimeline(extraDates: string[]): Promise<TimelineData> {
   return { items: days.flat(), dates };
 }
 
+interface OriginChipProps {
+  note: NoteItem;
+  onOpen: (note: NoteItem) => void;
+  onUnlink: (note: NoteItem) => void;
+}
+
+/** 昇格ノートへの入り口。開くのがタップ、繋がりを解くのが隠しアクション。 */
+function OriginChip(props: OriginChipProps): JSX.Element {
+  // モバイルの解除は長押し。PC はホバーで出る × が受ける
+  const press = createLongPress(() => props.onUnlink(props.note));
+
+  return (
+    <span class="origin-chip">
+      <button
+        type="button"
+        class="origin-chip-open"
+        onClick={() => {
+          // 長押しで解除した直後の click で開かない
+          if (press.shouldClick()) {
+            props.onOpen(props.note);
+          }
+        }}
+        onPointerDown={(e) => press.onPointerDown(e)}
+        onPointerUp={() => press.onPointerUp()}
+        onPointerMove={() => press.onPointerMove()}
+        onPointerCancel={() => press.onPointerCancel()}
+      >
+        <Icon name="file-text" size={13} />
+        <span class="origin-chip-title">{props.note.title}</span>
+        <span class="origin-chip-arrow" aria-hidden="true">
+          →
+        </span>
+      </button>
+      <button
+        type="button"
+        class="origin-chip-unlink"
+        title={t().timeline.unlink(props.note.title)}
+        aria-label={t().timeline.unlink(props.note.title)}
+        onClick={() => props.onUnlink(props.note)}
+      >
+        <Icon name="x" size={12} />
+      </button>
+    </span>
+  );
+}
+
 interface EntryProps {
   item: TimelineItem;
   selecting: boolean;
@@ -497,43 +543,13 @@ export default function Timeline(): JSX.Element {
                     <Show when={originNotes().get(day.date)?.length}>
                       <div class="origin-chips">
                         <For each={originNotes().get(day.date)}>
-                          {(note) => {
-                            // モバイルの解除は長押し。PC はホバーで出る × が受ける
-                            const press = createLongPress(() => void unlinkNote(note));
-                            return (
-                              <span class="origin-chip">
-                                <button
-                                  type="button"
-                                  class="origin-chip-open"
-                                  onClick={() => {
-                                    // 長押しで解除した直後の click で開かない
-                                    if (press.shouldClick()) {
-                                      openNote(note);
-                                    }
-                                  }}
-                                  onPointerDown={(e) => press.onPointerDown(e)}
-                                  onPointerUp={() => press.onPointerUp()}
-                                  onPointerMove={() => press.onPointerMove()}
-                                  onPointerCancel={() => press.onPointerCancel()}
-                                >
-                                  <Icon name="file-text" size={13} />
-                                  <span class="origin-chip-title">{note.title}</span>
-                                  <span class="origin-chip-arrow" aria-hidden="true">
-                                    →
-                                  </span>
-                                </button>
-                                <button
-                                  type="button"
-                                  class="origin-chip-unlink"
-                                  title={t().timeline.unlink(note.title)}
-                                  aria-label={t().timeline.unlink(note.title)}
-                                  onClick={() => void unlinkNote(note)}
-                                >
-                                  <Icon name="x" size={12} />
-                                </button>
-                              </span>
-                            );
-                          }}
+                          {(note) => (
+                            <OriginChip
+                              note={note}
+                              onOpen={openNote}
+                              onUnlink={(target) => void unlinkNote(target)}
+                            />
+                          )}
                         </For>
                       </div>
                     </Show>
