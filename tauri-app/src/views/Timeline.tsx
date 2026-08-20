@@ -22,7 +22,9 @@ import { formatDayHeading, toIsoDate } from "../lib/day-labels";
 import { t } from "../lib/i18n";
 import {
   groupTimelineByDay,
-  notesByOriginDate,
+  notesByOrigin,
+  orphanNotesByDate,
+  originKeyOf,
   planBulkDelete,
   replaceDayItems,
   toNoteItems,
@@ -72,12 +74,62 @@ async function loadTimeline(extraDates: string[]): Promise<TimelineData> {
   return { items: days.flat(), dates };
 }
 
+interface OriginChipProps {
+  note: NoteItem;
+  onOpen: (note: NoteItem) => void;
+  onUnlink: (note: NoteItem) => void;
+}
+
+/** 昇格ノートへの入り口。開くのがタップ、繋がりを解くのが隠しアクション。 */
+function OriginChip(props: OriginChipProps): JSX.Element {
+  // モバイルの解除は長押し。PC はホバーで出る × が受ける
+  const press = createLongPress(() => props.onUnlink(props.note));
+
+  return (
+    <span class="origin-chip">
+      <button
+        type="button"
+        class="origin-chip-open"
+        onClick={() => {
+          // 長押しで解除した直後の click で開かない
+          if (press.shouldClick()) {
+            props.onOpen(props.note);
+          }
+        }}
+        onPointerDown={(e) => press.onPointerDown(e)}
+        onPointerUp={() => press.onPointerUp()}
+        onPointerMove={() => press.onPointerMove()}
+        onPointerCancel={() => press.onPointerCancel()}
+      >
+        <Icon name="file-text" size={13} />
+        <span class="origin-chip-title">{props.note.title}</span>
+        <span class="origin-chip-arrow" aria-hidden="true">
+          →
+        </span>
+      </button>
+      <button
+        type="button"
+        class="origin-chip-unlink"
+        title={t().timeline.unlink(props.note.title)}
+        aria-label={t().timeline.unlink(props.note.title)}
+        onClick={() => props.onUnlink(props.note)}
+      >
+        <Icon name="x" size={12} />
+      </button>
+    </span>
+  );
+}
+
 interface EntryProps {
   item: TimelineItem;
+  /** このエントリから育ったノート。チップとして本文の真下に出す。 */
+  notes: NoteItem[];
   selecting: boolean;
   selected: boolean;
   onToggle: () => void;
   onPromote: () => void;
+  onOpenNote: (note: NoteItem) => void;
+  onUnlinkNote: (note: NoteItem) => void;
 }
 
 function Entry(props: EntryProps): JSX.Element {
@@ -86,7 +138,13 @@ function Entry(props: EntryProps): JSX.Element {
   const press = createLongPress(() => props.onPromote());
 
   return (
-    <article class="entry" classList={{ "entry--selected": props.selected }}>
+    <article
+      class="entry"
+      classList={{
+        "entry--selected": props.selected,
+        "entry--promoted": props.notes.length > 0,
+      }}
+    >
       <span class="entry-time">{props.item.time.slice(0, 5)}</span>
       <span class="entry-rail" aria-hidden="true">
         <span class="entry-rail-line" />
@@ -132,6 +190,19 @@ function Entry(props: EntryProps): JSX.Element {
               </For>
             </div>
           </Show>
+
+          {/* このエントリから育ったノート。origin の日時で引くので
+              日単位ではなく元の記録の真下に付く */}
+          <Show when={props.notes.length}>
+            <div class="entry-notes">
+              <For each={props.notes}>
+                {(note) => (
+                  <OriginChip note={note} onOpen={props.onOpenNote} onUnlink={props.onUnlinkNote} />
+                )}
+              </For>
+            </div>
+          </Show>
+
           {/* PC の入り口。隠しアクションの流儀どおり、ホバーでだけ現れる */}
           <div class="entry-actions">
             <button
@@ -220,7 +291,13 @@ export default function Timeline(): JSX.Element {
   });
 
   const days = createMemo(() => groupTimelineByDay(visible()));
-  const originNotes = createMemo(() => notesByOriginDate(notes() ?? []));
+
+  // エントリの日時 → ノート。チップは元のエントリの真下に付く
+  const originNotes = createMemo(() => notesByOrigin(notes() ?? []));
+  const notesFor = (item: TimelineItem): NoteItem[] => originNotes().get(originKeyOf(item)) ?? [];
+
+  // 元のエントリが消えたノートだけ、これまでどおり日の見出し直下に出す
+  const orphanNotes = createMemo(() => orphanNotesByDate(notes() ?? [], entries()));
 
   // ---- 週次ダイジェスト(週に一度、閉じるまで先頭に出る)----
   const [digestDismissed, setDigestDismissed] = createSignal(
@@ -483,6 +560,7 @@ export default function Timeline(): JSX.Element {
             <For each={days()}>
               {(day) => {
                 const heading = createMemo(() => formatDayHeading(day.date, today));
+                const orphans = createMemo(() => orphanNotes().get(day.date) ?? []);
                 return (
                   <section class="day-group" data-day={day.date}>
                     <header class="day-heading">
@@ -493,47 +571,18 @@ export default function Timeline(): JSX.Element {
                       </span>
                     </header>
 
-                    {/* この日のエントリから育ったノートへの入り口 */}
-                    <Show when={originNotes().get(day.date)?.length}>
+                    {/* 元のエントリが消えたノートだけの避難先。通常のチップは
+                        各エントリの真下に出る */}
+                    <Show when={orphans().length}>
                       <div class="origin-chips">
-                        <For each={originNotes().get(day.date)}>
-                          {(note) => {
-                            // モバイルの解除は長押し。PC はホバーで出る × が受ける
-                            const press = createLongPress(() => void unlinkNote(note));
-                            return (
-                              <span class="origin-chip">
-                                <button
-                                  type="button"
-                                  class="origin-chip-open"
-                                  onClick={() => {
-                                    // 長押しで解除した直後の click で開かない
-                                    if (press.shouldClick()) {
-                                      openNote(note);
-                                    }
-                                  }}
-                                  onPointerDown={(e) => press.onPointerDown(e)}
-                                  onPointerUp={() => press.onPointerUp()}
-                                  onPointerMove={() => press.onPointerMove()}
-                                  onPointerCancel={() => press.onPointerCancel()}
-                                >
-                                  <Icon name="file-text" size={13} />
-                                  <span class="origin-chip-title">{note.title}</span>
-                                  <span class="origin-chip-arrow" aria-hidden="true">
-                                    →
-                                  </span>
-                                </button>
-                                <button
-                                  type="button"
-                                  class="origin-chip-unlink"
-                                  title={t().timeline.unlink(note.title)}
-                                  aria-label={t().timeline.unlink(note.title)}
-                                  onClick={() => void unlinkNote(note)}
-                                >
-                                  <Icon name="x" size={12} />
-                                </button>
-                              </span>
-                            );
-                          }}
+                        <For each={orphans()}>
+                          {(note) => (
+                            <OriginChip
+                              note={note}
+                              onOpen={openNote}
+                              onUnlink={(target) => void unlinkNote(target)}
+                            />
+                          )}
                         </For>
                       </div>
                     </Show>
@@ -542,10 +591,13 @@ export default function Timeline(): JSX.Element {
                       {(item) => (
                         <Entry
                           item={item}
+                          notes={notesFor(item)}
                           selecting={selecting()}
                           selected={selected().has(item.id)}
                           onToggle={() => toggleSelected(item.id)}
                           onPromote={() => void promote(item)}
+                          onOpenNote={openNote}
+                          onUnlinkNote={(note) => void unlinkNote(note)}
                         />
                       )}
                     </For>

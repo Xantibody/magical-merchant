@@ -110,6 +110,12 @@
   border-color: var(--app-accent);
 }
 
+/* 昇格済みのエントリはレールのドットを塗って、育った印にする */
+.entry--promoted .entry-rail-dot {
+  background: var(--app-accent);
+  border-color: var(--app-accent);
+}
+
 .entry-body {
   position: relative;
   padding-bottom: 26px;
@@ -170,7 +176,17 @@
   color: var(--app-text);
 }
 
-/* その日のエントリから育ったノートへの入り口 */
+/* このエントリから育ったノート。本文の真下に横並びで、入りきらなければ折り返す */
+.entry-notes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+  /* 本文と同じ幅で止める。ホバーで出るツールバーの下へ回り込ませない */
+  max-width: 552px;
+}
+
+/* 元のエントリが消えたノートの避難先。日の見出し直下に残る */
 .origin-chips {
   display: flex;
   flex-wrap: wrap;
@@ -505,7 +521,8 @@
 
   .entry-text,
   .entry-select,
-  .entry-meta {
+  .entry-meta,
+  .entry-notes {
     max-width: none;
   }
 
