@@ -38,6 +38,9 @@ keystore.properties
 # Nix shims
 .nix-shims/
 
+# 素材の受け渡し場所。採用したものは src-tauri/icons/ など置き場所へ移す
+sample/
+
 # Nix build output symlink
 /result
 /result-*
