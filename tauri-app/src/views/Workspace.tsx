@@ -465,6 +465,10 @@ export default function Workspace(): JSX.Element {
         await typedInvoke("delete_note", { filename: item.filename });
         await refetchNotes();
         setHidden((ids) => ids.filter((id) => id !== item.id));
+        // タイムラインの origin チップはノート一覧から導出される。Undo の
+        // 猶予中に他のビューへ移られるとこの refetch は届かないので、版を
+        // 上げて向こうの一覧も読み直させる
+        shell.refreshData();
       })();
     }, UNDO_MS);
 
