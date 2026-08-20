@@ -7,7 +7,9 @@ import {
   itemMeta,
   itemTitle,
   noteCreatedLabel,
-  notesByOriginDate,
+  notesByOrigin,
+  orphanNotesByDate,
+  originKeyOf,
   replaceDayItems,
   planBulkDelete,
 } from "./items";
@@ -95,20 +97,56 @@ describe("toNoteItems", () => {
   });
 });
 
-describe("notesByOriginDate", () => {
+describe("originKeyOf", () => {
+  it("points at an entry with the same string promote writes into origin", () => {
+    const [item] = toTimelineItems("2026-08-03", ["- [08:30:00] 朝の記録"]);
+    expect(originKeyOf(item)).toBe("2026-08-03T08:30:00");
+  });
+});
+
+describe("notesByOrigin", () => {
   it("returns an empty map when no note has an origin", () => {
-    expect(notesByOriginDate(toNoteItems([note()])).size).toBe(0);
+    expect(notesByOrigin(toNoteItems([note()])).size).toBe(0);
   });
 
-  it("groups promoted notes under the day of their origin entry", () => {
+  it("groups promoted notes under the exact entry they grew from", () => {
     const items = toNoteItems([
       note({ filename: "a.md", origin: "2026-08-03T08:30:00" }),
       note({ filename: "b.md", origin: "2026-08-03T21:00:00" }),
-      note({ filename: "c.md", origin: "2026-08-01T07:00:00" }),
+      note({ filename: "c.md", origin: "2026-08-03T08:30:00" }),
     ]);
-    const map = notesByOriginDate(items);
-    expect(map.get("2026-08-03")?.map((n) => n.filename)).toEqual(["a.md", "b.md"]);
-    expect(map.get("2026-08-01")?.map((n) => n.filename)).toEqual(["c.md"]);
+    const map = notesByOrigin(items);
+    expect(map.get("2026-08-03T08:30:00")?.map((n) => n.filename)).toEqual(["a.md", "c.md"]);
+    expect(map.get("2026-08-03T21:00:00")?.map((n) => n.filename)).toEqual(["b.md"]);
+  });
+
+  it("keys notes so an entry of the same day but another time does not match", () => {
+    const [item] = toTimelineItems("2026-08-03", ["- [09:00:00] 別の記録"]);
+    const map = notesByOrigin(toNoteItems([note({ origin: "2026-08-03T08:30:00" })]));
+    expect(map.get(originKeyOf(item))).toBeUndefined();
+  });
+});
+
+describe("orphanNotesByDate", () => {
+  it("returns an empty map when no note has an origin", () => {
+    expect(orphanNotesByDate(toNoteItems([note()]), []).size).toBe(0);
+  });
+
+  it("leaves out notes whose origin entry is still on the timeline", () => {
+    const items = toTimelineItems("2026-08-03", ["- [08:30:00] 朝の記録"]);
+    const notes = toNoteItems([note({ origin: "2026-08-03T08:30:00" })]);
+    expect(orphanNotesByDate(notes, items).size).toBe(0);
+  });
+
+  it("groups notes whose origin entry is gone under the day of that origin", () => {
+    const items = toTimelineItems("2026-08-03", ["- [08:30:00] 朝の記録"]);
+    const notes = toNoteItems([
+      note({ filename: "a.md", origin: "2026-08-03T21:00:00" }),
+      note({ filename: "b.md", origin: "2026-08-01T07:00:00" }),
+    ]);
+    const map = orphanNotesByDate(notes, items);
+    expect(map.get("2026-08-03")?.map((n) => n.filename)).toEqual(["a.md"]);
+    expect(map.get("2026-08-01")?.map((n) => n.filename)).toEqual(["b.md"]);
   });
 });
 
