@@ -91,6 +91,16 @@ pub fn update_note_view(
     Notes::new(base_dir.to_path_buf()).update_view(filename, view)
 }
 
+/// 昇格元エントリとの繋がりだけを差し替える。`None` で関係を解いて
+/// 独立したノートに戻す。time / tags / context / 本文には触れない。
+pub fn update_note_origin(
+    base_dir: &Path,
+    filename: &NoteFilename,
+    origin: Option<&str>,
+) -> Result<(), CoreError> {
+    Notes::new(base_dir.to_path_buf()).update_origin(filename, origin)
+}
+
 /// 過去の編集で本文に混入した化けメタデータを直す。直したファイル数を返す。
 pub fn repair_notes(base_dir: &Path) -> Result<usize, CoreError> {
     repair::repair_all(&crate::utils::paths::notes_dir(base_dir))
@@ -526,6 +536,87 @@ mod tests {
 
         let meta = read_note_meta(tmp.path(), &filename).unwrap();
         assert_eq!(meta.view, Some("mindmap".to_string()));
+    }
+
+    fn promoted_note(tmp: &TempDir) -> NoteFilename {
+        let path = create_note_from_entry(
+            tmp.path(),
+            "エントリ本文",
+            &[],
+            &mock_context(),
+            "2026-08-13T08:30:00",
+        )
+        .unwrap();
+        filename_of(&path)
+    }
+
+    #[test]
+    fn update_note_origin_none_clears_the_key() {
+        let tmp = TempDir::new().unwrap();
+        let filename = promoted_note(&tmp);
+
+        update_note_origin(tmp.path(), &filename, None).unwrap();
+
+        let content =
+            fs::read_to_string(tmp.path().join("data/notes").join(filename.as_str())).unwrap();
+        assert!(!content.contains("origin"));
+    }
+
+    /// 解除は関係を断つだけで、ノートそのものの記録には触れない。
+    #[test]
+    fn update_note_origin_keeps_body_time_and_context() {
+        let tmp = TempDir::new().unwrap();
+        let filename = promoted_note(&tmp);
+        let before = read_note_meta(tmp.path(), &filename).unwrap();
+
+        update_note_origin(tmp.path(), &filename, None).unwrap();
+
+        let meta = read_note_meta(tmp.path(), &filename).unwrap();
+        assert_eq!(meta.time, before.time);
+        assert_eq!(meta.context.unwrap().battery, Some(50));
+        assert!(
+            read_note_by_filename(tmp.path(), &filename)
+                .unwrap()
+                .contains("エントリ本文")
+        );
+    }
+
+    /// Undo(繋ぎ直し)の経路。解除した値をそのまま書き戻せる。
+    #[test]
+    fn update_note_origin_restores_the_link() {
+        let tmp = TempDir::new().unwrap();
+        let filename = promoted_note(&tmp);
+        update_note_origin(tmp.path(), &filename, None).unwrap();
+
+        update_note_origin(tmp.path(), &filename, Some("2026-08-13T08:30:00")).unwrap();
+
+        let meta = read_note_meta(tmp.path(), &filename).unwrap();
+        assert_eq!(meta.origin, Some("2026-08-13T08:30:00".to_string()));
+    }
+
+    #[test]
+    fn update_note_origin_not_found() {
+        let tmp = TempDir::new().unwrap();
+        fs::create_dir_all(tmp.path().join("data/notes")).unwrap();
+        let filename = NoteFilename::parse("nonexistent.md").unwrap();
+
+        let result = update_note_origin(tmp.path(), &filename, None);
+
+        assert!(matches!(result, Err(CoreError::NotFound(_))));
+    }
+
+    /// 本文の保存で昇格元との繋がりが消えると、タイムラインのチップが
+    /// 編集のたびに消えてしまう。
+    #[test]
+    fn update_note_keeps_the_origin() {
+        let tmp = TempDir::new().unwrap();
+        let filename = promoted_note(&tmp);
+        let path = tmp.path().join("data/notes").join(filename.as_str());
+
+        update_note(&path, "書き直した本文", &mock_context()).unwrap();
+
+        let meta = read_note_meta(tmp.path(), &filename).unwrap();
+        assert_eq!(meta.origin, Some("2026-08-13T08:30:00".to_string()));
     }
 
     #[test]
