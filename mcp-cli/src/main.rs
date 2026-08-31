@@ -9,7 +9,7 @@ use clap::Parser;
 use rmcp::handler::server::tool::ToolRouter;
 use rmcp::handler::server::wrapper::{Json, Parameters};
 use rmcp::model::{
-    CallToolRequestParams, CallToolResult, ListToolsResult, PaginatedRequestParams,
+    CallToolRequestParams, CallToolResponse, ListToolsResult, PaginatedRequestParams,
     ServerCapabilities, ServerInfo,
 };
 use rmcp::service::RequestContext;
@@ -230,7 +230,7 @@ impl ServerHandler for McpServer {
         &self,
         request: CallToolRequestParams,
         context: RequestContext<RoleServer>,
-    ) -> Result<CallToolResult, ErrorData> {
+    ) -> Result<CallToolResponse, ErrorData> {
         let tcc = rmcp::handler::server::tool::ToolCallContext::new(self, request, context);
         self.tool_router.call(tcc).await
     }
