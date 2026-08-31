@@ -27,6 +27,7 @@ jobs:
       frontend: ${{ steps.filter.outputs.frontend || 'true' }}
       workers: ${{ steps.filter.outputs.workers || 'true' }}
       nix-package: ${{ steps.filter.outputs.nix-package || 'true' }}
+      android: ${{ steps.filter.outputs.android || 'true' }}
     steps:
       - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v3
@@ -67,6 +68,20 @@ jobs:
               - 'nix/package.nix'
               - 'flake.nix'
               - 'flake.lock'
+            # core/** はここに入れない。core が壊れれば rust ジョブが先に落ちるし、
+            # 15 分のビルドを core の変更のたびに足すと待ち時間だけが増える。
+            # android 限定でコンパイルされる widget_bridge.rs は src-tauri なので拾える
+            android:
+              - 'tauri-app/android-widget/**'
+              - 'tauri-app/src-tauri/**'
+              - 'tauri-app/justfile'
+              - 'Cargo.lock'
+              - 'flake.nix'
+              - 'flake.lock'
+              # 他のジョブと違い、このジョブは手元で走らせられない。定義を
+              # 変えたときに自分自身で試せないと、直したつもりのものが
+              # 次に Android を触る誰かの PR で初めて落ちる
+              - '.github/workflows/ci.yml'
 
   rust:
     needs: changes
@@ -147,6 +162,45 @@ jobs:
         run: nix develop .#workers --command just workers::check
       - name: test
         run: nix develop .#workers --command just workers::test
+
+  # ホーム画面ウィジェットの Kotlin とレイアウトは、ここでしか壊れが分からない。
+  # `R.id.*` の解決も、apply-widget.go が書き込んだマニフェストが通るかも、
+  # APK を組んで初めて確かめられる。無かった間は「実機に入れるまで気付かない」
+  # ままマージできてしまっていた。
+  #
+  # 署名しない debug ビルド。配布物ではなく「組み上がるか」だけを見る。
+  # ABI も aarch64 だけ: x86 系はエミュレータ専用で、検証したいのは
+  # コンパイルとリソースの解決であって ABI ごとの差ではない。
+  android:
+    needs: changes
+    if: needs.changes.outputs.android == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+      - name: Free disk space
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache
+      - uses: nixbuild/nix-quick-install-action@v35
+      # キーは release.yml と揃えてある。SDK と NDK は同じものなので、
+      # どちらが先に走っても取り直さない
+      - uses: nix-community/cache-nix-action@v7
+        with:
+          primary-key: nix-${{ runner.os }}-android-${{ hashFiles('flake.lock', 'flake.nix') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-android-
+          gc-max-store-size-linux: 6G
+      # rust ジョブとキーを分ける。同じ target/ でもホスト向けと Android 向けで
+      # 中身が入れ替わり、共有すると毎回どちらかが作り直しになる
+      - uses: actions/cache@v4
+        with:
+          path: target
+          key: cargo-android-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'flake.lock') }}
+          restore-keys: |
+            cargo-android-${{ runner.os }}-
+      - name: Generate the Android project
+        run: nix develop .#android --command just tauri_app::android-init
+      # android-widget-setup を含む。ウィジェットのソースを入れた状態で組む
+      - name: The debug APK builds
+        run: nix develop .#android --command just tauri_app::android-build-debug
 
   # pnpm-lock.yaml を変えると nix/package.nix の pnpmDeps.hash が黙って腐る。
   # 気付くのが macOS 配布 (nix build) の時では遅い
