@@ -71,6 +71,10 @@ jobs:
             # core/** はここに入れない。core が壊れれば rust ジョブが先に落ちるし、
             # 15 分のビルドを core の変更のたびに足すと待ち時間だけが増える。
             # android 限定でコンパイルされる widget_bridge.rs は src-tauri なので拾える
+            # このジョブの定義そのものを変えたときは workflow_dispatch で回す。
+            # push / 手動実行では filter を通さないので全ジョブが走る。
+            # ci.yml をここに入れると、フロントのジョブを 1 行直しただけで
+            # 12 分の APK ビルドが乗る
             android:
               - 'tauri-app/android-widget/**'
               - 'tauri-app/src-tauri/**'
@@ -78,10 +82,6 @@ jobs:
               - 'Cargo.lock'
               - 'flake.nix'
               - 'flake.lock'
-              # 他のジョブと違い、このジョブは手元で走らせられない。定義を
-              # 変えたときに自分自身で試せないと、直したつもりのものが
-              # 次に Android を触る誰かの PR で初めて落ちる
-              - '.github/workflows/ci.yml'
 
   rust:
     needs: changes
