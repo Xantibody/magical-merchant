@@ -3,7 +3,7 @@
 //
 // src-tauri/gen/android/ is gitignored and is recreated by `tauri android init`,
 // so widget sources cannot live there. They live in android-widget/src/main/
-// (tracked by git) and this patcher copies them in and registers the two
+// (tracked by git) and this patcher copies them in and registers the
 // <receiver> elements in the generated AndroidManifest.xml. Re-run it (via
 // `just android-widget-setup`) after any regeneration.
 //
@@ -35,9 +35,9 @@ const (
 
 const markerID = "widgets"
 
-// components is the manifest region: the two widget receivers and the capture
-// sheet they open. exported="false" throughout — the system's AppWidgetService
-// is exempt from the export check, and the sheet is only ever started through a
+// components is the manifest region: the widget receivers and the capture sheet
+// they open. exported="false" throughout — the system's AppWidgetService is
+// exempt from the export check, and the sheet is only ever started through a
 // PendingIntent this app created, which carries this app's identity.
 const components = `        <activity
             android:name=".widget.QuickCaptureActivity"
@@ -81,6 +81,18 @@ const components = `        <activity
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_notes_list_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.TemplatesWidgetProvider"
+            android:exported="false"
+            android:label="@string/widget_templates_widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_templates_info" />
         </receiver>
 
         <!-- BIND_REMOTEVIEWS is what makes exported="false" safe here: only the

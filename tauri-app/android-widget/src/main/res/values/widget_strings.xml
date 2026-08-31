@@ -17,4 +17,10 @@
     <string name="widget_notes_list_label">最近のノート</string>
     <string name="widget_notes_list_description">最近のノートを開きます</string>
     <string name="widget_notes_empty">ノートがありません</string>
+
+    <string name="widget_templates_label">TEMPLATES</string>
+    <string name="widget_templates_app">Magical Merchant</string>
+    <string name="widget_templates_widget_label">テンプレート</string>
+    <string name="widget_templates_description">テンプレートからノートを作ります</string>
+    <string name="widget_templates_empty">テンプレートを作る</string>
 </resources>

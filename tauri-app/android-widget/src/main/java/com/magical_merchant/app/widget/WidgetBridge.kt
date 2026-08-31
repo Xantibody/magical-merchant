@@ -6,6 +6,9 @@ import org.json.JSONObject
 /** 一覧に出すノート 1 件。 */
 internal data class NoteRow(val title: String, val filename: String, val date: String)
 
+/** ウィジェットのボタン 1 つぶんのテンプレ。名前がそのまま起動の引数になる。 */
+internal data class TemplateRow(val name: String)
+
 /** キャプチャバーとシートが描くぶん。読めなければ空。 */
 internal data class CaptureData(
     val lastTime: String = "",
@@ -48,6 +51,9 @@ internal object WidgetBridge {
     /** The most recent notes, as JSON. Reads the whole notes tree. */
     external fun readNotes(baseDir: String): String?
 
+    /** The templates to offer, as JSON. Reads only the templates directory. */
+    external fun readTemplates(baseDir: String): String?
+
     /**
      * The directory Tauri's `app_data_dir()` resolves to, so the widget and the
      * app read and write the same tree.
@@ -74,6 +80,9 @@ internal object WidgetBridge {
     fun readNoteRows(context: Context): List<NoteRow> =
         runCatching { parseNotes(read(context, ::readNotes)) }.getOrElse { emptyList() }
 
+    fun readTemplateRows(context: Context): List<TemplateRow> =
+        runCatching { parseTemplates(read(context, ::readTemplates)) }.getOrElse { emptyList() }
+
     private fun read(context: Context, call: (String) -> String?): String =
         runCatching { call(baseDir(context)) }.getOrNull().orEmpty().ifEmpty { "{}" }
 
@@ -88,6 +97,13 @@ internal object WidgetBridge {
             tags = List(tags?.length() ?: 0) { tags?.optString(it).orEmpty() }
                 .filter { it.isNotEmpty() },
         )
+    }
+
+    private fun parseTemplates(raw: String): List<TemplateRow> {
+        val templates = JSONObject(raw).optJSONArray("templates")
+        return List(templates?.length() ?: 0) { index ->
+            TemplateRow(name = templates?.optJSONObject(index)?.optString("name").orEmpty())
+        }.filter { it.name.isNotEmpty() }
     }
 
     private fun parseNotes(raw: String): List<NoteRow> {

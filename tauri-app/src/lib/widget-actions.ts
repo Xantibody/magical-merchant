@@ -2,10 +2,13 @@
 export interface WidgetAction {
   name: string;
   file: string | null;
+  /** テンプレ起動(`template`)のときだけ、どのテンプレかが入る。 */
+  template: string | null;
 }
 
 /**
  * `magical-merchant://widget/<name>?file=<filename>` を読む。
+ * テンプレ起動だけは `?name=<テンプレ名>` を伴う。
  * ウィジェット以外の deep link（認証のコールバック）は `null`。
  */
 export function parseWidgetAction(raw: string): WidgetAction | null {
@@ -25,7 +28,11 @@ export function parseWidgetAction(raw: string): WidgetAction | null {
     return null;
   }
 
-  return { name, file: url.searchParams.get("file") };
+  return {
+    name,
+    file: url.searchParams.get("file"),
+    template: url.searchParams.get("name"),
+  };
 }
 
 /** 起動 URL には認証のコールバックも混じる。最初のウィジェットリンクを取る。 */

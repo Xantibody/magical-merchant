@@ -96,6 +96,17 @@ pub extern "system" fn Java_com_magical_1merchant_app_widget_WidgetBridge_readNo
         .resolve::<LogErrorAndDefault>()
 }
 
+/// The templates the widget offers, as JSON. Reads only the templates
+/// directory, so the buttons do not wait on the whole notes tree.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_magical_1merchant_app_widget_WidgetBridge_readTemplates<'local>(
+    env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    base_dir: JString<'local>,
+) -> JString<'local> {
+    read_json(env, base_dir, widget_summary::collect_templates)
+}
+
 /// Serializes whatever `collect` gathers under `base_dir`.
 ///
 /// An unreadable path yields `{}`, not an exception: a Java exception crossing

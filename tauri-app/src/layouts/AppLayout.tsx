@@ -11,7 +11,7 @@ import FirstRunCard from "../components/FirstRunCard";
 import { ShellProvider, useShell } from "../lib/shell";
 import { createSyncState, syncIconName } from "../lib/sync";
 import { applyTheme, nextTheme, readStoredTheme, THEME_ICONS } from "../lib/theme";
-import { t } from "../lib/i18n";
+import { locale, t } from "../lib/i18n";
 import type { Theme } from "../lib/theme";
 import { MODE_ICONS, MODE_LABELS, ROUTES } from "../lib/routes";
 import type { RoutePath } from "../lib/routes";
@@ -71,9 +71,43 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
     })();
   };
 
+  /**
+   * ウィジェットのテンプレボタン。同じテンプレの今日のぶんが既にあれば
+   * core が作らずにそれを返すので、ここは開くだけでいい。
+   */
+  const openFromTemplate = (name: string): void => {
+    shell.closePalette();
+    void (async () => {
+      try {
+        const created = await typedInvoke("create_from_template", {
+          filename: `${name}.md`,
+          locale: locale(),
+          client: await getDeviceSignals(),
+        });
+        shell.refreshData();
+        const filename = created.path.split("/").at(-1);
+        navigate(filename ? `${ROUTES.NOTES}?file=${encodeURIComponent(filename)}` : ROUTES.NOTES);
+      } catch {
+        // 消したテンプレを指したままのウィジェットが残っていることがある。
+        // 押しても何も起きないより、一覧を開いて理由を出す
+        navigate(ROUTES.NOTES);
+        shell.showToast(t().templates.createFailed);
+      }
+    })();
+  };
+
   const runWidgetAction = (action: WidgetAction): void => {
     if (action.name === "new-note") {
       newNote();
+      return;
+    }
+    if (action.name === "template" && action.template) {
+      openFromTemplate(action.template);
+      return;
+    }
+    // ボタンが 1 つも無いウィジェットと、そのヘッダの行き先
+    if (action.name === "templates") {
+      navigate(ROUTES.TEMPLATES);
       return;
     }
     // ?file= はルーターに預ける。Workspace の選択状態を外から触れるように
