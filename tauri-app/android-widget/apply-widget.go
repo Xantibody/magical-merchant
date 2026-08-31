@@ -7,6 +7,11 @@
 // <receiver> elements in the generated AndroidManifest.xml. Re-run it (via
 // `just android-widget-setup`) after any regeneration.
 //
+// The copy also carries a MainActivity.kt that overwrites the generated stub:
+// it adds IME-inset padding so the window shrinks with the keyboard (#54).
+// After a Tauri upgrade, diff the freshly generated stub against ours before
+// re-running, in case upstream grew more than enableEdgeToEdge().
+//
 // Both halves are idempotent: copies overwrite, and the manifest region is
 // wrapped in marker comments that are stripped before being re-inserted, so any
 // number of runs yields the same file.

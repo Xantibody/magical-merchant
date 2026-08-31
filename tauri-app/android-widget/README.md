@@ -108,6 +108,13 @@ elements, the `<activity>` and the list `<service>` in `AndroidManifest.xml`
 behind idempotent marker comments — the same approach as
 [`../android-signing`](../android-signing/README.md).
 
+The copy includes one file that is not a widget:
+[`MainActivity.kt`](src/main/java/com/magical_merchant/app/MainActivity.kt)
+overwrites the Tauri-generated stub to pad the content view by the IME inset
+(#54 — `enableEdgeToEdge()` stops `adjustResize` from working, so without this
+the keyboard-top markdown toolbar falls back to jittery JS positioning). After
+a Tauri upgrade, diff the regenerated stub against ours before re-applying.
+
 ```sh
 just android-widget-setup
 ```
