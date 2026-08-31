@@ -63,6 +63,23 @@ export function resolveLine(line: string, now: Date, locale: Locale, prev = ""):
   });
 }
 
+/**
+ * 本文まるごとのプレビュー。行ごとに解くところは core と同じで、違うのは
+ * `{{prev}}` だけ — 前回のノートはここからは読めないので、書かれたまま
+ * 残して「ここにリンクが入る」と見せる。空に潰すと「前回: 」だけの行が
+ * 残り、何を待っている行なのか読めなくなる。
+ *
+ * 実際に作るときは、前回があればリンクに変わり、無ければその行ごと落ちる
+ * (`template/vars.rs`)。どちらになるかは、まだノートが 1 本も無い今は
+ * 決まらない。
+ */
+export function resolveBody(body: string, now: Date, locale: Locale): string {
+  return body
+    .split("\n")
+    .map((line) => resolveLine(line, now, locale, "{{prev}}"))
+    .join("\n");
+}
+
 /** 文字列に変数が含まれるか。タグを実線/破線で描き分けるのに使う。 */
 export function hasVariable(text: string): boolean {
   return /\{\{[^}]*\}\}/.test(text);

@@ -22,14 +22,26 @@ import { ROUTES } from "../lib/routes";
 import {
   addTemplateTag,
   hasVariable,
+  resolveBody,
   resolveLine,
   splitVariables,
   TEMPLATE_VARS,
 } from "../lib/template-vars";
 import "../styles/templates.css";
 
-const SAVE_DEBOUNCE_MS = 1000;
 const UNDO_MS = 5000;
+
+/** 変数チップの挿し先。テンプレで `{{…}}` を書ける欄はこの 3 つ。 */
+type VarField = "title" | "body" | "tag";
+
+/** 編集中の 1 枚。ディスクの姿と見比べて「未保存」を出すのに使う。 */
+interface Draft {
+  title: string;
+  body: string;
+  tags: string[];
+}
+
+const EMPTY_DRAFT: Draft = { title: "", body: "", tags: [] };
 
 /**
  * ファイル名にできない文字を落とす。テンプレ名はそのままファイル名になる。
@@ -62,11 +74,29 @@ export default function Templates(): JSX.Element {
   const [tags, setTags] = createSignal<string[]>([]);
   const [tagInput, setTagInput] = createSignal("");
   const [saveStatus, setSaveStatus] = createSignal<"idle" | "saving" | "saved">("idle");
+  /** 最後にディスクから読んだ / ディスクへ書いた姿。 */
+  const [baseline, setBaseline] = createSignal<Draft>(EMPTY_DRAFT);
   /** 削除の猶予中だけ一覧から伏せる。 */
   const [hidden, setHidden] = createSignal<string[]>([]);
 
   let bodyRef: HTMLTextAreaElement | undefined;
+  let titleRef: HTMLInputElement | undefined;
+  let tagRef: HTMLInputElement | undefined;
+  let nameRef: HTMLInputElement | undefined;
   let highlightRef: HTMLPreElement | undefined;
+
+  /** 最後に触っていた欄。開いた直後に押されたら本文に入れる。 */
+  const [varField, setVarField] = createSignal<VarField>("body");
+
+  const fieldInput = (field: VarField): HTMLInputElement | HTMLTextAreaElement | undefined => {
+    if (field === "title") {
+      return titleRef;
+    }
+    if (field === "tag") {
+      return tagRef;
+    }
+    return bodyRef;
+  };
 
   // 変数の挿入列は画面の下端にある。触る端末ではキーボードがちょうどそこを
   // 覆うので、開いているあいだだけその上へ逃がす
@@ -89,11 +119,30 @@ export default function Templates(): JSX.Element {
 
   const editing = (): boolean => selected() !== undefined || draftName() !== null;
 
+  /**
+   * 元に戻したばかりの書きかけ。ディスクの読み込みで潰さないための目印で、
+   * 立っているのは復元の batch のあいだだけ。
+   */
+  let restoring: Draft | undefined;
+
+  /** ディスクから来た姿を写す。ここが「未保存かどうか」の基準になる。 */
+  const load = (draft: Draft): void => {
+    batch(() => {
+      setTitle(draft.title);
+      setBody(draft.body);
+      setTags(draft.tags);
+      setBaseline(draft);
+      setSaveStatus("idle");
+    });
+  };
+
+  const current = (): Draft => ({ title: title(), body: body(), tags: tags() });
+
   // 選んだテンプレの中身を読む。新規作成中は読まない — 空の枠に
   // 前に選んでいたテンプレの本文が流れ込む
   createEffect(() => {
     const file = selectedFile();
-    if (!file || draftName() !== null) {
+    if (!file || draftName() !== null || restoring) {
       return;
     }
     void (async () => {
@@ -103,27 +152,25 @@ export default function Templates(): JSX.Element {
           return;
         }
         const titled = splitTitle(detail.body);
-        batch(() => {
-          setTitle(titled.title);
-          setBody(titled.body);
-          setTags(detail.tags);
-          setSaveStatus("idle");
-        });
+        load({ title: titled.title, body: titled.body, tags: detail.tags });
       } catch {
         if (selectedFile() === file) {
-          batch(() => {
-            setTitle("");
-            setBody("");
-            setTags([]);
-          });
+          load(EMPTY_DRAFT);
         }
       }
     })();
   });
 
-  // ---- 保存（1 秒 debounce + 直列化）----
-  let saveTimer: ReturnType<typeof setTimeout> | undefined;
-  let saveChain: Promise<void> = Promise.resolve();
+  /** ディスクの姿と食い違っているか。保存ボタンが押せるかはこれで決まる。 */
+  const dirty = createMemo<boolean>(() => {
+    const base = baseline();
+    return (
+      title() !== base.title ||
+      body() !== base.body ||
+      tags().length !== base.tags.length ||
+      tags().some((tag, at) => tag !== base.tags[at])
+    );
+  });
 
   /** いま書いているものの保存先。名前が決まっていなければ保存しない。 */
   const targetFilename = (): string | undefined => {
@@ -136,21 +183,38 @@ export default function Templates(): JSX.Element {
     return selected()?.filename;
   };
 
-  const flushSave = (): Promise<void> => {
-    const filename = targetFilename();
-    const content = joinTitle(title(), body());
-    const currentTags = tags();
-    const previous = saveChain;
+  /**
+   * 保存するものがあるか。新規は名前さえ決まっていれば書ける — 中身が空の
+   * ひな型にも意味がある。既存は変えたときだけ。
+   */
+  const canSave = (): boolean =>
+    targetFilename() !== undefined &&
+    saveStatus() !== "saving" &&
+    (draftName() !== null || dirty());
 
-    saveChain = (async () => {
-      await previous;
-      if (!filename) {
-        return;
-      }
-      setSaveStatus("saving");
+  /**
+   * 明示的に保存する。テンプレは書きかけのまま置かれると、そこから作る
+   * ノートまで壊れる。打つたびに書き出す作りにはしない。
+   */
+  const save = (): void => {
+    const filename = targetFilename();
+    if (!filename || !canSave()) {
+      return;
+    }
+    const draft = current();
+    setSaveStatus("saving");
+
+    void (async () => {
       try {
-        await typedInvoke("save_template", { filename, body: content, tags: currentTags });
-        setSaveStatus("saved");
+        await typedInvoke("save_template", {
+          filename,
+          body: joinTitle(draft.title, draft.body),
+          tags: draft.tags,
+        });
+        batch(() => {
+          setBaseline(draft);
+          setSaveStatus("saved");
+        });
         await refetch();
         // 名前が決まった時点で、新規作成から「そのテンプレの編集」に変わる
         if (draftName() !== null) {
@@ -164,41 +228,62 @@ export default function Templates(): JSX.Element {
         shell.showToast(t().templates.saveFailed);
       }
     })();
-    return saveChain;
   };
 
-  const scheduleSave = (): void => {
-    if (saveTimer) {
-      clearTimeout(saveTimer);
+  // ⌘S / Ctrl+S。保存ボタンしか入口がないと、書きながら残せない
+  const onKeyDown = (e: KeyboardEvent): void => {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+      e.preventDefault();
+      save();
     }
-    saveTimer = setTimeout(() => void flushSave(), SAVE_DEBOUNCE_MS);
   };
+  globalThis.addEventListener("keydown", onKeyDown);
+  onCleanup(() => globalThis.removeEventListener("keydown", onKeyDown));
 
-  onCleanup(() => {
-    if (saveTimer) {
-      clearTimeout(saveTimer);
-      void flushSave();
+  /** 書きかけを抱えたまま編集を離れる。捨てたことは伝えて、戻す道も残す。 */
+  const leaveEditor = (next: () => void): void => {
+    if (!dirty()) {
+      next();
+      return;
     }
-  });
+    const undo = { file: selectedFile(), name: draftName(), draft: current() };
+    shell.showToast(t().templates.discarded, () => {
+      restoring = undo.draft;
+      batch(() => {
+        setSelectedFile(undo.file);
+        setDraftName(undo.name);
+        setTitle(undo.draft.title);
+        setBody(undo.draft.body);
+        setTags(undo.draft.tags);
+        setDetailOpen(true);
+      });
+      // 読み込みの effect は batch の終わりに走り終えている
+      restoring = undefined;
+    });
+    next();
+  };
 
   const startNew = (): void => {
-    batch(() => {
-      setSelectedFile(null);
-      setDraftName("");
-      setTitle("");
-      setBody("");
-      setTags([]);
-      setTagInput("");
-      setSaveStatus("idle");
-      setDetailOpen(true);
+    leaveEditor(() => {
+      batch(() => {
+        setSelectedFile(null);
+        setDraftName("");
+        setTagInput("");
+        setDetailOpen(true);
+        load(EMPTY_DRAFT);
+      });
+      // 名前が決まるまでは保存できない。最初に要るものへ先に連れていく
+      queueMicrotask(() => nameRef?.focus());
     });
   };
 
   const select = (template: Template): void => {
-    batch(() => {
-      setDraftName(null);
-      setSelectedFile(template.filename);
-      setDetailOpen(true);
+    leaveEditor(() => {
+      batch(() => {
+        setDraftName(null);
+        setSelectedFile(template.filename);
+        setDetailOpen(true);
+      });
     });
   };
 
@@ -224,36 +309,49 @@ export default function Templates(): JSX.Element {
   };
 
   const commitTagInput = (): void => {
-    setTags((current) => addTemplateTag(current, tagInput()));
+    setTags((tagList) => addTemplateTag(tagList, tagInput()));
     setTagInput("");
-    scheduleSave();
   };
 
-  /** カーソルの居る場所に変数を差し込む。押したあとも本文に戻れるように。 */
+  /**
+   * カーソルの居る場所に変数を差し込む。挿し先は最後に触っていた欄 —
+   * 常に本文だと、タイトルやタグに変数を置く手段がなくなる。押したあとも
+   * その欄に戻す。
+   */
   const insertVariable = (token: string): void => {
-    const el = bodyRef;
+    const field = varField();
+    const el = fieldInput(field);
     if (!el) {
       return;
     }
-    const start = el.selectionStart;
-    const end = el.selectionEnd;
-    const next = `${body().slice(0, start)}${token}${body().slice(end)}`;
-    setBody(next);
-    scheduleSave();
+    const start = el.selectionStart ?? el.value.length;
+    const end = el.selectionEnd ?? start;
+    const next = `${el.value.slice(0, start)}${token}${el.value.slice(end)}`;
+
+    if (field === "title") {
+      setTitle(next);
+    } else if (field === "tag") {
+      setTagInput(next);
+    } else {
+      setBody(next);
+    }
+
+    const caret = start + token.length;
     queueMicrotask(() => {
       el.focus();
-      el.setSelectionRange(start + token.length, start + token.length);
+      el.setSelectionRange(caret, caret);
     });
   };
 
   /** 「今日作るとこうなる」。変数の書き方が合っているかはここで分かる。 */
-  const preview = createMemo<{ title: string; tags: string[] }>(() => {
+  const preview = createMemo<{ title: string; tags: string[]; body: string }>(() => {
     const now = new Date();
     return {
       title: resolveLine(title(), now, locale()),
       tags: tags()
         .map((tag) => resolveLine(tag, now, locale()))
         .filter((tag) => tag.trim() !== ""),
+      body: resolveBody(body(), now, locale()),
     };
   });
 
@@ -327,10 +425,7 @@ export default function Templates(): JSX.Element {
               type="button"
               class="icon-button detail-back"
               aria-label={t().templates.backToList}
-              onClick={() => {
-                void flushSave();
-                setDetailOpen(false);
-              }}
+              onClick={() => leaveEditor(() => setDetailOpen(false))}
             >
               <Icon name="arrow-left" size={18} />
             </button>
@@ -341,13 +436,11 @@ export default function Templates(): JSX.Element {
                   <input
                     type="text"
                     class="templates-name-input"
+                    ref={nameRef}
                     placeholder={t().templates.namePlaceholder}
                     aria-label={t().templates.namePlaceholder}
                     value={draftName() ?? ""}
-                    onInput={(e) => {
-                      setDraftName(e.currentTarget.value);
-                      scheduleSave();
-                    }}
+                    onInput={(e) => setDraftName(e.currentTarget.value)}
                   />
                 }
               >
@@ -355,14 +448,30 @@ export default function Templates(): JSX.Element {
                     そのテンプレから育ったノートとの繋がりが切れるので出すだけ */}
                 <span class="detail-created">{selected()?.name}</span>
               </Show>
-              <Show when={saveStatus() !== "idle"}>
-                <span class="detail-save-status">
-                  {saveStatus() === "saving" ? t().common.saving : t().common.saved}
-                </span>
+              {/* 未保存のあいだは、保存の手応えより先にそのことを出す */}
+              <Show
+                when={dirty()}
+                fallback={
+                  <Show when={saveStatus() !== "idle"}>
+                    <span class="detail-save-status">
+                      {saveStatus() === "saving" ? t().common.saving : t().common.saved}
+                    </span>
+                  </Show>
+                }
+              >
+                <span class="detail-save-status templates-unsaved">{t().templates.unsaved}</span>
               </Show>
             </span>
 
             <div class="detail-actions">
+              <button
+                type="button"
+                class="button-primary templates-save"
+                disabled={!canSave()}
+                onClick={save}
+              >
+                {t().common.save}
+              </button>
               <Show when={selected()}>
                 {(template) => (
                   <button
@@ -386,13 +495,12 @@ export default function Templates(): JSX.Element {
           <input
             type="text"
             class="note-title-input"
+            ref={titleRef}
             placeholder={t().templates.titlePlaceholder}
             aria-label={t().templates.titlePlaceholder}
             value={title()}
-            onInput={(e) => {
-              setTitle(e.currentTarget.value);
-              scheduleSave();
-            }}
+            onFocus={() => setVarField("title")}
+            onInput={(e) => setTitle(e.currentTarget.value)}
           />
 
           <div class="templates-tags">
@@ -405,10 +513,7 @@ export default function Templates(): JSX.Element {
                     type="button"
                     class="note-meta-tag-remove"
                     aria-label={t().templates.removeTag(tag)}
-                    onClick={() => {
-                      setTags((current) => current.filter((kept) => kept !== tag));
-                      scheduleSave();
-                    }}
+                    onClick={() => setTags((tagList) => tagList.filter((kept) => kept !== tag))}
                   >
                     <Icon name="x" size={10} />
                   </button>
@@ -418,9 +523,11 @@ export default function Templates(): JSX.Element {
             <input
               type="text"
               class="templates-tag-input"
+              ref={tagRef}
               placeholder={t().templates.addTag}
               aria-label={t().templates.addTag}
               value={tagInput()}
+              onFocus={() => setVarField("tag")}
               onInput={(e) => setTagInput(e.currentTarget.value)}
               onBlur={commitTagInput}
               onKeyDown={(e) => {
@@ -450,10 +557,8 @@ export default function Templates(): JSX.Element {
               aria-label={t().templates.bodyPlaceholder}
               spellcheck={false}
               value={body()}
-              onInput={(e) => {
-                setBody(e.currentTarget.value);
-                scheduleSave();
-              }}
+              onFocus={() => setVarField("body")}
+              onInput={(e) => setBody(e.currentTarget.value)}
               onScroll={(e) => {
                 if (highlightRef) {
                   highlightRef.scrollTop = e.currentTarget.scrollTop;
@@ -468,8 +573,9 @@ export default function Templates(): JSX.Element {
             classList={{ "templates-footer--floating": keyboardTop() !== undefined }}
             style={keyboardTopStyle(keyboardTop())}
           >
-            <div class="templates-vars">
-              <span class="templates-tags-label">{t().templates.insertVariable}</span>
+            {/* 見出しは置かない。チップが `{{date}} 日付` と自分で名乗るので、
+                読めば分かるものに 1 行ぶんの高さを使わない */}
+            <div class="templates-vars" role="group" aria-label={t().templates.insertVariable}>
               <For each={TEMPLATE_VARS}>
                 {(variable) => (
                   <button
@@ -485,10 +591,30 @@ export default function Templates(): JSX.Element {
                 )}
               </For>
             </div>
-            <p class="templates-preview">
-              {t().templates.todayPreview} — {preview().title || t().templates.untitled}
-              <For each={preview().tags}>{(tag) => <span class="tag-badge">#{tag}</span>}</For>
-            </p>
+            {/* 畳んだ 1 行で「今日作るとこうなる」のタイトルまでは常に見える。
+                本文まで確かめたいときだけ開く — 開きっぱなしにすると、
+                書く場所より読む場所のほうが広い画面になる */}
+            <details class="templates-preview">
+              <summary class="templates-preview-summary">
+                {t().templates.todayPreview} — {preview().title || t().templates.untitled}
+              </summary>
+              <div class="templates-preview-body">
+                <Show when={preview().tags.length > 0}>
+                  <p class="templates-preview-tags">
+                    <For each={preview().tags}>
+                      {(tag) => <span class="tag-badge">#{tag}</span>}
+                    </For>
+                  </p>
+                </Show>
+                {/* 解けずに残った変数は本文の層と同じ印で示す。ここに出るのは
+                    綴りを間違えたものか、作るときにしか決まらない {{prev}} */}
+                <pre class="templates-preview-text">
+                  <For each={splitVariables(preview().body)}>
+                    {(run) => <span classList={{ "templates-var": run.variable }}>{run.text}</span>}
+                  </For>
+                </pre>
+              </div>
+            </details>
           </div>
         </Show>
       </div>
