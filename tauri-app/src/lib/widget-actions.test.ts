@@ -6,6 +6,7 @@ describe("parseWidgetAction", () => {
     expect(parseWidgetAction("magical-merchant://widget/new-note")).toEqual({
       name: "new-note",
       file: null,
+      template: null,
     });
   });
 
@@ -13,6 +14,15 @@ describe("parseWidgetAction", () => {
     expect(parseWidgetAction("magical-merchant://widget/note?file=20260809_120000.md")).toEqual({
       name: "note",
       file: "20260809_120000.md",
+      template: null,
+    });
+  });
+
+  it("テンプレのリンクはどのテンプレかを運ぶ", () => {
+    expect(parseWidgetAction("magical-merchant://widget/template?name=daily")).toEqual({
+      name: "template",
+      file: null,
+      template: "daily",
     });
   });
 
