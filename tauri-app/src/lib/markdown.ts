@@ -23,15 +23,24 @@ function preservedEmptyLinePlugin(markdownIt: MarkdownItInstance): void {
   });
 }
 
-const md = new MarkdownIt({
-  html: false,
-  linkify: true,
-  typographer: true,
-});
+/**
+ * `md` と `fenceMd` は同じ構成の 2 インスタンス。分かれているのは fence の
+ * renderer rule だけが違うため — 同期版 (`renderMarkdownSync`) にスロット差し
+ * 込みの目印を出させないための分離で、構成そのものは常に揃える。
+ */
+function createRenderer(): MarkdownItInstance {
+  const renderer = new MarkdownIt({
+    html: false,
+    linkify: true,
+    typographer: true,
+  });
+  renderer.use(tagPlugin);
+  renderer.use(preservedEmptyLinePlugin);
+  renderer.use(noteLinkPlugin);
+  return renderer;
+}
 
-md.use(tagPlugin);
-md.use(preservedEmptyLinePlugin);
-md.use(noteLinkPlugin);
+const md = createRenderer();
 
 export function renderMarkdownSync(
   source: string,
@@ -50,15 +59,7 @@ interface RenderEnv extends Env {
   noteTitles?: ReadonlyMap<string, string>;
 }
 
-const fenceMd = new MarkdownIt({
-  html: false,
-  linkify: true,
-  typographer: true,
-});
-
-fenceMd.use(tagPlugin);
-fenceMd.use(preservedEmptyLinePlugin);
-fenceMd.use(noteLinkPlugin);
+const fenceMd = createRenderer();
 
 /**
  * フェンスの描画結果を差し込む目印。markdown-it は CommonMark どおり入力中の U+0000 を
