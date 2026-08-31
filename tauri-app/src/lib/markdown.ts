@@ -1,6 +1,5 @@
 import MarkdownIt from "markdown-it";
 import type { Env, MarkdownIt as MarkdownItInstance } from "markdown-it";
-import { getHighlighter } from "./highlighter";
 import { renderDiagrams } from "./mermaid";
 import { noteLinkPlugin } from "./note-link-markdown";
 import { isPreservedEmptyLine } from "./preserved-empty-line";
@@ -88,6 +87,9 @@ fenceMd.renderer.rules.fence = (tokens, idx, _options, renderEnv) => {
 async function highlightBlocks(blocks: FenceBlock[]): Promise<string[]> {
   let highlighter;
   try {
+    // 動的 import: shiki (コア + 正規表現エンジン) はコードフェンスを含む
+    // ノートを開くまで読まない。静的に書くと Workspace チャンクに同梱される
+    const { getHighlighter } = await import("./highlighter");
     highlighter = await getHighlighter();
   } catch {
     return blocks.map((block) => plainBlock(block.code));

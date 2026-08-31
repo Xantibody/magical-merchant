@@ -20,6 +20,7 @@ import { createPlaceholderPlugin } from "../lib/placeholder-plugin";
 import { createNoteLinkPlugin } from "../lib/note-link-plugin";
 import type { NoteLinkTarget } from "../lib/note-link-plugin";
 import { getShikiTheme } from "../lib/theme";
+import "../styles/editor.css";
 import type { JSX } from "solid-js";
 
 /** プレビューで押された場所。エディタが立ち上がったらここへカーソルを置く。 */

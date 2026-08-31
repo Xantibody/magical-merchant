@@ -1,12 +1,11 @@
+/* ここに置くのは初回描画 (Timeline) と全ビュー共通のぶんだけ。
+   lazy なビュー専用の CSS は、そのチャンクと一緒に読まれるように
+   ビュー/コンポーネント側で import する (settings.css / workspace.css /
+   editor.css / markdown-preview.css / markdown-toolbar.css / templates.css) */
 @import "./styles/base.css";
 @import "./styles/layout.css";
-@import "./styles/workspace.css";
 @import "./styles/timeline.css";
 @import "./styles/popover.css";
 @import "./styles/palette.css";
 @import "./styles/toast.css";
 @import "./styles/tags.css";
-@import "./styles/editor.css";
-@import "./styles/markdown-preview.css";
-@import "./styles/markdown-toolbar.css";
-@import "./styles/settings.css";
