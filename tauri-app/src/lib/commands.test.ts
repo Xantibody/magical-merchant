@@ -61,7 +61,7 @@ describe("typedInvoke local mutation notifications", () => {
 
   it("stops notifying once unsubscribed", async () => {
     stop();
-    await typedInvoke("save_document", { body: "x", tags: [], client: CLIENT });
+    await typedInvoke("update_draft", { filePath: "a.md", body: "x", client: CLIENT });
     expect(seen).toHaveLength(0);
   });
 });

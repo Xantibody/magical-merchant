@@ -61,8 +61,3 @@ export function formatNoteGroupLabel(iso: string, today: Date): string {
   }
   return t().day.earlier;
 }
-
-/** 詳細ペインのメタバー。「2026-08-04 15:27」 */
-export function formatDateTime(iso: string, time: string): string {
-  return time ? `${iso} ${time.slice(0, 5)}` : iso;
-}

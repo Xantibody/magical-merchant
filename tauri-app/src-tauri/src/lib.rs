@@ -54,20 +54,6 @@ fn save_quick_capture(
 }
 
 #[tauri::command]
-fn save_document(
-    handle: AppHandle,
-    body: String,
-    tags: Vec<String>,
-    client: ClientContext,
-) -> Result<(), String> {
-    let base_dir = app_base_dir(&handle)?;
-    let context = device::get_context(client);
-    magical_merchant_core::create_draft_note(&base_dir, &body, &tags, &context)
-        .map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-#[tauri::command]
 fn create_draft(
     handle: AppHandle,
     body: String,
@@ -231,13 +217,6 @@ fn create_from_template(
 }
 
 #[tauri::command]
-fn read_timeline(handle: AppHandle) -> Result<Vec<String>, String> {
-    let base_dir = app_base_dir(&handle)?;
-    let today = chrono::Local::now().date_naive();
-    magical_merchant_core::read_timeline(&base_dir, today).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
 fn list_timeline_dates(handle: AppHandle) -> Result<Vec<String>, String> {
     let base_dir = app_base_dir(&handle)?;
     let dates = magical_merchant_core::list_timeline_dates(&base_dir).map_err(|e| e.to_string())?;
@@ -369,7 +348,6 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             save_quick_capture,
-            save_document,
             create_draft,
             update_draft,
             list_notes,
@@ -384,7 +362,6 @@ pub fn run() {
             save_template,
             delete_template,
             create_from_template,
-            read_timeline,
             list_timeline_dates,
             read_timeline_by_date,
             delete_timeline_entry,

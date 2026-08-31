@@ -221,16 +221,6 @@ export function groupNotes(items: NoteItem[], today: Date): ItemGroup[] {
   return groupBy(items, (item) => formatNoteGroupLabel(item.date, today));
 }
 
-/** リスト行の 2 段目。「15:27 · macos」「08/03 · #sync #design」 */
-export function itemMeta(item: Item): string {
-  if (item.kind === "timeline") {
-    return [item.time.slice(0, 5), item.context?.os].filter(Boolean).join(" · ");
-  }
-  const date = item.date ? item.date.slice(5).replace("-", "/") : "";
-  const tags = item.tags.map((tag) => `#${tag}`).join(" ");
-  return [date, tags].filter(Boolean).join(" · ");
-}
-
 /**
  * 詳細ヘッダの作成日時。「2026/05/03 15:39」
  * ファイル名は同期やウィジェットが指す不変の ID であって、人に見せる
