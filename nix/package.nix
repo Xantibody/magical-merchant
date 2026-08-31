@@ -7,9 +7,14 @@
   pnpm_10,
   pnpmConfigHook,
   fetchPnpmDeps,
+  fetchurl,
   typescript-go,
   pkg-config,
 }:
+let
+  crateApiUrl = "https://crates.io/api/v1/crates";
+  crateMirrorUrl = "https://static.crates.io/crates";
+in
 stdenv.mkDerivation (finalAttrs: {
   pname = "magical-merchant";
   version = "0.2.0";
@@ -33,9 +38,29 @@ stdenv.mkDerivation (finalAttrs: {
     ];
   };
 
-  cargoDeps = rustPlatform.importCargoLock {
-    lockFile = ../Cargo.lock;
-  };
+  # crates.io は api/v1 の download を curl 系の User-Agent に 403 で返すように
+  # なった。importCargoLock はその URL を内部で組み立てるので、Cargo.lock に
+  # バイナリキャッシュ未収録の crate が 1 つ入るだけで nix ビルドだけが落ちる。
+  # api/v1 のリダイレクト先である static.crates.io は同じ URL の形をそのまま
+  # 受けるので、取得の一段下で向け直す。
+  #
+  # extraRegistries で差し替えないのは、あれが .cargo/config.toml にも
+  # `[source."…crates.io-index"]` を足し、cargo が crates-io の二重定義として
+  # 撥ねるため。
+  cargoDeps =
+    (rustPlatform.importCargoLock.override {
+      fetchurl =
+        args:
+        fetchurl (
+          args
+          // {
+            url = lib.replaceStrings [ crateApiUrl ] [ crateMirrorUrl ] args.url;
+          }
+        );
+    })
+      {
+        lockFile = ../Cargo.lock;
+      };
 
   pnpmDeps = fetchPnpmDeps {
     inherit (finalAttrs) pname version src;
