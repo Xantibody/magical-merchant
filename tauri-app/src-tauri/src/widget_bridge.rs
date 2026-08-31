@@ -5,8 +5,14 @@
 //! in-app capture bar uses — reimplementing the append in Kotlin would mean
 //! reimplementing the `DayLog` frontmatter and the row-level JSON, and any
 //! disagreement there shows up as a sync conflict rather than as a crash.
+//!
+//! jni 0.22 hands native methods an [`EnvUnowned`], which carries no JNI API of
+//! its own; the real [`Env`](jni::Env) only exists inside `with_env`, which also
+//! catches panics. Every entry point here resolves with [`LogErrorAndDefault`]
+//! rather than the throwing policy — see the note on `saveQuickCapture`.
 
-use jni::JNIEnv;
+use jni::EnvUnowned;
+use jni::errors::LogErrorAndDefault;
 use jni::objects::{JClass, JString};
 use jni::sys::{JNI_FALSE, JNI_TRUE, jboolean};
 use std::path::Path;
@@ -31,30 +37,32 @@ use crate::widget_summary;
 /// through an `AppWidgetProvider` tap would take the launcher's process with it.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_com_magical_1merchant_app_widget_WidgetBridge_saveQuickCapture(
-    mut env: JNIEnv<'_>,
+    mut unowned_env: EnvUnowned<'_>,
     _class: JClass<'_>,
     base_dir: JString<'_>,
     text: JString<'_>,
     client_json: JString<'_>,
 ) -> jboolean {
-    let (Ok(base_dir), Ok(text)) = (env.get_string(&base_dir), env.get_string(&text)) else {
-        return JNI_FALSE;
-    };
+    unowned_env
+        .with_env(|env| -> jni::errors::Result<jboolean> {
+            let (Ok(base_dir), Ok(text)) = (base_dir.try_to_string(env), text.try_to_string(env))
+            else {
+                return Ok(JNI_FALSE);
+            };
 
-    // An unreadable string is the same as an unreadable JSON: the entry is
-    // saved without the metadata rather than not saved at all.
-    let client = env
-        .get_string(&client_json)
-        .map(|json| device::parse_client_context(&String::from(json)))
-        .unwrap_or_default();
-    let context = device::get_context(client);
-    let saved = magical_merchant_core::save_timeline_entry(
-        Path::new(&String::from(base_dir)),
-        &String::from(text),
-        &context,
-    );
+            // An unreadable string is the same as an unreadable JSON: the entry is
+            // saved without the metadata rather than not saved at all.
+            let client = client_json
+                .try_to_string(env)
+                .map(|json| device::parse_client_context(&json))
+                .unwrap_or_default();
+            let context = device::get_context(client);
+            let saved =
+                magical_merchant_core::save_timeline_entry(Path::new(&base_dir), &text, &context);
 
-    if saved.is_ok() { JNI_TRUE } else { JNI_FALSE }
+            Ok(if saved.is_ok() { JNI_TRUE } else { JNI_FALSE })
+        })
+        .resolve::<LogErrorAndDefault>()
 }
 
 /// Today's last entry and tags, as JSON. Reads one day file.
@@ -62,22 +70,30 @@ pub extern "system" fn Java_com_magical_1merchant_app_widget_WidgetBridge_saveQu
 pub extern "system" fn Java_com_magical_1merchant_app_widget_WidgetBridge_readCaptureData<
     'local,
 >(
-    env: JNIEnv<'local>,
+    mut unowned_env: EnvUnowned<'local>,
     _class: JClass<'local>,
     base_dir: JString<'local>,
 ) -> JString<'local> {
-    read_json(env, base_dir, widget_summary::collect_capture)
+    unowned_env
+        .with_env(|env| -> jni::errors::Result<JString<'local>> {
+            Ok(read_json(env, base_dir, widget_summary::collect_capture))
+        })
+        .resolve::<LogErrorAndDefault>()
 }
 
 /// The most recent notes, as JSON. Reads the whole notes tree, which is why it
 /// is not folded into `readCaptureData`.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_com_magical_1merchant_app_widget_WidgetBridge_readNotes<'local>(
-    env: JNIEnv<'local>,
+    mut unowned_env: EnvUnowned<'local>,
     _class: JClass<'local>,
     base_dir: JString<'local>,
 ) -> JString<'local> {
-    read_json(env, base_dir, widget_summary::collect_notes)
+    unowned_env
+        .with_env(|env| -> jni::errors::Result<JString<'local>> {
+            Ok(read_json(env, base_dir, widget_summary::collect_notes))
+        })
+        .resolve::<LogErrorAndDefault>()
 }
 
 /// Serializes whatever `collect` gathers under `base_dir`.
@@ -85,14 +101,14 @@ pub extern "system" fn Java_com_magical_1merchant_app_widget_WidgetBridge_readNo
 /// An unreadable path yields `{}`, not an exception: a Java exception crossing
 /// back through a widget callback would take the launcher's process with it.
 fn read_json<'local, T: serde::Serialize>(
-    mut env: JNIEnv<'local>,
+    env: &mut jni::Env<'local>,
     base_dir: JString<'local>,
     collect: impl Fn(&Path) -> T,
 ) -> JString<'local> {
-    let json = env
-        .get_string(&base_dir)
+    let json = base_dir
+        .try_to_string(env)
         .ok()
-        .map(|dir| collect(Path::new(&String::from(dir))))
+        .map(|dir| collect(Path::new(&dir)))
         .and_then(|data| serde_json::to_string(&data).ok())
         .unwrap_or_else(|| "{}".to_string());
 

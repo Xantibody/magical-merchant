@@ -35,9 +35,17 @@ icons: setup
 
 # gen/android は Tauri 既定のランチャーアイコンを持って生成される。
 # 入れ直さないと配信 APK が Tauri のロゴのままになるので、init と一続きにする。
+# TLS 設定も同様: gen/android を作り直した時点でしか要らないので、ここに置く。
 android-init: setup
   pnpm tauri android init
   just icons
+  just android-tls-setup
+
+# Point the app module at the Kotlin half of rustls-platform-verifier, which
+# reqwest needs to reach Android's trust store (idempotent; re-run after
+# `tauri android init` regenerates gen/android). See android-tls/README.md.
+android-tls-setup:
+  go run android-tls/apply-tls.go
 
 android-dev: setup
   pnpm tauri android dev
