@@ -25,10 +25,13 @@ describe("MarkdownToolbar", () => {
     const editor = createMockEditor();
     render(() => <MarkdownToolbar editor={editor} />);
 
-    const toolbar = screen.getByRole("toolbar");
+    // markdown-toolbar.css がコンポーネント側で読み込まれるようになり、
+    // デスクトップ環境 (hover あり) では実アプリ同様 display: none になる。
+    // ここで見たいのは構造なので hidden も対象にする
+    const toolbar = screen.getByRole("toolbar", { hidden: true });
     expect(toolbar).toBeDefined();
 
-    const buttons = screen.getAllByRole("button");
+    const buttons = screen.getAllByRole("button", { hidden: true });
     expect(buttons).toHaveLength(6);
 
     expect(screen.getByLabelText("Outdent")).toBeDefined();
@@ -63,9 +66,9 @@ describe("MarkdownToolbar", () => {
     const [editor, setEditor] = createSignal<Editor | undefined>(createMockEditor());
     render(() => <MarkdownToolbar editor={editor()} />);
 
-    expect(screen.getByRole("toolbar")).toBeDefined();
+    expect(screen.getByRole("toolbar", { hidden: true })).toBeDefined();
 
     setEditor(undefined);
-    expect(screen.queryByRole("toolbar")).toBeNull();
+    expect(screen.queryByRole("toolbar", { hidden: true })).toBeNull();
   });
 });

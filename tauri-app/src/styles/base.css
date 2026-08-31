@@ -1,4 +1,17 @@
-@import "open-props/open-props.min.css";
+/* 全部入り open-props.min.css (30kB) は使わない。アプリと normalize が参照する
+   モジュールだけで 16kB に収まる。新しい var(--...) を使うときは、その
+   モジュールをここに足すこと (欠けると var() が空になり静かに崩れる) */
+@import "open-props/gray.min.css";
+@import "open-props/red.min.css";
+@import "open-props/green.min.css";
+@import "open-props/blue.min.css";
+@import "open-props/indigo.min.css";
+@import "open-props/purple.min.css";
+@import "open-props/easings.min.css";
+@import "open-props/sizes.min.css";
+@import "open-props/shadows.min.css";
+@import "open-props/borders.min.css";
+@import "open-props/fonts.min.css";
 @import "open-props/normalize.min.css";
 
 :root {

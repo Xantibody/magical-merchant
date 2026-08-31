@@ -13,6 +13,7 @@ import { deleteCurrentBlock, exitCodeBlock } from "../lib/block-commands";
 import { t } from "../lib/i18n";
 import { createKeyboardTop, keyboardTopStyle } from "../lib/keyboard";
 import Icon from "./Icon";
+import "../styles/markdown-toolbar.css";
 import type { JSX } from "solid-js";
 
 interface MarkdownToolbarProps {
