@@ -4,7 +4,10 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "lib": ["ESNext"],
-    "types": ["@cloudflare/workers-types/2023-07-01", "@cloudflare/vitest-pool-workers"],
+    // workers-types v5 dropped the dated entry points ("2023-07-01" and the
+    // rest); the package root is now the only one, and it tracks the latest
+    // runtime rather than wrangler.toml's compatibility_date.
+    "types": ["@cloudflare/workers-types", "@cloudflare/vitest-pool-workers/types"],
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true
