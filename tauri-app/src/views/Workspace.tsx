@@ -535,7 +535,7 @@ export default function Workspace(): JSX.Element {
           <span class="list-pane-title">NOTES</span>
           <button
             type="button"
-            class="new-note"
+            class="new-note long-press"
             aria-expanded={shell.popover() === "new-note-menu"}
             onPointerDown={(e) => {
               newNotePointer = e.pointerType;
@@ -544,6 +544,7 @@ export default function Workspace(): JSX.Element {
             onPointerUp={newNoteLongPress.onPointerUp}
             onPointerMove={newNoteLongPress.onPointerMove}
             onPointerCancel={newNoteLongPress.onPointerCancel}
+            onContextMenu={newNoteLongPress.onContextMenu}
             onClick={() => {
               // 長押しでメニューを開いた直後の click は飲み込む
               if (!newNoteLongPress.shouldClick()) {

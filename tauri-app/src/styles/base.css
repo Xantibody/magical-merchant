@@ -74,6 +74,14 @@ body {
   box-shadow: var(--shadow-3);
 }
 
+/* 長押しに何かを割り当てた要素(`lib/long-press.ts`)。押しっぱなしは
+   WebView から見るとテキスト選択の始まりなので、切らないと選択ハンドルと
+   コールアウトが割り込む。ハンドラ束の onContextMenu と対で使う */
+.long-press {
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
 .icon-button {
   display: flex;
   align-items: center;
