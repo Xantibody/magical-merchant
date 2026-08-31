@@ -11,7 +11,7 @@ categories.workspace = true
 
 [dependencies]
 magical-merchant-core = { path = "../core" }
-rmcp = { version = "1", features = [
+rmcp = { version = "3", features = [
   "server",
   "macros",
   "transport-io",
