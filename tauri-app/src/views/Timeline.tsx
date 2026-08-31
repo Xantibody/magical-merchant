@@ -89,7 +89,7 @@ function OriginChip(props: OriginChipProps): JSX.Element {
     <span class="origin-chip">
       <button
         type="button"
-        class="origin-chip-open"
+        class="origin-chip-open long-press"
         onClick={() => {
           // 長押しで解除した直後の click で開かない
           if (press.shouldClick()) {
@@ -100,6 +100,7 @@ function OriginChip(props: OriginChipProps): JSX.Element {
         onPointerUp={() => press.onPointerUp()}
         onPointerMove={() => press.onPointerMove()}
         onPointerCancel={() => press.onPointerCancel()}
+        onContextMenu={(e) => press.onContextMenu(e)}
       >
         <Icon name="file-text" size={13} />
         <span class="origin-chip-title">{props.note.title}</span>
@@ -170,11 +171,12 @@ function Entry(props: EntryProps): JSX.Element {
         <Show when={!props.selecting}>
           {/* 記録は書き換えない。本文は読むだけで、触れる先はノートへの昇格だけ */}
           <p
-            class="entry-text"
+            class="entry-text long-press"
             onPointerDown={(e) => press.onPointerDown(e)}
             onPointerUp={() => press.onPointerUp()}
             onPointerMove={() => press.onPointerMove()}
             onPointerCancel={() => press.onPointerCancel()}
+            onContextMenu={(e) => press.onContextMenu(e)}
           >
             <TagText text={props.item.text} />
           </p>
