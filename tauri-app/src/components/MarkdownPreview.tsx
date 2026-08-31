@@ -3,6 +3,7 @@ import { t } from "../lib/i18n";
 import { renderMarkdown } from "../lib/markdown";
 import { resolvedTheme } from "../lib/theme";
 import Icon from "./Icon";
+import "../styles/markdown-preview.css";
 import type { JSX } from "solid-js";
 
 interface MarkdownPreviewProps {
