@@ -2471,7 +2471,7 @@ dependencies = [
  "clap",
  "magical-merchant-core",
  "rmcp",
- "schemars 0.8.22",
+ "schemars 1.2.1",
  "serde",
  "tokio",
 ]
