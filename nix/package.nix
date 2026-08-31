@@ -67,7 +67,7 @@ stdenv.mkDerivation (finalAttrs: {
     pnpm = pnpm_10;
     sourceRoot = "${finalAttrs.src.name}/tauri-app";
     fetcherVersion = 3;
-    hash = "sha256-EKwiJEqV2Cnecn6TKq5q7OJxu7ujpmJfCqk9NsYfcig=";
+    hash = "sha256-qG685B+ntLicfmkf6Lwu2BzNks2fQhc/hxwtsW0t6n0=";
   };
 
   nativeBuildInputs = [
