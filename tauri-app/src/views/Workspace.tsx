@@ -40,6 +40,7 @@ import type { CaretPoint } from "../components/MilkdownEditor";
 import type { NoteLinkTarget } from "../lib/note-link-plugin";
 import type { SearchHit, Template } from "../lib/commands";
 import { ROUTES } from "../lib/routes";
+import "../styles/workspace.css";
 
 // Milkdown + ProseMirror は編集を始めるまで要らない。一覧とプレビューだけの
 // 表示をこの重さから切り離す
