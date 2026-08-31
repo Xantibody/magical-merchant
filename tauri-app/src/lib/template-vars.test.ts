@@ -3,6 +3,7 @@ import {
   addTemplateTag,
   formatStamp,
   hasVariable,
+  resolveBody,
   resolveLine,
   splitVariables,
 } from "./template-vars";
@@ -50,6 +51,25 @@ describe("resolveLine", () => {
 
   it("leaves text without variables untouched", () => {
     expect(resolveLine("ただの見出し", now, "ja")).toBe("ただの見出し");
+  });
+});
+
+describe("resolveBody", () => {
+  it("resolves every line", () => {
+    expect(resolveBody("# {{date}}\n\n## メモ\n{{time}} に書いた", now, "ja")).toBe(
+      "# 2026-08-31\n\n## メモ\n09:12 に書いた",
+    );
+  });
+
+  // 前回のノートはここからは読めない。空に潰すと「前回: 」だけの行が残って
+  // 何が入るのか分からなくなるので、書かれたまま見せる
+  it("leaves the link to the previous note as written", () => {
+    expect(resolveBody("上\n前回: {{prev}}\n下", now, "ja")).toBe("上\n前回: {{prev}}\n下");
+  });
+
+  it("leaves a body without variables untouched", () => {
+    const body = "# 見出し\n\n- [ ] やること";
+    expect(resolveBody(body, now, "ja")).toBe(body);
   });
 });
 
