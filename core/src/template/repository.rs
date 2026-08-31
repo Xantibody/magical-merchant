@@ -63,22 +63,8 @@ impl Templates {
         templates_dir(&self.base_dir)
     }
 
-    /// 読み書きの前に実体がテンプレ置き場の中にあることまで確かめる。
-    /// 名前の検証だけでは、シンボリックリンク越しに外のファイルを
-    /// 読ませることも書き換えさせることもできる(`Notes` と同じ理屈)。
     fn existing_path(&self, filename: &NoteFilename) -> Result<PathBuf, CoreError> {
-        let dir = self.dir();
-        let path = dir.join(filename.as_str());
-        if !path.exists() {
-            return Err(CoreError::NotFound(path.to_string_lossy().to_string()));
-        }
-
-        let canonical_dir = fs::canonicalize(&dir)?;
-        let canonical_path = fs::canonicalize(&path)?;
-        if !canonical_path.starts_with(&canonical_dir) {
-            return Err(CoreError::PathTraversal(filename.as_str().to_string()));
-        }
-        Ok(canonical_path)
+        crate::utils::fs::resolve_existing(&self.dir(), filename.as_str())
     }
 
     /// まだ無いファイルの書き込み先。存在しないものは canonicalize できないので、

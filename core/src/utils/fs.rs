@@ -1,5 +1,5 @@
 use std::fs::{self, DirEntry};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::error::CoreError;
@@ -9,6 +9,24 @@ pub fn ensure_dir(path: &Path) -> Result<(), CoreError> {
         fs::create_dir_all(parent)?;
     }
     Ok(())
+}
+
+/// 検証済みのファイル名を `dir` 直下の実ファイルパスに解決する。
+/// 名前の検証だけではシンボリックリンク越しに `dir` の外へ出られるので、
+/// canonicalize した実体が `dir` 配下にあることまで確かめる。
+/// セキュリティ境界なので、置き場ごとに写経せずここだけに置く。
+pub fn resolve_existing(dir: &Path, filename: &str) -> Result<PathBuf, CoreError> {
+    let path = dir.join(filename);
+    if !path.exists() {
+        return Err(CoreError::NotFound(path.to_string_lossy().to_string()));
+    }
+
+    let canonical_dir = fs::canonicalize(dir)?;
+    let canonical_path = fs::canonicalize(&path)?;
+    if !canonical_path.starts_with(&canonical_dir) {
+        return Err(CoreError::PathTraversal(filename.to_string()));
+    }
+    Ok(canonical_path)
 }
 
 /// 同一プロセス内の一時ファイル名の衝突を避ける通し番号。
