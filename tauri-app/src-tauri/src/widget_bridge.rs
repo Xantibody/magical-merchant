@@ -100,11 +100,15 @@ pub extern "system" fn Java_com_magical_1merchant_app_widget_WidgetBridge_readNo
 /// directory, so the buttons do not wait on the whole notes tree.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_com_magical_1merchant_app_widget_WidgetBridge_readTemplates<'local>(
-    env: JNIEnv<'local>,
+    mut unowned_env: EnvUnowned<'local>,
     _class: JClass<'local>,
     base_dir: JString<'local>,
 ) -> JString<'local> {
-    read_json(env, base_dir, widget_summary::collect_templates)
+    unowned_env
+        .with_env(|env| -> jni::errors::Result<JString<'local>> {
+            Ok(read_json(env, base_dir, widget_summary::collect_templates))
+        })
+        .resolve::<LogErrorAndDefault>()
 }
 
 /// Serializes whatever `collect` gathers under `base_dir`.
