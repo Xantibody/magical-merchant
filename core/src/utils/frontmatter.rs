@@ -27,6 +27,11 @@ pub struct NoteFrontmatter {
     /// いないノートの frontmatter が全部変わって同期が丸ごと走る。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub updated: Option<DateTime<FixedOffset>>,
+    /// 生まれ元のテンプレ名(`templates/daily.md` なら `daily`)。`origin` と
+    /// 同じ作成時の記録で、`{{prev}}` の解決も「同じテンプレの今日のノートは
+    /// もう在るか」の判定も、この値を走査する以外に手がない。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub template: Option<String>,
 }
 
 impl NoteFrontmatter {
@@ -44,15 +49,19 @@ impl NoteFrontmatter {
             view: None,
             origin: None,
             updated: None,
+            template: None,
         }
     }
 }
 
 /// 作成時にだけ書かれる出自の記録。後の編集では書き換わらない。
+/// 両方を持つノートは今のところ無い — エントリの昇格はテンプレを通らない。
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Provenance<'a> {
     /// 昇格元タイムラインエントリの日時(`YYYY-MM-DDTHH:MM:SS`)。
     pub origin: Option<&'a str>,
+    /// 生まれ元のテンプレ名。
+    pub template: Option<&'a str>,
 }
 
 pub fn render<T: Serialize>(fm: &T, body: &str) -> Result<String, CoreError> {

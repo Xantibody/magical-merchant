@@ -37,6 +37,7 @@ pub fn create_note_from_entry(
         context,
         Provenance {
             origin: Some(origin),
+            ..Provenance::default()
         },
     )
 }

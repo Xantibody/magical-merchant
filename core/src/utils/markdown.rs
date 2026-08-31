@@ -72,6 +72,7 @@ pub fn format_note_markdown(
         tags: tags.to_vec(),
         context: Some(context.clone()),
         origin: provenance.origin.map(str::to_string),
+        template: provenance.template.map(str::to_string),
         ..NoteFrontmatter::new(time)
     };
     frontmatter::render(&fm, body)
@@ -151,8 +152,14 @@ mod tests {
 
     #[test]
     fn test_format_note_markdown_empty_tags() {
-        let result =
-            format_note_markdown("body", &[], fixed_timestamp(), &test_context(), Provenance::default()).unwrap();
+        let result = format_note_markdown(
+            "body",
+            &[],
+            fixed_timestamp(),
+            &test_context(),
+            Provenance::default(),
+        )
+        .unwrap();
         let (fm, _body): (NoteFrontmatter, &str) = frontmatter::parse(&result).unwrap();
         assert!(fm.tags.is_empty());
     }
@@ -164,7 +171,9 @@ mod tests {
             is_charging: Some(true),
             ..Context::default()
         };
-        let result = format_note_markdown("body", &[], fixed_timestamp(), &ctx, Provenance::default()).unwrap();
+        let result =
+            format_note_markdown("body", &[], fixed_timestamp(), &ctx, Provenance::default())
+                .unwrap();
         let (fm, _body): (NoteFrontmatter, &str) = frontmatter::parse(&result).unwrap();
         let context = fm.context.unwrap();
         assert_eq!(context.battery, Some(100));

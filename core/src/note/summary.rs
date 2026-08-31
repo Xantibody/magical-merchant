@@ -16,18 +16,23 @@ pub struct Summary {
     /// 昇格元エントリの日時。タイムラインが日毎のチップ表示を導出するのに使う。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub origin: Option<String>,
+    /// 生まれ元のテンプレ名。テンプレ起動が「同じテンプレの今日のノート」と
+    /// 直近の 1 本をここから探すので、一覧に乗っていないと毎回全ファイルを
+    /// 開き直すことになる。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub template: Option<String>,
 }
 
 impl Summary {
     #[must_use]
     pub fn from_file(path: PathBuf, filename: String, content: &str) -> Self {
-        let (time, mut tags, body, origin) =
+        let (time, mut tags, body, origin, template) =
             if let Ok((fm, body)) = frontmatter::parse::<NoteFrontmatter>(content) {
-                (Some(fm.time), fm.tags, body, fm.origin)
+                (Some(fm.time), fm.tags, body, fm.origin, fm.template)
             } else {
                 // parse に失敗しても frontmatter の区切りは剥がす。壊れた
                 // メタデータを本文扱いすると、一覧のタイトルとプレビューに YAML が出る。
-                (None, Vec::new(), frontmatter::strip(content), None)
+                (None, Vec::new(), frontmatter::strip(content), None, None)
             };
 
         // 本文に書かれた `#タグ` が今の入力方法。frontmatter に残っているのは
@@ -51,6 +56,7 @@ impl Summary {
             tags,
             preview,
             origin,
+            template,
         }
     }
 }
