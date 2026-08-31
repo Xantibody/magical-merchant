@@ -4,6 +4,7 @@
 
 mod note;
 pub mod sync;
+mod template;
 mod timeline;
 pub mod utils;
 
@@ -18,6 +19,10 @@ pub use note::{
     update_note_origin, update_note_view,
 };
 pub use search::{HitKind, SearchHit, find_backlinks, search_all};
+pub use template::{
+    CreatedNote, TemplateDetail, TemplateSummary, VarLocale, create_note_from_template,
+    delete_template, list_templates, read_template, save_template,
+};
 pub use timeline::error::TimelineError;
 pub use timeline::{
     delete_timeline_entry, list_timeline_dates, read_timeline, save_timeline_entry,

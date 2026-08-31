@@ -26,7 +26,10 @@ pub mod widget_bridge;
 mod widget_summary;
 
 use device::ClientContext;
-use magical_merchant_core::{NoteFilename, NoteMeta, NoteSummary, SearchHit};
+use magical_merchant_core::{
+    CreatedNote, NoteFilename, NoteMeta, NoteSummary, SearchHit, TemplateDetail, TemplateSummary,
+    VarLocale,
+};
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_deep_link::DeepLinkExt as _;
 
@@ -160,6 +163,63 @@ fn set_note_origin(
     let filename = NoteFilename::parse(&filename).map_err(|e| e.to_string())?;
     magical_merchant_core::update_note_origin(&base_dir, &filename, origin.as_deref())
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn list_templates(handle: AppHandle) -> Result<Vec<TemplateSummary>, String> {
+    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    magical_merchant_core::list_templates(&base_dir).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn read_template(handle: AppHandle, filename: String) -> Result<TemplateDetail, String> {
+    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let filename = NoteFilename::parse(&filename).map_err(|e| e.to_string())?;
+    magical_merchant_core::read_template(&base_dir, &filename).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn save_template(
+    handle: AppHandle,
+    filename: String,
+    body: String,
+    tags: Vec<String>,
+) -> Result<(), String> {
+    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let filename = NoteFilename::parse(&filename).map_err(|e| e.to_string())?;
+    magical_merchant_core::save_template(&base_dir, &filename, &body, &tags)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_template(handle: AppHandle, filename: String) -> Result<(), String> {
+    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let filename = NoteFilename::parse(&filename).map_err(|e| e.to_string())?;
+    magical_merchant_core::delete_template(&base_dir, &filename).map_err(|e| e.to_string())
+}
+
+/// テンプレからノートを作る。同じテンプレの今日のぶんが既にあれば、
+/// 作らずにそれを返す(`reused`)。
+///
+/// `locale` を受けるのは `{{weekday}}` のため。曜日の呼び名だけは端末の
+/// 言語に従うべきで、その言語を知っているのは画面側だけ。
+#[tauri::command]
+fn create_from_template(
+    handle: AppHandle,
+    filename: String,
+    client: ClientContext,
+    locale: String,
+) -> Result<CreatedNote, String> {
+    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let filename = NoteFilename::parse(&filename).map_err(|e| e.to_string())?;
+    let context = device::get_context(client);
+    magical_merchant_core::create_note_from_template(
+        &base_dir,
+        &filename,
+        &context,
+        VarLocale::parse(&locale),
+    )
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -315,6 +375,11 @@ pub fn run() {
             update_note_meta,
             set_note_origin,
             set_note_view,
+            list_templates,
+            read_template,
+            save_template,
+            delete_template,
+            create_from_template,
             read_timeline,
             list_timeline_dates,
             read_timeline_by_date,

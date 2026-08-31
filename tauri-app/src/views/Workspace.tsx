@@ -16,6 +16,7 @@ import type { Editor } from "@milkdown/kit/core";
 import Icon from "../components/Icon";
 import MarkdownPreview from "../components/MarkdownPreview";
 import NoteMetaPopover from "../components/NoteMetaPopover";
+import TemplatePicker from "../components/TemplatePicker";
 import { typedInvoke } from "../lib/commands";
 import { getDeviceSignals } from "../lib/client-context";
 import { useShell } from "../lib/shell";
@@ -24,8 +25,9 @@ import type { ItemGroup, NoteItem } from "../lib/items";
 import { readNoteContent, toggledView, viewToFrontmatter } from "../lib/note-view";
 import type { NoteView } from "../lib/note-view";
 import { joinTitle, splitTitle } from "../lib/note-title";
-import { t } from "../lib/i18n";
+import { locale, t } from "../lib/i18n";
 import { isImeComposing } from "../lib/ime";
+import { createLongPress } from "../lib/long-press";
 import {
   beginEditSession,
   readBackup,
@@ -36,7 +38,7 @@ import {
 import type { EditSession } from "../lib/edit-backup";
 import type { CaretPoint } from "../components/MilkdownEditor";
 import type { NoteLinkTarget } from "../lib/note-link-plugin";
-import type { SearchHit } from "../lib/commands";
+import type { SearchHit, Template } from "../lib/commands";
 import { ROUTES } from "../lib/routes";
 
 // Milkdown + ProseMirror は編集を始めるまで要らない。一覧とプレビューだけの
@@ -91,6 +93,11 @@ export default function Workspace(): JSX.Element {
   const [markdownEditor, setMarkdownEditor] = createSignal<Editor | undefined>();
 
   const [notes, { refetch: refetchNotes }] = createResource(loadNotes);
+  // 「新規」を押すまで開かないが、押した瞬間に読み始めると空のメニューが
+  // 一度描かれる。件数は数件で、一覧と一緒に取っても目に見える差は出ない
+  const [templates, { refetch: refetchTemplates }] = createResource(() =>
+    typedInvoke("list_templates"),
+  );
 
   let detailBodyRef: HTMLDivElement | undefined;
   /** プレビューで押された場所。エディタのマウント時に一度だけ読まれる。 */
@@ -102,7 +109,16 @@ export default function Workspace(): JSX.Element {
 
   // 同期やパレット操作の後にデータを取り直す。初回は createResource が読むので
   // defer しないと全ノートの読み直しがマウント直後に二重で走る
-  createEffect(on(shell.dataVersion, () => void refetchNotes(), { defer: true }));
+  createEffect(
+    on(
+      shell.dataVersion,
+      () => {
+        void refetchNotes();
+        void refetchTemplates();
+      },
+      { defer: true },
+    ),
+  );
 
   const visibleItems = createMemo<NoteItem[]>(() => {
     const dropped = new Set(hidden());
@@ -455,6 +471,40 @@ export default function Workspace(): JSX.Element {
     setDetailOpen(true);
   };
 
+  /**
+   * テンプレから 1 本作って開く。同じテンプレの今日のぶんが既にあれば
+   * core は作らずにそれを返す — そのときだけ、増えなかった理由を伝える。
+   */
+  const createFromTemplate = async (template: Template): Promise<void> => {
+    shell.closePopovers();
+    try {
+      const created = await typedInvoke("create_from_template", {
+        filename: template.filename,
+        // 曜日の呼び名だけは端末の言語に従う。それを知っているのはここだけ
+        locale: locale(),
+        client: await getDeviceSignals(),
+      });
+      await refetchNotes();
+      const filename = created.path.split("/").at(-1);
+      if (filename) {
+        setSelectedId(filename);
+      }
+      setDetailOpen(true);
+      if (created.reused) {
+        shell.showToast(t().templates.reused(template.name));
+      }
+    } catch {
+      shell.showToast(t().templates.createFailed);
+    }
+  };
+
+  /**
+   * 触る端末では長押しがテンプレの入口。タップは今までどおり空のノートで、
+   * 「開いてすぐ書ける」を 1 手増やさない。
+   */
+  const newNoteLongPress = createLongPress(() => shell.togglePopover("new-note-menu"));
+  let newNotePointer = "mouse";
+
   // ---- 削除 + Undo（5秒は tombstone、経過後に本削除）----
   const remove = (item: NoteItem): void => {
     setHidden((ids) => [...ids, item.id]);
@@ -483,11 +533,51 @@ export default function Workspace(): JSX.Element {
       <div class="list-pane">
         <div class="list-pane-head">
           <span class="list-pane-title">NOTES</span>
-          <button type="button" class="new-note" onClick={() => void createNote()}>
+          <button
+            type="button"
+            class="new-note long-press"
+            aria-expanded={shell.popover() === "new-note-menu"}
+            onPointerDown={(e) => {
+              newNotePointer = e.pointerType;
+              newNoteLongPress.onPointerDown(e);
+            }}
+            onPointerUp={newNoteLongPress.onPointerUp}
+            onPointerMove={newNoteLongPress.onPointerMove}
+            onPointerCancel={newNoteLongPress.onPointerCancel}
+            onContextMenu={newNoteLongPress.onContextMenu}
+            onClick={() => {
+              // 長押しでメニューを開いた直後の click は飲み込む
+              if (!newNoteLongPress.shouldClick()) {
+                return;
+              }
+              if (newNotePointer === "mouse") {
+                shell.togglePopover("new-note-menu");
+              } else {
+                void createNote();
+              }
+            }}
+          >
             <Icon name="plus" size={12} />
             {t().notes.new}
           </button>
         </div>
+
+        <Show when={shell.popover() === "new-note-menu"}>
+          {/* 背後を暗くするのは下から出るシートのときだけ(CSS 側で出し分け) */}
+          <div class="template-picker-backdrop" />
+          <TemplatePicker
+            templates={templates() ?? []}
+            onPickEmpty={() => {
+              shell.closePopovers();
+              void createNote();
+            }}
+            onPick={(template) => void createFromTemplate(template)}
+            onManage={() => {
+              shell.closePopovers();
+              navigate(ROUTES.TEMPLATES);
+            }}
+          />
+        </Show>
 
         <div class="list-scroll">
           <Show when={groups().length} fallback={<EmptyNotes />}>

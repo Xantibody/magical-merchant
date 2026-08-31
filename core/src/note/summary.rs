@@ -16,18 +16,23 @@ pub struct Summary {
     /// 昇格元エントリの日時。タイムラインが日毎のチップ表示を導出するのに使う。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub origin: Option<String>,
+    /// 生まれ元のテンプレ名。テンプレ起動が「同じテンプレの今日のノート」と
+    /// 直近の 1 本をここから探すので、一覧に乗っていないと毎回全ファイルを
+    /// 開き直すことになる。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub template: Option<String>,
 }
 
 impl Summary {
     #[must_use]
     pub fn from_file(path: PathBuf, filename: String, content: &str) -> Self {
-        let (time, mut tags, body, origin) =
+        let (time, mut tags, body, origin, template) =
             if let Ok((fm, body)) = frontmatter::parse::<NoteFrontmatter>(content) {
-                (Some(fm.time), fm.tags, body, fm.origin)
+                (Some(fm.time), fm.tags, body, fm.origin, fm.template)
             } else {
                 // parse に失敗しても frontmatter の区切りは剥がす。壊れた
                 // メタデータを本文扱いすると、一覧のタイトルとプレビューに YAML が出る。
-                (None, Vec::new(), frontmatter::strip(content), None)
+                (None, Vec::new(), frontmatter::strip(content), None, None)
             };
 
         // 本文に書かれた `#タグ` が今の入力方法。frontmatter に残っているのは
@@ -51,6 +56,7 @@ impl Summary {
             tags,
             preview,
             origin,
+            template,
         }
     }
 }
@@ -63,22 +69,25 @@ mod tests {
     use chrono::{FixedOffset, TimeZone};
     use std::path::PathBuf;
 
+    fn at(year: i32, month: u32, day: u32, hour: u32, minute: u32) -> NoteFrontmatter {
+        NoteFrontmatter::new(
+            FixedOffset::east_opt(9 * 3600)
+                .unwrap()
+                .with_ymd_and_hms(year, month, day, hour, minute, 0)
+                .unwrap(),
+        )
+    }
+
     #[test]
     fn test_from_file_with_valid_frontmatter() {
         let fm = NoteFrontmatter {
-            time: FixedOffset::east_opt(9 * 3600)
-                .unwrap()
-                .with_ymd_and_hms(2026, 3, 20, 14, 30, 45)
-                .unwrap(),
             tags: vec!["a".to_string(), "b".to_string()],
             context: Some(Context {
                 battery: Some(50),
                 is_charging: Some(false),
                 ..Context::default()
             }),
-            view: None,
-            origin: None,
-            updated: None,
+            ..at(2026, 3, 20, 14, 30)
         };
         let content = frontmatter::render(&fm, "# Title\nBody").unwrap();
         let summary = Summary::from_file(
@@ -96,15 +105,8 @@ mod tests {
     #[test]
     fn test_from_file_carries_origin() {
         let fm = NoteFrontmatter {
-            time: FixedOffset::east_opt(9 * 3600)
-                .unwrap()
-                .with_ymd_and_hms(2026, 8, 13, 9, 0, 0)
-                .unwrap(),
-            tags: vec![],
-            context: None,
-            view: None,
             origin: Some("2026-08-13T08:30:00".to_string()),
-            updated: None,
+            ..at(2026, 8, 13, 9, 0)
         };
         let content = frontmatter::render(&fm, "body").unwrap();
         let summary = Summary::from_file(
@@ -120,15 +122,8 @@ mod tests {
     #[test]
     fn frontmatter_tags_are_normalized_like_body_tags() {
         let fm = NoteFrontmatter {
-            time: FixedOffset::east_opt(9 * 3600)
-                .unwrap()
-                .with_ymd_and_hms(2026, 3, 20, 14, 30, 45)
-                .unwrap(),
             tags: vec!["Rust".to_string()],
-            context: None,
-            view: None,
-            origin: None,
-            updated: None,
+            ..at(2026, 3, 20, 14, 30)
         };
         let content = frontmatter::render(&fm, "本文 #rust").unwrap();
         let summary = Summary::from_file(
