@@ -4,7 +4,6 @@ import {
   toNoteItems,
   groupTimelineByDay,
   groupNotes,
-  itemMeta,
   itemTitle,
   noteCreatedLabel,
   notesByOrigin,
@@ -173,22 +172,6 @@ describe("groupNotes", () => {
       note({ filename: "b.md", time: "2026-07-25T10:00:00+09:00" }),
     ]);
     expect(groupNotes(items, TODAY).map((g) => g.label)).toStrictEqual(["今週", "先週"]);
-  });
-});
-
-describe("itemMeta", () => {
-  it("shows time and device for a timeline entry", () => {
-    const [item] = toTimelineItems("2026-08-04", ['- [15:27:45] hi {"os":"macos","arch":"x"}']);
-    expect(itemMeta(item)).toBe("15:27 · macos");
-  });
-
-  it("omits the device when it was not recorded", () => {
-    expect(itemMeta(toTimelineItems("2026-08-04", ["- [15:27:45] hi"])[0])).toBe("15:27");
-  });
-
-  it("shows date and tags for a note", () => {
-    const [item] = toNoteItems([note({ tags: ["sync", "design"] })]);
-    expect(itemMeta(item)).toBe("08/04 · #sync #design");
   });
 });
 
