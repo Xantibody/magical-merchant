@@ -1,0 +1,332 @@
+/* テンプレート管理と、「新規」から開くテンプレ選択。
+   土台は Workspace と同じ 2 ペイン(workspace.css)で、ここにあるのは
+   その上に足すぶんだけ。 */
+
+/* ---------------- 選択メニュー / シート ---------------- */
+
+/* PC ではボタンの下のドロップダウン。位置の基準は .list-pane */
+.template-picker {
+  top: 46px;
+  right: 14px;
+  width: 236px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 掴み手と見出しは下から出るシートのためのもの。PC には要らない */
+.template-picker-handle,
+.template-picker-title {
+  display: none;
+}
+
+.template-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 8px;
+  border: none;
+  border-radius: var(--radius-2);
+  background: none;
+  color: var(--app-text);
+  font-size: 13px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.template-picker-row:hover {
+  background: var(--app-hairline);
+}
+
+.template-picker-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.template-picker-row .icon {
+  color: var(--app-text-faint);
+  flex-shrink: 0;
+}
+
+.template-picker-section {
+  padding: 8px 8px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--app-text-faint);
+}
+
+.template-picker-divider {
+  height: 1px;
+  margin: 6px 0;
+  background: var(--app-hairline);
+}
+
+.template-picker-manage {
+  font-size: 12px;
+  color: var(--app-text-muted);
+}
+
+/* 背後を暗くするのはシートのときだけ。ドロップダウンは画面を覆わない */
+.template-picker-backdrop {
+  display: none;
+}
+
+/* ---------------- 管理画面 ---------------- */
+
+.templates .list-pane-head {
+  gap: 8px;
+}
+
+.templates .list-pane-title {
+  margin-right: auto;
+}
+
+.templates-back {
+  flex-shrink: 0;
+  color: var(--app-text-muted);
+}
+
+.templates-file-hint {
+  margin: 0;
+  padding: 10px 14px calc(14px + var(--safe-bottom));
+  border-top: 1px solid var(--app-hairline);
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--app-text-faint);
+}
+
+.templates-name-input {
+  width: 10rem;
+  border: none;
+  background: none;
+  color: var(--app-text);
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.templates-name-input:focus {
+  outline: none;
+}
+
+.templates-name-error {
+  max-width: calc(640px + 28px * 2);
+  width: 100%;
+  margin: 4px auto 0;
+  padding: 0 28px;
+  font-size: 12px;
+  color: var(--app-danger);
+}
+
+/* 自動タグ。本文と同じ段の幅に揃えてタイトルの真下に置く */
+.templates-tags {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+  max-width: calc(640px + 28px * 2);
+  margin-inline: auto;
+  padding: 10px 28px 0;
+}
+
+.templates-tags-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--app-text-faint);
+}
+
+.templates-tag-input {
+  width: 7rem;
+  border: none;
+  background: none;
+  color: var(--app-text);
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.templates-tag-input:focus {
+  outline: none;
+}
+
+/* 変数を含むタグは破線。固定のタグと、作るたびに変わるタグを見分ける */
+.tag-badge--var {
+  border-style: dashed;
+  border-color: var(--app-text-hint);
+  font-family: ui-monospace, monospace;
+}
+
+/* ---------------- 本文（textarea + 色の層）---------------- */
+
+.templates-body {
+  position: relative;
+  flex: 1;
+  width: 100%;
+  max-width: calc(640px + 28px * 2);
+  margin-inline: auto;
+  min-height: 0;
+}
+
+/* 書いた文字を持つのは textarea、色を持つのはその下の層。
+   2 つは 1 文字もずれてはいけないので、字送りに関わる指定を必ず揃える */
+.templates-body-highlight,
+.templates-body-input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 16px 28px 32px;
+  border: none;
+  font-family: ui-monospace, monospace;
+  font-size: 14px;
+  line-height: 1.9;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  overflow: auto;
+  tab-size: 2;
+}
+
+.templates-body-highlight {
+  background: none;
+  color: var(--app-text);
+  pointer-events: none;
+}
+
+.templates-body-input {
+  background: none;
+  /* 文字は下の層が描く。ここが持つのはキャレットと選択だけ */
+  color: transparent;
+  caret-color: var(--app-text);
+  resize: none;
+}
+
+.templates-body-input:focus {
+  outline: none;
+}
+
+.templates-body-input::placeholder {
+  color: var(--app-text-hint);
+}
+
+.templates-body-input::selection {
+  background: var(--app-accent-soft);
+}
+
+/* 変数の印。チップらしく padding を足すと文字送りが変わって、下の層と
+   キャレットの位置がずれる。地の色だけで示す */
+.templates-var {
+  background: var(--app-surface-2);
+  border-radius: var(--radius-2);
+  color: var(--app-text-muted);
+  box-decoration-break: clone;
+}
+
+/* ---------------- フッター（変数の挿入とプレビュー）---------------- */
+
+.templates-footer {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: calc(640px + 28px * 2);
+  margin-inline: auto;
+  padding: 10px 28px calc(14px + var(--safe-bottom));
+  border-top: 1px solid var(--app-hairline);
+}
+
+.templates-vars {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.templates-var-chip code {
+  font-family: ui-monospace, monospace;
+  font-size: 11.5px;
+  color: var(--app-text-faint);
+}
+
+.templates-preview {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--app-text-faint);
+}
+
+@media (max-width: 767px) {
+  /* 下から出るシート。押せる高さと安全域はここで確保する */
+  .template-picker {
+    position: fixed;
+    inset: auto 0 0 0;
+    width: auto;
+    border-radius: 18px 18px 0 0;
+    border-bottom: none;
+    padding: 6px 12px calc(12px + var(--safe-bottom));
+    z-index: 130;
+  }
+
+  .template-picker-handle {
+    display: block;
+    width: 36px;
+    height: 4px;
+    margin: 6px auto 10px;
+    border-radius: 999px;
+    background: var(--app-border);
+  }
+
+  .template-picker-title {
+    display: block;
+    padding: 0 8px 6px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--app-text-faint);
+  }
+
+  .template-picker-row {
+    min-height: 48px;
+    border-radius: 12px;
+    font-size: 15px;
+  }
+
+  /* ⌘N は押せないキーの案内。触る端末には出さない */
+  .template-picker-key {
+    display: none;
+  }
+
+  .template-picker-manage {
+    min-height: 44px;
+    font-size: 13px;
+  }
+
+  .template-picker-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 129;
+    background: rgb(20 20 25 / 28%);
+  }
+
+  .templates-name-error,
+  .templates-tags,
+  .templates-footer,
+  .templates-body-highlight,
+  .templates-body-input {
+    padding-inline: 18px;
+  }
+
+  /* 一覧の下端の注記は場所を取る。ペインを切り替える幅では畳む */
+  .templates-file-hint {
+    display: none;
+  }
+}

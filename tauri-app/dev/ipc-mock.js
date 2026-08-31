@@ -197,7 +197,86 @@
         tags: note.tags,
         preview: note.body.slice(0, 120),
         ...(note.origin ? { origin: note.origin } : {}),
+        ...(note.template ? { template: note.template } : {}),
       }));
+
+  // ---- テンプレートのつくりもの ----
+
+  /** filename -> { tags, body }。変数は本物と同じく未解決のまま持つ。 */
+  const templates = new Map([
+    [
+      "daily.md",
+      {
+        tags: ["daily", "{{date:YYYY-MM}}"],
+        body: "# Daily {{date}} ({{weekday}})\n\n## 今日やること\n\n- [ ] \n\n## メモ\n\n前回: {{prev}}",
+      },
+    ],
+    [
+      "meeting.md",
+      {
+        tags: ["meeting"],
+        body: "# {{date}} 打ち合わせ\n\n## 出席者\n\n## 決まったこと\n\n## 宿題\n\n- [ ] ",
+      },
+    ],
+    [
+      "weekly.md",
+      {
+        tags: ["weekly"],
+        body: "# 週次ふりかえり {{date:YYYY-MM-DD}}\n\n## よかったこと\n\n## 次に試すこと\n\n前回: {{prev}}",
+      },
+    ],
+  ]);
+
+  const WEEKDAYS = {
+    ja: ["日", "月", "火", "水", "木", "金", "土"],
+    en: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+  };
+
+  /** core の `format_stamp` と同じトークン。strftime には渡さない。 */
+  const formatStamp = (date, pattern) =>
+    pattern
+      .replaceAll("YYYY", String(date.getFullYear()))
+      .replaceAll("MM", pad(date.getMonth() + 1))
+      .replaceAll("DD", pad(date.getDate()))
+      .replaceAll("HH", pad(date.getHours()))
+      .replaceAll("mm", pad(date.getMinutes()))
+      .replaceAll("ss", pad(date.getSeconds()));
+
+  const PREV_LINE = /\{\{\s*prev\s*(:[^}]*)?\}\}/;
+
+  /**
+   * core の `resolve_vars` と同じ規則で解く。ハーネスだけ違う結果を返すと、
+   * ブラウザで見た画面が実機の答え合わせにならない。
+   */
+  const resolveVars = (body, prev, locale) =>
+    body
+      .split("\n")
+      // 前回が無いときは、その行を丸ごと落とす(「前回: 」だけを残さない)
+      .filter((line) => prev !== null || !PREV_LINE.test(line))
+      .map((line) =>
+        line.replaceAll(/\{\{([^}]*)\}\}/g, (raw, inner) => {
+          const at = inner.indexOf(":");
+          const name = (at === -1 ? inner : inner.slice(0, at)).trim();
+          const arg = at === -1 ? undefined : inner.slice(at + 1).trim();
+          const now = new Date();
+          if (name === "date") return formatStamp(now, arg || "YYYY-MM-DD");
+          if (name === "time") return formatStamp(now, arg || "HH:mm");
+          if (name === "weekday") return (WEEKDAYS[locale] ?? WEEKDAYS.en)[now.getDay()];
+          if (name === "prev") return prev ?? "";
+          // 知らない変数は書いたまま残す
+          return raw;
+        }),
+      )
+      .join("\n");
+
+  const templateSummary = (filename, template) => ({
+    filename,
+    name: filename.replace(/\.md$/, ""),
+    tags: template.tags,
+    preview: (template.body.split("\n").find((line) => line.trim()) ?? "")
+      .replace(/^#+\s*/, "")
+      .trim(),
+  });
 
   // ---- コマンド実装 ----
 
@@ -385,6 +464,60 @@
         // core と同じく、本文の保存だけが更新日時を打つ
         note.updated = new Date().toISOString();
       }
+    },
+    list_templates: () =>
+      [...templates.entries()]
+        .map(([filename, template]) => templateSummary(filename, template))
+        .toSorted((a, b) => a.name.localeCompare(b.name)),
+    read_template: async ({ filename }) => {
+      await delay(30);
+      const template = templates.get(filename);
+      if (!template) {
+        throw new Error("template not found");
+      }
+      return { body: template.body, tags: template.tags };
+    },
+    save_template: ({ filename, body, tags }) => {
+      templates.set(filename, { body, tags: tags ?? [] });
+    },
+    delete_template: ({ filename }) => {
+      templates.delete(filename);
+    },
+    create_from_template: ({ filename, locale }) => {
+      const template = templates.get(filename);
+      if (!template) {
+        throw new Error("template not found");
+      }
+      const name = filename.replace(/\.md$/, "");
+      const now = new Date();
+      const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+
+      // 同じテンプレの今日のぶんが既にあれば作らない。日付はファイル名の
+      // 先頭 8 桁で見る — 保存している time は UTC で、日をまたぐと食い違う
+      const today = stamp.slice(0, 8);
+      const existing = [...notes.entries()].find(
+        ([fname, note]) => note.template === name && fname.slice(0, 8) === today,
+      );
+      if (existing) {
+        return { path: `/mock/data/${existing[0]}`, reused: true };
+      }
+
+      const previous = [...notes.entries()]
+        .filter(([, note]) => note.template === name)
+        .toSorted(([a], [b]) => b.localeCompare(a))[0];
+      const prev = previous ? `[[${previous[0].replace(/\.md$/, "")}]]` : null;
+
+      const created = `${stamp}.md`;
+      notes.set(created, {
+        time: now.toISOString(),
+        tags: template.tags
+          .map((tag) => resolveVars(tag, prev, locale))
+          .filter((tag) => tag.trim()),
+        view: null,
+        body: resolveVars(template.body, prev, locale),
+        template: name,
+      });
+      return { path: `/mock/data/${created}`, reused: false };
     },
     save_document: () => {},
     sync_start: () => {},

@@ -10,6 +10,9 @@ import type { JSX } from "solid-js";
 // これを外すだけで起動時に parse する JS が大きく減る。
 const Workspace = lazy(() => import("./views/Workspace"));
 const Settings = lazy(() => import("./views/Settings"));
+// テンプレート管理は Settings の下の画面。開く人はさらに少ないので
+// 先読みもしない
+const Templates = lazy(() => import("./views/Templates"));
 
 // 遅延にした代わりに、起動が落ち着いてから裏で読んでおく。
 // これが無いと Notes タブを初めて開いた瞬間に読み込み待ちが挟まる
@@ -31,6 +34,7 @@ export default function App(): JSX.Element {
       <Route path={ROUTES.TIMELINE} component={Timeline} />
       <Route path={ROUTES.NOTES} component={Workspace} />
       <Route path={ROUTES.SETTINGS} component={Settings} />
+      <Route path={ROUTES.TEMPLATES} component={Templates} />
     </Router>
   );
 }
