@@ -9,6 +9,18 @@ import android.net.Uri
 internal object WidgetDeepLink {
     const val NEW_NOTE = "magical-merchant://widget/new-note"
     const val NOTE = "magical-merchant://widget/note"
+
+    /** テンプレの管理画面。ボタンが 1 つも無いウィジェットの行き先でもある。 */
+    const val TEMPLATES = "magical-merchant://widget/templates"
+
+    /**
+     * [name] のテンプレからノートを作って開く。
+     *
+     * 名前は人が付けたファイル名で、空白も日本語も入る。素で繋ぐと
+     * クエリとして壊れるので必ず通す。
+     */
+    fun template(name: String): String =
+        "magical-merchant://widget/template?name=" + Uri.encode(name)
 }
 
 /**
