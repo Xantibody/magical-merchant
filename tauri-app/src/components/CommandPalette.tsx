@@ -4,6 +4,7 @@ import Icon from "./Icon";
 import type { IconName } from "./Icon";
 import { typedInvoke } from "../lib/commands";
 import type { SearchHit } from "../lib/commands";
+import { formatMonthDay } from "../lib/day-labels";
 import { createDebouncedAccessor } from "../lib/debounce";
 import { t } from "../lib/i18n";
 import { isImeComposing } from "../lib/ime";
@@ -58,10 +59,6 @@ const SEARCH_DEBOUNCE_MS = 200;
 /** zero-query に出すタグの数。全部出すと入り口ではなく一覧になってしまう。 */
 const HOME_TAG_LIMIT = 6;
 
-function monthDay(iso: string): string {
-  return iso.slice(5).replace("-", "/");
-}
-
 export default function CommandPalette(props: CommandPaletteProps): JSX.Element {
   const [query, setQuery] = createSignal("");
   const [cursor, setCursor] = createSignal(0);
@@ -108,14 +105,14 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
         key: `day:${day.hit.date}`,
         icon: "calendar-blank",
         label: day.label,
-        meta: monthDay(day.hit.date),
+        meta: formatMonthDay(day.hit.date),
         run: () => props.onSelectHit(day.hit),
       }));
       const recent: PaletteRow[] = (entry?.recent ?? []).map((hit) => ({
         key: `recent:${hit.filename}`,
         icon: "file-text",
         label: hit.title,
-        meta: monthDay(hit.date),
+        meta: formatMonthDay(hit.date),
         run: () => props.onSelectHit(hit),
       }));
       const tags: PaletteRow[] = (entry?.tags ?? []).map((tag) => ({
@@ -141,7 +138,7 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
       key: `hit:${i}`,
       icon: hit.kind === "note" ? "file-text" : "lightning",
       label: hit.title || hit.snippet,
-      meta: monthDay(hit.date),
+      meta: formatMonthDay(hit.date),
       highlight: splitSnippet(hit.snippet, hit.match_start, hit.match_len),
       run: () => props.onSelectHit(hit),
     }));

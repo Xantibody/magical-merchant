@@ -44,6 +44,11 @@ export function formatDayHeading(iso: string, today: Date): { label: string; dat
 }
 
 /** Notes のグループ見出し。「今週 / 先週 / それ以前」 */
+/** 一覧・検索結果の 2 段目に出す短い日付。「08/04」 */
+export function formatMonthDay(iso: string): string {
+  return iso.slice(5).replace("-", "/");
+}
+
 export function formatNoteGroupLabel(iso: string, today: Date): string {
   const date = parseIsoDate(iso);
   if (!date) {
