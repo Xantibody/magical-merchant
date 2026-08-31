@@ -29,6 +29,32 @@ pub struct NoteFrontmatter {
     pub updated: Option<DateTime<FixedOffset>>,
 }
 
+impl NoteFrontmatter {
+    /// 作成直後の記録。任意のキーは持たない状態から始め、書くものだけを
+    /// `..NoteFrontmatter::new(time)` で足す。
+    ///
+    /// 構築のたびに全フィールドを並べていると、キーが 1 つ増えるだけで
+    /// 関係のない呼び出し側とテストが全部書き換わる。増える先はここだけにする。
+    #[must_use]
+    pub const fn new(time: DateTime<FixedOffset>) -> Self {
+        Self {
+            time,
+            tags: Vec::new(),
+            context: None,
+            view: None,
+            origin: None,
+            updated: None,
+        }
+    }
+}
+
+/// 作成時にだけ書かれる出自の記録。後の編集では書き換わらない。
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Provenance<'a> {
+    /// 昇格元タイムラインエントリの日時(`YYYY-MM-DDTHH:MM:SS`)。
+    pub origin: Option<&'a str>,
+}
+
 pub fn render<T: Serialize>(fm: &T, body: &str) -> Result<String, CoreError> {
     let yaml = serde_yaml::to_string(fm).map_err(|e| CoreError::Parse(e.to_string()))?;
     Ok(format!("---\n{yaml}---\n{body}"))
@@ -73,19 +99,20 @@ mod tests {
             .unwrap()
     }
 
+    fn sample_fm() -> NoteFrontmatter {
+        NoteFrontmatter::new(sample_datetime())
+    }
+
     #[test]
     fn test_note_frontmatter_roundtrip() {
         let fm = NoteFrontmatter {
-            time: sample_datetime(),
             tags: vec!["memo".to_string()],
             context: Some(Context {
                 battery: Some(82),
                 is_charging: Some(false),
                 ..Context::default()
             }),
-            view: None,
-            origin: None,
-            updated: None,
+            ..sample_fm()
         };
         let rendered = render(&fm, "# Hello\nWorld").unwrap();
         let (parsed, body): (NoteFrontmatter, _) = parse(&rendered).unwrap();
@@ -96,12 +123,8 @@ mod tests {
     #[test]
     fn test_note_frontmatter_view_roundtrip() {
         let fm = NoteFrontmatter {
-            time: sample_datetime(),
-            tags: vec![],
-            context: None,
             view: Some("mindmap".to_string()),
-            origin: None,
-            updated: None,
+            ..sample_fm()
         };
         let rendered = render(&fm, "body").unwrap();
         let (parsed, _body): (NoteFrontmatter, _) = parse(&rendered).unwrap();
@@ -112,15 +135,7 @@ mod tests {
     /// 余計なキーを書くと、同期(Syncthing)が全ノートを転送し直すことになる。
     #[test]
     fn test_render_omits_absent_view() {
-        let fm = NoteFrontmatter {
-            time: sample_datetime(),
-            tags: vec![],
-            context: None,
-            view: None,
-            origin: None,
-            updated: None,
-        };
-        let rendered = render(&fm, "body").unwrap();
+        let rendered = render(&sample_fm(), "body").unwrap();
         assert!(!rendered.contains("view"));
     }
 
@@ -135,12 +150,8 @@ mod tests {
     #[test]
     fn test_note_frontmatter_updated_roundtrip() {
         let fm = NoteFrontmatter {
-            time: sample_datetime(),
-            tags: vec![],
-            context: None,
-            view: None,
-            origin: None,
             updated: Some(sample_datetime()),
+            ..sample_fm()
         };
         let rendered = render(&fm, "body").unwrap();
         let (parsed, _body): (NoteFrontmatter, _) = parse(&rendered).unwrap();
@@ -151,15 +162,7 @@ mod tests {
     /// 全ノートの frontmatter が書き換わって同期が丸ごと走る。
     #[test]
     fn test_render_omits_absent_updated() {
-        let fm = NoteFrontmatter {
-            time: sample_datetime(),
-            tags: vec![],
-            context: None,
-            view: None,
-            origin: None,
-            updated: None,
-        };
-        let rendered = render(&fm, "body").unwrap();
+        let rendered = render(&sample_fm(), "body").unwrap();
         assert!(!rendered.contains("updated"));
     }
 
@@ -174,12 +177,8 @@ mod tests {
     #[test]
     fn test_note_frontmatter_origin_roundtrip() {
         let fm = NoteFrontmatter {
-            time: sample_datetime(),
-            tags: vec![],
-            context: None,
-            view: None,
             origin: Some("2026-08-13T08:30:00".to_string()),
-            updated: None,
+            ..sample_fm()
         };
         let rendered = render(&fm, "body").unwrap();
         let (parsed, _body): (NoteFrontmatter, _) = parse(&rendered).unwrap();
@@ -190,15 +189,7 @@ mod tests {
     /// view と同じ約束: 書いていないキーは書かない。
     #[test]
     fn test_render_omits_absent_origin() {
-        let fm = NoteFrontmatter {
-            time: sample_datetime(),
-            tags: vec![],
-            context: None,
-            view: None,
-            origin: None,
-            updated: None,
-        };
-        let rendered = render(&fm, "body").unwrap();
+        let rendered = render(&sample_fm(), "body").unwrap();
         assert!(!rendered.contains("origin"));
     }
 
@@ -212,14 +203,7 @@ mod tests {
 
     #[test]
     fn test_note_frontmatter_no_context() {
-        let fm = NoteFrontmatter {
-            time: sample_datetime(),
-            tags: vec![],
-            context: None,
-            view: None,
-            origin: None,
-            updated: None,
-        };
+        let fm = sample_fm();
         let rendered = render(&fm, "body").unwrap();
         let (parsed, _body): (NoteFrontmatter, _) = parse(&rendered).unwrap();
         assert_eq!(parsed, fm);
@@ -227,15 +211,7 @@ mod tests {
 
     #[test]
     fn test_render_contains_delimiters() {
-        let fm = NoteFrontmatter {
-            time: sample_datetime(),
-            tags: vec![],
-            context: None,
-            view: None,
-            origin: None,
-            updated: None,
-        };
-        let rendered = render(&fm, "body").unwrap();
+        let rendered = render(&sample_fm(), "body").unwrap();
         assert!(rendered.starts_with("---\n"));
         assert!(rendered.contains("\n---\n"));
         assert!(rendered.ends_with("body"));
