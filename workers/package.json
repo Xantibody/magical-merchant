@@ -3,6 +3,7 @@
   "version": "0.3.0",
   "private": true,
   "license": "MIT",
+  "type": "module",
   "scripts": {
     "dev": "wrangler dev",
     "deploy:worker": "wrangler deploy",
@@ -13,7 +14,7 @@
     "jose": "^6.2.3"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.8",
+    "@cloudflare/vitest-pool-workers": "^0.22.0",
     "@cloudflare/workers-types": "^5.0.0",
     "knip": "^6.31.0",
     "typescript": "^7.0.0",
