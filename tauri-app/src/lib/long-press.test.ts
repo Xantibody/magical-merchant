@@ -73,6 +73,17 @@ describe("createLongPress", () => {
     expect(press.shouldClick()).toBe(true);
   });
 
+  // 押しっぱなしは WebView から見るとテキスト選択の始まり。放っておくと
+  // 「コピー」のメニューが長押しの手応えに割り込む
+  it("keeps the platform context menu from opening", () => {
+    const press = createLongPress(vi.fn<() => void>(), HOLD_MS);
+    const preventDefault = vi.fn<() => void>();
+
+    press.onContextMenu({ preventDefault });
+
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+  });
+
   it("lets an ordinary tap click through", () => {
     const press = createLongPress(vi.fn<() => void>(), HOLD_MS);
 

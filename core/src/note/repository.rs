@@ -5,7 +5,7 @@ use chrono::Local;
 
 use crate::error::CoreError;
 use crate::utils::device::Context;
-use crate::utils::frontmatter::{self, NoteFrontmatter};
+use crate::utils::frontmatter::{self, NoteFrontmatter, Provenance};
 use crate::utils::fs::{ensure_dir, list_md_files, write_atomic};
 use crate::utils::markdown::format_note_markdown;
 use crate::utils::paths::{note_file_path, notes_dir};
@@ -31,13 +31,13 @@ impl Notes {
         body: &str,
         tags: &[String],
         context: &Context,
-        origin: Option<&str>,
+        provenance: Provenance<'_>,
     ) -> Result<PathBuf, CoreError> {
         let now = Local::now();
         let file_path = note_file_path(&self.base_dir, now);
         ensure_dir(&file_path)?;
 
-        let markdown = format_note_markdown(body, tags, now, context, origin)?;
+        let markdown = format_note_markdown(body, tags, now, context, provenance)?;
         write_atomic(&file_path, markdown)?;
         Ok(file_path)
     }
@@ -101,12 +101,8 @@ impl Notes {
         let now = Local::now();
         let fm = frontmatter::parse::<NoteFrontmatter>(&existing).map_or_else(
             |_| NoteFrontmatter {
-                time: now.into(),
-                tags: Vec::new(),
                 context: Some(context.clone()),
-                view: None,
-                origin: None,
-                updated: None,
+                ..NoteFrontmatter::new(now.into())
             },
             |(fm, _)| NoteFrontmatter {
                 updated: Some(now.into()),
@@ -143,10 +139,7 @@ impl Notes {
         let fm = NoteFrontmatter {
             time,
             tags: tags.to_vec(),
-            context: existing.context,
-            view: existing.view,
-            origin: existing.origin,
-            updated: existing.updated,
+            ..existing
         };
         write_atomic(&path, frontmatter::render(&fm, body)?)?;
         Ok(())

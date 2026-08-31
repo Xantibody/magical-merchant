@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 
 use crate::error::CoreError;
 use crate::utils::device::Context;
-use crate::utils::frontmatter;
+use crate::utils::frontmatter::{self, Provenance};
 use crate::utils::validated::NoteFilename;
 
 pub fn create_draft_note(
@@ -19,7 +19,7 @@ pub fn create_draft_note(
     tags: &[String],
     context: &Context,
 ) -> Result<PathBuf, CoreError> {
-    Notes::new(base_dir.to_path_buf()).create(body, tags, context, None)
+    Notes::new(base_dir.to_path_buf()).create(body, tags, context, Provenance::default())
 }
 
 /// タイムラインエントリを昇格させてノートを作る。frontmatter の `origin` に
@@ -31,7 +31,15 @@ pub fn create_note_from_entry(
     context: &Context,
     origin: &str,
 ) -> Result<PathBuf, CoreError> {
-    Notes::new(base_dir.to_path_buf()).create(body, tags, context, Some(origin))
+    Notes::new(base_dir.to_path_buf()).create(
+        body,
+        tags,
+        context,
+        Provenance {
+            origin: Some(origin),
+            ..Provenance::default()
+        },
+    )
 }
 
 pub fn update_note(file_path: &Path, body: &str, context: &Context) -> Result<(), CoreError> {

@@ -2,7 +2,7 @@ import { createContext, createSignal, useContext, onCleanup } from "solid-js";
 import type { Accessor, JSX } from "solid-js";
 
 /** 同時に開けるポップオーバーは 1 つだけ。 */
-type PopoverName = "sync" | "theme" | "calendar" | "note-meta" | null;
+type PopoverName = "sync" | "theme" | "calendar" | "note-meta" | "new-note-menu" | null;
 
 interface Toast {
   message: string;
