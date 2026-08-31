@@ -240,11 +240,30 @@
   border-top: 1px solid var(--app-hairline);
 }
 
+/* キーボードが開いているあいだだけ、その上へ浮かせる。位置は JS が打つ
+   (`keyboard.ts`) — 高さを知っているのは visualViewport だけ */
+.templates-footer--floating {
+  position: fixed;
+  left: 0;
+  right: 0;
+  max-width: none;
+  z-index: 150;
+  padding-bottom: 10px;
+  background: var(--app-surface-2);
+  border-top: 1px solid var(--app-border);
+}
+
 .templates-vars {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+/* 浮いているあいだは見える面積が限られる。プレビューは畳んで、
+   キーボードのすぐ上に押せるものだけを残す */
+.templates-footer--floating .templates-preview {
+  display: none;
 }
 
 .templates-var-chip code {
