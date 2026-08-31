@@ -1,5 +1,12 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
+  // @cloudflare/vitest-pool-workers 0.22 moved from a Vitest pool to a Vite
+  // plugin, so `test.include` is gone from vitest.config.ts and knip's vitest
+  // plugin has nothing to derive the test entry points from. Naming them here
+  // keeps the tests — and everything only they use — off the unused list.
+  "vitest": {
+    "entry": ["src/**/*.test.ts"],
+  },
   // `cloudflare:test` is a virtual module supplied by
   // @cloudflare/vitest-pool-workers; knip reads it as a `cloudflare` package.
   "ignoreDependencies": ["cloudflare"],
