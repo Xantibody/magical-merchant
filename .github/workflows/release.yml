@@ -41,11 +41,14 @@ jobs:
         run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache
 
       - uses: nixbuild/nix-quick-install-action@v35
+      # restore 専用。タグ ref で保存するとタグごとに約 3GB の重複キャッシュが
+      # 増えて repo の 10GB 上限を圧迫する (保存は ci.yml が main でやる)
       - uses: nix-community/cache-nix-action@v7
         with:
           primary-key: nix-${{ runner.os }}-android-${{ hashFiles('flake.lock', 'flake.nix') }}
           restore-prefixes-first-match: nix-${{ runner.os }}-android-
           gc-max-store-size-linux: 6G
+          save: false
 
       - name: Generate the Android project
         run: nix develop .#android --command just tauri_app::android-init
