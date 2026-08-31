@@ -25,6 +25,7 @@ import type { ItemGroup, NoteItem } from "../lib/items";
 import { readNoteContent, toggledView, viewToFrontmatter } from "../lib/note-view";
 import type { NoteView } from "../lib/note-view";
 import { joinTitle, splitTitle } from "../lib/note-title";
+import { formatMonthDay } from "../lib/day-labels";
 import { locale, t } from "../lib/i18n";
 import { isImeComposing } from "../lib/ime";
 import { createLongPress } from "../lib/long-press";
@@ -58,7 +59,7 @@ async function loadNotes(): Promise<NoteItem[]> {
 
 /** 一覧の 2 段目に出す更新日。「08/04」 */
 function noteDate(item: NoteItem): string {
-  return item.date ? item.date.slice(5).replace("-", "/") : "";
+  return item.date ? formatMonthDay(item.date) : "";
 }
 
 function EmptyNotes(): JSX.Element {
@@ -761,9 +762,7 @@ export default function Workspace(): JSX.Element {
                                         size={14}
                                       />
                                       <span class="backlink-title">{hit.title || hit.snippet}</span>
-                                      <span class="backlink-date">
-                                        {hit.date.slice(5).replace("-", "/")}
-                                      </span>
+                                      <span class="backlink-date">{formatMonthDay(hit.date)}</span>
                                     </button>
                                   )}
                                 </For>
