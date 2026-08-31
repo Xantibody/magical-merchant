@@ -33,13 +33,21 @@ use magical_merchant_core::{
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_deep_link::DeepLinkExt as _;
 
+fn app_base_dir(handle: &AppHandle) -> Result<std::path::PathBuf, String> {
+    handle.path().app_data_dir().map_err(|e| e.to_string())
+}
+
+fn parse_filename(filename: &str) -> Result<NoteFilename, String> {
+    NoteFilename::parse(filename).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn save_quick_capture(
     handle: AppHandle,
     text: String,
     client: ClientContext,
 ) -> Result<(), String> {
-    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let base_dir = app_base_dir(&handle)?;
     let context = device::get_context(client);
     magical_merchant_core::save_timeline_entry(&base_dir, &text, &context)
         .map_err(|e| e.to_string())
@@ -52,7 +60,7 @@ fn save_document(
     tags: Vec<String>,
     client: ClientContext,
 ) -> Result<(), String> {
-    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let base_dir = app_base_dir(&handle)?;
     let context = device::get_context(client);
     magical_merchant_core::create_draft_note(&base_dir, &body, &tags, &context)
         .map_err(|e| e.to_string())?;
@@ -67,7 +75,7 @@ fn create_draft(
     client: ClientContext,
     origin: Option<String>,
 ) -> Result<String, String> {
-    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let base_dir = app_base_dir(&handle)?;
     let context = device::get_context(client);
     // origin 付きはタイムラインエントリからの昇格。出自を frontmatter に刻む
     let path = origin
@@ -98,7 +106,7 @@ fn list_notes(handle: AppHandle) -> Result<Vec<NoteSummary>, String> {
     // 修復に失敗してもノートが読めなくなるよりは、そのまま出すほうがいい。
     static REPAIR: std::sync::Once = std::sync::Once::new();
 
-    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let base_dir = app_base_dir(&handle)?;
     REPAIR.call_once(|| {
         let _ = magical_merchant_core::repair_notes(&base_dir);
     });
@@ -108,22 +116,22 @@ fn list_notes(handle: AppHandle) -> Result<Vec<NoteSummary>, String> {
 
 #[tauri::command]
 fn read_note(handle: AppHandle, filename: String) -> Result<String, String> {
-    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    let filename = NoteFilename::parse(&filename).map_err(|e| e.to_string())?;
+    let base_dir = app_base_dir(&handle)?;
+    let filename = parse_filename(&filename)?;
     magical_merchant_core::read_note_by_filename(&base_dir, &filename).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn find_backlinks(handle: AppHandle, filename: String) -> Result<Vec<SearchHit>, String> {
-    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    let filename = NoteFilename::parse(&filename).map_err(|e| e.to_string())?;
+    let base_dir = app_base_dir(&handle)?;
+    let filename = parse_filename(&filename)?;
     magical_merchant_core::find_backlinks(&base_dir, &filename).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn read_note_meta(handle: AppHandle, filename: String) -> Result<NoteMeta, String> {
-    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    let filename = NoteFilename::parse(&filename).map_err(|e| e.to_string())?;
+    let base_dir = app_base_dir(&handle)?;
+    let filename = parse_filename(&filename)?;
     magical_merchant_core::read_note_meta(&base_dir, &filename).map_err(|e| e.to_string())
 }
 
@@ -134,8 +142,8 @@ fn update_note_meta(
     time: String,
     tags: Vec<String>,
 ) -> Result<(), String> {
-    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    let filename = NoteFilename::parse(&filename).map_err(|e| e.to_string())?;
+    let base_dir = app_base_dir(&handle)?;
+    let filename = parse_filename(&filename)?;
     // オフセット付きの RFC 3339 で受ける。素の日時にすると、端末のタイム
     // ゾーンが変わっただけで同じ入力が別の時刻を指してしまう
     let time = chrono::DateTime::parse_from_rfc3339(&time).map_err(|e| e.to_string())?;
@@ -146,8 +154,8 @@ fn update_note_meta(
 /// 表示モードだけを書き換える。`None` で既定(エディタ)に戻す。
 #[tauri::command]
 fn set_note_view(handle: AppHandle, filename: String, view: Option<String>) -> Result<(), String> {
-    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    let filename = NoteFilename::parse(&filename).map_err(|e| e.to_string())?;
+    let base_dir = app_base_dir(&handle)?;
+    let filename = parse_filename(&filename)?;
     magical_merchant_core::update_note_view(&base_dir, &filename, view.as_deref())
         .map_err(|e| e.to_string())
 }
@@ -159,22 +167,22 @@ fn set_note_origin(
     filename: String,
     origin: Option<String>,
 ) -> Result<(), String> {
-    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    let filename = NoteFilename::parse(&filename).map_err(|e| e.to_string())?;
+    let base_dir = app_base_dir(&handle)?;
+    let filename = parse_filename(&filename)?;
     magical_merchant_core::update_note_origin(&base_dir, &filename, origin.as_deref())
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn list_templates(handle: AppHandle) -> Result<Vec<TemplateSummary>, String> {
-    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let base_dir = app_base_dir(&handle)?;
     magical_merchant_core::list_templates(&base_dir).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn read_template(handle: AppHandle, filename: String) -> Result<TemplateDetail, String> {
-    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    let filename = NoteFilename::parse(&filename).map_err(|e| e.to_string())?;
+    let base_dir = app_base_dir(&handle)?;
+    let filename = parse_filename(&filename)?;
     magical_merchant_core::read_template(&base_dir, &filename).map_err(|e| e.to_string())
 }
 
@@ -185,16 +193,16 @@ fn save_template(
     body: String,
     tags: Vec<String>,
 ) -> Result<(), String> {
-    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    let filename = NoteFilename::parse(&filename).map_err(|e| e.to_string())?;
+    let base_dir = app_base_dir(&handle)?;
+    let filename = parse_filename(&filename)?;
     magical_merchant_core::save_template(&base_dir, &filename, &body, &tags)
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn delete_template(handle: AppHandle, filename: String) -> Result<(), String> {
-    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    let filename = NoteFilename::parse(&filename).map_err(|e| e.to_string())?;
+    let base_dir = app_base_dir(&handle)?;
+    let filename = parse_filename(&filename)?;
     magical_merchant_core::delete_template(&base_dir, &filename).map_err(|e| e.to_string())
 }
 
@@ -210,8 +218,8 @@ fn create_from_template(
     client: ClientContext,
     locale: String,
 ) -> Result<CreatedNote, String> {
-    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    let filename = NoteFilename::parse(&filename).map_err(|e| e.to_string())?;
+    let base_dir = app_base_dir(&handle)?;
+    let filename = parse_filename(&filename)?;
     let context = device::get_context(client);
     magical_merchant_core::create_note_from_template(
         &base_dir,
@@ -224,14 +232,14 @@ fn create_from_template(
 
 #[tauri::command]
 fn read_timeline(handle: AppHandle) -> Result<Vec<String>, String> {
-    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let base_dir = app_base_dir(&handle)?;
     let today = chrono::Local::now().date_naive();
     magical_merchant_core::read_timeline(&base_dir, today).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn list_timeline_dates(handle: AppHandle) -> Result<Vec<String>, String> {
-    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let base_dir = app_base_dir(&handle)?;
     let dates = magical_merchant_core::list_timeline_dates(&base_dir).map_err(|e| e.to_string())?;
     Ok(dates
         .iter()
@@ -241,14 +249,14 @@ fn list_timeline_dates(handle: AppHandle) -> Result<Vec<String>, String> {
 
 #[tauri::command]
 fn read_timeline_by_date(handle: AppHandle, date: String) -> Result<Vec<String>, String> {
-    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let base_dir = app_base_dir(&handle)?;
     let naive = chrono::NaiveDate::parse_from_str(&date, "%Y-%m-%d").map_err(|e| e.to_string())?;
     magical_merchant_core::read_timeline(&base_dir, naive).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn delete_timeline_entry(handle: AppHandle, date: String, index: usize) -> Result<(), String> {
-    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let base_dir = app_base_dir(&handle)?;
     let naive = chrono::NaiveDate::parse_from_str(&date, "%Y-%m-%d").map_err(|e| e.to_string())?;
     magical_merchant_core::delete_timeline_entry(&base_dir, naive, index).map_err(|e| e.to_string())
 }
@@ -267,7 +275,7 @@ async fn resolve_places(
     coordinates: Vec<(f64, f64)>,
     locale: String,
 ) -> Result<Vec<(String, String)>, String> {
-    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let base_dir = app_base_dir(&handle)?;
     tauri::async_runtime::spawn_blocking(move || place::resolve(&base_dir, &coordinates, &locale))
         .await
         .map_err(|e| e.to_string())
@@ -275,14 +283,14 @@ async fn resolve_places(
 
 #[tauri::command]
 fn search_all(handle: AppHandle, query: String) -> Result<Vec<SearchHit>, String> {
-    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let base_dir = app_base_dir(&handle)?;
     magical_merchant_core::search_all(&base_dir, &query).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn delete_note(handle: AppHandle, filename: String) -> Result<(), String> {
-    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    let filename = NoteFilename::parse(&filename).map_err(|e| e.to_string())?;
+    let base_dir = app_base_dir(&handle)?;
+    let filename = parse_filename(&filename)?;
     magical_merchant_core::delete_note(&base_dir, &filename).map_err(|e| e.to_string())
 }
 
@@ -305,11 +313,7 @@ fn store_token_from_urls(handle: &AppHandle, urls: &[url::Url]) {
 
     let handle = handle.clone();
     std::thread::spawn(move || {
-        let stored = handle
-            .path()
-            .app_data_dir()
-            .map_err(|e| e.to_string())
-            .and_then(|dir| auth::store_token(&dir, &token));
+        let stored = app_base_dir(&handle).and_then(|dir| auth::store_token(&dir, &token));
 
         match stored {
             Ok(()) => {
