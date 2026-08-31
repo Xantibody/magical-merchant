@@ -1,4 +1,5 @@
 import MarkdownIt from "markdown-it";
+import type { Env, MarkdownIt as MarkdownItInstance } from "markdown-it";
 import { getHighlighter } from "./highlighter";
 import { renderDiagrams } from "./mermaid";
 import { noteLinkPlugin } from "./note-link-markdown";
@@ -10,7 +11,7 @@ import { tagPlugin } from "./tag-markdown";
  * 変える。html: false のままだと文字どおり `<br />` と表示されてしまう。
  * トークン列で見るのは、コードフェンスの中の同じ文字列を巻き込まないため。
  */
-function preservedEmptyLinePlugin(markdownIt: MarkdownIt): void {
+function preservedEmptyLinePlugin(markdownIt: MarkdownItInstance): void {
   markdownIt.core.ruler.push("preserved_empty_line", (state) => {
     for (const token of state.tokens) {
       if (token.type === "inline" && isPreservedEmptyLine(token.content)) {
@@ -45,7 +46,7 @@ interface FenceBlock {
   lang: string;
 }
 
-interface RenderEnv {
+interface RenderEnv extends Env {
   __fenceBlocks?: FenceBlock[];
   noteTitles?: ReadonlyMap<string, string>;
 }
@@ -68,15 +69,21 @@ fenceMd.use(noteLinkPlugin);
 const NUL = String.fromCodePoint(0);
 export const FENCE_SLOT = `${NUL}fence${NUL}`;
 
-fenceMd.renderer.rules.fence = (tokens, idx, _options, renderEnv: RenderEnv) => {
-  const token = tokens[idx];
-  (renderEnv.__fenceBlocks ??= []).push({ code: token.content, lang: token.info.trim() });
-  return FENCE_SLOT;
-};
-
 function plainBlock(code: string): string {
   return `<pre><code>${fenceMd.utils.escapeHtml(code)}</code></pre>`;
 }
+
+fenceMd.renderer.rules.fence = (tokens, idx, _options, renderEnv) => {
+  const token = tokens[idx];
+  // `render()` は env を必ず渡すが、型の上では省略できることになっている。
+  // 差し込み先が無ければ本文を落とすより素の <pre> に倒す
+  const env = renderEnv as RenderEnv | undefined;
+  if (!env) {
+    return plainBlock(token.content);
+  }
+  (env.__fenceBlocks ??= []).push({ code: token.content, lang: token.info.trim() });
+  return FENCE_SLOT;
+};
 
 async function highlightBlocks(blocks: FenceBlock[]): Promise<string[]> {
   let highlighter;

@@ -1,6 +1,4 @@
-import type MarkdownIt from "markdown-it";
-import type Token from "markdown-it/lib/token.mjs";
-import type StateCore from "markdown-it/lib/rules_core/state_core.mjs";
+import type { MarkdownIt, StateCore, Token } from "markdown-it";
 import { noteLinkFile, splitNoteLinks } from "./note-link";
 
 /** 描画時に渡す、ID → タイトルの解決表。 */

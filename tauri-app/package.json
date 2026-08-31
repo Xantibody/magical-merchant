@@ -31,7 +31,6 @@
   "devDependencies": {
     "@solidjs/testing-library": "^0.8.10",
     "@tauri-apps/cli": "~2.10",
-    "@types/markdown-it": "^14.1.2",
     "@vitest/browser-playwright": "^4.1.4",
     "jsdom": "^30.0.0",
     "knip": "^6.31.0",

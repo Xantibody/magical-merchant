@@ -12,7 +12,7 @@
  */
 
 import MarkdownIt from "markdown-it";
-import type Token from "markdown-it/lib/token.mjs";
+import type { Token } from "markdown-it";
 
 export interface MindmapNode {
   content: string;
