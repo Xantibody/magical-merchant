@@ -267,14 +267,12 @@ async function handleAuthCallback(request: Request, url: URL, env: Env): Promise
     return errorResponse("Missing authorization code", 400);
   }
 
-  // Validate state against cookie
   const stateParam = url.searchParams.get("state");
   const stateCookie = getCookie(request, "__oauth_state");
   if (!stateParam || !stateCookie || stateParam !== stateCookie) {
     return errorResponse("Invalid state parameter", 403);
   }
 
-  // Exchange code for access token
   const tokenResp = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -296,7 +294,6 @@ async function handleAuthCallback(request: Request, url: URL, env: Env): Promise
     return errorResponse("Missing access token in Google response", 502);
   }
 
-  // Get user info
   const userinfoResp = await fetch("https://openidconnect.googleapis.com/v1/userinfo", {
     headers: { Authorization: `Bearer ${tokenData.access_token}` },
   });
@@ -310,7 +307,6 @@ async function handleAuthCallback(request: Request, url: URL, env: Env): Promise
     return errorResponse("Missing user info in Google response", 502);
   }
 
-  // Issue JWT
   const expiry = getJwtExpiry(env);
   const jwt = await signJwt(
     {
@@ -372,7 +368,6 @@ export default {
       return handleAuthCallback(request, url, env);
     }
 
-    // Bearer token authentication
     const authHeader = request.headers.get("Authorization");
     const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
     if (!token) {

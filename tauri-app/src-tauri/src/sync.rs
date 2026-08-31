@@ -331,21 +331,17 @@ async fn do_sync(handle: &AppHandle) -> Result<SyncResult, SyncErrorInfo> {
 const MAX_SYNC_ATTEMPTS: usize = 3;
 
 async fn sync_once(client: &HttpClient, base_dir: &Path) -> Result<SyncResult, SyncErrorInfo> {
-    // 1. Server state を1リクエストで取得
     let server_state = client.get_sync_state().await?;
 
-    // 2. ローカルスキャン
     let local_files =
         scan::scan_local_files(base_dir).map_err(|e| SyncErrorInfo::other(e.to_string()))?;
     let local_state = SyncState::load(base_dir).map_err(|e| SyncErrorInfo::other(e.to_string()))?;
 
-    // 3. Rust core で diff 計算
     let remote_files = server_state_to_remote_files(&server_state);
     let actions = diff::compute(&local_files, &remote_files, &local_state);
 
     refuse_wholesale_local_deletion(&actions, &local_files)?;
 
-    // 4. アクションを bulk request に変換
     let data_dir = magical_merchant_core::utils::paths::data_dir(base_dir);
     let mut result = SyncResult::default();
     let bulk_req = build_bulk_request(
@@ -357,15 +353,14 @@ async fn sync_once(client: &HttpClient, base_dir: &Path) -> Result<SyncResult, S
     )
     .map_err(SyncErrorInfo::other)?;
 
-    // 5. 一括実行
     let bulk_resp = client.bulk(bulk_req).await?;
 
-    // 6. downloads + conflict コピー + ローカル削除を反映
     apply_response(&bulk_resp, &actions, &data_dir, &mut result).map_err(SyncErrorInfo::other)?;
 
-    // 7. サーバーが確定させた状態をそのままローカルにも記録する。
-    //    ここでローカルを再スキャンして組み直すと、ダウンロード直後の mtime が
-    //    サーバーの版と食い違い、同じファイルを永久に再取得し続ける
+    // サーバーが確定させた状態をそのままローカルにも記録する。
+    // ここでローカルを再スキャンして組み直すと、ダウンロード直後の mtime が
+    // サーバーの版と食い違い、同じファイルを永久に再取得し続ける
+
     save_local_state(base_dir, &bulk_resp.new_state, &data_dir).map_err(SyncErrorInfo::other)?;
 
     Ok(result)

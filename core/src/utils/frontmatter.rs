@@ -141,7 +141,7 @@ mod tests {
     }
 
     /// view を持たないノートの frontmatter は今までと 1 バイトも変わらない。
-    /// 余計なキーを書くと、同期(Syncthing)が全ノートを転送し直すことになる。
+    /// 余計なキーを書くと内容ハッシュが変わり、同期が全ノートを転送し直すことになる。
     #[test]
     fn test_render_omits_absent_view() {
         let rendered = render(&sample_fm(), "body").unwrap();
