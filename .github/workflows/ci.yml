@@ -29,8 +29,8 @@ jobs:
       nix-package: ${{ steps.filter.outputs.nix-package || 'true' }}
       android: ${{ steps.filter.outputs.android || 'true' }}
     steps:
-      - uses: actions/checkout@v6
-      - uses: dorny/paths-filter@v3
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v4
         if: github.event_name == 'pull_request'
         id: filter
         with:
@@ -89,7 +89,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Free disk space
         run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache
       - uses: nixbuild/nix-quick-install-action@v35
@@ -98,7 +98,7 @@ jobs:
           primary-key: nix-${{ runner.os }}-rust-${{ hashFiles('flake.lock', 'flake.nix') }}
           restore-prefixes-first-match: nix-${{ runner.os }}-rust-
           gc-max-store-size-linux: 3G
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: target
           key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'flake.lock') }}
@@ -115,7 +115,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: nixbuild/nix-quick-install-action@v35
       - uses: nix-community/cache-nix-action@v7
         with:
@@ -125,7 +125,7 @@ jobs:
       - name: Get pnpm store directory
         id: pnpm-cache
         run: echo "STORE_PATH=$(nix develop .#frontend --command pnpm store path)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
           key: pnpm-${{ runner.os }}-${{ hashFiles('tauri-app/pnpm-lock.yaml') }}
@@ -142,7 +142,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: nixbuild/nix-quick-install-action@v35
       - uses: nix-community/cache-nix-action@v7
         with:
@@ -152,7 +152,7 @@ jobs:
       - name: Get pnpm store directory
         id: pnpm-cache
         run: echo "STORE_PATH=$(nix develop .#workers --command pnpm store path)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
           key: pnpm-workers-${{ runner.os }}-${{ hashFiles('workers/pnpm-lock.yaml') }}
@@ -177,7 +177,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Free disk space
         run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache
       - uses: nixbuild/nix-quick-install-action@v35
@@ -190,7 +190,7 @@ jobs:
           gc-max-store-size-linux: 6G
       # rust ジョブとキーを分ける。同じ target/ でもホスト向けと Android 向けで
       # 中身が入れ替わり、共有すると毎回どちらかが作り直しになる
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: target
           key: cargo-android-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'flake.lock') }}
@@ -210,7 +210,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: nixbuild/nix-quick-install-action@v35
       # store キャッシュを張らない。FOD の出力パスは入力ではなく宣言した hash から
       # 決まるので、hash が腐ったままでも前回の出力が復元されれば nix はそれを有効と
@@ -228,7 +228,7 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: nixbuild/nix-quick-install-action@v35
       - uses: nix-community/cache-nix-action@v7
         with:
@@ -242,7 +242,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: nixbuild/nix-quick-install-action@v35
       - uses: nix-community/cache-nix-action@v7
         with:
