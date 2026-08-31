@@ -18,6 +18,8 @@ use serde::Serialize;
 
 /// 4x2 のノートウィジェットに収まる行数。
 const NOTE_LIMIT: usize = 4;
+/// テンプレウィジェットのボタン数。押せる高さ(46dp)で並べるとこれが上限。
+const TEMPLATE_LIMIT: usize = 3;
 /// シートに出すタグチップ。3 つを超えると 1 行に収まらない。
 const TAG_LIMIT: usize = 3;
 /// バーは 1 行しか出せない。長い記録は先頭だけ見せる。
@@ -40,6 +42,14 @@ pub(crate) struct NotesData {
     notes: Vec<NoteRow>,
 }
 
+/// テンプレウィジェットが要るぶん。テンプレ置き場だけを読む。
+#[derive(Debug, Default, Serialize)]
+pub(crate) struct TemplatesData {
+    /// 名前順のテンプレ。並びが実行ごとに変わると、同じ位置を押しても
+    /// 違うノートが生まれる。
+    templates: Vec<TemplateRow>,
+}
+
 #[derive(Debug, Serialize)]
 struct LastEntry {
     time: String,
@@ -51,6 +61,12 @@ struct NoteRow {
     title: String,
     filename: String,
     date: String,
+}
+
+#[derive(Debug, Serialize)]
+struct TemplateRow {
+    /// ボタンに出す名前であり、ディープリンクに載せる値でもある。
+    name: String,
 }
 
 /// Unreadable trees come back empty rather than as an error: a widget with no
@@ -68,6 +84,21 @@ pub(crate) fn collect_capture(base_dir: &Path) -> CaptureData {
 pub(crate) fn collect_notes(base_dir: &Path) -> NotesData {
     NotesData {
         notes: recent_notes(magical_merchant_core::list_notes(base_dir).unwrap_or_default()),
+    }
+}
+
+/// ノート一覧と分けてあるのは、テンプレ置き場だけ読めば足りるため。
+/// ここで全ノートを読むと、ボタンを 3 つ描くために全ファイルを開くことになる。
+pub(crate) fn collect_templates(base_dir: &Path) -> TemplatesData {
+    TemplatesData {
+        templates: magical_merchant_core::list_templates(base_dir)
+            .unwrap_or_default()
+            .into_iter()
+            .take(TEMPLATE_LIMIT)
+            .map(|template| TemplateRow {
+                name: template.name,
+            })
+            .collect(),
     }
 }
 
@@ -209,5 +240,31 @@ mod tests {
     #[test]
     fn a_blank_note_is_labelled_rather_than_left_empty() {
         assert_eq!(title_of("\n  \n"), UNTITLED);
+    }
+
+    /// 置いた数だけ並べると、ボタンがウィジェットの外まで伸びる。
+    #[test]
+    fn only_the_first_few_templates_fit_on_the_widget() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        for name in ["a", "b", "c", "d"] {
+            let filename =
+                magical_merchant_core::NoteFilename::parse(&format!("{name}.md")).unwrap();
+            magical_merchant_core::save_template(tmp.path(), &filename, "body", &[]).unwrap();
+        }
+
+        let data = collect_templates(tmp.path());
+
+        assert_eq!(data.templates.len(), TEMPLATE_LIMIT);
+        // 名前順。並びが変わると、同じ位置を押しても違うノートが生まれる
+        let names: Vec<&str> = data.templates.iter().map(|t| t.name.as_str()).collect();
+        assert_eq!(names, ["a", "b", "c"]);
+    }
+
+    /// テンプレを 1 つも置いていない端末が普通の状態。空で描かせる。
+    #[test]
+    fn a_tree_without_templates_comes_back_empty() {
+        let tmp = tempfile::TempDir::new().unwrap();
+
+        assert!(collect_templates(tmp.path()).templates.is_empty());
     }
 }
