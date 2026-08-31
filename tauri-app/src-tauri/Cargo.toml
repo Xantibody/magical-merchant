@@ -24,7 +24,10 @@ tauri-plugin-geolocation = "2"
 chrono = { version = "0.4", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-keyring = { version = "4", features = ["apple-native", "sync-secret-service"] }
+# v4 で credential store が別クレートに割れ、feature も v1 / cli の 2 つだけに
+# なった。既定の v1 が旧 apple-native + secret-service と同じ組み合わせを選ぶ
+# (Linux 側は dbus-secret-service ではなく zbus 実装)。API は v3 のまま
+keyring = "4"
 reqwest = { version = "0.12", default-features = false, features = [
   "json",
   "rustls-tls",
