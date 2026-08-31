@@ -33,6 +33,29 @@
       ],
     },
     {
+      description: [
+        "@tauri-apps/api と cli は npm 側が先に出る。crate の tauri と minor が",
+        "揃っていないと cargo-tauri が「version mismatched Tauri packages」で",
+        "ビルドを止めるので、範囲は ~2.10 に絞り patch だけ流す。crate が 2.11 に",
+        "上がったら手で範囲を動かす",
+      ],
+      matchManagers: ["npm"],
+      matchPackageNames: ["@tauri-apps/api", "@tauri-apps/cli"],
+      matchUpdateTypes: ["minor", "major"],
+      enabled: false,
+    },
+    {
+      description: [
+        "playwright の版はブラウザ本体のリビジョンと 1 対 1 で、そのブラウザは",
+        "flake.lock の nixpkgs が持つ playwright-driver から来る (PLAYWRIGHT_BROWSERS_PATH)。",
+        "npm 側だけ上げると要求リビジョンがずれ、vitest の browser mode が",
+        "「Executable doesn't exist」で全部落ちる。nixpkgs が動いた時に手で合わせる",
+      ],
+      matchManagers: ["npm"],
+      matchPackageNames: ["playwright"],
+      enabled: false,
+    },
+    {
       description: "workers は nix ビルドに入らないので tauri-app と分ける",
       matchManagers: ["npm"],
       matchFileNames: ["workers/package.json"],
