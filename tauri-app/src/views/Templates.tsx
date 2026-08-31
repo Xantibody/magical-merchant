@@ -16,6 +16,7 @@ import type { Template } from "../lib/commands";
 import { useShell } from "../lib/shell";
 import { locale, t } from "../lib/i18n";
 import { isImeComposing } from "../lib/ime";
+import { createKeyboardTop, keyboardTopStyle } from "../lib/keyboard";
 import { joinTitle, splitTitle } from "../lib/note-title";
 import { ROUTES } from "../lib/routes";
 import {
@@ -66,6 +67,10 @@ export default function Templates(): JSX.Element {
 
   let bodyRef: HTMLTextAreaElement | undefined;
   let highlightRef: HTMLPreElement | undefined;
+
+  // 変数の挿入列は画面の下端にある。触る端末ではキーボードがちょうどそこを
+  // 覆うので、開いているあいだだけその上へ逃がす
+  const keyboardTop = createKeyboardTop();
 
   const visible = createMemo<Template[]>(() => {
     const dropped = new Set(hidden());
@@ -458,7 +463,11 @@ export default function Templates(): JSX.Element {
             />
           </div>
 
-          <div class="templates-footer">
+          <div
+            class="templates-footer"
+            classList={{ "templates-footer--floating": keyboardTop() !== undefined }}
+            style={keyboardTopStyle(keyboardTop())}
+          >
             <div class="templates-vars">
               <span class="templates-tags-label">{t().templates.insertVariable}</span>
               <For each={TEMPLATE_VARS}>
