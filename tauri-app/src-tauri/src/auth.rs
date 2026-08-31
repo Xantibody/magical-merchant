@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::Path;
 
-use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode};
+use jsonwebtoken::dangerous::insecure_decode;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 #[cfg(target_os = "android")]
@@ -161,15 +161,10 @@ struct Claims {
     exp: i64,
 }
 
+/// 署名は検証しない。鍵は Worker 側にしか無く、ここで見たいのは
+/// 「まだ使える token か」だけ — 実際の可否は Worker が握っている。
 pub(crate) fn is_token_valid(token: &str) -> bool {
-    let mut validation = Validation::new(Algorithm::HS256);
-    validation.insecure_disable_signature_validation();
-    validation.validate_exp = false;
-    validation.validate_aud = false;
-    validation.required_spec_claims.clear();
-
-    let Ok(token_data) = decode::<Claims>(token, &DecodingKey::from_secret(&[]), &validation)
-    else {
+    let Ok(token_data) = insecure_decode::<Claims>(token) else {
         return false;
     };
 
@@ -362,16 +357,16 @@ pub(crate) fn is_sync_config_editable(handle: AppHandle) -> Result<bool, String>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use jsonwebtoken::{EncodingKey, Header, encode};
+    use base64::Engine;
+    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 
+    /// 署名は誰も見ないので、鍵も crypto backend も要らない。
+    /// jsonwebtoken の `encode` を呼ぶとテストのためだけに署名実装を
+    /// 抱き込むことになるため、3 つのパートを直に組む。
     fn make_jwt(exp: i64) -> String {
-        let claims = Claims { exp };
-        encode(
-            &Header::default(),
-            &claims,
-            &EncodingKey::from_secret(b"test-secret"),
-        )
-        .unwrap()
+        let header = URL_SAFE_NO_PAD.encode(r#"{"alg":"HS256","typ":"JWT"}"#);
+        let claims = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&Claims { exp }).unwrap());
+        format!("{header}.{claims}.not-a-real-signature")
     }
 
     #[test]
