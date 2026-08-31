@@ -17,7 +17,7 @@ rmcp = { version = "1", features = [
   "transport-io",
   "schemars",
 ] }
-schemars = "0.8"
+schemars = "1.0"
 serde = { version = "1", features = ["derive"] }
 chrono = { version = "0.4", features = ["serde"] }
 tokio = { version = "1", features = ["full"] }
