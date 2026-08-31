@@ -9,6 +9,32 @@ export interface Note {
   preview: string;
   /** 昇格元エントリの日時(`YYYY-MM-DDTHH:MM:SS`)。エントリ由来のノートだけ持つ。 */
   origin?: string;
+  /** 生まれ元のテンプレ名。テンプレから作ったノートだけ持つ。 */
+  template?: string;
+}
+
+/** テンプレ一覧の 1 件。 */
+export interface Template {
+  filename: string;
+  /** 拡張子を落とした名前。画面に出す名前でもある。 */
+  name: string;
+  tags: string[];
+  /** 本文の先頭行。変数は解決されていない。 */
+  preview: string;
+}
+
+/** テンプレ 1 件の中身。本文と自動タグは編集画面が同時に描く。 */
+interface TemplateDetail {
+  /** 変数を解決していない、書かれたままの本文。 */
+  body: string;
+  tags: string[];
+}
+
+/** テンプレ起動の結果。 */
+interface CreatedNote {
+  path: string;
+  /** 今日のぶんが既にあったので、作らずにそれを開いた。 */
+  reused: boolean;
 }
 
 /**
@@ -97,6 +123,18 @@ interface CommandMap {
   /** 昇格元エントリとの繋がりを書き換える。`null` で関係を解く。 */
   set_note_origin: { args: { filename: string; origin: string | null }; result: void };
   delete_note: { args: { filename: string }; result: void };
+  list_templates: { args: void; result: Template[] };
+  read_template: { args: { filename: string }; result: TemplateDetail };
+  save_template: { args: { filename: string; body: string; tags: string[] }; result: void };
+  delete_template: { args: { filename: string }; result: void };
+  /**
+   * テンプレからノートを作る。`locale` は `{{weekday}}` のため —
+   * 曜日の呼び名だけは端末の言語に従う。
+   */
+  create_from_template: {
+    args: { filename: string; locale: string } & ClientArgs;
+    result: CreatedNote;
+  };
   save_document: { args: { body: string; tags: string[] } & ClientArgs; result: void };
   sync_start: { args: void; result: void };
   sync_status: { args: void; result: unknown };
@@ -121,6 +159,9 @@ const MUTATING: ReadonlySet<CommandName> = new Set<CommandName>([
   "set_note_origin",
   "delete_note",
   "save_document",
+  "save_template",
+  "delete_template",
+  "create_from_template",
 ]);
 
 const mutationListeners = new Set<() => void>();

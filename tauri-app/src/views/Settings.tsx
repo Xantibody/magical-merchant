@@ -1,8 +1,11 @@
-import { createSignal, For, onMount, onCleanup, Show } from "solid-js";
+import { createResource, createSignal, For, onMount, onCleanup, Show } from "solid-js";
+import { A } from "@solidjs/router";
+import Icon from "../components/Icon";
 import { typedInvoke } from "../lib/commands";
 import { EVENTS } from "../lib/events";
 import { applyLocale, readStoredLocale, t } from "../lib/i18n";
 import type { LocalePreference } from "../lib/i18n";
+import { ROUTES } from "../lib/routes";
 import { listen } from "@tauri-apps/api/event";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import "../styles/settings.css";
@@ -16,6 +19,7 @@ export default function Settings(): JSX.Element {
   const [message, setMessage] = createSignal("");
   const [localePreference, setLocalePreference] =
     createSignal<LocalePreference>(readStoredLocale());
+  const [templates] = createResource(() => typedInvoke("list_templates"));
 
   const chooseLocale = (preference: LocalePreference): void => {
     setLocalePreference(preference);
@@ -145,6 +149,19 @@ export default function Settings(): JSX.Element {
               )}
             </For>
           </div>
+        </section>
+
+        <section class="settings-section">
+          <h2 class="settings-section-label">TEMPLATES</h2>
+          <A href={ROUTES.TEMPLATES} class="settings-link">
+            <Icon name="file-text" size={16} />
+            <span class="settings-link-label">{t().templates.manage}</span>
+            <span class="settings-link-count">
+              {t().templates.count((templates() ?? []).length)}
+            </span>
+            <Icon name="caret-right" size={14} />
+          </A>
+          <p class="settings-hint">{t().templates.manageHint}</p>
         </section>
 
         <section class="settings-section">
