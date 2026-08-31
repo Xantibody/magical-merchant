@@ -173,29 +173,35 @@ mod platform {
 mod platform {
     use super::coarsest_name;
     use jni::objects::{JObject, JString, JValue};
-    use jni::{JNIEnv, JavaVM};
+    use jni::strings::JNIStr;
+    use jni::{Env, JavaVM, jni_sig, jni_str};
 
     /// `Geocoder` は端末の Context と結び付いているので、Rust から素で作れない。
     /// `ndk_context` が握っている VM と Activity を借りて Java 側を呼ぶ。
     pub(super) fn geocode(latitude: f64, longitude: f64, locale: &str) -> Option<String> {
         let ctx = ndk_context::android_context();
         // SAFETY: tao がアプリ起動時に入れたポインタ。プロセスが生きている間有効。
-        let vm = unsafe { JavaVM::from_raw(ctx.vm().cast()) }.ok()?;
-        let mut env = vm.attach_current_thread().ok()?;
-        // SAFETY: 同上。Activity の参照で、借りている間だけ使う。
-        let context = unsafe { JObject::from_raw(ctx.context().cast()) };
+        let vm = unsafe { JavaVM::from_raw(ctx.vm().cast()) };
+        // jni 0.22 の attach は `Env` を閉包の中にしか出さない。借りた寿命が
+        // スタックの一区間に固定され、アタッチ解除後に持ち出せなくなる
+        vm.attach_current_thread(|env| -> jni::errors::Result<Option<String>> {
+            // SAFETY: 同上。Activity の参照で、借りている間だけ使う。
+            let context = unsafe { JObject::from_raw(env, ctx.context().cast()) };
 
-        let name = lookup(&mut env, &context, latitude, longitude, locale);
-        if name.is_none() {
-            // 圏外の `getFromLocation` は IOException を投げる。積んだままにすると
-            // 次に JNI を跨いだところで無関係な呼び出しが落ちる。
-            let _ = env.exception_clear();
-        }
-        name
+            let name = lookup(env, &context, latitude, longitude, locale);
+            if name.is_none() {
+                // 圏外の `getFromLocation` は IOException を投げる。積んだままにすると
+                // 次に JNI を跨いだところで無関係な呼び出しが落ちる。
+                let _ = env.exception_clear();
+            }
+            Ok(name)
+        })
+        .ok()
+        .flatten()
     }
 
     fn lookup(
-        env: &mut JNIEnv<'_>,
+        env: &mut Env<'_>,
         context: &JObject<'_>,
         latitude: f64,
         longitude: f64,
@@ -206,15 +212,15 @@ mod platform {
         let tag = env.new_string(language).ok()?;
         let locale = env
             .new_object(
-                "java/util/Locale",
-                "(Ljava/lang/String;)V",
+                jni_str!("java/util/Locale"),
+                jni_sig!((tag: java.lang.String) -> void),
                 &[JValue::Object(&tag)],
             )
             .ok()?;
         let geocoder = env
             .new_object(
-                "android/location/Geocoder",
-                "(Landroid/content/Context;Ljava/util/Locale;)V",
+                jni_str!("android/location/Geocoder"),
+                jni_sig!((context: android.content.Context, locale: java.util.Locale) -> void),
                 &[JValue::Object(context), JValue::Object(&locale)],
             )
             .ok()?;
@@ -223,8 +229,8 @@ mod platform {
         let addresses = env
             .call_method(
                 &geocoder,
-                "getFromLocation",
-                "(DDI)Ljava/util/List;",
+                jni_str!("getFromLocation"),
+                jni_sig!((latitude: double, longitude: double, max: int) -> java.util.List),
                 &[
                     JValue::Double(latitude),
                     JValue::Double(longitude),
@@ -236,7 +242,7 @@ mod platform {
             .ok()?;
         if addresses.is_null()
             || env
-                .call_method(&addresses, "size", "()I", &[])
+                .call_method(&addresses, jni_str!("size"), jni_sig!(() -> int), &[])
                 .ok()?
                 .i()
                 .ok()?
@@ -247,8 +253,8 @@ mod platform {
         let address = env
             .call_method(
                 &addresses,
-                "get",
-                "(I)Ljava/lang/Object;",
+                jni_str!("get"),
+                jni_sig!((index: int) -> java.lang.Object),
                 &[JValue::Int(0)],
             )
             .ok()?
@@ -256,24 +262,25 @@ mod platform {
             .ok()?;
 
         coarsest_name(
-            string_getter(env, &address, "getLocality"),
-            string_getter(env, &address, "getSubAdminArea"),
-            string_getter(env, &address, "getAdminArea"),
-            string_getter(env, &address, "getCountryName"),
+            string_getter(env, &address, jni_str!("getLocality")),
+            string_getter(env, &address, jni_str!("getSubAdminArea")),
+            string_getter(env, &address, jni_str!("getAdminArea")),
+            string_getter(env, &address, jni_str!("getCountryName")),
         )
     }
 
     /// `Address` の getter は、その段が無ければ null を返す。
-    fn string_getter(env: &mut JNIEnv<'_>, address: &JObject<'_>, name: &str) -> Option<String> {
+    fn string_getter(env: &mut Env<'_>, address: &JObject<'_>, name: &JNIStr) -> Option<String> {
         let value = env
-            .call_method(address, name, "()Ljava/lang/String;", &[])
+            .call_method(address, name, jni_sig!(() -> java.lang.String), &[])
             .ok()?
             .l()
             .ok()?;
         if value.is_null() {
             return None;
         }
-        env.get_string(&JString::from(value)).ok().map(String::from)
+        let text = env.cast_local::<JString<'_>>(value).ok()?;
+        text.try_to_string(env).ok()
     }
 }
 
