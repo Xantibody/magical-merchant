@@ -63,22 +63,25 @@ mod tests {
     use chrono::{FixedOffset, TimeZone};
     use std::path::PathBuf;
 
+    fn at(year: i32, month: u32, day: u32, hour: u32, minute: u32) -> NoteFrontmatter {
+        NoteFrontmatter::new(
+            FixedOffset::east_opt(9 * 3600)
+                .unwrap()
+                .with_ymd_and_hms(year, month, day, hour, minute, 0)
+                .unwrap(),
+        )
+    }
+
     #[test]
     fn test_from_file_with_valid_frontmatter() {
         let fm = NoteFrontmatter {
-            time: FixedOffset::east_opt(9 * 3600)
-                .unwrap()
-                .with_ymd_and_hms(2026, 3, 20, 14, 30, 45)
-                .unwrap(),
             tags: vec!["a".to_string(), "b".to_string()],
             context: Some(Context {
                 battery: Some(50),
                 is_charging: Some(false),
                 ..Context::default()
             }),
-            view: None,
-            origin: None,
-            updated: None,
+            ..at(2026, 3, 20, 14, 30)
         };
         let content = frontmatter::render(&fm, "# Title\nBody").unwrap();
         let summary = Summary::from_file(
@@ -96,15 +99,8 @@ mod tests {
     #[test]
     fn test_from_file_carries_origin() {
         let fm = NoteFrontmatter {
-            time: FixedOffset::east_opt(9 * 3600)
-                .unwrap()
-                .with_ymd_and_hms(2026, 8, 13, 9, 0, 0)
-                .unwrap(),
-            tags: vec![],
-            context: None,
-            view: None,
             origin: Some("2026-08-13T08:30:00".to_string()),
-            updated: None,
+            ..at(2026, 8, 13, 9, 0)
         };
         let content = frontmatter::render(&fm, "body").unwrap();
         let summary = Summary::from_file(
@@ -120,15 +116,8 @@ mod tests {
     #[test]
     fn frontmatter_tags_are_normalized_like_body_tags() {
         let fm = NoteFrontmatter {
-            time: FixedOffset::east_opt(9 * 3600)
-                .unwrap()
-                .with_ymd_and_hms(2026, 3, 20, 14, 30, 45)
-                .unwrap(),
             tags: vec!["Rust".to_string()],
-            context: None,
-            view: None,
-            origin: None,
-            updated: None,
+            ..at(2026, 3, 20, 14, 30)
         };
         let content = frontmatter::render(&fm, "本文 #rust").unwrap();
         let summary = Summary::from_file(

@@ -522,17 +522,12 @@ mod tests {
     fn write_second_note(base: &Path, filename: &str, body: &str) {
         use crate::utils::frontmatter::{self, NoteFrontmatter};
         use chrono::TimeZone;
-        let fm = NoteFrontmatter {
-            time: chrono::FixedOffset::east_opt(9 * 3600)
+        let fm = NoteFrontmatter::new(
+            chrono::FixedOffset::east_opt(9 * 3600)
                 .unwrap()
                 .with_ymd_and_hms(2020, 1, 1, 0, 0, 0)
                 .unwrap(),
-            tags: vec![],
-            context: None,
-            view: None,
-            origin: None,
-            updated: None,
-        };
+        );
         let path = crate::utils::paths::notes_dir(base).join(filename);
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(&path, frontmatter::render(&fm, body).unwrap()).unwrap();
