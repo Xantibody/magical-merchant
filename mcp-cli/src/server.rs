@@ -1,12 +1,14 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD as B64;
 use chrono::NaiveDate;
 use magical_merchant_core::utils::device::Context;
 use magical_merchant_core::utils::frontmatter;
 use magical_merchant_core::utils::paths::place_cache_path;
 use magical_merchant_core::utils::place::{PlaceCache, place_key};
-use magical_merchant_core::{NoteFilename, parse_timeline_entry};
+use magical_merchant_core::{GlyphFormat, GlyphName, NoteFilename, parse_timeline_entry};
 use rmcp::handler::server::tool::ToolRouter;
 use rmcp::handler::server::wrapper::{Json, Parameters};
 use rmcp::model::{
@@ -18,9 +20,10 @@ use rmcp::{ErrorData, RoleServer, ServerHandler, schemars, tool, tool_router};
 use serde::Deserialize;
 
 use crate::output::{
-    ContextInfo, CreatedNoteOutput, EntryInfo, HistoryOutput, HistoryVersionOutput, NoteListOutput,
-    NoteOutput, PlaceInfo, PlacesOutput, SearchOutput, TagInfo, TagsOutput, TemplateListOutput,
-    TemplateOutput, TimelineDatesOutput, TimelineOutput, UpdatedNoteOutput,
+    ContextInfo, CreatedNoteOutput, EntryInfo, GlyphListOutput, HistoryOutput,
+    HistoryVersionOutput, NoteListOutput, NoteOutput, PlaceInfo, PlacesOutput, SavedGlyphOutput,
+    SearchOutput, TagInfo, TagsOutput, TemplateListOutput, TemplateOutput, TimelineDatesOutput,
+    TimelineOutput, UpdatedNoteOutput,
 };
 
 /// 範囲読みの 1 回あたりの上限。日記は年単位で溜まるので、青天井にすると
@@ -34,17 +37,21 @@ local time, GPS coordinates when available, battery, network, and which \
 device wrote it. Use `read_timeline_range` to pull entries for a period, \
 `list_places` to see where records were written, and `search` to find text. \
 Timeline times are the device's local wall-clock time without a UTC offset; \
-note times are RFC 3339 with the offset. When write tools are present, \
-every overwrite first saves a copy that `restore_note` can bring back.";
+note times are RFC 3339 with the offset. Bodies may contain `:name:` \
+shortcodes that the app renders as user-registered images (glyphs); \
+`list_glyphs` gives the vocabulary, and an unregistered `:name:` stays \
+literal text. When write tools are present, every overwrite first saves a \
+copy that `restore_note` can bring back.";
 
 /// 書き込みは頼まれたときだけ出す。公開アプリの MCP が既定で書けると、
 /// 「読ませたつもり」の設定で日記が書き換わる。
-const WRITE_TOOLS: [&str; 5] = [
+const WRITE_TOOLS: [&str; 6] = [
     "create_note",
     "update_note",
     "list_note_history",
     "read_note_history",
     "restore_note",
+    "save_glyph",
 ];
 
 pub(crate) struct McpServer {
@@ -150,7 +157,8 @@ pub(crate) struct RangeParam {
 pub(crate) struct CreateNoteParam {
     /// Markdown body. The first line should be a `# Title` heading — that is
     /// the note's title. Fenced `mermaid` code blocks render as diagrams;
-    /// `[[YYYYMMDD_HHMMSS]]` links another note by filename stem.
+    /// `[[YYYYMMDD_HHMMSS]]` links another note by filename stem; `:name:`
+    /// renders a registered glyph image (see `list_glyphs` for the names).
     body: String,
     /// Tags to record in the frontmatter (without the `#`). Tags written as
     /// `#tag` in the body are picked up automatically.
@@ -163,7 +171,20 @@ pub(crate) struct UpdateNoteParam {
     filename: String,
     /// The complete new Markdown body; replaces the old one. The frontmatter
     /// (creation time, tags, device context) is preserved by the server.
+    /// `:name:` renders a registered glyph image (see `list_glyphs`).
     body: String,
+}
+
+#[derive(Deserialize, schemars::JsonSchema)]
+pub(crate) struct SaveGlyphParam {
+    /// The glyph name: lowercase letters, digits, `_`, `+`, `-`; starts with
+    /// a letter or digit; at most 32 characters. Bodies refer to it as
+    /// `:name:`. Saving an existing name replaces its image.
+    name: String,
+    /// `png` or `svg`
+    format: String,
+    /// The image bytes, standard base64. At most 256 KiB decoded.
+    data_base64: String,
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
@@ -579,6 +600,35 @@ impl McpServer {
         Ok(Json(TemplateOutput {
             body: detail.body,
             tags: detail.tags,
+        }))
+    }
+
+    #[tool(
+        name = "list_glyphs",
+        description = "List the user-registered glyph images and the `:name:` shortcode that renders each one inline in a note or timeline entry"
+    )]
+    fn list_glyphs(&self) -> Result<Json<GlyphListOutput>, String> {
+        let glyphs = magical_merchant_core::list_glyphs(&self.data_dir).map_err(err)?;
+        Ok(Json(GlyphListOutput {
+            glyphs: glyphs.into_iter().map(Into::into).collect(),
+        }))
+    }
+
+    #[tool(
+        name = "save_glyph",
+        description = "Register (or replace) a glyph image under a short name so that `:name:` renders it inline; png or svg, base64, at most 256 KiB"
+    )]
+    fn save_glyph(
+        &self,
+        Parameters(param): Parameters<SaveGlyphParam>,
+    ) -> Result<Json<SavedGlyphOutput>, String> {
+        let name = GlyphName::parse(&param.name).map_err(err)?;
+        let format = GlyphFormat::parse(&param.format).map_err(err)?;
+        let bytes = B64.decode(param.data_base64).map_err(err)?;
+        magical_merchant_core::save_glyph(&self.data_dir, &name, format, &bytes).map_err(err)?;
+        Ok(Json(SavedGlyphOutput {
+            shortcode: format!(":{name}:"),
+            name: name.as_str().to_string(),
         }))
     }
 }
@@ -1043,6 +1093,52 @@ mod tests {
             .unwrap()
             .0;
         assert_eq!(history.snapshots.len(), 2, "the restore also left a copy");
+    }
+
+    const SVG: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\"><circle r=\"4\"/></svg>";
+
+    #[test]
+    fn a_saved_glyph_is_listed_with_its_shortcode() {
+        let tmp = TempDir::new().unwrap();
+        let server = writable(tmp.path());
+
+        let saved = server
+            .save_glyph(Parameters(SaveGlyphParam {
+                name: "236p".to_string(),
+                format: "svg".to_string(),
+                data_base64: B64.encode(SVG),
+            }))
+            .unwrap()
+            .0;
+
+        assert_eq!(saved.shortcode, ":236p:");
+        let listed = server.list_glyphs().unwrap().0;
+        assert_eq!(listed.glyphs.len(), 1);
+        assert_eq!(listed.glyphs[0].name, "236p");
+        assert_eq!(listed.glyphs[0].shortcode, ":236p:");
+        assert_eq!(listed.glyphs[0].format, "svg");
+        assert_eq!(listed.glyphs[0].bytes, SVG.len() as u64);
+        assert!(tmp.path().join("data/glyphs/236p.svg").exists());
+    }
+
+    /// 名前・形式・中身のどれが崩れても、ファイルは生まれない。
+    #[test]
+    fn a_bad_glyph_is_refused_before_anything_is_written() {
+        let tmp = TempDir::new().unwrap();
+        let server = writable(tmp.path());
+        let attempt = |name: &str, format: &str, data: &str| {
+            server.save_glyph(Parameters(SaveGlyphParam {
+                name: name.to_string(),
+                format: format.to_string(),
+                data_base64: data.to_string(),
+            }))
+        };
+
+        assert!(attempt("Bad Name", "svg", &B64.encode(SVG)).is_err());
+        assert!(attempt("ok", "gif", &B64.encode(SVG)).is_err());
+        assert!(attempt("ok", "png", &B64.encode(SVG)).is_err());
+        assert!(attempt("ok", "svg", "not base64!").is_err());
+        assert!(server.list_glyphs().unwrap().0.glyphs.is_empty());
     }
 
     /// 無いノートを update で作らせない。frontmatter を今の時刻ででっち上げた

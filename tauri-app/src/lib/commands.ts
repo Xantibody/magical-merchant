@@ -30,6 +30,21 @@ interface TemplateDetail {
   tags: string[];
 }
 
+/** 登録済みグリフ(特殊文字画像)一覧の 1 件。画像そのものは持たない。 */
+export interface GlyphSummary {
+  name: string;
+  filename: string;
+  /** `png` か `svg`。 */
+  format: string;
+  bytes: number;
+}
+
+/** `:name:` を描くための 1 件。`url` はデータ URL。 */
+interface GlyphAsset {
+  name: string;
+  url: string;
+}
+
 /** テンプレ起動の結果。 */
 interface CreatedNote {
   path: string;
@@ -138,6 +153,12 @@ interface CommandMap {
     args: { filename: string; locale: string } & ClientArgs;
     result: CreatedNote;
   };
+  list_glyphs: { args: void; result: GlyphSummary[] };
+  /** 登録済みグリフを全部データ URL で。本文を描く前に 1 回引いておく。 */
+  read_glyphs: { args: void; result: GlyphAsset[] };
+  /** `format` は `png` か `svg`。中身は base64。 */
+  save_glyph: { args: { name: string; format: string; dataBase64: string }; result: void };
+  delete_glyph: { args: { name: string }; result: void };
   sync_start: { args: void; result: void };
   sync_status: { args: void; result: unknown };
   auth_login: { args: void; result: void };
@@ -150,7 +171,7 @@ interface CommandMap {
 
 export type CommandName = keyof CommandMap;
 
-/** ノート/タイムラインのファイルを書き換えるコマンド。 */
+/** `data/` の下のファイルを書き換えるコマンド。同期の合図になる。 */
 const MUTATING: ReadonlySet<CommandName> = new Set<CommandName>([
   "save_quick_capture",
   "delete_timeline_entry",
@@ -163,6 +184,8 @@ const MUTATING: ReadonlySet<CommandName> = new Set<CommandName>([
   "save_template",
   "delete_template",
   "create_from_template",
+  "save_glyph",
+  "delete_glyph",
 ]);
 
 const mutationListeners = new Set<() => void>();

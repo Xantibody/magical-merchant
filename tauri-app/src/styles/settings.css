@@ -195,6 +195,91 @@
   background: var(--app-ok);
 }
 
+/* ---------------- 特殊文字 ---------------- */
+
+.glyph-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--app-border);
+  border-radius: 9px;
+  background: var(--app-input-bg);
+}
+
+.glyph-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 6px 8px 6px 12px;
+}
+
+.glyph-row + .glyph-row {
+  border-top: 1px solid var(--app-hairline);
+}
+
+/* 縮小表示の枠。本文の 1.2em ではなく、一覧で見分けられる大きさに */
+.glyph-thumb {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: var(--radius-2);
+  background: var(--app-surface);
+}
+
+.glyph-thumb .glyph {
+  height: 24px;
+  max-width: 28px;
+  vertical-align: middle;
+}
+
+.glyph-code {
+  flex: 1;
+  min-width: 0;
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+  color: var(--app-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.glyph-meta {
+  font-size: 12px;
+  color: var(--app-text-faint);
+  white-space: nowrap;
+}
+
+.glyph-remove {
+  color: var(--app-text-faint);
+}
+
+.glyph-remove:hover {
+  color: var(--app-danger);
+}
+
+/* 選択は button-secondary が受け持つ。本物の input は見せない */
+.glyph-file {
+  display: none;
+}
+
+.glyph-form {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.glyph-form-name {
+  flex: 1;
+  min-width: 180px;
+}
+
 .settings-hint,
 .settings-message {
   margin: 0;

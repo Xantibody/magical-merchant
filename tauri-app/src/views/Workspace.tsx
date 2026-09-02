@@ -19,6 +19,7 @@ import NoteMetaPopover from "../components/NoteMetaPopover";
 import TemplatePicker from "../components/TemplatePicker";
 import { typedInvoke } from "../lib/commands";
 import { getDeviceSignals } from "../lib/client-context";
+import { glyphs } from "../lib/glyphs";
 import { useShell } from "../lib/shell";
 import { groupNotes, itemTitle, neighborOf, noteCreatedLabel, toNoteItems } from "../lib/items";
 import type { ItemGroup, NoteItem } from "../lib/items";
@@ -754,7 +755,11 @@ export default function Workspace(): JSX.Element {
                       when={noteView() === "mindmap"}
                       fallback={
                         <>
-                          <MarkdownPreview source={noteBody()} noteTitles={noteTitles()} />
+                          <MarkdownPreview
+                            source={noteBody()}
+                            noteTitles={noteTitles()}
+                            glyphs={glyphs()}
+                          />
                           {/* このノートを指している記録。畳んだ 1 行以上の場所は取らない */}
                           <Show when={(backlinks() ?? []).length > 0}>
                             <details class="backlinks">
@@ -794,6 +799,7 @@ export default function Workspace(): JSX.Element {
                     placeholder={t().notes.bodyPlaceholder}
                     caret={tapCaret()}
                     noteLinks={linkTargets}
+                    glyphs={glyphs}
                     defaultValue={draft()}
                     onChange={(markdown) => {
                       setDraft(markdown);
