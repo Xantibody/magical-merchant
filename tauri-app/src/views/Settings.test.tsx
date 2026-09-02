@@ -94,6 +94,10 @@ function fileInput(): HTMLInputElement {
   return screen.getByLabelText<HTMLInputElement>("画像を追加", { selector: "input" });
 }
 
+function folderInput(): HTMLInputElement {
+  return screen.getByLabelText<HTMLInputElement>("フォルダから追加", { selector: "input" });
+}
+
 describe("Settings › GLYPHS", () => {
   beforeEach(() => {
     saved.length = 0;
@@ -142,6 +146,55 @@ describe("Settings › GLYPHS", () => {
 
     expect(await screen.findByText("PNG か SVG の画像を選んでください")).toBeDefined();
     expect(screen.queryByLabelText("名前")).toBeNull();
+  });
+
+  // フォルダごと選ぶと、名前を訊かずにファイル名で一気に登録する。
+  // 混ざった README は落として、数だけ知らせる
+  it("registers every png and svg in a chosen folder under its file name", async () => {
+    await renderSettings();
+    await waitFor(() => expect(screen.getByText(":236p:")).toBeDefined());
+
+    const files = [
+      new File(["<svg/>"], "623K.svg", { type: "image/svg+xml" }),
+      new File(["png"], "214p.png", { type: "image/png" }),
+      new File(["# moves"], "README.md", { type: "text/markdown" }),
+    ];
+    fireEvent.change(folderInput(), { target: { files } });
+
+    expect(await screen.findByText("2 件を登録(1 件はスキップ)")).toBeDefined();
+    expect(saved.map((glyph) => `${glyph.name}.${glyph.format}`)).toStrictEqual([
+      "623k.svg",
+      "214p.png",
+    ]);
+    expect(screen.queryByLabelText("名前")).toBeNull();
+  });
+
+  // フォルダ選択が出せない WebView のために、複数選択でも同じ道を通る
+  it("registers several files picked at once the same way", async () => {
+    await renderSettings();
+    await waitFor(() => expect(screen.getByText(":236p:")).toBeDefined());
+
+    const files = [
+      new File(["<svg/>"], "623K.svg", { type: "image/svg+xml" }),
+      new File(["png"], "214p.png", { type: "image/png" }),
+    ];
+    fireEvent.change(fileInput(), { target: { files } });
+
+    expect(await screen.findByText("2 件を登録しました")).toBeDefined();
+    expect(saved).toHaveLength(2);
+  });
+
+  // 一枚だけなら、フォルダから選んでも名前を確かめる形のまま
+  it("still asks for the name when the folder holds one image", async () => {
+    await renderSettings();
+    await waitFor(() => expect(screen.getByText(":236p:")).toBeDefined());
+
+    const file = new File(["<svg/>"], "623K.svg", { type: "image/svg+xml" });
+    fireEvent.change(folderInput(), { target: { files: [file] } });
+
+    const name = await screen.findByLabelText<HTMLInputElement>("名前");
+    expect(name.value).toBe("623k");
+    expect(saved).toHaveLength(0);
   });
 
   it("will not save a name that breaks the rule", async () => {

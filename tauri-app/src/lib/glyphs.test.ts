@@ -3,6 +3,7 @@ import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
 import {
   glyphFormatOf,
   glyphs,
+  planGlyphImport,
   isGlyphName,
   loadGlyphs,
   splitGlyphs,
@@ -167,5 +168,85 @@ describe("loadGlyphs", () => {
     await loadGlyphs();
 
     expect(glyphs().has("236p")).toBe(true);
+  });
+});
+
+/** 計画に要るのは名前と大きさだけなので、本物の File は作らない。 */
+const file = (name: string, size = 100) => ({ name, size });
+
+describe("planGlyphImport", () => {
+  it("plans nothing for an empty folder", () => {
+    expect(planGlyphImport([])).toStrictEqual({ ready: [], skipped: [] });
+  });
+
+  it("names one image after its file stem", () => {
+    const png = file("236P.png");
+
+    expect(planGlyphImport([png])).toStrictEqual({
+      ready: [{ name: "236p", format: "png", file: png }],
+      skipped: [],
+    });
+  });
+
+  it("keeps the order of the folder for several images", () => {
+    const plan = planGlyphImport([file("a.png"), file("b.svg"), file("c.PNG")]);
+
+    expect(plan.ready.map((item) => `${item.name}.${item.format}`)).toStrictEqual([
+      "a.png",
+      "b.svg",
+      "c.png",
+    ]);
+    expect(plan.skipped).toStrictEqual([]);
+  });
+
+  // フォルダには README や GIF も混ざる。黙って落とさず、理由を添えて返す
+  it("skips files that are not png or svg", () => {
+    const readme = file("README.md");
+
+    expect(planGlyphImport([readme]).skipped).toStrictEqual([
+      { file: readme, reason: "unsupported" },
+    ]);
+  });
+
+  it("skips an image whose stem makes no usable name", () => {
+    const jp = file("画像.png");
+
+    expect(planGlyphImport([jp]).skipped).toStrictEqual([{ file: jp, reason: "badName" }]);
+  });
+
+  // 同じ名前が二つあるとき、後の方が黙って前を上書きするより、先勝ちで知らせる
+  it("keeps the first of two files that map to the same name", () => {
+    const first = file("236p.png");
+    const second = file("236P.svg");
+    const plan = planGlyphImport([first, second]);
+
+    expect(plan.ready).toStrictEqual([{ name: "236p", format: "png", file: first }]);
+    expect(plan.skipped).toStrictEqual([{ file: second, reason: "duplicate" }]);
+  });
+
+  // core と同じ 256 KiB。IPC で失敗するより先に、ここで理由を見せる
+  it("skips an image over 256 KiB", () => {
+    const big = file("big.png", 256 * 1024 + 1);
+    const edge = file("edge.png", 256 * 1024);
+    const plan = planGlyphImport([big, edge]);
+
+    expect(plan.ready.map((item) => item.name)).toStrictEqual(["edge"]);
+    expect(plan.skipped).toStrictEqual([{ file: big, reason: "tooLarge" }]);
+  });
+
+  // 大きすぎて落ちた方は名前を取らない。次の同名は重複ではなく登録できる
+  it("lets a later file take a name the oversized one did not get", () => {
+    const plan = planGlyphImport([file("236p.png", 1 << 20), file("236p.svg")]);
+
+    expect(plan.ready.map((item) => item.format)).toStrictEqual(["svg"]);
+  });
+
+  // 入れ子のフォルダはパス付きで来ることがある。名前はファイル名だけから作る
+  it("uses only the basename of a nested path", () => {
+    const nested = file("moves/ryu/236P.png");
+
+    expect(planGlyphImport([nested]).ready).toStrictEqual([
+      { name: "236p", format: "png", file: nested },
+    ]);
   });
 });

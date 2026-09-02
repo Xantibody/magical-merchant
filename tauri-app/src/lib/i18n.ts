@@ -197,6 +197,11 @@ const ja = {
       "画像を登録すると、本文に :名前: と書いた場所にその画像が出ます。PNG か SVG、256 KB まで。",
     glyphsEmpty: "まだ登録がありません",
     addGlyph: "画像を追加",
+    addGlyphsFolder: "フォルダから追加",
+    glyphsFolderHint:
+      "フォルダを選ぶと、中の PNG と SVG をファイル名の名前で登録します。同じ名前は上書きされます。data/glyphs/ に直接置いたファイルも読み込まれます。",
+    glyphsImported: (saved: number, skipped: number) =>
+      skipped > 0 ? `${saved} 件を登録(${skipped} 件はスキップ)` : `${saved} 件を登録しました`,
     glyphName: "名前",
     glyphNameHint: "小文字の英数字と _ + - だけ、32 文字まで",
     glyphUnsupported: "PNG か SVG の画像を選んでください",
@@ -455,6 +460,11 @@ const en: Messages = {
       "Register an image and write :name: in a note or entry to show it there. PNG or SVG, up to 256 KB.",
     glyphsEmpty: "Nothing registered yet",
     addGlyph: "Add an image",
+    addGlyphsFolder: "Add a folder",
+    glyphsFolderHint:
+      "Choosing a folder registers every PNG and SVG in it under its file name; an existing name is overwritten. Files placed straight into data/glyphs/ are picked up too.",
+    glyphsImported: (saved: number, skipped: number) =>
+      skipped > 0 ? `Registered ${saved} (skipped ${skipped})` : `Registered ${saved}`,
     glyphName: "Name",
     glyphNameHint: "Lowercase letters, digits, _ + - only; up to 32 characters",
     glyphUnsupported: "Choose a PNG or SVG image",
