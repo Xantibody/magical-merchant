@@ -1,0 +1,77 @@
+/**
+ * 特殊文字(グリフ)。ユーザーが登録した小さな画像に短い名前が付いていて、
+ * 本文の `:name:` がその画像として描かれる。格闘ゲームのコマンド表記
+ * (`:236p:`)のような、文字では書けない記号のためのもの。
+ *
+ * 保存形はあくまで `:name:` の文字列。画像は描くときに名前で引くだけで、
+ * 本文には何も書き込まない — 画像が消えても本文は文字として読める。
+ *
+ * 名前の規則は core の `GlyphName` と同じ。片方を直したらもう片方も直すこと。
+ */
+
+import { createSignal } from "solid-js";
+import { typedInvoke } from "./commands";
+
+/**
+ * 登録された名前しか解決しない前提のための、名前の形。`12:30:45` のような
+ * 時刻や URL の `:` を拾わないよう、一致した名前を登録表で確かめてから
+ * 画像にする。
+ */
+const SHORTCODE = /:([a-z0-9][a-z0-9_+-]{0,31}):/g;
+
+export interface GlyphSegment {
+  text: string;
+  /** グリフなら登録名。地の文なら null。 */
+  name: string | null;
+}
+
+/**
+ * 本文をグリフとそれ以外に切り分ける。`names` に無い `:foo:` は地の文の
+ * まま — 登録の無い名前を画像扱いすると、時刻や URL の一部が消える。
+ */
+export function splitGlyphs(text: string, names: ReadonlySet<string>): GlyphSegment[] {
+  const segments: GlyphSegment[] = [];
+  let last = 0;
+  if (names.size > 0 && text.includes(":")) {
+    // matchAll は正規表現を複製するので lastIndex を戻せない。exec で回す
+    const re = new RegExp(SHORTCODE.source, "g");
+    let match = re.exec(text);
+    while (match !== null) {
+      if (names.has(match[1])) {
+        if (match.index > last) {
+          segments.push({ text: text.slice(last, match.index), name: null });
+        }
+        segments.push({ text: match[0], name: match[1] });
+        last = match.index + match[0].length;
+      } else {
+        // `:foo:236p:` のように、閉じの `:` が次の名前の開きでもある。
+        // 登録の無い候補を読み飛ばすときは、その閉じから探し直す
+        re.lastIndex = match.index + match[0].length - 1;
+      }
+      match = re.exec(text);
+    }
+  }
+  if (last < text.length || segments.length === 0) {
+    segments.push({ text: text.slice(last), name: null });
+  }
+  return segments;
+}
+
+const [registry, setRegistry] = createSignal<ReadonlyMap<string, string>>(new Map());
+
+/** 名前 → データ URL。描く側はこれを引く。 */
+export const glyphs = registry;
+
+/**
+ * 登録表を読み直す。起動時と、同期やグリフの登録・削除のあとに呼ぶ。
+ * 読めなかったときは前の表を保つ — 一瞬でも空にすると、描いてある画像が
+ * 文字に戻ってレイアウトが跳ねる。
+ */
+export async function loadGlyphs(): Promise<void> {
+  try {
+    const assets = await typedInvoke("read_glyphs");
+    setRegistry(new Map(assets.map((asset) => [asset.name, asset.url])));
+  } catch {
+    // 表を持たない旧いコアや、ハーネス外での失敗。文字のまま出るだけ
+  }
+}
