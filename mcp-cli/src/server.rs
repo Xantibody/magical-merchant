@@ -120,8 +120,12 @@ pub(crate) struct FilenameParam {
 
 #[derive(Deserialize, schemars::JsonSchema)]
 pub(crate) struct QueryParam {
-    /// Substring to look for; matching ignores case
+    /// Substring to look for; matching ignores case. May be empty when `tags` is given
     query: String,
+    /// Only records carrying every one of these `#tags` (with or without the `#`,
+    /// case-insensitive). With an empty `query`, lists every record carrying them
+    #[serde(default)]
+    tags: Vec<String>,
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
@@ -268,14 +272,14 @@ impl McpServer {
 
     #[tool(
         name = "search",
-        description = "Search notes and timeline entries for a substring, ignoring case; newest first"
+        description = "Search notes and timeline entries for a substring, ignoring case; newest first. Pass `tags` to search only records carrying every listed #tag, or `tags` with an empty query to list every record carrying them"
     )]
     fn search(
         &self,
         Parameters(param): Parameters<QueryParam>,
     ) -> Result<Json<SearchOutput>, String> {
-        let hits =
-            magical_merchant_core::search_all(&self.data_dir, &param.query, &[]).map_err(err)?;
+        let hits = magical_merchant_core::search_all(&self.data_dir, &param.query, &param.tags)
+            .map_err(err)?;
         Ok(Json(SearchOutput {
             hits: hits.into_iter().map(Into::into).collect(),
         }))
