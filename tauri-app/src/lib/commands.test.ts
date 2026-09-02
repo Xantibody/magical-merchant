@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
 import type { ClientContext } from "./client-context";
-import { onLocalMutation, typedInvoke } from "./commands";
+import { isStaleSave, onLocalMutation, typedInvoke } from "./commands";
 
 // vi.mock("@tauri-apps/api/core") は使わない。browser mode のモジュールモックは
 // サーバー側の単一レジストリ越しに差し替えるため、並列実行下でモックが適用され
@@ -63,5 +63,15 @@ describe("typedInvoke local mutation notifications", () => {
     stop();
     await typedInvoke("update_draft", { filePath: "a.md", body: "x", client: CLIENT });
     expect(seen).toHaveLength(0);
+  });
+});
+
+describe("isStaleSave", () => {
+  // update_draft の失敗は kind 付きで届く。stale だけが「読み直して知らせる」に分岐する
+  it("recognises the stale kind and nothing else", () => {
+    expect(isStaleSave({ kind: "stale", message: "Stale: a.md changed" })).toBe(true);
+    expect(isStaleSave({ kind: "other", message: "disk full" })).toBe(false);
+    expect(isStaleSave(new Error("stale"))).toBe(false);
+    expect(isStaleSave("stale")).toBe(false);
   });
 });

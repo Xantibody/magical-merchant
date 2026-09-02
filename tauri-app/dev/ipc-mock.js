@@ -282,6 +282,15 @@
 
   const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+  // core の Revision の代わり。本文が同じなら同じ値、違えば違う値になれば足りる
+  const revisionOf = (body) => {
+    let hash = 5381;
+    for (const ch of body) {
+      hash = ((hash * 33) ^ ch.codePointAt(0)) >>> 0;
+    }
+    return hash.toString(16);
+  };
+
   const placeKey = (lat, lon) => `${lat.toFixed(2)},${lon.toFixed(2)}`;
 
   const commands = {
@@ -407,7 +416,8 @@
     read_note: async ({ filename }) => {
       // ディスク読みの往復ぶん。ノート切替の描画順の検証に効く
       await delay(30);
-      return notes.get(filename)?.body ?? "";
+      const body = notes.get(filename)?.body ?? "";
+      return { body, revision: revisionOf(body) };
     },
     read_note_meta: async ({ filename }) => {
       await delay(30);
@@ -456,14 +466,20 @@
       });
       return `/mock/data/${filename}`;
     },
-    update_draft: ({ filePath, body }) => {
+    update_draft: ({ filePath, body, revision }) => {
       const filename = filePath.split("/").at(-1);
       const note = notes.get(filename);
-      if (note) {
-        note.body = body;
-        // core と同じく、本文の保存だけが更新日時を打つ
-        note.updated = new Date().toISOString();
+      if (!note) {
+        throw { kind: "other", message: `note not found: ${filename}` };
       }
+      // core と同じ照合。読んでから誰かが書き換えていれば、その上に書かない
+      if (revision != null && revision !== revisionOf(note.body)) {
+        throw { kind: "stale", message: `Stale: ${filename} changed since it was read` };
+      }
+      note.body = body;
+      // core と同じく、本文の保存だけが更新日時を打つ
+      note.updated = new Date().toISOString();
+      return revisionOf(body);
     },
     list_templates: () =>
       [...templates.entries()]
