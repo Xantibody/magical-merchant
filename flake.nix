@@ -150,9 +150,14 @@
           # pnpm-lock.yaml を変えると package.nix の hash が黙って腐り、
           # nix build (= macOS の配布経路) だけが後から壊れる。CI で単体で検証できるよう出す
           pnpm-deps = default.pnpmDeps;
+          # ターミナルから一覧・$EDITOR 編集・MCP サーバーを担う 1 バイナリ。
+          # アプリ本体のツールチェーンは要らない
+          cli = pkgs.callPackage ./nix/cli.nix { };
           # AI クライアントから `nix run github:Xantibody/magical-merchant#mcp` で
-          # 起動する読み取り専用 MCP サーバー。アプリ本体のツールチェーンは要らない
-          mcp = pkgs.callPackage ./nix/mcp.nix { };
+          # 起動する入口。cli を建て直さず、`magical-merchant mcp` を呼ぶだけの薄い皮
+          mcp = pkgs.writeShellScriptBin "magical-merchant-mcp" ''
+            exec "${cli}/bin/magical-merchant" mcp "$@"
+          '';
         };
         formatter = treefmtEval.config.build.wrapper;
         checks.formatting = treefmtEval.config.build.check self;
@@ -210,6 +215,9 @@
           services.magical-merchant.package =
             lib.mkDefault
               self.packages.${pkgs.stdenv.hostPlatform.system}.default;
+          services.magical-merchant.cli.package =
+            lib.mkDefault
+              self.packages.${pkgs.stdenv.hostPlatform.system}.cli;
         };
     };
 }
