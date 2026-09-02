@@ -38,6 +38,15 @@ pub fn templates_dir(base_dir: &Path) -> PathBuf {
     data_dir(base_dir).join(TEMPLATES_DIR)
 }
 
+/// 書き換え前のノートの控えの置き場。
+///
+/// `data/` の外に置く。同期に載せると、書き換えのたびに控えが端末間を
+/// 往復する。控えは戻すためのもので、共有するものではない。
+#[must_use]
+pub fn history_dir(base_dir: &Path) -> PathBuf {
+    base_dir.join("history")
+}
+
 /// 地名キャッシュの置き場。
 ///
 /// `data/` の外に置く。中身は座標から引き直せる派生物でしかなく、同期に

@@ -1,8 +1,10 @@
 pub(crate) mod error;
+mod history;
 mod repair;
 pub(crate) mod repository;
 mod summary;
 
+pub use history::{Snapshot, list_note_history, read_note_history, restore_note, snapshot_note};
 pub(crate) use repository::Notes;
 pub use summary::Summary as NoteSummary;
 
