@@ -12,11 +12,16 @@ interface GlyphRange {
   shortcode: string;
 }
 
+/** コードスパンの中身。プレビューが文字のまま出すところは、ここでも同じ。 */
+function isInlineCode(node: ProseNode): boolean {
+  return node.marks.some((mark) => mark.type.name === "inlineCode");
+}
+
 /** 文書中の、登録済みの `:name:` の位置を集める。 */
 function glyphRanges(doc: ProseNode, glyphs: ReadonlyMap<string, string>): GlyphRange[] {
   const ranges: GlyphRange[] = [];
   doc.descendants((node, pos) => {
-    if (!node.isText || !node.text?.includes(":")) {
+    if (!node.isText || !node.text?.includes(":") || isInlineCode(node)) {
       return;
     }
     let offset = 0;
