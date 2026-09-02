@@ -62,3 +62,7 @@ profiles/
 /design_handoff_timeline_redesign/
 /plan-*.md
 *.zip
+
+# Vitest browser mode leaves failure screenshots next to the test
+.vitest-attachments/
+__screenshots__/
