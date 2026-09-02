@@ -62,6 +62,10 @@ local scan → diff → one `POST /sync/bulk`.
 - Auto sync runs a few seconds after any successful write
 - JWT: macOS Keychain; Android falls back to app-private file (mode 600) —
   keyring's in-memory fallback silently loses tokens
+- TLS: desktop verifies through the OS trust store (rustls-platform-verifier);
+  Android uses `webpki-roots` for the sync client because the platform
+  verifier reports OCSP-less certificates as Revoked
+  (`android_tls::sync_tls_config`, `tauri-app/android-tls/README.md`)
 
 ## Widgets & deep links
 

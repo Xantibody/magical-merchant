@@ -17,6 +17,23 @@ JNI lookup finds no class; without the Rust side the verifier has no `Context`.
 Either way the APK installs, the app opens, and only **sync** breaks — with a
 certificate error that says nothing about the real cause.
 
+## Currently bypassed for sync
+
+The wiring above is in place and initialises, but the sync client does not
+use it yet. Android's revocation checker throws for any certificate without
+an OCSP responder, and the Kotlin half maps every such exception to
+`Revoked`; Let's Encrypt, Google Trust Services and SSL.com — every CA
+Cloudflare can issue from — dropped OCSP in 2025, so sync failed with
+`invalid peer certificate: Revoked` on every device. Until upstream ships
+its fix (an allowlist of CRL hosts in the `.aar` manifest — see
+[rustls-platform-verifier#221] and [#179]), `android_tls::sync_tls_config`
+builds the sync client's TLS config from `webpki-roots` instead. Remove that
+function and the `rustls` / `webpki-roots` dependencies once the platform
+verifier verifies the sync host again; everything else here stays as is.
+
+[rustls-platform-verifier#221]: https://github.com/rustls/rustls-platform-verifier/issues/221
+[#179]: https://github.com/rustls/rustls-platform-verifier/pull/179
+
 ## Why a patcher
 
 `src-tauri/gen/android/` is gitignored and recreated by `tauri android init`,
