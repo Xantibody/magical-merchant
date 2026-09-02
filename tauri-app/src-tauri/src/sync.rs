@@ -163,7 +163,7 @@ impl HttpClient {
             .header("Authorization", self.auth())
             .send()
             .await
-            .map_err(|e| SyncErrorInfo::new("network", format!("Network error: {e}")))?;
+            .map_err(network_error)?;
 
         let resp = check_status(resp, "get_sync_state").await?;
 
@@ -180,7 +180,7 @@ impl HttpClient {
             .json(&req)
             .send()
             .await
-            .map_err(|e| SyncErrorInfo::new("network", format!("Network error: {e}")))?;
+            .map_err(network_error)?;
 
         if resp.status() == reqwest::StatusCode::CONFLICT {
             return Err(SyncErrorInfo::new(
@@ -195,6 +195,24 @@ impl HttpClient {
             .await
             .map_err(|e| SyncErrorInfo::other(format!("Failed to parse bulk response: {e}")))
     }
+}
+
+/// reqwest 0.12 以降の `Display` は「error sending request for url (…)」で
+/// 止まり、DNS・TCP・TLS のどこで落ちたかは `source()` を辿らないと出てこない。
+/// Android の TLS 検証は Java 経由で、ログも無いので、この連鎖が唯一の手がかり。
+fn network_error(e: reqwest::Error) -> SyncErrorInfo {
+    SyncErrorInfo::new("network", format!("Network error: {}", describe(&e)))
+}
+
+fn describe(e: &dyn std::error::Error) -> String {
+    let mut out = e.to_string();
+    let mut cur = e.source();
+    while let Some(s) = cur {
+        out.push_str(": ");
+        out.push_str(&s.to_string());
+        cur = s.source();
+    }
+    out
 }
 
 /// 非成功ステータスを kind 付きエラーに変換する。
@@ -615,6 +633,27 @@ mod tests {
         let info = SyncErrorInfo::other("boom");
         assert_eq!(info.kind, "other");
         assert!(info.message.contains("boom"));
+    }
+
+    #[test]
+    fn describe_walks_the_source_chain() {
+        #[derive(Debug)]
+        struct Outer(std::io::Error);
+        impl std::fmt::Display for Outer {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("error sending request")
+            }
+        }
+        impl std::error::Error for Outer {
+            fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+                Some(&self.0)
+            }
+        }
+        let inner = std::io::Error::other("invalid peer certificate: UnknownIssuer");
+        assert_eq!(
+            describe(&Outer(inner)),
+            "error sending request: invalid peer certificate: UnknownIssuer"
+        );
     }
 
     #[test]
