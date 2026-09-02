@@ -41,6 +41,22 @@ interface MilkdownEditorProps {
   noteLinks?: () => NoteLinkTarget[];
 }
 
+/**
+ * 実際にスクロールしている要素。エディタは中身に合わせて伸びるだけで、
+ * スクロールはプレビューと同じ親(Workspace の .detail-body)が担う。
+ * クラス名で結ばずに overflow を見るのは、この部品を置く側の構造に
+ * 依存させないため。
+ */
+function closestScroller(el: HTMLElement): HTMLElement | undefined {
+  for (let node: HTMLElement | null = el; node; node = node.parentElement) {
+    const { overflowY } = getComputedStyle(node);
+    if (overflowY === "auto" || overflowY === "scroll") {
+      return node;
+    }
+  }
+  return undefined;
+}
+
 export default function MilkdownEditor(props: MilkdownEditorProps): JSX.Element {
   let ref: HTMLDivElement | undefined;
   let editor: Editor | undefined;
@@ -54,10 +70,10 @@ export default function MilkdownEditor(props: MilkdownEditorProps): JSX.Element 
     if (!caret) {
       return;
     }
-    // 入力はすぐ受け付ける(モバイルはここでキーボードが開き始める)。
-    // 編集モードでスクロールするのはプレビューの親ではなく .milkdown-editor
+    // 入力はすぐ受け付ける(モバイルはここでキーボードが開き始める)
     created.action((ctx) => ctx.get(editorViewCtx).focus());
-    const scroller = ref;
+    // scrollTop はプレビューを押した瞬間に同じスクロール要素で測ったもの
+    const scroller = ref ? closestScroller(ref) : undefined;
 
     // コードの装飾や図は create の後から伸びてくる。高さが足りないうちに
     // scrollTop を戻すとクランプされ、同じ座標が別の行を指してしまう。
@@ -86,7 +102,8 @@ export default function MilkdownEditor(props: MilkdownEditorProps): JSX.Element 
       created.action((ctx) => {
         const view = ctx.get(editorViewCtx);
         const found = view.posAtCoords({ left: caret.x, top: caret.y });
-        // プレビューとエディタで行の高さは微妙に違う。外したら末尾に倒す
+        // 幾何はプレビューと揃えてある(workspace.test.ts)が、図の描き直しなどで
+        // 外れることはある。そのときは末尾に倒す
         const selection = found
           ? TextSelection.near(view.state.doc.resolve(found.pos))
           : Selection.atEnd(view.state.doc);

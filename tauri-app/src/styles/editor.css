@@ -1,7 +1,12 @@
+/* エディタ自身はスクロールしない。プレビューと同じく .detail-body に
+   任せる — 自分でスクロールすると .detail-body の余白が固定の額縁になり、
+   押した瞬間のスクロール量を別の要素へ写し替えることになる。
+   短い本文でも余白を押して書き始められるよう、欄いっぱいには伸ばす */
 .milkdown-editor {
+  display: flex;
+  flex-direction: column;
   width: 100%;
-  height: 100%;
-  overflow-y: auto;
+  min-height: 100%;
   cursor: text;
   border: none;
   outline: none;
@@ -19,14 +24,12 @@
   font-family: var(--font-sans);
   line-height: var(--font-lineheight-4);
   color: var(--app-text);
-  min-height: 100%;
   cursor: text;
 }
 
 .milkdown-editor .milkdown {
   display: flex;
   flex-direction: column;
-  height: 100%;
 }
 
 /* ブロックは .milkdown ではなく .ProseMirror の直下に並ぶ。間隔は
