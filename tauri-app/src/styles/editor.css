@@ -1,54 +1,57 @@
+/* エディタ自身はスクロールしない。プレビューと同じく .detail-body に
+   任せる — 自分でスクロールすると .detail-body の余白が固定の額縁になり、
+   押した瞬間のスクロール量を別の要素へ写し替えることになる。
+   短い本文でも余白を押して書き始められるよう、欄いっぱいには伸ばす */
 .milkdown-editor {
+  display: flex;
+  flex-direction: column;
   width: 100%;
-  height: 100%;
-  overflow-y: auto;
+  min-height: 100%;
   cursor: text;
   border: none;
   outline: none;
 }
 
+/* 余白と文字サイズはプレビュー(.markdown-preview)と同じく .detail-body から
+   受け取る。ここで独自に持つと、プレビューを押して編集に入った瞬間に
+   本文がずれて見える(workspace.test.ts が両者の幾何を突き合わせている) */
 .milkdown-editor .milkdown,
 .milkdown-editor .ProseMirror {
   outline: none !important;
   border: none !important;
   box-shadow: none !important;
   flex: 1;
-  padding: var(--size-4) var(--size-5);
   font-family: var(--font-sans);
-  font-size: var(--font-size-2);
   line-height: var(--font-lineheight-4);
   color: var(--app-text);
-  min-height: 100%;
   cursor: text;
 }
 
 .milkdown-editor .milkdown {
   display: flex;
   flex-direction: column;
-  height: 100%;
-  padding: 0;
 }
 
-.milkdown-editor .milkdown > * + * {
+/* ブロックは .milkdown ではなく .ProseMirror の直下に並ぶ。間隔は
+   markdown-preview.css の `.markdown-preview > * + *` と同じ値 */
+.milkdown-editor .ProseMirror > * + * {
   margin-top: var(--size-3);
 }
 
+/* 見出しの行の高さは normalize のまま(プレビューも同じ) */
 .milkdown-editor h1 {
   font-size: var(--font-size-5);
   font-weight: var(--font-weight-7);
-  line-height: var(--font-lineheight-1);
 }
 
 .milkdown-editor h2 {
   font-size: var(--font-size-4);
   font-weight: var(--font-weight-6);
-  line-height: var(--font-lineheight-2);
 }
 
 .milkdown-editor h3 {
   font-size: var(--font-size-3);
   font-weight: var(--font-weight-6);
-  line-height: var(--font-lineheight-2);
 }
 
 .milkdown-editor strong {
@@ -206,7 +209,6 @@
   border-left: 3px solid var(--app-border);
   padding-left: var(--size-3);
   color: var(--app-text-muted);
-  font-style: italic;
 }
 
 .milkdown-editor ul,
