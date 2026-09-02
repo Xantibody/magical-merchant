@@ -101,6 +101,9 @@ language each answer came from. Only the interface changes — what you wrote
 stays exactly as you wrote it, and so do your tags and the coordinates behind
 those place names.
 
+On macOS, Settings → WINDOW adds _Start in fullscreen_: the app opens in the
+native fullscreen (its own Space, like the green button) from the next launch.
+
 ## Sync (optional)
 
 A Cloudflare Worker + R2 backend syncs the Markdown files across devices.

@@ -153,6 +153,42 @@ body {
   cursor: default;
 }
 
+/* ---------------- スイッチ ---------------- */
+
+/* `<label><span>文言</span><input type="checkbox"><span class="switch"></label>`
+   の形で使う。入力を隠すのは置く側(sync-popover-toggle / settings-toggle)の
+   仕事で、ここは見た目だけ */
+.switch {
+  width: 34px;
+  height: 20px;
+  border-radius: 10px;
+  background: var(--app-border);
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.switch::after {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: white;
+  transition: left 0.15s;
+}
+
+input:checked ~ .switch {
+  background: var(--app-accent);
+}
+
+input:checked ~ .switch::after {
+  left: 16px;
+}
+
 /* ---------------- 初回起動 ---------------- */
 
 .first-run-overlay {
