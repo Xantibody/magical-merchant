@@ -19,6 +19,7 @@ import { codeBlockActivePlugin } from "../lib/code-block-active-plugin";
 import { createPlaceholderPlugin } from "../lib/placeholder-plugin";
 import { createNoteLinkPlugin } from "../lib/note-link-plugin";
 import type { NoteLinkTarget } from "../lib/note-link-plugin";
+import { createGlyphPlugin } from "../lib/glyph-plugin";
 import { getShikiTheme } from "../lib/theme";
 import "../styles/editor.css";
 import type { JSX } from "solid-js";
@@ -39,6 +40,8 @@ interface MilkdownEditorProps {
   caret?: CaretPoint;
   /** `[[` の補完候補とチップ表示に使うリンク先。渡したときだけ有効。 */
   noteLinks?: () => NoteLinkTarget[];
+  /** `:name:` を画像で見せるための登録表。渡したときだけ有効。 */
+  glyphs?: () => ReadonlyMap<string, string>;
 }
 
 /**
@@ -170,6 +173,7 @@ export default function MilkdownEditor(props: MilkdownEditorProps): JSX.Element 
       .use(codeBlockActivePlugin)
       .use(props.placeholder ? createPlaceholderPlugin(props.placeholder) : [])
       .use(props.noteLinks ? createNoteLinkPlugin(props.noteLinks) : [])
+      .use(props.glyphs ? createGlyphPlugin(props.glyphs) : [])
       .create();
 
     placeCaret(editor);

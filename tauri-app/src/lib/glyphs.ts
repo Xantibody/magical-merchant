@@ -25,11 +25,14 @@ export interface GlyphSegment {
   name: string | null;
 }
 
+/** 登録の有無を答えられればよい。Set でも、名前をキーにした Map でも通る。 */
+type GlyphNames = Pick<ReadonlySet<string>, "has" | "size">;
+
 /**
  * 本文をグリフとそれ以外に切り分ける。`names` に無い `:foo:` は地の文の
  * まま — 登録の無い名前を画像扱いすると、時刻や URL の一部が消える。
  */
-export function splitGlyphs(text: string, names: ReadonlySet<string>): GlyphSegment[] {
+export function splitGlyphs(text: string, names: GlyphNames): GlyphSegment[] {
   const segments: GlyphSegment[] = [];
   let last = 0;
   if (names.size > 0 && text.includes(":")) {
