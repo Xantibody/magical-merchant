@@ -25,6 +25,9 @@
   search with highlighted matches, exact landing on the note or day
 - **Optional sync** — Cloudflare Workers + R2, conflict-safe, with Android
   home-screen widgets and a read-only MCP server for AI assistants
+- **Your own editor** — a CLI lists notes and opens one in `$EDITOR`; edits
+  go back through the same guarded path as the app, so nothing gets
+  overwritten silently
 - **Japanese and English** — the interface follows your system language and
   can be pinned either way in Settings
 
@@ -62,14 +65,14 @@ More options (nix-darwin module, manual build, Android APK) are in
 
 ## Tech Stack
 
-Rust core (`core/`) shared by the Tauri 2 app, an MCP server (`cli/`),
+Rust core (`core/`) shared by the Tauri 2 app, a CLI + MCP server (`cli/`),
 and benchmarks · SolidJS + Milkdown frontend · Open Props design tokens ·
 Cloudflare Workers + R2 sync (`workers/`) · Nix flake for dev/CI/packaging.
 
 ```
 magical-merchant/
 ├── core/           # Rust core library (framework-independent business logic)
-├── cli/        # MCP server CLI (exposes core as AI assistant tools)
+├── cli/        # Terminal client ($EDITOR editing) + MCP server
 ├── tauri-app/
 │   ├── src/        # SolidJS frontend (TypeScript)
 │   └── src-tauri/  # Tauri 2 backend (Rust)

@@ -23,9 +23,22 @@ description: Rust core crate conventions, Tauri command plumbing, MCP CLI, and t
    browser harness so the gap is visible
 5. If it reads/writes notes: respect storage invariants (sync-storage skill)
 
-## MCP CLI
+## CLI (`cli/`, binary `magical-merchant`)
 
-`cli/` exposes core as read-only MCP tools (`server.rs`; output shapes
+One binary, two jobs. `commands.rs` holds `list` / `show` / `edit` / `new`;
+`edit` writes the body (never the frontmatter) to a scratch file, runs
+`$VISUAL` / `$EDITOR` (`editor.rs`), and writes back only if the body
+changed. `notes.rs` is the shared write path — snapshot, revision check,
+core `update_note` — used by both `edit` and the MCP `update_note` tool;
+never write a note from the CLI or MCP any other way. A refused edit
+(stale, empty, editor failure) keeps the scratch file and prints its path.
+The editor launch is a closure parameter so the flows are unit-tested
+without an editor.
+
+The MCP server runs only under the `mcp` subcommand (a bare invocation
+prints help). `nix run .#mcp` is a wrapper that adds the subcommand.
+
+`server.rs` exposes core as read-only MCP tools (output shapes
 in `output.rs`): `list_notes`, `read_note`, `backlinks`, `search`,
 `list_timeline_dates`, `read_timeline`, `read_timeline_range`, `list_places`,
 `list_tags`, `list_templates`, `read_template`. Timeline entries go out as

@@ -114,12 +114,38 @@ Three home-screen widgets ship with the APK: a Timeline capture bar (writes
 through JNI without launching the app), a "new note" bar, and a recent notes
 list that deep-links into the app.
 
+## Terminal (CLI)
+
+`magical-merchant` is a small command-line client over the same core, for
+the days you would rather write in your own editor:
+
+```sh
+nix run github:Xantibody/magical-merchant#cli -- list
+magical-merchant show                  # the newest note
+magical-merchant edit 20260320_143045  # opens it in $VISUAL / $EDITOR
+echo "# Idea" | magical-merchant new   # or: magical-merchant new --title Idea
+```
+
+`edit` hands the editor the Markdown body only — the frontmatter is the
+app's record and is never shown — and writes it back through the same path
+the MCP tools use: a copy of the previous version goes to `history/` first,
+and the write is refused if the note changed while the editor was open (in
+the app, by a sync, by an agent). Nothing typed is lost: the edited text
+stays in a scratch file whose path is printed. Closing the editor without
+changes writes nothing. The app, in turn, refuses to overwrite a note the
+CLI changed while it was open, reloads it, and keeps the typed text behind
+its Revert button.
+
+The CLI finds the app's data directory on its own; `--data-dir` or
+`MAGICAL_MERCHANT_DATA_DIR` overrides it.
+
 ## AI access (MCP)
 
-`cli` exposes the same core as read-only
+`magical-merchant mcp` exposes the same core as read-only
 [Model Context Protocol](https://modelcontextprotocol.io/) tools for AI
-assistants. It finds the app's data directory on its own, so the usual
-client configuration is just the launch command:
+assistants; `nix run …#mcp` is that command. It finds the app's data
+directory on its own, so the usual client configuration is just the launch
+command:
 
 ```json
 {
@@ -160,12 +186,15 @@ intact on updates; the body is all a client sends.
 
 Every overwrite first saves a full copy of the previous version under
 `<data-dir>/history/` (outside the synced `data/`), so any change an
-assistant makes can be brought back:
+assistant makes can be brought back. `read_note` also returns a `revision`
+of the body; pass it to `update_note` and the write is refused if the note
+changed in between (in the app, from the CLI) instead of overwriting that
+edit:
 
 | Tool                | Description                                                          |
 | ------------------- | -------------------------------------------------------------------- |
 | `create_note`       | Create a note from a Markdown body (first line `# Title`)            |
-| `update_note`       | Replace a note's body; returns the id of the copy saved beforehand   |
+| `update_note`       | Replace a note's body, optionally only if its `revision` still holds |
 | `list_note_history` | List the saved copies of a note, newest first                        |
 | `read_note_history` | Read the body of one saved copy                                      |
 | `restore_note`      | Bring a note back to a saved copy (the current version is saved too) |
