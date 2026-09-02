@@ -10,6 +10,7 @@ import { t } from "../lib/i18n";
 import { isImeComposing } from "../lib/ime";
 import { toNoteItems } from "../lib/items";
 import { countNoteTags, dayJumpHits, recentNoteHits } from "../lib/palette-home";
+import { searchRequest } from "../lib/search-scope";
 import { splitSnippet } from "../lib/snippet-highlight";
 import type { SnippetParts } from "../lib/snippet-highlight";
 
@@ -23,6 +24,8 @@ interface PaletteCommand {
 
 interface CommandPaletteProps {
   commands: PaletteCommand[];
+  /** 開いた画面から引き継ぐ検索の範囲(タグ)。開いた後はパレットの中で外せる。 */
+  scopeTag?: string | null;
   onSelectHit: (hit: SearchHit) => void;
   onClose: () => void;
 }
@@ -42,11 +45,17 @@ interface PaletteSection {
   rows: PaletteRow[];
 }
 
-function searchHits(query: string): Promise<SearchHit[]> {
-  if (!query.trim()) {
+interface SearchSource {
+  query: string;
+  tag: string | null;
+}
+
+function searchHits(source: SearchSource): Promise<SearchHit[]> {
+  const request = searchRequest(source.query, source.tag);
+  if (!request) {
     return Promise.resolve([]);
   }
-  return typedInvoke("search_all", { query });
+  return typedInvoke("search_all", request);
 }
 
 /**
@@ -61,8 +70,23 @@ const HOME_TAG_LIMIT = 6;
 
 export default function CommandPalette(props: CommandPaletteProps): JSX.Element {
   const [query, setQuery] = createSignal("");
+  // 開いた瞬間の範囲を初期値にするだけ。開いている間に外から変わることはない
+  const [scope, setScope] = createSignal<string | null>(props.scopeTag ?? null);
   const [cursor, setCursor] = createSignal(0);
-  const [hits] = createResource(createDebouncedAccessor(query, SEARCH_DEBOUNCE_MS), searchHits);
+  // 打鍵はまとめるが、チップの付け外しは即時に効かせる。1 回の操作で結果が変わる
+  const debouncedQuery = createDebouncedAccessor(query, SEARCH_DEBOUNCE_MS);
+  const [hits] = createResource<SearchHit[], SearchSource>(
+    () => ({ query: debouncedQuery(), tag: scope() }),
+    searchHits,
+  );
+
+  /** 範囲は検索の入り口なので、zero-query でもチップがあれば結果を出す。 */
+  const browsing = (): boolean => Boolean(query().trim() || scope());
+
+  const clearScope = (): void => {
+    setScope(null);
+    setCursor(0);
+  };
 
   // zero-query の入り口。どれも既存の IPC から導出するだけで、開いた瞬間に
   // 1 回読めば足りる
@@ -99,7 +123,7 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
       run: command.run,
     }));
 
-    if (!query().trim()) {
+    if (!browsing()) {
       const entry = home();
       const days: PaletteRow[] = (entry?.days ?? []).map((day) => ({
         key: `day:${day.hit.date}`,
@@ -121,9 +145,11 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
         label: `#${tag.tag}`,
         meta: t().palette.count(tag.count),
         run: () => {
-          // タグは着地先が一つに決まらないので、検索として引き継ぐ
-          setQuery(tag.tag);
+          // タグは着地先が一つに決まらないので、範囲として引き継ぐ。文字列に
+          // すると本文の一致も混ざり、しかもそこから絞って打ち足せない
+          setScope(tag.tag);
           setCursor(0);
+          inputRef?.focus();
         },
       }));
       return [
@@ -142,9 +168,13 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
       highlight: splitSnippet(hit.snippet, hit.match_start, hit.match_len),
       run: () => props.onSelectHit(hit),
     }));
+    // 範囲の中では件数も出す。「この中に何件あるか」が絞り込みの手応えになる
+    const hitsTitle = scope()
+      ? `${t().palette.hits} · ${t().palette.count(hitRows.length)}`
+      : t().palette.hits;
     return [
       { title: t().palette.commands, rows: commands },
-      { title: t().palette.hits, rows: hitRows },
+      { title: hitsTitle, rows: hitRows },
     ].filter((section) => section.rows.length > 0);
   });
 
@@ -156,6 +186,12 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
     if (e.key === "Escape") {
       e.preventDefault();
       props.onClose();
+      return;
+    }
+    // 空の入力欄で Backspace を押したら、その手前にあるチップが消える
+    if (e.key === "Backspace" && !query() && scope()) {
+      e.preventDefault();
+      clearScope();
       return;
     }
     if (e.key === "ArrowDown") {
@@ -192,6 +228,20 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
       <div class="palette" role="dialog" aria-modal="true" aria-label={t().palette.dialogLabel}>
         <div class="palette-input-row">
           <Icon name="magnifying-glass" size={17} />
+          <Show when={scope()}>
+            {(scoped) => (
+              <button
+                type="button"
+                class="tag-chip tag-chip--active palette-scope"
+                title={t().palette.removeScope}
+                aria-label={`${t().palette.scopeTag(scoped())} · ${t().palette.removeScope}`}
+                onClick={clearScope}
+              >
+                #{scoped()}
+                <Icon name="x" size={11} />
+              </button>
+            )}
+          </Show>
           <input
             ref={inputRef}
             type="text"
@@ -251,8 +301,10 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
             )}
           </For>
 
-          <Show when={query().trim() && !hits.loading && !hits()?.length}>
-            <p class="palette-empty">{t().palette.empty}</p>
+          <Show when={browsing() && !hits.loading && !hits()?.length}>
+            <p class="palette-empty">
+              {scope() ? t().palette.emptyScoped(scope() ?? "") : t().palette.empty}
+            </p>
           </Show>
         </div>
       </div>
