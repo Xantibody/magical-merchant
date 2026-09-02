@@ -33,11 +33,12 @@
 
 .markdown-preview pre {
   /* normalize の max-content フィットを解除して本文幅に(editor.css と同じ理由)。
-     padding はタイムラインのカードが窮屈にならないよう既存のまま */
+     padding も editor.css の pre と同じ。違うと編集に入るときにコードブロックの
+     高さが変わり、その下の本文がずれる */
   max-inline-size: none;
   width: 100%;
   background: var(--app-surface-2);
-  padding: var(--size-3);
+  padding: var(--size-5);
   border-radius: var(--radius-2);
   overflow-x: auto;
 }
@@ -45,6 +46,10 @@
 .markdown-preview pre code {
   background: none;
   padding: 0;
+  /* editor.css と同じくブロックにする。インラインのままだと pre 自身の
+     行の高さ(strut)が乗り、コードブロックがエディタより数 px 高くなる */
+  display: block;
+  min-height: 1em;
 }
 
 .markdown-preview blockquote {
@@ -70,11 +75,11 @@
 }
 
 /* Mermaid: 図は本文のように折り返せないので、幅に合わせて縮めて置く。
-   mermaid が SVG に付ける max-width が原寸なので、拡大はされない */
+   mermaid が SVG に付ける max-width が原寸なので、拡大はされない。
+   上下の間隔は他のブロックと同じ(エディタで図だけを見せる状態と揃える) */
 .markdown-preview .mermaid-block {
   display: flex;
   justify-content: center;
-  margin-block: var(--size-4);
   cursor: zoom-in;
 }
 
@@ -121,17 +126,21 @@
 
 /* Shiki dual theme: data-theme に応じて CSS 変数で配色を切り替える。
    下地は Shiki のテーマ色ではなく .markdown-preview pre の --app-surface-2 に
-   任せる。インラインコードや mermaid の図と同じ下地に揃える (#75) */
+   任せる。インラインコードや mermaid の図と同じ下地に揃える (#75)。
+   transparent は span にだけ当てる — pre.shiki 自身にも当てると詳細度で
+   .markdown-preview pre に勝ち、下地が消えて編集に入った瞬間に箱が現れる */
 .markdown-preview .shiki,
 .markdown-preview .shiki span {
   color: var(--shiki-light);
+}
+
+.markdown-preview .shiki span {
   background-color: transparent;
 }
 
 [data-theme="dark"] .markdown-preview .shiki,
 [data-theme="dark"] .markdown-preview .shiki span {
   color: var(--shiki-dark);
-  background-color: transparent;
 }
 
 /* ---- ノート間リンク。タイトルで描かれ、押すとそのノートが開く ---- */
