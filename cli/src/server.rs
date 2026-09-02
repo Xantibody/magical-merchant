@@ -427,7 +427,7 @@ impl McpServer {
         }
 
         let mut places: Vec<PlaceInfo> = cells.into_values().collect();
-        places.sort_by(|a, b| (b.entries + b.notes).cmp(&(a.entries + a.notes)));
+        places.sort_by_key(|p| std::cmp::Reverse(p.entries + p.notes));
         Ok(Json(PlacesOutput { places }))
     }
 
@@ -458,7 +458,7 @@ impl McpServer {
                 entries,
             })
             .collect();
-        tags.sort_by(|a, b| (b.notes + b.entries).cmp(&(a.notes + a.entries)));
+        tags.sort_by_key(|t| std::cmp::Reverse(t.notes + t.entries));
         Ok(Json(TagsOutput { tags }))
     }
 
@@ -635,13 +635,13 @@ impl ServerHandler for McpServer {
         info
     }
 
-    async fn list_tools(
+    fn list_tools(
         &self,
         _request: Option<PaginatedRequestParams>,
         _context: RequestContext<RoleServer>,
-    ) -> Result<ListToolsResult, ErrorData> {
+    ) -> impl std::future::Future<Output = Result<ListToolsResult, ErrorData>> + Send + '_ {
         let items = self.tool_router.list_all();
-        Ok(ListToolsResult::with_all_items(items))
+        std::future::ready(Ok(ListToolsResult::with_all_items(items)))
     }
 
     async fn call_tool(
