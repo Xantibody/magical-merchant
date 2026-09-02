@@ -28,7 +28,7 @@ fn search(c: &mut Criterion) {
         ("common", fixture::COMMON_NEEDLE),
     ] {
         group.bench_with_input(BenchmarkId::from_parameter(label), needle, |b, needle| {
-            b.iter(|| search_all(black_box(base), black_box(needle)).unwrap());
+            b.iter(|| search_all(black_box(base), black_box(needle), &[]).unwrap());
         });
     }
     group.finish();

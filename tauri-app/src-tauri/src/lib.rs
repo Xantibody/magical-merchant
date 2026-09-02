@@ -263,7 +263,7 @@ async fn resolve_places(
 #[tauri::command]
 fn search_all(handle: AppHandle, query: String) -> Result<Vec<SearchHit>, String> {
     let base_dir = app_base_dir(&handle)?;
-    magical_merchant_core::search_all(&base_dir, &query).map_err(|e| e.to_string())
+    magical_merchant_core::search_all(&base_dir, &query, &[]).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
