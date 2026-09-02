@@ -7,9 +7,10 @@ mod editor;
 mod notes;
 mod output;
 mod server;
+mod timeline;
 
 use std::io::{IsTerminal, Read as _, Write as _};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use clap::{Parser, Subcommand};
 use rmcp::ServiceExt;
@@ -59,6 +60,9 @@ enum Command {
         #[arg(long)]
         title: Option<String>,
     },
+    /// Read the Timeline or append to today's
+    #[command(subcommand)]
+    Timeline(TimelineCommand),
     /// Serve the journal to an AI client over MCP (stdio)
     Mcp {
         /// Preferred language for place names (`ja` or `en`). Falls back to
@@ -71,6 +75,24 @@ enum Command {
         #[arg(long, env = "MAGICAL_MERCHANT_ALLOW_WRITE")]
         allow_write: bool,
     },
+}
+
+#[derive(Subcommand)]
+enum TimelineCommand {
+    /// Append an entry to today: -m for a one-liner, stdin when piped,
+    /// otherwise $VISUAL / $EDITOR
+    Add {
+        /// The entry text, like `git commit -m`
+        #[arg(short, long)]
+        message: Option<String>,
+    },
+    /// Print one day's entries
+    Show {
+        /// Day to read, `YYYY-MM-DD`; today if omitted
+        date: Option<String>,
+    },
+    /// List the days that have entries, newest first
+    Dates,
 }
 
 /// アプリが書いている場所を、引数なしでも見つける。公開アプリの MCP に
@@ -148,6 +170,7 @@ async fn main() -> anyhow::Result<()> {
                 None => eprintln!("nothing written, no note created"),
             }
         }
+        Command::Timeline(command) => run_timeline(&data_dir, command)?,
         Command::Mcp {
             locale,
             allow_write,
@@ -156,6 +179,53 @@ async fn main() -> anyhow::Result<()> {
             let transport = rmcp::transport::io::stdio();
             let running = server.serve(transport).await?;
             running.waiting().await?;
+        }
+    }
+    Ok(())
+}
+
+fn run_timeline(data_dir: &Path, command: TimelineCommand) -> anyhow::Result<()> {
+    match command {
+        TimelineCommand::Add { message } => {
+            let text = match message {
+                Some(text) => Some(text),
+                None if std::io::stdin().is_terminal() => {
+                    let editor = editor::command_from_env();
+                    commands::write_in_editor(&commands::scratch_dir(), "entry", "", |path| {
+                        editor::open(&editor, path)
+                    })?
+                }
+                None => {
+                    let mut text = String::new();
+                    std::io::stdin().read_to_string(&mut text)?;
+                    Some(text)
+                }
+            };
+            let added = text.is_some_and(|t| timeline::add(data_dir, &t).is_ok_and(|a| a));
+            if added {
+                eprintln!("added to today's timeline");
+            } else {
+                eprintln!("nothing written, no entry added");
+            }
+        }
+        TimelineCommand::Show { date } => {
+            let date = timeline::resolve_date(date.as_deref())?;
+            let mut out = std::io::stdout().lock();
+            for entry in timeline::show(data_dir, date)? {
+                let time = entry
+                    .time
+                    .map_or_else(|| "--:--".to_string(), |t| t.format("%H:%M").to_string());
+                // 複数行のエントリは 2 行目以降を時刻の幅ぶん下げて、どの
+                // エントリの続きかが見えるようにする
+                let text = entry.text.replace('\n', "\n       ");
+                quiet_on_closed_pipe(writeln!(out, "{time}  {text}"))?;
+            }
+        }
+        TimelineCommand::Dates => {
+            let mut out = std::io::stdout().lock();
+            for date in timeline::dates(data_dir)? {
+                quiet_on_closed_pipe(writeln!(out, "{date}"))?;
+            }
         }
     }
     Ok(())

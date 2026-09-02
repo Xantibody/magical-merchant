@@ -33,7 +33,10 @@ core `update_note` — used by both `edit` and the MCP `update_note` tool;
 never write a note from the CLI or MCP any other way. A refused edit
 (stale, empty, editor failure) keeps the scratch file and prints its path.
 The editor launch is a closure parameter so the flows are unit-tested
-without an editor.
+without an editor. `timeline.rs` holds `timeline add / show / dates`;
+`add` only appends (same core call as the Android widget), so it carries
+no revision. Entry editing by index is deliberately absent — an index
+shifts under a concurrent append.
 
 The MCP server runs only under the `mcp` subcommand (a bare invocation
 prints help). `nix run .#mcp` is a wrapper that adds the subcommand.

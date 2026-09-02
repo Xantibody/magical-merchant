@@ -151,16 +151,20 @@ pub(crate) fn create(data_dir: &Path, body: &str) -> Result<Option<NoteFilename>
     NoteFilename::parse(name).map(Some)
 }
 
-/// 空(または `# 題` だけ)の一時ファイルをエディタで開き、書かれていれば
-/// ノートにする。作ってから開くと、閉じただけで空のノートが残る。
-pub(crate) fn compose(
-    data_dir: &Path,
+/// `seed` だけの一時ファイルをエディタで開き、何か書かれていればその全文を
+/// 返す。空のまま・seed のままなら `None`。先に記録を作ってから開くと、
+/// 閉じただけで空の記録が残るので、書かれた後にだけ作る。
+pub(crate) fn write_in_editor(
     scratch: &Path,
+    name: &str,
     seed: &str,
     open: impl FnOnce(&Path) -> Result<(), String>,
-) -> Result<Option<NoteFilename>, EditError> {
+) -> Result<Option<String>, EditError> {
     fs::create_dir_all(scratch).map_err(CoreError::from)?;
-    let scratch_file = scratch.join(format!("new-{}.md", Local::now().format("%Y%m%d_%H%M%S")));
+    let scratch_file = scratch.join(format!(
+        "{name}-{}.md",
+        Local::now().format("%Y%m%d_%H%M%S")
+    ));
     fs::write(&scratch_file, seed).map_err(CoreError::from)?;
 
     if let Err(e) = open(&scratch_file) {
@@ -169,14 +173,26 @@ pub(crate) fn compose(
             kept: scratch_file,
         });
     }
-    let body = fs::read_to_string(&scratch_file).map_err(CoreError::from)?;
-    if body.trim().is_empty() || body == seed {
-        let _ = fs::remove_file(&scratch_file);
+    let text = fs::read_to_string(&scratch_file).map_err(CoreError::from)?;
+    let _ = fs::remove_file(&scratch_file);
+    if text.trim().is_empty() || text == seed {
         return Ok(None);
     }
-    let created = create(data_dir, &body)?;
-    let _ = fs::remove_file(&scratch_file);
-    Ok(created)
+    Ok(Some(text))
+}
+
+/// 空(または `# 題` だけ)の一時ファイルをエディタで開き、書かれていれば
+/// ノートにする。
+pub(crate) fn compose(
+    data_dir: &Path,
+    scratch: &Path,
+    seed: &str,
+    open: impl FnOnce(&Path) -> Result<(), String>,
+) -> Result<Option<NoteFilename>, EditError> {
+    match write_in_editor(scratch, "new", seed, open)? {
+        Some(body) => Ok(create(data_dir, &body)?),
+        None => Ok(None),
+    }
 }
 
 #[cfg(test)]

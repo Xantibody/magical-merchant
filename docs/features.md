@@ -125,6 +125,8 @@ magical-merchant show                  # the newest note
 magical-merchant edit 20260320_143045  # opens it in $VISUAL / $EDITOR
 magical-merchant edit --last           # the newest note; `edit` never guesses
 echo "# Idea" | magical-merchant new   # or: magical-merchant new --title Idea
+magical-merchant timeline add -m "shipped it #work"   # capture; without -m, opens the editor
+magical-merchant timeline show [2026-03-20]           # one day, today if omitted
 ```
 
 `edit` hands the editor the Markdown body only — the frontmatter is the
@@ -136,6 +138,11 @@ stays in a scratch file whose path is printed. Closing the editor without
 changes writes nothing. The app, in turn, refuses to overwrite a note the
 CLI changed while it was open, reloads it, and keeps the typed text behind
 its Revert button.
+
+`timeline add` appends to today through the same core call the Android
+widget uses; it only ever appends, so it needs no revision check. `-m` is
+the one-liner, a pipe is read as the entry, and with neither the editor
+opens.
 
 The CLI finds the app's data directory on its own; `--data-dir` or
 `MAGICAL_MERCHANT_DATA_DIR` overrides it.
