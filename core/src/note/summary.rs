@@ -26,7 +26,7 @@ pub struct Summary {
 impl Summary {
     #[must_use]
     pub fn from_file(path: PathBuf, filename: String, content: &str) -> Self {
-        let (time, mut tags, body, origin, template) =
+        let (time, tags, body, origin, template) =
             if let Ok((fm, body)) = frontmatter::parse::<NoteFrontmatter>(content) {
                 (Some(fm.time), fm.tags, body, fm.origin, fm.template)
             } else {
@@ -35,18 +35,7 @@ impl Summary {
                 (None, Vec::new(), frontmatter::strip(content), None, None)
             };
 
-        // 本文に書かれた `#タグ` が今の入力方法。frontmatter に残っているのは
-        // タグ欄で付けていた頃のもので、消すと過去のノートから分類が消える。
-        // 見せる形は本文側の規則に合わせる — ファイルの中身には手を付けない。
-        for tag in &mut tags {
-            tag.make_ascii_lowercase();
-        }
-        for tag in tags::parse(body) {
-            if !tags.contains(&tag) {
-                tags.push(tag);
-            }
-        }
-
+        let tags = tags::merge(tags, body);
         let preview: String = body.chars().take(100).collect();
 
         Self {
