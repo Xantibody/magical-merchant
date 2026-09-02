@@ -2691,6 +2691,7 @@ dependencies = [
  "objc2-core-location",
  "objc2-foundation",
  "reqwest",
+ "rustls",
  "rustls-platform-verifier",
  "serde",
  "serde_json",
@@ -2704,6 +2705,7 @@ dependencies = [
  "tokio",
  "url",
  "urlencoding",
+ "webpki-roots",
 ]
 
 [[package]]
@@ -4060,6 +4062,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "69f9466fb2c14ea04357e91413efb882e2a6d4a406e625449bc0a5d360d53a21"
 dependencies = [
  "aws-lc-rs",
+ "log",
  "once_cell",
  "rustls-pki-types",
  "rustls-webpki",
@@ -5993,6 +5996,15 @@ name = "webpki-root-certs"
 version = "1.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b96554aa2acc8ccdb7e1c9a58a7a68dd5d13bccc69cd124cb09406db612a1c9b"
+dependencies = [
+ "rustls-pki-types",
+]
+
+[[package]]
+name = "webpki-roots"
+version = "1.0.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7dcd9d09a39985f5344844e66b0c530a33843579125f23e21e9f0f220850f22a"
 dependencies = [
  "rustls-pki-types",
 ]
