@@ -143,7 +143,7 @@ can line the journal up with other time- or location-based data.
 | `list_notes`          | List all notes with tags, a short preview, and their origin         |
 | `read_note`           | Read a note's metadata (time, tags, context) and Markdown body      |
 | `backlinks`           | List the records that link to a note with `[[…]]`                   |
-| `search`              | Search notes and timeline entries                                   |
+| `search`              | Search notes and timeline entries, optionally within a set of tags  |
 | `list_timeline_dates` | List the dates that have timeline entries                           |
 | `read_timeline`       | Read one day's entries with time, text, tags, location, and device  |
 | `read_timeline_range` | Read entries between two days, optionally filtered by tag           |
