@@ -22,6 +22,7 @@
 
   const TEXTS = [
     "朝の散歩で考えた設計メモ #design",
+    "対空は :623k: で取る。起き攻めは :236p: 重ね #fgc",
     "コードレビューの指摘を反映した",
     "mermaid の描画が重い気がするので後で測る #perf",
     "買い物リスト: 牛乳、卵、コーヒー豆",
@@ -149,7 +150,8 @@
         time: "2026-08-13T08:30:00+09:00",
         tags: [],
         view: null,
-        body: "# 短いメモ\n\n今日やることを 3 つだけ。",
+        // グリフ `:236p:` の描画検証用。登録の無い `:foo:` と時刻は文字のまま
+        body: "# 短いメモ\n\n今日やることを 3 つだけ。\n\n- :236p: の入力を安定させる\n- 12:30:45 に :foo: を確認\n- `:236p:` はコードなので文字のまま",
         // 昇格ノートのチップ検証用。3 日前のエントリから育ったことにする
         origin: `${isoDaysAgo(3)}T08:00:00`,
       },
@@ -277,6 +279,20 @@
       .replace(/^#+\s*/, "")
       .trim(),
   });
+
+  // ---- グリフのつくりもの ----
+
+  /** 本物は data:image/svg+xml;base64 で返す。ここも同じ形にしておく。 */
+  const svgDataUrl = (svg) => `data:image/svg+xml;base64,${btoa(svg)}`;
+
+  const glyphSvg = (label, fill) =>
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="${fill}"/><text x="16" y="21" font-size="12" font-family="sans-serif" font-weight="700" text-anchor="middle" fill="#fff">${label}</text></svg>`;
+
+  /** name -> { format, url }。 */
+  const glyphs = new Map([
+    ["236p", { format: "svg", url: svgDataUrl(glyphSvg("236P", "#d9480f")) }],
+    ["623k", { format: "svg", url: svgDataUrl(glyphSvg("623K", "#1c7ed6")) }],
+  ]);
 
   // ---- コマンド実装 ----
 
@@ -529,6 +545,34 @@
         template: name,
       });
       return { path: `/mock/data/${created}`, reused: false };
+    },
+    list_glyphs: () =>
+      [...glyphs.entries()]
+        .map(([name, glyph]) => ({
+          name,
+          filename: `${name}.${glyph.format}`,
+          format: glyph.format,
+          // データ URL の base64 部分のおおよその生バイト数
+          bytes: Math.floor((glyph.url.length - glyph.url.indexOf(",") - 1) * 0.75),
+        }))
+        .toSorted((a, b) => a.name.localeCompare(b.name)),
+    read_glyphs: () =>
+      [...glyphs.entries()]
+        .map(([name, glyph]) => ({ name, url: glyph.url }))
+        .toSorted((a, b) => a.name.localeCompare(b.name)),
+    save_glyph: ({ name, format, dataBase64 }) => {
+      // core と同じ規則。通らない名前は本物でも保存できない
+      if (!/^[a-z0-9][a-z0-9_+-]{0,31}$/.test(name)) {
+        throw new Error(`Invalid path: ${name}`);
+      }
+      if (format !== "png" && format !== "svg") {
+        throw new Error(`Parse error: unsupported glyph format: ${format}`);
+      }
+      const mime = format === "png" ? "image/png" : "image/svg+xml";
+      glyphs.set(name, { format, url: `data:${mime};base64,${dataBase64}` });
+    },
+    delete_glyph: ({ name }) => {
+      glyphs.delete(name);
     },
     sync_start: () => {},
     sync_status: () => ({}),

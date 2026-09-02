@@ -21,6 +21,7 @@ import { firstWidgetAction } from "../lib/widget-actions";
 import type { WidgetAction } from "../lib/widget-actions";
 import { getDeviceSignals, warmLocation } from "../lib/client-context";
 import { applyStartFullscreen } from "../lib/fullscreen";
+import { loadGlyphs } from "../lib/glyphs";
 
 const TABS: RoutePath[] = [ROUTES.TIMELINE, ROUTES.NOTES];
 const BOTTOM_TABS: RoutePath[] = [ROUTES.TIMELINE, ROUTES.NOTES, ROUTES.SETTINGS];
@@ -69,6 +70,14 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
   const openSearch = (): void => {
     shell.openPalette(paletteScopeAt(location.pathname, shell.timelineTag()));
   };
+
+  // グリフの登録表は起動時に 1 回と、データが入れ替わった合図(同期の
+  // 完了など)のたびに読み直す。本文のどこにも画像は書かれていないので、
+  // 表が無いと `:236p:` は文字のまま出る
+  createEffect(() => {
+    shell.dataVersion();
+    void loadGlyphs();
+  });
 
   const newNote = (): void => {
     shell.closePalette();

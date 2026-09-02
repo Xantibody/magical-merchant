@@ -6,6 +6,7 @@ const ICONS = {
   "note-pencil": () => import("@phosphor-icons/core/assets/regular/note-pencil.svg?raw"),
   "check-square": () => import("@phosphor-icons/core/assets/regular/check-square.svg?raw"),
   list: () => import("@phosphor-icons/core/assets/regular/list.svg?raw"),
+  folder: () => import("@phosphor-icons/core/assets/regular/folder.svg?raw"),
   "paper-plane-tilt": () => import("@phosphor-icons/core/assets/regular/paper-plane-tilt.svg?raw"),
   sun: () => import("@phosphor-icons/core/assets/regular/sun.svg?raw"),
   moon: () => import("@phosphor-icons/core/assets/regular/moon.svg?raw"),

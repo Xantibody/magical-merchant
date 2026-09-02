@@ -10,6 +10,8 @@ interface MarkdownPreviewProps {
   source: string;
   /** `[[ID]]` をタイトルで描くための解決表。無ければ保存形のまま出る。 */
   noteTitles?: ReadonlyMap<string, string>;
+  /** `:name:` を画像で描くための登録表。無ければ保存形のまま出る。 */
+  glyphs?: ReadonlyMap<string, string>;
 }
 
 interface ZoomedDiagram {
@@ -65,14 +67,14 @@ export default function MarkdownPreview(props: MarkdownPreviewProps): JSX.Elemen
   createEffect(
     on(
       // mermaid はテーマの色を SVG に焼き込むので、切り替えたら描き直すしかない
-      () => [props.source, resolvedTheme(), props.noteTitles] as const,
-      async ([source, , noteTitles]) => {
+      () => [props.source, resolvedTheme(), props.noteTitles, props.glyphs] as const,
+      async ([source, , noteTitles, glyphs]) => {
         const currentVersion = ++renderVersion;
         if (!source) {
           setHtml("");
           return;
         }
-        const rendered = await renderMarkdown(source, noteTitles);
+        const rendered = await renderMarkdown(source, noteTitles, glyphs);
         if (currentVersion === renderVersion) {
           setHtml(rendered);
         }

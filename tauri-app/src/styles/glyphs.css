@@ -1,0 +1,30 @@
+/* 特殊文字(グリフ)。本文の `:name:` が登録済みの画像として描かれる */
+
+/* 文字と同じ行に収める。高さを文字に合わせ、基線の少し下に沈めると
+   絵文字と同じ見え方になる */
+.glyph {
+  display: inline-block;
+  height: 1.2em;
+  width: auto;
+  vertical-align: -0.25em;
+  user-select: none;
+}
+
+/* ---- エディタの装飾 (note-link-hidden / note-link-source と同じ流儀) ---- */
+
+/* カーソルが離れている間、保存形のテキストは画像の裏に隠れる。
+   display: none にしないのはカーソル移動の位置を壊さないため */
+.glyph-hidden {
+  font-size: 0;
+}
+
+/* カーソルが触れている間は保存形をそのまま見せる */
+.glyph-source {
+  background: var(--app-accent-soft);
+  border-radius: 3px;
+}
+
+/* エディタの画像は押すと保存形が開く */
+.milkdown-editor .glyph {
+  cursor: pointer;
+}

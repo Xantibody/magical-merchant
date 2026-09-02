@@ -1,5 +1,6 @@
 import MarkdownIt from "markdown-it";
 import type { Env, MarkdownIt as MarkdownItInstance } from "markdown-it";
+import { glyphPlugin } from "./glyph-markdown";
 import { renderDiagrams } from "./mermaid";
 import { noteLinkPlugin } from "./note-link-markdown";
 import { isPreservedEmptyLine } from "./preserved-empty-line";
@@ -37,6 +38,7 @@ function createRenderer(): MarkdownItInstance {
   renderer.use(tagPlugin);
   renderer.use(preservedEmptyLinePlugin);
   renderer.use(noteLinkPlugin);
+  renderer.use(glyphPlugin);
   return renderer;
 }
 
@@ -45,8 +47,10 @@ const md = createRenderer();
 export function renderMarkdownSync(
   source: string,
   noteTitles?: ReadonlyMap<string, string>,
+  glyphs?: ReadonlyMap<string, string>,
 ): string {
-  return md.render(source, { noteTitles });
+  const env: RenderEnv = { noteTitles, glyphs };
+  return md.render(source, env);
 }
 
 interface FenceBlock {
@@ -57,6 +61,8 @@ interface FenceBlock {
 interface RenderEnv extends Env {
   __fenceBlocks?: FenceBlock[];
   noteTitles?: ReadonlyMap<string, string>;
+  /** `:name:` → データ URL。無ければ保存形のまま出る。 */
+  glyphs?: ReadonlyMap<string, string>;
 }
 
 const fenceMd = createRenderer();
@@ -157,8 +163,9 @@ function fillSlots(html: string, rendered: string[]): string {
 export async function renderMarkdown(
   source: string,
   noteTitles?: ReadonlyMap<string, string>,
+  glyphs?: ReadonlyMap<string, string>,
 ): Promise<string> {
-  const env: RenderEnv = { noteTitles };
+  const env: RenderEnv = { noteTitles, glyphs };
   const html = fenceMd.render(source, env);
 
   const blocks = env.__fenceBlocks;
