@@ -66,37 +66,25 @@ fetch what they need:
 
 ### Root recipes
 
-| Command              | Description                         | CI  |
-| -------------------- | ----------------------------------- | --- |
-| `just fmt`           | Format all files (`nix fmt`)        | ✓   |
-| `just check`         | Lint + type check (Rust + frontend) | ✓   |
-| `just test`          | Run all tests (Rust + frontend)     | ✓   |
-| `just verify`        | `fmt` → `check` → `test`            |     |
-| `just dev`           | Start Tauri development server      |     |
-| `just android-init`  | Initialize Android target           |     |
-| `just android-dev`   | Development on Android device       |     |
-| `just android-build` | Build Android APK                   |     |
-| `just build`         | Build macOS .app (Apple Silicon)    |     |
+| Command       | Description                         | CI  |
+| ------------- | ----------------------------------- | --- |
+| `just fmt`    | Format all files (`nix fmt`)        | ✓   |
+| `just check`  | Lint + type check (Rust + frontend) | ✓   |
+| `just test`   | Run all tests (Rust + frontend)     | ✓   |
+| `just verify` | `fmt` → `check` → `test`            |     |
+| `just dev`    | Start Tauri development server      |     |
 
-### Android release recipes (`tauri_app::`)
-
-| Command                                   | Description                               |
-| ----------------------------------------- | ----------------------------------------- |
-| `just tauri_app::android-sign-setup`      | Re-inject the signing config into Gradle  |
-| `just tauri_app::android-widget-setup`    | Re-install the home screen widget sources |
-| `just tauri_app::android-build-release`   | Build a signed release APK                |
-| `just tauri_app::android-install-release` | Build and install it over USB             |
+Everything else is reached through its module — `just tauri_app::…`,
+`just rust::…`, `just workers::…`. Run `just --list <module>` to see them.
 
 ### Rust recipes (`rust::`)
 
-| Command                | Description                          | CI  |
-| ---------------------- | ------------------------------------ | --- |
-| `just rust::check`     | `cargo clippy` for all Rust crates   | ✓   |
-| `just rust::test`      | `cargo test` for all Rust crates     | ✓   |
-| `just rust::check-app` | `cargo clippy` for core + app crates |     |
-| `just rust::test-app`  | `cargo test` for core + app crates   |     |
-| `just rust::check-cli` | `cargo clippy` for cli crate         |     |
-| `just rust::test-cli`  | `cargo test` for cli crate           |     |
+| Command            | Description                        | CI  |
+| ------------------ | ---------------------------------- | --- |
+| `just rust::check` | `cargo clippy` for all Rust crates | ✓   |
+| `just rust::test`  | `cargo test` for all Rust crates   | ✓   |
+
+Scope a single crate with cargo directly (`cargo test -p magical-merchant-cli`).
 
 ### Frontend recipes (`tauri_app::`)
 
@@ -106,6 +94,25 @@ fetch what they need:
 | `just tauri_app::test`        | Vitest (unit + browser tests)      | ✓   |
 | `just tauri_app::dev`         | Start Tauri development server     |     |
 | `just tauri_app::dev-browser` | Vite + IPC mock in a plain browser |     |
+| `just tauri_app::build`       | Build macOS .app (Apple Silicon)   |     |
+| `just tauri_app::icons`       | Regenerate icons from the SVG      |     |
+
+### Android recipes (`tauri_app::`)
+
+| Command                                     | Description                                         | CI  |
+| ------------------------------------------- | --------------------------------------------------- | --- |
+| `just tauri_app::android-init`              | Generate `gen/android` (runs `icons` + the patches) |     |
+| `just tauri_app::android-setup`             | Re-apply the TLS + widget patches to `gen/android`  |     |
+| `just tauri_app::android-sign-setup`        | Re-inject the signing config into Gradle            |     |
+| `just tauri_app::android-dev`               | Development on a connected device                   |     |
+| `just tauri_app::android-build-debug`       | Build the debug APK                                 | ✓   |
+| `just tauri_app::android-build-release`     | Build a signed release APK                          |     |
+| `just tauri_app::android-install [variant]` | Build and install over USB (`debug` / `release`)    |     |
+
+`android-setup` runs on its own from `android-init` and from both build
+recipes; `android-sign-setup` needs `keystore.properties` and so hangs off
+`android-build-release` only. Call either by hand after regenerating
+`gen/android` some other way.
 
 > [!NOTE]
 > **CI column**: ✓ = recipes executed by GitHub Actions (`ci.yml`). CI uses

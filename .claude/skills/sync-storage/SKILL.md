@@ -71,4 +71,4 @@ local scan → diff → one `POST /sync/bulk`.
   links; handled in AppLayout (`onOpenUrl` + `getCurrent` for cold start);
   note rows navigate with `?file=<filename>`
 - Widget sources live in `tauri-app/android-widget/`, injected by
-  `just android-widget-setup`
+  `just android-setup`
