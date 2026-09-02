@@ -95,7 +95,10 @@ written, and a shortcode inside a code span or fence is left alone. The
 images live under `data/glyphs/` next to the notes, so sync carries them to
 every device; a device that has not received an image yet simply shows the
 text. Names are lowercase (`a-z 0-9 _ + -`, up to 32 characters) and images
-are capped at 256 KB.
+are capped at 256 KB. To register many at once, pick a whole folder (or
+several files) — each PNG/SVG is named after its file stem, an existing name
+is overwritten, and anything unusable is counted as skipped; files dropped
+straight into `data/glyphs/` are picked up as well.
 
 ## Search palette
 

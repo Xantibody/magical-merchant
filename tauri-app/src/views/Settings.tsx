@@ -5,10 +5,17 @@ import { typedInvoke } from "../lib/commands";
 import type { GlyphSummary } from "../lib/commands";
 import { EVENTS } from "../lib/events";
 import { enterFullscreen, readStartFullscreen, writeStartFullscreen } from "../lib/fullscreen";
+import {
+  glyphFormatOf,
+  glyphs,
+  isGlyphName,
+  loadGlyphs,
+  planGlyphImport,
+  suggestGlyphName,
+} from "../lib/glyphs";
 import { applyLocale, readStoredLocale, t } from "../lib/i18n";
 import type { LocalePreference } from "../lib/i18n";
 import { isMacDesktop } from "../lib/platform";
-import { glyphFormatOf, glyphs, isGlyphName, loadGlyphs, suggestGlyphName } from "../lib/glyphs";
 import { isImeComposing } from "../lib/ime";
 import { ROUTES } from "../lib/routes";
 import { useShell } from "../lib/shell";
@@ -53,6 +60,7 @@ export default function Settings(): JSX.Element {
   const [glyphName, setGlyphName] = createSignal("");
   const [savingGlyph, setSavingGlyph] = createSignal(false);
   let fileInput: HTMLInputElement | undefined;
+  let folderInput: HTMLInputElement | undefined;
 
   const flash = (text: string): void => {
     setMessage(text);
@@ -79,6 +87,47 @@ export default function Settings(): JSX.Element {
   const cancelGlyph = (): void => {
     setPendingGlyph(null);
     setGlyphName("");
+  };
+
+  /**
+   * フォルダや複数選択。名前は訊かずファイル名から決めて、まとめて登録する。
+   * 同じ名前は core が置き換えるので上書きになる — ヒントにそう書いてある。
+   */
+  const importGlyphs = async (files: File[]): Promise<void> => {
+    const plan = planGlyphImport(files);
+    setSavingGlyph(true);
+    setMessage("");
+    let savedCount = 0;
+    let failed = 0;
+    try {
+      for (const { name, format, file } of plan.ready) {
+        try {
+          // 一枚ずつ書く。同じフォルダへ一斉に書かせて競わせる理由がない
+          // oxlint-disable-next-line no-await-in-loop
+          await typedInvoke("save_glyph", { name, format, dataBase64: await readAsBase64(file) });
+          savedCount += 1;
+        } catch {
+          // 一枚の失敗で残りを止めない。壊れた SVG が混ざっていても他は登録する
+          failed += 1;
+        }
+      }
+      // 登録表は最後に一度だけ読み直す。一枚ごとに読むと一覧が枚数分跳ねる
+      await refetchGlyphs();
+      await loadGlyphs();
+    } finally {
+      setSavingGlyph(false);
+    }
+    flash(t().settings.glyphsImported(savedCount, plan.skipped.length + failed));
+  };
+
+  // 一枚なら名前を確かめる形のまま。二枚以上でまとめ登録になる
+  const pickGlyphFiles = (list: FileList | null): void => {
+    const files = [...(list ?? [])];
+    if (files.length === 1) {
+      pickGlyphFile(files[0]);
+    } else if (files.length > 1) {
+      void importGlyphs(files);
+    }
   };
 
   const saveGlyph = async (): Promise<void> => {
@@ -333,9 +382,23 @@ export default function Settings(): JSX.Element {
             when={pendingGlyph()}
             fallback={
               <div class="settings-actions">
-                <button type="button" class="button-secondary" onClick={() => fileInput?.click()}>
+                <button
+                  type="button"
+                  class="button-secondary"
+                  disabled={savingGlyph()}
+                  onClick={() => fileInput?.click()}
+                >
                   <Icon name="plus" size={14} />
                   {t().settings.addGlyph}
+                </button>
+                <button
+                  type="button"
+                  class="button-secondary"
+                  disabled={savingGlyph()}
+                  onClick={() => folderInput?.click()}
+                >
+                  <Icon name="folder" size={14} />
+                  {t().settings.addGlyphsFolder}
                 </button>
                 {/* ダイアログのプラグインは入れない。ファイル選択はブラウザで足りる */}
                 <input
@@ -343,10 +406,30 @@ export default function Settings(): JSX.Element {
                   type="file"
                   class="glyph-file"
                   accept=".png,.svg,image/png,image/svg+xml"
+                  multiple
                   aria-label={t().settings.addGlyph}
                   onChange={(e) => {
-                    pickGlyphFile(e.currentTarget.files?.[0]);
+                    pickGlyphFiles(e.currentTarget.files);
                     // 同じファイルを選び直しても change が飛ぶように
+                    e.currentTarget.value = "";
+                  }}
+                />
+                {/* webkitdirectory は標準外だが、どのエンジンもフォルダ選択に
+                    これを見る。Solid の JSX 型に無いので ref で付ける。
+                    Android の WebView は出せないことがあるので、上の複数選択の
+                    input も残している。accept はフォルダ選択では効かない —
+                    中身の選別は planGlyphImport がやる */}
+                <input
+                  ref={(el) => {
+                    folderInput = el;
+                    el.setAttribute("webkitdirectory", "");
+                  }}
+                  type="file"
+                  class="glyph-file"
+                  multiple
+                  aria-label={t().settings.addGlyphsFolder}
+                  onChange={(e) => {
+                    pickGlyphFiles(e.currentTarget.files);
                     e.currentTarget.value = "";
                   }}
                 />
@@ -400,6 +483,7 @@ export default function Settings(): JSX.Element {
             )}
           </Show>
           <p class="settings-hint">{t().settings.glyphsHint}</p>
+          <p class="settings-hint">{t().settings.glyphsFolderHint}</p>
         </section>
 
         <section class="settings-section">

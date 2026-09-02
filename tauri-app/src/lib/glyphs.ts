@@ -87,6 +87,69 @@ export function glyphFormatOf(filename: string): "png" | "svg" | null {
   return null;
 }
 
+/** core の `GLYPH_MAX_BYTES` と同じ。片方を直したらもう片方も直すこと。 */
+const GLYPH_MAX_BYTES = 256 * 1024;
+
+type GlyphSkipReason = "unsupported" | "badName" | "duplicate" | "tooLarge";
+
+/** 計画に要るのは名前と大きさだけ。`File` でもテストの素朴な object でも通る。 */
+interface GlyphFileLike {
+  name: string;
+  size: number;
+}
+
+export interface GlyphImportPlan<F extends GlyphFileLike> {
+  ready: { name: string; format: "png" | "svg"; file: F }[];
+  skipped: { file: F; reason: GlyphSkipReason }[];
+}
+
+/** 一枚ぶんの判定。登録できるなら名前と形式、できないなら理由。 */
+function judgeGlyphFile(
+  file: GlyphFileLike,
+  taken: ReadonlySet<string>,
+): { name: string; format: "png" | "svg" } | GlyphSkipReason {
+  // 入れ子のフォルダから来た File は name がファイル名だけだが、
+  // パス付きで来ても名前はファイル名からしか作らない
+  const basename = file.name.replace(/^.*[\\/]/, "");
+  const format = glyphFormatOf(basename);
+  if (!format) {
+    return "unsupported";
+  }
+  const name = suggestGlyphName(basename);
+  if (!isGlyphName(name)) {
+    return "badName";
+  }
+  if (file.size > GLYPH_MAX_BYTES) {
+    return "tooLarge";
+  }
+  if (taken.has(name)) {
+    return "duplicate";
+  }
+  return { name, format };
+}
+
+/**
+ * フォルダごと選ばれた画像を、登録するものと落とすものに分ける。
+ * 落とす側に理由を添えるのは、フォルダには README や GIF も混ざるし、
+ * 名前が作れない画像や 256 KiB 超えを IPC の失敗で知るより、ここで
+ * 数えて見せる方が親切だから。同じ名前は先勝ち — 後の方が黙って
+ * 上書きすると、どちらが残ったか分からない。
+ */
+export function planGlyphImport<F extends GlyphFileLike>(files: readonly F[]): GlyphImportPlan<F> {
+  const plan: GlyphImportPlan<F> = { ready: [], skipped: [] };
+  const taken = new Set<string>();
+  for (const file of files) {
+    const verdict = judgeGlyphFile(file, taken);
+    if (typeof verdict === "string") {
+      plan.skipped.push({ file, reason: verdict });
+    } else {
+      taken.add(verdict.name);
+      plan.ready.push({ ...verdict, file });
+    }
+  }
+  return plan;
+}
+
 const [registry, setRegistry] = createSignal<ReadonlyMap<string, string>>(new Map());
 
 /** 名前 → データ URL。描く側はこれを引く。 */
