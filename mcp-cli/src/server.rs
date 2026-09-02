@@ -2,6 +2,8 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use chrono::NaiveDate;
+use magical_merchant_core::utils::device::Context;
+use magical_merchant_core::utils::frontmatter;
 use magical_merchant_core::utils::paths::place_cache_path;
 use magical_merchant_core::utils::place::{PlaceCache, place_key};
 use magical_merchant_core::{NoteFilename, parse_timeline_entry};
@@ -16,8 +18,9 @@ use rmcp::{ErrorData, RoleServer, ServerHandler, schemars, tool, tool_router};
 use serde::Deserialize;
 
 use crate::output::{
-    ContextInfo, EntryInfo, NoteListOutput, NoteOutput, PlaceInfo, PlacesOutput, SearchOutput,
-    TagInfo, TagsOutput, TemplateListOutput, TemplateOutput, TimelineDatesOutput, TimelineOutput,
+    ContextInfo, CreatedNoteOutput, EntryInfo, HistoryOutput, HistoryVersionOutput, NoteListOutput,
+    NoteOutput, PlaceInfo, PlacesOutput, SearchOutput, TagInfo, TagsOutput, TemplateListOutput,
+    TemplateOutput, TimelineDatesOutput, TimelineOutput, UpdatedNoteOutput,
 };
 
 /// 範囲読みの 1 回あたりの上限。日記は年単位で溜まるので、青天井にすると
@@ -31,7 +34,18 @@ local time, GPS coordinates when available, battery, network, and which \
 device wrote it. Use `read_timeline_range` to pull entries for a period, \
 `list_places` to see where records were written, and `search` to find text. \
 Timeline times are the device's local wall-clock time without a UTC offset; \
-note times are RFC 3339 with the offset.";
+note times are RFC 3339 with the offset. When write tools are present, \
+every overwrite first saves a copy that `restore_note` can bring back.";
+
+/// 書き込みは頼まれたときだけ出す。公開アプリの MCP が既定で書けると、
+/// 「読ませたつもり」の設定で日記が書き換わる。
+const WRITE_TOOLS: [&str; 5] = [
+    "create_note",
+    "update_note",
+    "list_note_history",
+    "read_note_history",
+    "restore_note",
+];
 
 pub(crate) struct McpServer {
     data_dir: PathBuf,
@@ -40,11 +54,29 @@ pub(crate) struct McpServer {
 }
 
 impl McpServer {
-    pub(crate) fn new(data_dir: PathBuf, locale: String) -> Self {
+    pub(crate) fn new(data_dir: PathBuf, locale: String, allow_write: bool) -> Self {
+        let mut tool_router = Self::tool_router();
+        if !allow_write {
+            // 断るのではなく見せない。並んでいるのに毎回断られる道具は、
+            // モデルに「もう一度試す」以外の使い道がない
+            for name in WRITE_TOOLS {
+                tool_router.remove_route(name);
+            }
+        }
         Self {
             data_dir,
             locale,
-            tool_router: Self::tool_router(),
+            tool_router,
+        }
+    }
+
+    /// 書き込み時に記録する端末。座標や電池は MCP から読めないので、
+    /// 分かる範囲(OS と CPU)だけを正直に書く。
+    fn context() -> Context {
+        Context {
+            os: std::env::consts::OS.to_string(),
+            arch: std::env::consts::ARCH.to_string(),
+            ..Context::default()
         }
     }
 
@@ -108,6 +140,34 @@ pub(crate) struct RangeParam {
     tag: Option<String>,
     /// Maximum number of entries to return (default 500)
     limit: Option<usize>,
+}
+
+#[derive(Deserialize, schemars::JsonSchema)]
+pub(crate) struct CreateNoteParam {
+    /// Markdown body. The first line should be a `# Title` heading — that is
+    /// the note's title. Fenced `mermaid` code blocks render as diagrams;
+    /// `[[YYYYMMDD_HHMMSS]]` links another note by filename stem.
+    body: String,
+    /// Tags to record in the frontmatter (without the `#`). Tags written as
+    /// `#tag` in the body are picked up automatically.
+    tags: Option<Vec<String>>,
+}
+
+#[derive(Deserialize, schemars::JsonSchema)]
+pub(crate) struct UpdateNoteParam {
+    /// The note filename, e.g. `20260320_143045.md`
+    filename: String,
+    /// The complete new Markdown body; replaces the old one. The frontmatter
+    /// (creation time, tags, device context) is preserved by the server.
+    body: String,
+}
+
+#[derive(Deserialize, schemars::JsonSchema)]
+pub(crate) struct HistoryParam {
+    /// The note filename, e.g. `20260320_143045.md`
+    filename: String,
+    /// A snapshot id from `list_note_history` or `update_note`
+    id: String,
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
@@ -383,6 +443,113 @@ impl McpServer {
     }
 
     #[tool(
+        name = "create_note",
+        description = "Create a new note from a Markdown body (first line `# Title`); returns its filename"
+    )]
+    fn create_note(
+        &self,
+        Parameters(param): Parameters<CreateNoteParam>,
+    ) -> Result<Json<CreatedNoteOutput>, String> {
+        if param.body.trim().is_empty() {
+            return Err("body is empty".to_string());
+        }
+        let tags = param.tags.unwrap_or_default();
+        let path = magical_merchant_core::create_draft_note(
+            &self.data_dir,
+            &param.body,
+            &tags,
+            &Self::context(),
+        )
+        .map_err(err)?;
+        let filename = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .ok_or_else(|| "created note has no filename".to_string())?;
+        Ok(Json(CreatedNoteOutput {
+            filename: filename.to_string(),
+        }))
+    }
+
+    #[tool(
+        name = "update_note",
+        description = "Replace a note's Markdown body, keeping its frontmatter; a copy of the previous version is saved first and can be brought back with restore_note"
+    )]
+    fn update_note(
+        &self,
+        Parameters(param): Parameters<UpdateNoteParam>,
+    ) -> Result<Json<UpdatedNoteOutput>, String> {
+        let filename = parse_filename(&param.filename)?;
+        if param.body.trim().is_empty() {
+            return Err("body is empty; delete is not offered here".to_string());
+        }
+        let snapshot =
+            magical_merchant_core::snapshot_note(&self.data_dir, &filename).map_err(err)?;
+        // 控えが取れなかった(存在しない)ノートには書かない。update は
+        // 無いファイルを frontmatter ごとでっち上げてしまう
+        let Some(snapshot) = snapshot else {
+            return Err(format!("note not found: {filename}"));
+        };
+        let path =
+            magical_merchant_core::utils::paths::notes_dir(&self.data_dir).join(filename.as_str());
+        magical_merchant_core::update_note(&path, &param.body, &Self::context()).map_err(err)?;
+        Ok(Json(UpdatedNoteOutput {
+            filename: filename.as_str().to_string(),
+            snapshot: Some(snapshot.into()),
+        }))
+    }
+
+    #[tool(
+        name = "list_note_history",
+        description = "List the saved copies of a note taken before each write, newest first"
+    )]
+    fn list_note_history(
+        &self,
+        Parameters(param): Parameters<FilenameParam>,
+    ) -> Result<Json<HistoryOutput>, String> {
+        let filename = parse_filename(&param.filename)?;
+        let snapshots =
+            magical_merchant_core::list_note_history(&self.data_dir, &filename).map_err(err)?;
+        Ok(Json(HistoryOutput {
+            snapshots: snapshots.into_iter().map(Into::into).collect(),
+        }))
+    }
+
+    #[tool(
+        name = "read_note_history",
+        description = "Read the body of one saved copy of a note"
+    )]
+    fn read_note_history(
+        &self,
+        Parameters(param): Parameters<HistoryParam>,
+    ) -> Result<Json<HistoryVersionOutput>, String> {
+        let filename = parse_filename(&param.filename)?;
+        let content =
+            magical_merchant_core::read_note_history(&self.data_dir, &filename, &param.id)
+                .map_err(err)?;
+        Ok(Json(HistoryVersionOutput {
+            id: param.id,
+            body: frontmatter::strip(&content).to_string(),
+        }))
+    }
+
+    #[tool(
+        name = "restore_note",
+        description = "Bring a note back to a saved copy; the current version is saved first so the restore itself can be undone"
+    )]
+    fn restore_note(
+        &self,
+        Parameters(param): Parameters<HistoryParam>,
+    ) -> Result<Json<UpdatedNoteOutput>, String> {
+        let filename = parse_filename(&param.filename)?;
+        let snapshot = magical_merchant_core::restore_note(&self.data_dir, &filename, &param.id)
+            .map_err(err)?;
+        Ok(Json(UpdatedNoteOutput {
+            filename: filename.as_str().to_string(),
+            snapshot: snapshot.map(Into::into),
+        }))
+    }
+
+    #[tool(
         name = "list_templates",
         description = "List the note templates with their tags and first line"
     )]
@@ -510,7 +677,20 @@ mod tests {
     }
 
     fn server(base: &Path) -> McpServer {
-        McpServer::new(base.to_path_buf(), "ja".to_string())
+        McpServer::new(base.to_path_buf(), "ja".to_string(), false)
+    }
+
+    fn writable(base: &Path) -> McpServer {
+        McpServer::new(base.to_path_buf(), "ja".to_string(), true)
+    }
+
+    fn tool_names(server: &McpServer) -> Vec<String> {
+        server
+            .tool_router
+            .list_all()
+            .into_iter()
+            .map(|t| t.name.to_string())
+            .collect()
     }
 
     fn range(server: &McpServer, from: &str, to: &str, tag: Option<&str>) -> TimelineOutput {
@@ -750,5 +930,128 @@ mod tests {
 
         assert!(message.contains("/nonexistent/magical-merchant"));
         assert!(message.contains("--data-dir"));
+    }
+
+    /// 読み取り専用の起動では書く道具が並ばない。断る道具は並べない。
+    #[test]
+    fn write_tools_are_absent_unless_asked_for() {
+        let tmp = TempDir::new().unwrap();
+
+        let read_only = tool_names(&server(tmp.path()));
+        let with_writes = tool_names(&writable(tmp.path()));
+
+        for name in WRITE_TOOLS {
+            assert!(!read_only.contains(&name.to_string()), "{name} leaked");
+            assert!(with_writes.contains(&name.to_string()), "{name} missing");
+        }
+    }
+
+    #[test]
+    fn a_created_note_has_compliant_frontmatter_and_the_given_body() {
+        let tmp = TempDir::new().unwrap();
+
+        let out = writable(tmp.path())
+            .create_note(Parameters(CreateNoteParam {
+                body: "# 図\n```mermaid\ngraph TD; A-->B;\n```".to_string(),
+                tags: Some(vec!["Diagram".to_string()]),
+            }))
+            .unwrap()
+            .0;
+
+        let filename = NoteFilename::parse(&out.filename).unwrap();
+        let meta = magical_merchant_core::read_note_meta(tmp.path(), &filename).unwrap();
+        assert_eq!(meta.tags, vec!["Diagram"]);
+        assert_eq!(meta.context.unwrap().os, std::env::consts::OS);
+        let body = magical_merchant_core::read_note_by_filename(tmp.path(), &filename).unwrap();
+        assert!(body.starts_with("# 図\n```mermaid"));
+    }
+
+    #[test]
+    fn an_empty_body_is_not_a_note() {
+        let tmp = TempDir::new().unwrap();
+
+        let result = writable(tmp.path()).create_note(Parameters(CreateNoteParam {
+            body: "  \n".to_string(),
+            tags: None,
+        }));
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn updating_keeps_the_frontmatter_and_leaves_a_way_back() {
+        let tmp = TempDir::new().unwrap();
+        let server = writable(tmp.path());
+        let created = server
+            .create_note(Parameters(CreateNoteParam {
+                body: "before".to_string(),
+                tags: Some(vec!["keep".to_string()]),
+            }))
+            .unwrap()
+            .0;
+        let filename = NoteFilename::parse(&created.filename).unwrap();
+        let time_before = magical_merchant_core::read_note_meta(tmp.path(), &filename)
+            .unwrap()
+            .time;
+
+        let updated = server
+            .update_note(Parameters(UpdateNoteParam {
+                filename: created.filename.clone(),
+                body: "after".to_string(),
+            }))
+            .unwrap()
+            .0;
+
+        let meta = magical_merchant_core::read_note_meta(tmp.path(), &filename).unwrap();
+        assert_eq!(meta.time, time_before);
+        assert_eq!(meta.tags, vec!["keep"]);
+        assert!(meta.updated.is_some());
+        assert_eq!(
+            magical_merchant_core::read_note_by_filename(tmp.path(), &filename).unwrap(),
+            "after"
+        );
+
+        let snapshot = updated.snapshot.unwrap();
+        let old = server
+            .read_note_history(Parameters(HistoryParam {
+                filename: created.filename.clone(),
+                id: snapshot.id.clone(),
+            }))
+            .unwrap()
+            .0;
+        assert_eq!(old.body, "before");
+
+        server
+            .restore_note(Parameters(HistoryParam {
+                filename: created.filename.clone(),
+                id: snapshot.id,
+            }))
+            .unwrap();
+        assert_eq!(
+            magical_merchant_core::read_note_by_filename(tmp.path(), &filename).unwrap(),
+            "before"
+        );
+        let history = server
+            .list_note_history(Parameters(FilenameParam {
+                filename: created.filename,
+            }))
+            .unwrap()
+            .0;
+        assert_eq!(history.snapshots.len(), 2, "the restore also left a copy");
+    }
+
+    /// 無いノートを update で作らせない。frontmatter を今の時刻ででっち上げた
+    /// ファイルが、要求したのと違う名前で生まれる。
+    #[test]
+    fn updating_a_missing_note_is_refused() {
+        let tmp = TempDir::new().unwrap();
+
+        let result = writable(tmp.path()).update_note(Parameters(UpdateNoteParam {
+            filename: "20260101_000000.md".to_string(),
+            body: "ghost".to_string(),
+        }));
+
+        assert!(result.is_err());
+        assert!(!tmp.path().join("data/notes/20260101_000000.md").exists());
     }
 }
