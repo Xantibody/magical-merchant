@@ -152,10 +152,29 @@ can line the journal up with other time- or location-based data.
 | `list_templates`      | List note templates                                                 |
 | `read_template`       | Read a template's body and tags                                     |
 
-| Flag / variable                            | Description                                                         |
-| ------------------------------------------ | ------------------------------------------------------------------- |
-| `--data-dir` / `MAGICAL_MERCHANT_DATA_DIR` | Override the data directory (default: the app's own data directory) |
-| `--locale` / `MAGICAL_MERCHANT_LOCALE`     | Preferred language for place names, `ja` or `en` (default `en`)     |
+With `--allow-write` the server also offers note-writing tools. Notes are
+plain Markdown, so a body can hold anything the app renders — Mermaid
+diagrams in a fenced `mermaid` block, `[[YYYYMMDD_HHMMSS]]` links to other
+notes, `#tags`. The server writes the frontmatter itself and keeps it
+intact on updates; the body is all a client sends.
+
+Every overwrite first saves a full copy of the previous version under
+`<data-dir>/history/` (outside the synced `data/`), so any change an
+assistant makes can be brought back:
+
+| Tool                | Description                                                          |
+| ------------------- | -------------------------------------------------------------------- |
+| `create_note`       | Create a note from a Markdown body (first line `# Title`)            |
+| `update_note`       | Replace a note's body; returns the id of the copy saved beforehand   |
+| `list_note_history` | List the saved copies of a note, newest first                        |
+| `read_note_history` | Read the body of one saved copy                                      |
+| `restore_note`      | Bring a note back to a saved copy (the current version is saved too) |
+
+| Flag / variable                                  | Description                                                         |
+| ------------------------------------------------ | ------------------------------------------------------------------- |
+| `--data-dir` / `MAGICAL_MERCHANT_DATA_DIR`       | Override the data directory (default: the app's own data directory) |
+| `--locale` / `MAGICAL_MERCHANT_LOCALE`           | Preferred language for place names, `ja` or `en` (default `en`)     |
+| `--allow-write` / `MAGICAL_MERCHANT_ALLOW_WRITE` | Offer the note-writing tools (off by default)                       |
 
 Timeline times are the recording device's local wall-clock time without a
 UTC offset; note times are RFC 3339 with the offset. Place names come from
