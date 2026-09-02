@@ -20,7 +20,7 @@ import TemplatePicker from "../components/TemplatePicker";
 import { typedInvoke } from "../lib/commands";
 import { getDeviceSignals } from "../lib/client-context";
 import { useShell } from "../lib/shell";
-import { groupNotes, itemTitle, noteCreatedLabel, toNoteItems } from "../lib/items";
+import { groupNotes, itemTitle, neighborOf, noteCreatedLabel, toNoteItems } from "../lib/items";
 import type { ItemGroup, NoteItem } from "../lib/items";
 import { readNoteContent, toggledView, viewToFrontmatter } from "../lib/note-view";
 import type { NoteView } from "../lib/note-view";
@@ -509,8 +509,15 @@ export default function Workspace(): JSX.Element {
 
   // ---- 削除 + Undo（5秒は tombstone、経過後に本削除）----
   const remove = (item: NoteItem): void => {
-    setHidden((ids) => [...ids, item.id]);
-    setEditing(false);
+    // 隠す前に隣を決める。selected は一覧から消えた id を先頭へ倒すので、
+    // 何もしないと削除のたびに最上段へ飛ばされる。隣なら目線は動かない。
+    // detailOpen は触らない — 今まで通り、端末が狭ければ隣を開いたままにする
+    const neighbor = neighborOf(visibleItems(), item.id);
+    batch(() => {
+      setHidden((ids) => [...ids, item.id]);
+      setSelectedId(neighbor);
+      setEditing(false);
+    });
 
     const commit = setTimeout(() => {
       void (async () => {
@@ -526,7 +533,12 @@ export default function Workspace(): JSX.Element {
 
     shell.showToast(t().notes.deleted, () => {
       clearTimeout(commit);
-      setHidden((ids) => ids.filter((id) => id !== item.id));
+      batch(() => {
+        setHidden((ids) => ids.filter((id) => id !== item.id));
+        // 取り消しは「消す前」へ戻す操作。隣に残したままだと、戻ったのに
+        // 別のノートを見せられる
+        setSelectedId(item.id);
+      });
     });
   };
 
