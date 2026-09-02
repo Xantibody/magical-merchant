@@ -13,7 +13,7 @@ import Icon from "../components/Icon";
 import CaptureBar from "../components/CaptureBar";
 import CalendarPopover from "../components/CalendarPopover";
 import TagFilter from "../components/TagFilter";
-import TagText from "../components/TagText";
+import TimelineEntry, { OriginChip } from "../components/TimelineEntry";
 import { useNavigate, useSearchParams } from "@solidjs/router";
 import { typedInvoke } from "../lib/commands";
 import { getClientContext } from "../lib/client-context";
@@ -31,8 +31,6 @@ import {
   toTimelineItems,
 } from "../lib/items";
 import type { NoteItem, TimelineItem } from "../lib/items";
-import { createLongPress } from "../lib/long-press";
-import { entryMeta } from "../lib/timeline-meta";
 import { places } from "../lib/places";
 import { ROUTES } from "../lib/routes";
 import { countTags, parseTags } from "../lib/tags";
@@ -72,155 +70,6 @@ async function loadTimeline(extraDates: string[]): Promise<TimelineData> {
     ),
   );
   return { items: days.flat(), dates };
-}
-
-interface OriginChipProps {
-  note: NoteItem;
-  onOpen: (note: NoteItem) => void;
-  onUnlink: (note: NoteItem) => void;
-}
-
-/** 昇格ノートへの入り口。開くのがタップ、繋がりを解くのが隠しアクション。 */
-function OriginChip(props: OriginChipProps): JSX.Element {
-  // モバイルの解除は長押し。PC はホバーで出る × が受ける
-  const press = createLongPress(() => props.onUnlink(props.note));
-
-  return (
-    <span class="origin-chip">
-      <button
-        type="button"
-        class="origin-chip-open long-press"
-        onClick={() => {
-          // 長押しで解除した直後の click で開かない
-          if (press.shouldClick()) {
-            props.onOpen(props.note);
-          }
-        }}
-        onPointerDown={(e) => press.onPointerDown(e)}
-        onPointerUp={() => press.onPointerUp()}
-        onPointerMove={() => press.onPointerMove()}
-        onPointerCancel={() => press.onPointerCancel()}
-        onContextMenu={(e) => press.onContextMenu(e)}
-      >
-        <Icon name="file-text" size={13} />
-        <span class="origin-chip-title">{props.note.title}</span>
-        <span class="origin-chip-arrow" aria-hidden="true">
-          →
-        </span>
-      </button>
-      <button
-        type="button"
-        class="origin-chip-unlink"
-        title={t().timeline.unlink(props.note.title)}
-        aria-label={t().timeline.unlink(props.note.title)}
-        onClick={() => props.onUnlink(props.note)}
-      >
-        <Icon name="x" size={12} />
-      </button>
-    </span>
-  );
-}
-
-interface EntryProps {
-  item: TimelineItem;
-  /** このエントリから育ったノート。チップとして本文の真下に出す。 */
-  notes: NoteItem[];
-  selecting: boolean;
-  selected: boolean;
-  onToggle: () => void;
-  onPromote: () => void;
-  onOpenNote: (note: NoteItem) => void;
-  onUnlinkNote: (note: NoteItem) => void;
-}
-
-function Entry(props: EntryProps): JSX.Element {
-  const meta = createMemo(() => entryMeta(props.item.context, places.nameOf));
-  // モバイルの入り口は長押し。タップには何も割り当てない
-  const press = createLongPress(() => props.onPromote());
-
-  return (
-    <article
-      class="entry"
-      classList={{
-        "entry--selected": props.selected,
-        "entry--promoted": props.notes.length > 0,
-      }}
-    >
-      <span class="entry-time">{props.item.time.slice(0, 5)}</span>
-      <span class="entry-rail" aria-hidden="true">
-        <span class="entry-rail-line" />
-        <span class="entry-rail-dot" />
-      </span>
-
-      <div class="entry-body">
-        <Show when={props.selecting}>
-          {/* 選択モード中だけ本文がクリックできる。押すと選択のトグル */}
-          <button
-            type="button"
-            class="entry-select"
-            aria-pressed={props.selected}
-            onClick={() => props.onToggle()}
-          >
-            <Icon name={props.selected ? "check-circle" : "circle"} size={16} />
-            <span class="entry-select-text">
-              <TagText text={props.item.text} />
-            </span>
-          </button>
-        </Show>
-
-        <Show when={!props.selecting}>
-          {/* 記録は書き換えない。本文は読むだけで、触れる先はノートへの昇格だけ */}
-          <p
-            class="entry-text long-press"
-            onPointerDown={(e) => press.onPointerDown(e)}
-            onPointerUp={() => press.onPointerUp()}
-            onPointerMove={() => press.onPointerMove()}
-            onPointerCancel={() => press.onPointerCancel()}
-            onContextMenu={(e) => press.onContextMenu(e)}
-          >
-            <TagText text={props.item.text} />
-          </p>
-          <Show when={meta().length}>
-            <div class="entry-meta">
-              <For each={meta()}>
-                {(segment) => (
-                  <span class="entry-meta-part">
-                    <Icon name={segment.icon} size={12} />
-                    {segment.label}
-                  </span>
-                )}
-              </For>
-            </div>
-          </Show>
-
-          {/* このエントリから育ったノート。origin の日時で引くので
-              日単位ではなく元の記録の真下に付く */}
-          <Show when={props.notes.length}>
-            <div class="entry-notes">
-              <For each={props.notes}>
-                {(note) => (
-                  <OriginChip note={note} onOpen={props.onOpenNote} onUnlink={props.onUnlinkNote} />
-                )}
-              </For>
-            </div>
-          </Show>
-
-          {/* PC の入り口。隠しアクションの流儀どおり、ホバーでだけ現れる */}
-          <div class="entry-actions">
-            <button
-              type="button"
-              class="icon-button entry-action"
-              title={t().timeline.promote}
-              aria-label={t().timeline.promote}
-              onClick={() => props.onPromote()}
-            >
-              <Icon name="note-pencil" size={15} />
-            </button>
-          </div>
-        </Show>
-      </div>
-    </article>
-  );
 }
 
 function EmptyTimeline(props: { filtered: boolean }): JSX.Element {
@@ -335,8 +184,7 @@ export default function Timeline(): JSX.Element {
     if (typeof day !== "string" || !day) {
       return;
     }
-    setExtraDates((dates) => (dates.includes(day) ? dates : [...dates, day]));
-    setJumpTo(day);
+    jumpToDay(day);
     setSearchParams({ day: undefined }, { replace: true });
   });
 
@@ -591,7 +439,7 @@ export default function Timeline(): JSX.Element {
 
                     <For each={day.items}>
                       {(item) => (
-                        <Entry
+                        <TimelineEntry
                           item={item}
                           notes={notesFor(item)}
                           selecting={selecting()}
@@ -659,8 +507,7 @@ export default function Timeline(): JSX.Element {
             recordedDates={recordedDates()}
             contextsFor={contextsFor}
             onPick={(iso) => {
-              setExtraDates((dates) => (dates.includes(iso) ? dates : [...dates, iso]));
-              setJumpTo(iso);
+              jumpToDay(iso);
               shell.closePopovers();
             }}
           />

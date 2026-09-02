@@ -5,7 +5,6 @@ import {
   daysBetween,
   formatDayHeading,
   formatNoteGroupLabel,
-  formatDateTime,
 } from "./day-labels";
 import { setLocale } from "./i18n";
 
@@ -113,15 +112,5 @@ describe("formatNoteGroupLabel", () => {
 
   it("labels a note with no date", () => {
     expect(formatNoteGroupLabel("", TODAY)).toBe("日付なし");
-  });
-});
-
-describe("formatDateTime", () => {
-  it("drops the seconds", () => {
-    expect(formatDateTime("2026-08-04", "15:27:45")).toBe("2026-08-04 15:27");
-  });
-
-  it("shows the date alone when there is no time", () => {
-    expect(formatDateTime("2026-08-04", "")).toBe("2026-08-04");
   });
 });

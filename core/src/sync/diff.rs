@@ -39,7 +39,6 @@ pub fn compute(
     let remote_map: std::collections::HashMap<&str, &RemoteFile> =
         remote_files.iter().map(|f| (f.key.as_str(), f)).collect();
 
-    // Keys present in either local or remote
     let all_keys: HashSet<&str> = local_keys.union(&remote_keys).copied().collect();
 
     // Keys that were previously synced but are now missing from both

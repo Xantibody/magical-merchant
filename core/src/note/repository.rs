@@ -59,24 +59,8 @@ impl Notes {
         Ok(summaries)
     }
 
-    /// 検証済みのノート名を実ファイルパスに解決する。名前の検証だけでは
-    /// シンボリックリンク越しに notes の外へ出られるので、canonicalize した
-    /// 実体が notes ディレクトリ配下にあることまで確かめる。
     fn existing_note_path(&self, filename: &NoteFilename) -> Result<PathBuf, CoreError> {
-        let fname = filename.as_str();
-        let notes_dir = self.notes_dir();
-        let file_path = notes_dir.join(fname);
-
-        if !file_path.exists() {
-            return Err(CoreError::NotFound(file_path.to_string_lossy().to_string()));
-        }
-
-        let canonical_notes_dir = fs::canonicalize(&notes_dir)?;
-        let canonical_file_path = fs::canonicalize(&file_path)?;
-        if !canonical_file_path.starts_with(&canonical_notes_dir) {
-            return Err(CoreError::PathTraversal(fname.to_string()));
-        }
-        Ok(canonical_file_path)
+        crate::utils::fs::resolve_existing(&self.notes_dir(), filename.as_str())
     }
 
     pub(crate) fn read(&self, filename: &NoteFilename) -> Result<String, CoreError> {
@@ -121,69 +105,58 @@ impl Notes {
         Ok(fm)
     }
 
-    /// time と tags だけを差し替えて書き戻す。本文と context には触れない。
+    /// frontmatter の一部だけを差し替えて書き戻す。本文には触れない。
     ///
     /// frontmatter が読めないファイルは `update` と違って作り直さない。
     /// 本文の保存は失敗させられないが、メタデータ編集はでっち上げた記録を
     /// 書くくらいなら断ったほうがいい。
+    fn edit_frontmatter<F>(&self, filename: &NoteFilename, edit: F) -> Result<(), CoreError>
+    where
+        F: FnOnce(NoteFrontmatter) -> NoteFrontmatter,
+    {
+        let path = self.existing_note_path(filename)?;
+        let content = fs::read_to_string(&path)?;
+        let (existing, body) = frontmatter::parse::<NoteFrontmatter>(&content)?;
+        write_atomic(&path, frontmatter::render(&edit(existing), body)?)?;
+        Ok(())
+    }
+
+    /// time と tags だけを差し替える。context には触れない。
     pub(crate) fn update_meta(
         &self,
         filename: &NoteFilename,
         time: chrono::DateTime<chrono::FixedOffset>,
         tags: &[String],
     ) -> Result<(), CoreError> {
-        let path = self.existing_note_path(filename)?;
-        let content = fs::read_to_string(&path)?;
-        let (existing, body) = frontmatter::parse::<NoteFrontmatter>(&content)?;
-
-        let fm = NoteFrontmatter {
+        self.edit_frontmatter(filename, |existing| NoteFrontmatter {
             time,
             tags: tags.to_vec(),
             ..existing
-        };
-        write_atomic(&path, frontmatter::render(&fm, body)?)?;
-        Ok(())
+        })
     }
 
-    /// 表示モードだけを差し替えて書き戻す。他のメタデータと本文には触れない。
-    ///
-    /// `update_meta` と同じく、frontmatter が読めないファイルには書かない。
-    /// 表示の好みのために壊れた記録を正当化するべきではない。
+    /// 表示モードだけを差し替える。
     pub(crate) fn update_view(
         &self,
         filename: &NoteFilename,
         view: Option<&str>,
     ) -> Result<(), CoreError> {
-        let path = self.existing_note_path(filename)?;
-        let content = fs::read_to_string(&path)?;
-        let (existing, body) = frontmatter::parse::<NoteFrontmatter>(&content)?;
-
-        let fm = NoteFrontmatter {
+        self.edit_frontmatter(filename, |existing| NoteFrontmatter {
             view: view.map(str::to_string),
             ..existing
-        };
-        write_atomic(&path, frontmatter::render(&fm, body)?)?;
-        Ok(())
+        })
     }
 
-    /// 昇格元エントリとの繋がりだけを差し替えて書き戻す。他のメタデータと
-    /// 本文には触れない。`update_view` と同じく、frontmatter が読めない
-    /// ファイルには書かない。
+    /// 昇格元エントリとの繋がりだけを差し替える。
     pub(crate) fn update_origin(
         &self,
         filename: &NoteFilename,
         origin: Option<&str>,
     ) -> Result<(), CoreError> {
-        let path = self.existing_note_path(filename)?;
-        let content = fs::read_to_string(&path)?;
-        let (existing, body) = frontmatter::parse::<NoteFrontmatter>(&content)?;
-
-        let fm = NoteFrontmatter {
+        self.edit_frontmatter(filename, |existing| NoteFrontmatter {
             origin: origin.map(str::to_string),
             ..existing
-        };
-        write_atomic(&path, frontmatter::render(&fm, body)?)?;
-        Ok(())
+        })
     }
 
     pub(crate) fn delete(&self, filename: &NoteFilename) -> Result<(), CoreError> {
