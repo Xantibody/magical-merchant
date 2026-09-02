@@ -46,7 +46,7 @@ jobs:
             rust:
               - 'core/**'
               - 'tauri-app/src-tauri/**'
-              - 'mcp-cli/**'
+              - 'cli/**'
               - 'Cargo.toml'
               - 'Cargo.lock'
               - 'flake.nix'
@@ -85,7 +85,7 @@ jobs:
             # 12 分の APK ビルドが乗る
             nix-mcp:
               - 'nix/mcp.nix'
-              - 'mcp-cli/**'
+              - 'cli/**'
               - 'core/**'
               - 'Cargo.toml'
               - 'Cargo.lock'

@@ -23,7 +23,7 @@ flowchart LR
         Core --> Files
     end
 
-    MCP["mcp-cli<br/>MCP server for AI assistants"] --> Core
+    MCP["cli<br/>MCP server for AI assistants"] --> Core
 
     subgraph Cloud["Cloudflare (optional sync)"]
         Worker["Worker<br/>workers/"]
@@ -37,7 +37,7 @@ flowchart LR
 ```
 
 Three consumers share the same core crate: the desktop/mobile app, the MCP
-server (`mcp-cli`, read-only tools such as `search` and `read_timeline`),
+server (`cli`, read-only tools such as `search` and `read_timeline`),
 and the benchmarks. The core knows nothing about Tauri, HTTP, or the UI —
 it takes a base directory and works on files.
 
@@ -142,7 +142,7 @@ the entry is already on disk.
 | [`tauri-app/src-tauri/`](../tauri-app/src-tauri/src) | Tauri commands, sync HTTP client, OAuth deep-link handling, device context |
 | [`tauri-app/src/`](../tauri-app/src)                 | SolidJS views, Milkdown editor integration, client-side device signals     |
 | [`workers/`](../workers/src)                         | Cloudflare Worker: Google OAuth, JWT, R2-backed bulk sync with ETag CAS    |
-| [`mcp-cli/`](../mcp-cli/src)                         | MCP server exposing read-only core tools to AI assistants                  |
+| [`cli/`](../cli/src)                                 | MCP server exposing read-only core tools to AI assistants                  |
 
 > [!NOTE]
 > UI priorities (simple → lightweight → stylish), the Milkdown plugin

@@ -25,7 +25,7 @@ description: Rust core crate conventions, Tauri command plumbing, MCP CLI, and t
 
 ## MCP CLI
 
-`mcp-cli/` exposes core as read-only MCP tools (`server.rs`; output shapes
+`cli/` exposes core as read-only MCP tools (`server.rs`; output shapes
 in `output.rs`): `list_notes`, `read_note`, `backlinks`, `search`,
 `list_timeline_dates`, `read_timeline`, `read_timeline_range`, `list_places`,
 `list_tags`, `list_templates`, `read_template`. Timeline entries go out as
