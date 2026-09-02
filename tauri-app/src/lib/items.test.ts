@@ -11,6 +11,7 @@ import {
   originKeyOf,
   replaceDayItems,
   planBulkDelete,
+  neighborOf,
 } from "./items";
 import type { Note } from "./commands";
 
@@ -272,5 +273,29 @@ describe("planBulkDelete", () => {
 
   it("returns nothing for an empty selection", () => {
     expect(planBulkDelete([])).toStrictEqual([]);
+  });
+});
+
+const list = (...ids: string[]) => ids.map((id) => ({ id }));
+
+describe("neighborOf", () => {
+  it("has no neighbour when the deleted note was the only one", () => {
+    expect(neighborOf(list("a"), "a")).toBeNull();
+  });
+
+  it("falls to the note below when the first note is deleted", () => {
+    expect(neighborOf(list("a", "b", "c"), "a")).toBe("b");
+  });
+
+  it("moves to the note above when a middle note is deleted", () => {
+    expect(neighborOf(list("a", "b", "c"), "b")).toBe("a");
+  });
+
+  it("moves to the note above when the last note is deleted", () => {
+    expect(neighborOf(list("a", "b", "c"), "c")).toBe("b");
+  });
+
+  it("has no neighbour for an id that is not in the list", () => {
+    expect(neighborOf(list("a", "b"), "zzz")).toBeNull();
   });
 });

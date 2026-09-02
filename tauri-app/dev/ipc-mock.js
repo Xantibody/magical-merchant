@@ -22,6 +22,7 @@
 
   const TEXTS = [
     "朝の散歩で考えた設計メモ #design",
+    "対空は :623k: で取る。起き攻めは :236p: 重ね #fgc",
     "コードレビューの指摘を反映した",
     "mermaid の描画が重い気がするので後で測る #perf",
     "買い物リスト: 牛乳、卵、コーヒー豆",
@@ -149,7 +150,8 @@
         time: "2026-08-13T08:30:00+09:00",
         tags: [],
         view: null,
-        body: "# 短いメモ\n\n今日やることを 3 つだけ。",
+        // グリフ `:236p:` の描画検証用。登録の無い `:foo:` と時刻は文字のまま
+        body: "# 短いメモ\n\n今日やることを 3 つだけ。\n\n- :236p: の入力を安定させる\n- 12:30:45 に :foo: を確認\n- `:236p:` はコードなので文字のまま",
         // 昇格ノートのチップ検証用。3 日前のエントリから育ったことにする
         origin: `${isoDaysAgo(3)}T08:00:00`,
       },
@@ -278,6 +280,20 @@
       .trim(),
   });
 
+  // ---- グリフのつくりもの ----
+
+  /** 本物は data:image/svg+xml;base64 で返す。ここも同じ形にしておく。 */
+  const svgDataUrl = (svg) => `data:image/svg+xml;base64,${btoa(svg)}`;
+
+  const glyphSvg = (label, fill) =>
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="${fill}"/><text x="16" y="21" font-size="12" font-family="sans-serif" font-weight="700" text-anchor="middle" fill="#fff">${label}</text></svg>`;
+
+  /** name -> { format, url }。 */
+  const glyphs = new Map([
+    ["236p", { format: "svg", url: svgDataUrl(glyphSvg("236P", "#d9480f")) }],
+    ["623k", { format: "svg", url: svgDataUrl(glyphSvg("623K", "#1c7ed6")) }],
+  ]);
+
   // ---- コマンド実装 ----
 
   const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -318,15 +334,25 @@
       }
       return answers;
     },
-    search_all: ({ query }) => {
+    search_all: ({ query, tags }) => {
       const needle = query.trim().toLowerCase();
-      if (!needle) {
+      // 本流(core)の utils::tags と同じ規則: `#` の有無と ASCII の大小は見ない
+      const lower = (tag) => tag.replaceAll(/[A-Z]/g, (c) => c.toLowerCase());
+      const scope = tags
+        .map((tag) => lower(tag.trim().replace(/^#/, "")))
+        .filter((tag) => tag.length > 0);
+      if (!needle && scope.length === 0) {
         return [];
       }
+      // lib/tags.ts の TAG と同じ。ここは 1 行しか読まないのでコードは切り分けない
+      const TAG = /(?<![\p{L}\p{N}_-])#([\p{L}\p{N}_-]+)/gu;
+      const parseTags = (text) => [...new Set([...text.matchAll(TAG)].map((m) => lower(m[1])))];
+      const inScope = (own) => scope.every((tag) => own.includes(tag));
       /** 本流(core)と同じ形: 一致の前後を含む抜粋と、文字数の一致位置。 */
       const excerpt = (text) => {
         const flat = text.replaceAll("\n", " ");
-        const at = flat.toLowerCase().indexOf(needle);
+        // タグだけで絞った一覧には光らせる場所がない
+        const at = needle ? flat.toLowerCase().indexOf(needle) : -1;
         if (at === -1) {
           return { snippet: flat.slice(0, 90), match_start: null, match_len: null };
         }
@@ -343,7 +369,8 @@
       for (const [iso, lines] of timeline) {
         lines.forEach((raw, index) => {
           const text = raw.replace(/^- \[\d\d:\d\d:\d\d\] /, "").replace(/ \{.*\}$/, "");
-          if (!text.toLowerCase().includes(needle)) {
+          const own = parseTags(text);
+          if (!text.toLowerCase().includes(needle) || !inScope(own)) {
             return;
           }
           hits.push({
@@ -352,13 +379,13 @@
             date: iso,
             filename: null,
             index,
-            tags: [],
+            tags: own,
             ...excerpt(text),
           });
         });
       }
       for (const [filename, note] of notes) {
-        if (!note.body.toLowerCase().includes(needle)) {
+        if (!note.body.toLowerCase().includes(needle) || !inScope(note.tags)) {
           continue;
         }
         hits.push({
@@ -535,6 +562,34 @@
       });
       return { path: `/mock/data/${created}`, reused: false };
     },
+    list_glyphs: () =>
+      [...glyphs.entries()]
+        .map(([name, glyph]) => ({
+          name,
+          filename: `${name}.${glyph.format}`,
+          format: glyph.format,
+          // データ URL の base64 部分のおおよその生バイト数
+          bytes: Math.floor((glyph.url.length - glyph.url.indexOf(",") - 1) * 0.75),
+        }))
+        .toSorted((a, b) => a.name.localeCompare(b.name)),
+    read_glyphs: () =>
+      [...glyphs.entries()]
+        .map(([name, glyph]) => ({ name, url: glyph.url }))
+        .toSorted((a, b) => a.name.localeCompare(b.name)),
+    save_glyph: ({ name, format, dataBase64 }) => {
+      // core と同じ規則。通らない名前は本物でも保存できない
+      if (!/^[a-z0-9][a-z0-9_+-]{0,31}$/.test(name)) {
+        throw new Error(`Invalid path: ${name}`);
+      }
+      if (format !== "png" && format !== "svg") {
+        throw new Error(`Parse error: unsupported glyph format: ${format}`);
+      }
+      const mime = format === "png" ? "image/png" : "image/svg+xml";
+      glyphs.set(name, { format, url: `data:${mime};base64,${dataBase64}` });
+    },
+    delete_glyph: ({ name }) => {
+      glyphs.delete(name);
+    },
     sync_start: () => {},
     sync_status: () => ({}),
     auth_login: () => {},
@@ -547,6 +602,8 @@
     "plugin:event|listen": () => 1,
     "plugin:event|unlisten": () => null,
     "plugin:deep-link|get_current": () => null,
+    // ブラウザに全画面にする窓は無い。設定を入れても何も起きないのが正しい
+    "plugin:window|set_fullscreen": () => null,
     "plugin:geolocation|check_permissions": () => ({
       location: "denied",
       coarseLocation: "denied",

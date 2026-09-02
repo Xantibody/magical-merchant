@@ -97,8 +97,9 @@ export default function Timeline(): JSX.Element {
   const [extraDates, setExtraDates] = createSignal<string[]>([]);
   /** カレンダーで選ばれた、これから見せたい日。表示できたら消す。 */
   const [jumpTo, setJumpTo] = createSignal<string | null>(null);
-  /** 絞り込み中のタグ。1 つだけ選べる。 */
-  const [tagFilter, setTagFilter] = createSignal<string | null>(null);
+  /** 絞り込み中のタグ。1 つだけ選べる。⌘K に引き継ぐので shell が持つ。 */
+  const tagFilter = shell.timelineTag;
+  const setTagFilter = shell.setTimelineTag;
   /** 選択モード。入っている間だけ本文がクリックで選択できる。 */
   const [selecting, setSelecting] = createSignal(false);
   const [selected, setSelected] = createSignal<ReadonlySet<string>>(new Set());
