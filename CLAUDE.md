@@ -25,7 +25,7 @@ ready to record the moment it opens (widgets exist for exactly this).
 | Editor     | Milkdown (headless) + custom plugins                |
 | Markdown   | markdown-it + Shiki; Mermaid / markmap lazy         |
 | Sync       | Cloudflare Workers + R2 (`workers/`)                |
-| AI access  | MCP server (`mcp-cli/`, read-only tools)            |
+| AI access  | MCP server (`mcp-cli/`, read-only, `nix run .#mcp`) |
 
 ## UI Architecture (current)
 

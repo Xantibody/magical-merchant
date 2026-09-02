@@ -127,7 +127,8 @@ unified formatting for all languages. CI runs `nix fmt -- --fail-on-change`.
 
 | Variable                           | Description                            | Set by       |
 | ---------------------------------- | -------------------------------------- | ------------ |
-| `MAGICAL_MERCHANT_DATA_DIR`        | Data directory path for MCP CLI        | User         |
+| `MAGICAL_MERCHANT_DATA_DIR`        | Data directory for the MCP server      | User         |
+| `MAGICAL_MERCHANT_LOCALE`          | Place-name language for the MCP server | User         |
 | `ANDROID_HOME`                     | Android SDK path                       | Nix devShell |
 | `NDK_HOME`                         | Android NDK path                       | Nix devShell |
 | `PLAYWRIGHT_BROWSERS_PATH`         | Playwright browser path                | Nix devShell |
