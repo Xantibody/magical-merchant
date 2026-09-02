@@ -123,6 +123,7 @@ the days you would rather write in your own editor:
 nix run github:Xantibody/magical-merchant#cli -- list
 magical-merchant show                  # the newest note
 magical-merchant edit 20260320_143045  # opens it in $VISUAL / $EDITOR
+magical-merchant edit --last           # the newest note; `edit` never guesses
 echo "# Idea" | magical-merchant new   # or: magical-merchant new --title Idea
 ```
 
