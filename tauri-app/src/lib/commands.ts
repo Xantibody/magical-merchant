@@ -31,7 +31,7 @@ interface TemplateDetail {
 }
 
 /** 登録済みグリフ(特殊文字画像)一覧の 1 件。画像そのものは持たない。 */
-interface GlyphSummary {
+export interface GlyphSummary {
   name: string;
   filename: string;
   /** `png` か `svg`。 */
