@@ -15,20 +15,5 @@ test: rust::test tauri_app::test workers::test
 
 verify: fmt check test
 
-# --- Dev shortcuts ---
-
+# 毎日叩くのはこれだけなので root に置く。他は `just tauri_app::…` を直接呼ぶ
 dev: tauri_app::dev
-
-icons: tauri_app::icons
-
-android-init: tauri_app::android-init
-
-android-dev: tauri_app::android-dev
-
-android-build: tauri_app::android-build
-
-android-build-debug: tauri_app::android-build-debug
-
-android-install: tauri_app::android-install
-
-build: tauri_app::build

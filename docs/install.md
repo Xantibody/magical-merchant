@@ -71,7 +71,7 @@ and the CLI needs no configuration of its own.
 
 ```sh
 # Build the .app bundle
-just build
+just tauri_app::build
 
 # Copy to Applications
 cp -r "target/release/bundle/macos/Magical Merchant.app" /Applications/
@@ -112,4 +112,4 @@ call into `magical_merchant_core` — the app is never started. The "new note"
 bar (4×1) and the recent notes list (4×2) open the app on
 `magical-merchant://widget/…` deep links. Sources live in
 [`tauri-app/android-widget/`](../tauri-app/android-widget/README.md) and are
-injected into the generated Gradle project by `just android-widget-setup`.
+injected into the generated Gradle project by `just android-setup`.
