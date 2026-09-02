@@ -32,8 +32,16 @@ in `output.rs`): `list_notes`, `read_note`, `backlinks`, `search`,
 values (`parse_timeline_entry` in core), never as raw lines — external
 consumers join on time and location, so keep those fields structured. Place
 names come only from the app's `places.json` cache; the server must stay
-offline. New core read APIs should be considered for MCP exposure; never
-expose writes without discussion. Packaged as `nix run .#mcp` (`nix/mcp.nix`).
+offline. New core read APIs should be considered for MCP exposure.
+
+Write tools (`create_note`, `update_note`, `list_note_history`,
+`read_note_history`, `restore_note`) exist only behind `--allow-write` and
+are removed from the router otherwise — never listed-but-refused. Every
+overwrite goes through `snapshot_note` first (`core/src/note/history.rs`,
+`<base>/history/<stem>/<id>.md`, outside the synced `data/`), and writes
+always use core's note functions so the frontmatter stays compliant. No
+delete tool; do not add one without discussion. Packaged as
+`nix run .#mcp` (`nix/mcp.nix`).
 
 ## Verification
 

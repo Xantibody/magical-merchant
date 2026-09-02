@@ -29,6 +29,11 @@ struct Cli {
     /// whatever language the app has resolved a place in.
     #[arg(long, env = "MAGICAL_MERCHANT_LOCALE", default_value = "en")]
     locale: String,
+
+    /// Also offer the write tools (`create_note`, `update_note`, `restore_note`,
+    /// ...). Every overwrite saves a copy first under `<data-dir>/history`.
+    #[arg(long, env = "MAGICAL_MERCHANT_ALLOW_WRITE")]
+    allow_write: bool,
 }
 
 /// アプリが書いている場所を、引数なしでも見つける。公開アプリの MCP に
@@ -46,7 +51,7 @@ async fn main() -> anyhow::Result<()> {
         .ok_or_else(|| anyhow::anyhow!("no data directory: pass --data-dir"))?;
     server::exists_or_hint(&data_dir).map_err(|e| anyhow::anyhow!(e))?;
 
-    let server = server::McpServer::new(data_dir, cli.locale);
+    let server = server::McpServer::new(data_dir, cli.locale, cli.allow_write);
     let transport = rmcp::transport::io::stdio();
     let running = server.serve(transport).await?;
     running.waiting().await?;

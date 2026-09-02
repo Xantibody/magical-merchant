@@ -2,7 +2,7 @@
 //! 知らないのと、外に見せる名前と中の名前を別々に変えられるようにするため。
 
 use magical_merchant_core::utils::device::{Context, NetworkType};
-use magical_merchant_core::{NoteSummary, SearchHit, TemplateSummary, TimelineEntry};
+use magical_merchant_core::{NoteSummary, SearchHit, Snapshot, TemplateSummary, TimelineEntry};
 use rmcp::schemars;
 use serde::Serialize;
 
@@ -301,4 +301,53 @@ pub(crate) struct TemplateOutput {
     /// Body with `{{variables}}` left unresolved.
     pub(crate) body: String,
     pub(crate) tags: Vec<String>,
+}
+
+// --- Write tools ---
+
+#[derive(Serialize, schemars::JsonSchema)]
+pub(crate) struct CreatedNoteOutput {
+    /// The new note's filename; also its permanent id.
+    pub(crate) filename: String,
+}
+
+#[derive(Serialize, schemars::JsonSchema)]
+pub(crate) struct UpdatedNoteOutput {
+    pub(crate) filename: String,
+    /// The copy of the note taken before this write. Pass its `id` to
+    /// `restore_note` to undo.
+    pub(crate) snapshot: Option<SnapshotInfo>,
+}
+
+/// One saved copy of a note, taken before a write replaced it.
+#[derive(Serialize, schemars::JsonSchema)]
+pub(crate) struct SnapshotInfo {
+    /// The argument to pass to `read_note_history` / `restore_note`.
+    pub(crate) id: String,
+    /// When the copy was taken, RFC 3339.
+    pub(crate) time: String,
+    pub(crate) bytes: u64,
+}
+
+impl From<Snapshot> for SnapshotInfo {
+    fn from(s: Snapshot) -> Self {
+        Self {
+            id: s.id,
+            time: s.time.to_rfc3339(),
+            bytes: s.bytes,
+        }
+    }
+}
+
+#[derive(Serialize, schemars::JsonSchema)]
+pub(crate) struct HistoryOutput {
+    /// Newest first.
+    pub(crate) snapshots: Vec<SnapshotInfo>,
+}
+
+#[derive(Serialize, schemars::JsonSchema)]
+pub(crate) struct HistoryVersionOutput {
+    pub(crate) id: String,
+    /// Markdown body of that version, without the frontmatter.
+    pub(crate) body: String,
 }
