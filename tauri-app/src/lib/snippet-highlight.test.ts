@@ -3,7 +3,7 @@ import { splitSnippet } from "./snippet-highlight";
 
 describe("splitSnippet", () => {
   it("splits the snippet around the match", () => {
-    expect(splitSnippet("short needle here", 6, 6)).toEqual({
+    expect(splitSnippet("short needle here", 6, 6)).toStrictEqual({
       before: "short ",
       match: "needle",
       after: " here",
@@ -13,7 +13,7 @@ describe("splitSnippet", () => {
   // core の位置は文字数で来る。バイトや UTF-16 コード単位で切ると
   // 絵文字やサロゲートペアでずれる
   it("counts characters, not UTF-16 code units", () => {
-    expect(splitSnippet("😀😀リトライ後", 2, 4)).toEqual({
+    expect(splitSnippet("😀😀リトライ後", 2, 4)).toStrictEqual({
       before: "😀😀",
       match: "リトライ",
       after: "後",

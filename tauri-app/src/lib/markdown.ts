@@ -59,7 +59,7 @@ interface FenceBlock {
 }
 
 interface RenderEnv extends Env {
-  __fenceBlocks?: FenceBlock[];
+  fenceBlocks?: FenceBlock[];
   noteTitles?: ReadonlyMap<string, string>;
   /** `:name:` → データ URL。無ければ保存形のまま出る。 */
   glyphs?: ReadonlyMap<string, string>;
@@ -87,7 +87,7 @@ fenceMd.renderer.rules.fence = (tokens, idx, _options, renderEnv) => {
   if (!env) {
     return plainBlock(token.content);
   }
-  (env.__fenceBlocks ??= []).push({ code: token.content, lang: token.info.trim() });
+  (env.fenceBlocks ??= []).push({ code: token.content, lang: token.info.trim() });
   return FENCE_SLOT;
 };
 
@@ -168,7 +168,7 @@ export async function renderMarkdown(
   const env: RenderEnv = { noteTitles, glyphs };
   const html = fenceMd.render(source, env);
 
-  const blocks = env.__fenceBlocks;
+  const blocks = env.fenceBlocks;
   if (!blocks || blocks.length === 0) {
     return html;
   }

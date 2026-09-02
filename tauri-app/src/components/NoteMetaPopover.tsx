@@ -183,7 +183,9 @@ export default function NoteMetaPopover(props: NoteMetaPopoverProps): JSX.Elemen
                   type="button"
                   class="button-primary note-meta-save"
                   disabled={saving()}
-                  onClick={() => void save()}
+                  onClick={() => {
+                    void save();
+                  }}
                 >
                   {t().common.save}
                 </button>

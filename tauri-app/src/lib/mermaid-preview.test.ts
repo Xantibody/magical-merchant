@@ -17,14 +17,6 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   return { promise, resolve: stored };
 }
 
-beforeEach(() => {
-  vi.useFakeTimers();
-});
-
-afterEach(() => {
-  vi.useRealTimers();
-});
-
 describe("isMermaidLanguage", () => {
   it("matches the exact language", () => {
     expect(isMermaidLanguage("mermaid")).toBe(true);
@@ -43,6 +35,14 @@ describe("isMermaidLanguage", () => {
 });
 
 describe("createDebouncedDiagramRenderer", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("renders immediately when asked to", async () => {
     const render = vi.fn<RenderFn>().mockResolvedValue("<svg/>");
     const onResult = vi.fn<ResultFn>();
@@ -94,7 +94,7 @@ describe("createDebouncedDiagramRenderer", () => {
     renderer.request("new", { immediate: true });
     second.resolve("<svg new/>");
     first.resolve("<svg old/>");
-    await vi.waitFor(() => expect(onResult).toHaveBeenCalled());
+    await vi.waitFor(() => expect(onResult).toHaveBeenCalledWith("<svg new/>"));
 
     expect(onResult).toHaveBeenCalledExactlyOnceWith("<svg new/>");
   });

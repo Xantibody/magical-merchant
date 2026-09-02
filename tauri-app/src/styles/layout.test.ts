@@ -13,6 +13,14 @@ function setInsets(top: string, bottom: string): void {
   document.documentElement.style.setProperty("--safe-bottom", bottom);
 }
 
+function element(selector: string): HTMLElement {
+  const found = document.querySelector<HTMLElement>(selector);
+  if (!found) {
+    throw new Error(`expected ${selector} to be mounted`);
+  }
+  return found;
+}
+
 function mountApp(): HTMLElement {
   document.body.innerHTML = `
     <div class="app">
@@ -52,10 +60,7 @@ describe("app shell inside the system bars", () => {
   it("keeps the bottom tabs reachable above the navigation bar", () => {
     setInsets(ANDROID_SAFE_TOP, ANDROID_SAFE_BOTTOM);
     mountApp();
-    const tabs = document.querySelector<HTMLElement>(".bottom-tabs");
-    if (!tabs) {
-      throw new Error("expected .bottom-tabs to be mounted");
-    }
+    const tabs = element(".bottom-tabs");
     // 下タブはモバイル幅でしか出ない。テストの実行幅に依らず位置だけを見る
     tabs.style.display = "flex";
 

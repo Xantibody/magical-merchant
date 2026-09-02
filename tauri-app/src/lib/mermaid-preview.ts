@@ -12,10 +12,10 @@ interface RequestOptions {
 }
 
 export interface DebouncedDiagramRenderer {
-  request(source: string, options?: RequestOptions): void;
+  request: (source: string, options?: RequestOptions) => void;
   /** 予約済み・進行中の描画を捨てる。プレビュー自体を畳むときに使う */
-  cancel(): void;
-  dispose(): void;
+  cancel: () => void;
+  dispose: () => void;
 }
 
 /**

@@ -83,7 +83,9 @@ export default function SyncPopover(props: SyncPopoverProps): JSX.Element {
           <input
             type="checkbox"
             checked={props.sync.autoSync()}
-            onChange={(e) => void props.sync.setAutoSync(e.currentTarget.checked)}
+            onChange={(e) => {
+              void props.sync.setAutoSync(e.currentTarget.checked);
+            }}
           />
           <span class="switch" aria-hidden="true" />
         </label>

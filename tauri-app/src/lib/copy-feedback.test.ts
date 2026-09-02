@@ -24,15 +24,15 @@ function flushMicrotasks(): Promise<void> {
   return vi.advanceTimersByTimeAsync(0);
 }
 
-beforeEach(() => {
-  vi.useFakeTimers();
-});
-
-afterEach(() => {
-  vi.useRealTimers();
-});
-
 describe("createCopyFeedback", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("writes the text, reports copied, and resets after the delay", async () => {
     const write = vi.fn<WriteFn>(() => Promise.resolve());
     const onState = vi.fn<StateFn>();

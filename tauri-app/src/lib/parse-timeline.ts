@@ -20,12 +20,12 @@ export interface ParsedEntry {
 }
 
 export function parseTimelineEntry(raw: string): ParsedEntry {
-  const timeMatch = raw.match(/^- \[(\d{2}:\d{2}:\d{2})\] /);
+  const timeMatch = raw.match(/^- \[(?<time>\d{2}:\d{2}:\d{2})\] /u);
   if (!timeMatch) {
     return { time: "", text: raw, context: null };
   }
 
-  const [, time] = timeMatch;
+  const time = timeMatch.groups?.time ?? "";
   const rest = raw.slice(timeMatch[0].length);
 
   const lastBrace = rest.lastIndexOf(" {");

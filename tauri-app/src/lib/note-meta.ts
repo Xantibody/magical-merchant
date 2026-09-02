@@ -29,7 +29,7 @@ export function resolveEditedTime(original: string, edited: string): string {
   if (edited === toDatetimeLocal(original)) {
     return original;
   }
-  const offset = /(?<offset>Z|[+-]\d{2}:\d{2})$/.exec(original)?.groups?.offset ?? "";
+  const offset = /(?<offset>Z|[+-]\d{2}:\d{2})$/u.exec(original)?.groups?.offset ?? "";
   return `${edited}:00${offset}`;
 }
 
@@ -49,7 +49,7 @@ export function formatRecordedAt(rfc3339?: string): string {
  * 同一性は本文の `#記法` と同じ規則で見る(`tags.ts`)。
  */
 export function addTag(tags: string[], raw: string): string[] {
-  const tag = normalizeTag(raw.trim().replace(/^#+/, ""));
+  const tag = normalizeTag(raw.trim().replace(/^#+/u, ""));
   if (!tag || tags.includes(tag)) {
     return tags;
   }

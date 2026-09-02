@@ -1,6 +1,14 @@
 import { describe, it, expect, afterEach } from "vitest";
 import "../styles/editor.css";
 
+function element(selector: string): Element {
+  const found = document.querySelector(selector);
+  if (!found) {
+    throw new Error(`fixture has no ${selector}`);
+  }
+  return found;
+}
+
 /**
  * 図だけ表示のとき、ユーザーが最も押すのは描画された図そのもの。
  * ソースを開くクリック ハンドラは preview コンテナに付いているので、
@@ -24,11 +32,8 @@ describe("mermaid figure click-through", () => {
           </div>
         </div>
       </div>`;
-    const preview = document.querySelector(".mermaid-editor-preview");
-    const svg = document.querySelector("svg");
-    if (!preview || !svg) {
-      throw new Error("fixture not mounted");
-    }
+    const preview = element(".mermaid-editor-preview");
+    const svg = element("svg");
 
     const rect = svg.getBoundingClientRect();
     const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);

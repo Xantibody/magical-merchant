@@ -45,7 +45,7 @@ describe("glyphs in the preview", () => {
     const glyphs = new Map([...GLYPHS, ["623k", "data:image/png;base64,AA=="]]);
     const html = renderMarkdownSync(":236p::623k:", undefined, glyphs);
 
-    expect(html.match(/<img class="glyph"/g)).toHaveLength(2);
+    expect(html.match(/<img class="glyph"/gu)).toHaveLength(2);
   });
 
   it("works next to a note link", () => {
