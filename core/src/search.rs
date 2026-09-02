@@ -6,6 +6,7 @@ use crate::error::CoreError;
 use crate::timeline::Timeline;
 use crate::timeline::day::DayLog;
 use crate::utils::markdown::strip_timeline_prefix;
+use crate::utils::tags;
 use crate::{list_notes, list_timeline_dates};
 
 /// 検索結果がどちらの保管場所から来たか。
@@ -79,7 +80,7 @@ fn timeline_hits(base_dir: &Path, needle: &str) -> Result<Vec<SearchHit>, CoreEr
                 date: formatted.clone(),
                 filename: None,
                 index: Some(index),
-                tags: Vec::new(),
+                tags: tags::parse(text),
                 match_start: excerpt.match_start,
                 match_len: excerpt.match_start.map(|_| needle.chars().count()),
             });
@@ -316,6 +317,18 @@ mod tests {
         assert_eq!(hits[0].kind, HitKind::Timeline);
         assert_eq!(hits[0].title, "R2 同期のリトライ戦略");
         assert_eq!(hits[0].index, Some(0));
+    }
+
+    /// ノートのヒットはタグを名乗るのに、エントリのヒットだけ空だった。
+    /// 呼び出し側が「同じ形」と信じて読むので、片方だけ黙っていてはいけない。
+    #[test]
+    fn a_timeline_hit_reports_the_tags_in_its_text() {
+        let tmp = TempDir::new().unwrap();
+        save_timeline_entry(tmp.path(), "R2 を直す #Sync #設計", &context()).unwrap();
+
+        let hits = search_all(tmp.path(), "直す").unwrap();
+
+        assert_eq!(hits[0].tags, vec!["sync", "設計"]);
     }
 
     #[test]
