@@ -95,7 +95,11 @@ interface CommandMap {
   list_timeline_dates: { args: void; result: string[] };
   read_timeline_by_date: { args: { date: string }; result: string[] };
   delete_timeline_entry: { args: { date: string; index: number }; result: void };
-  search_all: { args: { query: string }; result: SearchHit[] };
+  /**
+   * `tags` は範囲。全部を持つ記録だけが返り、query が空でも tags があれば
+   * そのタグの付いた記録を全部返す。
+   */
+  search_all: { args: { query: string; tags: string[] }; result: SearchHit[] };
   /** このノートを `[[ID]]` で指している記録。開くたびに走査で導出される。 */
   find_backlinks: { args: { filename: string }; result: SearchHit[] };
   /**

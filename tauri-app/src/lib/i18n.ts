@@ -202,6 +202,10 @@ const ja = {
     empty: "一致するものがありません",
     count: (count: number) => `${count}件`,
     newNote: "新規ノート",
+    scopeTag: (tag: string) => `#${tag} で絞り込み`,
+    removeScope: "絞り込みを外す",
+    // 引数は「#a #b」の形に揃えた範囲の文字(scopeLabel)。タグが幾つでも一文で済む
+    emptyScoped: (scope: string) => `${scope} の中に一致するものがありません`,
   },
   editor: {
     copyCode: "コードをコピー",
@@ -444,6 +448,9 @@ const en: Messages = {
     empty: "Nothing matches",
     count: (count: number) => `${count}`,
     newNote: "New note",
+    scopeTag: (tag: string) => `Scoped to #${tag}`,
+    removeScope: "Remove the scope",
+    emptyScoped: (scope: string) => `Nothing in ${scope} matches`,
   },
   editor: {
     copyCode: "Copy the code",

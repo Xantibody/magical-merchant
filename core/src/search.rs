@@ -6,6 +6,7 @@ use crate::error::CoreError;
 use crate::timeline::Timeline;
 use crate::timeline::day::DayLog;
 use crate::utils::markdown::strip_timeline_prefix;
+use crate::utils::tags;
 use crate::{list_notes, list_timeline_dates};
 
 /// 検索結果がどちらの保管場所から来たか。
@@ -40,13 +41,25 @@ pub struct SearchHit {
 const SNIPPET_CONTEXT: usize = 40;
 const MAX_HITS: usize = 100;
 
-/// タイムライン全日を走査して needle(小文字化済み)に一致するエントリを集める。
-fn timeline_hits(base_dir: &Path, needle: &str) -> Result<Vec<SearchHit>, CoreError> {
+/// 検索の範囲を切るタグ(`tags::normalize` 済み)。空なら切らない。
+/// 複数あれば全部を持つ記録だけが残る。
+fn in_scope(scope: &[String], tags: &[String]) -> bool {
+    scope.iter().all(|wanted| tags.contains(wanted))
+}
+
+/// タイムライン全日を走査して needle(小文字化済み)に一致し、`scope` の
+/// タグを全て持つエントリを集める。needle が空なら本文は見ない。
+fn timeline_hits(
+    base_dir: &Path,
+    needle: &str,
+    scope: &[String],
+) -> Result<Vec<SearchHit>, CoreError> {
     let mut hits = Vec::new();
     let timeline = Timeline::new(base_dir.to_path_buf());
     // 改行をまたぐ needle だけは日単位の足切りが使えない。CRLF のファイルでは
     // エントリ内の改行が "\n" に正規化され、ファイル本文の部分文字列にならない。
-    let day_filter_applies = !needle.contains('\n');
+    // needle が空なら足切りは常に通るので、小文字化のぶんだけ無駄になる。
+    let day_filter_applies = !needle.is_empty() && !needle.contains('\n');
 
     for date in list_timeline_dates(base_dir)? {
         let Some(content) = timeline.read_raw(date)? else {
@@ -71,6 +84,10 @@ fn timeline_hits(base_dir: &Path, needle: &str) -> Result<Vec<SearchHit>, CoreEr
             if !lowered.contains(needle) {
                 continue;
             }
+            let entry_tags = tags::parse(text);
+            if !in_scope(scope, &entry_tags) {
+                continue;
+            }
             let excerpt = snippet(text, &lowered, needle);
             hits.push(SearchHit {
                 kind: HitKind::Timeline,
@@ -79,7 +96,7 @@ fn timeline_hits(base_dir: &Path, needle: &str) -> Result<Vec<SearchHit>, CoreEr
                 date: formatted.clone(),
                 filename: None,
                 index: Some(index),
-                tags: Vec::new(),
+                tags: entry_tags,
                 match_start: excerpt.match_start,
                 match_len: excerpt.match_start.map(|_| needle.chars().count()),
             });
@@ -90,16 +107,33 @@ fn timeline_hits(base_dir: &Path, needle: &str) -> Result<Vec<SearchHit>, CoreEr
 
 /// Timeline と Notes を横断して大文字小文字を無視した部分一致で検索する。
 /// 新しいものから順に返す。
-pub fn search_all(base_dir: &Path, query: &str) -> Result<Vec<SearchHit>, CoreError> {
+///
+/// `tags` は範囲。渡された全てのタグを持つ記録だけが対象になる(`#` の有無と
+/// ASCII の大小は見ない)。query が空でも tags があれば、そのタグの付いた記録を
+/// 全部返す — 画面でタグを選んで絞った状態を、そのまま検索の入り口にするため。
+/// どちらも空なら何も返さない。
+pub fn search_all(
+    base_dir: &Path,
+    query: &str,
+    tags: &[String],
+) -> Result<Vec<SearchHit>, CoreError> {
     let needle = query.trim().to_lowercase();
-    if needle.is_empty() {
+    let scope: Vec<String> = tags
+        .iter()
+        .map(|t| tags::normalize(t))
+        .filter(|t| !t.is_empty())
+        .collect();
+    if needle.is_empty() && scope.is_empty() {
         return Ok(Vec::new());
     }
 
-    let mut hits = timeline_hits(base_dir, &needle)?;
+    let mut hits = timeline_hits(base_dir, &needle, &scope)?;
 
     let mut haystack = String::new();
     for note in list_notes(base_dir)? {
+        if !in_scope(&scope, &note.tags) {
+            continue;
+        }
         // format! + join だとノート 1 件につき 2 回余分に確保する。
         haystack.clear();
         haystack.push_str(&note.preview);
@@ -147,7 +181,7 @@ pub fn find_backlinks(
     // 書き方の違いでバックリンクが消えてはいけない
     let needle = format!("[[{stem}");
 
-    let mut hits = timeline_hits(base_dir, &needle)?;
+    let mut hits = timeline_hits(base_dir, &needle, &[])?;
 
     for note in list_notes(base_dir)? {
         if note.filename == target.as_str() {
@@ -234,10 +268,15 @@ struct Excerpt {
 /// `lowered` は照合に使った `text` の小文字版。作り直さず受け取るのは、
 /// ここが 1 ヒットごとに走るため。
 fn snippet(text: &str, lowered: &str, needle: &str) -> Excerpt {
-    // ヒットしたのが本文以外（ノートのタグなど）なら先頭から切り出す。
-    let found = lowered
-        .find(needle)
-        .map(|byte| lowered[..byte].chars().count());
+    // ヒットしたのが本文以外(ノートのタグなど)なら先頭から切り出す。
+    // needle が空(タグだけで絞った一覧)のときも同じ — 光らせる場所はない。
+    let found = if needle.is_empty() {
+        None
+    } else {
+        lowered
+            .find(needle)
+            .map(|byte| lowered[..byte].chars().count())
+    };
     let at = found.unwrap_or(0);
     let end = at + needle.chars().count() + SNIPPET_CONTEXT;
     let start = at.saturating_sub(SNIPPET_CONTEXT);
@@ -301,7 +340,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         save_timeline_entry(tmp.path(), "anything", &context()).unwrap();
 
-        assert!(search_all(tmp.path(), "   ").unwrap().is_empty());
+        assert!(search_all(tmp.path(), "   ", &[]).unwrap().is_empty());
     }
 
     #[test]
@@ -310,7 +349,7 @@ mod tests {
         save_timeline_entry(tmp.path(), "R2 同期のリトライ戦略", &context()).unwrap();
         save_timeline_entry(tmp.path(), "牛乳を買う", &context()).unwrap();
 
-        let hits = search_all(tmp.path(), "リトライ").unwrap();
+        let hits = search_all(tmp.path(), "リトライ", &[]).unwrap();
 
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].kind, HitKind::Timeline);
@@ -318,12 +357,24 @@ mod tests {
         assert_eq!(hits[0].index, Some(0));
     }
 
+    /// ノートのヒットはタグを名乗るのに、エントリのヒットだけ空だった。
+    /// 呼び出し側が「同じ形」と信じて読むので、片方だけ黙っていてはいけない。
+    #[test]
+    fn a_timeline_hit_reports_the_tags_in_its_text() {
+        let tmp = TempDir::new().unwrap();
+        save_timeline_entry(tmp.path(), "R2 を直す #Sync #設計", &context()).unwrap();
+
+        let hits = search_all(tmp.path(), "直す", &[]).unwrap();
+
+        assert_eq!(hits[0].tags, vec!["sync", "設計"]);
+    }
+
     #[test]
     fn matching_ignores_case() {
         let tmp = TempDir::new().unwrap();
         save_timeline_entry(tmp.path(), "Local-First Sync", &context()).unwrap();
 
-        assert_eq!(search_all(tmp.path(), "local-first").unwrap().len(), 1);
+        assert_eq!(search_all(tmp.path(), "local-first", &[]).unwrap().len(), 1);
     }
 
     /// 日ファイルの先頭に端末情報が載っている日でも、返す index は
@@ -341,7 +392,7 @@ mod tests {
         save_timeline_entry(tmp.path(), "first", &ctx).unwrap();
         save_timeline_entry(tmp.path(), "second", &ctx).unwrap();
 
-        let hits = search_all(tmp.path(), "second").unwrap();
+        let hits = search_all(tmp.path(), "second", &[]).unwrap();
 
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].title, "second");
@@ -358,7 +409,7 @@ mod tests {
         };
         save_timeline_entry(tmp.path(), "plain text", &ctx).unwrap();
 
-        assert!(search_all(tmp.path(), "MacBook").unwrap().is_empty());
+        assert!(search_all(tmp.path(), "MacBook", &[]).unwrap().is_empty());
     }
 
     #[test]
@@ -370,7 +421,7 @@ mod tests {
         };
         save_timeline_entry(tmp.path(), "plain text", &ctx).unwrap();
 
-        assert!(search_all(tmp.path(), "battery").unwrap().is_empty());
+        assert!(search_all(tmp.path(), "battery", &[]).unwrap().is_empty());
     }
 
     #[test]
@@ -378,7 +429,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         create_draft_note(tmp.path(), "R2 のリトライ設計", &[], &context()).unwrap();
 
-        let hits = search_all(tmp.path(), "リトライ").unwrap();
+        let hits = search_all(tmp.path(), "リトライ", &[]).unwrap();
 
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].kind, HitKind::Note);
@@ -390,7 +441,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         create_draft_note(tmp.path(), "body", &["sync".to_string()], &context()).unwrap();
 
-        let hits = search_all(tmp.path(), "sync").unwrap();
+        let hits = search_all(tmp.path(), "sync", &[]).unwrap();
 
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].tags, vec!["sync"]);
@@ -402,7 +453,7 @@ mod tests {
         let long = format!("{}NEEDLE{}", "a".repeat(80), "b".repeat(80));
         save_timeline_entry(tmp.path(), &long, &context()).unwrap();
 
-        let hits = search_all(tmp.path(), "needle").unwrap();
+        let hits = search_all(tmp.path(), "needle", &[]).unwrap();
 
         assert!(hits[0].snippet.starts_with('…'));
         assert!(hits[0].snippet.ends_with('…'));
@@ -414,7 +465,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         save_timeline_entry(tmp.path(), "一行目\n二行目にリトライ", &context()).unwrap();
 
-        let hits = search_all(tmp.path(), "リトライ").unwrap();
+        let hits = search_all(tmp.path(), "リトライ", &[]).unwrap();
 
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].title, "一行目");
@@ -427,7 +478,7 @@ mod tests {
         let body = "本文はタグと無関係で長い".repeat(10);
         create_draft_note(tmp.path(), &body, &["sync".to_string()], &context()).unwrap();
 
-        let hits = search_all(tmp.path(), "sync").unwrap();
+        let hits = search_all(tmp.path(), "sync", &[]).unwrap();
 
         assert_eq!(hits.len(), 1);
         assert!(hits[0].snippet.starts_with("本文はタグと無関係で長い"));
@@ -439,7 +490,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         save_timeline_entry(tmp.path(), "needle のあと\n改行", &context()).unwrap();
 
-        let hits = search_all(tmp.path(), "needle").unwrap();
+        let hits = search_all(tmp.path(), "needle", &[]).unwrap();
 
         assert_eq!(hits[0].snippet, "needle のあと 改行");
     }
@@ -449,7 +500,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         save_timeline_entry(tmp.path(), "short needle here", &context()).unwrap();
 
-        let hits = search_all(tmp.path(), "needle").unwrap();
+        let hits = search_all(tmp.path(), "needle", &[]).unwrap();
 
         assert_eq!(hits[0].snippet, "short needle here");
     }
@@ -461,7 +512,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         save_timeline_entry(tmp.path(), "short needle here", &context()).unwrap();
 
-        let hits = search_all(tmp.path(), "needle").unwrap();
+        let hits = search_all(tmp.path(), "needle", &[]).unwrap();
 
         assert_eq!(hits[0].match_start, Some(6));
         assert_eq!(hits[0].match_len, Some(6));
@@ -475,7 +526,7 @@ mod tests {
         let long = format!("{}NEEDLE{}", "a".repeat(80), "b".repeat(80));
         save_timeline_entry(tmp.path(), &long, &context()).unwrap();
 
-        let hits = search_all(tmp.path(), "needle").unwrap();
+        let hits = search_all(tmp.path(), "needle", &[]).unwrap();
 
         let start = hits[0].match_start.unwrap();
         let len = hits[0].match_len.unwrap();
@@ -490,7 +541,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         save_timeline_entry(tmp.path(), "日本語の本文にリトライ", &context()).unwrap();
 
-        let hits = search_all(tmp.path(), "リトライ").unwrap();
+        let hits = search_all(tmp.path(), "リトライ", &[]).unwrap();
 
         assert_eq!(hits[0].match_start, Some(7));
         assert_eq!(hits[0].match_len, Some(4));
@@ -502,10 +553,124 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         create_draft_note(tmp.path(), "本文", &["sync".to_string()], &context()).unwrap();
 
-        let hits = search_all(tmp.path(), "sync").unwrap();
+        let hits = search_all(tmp.path(), "sync", &[]).unwrap();
 
         assert_eq!(hits[0].match_start, None);
         assert_eq!(hits[0].match_len, None);
+    }
+
+    fn scope(tags: &[&str]) -> Vec<String> {
+        tags.iter().map(|t| (*t).to_string()).collect()
+    }
+
+    /// 画面でタグを選んで絞り込んだまま検索できるように、範囲はタグで切る。
+    #[test]
+    fn a_tag_scope_keeps_only_entries_carrying_the_tag() {
+        let tmp = TempDir::new().unwrap();
+        save_timeline_entry(tmp.path(), "リトライを直す #sync", &context()).unwrap();
+        save_timeline_entry(tmp.path(), "リトライを試す #run", &context()).unwrap();
+
+        let hits = search_all(tmp.path(), "リトライ", &scope(&["sync"])).unwrap();
+
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].title, "リトライを直す #sync");
+    }
+
+    #[test]
+    fn a_tag_scope_keeps_only_notes_carrying_the_tag() {
+        let tmp = TempDir::new().unwrap();
+        create_draft_note(
+            tmp.path(),
+            "リトライ設計",
+            &["sync".to_string()],
+            &context(),
+        )
+        .unwrap();
+        write_second_note(tmp.path(), "20200101_000000.md", "リトライの雑記 #misc");
+
+        let hits = search_all(tmp.path(), "リトライ", &scope(&["sync"])).unwrap();
+
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].kind, HitKind::Note);
+        assert_eq!(hits[0].tags, vec!["sync"]);
+    }
+
+    /// 何も打たずにタグだけ渡すと、そのタグの付いた記録が一覧になる。
+    /// パレットで「タグで絞った状態」をそのまま眺められるようにするため。
+    #[test]
+    fn an_empty_query_with_a_tag_lists_everything_carrying_it() {
+        let tmp = TempDir::new().unwrap();
+        save_timeline_entry(tmp.path(), "走った #run", &context()).unwrap();
+        save_timeline_entry(tmp.path(), "読んだ #book", &context()).unwrap();
+        create_draft_note(tmp.path(), "走る計画", &["run".to_string()], &context()).unwrap();
+
+        let hits = search_all(tmp.path(), "", &scope(&["run"])).unwrap();
+
+        assert_eq!(hits.len(), 2);
+        assert!(hits.iter().any(|h| h.kind == HitKind::Timeline));
+        assert!(hits.iter().any(|h| h.kind == HitKind::Note));
+        // 本文には光らせる場所がない
+        assert!(hits.iter().all(|h| h.match_start.is_none()));
+    }
+
+    #[test]
+    fn an_unknown_tag_matches_nothing() {
+        let tmp = TempDir::new().unwrap();
+        save_timeline_entry(tmp.path(), "走った #run", &context()).unwrap();
+
+        assert!(
+            search_all(tmp.path(), "", &scope(&["nope"]))
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    /// 選んだチップは `#Sync` でも、書かれているのは `#sync` かもしれない。
+    /// 先頭の `#` も書き手が付けがちなので、付いていても同じタグとして読む。
+    #[test]
+    fn tag_scope_matching_ignores_case_and_a_leading_hash() {
+        let tmp = TempDir::new().unwrap();
+        save_timeline_entry(tmp.path(), "直す #sync", &context()).unwrap();
+
+        assert_eq!(
+            search_all(tmp.path(), "", &scope(&["#SYNC"]))
+                .unwrap()
+                .len(),
+            1
+        );
+    }
+
+    /// 複数渡したら AND。どれか 1 つで良いなら、1 つずつ引けばいい。
+    #[test]
+    fn every_tag_in_the_scope_must_be_present() {
+        let tmp = TempDir::new().unwrap();
+        save_timeline_entry(tmp.path(), "両方 #a #b", &context()).unwrap();
+        save_timeline_entry(tmp.path(), "片方 #a", &context()).unwrap();
+
+        let hits = search_all(tmp.path(), "", &scope(&["a", "b"])).unwrap();
+
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].title, "両方 #a #b");
+    }
+
+    /// 空のタグは範囲を狭めない。`""` を渡されて全件が消えると、呼び出し側は
+    /// 何が起きたか分からない。
+    #[test]
+    fn blank_tags_do_not_narrow_the_scope() {
+        let tmp = TempDir::new().unwrap();
+        save_timeline_entry(tmp.path(), "走った #run", &context()).unwrap();
+
+        assert_eq!(
+            search_all(tmp.path(), "走った", &scope(&["", "#"]))
+                .unwrap()
+                .len(),
+            1
+        );
+        assert!(
+            search_all(tmp.path(), "", &scope(&[""]))
+                .unwrap()
+                .is_empty()
+        );
     }
 
     fn filename_of(path: &Path) -> crate::utils::validated::NoteFilename {
