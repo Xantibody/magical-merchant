@@ -137,6 +137,24 @@ struct DownloadedFile {
 
 // ──────────── HTTP client ────────────
 
+// Android 側は失敗しうるので、両方を同じ型で呼べるように揃える
+#[allow(clippy::unnecessary_wraps)]
+#[cfg(not(target_os = "android"))]
+fn http_client() -> Result<reqwest::Client, SyncErrorInfo> {
+    Ok(reqwest::Client::new())
+}
+
+/// Android だけ端末の検証器を迂回する。理由は `android_tls::sync_tls_config`
+#[cfg(target_os = "android")]
+fn http_client() -> Result<reqwest::Client, SyncErrorInfo> {
+    let tls = crate::android_tls::sync_tls_config()
+        .map_err(|e| SyncErrorInfo::other(format!("TLS setup failed: {e}")))?;
+    reqwest::Client::builder()
+        .tls_backend_preconfigured(tls)
+        .build()
+        .map_err(|e| SyncErrorInfo::other(format!("HTTP client setup failed: {}", describe(&e))))
+}
+
 struct HttpClient {
     http: reqwest::Client,
     base_url: String,
@@ -144,12 +162,12 @@ struct HttpClient {
 }
 
 impl HttpClient {
-    fn new(base_url: String, token: String) -> Self {
-        Self {
-            http: reqwest::Client::new(),
+    fn new(base_url: String, token: String) -> Result<Self, SyncErrorInfo> {
+        Ok(Self {
+            http: http_client()?,
             base_url: base_url.trim_end_matches('/').to_string(),
             token,
-        }
+        })
     }
 
     fn auth(&self) -> String {
@@ -331,7 +349,7 @@ async fn do_sync(handle: &AppHandle) -> Result<SyncResult, SyncErrorInfo> {
         ));
     }
 
-    let client = HttpClient::new(config.workers_url, token);
+    let client = HttpClient::new(config.workers_url, token)?;
 
     // 他端末と同時に同期すると CAS で弾かれる。ユーザーに再試行させる理由はないので
     // 取得し直して自動でやり直す
