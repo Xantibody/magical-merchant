@@ -67,6 +67,14 @@ pub(crate) fn overwrite(
     if body.trim().is_empty() {
         return Err(WriteError::Empty);
     }
+    // 控えを取る前にも照合する。core の照合だけだと、断られる書き込みの
+    // ために相手の版の控えが 1 つ増える。core 側は最後の砦として残す
+    if let Some(expected) = expected {
+        let current = read(data_dir, filename)?;
+        if current.revision != *expected {
+            return Err(WriteError::Stale(filename.clone()));
+        }
+    }
     // 控えが取れなかった(存在しない)ノートには書かない。update は
     // 無いファイルを frontmatter ごとでっち上げてしまう
     let snapshot = magical_merchant_core::snapshot_note(data_dir, filename)?
@@ -132,6 +140,13 @@ mod tests {
 
         assert!(matches!(err, WriteError::Stale(ref f) if *f == filename));
         assert_eq!(body_of(tmp.path(), &filename), "theirs");
+        assert_eq!(
+            magical_merchant_core::list_note_history(tmp.path(), &filename)
+                .unwrap()
+                .len(),
+            1,
+            "only the unguarded write left a copy; the refused one took none"
+        );
     }
 
     #[test]
