@@ -2719,6 +2719,7 @@ dependencies = [
  "schemars 1.2.1",
  "serde",
  "tempfile",
+ "thiserror 2.0.18",
  "tokio",
 ]
 

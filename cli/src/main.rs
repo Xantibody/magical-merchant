@@ -2,6 +2,7 @@
 // prove it handles the error case.
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
+mod notes;
 mod output;
 mod server;
 
