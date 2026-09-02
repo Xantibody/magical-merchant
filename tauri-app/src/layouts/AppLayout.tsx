@@ -296,7 +296,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
 
       <Show when={shell.paletteOpen()}>
         <CommandPalette
-          scopeTag={shell.paletteScope()?.tag ?? null}
+          scopeTags={shell.paletteScope()?.tags ?? []}
           commands={[
             {
               id: "new-note",
