@@ -69,6 +69,16 @@ pub fn merge(mut tags: Vec<String>, body: &str) -> Vec<String> {
     tags
 }
 
+/// 外から渡されたタグを、`parse` が返す形に揃える。
+///
+/// 画面のチップや MCP の引数は `#Sync` のように `#` 付き・大文字混じりで
+/// 来ることがある。本文から拾った `sync` と突き合わせる前にここを通す。
+/// 空になったら「タグではない」ので、呼び出し側は捨てること。
+#[must_use]
+pub fn normalize(tag: &str) -> String {
+    tag.trim().trim_start_matches('#').to_ascii_lowercase()
+}
+
 /// 行がコードフェンスの区切りなら、その記号と本数を返す。
 fn fence_marker(line: &str) -> Option<(char, usize)> {
     let trimmed = line.trim_start();
@@ -233,6 +243,14 @@ mod tests {
     #[test]
     fn finds_nothing_in_text_without_tags() {
         assert_eq!(parse("ただの本文"), Vec::<String>::new());
+    }
+
+    /// チップや引数で渡される形と、本文から拾った形を同じにする。
+    #[test]
+    fn normalizes_an_external_tag_to_the_parsed_form() {
+        assert_eq!(normalize("#Sync"), "sync");
+        assert_eq!(normalize(" 設計 "), "設計");
+        assert_eq!(normalize("#"), "");
     }
 
     #[test]

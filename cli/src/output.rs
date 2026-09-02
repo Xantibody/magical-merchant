@@ -2,7 +2,9 @@
 //! 知らないのと、外に見せる名前と中の名前を別々に変えられるようにするため。
 
 use magical_merchant_core::utils::device::{Context, NetworkType};
-use magical_merchant_core::{NoteSummary, SearchHit, Snapshot, TemplateSummary, TimelineEntry};
+use magical_merchant_core::{
+    GlyphSummary, NoteSummary, SearchHit, Snapshot, TemplateSummary, TimelineEntry,
+};
 use rmcp::schemars;
 use serde::Serialize;
 
@@ -306,7 +308,43 @@ pub(crate) struct TemplateOutput {
     pub(crate) tags: Vec<String>,
 }
 
+#[derive(Serialize, schemars::JsonSchema)]
+pub(crate) struct GlyphListOutput {
+    /// Sorted by name.
+    pub(crate) glyphs: Vec<GlyphInfo>,
+}
+
+/// A user-registered image that renders inline wherever its shortcode is
+/// written. The image bytes are not exposed over MCP.
+#[derive(Serialize, schemars::JsonSchema)]
+pub(crate) struct GlyphInfo {
+    pub(crate) name: String,
+    /// What to write in a body to show the image, e.g. `:236p:`.
+    pub(crate) shortcode: String,
+    /// `png` or `svg`.
+    pub(crate) format: String,
+    pub(crate) bytes: u64,
+}
+
+impl From<GlyphSummary> for GlyphInfo {
+    fn from(g: GlyphSummary) -> Self {
+        Self {
+            shortcode: format!(":{}:", g.name),
+            name: g.name,
+            format: g.format,
+            bytes: g.bytes,
+        }
+    }
+}
+
 // --- Write tools ---
+
+#[derive(Serialize, schemars::JsonSchema)]
+pub(crate) struct SavedGlyphOutput {
+    pub(crate) name: String,
+    /// What to write in a body to show the image from now on.
+    pub(crate) shortcode: String,
+}
 
 #[derive(Serialize, schemars::JsonSchema)]
 pub(crate) struct CreatedNoteOutput {

@@ -16,9 +16,12 @@ import type { Theme } from "../lib/theme";
 import { MODE_ICONS, MODE_LABELS, ROUTES } from "../lib/routes";
 import type { RoutePath } from "../lib/routes";
 import { typedInvoke } from "../lib/commands";
+import { paletteScopeAt } from "../lib/search-scope";
 import { firstWidgetAction } from "../lib/widget-actions";
 import type { WidgetAction } from "../lib/widget-actions";
 import { getDeviceSignals, warmLocation } from "../lib/client-context";
+import { applyStartFullscreen } from "../lib/fullscreen";
+import { loadGlyphs } from "../lib/glyphs";
 
 const TABS: RoutePath[] = [ROUTES.TIMELINE, ROUTES.NOTES];
 const BOTTOM_TABS: RoutePath[] = [ROUTES.TIMELINE, ROUTES.NOTES, ROUTES.SETTINGS];
@@ -56,6 +59,24 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
     if (sync.alertVersion() > 0) {
       shell.togglePopover("sync");
     }
+  });
+
+  const isActive = (path: RoutePath): boolean => location.pathname === path;
+
+  /**
+   * Timeline でタグを選んで絞っているなら、その中を探す。全体を探したければ
+   * パレットのチップを外せばよく、逆(絞り込みを後から思い出す)は難しい
+   */
+  const openSearch = (): void => {
+    shell.openPalette(paletteScopeAt(location.pathname, shell.timelineTag()));
+  };
+
+  // グリフの登録表は起動時に 1 回と、データが入れ替わった合図(同期の
+  // 完了など)のたびに読み直す。本文のどこにも画像は書かれていないので、
+  // 表が無いと `:236p:` は文字のまま出る
+  createEffect(() => {
+    shell.dataVersion();
+    void loadGlyphs();
   });
 
   const newNote = (): void => {
@@ -121,6 +142,9 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
     // 最初の記録が測位を待たされないよう、許可済みなら今のうちに測り始める
     warmLocation();
 
+    // 設定画面は遅延読み込みなので、起動時の窓の姿はここで決める
+    void applyStartFullscreen();
+
     // ウィジェットのタップはたいていアプリを冷えた状態から起こす。onOpenUrl は
     // 購読してからのぶんしか来ないので、起動時の URL は getCurrent で拾う。
     let unlistenWidget: UnlistenFn | undefined;
@@ -141,7 +165,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
     const onKeyDown = (e: KeyboardEvent): void => {
       if (isMetaK(e)) {
         e.preventDefault();
-        shell.openPalette();
+        openSearch();
         return;
       }
       if (isMetaN(e)) {
@@ -173,8 +197,6 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
     onCleanup(() => document.removeEventListener("pointerdown", onPointerDown));
   });
 
-  const isActive = (path: RoutePath): boolean => location.pathname === path;
-
   return (
     <div class="app">
       <header class="header">
@@ -197,7 +219,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
           {MODE_LABELS[location.pathname as RoutePath] ?? "Timeline"}
         </span>
 
-        <button type="button" class="search-field" onClick={() => shell.openPalette()}>
+        <button type="button" class="search-field" onClick={openSearch}>
           <Icon name="magnifying-glass" size={15} />
           <span class="search-field-label">{t().header.searchPlaceholder}</span>
           <span class="key-badge">⌘K</span>
@@ -210,7 +232,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
             class="icon-button header-action header-action--search"
             title={t().header.search}
             aria-label={t().header.search}
-            onClick={() => shell.openPalette()}
+            onClick={openSearch}
           >
             <Icon name="magnifying-glass" size={18} />
           </button>
@@ -287,6 +309,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
 
       <Show when={shell.paletteOpen()}>
         <CommandPalette
+          scopeTags={shell.paletteScope()?.tags ?? []}
           commands={[
             {
               id: "new-note",

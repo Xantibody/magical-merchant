@@ -2,6 +2,7 @@
 // prove it handles the error case.
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
+mod glyph;
 mod note;
 pub mod sync;
 mod template;
@@ -12,6 +13,9 @@ mod error;
 pub mod search;
 
 pub use error::CoreError;
+pub use glyph::{
+    GLYPH_MAX_BYTES, GlyphData, GlyphSummary, delete_glyph, list_glyphs, read_glyph, save_glyph,
+};
 pub use note::error::NoteError;
 pub use note::{
     NoteSummary, Revision, Snapshot, create_draft_note, create_note_from_entry, delete_note,
@@ -34,4 +38,4 @@ pub use utils::frontmatter;
 /// 1 件ぶんのノートメタデータ。中身は frontmatter そのもの。
 pub use utils::frontmatter::NoteFrontmatter as NoteMeta;
 pub use utils::markdown::{TimelineEntry, parse_timeline_entry};
-pub use utils::validated::NoteFilename;
+pub use utils::validated::{GlyphFormat, GlyphName, NoteFilename};

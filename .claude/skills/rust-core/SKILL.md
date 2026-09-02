@@ -44,20 +44,26 @@ prints help). `nix run .#mcp` is a wrapper that adds the subcommand.
 `server.rs` exposes core as read-only MCP tools (output shapes
 in `output.rs`): `list_notes`, `read_note`, `backlinks`, `search`,
 `list_timeline_dates`, `read_timeline`, `read_timeline_range`, `list_places`,
-`list_tags`, `list_templates`, `read_template`. Timeline entries go out as
+`list_tags`, `list_templates`, `read_template`, `list_glyphs`. Timeline entries go out as
 values (`parse_timeline_entry` in core), never as raw lines — external
 consumers join on time and location, so keep those fields structured. Place
 names come only from the app's `places.json` cache; the server must stay
 offline. New core read APIs should be considered for MCP exposure.
 
 Write tools (`create_note`, `update_note`, `list_note_history`,
-`read_note_history`, `restore_note`) exist only behind `--allow-write` and
-are removed from the router otherwise — never listed-but-refused. Every
-overwrite goes through `snapshot_note` first (`core/src/note/history.rs`,
-`<base>/history/<stem>/<id>.md`, outside the synced `data/`), and writes
-always use core's note functions so the frontmatter stays compliant. No
-delete tool; do not add one without discussion. Packaged as
-`nix run .#mcp` (`nix/mcp.nix`).
+`read_note_history`, `restore_note`, `save_glyph`) exist only behind
+`--allow-write` and are removed from the router otherwise — never
+listed-but-refused (`WRITE_TOOLS` in `server.rs`; extend it when adding
+one). Every note overwrite goes through `snapshot_note` first
+(`core/src/note/history.rs`, `<base>/history/<stem>/<id>.md`, outside the
+synced `data/`), and writes always use core's note functions so the
+frontmatter stays compliant. No delete tool; do not add one without
+discussion. Packaged as `nix run .#cli` (`nix/cli.nix`); `.#mcp` wraps it.
+
+Glyphs (`core/src/glyph.rs`): user images under `data/glyphs/<name>.<png|svg>`
+that `:name:` renders inline. `GlyphName` (`utils/validated.rs`) fixes the
+charset — the same regex lives in `lib/glyphs.ts`; fix both. Only registered
+names resolve, so the tokenizer never touches `12:30:45`.
 
 ## Verification
 

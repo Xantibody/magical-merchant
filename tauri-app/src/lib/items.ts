@@ -194,6 +194,19 @@ export function planBulkDelete(targets: DeleteTarget[]): DeleteTarget[] {
   );
 }
 
+/**
+ * 消したあとに選び直す隣の id。一覧で真上にあったものを優先し、先頭を
+ * 消したときだけ真下へ落ちる。ノートは新しい順に並ぶので「上」は直近の
+ * 記録 — 消した直後に目が向く先と同じ。残りがなければ null。
+ */
+export function neighborOf(items: readonly { id: string }[], id: string): string | null {
+  const at = items.findIndex((item) => item.id === id);
+  if (at === -1) {
+    return null;
+  }
+  return items[at - 1]?.id ?? items[at + 1]?.id ?? null;
+}
+
 export interface TimelineDay {
   /** `YYYY-MM-DD`。見出しの文字は表示側で作る。 */
   date: string;
