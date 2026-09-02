@@ -55,6 +55,9 @@ pub(crate) struct NoteOutput {
     pub(crate) view: Option<String>,
     /// Device state at creation time.
     pub(crate) context: Option<ContextInfo>,
+    /// Fingerprint of `body`. Pass it to `update_note` so the write is
+    /// refused if the note changed in the meantime.
+    pub(crate) revision: String,
     /// Markdown body without the frontmatter.
     pub(crate) body: String,
 }
@@ -317,6 +320,9 @@ pub(crate) struct UpdatedNoteOutput {
     /// The copy of the note taken before this write. Pass its `id` to
     /// `restore_note` to undo.
     pub(crate) snapshot: Option<SnapshotInfo>,
+    /// Fingerprint of the body now on disk; the `revision` for a further
+    /// `update_note`.
+    pub(crate) revision: Option<String>,
 }
 
 /// One saved copy of a note, taken before a write replaced it.
