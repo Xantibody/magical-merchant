@@ -43,9 +43,15 @@ enum Command {
         note: Option<String>,
     },
     /// Open a note's body in $VISUAL / $EDITOR and write it back
+    /// `show` は省略で最新に倒すが、`edit` は倒さない。引数を打ち損ねた
+    /// だけで直近のノートがエディタで開き、閉じ方次第で書き戻される
+    #[command(group = clap::ArgGroup::new("target").required(true).args(["note", "last"]))]
     Edit {
-        /// Note filename or stem (`20260320_143045`); the newest note if omitted
+        /// Note filename or stem (`20260320_143045`)
         note: Option<String>,
+        /// Edit the newest note instead of naming one
+        #[arg(long)]
+        last: bool,
     },
     /// Create a note: from stdin when piped, otherwise in $VISUAL / $EDITOR
     New {
@@ -111,7 +117,8 @@ async fn main() -> anyhow::Result<()> {
             let body = commands::show(&data_dir, &filename)?;
             quiet_on_closed_pipe(write!(std::io::stdout().lock(), "{body}"))?;
         }
-        Command::Edit { note } => {
+        Command::Edit { note, last: _ } => {
+            // グループが「どちらか必須」なので、note が無ければ --last
             let filename = commands::resolve(&data_dir, note.as_deref())?;
             let editor = editor::command_from_env();
             let outcome = commands::edit(&data_dir, &filename, &commands::scratch_dir(), |path| {
@@ -173,5 +180,17 @@ mod tests {
         assert!(Cli::try_parse_from(["magical-merchant"]).is_err());
         assert!(Cli::try_parse_from(["magical-merchant", "mcp", "--allow-write"]).is_ok());
         Cli::command().debug_assert();
+    }
+
+    /// `edit` だけは省略で最新に倒さない。書き戻しが起きる側なので、
+    /// どのノートかは毎回言わせる。
+    #[test]
+    fn edit_needs_a_note_or_an_explicit_last() {
+        assert!(Cli::try_parse_from(["magical-merchant", "edit"]).is_err());
+        assert!(Cli::try_parse_from(["magical-merchant", "edit", "--last"]).is_ok());
+        assert!(Cli::try_parse_from(["magical-merchant", "edit", "20260320_143045"]).is_ok());
+        assert!(Cli::try_parse_from(["magical-merchant", "edit", "x", "--last"]).is_err());
+        // show は読むだけなので省略でよい
+        assert!(Cli::try_parse_from(["magical-merchant", "show"]).is_ok());
     }
 }
