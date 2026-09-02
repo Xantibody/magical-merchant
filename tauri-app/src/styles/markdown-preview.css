@@ -126,17 +126,21 @@
 
 /* Shiki dual theme: data-theme に応じて CSS 変数で配色を切り替える。
    下地は Shiki のテーマ色ではなく .markdown-preview pre の --app-surface-2 に
-   任せる。インラインコードや mermaid の図と同じ下地に揃える (#75) */
+   任せる。インラインコードや mermaid の図と同じ下地に揃える (#75)。
+   transparent は span にだけ当てる — pre.shiki 自身にも当てると詳細度で
+   .markdown-preview pre に勝ち、下地が消えて編集に入った瞬間に箱が現れる */
 .markdown-preview .shiki,
 .markdown-preview .shiki span {
   color: var(--shiki-light);
+}
+
+.markdown-preview .shiki span {
   background-color: transparent;
 }
 
 [data-theme="dark"] .markdown-preview .shiki,
 [data-theme="dark"] .markdown-preview .shiki span {
   color: var(--shiki-dark);
-  background-color: transparent;
 }
 
 /* ---- ノート間リンク。タイトルで描かれ、押すとそのノートが開く ---- */

@@ -7,13 +7,16 @@ import { page } from "vitest/browser";
  * 前提も崩れる。同じ本文を両方の DOM で組み、ブロックごとの幾何を突き合わせる。
  */
 
-const BLOCKS = `
+/** プレビューのコードブロックは Shiki が `pre.shiki` として出す */
+function bodyBlocks(preClass: string): string {
+  return `
   <p>一段目の本文。</p>
   <h2>見出し</h2>
   <p>二段目の本文。</p>
-  <pre><code>const a = 1;</code></pre>
+  <pre class="${preClass}"><code>const a = 1;</code></pre>
   <blockquote><p>引用</p></blockquote>
   <p>結び。</p>`;
+}
 
 const BLOCK_SELECTORS = [
   ":scope > p:nth-of-type(1)",
@@ -75,6 +78,7 @@ interface Geometry {
   fontSize: string;
   lineHeight: string;
   fontStyle: string;
+  backgroundColor: string;
 }
 
 /** サブピクセルの揺れは丸めて捨てる */
@@ -94,6 +98,7 @@ function geometry(target: HTMLElement, body: HTMLElement): Geometry {
     fontSize: style.fontSize,
     lineHeight: style.lineHeight,
     fontStyle: style.fontStyle,
+    backgroundColor: style.backgroundColor,
   };
 }
 
@@ -124,8 +129,8 @@ describe("note body: preview and editor draw the same page", () => {
     ["desktop", 1280, 800],
   ])("keeps every block where the preview drew it (%s)", async (_name, width, height) => {
     await page.viewport(width, height);
-    const previewed = measureBlocks(preview(BLOCKS));
-    const edited = measureBlocks(editor(BLOCKS));
+    const previewed = measureBlocks(preview(bodyBlocks("shiki")));
+    const edited = measureBlocks(editor(bodyBlocks("")));
 
     expect(edited).toEqual(previewed);
   });
