@@ -17,7 +17,8 @@ let
 in
 stdenv.mkDerivation (finalAttrs: {
   pname = "magical-merchant";
-  version = "0.2.0";
+  # tauri.conf.json が唯一の出どころ。release.yml もそこと tag を突き合わせる
+  version = (lib.importJSON ../tauri-app/src-tauri/tauri.conf.json).version;
 
   src = lib.fileset.toSource {
     root = ../.;
