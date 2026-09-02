@@ -1,6 +1,6 @@
 [package]
 name = "magical-merchant-core"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 description = "Framework-independent core logic for the Magical Merchant note-taking app"
 license.workspace = true
