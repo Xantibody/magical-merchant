@@ -491,7 +491,8 @@ impl McpServer {
         };
         let path =
             magical_merchant_core::utils::paths::notes_dir(&self.data_dir).join(filename.as_str());
-        magical_merchant_core::update_note(&path, &param.body, &Self::context()).map_err(err)?;
+        magical_merchant_core::update_note(&path, &param.body, &Self::context(), None)
+            .map_err(err)?;
         Ok(Json(UpdatedNoteOutput {
             filename: filename.as_str().to_string(),
             snapshot: Some(snapshot.into()),
