@@ -3,8 +3,10 @@ import { A } from "@solidjs/router";
 import Icon from "../components/Icon";
 import { typedInvoke } from "../lib/commands";
 import { EVENTS } from "../lib/events";
+import { enterFullscreen, readStartFullscreen, writeStartFullscreen } from "../lib/fullscreen";
 import { applyLocale, readStoredLocale, t } from "../lib/i18n";
 import type { LocalePreference } from "../lib/i18n";
+import { isMacDesktop } from "../lib/platform";
 import { ROUTES } from "../lib/routes";
 import { listen } from "@tauri-apps/api/event";
 import type { UnlistenFn } from "@tauri-apps/api/event";
@@ -24,6 +26,18 @@ export default function Settings(): JSX.Element {
   const chooseLocale = (preference: LocalePreference): void => {
     setLocalePreference(preference);
     applyLocale(preference);
+  };
+
+  const [startFullscreen, setStartFullscreen] = createSignal(readStartFullscreen());
+
+  const chooseStartFullscreen = (on: boolean): void => {
+    setStartFullscreen(on);
+    writeStartFullscreen(on);
+    // 入れた側は次回を待たせずその場で全画面にする。切った側は触らない —
+    // いま全画面で使っているのを設定の操作で解く理由はない
+    if (on) {
+      void enterFullscreen();
+    }
   };
 
   const unlisteners: UnlistenFn[] = [];
@@ -150,6 +164,23 @@ export default function Settings(): JSX.Element {
             </For>
           </div>
         </section>
+
+        {/* 全画面の窓があるのは macOS だけ。Android に出しても何も起きない */}
+        <Show when={isMacDesktop()}>
+          <section class="settings-section">
+            <h2 class="settings-section-label">WINDOW</h2>
+            <label class="settings-toggle">
+              <span>{t().settings.startFullscreen}</span>
+              <input
+                type="checkbox"
+                checked={startFullscreen()}
+                onChange={(e) => chooseStartFullscreen(e.currentTarget.checked)}
+              />
+              <span class="switch" aria-hidden="true" />
+            </label>
+            <p class="settings-hint">{t().settings.startFullscreenHint}</p>
+          </section>
+        </Show>
 
         <section class="settings-section">
           <h2 class="settings-section-label">TEMPLATES</h2>

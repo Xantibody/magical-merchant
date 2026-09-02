@@ -124,6 +124,34 @@
   color: var(--app-text-faint);
 }
 
+/* 文言と右端のスイッチ。枠は settings-link と揃え、行ごと押せる */
+.settings-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 1px solid var(--app-border);
+  border-radius: 9px;
+  background: var(--app-input-bg);
+  color: var(--app-text);
+  font-size: 14px;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgb(20 20 25 / 4%);
+}
+
+.settings-toggle:hover {
+  background: var(--app-surface-2);
+}
+
+/* チェックボックスは隠し、右のスイッチ(base.css の .switch)が状態を映す */
+.settings-toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
 /* 設定ファイルで固定されている環境では読むだけ */
 .settings-readonly {
   display: flex;
