@@ -274,7 +274,8 @@ impl McpServer {
         &self,
         Parameters(param): Parameters<QueryParam>,
     ) -> Result<Json<SearchOutput>, String> {
-        let hits = magical_merchant_core::search_all(&self.data_dir, &param.query).map_err(err)?;
+        let hits =
+            magical_merchant_core::search_all(&self.data_dir, &param.query, &[]).map_err(err)?;
         Ok(Json(SearchOutput {
             hits: hits.into_iter().map(Into::into).collect(),
         }))
