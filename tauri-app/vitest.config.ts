@@ -21,6 +21,8 @@ export default defineConfig({
     browser: {
       provider: playwright(),
       enabled: true,
+      // 手元でも CI でも Chromium の窓を開かない。並列で回すと窓が前面に出続ける
+      headless: true,
       instances: [{ browser: "chromium" }],
     },
   },
