@@ -131,11 +131,11 @@ the keyboard-top markdown toolbar falls back to jittery JS positioning). After
 a Tauri upgrade, diff the regenerated stub against ours before re-applying.
 
 ```sh
-just android-widget-setup
+just android-setup
 ```
 
 `android-build-debug` and `android-build-release` depend on it, so
-`just android-install` / `just android-install-release` pick the widgets up on
+`just android-install` / `just android-install release` pick the widgets up on
 their own. `just android-dev` does **not** — run the recipe once by hand before
 `android-dev` if you want the widgets in a dev build.
 

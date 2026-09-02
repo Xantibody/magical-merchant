@@ -255,7 +255,7 @@ jobs:
             cargo-android-${{ runner.os }}-
       - name: Generate the Android project
         run: nix develop .#android --command just tauri_app::android-init
-      # android-widget-setup を含む。ウィジェットのソースを入れた状態で組む
+      # android-setup を含む。ウィジェットのソースを入れた状態で組む
       - name: The debug APK builds
         run: nix develop .#android --command just tauri_app::android-build-debug
       - uses: actions/cache/save@v6

@@ -53,9 +53,6 @@ jobs:
       - name: Generate the Android project
         run: nix develop .#android --command just tauri_app::android-init
 
-      - name: Install the home screen widget sources
-        run: nix develop .#android --command just tauri_app::android-widget-setup
-
       - name: Restore the signing keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -77,11 +74,11 @@ jobs:
           keyPassword=$KEY_PASSWORD
           EOF
 
-      - name: Inject the signing config
-        run: nix develop .#android --command just tauri_app::android-sign-setup
-
+      # ウィジェットの注入と署名設定は android-build-release の依存で走る。
+      # keystore.properties を書いた後でないと android-sign-setup が落ちるので、
+      # このステップは keystore の復元より後に置くこと
       - name: Build the signed APK
-        run: nix develop .#android --command just tauri_app::android-release-build
+        run: nix develop .#android --command just tauri_app::android-build-release
 
       - name: Collect the APK
         id: apk

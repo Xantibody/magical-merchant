@@ -53,7 +53,7 @@ From the `tauri-app/` directory:
 just android-build-release
 
 # …or build and install onto a USB-connected device in one step
-just android-install-release
+just android-install release
 ```
 
 The signed APK is written to:
@@ -70,7 +70,7 @@ transfer, email to yourself, etc.), then open it on the device and allow
 
 Bump `versionCode` (and `versionName`) in
 `src-tauri/gen/android/app/tauri.properties`, rebuild, and install over the
-existing app with `adb install -r …` (what `android-install-release` does). The
+existing app with `adb install -r …` (what `android-install release` does). The
 same signing key lets it install as an update rather than a conflicting app.
 
 ## Verifying the signature (optional)
