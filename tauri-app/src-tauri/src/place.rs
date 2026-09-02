@@ -7,7 +7,7 @@
 //! ものの劣化版にしかならず、住所の言い方は国ごとに違う。
 
 use magical_merchant_core::utils::paths::place_cache_path;
-use magical_merchant_core::utils::place::{PlaceCache, place_key};
+use magical_merchant_core::utils::place::{PlaceCache, cache_key, place_key};
 use std::path::Path;
 
 /// 地名の分かった座標だけを、[`place_key`] 付きで返す。
@@ -52,16 +52,6 @@ pub(crate) fn resolve(
         let _ = cache.save(&path);
     }
     resolved
-}
-
-/// 控えの中でのキー。言語を変えると同じ座標に別の名前が付くので、
-/// 座標だけで引くと前の言語の名前をそのまま出してしまう。
-///
-/// この変更より前に書かれた控え(言語の付かないキー)はもう一致しない。
-/// 派生ファイルなので消しには行かず、次に同じ場所を通ったときに
-/// 言語付きで書き直されるに任せる。
-fn cache_key(locale: &str, place_key: &str) -> String {
-    format!("{locale}:{place_key}")
 }
 
 /// 住所の各段から、地図で指させるいちばん細かいものを選ぶ。
@@ -301,16 +291,6 @@ mod tests {
 
     /// 住所の 4 段を、無い段は `""` で。ジオコーダが空文字で返す段と
     /// そもそも返さない段は、どちらも「名乗れなかった」で区別しない。
-    /// 控えは言語ごとに分ける。座標だけで引くと、言語を変えても前の名前が出る。
-    #[test]
-    fn the_cache_remembers_which_language_it_asked_in() {
-        assert_eq!(cache_key("en", "35.68,139.55"), "en:35.68,139.55");
-        assert_ne!(
-            cache_key("en", "35.68,139.55"),
-            cache_key("ja", "35.68,139.55")
-        );
-    }
-
     fn named(areas: [&str; 4]) -> Option<String> {
         let [locality, sub, admin, country] =
             areas.map(|area| (!area.is_empty()).then(|| area.to_string()));
