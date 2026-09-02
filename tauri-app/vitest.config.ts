@@ -14,6 +14,7 @@ export default defineConfig({
       "mermaid",
       "@solidjs/testing-library",
       "@tauri-apps/api/mocks",
+      "@tauri-apps/api/window",
     ],
   },
   test: {
