@@ -4,11 +4,10 @@ use std::path::{Path, PathBuf};
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as B64;
 use chrono::NaiveDate;
-use magical_merchant_core::utils::device::Context;
 use magical_merchant_core::utils::frontmatter;
 use magical_merchant_core::utils::paths::place_cache_path;
 use magical_merchant_core::utils::place::{PlaceCache, place_key};
-use magical_merchant_core::{GlyphFormat, GlyphName, NoteFilename, parse_timeline_entry};
+use magical_merchant_core::{GlyphFormat, GlyphName, NoteFilename, Revision, parse_timeline_entry};
 use rmcp::handler::server::tool::ToolRouter;
 use rmcp::handler::server::wrapper::{Json, Parameters};
 use rmcp::model::{
@@ -19,6 +18,7 @@ use rmcp::service::RequestContext;
 use rmcp::{ErrorData, RoleServer, ServerHandler, schemars, tool, tool_router};
 use serde::Deserialize;
 
+use crate::notes;
 use crate::output::{
     ContextInfo, CreatedNoteOutput, EntryInfo, GlyphListOutput, HistoryOutput,
     HistoryVersionOutput, NoteListOutput, NoteOutput, PlaceInfo, PlacesOutput, SavedGlyphOutput,
@@ -74,16 +74,6 @@ impl McpServer {
             data_dir,
             locale,
             tool_router,
-        }
-    }
-
-    /// 書き込み時に記録する端末。座標や電池は MCP から読めないので、
-    /// 分かる範囲(OS と CPU)だけを正直に書く。
-    fn context() -> Context {
-        Context {
-            os: std::env::consts::OS.to_string(),
-            arch: std::env::consts::ARCH.to_string(),
-            ..Context::default()
         }
     }
 
@@ -173,6 +163,10 @@ pub(crate) struct UpdateNoteParam {
     /// (creation time, tags, device context) is preserved by the server.
     /// `:name:` renders a registered glyph image (see `list_glyphs`).
     body: String,
+    /// The `revision` that `read_note` returned. When given, the write is
+    /// refused if the note changed since that read, so an edit made in the
+    /// app or elsewhere in the meantime is not silently overwritten.
+    revision: Option<String>,
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
@@ -235,8 +229,7 @@ impl McpServer {
         Parameters(param): Parameters<FilenameParam>,
     ) -> Result<Json<NoteOutput>, String> {
         let filename = parse_filename(&param.filename)?;
-        let body =
-            magical_merchant_core::read_note_by_filename(&self.data_dir, &filename).map_err(err)?;
+        let notes::Read { body, revision } = notes::read(&self.data_dir, &filename).map_err(err)?;
         // 壊れた frontmatter は本文だけ返す。一覧がそうしているのと同じで、
         // メタデータが読めないことを理由に本文まで隠す理由がない。
         let meta = magical_merchant_core::read_note_meta(&self.data_dir, &filename).ok();
@@ -272,6 +265,7 @@ impl McpServer {
             template,
             view,
             context,
+            revision: revision.to_string(),
             body,
         }))
     }
@@ -484,7 +478,7 @@ impl McpServer {
             &self.data_dir,
             &param.body,
             &tags,
-            &Self::context(),
+            &notes::context(),
         )
         .map_err(err)?;
         let filename = path
@@ -505,22 +499,13 @@ impl McpServer {
         Parameters(param): Parameters<UpdateNoteParam>,
     ) -> Result<Json<UpdatedNoteOutput>, String> {
         let filename = parse_filename(&param.filename)?;
-        if param.body.trim().is_empty() {
-            return Err("body is empty; delete is not offered here".to_string());
-        }
-        let snapshot =
-            magical_merchant_core::snapshot_note(&self.data_dir, &filename).map_err(err)?;
-        // 控えが取れなかった(存在しない)ノートには書かない。update は
-        // 無いファイルを frontmatter ごとでっち上げてしまう
-        let Some(snapshot) = snapshot else {
-            return Err(format!("note not found: {filename}"));
-        };
-        let path =
-            magical_merchant_core::utils::paths::notes_dir(&self.data_dir).join(filename.as_str());
-        magical_merchant_core::update_note(&path, &param.body, &Self::context()).map_err(err)?;
+        let expected = param.revision.map(Revision::from);
+        let written = notes::overwrite(&self.data_dir, &filename, &param.body, expected.as_ref())
+            .map_err(err)?;
         Ok(Json(UpdatedNoteOutput {
             filename: filename.as_str().to_string(),
-            snapshot: Some(snapshot.into()),
+            snapshot: Some(written.snapshot.into()),
+            revision: Some(written.revision.to_string()),
         }))
     }
 
@@ -572,6 +557,9 @@ impl McpServer {
         Ok(Json(UpdatedNoteOutput {
             filename: filename.as_str().to_string(),
             snapshot: snapshot.map(Into::into),
+            revision: notes::read(&self.data_dir, &filename)
+                .ok()
+                .map(|r| r.revision.to_string()),
         }))
     }
 
@@ -1053,6 +1041,7 @@ mod tests {
             .update_note(Parameters(UpdateNoteParam {
                 filename: created.filename.clone(),
                 body: "after".to_string(),
+                revision: None,
             }))
             .unwrap()
             .0;
@@ -1150,9 +1139,71 @@ mod tests {
         let result = writable(tmp.path()).update_note(Parameters(UpdateNoteParam {
             filename: "20260101_000000.md".to_string(),
             body: "ghost".to_string(),
+            revision: None,
         }));
 
         assert!(result.is_err());
         assert!(!tmp.path().join("data/notes/20260101_000000.md").exists());
+    }
+
+    /// `read_note` が返した revision を添えて書くと、そのあいだにアプリや CLI が
+    /// 本文を変えていれば断られる。相手の編集の上に黙って書かない。
+    #[test]
+    fn updating_with_a_stale_revision_is_refused() {
+        let tmp = TempDir::new().unwrap();
+        let server = writable(tmp.path());
+        let created = server
+            .create_note(Parameters(CreateNoteParam {
+                body: "before".to_string(),
+                tags: None,
+            }))
+            .unwrap()
+            .0;
+        let read = server
+            .read_note(Parameters(FilenameParam {
+                filename: created.filename.clone(),
+            }))
+            .unwrap()
+            .0;
+        let filename = NoteFilename::parse(&created.filename).unwrap();
+        magical_merchant_core::update_note(
+            &tmp.path().join("data/notes").join(&created.filename),
+            "from the app",
+            &Context::default(),
+            None,
+        )
+        .unwrap();
+
+        let result = server.update_note(Parameters(UpdateNoteParam {
+            filename: created.filename.clone(),
+            body: "from the agent".to_string(),
+            revision: Some(read.revision),
+        }));
+
+        let Err(message) = result else {
+            panic!("a stale revision must be refused");
+        };
+        assert!(message.contains("changed since it was read"));
+        assert_eq!(
+            magical_merchant_core::read_note_by_filename(tmp.path(), &filename).unwrap(),
+            "from the app"
+        );
+
+        // 読み直した revision なら通る
+        let fresh = server
+            .read_note(Parameters(FilenameParam {
+                filename: created.filename.clone(),
+            }))
+            .unwrap()
+            .0;
+        let updated = server
+            .update_note(Parameters(UpdateNoteParam {
+                filename: created.filename,
+                body: "from the agent".to_string(),
+                revision: Some(fresh.revision),
+            }))
+            .unwrap()
+            .0;
+        assert!(updated.revision.is_some());
     }
 }

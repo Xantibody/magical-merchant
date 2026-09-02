@@ -25,18 +25,18 @@ describe("toggledView", () => {
 describe("readNoteContent", () => {
   it("本文と表示モードを一度に返す(別々に届くと一瞬違うモードで描かれる)", async () => {
     const content = await readNoteContent(
-      () => Promise.resolve("# 見取り図"),
+      () => Promise.resolve({ body: "# 見取り図", revision: "r1" }),
       () => Promise.resolve({ view: "mindmap" }),
     );
-    expect(content).toEqual({ body: "# 見取り図", view: "mindmap" });
+    expect(content).toEqual({ body: "# 見取り図", view: "mindmap", revision: "r1" });
   });
 
   it("メタが読めないノートはエディタ表示で開く", async () => {
     const content = await readNoteContent(
-      () => Promise.resolve("body"),
+      () => Promise.resolve({ body: "body", revision: "r1" }),
       () => Promise.reject(new Error("broken frontmatter")),
     );
-    expect(content).toEqual({ body: "body", view: "editor" });
+    expect(content).toEqual({ body: "body", view: "editor", revision: "r1" });
   });
 
   it("本文が読めなければ失敗はそのまま伝える", async () => {

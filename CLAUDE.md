@@ -16,16 +16,16 @@ ready to record the moment it opens (widgets exist for exactly this).
 
 ## Tech Stack
 
-| Layer      | Technology                                              |
-| ---------- | ------------------------------------------------------- |
-| Core logic | Rust (`core/` crate, framework-independent)             |
-| App        | Tauri 2 + SolidJS (`tauri-app/`)                        |
-| Styling    | Open Props via `--app-*` tokens (`styles/base.css`)     |
-| Icons      | Phosphor Icons (SVG files, `components/Icon.tsx`)       |
-| Editor     | Milkdown (headless) + custom plugins                    |
-| Markdown   | markdown-it + Shiki; Mermaid / markmap lazy             |
-| Sync       | Cloudflare Workers + R2 (`workers/`)                    |
-| AI access  | MCP server (`mcp-cli/`, `nix run .#mcp`; writes opt-in) |
+| Layer      | Technology                                                |
+| ---------- | --------------------------------------------------------- |
+| Core logic | Rust (`core/` crate, framework-independent)               |
+| App        | Tauri 2 + SolidJS (`tauri-app/`)                          |
+| Styling    | Open Props via `--app-*` tokens (`styles/base.css`)       |
+| Icons      | Phosphor Icons (SVG files, `components/Icon.tsx`)         |
+| Editor     | Milkdown (headless) + custom plugins                      |
+| Markdown   | markdown-it + Shiki; Mermaid / markmap lazy               |
+| Sync       | Cloudflare Workers + R2 (`workers/`)                      |
+| CLI / AI   | `cli/`: `$EDITOR` editing + MCP server (`.#cli`, `.#mcp`) |
 
 ## UI Architecture (current)
 
@@ -51,6 +51,8 @@ ready to record the moment it opens (widgets exist for exactly this).
 - The **editor/preview only ever see the body**, never frontmatter (and never
   the title line — that lives in the title field, `note-title.ts`)
 - Sync clients **never upload their own state**; the Worker owns it
+- Every **body write goes through core `update_note` with the revision the
+  writer read**; a mismatch is refused (`Stale`), never resolved by overwriting
 - Every new Tauri command gets a handler in `tauri-app/dev/ipc-mock.js`
 - Keep the DOM small; never re-render whole documents via innerHTML
 

@@ -23,7 +23,7 @@ flowchart LR
         Core --> Files
     end
 
-    MCP["mcp-cli<br/>MCP server for AI assistants"] --> Core
+    CLI["cli/<br/>terminal client + MCP server"] --> Core
 
     subgraph Cloud["Cloudflare (optional sync)"]
         Worker["Worker<br/>workers/"]
@@ -36,10 +36,16 @@ flowchart LR
     Worker -- "JWT via loopback / deep link<br/>magical-merchant://auth" --> Shell
 ```
 
-Three consumers share the same core crate: the desktop/mobile app, the MCP
-server (`mcp-cli`, read-only tools such as `search` and `read_timeline`),
-and the benchmarks. The core knows nothing about Tauri, HTTP, or the UI —
-it takes a base directory and works on files.
+Three consumers share the same core crate: the desktop/mobile app, the
+`cli/` binary (a terminal client that opens notes in `$EDITOR`, and the MCP
+server behind `magical-merchant mcp`), and the benchmarks. The core knows
+nothing about Tauri, HTTP, or the UI — it takes a base directory and works
+on files.
+
+Because three writers can touch the same note, every body write goes
+through one core function that takes the revision the writer read. A write
+whose revision no longer matches is refused; the app then reloads and keeps
+the typed text behind Revert, the CLI keeps it in a scratch file.
 
 ## Key design decisions
 
@@ -66,8 +72,9 @@ it takes a base directory and works on files.
 │   │   └── 2026-08-09.md      # one file per day, entries appended
 │   └── notes/
 │       └── 20260809_143000.md # one file per note, frontmatter + body
+├── history/                   # copies taken before CLI / MCP overwrites
 ├── .sync-state.json           # what the server last confirmed
-└── sync-config.json           # Workers URL, auto-sync flag
+└── sync-config.json           # Workers URL, auto-sync flag (shared with the CLI)
 ```
 
 A timeline day file lists the devices used that day once in its
@@ -142,7 +149,7 @@ the entry is already on disk.
 | [`tauri-app/src-tauri/`](../tauri-app/src-tauri/src) | Tauri commands, sync HTTP client, OAuth deep-link handling, device context |
 | [`tauri-app/src/`](../tauri-app/src)                 | SolidJS views, Milkdown editor integration, client-side device signals     |
 | [`workers/`](../workers/src)                         | Cloudflare Worker: Google OAuth, JWT, R2-backed bulk sync with ETag CAS    |
-| [`mcp-cli/`](../mcp-cli/src)                         | MCP server exposing read-only core tools to AI assistants                  |
+| [`cli/`](../cli/src)                                 | Terminal client (`list` / `show` / `edit` / `new`) and the MCP server      |
 
 > [!NOTE]
 > UI priorities (simple → lightweight → stylish), the Milkdown plugin

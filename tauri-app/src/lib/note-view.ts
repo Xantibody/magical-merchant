@@ -25,6 +25,8 @@ export function viewToFrontmatter(view: NoteView): string | null {
 export interface NoteContent {
   body: string;
   view: NoteView;
+  /** 読んだ時点の本文の指紋。保存に添える。 */
+  revision: string;
 }
 
 /**
@@ -34,15 +36,15 @@ export interface NoteContent {
  * 読み損ねはごまかさない — 空のノートに見せるほうが害が大きい。
  */
 export async function readNoteContent(
-  readBody: () => Promise<string>,
+  readBody: () => Promise<{ body: string; revision: string }>,
   readMeta: () => Promise<{ view?: string }>,
 ): Promise<NoteContent> {
-  const [body, view] = await Promise.all([
+  const [{ body, revision }, view] = await Promise.all([
     readBody(),
     readMeta().then(
       (meta) => resolveNoteView(meta.view),
       () => "editor" as const,
     ),
   ]);
-  return { body, view };
+  return { body, view, revision };
 }

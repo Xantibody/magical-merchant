@@ -19,7 +19,7 @@ test-app:
   cargo test -p magical-merchant-core -p magical-merchant-app
 
 check-cli:
-  cargo clippy -p magical-merchant-mcp-cli --all-targets -- -D warnings
+  cargo clippy -p magical-merchant-cli --all-targets -- -D warnings
 
 test-cli:
-  cargo test -p magical-merchant-mcp-cli
+  cargo test -p magical-merchant-cli
