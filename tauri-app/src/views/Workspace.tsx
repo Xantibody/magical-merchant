@@ -17,7 +17,7 @@ import Icon from "../components/Icon";
 import MarkdownPreview from "../components/MarkdownPreview";
 import NoteMetaPopover from "../components/NoteMetaPopover";
 import TemplatePicker from "../components/TemplatePicker";
-import { typedInvoke } from "../lib/commands";
+import { isStaleSave, typedInvoke } from "../lib/commands";
 import { getDeviceSignals } from "../lib/client-context";
 import { glyphs } from "../lib/glyphs";
 import { useShell } from "../lib/shell";
@@ -109,6 +109,12 @@ export default function Workspace(): JSX.Element {
   let session = beginEditSession("");
   /** そのセッションがどのノートのものか。null なら開いていない。 */
   let sessionFile: string | null = null;
+  /**
+   * ノートごとの、最後に読んだ(または書いた)本文の指紋。保存に添えると、
+   * CLI や MCP がそのあいだに書き換えていれば断られる。ノート単位で持つ
+   * のは、保存が遅れて届く頃には別のノートが選ばれていることがあるから。
+   */
+  const revisions = new Map<string, string>();
 
   // 同期やパレット操作の後にデータを取り直す。初回は createResource が読むので
   // defer しないと全ノートの読み直しがマウント直後に二重で走る
@@ -194,6 +200,40 @@ export default function Workspace(): JSX.Element {
     ),
   );
 
+  /** ディスクから読み直して画面に出す。選択の切り替えと、外からの書き換えの後に。 */
+  const loadNote = async (item: NoteItem): Promise<void> => {
+    try {
+      const content = await readNoteContent(
+        () => typedInvoke("read_note", { filename: item.filename }),
+        () => typedInvoke("read_note_meta", { filename: item.filename }),
+      );
+      revisions.set(item.filename, content.revision);
+      // 一覧を素早くたどると、遅い読みが速い読みを追い越して届く。
+      // いま選ばれているノートへの答えだけを画面に出す
+      if (selected()?.id !== item.id) {
+        return;
+      }
+      // 本文とモードは対で出す。バラすと一瞬だけ違うモードで描かれる
+      const titled = splitTitle(content.body);
+      batch(() => {
+        setNoteTitle(titled.title);
+        setNoteBody(titled.body);
+        setNoteView(content.view);
+        setLoadedId(item.id);
+      });
+    } catch {
+      // 読めないノートを選んだまま、前のノートの本文を出し続けない
+      if (selected()?.id === item.id) {
+        batch(() => {
+          setNoteTitle("");
+          setNoteBody("");
+          setNoteView("editor");
+          setLoadedId(item.id);
+        });
+      }
+    }
+  };
+
   // ---- 選択中ノートの本文と表示モードを読む ----
   createEffect(() => {
     const item = selected();
@@ -208,37 +248,7 @@ export default function Workspace(): JSX.Element {
       });
       return;
     }
-    void (async () => {
-      try {
-        const content = await readNoteContent(
-          () => typedInvoke("read_note", { filename: item.filename }),
-          () => typedInvoke("read_note_meta", { filename: item.filename }),
-        );
-        // 一覧を素早くたどると、遅い読みが速い読みを追い越して届く。
-        // いま選ばれているノートへの答えだけを画面に出す
-        if (selected()?.id !== item.id) {
-          return;
-        }
-        // 本文とモードは対で出す。バラすと一瞬だけ違うモードで描かれる
-        const titled = splitTitle(content.body);
-        batch(() => {
-          setNoteTitle(titled.title);
-          setNoteBody(titled.body);
-          setNoteView(content.view);
-          setLoadedId(item.id);
-        });
-      } catch {
-        // 読めないノートを選んだまま、前のノートの本文を出し続けない
-        if (selected()?.id === item.id) {
-          batch(() => {
-            setNoteTitle("");
-            setNoteBody("");
-            setNoteView("editor");
-            setLoadedId(item.id);
-          });
-        }
-      }
-    })();
+    void loadNote(item);
   });
 
   const toggleNoteView = async (item: NoteItem): Promise<void> => {
@@ -283,6 +293,26 @@ export default function Workspace(): JSX.Element {
     return item ? { item, body: fullBody(), session } : undefined;
   };
 
+  /**
+   * 読んでから書くまでに、CLI や MCP が同じノートを書き換えていた。
+   * 相手の本文の上には書かず、打った字はこの端末のバックアップに退避して
+   * ディスクの本文を読み直す。「戻す」を押せば退避した本文と入れ替わる —
+   * 相手の版がバックアップに回るので、どちらも失わない。
+   */
+  const yieldToOutsideEdit = async (pending: PendingSave): Promise<void> => {
+    writeBackup(localStorage, pending.item.filename, pending.body);
+    if (saveTimer) {
+      clearTimeout(saveTimer);
+      saveTimer = undefined;
+    }
+    if (selected()?.id === pending.item.id) {
+      setEditing(false);
+      sessionFile = null;
+      await loadNote(pending.item);
+    }
+    await refetchNotes();
+    shell.showToast(t().notes.editedElsewhere);
+  };
   const flushSave = (pending = snapshotSave()): Promise<void> => {
     const previous = saveChain;
     saveChain = (async () => {
@@ -294,18 +324,23 @@ export default function Workspace(): JSX.Element {
       }
       setSaveStatus("saving");
       try {
-        await typedInvoke("update_draft", {
+        const revision = await typedInvoke("update_draft", {
           filePath: pending.item.path,
           body: pending.body,
           client: await getDeviceSignals(),
+          revision: revisions.get(pending.item.filename) ?? null,
         });
+        revisions.set(pending.item.filename, revision);
         recordSaved(localStorage, pending.item.filename, pending.session, pending.body);
         // 一覧はここでは読み直さない。1 秒おきの保存のたびに全ノートを
         // 読み直すのは低スペック端末に重く、編集中は一覧が見えてもいない。
         // 編集を終えるときに 1 回だけ読み直す。
         setSaveStatus("saved");
-      } catch {
+      } catch (error) {
         setSaveStatus("idle");
+        if (isStaleSave(error)) {
+          await yieldToOutsideEdit(pending);
+        }
       }
     })();
     return saveChain;
@@ -399,11 +434,13 @@ export default function Workspace(): JSX.Element {
       return;
     }
     try {
-      await typedInvoke("update_draft", {
+      const revision = await typedInvoke("update_draft", {
         filePath: item.path,
         body: backup,
         client: await getDeviceSignals(),
+        revision: revisions.get(item.filename) ?? null,
       });
+      revisions.set(item.filename, revision);
     } catch {
       shell.showToast(t().notes.revertFailed);
       return;

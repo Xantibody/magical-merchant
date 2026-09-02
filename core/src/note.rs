@@ -2,10 +2,12 @@ pub(crate) mod error;
 mod history;
 mod repair;
 pub(crate) mod repository;
+mod revision;
 mod summary;
 
 pub use history::{Snapshot, list_note_history, read_note_history, restore_note, snapshot_note};
 pub(crate) use repository::Notes;
+pub use revision::Revision;
 pub use summary::Summary as NoteSummary;
 
 use std::path::{Path, PathBuf};
@@ -44,8 +46,16 @@ pub fn create_note_from_entry(
     )
 }
 
-pub fn update_note(file_path: &Path, body: &str, context: &Context) -> Result<(), CoreError> {
-    Notes::update(file_path, body, context)
+/// 本文を書き換える。`expected` に読んだときの [`Revision`] を添えると、
+/// そのあいだに本文が変わっていれば [`CoreError::Stale`] で断る。
+/// 返るのは書いた本文の revision — 続けて書くときの `expected` になる。
+pub fn update_note(
+    file_path: &Path,
+    body: &str,
+    context: &Context,
+    expected: Option<&Revision>,
+) -> Result<Revision, CoreError> {
+    Notes::update(file_path, body, context, expected)
 }
 
 pub fn list_notes(base_dir: &Path) -> Result<Vec<NoteSummary>, CoreError> {
@@ -173,7 +183,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let path = create_draft_note(tmp.path(), "original", &[], &mock_context()).unwrap();
 
-        update_note(&path, "updated", &mock_context()).unwrap();
+        update_note(&path, "updated", &mock_context(), None).unwrap();
 
         let content = fs::read_to_string(&path).unwrap();
         assert!(content.contains("updated"));
@@ -189,7 +199,7 @@ mod tests {
         let original = fs::read_to_string(&path).unwrap();
         let (fm_before, _) = frontmatter::parse::<NoteFrontmatter>(&original).unwrap();
 
-        update_note(&path, "updated", &mock_context()).unwrap();
+        update_note(&path, "updated", &mock_context(), None).unwrap();
 
         let updated = fs::read_to_string(&path).unwrap();
         let (fm_after, body) = frontmatter::parse::<NoteFrontmatter>(&updated).unwrap();
@@ -206,11 +216,61 @@ mod tests {
         let filename = filename_of(&path);
         assert_eq!(read_note_meta(tmp.path(), &filename).unwrap().updated, None);
 
-        update_note(&path, "updated", &mock_context()).unwrap();
+        update_note(&path, "updated", &mock_context(), None).unwrap();
 
         let meta = read_note_meta(tmp.path(), &filename).unwrap();
         assert!(meta.updated.is_some());
         assert!(meta.updated.unwrap() >= meta.time);
+    }
+
+    /// 読んでから書くまでに別の書き手が本文を変えていたら、その上に書かない。
+    /// アプリはファイルを監視しないので、外(CLI・MCP)で書き換えたノートを
+    /// 開いたまま打つと、古い本文ごと上書きしてしまう。
+    #[test]
+    fn update_note_refuses_to_overwrite_a_body_that_moved_since_it_was_read() {
+        let tmp = TempDir::new().unwrap();
+        let path = create_draft_note(tmp.path(), "original", &[], &mock_context()).unwrap();
+        let read = Revision::of(&read_note(&path).unwrap());
+        update_note(&path, "someone else", &mock_context(), None).unwrap();
+
+        let result = update_note(&path, "mine", &mock_context(), Some(&read));
+
+        assert!(
+            matches!(result, Err(CoreError::Stale(ref name)) if name == filename_of(&path).as_str())
+        );
+        assert_eq!(read_note(&path).unwrap(), "someone else");
+    }
+
+    #[test]
+    fn update_note_with_the_current_revision_writes_and_returns_the_next_one() {
+        let tmp = TempDir::new().unwrap();
+        let path = create_draft_note(tmp.path(), "original", &[], &mock_context()).unwrap();
+        let read = Revision::of(&read_note(&path).unwrap());
+
+        let next = update_note(&path, "mine", &mock_context(), Some(&read)).unwrap();
+
+        assert_eq!(read_note(&path).unwrap(), "mine");
+        assert_eq!(next, Revision::of("mine"));
+        // 返った revision で続けて書ける
+        update_note(&path, "again", &mock_context(), Some(&next)).unwrap();
+        assert_eq!(read_note(&path).unwrap(), "again");
+    }
+
+    /// 指紋は本文だけから取る。編集中に表示モードを切り替えても、
+    /// 自分の保存が「古い」ことにはならない。
+    #[test]
+    fn a_metadata_edit_does_not_make_the_body_revision_stale() {
+        let tmp = TempDir::new().unwrap();
+        let path = create_draft_note(tmp.path(), "original", &[], &mock_context()).unwrap();
+        let filename = filename_of(&path);
+        let read = Revision::of(&read_note(&path).unwrap());
+        update_note_view(tmp.path(), &filename, Some("mindmap")).unwrap();
+
+        update_note(&path, "mine", &mock_context(), Some(&read)).unwrap();
+
+        let meta = read_note_meta(tmp.path(), &filename).unwrap();
+        assert_eq!(meta.view, Some("mindmap".to_string()));
+        assert_eq!(read_note(&path).unwrap(), "mine");
     }
 
     /// メタデータや表示モードの差し替えは本文を書き直していない。
@@ -233,7 +293,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let path = create_draft_note(tmp.path(), "body", &[], &mock_context()).unwrap();
         let filename = filename_of(&path);
-        update_note(&path, "edited", &mock_context()).unwrap();
+        update_note(&path, "edited", &mock_context(), None).unwrap();
         let stamped = read_note_meta(tmp.path(), &filename).unwrap().updated;
 
         update_note_meta(tmp.path(), &filename, sample_time(), &[]).unwrap();
@@ -257,7 +317,7 @@ mod tests {
             is_charging: Some(true),
             ..Context::default()
         };
-        update_note(&path, "updated", &other_device).unwrap();
+        update_note(&path, "updated", &other_device, None).unwrap();
 
         let updated = fs::read_to_string(&path).unwrap();
         let (fm, _) = frontmatter::parse::<NoteFrontmatter>(&updated).unwrap();
@@ -278,7 +338,7 @@ mod tests {
         )
         .unwrap();
 
-        update_note(&path, "updated", &mock_context()).unwrap();
+        update_note(&path, "updated", &mock_context(), None).unwrap();
 
         assert!(fs::read_to_string(&path).unwrap().contains("sync"));
     }
@@ -528,7 +588,7 @@ mod tests {
         let filename = filename_of(&path);
         update_note_view(tmp.path(), &filename, Some("mindmap")).unwrap();
 
-        update_note(&path, "updated", &mock_context()).unwrap();
+        update_note(&path, "updated", &mock_context(), None).unwrap();
 
         let meta = read_note_meta(tmp.path(), &filename).unwrap();
         assert_eq!(meta.view, Some("mindmap".to_string()));
@@ -623,7 +683,7 @@ mod tests {
         let filename = promoted_note(&tmp);
         let path = tmp.path().join("data/notes").join(filename.as_str());
 
-        update_note(&path, "書き直した本文", &mock_context()).unwrap();
+        update_note(&path, "書き直した本文", &mock_context(), None).unwrap();
 
         let meta = read_note_meta(tmp.path(), &filename).unwrap();
         assert_eq!(meta.origin, Some("2026-08-13T08:30:00".to_string()));

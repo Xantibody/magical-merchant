@@ -11,6 +11,7 @@ use crate::utils::markdown::format_note_markdown;
 use crate::utils::paths::{note_file_path, notes_dir};
 use crate::utils::validated::NoteFilename;
 
+use super::revision::Revision;
 use super::summary::Summary as NoteSummary;
 
 pub(crate) struct Notes {
@@ -80,8 +81,26 @@ impl Notes {
     ///
     /// 唯一ここが書き足すのが `updated`。本文を書き直したのはこの経路だけで、
     /// メタデータや表示モードの差し替えは「書き直し」ではない。
-    pub(crate) fn update(path: &Path, body: &str, context: &Context) -> Result<(), CoreError> {
+    ///
+    /// `expected` は読んだときの本文の指紋。今の本文と食い違えば、誰かが
+    /// 先に書いている — その上に書くと相手の編集が黙って消える。
+    pub(crate) fn update(
+        path: &Path,
+        body: &str,
+        context: &Context,
+        expected: Option<&Revision>,
+    ) -> Result<Revision, CoreError> {
         let existing = fs::read_to_string(path).unwrap_or_default();
+        if let Some(expected) = expected {
+            let current = Revision::of(frontmatter::strip(&existing));
+            if current != *expected {
+                let name = path.file_name().map_or_else(
+                    || path.display().to_string(),
+                    |n| n.to_string_lossy().to_string(),
+                );
+                return Err(CoreError::Stale(name));
+            }
+        }
         let now = Local::now();
         let fm = frontmatter::parse::<NoteFrontmatter>(&existing).map_or_else(
             |_| NoteFrontmatter {
@@ -96,7 +115,7 @@ impl Notes {
 
         let markdown = frontmatter::render(&fm, body)?;
         write_atomic(path, markdown)?;
-        Ok(())
+        Ok(Revision::of(body))
     }
 
     pub(crate) fn read_meta(&self, filename: &NoteFilename) -> Result<NoteFrontmatter, CoreError> {

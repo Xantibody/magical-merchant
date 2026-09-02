@@ -20,6 +20,20 @@ nix build .#default
 open result/Applications/Magical\ Merchant.app
 ```
 
+## macOS / Linux — CLI
+
+The terminal client (`list` / `show` / `edit` / `new`, and the MCP server
+behind `mcp`) is its own package and needs none of the app's toolchain:
+
+```sh
+nix profile install github:Xantibody/magical-merchant#cli
+magical-merchant list
+```
+
+It reads the same data directory and `sync-config.json` the app uses.
+Signing in for sync stays in the app; the CLI only edits local files, and
+the app's next sync carries the changes.
+
 ## macOS — nix-darwin module
 
 Add the flake input and enable the module in your nix-darwin configuration:
@@ -36,6 +50,8 @@ Add the flake input and enable the module in your nix-darwin configuration:
         {
           services.magical-merchant = {
             enable = true;
+            desktop.enable = true; # the app in /Applications/Nix Apps (default)
+            cli.enable = true; # `magical-merchant` on the PATH
             workersUrl = "https://your-worker.example.workers.dev"; # R2 sync URL; must not end with a trailing slash, or sync requests may become `//files`
             autoSync = true; # sync after every successful save
           };
@@ -46,9 +62,10 @@ Add the flake input and enable the module in your nix-darwin configuration:
 }
 ```
 
-The module installs the app to `/Applications/Nix Apps/` and writes a
-read-only `sync-config.json` from the options above (the app then hides the
-Settings fields it no longer owns).
+The module installs whichever of the desktop app and the CLI are enabled
+and writes a read-only `sync-config.json` from the options above. Both
+read that one file, so the app hides the Settings fields it no longer owns
+and the CLI needs no configuration of its own.
 
 ## macOS — manual build
 

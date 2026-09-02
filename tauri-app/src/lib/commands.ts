@@ -13,6 +13,27 @@ export interface Note {
   template?: string;
 }
 
+interface NoteRead {
+  body: string;
+  /** 本文の指紋。`update_draft` に添えて、外からの書き換えの上に書かない。 */
+  revision: string;
+}
+
+/** `update_draft` の失敗。`stale` は「読んでから誰かが書き換えた」。 */
+interface SaveError {
+  kind: "stale" | "other";
+  message: string;
+}
+
+export function isStaleSave(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "kind" in error &&
+    (error as SaveError).kind === "stale"
+  );
+}
+
 /** テンプレ一覧の 1 件。 */
 export interface Template {
   filename: string;
@@ -129,12 +150,17 @@ interface CommandMap {
     args: { body: string; tags: string[]; origin?: string } & ClientArgs;
     result: string;
   };
+  /**
+   * `revision` は `read_note` が返した本文の指紋。添えると、そのあいだに
+   * CLI や MCP が同じノートを書き換えていれば `kind: "stale"` で断られる。
+   * 返るのは書いた本文の revision。
+   */
   update_draft: {
-    args: { filePath: string; body: string } & ClientArgs;
-    result: void;
+    args: { filePath: string; body: string; revision?: string | null } & ClientArgs;
+    result: string;
   };
   list_notes: { args: void; result: Note[] };
-  read_note: { args: { filename: string }; result: string };
+  read_note: { args: { filename: string }; result: NoteRead };
   read_note_meta: { args: { filename: string }; result: NoteMeta };
   update_note_meta: { args: { filename: string; time: string; tags: string[] }; result: void };
   set_note_view: { args: { filename: string; view: string | null }; result: void };

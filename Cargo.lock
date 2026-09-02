@@ -2707,23 +2707,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "magical-merchant-core"
-version = "0.3.0"
-dependencies = [
- "chrono",
- "criterion",
- "markdown-frontmatter",
- "serde",
- "serde_json",
- "serde_yaml",
- "sha2 0.11.0",
- "tempfile",
- "thiserror 2.0.18",
- "tokio",
-]
-
-[[package]]
-name = "magical-merchant-mcp-cli"
+name = "magical-merchant-cli"
 version = "0.3.0"
 dependencies = [
  "anyhow",
@@ -2736,6 +2720,23 @@ dependencies = [
  "schemars 1.2.1",
  "serde",
  "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+]
+
+[[package]]
+name = "magical-merchant-core"
+version = "0.3.0"
+dependencies = [
+ "chrono",
+ "criterion",
+ "markdown-frontmatter",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "sha2 0.11.0",
+ "tempfile",
+ "thiserror 2.0.18",
  "tokio",
 ]
 

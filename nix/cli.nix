@@ -1,7 +1,7 @@
-# MCP サーバーだけのパッケージ。default(Tauri アプリ)から切り出すのは、
-# AI クライアントの設定に `nix run github:Xantibody/magical-merchant#mcp` と
-# 書けるようにするため。アプリ本体を建てる pnpm と Tauri のツールチェーンを、
-# stdio で JSON を返すだけのバイナリのために取り寄せたくない。
+# CLI と MCP サーバーだけのパッケージ。default(Tauri アプリ)から切り出すのは、
+# `nix run github:Xantibody/magical-merchant#mcp` と書けるようにするためと、
+# アプリ本体を建てる pnpm と Tauri のツールチェーンを、ターミナルで動く
+# バイナリのために取り寄せたくないから。
 {
   lib,
   rustPlatform,
@@ -10,14 +10,14 @@
 let
   crateApiUrl = "https://crates.io/api/v1/crates";
   crateMirrorUrl = "https://static.crates.io/crates";
-  cargoToml = lib.importTOML ../mcp-cli/Cargo.toml;
+  cargoToml = lib.importTOML ../cli/Cargo.toml;
   cargoFlags = [
     "-p"
-    "magical-merchant-mcp-cli"
+    "magical-merchant-cli"
   ];
 in
 rustPlatform.buildRustPackage {
-  pname = "magical-merchant-mcp";
+  pname = "magical-merchant-cli";
   inherit (cargoToml.package) version;
 
   src = lib.fileset.toSource {
@@ -26,7 +26,7 @@ rustPlatform.buildRustPackage {
       ../Cargo.toml
       ../Cargo.lock
       ../core
-      ../mcp-cli
+      ../cli
       # ワークスペースの解決にだけ要る。ビルドはしない
       ../tauri-app/src-tauri/Cargo.toml
       ../tauri-app/src-tauri/src
@@ -54,7 +54,7 @@ rustPlatform.buildRustPackage {
   cargoTestFlags = cargoFlags;
 
   meta = {
-    description = "Read-only MCP server for a Magical Merchant journal";
-    mainProgram = "magical-merchant-mcp-cli";
+    description = "Terminal client and MCP server for a Magical Merchant journal";
+    mainProgram = "magical-merchant";
   };
 }

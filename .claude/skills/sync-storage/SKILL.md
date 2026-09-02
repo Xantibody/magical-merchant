@@ -25,6 +25,12 @@ description: Note/timeline storage invariants, sync protocol, widgets and deep l
   byte-identical
 - Any new frontmatter key must be a **typed field on `NoteFrontmatter`** in
   Rust core; unknown keys are dropped on the next save
+- **Revision guard**: `read_note` returns `Revision::of(body)`; every body
+  write passes it to `update_note`, which refuses with `CoreError::Stale`
+  if the body moved. The app parks the typed text in the edit backup and
+  reloads; the CLI keeps it in a scratch file; MCP returns the error. The
+  revision covers the body only, so metadata edits never make a save stale.
+  No writer watches the filesystem — this guard is the only protection
 - **Tags** come from the body's `#記法`. Identity is the ASCII-lowercased form
   (`#Rust` = `#rust`; Japanese is left alone) and code — fences and spans — is
   not scanned. The same rule lives twice: `core/src/utils/tags.rs` and

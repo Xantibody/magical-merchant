@@ -95,8 +95,8 @@ fetch what they need:
 | `just rust::test`      | `cargo test` for all Rust crates     | ✓   |
 | `just rust::check-app` | `cargo clippy` for core + app crates |     |
 | `just rust::test-app`  | `cargo test` for core + app crates   |     |
-| `just rust::check-cli` | `cargo clippy` for mcp-cli crate     |     |
-| `just rust::test-cli`  | `cargo test` for mcp-cli crate       |     |
+| `just rust::check-cli` | `cargo clippy` for cli crate         |     |
+| `just rust::test-cli`  | `cargo test` for cli crate           |     |
 
 ### Frontend recipes (`tauri_app::`)
 
@@ -127,9 +127,10 @@ unified formatting for all languages. CI runs `nix fmt -- --fail-on-change`.
 
 | Variable                           | Description                            | Set by       |
 | ---------------------------------- | -------------------------------------- | ------------ |
-| `MAGICAL_MERCHANT_DATA_DIR`        | Data directory for the MCP server      | User         |
+| `MAGICAL_MERCHANT_DATA_DIR`        | Data directory for the CLI / MCP       | User         |
 | `MAGICAL_MERCHANT_LOCALE`          | Place-name language for the MCP server | User         |
 | `MAGICAL_MERCHANT_ALLOW_WRITE`     | Enable the MCP server's write tools    | User         |
+| `VISUAL` / `EDITOR`                | Editor for `magical-merchant edit`     | User         |
 | `ANDROID_HOME`                     | Android SDK path                       | Nix devShell |
 | `NDK_HOME`                         | Android NDK path                       | Nix devShell |
 | `PLAYWRIGHT_BROWSERS_PATH`         | Playwright browser path                | Nix devShell |
