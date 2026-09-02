@@ -165,6 +165,43 @@ describe("note body: preview and editor draw the same page", () => {
     expect(editorAfter).toEqual(previewAfter);
   });
 
+  // Open Props の normalize は p/li/blockquote/見出しに 20〜60ch の読みやすさ上限を
+  // 掛ける。ch は「0」の幅なので日本語では半分ほどの文字数で折り返され、段の
+  // 右半分が空く。段幅は .detail-body が決めるので、どのブロックも段いっぱいに伸びること
+  it.each([
+    ["preview", preview],
+    ["editor", editor],
+  ])("lets every block fill the column, not a ch-based measure (%s)", async (_name, wrap) => {
+    await page.viewport(1280, 800);
+    const long =
+      "日本語の本文は一文字が二桁ぶんの幅を持つので、桁で決めた上限幅ではすぐに折り返してしまう。";
+    const body = mountDetail(
+      wrap(
+        `<h2>${long}</h2><p>${long}</p><blockquote><p>${long}</p></blockquote><ul><li>${long}</li></ul>`,
+      ),
+    );
+    const root = blockRoot(body);
+    const column = root.getBoundingClientRect().width;
+    const quote = element(":scope > blockquote", root);
+    const quoteStyle = getComputedStyle(quote);
+    const quoteInner =
+      column -
+      Number.parseFloat(quoteStyle.borderLeftWidth) -
+      Number.parseFloat(quoteStyle.paddingLeft) -
+      Number.parseFloat(quoteStyle.paddingRight);
+    const list = element(":scope > ul", root);
+    const listInner = column - Number.parseFloat(getComputedStyle(list).paddingLeft);
+
+    expect(element(":scope > h2", root).getBoundingClientRect().width).toBeCloseTo(column, 0);
+    expect(element(":scope > p", root).getBoundingClientRect().width).toBeCloseTo(column, 0);
+    expect(quote.getBoundingClientRect().width).toBeCloseTo(column, 0);
+    expect(element("blockquote > p", root).getBoundingClientRect().width).toBeCloseTo(
+      quoteInner,
+      0,
+    );
+    expect(element("li", root).getBoundingClientRect().width).toBeCloseTo(listInner, 0);
+  });
+
   // スクロールするのは両モードとも .detail-body。エディタが自分で
   // スクロールすると .detail-body の余白が固定の額縁になり、押した瞬間の
   // scrollTop を別の要素に写し替える必要が生まれる
