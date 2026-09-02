@@ -16,6 +16,7 @@ import type { Theme } from "../lib/theme";
 import { MODE_ICONS, MODE_LABELS, ROUTES } from "../lib/routes";
 import type { RoutePath } from "../lib/routes";
 import { typedInvoke } from "../lib/commands";
+import { paletteScopeAt } from "../lib/search-scope";
 import { firstWidgetAction } from "../lib/widget-actions";
 import type { WidgetAction } from "../lib/widget-actions";
 import { getDeviceSignals, warmLocation } from "../lib/client-context";
@@ -57,6 +58,16 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
       shell.togglePopover("sync");
     }
   });
+
+  const isActive = (path: RoutePath): boolean => location.pathname === path;
+
+  /**
+   * Timeline でタグを選んで絞っているなら、その中を探す。全体を探したければ
+   * パレットのチップを外せばよく、逆(絞り込みを後から思い出す)は難しい
+   */
+  const openSearch = (): void => {
+    shell.openPalette(paletteScopeAt(location.pathname, shell.timelineTag()));
+  };
 
   const newNote = (): void => {
     shell.closePalette();
@@ -141,7 +152,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
     const onKeyDown = (e: KeyboardEvent): void => {
       if (isMetaK(e)) {
         e.preventDefault();
-        shell.openPalette();
+        openSearch();
         return;
       }
       if (isMetaN(e)) {
@@ -173,8 +184,6 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
     onCleanup(() => document.removeEventListener("pointerdown", onPointerDown));
   });
 
-  const isActive = (path: RoutePath): boolean => location.pathname === path;
-
   return (
     <div class="app">
       <header class="header">
@@ -197,7 +206,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
           {MODE_LABELS[location.pathname as RoutePath] ?? "Timeline"}
         </span>
 
-        <button type="button" class="search-field" onClick={() => shell.openPalette()}>
+        <button type="button" class="search-field" onClick={openSearch}>
           <Icon name="magnifying-glass" size={15} />
           <span class="search-field-label">{t().header.searchPlaceholder}</span>
           <span class="key-badge">⌘K</span>
@@ -210,7 +219,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
             class="icon-button header-action header-action--search"
             title={t().header.search}
             aria-label={t().header.search}
-            onClick={() => shell.openPalette()}
+            onClick={openSearch}
           >
             <Icon name="magnifying-glass" size={18} />
           </button>
@@ -287,6 +296,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
 
       <Show when={shell.paletteOpen()}>
         <CommandPalette
+          scopeTag={shell.paletteScope()?.tag ?? null}
           commands={[
             {
               id: "new-note",
