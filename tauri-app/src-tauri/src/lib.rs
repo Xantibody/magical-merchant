@@ -27,8 +27,8 @@ mod widget_summary;
 
 use device::ClientContext;
 use magical_merchant_core::{
-    CreatedNote, NoteFilename, NoteMeta, NoteSummary, SearchHit, TemplateDetail, TemplateSummary,
-    VarLocale,
+    CreatedNote, NoteFilename, NoteMeta, NoteSummary, Revision, SearchHit, TemplateDetail,
+    TemplateSummary, VarLocale,
 };
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_deep_link::DeepLinkExt as _;
@@ -77,12 +77,46 @@ fn create_draft(
     Ok(path.to_string_lossy().to_string())
 }
 
+/// 保存の失敗。`stale` はフロントが「読み直して知らせる」に分岐するための印。
+#[derive(Debug, Clone, serde::Serialize)]
+struct SaveError {
+    kind: &'static str,
+    message: String,
+}
+
+/// `revision` は `read_note` が返した本文の指紋。添えると、そのあいだに
+/// CLI や MCP が同じノートを書き換えていれば `stale` で断られる。
+/// 返るのは書いた本文の revision — 次の保存に添える。
 #[tauri::command]
-fn update_draft(file_path: String, body: String, client: ClientContext) -> Result<(), String> {
+fn update_draft(
+    file_path: String,
+    body: String,
+    client: ClientContext,
+    revision: Option<String>,
+) -> Result<String, SaveError> {
     let context = device::get_context(client);
-    magical_merchant_core::update_note(std::path::Path::new(&file_path), &body, &context, None)
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+    let expected = revision.map(Revision::from);
+    magical_merchant_core::update_note(
+        std::path::Path::new(&file_path),
+        &body,
+        &context,
+        expected.as_ref(),
+    )
+    .map(|r| r.to_string())
+    .map_err(|e| SaveError {
+        kind: match e {
+            magical_merchant_core::CoreError::Stale(_) => "stale",
+            _ => "other",
+        },
+        message: e.to_string(),
+    })
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+struct NoteRead {
+    body: String,
+    /// 本文の指紋。`update_draft` に添えて、外からの書き換えの上に書かない。
+    revision: String,
 }
 
 #[tauri::command]
@@ -102,10 +136,13 @@ fn list_notes(handle: AppHandle) -> Result<Vec<NoteSummary>, String> {
 }
 
 #[tauri::command]
-fn read_note(handle: AppHandle, filename: String) -> Result<String, String> {
+fn read_note(handle: AppHandle, filename: String) -> Result<NoteRead, String> {
     let base_dir = app_base_dir(&handle)?;
     let filename = parse_filename(&filename)?;
-    magical_merchant_core::read_note_by_filename(&base_dir, &filename).map_err(|e| e.to_string())
+    let body = magical_merchant_core::read_note_by_filename(&base_dir, &filename)
+        .map_err(|e| e.to_string())?;
+    let revision = Revision::of(&body).to_string();
+    Ok(NoteRead { body, revision })
 }
 
 #[tauri::command]

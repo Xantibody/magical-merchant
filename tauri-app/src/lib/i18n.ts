@@ -90,6 +90,8 @@ const ja = {
     deleted: "ノートを削除しました",
     reverted: "編集前の内容に戻しました",
     revertFailed: "戻せませんでした",
+    editedElsewhere:
+      "別の場所で書き換えられたので読み直しました。入力した本文は「戻す」で呼び出せます",
   },
   templates: {
     title: "テンプレート",
@@ -330,6 +332,8 @@ const en: Messages = {
     deleted: "Note deleted",
     reverted: "Restored the body from before the edit",
     revertFailed: "Could not restore it",
+    editedElsewhere:
+      "This note was changed elsewhere and has been reloaded. Revert brings your text back",
   },
   templates: {
     title: "Templates",
