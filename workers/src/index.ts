@@ -46,8 +46,10 @@ function isInvalidTimestamp(value: unknown): boolean {
   return typeof value !== "string" || Number.isNaN(Date.parse(value));
 }
 
-/// リクエストの形をここで弾いておかないと、壊れた値が新しい同期状態に
-/// そのまま焼き込まれ、全端末に伝播する
+/**
+ * リクエストの形をここで弾いておかないと、壊れた値が新しい同期状態に
+ * そのまま焼き込まれ、全端末に伝播する。
+ */
 function validateBulkRequest(body: BulkRequest): string | null {
   if (
     !Array.isArray(body.uploads) ||
@@ -183,8 +185,10 @@ function escapeHtml(value: string): string {
     .replaceAll('"', "&quot;");
 }
 
-/// Android Chrome はユーザー操作を伴わないカスタムスキームへの遷移を捨てる。
-/// 自動遷移だけだとアプリに戻れないので、必ずタップできるリンクを残す。
+/**
+ * Android Chrome はユーザー操作を伴わないカスタムスキームへの遷移を捨てる。
+ * 自動遷移だけだとアプリに戻れないので、必ずタップできるリンクを残す。
+ */
 export function deepLinkPage(redirectUrl: string): string {
   const href = escapeHtml(redirectUrl);
   return `<!doctype html>
@@ -224,144 +228,146 @@ function getJwtExpiry(env: Env): number {
   return DEFAULT_JWT_EXPIRY_SECONDS;
 }
 
+/** OAuth の入口: Google の同意画面へ 302 で送り出す。 */
+function handleAuthGoogle(url: URL, env: Env): Response {
+  const state = generateState();
+  const appRedirect = url.searchParams.get("app_redirect") ?? "magical-merchant://auth/callback";
+  if (!isAllowedRedirect(appRedirect)) {
+    return errorResponse("Invalid app_redirect", 400);
+  }
+  const redirectUri = `${url.origin}/auth/callback`;
+  const params = new URLSearchParams({
+    client_id: env.GOOGLE_CLIENT_ID,
+    redirect_uri: redirectUri,
+    response_type: "code",
+    scope: "openid email",
+    state,
+    access_type: "offline",
+  });
+  return new Response(null, {
+    status: 302,
+    headers: new Headers([
+      ["Location", `https://accounts.google.com/o/oauth2/v2/auth?${params}`],
+      [
+        "Set-Cookie",
+        `__oauth_state=${state}; HttpOnly; Secure; SameSite=Lax; Max-Age=600; Path=/auth/callback`,
+      ],
+      [
+        "Set-Cookie",
+        `__oauth_app_redirect=${encodeURIComponent(appRedirect)}; HttpOnly; Secure; SameSite=Lax; Max-Age=600; Path=/auth/callback`,
+      ],
+    ]),
+  });
+}
+
+/** OAuth の出口: code をトークンに換え、JWT を発行してアプリへ戻す。 */
+async function handleAuthCallback(request: Request, url: URL, env: Env): Promise<Response> {
+  const code = url.searchParams.get("code");
+  if (!code) {
+    return errorResponse("Missing authorization code", 400);
+  }
+
+  const stateParam = url.searchParams.get("state");
+  const stateCookie = getCookie(request, "__oauth_state");
+  if (!stateParam || !stateCookie || stateParam !== stateCookie) {
+    return errorResponse("Invalid state parameter", 403);
+  }
+
+  const tokenResp = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      code,
+      client_id: env.GOOGLE_CLIENT_ID,
+      client_secret: env.GOOGLE_CLIENT_SECRET,
+      redirect_uri: `${url.origin}/auth/callback`,
+      grant_type: "authorization_code",
+    }),
+  });
+
+  if (!tokenResp.ok) {
+    return errorResponse("Failed to exchange authorization code", 502);
+  }
+
+  const tokenData = (await tokenResp.json()) as GoogleTokenResponse;
+  if (!tokenData.access_token) {
+    return errorResponse("Missing access token in Google response", 502);
+  }
+
+  const userinfoResp = await fetch("https://openidconnect.googleapis.com/v1/userinfo", {
+    headers: { Authorization: `Bearer ${tokenData.access_token}` },
+  });
+
+  if (!userinfoResp.ok) {
+    return errorResponse("Failed to fetch user info", 502);
+  }
+
+  const userinfo = (await userinfoResp.json()) as GoogleUserInfo;
+  if (!userinfo.sub || !userinfo.email) {
+    return errorResponse("Missing user info in Google response", 502);
+  }
+
+  const expiry = getJwtExpiry(env);
+  const jwt = await signJwt(
+    {
+      sub: userinfo.sub,
+      email: userinfo.email,
+      exp: Math.floor(Date.now() / 1000) + expiry,
+    },
+    env.JWT_SECRET,
+  );
+
+  const appRedirectCookie = getCookie(request, "__oauth_app_redirect");
+  let appRedirect: string;
+  try {
+    appRedirect = appRedirectCookie
+      ? decodeURIComponent(appRedirectCookie)
+      : "magical-merchant://auth/callback";
+  } catch {
+    // 不正な %-エンコーディングで例外 → 500 になるのを防ぐ
+    return errorResponse("Invalid redirect", 400);
+  }
+  if (!isAllowedRedirect(appRedirect)) {
+    return errorResponse("Invalid redirect", 400);
+  }
+  const separator = appRedirect.includes("?") ? "&" : "?";
+  const redirectUrl = `${appRedirect}${separator}token=${encodeURIComponent(jwt)}`;
+
+  const clearCookies = new Headers([
+    ["Content-Type", "text/html; charset=utf-8"],
+    [
+      "Set-Cookie",
+      `__oauth_state=; HttpOnly; Secure; SameSite=Lax; Max-Age=0; Path=/auth/callback`,
+    ],
+    [
+      "Set-Cookie",
+      `__oauth_app_redirect=; HttpOnly; Secure; SameSite=Lax; Max-Age=0; Path=/auth/callback`,
+    ],
+  ]);
+
+  // Loopback redirects use 302, deep links use JS redirect
+  if (appRedirect.startsWith("http://127.0.0.1")) {
+    clearCookies.set("Location", redirectUrl);
+    return new Response(null, { status: 302, headers: clearCookies });
+  }
+
+  return new Response(deepLinkPage(redirectUrl), { status: 200, headers: clearCookies });
+}
+
 export default {
   async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const { pathname } = url;
     const { method } = request;
 
-    // OAuth: redirect to Google
     if (pathname === "/auth/google" && method === "GET") {
-      const state = generateState();
-      const appRedirect =
-        url.searchParams.get("app_redirect") ?? "magical-merchant://auth/callback";
-      if (!isAllowedRedirect(appRedirect)) {
-        return errorResponse("Invalid app_redirect", 400);
-      }
-      const redirectUri = `${url.origin}/auth/callback`;
-      const params = new URLSearchParams({
-        client_id: env.GOOGLE_CLIENT_ID,
-        redirect_uri: redirectUri,
-        response_type: "code",
-        scope: "openid email",
-        state,
-        access_type: "offline",
-      });
-      return new Response(null, {
-        status: 302,
-        headers: new Headers([
-          ["Location", `https://accounts.google.com/o/oauth2/v2/auth?${params}`],
-          [
-            "Set-Cookie",
-            `__oauth_state=${state}; HttpOnly; Secure; SameSite=Lax; Max-Age=600; Path=/auth/callback`,
-          ],
-          [
-            "Set-Cookie",
-            `__oauth_app_redirect=${encodeURIComponent(appRedirect)}; HttpOnly; Secure; SameSite=Lax; Max-Age=600; Path=/auth/callback`,
-          ],
-        ]),
-      });
+      return handleAuthGoogle(url, env);
     }
 
-    // OAuth: callback — exchange code for token, issue JWT, deep link
     if (pathname === "/auth/callback" && method === "GET") {
-      const code = url.searchParams.get("code");
-      if (!code) {
-        return errorResponse("Missing authorization code", 400);
-      }
-
-      // Validate state against cookie
-      const stateParam = url.searchParams.get("state");
-      const stateCookie = getCookie(request, "__oauth_state");
-      if (!stateParam || !stateCookie || stateParam !== stateCookie) {
-        return errorResponse("Invalid state parameter", 403);
-      }
-
-      // Exchange code for access token
-      const tokenResp = await fetch("https://oauth2.googleapis.com/token", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          code,
-          client_id: env.GOOGLE_CLIENT_ID,
-          client_secret: env.GOOGLE_CLIENT_SECRET,
-          redirect_uri: `${url.origin}/auth/callback`,
-          grant_type: "authorization_code",
-        }),
-      });
-
-      if (!tokenResp.ok) {
-        return errorResponse("Failed to exchange authorization code", 502);
-      }
-
-      const tokenData = (await tokenResp.json()) as GoogleTokenResponse;
-      if (!tokenData.access_token) {
-        return errorResponse("Missing access token in Google response", 502);
-      }
-
-      // Get user info
-      const userinfoResp = await fetch("https://openidconnect.googleapis.com/v1/userinfo", {
-        headers: { Authorization: `Bearer ${tokenData.access_token}` },
-      });
-
-      if (!userinfoResp.ok) {
-        return errorResponse("Failed to fetch user info", 502);
-      }
-
-      const userinfo = (await userinfoResp.json()) as GoogleUserInfo;
-      if (!userinfo.sub || !userinfo.email) {
-        return errorResponse("Missing user info in Google response", 502);
-      }
-
-      // Issue JWT
-      const expiry = getJwtExpiry(env);
-      const jwt = await signJwt(
-        {
-          sub: userinfo.sub,
-          email: userinfo.email,
-          exp: Math.floor(Date.now() / 1000) + expiry,
-        },
-        env.JWT_SECRET,
-      );
-
-      const appRedirectCookie = getCookie(request, "__oauth_app_redirect");
-      let appRedirect: string;
-      try {
-        appRedirect = appRedirectCookie
-          ? decodeURIComponent(appRedirectCookie)
-          : "magical-merchant://auth/callback";
-      } catch {
-        // 不正な %-エンコーディングで例外 → 500 になるのを防ぐ
-        return errorResponse("Invalid redirect", 400);
-      }
-      if (!isAllowedRedirect(appRedirect)) {
-        return errorResponse("Invalid redirect", 400);
-      }
-      const separator = appRedirect.includes("?") ? "&" : "?";
-      const redirectUrl = `${appRedirect}${separator}token=${encodeURIComponent(jwt)}`;
-
-      const clearCookies = new Headers([
-        ["Content-Type", "text/html; charset=utf-8"],
-        [
-          "Set-Cookie",
-          `__oauth_state=; HttpOnly; Secure; SameSite=Lax; Max-Age=0; Path=/auth/callback`,
-        ],
-        [
-          "Set-Cookie",
-          `__oauth_app_redirect=; HttpOnly; Secure; SameSite=Lax; Max-Age=0; Path=/auth/callback`,
-        ],
-      ]);
-
-      // Loopback redirects use 302, deep links use JS redirect
-      if (appRedirect.startsWith("http://127.0.0.1")) {
-        clearCookies.set("Location", redirectUrl);
-        return new Response(null, { status: 302, headers: clearCookies });
-      }
-
-      return new Response(deepLinkPage(redirectUrl), { status: 200, headers: clearCookies });
+      return handleAuthCallback(request, url, env);
     }
 
-    // Bearer token authentication
     const authHeader = request.headers.get("Authorization");
     const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
     if (!token) {

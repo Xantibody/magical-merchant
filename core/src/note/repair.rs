@@ -14,7 +14,7 @@ use crate::utils::fs::{list_md_files, write_atomic};
 /// 上書きされている。その塊を取り除き、time をファイル名の作成時刻へ戻す。
 ///
 /// 該当しないファイルには一切書き込まない。全ファイルを書き直すと
-/// 同期(Syncthing)が無変更のノートまで転送し直すことになる。
+/// 内容ハッシュが変わった扱いになり、同期が無変更のノートまで転送し直すことになる。
 pub(crate) fn repair_all(notes_dir: &Path) -> Result<usize, CoreError> {
     let mut repaired = 0;
     for entry in list_md_files(notes_dir)? {

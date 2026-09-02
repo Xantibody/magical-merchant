@@ -20,7 +20,6 @@ export interface ParsedEntry {
 }
 
 export function parseTimelineEntry(raw: string): ParsedEntry {
-  // Match timestamp prefix: "- [HH:MM:SS] ..."
   const timeMatch = raw.match(/^- \[(\d{2}:\d{2}:\d{2})\] /);
   if (!timeMatch) {
     return { time: "", text: raw, context: null };
@@ -29,7 +28,6 @@ export function parseTimelineEntry(raw: string): ParsedEntry {
   const [, time] = timeMatch;
   const rest = raw.slice(timeMatch[0].length);
 
-  // Try to extract context JSON from the last " {" in the line
   const lastBrace = rest.lastIndexOf(" {");
   if (lastBrace !== -1) {
     const jsonCandidate = rest.slice(lastBrace + 1);

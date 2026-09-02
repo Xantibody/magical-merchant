@@ -92,7 +92,6 @@ interface ClientArgs {
 
 interface CommandMap {
   save_quick_capture: { args: { text: string } & ClientArgs; result: void };
-  read_timeline: { args: void; result: string[] };
   list_timeline_dates: { args: void; result: string[] };
   read_timeline_by_date: { args: { date: string }; result: string[] };
   delete_timeline_entry: { args: { date: string; index: number }; result: void };
@@ -135,7 +134,6 @@ interface CommandMap {
     args: { filename: string; locale: string } & ClientArgs;
     result: CreatedNote;
   };
-  save_document: { args: { body: string; tags: string[] } & ClientArgs; result: void };
   sync_start: { args: void; result: void };
   sync_status: { args: void; result: unknown };
   auth_login: { args: void; result: void };
@@ -158,7 +156,6 @@ const MUTATING: ReadonlySet<CommandName> = new Set<CommandName>([
   "set_note_view",
   "set_note_origin",
   "delete_note",
-  "save_document",
   "save_template",
   "delete_template",
   "create_from_template",

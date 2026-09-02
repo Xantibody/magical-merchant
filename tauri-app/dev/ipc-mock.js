@@ -519,7 +519,6 @@
       });
       return { path: `/mock/data/${created}`, reused: false };
     },
-    save_document: () => {},
     sync_start: () => {},
     sync_status: () => ({}),
     auth_login: () => {},
