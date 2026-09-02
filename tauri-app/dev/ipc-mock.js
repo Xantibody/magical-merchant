@@ -531,6 +531,8 @@
     "plugin:event|listen": () => 1,
     "plugin:event|unlisten": () => null,
     "plugin:deep-link|get_current": () => null,
+    // ブラウザに全画面にする窓は無い。設定を入れても何も起きないのが正しい
+    "plugin:window|set_fullscreen": () => null,
     "plugin:geolocation|check_permissions": () => ({
       location: "denied",
       coarseLocation: "denied",

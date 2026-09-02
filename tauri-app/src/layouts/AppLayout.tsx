@@ -19,6 +19,7 @@ import { typedInvoke } from "../lib/commands";
 import { firstWidgetAction } from "../lib/widget-actions";
 import type { WidgetAction } from "../lib/widget-actions";
 import { getDeviceSignals, warmLocation } from "../lib/client-context";
+import { applyStartFullscreen } from "../lib/fullscreen";
 
 const TABS: RoutePath[] = [ROUTES.TIMELINE, ROUTES.NOTES];
 const BOTTOM_TABS: RoutePath[] = [ROUTES.TIMELINE, ROUTES.NOTES, ROUTES.SETTINGS];
@@ -120,6 +121,9 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
   onMount(() => {
     // 最初の記録が測位を待たされないよう、許可済みなら今のうちに測り始める
     warmLocation();
+
+    // 設定画面は遅延読み込みなので、起動時の窓の姿はここで決める
+    void applyStartFullscreen();
 
     // ウィジェットのタップはたいていアプリを冷えた状態から起こす。onOpenUrl は
     // 購読してからのぶんしか来ないので、起動時の URL は getCurrent で拾う。
