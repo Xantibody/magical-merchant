@@ -81,6 +81,22 @@ derived by scanning at read time; there is no index to corrupt or sync.
 
 ![Backlinks](images/backlinks.png)
 
+## Glyphs — your own inline symbols
+
+Some things have no character: fighting-game command notation, a custom
+mark, a logo. Register a small PNG or SVG under a short name in
+Settings → GLYPHS and write `:name:` anywhere — a note or a timeline entry —
+to show it inline, the way an emoji shortcode works. The preview, the
+editor and the timeline all render it; the editor shows the source text
+again when the caret touches it, so the stored Markdown stays plain text.
+
+Only registered names render: `12:30:45` and an unknown `:foo:` stay as
+written, and a shortcode inside a code span or fence is left alone. The
+images live under `data/glyphs/` next to the notes, so sync carries them to
+every device; a device that has not received an image yet simply shows the
+text. Names are lowercase (`a-z 0-9 _ + -`, up to 32 characters) and images
+are capped at 256 KB.
+
 ## Search palette
 
 `⌘K` opens the palette. Before you type anything it offers entry points:
@@ -164,12 +180,14 @@ can line the journal up with other time- or location-based data.
 | `list_tags`           | Every `#tag` with note and entry counts                             |
 | `list_templates`      | List note templates                                                 |
 | `read_template`       | Read a template's body and tags                                     |
+| `list_glyphs`         | Registered glyphs with the `:name:` shortcode that renders each one |
 
-With `--allow-write` the server also offers note-writing tools. Notes are
+With `--allow-write` the server also offers writing tools. Notes are
 plain Markdown, so a body can hold anything the app renders — Mermaid
 diagrams in a fenced `mermaid` block, `[[YYYYMMDD_HHMMSS]]` links to other
-notes, `#tags`. The server writes the frontmatter itself and keeps it
-intact on updates; the body is all a client sends.
+notes, `#tags`, `:name:` glyph shortcodes (ask `list_glyphs` for the
+vocabulary). The server writes the frontmatter itself and keeps it intact
+on updates; the body is all a client sends.
 
 Every overwrite first saves a full copy of the previous version under
 `<data-dir>/history/` (outside the synced `data/`), so any change an
@@ -182,12 +200,13 @@ assistant makes can be brought back:
 | `list_note_history` | List the saved copies of a note, newest first                        |
 | `read_note_history` | Read the body of one saved copy                                      |
 | `restore_note`      | Bring a note back to a saved copy (the current version is saved too) |
+| `save_glyph`        | Register or replace a glyph image (png/svg, base64, up to 256 KiB)   |
 
 | Flag / variable                                  | Description                                                         |
 | ------------------------------------------------ | ------------------------------------------------------------------- |
 | `--data-dir` / `MAGICAL_MERCHANT_DATA_DIR`       | Override the data directory (default: the app's own data directory) |
 | `--locale` / `MAGICAL_MERCHANT_LOCALE`           | Preferred language for place names, `ja` or `en` (default `en`)     |
-| `--allow-write` / `MAGICAL_MERCHANT_ALLOW_WRITE` | Offer the note-writing tools (off by default)                       |
+| `--allow-write` / `MAGICAL_MERCHANT_ALLOW_WRITE` | Offer the writing tools (off by default)                            |
 
 Timeline times are the recording device's local wall-clock time without a
 UTC offset; note times are RFC 3339 with the offset. Place names come from
