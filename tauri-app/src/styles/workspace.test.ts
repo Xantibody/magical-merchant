@@ -159,4 +159,30 @@ describe("note body: preview and editor draw the same page", () => {
     expect(editorSvg).toEqual(previewSvg);
     expect(editorAfter).toEqual(previewAfter);
   });
+
+  // スクロールするのは両モードとも .detail-body。エディタが自分で
+  // スクロールすると .detail-body の余白が固定の額縁になり、押した瞬間の
+  // scrollTop を別の要素に写し替える必要が生まれる
+  it("scrolls the body itself while editing, not the editor", () => {
+    const paragraphs = Array.from({ length: 80 }, (_, i) => `<p>段落 ${i}</p>`).join("");
+    const body = mountDetail(editor(paragraphs));
+    const milkdown = element(".milkdown-editor", body);
+
+    expect(body.scrollHeight).toBeGreaterThan(body.clientHeight);
+    expect(milkdown.scrollHeight).toBeLessThanOrEqual(milkdown.clientHeight + 0.5);
+  });
+
+  // 短い本文でも、余白を押せば書き始められるようエディタは欄いっぱいに伸びる
+  it("stretches a short editor to the bottom of the body", () => {
+    const body = mountDetail(editor("<p>一行だけ</p>"));
+    const style = getComputedStyle(body);
+    const inner =
+      body.clientHeight -
+      Number.parseFloat(style.paddingTop) -
+      Number.parseFloat(style.paddingBottom);
+
+    expect(element(".ProseMirror", body).getBoundingClientRect().height).toBeGreaterThanOrEqual(
+      inner - 0.5,
+    );
+  });
 });
