@@ -60,6 +60,33 @@ export function splitGlyphs(text: string, names: GlyphNames): GlyphSegment[] {
   return segments;
 }
 
+/** 名前として通る形かどうか。core の `GlyphName::parse` と同じ規則。 */
+export function isGlyphName(name: string): boolean {
+  return /^[a-z0-9][a-z0-9_+-]{0,31}$/.test(name);
+}
+
+/**
+ * 画像ファイル名から名前の候補を作る。`236P.png` なら `236p`。
+ * 使えない文字は `-` に寄せ、先頭の記号は落とす。候補でしかないので、
+ * 空になることもある — そのときは書いてもらう。
+ */
+export function suggestGlyphName(filename: string): string {
+  const stem = filename.replace(/\.[^.]*$/, "").toLowerCase();
+  return stem
+    .replaceAll(/[^a-z0-9_+-]+/g, "-")
+    .replace(/^[^a-z0-9]+/, "")
+    .slice(0, 32);
+}
+
+/** 拡張子から形式を決める。それ以外の画像は受けない。 */
+export function glyphFormatOf(filename: string): "png" | "svg" | null {
+  const ext = filename.toLowerCase().replace(/^.*\./, "");
+  if (ext === "png" || ext === "svg") {
+    return ext;
+  }
+  return null;
+}
+
 const [registry, setRegistry] = createSignal<ReadonlyMap<string, string>>(new Map());
 
 /** 名前 → データ URL。描く側はこれを引く。 */

@@ -1,6 +1,13 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
-import { glyphs, loadGlyphs, splitGlyphs } from "./glyphs";
+import {
+  glyphFormatOf,
+  glyphs,
+  isGlyphName,
+  loadGlyphs,
+  splitGlyphs,
+  suggestGlyphName,
+} from "./glyphs";
 
 const NAMES = new Set(["236p", "623k"]);
 
@@ -82,6 +89,57 @@ describe("splitGlyphs", () => {
 
   it("leaves everything alone when nothing is registered", () => {
     expect(splitGlyphs(":236p:", new Set())).toStrictEqual([{ text: ":236p:", name: null }]);
+  });
+});
+
+describe("suggestGlyphName", () => {
+  it("lowercases the file stem", () => {
+    expect(suggestGlyphName("236P.png")).toBe("236p");
+  });
+
+  it("turns characters outside the charset into a dash", () => {
+    expect(suggestGlyphName("Dragon Punch (K).svg")).toBe("dragon-punch-k-");
+  });
+
+  it("drops leading symbols", () => {
+    expect(suggestGlyphName("_-236p.png")).toBe("236p");
+  });
+
+  it("keeps the allowed symbols", () => {
+    expect(suggestGlyphName("hcb+p_2.png")).toBe("hcb+p_2");
+  });
+
+  it("caps at 32 characters", () => {
+    expect(suggestGlyphName(`${"a".repeat(40)}.png`)).toHaveLength(32);
+  });
+
+  // 名前が作れない画像もある。空を返して、書いてもらう
+  it("returns an empty string when nothing usable is left", () => {
+    expect(suggestGlyphName("画像.png")).toBe("");
+  });
+});
+
+describe("isGlyphName", () => {
+  it("matches core's rule", () => {
+    expect(isGlyphName("236p")).toBe(true);
+    expect(isGlyphName("dp+k")).toBe(true);
+    expect(isGlyphName("")).toBe(false);
+    expect(isGlyphName("236P")).toBe(false);
+    expect(isGlyphName("-lead")).toBe(false);
+    expect(isGlyphName("a b")).toBe(false);
+    expect(isGlyphName("a".repeat(33))).toBe(false);
+  });
+});
+
+describe("glyphFormatOf", () => {
+  it("reads png and svg from the extension, whatever the case", () => {
+    expect(glyphFormatOf("236p.PNG")).toBe("png");
+    expect(glyphFormatOf("236p.svg")).toBe("svg");
+  });
+
+  it("refuses other images", () => {
+    expect(glyphFormatOf("236p.gif")).toBeNull();
+    expect(glyphFormatOf("236p")).toBeNull();
   });
 });
 

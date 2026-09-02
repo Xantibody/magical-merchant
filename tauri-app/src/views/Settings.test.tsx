@@ -1,13 +1,26 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, fireEvent, cleanup, waitFor } from "@solidjs/testing-library";
 import { mockIPC, mockWindows, clearMocks } from "@tauri-apps/api/mocks";
 import { MemoryRouter, Route } from "@solidjs/router";
+import { ShellProvider } from "../lib/shell";
 import { readStartFullscreen } from "../lib/fullscreen";
+import UndoToast from "../components/UndoToast";
 import Settings from "./Settings";
+
+// vi.mock ではなく mockIPC を使う理由は commands.test.ts に書いたとおり
+const URL_236P = "data:image/svg+xml;base64,PHN2Zy8+";
 
 const MAC = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15";
 const ANDROID = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36";
 
+interface SavedGlyph {
+  name: string;
+  format: string;
+  dataBase64: string;
+}
+
+const saved: SavedGlyph[] = [];
+const deleted: string[] = [];
 const fullscreenCalls: unknown[] = [];
 let listens = 0;
 
@@ -18,38 +31,38 @@ interface TauriInternals {
 }
 const tauri = globalThis as unknown as TauriInternals;
 
-// vi.mock ではなく mockIPC を使う理由は commands.test.ts に書いたとおり
+const HANDLERS: Record<string, (args: unknown) => unknown> = {
+  list_glyphs: () => [{ name: "236p", filename: "236p.svg", format: "svg", bytes: 512 }],
+  read_glyphs: () => [{ name: "236p", url: URL_236P }],
+  save_glyph: (args) => {
+    saved.push(args as SavedGlyph);
+  },
+  delete_glyph: (args) => {
+    deleted.push((args as { name: string }).name);
+  },
+  list_templates: () => [],
+  get_sync_config: () => ({ workers_url: "", auto_sync: false }),
+  is_sync_config_editable: () => false,
+  auth_status: () => false,
+  "plugin:event|listen": () => {
+    listens += 1;
+    return 1;
+  },
+  "plugin:event|unlisten": () => null,
+  "plugin:window|set_fullscreen": (args) => {
+    fullscreenCalls.push(args);
+    return null;
+  },
+};
+
 function mockCommands(): void {
   mockWindows("main");
   mockIPC((cmd, args) => {
-    switch (cmd) {
-      case "list_templates": {
-        return [];
-      }
-      case "get_sync_config": {
-        return { workers_url: "", auto_sync: false };
-      }
-      case "is_sync_config_editable": {
-        return false;
-      }
-      case "auth_status": {
-        return false;
-      }
-      case "plugin:event|listen": {
-        listens += 1;
-        return 1;
-      }
-      case "plugin:event|unlisten": {
-        return null;
-      }
-      case "plugin:window|set_fullscreen": {
-        fullscreenCalls.push(args);
-        return null;
-      }
-      default: {
-        throw new Error(`unexpected command ${cmd}`);
-      }
+    const handler = HANDLERS[cmd];
+    if (!handler) {
+      throw new Error(`unexpected command ${cmd}`);
     }
+    return handler(args);
   });
   // 認証イベントの listen / unlisten が要る。mockIPC は invoke しか差し替えない
   tauri.__TAURI_INTERNALS__.transformCallback = () => 1;
@@ -67,12 +80,110 @@ function pretendUserAgent(userAgent: string): void {
  */
 async function renderSettings(): Promise<void> {
   render(() => (
-    <MemoryRouter>
-      <Route path="/" component={Settings} />
-    </MemoryRouter>
+    <ShellProvider>
+      <MemoryRouter>
+        <Route path="/" component={Settings} />
+      </MemoryRouter>
+      <UndoToast />
+    </ShellProvider>
   ));
   await waitFor(() => expect(listens).toBe(2));
 }
+
+function fileInput(): HTMLInputElement {
+  return screen.getByLabelText<HTMLInputElement>("画像を追加", { selector: "input" });
+}
+
+describe("Settings › GLYPHS", () => {
+  beforeEach(() => {
+    saved.length = 0;
+    deleted.length = 0;
+    listens = 0;
+    mockCommands();
+  });
+
+  afterEach(() => {
+    cleanup();
+    clearMocks();
+    vi.useRealTimers();
+    document.body.innerHTML = "";
+  });
+
+  it("lists every registered glyph as its shortcode", async () => {
+    await renderSettings();
+
+    await waitFor(() => expect(screen.getByText(":236p:")).toBeDefined());
+  });
+
+  // 名前はファイル名から作る。打ち直せるが、大抵はそのままでいい
+  it("prefills the name from the chosen file and registers it", async () => {
+    await renderSettings();
+    await waitFor(() => expect(screen.getByText(":236p:")).toBeDefined());
+
+    const file = new File(["<svg/>"], "623K.svg", { type: "image/svg+xml" });
+    fireEvent.change(fileInput(), { target: { files: [file] } });
+
+    const name = await screen.findByLabelText<HTMLInputElement>("名前");
+    expect(name.value).toBe("623k");
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+
+    await waitFor(() => expect(saved).toHaveLength(1));
+    expect(saved[0].name).toBe("623k");
+    expect(saved[0].format).toBe("svg");
+    expect(atob(saved[0].dataBase64)).toBe("<svg/>");
+  });
+
+  it("refuses an image that is neither png nor svg", async () => {
+    await renderSettings();
+    await waitFor(() => expect(screen.getByText(":236p:")).toBeDefined());
+
+    const file = new File(["GIF89a"], "anim.gif", { type: "image/gif" });
+    fireEvent.change(fileInput(), { target: { files: [file] } });
+
+    expect(await screen.findByText("PNG か SVG の画像を選んでください")).toBeDefined();
+    expect(screen.queryByLabelText("名前")).toBeNull();
+  });
+
+  it("will not save a name that breaks the rule", async () => {
+    await renderSettings();
+    await waitFor(() => expect(screen.getByText(":236p:")).toBeDefined());
+    const file = new File(["<svg/>"], "x.svg", { type: "image/svg+xml" });
+    fireEvent.change(fileInput(), { target: { files: [file] } });
+    const name = await screen.findByLabelText<HTMLInputElement>("名前");
+
+    fireEvent.input(name, { target: { value: "Bad Name" } });
+
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "保存" }).disabled).toBe(true);
+  });
+
+  // 消してすぐ戻せる。5 秒は tombstone で、本当に消えるのはそのあと
+  it("deletes after the undo window", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    await renderSettings();
+    await waitFor(() => expect(screen.getByText(":236p:")).toBeDefined());
+
+    fireEvent.click(screen.getByRole("button", { name: ":236p: を削除" }));
+
+    await waitFor(() => expect(screen.queryByText(":236p:")).toBeNull());
+    expect(deleted).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(deleted).toStrictEqual(["236p"]);
+  });
+
+  it("keeps the glyph when undo is pressed in time", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    await renderSettings();
+    await waitFor(() => expect(screen.getByText(":236p:")).toBeDefined());
+
+    fireEvent.click(screen.getByRole("button", { name: ":236p: を削除" }));
+    await waitFor(() => expect(screen.queryByText(":236p:")).toBeNull());
+    fireEvent.click(screen.getByRole("button", { name: "元に戻す" }));
+
+    await waitFor(() => expect(screen.getByText(":236p:")).toBeDefined());
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(deleted).toHaveLength(0);
+  });
+});
 
 describe("Settings › start in fullscreen", () => {
   beforeEach(() => {
