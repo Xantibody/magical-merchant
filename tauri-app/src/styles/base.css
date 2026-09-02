@@ -14,6 +14,14 @@
 @import "open-props/fonts.min.css";
 @import "open-props/normalize.min.css";
 
+/* normalize は p / li / blockquote / 見出しに 20〜60ch の「読みやすい行長」を
+   上限幅として掛ける。ch は「0」の幅なので、日本語ではその半分ほどの文字数で
+   折り返され、段の右半分が空く。段幅は各ビュー(.detail-body の 640px、
+   タイムラインの 552px)が決めているので、要素側の上限は外す */
+:where(h1, h2, h3, h4, h5, h6, p, li, dd, dt, blockquote, figcaption, td) {
+  max-inline-size: none;
+}
+
 :root {
   --app-surface: var(--gray-0);
   --app-surface-2: var(--gray-1);
