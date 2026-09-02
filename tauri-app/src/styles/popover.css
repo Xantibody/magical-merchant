@@ -77,41 +77,11 @@
   cursor: pointer;
 }
 
-/* チェックボックスは隠し、右のスイッチが状態を映す */
+/* チェックボックスは隠し、右のスイッチ(base.css の .switch)が状態を映す */
 .sync-popover-toggle input {
   position: absolute;
   opacity: 0;
   pointer-events: none;
-}
-
-.switch {
-  width: 34px;
-  height: 20px;
-  border-radius: 10px;
-  background: var(--app-border);
-  position: relative;
-  display: inline-block;
-  transition: background 0.15s;
-}
-
-.switch::after {
-  content: "";
-  position: absolute;
-  left: 2px;
-  top: 2px;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: white;
-  transition: left 0.15s;
-}
-
-.sync-popover-toggle input:checked ~ .switch {
-  background: var(--app-accent);
-}
-
-.sync-popover-toggle input:checked ~ .switch::after {
-  left: 16px;
 }
 
 .link-button {
