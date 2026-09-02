@@ -5,6 +5,7 @@ pub const DATA_DIR: &str = "data";
 pub const TIMELINE_DIR: &str = "timeline";
 pub const NOTES_DIR: &str = "notes";
 pub const TEMPLATES_DIR: &str = "templates";
+pub const GLYPHS_DIR: &str = "glyphs";
 
 #[must_use]
 pub fn data_dir(base_dir: &Path) -> PathBuf {
@@ -36,6 +37,14 @@ pub fn notes_dir(base_dir: &Path) -> PathBuf {
 #[must_use]
 pub fn templates_dir(base_dir: &Path) -> PathBuf {
     data_dir(base_dir).join(TEMPLATES_DIR)
+}
+
+/// 特殊文字(グリフ)画像の置き場。`data/` の中に置くのは、画像も同期されて
+/// ほしいから。`:236p:` と書いたノートが別の端末で文字のまま出ては、
+/// 登録した意味がない。同期の走査は data 配下を拡張子で選ばず丸ごと辿る。
+#[must_use]
+pub fn glyphs_dir(base_dir: &Path) -> PathBuf {
+    data_dir(base_dir).join(GLYPHS_DIR)
 }
 
 /// 書き換え前のノートの控えの置き場。
@@ -88,6 +97,15 @@ mod tests {
         assert_eq!(
             templates_dir(Path::new("/app")),
             PathBuf::from("/app/data/templates")
+        );
+    }
+
+    /// グリフ画像も `data/` の中。ノートと一緒に他の端末へ届く。
+    #[test]
+    fn glyphs_live_inside_the_synced_tree() {
+        assert_eq!(
+            glyphs_dir(Path::new("/app")),
+            PathBuf::from("/app/data/glyphs")
         );
     }
 
