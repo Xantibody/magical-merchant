@@ -67,6 +67,36 @@ impl PlaceCache {
     pub fn is_empty(&self) -> bool {
         self.places.is_empty()
     }
+
+    /// 言語の希望つきで引く。希望の言語に無ければ他の言語、それも無ければ
+    /// 言語を付けて書く前の控えを見る。
+    ///
+    /// 画面(`resolve`)はこれを使わない。あちらは希望の言語に無ければ
+    /// ジオコーダに聞き直せるが、MCP のように聞き直す手段のない読み手には、
+    /// 別の言語の名前でも座標だけよりは役に立つ。
+    #[must_use]
+    pub fn lookup(&self, locale: &str, key: &str) -> Option<&str> {
+        let suffix = format!(":{key}");
+        self.get(&cache_key(locale, key))
+            .or_else(|| {
+                self.places
+                    .iter()
+                    .find(|(k, _)| k.ends_with(&suffix))
+                    .map(|(_, v)| v.as_str())
+            })
+            .or_else(|| self.get(key))
+    }
+}
+
+/// 控えの中でのキー。言語を変えると同じ座標に別の名前が付くので、
+/// 座標だけで引くと前の言語の名前をそのまま出してしまう。
+///
+/// この変更より前に書かれた控え(言語の付かないキー)はもう一致しない。
+/// 派生ファイルなので消しには行かず、次に同じ場所を通ったときに
+/// 言語付きで書き直されるに任せる。
+#[must_use]
+pub fn cache_key(locale: &str, place_key: &str) -> String {
+    format!("{locale}:{place_key}")
 }
 
 #[cfg(test)]
@@ -135,5 +165,36 @@ mod tests {
         let tmp = TempDir::new().unwrap();
 
         assert!(PlaceCache::load(&tmp.path().join("places.json")).is_empty());
+    }
+    /// 画面の言語で聞いた名前があればそれ。無ければ別の言語のものでも、
+    /// 座標だけ見せられるより読める。
+    #[test]
+    fn lookup_prefers_the_asked_language_and_falls_back_to_any() {
+        let mut cache = PlaceCache::default();
+        cache.insert(cache_key("ja", "35.68,139.55"), "渋谷区".to_string());
+        cache.insert(cache_key("en", "35.68,139.55"), "Shibuya".to_string());
+        cache.insert(cache_key("ja", "43.06,141.35"), "札幌市".to_string());
+
+        assert_eq!(cache.lookup("en", "35.68,139.55"), Some("Shibuya"));
+        assert_eq!(cache.lookup("en", "43.06,141.35"), Some("札幌市"));
+        assert_eq!(cache.lookup("en", "0.00,0.00"), None);
+    }
+
+    /// 言語を付けて書く前の控え。消しには行かないので、読めるうちは読む。
+    #[test]
+    fn lookup_reads_a_legacy_key_without_a_language() {
+        let mut cache = PlaceCache::default();
+        cache.insert("35.68,139.55".to_string(), "渋谷区".to_string());
+
+        assert_eq!(cache.lookup("ja", "35.68,139.55"), Some("渋谷区"));
+    }
+
+    #[test]
+    fn the_cache_remembers_which_language_it_asked_in() {
+        assert_eq!(cache_key("en", "35.68,139.55"), "en:35.68,139.55");
+        assert_ne!(
+            cache_key("en", "35.68,139.55"),
+            cache_key("ja", "35.68,139.55")
+        );
     }
 }

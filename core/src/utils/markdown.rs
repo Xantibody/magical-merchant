@@ -1,4 +1,4 @@
-use chrono::{DateTime, FixedOffset, Local};
+use chrono::{DateTime, FixedOffset, Local, NaiveTime};
 use serde::Serialize;
 use serde::de::IgnoredAny;
 
@@ -60,6 +60,39 @@ pub fn timeline_entry_time(entry: &str) -> Option<&str> {
         .and_then(|t| t.strip_suffix("] "))
 }
 
+/// 1 行を分解したもの。行の形(時刻の括弧、行末 JSON)を読む側に見せない。
+///
+/// 画面は行のまま扱えるが、外部(MCP)に渡すときは書式ではなく値が要る。
+/// 突き合わせたいのは「いつ・どこで」であって、`- [` の位置ではない。
+#[derive(Debug, Clone, PartialEq)]
+pub struct TimelineEntry {
+    /// 端末のローカル時刻。旧い行では `None`。
+    pub time: Option<NaiveTime>,
+    /// 書き手が打った本文だけ。
+    pub text: String,
+    /// 記録時の端末の状態。何も残っていなければ既定値。
+    pub context: Context,
+}
+
+/// 保存された行を [`TimelineEntry`] に戻す。
+///
+/// 読めない部分は本文に倒す。行末が JSON として壊れていても、時刻の括弧が
+/// 無くても、書かれた文字は失わない。
+#[must_use]
+pub fn parse_timeline_entry(entry: &str) -> TimelineEntry {
+    let time =
+        timeline_entry_time(entry).and_then(|t| NaiveTime::parse_from_str(t, "%H:%M:%S").ok());
+    let rest = split_time_prefix(entry).map_or(entry, |(_, rest)| rest);
+    let context = split_context_json(rest)
+        .and_then(|json| serde_json::from_str::<Context>(json).ok())
+        .unwrap_or_default();
+    TimelineEntry {
+        time,
+        text: strip_timeline_prefix(entry).to_string(),
+        context,
+    }
+}
+
 pub fn format_note_markdown(
     body: &str,
     tags: &[String],
@@ -81,6 +114,7 @@ pub fn format_note_markdown(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::utils::device::Location;
     use crate::utils::frontmatter::NoteFrontmatter;
     use chrono::TimeZone;
 
@@ -178,5 +212,53 @@ mod tests {
         let context = fm.context.unwrap();
         assert_eq!(context.battery, Some(100));
         assert_eq!(context.is_charging, Some(true));
+    }
+    #[test]
+    fn a_line_parses_back_into_time_text_and_context() {
+        let ctx = Context {
+            battery: Some(82),
+            location: Some(Location {
+                latitude: 35.6762,
+                longitude: 139.6503,
+            }),
+            os: "macos".to_string(),
+            ..Context::default()
+        };
+        let line = format_timeline_line("hello world", fixed_timestamp(), &ctx);
+
+        let entry = parse_timeline_entry(&line);
+
+        assert_eq!(entry.time, NaiveTime::from_hms_opt(14, 30, 45));
+        assert_eq!(entry.text, "hello world");
+        assert_eq!(entry.context, ctx);
+    }
+
+    /// 時刻もコンテキストも持たない旧い行。本文だけは落とさない。
+    #[test]
+    fn a_bare_line_is_all_text() {
+        let entry = parse_timeline_entry("- plain bullet");
+
+        assert_eq!(entry.time, None);
+        assert_eq!(entry.text, "- plain bullet");
+        assert_eq!(entry.context, Context::default());
+    }
+
+    #[test]
+    fn a_multiline_entry_keeps_its_newlines() {
+        let line = format_timeline_line("line1\nline2", fixed_timestamp(), &Context::default());
+
+        let entry = parse_timeline_entry(&line);
+
+        assert_eq!(entry.text, "line1\nline2");
+    }
+
+    /// 本文が `{` で終わる JSON 風の文だと、末尾がコンテキストと紛れる。
+    /// 読めない JSON は本文のまま残す。
+    #[test]
+    fn a_trailing_brace_in_the_text_is_not_a_context() {
+        let entry = parse_timeline_entry("- [09:00:00] fn main() {");
+
+        assert_eq!(entry.text, "fn main() {");
+        assert_eq!(entry.context, Context::default());
     }
 }

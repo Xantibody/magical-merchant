@@ -25,9 +25,15 @@ description: Rust core crate conventions, Tauri command plumbing, MCP CLI, and t
 
 ## MCP CLI
 
-`mcp-cli/` exposes core as read-only MCP tools: `list_notes`, `read_note`,
-`search`, `list_timeline_dates`, `read_timeline`. New core read APIs should
-be considered for MCP exposure; never expose writes without discussion.
+`mcp-cli/` exposes core as read-only MCP tools (`server.rs`; output shapes
+in `output.rs`): `list_notes`, `read_note`, `backlinks`, `search`,
+`list_timeline_dates`, `read_timeline`, `read_timeline_range`, `list_places`,
+`list_tags`, `list_templates`, `read_template`. Timeline entries go out as
+values (`parse_timeline_entry` in core), never as raw lines — external
+consumers join on time and location, so keep those fields structured. Place
+names come only from the app's `places.json` cache; the server must stay
+offline. New core read APIs should be considered for MCP exposure; never
+expose writes without discussion. Packaged as `nix run .#mcp` (`nix/mcp.nix`).
 
 ## Verification
 
