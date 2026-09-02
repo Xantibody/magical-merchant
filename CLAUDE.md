@@ -16,16 +16,16 @@ ready to record the moment it opens (widgets exist for exactly this).
 
 ## Tech Stack
 
-| Layer      | Technology                                          |
-| ---------- | --------------------------------------------------- |
-| Core logic | Rust (`core/` crate, framework-independent)         |
-| App        | Tauri 2 + SolidJS (`tauri-app/`)                    |
-| Styling    | Open Props via `--app-*` tokens (`styles/base.css`) |
-| Icons      | Phosphor Icons (SVG files, `components/Icon.tsx`)   |
-| Editor     | Milkdown (headless) + custom plugins                |
-| Markdown   | markdown-it + Shiki; Mermaid / markmap lazy         |
-| Sync       | Cloudflare Workers + R2 (`workers/`)                |
-| AI access  | MCP server (`mcp-cli/`, read-only, `nix run .#mcp`) |
+| Layer      | Technology                                              |
+| ---------- | ------------------------------------------------------- |
+| Core logic | Rust (`core/` crate, framework-independent)             |
+| App        | Tauri 2 + SolidJS (`tauri-app/`)                        |
+| Styling    | Open Props via `--app-*` tokens (`styles/base.css`)     |
+| Icons      | Phosphor Icons (SVG files, `components/Icon.tsx`)       |
+| Editor     | Milkdown (headless) + custom plugins                    |
+| Markdown   | markdown-it + Shiki; Mermaid / markmap lazy             |
+| Sync       | Cloudflare Workers + R2 (`workers/`)                    |
+| AI access  | MCP server (`mcp-cli/`, `nix run .#mcp`; writes opt-in) |
 
 ## UI Architecture (current)
 
