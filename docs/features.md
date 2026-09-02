@@ -116,7 +116,7 @@ list that deep-links into the app.
 
 ## AI access (MCP)
 
-`mcp-cli` exposes the same core as read-only
+`cli` exposes the same core as read-only
 [Model Context Protocol](https://modelcontextprotocol.io/) tools for AI
 assistants. It finds the app's data directory on its own, so the usual
 client configuration is just the launch command:

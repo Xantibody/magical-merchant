@@ -95,8 +95,8 @@ fetch what they need:
 | `just rust::test`      | `cargo test` for all Rust crates     | ✓   |
 | `just rust::check-app` | `cargo clippy` for core + app crates |     |
 | `just rust::test-app`  | `cargo test` for core + app crates   |     |
-| `just rust::check-cli` | `cargo clippy` for mcp-cli crate     |     |
-| `just rust::test-cli`  | `cargo test` for mcp-cli crate       |     |
+| `just rust::check-cli` | `cargo clippy` for cli crate         |     |
+| `just rust::test-cli`  | `cargo test` for cli crate           |     |
 
 ### Frontend recipes (`tauri_app::`)
 

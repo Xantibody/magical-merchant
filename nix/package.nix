@@ -25,9 +25,9 @@ stdenv.mkDerivation (finalAttrs: {
       ../Cargo.toml
       ../Cargo.lock
       ../core
-      # mcp-cli included for workspace resolution only
-      ../mcp-cli/Cargo.toml
-      ../mcp-cli/src
+      # cli included for workspace resolution only
+      ../cli/Cargo.toml
+      ../cli/src
       ../tauri-app/src-tauri
       ../tauri-app/src
       ../tauri-app/package.json

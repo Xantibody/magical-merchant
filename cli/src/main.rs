@@ -15,7 +15,7 @@ const APP_IDENTIFIER: &str = "com.magical-merchant.app";
 
 #[derive(Parser)]
 #[command(
-    name = "magical-merchant-mcp",
+    name = "magical-merchant",
     version,
     about = "Read-only MCP server for a Magical Merchant journal"
 )]

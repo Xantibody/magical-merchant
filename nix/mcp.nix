@@ -10,10 +10,10 @@
 let
   crateApiUrl = "https://crates.io/api/v1/crates";
   crateMirrorUrl = "https://static.crates.io/crates";
-  cargoToml = lib.importTOML ../mcp-cli/Cargo.toml;
+  cargoToml = lib.importTOML ../cli/Cargo.toml;
   cargoFlags = [
     "-p"
-    "magical-merchant-mcp-cli"
+    "magical-merchant-cli"
   ];
 in
 rustPlatform.buildRustPackage {
@@ -26,7 +26,7 @@ rustPlatform.buildRustPackage {
       ../Cargo.toml
       ../Cargo.lock
       ../core
-      ../mcp-cli
+      ../cli
       # ワークスペースの解決にだけ要る。ビルドはしない
       ../tauri-app/src-tauri/Cargo.toml
       ../tauri-app/src-tauri/src
@@ -55,6 +55,6 @@ rustPlatform.buildRustPackage {
 
   meta = {
     description = "Read-only MCP server for a Magical Merchant journal";
-    mainProgram = "magical-merchant-mcp-cli";
+    mainProgram = "magical-merchant";
   };
 }

@@ -62,14 +62,14 @@ More options (nix-darwin module, manual build, Android APK) are in
 
 ## Tech Stack
 
-Rust core (`core/`) shared by the Tauri 2 app, an MCP server (`mcp-cli/`),
+Rust core (`core/`) shared by the Tauri 2 app, an MCP server (`cli/`),
 and benchmarks · SolidJS + Milkdown frontend · Open Props design tokens ·
 Cloudflare Workers + R2 sync (`workers/`) · Nix flake for dev/CI/packaging.
 
 ```
 magical-merchant/
 ├── core/           # Rust core library (framework-independent business logic)
-├── mcp-cli/        # MCP server CLI (exposes core as AI assistant tools)
+├── cli/        # MCP server CLI (exposes core as AI assistant tools)
 ├── tauri-app/
 │   ├── src/        # SolidJS frontend (TypeScript)
 │   └── src-tauri/  # Tauri 2 backend (Rust)

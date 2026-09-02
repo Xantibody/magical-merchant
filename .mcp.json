@@ -11,7 +11,7 @@
     "magical-merchant": {
       "type": "stdio",
       "command": "cargo",
-      "args": ["run", "--quiet", "-p", "magical-merchant-mcp-cli"]
+      "args": ["run", "--quiet", "-p", "magical-merchant-cli"]
     }
   }
 }

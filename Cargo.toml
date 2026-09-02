@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["core", "mcp-cli", "tauri-app/src-tauri"]
+members = ["core", "cli", "tauri-app/src-tauri"]
 
 [workspace.package]
 license = "MIT"
