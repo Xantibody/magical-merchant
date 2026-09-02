@@ -89,6 +89,16 @@ used tags. Search results highlight the matched text in a context snippet, and
 selecting a hit lands exactly — a note opens that note, a timeline hit scrolls
 to that day.
 
+Searches can be scoped to tags, from any screen. Every `#tag` you type in the
+palette counts as scope rather than text: `#SF6 #ベガ #置き攻め` lists every
+note and entry carrying all three tags (AND), and `#sf6 コンボ` looks for
+"コンボ" only inside `#sf6`. Tags are matched the way the Timeline chips are,
+so `#SF6` and `#sf6` are the same tag. Picking a tag from the entry points adds
+it as a chip in front of the input; a chip is removed by clicking it, or with
+Backspace in an empty field (last chip first). When the Timeline is filtered
+by a tag, `⌘K` opens the palette with that chip already set. Scoped results
+show their count, and the empty message names the tags it looked inside.
+
 ![Command palette](images/palette.png)
 
 ## Language
@@ -146,7 +156,7 @@ can line the journal up with other time- or location-based data.
 | `list_notes`          | List all notes with tags, a short preview, and their origin         |
 | `read_note`           | Read a note's metadata (time, tags, context) and Markdown body      |
 | `backlinks`           | List the records that link to a note with `[[…]]`                   |
-| `search`              | Search notes and timeline entries                                   |
+| `search`              | Search notes and timeline entries, optionally within a set of tags  |
 | `list_timeline_dates` | List the dates that have timeline entries                           |
 | `read_timeline`       | Read one day's entries with time, text, tags, location, and device  |
 | `read_timeline_range` | Read entries between two days, optionally filtered by tag           |

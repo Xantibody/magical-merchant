@@ -309,15 +309,25 @@
       }
       return answers;
     },
-    search_all: ({ query }) => {
+    search_all: ({ query, tags }) => {
       const needle = query.trim().toLowerCase();
-      if (!needle) {
+      // 本流(core)の utils::tags と同じ規則: `#` の有無と ASCII の大小は見ない
+      const lower = (tag) => tag.replaceAll(/[A-Z]/g, (c) => c.toLowerCase());
+      const scope = tags
+        .map((tag) => lower(tag.trim().replace(/^#/, "")))
+        .filter((tag) => tag.length > 0);
+      if (!needle && scope.length === 0) {
         return [];
       }
+      // lib/tags.ts の TAG と同じ。ここは 1 行しか読まないのでコードは切り分けない
+      const TAG = /(?<![\p{L}\p{N}_-])#([\p{L}\p{N}_-]+)/gu;
+      const parseTags = (text) => [...new Set([...text.matchAll(TAG)].map((m) => lower(m[1])))];
+      const inScope = (own) => scope.every((tag) => own.includes(tag));
       /** 本流(core)と同じ形: 一致の前後を含む抜粋と、文字数の一致位置。 */
       const excerpt = (text) => {
         const flat = text.replaceAll("\n", " ");
-        const at = flat.toLowerCase().indexOf(needle);
+        // タグだけで絞った一覧には光らせる場所がない
+        const at = needle ? flat.toLowerCase().indexOf(needle) : -1;
         if (at === -1) {
           return { snippet: flat.slice(0, 90), match_start: null, match_len: null };
         }
@@ -334,7 +344,8 @@
       for (const [iso, lines] of timeline) {
         lines.forEach((raw, index) => {
           const text = raw.replace(/^- \[\d\d:\d\d:\d\d\] /, "").replace(/ \{.*\}$/, "");
-          if (!text.toLowerCase().includes(needle)) {
+          const own = parseTags(text);
+          if (!text.toLowerCase().includes(needle) || !inScope(own)) {
             return;
           }
           hits.push({
@@ -343,13 +354,13 @@
             date: iso,
             filename: null,
             index,
-            tags: [],
+            tags: own,
             ...excerpt(text),
           });
         });
       }
       for (const [filename, note] of notes) {
-        if (!note.body.toLowerCase().includes(needle)) {
+        if (!note.body.toLowerCase().includes(needle) || !inScope(note.tags)) {
           continue;
         }
         hits.push({

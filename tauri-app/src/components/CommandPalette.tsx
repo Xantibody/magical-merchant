@@ -10,6 +10,7 @@ import { t } from "../lib/i18n";
 import { isImeComposing } from "../lib/ime";
 import { toNoteItems } from "../lib/items";
 import { countNoteTags, dayJumpHits, recentNoteHits } from "../lib/palette-home";
+import { scopeLabel, searchRequest } from "../lib/search-scope";
 import { splitSnippet } from "../lib/snippet-highlight";
 import type { SnippetParts } from "../lib/snippet-highlight";
 
@@ -23,6 +24,8 @@ interface PaletteCommand {
 
 interface CommandPaletteProps {
   commands: PaletteCommand[];
+  /** 開いた画面から引き継ぐ検索の範囲(タグ、AND)。開いた後はパレットの中で外せる。 */
+  scopeTags?: string[];
   onSelectHit: (hit: SearchHit) => void;
   onClose: () => void;
 }
@@ -42,11 +45,17 @@ interface PaletteSection {
   rows: PaletteRow[];
 }
 
-function searchHits(query: string): Promise<SearchHit[]> {
-  if (!query.trim()) {
+interface SearchSource {
+  query: string;
+  tags: string[];
+}
+
+function searchHits(source: SearchSource): Promise<SearchHit[]> {
+  const request = searchRequest(source.query, source.tags);
+  if (!request) {
     return Promise.resolve([]);
   }
-  return typedInvoke("search_all", { query });
+  return typedInvoke("search_all", request);
 }
 
 /**
@@ -61,8 +70,41 @@ const HOME_TAG_LIMIT = 6;
 
 export default function CommandPalette(props: CommandPaletteProps): JSX.Element {
   const [query, setQuery] = createSignal("");
+  // 開いた瞬間の範囲を初期値にするだけ。開いている間に外から変わることはない
+  const [scope, setScope] = createSignal<string[]>(props.scopeTags ?? []);
   const [cursor, setCursor] = createSignal(0);
-  const [hits] = createResource(createDebouncedAccessor(query, SEARCH_DEBOUNCE_MS), searchHits);
+  // 打鍵はまとめるが、チップの付け外しは即時に効かせる。1 回の操作で結果が変わる
+  const debouncedQuery = createDebouncedAccessor(query, SEARCH_DEBOUNCE_MS);
+  const [hits] = createResource<SearchHit[], SearchSource>(
+    () => ({ query: debouncedQuery(), tags: scope() }),
+    searchHits,
+  );
+
+  /**
+   * いま効いている範囲。チップに加えて、打った `#タグ` も入る(searchRequest)。
+   *
+   * 打った `#タグ` はチップにしない。打っている途中で `#sf` がチップになると
+   * 続きが打てず、`#sf6` と `#sf` のどちらを消したいかも分からなくなる。
+   * 打ったままの文字が範囲として効けばよく、消すのも文字を消すだけでいい。
+   */
+  const activeTags = createMemo(() => searchRequest(debouncedQuery(), scope())?.tags ?? []);
+
+  /** 範囲は検索の入り口なので、zero-query でもチップがあれば結果を出す。 */
+  const browsing = (): boolean => Boolean(query().trim() || scope().length > 0);
+
+  let inputRef: HTMLInputElement | undefined;
+
+  const removeScope = (tag: string): void => {
+    setScope((tags) => tags.filter((candidate) => candidate !== tag));
+    setCursor(0);
+  };
+
+  /** 範囲は足していく(AND)。置き換えると二つ目のタグで一つ目が消える。 */
+  const addScope = (tag: string): void => {
+    setScope((tags) => (tags.includes(tag) ? tags : [...tags, tag]));
+    setCursor(0);
+    inputRef?.focus();
+  };
 
   // zero-query の入り口。どれも既存の IPC から導出するだけで、開いた瞬間に
   // 1 回読めば足りる
@@ -79,7 +121,6 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
     };
   });
 
-  let inputRef: HTMLInputElement | undefined;
   onMount(() => inputRef?.focus());
 
   const matchingCommands = createMemo(() => {
@@ -99,7 +140,7 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
       run: command.run,
     }));
 
-    if (!query().trim()) {
+    if (!browsing()) {
       const entry = home();
       const days: PaletteRow[] = (entry?.days ?? []).map((day) => ({
         key: `day:${day.hit.date}`,
@@ -120,11 +161,9 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
         icon: "magnifying-glass",
         label: `#${tag.tag}`,
         meta: t().palette.count(tag.count),
-        run: () => {
-          // タグは着地先が一つに決まらないので、検索として引き継ぐ
-          setQuery(tag.tag);
-          setCursor(0);
-        },
+        // タグは着地先が一つに決まらないので、範囲として引き継ぐ。文字列に
+        // すると本文の一致も混ざり、しかもそこから絞って打ち足せない
+        run: () => addScope(tag.tag),
       }));
       return [
         { title: t().palette.commands, rows: commands },
@@ -142,9 +181,14 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
       highlight: splitSnippet(hit.snippet, hit.match_start, hit.match_len),
       run: () => props.onSelectHit(hit),
     }));
+    // 範囲の中では件数も出す。「この中に何件あるか」が絞り込みの手応えになる
+    const hitsTitle =
+      activeTags().length > 0
+        ? `${t().palette.hits} · ${t().palette.count(hitRows.length)}`
+        : t().palette.hits;
     return [
       { title: t().palette.commands, rows: commands },
-      { title: t().palette.hits, rows: hitRows },
+      { title: hitsTitle, rows: hitRows },
     ].filter((section) => section.rows.length > 0);
   });
 
@@ -156,6 +200,13 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
     if (e.key === "Escape") {
       e.preventDefault();
       props.onClose();
+      return;
+    }
+    // 空の入力欄で Backspace を押したら、その手前にあるチップ(最後の一つ)が消える
+    const last = scope().at(-1);
+    if (e.key === "Backspace" && !query() && last !== undefined) {
+      e.preventDefault();
+      removeScope(last);
       return;
     }
     if (e.key === "ArrowDown") {
@@ -192,6 +243,20 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
       <div class="palette" role="dialog" aria-modal="true" aria-label={t().palette.dialogLabel}>
         <div class="palette-input-row">
           <Icon name="magnifying-glass" size={17} />
+          <For each={scope()}>
+            {(tag) => (
+              <button
+                type="button"
+                class="tag-chip tag-chip--active palette-scope"
+                title={t().palette.removeScope}
+                aria-label={`${t().palette.scopeTag(tag)} · ${t().palette.removeScope}`}
+                onClick={() => removeScope(tag)}
+              >
+                #{tag}
+                <Icon name="x" size={11} />
+              </button>
+            )}
+          </For>
           <input
             ref={inputRef}
             type="text"
@@ -251,8 +316,12 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
             )}
           </For>
 
-          <Show when={query().trim() && !hits.loading && !hits()?.length}>
-            <p class="palette-empty">{t().palette.empty}</p>
+          <Show when={browsing() && !hits.loading && !hits()?.length}>
+            <p class="palette-empty">
+              {activeTags().length > 0
+                ? t().palette.emptyScoped(scopeLabel(activeTags()))
+                : t().palette.empty}
+            </p>
           </Show>
         </div>
       </div>

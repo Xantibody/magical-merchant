@@ -31,6 +31,15 @@
   color: var(--app-text-faint);
 }
 
+/* 引き継いだタグの範囲。入力欄の前に付き、外すまで検索はこの中だけ。
+   見た目は Timeline の選択中チップと同じ(tags.css)で、入力欄の高さに収める */
+.palette-input-row .palette-scope {
+  padding: 3px 9px;
+  gap: 4px;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
 .palette-input {
   flex: 1;
   border: none;
