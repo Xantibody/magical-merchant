@@ -7,7 +7,7 @@ import {
 
 describe("buildLanguageSuggestions", () => {
   it("sorts the loaded languages", () => {
-    expect(buildLanguageSuggestions(["ts", "bash", "rust"])).toEqual([
+    expect(buildLanguageSuggestions(["ts", "bash", "rust"])).toStrictEqual([
       "bash",
       "mermaid",
       "rust",
@@ -17,8 +17,8 @@ describe("buildLanguageSuggestions", () => {
 
   // mermaid はハイライト対象外でも図が描ける言語なので、候補から漏らさない
   it("always offers mermaid even though the highlighter does not load it", () => {
-    expect(buildLanguageSuggestions([])).toEqual(["mermaid"]);
-    expect(buildLanguageSuggestions(["mermaid", "ts"])).toEqual(["mermaid", "ts"]);
+    expect(buildLanguageSuggestions([])).toStrictEqual(["mermaid"]);
+    expect(buildLanguageSuggestions(["mermaid", "ts"])).toStrictEqual(["mermaid", "ts"]);
   });
 });
 
@@ -32,7 +32,7 @@ describe("ensureLanguageDatalist", () => {
 
     expect(id).toBe(LANGUAGE_DATALIST_ID);
     const options = document.querySelectorAll(`#${LANGUAGE_DATALIST_ID} option`);
-    expect([...options].map((o) => (o as HTMLOptionElement).value)).toEqual(["js", "rust"]);
+    expect([...options].map((o) => (o as HTMLOptionElement).value)).toStrictEqual(["js", "rust"]);
   });
 
   // エディタは開き直されるし、ブロックごとに nodeView が立つ。何度呼んでも 1 つ

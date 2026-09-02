@@ -27,12 +27,10 @@ function mockPlaces(answers: [string, string][]): {
   return { calls, locales };
 }
 
-afterEach(() => clearMocks());
-
 describe("placeKey", () => {
   /** Rust 側の `place_key` と同じ丸めでないと、答えを引き当てられない。 */
   it("rounds to the same grid the cache is keyed by", () => {
-    expect(placeKey(35.676_140_3, 139.546_563_4)).toBe("35.68,139.55");
+    expect(placeKey(35.6761403, 139.5465634)).toBe("35.68,139.55");
   });
 
   it("keeps the hemisphere", () => {
@@ -41,13 +39,15 @@ describe("placeKey", () => {
 });
 
 describe("createPlaceStore", () => {
+  afterEach(() => clearMocks());
+
   it("names a coordinate once it has been resolved", async () => {
     const store = createPlaceStore();
     mockPlaces([["35.68,139.55", "渋谷区"]]);
 
-    await store.load([at(35.676_140_3, 139.546_563_4)]);
+    await store.load([at(35.6761403, 139.5465634)]);
 
-    expect(store.nameOf({ latitude: 35.676_140_3, longitude: 139.546_563_4 })).toBe("渋谷区");
+    expect(store.nameOf({ latitude: 35.6761403, longitude: 139.5465634 })).toBe("渋谷区");
   });
 
   /** 同じ町で書いた 1 日ぶんの記録に、同じ問い合わせを何十回もさせない。 */
@@ -57,7 +57,7 @@ describe("createPlaceStore", () => {
 
     await store.load([at(35.6761, 139.5465), at(35.6769, 139.5469), at(35.6517, 139.5446)]);
 
-    expect(calls[0]).toEqual([
+    expect(calls[0]).toStrictEqual([
       [35.6761, 139.5465],
       [35.6517, 139.5446],
     ]);

@@ -8,7 +8,7 @@
  * 指し先は変わらない。
  */
 
-const LINK = /\[\[(\d{8}_\d{6})(?:\|([^\n[\]]*))?\]\]/g;
+const LINK = /\[\[(?<id>\d{8}_\d{6})(?:\|(?<alias>[^\n[\]]*))?\]\]/gu;
 
 export interface NoteLinkSegment {
   text: string;
@@ -25,7 +25,11 @@ export function splitNoteLinks(text: string): NoteLinkSegment[] {
     if (match.index > last) {
       segments.push({ text: text.slice(last, match.index), id: null, alias: null });
     }
-    segments.push({ text: match[0], id: match[1], alias: match[2] || null });
+    segments.push({
+      text: match[0],
+      id: match.groups?.id ?? null,
+      alias: match.groups?.alias || null,
+    });
     last = match.index + match[0].length;
   }
   if (last < text.length || segments.length === 0) {

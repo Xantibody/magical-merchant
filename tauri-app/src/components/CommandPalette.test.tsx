@@ -64,7 +64,7 @@ describe("CommandPalette with a tag scope", () => {
   it("lists everything under the tag before anything is typed", async () => {
     const { container, chips, searches } = renderPalette(["sync"]);
 
-    expect(chips()).toEqual(["#sync"]);
+    expect(chips()).toStrictEqual(["#sync"]);
     await waitFor(() => expect(searches).toContainEqual({ query: "", tags: ["sync"] }));
     await waitFor(() => expect(container.textContent).toContain("走った #sync"));
   });
@@ -79,7 +79,7 @@ describe("CommandPalette with a tag scope", () => {
   it("shows one chip per tag and requires all of them", async () => {
     const { chips, searches } = renderPalette(["sf6", "ベガ"]);
 
-    expect(chips()).toEqual(["#sf6", "#ベガ"]);
+    expect(chips()).toStrictEqual(["#sf6", "#ベガ"]);
     await waitFor(() => expect(searches).toContainEqual({ query: "", tags: ["sf6", "ベガ"] }));
   });
 
@@ -91,7 +91,7 @@ describe("CommandPalette with a tag scope", () => {
     await waitFor(() =>
       expect(searches).toContainEqual({ query: "コンボ", tags: ["sf6", "ベガ"] }),
     );
-    expect(chips()).toEqual([]);
+    expect(chips()).toStrictEqual([]);
   });
 
   it("adds typed hashtags to the chips", async () => {
@@ -106,7 +106,7 @@ describe("CommandPalette with a tag scope", () => {
 
     fireEvent.keyDown(input, { key: "Backspace" });
 
-    expect(chips()).toEqual(["#sf6"]);
+    expect(chips()).toStrictEqual(["#sf6"]);
   });
 
   it("drops the chip that is clicked", () => {
@@ -115,7 +115,7 @@ describe("CommandPalette with a tag scope", () => {
 
     first?.click();
 
-    expect(chips()).toEqual(["#ベガ"]);
+    expect(chips()).toStrictEqual(["#ベガ"]);
   });
 
   // 入り口のタグ行は文字を貼らず、チップとして範囲に足す
@@ -131,7 +131,7 @@ describe("CommandPalette with a tag scope", () => {
 
     row?.click();
 
-    expect(chips()).toEqual(["#sf6"]);
+    expect(chips()).toStrictEqual(["#sf6"]);
     await waitFor(() => expect(searches).toContainEqual({ query: "", tags: ["sf6"] }));
   });
 
@@ -146,6 +146,6 @@ describe("CommandPalette with a tag scope", () => {
   it("opens unscoped when no tag is handed over", () => {
     const { chips } = renderPalette([]);
 
-    expect(chips()).toEqual([]);
+    expect(chips()).toStrictEqual([]);
   });
 });

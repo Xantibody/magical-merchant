@@ -32,15 +32,15 @@ function manualPosition(): {
   };
 }
 
-beforeEach(() => {
-  vi.useFakeTimers();
-});
-
-afterEach(() => {
-  vi.useRealTimers();
-});
-
 describe("createLocationTracker", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("uses the fix when it arrives within the budget", async () => {
     const gps = manualPosition();
     const tracker = createLocationTracker({
@@ -52,7 +52,7 @@ describe("createLocationTracker", () => {
     await vi.advanceTimersByTimeAsync(0);
     gps.resolve(SHIBUYA);
 
-    await expect(reading).resolves.toEqual(SHIBUYA);
+    await expect(reading).resolves.toStrictEqual(SHIBUYA);
   });
 
   // 保存が測位を待ち続けると「即座に保存される」が壊れる。位置は諦めてよい。
@@ -66,7 +66,7 @@ describe("createLocationTracker", () => {
     const reading = tracker.read();
     await vi.advanceTimersByTimeAsync(LOCATION_BUDGET_MS);
 
-    await expect(reading).resolves.toEqual(NONE);
+    await expect(reading).resolves.toStrictEqual(NONE);
   });
 
   it("uses a fix that arrived late for the next capture", async () => {
@@ -83,7 +83,7 @@ describe("createLocationTracker", () => {
     await vi.advanceTimersByTimeAsync(0);
 
     // 2 回目は新しいフィックスを待たされず、手元にある前回の座標で即返る
-    await expect(tracker.read()).resolves.toEqual(SHIBUYA);
+    await expect(tracker.read()).resolves.toStrictEqual(SHIBUYA);
   });
 
   it("never asks the GPS when permission is denied", async () => {
@@ -93,7 +93,7 @@ describe("createLocationTracker", () => {
       position: gps.position,
     });
 
-    await expect(tracker.read()).resolves.toEqual(NONE);
+    await expect(tracker.read()).resolves.toStrictEqual(NONE);
     expect(gps.calls()).toBe(0);
   });
 
@@ -111,7 +111,7 @@ describe("createLocationTracker", () => {
     tracker.warmUp();
     await vi.advanceTimersByTimeAsync(0);
 
-    expect(requests).toEqual([false]);
+    expect(requests).toStrictEqual([false]);
   });
 
   it("lets the first capture use the coordinates the warm-up fetched", async () => {
@@ -126,7 +126,7 @@ describe("createLocationTracker", () => {
     gps.resolve(SHIBUYA);
     await vi.advanceTimersByTimeAsync(0);
 
-    await expect(tracker.read()).resolves.toEqual(SHIBUYA);
+    await expect(tracker.read()).resolves.toStrictEqual(SHIBUYA);
   });
 
   it("shares one in-flight fix between overlapping reads", async () => {
@@ -141,8 +141,8 @@ describe("createLocationTracker", () => {
     await vi.advanceTimersByTimeAsync(0);
     gps.resolve(SHIBUYA);
 
-    await expect(first).resolves.toEqual(SHIBUYA);
-    await expect(second).resolves.toEqual(SHIBUYA);
+    await expect(first).resolves.toStrictEqual(SHIBUYA);
+    await expect(second).resolves.toStrictEqual(SHIBUYA);
     expect(gps.calls()).toBe(1);
   });
 
@@ -153,6 +153,6 @@ describe("createLocationTracker", () => {
       position: gps.position,
     });
 
-    await expect(tracker.read()).resolves.toEqual(NONE);
+    await expect(tracker.read()).resolves.toStrictEqual(NONE);
   });
 });

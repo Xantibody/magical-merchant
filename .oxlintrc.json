@@ -36,6 +36,12 @@
     "no-void": ["error", { "allowAsStatement": true }],
     // A bare `import "./styles.css"` has no binding to assign by definition.
     "import/no-unassigned-import": ["error", { "allow": ["**/*.css"] }],
+    // Tauri hands its runtime globals to the webview under dunder names; the
+    // test that stubs them has to spell them the same way.
+    "no-underscore-dangle": [
+      "error",
+      { "allow": ["__TAURI_INTERNALS__", "__TAURI_EVENT_PLUGIN_INTERNALS__"] }
+    ],
 
     // --- off: contradicts another enabled rule ---
     // `import/no-default-export` is the convention here; these three demand the
@@ -61,6 +67,10 @@
     // TypeScript already resolves every identifier; this rule only has value in
     // untyped JS and misreports type-only and platform globals.
     "no-undef": "off",
+    // Bans calling any method whose name ends in "Sync" to keep Node's blocking
+    // fs APIs out of servers. Nothing here runs on Node, and the rule matches
+    // by name suffix, so it hits this project's own renderMarkdownSync/autoSync.
+    "node/no-sync": "off",
 
     // --- off: conflicts with project conventions ---
     // CLAUDE.md assigns "why not" to comments; JSDoc-on-everything is a
@@ -70,6 +80,18 @@
     "no-inline-comments": "off",
     // Comments here are written in Japanese, which has no letter case.
     "capitalized-comments": "off",
+    // Wants native <dialog>, <select>, <input type="radio"> and <output> in
+    // place of ARIA roles. The palette, tag suggestions, segmented controls and
+    // toast are custom widgets on purpose: the native elements bring browser
+    // chrome and behaviour the UI replaces, and these roles are what WAI-ARIA
+    // prescribes for exactly that.
+    "jsx-a11y/prefer-tag-over-role": "off",
+
+    // --- off: the replacement it proposes is wrong ---
+    // Proposes Number(x) for parseFloat(x). The strings parsed here are CSS
+    // lengths from getComputedStyle: parseFloat("24px") is 24, Number("24px")
+    // is NaN.
+    "unicorn/prefer-number-coercion": "off",
 
     // --- off: arbitrary thresholds, not defects ---
     "max-lines": "off",
@@ -80,6 +102,7 @@
     "max-nested-callbacks": "off",
     "import/max-dependencies": "off",
     "no-magic-numbers": "off",
+    "unicorn/max-nested-calls": "off",
 
     // --- off: style opinions a formatter or reviewer owns ---
     // Ordering rules that fight each other and the grouping used here.
@@ -91,6 +114,11 @@
     "no-ternary": "off",
     // Forcing one of declaration/expression everywhere has no defect behind it.
     "func-style": "off",
+    // Wants consecutive declarations merged into one `const a = …, b = …;`
+    // statement, and their names sorted. One binding per line is what the
+    // formatter lays out; the order is the reader's.
+    "one-var": "off",
+    "sort-vars": "off",
     // `let x; if (…) x = …` is a legitimate shape.
     "init-declarations": "off",
     "no-plusplus": "off",
@@ -104,17 +132,24 @@
       "rules": {
         // A top-level `describe` names the component or module under test, so
         // it keeps that identifier's casing; nested titles stay lowercase.
-        "jest/prefer-lowercase-title": ["error", { "ignoreTopLevelDescribe": true }],
+        "vitest/prefer-lowercase-title": ["error", { "ignoreTopLevelDescribe": true }],
         // Test names describe behaviour, not the function under test.
         "vitest/prefer-describe-function-title": "off",
         // Importing `describe`/`it` explicitly is deliberate: no magic globals.
         "vitest/no-importing-vitest-globals": "off",
+        // An assertion may live in an expect… helper shared by several tests
+        // (expectTransformUnchanged); a test that only calls one still asserts.
+        "vitest/expect-expect": ["error", { "assertFunctionNames": ["expect", "expect*"] }],
         // A missing timeout means "use the configured default", not a bug.
         "vitest/require-test-timeout": "off",
         // Fixture setup in a hook is the pattern this suite uses.
-        "jest/no-hooks": "off",
+        "vitest/no-hooks": "off",
         // An arbitrary threshold, like the other max-* rules above.
-        "jest/max-expects": "off",
+        "vitest/max-expects": "off",
+        // Wants `expect.hasAssertions()` as the first line of every test.
+        // `vitest/expect-expect` already rejects a test with no assertion
+        // statically; the runtime guard only adds a line to each test.
+        "vitest/prefer-expect-assertions": "off",
         // Exact opposites of `vitest/prefer-strict-boolean-matchers`, which
         // stays on: asserting `toBe(true)` is stricter than truthiness.
         "vitest/prefer-to-be-truthy": "off",

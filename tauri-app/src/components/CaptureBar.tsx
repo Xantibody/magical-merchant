@@ -203,7 +203,9 @@ export default function CaptureBar(props: CaptureBarProps): JSX.Element {
         class="capture-send"
         aria-label="Send"
         disabled={sending() || !text().trim()}
-        onClick={() => void send()}
+        onClick={() => {
+          void send();
+        }}
       >
         <Icon name="paper-plane-tilt" size={16} />
         <span class="capture-send-label">Send</span>

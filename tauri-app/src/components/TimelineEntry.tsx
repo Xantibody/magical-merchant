@@ -108,6 +108,9 @@ export default function TimelineEntry(props: TimelineEntryProps): JSX.Element {
 
         <Show when={!props.selecting}>
           {/* 記録は書き換えない。本文は読むだけで、触れる先はノートへの昇格だけ */}
+          {/* 長押しは指の合図で、本文を button にすると読み物が押し物に見える。
+              そのぶんキーボードからの昇格は無い */}
+          {/* oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
           <p
             class="entry-text long-press"
             onPointerDown={(e) => press.onPointerDown(e)}

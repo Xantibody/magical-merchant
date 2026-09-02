@@ -7,5 +7,5 @@
  * 揺れ(`<br>` `<br/>` `<br >`)も Milkdown の認識と同じく空行として扱う。
  */
 export function isPreservedEmptyLine(line: string): boolean {
-  return /^<br[ \t]*\/?[ \t]*>$/i.test(line.trim());
+  return /^<br[ \t]*\/?[ \t]*>$/iu.test(line.trim());
 }

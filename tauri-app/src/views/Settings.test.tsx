@@ -22,7 +22,7 @@ interface SavedGlyph {
 const saved: SavedGlyph[] = [];
 const deleted: string[] = [];
 const fullscreenCalls: unknown[] = [];
-let listens = 0;
+let listens: number;
 
 /** Tauri の内部 API に公開の型は無い。テストが触るぶんだけ形を書く */
 interface TauriInternals {
@@ -144,7 +144,7 @@ describe("Settings › GLYPHS", () => {
     const file = new File(["GIF89a"], "anim.gif", { type: "image/gif" });
     fireEvent.change(fileInput(), { target: { files: [file] } });
 
-    expect(await screen.findByText("PNG か SVG の画像を選んでください")).toBeDefined();
+    await expect(screen.findByText("PNG か SVG の画像を選んでください")).resolves.toBeDefined();
     expect(screen.queryByLabelText("名前")).toBeNull();
   });
 
@@ -161,7 +161,7 @@ describe("Settings › GLYPHS", () => {
     ];
     fireEvent.change(folderInput(), { target: { files } });
 
-    expect(await screen.findByText("2 件を登録(1 件はスキップ)")).toBeDefined();
+    await expect(screen.findByText("2 件を登録(1 件はスキップ)")).resolves.toBeDefined();
     expect(saved.map((glyph) => `${glyph.name}.${glyph.format}`)).toStrictEqual([
       "623k.svg",
       "214p.png",
@@ -180,7 +180,7 @@ describe("Settings › GLYPHS", () => {
     ];
     fireEvent.change(fileInput(), { target: { files } });
 
-    expect(await screen.findByText("2 件を登録しました")).toBeDefined();
+    await expect(screen.findByText("2 件を登録しました")).resolves.toBeDefined();
     expect(saved).toHaveLength(2);
   });
 

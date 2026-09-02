@@ -35,7 +35,7 @@ export function formatStamp(date: Date, pattern: string): string {
 const DEFAULT_DATE = "YYYY-MM-DD";
 const DEFAULT_TIME = "HH:mm";
 
-const PLACEHOLDER = /\{\{([^}]*)\}\}/g;
+const PLACEHOLDER = /\{\{(?<inner>[^}]*)\}\}/gu;
 
 /**
  * 1 行ぶんの変数を解く。知らない変数は書かれたまま残す — 綴りを間違えた
@@ -82,7 +82,7 @@ export function resolveBody(body: string, now: Date, locale: Locale): string {
 
 /** 文字列に変数が含まれるか。タグを実線/破線で描き分けるのに使う。 */
 export function hasVariable(text: string): boolean {
-  return /\{\{[^}]*\}\}/.test(text);
+  return /\{\{[^}]*\}\}/u.test(text);
 }
 
 /**
@@ -92,7 +92,7 @@ export function hasVariable(text: string): boolean {
  * 文字列がタグになる。解決したあとの値は core があらためて正規化する。
  */
 export function addTemplateTag(tags: string[], raw: string): string[] {
-  const trimmed = raw.trim().replace(/^#+/, "");
+  const trimmed = raw.trim().replace(/^#+/u, "");
   if (!trimmed) {
     return tags;
   }
@@ -109,7 +109,7 @@ export interface TextRun {
 export function splitVariables(text: string): TextRun[] {
   const runs: TextRun[] = [];
   let at = 0;
-  for (const match of text.matchAll(/\{\{[^}]*\}\}/g)) {
+  for (const match of text.matchAll(/\{\{[^}]*\}\}/gu)) {
     const start = match.index;
     if (start > at) {
       runs.push({ text: text.slice(at, start), variable: false });

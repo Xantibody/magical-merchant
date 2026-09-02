@@ -14,21 +14,21 @@ interface TemplatePickerProps {
 }
 
 /**
+ * 一覧に添える代表タグ。ここでは変数を解いて見せる — 押せば今すぐ
+ * ノートになる場所なので、知りたいのは「今日作ると何が付くか」。
+ * テンプレの定義そのものを見る管理画面では逆に解かない。
+ */
+function badge(template: Template): string | undefined {
+  const [first] = template.tags;
+  return first === undefined ? undefined : resolveLine(first, new Date(), locale());
+}
+
+/**
  * 「新規」から開くテンプレ選択。PC ではボタンの下のドロップダウン、
  * 携帯では下から出るシートになる — 出方が違うだけで中身は同じなので、
  * 描くものは 1 つにして見せ方を CSS に預ける。
  */
 export default function TemplatePicker(props: TemplatePickerProps): JSX.Element {
-  /**
-   * 一覧に添える代表タグ。ここでは変数を解いて見せる — 押せば今すぐ
-   * ノートになる場所なので、知りたいのは「今日作ると何が付くか」。
-   * テンプレの定義そのものを見る管理画面では逆に解かない。
-   */
-  const badge = (template: Template): string | undefined => {
-    const [first] = template.tags;
-    return first === undefined ? undefined : resolveLine(first, new Date(), locale());
-  };
-
   return (
     <div class="popover template-picker" role="menu">
       {/* 携帯のシートだけが持つ掴み手と見出し。PC では隠れる */}

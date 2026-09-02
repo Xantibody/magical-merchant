@@ -169,7 +169,7 @@ function getCookie(request: Request, name: string): string | null {
   if (!cookie) {
     return null;
   }
-  const match = cookie.match(new RegExp(`(?:^|;\\s*)${name}=([^;]*)`));
+  const match = cookie.match(new RegExp(`(?:^|;\\s*)${name}=([^;]*)`, "u"));
   return match ? match[1] : null;
 }
 

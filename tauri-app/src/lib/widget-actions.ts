@@ -23,7 +23,7 @@ export function parseWidgetAction(raw: string): WidgetAction | null {
     return null;
   }
 
-  const name = url.pathname.replace(/^\/+/, "");
+  const name = url.pathname.replace(/^\/+/u, "");
   if (!name) {
     return null;
   }

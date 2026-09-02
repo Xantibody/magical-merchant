@@ -12,6 +12,10 @@ import {
 
 const NAMES = new Set(["236p", "623k"]);
 
+function answerReadGlyphs(answer: { name: string; url: string }[]): (cmd: string) => unknown {
+  return (cmd) => (cmd === "read_glyphs" ? answer : null);
+}
+
 describe("splitGlyphs", () => {
   it("returns the whole text as one segment when there is no shortcode", () => {
     expect(splitGlyphs("ただの文", NAMES)).toStrictEqual([{ text: "ただの文", name: null }]);
@@ -148,9 +152,7 @@ describe("loadGlyphs", () => {
   afterEach(() => clearMocks());
 
   it("fills the registry from read_glyphs", async () => {
-    mockIPC((cmd) =>
-      cmd === "read_glyphs" ? [{ name: "236p", url: "data:image/png;base64,x" }] : null,
-    );
+    mockIPC(answerReadGlyphs([{ name: "236p", url: "data:image/png;base64,x" }]));
 
     await loadGlyphs();
 

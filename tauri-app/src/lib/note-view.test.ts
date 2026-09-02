@@ -28,7 +28,7 @@ describe("readNoteContent", () => {
       () => Promise.resolve({ body: "# 見取り図", revision: "r1" }),
       () => Promise.resolve({ view: "mindmap" }),
     );
-    expect(content).toEqual({ body: "# 見取り図", view: "mindmap", revision: "r1" });
+    expect(content).toStrictEqual({ body: "# 見取り図", view: "mindmap", revision: "r1" });
   });
 
   it("メタが読めないノートはエディタ表示で開く", async () => {
@@ -36,7 +36,7 @@ describe("readNoteContent", () => {
       () => Promise.resolve({ body: "body", revision: "r1" }),
       () => Promise.reject(new Error("broken frontmatter")),
     );
-    expect(content).toEqual({ body: "body", view: "editor", revision: "r1" });
+    expect(content).toStrictEqual({ body: "body", view: "editor", revision: "r1" });
   });
 
   it("本文が読めなければ失敗はそのまま伝える", async () => {

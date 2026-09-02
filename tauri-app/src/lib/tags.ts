@@ -41,7 +41,7 @@ export interface TagSegment {
  * 本文に書かれた文字そのものは変えない — 色を付けて描くのは打ったとおりの形。
  */
 export function normalizeTag(tag: string): string {
-  return tag.replaceAll(/[A-Z]/g, (c) => c.toLowerCase());
+  return tag.replaceAll(/[A-Z]/gu, (c) => c.toLowerCase());
 }
 
 /** 本文の `#タグ` を、出てきた順に重複なく返す。 */

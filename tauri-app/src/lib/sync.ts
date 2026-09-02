@@ -121,15 +121,16 @@ export function createSyncState(onSynced: () => void): SyncState {
     if (autoSyncTimer) {
       clearTimeout(autoSyncTimer);
     }
-    autoSyncTimer = setTimeout(() => void syncNow(), AUTO_SYNC_DEBOUNCE_MS);
+    autoSyncTimer = setTimeout(() => {
+      void syncNow();
+    }, AUTO_SYNC_DEBOUNCE_MS);
   };
 
   onMount(async () => {
     await checkReadiness();
 
-    unlisteners.push(onLocalMutation(scheduleAutoSync));
-
     unlisteners.push(
+      onLocalMutation(scheduleAutoSync),
       await listen<SyncResultPayload>(EVENTS.SYNC_COMPLETE, (e) => {
         const ui = describeSyncResult(e.payload);
         setStatus(ui.status);
