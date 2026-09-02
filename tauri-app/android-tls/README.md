@@ -21,9 +21,10 @@ certificate error that says nothing about the real cause.
 
 `src-tauri/gen/android/` is gitignored and recreated by `tauri android init`,
 so the Gradle edit cannot simply live there. `apply-tls.go` re-applies it and
-runs as the last step of `just android-init`. Like `../android-signing/` and
-`../android-widget/`, every inserted region is wrapped in marker comments and
-stripped before re-insertion, so any number of runs yields the same file.
+runs as part of `just android-setup`, which `android-init` and the build
+recipes depend on. Like `../android-signing/` and `../android-widget/`, every
+inserted region is wrapped in marker comments and stripped before
+re-insertion, so any number of runs yields the same file.
 
 Two regions go into `build.gradle.kts` and one into `proguard-rules.pro`:
 

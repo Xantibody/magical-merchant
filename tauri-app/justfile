@@ -6,9 +6,6 @@ default:
 setup:
   pnpm install
 
-assets: setup
-  pnpm run build
-
 check: setup
   oxlint src/
   tsgo -b --noEmit
@@ -33,59 +30,49 @@ icons: setup
   pnpm tauri icon src-tauri/icons/icons.json
   cp src-tauri/icons/icon.svg public/icon.svg
 
+# --- Android ---
+
 # gen/android は Tauri 既定のランチャーアイコンを持って生成される。
 # 入れ直さないと配信 APK が Tauri のロゴのままになるので、init と一続きにする。
-# TLS 設定も同様: gen/android を作り直した時点でしか要らないので、ここに置く。
 android-init: setup
   pnpm tauri android init
   just icons
-  just android-tls-setup
+  just android-setup
 
-# Point the app module at the Kotlin half of rustls-platform-verifier, which
-# reqwest needs to reach Android's trust store (idempotent; re-run after
-# `tauri android init` regenerates gen/android). See android-tls/README.md.
-android-tls-setup:
+# gen/android を作り直すたびに当て直す生成物パッチ (どちらも冪等):
+#   - rustls-platform-verifier の Kotlin 側を app モジュールに繋ぐ。reqwest が
+#     Android のトラストストアに届くのに要る (android-tls/README.md)
+#   - ホーム画面ウィジェットのソースを入れ、receiver を manifest に登録する
+#     (android-widget/README.md)
+# 署名だけは keystore.properties を要求して失敗しうるので android-sign-setup に分けてある。
+android-setup:
   go run android-tls/apply-tls.go
+  go run android-widget/apply-widget.go
+
+# リリース署名の設定を、生成された build.gradle.kts に注入する (冪等)。
+# keystore.properties が無いと失敗するので android-setup とは別建て。
+# キーストアの初回準備は android-signing/README.md を参照。
+android-sign-setup:
+  go run android-signing/apply-signing.go
 
 android-dev: setup
   pnpm tauri android dev
 
-android-build:
-  pnpm tauri android build
-
-android-build-debug: android-widget-setup
+android-build-debug: android-setup
   pnpm tauri android build --debug --target aarch64
 
-android-install: android-build-debug
-  adb install src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
-
-# Inject the release signing config into the generated build.gradle.kts
-# (idempotent; re-run after `tauri android init` regenerates gen/android).
-# See android-signing/README.md for one-time keystore setup.
-android-sign-setup:
-  go run android-signing/apply-signing.go
-
-# Install the home screen widget sources into gen/android and register the
-# receivers in the generated manifest (idempotent; re-run after
-# `tauri android init`). See android-widget/README.md.
-android-widget-setup:
-  go run android-widget/apply-widget.go
-
-# Build a signed release APK. Requires keystore.properties.
+# 署名済みリリース APK。keystore.properties が要る。
 # arm64 のみ: x86 系はエミュレータ専用で実機には要らず、universal だと
 # 4 ABI ぶんの .so で APK が 52MB まで膨らむ。
-android-build-release: android-widget-setup android-sign-setup
+android-build-release: android-setup android-sign-setup
   pnpm tauri android build --apk --target aarch64
 
-# Same, but from a checkout with no gen/android yet (CI). keystore.properties
-# has to be written after android-init, so this recipe does not build on its own —
-# see .github/workflows/release.yml.
-android-release-build: setup
-  pnpm tauri android build --apk --target aarch64
-
-# Build and install the signed release APK onto a connected device (-r updates in place).
-android-install-release: android-build-release
-  adb install -r src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
+# ビルドして USB 接続の端末に入れる (-r で上書き更新)。
+# `just android-install` で debug、`just android-install release` で署名済み。
+# --target aarch64 でも Tauri は出力名を universal のままにする。
+android-install variant="debug":
+  just android-build-{{variant}}
+  adb install -r src-tauri/gen/android/app/build/outputs/apk/universal/{{variant}}/app-universal-{{variant}}.apk
 
 build:
   pnpm tauri build --bundles app
