@@ -56,6 +56,13 @@ ndk-context = "0.1"
 # 渡す初期化が要るので、reqwest 越しではなく直に呼べるところに置く。
 # 0.7 は jni 0.22 を使う版で、上の jni と同じものに解決させるために要る
 rustls-platform-verifier = "0.7"
+# 同期の HTTPS だけは上の検証器を通さない。Android の失効チェックは OCSP
+# 応答者の無い証明書を Revoked と誤判定し、Cloudflare で選べる CA は全部
+# OCSP をやめている (rustls/rustls-platform-verifier#221)。Mozilla のルート束で
+# 検証する。上流が CRL 配布ホストの許可リストを .aar に同梱したら外す。
+# rustls は reqwest が既定 feature 付きで持っているものと同じ版に解決させる
+rustls = "0.23"
+webpki-roots = "1"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
