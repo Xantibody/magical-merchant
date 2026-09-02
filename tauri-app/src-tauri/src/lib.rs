@@ -25,10 +25,12 @@ pub mod widget_bridge;
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 mod widget_summary;
 
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD as B64;
 use device::ClientContext;
 use magical_merchant_core::{
-    CreatedNote, NoteFilename, NoteMeta, NoteSummary, SearchHit, TemplateDetail, TemplateSummary,
-    VarLocale,
+    CreatedNote, GlyphFormat, GlyphName, GlyphSummary, NoteFilename, NoteMeta, NoteSummary,
+    SearchHit, TemplateDetail, TemplateSummary, VarLocale,
 };
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_deep_link::DeepLinkExt as _;
@@ -216,6 +218,74 @@ fn create_from_template(
     .map_err(|e| e.to_string())
 }
 
+fn parse_glyph_name(name: &str) -> Result<GlyphName, String> {
+    GlyphName::parse(name).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn list_glyphs(handle: AppHandle) -> Result<Vec<GlyphSummary>, String> {
+    let base_dir = app_base_dir(&handle)?;
+    magical_merchant_core::list_glyphs(&base_dir).map_err(|e| e.to_string())
+}
+
+/// 画面が `:name:` を描くときに引く 1 件。
+#[derive(serde::Serialize)]
+struct GlyphAsset {
+    name: String,
+    /// `data:image/...;base64,...`。
+    url: String,
+}
+
+/// 登録済みのグリフを全部、データ URL で返す。
+///
+/// 1 回で全部返すのは、画面側が本文を描く途中で同期的に名前を引けるように
+/// するため。asset プロトコルやカスタムスキームで配らないのは、新しい
+/// capability を開けずに済み、ブラウザのハーネスでもそのまま真似できるから。
+#[tauri::command]
+fn read_glyphs(handle: AppHandle) -> Result<Vec<GlyphAsset>, String> {
+    let base_dir = app_base_dir(&handle)?;
+    let mut assets = Vec::new();
+    for summary in magical_merchant_core::list_glyphs(&base_dir).map_err(|e| e.to_string())? {
+        // 一覧に出た直後に消えた 1 枚のために全部を失敗させない
+        let Ok(name) = GlyphName::parse(&summary.name) else {
+            continue;
+        };
+        let Ok(glyph) = magical_merchant_core::read_glyph(&base_dir, &name) else {
+            continue;
+        };
+        assets.push(GlyphAsset {
+            name: summary.name,
+            url: format!(
+                "data:{};base64,{}",
+                glyph.format.mime(),
+                B64.encode(&glyph.bytes)
+            ),
+        });
+    }
+    Ok(assets)
+}
+
+#[tauri::command]
+fn save_glyph(
+    handle: AppHandle,
+    name: String,
+    format: String,
+    data_base64: String,
+) -> Result<(), String> {
+    let base_dir = app_base_dir(&handle)?;
+    let name = parse_glyph_name(&name)?;
+    let format = GlyphFormat::parse(&format).map_err(|e| e.to_string())?;
+    let bytes = B64.decode(data_base64).map_err(|e| e.to_string())?;
+    magical_merchant_core::save_glyph(&base_dir, &name, format, &bytes).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_glyph(handle: AppHandle, name: String) -> Result<(), String> {
+    let base_dir = app_base_dir(&handle)?;
+    let name = parse_glyph_name(&name)?;
+    magical_merchant_core::delete_glyph(&base_dir, &name).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn list_timeline_dates(handle: AppHandle) -> Result<Vec<String>, String> {
     let base_dir = app_base_dir(&handle)?;
@@ -366,6 +436,10 @@ pub fn run() {
             save_template,
             delete_template,
             create_from_template,
+            list_glyphs,
+            read_glyphs,
+            save_glyph,
+            delete_glyph,
             list_timeline_dates,
             read_timeline_by_date,
             delete_timeline_entry,
