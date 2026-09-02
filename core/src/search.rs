@@ -569,7 +569,7 @@ mod tests {
         let target =
             create_draft_note(tmp.path(), "後で本文に自分を書く", &[], &context()).unwrap();
         let stem = stem_of(&target);
-        crate::update_note(&target, &format!("自分 [[{stem}]]"), &context()).unwrap();
+        crate::update_note(&target, &format!("自分 [[{stem}]]"), &context(), None).unwrap();
 
         assert!(
             find_backlinks(tmp.path(), &filename_of(&target))

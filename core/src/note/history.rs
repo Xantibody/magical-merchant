@@ -179,7 +179,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let (path, filename) = note(tmp.path(), "before");
         let snap = snapshot_note(tmp.path(), &filename).unwrap().unwrap();
-        update_note(&path, "after", &Context::default()).unwrap();
+        update_note(&path, "after", &Context::default(), None).unwrap();
 
         let undo = restore_note(tmp.path(), &filename, &snap.id)
             .unwrap()
@@ -201,7 +201,7 @@ mod tests {
         let (path, filename) = note(tmp.path(), "one");
 
         let first = snapshot_note(tmp.path(), &filename).unwrap().unwrap();
-        update_note(&path, "two", &Context::default()).unwrap();
+        update_note(&path, "two", &Context::default(), None).unwrap();
         let second = snapshot_note(tmp.path(), &filename).unwrap().unwrap();
 
         assert_ne!(first.id, second.id);
@@ -253,7 +253,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let (path, filename) = note(tmp.path(), "before");
         let snap = snapshot_note(tmp.path(), &filename).unwrap().unwrap();
-        update_note(&path, "after", &Context::default()).unwrap();
+        update_note(&path, "after", &Context::default(), None).unwrap();
 
         restore_note(tmp.path(), &filename, &snap.id).unwrap();
 

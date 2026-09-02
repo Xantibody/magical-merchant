@@ -17,6 +17,10 @@ pub enum CoreError {
     #[error("Parse error: {0}")]
     Parse(String),
 
+    /// 読んでから書くまでのあいだに、別の書き手が本文を変えていた。
+    #[error("Stale: {0} changed since it was read")]
+    Stale(String),
+
     #[error("Sync error: {0}")]
     Sync(String),
 

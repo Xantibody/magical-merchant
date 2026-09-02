@@ -80,7 +80,8 @@ fn create_draft(
 #[tauri::command]
 fn update_draft(file_path: String, body: String, client: ClientContext) -> Result<(), String> {
     let context = device::get_context(client);
-    magical_merchant_core::update_note(std::path::Path::new(&file_path), &body, &context)
+    magical_merchant_core::update_note(std::path::Path::new(&file_path), &body, &context, None)
+        .map(|_| ())
         .map_err(|e| e.to_string())
 }
 

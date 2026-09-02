@@ -14,7 +14,7 @@ pub mod search;
 pub use error::CoreError;
 pub use note::error::NoteError;
 pub use note::{
-    NoteSummary, Snapshot, create_draft_note, create_note_from_entry, delete_note,
+    NoteSummary, Revision, Snapshot, create_draft_note, create_note_from_entry, delete_note,
     list_note_history, list_notes, read_note, read_note_by_filename, read_note_history,
     read_note_meta, repair_notes, restore_note, snapshot_note, update_note, update_note_meta,
     update_note_origin, update_note_view,
