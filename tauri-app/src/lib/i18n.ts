@@ -190,6 +190,8 @@ const ja = {
     languageSystem: "システム",
     languageJa: "日本語",
     languageEn: "English",
+    startFullscreen: "起動時に全画面",
+    startFullscreenHint: "次回の起動から反映されます",
   },
   palette: {
     dialogLabel: "検索・コマンド",
@@ -430,6 +432,8 @@ const en: Messages = {
     languageSystem: "System",
     languageJa: "日本語",
     languageEn: "English",
+    startFullscreen: "Start in fullscreen",
+    startFullscreenHint: "Applies from the next launch",
   },
   palette: {
     dialogLabel: "Search and commands",
