@@ -9,9 +9,22 @@ let
 in
 {
   options.services.magical-merchant = {
-    enable = lib.mkEnableOption "Magical Merchant app";
+    enable = lib.mkEnableOption "Magical Merchant";
 
     package = lib.mkPackageOption pkgs "magical-merchant" { };
+
+    # デスクトップと CLI は別々に入れられる。サーバー的な Mac には CLI だけ、
+    # 普段使いの Mac には両方、という分かれ方をする
+    desktop.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Install the desktop app to /Applications/Nix Apps.";
+    };
+
+    cli = {
+      enable = lib.mkEnableOption "the magical-merchant CLI (list, edit, mcp)";
+      package = lib.mkPackageOption pkgs "magical-merchant-cli" { };
+    };
 
     workersUrl = lib.mkOption {
       type = lib.types.str;
@@ -27,8 +40,11 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    environment.systemPackages = [ cfg.package ];
+    environment.systemPackages =
+      lib.optional cfg.desktop.enable cfg.package ++ lib.optional cfg.cli.enable cfg.cli.package;
 
+    # sync-config.json はアプリと CLI が同じ場所から読む共通の設定。
+    # module が書くと、どちらを入れても同じ接続先になる
     system.activationScripts.postActivation.text = lib.mkAfter (
       lib.optionalString (cfg.workersUrl != "") ''
         CONSOLE_USER=$(/usr/bin/stat -f '%Su' /dev/console)

@@ -1,7 +1,7 @@
-# MCP サーバーだけのパッケージ。default(Tauri アプリ)から切り出すのは、
-# AI クライアントの設定に `nix run github:Xantibody/magical-merchant#mcp` と
-# 書けるようにするため。アプリ本体を建てる pnpm と Tauri のツールチェーンを、
-# stdio で JSON を返すだけのバイナリのために取り寄せたくない。
+# CLI と MCP サーバーだけのパッケージ。default(Tauri アプリ)から切り出すのは、
+# `nix run github:Xantibody/magical-merchant#mcp` と書けるようにするためと、
+# アプリ本体を建てる pnpm と Tauri のツールチェーンを、ターミナルで動く
+# バイナリのために取り寄せたくないから。
 {
   lib,
   rustPlatform,
@@ -17,7 +17,7 @@ let
   ];
 in
 rustPlatform.buildRustPackage {
-  pname = "magical-merchant-mcp";
+  pname = "magical-merchant-cli";
   inherit (cargoToml.package) version;
 
   src = lib.fileset.toSource {
@@ -54,7 +54,7 @@ rustPlatform.buildRustPackage {
   cargoTestFlags = cargoFlags;
 
   meta = {
-    description = "Read-only MCP server for a Magical Merchant journal";
+    description = "Terminal client and MCP server for a Magical Merchant journal";
     mainProgram = "magical-merchant";
   };
 }
