@@ -2729,10 +2729,12 @@ dependencies = [
  "anyhow",
  "chrono",
  "clap",
+ "dirs",
  "magical-merchant-core",
  "rmcp",
  "schemars 1.2.1",
  "serde",
+ "tempfile",
  "tokio",
 ]
 

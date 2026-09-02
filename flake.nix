@@ -150,6 +150,9 @@
           # pnpm-lock.yaml を変えると package.nix の hash が黙って腐り、
           # nix build (= macOS の配布経路) だけが後から壊れる。CI で単体で検証できるよう出す
           pnpm-deps = default.pnpmDeps;
+          # AI クライアントから `nix run github:Xantibody/magical-merchant#mcp` で
+          # 起動する読み取り専用 MCP サーバー。アプリ本体のツールチェーンは要らない
+          mcp = pkgs.callPackage ./nix/mcp.nix { };
         };
         formatter = treefmtEval.config.build.wrapper;
         checks.formatting = treefmtEval.config.build.check self;

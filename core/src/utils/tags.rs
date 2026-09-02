@@ -51,6 +51,24 @@ pub fn parse(text: &str) -> Vec<String> {
     tags
 }
 
+/// frontmatter のタグと本文の `#タグ` を、ノートが名乗る 1 つの一覧にする。
+///
+/// 本文に書かれた `#タグ` が今の入力方法。frontmatter に残っているのは
+/// タグ欄で付けていた頃のもので、消すと過去のノートから分類が消える。
+/// 見せる形は本文側の規則に合わせる — ファイルの中身には手を付けない。
+#[must_use]
+pub fn merge(mut tags: Vec<String>, body: &str) -> Vec<String> {
+    for tag in &mut tags {
+        tag.make_ascii_lowercase();
+    }
+    for tag in parse(body) {
+        if !tags.contains(&tag) {
+            tags.push(tag);
+        }
+    }
+    tags
+}
+
 /// 行がコードフェンスの区切りなら、その記号と本数を返す。
 fn fence_marker(line: &str) -> Option<(char, usize)> {
     let trimmed = line.trim_start();

@@ -32,4 +32,5 @@ pub use utils::device::Context as DeviceContext;
 pub use utils::frontmatter;
 /// 1 件ぶんのノートメタデータ。中身は frontmatter そのもの。
 pub use utils::frontmatter::NoteFrontmatter as NoteMeta;
+pub use utils::markdown::{TimelineEntry, parse_timeline_entry};
 pub use utils::validated::NoteFilename;

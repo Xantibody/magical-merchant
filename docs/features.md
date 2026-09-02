@@ -118,20 +118,45 @@ list that deep-links into the app.
 
 `mcp-cli` exposes the same core as read-only
 [Model Context Protocol](https://modelcontextprotocol.io/) tools for AI
-assistants:
+assistants. It finds the app's data directory on its own, so the usual
+client configuration is just the launch command:
 
-```sh
-magical_merchant_mcp_cli --data-dir /path/to/data
+```json
+{
+  "mcpServers": {
+    "magical-merchant": {
+      "type": "stdio",
+      "command": "nix",
+      "args": ["run", "github:Xantibody/magical-merchant#mcp"]
+    }
+  }
+}
 ```
 
-| Tool                  | Description                                  |
-| --------------------- | -------------------------------------------- |
-| `list_notes`          | List all notes with tags and a short preview |
-| `read_note`           | Read a note's full Markdown source           |
-| `search`              | Search notes and timeline entries            |
-| `list_timeline_dates` | List the dates that have timeline entries    |
-| `read_timeline`       | Read all timeline entries for a single day   |
+Every record comes back with the device state captured when it was
+written — local time, GPS coordinates (and the place name the app resolved
+for them), battery, network type, and which device wrote it — so an agent
+can line the journal up with other time- or location-based data.
 
-> [!NOTE]
-> The data directory can also be set with the `MAGICAL_MERCHANT_DATA_DIR`
-> environment variable.
+| Tool                  | Description                                                         |
+| --------------------- | ------------------------------------------------------------------- |
+| `list_notes`          | List all notes with tags, a short preview, and their origin         |
+| `read_note`           | Read a note's metadata (time, tags, context) and Markdown body      |
+| `backlinks`           | List the records that link to a note with `[[…]]`                   |
+| `search`              | Search notes and timeline entries                                   |
+| `list_timeline_dates` | List the dates that have timeline entries                           |
+| `read_timeline`       | Read one day's entries with time, text, tags, location, and device  |
+| `read_timeline_range` | Read entries between two days, optionally filtered by tag           |
+| `list_places`         | Places (~1 km cells) records were written at, with names and counts |
+| `list_tags`           | Every `#tag` with note and entry counts                             |
+| `list_templates`      | List note templates                                                 |
+| `read_template`       | Read a template's body and tags                                     |
+
+| Flag / variable                            | Description                                                         |
+| ------------------------------------------ | ------------------------------------------------------------------- |
+| `--data-dir` / `MAGICAL_MERCHANT_DATA_DIR` | Override the data directory (default: the app's own data directory) |
+| `--locale` / `MAGICAL_MERCHANT_LOCALE`     | Preferred language for place names, `ja` or `en` (default `en`)     |
+
+Timeline times are the recording device's local wall-clock time without a
+UTC offset; note times are RFC 3339 with the offset. Place names come from
+the app's own geocoding cache — the server never calls a network service.
