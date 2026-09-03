@@ -57,9 +57,12 @@ alone.
 
 ![Editor with note links](images/editor-links.png)
 
-Code blocks are highlighted with Shiki, ` ```mermaid ` fences render as
-diagrams, and a per-note **mindmap view** (frontmatter `view: mindmap`) turns
-the heading/list structure into a markmap:
+Code blocks are highlighted with Shiki; a ` ```diff ` fence colours its `+`
+and `-` lines instead. ` ```mermaid ` fences render as diagrams, and a leading
+`%% caption: …` comment inside the fence becomes the figure's caption —
+mermaid skips `%%` lines, so the note still draws anywhere else. A per-note
+**mindmap view** (frontmatter `view: mindmap`) turns the heading/list
+structure into a markmap:
 
 ![Mindmap view](images/mindmap.png)
 
