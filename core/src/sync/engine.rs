@@ -71,7 +71,7 @@ async fn sync_once(client: &HttpClient, base_dir: &Path) -> Result<SyncResult, S
 
     let bulk_resp = client.bulk(bulk_req).await?;
 
-    let unwritten = apply_response(&bulk_resp, &actions, &data_dir, &mut result);
+    let unwritten = apply_response(&bulk_resp, &actions, &local_files, &data_dir, &mut result);
 
     // サーバーが確定させた状態をそのままローカルにも記録する。
     // ここでローカルを再スキャンして組み直すと、ダウンロード直後の mtime が
@@ -230,6 +230,7 @@ fn decode(file: &DownloadedFile) -> Result<Vec<u8>, String> {
 fn apply_response(
     bulk_resp: &BulkResponse,
     actions: &[SyncAction],
+    local_files: &[LocalFile],
     data_dir: &Path,
     result: &mut SyncResult,
 ) -> HashSet<String> {
@@ -266,22 +267,56 @@ fn apply_response(
                 result.conflicts += 1;
             }
             SyncAction::DeleteLocal { key } => {
-                let path = data_dir.join(key);
-                if path.exists() {
-                    if let Err(e) = fs::remove_file(&path) {
-                        result.errors.push(format!("delete_local {key}: {e}"));
-                    } else {
-                        result.deleted_local += 1;
-                    }
-                } else {
-                    result.deleted_local += 1;
-                }
+                delete_local_file(key, local_files, data_dir, result);
             }
             SyncAction::DownloadNew { .. } | SyncAction::DownloadModified { .. } => {}
         }
     }
 
     unwritten
+}
+
+/// リモートで消されたファイルをローカルからも消す。
+///
+/// scan の判定からここまでにサーバーとの往復が挟まる。その隙に書かれた編集は
+/// まだ誰も知らないので、削除の直前に中身を数え直し、scan 時と違えば残す。
+/// 残ったファイルは次の同期で `UploadModified` として復活する
+fn delete_local_file(
+    key: &str,
+    local_files: &[LocalFile],
+    data_dir: &Path,
+    result: &mut SyncResult,
+) {
+    let path = data_dir.join(key);
+    let content = match fs::read(&path) {
+        Ok(content) => content,
+        // すでに無いなら消す手間が省けただけ
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            result.deleted_local += 1;
+            return;
+        }
+        Err(e) => {
+            result.errors.push(format!("delete_local {key}: {e}"));
+            return;
+        }
+    };
+
+    let scanned = local_files
+        .iter()
+        .find(|f| f.key == key)
+        .map(|f| f.content_hash.as_str());
+    if scanned != Some(scan::compute_hash(&content).as_str()) {
+        result
+            .errors
+            .push(format!("delete_local {key}: changed since scan, kept"));
+        return;
+    }
+
+    if let Err(e) = fs::remove_file(&path) {
+        result.errors.push(format!("delete_local {key}: {e}"));
+    } else {
+        result.deleted_local += 1;
+    }
 }
 
 /// サーバーが確定させた状態を、実際に手元にあるファイルだけに絞って保存する。
@@ -470,7 +505,7 @@ mod tests {
         };
 
         let mut result = SyncResult::default();
-        apply_response(&resp, &[], dir.path(), &mut result);
+        apply_response(&resp, &[], &[], dir.path(), &mut result);
 
         assert_eq!(
             fs::read_to_string(dir.path().join("notes/a.md")).unwrap(),
@@ -511,7 +546,7 @@ mod tests {
         };
 
         let mut result = SyncResult::default();
-        let unwritten = apply_response(&resp, &[], dir.path(), &mut result);
+        let unwritten = apply_response(&resp, &[], &[], dir.path(), &mut result);
 
         assert_eq!(
             fs::read_to_string(dir.path().join("notes/good.md")).unwrap(),
@@ -535,6 +570,63 @@ mod tests {
         SyncAction::DeleteLocal {
             key: key.to_string(),
         }
+    }
+
+    fn no_response() -> BulkResponse {
+        BulkResponse {
+            downloads: Vec::new(),
+            conflict_downloads: Vec::new(),
+            new_state: server_state(&[]),
+        }
+    }
+
+    #[test]
+    fn a_local_delete_removes_the_file_it_was_computed_from() {
+        let dir = tempfile::tempdir().unwrap();
+        seed(dir.path(), "notes/a.md", "untouched");
+        let locals = vec![local_file("notes/a.md", &scan::compute_hash(b"untouched"))];
+
+        let mut result = SyncResult::default();
+        apply_response(
+            &no_response(),
+            &[delete_local("notes/a.md")],
+            &locals,
+            dir.path(),
+            &mut result,
+        );
+
+        assert!(!dir.path().join("notes/a.md").exists());
+        assert_eq!(result.deleted_local, 1);
+        assert!(result.errors.is_empty(), "errors: {:?}", result.errors);
+    }
+
+    /// scan と削除のあいだにはネットワーク往復が挟まる。その隙に書かれた
+    /// 編集まで消さないよう、削除の直前に中身を見直す
+    #[test]
+    fn a_local_delete_is_skipped_when_the_file_changed_after_the_scan() {
+        let dir = tempfile::tempdir().unwrap();
+        seed(
+            dir.path(),
+            "notes/a.md",
+            "edited while the sync was in flight",
+        );
+        let locals = vec![local_file("notes/a.md", &scan::compute_hash(b"as scanned"))];
+
+        let mut result = SyncResult::default();
+        apply_response(
+            &no_response(),
+            &[delete_local("notes/a.md")],
+            &locals,
+            dir.path(),
+            &mut result,
+        );
+
+        assert_eq!(
+            fs::read_to_string(dir.path().join("notes/a.md")).unwrap(),
+            "edited while the sync was in flight"
+        );
+        assert_eq!(result.deleted_local, 0);
+        assert_eq!(result.errors.len(), 1, "errors: {:?}", result.errors);
     }
 
     /// サーバーの同期状態が壊れて空になったときに、それを「全部削除された」と
@@ -605,7 +697,7 @@ mod tests {
         };
 
         let mut result = SyncResult::default();
-        let unwritten = apply_response(&resp, &[], dir.path(), &mut result);
+        let unwritten = apply_response(&resp, &[], &[], dir.path(), &mut result);
 
         assert!(!dir.path().parent().unwrap().join("escaped.md").exists());
         assert_eq!(result.downloaded, 0);

@@ -182,7 +182,9 @@ fn is_excluded(file_name: &str) -> bool {
         || file_name.starts_with(".sync-tmp-")
 }
 
-fn compute_hash(content: &[u8]) -> String {
+/// 同期のハッシュはここでしか作らない。engine が削除の直前に計算し直すぶんも
+/// 同じ関数を通す — 定義が 2 つに割れると、片方の版が「変更あり」に見え続ける
+pub(crate) fn compute_hash(content: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
 
     let mut hasher = Sha256::new();
