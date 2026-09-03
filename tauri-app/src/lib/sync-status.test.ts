@@ -51,29 +51,32 @@ describe("describeSyncResult", () => {
 describe("describeSyncError", () => {
   it("maps notConfigured to needs-setup", () => {
     const ui = describeSyncError({ kind: "notConfigured", message: "Sync is not set up." });
-    expect(ui?.status).toBe("needs-setup");
-    expect(ui?.message).toContain("Sync is not set up.");
+    expect(ui.status).toBe("needs-setup");
+    expect(ui.message).toContain("Sync is not set up.");
   });
 
   it("maps notAuthenticated to needs-setup", () => {
     const ui = describeSyncError({ kind: "notAuthenticated", message: "Not logged in." });
-    expect(ui?.status).toBe("needs-setup");
+    expect(ui.status).toBe("needs-setup");
   });
 
   it("maps network errors to error with message", () => {
     const ui = describeSyncError({ kind: "network", message: "Network error: timeout" });
-    expect(ui?.status).toBe("error");
-    expect(ui?.message).toBe("Network error: timeout");
+    expect(ui.status).toBe("error");
+    expect(ui.message).toBe("Network error: timeout");
   });
 
-  it("ignores busy (another sync running)", () => {
+  // アプリ内の再入だけでなく、CLI がロックを持っているときにも返ってくる。
+  // 待機に戻さないと "syncing" のまま固まり、以後の同期が始められない
+  it("returns to idle without a message when another process is syncing", () => {
     const ui = describeSyncError({ kind: "busy", message: "Sync already in progress" });
-    expect(ui).toBeNull();
+    expect(ui.status).toBe("idle");
+    expect(ui.message).toBe("");
   });
 
   it("handles plain string errors from older code paths", () => {
     const ui = describeSyncError("something broke");
-    expect(ui?.status).toBe("error");
-    expect(ui?.message).toBe("something broke");
+    expect(ui.status).toBe("error");
+    expect(ui.message).toBe("something broke");
   });
 });
