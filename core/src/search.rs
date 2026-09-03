@@ -314,11 +314,17 @@ fn snippet(text: &str, lowered: &str, needle: &str) -> Excerpt {
 mod tests {
     use super::*;
     use crate::utils::device::Context;
+    use crate::utils::frontmatter::Provenance;
     use crate::{create_draft_note, save_timeline_entry};
     use tempfile::TempDir;
 
     fn context() -> Context {
         Context::default()
+    }
+
+    /// 検索に引っかける普通のノート。出自は検索の対象ではないので名乗らない。
+    fn draft(tmp: &TempDir, body: &str, tags: &[String]) -> Result<std::path::PathBuf, CoreError> {
+        create_draft_note(tmp.path(), body, tags, &context(), Provenance::default())
     }
 
     /// 一覧ペインは `# ` を落とした題を出す。パレットとバックリンクだけ
@@ -427,7 +433,7 @@ mod tests {
     #[test]
     fn finds_a_note_by_body_and_reports_its_filename() {
         let tmp = TempDir::new().unwrap();
-        create_draft_note(tmp.path(), "R2 のリトライ設計", &[], &context()).unwrap();
+        draft(&tmp, "R2 のリトライ設計", &[]).unwrap();
 
         let hits = search_all(tmp.path(), "リトライ", &[]).unwrap();
 
@@ -439,7 +445,7 @@ mod tests {
     #[test]
     fn finds_a_note_by_tag() {
         let tmp = TempDir::new().unwrap();
-        create_draft_note(tmp.path(), "body", &["sync".to_string()], &context()).unwrap();
+        draft(&tmp, "body", &["sync".to_string()]).unwrap();
 
         let hits = search_all(tmp.path(), "sync", &[]).unwrap();
 
@@ -476,7 +482,7 @@ mod tests {
     fn a_tag_only_hit_shows_the_start_of_the_body() {
         let tmp = TempDir::new().unwrap();
         let body = "本文はタグと無関係で長い".repeat(10);
-        create_draft_note(tmp.path(), &body, &["sync".to_string()], &context()).unwrap();
+        draft(&tmp, &body, &["sync".to_string()]).unwrap();
 
         let hits = search_all(tmp.path(), "sync", &[]).unwrap();
 
@@ -551,7 +557,7 @@ mod tests {
     #[test]
     fn a_tag_only_hit_has_no_match_position() {
         let tmp = TempDir::new().unwrap();
-        create_draft_note(tmp.path(), "本文", &["sync".to_string()], &context()).unwrap();
+        draft(&tmp, "本文", &["sync".to_string()]).unwrap();
 
         let hits = search_all(tmp.path(), "sync", &[]).unwrap();
 
@@ -579,13 +585,7 @@ mod tests {
     #[test]
     fn a_tag_scope_keeps_only_notes_carrying_the_tag() {
         let tmp = TempDir::new().unwrap();
-        create_draft_note(
-            tmp.path(),
-            "リトライ設計",
-            &["sync".to_string()],
-            &context(),
-        )
-        .unwrap();
+        draft(&tmp, "リトライ設計", &["sync".to_string()]).unwrap();
         write_second_note(tmp.path(), "20200101_000000.md", "リトライの雑記 #misc");
 
         let hits = search_all(tmp.path(), "リトライ", &scope(&["sync"])).unwrap();
@@ -602,7 +602,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         save_timeline_entry(tmp.path(), "走った #run", &context()).unwrap();
         save_timeline_entry(tmp.path(), "読んだ #book", &context()).unwrap();
-        create_draft_note(tmp.path(), "走る計画", &["run".to_string()], &context()).unwrap();
+        draft(&tmp, "走る計画", &["run".to_string()]).unwrap();
 
         let hits = search_all(tmp.path(), "", &scope(&["run"])).unwrap();
 
@@ -701,7 +701,7 @@ mod tests {
     #[test]
     fn a_timeline_entry_that_links_a_note_is_a_backlink() {
         let tmp = TempDir::new().unwrap();
-        let target = create_draft_note(tmp.path(), "指される側", &[], &context()).unwrap();
+        let target = draft(&tmp, "指される側", &[]).unwrap();
         let link = format!("これ参照 [[{}]]", stem_of(&target));
         save_timeline_entry(tmp.path(), &link, &context()).unwrap();
 
@@ -717,7 +717,7 @@ mod tests {
     #[test]
     fn a_link_deep_in_a_long_note_is_still_found() {
         let tmp = TempDir::new().unwrap();
-        let target = create_draft_note(tmp.path(), "指される側", &[], &context()).unwrap();
+        let target = draft(&tmp, "指される側", &[]).unwrap();
         let body = format!("{}\n[[{}]]", "あ".repeat(300), stem_of(&target));
         write_second_note(tmp.path(), "20200101_000000.md", &body);
 
@@ -731,8 +731,7 @@ mod tests {
     #[test]
     fn a_note_is_not_its_own_backlink() {
         let tmp = TempDir::new().unwrap();
-        let target =
-            create_draft_note(tmp.path(), "後で本文に自分を書く", &[], &context()).unwrap();
+        let target = draft(&tmp, "後で本文に自分を書く", &[]).unwrap();
         let stem = stem_of(&target);
         crate::update_note(&target, &format!("自分 [[{stem}]]"), &context(), None).unwrap();
 
@@ -748,7 +747,7 @@ mod tests {
     #[test]
     fn a_link_with_display_text_is_a_backlink() {
         let tmp = TempDir::new().unwrap();
-        let target = create_draft_note(tmp.path(), "指される側", &[], &context()).unwrap();
+        let target = draft(&tmp, "指される側", &[]).unwrap();
         let body = format!("詳しくは [[{}|前の話]] を見る", stem_of(&target));
         write_second_note(tmp.path(), "20200101_000000.md", &body);
 
@@ -766,7 +765,7 @@ mod tests {
     #[test]
     fn no_links_means_no_backlinks() {
         let tmp = TempDir::new().unwrap();
-        let target = create_draft_note(tmp.path(), "誰も指していない", &[], &context()).unwrap();
+        let target = draft(&tmp, "誰も指していない", &[]).unwrap();
         write_second_note(tmp.path(), "20200101_000000.md", "無関係なノート");
         save_timeline_entry(tmp.path(), "無関係なエントリ", &context()).unwrap();
 
