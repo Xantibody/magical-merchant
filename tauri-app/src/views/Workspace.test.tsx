@@ -241,6 +241,20 @@ describe("Workspace › 外から書き換わったノートの読み直し", ()
       expect(countOf(command)).toBe(0);
     }
   });
+
+  // 自動保存が起きたあとも「保存待ち」のままだと、同期の版が二度と画面に出ない
+  it("reloads the open note after an autosave has already fired", async () => {
+    await openNoteA();
+    fireEvent.input(titleInput(), { target: { value: "会議メモ 改" } });
+    await waitFor(() => expect(countOf("update_draft")).toBe(1), { timeout: 3000 });
+    const readsBefore = countOf("read_note");
+
+    disk.set(FILE_A, BODY_A_SYNCED);
+    shell?.refreshData();
+
+    await waitFor(() => expect(screen.getByText("他の端末で足された行")).toBeDefined());
+    expect(countOf("read_note")).toBe(readsBefore + 1);
+  });
 });
 
 describe("Workspace › 編集中に選択が差し替わる", () => {
@@ -365,5 +379,22 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     });
     expect(countOf("update_draft")).toBe(2);
     expect(disk.get(FILE_A)).toBe("# 読み直したあとの題\n\n他の端末で足された行");
+  });
+
+  // 復元は入れ替え。戻した直後の「戻る先」を次の保存で押し出すと、
+  // もう一度押しても戻れない
+  it("keeps the reverted body reachable after the next save", async () => {
+    const bodyOld = "# 会議メモ\n\nいちばん最初の本文";
+    localStorage.setItem(`note-backup:${FILE_A}`, bodyOld);
+    await openNoteA();
+
+    fireEvent.click(screen.getByRole("button", { name: "ノート情報" }));
+    fireEvent.click(await screen.findByRole("button", { name: /編集前に戻す/u }));
+    await waitFor(() => expect(disk.get(FILE_A)).toBe(bodyOld));
+    expect(localStorage.getItem(`note-backup:${FILE_A}`)).toBe(BODY_A);
+
+    fireEvent.input(titleInput(), { target: { value: "別の題" } });
+    await waitFor(() => expect(countOf("update_draft")).toBe(2), { timeout: 3000 });
+    expect(localStorage.getItem(`note-backup:${FILE_A}`)).toBe(BODY_A);
   });
 });
