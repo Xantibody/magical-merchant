@@ -234,6 +234,16 @@ const ja = {
     exitBlock: "ブロックから抜ける",
     deleteBlock: "ブロックを削除",
   },
+  preview: {
+    zoom: "拡大",
+    zoomIn: "大きく",
+    zoomOut: "小さく",
+    fit: "全体表示",
+    zoomHint: "ホイールでズーム / ドラッグで移動 / Esc で閉じる",
+    saveSvg: "SVG で保存",
+    savePng: "PNG で保存",
+    exportFailed: "図を保存できませんでした",
+  },
   firstRun: {
     title: "同期はあとからでも設定できます",
     body: "設定しなければ、書いたものはこの端末の中だけに残ります。それで困らないなら、このまま使い始めて構いません。",
@@ -498,6 +508,16 @@ const en: Messages = {
     diagramFailed: "Cannot draw this diagram",
     exitBlock: "Leave the block",
     deleteBlock: "Delete the block",
+  },
+  preview: {
+    zoom: "Zoom",
+    zoomIn: "Zoom in",
+    zoomOut: "Zoom out",
+    fit: "Fit",
+    zoomHint: "Scroll to zoom / drag to pan / Esc to close",
+    saveSvg: "Save as SVG",
+    savePng: "Save as PNG",
+    exportFailed: "Could not save the diagram",
   },
   firstRun: {
     title: "You can set up sync later",

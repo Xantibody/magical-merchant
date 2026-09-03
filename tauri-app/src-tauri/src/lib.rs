@@ -10,6 +10,7 @@
 mod android_tls;
 mod auth;
 mod device;
+mod export;
 #[cfg(target_os = "macos")]
 mod location;
 mod place;
@@ -422,13 +423,19 @@ fn store_token_from_urls(handle: &AppHandle, urls: &[url::Url]) {
 
 // `mobile_entry_point` fixes the signature to `fn run()`, so a failed startup
 // has nowhere to be returned to — panicking is the only way to report it.
-#[allow(clippy::expect_used)]
+// `generate_context!` embeds every plugin's permission tables in one value;
+// with dialog and fs on board it crosses clippy's stack-frame threshold. It
+// is built once at startup, so the frame size is not a concern.
+#[allow(clippy::expect_used, clippy::large_stack_frames)]
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_geolocation::init())
         .plugin(tauri_plugin_opener::init())
+        // 図の書き出し: 保存ダイアログと、Android の content:// への書き込み
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         .manage(sync::AppSyncState::default())
         .setup(|app| {
             // ブラウザで認証している間に OS がアプリを回収すると、トークンは
@@ -487,6 +494,7 @@ pub fn run() {
             search_all,
             resolve_places,
             delete_note,
+            export::save_export,
             sync::sync_start,
             sync::sync_status,
             auth::auth_login,

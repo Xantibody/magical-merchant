@@ -1,8 +1,11 @@
 import MarkdownIt from "markdown-it";
 import type { Env, MarkdownIt as MarkdownItInstance } from "markdown-it";
+import copyIcon from "@phosphor-icons/core/assets/regular/copy.svg?raw";
+import cornersOutIcon from "@phosphor-icons/core/assets/regular/corners-out.svg?raw";
 import { extractCaption } from "./diagram-caption";
 import { renderDiffBlock } from "./diff-block";
 import { glyphPlugin } from "./glyph-markdown";
+import { t } from "./i18n";
 import { renderDiagrams } from "./mermaid";
 import { noteLinkPlugin } from "./note-link-markdown";
 import { isPreservedEmptyLine } from "./preserved-empty-line";
@@ -81,6 +84,49 @@ function plainBlock(code: string): string {
   return `<pre><code>${fenceMd.utils.escapeHtml(code)}</code></pre>`;
 }
 
+/**
+ * ホバーで現れる操作。描画結果は innerHTML に流すので SolidJS の部品は置けず、
+ * node view (code-block-view-plugin.ts) と同じく raw の SVG 文字列を埋める。
+ * 押されたときの処理は MarkdownPreview が data-action で受ける。
+ */
+function toolButton(action: string, label: string, content: string): string {
+  const escaped = fenceMd.utils.escapeHtml(label);
+  return (
+    `<button type="button" class="preview-tool" data-action="${action}" ` +
+    `title="${escaped}" aria-label="${escaped}">${content}</button>`
+  );
+}
+
+/**
+ * コードブロックにコピーの道具と生ソースを付ける。ソースを DOM に持たせるのは、
+ * 押されたブロックの中身を描画結果から逆算しないため — diff の行は改行を
+ * 持たない div なので textContent では戻らない。
+ * 道具は pre の中に置く(node view と同じ構造)。外に包むと、閲覧とエディタで
+ * ブロック直下の要素が変わり、幾何を突き合わせる前提が崩れる。
+ */
+function codeBlock(pre: string, block: FenceBlock): string {
+  const openEnd = pre.indexOf(">");
+  const end = pre.lastIndexOf("</pre>");
+  if (!pre.startsWith("<pre") || openEnd === -1 || end === -1) {
+    return pre;
+  }
+  const lang = block.lang
+    ? `<span class="preview-tools-lang">${fenceMd.utils.escapeHtml(block.lang)}</span>`
+    : "";
+  const tools = `<div class="preview-tools">${lang}${toolButton("copy", t().editor.copyCode, copyIcon)}</div>`;
+  // Shiki の付けた class を先頭に残す。後ろに足せば `<pre class="shiki` で数えられる
+  const source = fenceMd.utils.escapeHtml(block.code);
+  return `${pre.slice(0, openEnd)} data-source="${source}"${pre.slice(openEnd, end)}${tools}${pre.slice(end)}`;
+}
+
+function diagramTools(): string {
+  const { preview } = t();
+  return (
+    `<div class="preview-tools">${toolButton("zoom", preview.zoom, cornersOutIcon)}` +
+    `${toolButton("svg", preview.saveSvg, "SVG")}${toolButton("png", preview.savePng, "PNG")}</div>`
+  );
+}
+
 fenceMd.renderer.rules.fence = (tokens, idx, _options, renderEnv) => {
   const token = tokens[idx];
   // `render()` は env を必ず渡すが、型の上では省略できることになっている。
@@ -134,7 +180,10 @@ function diagramBlock(svg: string, source: string): string {
   const figcaption = caption
     ? `<figcaption class="mermaid-caption">${fenceMd.utils.escapeHtml(caption)}</figcaption>`
     : "";
-  return `<figure class="mermaid-block"><div class="mermaid-figure">${svg}</div>${figcaption}</figure>`;
+  return (
+    `<figure class="mermaid-block"><div class="mermaid-figure">${svg}</div>` +
+    `${figcaption}${diagramTools()}</figure>`
+  );
 }
 
 type FenceKind = "diagram" | "diff" | "code";
@@ -168,14 +217,15 @@ async function renderFences(blocks: FenceBlock[]): Promise<string[]> {
   return blocks.map((block, index) => {
     switch (kinds[index]) {
       case "diff": {
-        return renderDiffBlock(block.code);
+        return codeBlock(renderDiffBlock(block.code), block);
       }
       case "code": {
-        return highlighted[codeIndex++];
+        return codeBlock(highlighted[codeIndex++], block);
       }
       default: {
         const svg = svgs[diagramIndex++];
-        return svg ? diagramBlock(svg, block.code) : plainBlock(block.code);
+        // 描けなかった図はソースを読ませる。読めるなら写せてもよい
+        return svg ? diagramBlock(svg, block.code) : codeBlock(plainBlock(block.code), block);
       }
     }
   });
