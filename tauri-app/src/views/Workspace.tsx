@@ -116,19 +116,6 @@ export default function Workspace(): JSX.Element {
    */
   const revisions = new Map<string, string>();
 
-  // 同期やパレット操作の後にデータを取り直す。初回は createResource が読むので
-  // defer しないと全ノートの読み直しがマウント直後に二重で走る
-  createEffect(
-    on(
-      shell.dataVersion,
-      () => {
-        void refetchNotes();
-        void refetchTemplates();
-      },
-      { defer: true },
-    ),
-  );
-
   const visibleItems = createMemo<NoteItem[]>(() => {
     const dropped = new Set(hidden());
     return (notes() ?? []).filter((item) => !dropped.has(item.id));
@@ -140,6 +127,13 @@ export default function Workspace(): JSX.Element {
     const items = visibleItems();
     return items.find((item) => item.id === selectedId()) ?? items[0];
   });
+
+  /**
+   * いま見ているノートの id。一覧を取り直すと NoteItem は作り直されるので、
+   * 「見ているノートが変わった」を item の同一性で判断すると、保存や同期の
+   * たびに変わったことになる。id なら同じノートのあいだ動かない。
+   */
+  const selectedKey = createMemo<string | undefined>(() => selected()?.id);
 
   /**
    * ファイルに書く本文。タイトル欄とエディタは別々に見せているが、
@@ -235,21 +229,25 @@ export default function Workspace(): JSX.Element {
   };
 
   // ---- 選択中ノートの本文と表示モードを読む ----
-  createEffect(() => {
-    const item = selected();
-    // 別のノートに移ったら編集セッションは畳む。戻る先が前のノートの
-    // 本文のままだと、次の保存が他人のバックアップを潰す
-    sessionFile = null;
-    if (!item) {
-      batch(() => {
-        setNoteBody("");
-        setNoteTitle("");
-        setNoteView("editor");
-      });
-      return;
-    }
-    void loadNote(item);
-  });
+  // 追うのは「どのノートを見ているか」だけ。item そのものを追うと、一覧を
+  // 取り直すたびに本文を読み直し、開いているエディタの下で本文が入れ替わる
+  createEffect(
+    on(selectedKey, () => {
+      const item = selected();
+      // 別のノートに移ったら編集セッションは畳む。戻る先が前のノートの
+      // 本文のままだと、次の保存が他人のバックアップを潰す
+      sessionFile = null;
+      if (!item) {
+        batch(() => {
+          setNoteBody("");
+          setNoteTitle("");
+          setNoteView("editor");
+        });
+        return;
+      }
+      void loadNote(item);
+    }),
+  );
 
   const toggleNoteView = async (item: NoteItem): Promise<void> => {
     const next = toggledView(noteView());
@@ -363,6 +361,30 @@ export default function Workspace(): JSX.Element {
       void flushSave();
     }
   });
+
+  // 同期やパレット操作の後にデータを取り直す。初回は createResource が読むので
+  // defer しないと全ノートの読み直しがマウント直後に二重で走る
+  createEffect(
+    on(
+      shell.dataVersion,
+      () => {
+        void refetchNotes();
+        void refetchTemplates();
+        // 一覧を取り直しただけでは、開いたままのノートは古い本文を出し続ける。
+        // 同期で降ってきた版をここで読み直す。読むだけで、書き戻しはしない
+        const item = selected();
+        // エディタが開いている間は絶対に触らない。本文の差し替えは
+        // カーソル・選択・スクロール・IME の状態ごと壊す(editor skill)。
+        // 待っている保存があるときも同じ — タイトル欄に打った字はまだ
+        // ディスクに無いので、読み直せばそれを捨てることになる。
+        // どちらも次の Step(ファイル監視)でトーストを出して人に決めさせる
+        if (item && !editing() && !saveTimer) {
+          void loadNote(item);
+        }
+      },
+      { defer: true },
+    ),
+  );
 
   const startEditing = (point?: CaretPoint): void => {
     if (!selected()) {
