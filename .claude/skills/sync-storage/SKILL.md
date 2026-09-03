@@ -20,9 +20,10 @@ description: Note/timeline storage invariants, sync protocol, widgets and deep l
 - **`updated`** (optional frontmatter): when the body was last rewritten.
   Stamped only by `Notes::update` — metadata edits and view toggles are not
   rewrites. Absent until the first edit, like `view`
-- **`view`** (optional frontmatter): per-note display mode (`mindmap`).
-  A preference, not a record — omitted unless set so untouched notes stay
-  byte-identical
+- **`view`** (optional frontmatter): per-note display mode (`mindmap`,
+  `preview`). A preference, not a record — omitted unless set so untouched
+  notes stay byte-identical. Unknown values resolve to the editor, so a new
+  value never breaks an older build
 - Any new frontmatter key must be a **typed field on `NoteFrontmatter`** in
   Rust core; unknown keys are dropped on the next save
 - **Revision guard**: `read_note` returns `Revision::of(body)`; every body

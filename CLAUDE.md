@@ -37,7 +37,8 @@ ready to record the moment it opens (widgets exist for exactly this).
 - **Notes (Workspace)**: list pane + detail pane; mobile shows one pane at a
   time (`workspace--detail`); title field above the body (it _is_ the body's
   leading `# heading`); Milkdown editor is lazy-loaded on first edit;
-  per-note mindmap view via frontmatter `view`
+  per-note view via frontmatter `view` (`mindmap` / `preview`, one cycle
+  button in the detail header; absent means the editable default)
 - **Command palette** (⌘K): in-memory commands + debounced `search_all`
 - **Language**: Japanese and English only, from one table (`lib/i18n.ts`).
   Every user-visible string goes through `t()`; the choice lives in Settings
