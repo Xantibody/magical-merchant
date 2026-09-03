@@ -13,7 +13,7 @@ interface SyncErrorInfo {
 }
 
 export interface SyncUiState {
-  status: "success" | "error" | "needs-setup";
+  status: "idle" | "success" | "error" | "needs-setup";
   message: string;
 }
 
@@ -48,15 +48,18 @@ export function describeSyncResult(result: SyncResultPayload): SyncUiState {
   return { status: "success", message };
 }
 
-/** null は「表示しない」(別の同期が進行中など) */
-export function describeSyncError(err: unknown): SyncUiState | null {
+export function describeSyncError(err: unknown): SyncUiState {
   const info: SyncErrorInfo =
     typeof err === "object" && err !== null && "message" in err
       ? (err as SyncErrorInfo)
       : { kind: "other", message: String(err) };
 
+  // 別の同期が走っていただけ。アプリ内の再入だけでなく、CLI が同じ
+  // データディレクトリのロックを持っているときもここに来る。異常ではないので
+  // 何も知らせないが、待機に戻すのは必須: "syncing" のまま止めると
+  // syncNow の再入ガードに引っかかり、以後どの同期も始まらなくなる
   if (info.kind === "busy") {
-    return null;
+    return { status: "idle", message: "" };
   }
   if (info.kind === "notConfigured" || info.kind === "notAuthenticated") {
     return { status: "needs-setup", message: info.message };

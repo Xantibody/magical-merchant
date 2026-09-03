@@ -91,12 +91,12 @@ export function createSyncState(onSynced: () => void): SyncState {
 
   const applyError = (err: unknown): void => {
     const ui = describeSyncError(err);
-    if (!ui) {
-      return;
-    }
     setStatus(ui.status);
     setMessage(ui.message);
-    setAlertVersion((v) => v + 1);
+    // 待機に戻るだけの結果 (別プロセスが同期中) でポップオーバーを開かない
+    if (ui.status === "error" || ui.status === "needs-setup") {
+      setAlertVersion((v) => v + 1);
+    }
   };
 
   const syncNow = async (): Promise<void> => {
