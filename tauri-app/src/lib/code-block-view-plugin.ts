@@ -4,6 +4,7 @@ import { TextSelection } from "@milkdown/kit/prose/state";
 import copyIcon from "@phosphor-icons/core/assets/regular/copy.svg?raw";
 import checkIcon from "@phosphor-icons/core/assets/regular/check.svg?raw";
 import { t } from "./i18n";
+import { extractCaption } from "./diagram-caption";
 import { renderDiagrams } from "./mermaid";
 import { isMermaidLanguage, createDebouncedDiagramRenderer } from "./mermaid-preview";
 import { createCopyFeedback } from "./copy-feedback";
@@ -41,9 +42,12 @@ class CodeBlockPreviewView implements NodeView {
   private readonly copyButton: HTMLButtonElement;
   private readonly languageInput: HTMLInputElement;
   private preview: HTMLElement | undefined;
+  private caption: HTMLElement | undefined;
   private node: Node;
   private lastSource: string | undefined;
   private lastSvg: string | undefined;
+  /** 描画を頼んだソースのキャプション。図と一緒に出すため結果まで持ち越す */
+  private pendingCaption: string | undefined;
 
   private readonly copyFeedback = createCopyFeedback(
     (text) => navigator.clipboard.writeText(text),
@@ -97,7 +101,8 @@ class CodeBlockPreviewView implements NodeView {
     return (
       this.copyButton.contains(target) ||
       this.languageInput.contains(target) ||
-      (this.preview?.contains(target) ?? false)
+      (this.preview?.contains(target) ?? false) ||
+      (this.caption?.contains(target) ?? false)
     );
   }
 
@@ -215,6 +220,7 @@ class CodeBlockPreviewView implements NodeView {
       return;
     }
     this.lastSource = source;
+    this.pendingCaption = extractCaption(source);
 
     if (source.trim() === "") {
       this.resetPreview();
@@ -231,6 +237,7 @@ class CodeBlockPreviewView implements NodeView {
       this.dom.classList.remove("has-diagram");
       if (!this.lastSvg) {
         this.showNotice(t().editor.diagramFailed);
+        this.applyCaption();
       }
       return;
     }
@@ -238,7 +245,32 @@ class CodeBlockPreviewView implements NodeView {
     const preview = this.ensurePreview();
     preview.classList.remove("is-error");
     preview.innerHTML = svg;
+    this.applyCaption(this.pendingCaption);
     this.dom.classList.add("has-diagram");
+  }
+
+  /**
+   * `%% caption:` をプレビューと同じ figcaption で図の下に出す。閲覧側だけに
+   * 出すと図の高さが 2 つの面で食い違い、押した座標の文字にカーソルを置く
+   * 前提が崩れて下の本文が 1 ブロックずれる (#168)。
+   *
+   * 要素は作り直さず文字だけ差し替える。ノードを入れ替えると、その中に
+   * 選択が乗っているときにカーソルが飛ぶ
+   */
+  private applyCaption(text?: string): void {
+    if (text === undefined) {
+      this.caption?.remove();
+      this.caption = undefined;
+      return;
+    }
+    if (!this.caption) {
+      this.caption = document.createElement("figcaption");
+      this.caption.className = "mermaid-caption";
+      // 図と同じく編集の対象外。書き換えられるのはあくまで上のソース
+      this.caption.contentEditable = "false";
+      this.dom.append(this.caption);
+    }
+    this.caption.textContent = text;
   }
 
   private showNotice(text: string): void {
@@ -279,8 +311,10 @@ class CodeBlockPreviewView implements NodeView {
     this.renderer.cancel();
     this.lastSource = undefined;
     this.lastSvg = undefined;
+    this.pendingCaption = undefined;
     this.preview?.remove();
     this.preview = undefined;
+    this.applyCaption();
     this.dom.classList.remove("has-diagram");
   }
 }
