@@ -365,6 +365,9 @@ export default function Workspace(): JSX.Element {
       clearTimeout(saveTimer);
     }
     saveTimer = setTimeout(() => {
+      // 起きたタイマーは終わったタイマー。掃除しないと「保存待ちがある」が
+      // 立ったままになり、フォーカス復帰の読み直しが二度と通らない
+      saveTimer = undefined;
       void flushSave(pending);
     }, SAVE_DEBOUNCE_MS);
   };
@@ -552,6 +555,13 @@ export default function Workspace(): JSX.Element {
       return;
     }
     writeBackup(localStorage, item.filename, current);
+    // 入れ替えたので、いまの「戻る先」はこの控え。控えを取り終えた
+    // セッションとして開き直す — 開き直さないと、次に題や本文を触った
+    // ときに新しいセッションが立ち上がり、その最初の保存が復元直前の本文を
+    // 控えに書いて、もう一度押しても戻れなくなる
+    session = beginEditSession(backup);
+    session.committed = true;
+    sessionFile = item.filename;
     const titled = splitTitle(backup);
     batch(() => {
       setNoteTitle(titled.title);
