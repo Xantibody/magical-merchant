@@ -5,6 +5,7 @@ import copyIcon from "@phosphor-icons/core/assets/regular/copy.svg?raw";
 import checkIcon from "@phosphor-icons/core/assets/regular/check.svg?raw";
 import { t } from "./i18n";
 import { extractCaption } from "./diagram-caption";
+import { setDiagramPending } from "./diagram-pending";
 import { renderDiagrams } from "./mermaid";
 import { isMermaidLanguage, createDebouncedDiagramRenderer } from "./mermaid-preview";
 import { createCopyFeedback } from "./copy-feedback";
@@ -118,6 +119,8 @@ class CodeBlockPreviewView implements NodeView {
   destroy(): void {
     this.renderer.dispose();
     this.copyFeedback.dispose();
+    // 描き終わりは二度と来ない。待っている側を締切まで待たせない
+    setDiagramPending(this.dom, false);
   }
 
   /**
@@ -226,10 +229,19 @@ class CodeBlockPreviewView implements NodeView {
       this.resetPreview();
       return;
     }
+    // ここから図が入るまで、ブロックはソースの高さで場所を取る。高さが確定
+    // していないことを外へ知らせる — 座標から位置を引く側が待てるように (#168)
+    setDiagramPending(this.dom, true);
     this.renderer.request(source, { immediate: initial });
   }
 
   private applyResult(svg: string | null): void {
+    this.showResult(svg);
+    // 描けても描けなくても、この時点で高さは決まっている
+    setDiagramPending(this.dom, false);
+  }
+
+  private showResult(svg: string | null): void {
     if (svg === null) {
       // 打鍵の途中は書きかけの構文になるのが普通。最後に描けた図を残して
       // 落ち着きを保ち、まだ一度も描けていないときだけ控えめに伝える。
@@ -316,6 +328,8 @@ class CodeBlockPreviewView implements NodeView {
     this.preview = undefined;
     this.applyCaption();
     this.dom.classList.remove("has-diagram");
+    // 捨てた描画の結果は届かない。畳んだ姿で高さは決まっている
+    setDiagramPending(this.dom, false);
   }
 }
 
