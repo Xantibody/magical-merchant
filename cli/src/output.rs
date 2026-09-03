@@ -55,6 +55,10 @@ pub(crate) struct NoteOutput {
     pub(crate) template: Option<String>,
     /// Per-note view preference (e.g. `mindmap`).
     pub(crate) view: Option<String>,
+    /// Which tool created the note: `app`, `cli`, `mcp` or `widget`.
+    /// Recorded at creation and never changed by a later edit. Absent on
+    /// notes written before this was recorded.
+    pub(crate) source: Option<String>,
     /// Device state at creation time.
     pub(crate) context: Option<ContextInfo>,
     /// Fingerprint of `body`. Pass it to `update_note` so the write is
@@ -133,6 +137,9 @@ pub(crate) struct EntryInfo {
     pub(crate) text: String,
     /// `#tags` found in the text.
     pub(crate) tags: Vec<String>,
+    /// Which tool wrote the entry: `app`, `cli`, `mcp` or `widget`. Absent
+    /// on entries written before this was recorded.
+    pub(crate) source: Option<String>,
     /// Device state at recording time. Empty object when nothing was recorded.
     pub(crate) context: ContextInfo,
 }
@@ -229,6 +236,7 @@ impl EntryInfo {
             datetime,
             tags: magical_merchant_core::utils::tags::parse(&entry.text),
             text: entry.text,
+            source: entry.source,
             context: ContextInfo::from_context(&entry.context, place),
         }
     }

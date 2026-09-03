@@ -1,5 +1,5 @@
 import type { IconName } from "../components/Icon";
-import { getBatteryIcon, getNetworkIcon, networkLabel } from "./parse-timeline";
+import { getBatteryIcon, getNetworkIcon, networkLabel, sourceLabel } from "./parse-timeline";
 import type { DeviceContext } from "./parse-timeline";
 
 /** エントリ本文の下に並べる、記録時の状況ひとつ。 */
@@ -54,7 +54,15 @@ function batterySegment(ctx: DeviceContext): MetaSegment | null {
   return icon ? { icon, label: `${ctx.battery}%` } : null;
 }
 
-/** 記録できていたものだけを、端末 → 場所 → 回線 → 電源の順に並べる。 */
+function sourceSegment(ctx: DeviceContext): MetaSegment | null {
+  return ctx.s ? { icon: "pencil", label: sourceLabel(ctx.s) } : null;
+}
+
+/**
+ * 記録できていたものだけを、端末 → 場所 → 回線 → 電源 → 入り口の順に並べる。
+ * 入り口を末尾に置くのは、端末や場所より後から足された記録だからで、
+ * 古いエントリだけ並びが違って見えることがない。
+ */
 export function entryMeta(context: DeviceContext | null, nameOf?: PlaceLookup): MetaSegment[] {
   if (!context) {
     return [];
@@ -64,5 +72,6 @@ export function entryMeta(context: DeviceContext | null, nameOf?: PlaceLookup): 
     locationSegment(context, nameOf),
     networkSegment(context),
     batterySegment(context),
+    sourceSegment(context),
   ].filter((segment): segment is MetaSegment => segment !== null);
 }

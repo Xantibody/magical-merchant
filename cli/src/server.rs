@@ -243,8 +243,8 @@ impl McpServer {
                 .and_then(|l| self.place_name(&cache, l.latitude, l.longitude));
             ContextInfo::from_context(ctx, place)
         });
-        let (time, updated, tags, origin, template, view) = meta.map_or_else(
-            || (None, None, Vec::new(), None, None, None),
+        let (time, updated, tags, origin, template, view, source) = meta.map_or_else(
+            || (None, None, Vec::new(), None, None, None, None),
             |m| {
                 (
                     Some(m.time.to_rfc3339()),
@@ -253,6 +253,7 @@ impl McpServer {
                     m.origin,
                     m.template,
                     m.view,
+                    m.source,
                 )
             },
         );
@@ -266,6 +267,7 @@ impl McpServer {
             origin,
             template,
             view,
+            source,
             context,
             revision: revision.to_string(),
             body,
