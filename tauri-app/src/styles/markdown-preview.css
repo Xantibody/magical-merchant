@@ -1,3 +1,5 @@
+@import "./diagram-caption.css";
+
 .markdown-preview {
   font-family: var(--font-sans);
   line-height: var(--font-lineheight-4);
@@ -107,11 +109,17 @@
 
 /* Mermaid: 図は本文のように折り返せないので、幅に合わせて縮めて置く。
    mermaid が SVG に付ける max-width が原寸なので、拡大はされない。
-   上下の間隔は他のブロックと同じ(エディタで図だけを見せる状態と揃える) */
+   上下の間隔は他のブロックと同じ(エディタで図だけを見せる状態と揃える)。
+   figure の既定はグリッドだが、間隔をエディタ側と同じ margin で決めるため
+   ブロックに戻す(normalize の gap はエディタ側の div には効かない) */
 .markdown-preview .mermaid-block {
+  display: block;
+  cursor: zoom-in;
+}
+
+.markdown-preview .mermaid-figure {
   display: flex;
   justify-content: center;
-  cursor: zoom-in;
 }
 
 .markdown-preview .mermaid-block svg {

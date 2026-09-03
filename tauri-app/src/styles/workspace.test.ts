@@ -102,6 +102,12 @@ function geometry(target: HTMLElement, body: HTMLElement): Geometry {
   };
 }
 
+/** getComputedStyle は生きた参照なので、次の DOM を組む前に値を写し取る */
+function captionType(target: HTMLElement): Record<string, string> {
+  const style = getComputedStyle(target);
+  return { fontSize: style.fontSize, color: style.color, marginTop: style.marginTop };
+}
+
 function measureBlocks(body: string): Record<string, Geometry> {
   const detail = mountDetail(body);
   const root = blockRoot(detail);
@@ -136,12 +142,20 @@ describe("note body: preview and editor draw the same page", () => {
   });
 
   // mermaid はカーソルが離れている間、エディタでもソースを隠して図だけを見せる。
-  // その状態の図と、その次のブロックがプレビューと同じ高さに来ること
-  it("hangs a mermaid figure at the same height in both", () => {
+  // その状態の図と、その次のブロックがプレビューと同じ高さに来ること。
+  // `%% caption:` を書いた図はキャプションのぶんだけ背が伸びるので、
+  // 片側にしか出さないと図の下の本文がずれる (#168 と同じ壊れ方)
+  it.each([
+    ["without a caption", ""],
+    ["with a caption", '<figcaption class="mermaid-caption">図1 — 同期の流れ</figcaption>'],
+  ])("hangs a mermaid figure at the same height in both (%s)", (_name, caption) => {
     const before = "<p>前</p>";
     const after = "<p>後</p>";
     const previewBody = mountDetail(
-      preview(`${before}<div class="mermaid-block">${SVG}</div>${after}`),
+      preview(
+        `${before}<figure class="mermaid-block"><div class="mermaid-figure">${SVG}</div>` +
+          `${caption}</figure>${after}`,
+      ),
     );
     const previewSvg = geometry(element("svg", previewBody), previewBody);
     const previewAfter = geometry(
@@ -152,7 +166,7 @@ describe("note body: preview and editor draw the same page", () => {
     const editorBody = mountDetail(
       editor(
         `${before}<div class="code-block-view has-diagram"><pre><code>graph TD</code></pre>` +
-          `<div class="mermaid-editor-preview">${SVG}</div></div>${after}`,
+          `<div class="mermaid-editor-preview">${SVG}</div>${caption}</div>${after}`,
       ),
     );
     const editorSvg = geometry(element("svg", editorBody), editorBody);
@@ -163,6 +177,48 @@ describe("note body: preview and editor draw the same page", () => {
 
     expect(editorSvg).toStrictEqual(previewSvg);
     expect(editorAfter).toStrictEqual(previewAfter);
+  });
+
+  // 幾何が一致していても、両側とも素の figcaption のままなら通ってしまう。
+  // キャプションの体裁は 2 つの面が共有する 1 枚 (diagram-caption.css) から
+  // 来ていること — 片方だけが読み込みに失敗していれば、ここで落ちる
+  it("takes the caption's type from the sheet both surfaces share", () => {
+    const caption = '<figcaption class="mermaid-caption">図1</figcaption>';
+    const previewBody = mountDetail(
+      preview(
+        `<figure class="mermaid-block"><div class="mermaid-figure">${SVG}</div>${caption}</figure>`,
+      ),
+    );
+    const bodyFontSize = getComputedStyle(previewBody).fontSize;
+    const previewType = captionType(element("figcaption", previewBody));
+
+    const editorBody = mountDetail(
+      editor(
+        `<div class="code-block-view has-diagram"><pre><code>graph TD</code></pre>` +
+          `<div class="mermaid-editor-preview">${SVG}</div>${caption}</div>`,
+      ),
+    );
+
+    expect(previewType.fontSize).not.toBe(bodyFontSize);
+    expect(previewType.marginTop).not.toBe("0px");
+    expect(captionType(element("figcaption", editorBody))).toStrictEqual(previewType);
+  });
+
+  // キャプションを出したぶんだけ、次のブロックは下がっていること。
+  // 両側が同じ高さでも 0px なら「両方とも出ていない」で通ってしまう
+  it("pushes the block after the diagram down by the caption", () => {
+    const figure = (caption: string): string =>
+      preview(
+        `<figure class="mermaid-block"><div class="mermaid-figure">${SVG}</div>` +
+          `${caption}</figure><p>後</p>`,
+      );
+    const plain = mountDetail(figure(""));
+    const plainAfter = geometry(element(":scope > p", blockRoot(plain)), plain).top;
+
+    const captioned = mountDetail(figure('<figcaption class="mermaid-caption">図1</figcaption>'));
+    const captionedAfter = geometry(element(":scope > p", blockRoot(captioned)), captioned).top;
+
+    expect(captionedAfter).toBeGreaterThan(plainAfter);
   });
 
   // Open Props の normalize は p/li/blockquote/見出しに 20〜60ch の読みやすさ上限を

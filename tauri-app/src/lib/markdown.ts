@@ -1,5 +1,6 @@
 import MarkdownIt from "markdown-it";
 import type { Env, MarkdownIt as MarkdownItInstance } from "markdown-it";
+import { extractCaption } from "./diagram-caption";
 import { renderDiffBlock } from "./diff-block";
 import { glyphPlugin } from "./glyph-markdown";
 import { renderDiagrams } from "./mermaid";
@@ -123,6 +124,19 @@ async function highlightBlocks(blocks: FenceBlock[]): Promise<string[]> {
   });
 }
 
+/**
+ * 図は `<figure>` で包み、説明があれば `<figcaption>` を足す。同じ figcaption を
+ * エディタの node view も出す — 片方だけ背が高くなると、押した座標の文字に
+ * カーソルを置く前提が崩れて図の下の本文がずれる (#168)。
+ */
+function diagramBlock(svg: string, source: string): string {
+  const caption = extractCaption(source);
+  const figcaption = caption
+    ? `<figcaption class="mermaid-caption">${fenceMd.utils.escapeHtml(caption)}</figcaption>`
+    : "";
+  return `<figure class="mermaid-block"><div class="mermaid-figure">${svg}</div>${figcaption}</figure>`;
+}
+
 type FenceKind = "diagram" | "diff" | "code";
 
 function kindOf(block: FenceBlock): FenceKind {
@@ -161,7 +175,7 @@ async function renderFences(blocks: FenceBlock[]): Promise<string[]> {
       }
       default: {
         const svg = svgs[diagramIndex++];
-        return svg ? `<div class="mermaid-block">${svg}</div>` : plainBlock(block.code);
+        return svg ? diagramBlock(svg, block.code) : plainBlock(block.code);
       }
     }
   });

@@ -170,6 +170,29 @@ describe("renderMarkdown with mermaid", () => {
     expect(new Set(ids).size).toBe(2);
   });
 
+  it("hangs the caption of a leading %% comment under the diagram", async () => {
+    const source = [
+      "```mermaid",
+      "%% caption: 図1 — 同期の流れ",
+      "flowchart TD",
+      "  A --> B",
+      "```",
+    ].join("\n");
+
+    const html = await renderMarkdown(source);
+
+    expect(html).toContain("<figcaption");
+    expect(html).toContain("図1 — 同期の流れ");
+    // コメントは mermaid が読み飛ばす。本文から消してはいない
+    expect(html).toContain("<svg");
+  });
+
+  it("draws no caption when the diagram has no caption comment", async () => {
+    const html = await renderMarkdown(FLOWCHART);
+
+    expect(html).not.toContain("<figcaption");
+  });
+
   it("keeps diagrams and code blocks in source order", async () => {
     const source = [FLOWCHART, "", "```ts", "const a = 1;", "```", "", FLOWCHART].join("\n");
 
