@@ -858,6 +858,8 @@ export default function Workspace(): JSX.Element {
                             source={noteBody()}
                             noteTitles={noteTitles()}
                             glyphs={glyphs()}
+                            exportStem={selected()?.filename.replace(/\.md$/u, "")}
+                            onError={(message) => shell.showToast(message)}
                           />
                           {/* このノートを指している記録。畳んだ 1 行以上の場所は取らない */}
                           <Show when={(backlinks() ?? []).length > 0}>

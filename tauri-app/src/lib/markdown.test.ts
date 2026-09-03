@@ -224,11 +224,14 @@ describe("renderMarkdown with mermaid", () => {
     expect(html).not.toContain("<figcaption");
   });
 
-  it("puts the zoom tool inside the figure", async () => {
+  it("puts the zoom and export tools inside the figure", async () => {
     const html = await renderMarkdown(FLOWCHART);
 
-    expect(html.indexOf('data-action="zoom"')).toBeGreaterThan(html.indexOf("<figure"));
-    expect(html.indexOf('data-action="zoom"')).toBeLessThan(html.indexOf("</figure>"));
+    for (const action of ["zoom", "svg", "png"]) {
+      const at = html.indexOf(`data-action="${action}"`);
+      expect(at).toBeGreaterThan(html.indexOf("<figure"));
+      expect(at).toBeLessThan(html.indexOf("</figure>"));
+    }
   });
 
   it("keeps diagrams and code blocks in source order", async () => {

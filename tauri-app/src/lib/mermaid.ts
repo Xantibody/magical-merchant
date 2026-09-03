@@ -96,6 +96,10 @@ export async function renderDiagrams(sources: string[]): Promise<(string | null)
     startOnLoad: false,
     // ノートは同期先から降ってくることもある。ラベルの HTML は DOMPurify に通す
     securityLevel: "strict",
+    // ラベルを foreignObject(HTML)ではなく SVG の text で描く。foreignObject が
+    // あると PNG に描くときに canvas が汚染されて書き出せない。ラベル内の
+    // <br/> や太字の見え方は変わる
+    flowchart: { htmlLabels: false },
     ...themeConfig(),
   });
 

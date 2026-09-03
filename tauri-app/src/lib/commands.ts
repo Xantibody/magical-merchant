@@ -193,6 +193,11 @@ interface CommandMap {
   get_sync_config: { args: void; result: SyncConfig };
   save_sync_config: { args: { config: SyncConfig }; result: void };
   is_sync_config_editable: { args: void; result: boolean };
+  /**
+   * 図の書き出し。保存ダイアログを出し、選ばれた場所に書く。ノートには
+   * 触れないので MUTATING には入れない。`saved: false` はキャンセル。
+   */
+  save_export: { args: { suggestedName: string; dataBase64: string }; result: { saved: boolean } };
 }
 
 export type CommandName = keyof CommandMap;
