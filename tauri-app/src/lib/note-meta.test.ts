@@ -96,4 +96,22 @@ describe("contextRows", () => {
     expect(contextRows()).toStrictEqual([]);
     expect(contextRows({})).toStrictEqual([]);
   });
+
+  /** 書いたツールは context の中ではないが、読む人には同じ一続きの記録。 */
+  it("names the tool the note was written with, after the context", () => {
+    expect(contextRows({ os: "macos" }, "widget")).toStrictEqual([
+      { label: "OS", value: "macos" },
+      { label: "書いたツール", value: "ウィジェット" },
+    ]);
+  });
+
+  /** 名乗る前に作られたノートに行は生えない。 */
+  it("leaves the row out when the note names no tool", () => {
+    expect(contextRows({ os: "macos" })).toStrictEqual([{ label: "OS", value: "macos" }]);
+  });
+
+  /** context が読めなくても、作ったツールだけは分かっていることがある。 */
+  it("shows the tool even when there is no context at all", () => {
+    expect(contextRows(undefined, "cli")).toStrictEqual([{ label: "書いたツール", value: "CLI" }]);
+  });
 });

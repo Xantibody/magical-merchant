@@ -2,7 +2,7 @@ use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 
 use crate::error::CoreError;
-use crate::utils::device::{Context, DeviceIdentity};
+use crate::utils::device::{Context, DeviceIdentity, Source};
 use crate::utils::frontmatter;
 use crate::utils::markdown::{format_timeline_line, split_context_json, split_time_prefix};
 
@@ -27,6 +27,14 @@ struct StoredContext {
     /// エントリを見分けられない。前者に後者の端末が付いてしまう。
     #[serde(default, rename = "d", skip_serializing_if = "is_unknown_device")]
     device: usize,
+    /// どの入り口で書かれたか(`app` / `cli` / `mcp` / `widget`)。
+    ///
+    /// `d` と同じく 1 文字のキーにする。1 行あたり数十文字の本文に対して
+    /// `"source":"widget"` を毎行足すと、読める Markdown ではなくなる。
+    /// 記録していないエントリには付けない — 既存の日ファイルが書き換わると
+    /// 内容ハッシュが動いて同期が丸ごと走る。
+    #[serde(default, rename = "s", skip_serializing_if = "Option::is_none")]
+    source: Option<String>,
 }
 
 #[allow(clippy::trivially_copy_pass_by_ref)] // skip_serializing_if は参照しか渡さない
@@ -71,10 +79,19 @@ impl DayLog {
     }
 
     /// 記録を 1 件足す。端末情報は既出なら使い回し、初めてなら一覧に加える。
-    pub(crate) fn push(&mut self, text: &str, timestamp: DateTime<Local>, context: &Context) {
+    ///
+    /// `source` が `None` なら行末は今までと 1 バイトも変わらない。
+    pub(crate) fn push(
+        &mut self,
+        text: &str,
+        timestamp: DateTime<Local>,
+        context: &Context,
+        source: Option<Source>,
+    ) {
         let stored = StoredContext {
             context: context.volatile(),
             device: self.device_number(&context.identity()),
+            source: source.map(|s| s.as_str().to_string()),
         };
         self.entries
             .push(format_timeline_line(text, timestamp, &stored));
@@ -125,7 +142,14 @@ impl DayLog {
         };
 
         let text = &rest[..rest.len() - json.len()];
-        let full = stored.context.with_identity(identity);
+        // 戻すのは端末情報だけ。`d` は畳んだまま(0 は書かれない)で、`s` は
+        // 端末の状態ではなく行そのものの記録なので展開後の行にも残す —
+        // 落とすと、読む側(MCP 出力・行のメタ表示)から出所が消える。
+        let full = StoredContext {
+            context: stored.context.with_identity(identity),
+            device: 0,
+            source: stored.source,
+        };
         serde_json::to_string(&full).map_or_else(
             |_| entry.to_string(),
             |full| format!("{prefix}{text}{full}"),
@@ -189,8 +213,8 @@ mod tests {
     #[test]
     fn a_single_device_day_writes_its_identity_once() {
         let mut day = DayLog::default();
-        day.push("first", at(9), &mac());
-        day.push("second", at(10), &mac());
+        day.push("first", at(9), &mac(), None);
+        day.push("second", at(10), &mac(), None);
 
         let rendered = day.render().unwrap();
 
@@ -202,8 +226,8 @@ mod tests {
     #[test]
     fn a_day_split_across_devices_keeps_both() {
         let mut day = DayLog::default();
-        day.push("on the phone", at(9), &android());
-        day.push("at the desk", at(21), &mac());
+        day.push("on the phone", at(9), &android(), None);
+        day.push("at the desk", at(21), &mac(), None);
 
         let reread = DayLog::parse(&day.render().unwrap());
         let entries = reread.expanded();
@@ -216,7 +240,7 @@ mod tests {
     #[test]
     fn reading_it_back_reproduces_the_full_context() {
         let mut day = DayLog::default();
-        day.push("hello", at(9), &mac());
+        day.push("hello", at(9), &mac(), None);
 
         let entries = DayLog::parse(&day.render().unwrap()).expanded();
 
@@ -237,7 +261,7 @@ mod tests {
     fn a_new_entry_does_not_claim_the_device_of_older_ones() {
         let old = "- [09:00:00] legacy {\"battery\":80}\n";
         let mut day = DayLog::parse(old);
-        day.push("fresh", at(10), &mac());
+        day.push("fresh", at(10), &mac(), None);
 
         let entries = DayLog::parse(&day.render().unwrap()).expanded();
 
@@ -248,7 +272,7 @@ mod tests {
     #[test]
     fn an_entry_without_any_context_survives_a_round_trip() {
         let mut day = DayLog::default();
-        day.push("bare", at(9), &Context::default());
+        day.push("bare", at(9), &Context::default(), None);
 
         let rendered = day.render().unwrap();
 
@@ -259,10 +283,43 @@ mod tests {
         );
     }
 
+    /// 入り口を名乗らないエントリの行は、`s` を足す前と 1 バイトも違わない。
+    /// 日ファイルは同期の単位そのもので、行末が 1 文字でも動けば全端末が
+    /// 「その日は変わった」と見て転送し直す。
+    #[test]
+    fn an_entry_that_names_no_source_is_written_exactly_as_before() {
+        let mut day = DayLog::default();
+        day.push("bare", at(9), &Context::default(), None);
+        day.push("with a device", at(10), &mac(), None);
+
+        let rendered = day.render().unwrap();
+
+        assert!(!rendered.contains("\"s\""));
+        assert!(rendered.contains("- [09:00:00] bare\n"));
+        assert!(rendered.contains(
+            "- [10:00:00] with a device {\"battery\":56,\"network_type\":\"WiFi\",\"d\":1}"
+        ));
+    }
+
+    /// 名乗ったぶんだけ、行末に 1 文字のキーで付く。読み戻しても消えない —
+    /// 端末情報を戻す展開は `s` を落としてはいけない。
+    #[test]
+    fn an_entry_carries_the_source_that_wrote_it() {
+        let mut day = DayLog::default();
+        day.push("from the widget", at(9), &android(), Some(Source::Widget));
+
+        let rendered = day.render().unwrap();
+
+        assert!(rendered.contains("\"s\":\"widget\""));
+        assert!(DayLog::parse(&rendered).expanded()[0].ends_with(
+            "{\"battery\":30,\"os\":\"android\",\"arch\":\"aarch64\",\"s\":\"widget\"}"
+        ));
+    }
+
     #[test]
     fn multiline_entries_stay_one_entry() {
         let mut day = DayLog::default();
-        day.push("line1\nline2", at(9), &mac());
+        day.push("line1\nline2", at(9), &mac(), None);
 
         let entries = DayLog::parse(&day.render().unwrap()).expanded();
 
@@ -274,7 +331,7 @@ mod tests {
     fn the_same_device_is_listed_once_however_often_it_writes() {
         let mut day = DayLog::default();
         for hour in 9..15 {
-            day.push("tick", at(hour), &mac());
+            day.push("tick", at(hour), &mac(), None);
         }
 
         assert_eq!(day.devices.len(), 1);
@@ -283,7 +340,7 @@ mod tests {
     #[test]
     fn a_battery_reading_is_kept_per_entry() {
         let mut day = DayLog::default();
-        day.push("morning", at(9), &mac());
+        day.push("morning", at(9), &mac(), None);
         day.push(
             "evening",
             at(21),
@@ -291,6 +348,7 @@ mod tests {
                 battery: Some(12),
                 ..mac()
             },
+            None,
         );
 
         let entries = DayLog::parse(&day.render().unwrap()).expanded();

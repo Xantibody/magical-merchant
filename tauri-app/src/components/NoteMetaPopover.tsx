@@ -144,11 +144,11 @@ export default function NoteMetaPopover(props: NoteMetaPopoverProps): JSX.Elemen
                 <span class="note-meta-hint">{t().meta.tagsHint}</span>
               </div>
 
-              <Show when={contextRows(m().context).length > 0}>
+              <Show when={contextRows(m().context, m().source).length > 0}>
                 <div class="note-meta-field">
                   <span class="note-meta-label">{t().meta.context}</span>
                   <div class="note-meta-context">
-                    <For each={contextRows(m().context)}>
+                    <For each={contextRows(m().context, m().source)}>
                       {(row) => (
                         <>
                           <span class="note-meta-context-label">{row.label}</span>

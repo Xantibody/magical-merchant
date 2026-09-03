@@ -98,6 +98,11 @@ interface NoteMeta {
   view?: string;
   /** 本文を最後に書き直した時刻。一度も編集していないノートは持たない。 */
   updated?: string;
+  /**
+   * 作ったツール(`app` / `cli` / `mcp` / `widget`)。作成時の記録なので、
+   * 別のツールで編集しても変わらない。名乗る前に書かれたノートは持たない。
+   */
+  source?: string;
 }
 
 type HitKind = "timeline" | "note";

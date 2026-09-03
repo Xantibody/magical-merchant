@@ -5,7 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use chrono::Local;
-use magical_merchant_core::{CoreError, NoteFilename, NoteSummary, Provenance, Revision};
+use magical_merchant_core::{CoreError, NoteFilename, NoteSummary, Provenance, Revision, Source};
 
 use crate::notes::{self, WriteError};
 
@@ -148,7 +148,10 @@ pub(crate) fn create(data_dir: &Path, body: &str) -> Result<Option<NoteFilename>
         body,
         &[],
         &notes::context(),
-        Provenance::default(),
+        Provenance {
+            source: Some(Source::Cli),
+            ..Provenance::default()
+        },
     )?;
     let name = path
         .file_name()
