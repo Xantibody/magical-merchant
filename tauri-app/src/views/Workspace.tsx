@@ -278,11 +278,22 @@ export default function Workspace(): JSX.Element {
     item: NoteItem;
     body: string;
     session: EditSession;
+    /** 写しを取った時点の世代。読み直しをまたいだ写しは書かない。 */
+    generation: number;
   }
+
+  /**
+   * 保存の世代。外からの書き換えに譲って読み直すたびに 1 つ進める。
+   * 譲るより前に `saveChain` に並んだ写しは、読み直した版を知らないまま
+   * 順番が来る。そのまま書くと、いま画面に出ている相手の本文を古い draft で
+   * 潰す — 読み直しで `revisions` が新しくなっているので core も止められない。
+   * `session.lastSavedBody` を合わせるだけでは「同じ本文の写し」しか止まらない。
+   */
+  let saveGeneration = 0;
 
   const snapshotSave = (): PendingSave | undefined => {
     const item = selected();
-    return item ? { item, body: fullBody(), session } : undefined;
+    return item ? { item, body: fullBody(), session, generation: saveGeneration } : undefined;
   };
 
   /**
@@ -292,7 +303,11 @@ export default function Workspace(): JSX.Element {
    * 相手の版がバックアップに回るので、どちらも失わない。
    */
   const yieldToOutsideEdit = async (pending: PendingSave): Promise<void> => {
-    writeBackup(localStorage, pending.item.filename, pending.body);
+    // 退避するのは飛んでいった写しではなく、いま画面にある本文。Stale が
+    // 返るまでの往復のあいだに打った字は、まだファイルにもここにも無い
+    const typed = selected()?.id === pending.item.id ? fullBody() : pending.body;
+    writeBackup(localStorage, pending.item.filename, typed);
+    saveGeneration += 1;
     if (saveTimer) {
       clearTimeout(saveTimer);
       saveTimer = undefined;
@@ -310,8 +325,13 @@ export default function Workspace(): JSX.Element {
     saveChain = (async () => {
       await previous;
       // 触っていない誤タップのセッションを書き込みに変えない。書いても
-      // 内容が変わらないなら、ファイルの mtime を動かして同期を起こすだけ
-      if (!pending || !shouldSave(pending.session, pending.body)) {
+      // 内容が変わらないなら、ファイルの mtime を動かして同期を起こすだけ。
+      // 読み直しをまたいだ写しも書かない(世代が置いていかれている)
+      if (
+        !pending ||
+        pending.generation !== saveGeneration ||
+        !shouldSave(pending.session, pending.body)
+      ) {
         return;
       }
       setSaveStatus("saving");

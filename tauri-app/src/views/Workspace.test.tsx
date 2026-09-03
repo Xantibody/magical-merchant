@@ -321,4 +321,49 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     // 読んだ版で断られるので、相手の行は残る
     expect(disk.get(FILE_A)).toBe(BODY_A_SYNCED);
   });
+
+  // Stale で退避するのは「飛んでいった写し」ではなく、いま画面にある本文。
+  // 往復のあいだに打った字は、まだどこにも残っていない
+  it("backs up the draft as it stands when the save is refused as stale", async () => {
+    await openNoteA();
+    await startEditingBody();
+    typeInEditor?.(`${TEXT_A}\n\n一回目`);
+    disk.set(FILE_A, BODY_A_SYNCED);
+    duringSave = () => {
+      duringSave = undefined;
+      typeInEditor?.(`${TEXT_A}\n\n二回目`);
+    };
+
+    await waitFor(() => expect(screen.getByText("他の端末で足された行")).toBeDefined(), {
+      timeout: 3000,
+    });
+    expect(localStorage.getItem(`note-backup:${FILE_A}`)).toContain("二回目");
+  });
+
+  // 退避して読み直したあとに、その手前で並んだ保存が出てくると、
+  // 読み直した版の指紋で古い draft が通ってしまう
+  it("drops a save that was queued before the stale reload", async () => {
+    await openNoteA();
+    await startEditingBody();
+    typeInEditor?.(`${TEXT_A}\n\n一回目`);
+    disk.set(FILE_A, BODY_A_SYNCED);
+    duringSave = () => {
+      duringSave = undefined;
+      typeInEditor?.(`${TEXT_A}\n\n二回目`);
+      // 飛んでいる保存の後ろに、もう 1 回ぶんの保存を並べる
+      fireEvent.change(titleInput(), { target: { value: TITLE_A } });
+    };
+
+    await waitFor(() => expect(screen.getByText("他の端末で足された行")).toBeDefined(), {
+      timeout: 3000,
+    });
+    // 読み直したあとの保存は通る。それが着く時点までに、並んでいた古い
+    // draft が書かれていないことを見る(書かれていれば 3 回になる)
+    fireEvent.input(titleInput(), { target: { value: "読み直したあとの題" } });
+    await waitFor(() => expect(disk.get(FILE_A)).toContain("読み直したあとの題"), {
+      timeout: 3000,
+    });
+    expect(countOf("update_draft")).toBe(2);
+    expect(disk.get(FILE_A)).toBe("# 読み直したあとの題\n\n他の端末で足された行");
+  });
 });
