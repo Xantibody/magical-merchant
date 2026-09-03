@@ -50,8 +50,10 @@ jobs:
           gc-max-store-size-linux: 6G
           save: false
 
+      # ci.yml と同じ理由で消す。ここは rm が同期なので今は当たらないが、
+      # 消えたパスを指したままの環境変数に配信ビルドを預ける必要はない
       - name: Generate the Android project
-        run: nix develop .#android --command just tauri_app::android-init
+        run: env -u ANDROID_SDK_ROOT nix develop .#android --command just tauri_app::android-init
 
       - name: Restore the signing keystore
         env:
@@ -78,7 +80,7 @@ jobs:
       # keystore.properties を書いた後でないと android-sign-setup が落ちるので、
       # このステップは keystore の復元より後に置くこと
       - name: Build the signed APK
-        run: nix develop .#android --command just tauri_app::android-build-release
+        run: env -u ANDROID_SDK_ROOT nix develop .#android --command just tauri_app::android-build-release
 
       - name: Collect the APK
         id: apk
