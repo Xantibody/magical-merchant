@@ -141,12 +141,13 @@ pub fn restore_note(
 mod tests {
     use super::*;
     use crate::utils::device::Context;
-    use crate::utils::frontmatter::{self, NoteFrontmatter};
+    use crate::utils::frontmatter::{self, NoteFrontmatter, Provenance};
     use crate::{create_draft_note, read_note_by_filename, update_note};
     use tempfile::TempDir;
 
     fn note(base: &Path, body: &str) -> (PathBuf, NoteFilename) {
-        let path = create_draft_note(base, body, &[], &Context::default()).unwrap();
+        let path =
+            create_draft_note(base, body, &[], &Context::default(), Provenance::default()).unwrap();
         let filename = NoteFilename::parse(path.file_name().unwrap().to_str().unwrap()).unwrap();
         (path, filename)
     }
