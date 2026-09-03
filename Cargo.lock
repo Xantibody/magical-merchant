@@ -2683,8 +2683,6 @@ dependencies = [
  "chrono",
  "hostname",
  "jni 0.22.4",
- "jsonwebtoken",
- "keyring",
  "magical-merchant-core",
  "ndk-context",
  "objc2",
@@ -2730,9 +2728,13 @@ dependencies = [
 name = "magical-merchant-core"
 version = "0.4.0"
 dependencies = [
+ "base64 0.23.1",
  "chrono",
  "criterion",
+ "jsonwebtoken",
+ "keyring",
  "markdown-frontmatter",
+ "reqwest",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -2740,6 +2742,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
+ "url",
 ]
 
 [[package]]
