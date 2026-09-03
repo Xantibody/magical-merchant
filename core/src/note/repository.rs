@@ -1,4 +1,5 @@
-use std::fs;
+use std::fs::{self, OpenOptions};
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use chrono::Local;
@@ -27,6 +28,21 @@ impl Notes {
         notes_dir(&self.base_dir)
     }
 
+    /// ノートを 1 本作る。返るのは書いたファイルのパス。
+    ///
+    /// ファイル名は秒までの時刻で、それがそのままノートの ID になる
+    /// (形式は不変)。同じ秒に 2 本作られたときは空いている秒まで
+    /// 1 秒ずつ進める — 名前を変えるのではなく、まだ誰も使っていない
+    /// 名前を選び直すだけ。frontmatter の `time` も進めたあとの時刻に
+    /// 揃える。名前(一覧の並び)と `time`(表示)がずれると、同じ一覧の
+    /// 中で並びと日時が食い違う。
+    ///
+    /// 予約は `create_new` に任せる。`exists()` で見てから書くと、その
+    /// あいだに別スレッド・別プロセスが同じ名前を取れてしまう。
+    /// 作成は `write_atomic`(tmp → rename)を通さない: rename は既存の
+    /// ファイルを黙って置き換えるので、衝突回避と両立しない。ここで
+    /// 書き途中に落ちても失うのは書きかけの新規ノートだけで、
+    /// 既存の記録は壊れない。
     pub(crate) fn create(
         &self,
         body: &str,
@@ -34,13 +50,28 @@ impl Notes {
         context: &Context,
         provenance: Provenance<'_>,
     ) -> Result<PathBuf, CoreError> {
-        let now = Local::now();
-        let file_path = note_file_path(&self.base_dir, now);
+        let mut now = Local::now();
+        let mut file_path = note_file_path(&self.base_dir, now);
         ensure_dir(&file_path)?;
 
-        let markdown = format_note_markdown(body, tags, now, context, provenance)?;
-        write_atomic(&file_path, markdown)?;
-        Ok(file_path)
+        loop {
+            match OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&file_path)
+            {
+                Ok(mut file) => {
+                    let markdown = format_note_markdown(body, tags, now, context, provenance)?;
+                    file.write_all(markdown.as_bytes())?;
+                    return Ok(file_path);
+                }
+                Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
+                    now += chrono::Duration::seconds(1);
+                    file_path = note_file_path(&self.base_dir, now);
+                }
+                Err(e) => return Err(e.into()),
+            }
+        }
     }
 
     pub(crate) fn list(&self) -> Result<Vec<NoteSummary>, CoreError> {
