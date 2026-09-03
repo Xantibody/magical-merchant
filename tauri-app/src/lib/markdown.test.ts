@@ -128,6 +128,37 @@ describe("renderMarkdown", () => {
     expect(html).toContain('class="diff-line diff-add"');
   });
 
+  // コピーは innerHTML の中の 1 つのハンドラが拾う。押されたブロックの
+  // 生ソースは DOM から引けないと、描画結果から逆算することになる
+  it("hangs a copy tool and the fence source on a highlighted block", async () => {
+    const source = ["```ts", 'const a = "<b>";', "```"].join("\n");
+
+    const html = await renderMarkdown(source);
+
+    expect(html).toMatch(
+      /<pre class="shiki[^>]* data-source="const a = &quot;&lt;b&gt;&quot;;\n"/u,
+    );
+    expect(html).toContain('data-action="copy"');
+    expect(html).toContain('<span class="preview-tools-lang">ts</span>');
+    // 道具はブロックの中に置く。外に置くと pre の位置決めの基準にならない
+    expect(html.indexOf('data-action="copy"')).toBeLessThan(html.lastIndexOf("</pre>"));
+  });
+
+  it("hangs the same copy tool on a diff fence", async () => {
+    const source = ["```diff", "+new", "```"].join("\n");
+
+    const html = await renderMarkdown(source);
+
+    expect(html).toContain('<pre data-source="+new\n"><code>');
+    expect(html).toContain('data-action="copy"');
+  });
+
+  it("names the copy tool in the current language", async () => {
+    const html = await renderMarkdown(["```ts", "1", "```"].join("\n"));
+
+    expect(html).toContain('aria-label="コードをコピー"');
+  });
+
   // 種類ごとに別の配列へ振り分けて描くので、戻すときの番号がずれやすい
   it("keeps a diff fence in source order next to a highlighted one", async () => {
     const source = ["```diff", "+added", "```", "", "```ts", "const a = 1;", "```"].join("\n");
@@ -156,7 +187,7 @@ describe("renderMarkdown with mermaid", () => {
 
     const html = await renderMarkdown(source);
 
-    expect(html).not.toContain("<svg");
+    expect(html).not.toContain('class="mermaid-block"');
     expect(html).toContain("これは図ではない");
   });
 
@@ -191,6 +222,13 @@ describe("renderMarkdown with mermaid", () => {
     const html = await renderMarkdown(FLOWCHART);
 
     expect(html).not.toContain("<figcaption");
+  });
+
+  it("puts the zoom tool inside the figure", async () => {
+    const html = await renderMarkdown(FLOWCHART);
+
+    expect(html.indexOf('data-action="zoom"')).toBeGreaterThan(html.indexOf("<figure"));
+    expect(html.indexOf('data-action="zoom"')).toBeLessThan(html.indexOf("</figure>"));
   });
 
   it("keeps diagrams and code blocks in source order", async () => {
