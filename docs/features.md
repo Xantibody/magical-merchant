@@ -55,11 +55,18 @@ pinned to the filename order, so the update time is the only place a rewrite
 shows up. Changing metadata or the view mode is not a rewrite and leaves it
 alone.
 
+A note that is done being written can be parked in a **read-only view**
+(frontmatter `view: preview`): the same rendered page, except that tapping
+the body no longer starts an edit and the title field is fixed. The choice
+lives in the file, so it follows the note to every device.
+
 ![Editor with note links](images/editor-links.png)
 
 Code blocks are highlighted with Shiki, ` ```mermaid ` fences render as
 diagrams, and a per-note **mindmap view** (frontmatter `view: mindmap`) turns
-the heading/list structure into a markmap:
+the heading/list structure into a markmap. One button in the note's header
+cycles the three views — editor, mindmap, read-only — and shows the icon of
+whichever comes next:
 
 ![Mindmap view](images/mindmap.png)
 
