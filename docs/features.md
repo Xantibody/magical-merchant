@@ -62,11 +62,14 @@ lives in the file, so it follows the note to every device.
 
 ![Editor with note links](images/editor-links.png)
 
-Code blocks are highlighted with Shiki, ` ```mermaid ` fences render as
-diagrams, and a per-note **mindmap view** (frontmatter `view: mindmap`) turns
-the heading/list structure into a markmap. One button in the note's header
-cycles the three views — editor, mindmap, read-only — and shows the icon of
-whichever comes next:
+Code blocks are highlighted with Shiki; a ` ```diff ` fence colours its `+`
+and `-` lines instead. ` ```mermaid ` fences render as diagrams, and a leading
+`%% caption: …` comment inside the fence becomes the figure's caption —
+mermaid skips `%%` lines, so the note still draws anywhere else. A per-note
+**mindmap view** (frontmatter `view: mindmap`) turns the heading/list
+structure into a markmap. One button in the note's header cycles the three
+views — editor, mindmap, read-only — and shows the icon of whichever comes
+next:
 
 ![Mindmap view](images/mindmap.png)
 
