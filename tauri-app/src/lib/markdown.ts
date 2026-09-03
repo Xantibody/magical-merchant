@@ -1,5 +1,6 @@
 import MarkdownIt from "markdown-it";
 import type { Env, MarkdownIt as MarkdownItInstance } from "markdown-it";
+import { renderDiffBlock } from "./diff-block";
 import { glyphPlugin } from "./glyph-markdown";
 import { renderDiagrams } from "./mermaid";
 import { noteLinkPlugin } from "./note-link-markdown";
@@ -122,17 +123,26 @@ async function highlightBlocks(blocks: FenceBlock[]): Promise<string[]> {
   });
 }
 
-function isDiagram(block: FenceBlock): boolean {
-  return block.lang.toLowerCase() === "mermaid";
+type FenceKind = "diagram" | "diff" | "code";
+
+function kindOf(block: FenceBlock): FenceKind {
+  const lang = block.lang.toLowerCase();
+  if (lang === "mermaid") {
+    return "diagram";
+  }
+  // diff は Shiki の読込済み言語に無い。回してもプレーンテキストになるだけで、
+  // +/- の行こそが読みたいもの
+  return lang === "diff" ? "diff" : "code";
 }
 
 /**
- * フェンスを種類ごとに描く。図は mermaid、それ以外は Shiki に回し、
- * 描けなかった図はソースが読める素のコードブロックに落とす。
+ * フェンスを種類ごとに描く。図は mermaid、diff は専用のレンダラ、残りは
+ * Shiki に回し、描けなかった図はソースが読める素のコードブロックに落とす。
  */
 async function renderFences(blocks: FenceBlock[]): Promise<string[]> {
-  const diagrams = blocks.filter((block) => isDiagram(block));
-  const code = blocks.filter((block) => !isDiagram(block));
+  const kinds = blocks.map((block) => kindOf(block));
+  const diagrams = blocks.filter((_, index) => kinds[index] === "diagram");
+  const code = blocks.filter((_, index) => kinds[index] === "code");
 
   const [svgs, highlighted] = await Promise.all([
     renderDiagrams(diagrams.map((block) => block.code)),
@@ -141,12 +151,19 @@ async function renderFences(blocks: FenceBlock[]): Promise<string[]> {
 
   let diagramIndex = 0;
   let codeIndex = 0;
-  return blocks.map((block) => {
-    if (!isDiagram(block)) {
-      return highlighted[codeIndex++];
+  return blocks.map((block, index) => {
+    switch (kinds[index]) {
+      case "diff": {
+        return renderDiffBlock(block.code);
+      }
+      case "code": {
+        return highlighted[codeIndex++];
+      }
+      default: {
+        const svg = svgs[diagramIndex++];
+        return svg ? `<div class="mermaid-block">${svg}</div>` : plainBlock(block.code);
+      }
     }
-    const svg = svgs[diagramIndex++];
-    return svg ? `<div class="mermaid-block">${svg}</div>` : plainBlock(block.code);
   });
 }
 
