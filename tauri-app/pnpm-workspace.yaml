@@ -1,0 +1,3 @@
+# pnpm 11 は package.json の "pnpm" フィールドを読まない
+allowBuilds:
+  esbuild: true

@@ -43,7 +43,7 @@ const untitled = (): string => t().notes.untitled;
 function firstLine(text: string): string {
   // Milkdown は空行を <br /> 行として保存する。タイトルはそれも読み飛ばす
   const line = text.split("\n").find((l) => l.trim().length > 0 && !isPreservedEmptyLine(l));
-  return line?.replace(/^#+\s*/, "").trim() ?? "";
+  return line?.replace(/^#+\s*/u, "").trim() ?? "";
 }
 
 /**

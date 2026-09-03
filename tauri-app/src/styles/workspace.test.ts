@@ -132,7 +132,7 @@ describe("note body: preview and editor draw the same page", () => {
     const previewed = measureBlocks(preview(bodyBlocks("shiki")));
     const edited = measureBlocks(editor(bodyBlocks("")));
 
-    expect(edited).toEqual(previewed);
+    expect(edited).toStrictEqual(previewed);
   });
 
   // mermaid はカーソルが離れている間、エディタでもソースを隠して図だけを見せる。
@@ -161,8 +161,8 @@ describe("note body: preview and editor draw the same page", () => {
       editorBody,
     );
 
-    expect(editorSvg).toEqual(previewSvg);
-    expect(editorAfter).toEqual(previewAfter);
+    expect(editorSvg).toStrictEqual(previewSvg);
+    expect(editorAfter).toStrictEqual(previewAfter);
   });
 
   // Open Props の normalize は p/li/blockquote/見出しに 20〜60ch の読みやすさ上限を

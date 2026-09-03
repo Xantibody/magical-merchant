@@ -129,7 +129,7 @@ fn top_tags(entries: &[String]) -> Vec<String> {
         }
     }
 
-    counts.sort_by(|a, b| b.1.cmp(&a.1));
+    counts.sort_by_key(|(_, count)| std::cmp::Reverse(*count));
     counts
         .into_iter()
         .take(TAG_LIMIT)
@@ -142,7 +142,7 @@ fn top_tags(entries: &[String]) -> Vec<String> {
 fn recent_notes(mut notes: Vec<magical_merchant_core::NoteSummary>) -> Vec<NoteRow> {
     // 時刻を持たないノートは frontmatter が壊れているぶんで、順番の手がかりが
     // 無い。落とさず末尾に送る。
-    notes.sort_by(|a, b| b.time.cmp(&a.time));
+    notes.sort_by_key(|note| std::cmp::Reverse(note.time));
     notes
         .into_iter()
         .take(NOTE_LIMIT)

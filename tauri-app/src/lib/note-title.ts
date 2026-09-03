@@ -17,7 +17,7 @@ export interface TitledNote {
 }
 
 /** ATX の H1 だけ。`#タグ` と区別するために `# ` の空白まで求める。 */
-const H1 = /^#[ \t]+(?<title>.*)$/;
+const H1 = /^#[ \t]+(?<title>.*)$/u;
 
 export function splitTitle(source: string): TitledNote {
   const [first, ...rest] = source.split("\n");

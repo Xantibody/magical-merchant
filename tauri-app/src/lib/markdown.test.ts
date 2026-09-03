@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { FENCE_SLOT, renderMarkdown, renderMarkdownSync } from "./markdown";
 
+function kindOf(className: string | undefined): "code" | "diagram" {
+  return className?.startsWith("shiki") ? "code" : "diagram";
+}
+
 describe("renderMarkdownSync", () => {
   it("converts a heading", () => {
     const html = renderMarkdownSync("# Hello");
@@ -63,7 +67,7 @@ describe("Milkdown の空行 (<br /> 行)", () => {
     const source = ["```html", "<br />", "```"].join("\n");
     const html = await renderMarkdown(source);
     // Shiki は < を &#x3C; にエスケープする。コードとして残っていればよい
-    expect(html).toMatch(/&(?:lt|#x3C);/);
+    expect(html).toMatch(/&(?:lt|#x3C);/u);
     expect(html).not.toContain("<p>\u00A0</p>");
   });
 
@@ -137,7 +141,9 @@ describe("renderMarkdown with mermaid", () => {
   it("gives every diagram its own id so their styles do not collide", async () => {
     const html = await renderMarkdown(`${FLOWCHART}\n\n${FLOWCHART}`);
 
-    const ids = [...html.matchAll(/<svg[^>]*\sid="([^"]+)"/g)].map((match) => match[1]);
+    const ids = [...html.matchAll(/<svg[^>]*\sid="(?<id>[^"]+)"/gu)].map(
+      (match) => match.groups?.id,
+    );
     expect(ids).toHaveLength(2);
     expect(new Set(ids).size).toBe(2);
   });
@@ -147,9 +153,9 @@ describe("renderMarkdown with mermaid", () => {
 
     const html = await renderMarkdown(source);
 
-    const kinds = [...html.matchAll(/class="(mermaid-block|shiki[^"]*)"/g)].map((match) =>
-      match[1].startsWith("shiki") ? "code" : "diagram",
+    const kinds = [...html.matchAll(/class="(?<kind>mermaid-block|shiki[^"]*)"/gu)].map((match) =>
+      kindOf(match.groups?.kind),
     );
-    expect(kinds).toEqual(["diagram", "code", "diagram"]);
+    expect(kinds).toStrictEqual(["diagram", "code", "diagram"]);
   });
 });

@@ -15,6 +15,15 @@ describe("addTag", () => {
   it("drops a tag that differs only in case", () => {
     expect(addTag(["rust"], "RUST")).toStrictEqual(["rust"]);
   });
+
+  it("appends a trimmed tag without the leading hash", () => {
+    expect(addTag(["a"], " #memo ")).toStrictEqual(["a", "memo"]);
+  });
+
+  it("ignores empty input and duplicates", () => {
+    expect(addTag(["a"], "  ")).toStrictEqual(["a"]);
+    expect(addTag(["a"], "a")).toStrictEqual(["a"]);
+  });
 });
 
 describe("formatRecordedAt", () => {
@@ -55,28 +64,17 @@ describe("resolveEditedTime", () => {
   });
 });
 
-describe("addTag", () => {
-  it("appends a trimmed tag without the leading hash", () => {
-    expect(addTag(["a"], " #memo ")).toEqual(["a", "memo"]);
-  });
-
-  it("ignores empty input and duplicates", () => {
-    expect(addTag(["a"], "  ")).toEqual(["a"]);
-    expect(addTag(["a"], "a")).toEqual(["a"]);
-  });
-});
-
 describe("contextRows", () => {
   it("lists only the fields that were recorded", () => {
     const rows = contextRows({ os: "macos", os_version: "15.3", battery: 82 });
-    expect(rows).toEqual([
+    expect(rows).toStrictEqual([
       { label: "OS", value: "macos 15.3" },
       { label: "バッテリー", value: "82%" },
     ]);
   });
 
   it("marks a charging battery", () => {
-    expect(contextRows({ battery: 20, is_charging: true })).toEqual([
+    expect(contextRows({ battery: 20, is_charging: true })).toStrictEqual([
       { label: "バッテリー", value: "20% (充電中)" },
     ]);
   });
@@ -85,9 +83,9 @@ describe("contextRows", () => {
     const rows = contextRows({
       network_type: "WiFi",
       hostname: "MacBook",
-      location: { latitude: 35.676_21, longitude: 139.650_31 },
+      location: { latitude: 35.67621, longitude: 139.65031 },
     });
-    expect(rows).toEqual([
+    expect(rows).toStrictEqual([
       { label: "ネットワーク", value: "Wi-Fi" },
       { label: "ホスト名", value: "MacBook" },
       { label: "位置", value: "35.6762, 139.6503" },
@@ -95,7 +93,7 @@ describe("contextRows", () => {
   });
 
   it("returns nothing for a missing context", () => {
-    expect(contextRows()).toEqual([]);
-    expect(contextRows({})).toEqual([]);
+    expect(contextRows()).toStrictEqual([]);
+    expect(contextRows({})).toStrictEqual([]);
   });
 });

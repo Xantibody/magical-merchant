@@ -38,7 +38,7 @@ interface ConnectionCapableNavigator extends Navigator {
 }
 
 export function parseAndroidVersion(userAgent: string): string | null {
-  return /Android (?<version>\d+(?:\.\d+)*)/.exec(userAgent)?.groups?.version ?? null;
+  return /Android (?<version>\d+(?:\.\d+)*)/u.exec(userAgent)?.groups?.version ?? null;
 }
 
 export function toNetworkType(online: boolean, connectionType?: string): NetworkType | null {

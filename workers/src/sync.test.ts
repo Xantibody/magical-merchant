@@ -84,13 +84,13 @@ describe("deriveState", () => {
   it("leaves downloaded files untouched", () => {
     const old = stateWith("notes/a.md", "2026-08-01T00:00:00Z");
     const state = deriveState(old, req({ downloads: ["notes/a.md"] }), now);
-    expect(state.files["notes/a.md"]).toEqual(old.files["notes/a.md"]);
+    expect(state.files["notes/a.md"]).toStrictEqual(old.files["notes/a.md"]);
   });
 
   it("removes deleted files", () => {
     const old = stateWith("notes/a.md", "2026-08-01T00:00:00Z");
     const state = deriveState(old, req({ delete_remote: ["notes/a.md"] }), now);
-    expect(state.files).toEqual({});
+    expect(state.files).toStrictEqual({});
   });
 
   // 版が据え置かれると、他端末が「変更なし」と判断して更新を取りこぼす

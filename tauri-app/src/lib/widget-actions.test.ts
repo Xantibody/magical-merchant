@@ -3,7 +3,7 @@ import { firstWidgetAction, parseWidgetAction } from "./widget-actions";
 
 describe("parseWidgetAction", () => {
   it("新しいノートのリンクは名前だけを持つ", () => {
-    expect(parseWidgetAction("magical-merchant://widget/new-note")).toEqual({
+    expect(parseWidgetAction("magical-merchant://widget/new-note")).toStrictEqual({
       name: "new-note",
       file: null,
       template: null,
@@ -11,7 +11,9 @@ describe("parseWidgetAction", () => {
   });
 
   it("ノートのリンクはファイル名を運ぶ", () => {
-    expect(parseWidgetAction("magical-merchant://widget/note?file=20260809_120000.md")).toEqual({
+    expect(
+      parseWidgetAction("magical-merchant://widget/note?file=20260809_120000.md"),
+    ).toStrictEqual({
       name: "note",
       file: "20260809_120000.md",
       template: null,
@@ -19,7 +21,7 @@ describe("parseWidgetAction", () => {
   });
 
   it("テンプレのリンクはどのテンプレかを運ぶ", () => {
-    expect(parseWidgetAction("magical-merchant://widget/template?name=daily")).toEqual({
+    expect(parseWidgetAction("magical-merchant://widget/template?name=daily")).toStrictEqual({
       name: "template",
       file: null,
       template: "daily",

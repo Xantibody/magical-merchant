@@ -65,14 +65,14 @@ describe("daysBetween", () => {
 
 describe("formatDayHeading", () => {
   it("names today and dates it", () => {
-    expect(formatDayHeading("2026-08-04", TODAY)).toEqual({
+    expect(formatDayHeading("2026-08-04", TODAY)).toStrictEqual({
       label: "今日",
       date: "8月4日 火曜日",
     });
   });
 
   it("names yesterday", () => {
-    expect(formatDayHeading("2026-08-03", TODAY)).toEqual({
+    expect(formatDayHeading("2026-08-03", TODAY)).toStrictEqual({
       label: "昨日",
       date: "8月3日 月曜日",
     });
@@ -80,14 +80,14 @@ describe("formatDayHeading", () => {
 
   // 「3日前」より日付そのもののほうが手がかりになる距離。
   it("uses the date itself as the label further back", () => {
-    expect(formatDayHeading("2026-07-29", TODAY)).toEqual({
+    expect(formatDayHeading("2026-07-29", TODAY)).toStrictEqual({
       label: "7月29日",
       date: "水曜日",
     });
   });
 
   it("passes unparsable input through untouched", () => {
-    expect(formatDayHeading("garbage", TODAY)).toEqual({ label: "garbage", date: "" });
+    expect(formatDayHeading("garbage", TODAY)).toStrictEqual({ label: "garbage", date: "" });
   });
 });
 

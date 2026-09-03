@@ -56,7 +56,7 @@ describe("MindmapView", () => {
         .toBeInTheDocument();
       const svg = query<SVGSVGElement>(baseElement, ".mindmap-view svg");
       const rootGroup = query<SVGGElement>(svg, ":scope > g:not([class])");
-      // fit() は duration 0 でも d3 の transition 経由なので、初期 transform が
+      // markmap の fit() は duration 0 でも d3 の transition 経由なので、初期 transform が
       // 書かれるまで待たないと「前」の値が取れない
       await expect.poll(() => rootGroup.getAttribute("transform")).toBeTruthy();
       return { svg, rootGroup, before: rootGroup.getAttribute("transform") };

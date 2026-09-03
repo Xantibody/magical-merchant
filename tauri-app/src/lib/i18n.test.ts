@@ -1,8 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { locale, messages, resolveLocale, setLocale, t } from "./i18n";
 
-afterEach(() => setLocale("ja"));
-
 describe("resolveLocale", () => {
   it("follows the system language when the preference is system", () => {
     expect(resolveLocale("system", "ja-JP")).toBe("ja");
@@ -21,6 +19,8 @@ describe("resolveLocale", () => {
 });
 
 describe("t", () => {
+  afterEach(() => setLocale("ja"));
+
   it("returns the table for the active locale", () => {
     setLocale("ja");
     expect(t().common.save).toBe("保存");

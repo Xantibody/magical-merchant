@@ -17,7 +17,7 @@ import { typedInvoke } from "./commands";
  * 時刻や URL の `:` を拾わないよう、一致した名前を登録表で確かめてから
  * 画像にする。
  */
-const SHORTCODE = /:([a-z0-9][a-z0-9_+-]{0,31}):/g;
+const SHORTCODE = /:(?<name>[a-z0-9][a-z0-9_+-]{0,31}):/gu;
 
 export interface GlyphSegment {
   text: string;
@@ -37,14 +37,15 @@ export function splitGlyphs(text: string, names: GlyphNames): GlyphSegment[] {
   let last = 0;
   if (names.size > 0 && text.includes(":")) {
     // matchAll は正規表現を複製するので lastIndex を戻せない。exec で回す
-    const re = new RegExp(SHORTCODE.source, "g");
+    const re = new RegExp(SHORTCODE.source, "gu");
     let match = re.exec(text);
     while (match !== null) {
-      if (names.has(match[1])) {
+      const name = match.groups?.name ?? "";
+      if (names.has(name)) {
         if (match.index > last) {
           segments.push({ text: text.slice(last, match.index), name: null });
         }
-        segments.push({ text: match[0], name: match[1] });
+        segments.push({ text: match[0], name });
         last = match.index + match[0].length;
       } else {
         // `:foo:236p:` のように、閉じの `:` が次の名前の開きでもある。
@@ -62,7 +63,7 @@ export function splitGlyphs(text: string, names: GlyphNames): GlyphSegment[] {
 
 /** 名前として通る形かどうか。core の `GlyphName::parse` と同じ規則。 */
 export function isGlyphName(name: string): boolean {
-  return /^[a-z0-9][a-z0-9_+-]{0,31}$/.test(name);
+  return /^[a-z0-9][a-z0-9_+-]{0,31}$/u.test(name);
 }
 
 /**
@@ -71,16 +72,16 @@ export function isGlyphName(name: string): boolean {
  * 空になることもある — そのときは書いてもらう。
  */
 export function suggestGlyphName(filename: string): string {
-  const stem = filename.replace(/\.[^.]*$/, "").toLowerCase();
+  const stem = filename.replace(/\.[^.]*$/u, "").toLowerCase();
   return stem
-    .replaceAll(/[^a-z0-9_+-]+/g, "-")
-    .replace(/^[^a-z0-9]+/, "")
+    .replaceAll(/[^a-z0-9_+-]+/gu, "-")
+    .replace(/^[^a-z0-9]+/u, "")
     .slice(0, 32);
 }
 
 /** 拡張子から形式を決める。それ以外の画像は受けない。 */
 export function glyphFormatOf(filename: string): "png" | "svg" | null {
-  const ext = filename.toLowerCase().replace(/^.*\./, "");
+  const ext = filename.toLowerCase().replace(/^.*\./u, "");
   if (ext === "png" || ext === "svg") {
     return ext;
   }
@@ -110,7 +111,7 @@ function judgeGlyphFile(
 ): { name: string; format: "png" | "svg" } | GlyphSkipReason {
   // 入れ子のフォルダから来た File は name がファイル名だけだが、
   // パス付きで来ても名前はファイル名からしか作らない
-  const basename = file.name.replace(/^.*[\\/]/, "");
+  const basename = file.name.replace(/^.*[\\/]/u, "");
   const format = glyphFormatOf(basename);
   if (!format) {
     return "unsupported";

@@ -7,15 +7,15 @@ function touchDown(): { pointerType: string } {
   return { pointerType: "touch" };
 }
 
-beforeEach(() => {
-  vi.useFakeTimers();
-});
-
-afterEach(() => {
-  vi.useRealTimers();
-});
-
 describe("createLongPress", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("fires after the hold duration on touch", () => {
     const fired = vi.fn<() => void>();
     const press = createLongPress(fired, HOLD_MS);

@@ -23,15 +23,15 @@ function setup(): {
   return { setSource, debounced, dispose };
 }
 
-beforeEach(() => {
-  vi.useFakeTimers();
-});
-
-afterEach(() => {
-  vi.useRealTimers();
-});
-
 describe("createDebouncedAccessor", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("starts with the source's current value", () => {
     const { debounced, dispose } = setup();
 

@@ -16,7 +16,7 @@ describe("withKnownLanguages", () => {
     const result = parser(parserOptions("rust"));
 
     expect(inner).toHaveBeenCalledExactlyOnceWith(parserOptions("rust"));
-    expect(result).toEqual([]);
+    expect(result).toStrictEqual([]);
   });
 
   // フェンスの info 文字列は手打ちなので、大文字や前後の空白はよくある揺れ。
@@ -40,15 +40,15 @@ describe("withKnownLanguages", () => {
     const result = parser(parserOptions("mermaid"));
 
     expect(inner).not.toHaveBeenCalled();
-    expect(result).toEqual([]);
+    expect(result).toStrictEqual([]);
   });
 
   it("returns no decorations when the language is missing or empty", () => {
     const inner = vi.fn<Parser>();
     const parser = withKnownLanguages(inner, LOADED);
 
-    expect(parser(parserOptions())).toEqual([]);
-    expect(parser(parserOptions(""))).toEqual([]);
+    expect(parser(parserOptions())).toStrictEqual([]);
+    expect(parser(parserOptions(""))).toStrictEqual([]);
     expect(inner).not.toHaveBeenCalled();
   });
 });

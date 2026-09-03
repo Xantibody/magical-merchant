@@ -17,14 +17,6 @@ function makeJwt(
 
 let validToken: string;
 
-beforeAll(async () => {
-  validToken = await makeJwt({
-    sub: "user-123",
-    email: "test@example.com",
-    exp: Math.floor(Date.now() / 1000) + 3600,
-  });
-});
-
 function authHeader(): Record<string, string> {
   return { Authorization: `Bearer ${validToken}` };
 }
@@ -68,7 +60,7 @@ function hash(seed: string): string {
   return seed
     .repeat(64)
     .slice(0, 64)
-    .replaceAll(/[^0-9a-f]/g, "a");
+    .replaceAll(/[^0-9a-f]/gu, "a");
 }
 
 interface FileContent {
@@ -135,6 +127,14 @@ async function clearBucket(): Promise<void> {
 }
 
 describe("Workers Sync API", () => {
+  beforeAll(async () => {
+    validToken = await makeJwt({
+      sub: "user-123",
+      email: "test@example.com",
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    });
+  });
+
   afterEach(async () => {
     await clearBucket();
   });
@@ -172,7 +172,7 @@ describe("Workers Sync API", () => {
   describe("gET /sync-state", () => {
     it("returns empty state for new user", async () => {
       const body = await currentState();
-      expect(body.files).toEqual({});
+      expect(body.files).toStrictEqual({});
       expect(body.last_sync).toBeNull();
       expect(body.etag).toBeNull();
     });
@@ -192,7 +192,9 @@ describe("Workers Sync API", () => {
       const res = await bulk({ uploads: [upload("notes/up.md", "uploaded content")] });
 
       expect(res.status).toBe(200);
-      expect(await objectText(await env.BUCKET.get("notes/up.md"))).toBe("uploaded content");
+      await expect(objectText(await env.BUCKET.get("notes/up.md"))).resolves.toBe(
+        "uploaded content",
+      );
     });
 
     it("records uploads in the server-owned state", async () => {
@@ -230,7 +232,7 @@ describe("Workers Sync API", () => {
 
       expect(res.status).toBe(200);
       const body = await jsonBody<BulkBody>(res);
-      expect(Object.keys(body.new_state.files)).toEqual(["notes/a.md"]);
+      expect(Object.keys(body.new_state.files)).toStrictEqual(["notes/a.md"]);
       expect(body.new_state.files["notes/a.md"].hash).toBe(hash("d"));
       // ダウンロードは版を進めない。進めると同期済みの端末が再取得し続ける
       expect(body.new_state.files["notes/a.md"].last_modified).toBe(
@@ -248,9 +250,9 @@ describe("Workers Sync API", () => {
       });
 
       expect(res.status).toBe(200);
-      expect(await env.BUCKET.get("notes/del.md")).toBeNull();
+      await expect(env.BUCKET.get("notes/del.md")).resolves.toBeNull();
       const body = await jsonBody<BulkBody>(res);
-      expect(body.new_state.files).toEqual({});
+      expect(body.new_state.files).toStrictEqual({});
     });
 
     it("advances the version stamp when the same file is uploaded again", async () => {
@@ -289,15 +291,15 @@ describe("Workers Sync API", () => {
       const body = await jsonBody<BulkBody>(res);
 
       // ローカルが勝つ
-      expect(await objectText(await env.BUCKET.get("notes/c.md"))).toBe("local version");
+      await expect(objectText(await env.BUCKET.get("notes/c.md"))).resolves.toBe("local version");
       // 上書きされたリモート側は R2 に退避され、クライアントにも返る
-      expect(
-        await objectText(await env.BUCKET.get("notes/c.sync-conflict-20260512-120000.md")),
-      ).toBe("remote version");
+      await expect(
+        objectText(await env.BUCKET.get("notes/c.sync-conflict-20260512-120000.md")),
+      ).resolves.toBe("remote version");
       expect(body.conflict_downloads).toHaveLength(1);
       expect(b64Decode(body.conflict_downloads[0].content_base64)).toBe("remote version");
       // 競合コピーは同期対象外。state に載せると全端末が延々と取得し続ける
-      expect(Object.keys(body.new_state.files)).toEqual(["notes/c.md"]);
+      expect(Object.keys(body.new_state.files)).toStrictEqual(["notes/c.md"]);
     });
 
     it("rejects unsafe keys (path traversal)", async () => {
