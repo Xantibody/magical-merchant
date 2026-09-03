@@ -452,9 +452,9 @@ export default function Workspace(): JSX.Element {
       setDetailOpen(true);
       return;
     }
-    // リンクは踏める・図はズームのまま・バックリンク欄は一覧のまま。
-    // 編集に化けさせない
-    if (target?.closest("a, button, .mermaid-block, .mermaid-zoom, .backlinks")) {
+    // リンクは踏める・図はズームのまま・道具は道具のまま・バックリンク欄は
+    // 一覧のまま。編集に化けさせない
+    if (target?.closest("a, button, .mermaid-block, .mermaid-zoom, .preview-tools, .backlinks")) {
       return;
     }
     // 書けるのはエディタ表示のときだけ。ここから下は編集を始める話になる

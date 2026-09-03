@@ -34,6 +34,8 @@
 }
 
 .markdown-preview pre {
+  /* ホバーツールの位置決めの基準(editor.css の pre と同じ) */
+  position: relative;
   /* normalize の max-content フィットを解除して本文幅に(editor.css と同じ理由)。
      padding も editor.css の pre と同じ。違うと編集に入るときにコードブロックの
      高さが変わり、その下の本文がずれる */
@@ -114,6 +116,7 @@
    ブロックに戻す(normalize の gap はエディタ側の div には効かない) */
 .markdown-preview .mermaid-block {
   display: block;
+  position: relative;
   cursor: zoom-in;
 }
 
@@ -161,6 +164,85 @@
   background: var(--app-surface);
   border: 1px solid var(--app-border);
   color: var(--app-text-muted);
+}
+
+/* ---- ホバーツール: 図とコードブロックの右上に、触れている間だけ出る操作。
+   絶対配置なので紙面の高さは変えない — 閲覧とエディタで図やコードの高さが
+   食い違うと、その下の本文がずれる (#168)。 ---- */
+
+.markdown-preview .preview-tools {
+  position: absolute;
+  top: var(--size-2);
+  right: var(--size-2);
+  display: flex;
+  align-items: center;
+  gap: var(--size-1);
+  padding: 2px var(--size-1);
+  background: var(--app-input-bg);
+  border: 1px solid var(--app-border);
+  border-radius: var(--radius-2);
+  box-shadow: 0 4px 12px -6px rgb(20 20 25 / 20%);
+  /* pre の中に置くので mono と white-space: pre を継承する。道具は本文ではない */
+  font-family: var(--font-sans);
+  line-height: 1;
+  white-space: nowrap;
+  cursor: default;
+  opacity: 0;
+  /* 透明なままだと見えない道具が図やコードへのクリックを吸う */
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+
+.markdown-preview pre:hover .preview-tools,
+.markdown-preview .mermaid-block:hover .preview-tools,
+.markdown-preview .preview-tools:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* タッチ端末に hover は無い(あっても押した後に残る)。薄く出しっぱなしにする */
+@media (hover: none) {
+  .markdown-preview .preview-tools {
+    opacity: 0.75;
+    pointer-events: auto;
+  }
+}
+
+.markdown-preview .preview-tools-lang {
+  padding-inline: var(--size-1);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-0);
+  color: var(--app-text-faint);
+}
+
+.markdown-preview .preview-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--size-1);
+  border: none;
+  border-radius: var(--radius-1);
+  background: none;
+  color: var(--app-text-muted);
+  font-size: var(--font-size-0);
+  font-weight: var(--font-weight-6);
+  cursor: pointer;
+}
+
+.markdown-preview .preview-tool:hover {
+  color: var(--app-text);
+  background: var(--app-surface-2);
+}
+
+.markdown-preview .preview-tool svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+
+/* コピー直後のチェック表示。押した実感のための最小の変化 */
+.markdown-preview .preview-tool.is-copied {
+  color: var(--app-ok);
 }
 
 /* Shiki dual theme: data-theme に応じて CSS 変数で配色を切り替える。

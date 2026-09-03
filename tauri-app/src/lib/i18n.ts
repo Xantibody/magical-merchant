@@ -234,6 +234,9 @@ const ja = {
     exitBlock: "ブロックから抜ける",
     deleteBlock: "ブロックを削除",
   },
+  preview: {
+    zoom: "拡大",
+  },
   firstRun: {
     title: "同期はあとからでも設定できます",
     body: "設定しなければ、書いたものはこの端末の中だけに残ります。それで困らないなら、このまま使い始めて構いません。",
@@ -498,6 +501,9 @@ const en: Messages = {
     diagramFailed: "Cannot draw this diagram",
     exitBlock: "Leave the block",
     deleteBlock: "Delete the block",
+  },
+  preview: {
+    zoom: "Zoom",
   },
   firstRun: {
     title: "You can set up sync later",
