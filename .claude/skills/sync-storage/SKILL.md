@@ -58,6 +58,10 @@ local scan → diff → one `POST /sync/bulk`.
 - The client **never sends its own state** (would read undownloaded keys as
   deletions and erase notes everywhere)
 - Writes use `expected_etag` compare-and-swap; losing races retry
+- **One sync per data directory**: `engine::run` takes an exclusive lock on
+  `<base>/.sync.lock` at its entry (`core/src/sync/lock.rs`) and fails with
+  `kind: "busy"` if another process holds it. The app's `AtomicBool` only
+  drives the "syncing" indicator; the file lock is the authority
 - Conflicts keep the loser as `….sync-conflict-<ts>.md` in R2 and on disk;
   conflict copies are excluded from scanning
 - Auto sync runs a few seconds after any successful write
