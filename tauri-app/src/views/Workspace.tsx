@@ -401,11 +401,13 @@ export default function Workspace(): JSX.Element {
 
   /** プレビューのどこを押しても、その場所から書き始められる。 */
   const onPreviewClick = (e: MouseEvent): void => {
-    if (editing() || noteView() !== "editor" || !selected()) {
+    if (editing() || !selected()) {
       return;
     }
     const target = e.target instanceof Element ? e.target : null;
-    // ノートリンクはこのアプリの中で解決する。href の無い a なので自前で開く
+    // ノートリンクはこのアプリの中で解決する。href の無い a なので自前で開く。
+    // 表示モードの手前で見るのは、リンクを辿るのは読む操作であって
+    // 書き始める操作ではないから — マインドマップでも踏める
     const noteLink = target?.closest("a.note-link");
     if (noteLink instanceof HTMLElement && noteLink.dataset.file) {
       setSelectedId(noteLink.dataset.file);
@@ -415,6 +417,10 @@ export default function Workspace(): JSX.Element {
     // リンクは踏める・図はズームのまま・バックリンク欄は一覧のまま。
     // 編集に化けさせない
     if (target?.closest("a, button, .mermaid-block, .mermaid-zoom, .backlinks")) {
+      return;
+    }
+    // 書けるのはエディタ表示のときだけ。ここから下は編集を始める話になる
+    if (noteView() !== "editor") {
       return;
     }
     // 本文をなぞってコピーしたいだけのときも編集へ切り替えない
