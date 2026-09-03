@@ -404,7 +404,8 @@ fn store_token_from_urls(handle: &AppHandle, urls: &[url::Url]) {
 
     let handle = handle.clone();
     std::thread::spawn(move || {
-        let stored = app_base_dir(&handle).and_then(|dir| auth::store_token(&dir, &token));
+        let stored = app_base_dir(&handle)
+            .and_then(|dir| magical_merchant_core::sync::token::store_token(&dir, &token));
 
         match stored {
             Ok(()) => {

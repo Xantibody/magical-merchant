@@ -17,25 +17,20 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-magical-merchant-core = { path = "../../core" }
+magical-merchant-core = { path = "../../core", features = ["sync-client"] }
 tauri = { version = "2", features = [] }
 tauri-plugin-deep-link = "2"
 tauri-plugin-geolocation = "2"
 chrono = { version = "0.4", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-# v4 で credential store が別クレートに割れ、feature も v1 / cli の 2 つだけに
-# なった。既定の v1 が旧 apple-native + secret-service と同じ組み合わせを選ぶ
-# (Linux 側は dbus-secret-service ではなく zbus 実装)。API は v3 のまま
-keyring = "4"
+# 同期エンジンは core にあるが、TLS の組み立てだけはここに残る (android_tls)。
+# core と同じ版・同じ feature に解決させる
 reqwest = { version = "0.13", default-features = false, features = [
   "json",
   "rustls",
 ] }
 tokio = { version = "1", features = ["macros", "sync"] }
-# 署名は検証せず exp を覗くだけなので、crypto backend (aws_lc_rs / rust_crypto)
-# も PEM 読み込みも要らない。既定のまま入れると使わない実装を丸ごと抱える
-jsonwebtoken = { version = "11", default-features = false }
 url = "2"
 hostname = "0.4"
 sha2 = "0.11"
