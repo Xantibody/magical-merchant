@@ -9,8 +9,8 @@
 
 /** localStorage の使う範囲だけ。テストではメモリ実装を差し込む。 */
 export interface BackupStore {
-  getItem(key: string): string | null;
-  setItem(key: string, value: string): void;
+  getItem: (key: string) => string | null;
+  setItem: (key: string, value: string) => void;
 }
 
 export interface EditSession {

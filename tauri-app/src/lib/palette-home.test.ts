@@ -35,7 +35,7 @@ describe("recentNoteHits", () => {
   });
 
   it("is empty when there are no notes", () => {
-    expect(recentNoteHits([])).toEqual([]);
+    expect(recentNoteHits([])).toStrictEqual([]);
   });
 });
 
@@ -47,14 +47,14 @@ describe("countNoteTags", () => {
       item({ tags: [] }),
     ]);
 
-    expect(tags).toEqual([
+    expect(tags).toStrictEqual([
       { tag: "sync", count: 2 },
       { tag: "design", count: 1 },
     ]);
   });
 
   it("is empty when no note has tags", () => {
-    expect(countNoteTags([item()])).toEqual([]);
+    expect(countNoteTags([item()])).toStrictEqual([]);
   });
 });
 
@@ -62,7 +62,7 @@ describe("dayJumpHits", () => {
   it("offers 今日 and 昨日 when both days have entries", () => {
     const hits = dayJumpHits(["2026-08-16", "2026-08-15", "2026-08-10"], TODAY);
 
-    expect(hits.map((h) => h.label)).toEqual(["今日", "昨日"]);
+    expect(hits.map((h) => h.label)).toStrictEqual(["今日", "昨日"]);
     expect(hits[0]?.hit).toMatchObject({ kind: "timeline", date: "2026-08-16" });
   });
 
@@ -70,10 +70,10 @@ describe("dayJumpHits", () => {
   it("omits a day that has no entries", () => {
     const hits = dayJumpHits(["2026-08-15"], TODAY);
 
-    expect(hits.map((h) => h.label)).toEqual(["昨日"]);
+    expect(hits.map((h) => h.label)).toStrictEqual(["昨日"]);
   });
 
   it("is empty when neither day has entries", () => {
-    expect(dayJumpHits(["2026-08-01"], TODAY)).toEqual([]);
+    expect(dayJumpHits(["2026-08-01"], TODAY)).toStrictEqual([]);
   });
 });

@@ -46,7 +46,7 @@ describe("isDigestDismissed", () => {
 
 describe("summarizeWeek", () => {
   it("is empty with no entries", () => {
-    expect(summarizeWeek([], SUNDAY)).toEqual({ count: 0, days: 0, topTags: [] });
+    expect(summarizeWeek([], SUNDAY)).toStrictEqual({ count: 0, days: 0, topTags: [] });
   });
 
   it("counts entries and distinct days within the week", () => {
@@ -61,7 +61,7 @@ describe("summarizeWeek", () => {
 
     expect(summary.count).toBe(3);
     expect(summary.days).toBe(2);
-    expect(summary.topTags.map((t) => t.tag)).toEqual(["sync", "perf"]);
+    expect(summary.topTags.map((t) => t.tag)).toStrictEqual(["sync", "perf"]);
   });
 
   // 先週のエントリを混ぜると「今週のふりかえり」ではなくなる

@@ -108,7 +108,7 @@ export function isUnsafeKey(key: string): boolean {
   );
 }
 
-const HASH_PATTERN = /^[0-9a-f]{64}$/;
+const HASH_PATTERN = /^[0-9a-f]{64}$/u;
 
 /// 壊れたハッシュを state に入れると、全クライアントで「常に変更あり」と
 /// 判定され続けるか、逆に変更が永久に検出されなくなる。

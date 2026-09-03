@@ -162,14 +162,14 @@ export default function Workspace(): JSX.Element {
 
   /** `[[ID]]` → タイトルの解決表。プレビューが毎回これを引いて描く。 */
   const noteTitles = createMemo<ReadonlyMap<string, string>>(
-    () => new Map(visibleItems().map((item) => [item.filename.replace(/\.md$/, ""), item.title])),
+    () => new Map(visibleItems().map((item) => [item.filename.replace(/\.md$/u, ""), item.title])),
   );
 
   /** `[[` 補完の候補。自分自身へのリンクは出さない。 */
   const linkTargets = (): NoteLinkTarget[] =>
     visibleItems()
       .filter((item) => item.id !== selected()?.id)
-      .map((item) => ({ id: item.filename.replace(/\.md$/, ""), title: item.title }));
+      .map((item) => ({ id: item.filename.replace(/\.md$/u, ""), title: item.title }));
 
   // このノートを [[ID]] で指している記録。開くたびに走査で導出される
   const [backlinks] = createResource(
@@ -352,7 +352,9 @@ export default function Workspace(): JSX.Element {
     if (saveTimer) {
       clearTimeout(saveTimer);
     }
-    saveTimer = setTimeout(() => void flushSave(pending), SAVE_DEBOUNCE_MS);
+    saveTimer = setTimeout(() => {
+      void flushSave(pending);
+    }, SAVE_DEBOUNCE_MS);
   };
 
   onCleanup(() => {
@@ -623,7 +625,9 @@ export default function Workspace(): JSX.Element {
               shell.closePopovers();
               void createNote();
             }}
-            onPick={(template) => void createFromTemplate(template)}
+            onPick={(template) => {
+              void createFromTemplate(template);
+            }}
             onManage={() => {
               shell.closePopovers();
               navigate(ROUTES.TEMPLATES);
@@ -703,7 +707,9 @@ export default function Workspace(): JSX.Element {
                         noteView() === "mindmap" ? t().notes.showEditor : t().notes.showMindmap
                       }
                       aria-pressed={noteView() === "mindmap"}
-                      onClick={() => void toggleNoteView(item())}
+                      onClick={() => {
+                        void toggleNoteView(item());
+                      }}
                     >
                       <Icon
                         name={noteView() === "mindmap" ? "file-text" : "tree-structure"}
@@ -728,7 +734,9 @@ export default function Workspace(): JSX.Element {
                       class="icon-button"
                       title={t().notes.finishEditing}
                       aria-label={t().notes.finishEditing}
-                      onClick={() => void stopEditing()}
+                      onClick={() => {
+                        void stopEditing();
+                      }}
                     >
                       <Icon name="check" size={17} />
                     </button>
@@ -749,7 +757,9 @@ export default function Workspace(): JSX.Element {
                 <NoteMetaPopover
                   filename={item().filename}
                   revertable={revertable()}
-                  onRevert={() => void revertEdit(item())}
+                  onRevert={() => {
+                    void revertEdit(item());
+                  }}
                   onSaved={async () => {
                     await refetchNotes();
                   }}
@@ -767,7 +777,9 @@ export default function Workspace(): JSX.Element {
                 aria-label={t().notes.titlePlaceholder}
                 value={noteTitle()}
                 onInput={(e) => editTitle(e.currentTarget.value)}
-                onChange={() => void commitTitle()}
+                onChange={() => {
+                  void commitTitle();
+                }}
                 onKeyDown={(e) => {
                   // 変換確定の Enter は IME のもの (#102)
                   if (e.key === "Enter" && !isImeComposing(e)) {

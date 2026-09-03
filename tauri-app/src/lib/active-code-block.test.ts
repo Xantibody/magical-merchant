@@ -22,15 +22,15 @@ const doc = schema.node("doc", null, [
 
 describe("activeCodeBlockRanges", () => {
   it("returns the enclosing block for a cursor inside it", () => {
-    expect(activeCodeBlockRanges(doc, 10, 10)).toEqual([{ from: 7, to: 18 }]);
+    expect(activeCodeBlockRanges(doc, 10, 10)).toStrictEqual([{ from: 7, to: 18 }]);
   });
 
   it("returns nothing for a cursor outside every code block", () => {
-    expect(activeCodeBlockRanges(doc, 2, 2)).toEqual([]);
+    expect(activeCodeBlockRanges(doc, 2, 2)).toStrictEqual([]);
   });
 
   it("includes a block the selection only partially covers", () => {
-    expect(activeCodeBlockRanges(doc, 2, 10)).toEqual([{ from: 7, to: 18 }]);
+    expect(activeCodeBlockRanges(doc, 2, 10)).toStrictEqual([{ from: 7, to: 18 }]);
   });
 
   it("returns every block inside a wide selection", () => {
@@ -40,7 +40,7 @@ describe("activeCodeBlockRanges", () => {
       schema.node("code_block", null, [schema.text("b")]),
     ]);
     // code_block "a" = [0,3)、paragraph = [3,6)、code_block "b" = [6,9)
-    expect(activeCodeBlockRanges(two, 0, two.content.size)).toEqual([
+    expect(activeCodeBlockRanges(two, 0, two.content.size)).toStrictEqual([
       { from: 0, to: 3 },
       { from: 6, to: 9 },
     ]);
@@ -52,6 +52,6 @@ describe("activeCodeBlockRanges", () => {
       schema.node("blockquote", null, [schema.node("code_block", null, [schema.text("a")])]),
     ]);
     // blockquote = [0,5)、code_block "a" = [1,4)
-    expect(activeCodeBlockRanges(nested, 2, 2)).toEqual([{ from: 1, to: 4 }]);
+    expect(activeCodeBlockRanges(nested, 2, 2)).toStrictEqual([{ from: 1, to: 4 }]);
   });
 });

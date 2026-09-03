@@ -50,7 +50,7 @@ const EMPTY_DRAFT: Draft = { title: "", body: "", tags: [] };
  * `..` も NUL も、受け取った core の `NoteFilename` が改めて弾く。
  */
 function toFileStem(raw: string): string {
-  return raw.trim().replaceAll(/[/\\:*?"<>|]/g, "");
+  return raw.trim().replaceAll(/[/\\:*?"<>|]/gu, "");
 }
 
 /**

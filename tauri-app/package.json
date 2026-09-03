@@ -34,15 +34,10 @@
     "@vitest/browser-playwright": "^4.1.4",
     "jsdom": "^30.0.0",
     "knip": "^6.31.0",
-    "playwright": "1.58.2",
+    "playwright": "1.61.1",
     "typescript": "^7.0.0",
     "vite": "^8.0.0",
     "vite-plugin-solid": "^2.11.12",
     "vitest": "^4.1.4"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild"
-    ]
   }
 }

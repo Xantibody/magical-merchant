@@ -1,6 +1,6 @@
 export interface CopyFeedback {
-  copy(text: string): void;
-  dispose(): void;
+  copy: (text: string) => void;
+  dispose: () => void;
 }
 
 /**

@@ -221,8 +221,6 @@ export default function Settings(): JSX.Element {
         setAuthenticated(true);
         flash(t().settings.signedInMessage);
       }),
-    );
-    unlisteners.push(
       await listen<string>(EVENTS.AUTH_ERROR, (e) => {
         setAuthenticated(false);
         setMessage(t().settings.signInFailed(String(e.payload)));
@@ -470,7 +468,9 @@ export default function Settings(): JSX.Element {
                   <button
                     type="button"
                     class="button-primary"
-                    onClick={() => void saveGlyph()}
+                    onClick={() => {
+                      void saveGlyph();
+                    }}
                     disabled={savingGlyph() || !isGlyphName(glyphName().trim())}
                   >
                     {savingGlyph() ? t().common.saving : t().common.save}
@@ -511,7 +511,9 @@ export default function Settings(): JSX.Element {
               <button
                 type="button"
                 class="button-primary"
-                onClick={() => void save()}
+                onClick={() => {
+                  void save();
+                }}
                 disabled={saving()}
               >
                 {saving() ? t().common.saving : t().common.save}
@@ -535,14 +537,22 @@ export default function Settings(): JSX.Element {
                 <button
                   type="button"
                   class="button-primary"
-                  onClick={() => void login()}
+                  onClick={() => {
+                    void login();
+                  }}
                   disabled={!workersUrl().trim()}
                 >
                   {t().settings.signInGoogle}
                 </button>
               }
             >
-              <button type="button" class="button-secondary" onClick={() => void logout()}>
+              <button
+                type="button"
+                class="button-secondary"
+                onClick={() => {
+                  void logout();
+                }}
+              >
                 {t().settings.signOut}
               </button>
             </Show>

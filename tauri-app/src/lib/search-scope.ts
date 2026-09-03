@@ -33,7 +33,7 @@ export function searchRequest(
     .filter((segment) => !segment.tag)
     .map((segment) => segment.text)
     .join("")
-    .replaceAll(/\s+/g, " ")
+    .replaceAll(/\s+/gu, " ")
     .trim();
   const tags = [...new Set([...scope.map((tag) => normalizeTag(tag)), ...parseTags(query)])];
   if (!text && tags.length === 0) {

@@ -32,8 +32,6 @@
           config.allowUnfree = true;
           config.android_sdk.accept_license = true;
         };
-        # Workaround: see nix/android-repo-fix.nix and #26
-        fixedRepoFile = import ./nix/android-repo-fix.nix { inherit pkgs; };
 
         # Rust の入手経路はここ一箇所。shell ごとに override を書き分けると
         # バージョンが静かにずれる
@@ -66,7 +64,6 @@
 
         androidNdkVersion = "29.0.14206865";
         androidComposition = pkgs.androidenv.composeAndroidPackages {
-          repoJson = fixedRepoFile;
           platformVersions = [ "36" ];
           buildToolsVersions = [
             "35.0.0"

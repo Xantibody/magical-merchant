@@ -116,8 +116,8 @@ describe("notesByOrigin", () => {
       note({ filename: "c.md", origin: "2026-08-03T08:30:00" }),
     ]);
     const map = notesByOrigin(items);
-    expect(map.get("2026-08-03T08:30:00")?.map((n) => n.filename)).toEqual(["a.md", "c.md"]);
-    expect(map.get("2026-08-03T21:00:00")?.map((n) => n.filename)).toEqual(["b.md"]);
+    expect(map.get("2026-08-03T08:30:00")?.map((n) => n.filename)).toStrictEqual(["a.md", "c.md"]);
+    expect(map.get("2026-08-03T21:00:00")?.map((n) => n.filename)).toStrictEqual(["b.md"]);
   });
 
   it("keys notes so an entry of the same day but another time does not match", () => {
@@ -145,8 +145,8 @@ describe("orphanNotesByDate", () => {
       note({ filename: "b.md", origin: "2026-08-01T07:00:00" }),
     ]);
     const map = orphanNotesByDate(notes, items);
-    expect(map.get("2026-08-03")?.map((n) => n.filename)).toEqual(["a.md"]);
-    expect(map.get("2026-08-01")?.map((n) => n.filename)).toEqual(["b.md"]);
+    expect(map.get("2026-08-03")?.map((n) => n.filename)).toStrictEqual(["a.md"]);
+    expect(map.get("2026-08-01")?.map((n) => n.filename)).toStrictEqual(["b.md"]);
   });
 });
 
@@ -200,13 +200,14 @@ describe("noteCreatedLabel", () => {
   });
 });
 
-describe("replaceDayItems", () => {
-  const day = (date: string, texts: string[]) =>
-    toTimelineItems(
-      date,
-      texts.map((t, i) => `- [${String(i + 9).padStart(2, "0")}:00:00] ${t}`),
-    );
+function day(date: string, texts: string[]): ReturnType<typeof toTimelineItems> {
+  return toTimelineItems(
+    date,
+    texts.map((t, i) => `- [${String(i + 9).padStart(2, "0")}:00:00] ${t}`),
+  );
+}
 
+describe("replaceDayItems", () => {
   it("swaps in the fresh entries for a day already on screen", () => {
     const items = [...day("2026-08-04", ["today"]), ...day("2026-08-03", ["yesterday"])];
 

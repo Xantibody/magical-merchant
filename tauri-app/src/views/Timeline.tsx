@@ -131,7 +131,9 @@ export default function Timeline(): JSX.Element {
   const entries = createMemo(() => timeline()?.items ?? []);
   // 地名は記録の一部ではないので、これを待って一覧を出さない。座標のまま先に
   // 並べ、引けたものから名前に差し替わる。
-  createEffect(() => void places.load(entries().map((item) => item.context)));
+  createEffect(() => {
+    void places.load(entries().map((item) => item.context));
+  });
   const knownTags = createMemo(() => countTags(entries().map((item) => item.text)));
 
   const visible = createMemo(() => {
@@ -431,7 +433,9 @@ export default function Timeline(): JSX.Element {
                             <OriginChip
                               note={note}
                               onOpen={openNote}
-                              onUnlink={(target) => void unlinkNote(target)}
+                              onUnlink={(target) => {
+                                void unlinkNote(target);
+                              }}
                             />
                           )}
                         </For>
@@ -446,9 +450,13 @@ export default function Timeline(): JSX.Element {
                           selecting={selecting()}
                           selected={selected().has(item.id)}
                           onToggle={() => toggleSelected(item.id)}
-                          onPromote={() => void promote(item)}
+                          onPromote={() => {
+                            void promote(item);
+                          }}
                           onOpenNote={openNote}
-                          onUnlinkNote={(note) => void unlinkNote(note)}
+                          onUnlinkNote={(note) => {
+                            void unlinkNote(note);
+                          }}
                         />
                       )}
                     </For>
@@ -490,7 +498,9 @@ export default function Timeline(): JSX.Element {
                 type="button"
                 class="select-bar-danger"
                 disabled={deleting()}
-                onClick={() => void runDelete()}
+                onClick={() => {
+                  void runDelete();
+                }}
               >
                 {t().timeline.confirmDeleteYes}
               </button>

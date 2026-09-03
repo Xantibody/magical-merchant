@@ -3,6 +3,14 @@ import { page } from "vitest/browser";
 import { describe, it, expect, afterEach } from "vitest";
 import Icon from "./Icon";
 
+function query<T extends Element = Element>(root: ParentNode, selector: string): T {
+  const found = root.querySelector<T>(selector);
+  if (!found) {
+    throw new Error(`expected ${selector} to render`);
+  }
+  return found;
+}
+
 describe("Icon", () => {
   afterEach(() => cleanup());
 
@@ -18,10 +26,7 @@ describe("Icon", () => {
     const screen = page.elementLocator(baseElement);
 
     await expect.element(screen.locator(".icon svg")).toBeInTheDocument();
-    const svg = baseElement.querySelector(".icon svg");
-    if (!svg) {
-      throw new Error("expected the icon to render an svg");
-    }
+    const svg = query(baseElement, ".icon svg");
     expect(svg.getAttribute("width")).toBe("16px");
     expect(svg.getAttribute("height")).toBe("16px");
   });
@@ -30,20 +35,14 @@ describe("Icon", () => {
     // SVG は動的 import で遅れて届く。それまで span が 0px だと、届いた瞬間に
     // 周りのレイアウトが育って画面全体が揺れる(起動時 CLS の主因だった)
     const { baseElement } = render(() => <Icon name="caret-left" size={18} />);
-    const span = baseElement.querySelector<HTMLSpanElement>(".icon");
-    if (!span) {
-      throw new Error("expected the icon span to render");
-    }
+    const span = query<HTMLSpanElement>(baseElement, ".icon");
     expect(span.style.width).toBe("18px");
     expect(span.style.height).toBe("18px");
   });
 
   it("reserves the default 24px box when no size is given", () => {
     const { baseElement } = render(() => <Icon name="caret-right" />);
-    const span = baseElement.querySelector<HTMLSpanElement>(".icon");
-    if (!span) {
-      throw new Error("expected the icon span to render");
-    }
+    const span = query<HTMLSpanElement>(baseElement, ".icon");
     expect(span.style.width).toBe("24px");
     expect(span.style.height).toBe("24px");
   });

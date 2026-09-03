@@ -74,12 +74,12 @@ class NoteLinkSuggest {
       return;
     }
     const before = $from.parent.textBetween(0, $from.parentOffset, "\n", "\n");
-    const match = /\[\[([^\n[\]]*)$/.exec(before);
+    const match = /\[\[(?<query>[^\n[\]]*)$/u.exec(before);
     if (!match) {
       this.hide();
       return;
     }
-    const [, query] = match;
+    const query = match.groups?.query ?? "";
     this.matchFrom = $from.pos - query.length;
     this.items = this.targets()
       .filter((t) => t.title.includes(query) || t.id.startsWith(query))

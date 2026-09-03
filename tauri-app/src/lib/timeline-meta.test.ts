@@ -8,8 +8,11 @@ function context(overrides: Partial<DeviceContext> = {}): DeviceContext {
 
 describe("entryMeta", () => {
   it("names the platform with the icon of its form factor", () => {
-    expect(entryMeta(context({ os: "macos" }))[0]).toEqual({ icon: "laptop", label: "macos" });
-    expect(entryMeta(context({ os: "android" }))[0]).toEqual({
+    expect(entryMeta(context({ os: "macos" }))[0]).toStrictEqual({
+      icon: "laptop",
+      label: "macos",
+    });
+    expect(entryMeta(context({ os: "android" }))[0]).toStrictEqual({
       icon: "device-mobile",
       label: "android",
     });
@@ -20,30 +23,30 @@ describe("entryMeta", () => {
   });
 
   it("tells wired from wireless", () => {
-    expect(entryMeta(context({ network_type: "WiFi" }))[1]).toEqual({
+    expect(entryMeta(context({ network_type: "WiFi" }))[1]).toStrictEqual({
       icon: "wifi-high",
       label: "Wi-Fi",
     });
-    expect(entryMeta(context({ network_type: "Ethernet" }))[1]).toEqual({
+    expect(entryMeta(context({ network_type: "Ethernet" }))[1]).toStrictEqual({
       icon: "network",
       label: "有線",
     });
-    expect(entryMeta(context({ network_type: "Mobile" }))[1]).toEqual({
+    expect(entryMeta(context({ network_type: "Mobile" }))[1]).toStrictEqual({
       icon: "cell-signal-full",
       label: "モバイル回線",
     });
-    expect(entryMeta(context({ network_type: "Offline" }))[1]).toEqual({
+    expect(entryMeta(context({ network_type: "Offline" }))[1]).toStrictEqual({
       icon: "wifi-slash",
       label: "オフライン",
     });
   });
 
   it("shows the battery level with an icon that matches it", () => {
-    expect(entryMeta(context({ battery: 68 }))[1]).toEqual({
+    expect(entryMeta(context({ battery: 68 }))[1]).toStrictEqual({
       icon: "battery-high",
       label: "68%",
     });
-    expect(entryMeta(context({ battery: 68, is_charging: true }))[1]).toEqual({
+    expect(entryMeta(context({ battery: 68, is_charging: true }))[1]).toStrictEqual({
       icon: "battery-charging",
       label: "68%",
     });
@@ -51,17 +54,17 @@ describe("entryMeta", () => {
 
   it("names the place when the coordinate has been resolved", () => {
     const meta = entryMeta(
-      context({ location: { latitude: 35.676_140_3, longitude: 139.546_563_4 } }),
+      context({ location: { latitude: 35.6761403, longitude: 139.5465634 } }),
       () => "渋谷区",
     );
 
-    expect(meta[1]).toEqual({ icon: "map-pin", label: "渋谷区" });
+    expect(meta[1]).toStrictEqual({ icon: "map-pin", label: "渋谷区" });
   });
 
   it("shows where the entry was written", () => {
     expect(
-      entryMeta(context({ location: { latitude: 35.676_140_3, longitude: 139.546_563_4 } }))[1],
-    ).toEqual({ icon: "map-pin", label: "35.6761, 139.5466" });
+      entryMeta(context({ location: { latitude: 35.6761403, longitude: 139.5465634 } }))[1],
+    ).toStrictEqual({ icon: "map-pin", label: "35.6761, 139.5466" });
   });
 
   it("keeps the sign of the southern and western hemispheres", () => {
@@ -71,28 +74,28 @@ describe("entryMeta", () => {
   });
 
   it("leaves out what was not recorded", () => {
-    expect(entryMeta(context())).toEqual([{ icon: "laptop", label: "macos" }]);
+    expect(entryMeta(context())).toStrictEqual([{ icon: "laptop", label: "macos" }]);
   });
 
   it("keeps the order device, location, network, battery", () => {
     const meta = entryMeta(
       context({
         os: "android",
-        location: { latitude: 35.676_140_3, longitude: 139.546_563_4 },
+        location: { latitude: 35.6761403, longitude: 139.5465634 },
         network_type: "Mobile",
         battery: 30,
       }),
     ).map((s) => s.label);
 
-    expect(meta).toEqual(["android", "35.6761, 139.5466", "モバイル回線", "30%"]);
+    expect(meta).toStrictEqual(["android", "35.6761, 139.5466", "モバイル回線", "30%"]);
   });
 
   it("says nothing at all when there is no context", () => {
-    expect(entryMeta(null)).toEqual([]);
+    expect(entryMeta(null)).toStrictEqual([]);
   });
 
   it("skips the device when the platform is unknown", () => {
-    expect(entryMeta({ os: "", arch: "", battery: 50 })).toEqual([
+    expect(entryMeta({ os: "", arch: "", battery: 50 })).toStrictEqual([
       { icon: "battery-high", label: "50%" },
     ]);
   });

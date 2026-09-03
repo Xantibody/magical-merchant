@@ -86,5 +86,10 @@ export function createLocationTracker(deps: TrackerDeps): LocationTracker {
     return Promise.race([fix, giveUp]);
   };
 
-  return { warmUp: () => void refresh(false), read };
+  return {
+    warmUp: () => {
+      void refresh(false);
+    },
+    read,
+  };
 }
