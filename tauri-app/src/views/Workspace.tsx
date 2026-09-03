@@ -388,25 +388,35 @@ export default function Workspace(): JSX.Element {
   };
 
   /**
+   * 開いている編集を畳んでから戻る。選択を動かす手前で必ず通す道。
+   * 畳まずに移ると `fullBody()` が「次のノートの題 + 前のノートの本文」に
+   * なり、次の保存がその混ぜ物を隣のノートへ書き込む。読み直しが
+   * `revisions` を更新済みなので Stale でも止まらない。
+   * 編集していないときに `stopEditing` を呼ばないのは、あれが `draft()` を
+   * 本文に据えるから — 開いていない draft は前のノートのものだ。
+   */
+  const settleEdit = (): Promise<void> => (editing() ? stopEditing() : Promise.resolve());
+
+  /**
    * 選択を差し替える唯一の入口。一覧のタップ・ウィジェットの `?file=`・
    * 新規作成・テンプレ・バックリンクは全部ここを通る。入口ごとに
    * 「編集中だったらどうするか」を書くと、書き忘れた入口だけが前のノートの
    * 本文を次のノートへ持ち込む — 入口が増えても書く場所は 1 つにしておく。
    */
-  function switchTo(id: string): void {
+  async function switchTo(id: string): Promise<void> {
+    await settleEdit();
     setSelectedId(id);
     setDetailOpen(true);
   }
 
   const select = (item: NoteItem): void => {
     shell.closePopovers();
-    setEditing(false);
-    switchTo(item.id);
+    void switchTo(item.id);
   };
 
   const openBacklink = (hit: SearchHit): void => {
     if (hit.kind === "note" && hit.filename) {
-      switchTo(hit.filename);
+      void switchTo(hit.filename);
     } else {
       navigate(`${ROUTES.TIMELINE}?day=${hit.date}`);
     }
@@ -419,7 +429,7 @@ export default function Workspace(): JSX.Element {
       () => searchParams.file,
       (file) => {
         if (typeof file === "string" && file) {
-          switchTo(file);
+          void switchTo(file);
         }
       },
     ),
@@ -471,7 +481,7 @@ export default function Workspace(): JSX.Element {
     // 書き始める操作ではないから — マインドマップでも踏める
     const noteLink = target?.closest("a.note-link");
     if (noteLink instanceof HTMLElement && noteLink.dataset.file) {
-      switchTo(noteLink.dataset.file);
+      void switchTo(noteLink.dataset.file);
       return;
     }
     // リンクは踏める・図はズームのまま・道具は道具のまま・バックリンク欄は
@@ -603,7 +613,10 @@ export default function Workspace(): JSX.Element {
   let newNotePointer = "mouse";
 
   // ---- 削除 + Undo（5秒は tombstone、経過後に本削除）----
-  const remove = (item: NoteItem): void => {
+  const remove = async (item: NoteItem): Promise<void> => {
+    // 隣を選ぶ前に編集を畳む。switchTo と同じ理屈だが、削除は詳細ペインを
+    // 開かない(狭い端末では隣を開いたままにする)ので switchTo は通さない
+    await settleEdit();
     // 隠す前に隣を決める。selected は一覧から消えた id を先頭へ倒すので、
     // 何もしないと削除のたびに最上段へ飛ばされる。隣なら目線は動かない。
     // detailOpen は触らない — 今まで通り、端末が狭ければ隣を開いたままにする
@@ -795,7 +808,9 @@ export default function Workspace(): JSX.Element {
                     class="icon-button"
                     title={t().common.delete}
                     aria-label={t().common.delete}
-                    onClick={() => remove(item())}
+                    onClick={() => {
+                      void remove(item());
+                    }}
                   >
                     <Icon name="trash" size={17} />
                   </button>
