@@ -18,10 +18,10 @@ pub use glyph::{
 };
 pub use note::error::NoteError;
 pub use note::{
-    NoteSummary, Revision, Snapshot, create_draft_note, create_note_from_entry, delete_note,
-    list_note_history, list_notes, read_note, read_note_by_filename, read_note_history,
-    read_note_meta, repair_notes, restore_note, snapshot_note, update_note, update_note_meta,
-    update_note_origin, update_note_view,
+    NoteSummary, Revision, Snapshot, create_draft_note, delete_note, list_note_history, list_notes,
+    read_note, read_note_by_filename, read_note_history, read_note_meta, repair_notes,
+    restore_note, snapshot_note, update_note, update_note_meta, update_note_origin,
+    update_note_view,
 };
 pub use search::{HitKind, SearchHit, find_backlinks, search_all};
 pub use template::{
@@ -37,5 +37,7 @@ pub use utils::device::Context as DeviceContext;
 pub use utils::frontmatter;
 /// 1 件ぶんのノートメタデータ。中身は frontmatter そのもの。
 pub use utils::frontmatter::NoteFrontmatter as NoteMeta;
+/// ノートを作るときにだけ書ける出自。作成の入口はこれを 1 つ受け取る。
+pub use utils::frontmatter::Provenance;
 pub use utils::markdown::{TimelineEntry, parse_timeline_entry};
 pub use utils::validated::{GlyphFormat, GlyphName, NoteFilename};
