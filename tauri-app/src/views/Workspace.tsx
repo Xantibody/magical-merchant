@@ -129,6 +129,11 @@ export default function Workspace(): JSX.Element {
    * のは、保存が遅れて届く頃には別のノートが選ばれていることがあるから。
    */
   const revisions = new Map<string, string>();
+  /**
+   * 走っている自動保存のタイマー。「まだディスクに無い本文がある」の合図で、
+   * 読み直しを抑える判断がこれを読む。他の編集セッションの状態と一緒に置く。
+   */
+  let saveTimer: ReturnType<typeof setTimeout> | undefined;
 
   const visibleItems = createMemo<NoteItem[]>(() => {
     const dropped = new Set(hidden());
@@ -192,12 +197,16 @@ export default function Workspace(): JSX.Element {
         () => typedInvoke("read_note", { filename: item.filename }),
         () => typedInvoke("read_note_meta", { filename: item.filename }),
       );
-      revisions.set(item.filename, content.revision);
       // 一覧を素早くたどると、遅い読みが速い読みを追い越して届く。
-      // いま選ばれているノートへの答えだけを画面に出す
-      if (selected()?.id !== item.id) {
+      // いま選ばれているノートへの答えだけを画面に出す。読み始める前に
+      // 確かめた「編集中でも保存待ちでもない」も、届いた時点でもう一度見る —
+      // 応答を待つあいだにタップして書き始められる。
+      // revision まで見送るのは、画面に出していない版で保存に行くと、
+      // 読んでいない相手の本文の上に書けてしまうから
+      if (selected()?.id !== item.id || editing() || saveTimer) {
         return;
       }
+      revisions.set(item.filename, content.revision);
       // 本文とモードは対で出す。バラすと一瞬だけ違うモードで描かれる
       const titled = splitTitle(content.body);
       batch(() => {
@@ -258,7 +267,6 @@ export default function Workspace(): JSX.Element {
   };
 
   // ---- 編集（自動保存: 1秒 debounce + 直列化）----
-  let saveTimer: ReturnType<typeof setTimeout> | undefined;
   let saveChain: Promise<void> = Promise.resolve();
 
   /**

@@ -302,4 +302,23 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     await waitFor(() => expect(shell?.toast()?.undo).toBeInstanceOf(Function));
     shell?.toast()?.undo?.();
   });
+
+  // フォーカス復帰の読み直しが飛んでいる間にタップして書き始めると、
+  // 画面に出ているのは読む前の本文。保存に添える版もそれに揃っていないと、
+  // 相手の版を「読んだつもり」で潰す
+  it("saves with the revision it actually read when a refresh lands mid-edit", async () => {
+    await openNoteA();
+
+    blockReads();
+    disk.set(FILE_A, BODY_A_SYNCED);
+    shell?.refreshData();
+    await startEditingBody();
+    typeInEditor?.(`${TEXT_A}\n\nこの端末で足した行`);
+    releaseReads();
+
+    await waitFor(() => expect(countOf("update_draft")).toBe(1), { timeout: 3000 });
+    expect(writesTo(FILE_A)[0]?.revision).toBe(revisionOf(BODY_A));
+    // 読んだ版で断られるので、相手の行は残る
+    expect(disk.get(FILE_A)).toBe(BODY_A_SYNCED);
+  });
 });
