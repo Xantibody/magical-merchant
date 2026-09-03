@@ -186,8 +186,9 @@ mod tests {
         .unwrap();
     }
 
-    /// 作成日時を指定してノートを直に書く。`create_note_from_template` を
-    /// 同じ秒に 2 回呼ぶとファイル名が衝突して 1 件目を上書きしてしまう。
+    /// 過去の日付のノートを直に書く。`{{prev}}` も「今日のぶんはもう在るか」も
+    /// 日付で判定するので、`create_note_from_template`(作成時刻は今)では
+    /// 昨日以前のノートを用意できない。
     fn seed_note(tmp: &TempDir, filename: &str, template: &str, days_ago: i64) {
         let time = (Local::now() - chrono::Duration::days(days_ago)).fixed_offset();
         let fm = NoteFrontmatter {
