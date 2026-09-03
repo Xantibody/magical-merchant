@@ -14,6 +14,8 @@ pub mod config;
 #[cfg(feature = "sync-client")]
 pub mod engine;
 #[cfg(feature = "sync-client")]
+pub mod lock;
+#[cfg(feature = "sync-client")]
 pub mod token;
 
 /// 1 回の同期でおきたことの内訳。

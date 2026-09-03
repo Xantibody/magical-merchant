@@ -31,6 +31,14 @@ One sync is `GET /sync-state` → local scan → diff → one `POST /sync/bulk`:
 > and erase the notes on every device. Writes use `expected_etag` for
 > compare-and-swap, and the client retries a losing race automatically.
 
+Only one sync at a time may touch a data directory. A run takes an exclusive
+lock on `<base>/.sync.lock` before it does anything else and holds it to the
+end; anyone who finds it taken gives up with `busy` rather than waiting. Two
+runs would otherwise overwrite each other's `.sync-state.json`, and the keys
+lost that way come back as conflicts on the next sync. The lock lives on the
+open file descriptor, so a crash releases it — there is never a stale lock to
+clear by hand.
+
 Turning on **Auto sync** (sync popover, or `autoSync` in the nix-darwin
 module) runs a sync a few seconds after any successful write, so a note taken
 on the phone reaches the Mac without touching the sync button.
