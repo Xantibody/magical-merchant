@@ -84,6 +84,16 @@ pub fn snapshot_note(
     }))
 }
 
+/// 並べるための (秒, 枝番) の組。枝番だけは数として比べる — 文字列のままだと
+/// 同じ秒の 2 桁目が来た時点で `-10` が `-2` より前に落ちる。
+///
+/// 枝番はゼロ埋めしない。名前が桁で変わると、既に置かれている控えの id が
+/// 過去のものと今のもので 2 通りになる。並べる側だけを直せば名前は不変。
+fn sort_key(id: &str) -> (&str, u32) {
+    let (stamp, suffix) = id.split_once('-').unwrap_or((id, "1"));
+    (stamp, suffix.parse().unwrap_or(0))
+}
+
 /// 新しいものから順に。
 pub fn list_note_history(
     base_dir: &Path,
@@ -105,7 +115,7 @@ pub fn list_note_history(
         .collect();
     // id は時刻そのものなので、名前順が時刻順。mtime はコピー先の時刻で、
     // 同じ秒の枝番を並べ替える力はない。
-    snapshots.sort_by(|a, b| b.id.cmp(&a.id));
+    snapshots.sort_by(|a, b| sort_key(&b.id).cmp(&sort_key(&a.id)));
     Ok(snapshots)
 }
 
@@ -214,6 +224,34 @@ mod tests {
                 .unwrap()
                 .ends_with("one")
         );
+    }
+
+    /// 枝番が 2 桁に届くと文字列順が時刻順から外れる(`-10` < `-2`)。
+    /// 一覧の先頭は「戻したい直前の 1 つ」なので、そこが入れ替わると
+    /// 復元の既定の候補が 9 個前の控えになる。
+    ///
+    /// 控えは `snapshot_note` を 11 回呼ばずに直に置く。11 回のあいだに
+    /// 秒が変わると枝番が振り直され、並びの前提そのものが消える。
+    #[test]
+    fn eleven_snapshots_in_the_same_second_are_listed_newest_first() {
+        let tmp = TempDir::new().unwrap();
+        let filename = NoteFilename::parse("20260101_000000.md").unwrap();
+        let dir = note_history_dir(tmp.path(), &filename);
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("20260101_120000.md"), "x").unwrap();
+        for n in 2..=11 {
+            fs::write(dir.join(format!("20260101_120000-{n}.md")), "x").unwrap();
+        }
+
+        let ids: Vec<String> = list_note_history(tmp.path(), &filename)
+            .unwrap()
+            .into_iter()
+            .map(|s| s.id)
+            .collect();
+
+        assert_eq!(ids[0], "20260101_120000-11");
+        assert_eq!(ids[1], "20260101_120000-10");
+        assert_eq!(ids.last().unwrap(), "20260101_120000");
     }
 
     /// 控えの置き場は同期の走査範囲の外。載せると端末間で控えが往復する。
