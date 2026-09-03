@@ -7,7 +7,9 @@ use chrono::NaiveDate;
 use magical_merchant_core::utils::frontmatter;
 use magical_merchant_core::utils::paths::place_cache_path;
 use magical_merchant_core::utils::place::{PlaceCache, place_key};
-use magical_merchant_core::{GlyphFormat, GlyphName, NoteFilename, Revision, parse_timeline_entry};
+use magical_merchant_core::{
+    GlyphFormat, GlyphName, NoteFilename, Provenance, Revision, parse_timeline_entry,
+};
 use rmcp::handler::server::tool::ToolRouter;
 use rmcp::handler::server::wrapper::{Json, Parameters};
 use rmcp::model::{
@@ -479,6 +481,7 @@ impl McpServer {
             &param.body,
             &tags,
             &notes::context(),
+            Provenance::default(),
         )
         .map_err(err)?;
         let filename = path
@@ -902,7 +905,14 @@ mod tests {
             &[(9, "a", &here), (10, "b", &nearby)],
         );
         write_day(tmp.path(), "2026-03-01", &[(9, "c", &far)]);
-        magical_merchant_core::create_draft_note(tmp.path(), "note", &[], &here).unwrap();
+        magical_merchant_core::create_draft_note(
+            tmp.path(),
+            "note",
+            &[],
+            &here,
+            Provenance::default(),
+        )
+        .unwrap();
         name_shibuya(tmp.path(), "en");
 
         let out = server(tmp.path()).list_places().unwrap().0;
@@ -928,7 +938,14 @@ mod tests {
             "2026-01-15",
             &[(9, "#run 朝", &ctx), (10, "#run 夜 #rest", &ctx)],
         );
-        magical_merchant_core::create_draft_note(tmp.path(), "設計 #rust", &[], &ctx).unwrap();
+        magical_merchant_core::create_draft_note(
+            tmp.path(),
+            "設計 #rust",
+            &[],
+            &ctx,
+            Provenance::default(),
+        )
+        .unwrap();
 
         let out = server(tmp.path()).list_tags().unwrap().0;
 
@@ -947,6 +964,7 @@ mod tests {
             "# 題\n本文 #rust",
             &["Memo".to_string()],
             &mac_at_shibuya(),
+            Provenance::default(),
         )
         .unwrap();
         name_shibuya(tmp.path(), "ja");

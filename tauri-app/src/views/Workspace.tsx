@@ -14,6 +14,7 @@ import type { JSX } from "solid-js";
 import { useNavigate, useSearchParams } from "@solidjs/router";
 import type { Editor } from "@milkdown/kit/core";
 import Icon from "../components/Icon";
+import type { IconName } from "../components/Icon";
 import MarkdownPreview from "../components/MarkdownPreview";
 import NoteMetaPopover from "../components/NoteMetaPopover";
 import TemplatePicker from "../components/TemplatePicker";
@@ -23,7 +24,7 @@ import { glyphs } from "../lib/glyphs";
 import { useShell } from "../lib/shell";
 import { groupNotes, itemTitle, neighborOf, noteCreatedLabel, toNoteItems } from "../lib/items";
 import type { ItemGroup, NoteItem } from "../lib/items";
-import { readNoteContent, toggledView, viewToFrontmatter } from "../lib/note-view";
+import { nextView, readNoteContent, viewToFrontmatter } from "../lib/note-view";
 import type { NoteView } from "../lib/note-view";
 import { joinTitle, splitTitle } from "../lib/note-title";
 import { formatMonthDay } from "../lib/day-labels";
@@ -53,6 +54,19 @@ const MindmapView = lazy(() => import("../components/MindmapView"));
 
 const UNDO_MS = 5000;
 const SAVE_DEBOUNCE_MS = 1000;
+
+/**
+ * 表示モードの見せ方。切替ボタンは「次に何になるか」でこれを引くので、
+ * モードが増えてもボタンは 1 つのまま — 増えるのはこの表の 1 行だけ。
+ */
+const VIEW_BUTTON: Record<
+  NoteView,
+  { icon: IconName; label: "showEditor" | "showMindmap" | "showPreview" }
+> = {
+  editor: { icon: "note-pencil", label: "showEditor" },
+  mindmap: { icon: "tree-structure", label: "showMindmap" },
+  preview: { icon: "eye", label: "showPreview" },
+};
 
 async function loadNotes(): Promise<NoteItem[]> {
   return toNoteItems(await typedInvoke("list_notes"));
@@ -116,19 +130,6 @@ export default function Workspace(): JSX.Element {
    */
   const revisions = new Map<string, string>();
 
-  // 同期やパレット操作の後にデータを取り直す。初回は createResource が読むので
-  // defer しないと全ノートの読み直しがマウント直後に二重で走る
-  createEffect(
-    on(
-      shell.dataVersion,
-      () => {
-        void refetchNotes();
-        void refetchTemplates();
-      },
-      { defer: true },
-    ),
-  );
-
   const visibleItems = createMemo<NoteItem[]>(() => {
     const dropped = new Set(hidden());
     return (notes() ?? []).filter((item) => !dropped.has(item.id));
@@ -140,6 +141,13 @@ export default function Workspace(): JSX.Element {
     const items = visibleItems();
     return items.find((item) => item.id === selectedId()) ?? items[0];
   });
+
+  /**
+   * いま見ているノートの id。一覧を取り直すと NoteItem は作り直されるので、
+   * 「見ているノートが変わった」を item の同一性で判断すると、保存や同期の
+   * たびに変わったことになる。id なら同じノートのあいだ動かない。
+   */
+  const selectedKey = createMemo<string | undefined>(() => selected()?.id);
 
   /**
    * ファイルに書く本文。タイトル欄とエディタは別々に見せているが、
@@ -235,24 +243,30 @@ export default function Workspace(): JSX.Element {
   };
 
   // ---- 選択中ノートの本文と表示モードを読む ----
-  createEffect(() => {
-    const item = selected();
-    // 別のノートに移ったら編集セッションは畳む。戻る先が前のノートの
-    // 本文のままだと、次の保存が他人のバックアップを潰す
-    sessionFile = null;
-    if (!item) {
-      batch(() => {
-        setNoteBody("");
-        setNoteTitle("");
-        setNoteView("editor");
-      });
-      return;
-    }
-    void loadNote(item);
-  });
+  // 追うのは「どのノートを見ているか」だけ。item そのものを追うと、一覧を
+  // 取り直すたびに本文を読み直し、開いているエディタの下で本文が入れ替わる
+  createEffect(
+    on(selectedKey, () => {
+      const item = selected();
+      // 別のノートに移ったら編集セッションは畳む。戻る先が前のノートの
+      // 本文のままだと、次の保存が他人のバックアップを潰す
+      sessionFile = null;
+      if (!item) {
+        batch(() => {
+          setNoteBody("");
+          setNoteTitle("");
+          setNoteView("editor");
+        });
+        return;
+      }
+      void loadNote(item);
+    }),
+  );
 
-  const toggleNoteView = async (item: NoteItem): Promise<void> => {
-    const next = toggledView(noteView());
+  const cycleNoteView = async (item: NoteItem): Promise<void> => {
+    // 巻き戻し先は切替前の値そのもの。3 値の輪では「次の次」が元に戻らない
+    const previous = noteView();
+    const next = nextView(previous);
     // 保存を待たずに切り替える。書き込みは frontmatter が壊れたノートで
     // 失敗し得るので、そのときは表示だけ戻す
     setNoteView(next);
@@ -262,7 +276,7 @@ export default function Workspace(): JSX.Element {
         view: viewToFrontmatter(next),
       });
     } catch {
-      setNoteView(toggledView(next));
+      setNoteView(previous);
     }
   };
 
@@ -364,6 +378,30 @@ export default function Workspace(): JSX.Element {
     }
   });
 
+  // 同期やパレット操作の後にデータを取り直す。初回は createResource が読むので
+  // defer しないと全ノートの読み直しがマウント直後に二重で走る
+  createEffect(
+    on(
+      shell.dataVersion,
+      () => {
+        void refetchNotes();
+        void refetchTemplates();
+        // 一覧を取り直しただけでは、開いたままのノートは古い本文を出し続ける。
+        // 同期で降ってきた版をここで読み直す。読むだけで、書き戻しはしない
+        const item = selected();
+        // エディタが開いている間は絶対に触らない。本文の差し替えは
+        // カーソル・選択・スクロール・IME の状態ごと壊す(editor skill)。
+        // 待っている保存があるときも同じ — タイトル欄に打った字はまだ
+        // ディスクに無いので、読み直せばそれを捨てることになる。
+        // どちらも次の Step(ファイル監視)でトーストを出して人に決めさせる
+        if (item && !editing() && !saveTimer) {
+          void loadNote(item);
+        }
+      },
+      { defer: true },
+    ),
+  );
+
   const startEditing = (point?: CaretPoint): void => {
     if (!selected()) {
       return;
@@ -401,11 +439,13 @@ export default function Workspace(): JSX.Element {
 
   /** プレビューのどこを押しても、その場所から書き始められる。 */
   const onPreviewClick = (e: MouseEvent): void => {
-    if (editing() || noteView() !== "editor" || !selected()) {
+    if (editing() || !selected()) {
       return;
     }
     const target = e.target instanceof Element ? e.target : null;
-    // ノートリンクはこのアプリの中で解決する。href の無い a なので自前で開く
+    // ノートリンクはこのアプリの中で解決する。href の無い a なので自前で開く。
+    // 表示モードの手前で見るのは、リンクを辿るのは読む操作であって
+    // 書き始める操作ではないから — マインドマップでも踏める
     const noteLink = target?.closest("a.note-link");
     if (noteLink instanceof HTMLElement && noteLink.dataset.file) {
       setSelectedId(noteLink.dataset.file);
@@ -415,6 +455,10 @@ export default function Workspace(): JSX.Element {
     // リンクは踏める・図はズームのまま・バックリンク欄は一覧のまま。
     // 編集に化けさせない
     if (target?.closest("a, button, .mermaid-block, .mermaid-zoom, .backlinks")) {
+      return;
+    }
+    // 書けるのはエディタ表示のときだけ。ここから下は編集を始める話になる
+    if (noteView() !== "editor") {
       return;
     }
     // 本文をなぞってコピーしたいだけのときも編集へ切り替えない
@@ -466,6 +510,12 @@ export default function Workspace(): JSX.Element {
     }
     const item = selected();
     if (!item || item.filename !== searchParams.file || loadedId() !== item.id) {
+      return;
+    }
+    // 読み取り専用にしたノートは、リンクで叩かれても開くだけ。昇格直後の
+    // ノートは view を持たないので実害は無いが、経路として塞いでおく
+    if (noteView() === "preview") {
+      setSearchParams({ edit: undefined }, { replace: true });
       return;
     }
     startEditing();
@@ -696,25 +746,19 @@ export default function Workspace(): JSX.Element {
                 </span>
 
                 <div class="detail-actions">
+                  {/* 表示モードは 1 つのボタンで一巡する。押したら何になるかを
+                      出すので、on/off を表す aria-pressed は当てはまらない */}
                   <Show when={!editing()}>
                     <button
                       type="button"
                       class="icon-button"
-                      title={
-                        noteView() === "mindmap" ? t().notes.showEditor : t().notes.showMindmap
-                      }
-                      aria-label={
-                        noteView() === "mindmap" ? t().notes.showEditor : t().notes.showMindmap
-                      }
-                      aria-pressed={noteView() === "mindmap"}
+                      title={t().notes[VIEW_BUTTON[nextView(noteView())].label]}
+                      aria-label={t().notes[VIEW_BUTTON[nextView(noteView())].label]}
                       onClick={() => {
-                        void toggleNoteView(item());
+                        void cycleNoteView(item());
                       }}
                     >
-                      <Icon
-                        name={noteView() === "mindmap" ? "file-text" : "tree-structure"}
-                        size={17}
-                      />
+                      <Icon name={VIEW_BUTTON[nextView(noteView())].icon} size={17} />
                     </button>
                   </Show>
                   <button
@@ -776,6 +820,9 @@ export default function Workspace(): JSX.Element {
                 placeholder={t().notes.titlePlaceholder}
                 aria-label={t().notes.titlePlaceholder}
                 value={noteTitle()}
+                // 読み取り専用のノートは題も動かない。disabled にしないのは
+                // 読めなくなるから — 選んでコピーはできたままにする
+                readOnly={noteView() === "preview"}
                 onInput={(e) => editTitle(e.currentTarget.value)}
                 onChange={() => {
                   void commitTitle();
@@ -784,7 +831,9 @@ export default function Workspace(): JSX.Element {
                   // 変換確定の Enter は IME のもの (#102)
                   if (e.key === "Enter" && !isImeComposing(e)) {
                     e.preventDefault();
-                    startEditing();
+                    if (noteView() !== "preview") {
+                      startEditing();
+                    }
                   }
                 }}
               />
@@ -793,6 +842,7 @@ export default function Workspace(): JSX.Element {
                   同じ操作はキーボードでは編集終了ボタンと Tab 移動で賄える */}
               <div
                 class="detail-body"
+                data-view={noteView()}
                 ref={detailBodyRef}
                 role="presentation"
                 onClick={onPreviewClick}

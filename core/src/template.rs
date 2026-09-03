@@ -80,11 +80,15 @@ pub fn delete_template(base_dir: &Path, filename: &NoteFilename) -> Result<(), C
 /// 同じテンプレの今日のノートが既にあれば作らずにそれを返す。日次テンプレを
 /// ウィジェットから 1 日に何度も叩くのは普通のことで、そのたびに空の
 /// 「Daily」が増えるとテンプレのほうが邪魔になる。
+///
+/// `provenance` は呼ぶ側が名乗る出自。テンプレ名だけはここで埋める —
+/// ファイル名から導けるものを呼ぶ側に渡させても間違いが増えるだけ。
 pub fn create_note_from_template(
     base_dir: &Path,
     filename: &NoteFilename,
     context: &Context,
     locale: VarLocale,
+    provenance: Provenance<'_>,
 ) -> Result<CreatedNote, CoreError> {
     let (fm, body) = Templates::new(base_dir.to_path_buf()).read(filename)?;
     let name = template_name(filename);
@@ -115,7 +119,7 @@ pub fn create_note_from_template(
         context,
         Provenance {
             template: Some(name),
-            ..Provenance::default()
+            ..provenance
         },
     )?;
 
@@ -204,9 +208,14 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         daily(&tmp);
 
-        let created =
-            create_note_from_template(tmp.path(), &name("daily.md"), &context(), VarLocale::Ja)
-                .unwrap();
+        let created = create_note_from_template(
+            tmp.path(),
+            &name("daily.md"),
+            &context(),
+            VarLocale::Ja,
+            Provenance::default(),
+        )
+        .unwrap();
 
         let body = read_note(&created.path).unwrap();
         let today = Local::now().format("%Y-%m-%d").to_string();
@@ -221,9 +230,14 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         daily(&tmp);
 
-        let created =
-            create_note_from_template(tmp.path(), &name("daily.md"), &context(), VarLocale::Ja)
-                .unwrap();
+        let created = create_note_from_template(
+            tmp.path(),
+            &name("daily.md"),
+            &context(),
+            VarLocale::Ja,
+            Provenance::default(),
+        )
+        .unwrap();
 
         assert!(!read_note(&created.path).unwrap().contains("前回"));
     }
@@ -234,9 +248,14 @@ mod tests {
         daily(&tmp);
         seed_note(&tmp, "20260830_090000.md", "daily", 1);
 
-        let created =
-            create_note_from_template(tmp.path(), &name("daily.md"), &context(), VarLocale::Ja)
-                .unwrap();
+        let created = create_note_from_template(
+            tmp.path(),
+            &name("daily.md"),
+            &context(),
+            VarLocale::Ja,
+            Provenance::default(),
+        )
+        .unwrap();
 
         assert!(
             read_note(&created.path)
@@ -252,9 +271,14 @@ mod tests {
         daily(&tmp);
         seed_note(&tmp, "20260830_090000.md", "weekly", 1);
 
-        let created =
-            create_note_from_template(tmp.path(), &name("daily.md"), &context(), VarLocale::Ja)
-                .unwrap();
+        let created = create_note_from_template(
+            tmp.path(),
+            &name("daily.md"),
+            &context(),
+            VarLocale::Ja,
+            Provenance::default(),
+        )
+        .unwrap();
 
         assert!(!read_note(&created.path).unwrap().contains("前回"));
     }
@@ -264,8 +288,14 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         daily(&tmp);
 
-        create_note_from_template(tmp.path(), &name("daily.md"), &context(), VarLocale::Ja)
-            .unwrap();
+        create_note_from_template(
+            tmp.path(),
+            &name("daily.md"),
+            &context(),
+            VarLocale::Ja,
+            Provenance::default(),
+        )
+        .unwrap();
 
         let listed = list_notes(tmp.path()).unwrap();
         let month = Local::now().format("%Y-%m").to_string();
@@ -279,8 +309,14 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         daily(&tmp);
 
-        create_note_from_template(tmp.path(), &name("daily.md"), &context(), VarLocale::Ja)
-            .unwrap();
+        create_note_from_template(
+            tmp.path(),
+            &name("daily.md"),
+            &context(),
+            VarLocale::Ja,
+            Provenance::default(),
+        )
+        .unwrap();
 
         assert_eq!(
             list_notes(tmp.path()).unwrap()[0].template,
@@ -293,13 +329,23 @@ mod tests {
     fn the_same_template_reuses_todays_note() {
         let tmp = TempDir::new().unwrap();
         daily(&tmp);
-        let first =
-            create_note_from_template(tmp.path(), &name("daily.md"), &context(), VarLocale::Ja)
-                .unwrap();
+        let first = create_note_from_template(
+            tmp.path(),
+            &name("daily.md"),
+            &context(),
+            VarLocale::Ja,
+            Provenance::default(),
+        )
+        .unwrap();
 
-        let second =
-            create_note_from_template(tmp.path(), &name("daily.md"), &context(), VarLocale::Ja)
-                .unwrap();
+        let second = create_note_from_template(
+            tmp.path(),
+            &name("daily.md"),
+            &context(),
+            VarLocale::Ja,
+            Provenance::default(),
+        )
+        .unwrap();
 
         assert_eq!(second.path, first.path);
         assert!(second.reused);
@@ -313,9 +359,14 @@ mod tests {
         daily(&tmp);
         seed_note(&tmp, "20260830_090000.md", "daily", 1);
 
-        let created =
-            create_note_from_template(tmp.path(), &name("daily.md"), &context(), VarLocale::Ja)
-                .unwrap();
+        let created = create_note_from_template(
+            tmp.path(),
+            &name("daily.md"),
+            &context(),
+            VarLocale::Ja,
+            Provenance::default(),
+        )
+        .unwrap();
 
         assert!(!created.reused);
         assert_eq!(list_notes(tmp.path()).unwrap().len(), 2);
@@ -327,9 +378,14 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         save_template(tmp.path(), &name("w.md"), "{{weekday}}", &[]).unwrap();
 
-        let created =
-            create_note_from_template(tmp.path(), &name("w.md"), &context(), VarLocale::En)
-                .unwrap();
+        let created = create_note_from_template(
+            tmp.path(),
+            &name("w.md"),
+            &context(),
+            VarLocale::En,
+            Provenance::default(),
+        )
+        .unwrap();
 
         let body = read_note(&created.path).unwrap();
         assert!(["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].contains(&body.trim()));
@@ -339,8 +395,13 @@ mod tests {
     fn creating_from_a_missing_template_is_not_found() {
         let tmp = TempDir::new().unwrap();
 
-        let result =
-            create_note_from_template(tmp.path(), &name("nope.md"), &context(), VarLocale::Ja);
+        let result = create_note_from_template(
+            tmp.path(),
+            &name("nope.md"),
+            &context(),
+            VarLocale::Ja,
+            Provenance::default(),
+        );
 
         assert!(matches!(result, Err(CoreError::NotFound(_))));
     }

@@ -5,7 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use chrono::Local;
-use magical_merchant_core::{CoreError, NoteFilename, NoteSummary, Revision};
+use magical_merchant_core::{CoreError, NoteFilename, NoteSummary, Provenance, Revision};
 
 use crate::notes::{self, WriteError};
 
@@ -143,7 +143,13 @@ pub(crate) fn create(data_dir: &Path, body: &str) -> Result<Option<NoteFilename>
     if body.trim().is_empty() {
         return Ok(None);
     }
-    let path = magical_merchant_core::create_draft_note(data_dir, body, &[], &notes::context())?;
+    let path = magical_merchant_core::create_draft_note(
+        data_dir,
+        body,
+        &[],
+        &notes::context(),
+        Provenance::default(),
+    )?;
     let name = path
         .file_name()
         .and_then(|n| n.to_str())
@@ -202,8 +208,14 @@ mod tests {
     use tempfile::TempDir;
 
     fn seed(base: &Path, body: &str) -> NoteFilename {
-        let path =
-            magical_merchant_core::create_draft_note(base, body, &[], &Context::default()).unwrap();
+        let path = magical_merchant_core::create_draft_note(
+            base,
+            body,
+            &[],
+            &Context::default(),
+            Provenance::default(),
+        )
+        .unwrap();
         NoteFilename::parse(path.file_name().unwrap().to_str().unwrap()).unwrap()
     }
 

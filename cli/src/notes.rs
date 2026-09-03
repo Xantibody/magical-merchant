@@ -91,10 +91,18 @@ pub(crate) fn overwrite(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use magical_merchant_core::Provenance;
     use tempfile::TempDir;
 
     fn seed(base: &Path, body: &str) -> NoteFilename {
-        let path = magical_merchant_core::create_draft_note(base, body, &[], &context()).unwrap();
+        let path = magical_merchant_core::create_draft_note(
+            base,
+            body,
+            &[],
+            &context(),
+            Provenance::default(),
+        )
+        .unwrap();
         NoteFilename::parse(path.file_name().unwrap().to_str().unwrap()).unwrap()
     }
 

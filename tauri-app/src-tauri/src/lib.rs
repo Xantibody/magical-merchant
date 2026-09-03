@@ -30,7 +30,7 @@ use base64::engine::general_purpose::STANDARD as B64;
 use device::ClientContext;
 use magical_merchant_core::{
     CreatedNote, GlyphFormat, GlyphName, GlyphSummary, NoteFilename, NoteMeta, NoteSummary,
-    Revision, SearchHit, TemplateDetail, TemplateSummary, VarLocale,
+    Provenance, Revision, SearchHit, TemplateDetail, TemplateSummary, VarLocale,
 };
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_deep_link::DeepLinkExt as _;
@@ -66,16 +66,17 @@ fn create_draft(
     let base_dir = app_base_dir(&handle)?;
     let context = device::get_context(client);
     // origin 付きはタイムラインエントリからの昇格。出自を frontmatter に刻む
-    let path = origin
-        .map_or_else(
-            || magical_merchant_core::create_draft_note(&base_dir, &body, &tags, &context),
-            |origin| {
-                magical_merchant_core::create_note_from_entry(
-                    &base_dir, &body, &tags, &context, &origin,
-                )
-            },
-        )
-        .map_err(|e| e.to_string())?;
+    let path = magical_merchant_core::create_draft_note(
+        &base_dir,
+        &body,
+        &tags,
+        &context,
+        Provenance {
+            origin: origin.as_deref(),
+            ..Provenance::default()
+        },
+    )
+    .map_err(|e| e.to_string())?;
     Ok(path.to_string_lossy().to_string())
 }
 
@@ -252,6 +253,7 @@ fn create_from_template(
         &filename,
         &context,
         VarLocale::parse(&locale),
+        Provenance::default(),
     )
     .map_err(|e| e.to_string())
 }
@@ -404,7 +406,8 @@ fn store_token_from_urls(handle: &AppHandle, urls: &[url::Url]) {
 
     let handle = handle.clone();
     std::thread::spawn(move || {
-        let stored = app_base_dir(&handle).and_then(|dir| auth::store_token(&dir, &token));
+        let stored = app_base_dir(&handle)
+            .and_then(|dir| magical_merchant_core::sync::token::store_token(&dir, &token));
 
         match stored {
             Ok(()) => {
