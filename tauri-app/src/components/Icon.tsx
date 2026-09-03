@@ -43,6 +43,13 @@ const ICONS = {
   "code-block": () => import("@phosphor-icons/core/assets/regular/code-block.svg?raw"),
   minus: () => import("@phosphor-icons/core/assets/regular/minus.svg?raw"),
   "magnifying-glass": () => import("@phosphor-icons/core/assets/regular/magnifying-glass.svg?raw"),
+  "magnifying-glass-plus": () =>
+    import("@phosphor-icons/core/assets/regular/magnifying-glass-plus.svg?raw"),
+  "magnifying-glass-minus": () =>
+    import("@phosphor-icons/core/assets/regular/magnifying-glass-minus.svg?raw"),
+  "corners-out": () => import("@phosphor-icons/core/assets/regular/corners-out.svg?raw"),
+  "corners-in": () => import("@phosphor-icons/core/assets/regular/corners-in.svg?raw"),
+  copy: () => import("@phosphor-icons/core/assets/regular/copy.svg?raw"),
   "calendar-blank": () => import("@phosphor-icons/core/assets/regular/calendar-blank.svg?raw"),
   info: () => import("@phosphor-icons/core/assets/regular/info.svg?raw"),
   x: () => import("@phosphor-icons/core/assets/regular/x.svg?raw"),

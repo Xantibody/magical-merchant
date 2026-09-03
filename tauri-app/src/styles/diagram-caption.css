@@ -1,0 +1,16 @@
+/* 図のキャプション (`%% caption: …`)。
+   プレビュー (markdown-preview.css) とエディタの node view (editor.css) の
+   両方が読む 1 か所。閲覧と編集で図の下に足す高さが 1px でも違うと、押した
+   座標の文字にカーソルを置く前提が崩れて図の下の本文が 1 ブロックずれる
+   (#168)。片側にだけ書けるようにしない、というのがこのファイルの理由。
+
+   normalize は :where(figure) にグリッドと gap を、figure > figcaption に
+   font-size を敷くが、エディタ側の親は figure ではないので効かない。
+   間隔と字の大きさはここで両側に同じ値を与える。 */
+.mermaid-caption {
+  margin-top: var(--size-2);
+  text-align: center;
+  text-wrap: balance;
+  font-size: var(--font-size-0);
+  color: var(--app-text-muted);
+}

@@ -116,6 +116,28 @@ describe("renderMarkdown", () => {
 
     expect(html).toContain("<h1>Hello</h1>");
   });
+
+  // Shiki は diff を持たないので、渡してもプレーンテキストに落ちるだけ
+  it("draws a diff fence with its own renderer instead of the highlighter", async () => {
+    const source = ["```diff", "-old", "+new", "```"].join("\n");
+
+    const html = await renderMarkdown(source);
+
+    expect(html).not.toContain('<pre class="shiki');
+    expect(html).toContain('class="diff-line diff-del"');
+    expect(html).toContain('class="diff-line diff-add"');
+  });
+
+  // 種類ごとに別の配列へ振り分けて描くので、戻すときの番号がずれやすい
+  it("keeps a diff fence in source order next to a highlighted one", async () => {
+    const source = ["```diff", "+added", "```", "", "```ts", "const a = 1;", "```"].join("\n");
+
+    const html = await renderMarkdown(source);
+
+    expect(html.indexOf('class="diff-line diff-add"')).toBeLessThan(
+      html.indexOf('<pre class="shiki'),
+    );
+  });
 });
 
 describe("renderMarkdown with mermaid", () => {
@@ -146,6 +168,29 @@ describe("renderMarkdown with mermaid", () => {
     );
     expect(ids).toHaveLength(2);
     expect(new Set(ids).size).toBe(2);
+  });
+
+  it("hangs the caption of a leading %% comment under the diagram", async () => {
+    const source = [
+      "```mermaid",
+      "%% caption: 図1 — 同期の流れ",
+      "flowchart TD",
+      "  A --> B",
+      "```",
+    ].join("\n");
+
+    const html = await renderMarkdown(source);
+
+    expect(html).toContain("<figcaption");
+    expect(html).toContain("図1 — 同期の流れ");
+    // コメントは mermaid が読み飛ばす。本文から消してはいない
+    expect(html).toContain("<svg");
+  });
+
+  it("draws no caption when the diagram has no caption comment", async () => {
+    const html = await renderMarkdown(FLOWCHART);
+
+    expect(html).not.toContain("<figcaption");
   });
 
   it("keeps diagrams and code blocks in source order", async () => {
