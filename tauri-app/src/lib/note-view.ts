@@ -6,20 +6,28 @@
  * 内容ハッシュが変わった扱いになり、同期が無変更のノートを転送し直すことになる。
  */
 
-export type NoteView = "editor" | "mindmap";
+export type NoteView = "editor" | "mindmap" | "preview";
 
 /** frontmatter の `view` の値を表示モードに解決する。未知の値はエディタに倒す。 */
 export function resolveNoteView(view?: string): NoteView {
-  return view === "mindmap" ? "mindmap" : "editor";
+  return view === "mindmap" || view === "preview" ? view : "editor";
 }
 
-export function toggledView(view: NoteView): NoteView {
-  return view === "mindmap" ? "editor" : "mindmap";
+/**
+ * ボタン 1 つで一巡する。editor → mindmap → preview → editor。
+ * 3 つ目が増えても入り口を増やさないのは、ヘッダに並ぶボタンの数が
+ * そのまま「最小限の chrome」の値段だから。
+ */
+export function nextView(view: NoteView): NoteView {
+  if (view === "editor") {
+    return "mindmap";
+  }
+  return view === "mindmap" ? "preview" : "editor";
 }
 
 /** frontmatter に書く値。既定のエディタ表示はキーごと消す(null)。 */
 export function viewToFrontmatter(view: NoteView): string | null {
-  return view === "mindmap" ? "mindmap" : null;
+  return view === "editor" ? null : view;
 }
 
 export interface NoteContent {
