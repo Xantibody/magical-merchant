@@ -129,41 +129,91 @@
   height: auto;
 }
 
-/* 縮んだ図を原寸で読むための全画面。はみ出した分はスクロールで追う */
+/* ---- 図のズーム画面: transform で倍率と位置を持つ。はみ出しは隠し、
+   ホイール・ピンチ・ドラッグで動かす (DiagramZoom.tsx) ---- */
 .mermaid-zoom {
   position: fixed;
   inset: 0;
   z-index: 200;
-  display: flex;
-  overflow: auto;
-  /* 端まで来たときに背後のノートが動き出さないようにする */
-  overscroll-behavior: contain;
+  overflow: hidden;
   background: var(--app-surface);
-  padding: calc(env(safe-area-inset-top, 0px) + var(--size-3)) var(--size-3)
-    calc(env(safe-area-inset-bottom, 0px) + var(--size-3));
+  cursor: grab;
+  /* ブラウザのスクロールやピンチに取られず、pointer events で全部受ける */
+  touch-action: none;
+  overscroll-behavior: contain;
+  user-select: none;
 }
 
-/* 幅は原寸を JS から受け取る。flex + margin auto なら、はみ出しても
-   左上が切り落とされない */
+.mermaid-zoom.is-dragging {
+  cursor: grabbing;
+}
+
+/* 幅は原寸を JS から受け取り、倍率と位置は JS が transform に直接書く */
 .mermaid-zoom-canvas {
-  margin: auto;
-  flex: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  will-change: transform;
 }
 
 .mermaid-zoom-canvas svg {
+  display: block;
   width: 100%;
   max-width: none;
   height: auto;
+  /* ドラッグは画面全体で受ける。図形やラベルにヒットテストを食わせない */
+  pointer-events: none;
 }
 
-/* 図をスクロールしても流れていかないよう、絶対配置ではなく画面に固定する */
 .mermaid-zoom-close {
-  position: fixed;
-  top: calc(env(safe-area-inset-top, 0px) + var(--size-2));
+  position: absolute;
+  top: calc(var(--safe-top) + var(--size-2));
   right: var(--size-2);
-  background: var(--app-surface);
+  background: var(--app-input-bg);
   border: 1px solid var(--app-border);
   color: var(--app-text-muted);
+}
+
+/* 右下: 倍率のボタンと数字。ホイールの無い端末でもここから動かせる */
+.mermaid-zoom-controls {
+  position: absolute;
+  right: var(--size-3);
+  bottom: calc(var(--safe-bottom) + var(--size-3));
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: var(--size-1);
+  background: var(--app-input-bg);
+  border: 1px solid var(--app-border);
+  border-radius: var(--radius-2);
+  box-shadow: 0 8px 24px -12px rgb(20 20 25 / 25%);
+  color: var(--app-text-muted);
+  cursor: default;
+}
+
+.mermaid-zoom-percent {
+  min-width: 44px;
+  text-align: center;
+  font-size: var(--font-size-0);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 左下: 操作の手引き。触れば分かる操作なので薄く。タッチ端末には当てはまらない */
+.mermaid-zoom-hint {
+  position: absolute;
+  left: var(--size-3);
+  bottom: calc(var(--safe-bottom) + var(--size-3));
+  margin: 0;
+  font-size: var(--font-size-0);
+  color: var(--app-text-faint);
+  pointer-events: none;
+}
+
+@media (hover: none) {
+  .mermaid-zoom-hint {
+    display: none;
+  }
 }
 
 /* ---- ホバーツール: 図とコードブロックの右上に、触れている間だけ出る操作。

@@ -82,9 +82,18 @@ export default function MarkdownPreview(props: MarkdownPreviewProps): JSX.Elemen
   // 押されたときだけ原寸で開く
   const openZoom = (from: Element): void => {
     const svg = from.closest(".mermaid-block")?.querySelector("svg");
-    if (svg) {
-      setZoomed({ svg: svg.outerHTML, width: svg.style.maxWidth });
+    if (!svg) {
+      return;
     }
+    // 原寸は viewBox。mermaid が max-width に書く値と同じだが、数値で欲しい。
+    // viewBox を持たない SVG は縮めて描いている今の大きさを原寸とみなす
+    const box = svg.viewBox.baseVal;
+    const rect = svg.getBoundingClientRect();
+    setZoomed({
+      svg: svg.outerHTML,
+      width: box.width > 0 ? box.width : rect.width,
+      height: box.height > 0 ? box.height : rect.height,
+    });
   };
 
   /** 道具は描画結果の中に静的な HTML で居るので、押されたものをここで 1 か所で受ける */

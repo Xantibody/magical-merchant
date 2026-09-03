@@ -1,9 +1,15 @@
 import { render, cleanup } from "@solidjs/testing-library";
 import { page, userEvent } from "vitest/browser";
+import type { Locator } from "vitest/browser";
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import MarkdownPreview from "./MarkdownPreview";
 
 const FLOWCHART = ["```mermaid", "flowchart TD", "  A[Start] --> B[End]", "```"].join("\n");
+
+/** 右下の倍率表示を数で読む */
+function percentOf(locator: Locator): number {
+  return Number.parseInt(locator.element().textContent ?? "", 10);
+}
 
 describe("MarkdownPreview", () => {
   afterEach(() => cleanup());
@@ -36,6 +42,58 @@ describe("MarkdownPreview", () => {
     await userEvent.keyboard("{Escape}");
 
     await expect.element(screen.locator(".mermaid-zoom")).not.toBeInTheDocument();
+  });
+
+  it("fits the diagram to the screen when it opens and zooms in from the controls", async () => {
+    const { baseElement } = render(() => <MarkdownPreview source={FLOWCHART} />);
+    const screen = page.elementLocator(baseElement);
+
+    await expect.element(screen.locator(".mermaid-figure svg")).toBeInTheDocument();
+    await userEvent.click(screen.locator(".mermaid-block"));
+    const canvas = screen.locator(".mermaid-zoom-canvas");
+    await expect.element(canvas).toBeInTheDocument();
+
+    // 開いた直後から transform が付いている(fit)。原寸の 2 倍まで
+    const before = (canvas.element() as HTMLElement).style.transform;
+    expect(before).toMatch(/^translate\(.+\) scale\(.+\)$/u);
+    const percent = screen.locator(".mermaid-zoom-percent");
+    const fitted = percentOf(percent);
+    expect(fitted).toBeGreaterThan(0);
+    expect(fitted).toBeLessThanOrEqual(200);
+
+    await userEvent.click(screen.getByRole("button", { name: "大きく" }));
+
+    await expect.element(percent).toHaveTextContent(`${Math.round(fitted * 1.25)}%`);
+    expect((canvas.element() as HTMLElement).style.transform).not.toBe(before);
+  });
+
+  it("zooms toward the wheel without closing", async () => {
+    const { baseElement } = render(() => <MarkdownPreview source={FLOWCHART} />);
+    const screen = page.elementLocator(baseElement);
+
+    await expect.element(screen.locator(".mermaid-figure svg")).toBeInTheDocument();
+    await userEvent.click(screen.locator('[data-action="zoom"]'));
+    const zoom = screen.locator(".mermaid-zoom");
+    await expect.element(zoom).toBeInTheDocument();
+    const percent = screen.locator(".mermaid-zoom-percent");
+    const fitted = percentOf(percent);
+
+    const wheel = new WheelEvent("wheel", {
+      deltaY: -300,
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    });
+    zoom.element().dispatchEvent(wheel);
+
+    // preventDefault されていれば、ページのスクロールやブラウザのズームには渡らない
+    expect(wheel.defaultPrevented).toBe(true);
+    const zoomed = percentOf(percent);
+    expect(zoomed).toBeGreaterThan(fitted);
+    // 背景を押しても閉じない — ドラッグの始点と区別が付かないので
+    await userEvent.click(zoom);
+    await expect.element(zoom).toBeInTheDocument();
   });
 
   it("leaves prose alone", async () => {
