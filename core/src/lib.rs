@@ -34,6 +34,8 @@ pub use timeline::{
     update_timeline_entry,
 };
 pub use utils::device::Context as DeviceContext;
+/// 書いた入り口の固定語彙。作成の入口はどれもこれを 1 つ受け取る。
+pub use utils::device::Source;
 pub use utils::frontmatter;
 /// 1 件ぶんのノートメタデータ。中身は frontmatter そのもの。
 pub use utils::frontmatter::NoteFrontmatter as NoteMeta;

@@ -114,6 +114,7 @@ pub fn repair_notes(base_dir: &Path) -> Result<usize, CoreError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::utils::device::Source;
     use crate::utils::frontmatter::NoteFrontmatter;
     use std::fs;
     use tempfile::TempDir;
@@ -306,6 +307,87 @@ mod tests {
         assert_eq!(
             read_note_meta(tmp.path(), &filename).unwrap().updated,
             stamped
+        );
+    }
+
+    /// 書いた入り口は作成時に決まる。CLI で作ったノートはそう名乗る。
+    #[test]
+    fn a_note_records_the_tool_that_created_it() {
+        let tmp = TempDir::new().unwrap();
+        let path = create_draft_note(
+            tmp.path(),
+            "CLI から書いた",
+            &[],
+            &mock_context(),
+            Provenance {
+                source: Some(Source::Cli),
+                ..Provenance::default()
+            },
+        )
+        .unwrap();
+
+        assert!(fs::read_to_string(&path).unwrap().contains("source: cli"));
+        let meta = read_note_meta(tmp.path(), &filename_of(&path)).unwrap();
+        assert_eq!(meta.source, Some("cli".to_string()));
+    }
+
+    /// 名乗らなければキーは付かない。既存のノートを書き直しても
+    /// `source` が生えないのと同じ約束。
+    #[test]
+    fn a_note_that_names_no_source_has_no_source_key() {
+        let tmp = TempDir::new().unwrap();
+        let path = draft(&tmp, "body", &[]).unwrap();
+
+        assert!(!fs::read_to_string(&path).unwrap().contains("source"));
+    }
+
+    /// `source` は作成時の記録。別のツールで本文を書き直しても、
+    /// 「誰が作ったか」は書き換わらない(`updated_by` は別の問い)。
+    #[test]
+    fn update_note_keeps_the_creation_source() {
+        let tmp = TempDir::new().unwrap();
+        let path = create_draft_note(
+            tmp.path(),
+            "original",
+            &[],
+            &mock_context(),
+            Provenance {
+                source: Some(Source::Widget),
+                ..Provenance::default()
+            },
+        )
+        .unwrap();
+
+        update_note(&path, "アプリで書き直した", &mock_context(), None).unwrap();
+
+        let meta = read_note_meta(tmp.path(), &filename_of(&path)).unwrap();
+        assert_eq!(meta.source, Some("widget".to_string()));
+    }
+
+    /// メタデータ編集も表示モードの切り替えも本文を書いていない。
+    /// ましてや作成の記録には触れない。
+    #[test]
+    fn update_note_meta_and_view_do_not_touch_the_source() {
+        let tmp = TempDir::new().unwrap();
+        let path = create_draft_note(
+            tmp.path(),
+            "body",
+            &[],
+            &mock_context(),
+            Provenance {
+                source: Some(Source::Mcp),
+                ..Provenance::default()
+            },
+        )
+        .unwrap();
+        let filename = filename_of(&path);
+
+        update_note_meta(tmp.path(), &filename, sample_time(), &["log".to_string()]).unwrap();
+        update_note_view(tmp.path(), &filename, Some("mindmap")).unwrap();
+
+        assert_eq!(
+            read_note_meta(tmp.path(), &filename).unwrap().source,
+            Some("mcp".to_string())
         );
     }
 

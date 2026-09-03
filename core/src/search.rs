@@ -313,7 +313,7 @@ fn snippet(text: &str, lowered: &str, needle: &str) -> Excerpt {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::device::Context;
+    use crate::utils::device::{Context, Source};
     use crate::utils::frontmatter::Provenance;
     use crate::{create_draft_note, save_timeline_entry};
     use tempfile::TempDir;
@@ -344,7 +344,7 @@ mod tests {
     #[test]
     fn an_empty_query_matches_nothing() {
         let tmp = TempDir::new().unwrap();
-        save_timeline_entry(tmp.path(), "anything", &context()).unwrap();
+        save_timeline_entry(tmp.path(), "anything", &context(), Source::App).unwrap();
 
         assert!(search_all(tmp.path(), "   ", &[]).unwrap().is_empty());
     }
@@ -352,8 +352,8 @@ mod tests {
     #[test]
     fn finds_a_timeline_entry_by_substring() {
         let tmp = TempDir::new().unwrap();
-        save_timeline_entry(tmp.path(), "R2 同期のリトライ戦略", &context()).unwrap();
-        save_timeline_entry(tmp.path(), "牛乳を買う", &context()).unwrap();
+        save_timeline_entry(tmp.path(), "R2 同期のリトライ戦略", &context(), Source::App).unwrap();
+        save_timeline_entry(tmp.path(), "牛乳を買う", &context(), Source::App).unwrap();
 
         let hits = search_all(tmp.path(), "リトライ", &[]).unwrap();
 
@@ -368,7 +368,7 @@ mod tests {
     #[test]
     fn a_timeline_hit_reports_the_tags_in_its_text() {
         let tmp = TempDir::new().unwrap();
-        save_timeline_entry(tmp.path(), "R2 を直す #Sync #設計", &context()).unwrap();
+        save_timeline_entry(tmp.path(), "R2 を直す #Sync #設計", &context(), Source::App).unwrap();
 
         let hits = search_all(tmp.path(), "直す", &[]).unwrap();
 
@@ -378,7 +378,7 @@ mod tests {
     #[test]
     fn matching_ignores_case() {
         let tmp = TempDir::new().unwrap();
-        save_timeline_entry(tmp.path(), "Local-First Sync", &context()).unwrap();
+        save_timeline_entry(tmp.path(), "Local-First Sync", &context(), Source::App).unwrap();
 
         assert_eq!(search_all(tmp.path(), "local-first", &[]).unwrap().len(), 1);
     }
@@ -395,8 +395,8 @@ mod tests {
             hostname: Some("MacBook".to_string()),
             ..Context::default()
         };
-        save_timeline_entry(tmp.path(), "first", &ctx).unwrap();
-        save_timeline_entry(tmp.path(), "second", &ctx).unwrap();
+        save_timeline_entry(tmp.path(), "first", &ctx, Source::App).unwrap();
+        save_timeline_entry(tmp.path(), "second", &ctx, Source::App).unwrap();
 
         let hits = search_all(tmp.path(), "second", &[]).unwrap();
 
@@ -413,7 +413,7 @@ mod tests {
             hostname: Some("MacBook".to_string()),
             ..Context::default()
         };
-        save_timeline_entry(tmp.path(), "plain text", &ctx).unwrap();
+        save_timeline_entry(tmp.path(), "plain text", &ctx, Source::App).unwrap();
 
         assert!(search_all(tmp.path(), "MacBook", &[]).unwrap().is_empty());
     }
@@ -425,7 +425,7 @@ mod tests {
             battery: Some(82),
             ..Context::default()
         };
-        save_timeline_entry(tmp.path(), "plain text", &ctx).unwrap();
+        save_timeline_entry(tmp.path(), "plain text", &ctx, Source::App).unwrap();
 
         assert!(search_all(tmp.path(), "battery", &[]).unwrap().is_empty());
     }
@@ -457,7 +457,7 @@ mod tests {
     fn a_snippet_is_elided_around_the_match() {
         let tmp = TempDir::new().unwrap();
         let long = format!("{}NEEDLE{}", "a".repeat(80), "b".repeat(80));
-        save_timeline_entry(tmp.path(), &long, &context()).unwrap();
+        save_timeline_entry(tmp.path(), &long, &context(), Source::App).unwrap();
 
         let hits = search_all(tmp.path(), "needle", &[]).unwrap();
 
@@ -469,7 +469,13 @@ mod tests {
     #[test]
     fn finds_a_needle_on_a_later_line_of_a_multiline_entry() {
         let tmp = TempDir::new().unwrap();
-        save_timeline_entry(tmp.path(), "一行目\n二行目にリトライ", &context()).unwrap();
+        save_timeline_entry(
+            tmp.path(),
+            "一行目\n二行目にリトライ",
+            &context(),
+            Source::App,
+        )
+        .unwrap();
 
         let hits = search_all(tmp.path(), "リトライ", &[]).unwrap();
 
@@ -494,7 +500,7 @@ mod tests {
     #[test]
     fn a_snippet_keeps_the_body_on_one_line() {
         let tmp = TempDir::new().unwrap();
-        save_timeline_entry(tmp.path(), "needle のあと\n改行", &context()).unwrap();
+        save_timeline_entry(tmp.path(), "needle のあと\n改行", &context(), Source::App).unwrap();
 
         let hits = search_all(tmp.path(), "needle", &[]).unwrap();
 
@@ -504,7 +510,7 @@ mod tests {
     #[test]
     fn a_short_entry_is_not_elided() {
         let tmp = TempDir::new().unwrap();
-        save_timeline_entry(tmp.path(), "short needle here", &context()).unwrap();
+        save_timeline_entry(tmp.path(), "short needle here", &context(), Source::App).unwrap();
 
         let hits = search_all(tmp.path(), "needle", &[]).unwrap();
 
@@ -516,7 +522,7 @@ mod tests {
     #[test]
     fn a_hit_reports_where_the_match_sits_in_the_snippet() {
         let tmp = TempDir::new().unwrap();
-        save_timeline_entry(tmp.path(), "short needle here", &context()).unwrap();
+        save_timeline_entry(tmp.path(), "short needle here", &context(), Source::App).unwrap();
 
         let hits = search_all(tmp.path(), "needle", &[]).unwrap();
 
@@ -530,7 +536,7 @@ mod tests {
     fn an_elided_snippet_counts_the_leading_ellipsis() {
         let tmp = TempDir::new().unwrap();
         let long = format!("{}NEEDLE{}", "a".repeat(80), "b".repeat(80));
-        save_timeline_entry(tmp.path(), &long, &context()).unwrap();
+        save_timeline_entry(tmp.path(), &long, &context(), Source::App).unwrap();
 
         let hits = search_all(tmp.path(), "needle", &[]).unwrap();
 
@@ -545,7 +551,13 @@ mod tests {
     #[test]
     fn a_match_position_counts_chars_not_bytes() {
         let tmp = TempDir::new().unwrap();
-        save_timeline_entry(tmp.path(), "日本語の本文にリトライ", &context()).unwrap();
+        save_timeline_entry(
+            tmp.path(),
+            "日本語の本文にリトライ",
+            &context(),
+            Source::App,
+        )
+        .unwrap();
 
         let hits = search_all(tmp.path(), "リトライ", &[]).unwrap();
 
@@ -573,8 +585,8 @@ mod tests {
     #[test]
     fn a_tag_scope_keeps_only_entries_carrying_the_tag() {
         let tmp = TempDir::new().unwrap();
-        save_timeline_entry(tmp.path(), "リトライを直す #sync", &context()).unwrap();
-        save_timeline_entry(tmp.path(), "リトライを試す #run", &context()).unwrap();
+        save_timeline_entry(tmp.path(), "リトライを直す #sync", &context(), Source::App).unwrap();
+        save_timeline_entry(tmp.path(), "リトライを試す #run", &context(), Source::App).unwrap();
 
         let hits = search_all(tmp.path(), "リトライ", &scope(&["sync"])).unwrap();
 
@@ -600,8 +612,8 @@ mod tests {
     #[test]
     fn an_empty_query_with_a_tag_lists_everything_carrying_it() {
         let tmp = TempDir::new().unwrap();
-        save_timeline_entry(tmp.path(), "走った #run", &context()).unwrap();
-        save_timeline_entry(tmp.path(), "読んだ #book", &context()).unwrap();
+        save_timeline_entry(tmp.path(), "走った #run", &context(), Source::App).unwrap();
+        save_timeline_entry(tmp.path(), "読んだ #book", &context(), Source::App).unwrap();
         draft(&tmp, "走る計画", &["run".to_string()]).unwrap();
 
         let hits = search_all(tmp.path(), "", &scope(&["run"])).unwrap();
@@ -616,7 +628,7 @@ mod tests {
     #[test]
     fn an_unknown_tag_matches_nothing() {
         let tmp = TempDir::new().unwrap();
-        save_timeline_entry(tmp.path(), "走った #run", &context()).unwrap();
+        save_timeline_entry(tmp.path(), "走った #run", &context(), Source::App).unwrap();
 
         assert!(
             search_all(tmp.path(), "", &scope(&["nope"]))
@@ -630,7 +642,7 @@ mod tests {
     #[test]
     fn tag_scope_matching_ignores_case_and_a_leading_hash() {
         let tmp = TempDir::new().unwrap();
-        save_timeline_entry(tmp.path(), "直す #sync", &context()).unwrap();
+        save_timeline_entry(tmp.path(), "直す #sync", &context(), Source::App).unwrap();
 
         assert_eq!(
             search_all(tmp.path(), "", &scope(&["#SYNC"]))
@@ -644,8 +656,8 @@ mod tests {
     #[test]
     fn every_tag_in_the_scope_must_be_present() {
         let tmp = TempDir::new().unwrap();
-        save_timeline_entry(tmp.path(), "両方 #a #b", &context()).unwrap();
-        save_timeline_entry(tmp.path(), "片方 #a", &context()).unwrap();
+        save_timeline_entry(tmp.path(), "両方 #a #b", &context(), Source::App).unwrap();
+        save_timeline_entry(tmp.path(), "片方 #a", &context(), Source::App).unwrap();
 
         let hits = search_all(tmp.path(), "", &scope(&["a", "b"])).unwrap();
 
@@ -658,7 +670,7 @@ mod tests {
     #[test]
     fn blank_tags_do_not_narrow_the_scope() {
         let tmp = TempDir::new().unwrap();
-        save_timeline_entry(tmp.path(), "走った #run", &context()).unwrap();
+        save_timeline_entry(tmp.path(), "走った #run", &context(), Source::App).unwrap();
 
         assert_eq!(
             search_all(tmp.path(), "走った", &scope(&["", "#"]))
@@ -703,7 +715,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let target = draft(&tmp, "指される側", &[]).unwrap();
         let link = format!("これ参照 [[{}]]", stem_of(&target));
-        save_timeline_entry(tmp.path(), &link, &context()).unwrap();
+        save_timeline_entry(tmp.path(), &link, &context(), Source::App).unwrap();
 
         let hits = find_backlinks(tmp.path(), &filename_of(&target)).unwrap();
 
@@ -767,7 +779,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let target = draft(&tmp, "誰も指していない", &[]).unwrap();
         write_second_note(tmp.path(), "20200101_000000.md", "無関係なノート");
-        save_timeline_entry(tmp.path(), "無関係なエントリ", &context()).unwrap();
+        save_timeline_entry(tmp.path(), "無関係なエントリ", &context(), Source::App).unwrap();
 
         assert!(
             find_backlinks(tmp.path(), &filename_of(&target))

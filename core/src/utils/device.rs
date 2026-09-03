@@ -18,6 +18,40 @@ pub struct Location {
     pub longitude: f64,
 }
 
+/// どの入り口から書かれたか。作成時にだけ決まる記録で、あとから別の
+/// ツールで編集しても変わらない(`context` / `origin` / `template` と同じ)。
+///
+/// `Context` には入れない。あれは「端末がどういう状態だったか」で、
+/// 1 日を通して変わらない `identity` と記録ごとに変わる `volatile` に
+/// 割れている。書いたツールはそのどちらでもないし、混ぜるとノートの
+/// `context:` ブロックにも紛れ込む。
+///
+/// 語彙は固定。外へ出るのは [`Self::as_str`] の小文字の文字列だけで、
+/// 知らない値を読む側は素通しできる。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Source {
+    /// Tauri アプリ本体。
+    App,
+    /// `magical-merchant` CLI。
+    Cli,
+    /// MCP サーバー越しのエージェント。
+    Mcp,
+    /// Android のホーム画面ウィジェット。
+    Widget,
+}
+
+impl Source {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::App => "app",
+            Self::Cli => "cli",
+            Self::Mcp => "mcp",
+            Self::Widget => "widget",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct Context {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -214,6 +248,16 @@ mod tests {
         let ctx: Context = serde_json::from_str(json).unwrap();
         assert_eq!(ctx.battery, None);
         assert_eq!(ctx.network_type, None);
+    }
+
+    /// 外へ出るのは小文字の固定語彙。表示にもファイルにもこの文字列が乗る
+    /// ので、`Debug` の綴り(`App`)が漏れると記録が版ごとにばらける。
+    #[test]
+    fn a_source_names_itself_in_lowercase() {
+        assert_eq!(Source::App.as_str(), "app");
+        assert_eq!(Source::Cli.as_str(), "cli");
+        assert_eq!(Source::Mcp.as_str(), "mcp");
+        assert_eq!(Source::Widget.as_str(), "widget");
     }
 
     #[test]
