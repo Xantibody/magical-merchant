@@ -253,11 +253,16 @@ jobs:
           key: cargo-android-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'flake.lock') }}
           restore-keys: |
             cargo-android-${{ runner.os }}-
+      # ランナーが置く ANDROID_SDK_ROOT (/usr/local/lib/android/sdk) は落とす。
+      # nix の devshell が入れる ANDROID_HOME と別の SDK を指すので、両方が
+      # 生きていると Gradle が「SDK の場所が複数ある」と言って組み立てを拒む。
+      # 上の rm がその実体を消すまでの間だけ起きるので、負けると落ちて勝つと
+      # 通るレースになっていた。env を消すほうが待つより確実
       - name: Generate the Android project
-        run: nix develop .#android --command just tauri_app::android-init
+        run: env -u ANDROID_SDK_ROOT nix develop .#android --command just tauri_app::android-init
       # android-setup を含む。ウィジェットのソースを入れた状態で組む
       - name: The debug APK builds
-        run: nix develop .#android --command just tauri_app::android-build-debug
+        run: env -u ANDROID_SDK_ROOT nix develop .#android --command just tauri_app::android-build-debug
       - uses: actions/cache/save@v6
         if: github.ref == 'refs/heads/main' && steps.cargo-cache.outputs.cache-hit != 'true'
         with:
