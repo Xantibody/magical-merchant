@@ -3,6 +3,7 @@ import type { JSX } from "solid-js";
 import { useLocation, useNavigate, A } from "@solidjs/router";
 import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import type { UnlistenFn } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import Icon from "../components/Icon";
 import CommandPalette from "../components/CommandPalette";
 import SyncPopover from "../components/SyncPopover";
@@ -195,6 +196,33 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
     };
     document.addEventListener("pointerdown", onPointerDown);
     onCleanup(() => document.removeEventListener("pointerdown", onPointerDown));
+
+    // 目を離しているあいだに CLI・MCP・他の端末が data/ を書き換えている。
+    // アプリはファイルを監視しないので、戻ってきた瞬間を合図に読み直す。
+    // Android では凍結されたプロセスが起きる唯一の合図でもある
+    const onVisible = (): void => {
+      if (document.visibilityState === "visible") {
+        shell.refreshData();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    onCleanup(() => document.removeEventListener("visibilitychange", onVisible));
+
+    // デスクトップでは窓を隠さずに他のアプリへ移るので visibilitychange が
+    // 来ない。窓のフォーカスが戻ったことは Tauri 側からしか分からない
+    let unlistenFocus: UnlistenFn | undefined;
+    void (async () => {
+      try {
+        unlistenFocus = await getCurrentWindow().onFocusChanged(({ payload: focused }) => {
+          if (focused) {
+            shell.refreshData();
+          }
+        });
+      } catch {
+        // 窓が無い(ブラウザハーネス・テスト)。visibilitychange だけで動く
+      }
+    })();
+    onCleanup(() => unlistenFocus?.());
   });
 
   return (
