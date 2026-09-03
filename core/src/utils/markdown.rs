@@ -106,6 +106,7 @@ pub fn format_note_markdown(
         context: Some(context.clone()),
         origin: provenance.origin.map(str::to_string),
         template: provenance.template.map(str::to_string),
+        source: provenance.source.map(|s| s.as_str().to_string()),
         ..NoteFrontmatter::new(time)
     };
     frontmatter::render(&fm, body)

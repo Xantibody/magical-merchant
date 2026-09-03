@@ -2,7 +2,7 @@ use chrono::{DateTime, FixedOffset};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use crate::error::CoreError;
-use crate::utils::device::Context;
+use crate::utils::device::{Context, Source};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct NoteFrontmatter {
@@ -32,6 +32,12 @@ pub struct NoteFrontmatter {
     /// もう在るか」の判定も、この値を走査する以外に手がない。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub template: Option<String>,
+    /// どの入り口で書かれたか(`app` / `cli` / `mcp` / `widget`)。
+    /// `origin` / `template` と同じ作成時の記録で、あとから別のツールで
+    /// 編集しても変わらない。「最後に編集したツール」が要るなら別のキーを
+    /// 足す — 1 つのキーに両方の意味を持たせると、どちらの問いにも答えられない。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
 }
 
 impl NoteFrontmatter {
@@ -50,6 +56,7 @@ impl NoteFrontmatter {
             origin: None,
             updated: None,
             template: None,
+            source: None,
         }
     }
 }
@@ -62,6 +69,9 @@ pub struct Provenance<'a> {
     pub origin: Option<&'a str>,
     /// 生まれ元のテンプレ名。
     pub template: Option<&'a str>,
+    /// どの入り口で書かれたか。呼び出し側が自分で名乗る — 共有のヘルパに
+    /// 決めさせると、CLI と MCP のように同じ経路を通るものが同じ名前になる。
+    pub source: Option<Source>,
 }
 
 pub fn render<T: Serialize>(fm: &T, body: &str) -> Result<String, CoreError> {
@@ -208,6 +218,34 @@ mod tests {
         let yaml = "---\ntime: 2026-03-20T14:30:45+09:00\ntags: []\n---\nbody";
         let (fm, _body): (NoteFrontmatter, &str) = parse(yaml).unwrap();
         assert_eq!(fm.origin, None);
+    }
+
+    #[test]
+    fn test_note_frontmatter_source_roundtrip() {
+        let fm = NoteFrontmatter {
+            source: Some(Source::Cli.as_str().to_string()),
+            ..sample_fm()
+        };
+        let rendered = render(&fm, "body").unwrap();
+        let (parsed, _body): (NoteFrontmatter, _) = parse(&rendered).unwrap();
+        assert_eq!(parsed.source, Some("cli".to_string()));
+    }
+
+    /// source を名乗らないノートの frontmatter は今までと 1 バイトも変わらない。
+    /// view / origin と同じ約束: 書いていないキーは書かない。既存のノートに
+    /// キーが増えると内容ハッシュが動き、全端末で「変更あり」として同期が走る。
+    #[test]
+    fn test_render_omits_absent_source() {
+        let rendered = render(&sample_fm(), "body").unwrap();
+        assert!(!rendered.contains("source"));
+    }
+
+    /// source キーを知らない版のアプリが書いたノートも今まで通り読める。
+    #[test]
+    fn test_parse_defaults_source_to_none() {
+        let yaml = "---\ntime: 2026-03-20T14:30:45+09:00\ntags: []\n---\nbody";
+        let (fm, _body): (NoteFrontmatter, &str) = parse(yaml).unwrap();
+        assert_eq!(fm.source, None);
     }
 
     #[test]
