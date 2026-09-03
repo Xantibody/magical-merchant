@@ -65,7 +65,11 @@ lives in the file, so it follows the note to every device.
 Code blocks are highlighted with Shiki; a ` ```diff ` fence colours its `+`
 and `-` lines instead. ` ```mermaid ` fences render as diagrams, and a leading
 `%% caption: …` comment inside the fence becomes the figure's caption —
-mermaid skips `%%` lines, so the note still draws anywhere else. A per-note
+mermaid skips `%%` lines, so the note still draws anywhere else. Hovering a
+code block or a figure reveals a small toolbar: copy the code, or open the
+diagram full screen and save it as SVG or PNG (the file is named after the
+note and the diagram's position). The full-screen view zooms around the
+cursor with the wheel or a pinch, drags to pan, and closes with Esc. A per-note
 **mindmap view** (frontmatter `view: mindmap`) turns the heading/list
 structure into a markmap. One button in the note's header cycles the three
 views — editor, mindmap, read-only — and shows the icon of whichever comes

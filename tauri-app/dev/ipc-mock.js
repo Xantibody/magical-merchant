@@ -601,6 +601,14 @@
     delete_glyph: ({ name }) => {
       glyphs.delete(name);
     },
+    save_export: ({ suggestedName, dataBase64 }) => {
+      // ブラウザに保存ダイアログは無い。書き出した中身を別タブで開いて、
+      // 目で確かめられるようにする
+      const mime = suggestedName.endsWith(".png") ? "image/png" : "image/svg+xml";
+      const bytes = Uint8Array.from(atob(dataBase64), (c) => c.codePointAt(0));
+      window.open(URL.createObjectURL(new Blob([bytes], { type: mime })), "_blank");
+      return { saved: true };
+    },
     sync_start: () => {},
     sync_status: () => ({}),
     auth_login: () => {},
