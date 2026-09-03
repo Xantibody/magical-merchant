@@ -116,6 +116,28 @@ describe("renderMarkdown", () => {
 
     expect(html).toContain("<h1>Hello</h1>");
   });
+
+  // Shiki は diff を持たないので、渡してもプレーンテキストに落ちるだけ
+  it("draws a diff fence with its own renderer instead of the highlighter", async () => {
+    const source = ["```diff", "-old", "+new", "```"].join("\n");
+
+    const html = await renderMarkdown(source);
+
+    expect(html).not.toContain('<pre class="shiki');
+    expect(html).toContain('class="diff-line diff-del"');
+    expect(html).toContain('class="diff-line diff-add"');
+  });
+
+  // 種類ごとに別の配列へ振り分けて描くので、戻すときの番号がずれやすい
+  it("keeps a diff fence in source order next to a highlighted one", async () => {
+    const source = ["```diff", "+added", "```", "", "```ts", "const a = 1;", "```"].join("\n");
+
+    const html = await renderMarkdown(source);
+
+    expect(html.indexOf('class="diff-line diff-add"')).toBeLessThan(
+      html.indexOf('<pre class="shiki'),
+    );
+  });
 });
 
 describe("renderMarkdown with mermaid", () => {

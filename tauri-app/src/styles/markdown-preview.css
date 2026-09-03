@@ -52,6 +52,37 @@
   min-height: 1em;
 }
 
+/* diff: 行そのものに色を敷く。背景は pre の padding まで届かせないと
+   行の色が段の途中で切れ、コードブロックの中に細い帯が浮いて見える */
+.markdown-preview .diff-line {
+  margin: 0 calc(-1 * var(--size-5));
+  padding: 0 var(--size-5);
+  white-space: pre;
+}
+
+/* color-mix なので、--app-ok / --app-danger が入れ替わるダークテーマでは
+   下地の明るさに合った色が自動で出る */
+.markdown-preview .diff-add {
+  background: color-mix(in oklab, var(--app-ok) 13%, transparent);
+}
+
+.markdown-preview .diff-del {
+  background: color-mix(in oklab, var(--app-danger) 10%, transparent);
+}
+
+.markdown-preview .diff-add .diff-sign {
+  color: var(--app-ok);
+}
+
+.markdown-preview .diff-del .diff-sign {
+  color: var(--app-danger);
+}
+
+/* @@ の行は差分ではなく位置の見出し。読み飛ばせる濃さに落とす */
+.markdown-preview .diff-hunk {
+  color: var(--app-text-muted);
+}
+
 .markdown-preview blockquote {
   border-left: 3px solid var(--app-border);
   padding-left: var(--size-3);
