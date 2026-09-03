@@ -16,6 +16,7 @@ import { buildLanguageSuggestions, ensureLanguageDatalist } from "../lib/languag
 import { exitCodeBlockPlugin } from "../lib/exit-code-block-plugin";
 import { codeBlockViewPlugin } from "../lib/code-block-view-plugin";
 import { codeBlockActivePlugin } from "../lib/code-block-active-plugin";
+import { DIAGRAM_SETTLED_EVENT, hasPendingDiagram } from "../lib/diagram-pending";
 import { createPlaceholderPlugin } from "../lib/placeholder-plugin";
 import { createNoteLinkPlugin } from "../lib/note-link-plugin";
 import type { NoteLinkTarget } from "../lib/note-link-plugin";
@@ -76,15 +77,23 @@ export default function MilkdownEditor(props: MilkdownEditorProps): JSX.Element 
     // 入力はすぐ受け付ける(モバイルはここでキーボードが開き始める)
     created.action((ctx) => ctx.get(editorViewCtx).focus());
     // scrollTop はプレビューを押した瞬間に同じスクロール要素で測ったもの
-    const scroller = ref ? closestScroller(ref) : undefined;
+    const root = ref;
+    const scroller = root ? closestScroller(root) : undefined;
 
     // コードの装飾や図は create の後から伸びてくる。高さが足りないうちに
     // scrollTop を戻すとクランプされ、同じ座標が別の行を指してしまう。
     // 元のスクロール量まで戻せる高さに育ったら景色を戻し、カーソルを置く
     let done = false;
-    const pending: { observer?: ResizeObserver; deadline?: ReturnType<typeof setTimeout> } = {};
+    const pending: {
+      observer?: ResizeObserver;
+      deadline?: ReturnType<typeof setTimeout>;
+      settled?: () => void;
+    } = {};
     const cancel = (): void => {
       pending.observer?.disconnect();
+      if (pending.settled) {
+        root?.removeEventListener(DIAGRAM_SETTLED_EVENT, pending.settled);
+      }
       if (pending.deadline !== undefined) {
         clearTimeout(pending.deadline);
       }
@@ -94,7 +103,11 @@ export default function MilkdownEditor(props: MilkdownEditorProps): JSX.Element 
         return;
       }
       const grown = !scroller || scroller.scrollHeight - scroller.clientHeight >= caret.scrollTop;
-      if (!grown && !force) {
+      // 図は create の時点ではまだソースの高さで場所を取っている。描き終わる
+      // 前に座標を引くと、図より下は丸ごと別のブロックを指す (#168)。
+      // scrollTop 0 では grown が常に真なので、この待ちは別に要る
+      const drawn = !root || !hasPendingDiagram(root);
+      if ((!grown || !drawn) && !force) {
         return;
       }
       done = true;
@@ -116,8 +129,12 @@ export default function MilkdownEditor(props: MilkdownEditorProps): JSX.Element 
     };
     pending.observer = new ResizeObserver(() => apply(false));
     created.action((ctx) => pending.observer?.observe(ctx.get(editorViewCtx).dom));
-    // 図がプレビューより低く終わって高さが届かないこともある。1 秒で
-    // 見切って、そのとき見えている中で一番近い場所に置く
+    // 図の描き終わりは高さを変えないこともある(本文がもう十分に長い、図と
+    // ソースの背丈が同じ)。ResizeObserver だけに頼らず合図も聞く
+    pending.settled = (): void => apply(false);
+    root?.addEventListener(DIAGRAM_SETTLED_EVENT, pending.settled);
+    // 図がプレビューより低く終わって高さが届かないこともある。図が最後まで
+    // 描けないときもここで見切る。1 秒で、そのとき見えている中で一番近い場所に置く
     pending.deadline = setTimeout(() => apply(true), 1000);
     // onCleanup は await 後のここでは owner がいない。外の onCleanup から呼ぶ
     cancelCaret = cancel;
