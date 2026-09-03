@@ -50,7 +50,7 @@ function element(selector: string, root: ParentNode = document): HTMLElement {
   return found;
 }
 
-function mountDetail(body: string): HTMLElement {
+function mountDetail(body: string, view: "editor" | "mindmap" | "preview" = "editor"): HTMLElement {
   document.body.innerHTML = `
     <div class="app">
       <header class="header">header</header>
@@ -58,7 +58,7 @@ function mountDetail(body: string): HTMLElement {
         <div class="workspace workspace--detail">
           <div class="detail-pane">
             <input class="note-title-input" value="タイトル" />
-            <div class="detail-body">${body}</div>
+            <div class="detail-body" data-view="${view}">${body}</div>
           </div>
         </div>
       </main>
@@ -102,8 +102,11 @@ function geometry(target: HTMLElement, body: HTMLElement): Geometry {
   };
 }
 
-function measureBlocks(body: string): Record<string, Geometry> {
-  const detail = mountDetail(body);
+function measureBlocks(
+  body: string,
+  view?: "editor" | "mindmap" | "preview",
+): Record<string, Geometry> {
+  const detail = mountDetail(body, view);
   const root = blockRoot(detail);
   return Object.fromEntries(
     BLOCK_SELECTORS.map((selector) => [selector, geometry(element(selector, root), detail)]),
@@ -133,6 +136,20 @@ describe("note body: preview and editor draw the same page", () => {
     const edited = measureBlocks(editor(bodyBlocks("")));
 
     expect(edited).toStrictEqual(previewed);
+  });
+
+  // `view: preview` のノートは同じ MarkdownPreview を読むだけの姿で出す。
+  // 変わるのは「押せば書ける」の合図だけで、字の置き場は 1px も動かない
+  it("draws a read-only note exactly where the editable preview drew it", async () => {
+    await page.viewport(1280, 800);
+    const editable = measureBlocks(preview(bodyBlocks("shiki")));
+    const editableCursor = getComputedStyle(element(".markdown-preview")).cursor;
+    const readOnly = measureBlocks(preview(bodyBlocks("shiki")), "preview");
+    const readOnlyCursor = getComputedStyle(element(".markdown-preview")).cursor;
+
+    expect(readOnly).toStrictEqual(editable);
+    expect(editableCursor).toBe("text");
+    expect(readOnlyCursor).toBe("default");
   });
 
   // mermaid はカーソルが離れている間、エディタでもソースを隠して図だけを見せる。
