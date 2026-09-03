@@ -18,6 +18,7 @@ use super::client::{
 };
 use super::conflict;
 use super::diff::{self, RemoteFile, SyncAction};
+use super::lock::SyncLock;
 use super::scan::{self, LocalFile};
 use super::state::{FileSyncRecord, SyncState};
 use super::{SyncError, SyncResult};
@@ -26,6 +27,12 @@ const MAX_SYNC_ATTEMPTS: usize = 3;
 
 /// 1 回の同期。呼び出し側は認証済みの `HttpClient` を渡す。
 pub async fn run(client: &HttpClient, base_dir: &Path) -> Result<SyncResult, SyncError> {
+    // 同じデータディレクトリを見ている他のプロセス (アプリと CLI) と同時に走ると、
+    // 最後に書いたほうの `.sync-state.json` が残って相手の記録が消える。
+    // 再試行のあいだも手放さないので、ここで 1 回だけ取る。
+    // 名前付きで束縛すること: `let _ = ` だとその場で解放されてしまう
+    let _lock = SyncLock::acquire(base_dir)?;
+
     // 他端末と同時に同期すると CAS で弾かれる。ユーザーに再試行させる理由はないので
     // 取得し直して自動でやり直す
     for attempt in 1..=MAX_SYNC_ATTEMPTS {
@@ -490,6 +497,21 @@ mod tests {
         let actions = vec![delete_local("notes/a.md")];
 
         assert!(refuse_wholesale_local_deletion(&actions, &locals).is_ok());
+    }
+
+    /// ロックは入口で取る。取れないまま走査や HTTP に進むと、
+    /// もう一方のプロセスが書いている最中の状態を読んでしまう。
+    /// 到達できない宛先を渡してあるので、通信まで進んでいれば kind は `network` になる。
+    #[tokio::test]
+    async fn a_held_lock_stops_the_run_before_it_talks_to_the_server() {
+        let dir = tempfile::tempdir().unwrap();
+        let held = SyncLock::acquire(dir.path()).unwrap();
+
+        let client = HttpClient::new(reqwest::Client::new(), "http://127.0.0.1:1", "token");
+        let err = run(&client, dir.path()).await.unwrap_err();
+
+        assert_eq!(err.kind, "busy");
+        drop(held);
     }
 
     #[test]

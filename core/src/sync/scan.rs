@@ -54,9 +54,14 @@ impl ScanCache {
     }
 
     /// 書けなくても致命ではない。次のスキャンが全件ハッシュに戻るだけ。
+    ///
+    /// それでも書き換えは原子的にする。`fs::write` は先に切り詰めるので、
+    /// 書いている途中で落ちると半端な JSON が残り、そこから同期が始まると
+    /// 全ファイルを読み直す羽目になる。書き手が同時に 2 つ走りうる
+    /// (アプリと CLI) 場所で、途中の状態を他人に見せない意味もある。
     fn save(&self, base_dir: &Path) {
         if let Ok(content) = serde_json::to_string(self) {
-            let _ = fs::write(base_dir.join(CACHE_FILENAME), content);
+            let _ = crate::utils::fs::write_atomic(&base_dir.join(CACHE_FILENAME), content);
         }
     }
 }
@@ -395,6 +400,35 @@ mod tests {
         let files = scan_local_files(dir.path()).unwrap();
 
         assert_eq!(files[0].content_hash, compute_hash(b"hello"));
+    }
+
+    /// 落ちても半端な JSON を残さない。置き換えは rename なので、先に開いた
+    /// 読み手は最後まで旧内容を読み切れる。`fs::write` は書く前に切り詰めるので、
+    /// 同じ読み手が空か途中までの JSON を読むことになる。
+    #[test]
+    fn the_cache_is_replaced_whole_rather_than_truncated_in_place() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(CACHE_FILENAME);
+        fs::write(&path, "previous cache").unwrap();
+        let reader = File::open(&path).unwrap();
+
+        let mut cache = ScanCache::default();
+        cache.files.insert(
+            "notes/a.md".to_string(),
+            CachedHash {
+                mtime_ms: 1,
+                size: 5,
+                hash: "hash-a".to_string(),
+            },
+        );
+        cache.save(dir.path());
+
+        assert_eq!(std::io::read_to_string(reader).unwrap(), "previous cache");
+        assert!(
+            fs::read_to_string(&path)
+                .unwrap()
+                .contains("\"notes/a.md\"")
+        );
     }
 
     /// キャッシュは data の外に置く。data 配下だと自分自身が同期対象になる。
