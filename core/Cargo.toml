@@ -12,6 +12,18 @@ categories.workspace = true
 # 単独ターゲットとしてもビルドされ、全項目が dead_code になる。
 autobenches = false
 
+[features]
+# HTTP を話す同期エンジン。Android の JNI ビルド (widget) と MCP-only の CLI は
+# ノートを読み書きするだけなので、reqwest / keyring を引き込まないでいられるよう
+# 既定では外している。
+sync-client = [
+  "dep:base64",
+  "dep:jsonwebtoken",
+  "dep:keyring",
+  "dep:reqwest",
+  "dep:url",
+]
+
 [dependencies]
 chrono = { version = "0.4", features = ["serde"] }
 markdown-frontmatter = { version = "0.5", features = ["yaml"] }
@@ -20,6 +32,21 @@ serde_json = "1"
 serde_yaml = "0.9"
 sha2 = "0.11"
 thiserror = "2"
+
+# ── sync-client only ──
+base64 = { version = "0.23", optional = true }
+# 署名は検証せず exp を覗くだけなので、crypto backend (aws_lc_rs / rust_crypto)
+# も PEM 読み込みも要らない。既定のまま入れると使わない実装を丸ごと抱える
+jsonwebtoken = { version = "11", default-features = false, optional = true }
+# v4 で credential store が別クレートに割れ、feature も v1 / cli の 2 つだけに
+# なった。既定の v1 が旧 apple-native + secret-service と同じ組み合わせを選ぶ
+# (Linux 側は dbus-secret-service ではなく zbus 実装)。API は v3 のまま
+keyring = { version = "4", optional = true }
+reqwest = { version = "0.13", default-features = false, features = [
+  "json",
+  "rustls",
+], optional = true }
+url = { version = "2", optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.8.2", default-features = false, features = [
