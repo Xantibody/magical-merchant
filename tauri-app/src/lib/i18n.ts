@@ -236,6 +236,10 @@ const ja = {
   },
   preview: {
     zoom: "拡大",
+    zoomIn: "大きく",
+    zoomOut: "小さく",
+    fit: "全体表示",
+    zoomHint: "ホイールでズーム / ドラッグで移動 / Esc で閉じる",
   },
   firstRun: {
     title: "同期はあとからでも設定できます",
@@ -504,6 +508,10 @@ const en: Messages = {
   },
   preview: {
     zoom: "Zoom",
+    zoomIn: "Zoom in",
+    zoomOut: "Zoom out",
+    fit: "Fit",
+    zoomHint: "Scroll to zoom / drag to pan / Esc to close",
   },
   firstRun: {
     title: "You can set up sync later",
