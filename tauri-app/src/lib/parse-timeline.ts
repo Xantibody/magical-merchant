@@ -11,6 +11,12 @@ export interface DeviceContext {
   arch: string;
   hostname?: string;
   locale?: string;
+  /**
+   * どの入り口で書かれたか(`app` / `cli` / `mcp` / `widget`)。行末 JSON では
+   * 1 文字のキー — エントリ 1 行あたり数十文字の本文に対して、`"source"` と
+   * 綴ると読める Markdown ではなくなる。名乗る前に書かれた行には無い。
+   */
+  s?: string;
 }
 
 export interface ParsedEntry {
@@ -111,6 +117,32 @@ export function networkLabel(type: string): string {
     }
     default: {
       return type;
+    }
+  }
+}
+
+/**
+ * 書いたツールの呼び名。記録に残っているのは `widget` のような素の値で、
+ * これは読むための言い換え。知らない値はそのまま出す — 語彙が増えた版で
+ * 書いた記録を、古い版が「不明」に潰してはいけない。
+ */
+export function sourceLabel(source: string): string {
+  const labels = t().meta;
+  switch (source) {
+    case "app": {
+      return labels.sourceApp;
+    }
+    case "cli": {
+      return labels.sourceCli;
+    }
+    case "mcp": {
+      return labels.sourceMcp;
+    }
+    case "widget": {
+      return labels.sourceWidget;
+    }
+    default: {
+      return source;
     }
   }
 }

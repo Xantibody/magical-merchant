@@ -31,7 +31,7 @@ use base64::engine::general_purpose::STANDARD as B64;
 use device::ClientContext;
 use magical_merchant_core::{
     CreatedNote, GlyphFormat, GlyphName, GlyphSummary, NoteFilename, NoteMeta, NoteSummary,
-    Provenance, Revision, SearchHit, TemplateDetail, TemplateSummary, VarLocale,
+    Provenance, Revision, SearchHit, Source, TemplateDetail, TemplateSummary, VarLocale,
 };
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_deep_link::DeepLinkExt as _;
@@ -52,7 +52,7 @@ fn save_quick_capture(
 ) -> Result<(), String> {
     let base_dir = app_base_dir(&handle)?;
     let context = device::get_context(client);
-    magical_merchant_core::save_timeline_entry(&base_dir, &text, &context)
+    magical_merchant_core::save_timeline_entry(&base_dir, &text, &context, Source::App)
         .map_err(|e| e.to_string())
 }
 
@@ -74,6 +74,7 @@ fn create_draft(
         &context,
         Provenance {
             origin: origin.as_deref(),
+            source: Some(Source::App),
             ..Provenance::default()
         },
     )
@@ -254,7 +255,10 @@ fn create_from_template(
         &filename,
         &context,
         VarLocale::parse(&locale),
-        Provenance::default(),
+        Provenance {
+            source: Some(Source::App),
+            ..Provenance::default()
+        },
     )
     .map_err(|e| e.to_string())
 }

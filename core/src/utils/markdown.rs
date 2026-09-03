@@ -1,6 +1,6 @@
 use chrono::{DateTime, FixedOffset, Local, NaiveTime};
-use serde::Serialize;
 use serde::de::IgnoredAny;
+use serde::{Deserialize, Serialize};
 
 use crate::error::CoreError;
 use crate::utils::device::Context;
@@ -72,6 +72,20 @@ pub struct TimelineEntry {
     pub text: String,
     /// 記録時の端末の状態。何も残っていなければ既定値。
     pub context: Context,
+    /// どの入り口で書かれたか(`app` / `cli` / `mcp` / `widget`)。
+    /// 名乗らなかった行と、この語彙を知らない版が書いた行では `None`。
+    pub source: Option<String>,
+}
+
+/// 行末 JSON をそのまま写したもの。`Context` は端末の状態だけを持つので、
+/// 同じ括弧に入っている `s` はここで拾う。日ファイルの `d` は展開の時点で
+/// 畳まれていて、外に出る行には残らない。
+#[derive(Debug, Default, Deserialize)]
+struct StoredEntry {
+    #[serde(flatten)]
+    context: Context,
+    #[serde(default, rename = "s")]
+    source: Option<String>,
 }
 
 /// 保存された行を [`TimelineEntry`] に戻す。
@@ -83,13 +97,14 @@ pub fn parse_timeline_entry(entry: &str) -> TimelineEntry {
     let time =
         timeline_entry_time(entry).and_then(|t| NaiveTime::parse_from_str(t, "%H:%M:%S").ok());
     let rest = split_time_prefix(entry).map_or(entry, |(_, rest)| rest);
-    let context = split_context_json(rest)
-        .and_then(|json| serde_json::from_str::<Context>(json).ok())
+    let stored = split_context_json(rest)
+        .and_then(|json| serde_json::from_str::<StoredEntry>(json).ok())
         .unwrap_or_default();
     TimelineEntry {
         time,
         text: strip_timeline_prefix(entry).to_string(),
-        context,
+        context: stored.context,
+        source: stored.source,
     }
 }
 
@@ -106,6 +121,7 @@ pub fn format_note_markdown(
         context: Some(context.clone()),
         origin: provenance.origin.map(str::to_string),
         template: provenance.template.map(str::to_string),
+        source: provenance.source.map(|s| s.as_str().to_string()),
         ..NoteFrontmatter::new(time)
     };
     frontmatter::render(&fm, body)
@@ -231,6 +247,25 @@ mod tests {
         assert_eq!(entry.time, NaiveTime::from_hms_opt(14, 30, 45));
         assert_eq!(entry.text, "hello world");
         assert_eq!(entry.context, ctx);
+    }
+
+    /// 行末の `s` は端末の状態ではないので `Context` には入らない。
+    /// それでも読む側は「どこから来た記録か」を知りたい。
+    #[test]
+    fn a_line_reports_the_source_that_wrote_it() {
+        let entry = parse_timeline_entry("- [09:00:00] tapped {\"battery\":30,\"s\":\"widget\"}");
+
+        assert_eq!(entry.text, "tapped");
+        assert_eq!(entry.source.as_deref(), Some("widget"));
+        assert_eq!(entry.context.battery, Some(30));
+    }
+
+    /// 名乗っていない行(この語彙より前に書かれたもの)は空欄のまま。
+    #[test]
+    fn a_line_without_a_source_reports_none() {
+        let entry = parse_timeline_entry("- [09:00:00] typed {\"battery\":30}");
+
+        assert_eq!(entry.source, None);
     }
 
     /// 時刻もコンテキストも持たない旧い行。本文だけは落とさない。

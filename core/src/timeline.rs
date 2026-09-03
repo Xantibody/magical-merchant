@@ -9,14 +9,18 @@ use std::path::Path;
 use chrono::NaiveDate;
 
 use crate::error::CoreError;
-use crate::utils::device::Context;
+use crate::utils::device::{Context, Source};
 
+/// 今日のファイルに 1 行足す。`source` は書き手が名乗る入り口で、
+/// アプリ・CLI・MCP・ウィジェットは同じ core 関数を通るため、ここで
+/// 名乗らないと記録からは区別が付かない。
 pub fn save_timeline_entry(
     base_dir: &Path,
     text: &str,
     context: &Context,
+    source: Source,
 ) -> Result<(), CoreError> {
-    Timeline::new(base_dir.to_path_buf()).save_entry(text, context)
+    Timeline::new(base_dir.to_path_buf()).save_entry(text, context, source)
 }
 
 pub fn list_timeline_dates(base_dir: &Path) -> Result<Vec<NaiveDate>, CoreError> {
@@ -62,7 +66,7 @@ mod tests {
     #[test]
     fn test_save_timeline_entry_creates_file() {
         let tmp = TempDir::new().unwrap();
-        save_timeline_entry(tmp.path(), "hello", &mock_context()).unwrap();
+        save_timeline_entry(tmp.path(), "hello", &mock_context(), Source::App).unwrap();
 
         let today = Local::now().format("%Y-%m-%d").to_string();
         let file = tmp.path().join("data/timeline").join(format!("{today}.md"));
@@ -73,11 +77,25 @@ mod tests {
         assert!(content.contains("battery"));
     }
 
+    /// アプリも CLI も MCP もウィジェットもこの 1 つの関数を通る。
+    /// 行末の `s` だけが、あとから記録を見て入り口を見分ける手がかり。
+    #[test]
+    fn a_saved_entry_names_the_tool_that_wrote_it() {
+        let tmp = TempDir::new().unwrap();
+        save_timeline_entry(tmp.path(), "hello", &mock_context(), Source::Widget).unwrap();
+
+        let today = Local::now().format("%Y-%m-%d").to_string();
+        let content =
+            fs::read_to_string(tmp.path().join("data/timeline").join(format!("{today}.md")))
+                .unwrap();
+        assert!(content.contains("\"s\":\"widget\""));
+    }
+
     #[test]
     fn test_save_timeline_entry_appends() {
         let tmp = TempDir::new().unwrap();
-        save_timeline_entry(tmp.path(), "first", &mock_context()).unwrap();
-        save_timeline_entry(tmp.path(), "second", &mock_context()).unwrap();
+        save_timeline_entry(tmp.path(), "first", &mock_context(), Source::App).unwrap();
+        save_timeline_entry(tmp.path(), "second", &mock_context(), Source::App).unwrap();
 
         let today = Local::now().format("%Y-%m-%d").to_string();
         let file = tmp.path().join("data/timeline").join(format!("{today}.md"));
@@ -137,8 +155,8 @@ mod tests {
     #[test]
     fn test_read_timeline_groups_multiline_entries() {
         let tmp = TempDir::new().unwrap();
-        save_timeline_entry(tmp.path(), "line1\nline2", &mock_context()).unwrap();
-        save_timeline_entry(tmp.path(), "second", &mock_context()).unwrap();
+        save_timeline_entry(tmp.path(), "line1\nline2", &mock_context(), Source::App).unwrap();
+        save_timeline_entry(tmp.path(), "second", &mock_context(), Source::App).unwrap();
 
         let today = Local::now().date_naive();
         let entries = read_timeline(tmp.path(), today).unwrap();
@@ -150,8 +168,8 @@ mod tests {
     #[test]
     fn test_read_timeline_returns_entries() {
         let tmp = TempDir::new().unwrap();
-        save_timeline_entry(tmp.path(), "first", &mock_context()).unwrap();
-        save_timeline_entry(tmp.path(), "second", &mock_context()).unwrap();
+        save_timeline_entry(tmp.path(), "first", &mock_context(), Source::App).unwrap();
+        save_timeline_entry(tmp.path(), "second", &mock_context(), Source::App).unwrap();
 
         let today = Local::now().date_naive();
         let lines = read_timeline(tmp.path(), today).unwrap();

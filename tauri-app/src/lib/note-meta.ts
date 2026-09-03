@@ -9,7 +9,7 @@
 
 import type { NoteContext } from "./commands";
 import { t } from "./i18n";
-import { networkLabel } from "./parse-timeline";
+import { networkLabel, sourceLabel } from "./parse-timeline";
 import { normalizeTag } from "./tags";
 
 /** RFC 3339 の time を datetime-local input の値(分まで)にする。 */
@@ -61,36 +61,42 @@ export interface ContextRow {
   value: string;
 }
 
-/** context のうち記録されているフィールドだけを、表示する行にする。 */
-export function contextRows(ctx: NoteContext | undefined): ContextRow[] {
-  if (!ctx) {
-    return [];
-  }
+/**
+ * context のうち記録されているフィールドだけを、表示する行にする。
+ *
+ * `source` は frontmatter の直下にあって context の中ではない(端末の状態
+ * ではないため)が、読む人にとっては「どこで・何で書いたか」の一続きなので
+ * 同じ表に並べる。
+ */
+export function contextRows(ctx: NoteContext | undefined, source?: string): ContextRow[] {
   const labels = t().meta;
   const rows: ContextRow[] = [];
-  if (ctx.os) {
+  if (ctx?.os) {
     rows.push({ label: labels.os, value: [ctx.os, ctx.os_version].filter(Boolean).join(" ") });
   }
-  if (ctx.battery !== undefined) {
+  if (ctx?.battery !== undefined) {
     rows.push({
       label: labels.battery,
       value: `${ctx.battery}%${ctx.is_charging ? ` (${labels.charging})` : ""}`,
     });
   }
-  if (ctx.network_type) {
+  if (ctx?.network_type) {
     rows.push({ label: labels.network, value: networkLabel(ctx.network_type) });
   }
-  if (ctx.hostname) {
+  if (ctx?.hostname) {
     rows.push({ label: labels.hostname, value: ctx.hostname });
   }
-  if (ctx.location) {
+  if (ctx?.location) {
     rows.push({
       label: labels.location,
       value: `${ctx.location.latitude.toFixed(4)}, ${ctx.location.longitude.toFixed(4)}`,
     });
   }
-  if (ctx.locale) {
+  if (ctx?.locale) {
     rows.push({ label: labels.locale, value: ctx.locale });
+  }
+  if (source) {
+    rows.push({ label: labels.source, value: sourceLabel(source) });
   }
   return rows;
 }

@@ -6,7 +6,7 @@ use chrono::{Local, NaiveDate};
 
 use crate::error::CoreError;
 use crate::timeline::day::DayLog;
-use crate::utils::device::Context;
+use crate::utils::device::{Context, Source};
 use crate::utils::fs::{ensure_dir, write_atomic};
 use crate::utils::markdown::{split_context_json, split_time_prefix};
 use crate::utils::paths::{self, timeline_file_path};
@@ -20,13 +20,18 @@ impl Timeline {
         Self { base_dir }
     }
 
-    pub(crate) fn save_entry(&self, text: &str, context: &Context) -> Result<(), CoreError> {
+    pub(crate) fn save_entry(
+        &self,
+        text: &str,
+        context: &Context,
+        source: Source,
+    ) -> Result<(), CoreError> {
         let now = Local::now();
         let file_path = timeline_file_path(&self.base_dir, now.date_naive());
         ensure_dir(&file_path)?;
 
         let mut day = DayLog::parse(&self.read_raw(now.date_naive())?.unwrap_or_default());
-        day.push(text, now, context);
+        day.push(text, now, context, Some(source));
 
         write_atomic(&file_path, day.render()?)?;
         Ok(())
@@ -248,6 +253,7 @@ mod tests {
                     arch: "aarch64".to_string(),
                     ..Context::default()
                 },
+                Source::App,
             )
             .unwrap();
 
@@ -274,6 +280,21 @@ mod tests {
         );
     }
 
+    /// 編集で書き換わるのは本文だけ。書いたツールの記録は行末 JSON ごと
+    /// 残る — `s` は作成時の記録で、「最後に直したツール」ではない。
+    #[test]
+    fn editing_an_entry_keeps_the_source_that_wrote_it() {
+        let (_tmp, timeline) =
+            seed(&["- [09:00:00] on the phone {\"battery\":80,\"s\":\"widget\"}"]);
+
+        timeline.update_entry(date(), 0, "edited").unwrap();
+
+        assert_eq!(
+            timeline.read(date()).unwrap(),
+            vec!["- [09:00:00] edited {\"battery\":80,\"s\":\"widget\"}"]
+        );
+    }
+
     #[test]
     fn editing_a_day_that_lists_its_devices_keeps_the_list() {
         let tmp = TempDir::new().unwrap();
@@ -286,8 +307,10 @@ mod tests {
         };
         let path = timeline_file_path(tmp.path(), Local::now().date_naive());
         ensure_dir(&path).unwrap();
-        timeline.save_entry("first", &context).unwrap();
-        timeline.save_entry("second", &context).unwrap();
+        timeline.save_entry("first", &context, Source::App).unwrap();
+        timeline
+            .save_entry("second", &context, Source::App)
+            .unwrap();
 
         let today = Local::now().date_naive();
         timeline.update_entry(today, 0, "rewritten").unwrap();

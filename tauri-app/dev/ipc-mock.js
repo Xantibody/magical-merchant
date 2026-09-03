@@ -34,6 +34,9 @@
 
   const pad = (n) => String(n).padStart(2, "0");
 
+  /** 書いた入り口の固定語彙。`undefined` は名乗る前に書かれた記録。 */
+  const SOURCES = ["app", "widget", "cli", "mcp", undefined];
+
   function contextFor(dayIndex, entryIndex) {
     if ((dayIndex + entryIndex) % 3 === 2) {
       return null;
@@ -52,6 +55,12 @@
         latitude: place.lat + (entryIndex % 5) * 0.0004,
         longitude: place.lon + (entryIndex % 7) * 0.0003,
       };
+    }
+    // 書いた入り口。実ファイルと同じく行末 JSON の最後に置き、名乗らない
+    // エントリも混ぜる — キーが無い記録でも行のメタ表示が崩れないこと
+    const source = SOURCES[(dayIndex + entryIndex) % SOURCES.length];
+    if (source) {
+      ctx.s = source;
     }
     return ctx;
   }
@@ -129,6 +138,8 @@
         time: "2026-08-12T14:00:00+09:00",
         tags: ["design"],
         view: "mindmap",
+        // エージェントが書いたノート。メタデータパネルの「書いたツール」検証用
+        source: "mcp",
         body: `# 設計の見取り図\n\n## UI\n\n- ヘッダ\n- タイムライン\n  - 入力バー\n  - 日付ジャンプ\n\n## コア\n\n- 保存\n- 同期\n  - 認証\n  - 競合`,
       },
     ],
@@ -161,6 +172,8 @@
         time: "2026-08-13T08:30:00+09:00",
         tags: [],
         view: null,
+        // ウィジェットで捕まえたエントリから育ったノート
+        source: "widget",
         // グリフ `:236p:` の描画検証用。登録の無い `:foo:` と時刻は文字のまま
         body: "# 短いメモ\n\n今日やることを 3 つだけ。\n\n- :236p: の入力を安定させる\n- 12:30:45 に :foo: を確認\n- `:236p:` はコードなので文字のまま",
         // 昇格ノートのチップ検証用。3 日前のエントリから育ったことにする
@@ -468,6 +481,9 @@
         tags: note.tags,
         ...(note.view ? { view: note.view } : {}),
         ...(note.updated ? { updated: note.updated } : {}),
+        // 名乗る前に作られたノートにはキーごと無い。core が
+        // `skip_serializing_if` で落とすのと同じ形にしておく
+        ...(note.source ? { source: note.source } : {}),
       };
     },
     update_note_meta: ({ filename, time, tags }) => {
@@ -499,6 +515,9 @@
         time: now.toISOString(),
         tags: tags ?? [],
         view: null,
+        // 画面から作ったノートはアプリが名乗る。実装(`create_draft`)と
+        // 揃えておかないと、作った直後だけメタデータの行が 1 本足りない
+        source: "app",
         body,
         ...(origin ? { origin } : {}),
       });
@@ -568,6 +587,7 @@
           .map((tag) => resolveVars(tag, prev, locale))
           .filter((tag) => tag.trim()),
         view: null,
+        source: "app",
         body: resolveVars(template.body, prev, locale),
         template: name,
       });

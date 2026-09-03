@@ -99,4 +99,24 @@ describe("entryMeta", () => {
       { icon: "battery-high", label: "50%" },
     ]);
   });
+
+  /** 入り口は末尾。後から足した記録なので、古い行だけ並びが変わらない。 */
+  it("names the tool that wrote the entry, last", () => {
+    const meta = entryMeta(context({ battery: 30, s: "widget" }));
+
+    expect(meta.at(-1)).toStrictEqual({ icon: "pencil", label: "ウィジェット" });
+  });
+
+  /** 名乗る前に書かれた行に項目は生えない。 */
+  it("leaves the tool out when the entry names none", () => {
+    expect(entryMeta(context({ battery: 30 })).map((s) => s.label)).toStrictEqual(["macos", "30%"]);
+  });
+
+  /** 知らない値でも「不明」に潰さない。語彙が増えた版で書いた行も読める。 */
+  it("passes an unknown tool through as written", () => {
+    expect(entryMeta(context({ s: "future" })).at(-1)).toStrictEqual({
+      icon: "pencil",
+      label: "future",
+    });
+  });
 });

@@ -8,7 +8,7 @@ use magical_merchant_core::utils::frontmatter;
 use magical_merchant_core::utils::paths::place_cache_path;
 use magical_merchant_core::utils::place::{PlaceCache, place_key};
 use magical_merchant_core::{
-    GlyphFormat, GlyphName, NoteFilename, Provenance, Revision, parse_timeline_entry,
+    GlyphFormat, GlyphName, NoteFilename, Provenance, Revision, Source, parse_timeline_entry,
 };
 use rmcp::handler::server::tool::ToolRouter;
 use rmcp::handler::server::wrapper::{Json, Parameters};
@@ -243,8 +243,8 @@ impl McpServer {
                 .and_then(|l| self.place_name(&cache, l.latitude, l.longitude));
             ContextInfo::from_context(ctx, place)
         });
-        let (time, updated, tags, origin, template, view) = meta.map_or_else(
-            || (None, None, Vec::new(), None, None, None),
+        let (time, updated, tags, origin, template, view, source) = meta.map_or_else(
+            || (None, None, Vec::new(), None, None, None, None),
             |m| {
                 (
                     Some(m.time.to_rfc3339()),
@@ -253,6 +253,7 @@ impl McpServer {
                     m.origin,
                     m.template,
                     m.view,
+                    m.source,
                 )
             },
         );
@@ -266,6 +267,7 @@ impl McpServer {
             origin,
             template,
             view,
+            source,
             context,
             revision: revision.to_string(),
             body,
@@ -481,7 +483,12 @@ impl McpServer {
             &param.body,
             &tags,
             &notes::context(),
-            Provenance::default(),
+            // CLI と同じ `notes::context()` を通るので、名乗らないと
+            // エージェントが書いたノートが手で書いたものと区別できない
+            Provenance {
+                source: Some(Source::Mcp),
+                ..Provenance::default()
+            },
         )
         .map_err(err)?;
         let filename = path

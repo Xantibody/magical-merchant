@@ -7,7 +7,7 @@
 use std::path::Path;
 
 use chrono::{Local, NaiveDate, NaiveTime};
-use magical_merchant_core::{CoreError, parse_timeline_entry};
+use magical_merchant_core::{CoreError, Source, parse_timeline_entry};
 
 use crate::notes;
 
@@ -17,7 +17,9 @@ pub(crate) fn add(data_dir: &Path, text: &str) -> Result<bool, CoreError> {
     if text.is_empty() {
         return Ok(false);
     }
-    magical_merchant_core::save_timeline_entry(data_dir, text, &notes::context())?;
+    // 入り口は `notes::context()` に混ぜない。あれは MCP とも共有していて、
+    // 端末しか見ていないので CLI と MCP を同じものとして書いてしまう
+    magical_merchant_core::save_timeline_entry(data_dir, text, &notes::context(), Source::Cli)?;
     Ok(true)
 }
 
