@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readNoteContent, resolveNoteView, toggledView, viewToFrontmatter } from "./note-view";
+import { nextView, readNoteContent, resolveNoteView, viewToFrontmatter } from "./note-view";
 
 describe("resolveNoteView", () => {
   it("view キーが無いノートはエディタ表示", () => {
@@ -10,15 +10,20 @@ describe("resolveNoteView", () => {
     expect(resolveNoteView("mindmap")).toBe("mindmap");
   });
 
+  it("preview は読むだけの表示", () => {
+    expect(resolveNoteView("preview")).toBe("preview");
+  });
+
   it("知らない値はエディタ表示に倒す(新しい版のアプリが書いたノートかもしれない)", () => {
     expect(resolveNoteView("kanban")).toBe("editor");
   });
 });
 
-describe("toggledView", () => {
-  it("エディタ ⇄ マインドマップを往復する", () => {
-    expect(toggledView("editor")).toBe("mindmap");
-    expect(toggledView("mindmap")).toBe("editor");
+describe("nextView", () => {
+  it("ボタン 1 つで エディタ → マインドマップ → プレビュー と一巡する", () => {
+    expect(nextView("editor")).toBe("mindmap");
+    expect(nextView("mindmap")).toBe("preview");
+    expect(nextView("preview")).toBe("editor");
   });
 });
 
@@ -29,6 +34,14 @@ describe("readNoteContent", () => {
       () => Promise.resolve({ view: "mindmap" }),
     );
     expect(content).toStrictEqual({ body: "# 見取り図", view: "mindmap", revision: "r1" });
+  });
+
+  it("preview のノートは読むだけの表示で開く", async () => {
+    const content = await readNoteContent(
+      () => Promise.resolve({ body: "# 読み物", revision: "r2" }),
+      () => Promise.resolve({ view: "preview" }),
+    );
+    expect(content).toStrictEqual({ body: "# 読み物", view: "preview", revision: "r2" });
   });
 
   it("メタが読めないノートはエディタ表示で開く", async () => {
@@ -56,5 +69,9 @@ describe("viewToFrontmatter", () => {
 
   it("マインドマップは mindmap を書く", () => {
     expect(viewToFrontmatter("mindmap")).toBe("mindmap");
+  });
+
+  it("プレビューは preview を書く", () => {
+    expect(viewToFrontmatter("preview")).toBe("preview");
   });
 });
