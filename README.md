@@ -15,7 +15,7 @@
 - **Markdown notes** — a Typora-style Milkdown editor; a title field that is
   the body's own `# heading`, tap anywhere in the preview to edit, autosave
   with a local one-step revert, Shiki code highlighting, Mermaid diagrams,
-  and a per-note mindmap view
+  and a per-note mindmap or read-only view
 - **Entries grow into notes** — promote a timeline entry into a note; the two
   stay linked through the note's `origin` frontmatter
 - **`[[links]]` and backlinks** — link notes by immutable file ID with

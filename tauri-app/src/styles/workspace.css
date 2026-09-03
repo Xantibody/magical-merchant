@@ -281,6 +281,12 @@
   min-height: 100%;
 }
 
+/* `view: preview` は読むだけのノート。押しても書き始まらないので、
+   書けるという合図の I ビームを出さない */
+.detail-body[data-view="preview"] .markdown-preview {
+  cursor: default;
+}
+
 .detail-body > * {
   max-width: 640px;
   margin-inline: auto;
