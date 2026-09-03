@@ -333,6 +333,20 @@
 
   const placeKey = (lat, lon) => `${lat.toFixed(2)},${lon.toFixed(2)}`;
 
+  const stampOf = (date) =>
+    `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}_${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
+
+  // まだ使われていない名前と、その名前が名乗る時刻。core の `Notes::create`
+  // と同じく、同じ秒に 2 本作られたら空いている秒まで 1 秒ずつ進める。
+  // ここで潰すと、「+ 新規」を続けて押したときだけモックが実物と違う挙動を見せる
+  const freeNoteName = () => {
+    const time = new Date();
+    while (notes.has(`${stampOf(time)}.md`)) {
+      time.setSeconds(time.getSeconds() + 1);
+    }
+    return { filename: `${stampOf(time)}.md`, time };
+  };
+
   const commands = {
     list_timeline_dates: () => [...timeline.keys()].toSorted().toReversed(),
     read_timeline_by_date: ({ date }) => timeline.get(date) ?? [],
@@ -508,11 +522,9 @@
       notes.delete(filename);
     },
     create_draft: ({ body, tags, origin }) => {
-      const now = new Date();
-      const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-      const filename = `${stamp}.md`;
+      const { filename, time } = freeNoteName();
       notes.set(filename, {
-        time: now.toISOString(),
+        time: time.toISOString(),
         tags: tags ?? [],
         view: null,
         // 画面から作ったノートはアプリが名乗る。実装(`create_draft`)と
@@ -562,12 +574,10 @@
         throw new Error("template not found");
       }
       const name = filename.replace(/\.md$/, "");
-      const now = new Date();
-      const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
 
       // 同じテンプレの今日のぶんが既にあれば作らない。日付はファイル名の
       // 先頭 8 桁で見る — 保存している time は UTC で、日をまたぐと食い違う
-      const today = stamp.slice(0, 8);
+      const today = stampOf(new Date()).slice(0, 8);
       const existing = [...notes.entries()].find(
         ([fname, note]) => note.template === name && fname.slice(0, 8) === today,
       );
@@ -580,9 +590,9 @@
         .toSorted(([a], [b]) => b.localeCompare(a))[0];
       const prev = previous ? `[[${previous[0].replace(/\.md$/, "")}]]` : null;
 
-      const created = `${stamp}.md`;
+      const { filename: created, time } = freeNoteName();
       notes.set(created, {
-        time: now.toISOString(),
+        time: time.toISOString(),
         tags: template.tags
           .map((tag) => resolveVars(tag, prev, locale))
           .filter((tag) => tag.trim()),
