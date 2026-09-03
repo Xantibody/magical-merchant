@@ -185,29 +185,6 @@ export default function Workspace(): JSX.Element {
     (filename) => typedInvoke("find_backlinks", { filename }),
   );
 
-  const openBacklink = (hit: SearchHit): void => {
-    if (hit.kind === "note" && hit.filename) {
-      setSelectedId(hit.filename);
-      setDetailOpen(true);
-    } else {
-      navigate(`${ROUTES.TIMELINE}?day=${hit.date}`);
-    }
-  };
-
-  // ウィジェットの行から `?file=` 付きで来たときだけ、その 1 件を開く。
-  // 一覧が届く前に来ることがあるが、id はファイル名そのものなので先に置ける
-  createEffect(
-    on(
-      () => searchParams.file,
-      (file) => {
-        if (typeof file === "string" && file) {
-          setSelectedId(file);
-          setDetailOpen(true);
-        }
-      },
-    ),
-  );
-
   /** ディスクから読み直して画面に出す。選択の切り替えと、外からの書き換えの後に。 */
   const loadNote = async (item: NoteItem): Promise<void> => {
     try {
@@ -278,13 +255,6 @@ export default function Workspace(): JSX.Element {
     } catch {
       setNoteView(previous);
     }
-  };
-
-  const select = (item: NoteItem): void => {
-    shell.closePopovers();
-    setSelectedId(item.id);
-    setEditing(false);
-    setDetailOpen(true);
   };
 
   // ---- 編集（自動保存: 1秒 debounce + 直列化）----
@@ -402,6 +372,59 @@ export default function Workspace(): JSX.Element {
     ),
   );
 
+  const stopEditing = async (): Promise<void> => {
+    if (saveTimer) {
+      clearTimeout(saveTimer);
+      saveTimer = undefined;
+    }
+    await flushSave();
+    // 書き終えた本文が真実。読み直しを待ってからプレビューを出すと
+    // 一瞬だけ編集前の本文が見える
+    setNoteBody(draft());
+    setEditing(false);
+    // 次に書き始めるときは新しいセッション。戻る先が 1 段ずつ進む
+    sessionFile = null;
+    await refetchNotes();
+  };
+
+  /**
+   * 選択を差し替える唯一の入口。一覧のタップ・ウィジェットの `?file=`・
+   * 新規作成・テンプレ・バックリンクは全部ここを通る。入口ごとに
+   * 「編集中だったらどうするか」を書くと、書き忘れた入口だけが前のノートの
+   * 本文を次のノートへ持ち込む — 入口が増えても書く場所は 1 つにしておく。
+   */
+  function switchTo(id: string): void {
+    setSelectedId(id);
+    setDetailOpen(true);
+  }
+
+  const select = (item: NoteItem): void => {
+    shell.closePopovers();
+    setEditing(false);
+    switchTo(item.id);
+  };
+
+  const openBacklink = (hit: SearchHit): void => {
+    if (hit.kind === "note" && hit.filename) {
+      switchTo(hit.filename);
+    } else {
+      navigate(`${ROUTES.TIMELINE}?day=${hit.date}`);
+    }
+  };
+
+  // ウィジェットの行から `?file=` 付きで来たときだけ、その 1 件を開く。
+  // 一覧が届く前に来ることがあるが、id はファイル名そのものなので先に置ける
+  createEffect(
+    on(
+      () => searchParams.file,
+      (file) => {
+        if (typeof file === "string" && file) {
+          switchTo(file);
+        }
+      },
+    ),
+  );
+
   const startEditing = (point?: CaretPoint): void => {
     if (!selected()) {
       return;
@@ -448,8 +471,7 @@ export default function Workspace(): JSX.Element {
     // 書き始める操作ではないから — マインドマップでも踏める
     const noteLink = target?.closest("a.note-link");
     if (noteLink instanceof HTMLElement && noteLink.dataset.file) {
-      setSelectedId(noteLink.dataset.file);
-      setDetailOpen(true);
+      switchTo(noteLink.dataset.file);
       return;
     }
     // リンクは踏める・図はズームのまま・道具は道具のまま・バックリンク欄は
@@ -532,21 +554,6 @@ export default function Workspace(): JSX.Element {
     return backup !== null && backup !== fullBody();
   });
 
-  const stopEditing = async (): Promise<void> => {
-    if (saveTimer) {
-      clearTimeout(saveTimer);
-      saveTimer = undefined;
-    }
-    await flushSave();
-    // 書き終えた本文が真実。読み直しを待ってからプレビューを出すと
-    // 一瞬だけ編集前の本文が見える
-    setNoteBody(draft());
-    setEditing(false);
-    // 次に書き始めるときは新しいセッション。戻る先が 1 段ずつ進む
-    sessionFile = null;
-    await refetchNotes();
-  };
-
   const createNote = async (): Promise<void> => {
     const path = await typedInvoke("create_draft", {
       body: "",
@@ -558,9 +565,8 @@ export default function Workspace(): JSX.Element {
     // 前に開いていたノートの題を書き換えることになる
     const filename = path.split("/").at(-1);
     if (filename) {
-      setSelectedId(filename);
+      await switchTo(filename);
     }
-    setDetailOpen(true);
   };
 
   /**
@@ -579,9 +585,8 @@ export default function Workspace(): JSX.Element {
       await refetchNotes();
       const filename = created.path.split("/").at(-1);
       if (filename) {
-        setSelectedId(filename);
+        await switchTo(filename);
       }
-      setDetailOpen(true);
       if (created.reused) {
         shell.showToast(t().templates.reused(template.name));
       }
