@@ -240,6 +240,9 @@ const ja = {
     zoomOut: "小さく",
     fit: "全体表示",
     zoomHint: "ホイールでズーム / ドラッグで移動 / Esc で閉じる",
+    saveSvg: "SVG で保存",
+    savePng: "PNG で保存",
+    exportFailed: "図を保存できませんでした",
   },
   firstRun: {
     title: "同期はあとからでも設定できます",
@@ -512,6 +515,9 @@ const en: Messages = {
     zoomOut: "Zoom out",
     fit: "Fit",
     zoomHint: "Scroll to zoom / drag to pan / Esc to close",
+    saveSvg: "Save as SVG",
+    savePng: "Save as PNG",
+    exportFailed: "Could not save the diagram",
   },
   firstRun: {
     title: "You can set up sync later",

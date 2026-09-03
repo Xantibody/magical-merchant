@@ -2,9 +2,22 @@ import { render, cleanup } from "@solidjs/testing-library";
 import { page, userEvent } from "vitest/browser";
 import type { Locator } from "vitest/browser";
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
+import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
 import MarkdownPreview from "./MarkdownPreview";
 
 const FLOWCHART = ["```mermaid", "flowchart TD", "  A[Start] --> B[End]", "```"].join("\n");
+
+/** コマンドに渡った base64 を文字列に戻す */
+function decodeBase64(base64: string): string {
+  return new TextDecoder().decode(
+    Uint8Array.from(atob(base64), (char) => char.codePointAt(0) ?? 0),
+  );
+}
+
+/** SVG の開始タグだけ。mermaid の <style> の中の max-width は図の体裁で、見たいのはルートの属性 */
+function openingTagOf(svg: string): string {
+  return svg.match(/^<svg[^>]*>/u)?.[0] ?? "";
+}
 
 /** 右下の倍率表示を数で読む */
 function percentOf(locator: Locator): number {
@@ -112,6 +125,65 @@ describe("MarkdownPreview", () => {
     await userEvent.click(screen.locator('[data-action="zoom"]'));
 
     await expect.element(screen.locator(".mermaid-zoom-canvas svg")).toBeInTheDocument();
+  });
+
+  describe("export tools", () => {
+    const calls: { cmd: string; args: Record<string, unknown> }[] = [];
+
+    beforeEach(() => {
+      calls.length = 0;
+      mockIPC((cmd, args) => {
+        calls.push({ cmd, args: (args ?? {}) as Record<string, unknown> });
+        return { saved: true };
+      });
+    });
+
+    afterEach(() => clearMocks());
+
+    it("hands the sized svg to the save command, named after the note", async () => {
+      const { baseElement } = render(() => (
+        <MarkdownPreview source={FLOWCHART} exportStem="20260903_101010" />
+      ));
+      const screen = page.elementLocator(baseElement);
+
+      await expect.element(screen.locator(".mermaid-figure svg")).toBeInTheDocument();
+      await userEvent.click(screen.locator('[data-action="svg"]'));
+
+      await expect.poll(() => calls.map((call) => call.cmd)).toStrictEqual(["save_export"]);
+      expect(calls[0].args.suggestedName).toBe("20260903_101010-1.svg");
+      const opening = openingTagOf(decodeBase64(calls[0].args.dataBase64 as string));
+      expect(opening).toContain('xmlns="http://www.w3.org/2000/svg"');
+      expect(opening).not.toContain("max-width");
+    });
+
+    it("hands a png to the save command", async () => {
+      const { baseElement } = render(() => <MarkdownPreview source={FLOWCHART} />);
+      const screen = page.elementLocator(baseElement);
+
+      await expect.element(screen.locator(".mermaid-figure svg")).toBeInTheDocument();
+      await userEvent.click(screen.locator('[data-action="png"]'));
+
+      await expect.poll(() => calls.map((call) => call.cmd)).toStrictEqual(["save_export"]);
+      expect(calls[0].args.suggestedName).toBe("diagram-1.png");
+      // PNG の先頭 8 バイト (\x89PNG\r\n\x1a\n) の base64
+      expect(calls[0].args.dataBase64).toMatch(/^iVBORw0KGgo/u);
+    });
+
+    it("reports a failed save instead of staying silent", async () => {
+      mockIPC(() => {
+        throw new Error("disk full");
+      });
+      const errors: string[] = [];
+      const { baseElement } = render(() => (
+        <MarkdownPreview source={FLOWCHART} onError={(message) => errors.push(message)} />
+      ));
+      const screen = page.elementLocator(baseElement);
+
+      await expect.element(screen.locator(".mermaid-figure svg")).toBeInTheDocument();
+      await userEvent.click(screen.locator('[data-action="svg"]'));
+
+      await expect.poll(() => errors).toStrictEqual(["図を保存できませんでした"]);
+    });
   });
 
   describe("copy tool", () => {

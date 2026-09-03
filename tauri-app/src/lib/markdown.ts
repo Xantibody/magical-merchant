@@ -120,7 +120,11 @@ function codeBlock(pre: string, block: FenceBlock): string {
 }
 
 function diagramTools(): string {
-  return `<div class="preview-tools">${toolButton("zoom", t().preview.zoom, cornersOutIcon)}</div>`;
+  const { preview } = t();
+  return (
+    `<div class="preview-tools">${toolButton("zoom", preview.zoom, cornersOutIcon)}` +
+    `${toolButton("svg", preview.saveSvg, "SVG")}${toolButton("png", preview.savePng, "PNG")}</div>`
+  );
 }
 
 fenceMd.renderer.rules.fence = (tokens, idx, _options, renderEnv) => {

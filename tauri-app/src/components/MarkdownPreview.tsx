@@ -1,12 +1,15 @@
 import { createSignal, createEffect, on, onCleanup, Show } from "solid-js";
 import copyIcon from "@phosphor-icons/core/assets/regular/copy.svg?raw";
 import checkIcon from "@phosphor-icons/core/assets/regular/check.svg?raw";
+import { typedInvoke } from "../lib/commands";
 import { createCopyFeedback } from "../lib/copy-feedback";
+import { exportName, rasterize, sizedSvg, textToBase64 } from "../lib/diagram-export";
 import { t } from "../lib/i18n";
 import { renderMarkdown } from "../lib/markdown";
 import { resolvedTheme } from "../lib/theme";
 import DiagramZoom from "./DiagramZoom";
 import "../styles/markdown-preview.css";
+import type { ExportFormat } from "../lib/diagram-export";
 import type { ZoomedDiagram } from "./DiagramZoom";
 import type { JSX } from "solid-js";
 
@@ -16,15 +19,33 @@ interface MarkdownPreviewProps {
   noteTitles?: ReadonlyMap<string, string>;
   /** `:name:` を画像で描くための登録表。無ければ保存形のまま出る。 */
   glyphs?: ReadonlyMap<string, string>;
+  /** 図を書き出すときのファイル名の頭。ノートの stem。無ければ generic な名前 */
+  exportStem?: string;
+  /** 書き出しに失敗したとき、利用者に見せる文。無ければ黙って失敗する */
+  onError?: (message: string) => void;
 }
 
 /** コピー後にチェック表示を戻すまでの時間。エディタの node view と同じ */
 const COPY_RESET_MS = 1500;
 
+/** 押された道具が属する図。道具のアイコンも svg なので、図の入れ物で絞る */
+function diagramOf(from: Element): { figure: Element; svg: SVGSVGElement } | undefined {
+  const figure = from.closest(".mermaid-block");
+  const svg = figure?.querySelector<SVGSVGElement>(".mermaid-figure svg");
+  return figure && svg ? { figure, svg } : undefined;
+}
+
+/** PNG の下地。透明のままだと暗い背景のビューアで線が消える */
+function surfaceColor(): string {
+  const color = getComputedStyle(document.documentElement).getPropertyValue("--app-surface");
+  return color.trim() || "#ffffff";
+}
+
 export default function MarkdownPreview(props: MarkdownPreviewProps): JSX.Element {
   const [html, setHtml] = createSignal("");
   const [zoomed, setZoomed] = createSignal<ZoomedDiagram | undefined>();
 
+  let root: HTMLDivElement | undefined;
   let renderVersion = 0;
 
   createEffect(
@@ -81,12 +102,13 @@ export default function MarkdownPreview(props: MarkdownPreviewProps): JSX.Elemen
   // 図は本文と違って折り返せない。狭い画面では幅に合わせて縮めておき、
   // 押されたときだけ原寸で開く
   const openZoom = (from: Element): void => {
-    const svg = from.closest(".mermaid-block")?.querySelector("svg");
-    if (!svg) {
+    const diagram = diagramOf(from);
+    if (!diagram) {
       return;
     }
     // 原寸は viewBox。mermaid が max-width に書く値と同じだが、数値で欲しい。
     // viewBox を持たない SVG は縮めて描いている今の大きさを原寸とみなす
+    const { svg } = diagram;
     const box = svg.viewBox.baseVal;
     const rect = svg.getBoundingClientRect();
     setZoomed({
@@ -94,6 +116,27 @@ export default function MarkdownPreview(props: MarkdownPreviewProps): JSX.Elemen
       width: box.width > 0 ? box.width : rect.width,
       height: box.height > 0 ? box.height : rect.height,
     });
+  };
+
+  /** ネイティブの保存ダイアログへ。キャンセルは失敗ではないので何も言わない */
+  const exportDiagram = async (from: Element, format: ExportFormat): Promise<void> => {
+    const diagram = diagramOf(from);
+    if (!diagram) {
+      return;
+    }
+    const figures = [...(root?.querySelectorAll(".mermaid-block") ?? [])];
+    const index = figures.indexOf(diagram.figure) + 1;
+    try {
+      const source = diagram.svg.outerHTML;
+      const dataBase64 =
+        format === "svg" ? textToBase64(sizedSvg(source)) : await rasterize(source, surfaceColor());
+      await typedInvoke("save_export", {
+        suggestedName: exportName(props.exportStem, index, format),
+        dataBase64,
+      });
+    } catch {
+      props.onError?.(t().preview.exportFailed);
+    }
   };
 
   /** 道具は描画結果の中に静的な HTML で居るので、押されたものをここで 1 か所で受ける */
@@ -118,6 +161,11 @@ export default function MarkdownPreview(props: MarkdownPreviewProps): JSX.Elemen
         openZoom(tool);
         break;
       }
+      case "svg":
+      case "png": {
+        void exportDiagram(tool, tool.dataset.action);
+        break;
+      }
       default: {
         break;
       }
@@ -126,7 +174,13 @@ export default function MarkdownPreview(props: MarkdownPreviewProps): JSX.Elemen
 
   return (
     <>
-      <div class="markdown-preview" innerHTML={html()} onClick={onClick} role="presentation" />
+      <div
+        ref={root}
+        class="markdown-preview"
+        innerHTML={html()}
+        onClick={onClick}
+        role="presentation"
+      />
 
       <Show when={zoomed()}>
         {(diagram) => <DiagramZoom diagram={diagram()} onClose={() => setZoomed(undefined)} />}
