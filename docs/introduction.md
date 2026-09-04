@@ -72,7 +72,7 @@ the typed text behind Revert, the CLI keeps it in a scratch file.
 │   │   └── 2026-08-09.md      # one file per day, entries appended
 │   └── notes/
 │       └── 20260809_143000.md # one file per note, frontmatter + body
-├── history/                   # copies taken before CLI / MCP overwrites
+├── history/                   # copies taken before CLI / MCP overwrites (newest 20 per note)
 ├── conflicts/                 # the losing side of a sync conflict
 │   └── notes/
 │       └── 20260809_143000/
