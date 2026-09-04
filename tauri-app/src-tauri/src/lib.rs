@@ -147,14 +147,14 @@ struct NoteRead {
 /// どちらも失敗しても黙って進む — ノートが読めなくなるよりはましで、
 /// 次の起動でまた試す。
 ///
-/// 引っ越しを同期より前に済ませるのが要点。あとになると、`data/notes/` に
+/// 引っ越しを同期より前に済ませるのが要点。あとになると、`data/` に
 /// 残った競合コピーを走査が拾って、残骸を全端末へ配ってしまう。
 pub(crate) fn repair_once(base_dir: &std::path::Path) {
     static REPAIR: std::sync::Once = std::sync::Once::new();
     REPAIR.call_once(|| {
         // 過去の編集で本文に混入した化けメタデータ
         let _ = magical_merchant_core::repair_notes(base_dir);
-        // 古い版が `data/notes/` に置いた競合コピー
+        // 古い版が `data/` に置いた競合コピー
         let _ = magical_merchant_core::relocate_conflict_copies(base_dir);
     });
 }
