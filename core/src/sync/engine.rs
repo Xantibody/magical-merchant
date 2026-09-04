@@ -23,6 +23,7 @@ use super::lock::SyncLock;
 use super::scan::{self, LocalFile};
 use super::state::{FileSyncRecord, SyncState};
 use super::{SyncError, SyncResult};
+use crate::utils::paths;
 
 const MAX_SYNC_ATTEMPTS: usize = 3;
 
@@ -61,7 +62,7 @@ async fn sync_once(client: &HttpClient, base_dir: &Path) -> Result<SyncResult, S
 
     refuse_wholesale_local_deletion(&actions, &local_files)?;
 
-    let data_dir = crate::utils::paths::data_dir(base_dir);
+    let data_dir = paths::data_dir(base_dir);
     let mut result = SyncResult::default();
     let bulk_req = build_bulk_request(
         &actions,
@@ -74,7 +75,7 @@ async fn sync_once(client: &HttpClient, base_dir: &Path) -> Result<SyncResult, S
 
     let bulk_resp = client.bulk(bulk_req).await?;
 
-    let unwritten = apply_response(&bulk_resp, &actions, &local_files, &data_dir, &mut result);
+    let unwritten = apply_response(&bulk_resp, &actions, &local_files, base_dir, &mut result);
 
     // サーバーが確定させた状態をそのままローカルにも記録する。
     // ここでローカルを再スキャンして組み直すと、ダウンロード直後の mtime が
@@ -276,13 +277,14 @@ fn apply_response(
     bulk_resp: &BulkResponse,
     actions: &[SyncAction],
     local_files: &[LocalFile],
-    data_dir: &Path,
+    base_dir: &Path,
     result: &mut SyncResult,
 ) -> HashSet<String> {
+    let data_dir = paths::data_dir(base_dir);
     let mut unwritten = HashSet::new();
 
     for d in &bulk_resp.downloads {
-        match decode(d).and_then(|content| write_under(data_dir, &d.key, &content)) {
+        match decode(d).and_then(|content| write_under(&data_dir, &d.key, &content)) {
             Ok(()) => result.downloaded += 1,
             Err(e) => {
                 result.errors.push(e);
@@ -291,12 +293,15 @@ fn apply_response(
         }
     }
 
-    // 競合で負けたリモート側。`.sync-conflict-` はスキャン対象外なので、
-    // ローカルに置いても同期ループにはならない。
+    // 競合で負けたリモート側。`data/` の外に置くので同期にも載らず、
+    // ノート一覧にも並ばない。
     // 失敗しても `unwritten` には入れない: 控えのキーは state に載らないので、
     // 入れたところで何も除けない（サーバー側の控えは残るので中身も失われない）
+    let conflicts_dir = paths::conflicts_dir(base_dir);
     for d in &bulk_resp.conflict_downloads {
-        if let Err(e) = decode(d).and_then(|content| write_under(data_dir, &d.key, &content)) {
+        // 名前が読めなければキーのまま置く。形が古くても控えは控え
+        let key = conflict::conflict_copy_path(&d.key).unwrap_or_else(|| d.key.clone());
+        if let Err(e) = decode(d).and_then(|content| write_under(&conflicts_dir, &key, &content)) {
             result.errors.push(e);
         }
     }
@@ -313,7 +318,7 @@ fn apply_response(
                 result.conflicts += 1;
             }
             SyncAction::DeleteLocal { key } => {
-                delete_local_file(key, local_files, data_dir, result);
+                delete_local_file(key, local_files, &data_dir, result);
             }
             SyncAction::DownloadNew { .. } | SyncAction::DownloadModified { .. } => {}
         }
@@ -466,8 +471,10 @@ mod tests {
         }
     }
 
-    fn seed(data_dir: &Path, key: &str, content: &str) {
-        let path = data_dir.join(key);
+    /// テストはどれもアプリと同じ `base_dir` を渡す。同期が触るのはその下の
+    /// `data/` だけなので、置くのもそこ。
+    fn seed(base_dir: &Path, key: &str, content: &str) {
+        let path = paths::data_dir(base_dir).join(key);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, content).unwrap();
     }
@@ -483,7 +490,14 @@ mod tests {
         }];
 
         let mut result = SyncResult::default();
-        let req = build_bulk_request(&actions, &locals, dir.path(), None, &mut result).unwrap();
+        let req = build_bulk_request(
+            &actions,
+            &locals,
+            &paths::data_dir(dir.path()),
+            None,
+            &mut result,
+        )
+        .unwrap();
 
         assert_eq!(req.uploads.len(), 1);
         assert_eq!(req.uploads[0].hash, "deadbeef");
@@ -500,7 +514,14 @@ mod tests {
         }];
 
         let mut result = SyncResult::default();
-        let req = build_bulk_request(&actions, &locals, dir.path(), None, &mut result).unwrap();
+        let req = build_bulk_request(
+            &actions,
+            &locals,
+            &paths::data_dir(dir.path()),
+            None,
+            &mut result,
+        )
+        .unwrap();
 
         assert_eq!(req.conflicts.len(), 1);
         assert_eq!(req.conflicts[0].hash, "hash-local");
@@ -514,7 +535,12 @@ mod tests {
         seed(dir.path(), "notes/a.md", "content");
         let state = server_state(&[("notes/a.md", "hash-a", "2026-08-05T00:00:00Z")]);
 
-        let local = to_local_state(&state, dir.path(), &HashSet::new(), &SyncState::default());
+        let local = to_local_state(
+            &state,
+            &paths::data_dir(dir.path()),
+            &HashSet::new(),
+            &SyncState::default(),
+        );
 
         let record = &local.files["notes/a.md"];
         assert_eq!(record.content_hash, "hash-a");
@@ -532,9 +558,14 @@ mod tests {
         let state = server_state(&[("notes/missing.md", "hash-a", "2026-08-05T00:00:00Z")]);
 
         assert!(
-            to_local_state(&state, dir.path(), &HashSet::new(), &SyncState::default())
-                .files
-                .is_empty()
+            to_local_state(
+                &state,
+                &paths::data_dir(dir.path()),
+                &HashSet::new(),
+                &SyncState::default()
+            )
+            .files
+            .is_empty()
         );
     }
 
@@ -544,9 +575,14 @@ mod tests {
         let state = server_state(&[("../escape.md", "hash-a", "2026-08-05T00:00:00Z")]);
 
         assert!(
-            to_local_state(&state, dir.path(), &HashSet::new(), &SyncState::default())
-                .files
-                .is_empty()
+            to_local_state(
+                &state,
+                &paths::data_dir(dir.path()),
+                &HashSet::new(),
+                &SyncState::default()
+            )
+            .files
+            .is_empty()
         );
     }
 
@@ -568,12 +604,20 @@ mod tests {
         let mut result = SyncResult::default();
         apply_response(&resp, &[], &[], dir.path(), &mut result);
 
+        let data = paths::data_dir(dir.path());
         assert_eq!(
-            fs::read_to_string(dir.path().join("notes/a.md")).unwrap(),
+            fs::read_to_string(data.join("notes/a.md")).unwrap(),
             "remote"
         );
+        // 控えは書き続けるノートではない。`data/notes/` に置くと同期からは
+        // 外れていてもノート一覧に並び、元のノートが消えたあとも残骸として残る
+        assert!(
+            !data
+                .join("notes/a.sync-conflict-20260805-000000.md")
+                .exists()
+        );
         assert_eq!(
-            fs::read_to_string(dir.path().join("notes/a.sync-conflict-20260805-000000.md"))
+            fs::read_to_string(paths::conflicts_dir(dir.path()).join("notes/a/20260805-000000.md"))
                 .unwrap(),
             "other device"
         );
@@ -621,12 +665,13 @@ mod tests {
         let mut result = SyncResult::default();
         let unwritten = apply_response(&resp, &[], &[], dir.path(), &mut result);
 
+        let data = paths::data_dir(dir.path());
         assert_eq!(
-            fs::read_to_string(dir.path().join("notes/good.md")).unwrap(),
+            fs::read_to_string(data.join("notes/good.md")).unwrap(),
             "remote"
         );
         assert_eq!(
-            fs::read_to_string(dir.path().join("notes/bad.md")).unwrap(),
+            fs::read_to_string(data.join("notes/bad.md")).unwrap(),
             "stale local copy"
         );
         assert_eq!(result.downloaded, 1);
@@ -634,7 +679,7 @@ mod tests {
 
         // 取れなかったキーを「同期済み」と記録すると、手元の古い版が
         // 新しいハッシュで確定してしまう。かわりに前回の記録をそのまま残す
-        let state = to_local_state(&resp.new_state, dir.path(), &unwritten, &previous);
+        let state = to_local_state(&resp.new_state, &data, &unwritten, &previous);
         assert_eq!(state.files["notes/good.md"].content_hash, "hash-good");
         let kept = &state.files["notes/bad.md"];
         assert_eq!(kept.content_hash, "hash-stale");
@@ -692,7 +737,7 @@ mod tests {
             &mut result,
         );
 
-        assert!(!dir.path().join("notes/a.md").exists());
+        assert!(!paths::data_dir(dir.path()).join("notes/a.md").exists());
         assert_eq!(result.deleted_local, 1);
         assert!(result.errors.is_empty(), "errors: {:?}", result.errors);
     }
@@ -719,7 +764,7 @@ mod tests {
         );
 
         assert_eq!(
-            fs::read_to_string(dir.path().join("notes/a.md")).unwrap(),
+            fs::read_to_string(paths::data_dir(dir.path()).join("notes/a.md")).unwrap(),
             "edited while the sync was in flight"
         );
         assert_eq!(result.deleted_local, 0);
@@ -826,7 +871,7 @@ mod tests {
         let mut result = SyncResult::default();
         let unwritten = apply_response(&resp, &[], &[], dir.path(), &mut result);
 
-        assert!(!dir.path().parent().unwrap().join("escaped.md").exists());
+        assert!(!dir.path().join("escaped.md").exists());
         assert_eq!(result.downloaded, 0);
         assert_eq!(result.errors.len(), 1, "errors: {:?}", result.errors);
         assert!(unwritten.contains("../escaped.md"));

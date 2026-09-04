@@ -65,8 +65,10 @@ local scan → diff → one `POST /sync/bulk`.
   drives the "syncing" indicator; the file lock is the authority. Only the
   app starts a sync today — the lock is there for the CLI `sync` subcommand
   (#170), which does not exist yet
-- Conflicts keep the loser as `….sync-conflict-<ts>.md` in R2 and on disk;
-  conflict copies are excluded from scanning
+- Conflicts keep the loser as `….sync-conflict-<ts>.md` in R2, and on disk
+  as `conflicts/<key minus extension>/<ts>.md` — outside `data/`, same shape
+  as `history/`, so it neither syncs back nor lands in the notes list.
+  The name is built and read back in `core/src/sync/conflict.rs` only
 - Auto sync runs a few seconds after any successful write
 - JWT: macOS Keychain; Android falls back to app-private file (mode 600) —
   keyring's in-memory fallback silently loses tokens
