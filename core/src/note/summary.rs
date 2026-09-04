@@ -84,9 +84,38 @@ mod tests {
             "note.md".to_string(),
             &content,
         );
-        assert!(summary.time.is_some());
+        assert_eq!(
+            summary.time,
+            Some(
+                FixedOffset::east_opt(9 * 3600)
+                    .unwrap()
+                    .with_ymd_and_hms(2026, 3, 20, 14, 30, 0)
+                    .unwrap()
+            )
+        );
         assert_eq!(summary.tags, vec!["a", "b"]);
-        assert!(summary.preview.contains("# Title"));
+        assert_eq!(summary.preview, "# Title\nBody");
+    }
+
+    /// 一覧に載せるのは先頭 100 文字。バイトではなく文字で切らないと、
+    /// 日本語の本文は 3 分の 1 しか見えない。
+    #[test]
+    fn the_preview_is_the_first_hundred_chars_of_the_body() {
+        let preview_of = |len: usize| {
+            let body = "あ".repeat(len);
+            let content = frontmatter::render(&at(2026, 3, 20, 14, 30), &body).unwrap();
+            Summary::from_file(
+                PathBuf::from("/test/note.md"),
+                "note.md".to_string(),
+                &content,
+            )
+            .preview
+        };
+
+        assert_eq!(preview_of(99).chars().count(), 99);
+        assert_eq!(preview_of(100).chars().count(), 100);
+        assert_eq!(preview_of(101).chars().count(), 100);
+        assert_eq!(preview_of(101), "あ".repeat(100));
     }
 
     /// origin はタイムラインのチップ表示が使う。一覧に乗らないと、昇格した

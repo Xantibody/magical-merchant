@@ -53,17 +53,21 @@ mod tests {
         assert!(state.last_sync.is_none());
     }
 
+    /// 書いた値がそのまま戻る。時刻は秒より細かい桁まで — ここが丸まると
+    /// 次の同期で「ローカルが新しい」と誤判定して転送し直す。
     #[test]
     fn save_and_load_roundtrip() {
         let dir = tempfile::tempdir().unwrap();
+        let last_sync = Utc::now();
+        let last_synced_modified = Utc::now() - chrono::Duration::seconds(30);
         let mut state = SyncState {
-            last_sync: Some(Utc::now()),
+            last_sync: Some(last_sync),
             ..SyncState::default()
         };
         state.files.insert(
             "notes/test.md".to_string(),
             FileSyncRecord {
-                last_synced_modified: Utc::now(),
+                last_synced_modified,
                 content_hash: "abc123".to_string(),
             },
         );
@@ -72,7 +76,9 @@ mod tests {
         let loaded = SyncState::load(dir.path()).unwrap();
 
         assert_eq!(loaded.files.len(), 1);
-        assert!(loaded.files.contains_key("notes/test.md"));
-        assert!(loaded.last_sync.is_some());
+        let record = &loaded.files["notes/test.md"];
+        assert_eq!(record.last_synced_modified, last_synced_modified);
+        assert_eq!(record.content_hash, "abc123");
+        assert_eq!(loaded.last_sync, Some(last_sync));
     }
 }
