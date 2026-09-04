@@ -214,6 +214,34 @@ mod tests {
         assert!(files.is_empty());
     }
 
+    /// `data/` はあるが中身が無い。無い場合の早期 return とは別の経路で、
+    /// 走査そのものが空を返さなければならない。
+    #[test]
+    fn scan_an_existing_but_empty_data_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dir.path().join("data")).unwrap();
+
+        let files = scan_local_files(dir.path()).unwrap();
+
+        assert!(files.is_empty());
+    }
+
+    /// 同期の道具立て(状態ファイルと書きかけの一時ファイル)は、data の中に
+    /// あっても同期しない。載ると端末同士が互いの状態を上書きし合う。
+    #[test]
+    fn sync_state_and_temp_files_inside_data_are_not_scanned() {
+        let dir = tempfile::tempdir().unwrap();
+        let data = dir.path().join("data");
+        seed_note(dir.path(), "a.md", "hello");
+        fs::write(data.join(".sync-state.json"), "{}").unwrap();
+        fs::write(data.join(".sync-tmp-1-0"), "half written").unwrap();
+
+        let files = scan_local_files(dir.path()).unwrap();
+
+        let keys: Vec<&str> = files.iter().map(|f| f.key.as_str()).collect();
+        assert_eq!(keys, vec!["notes/a.md"]);
+    }
+
     #[test]
     fn scan_finds_md_files() {
         let dir = tempfile::tempdir().unwrap();

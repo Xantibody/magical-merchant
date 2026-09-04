@@ -210,13 +210,44 @@ mod tests {
         assert_eq!(last.text, "- plain");
     }
 
+    /// 先に出たタグが少ないほうでも、数の多いほうが前に来る。出現順で
+    /// 並べても通る並びでは、数えているかどうかが分からない。
     #[test]
     fn tags_come_back_most_used_first() {
         let entries = vec![
-            "- [09:00:00] #work started".to_string(),
-            "- [10:00:00] #rust and #work".to_string(),
+            "- [09:00:00] #rust started".to_string(),
+            "- [10:00:00] #work and #rust".to_string(),
+            "- [11:00:00] #work again".to_string(),
+            "- [12:00:00] #work still".to_string(),
         ];
         assert_eq!(top_tags(&entries), vec!["#work", "#rust"]);
+    }
+
+    /// 同数なら先に出たほう。並びが実行ごとに変わると、同じ画面を開いた
+    /// だけでチップが入れ替わって見える。
+    #[test]
+    fn tags_used_equally_keep_their_first_seen_order() {
+        let entries = vec![
+            "- [09:00:00] #b then #a".to_string(),
+            "- [10:00:00] #a and #b".to_string(),
+        ];
+        assert_eq!(top_tags(&entries), vec!["#b", "#a"]);
+    }
+
+    /// 4 つ目からはチップが 1 行に収まらないので落とす。落ちるのは
+    /// いちばん使われていないタグ。
+    #[test]
+    fn only_the_most_used_tags_fit_on_the_sheet() {
+        let entries = vec![
+            "- [09:00:00] #d once".to_string(),
+            "- [10:00:00] #a #b #c".to_string(),
+            "- [11:00:00] #a #b #c".to_string(),
+            "- [12:00:00] #a #b".to_string(),
+            "- [13:00:00] #a".to_string(),
+        ];
+        let tags = top_tags(&entries);
+        assert_eq!(tags.len(), TAG_LIMIT);
+        assert_eq!(tags, vec!["#a", "#b", "#c"]);
     }
 
     #[test]

@@ -179,6 +179,19 @@ mod tests {
         assert_eq!(timeline_entry_time("- plain bullet"), None);
     }
 
+    /// 括弧の中は `HH:MM:SS` の 8 文字だけを時刻と見る。本文が `- [` で
+    /// 始まる普通の箇条書き(`- [x] done` など)を時刻と取り違えない。
+    #[test]
+    fn a_time_prefix_is_exactly_eight_digits_and_colons() {
+        assert_eq!(
+            split_time_prefix("- [09:00:00] x"),
+            Some(("- [09:00:00] ", "x"))
+        );
+        assert_eq!(split_time_prefix("- [9:00:00] x"), None);
+        assert_eq!(split_time_prefix("- [09:00:000] x"), None);
+        assert_eq!(split_time_prefix("- [aa:bb:cc] x"), None);
+    }
+
     #[test]
     fn test_format_note_markdown() {
         let tags = vec!["rust".to_string(), "memo".to_string()];

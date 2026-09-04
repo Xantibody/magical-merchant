@@ -268,11 +268,15 @@ mod tests {
         let filename = filename_of(&path);
         assert_eq!(read_note_meta(tmp.path(), &filename).unwrap().updated, None);
 
+        // 作成時刻は秒に丸まっているので、書き直した瞬間はそれより後になる。
+        // `>= time` では作成時刻を写しただけでも通ってしまう
+        let before = chrono::Local::now();
         update_note(&path, "updated", &mock_context(), None).unwrap();
 
         let meta = read_note_meta(tmp.path(), &filename).unwrap();
-        assert!(meta.updated.is_some());
-        assert!(meta.updated.unwrap() >= meta.time);
+        let updated = meta.updated.expect("updated is stamped");
+        assert!(updated >= before, "updated {updated} < before {before}");
+        assert!(updated <= chrono::Local::now());
     }
 
     /// 読んでから書くまでに別の書き手が本文を変えていたら、その上に書かない。
