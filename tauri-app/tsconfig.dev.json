@@ -1,0 +1,10 @@
+{
+  // dev/ は素の JS のまま (インライン注入される <script> なので TS にはできない)。
+  // それでも型は見る: checkJs でここだけ別に走らせる。strict の設定は親を継ぐ。
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true
+  },
+  "include": ["dev"]
+}
