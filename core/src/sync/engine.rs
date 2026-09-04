@@ -22,7 +22,7 @@ use super::diff::{self, RemoteFile, SyncAction};
 use super::lock::SyncLock;
 use super::scan::{self, LocalFile};
 use super::state::{FileSyncRecord, SyncState};
-use super::{SyncError, SyncResult};
+use super::{SyncError, SyncIssue, SyncResult};
 use crate::utils::paths;
 
 const MAX_SYNC_ATTEMPTS: usize = 3;
@@ -71,7 +71,8 @@ async fn sync_once(client: &HttpClient, base_dir: &Path) -> Result<SyncResult, S
         server_state.etag.clone(),
         &mut result,
     )
-    .map_err(SyncError::other)?;
+    // 同期そのものが止まる側。CLI もアプリの汎用エラー表示も英文で扱う
+    .map_err(|issue| SyncError::other(issue.to_string()))?;
 
     let bulk_resp = client.bulk(bulk_req).await?;
 
@@ -183,7 +184,7 @@ fn build_bulk_request(
     data_dir: &Path,
     expected_etag: Option<String>,
     result: &mut SyncResult,
-) -> Result<BulkRequest, String> {
+) -> Result<BulkRequest, SyncIssue> {
     let local_map: HashMap<&str, &LocalFile> =
         local_files.iter().map(|f| (f.key.as_str(), f)).collect();
 
@@ -195,7 +196,9 @@ fn build_bulk_request(
     for action in actions {
         let key = action_key(action);
         if !is_safe_key(key) {
-            result.errors.push(format!("unsafe key rejected: {key}"));
+            result.errors.push(SyncIssue::UnsafeKey {
+                key: key.to_string(),
+            });
             continue;
         }
 
@@ -203,9 +206,11 @@ fn build_bulk_request(
             SyncAction::UploadNew { key } | SyncAction::UploadModified { key } => {
                 let local = local_map
                     .get(key.as_str())
-                    .ok_or_else(|| format!("missing local file for upload: {key}"))?;
-                let content =
-                    fs::read(data_dir.join(key)).map_err(|e| format!("read {key}: {e}"))?;
+                    .ok_or_else(|| SyncIssue::MissingLocalFile { key: key.clone() })?;
+                let content = fs::read(data_dir.join(key)).map_err(|e| SyncIssue::ReadFailed {
+                    key: key.clone(),
+                    detail: e.to_string(),
+                })?;
                 uploads.push(WireUpload {
                     key: key.clone(),
                     content_base64: B64.encode(&content),
@@ -227,9 +232,11 @@ fn build_bulk_request(
                 // 残るので、どちらの編集も失われない
                 let local = local_map
                     .get(key.as_str())
-                    .ok_or_else(|| format!("missing local file for conflict: {key}"))?;
-                let content = fs::read(data_dir.join(key))
-                    .map_err(|e| format!("read conflict {key}: {e}"))?;
+                    .ok_or_else(|| SyncIssue::MissingLocalFile { key: key.clone() })?;
+                let content = fs::read(data_dir.join(key)).map_err(|e| SyncIssue::ReadFailed {
+                    key: key.clone(),
+                    detail: e.to_string(),
+                })?;
                 conflicts.push(WireConflictOp {
                     key: key.clone(),
                     conflict_key: conflict::conflict_filename(key, Utc::now()),
@@ -250,22 +257,33 @@ fn build_bulk_request(
     })
 }
 
-fn write_under(data_dir: &Path, key: &str, content: &[u8]) -> Result<(), String> {
+fn write_under(data_dir: &Path, key: &str, content: &[u8]) -> Result<(), SyncIssue> {
     if !is_safe_key(key) {
-        return Err(format!("unsafe key from server: {key}"));
+        return Err(SyncIssue::UnsafeKey {
+            key: key.to_string(),
+        });
     }
     let path = data_dir.join(key);
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| format!("mkdir {key}: {e}"))?;
+        fs::create_dir_all(parent).map_err(|e| SyncIssue::WriteFailed {
+            key: key.to_string(),
+            detail: format!("mkdir: {e}"),
+        })?;
     }
     // 直接上書きだと、ダウンロード書き込み中のクラッシュで手元のメモが
     // 半分だけ書けたファイルに置き換わる
-    crate::utils::fs::write_atomic(&path, content).map_err(|e| format!("write {key}: {e}"))
+    crate::utils::fs::write_atomic(&path, content).map_err(|e| SyncIssue::WriteFailed {
+        key: key.to_string(),
+        detail: e.to_string(),
+    })
 }
 
-fn decode(file: &DownloadedFile) -> Result<Vec<u8>, String> {
+fn decode(file: &DownloadedFile) -> Result<Vec<u8>, SyncIssue> {
     B64.decode(&file.content_base64)
-        .map_err(|e| format!("base64 decode {}: {e}", file.key))
+        .map_err(|e| SyncIssue::DecodeFailed {
+            key: file.key.clone(),
+            detail: e.to_string(),
+        })
 }
 
 /// サーバーの返事をローカルに反映する。書けなかったキーを返す。
@@ -347,7 +365,10 @@ fn delete_local_file(
             return;
         }
         Err(e) => {
-            result.errors.push(format!("delete_local {key}: {e}"));
+            result.errors.push(SyncIssue::DeleteFailed {
+                key: key.to_string(),
+                detail: e.to_string(),
+            });
             return;
         }
     };
@@ -357,14 +378,17 @@ fn delete_local_file(
         .find(|f| f.key == key)
         .map(|f| f.content_hash.as_str());
     if scanned != Some(scan::compute_hash(&content).as_str()) {
-        result
-            .errors
-            .push(format!("delete_local {key}: changed since scan, kept"));
+        result.errors.push(SyncIssue::DeleteSkippedChanged {
+            key: key.to_string(),
+        });
         return;
     }
 
     if let Err(e) = fs::remove_file(&path) {
-        result.errors.push(format!("delete_local {key}: {e}"));
+        result.errors.push(SyncIssue::DeleteFailed {
+            key: key.to_string(),
+            detail: e.to_string(),
+        });
     } else {
         result.deleted_local += 1;
     }
@@ -768,7 +792,14 @@ mod tests {
             "edited while the sync was in flight"
         );
         assert_eq!(result.deleted_local, 0);
-        assert_eq!(result.errors.len(), 1, "errors: {:?}", result.errors);
+        // 表示するのはアプリ (日本語) と CLI (英語) の両方なので、理由は
+        // 英文ではなくキーで返す
+        assert_eq!(
+            result.errors,
+            vec![SyncIssue::DeleteSkippedChanged {
+                key: "notes/a.md".to_string()
+            }]
+        );
     }
 
     /// サーバーの同期状態が壊れて空になったときに、それを「全部削除された」と

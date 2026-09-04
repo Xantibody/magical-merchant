@@ -12,6 +12,7 @@
  */
 
 import { createSignal } from "solid-js";
+import type { SyncIssue } from "./sync-status";
 
 export type Locale = "ja" | "en";
 /** 設定に残す値。`system` は端末の言語に従う。 */
@@ -180,6 +181,39 @@ const ja = {
     minutesAgo: (minutes: number) => `${minutes}分前`,
     hoursAgo: (hours: number) => `${hours}時間前`,
     daysAgo: (days: number) => `${days}日前`,
+    // 1 回の同期が終わったあとの知らせ。core は kind と材料だけを返すので、
+    // 文にするのはここ (`sync-status.ts` の describeSyncResult)
+    result: {
+      upToDate: "すべて同期済み",
+      synced: (parts: string) => `同期しました ${parts}`,
+      conflictsSaved: (count: number) => `競合${count}件を控えに保存しました`,
+      failed: (count: number, first: string) => `${count} 件が失敗 — ${first}`,
+      issue: (issue: SyncIssue) => {
+        switch (issue.kind) {
+          case "unsafe_key": {
+            return `${issue.key}: 安全でない名前なので送りませんでした`;
+          }
+          case "missing_local_file": {
+            return `${issue.key}: 送る直前に見つかりませんでした`;
+          }
+          case "read_failed": {
+            return `${issue.key}: 読めませんでした (${issue.detail})`;
+          }
+          case "write_failed": {
+            return `${issue.key}: 書けませんでした (${issue.detail})`;
+          }
+          case "decode_failed": {
+            return `${issue.key}: 受け取った中身を戻せませんでした (${issue.detail})`;
+          }
+          case "delete_failed": {
+            return `${issue.key}: 消せませんでした (${issue.detail})`;
+          }
+          case "delete_skipped_changed": {
+            return `${issue.key}: 同期中に書き換わったので消さずに残しました`;
+          }
+        }
+      },
+    },
   },
   settings: {
     title: "設定",
@@ -462,6 +496,37 @@ const en: Messages = {
     minutesAgo: (minutes: number) => `${minutes} min ago`,
     hoursAgo: (hours: number) => `${hours} h ago`,
     daysAgo: (days: number) => `${days} d ago`,
+    result: {
+      upToDate: "Already up to date",
+      synced: (parts: string) => `Synced ${parts}`,
+      conflictsSaved: (count: number) => `${count} conflict(s) saved as copies`,
+      failed: (count: number, first: string) => `${count} item(s) failed — ${first}`,
+      issue: (issue: SyncIssue) => {
+        switch (issue.kind) {
+          case "unsafe_key": {
+            return `${issue.key}: unsafe name, not synced`;
+          }
+          case "missing_local_file": {
+            return `${issue.key}: gone by the time it was sent`;
+          }
+          case "read_failed": {
+            return `${issue.key}: could not be read (${issue.detail})`;
+          }
+          case "write_failed": {
+            return `${issue.key}: could not be written (${issue.detail})`;
+          }
+          case "decode_failed": {
+            return `${issue.key}: what arrived could not be decoded (${issue.detail})`;
+          }
+          case "delete_failed": {
+            return `${issue.key}: could not be deleted (${issue.detail})`;
+          }
+          case "delete_skipped_changed": {
+            return `${issue.key}: changed during the sync, so it was kept`;
+          }
+        }
+      },
+    },
   },
   settings: {
     title: "Settings",
