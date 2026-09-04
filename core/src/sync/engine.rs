@@ -293,12 +293,15 @@ fn apply_response(
         }
     }
 
-    // 競合で負けたリモート側。`.sync-conflict-` はスキャン対象外なので、
-    // ローカルに置いても同期ループにはならない。
+    // 競合で負けたリモート側。`data/` の外に置くので同期にも載らず、
+    // ノート一覧にも並ばない。
     // 失敗しても `unwritten` には入れない: 控えのキーは state に載らないので、
     // 入れたところで何も除けない（サーバー側の控えは残るので中身も失われない）
+    let conflicts_dir = paths::conflicts_dir(base_dir);
     for d in &bulk_resp.conflict_downloads {
-        if let Err(e) = decode(d).and_then(|content| write_under(&data_dir, &d.key, &content)) {
+        // 名前が読めなければキーのまま置く。形が古くても控えは控え
+        let key = conflict::conflict_copy_path(&d.key).unwrap_or_else(|| d.key.clone());
+        if let Err(e) = decode(d).and_then(|content| write_under(&conflicts_dir, &key, &content)) {
             result.errors.push(e);
         }
     }
@@ -606,8 +609,16 @@ mod tests {
             fs::read_to_string(data.join("notes/a.md")).unwrap(),
             "remote"
         );
+        // 控えは書き続けるノートではない。`data/notes/` に置くと同期からは
+        // 外れていてもノート一覧に並び、元のノートが消えたあとも残骸として残る
+        assert!(
+            !data
+                .join("notes/a.sync-conflict-20260805-000000.md")
+                .exists()
+        );
         assert_eq!(
-            fs::read_to_string(data.join("notes/a.sync-conflict-20260805-000000.md")).unwrap(),
+            fs::read_to_string(paths::conflicts_dir(dir.path()).join("notes/a/20260805-000000.md"))
+                .unwrap(),
             "other device"
         );
         assert_eq!(result.downloaded, 1);
