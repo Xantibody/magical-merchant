@@ -7,7 +7,7 @@ setup:
   pnpm install
 
 check: setup
-  oxlint src/
+  oxlint src/ dev/
   tsgo -b --noEmit
   pnpm knip
 

@@ -5,9 +5,74 @@
  * インライン注入する。モジュールグラフより先に実行される普通の <script> なので、
  * `@tauri-apps/api` が `window.__TAURI_INTERNALS__` を読む頃には必ず居る。
  * プロダクションビルドには一切含まれない。
+ *
+ * 作り物の状態(タイムライン・ノート・テンプレ)は IIFE の中に閉じる。外に出て
+ * いるのは、その状態を何も見ない純粋なヘルパだけ。
  */
+
+const pad = (n) => String(n).padStart(2, "0");
+
+/** core の `format_stamp` と同じトークン。strftime には渡さない。 */
+const formatStamp = (date, pattern) =>
+  pattern
+    .replaceAll("YYYY", String(date.getFullYear()))
+    .replaceAll("MM", pad(date.getMonth() + 1))
+    .replaceAll("DD", pad(date.getDate()))
+    .replaceAll("HH", pad(date.getHours()))
+    .replaceAll("mm", pad(date.getMinutes()))
+    .replaceAll("ss", pad(date.getSeconds()));
+
+/** ノートのファイル名になる `YYYYMMDD_HHMMSS`。 */
+const stampOf = (date) =>
+  `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}_${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
+
+const templateSummary = (filename, template) => ({
+  filename,
+  name: filename.replace(/\.md$/u, ""),
+  tags: template.tags,
+  preview: (template.body.split("\n").find((line) => line.trim()) ?? "")
+    .replace(/^#+\s*/u, "")
+    .trim(),
+});
+
+/** 本物は data:image/svg+xml;base64 で返す。ここも同じ形にしておく。 */
+const svgDataUrl = (svg) => `data:image/svg+xml;base64,${btoa(svg)}`;
+
+const glyphSvg = (label, fill) =>
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="${fill}"/><text x="16" y="21" font-size="12" font-family="sans-serif" font-weight="700" text-anchor="middle" fill="#fff">${label}</text></svg>`;
+
+const delay = (ms) =>
+  // oxlint-disable-next-line promise/avoid-new
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+
+// core の Revision の代わり。本文が同じなら同じ値、違えば違う値になれば足りる
+const revisionOf = (body) => {
+  let hash = 5381;
+  for (const ch of body) {
+    hash = ((hash * 33) ^ ch.codePointAt(0)) >>> 0;
+  }
+  return hash.toString(16);
+};
+
+const placeKey = (lat, lon) => `${lat.toFixed(2)},${lon.toFixed(2)}`;
+
+/** 本流(core)の utils::tags と同じ規則: ASCII の大小は見ない。 */
+const lowerTag = (tag) => tag.replaceAll(/[A-Z]/gu, (c) => c.toLowerCase());
+
+/** core が返す一致位置と同じ数え方。UTF-16 の要素数ではなく文字数で数える。 */
+const charCount = (text) => [...text].length;
+
+/**
+ * `update_draft` の失敗。本物は Rust 側の JSON がそのまま届くので `kind` を持つ
+ * ただのオブジェクトだが、Error に同じキーを生やしても `isStaleSave` の見る形は
+ * 変わらない(`typeof` が object で `kind` を持つ)。
+ */
+const saveError = (kind, message) => Object.assign(new Error(message), { kind });
+
 (() => {
-  if (window.__TAURI_INTERNALS__) {
+  if (globalThis.__TAURI_INTERNALS__) {
     return;
   }
 
@@ -31,8 +96,6 @@
     "読書メモ: 設計の背景を残すことについて",
     "ウィジェットからの起動導線を確認した",
   ];
-
-  const pad = (n) => String(n).padStart(2, "0");
 
   /** 書いた入り口の固定語彙。`undefined` は名乗る前に書かれた記録。 */
   const SOURCES = ["app", "widget", "cli", "mcp", undefined];
@@ -216,15 +279,23 @@
   const noteList = () =>
     [...notes.entries()]
       .toSorted(([a], [b]) => b.localeCompare(a))
-      .map(([filename, note]) => ({
-        path: `/mock/data/${filename}`,
-        filename,
-        time: note.time,
-        tags: note.tags,
-        preview: note.body.slice(0, 120),
-        ...(note.origin ? { origin: note.origin } : {}),
-        ...(note.template ? { template: note.template } : {}),
-      }));
+      .map(([filename, note]) => {
+        const summary = {
+          path: `/mock/data/${filename}`,
+          filename,
+          time: note.time,
+          tags: note.tags,
+          preview: note.body.slice(0, 120),
+        };
+        // core が `skip_serializing_if` で落とすのと同じく、無いキーは生やさない
+        if (note.origin) {
+          summary.origin = note.origin;
+        }
+        if (note.template) {
+          summary.template = note.template;
+        }
+        return summary;
+      });
 
   // ---- テンプレートのつくりもの ----
 
@@ -258,17 +329,7 @@
     en: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
   };
 
-  /** core の `format_stamp` と同じトークン。strftime には渡さない。 */
-  const formatStamp = (date, pattern) =>
-    pattern
-      .replaceAll("YYYY", String(date.getFullYear()))
-      .replaceAll("MM", pad(date.getMonth() + 1))
-      .replaceAll("DD", pad(date.getDate()))
-      .replaceAll("HH", pad(date.getHours()))
-      .replaceAll("mm", pad(date.getMinutes()))
-      .replaceAll("ss", pad(date.getSeconds()));
-
-  const PREV_LINE = /\{\{\s*prev\s*(:[^}]*)?\}\}/;
+  const PREV_LINE = /\{\{\s*prev\s*(?::[^}]*)?\}\}/u;
 
   /**
    * core の `resolve_vars` と同じ規則で解く。ハーネスだけ違う結果を返すと、
@@ -280,37 +341,30 @@
       // 前回が無いときは、その行を丸ごと落とす(「前回: 」だけを残さない)
       .filter((line) => prev !== null || !PREV_LINE.test(line))
       .map((line) =>
-        line.replaceAll(/\{\{([^}]*)\}\}/g, (raw, inner) => {
+        line.replaceAll(/\{\{(?<inner>[^}]*)\}\}/gu, (raw, inner) => {
           const at = inner.indexOf(":");
           const name = (at === -1 ? inner : inner.slice(0, at)).trim();
           const arg = at === -1 ? undefined : inner.slice(at + 1).trim();
           const now = new Date();
-          if (name === "date") return formatStamp(now, arg || "YYYY-MM-DD");
-          if (name === "time") return formatStamp(now, arg || "HH:mm");
-          if (name === "weekday") return (WEEKDAYS[locale] ?? WEEKDAYS.en)[now.getDay()];
-          if (name === "prev") return prev ?? "";
+          if (name === "date") {
+            return formatStamp(now, arg || "YYYY-MM-DD");
+          }
+          if (name === "time") {
+            return formatStamp(now, arg || "HH:mm");
+          }
+          if (name === "weekday") {
+            return (WEEKDAYS[locale] ?? WEEKDAYS.en)[now.getDay()];
+          }
+          if (name === "prev") {
+            return prev ?? "";
+          }
           // 知らない変数は書いたまま残す
           return raw;
         }),
       )
       .join("\n");
 
-  const templateSummary = (filename, template) => ({
-    filename,
-    name: filename.replace(/\.md$/, ""),
-    tags: template.tags,
-    preview: (template.body.split("\n").find((line) => line.trim()) ?? "")
-      .replace(/^#+\s*/, "")
-      .trim(),
-  });
-
   // ---- グリフのつくりもの ----
-
-  /** 本物は data:image/svg+xml;base64 で返す。ここも同じ形にしておく。 */
-  const svgDataUrl = (svg) => `data:image/svg+xml;base64,${btoa(svg)}`;
-
-  const glyphSvg = (label, fill) =>
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="${fill}"/><text x="16" y="21" font-size="12" font-family="sans-serif" font-weight="700" text-anchor="middle" fill="#fff">${label}</text></svg>`;
 
   /** name -> { format, url }。 */
   const glyphs = new Map([
@@ -319,22 +373,6 @@
   ]);
 
   // ---- コマンド実装 ----
-
-  const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-  // core の Revision の代わり。本文が同じなら同じ値、違えば違う値になれば足りる
-  const revisionOf = (body) => {
-    let hash = 5381;
-    for (const ch of body) {
-      hash = ((hash * 33) ^ ch.codePointAt(0)) >>> 0;
-    }
-    return hash.toString(16);
-  };
-
-  const placeKey = (lat, lon) => `${lat.toFixed(2)},${lon.toFixed(2)}`;
-
-  const stampOf = (date) =>
-    `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}_${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
 
   // まだ使われていない名前と、その名前が名乗る時刻。core の `Notes::create`
   // と同じく、同じ秒に 2 本作られたら空いている秒まで 1 秒ずつ進める。
@@ -375,16 +413,17 @@
     search_all: ({ query, tags }) => {
       const needle = query.trim().toLowerCase();
       // 本流(core)の utils::tags と同じ規則: `#` の有無と ASCII の大小は見ない
-      const lower = (tag) => tag.replaceAll(/[A-Z]/g, (c) => c.toLowerCase());
       const scope = tags
-        .map((tag) => lower(tag.trim().replace(/^#/, "")))
+        .map((tag) => lowerTag(tag.trim().replace(/^#/u, "")))
         .filter((tag) => tag.length > 0);
       if (!needle && scope.length === 0) {
         return [];
       }
       // lib/tags.ts の TAG と同じ。ここは 1 行しか読まないのでコードは切り分けない
-      const TAG = /(?<![\p{L}\p{N}_-])#([\p{L}\p{N}_-]+)/gu;
-      const parseTags = (text) => [...new Set([...text.matchAll(TAG)].map((m) => lower(m[1])))];
+      const TAG = /(?<![\p{L}\p{N}_-])#(?<tag>[\p{L}\p{N}_-]+)/gu;
+      const parseTags = (text) => [
+        ...new Set([...text.matchAll(TAG)].map((m) => lowerTag(m.groups.tag))),
+      ];
       const inScope = (own) => scope.every((tag) => own.includes(tag));
       /** 本流(core)と同じ形: 一致の前後を含む抜粋と、文字数の一致位置。 */
       const excerpt = (text) => {
@@ -399,14 +438,14 @@
         const snippet = lead + flat.slice(start, at + needle.length + 40);
         return {
           snippet,
-          match_start: [...(lead + flat.slice(start, at))].length,
-          match_len: [...flat.slice(at, at + needle.length)].length,
+          match_start: charCount(lead + flat.slice(start, at)),
+          match_len: charCount(flat.slice(at, at + needle.length)),
         };
       };
       const hits = [];
       for (const [iso, lines] of timeline) {
         lines.forEach((raw, index) => {
-          const text = raw.replace(/^- \[\d\d:\d\d:\d\d\] /, "").replace(/ \{.*\}$/, "");
+          const text = raw.replace(/^- \[\d\d:\d\d:\d\d\] /u, "").replace(/ \{.*\}$/u, "");
           const own = parseTags(text);
           if (!text.toLowerCase().includes(needle) || !inScope(own)) {
             return;
@@ -423,28 +462,27 @@
         });
       }
       for (const [filename, note] of notes) {
-        if (!note.body.toLowerCase().includes(needle) || !inScope(note.tags)) {
-          continue;
+        if (note.body.toLowerCase().includes(needle) && inScope(note.tags)) {
+          hits.push({
+            kind: "note",
+            title: note.body.split("\n")[0].replace(/^#+\s*/u, ""),
+            date: note.time.slice(0, 10),
+            filename,
+            index: null,
+            tags: note.tags,
+            ...excerpt(note.body),
+          });
         }
-        hits.push({
-          kind: "note",
-          title: note.body.split("\n")[0].replace(/^#+\s*/, ""),
-          date: note.time.slice(0, 10),
-          filename,
-          index: null,
-          tags: note.tags,
-          ...excerpt(note.body),
-        });
       }
       return hits.toSorted((a, b) => b.date.localeCompare(a.date)).slice(0, 100);
     },
     list_notes: () => noteList(),
     find_backlinks: ({ filename }) => {
-      const needle = `[[${filename.replace(/\.md$/, "")}]]`;
+      const needle = `[[${filename.replace(/\.md$/u, "")}]]`;
       const hits = [];
       for (const [iso, lines] of timeline) {
         lines.forEach((raw, index) => {
-          const text = raw.replace(/^- \[\d\d:\d\d:\d\d\] /, "").replace(/ \{.*\}$/, "");
+          const text = raw.replace(/^- \[\d\d:\d\d:\d\d\] /u, "").replace(/ \{.*\}$/u, "");
           if (text.includes(needle)) {
             hits.push({
               kind: "timeline",
@@ -461,20 +499,19 @@
         });
       }
       for (const [name, note] of notes) {
-        if (name === filename || !note.body.includes(needle)) {
-          continue;
+        if (name !== filename && note.body.includes(needle)) {
+          hits.push({
+            kind: "note",
+            title: note.body.split("\n")[0].replace(/^#+\s*/u, ""),
+            snippet: note.body.slice(0, 90),
+            date: note.time.slice(0, 10),
+            filename: name,
+            index: null,
+            tags: note.tags,
+            match_start: null,
+            match_len: null,
+          });
         }
-        hits.push({
-          kind: "note",
-          title: note.body.split("\n")[0].replace(/^#+\s*/, ""),
-          snippet: note.body.slice(0, 90),
-          date: note.time.slice(0, 10),
-          filename: name,
-          index: null,
-          tags: note.tags,
-          match_start: null,
-          match_len: null,
-        });
       }
       return hits.toSorted((a, b) => b.date.localeCompare(a.date));
     },
@@ -539,11 +576,12 @@
       const filename = filePath.split("/").at(-1);
       const note = notes.get(filename);
       if (!note) {
-        throw { kind: "other", message: `note not found: ${filename}` };
+        throw saveError("other", `note not found: ${filename}`);
       }
       // core と同じ照合。読んでから誰かが書き換えていれば、その上に書かない
-      if (revision != null && revision !== revisionOf(note.body)) {
-        throw { kind: "stale", message: `Stale: ${filename} changed since it was read` };
+      const expected = revision ?? null;
+      if (expected !== null && expected !== revisionOf(note.body)) {
+        throw saveError("stale", `Stale: ${filename} changed since it was read`);
       }
       note.body = body;
       // core と同じく、本文の保存だけが更新日時を打つ
@@ -573,22 +611,22 @@
       if (!template) {
         throw new Error("template not found");
       }
-      const name = filename.replace(/\.md$/, "");
+      const name = filename.replace(/\.md$/u, "");
 
       // 同じテンプレの今日のぶんが既にあれば作らない。日付はファイル名の
       // 先頭 8 桁で見る — 保存している time は UTC で、日をまたぐと食い違う
-      const today = stampOf(new Date()).slice(0, 8);
+      const todayStamp = stampOf(new Date()).slice(0, 8);
       const existing = [...notes.entries()].find(
-        ([fname, note]) => note.template === name && fname.slice(0, 8) === today,
+        ([fname, note]) => note.template === name && fname.slice(0, 8) === todayStamp,
       );
       if (existing) {
         return { path: `/mock/data/${existing[0]}`, reused: true };
       }
 
-      const previous = [...notes.entries()]
+      const [previous] = [...notes.entries()]
         .filter(([, note]) => note.template === name)
-        .toSorted(([a], [b]) => b.localeCompare(a))[0];
-      const prev = previous ? `[[${previous[0].replace(/\.md$/, "")}]]` : null;
+        .toSorted(([a], [b]) => b.localeCompare(a));
+      const prev = previous ? `[[${previous[0].replace(/\.md$/u, "")}]]` : null;
 
       const { filename: created, time } = freeNoteName();
       notes.set(created, {
@@ -619,7 +657,7 @@
         .toSorted((a, b) => a.name.localeCompare(b.name)),
     save_glyph: ({ name, format, dataBase64 }) => {
       // core と同じ規則。通らない名前は本物でも保存できない
-      if (!/^[a-z0-9][a-z0-9_+-]{0,31}$/.test(name)) {
+      if (!/^[a-z0-9][a-z0-9_+-]{0,31}$/u.test(name)) {
         throw new Error(`Invalid path: ${name}`);
       }
       if (format !== "png" && format !== "svg") {
@@ -661,13 +699,14 @@
 
   let callbackId = 0;
 
-  window.__TAURI_INTERNALS__ = {
+  globalThis.__TAURI_INTERNALS__ = {
     invoke: async (cmd, args) => {
       const handler = commands[cmd];
       if (!handler) {
         throw new Error(`mock: unknown command ${cmd}`);
       }
-      return handler(args ?? {});
+      // await して返す。ハンドラが同期に投げても、本物と同じく reject で届く
+      return await handler(args ?? {});
     },
     transformCallback: () => {
       callbackId += 1;
