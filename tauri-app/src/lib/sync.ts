@@ -5,7 +5,7 @@ import type { UnlistenFn } from "@tauri-apps/api/event";
 import { onLocalMutation, typedInvoke } from "./commands";
 import { EVENTS } from "./events";
 import { t } from "./i18n";
-import { describeSyncError, describeSyncResult } from "./sync-status";
+import { describeSyncError, describeSyncResult, syncErrorKind } from "./sync-status";
 import type { SyncResultPayload } from "./sync-status";
 import type { IconName } from "../components/Icon";
 
@@ -83,7 +83,14 @@ export function createSyncState(onSynced: () => void): SyncState {
       }
       setStatus("idle");
       setMessage("");
-    } catch {
+    } catch (error) {
+      // 壊れた設定を「未設定」と見せると、設定画面で入力し直させることになり、
+      // その保存が読めなかったファイルを上書きする
+      if (syncErrorKind(error) === "configCorrupt") {
+        setStatus("error");
+        setMessage(t().sync.configCorrupt);
+        return;
+      }
       setStatus("needs-setup");
       setMessage(t().sync.notConfigured);
     }

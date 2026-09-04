@@ -138,7 +138,7 @@ async fn do_sync(handle: &AppHandle) -> Result<SyncResult, SyncError> {
         .path()
         .app_data_dir()
         .map_err(|e| SyncError::other(e.to_string()))?;
-    let config = SyncConfig::load(&base_dir);
+    let config = SyncConfig::load(&base_dir)?.unwrap_or_default();
     if !config.is_configured() {
         return Err(SyncError::new(
             "notConfigured",
