@@ -598,7 +598,7 @@ mod tests {
     fn a_tag_scope_keeps_only_notes_carrying_the_tag() {
         let tmp = TempDir::new().unwrap();
         draft(&tmp, "リトライ設計", &["sync".to_string()]).unwrap();
-        write_second_note(tmp.path(), "20200101_000000.md", "リトライの雑記 #misc");
+        draft(&tmp, "リトライの雑記 #misc", &[]).unwrap();
 
         let hits = search_all(tmp.path(), "リトライ", &scope(&["sync"])).unwrap();
 
@@ -694,22 +694,6 @@ mod tests {
         path.file_stem().unwrap().to_str().unwrap().to_string()
     }
 
-    /// 2 件目のノートを固定名で直接書く。`create_draft_note` を同じ秒に
-    /// 2 回呼ぶとファイル名が衝突し、1 件目を上書きしてしまう。
-    fn write_second_note(base: &Path, filename: &str, body: &str) {
-        use crate::utils::frontmatter::{self, NoteFrontmatter};
-        use chrono::TimeZone;
-        let fm = NoteFrontmatter::new(
-            chrono::FixedOffset::east_opt(9 * 3600)
-                .unwrap()
-                .with_ymd_and_hms(2020, 1, 1, 0, 0, 0)
-                .unwrap(),
-        );
-        let path = crate::utils::paths::notes_dir(base).join(filename);
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(&path, frontmatter::render(&fm, body).unwrap()).unwrap();
-    }
-
     #[test]
     fn a_timeline_entry_that_links_a_note_is_a_backlink() {
         let tmp = TempDir::new().unwrap();
@@ -731,7 +715,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let target = draft(&tmp, "指される側", &[]).unwrap();
         let body = format!("{}\n[[{}]]", "あ".repeat(300), stem_of(&target));
-        write_second_note(tmp.path(), "20200101_000000.md", &body);
+        draft(&tmp, &body, &[]).unwrap();
 
         let hits = find_backlinks(tmp.path(), &filename_of(&target)).unwrap();
 
@@ -761,7 +745,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let target = draft(&tmp, "指される側", &[]).unwrap();
         let body = format!("詳しくは [[{}|前の話]] を見る", stem_of(&target));
-        write_second_note(tmp.path(), "20200101_000000.md", &body);
+        draft(&tmp, &body, &[]).unwrap();
 
         let hits = find_backlinks(tmp.path(), &filename_of(&target)).unwrap();
 
@@ -778,7 +762,7 @@ mod tests {
     fn no_links_means_no_backlinks() {
         let tmp = TempDir::new().unwrap();
         let target = draft(&tmp, "誰も指していない", &[]).unwrap();
-        write_second_note(tmp.path(), "20200101_000000.md", "無関係なノート");
+        draft(&tmp, "無関係なノート", &[]).unwrap();
         save_timeline_entry(tmp.path(), "無関係なエントリ", &context(), Source::App).unwrap();
 
         assert!(

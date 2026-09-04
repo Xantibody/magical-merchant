@@ -183,6 +183,46 @@ mod tests {
         assert!(content.contains("draft body"));
     }
 
+    /// ファイル名は秒までの時刻。同じ秒に 2 本作っても 1 本目を潰さない。
+    /// 2 本目は 1 秒後の名前を取る — 形式(`YYYYMMDD_HHMMSS.md`)は不変。
+    #[test]
+    fn two_notes_created_in_the_same_second_both_survive() {
+        let tmp = TempDir::new().unwrap();
+
+        let first = draft(&tmp, "one", &[]).unwrap();
+        let second = draft(&tmp, "two", &[]).unwrap();
+
+        assert_ne!(first, second);
+        assert_eq!(read_note(&first).unwrap(), "one");
+        assert_eq!(read_note(&second).unwrap(), "two");
+        assert_eq!(list_notes(tmp.path()).unwrap().len(), 2);
+        assert_eq!(
+            stamp_of(&second) - stamp_of(&first),
+            chrono::Duration::seconds(1)
+        );
+    }
+
+    /// ずらした秒はファイル名だけの話ではない。frontmatter の `time` が
+    /// 名前とずれると、一覧(名前順)と表示(`time`)で並びが食い違う。
+    #[test]
+    fn a_shifted_name_carries_the_same_time_in_the_frontmatter() {
+        let tmp = TempDir::new().unwrap();
+        draft(&tmp, "one", &[]).unwrap();
+
+        let second = draft(&tmp, "two", &[]).unwrap();
+
+        let meta = read_note_meta(tmp.path(), &filename_of(&second)).unwrap();
+        assert_eq!(
+            meta.time.naive_local().format("%Y%m%d_%H%M%S").to_string(),
+            second.file_stem().unwrap().to_str().unwrap()
+        );
+    }
+
+    fn stamp_of(path: &Path) -> chrono::NaiveDateTime {
+        let stem = path.file_stem().unwrap().to_str().unwrap();
+        chrono::NaiveDateTime::parse_from_str(stem, "%Y%m%d_%H%M%S").unwrap()
+    }
+
     #[test]
     fn test_update_note_overwrites() {
         let tmp = TempDir::new().unwrap();
