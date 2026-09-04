@@ -88,19 +88,62 @@ pub fn parse<T: DeserializeOwned>(content: &str) -> Result<(T, &str), CoreError>
 /// frontmatter を捨てて本文だけを返す。`parse` と違い YAML の中身は見ないので、
 /// メタデータが壊れているファイルでも本文が画面に漏れ出さない。
 /// 区切りが閉じていなければ frontmatter とはみなさず全文を返す。
+///
+/// 区切りの探し方は `parse` が使う `markdown-frontmatter` の分割と同じ規則に
+/// 揃えてある(先頭の空白は落とす、行末は LF / CRLF / CR のどれでもよい、
+/// 開始直後の `---` も閉じ区切り)。crate は分割位置を公開していないので実装は
+/// 2 つあり、規則が食い違うと一覧(`parse`)は正しいのに編集経路(`strip`)
+/// だけ frontmatter を本文として抱える — `strip_matches_parse_body` がその
+/// 食い違いを見張っている。
 #[must_use]
 pub fn strip(content: &str) -> &str {
-    let Some(rest) = content.strip_prefix("---\n") else {
+    // `parse` は本文を trim 後の文字列から切り出すので、ここも揃える。
+    let content = content.trim_start();
+    let Some(first) = next_line(content, 0) else {
         return content;
     };
-    if let Some(idx) = rest.find("\n---\n") {
-        return &rest[idx + "\n---\n".len()..];
+    if first.text != "---" {
+        return content;
     }
-    if rest.ends_with("\n---") {
-        // 閉じ区切りがファイル末尾: 本文が空のノート
-        return "";
+    let mut pos = first.next_start;
+    while let Some(line) = next_line(content, pos) {
+        if line.text == "---" {
+            return &content[line.next_start..];
+        }
+        pos = line.next_start;
     }
+    // 閉じ区切りが無いなら frontmatter ではない
     content
+}
+
+struct Line<'a> {
+    /// 行末の改行を含まない行の中身。
+    text: &'a str,
+    /// 次の行の開始位置。行末が無い(末尾の行)なら文字列の長さ。
+    next_start: usize,
+}
+
+/// `pos` から 1 行を切り出す。行末は LF / CRLF / CR のどれでもよい。
+fn next_line(s: &str, pos: usize) -> Option<Line<'_>> {
+    let bytes = s.as_bytes();
+    if pos >= bytes.len() {
+        return None;
+    }
+    let mut end = pos;
+    while end < bytes.len() && bytes[end] != b'\n' && bytes[end] != b'\r' {
+        end += 1;
+    }
+    let mut next_start = end;
+    if next_start < bytes.len() && bytes[next_start] == b'\r' {
+        next_start += 1;
+    }
+    if next_start < bytes.len() && bytes[next_start] == b'\n' {
+        next_start += 1;
+    }
+    Some(Line {
+        text: &s[pos..end],
+        next_start,
+    })
 }
 
 #[cfg(test)]
@@ -289,6 +332,40 @@ mod tests {
     #[test]
     fn strip_keeps_unclosed_delimiter() {
         assert_eq!(strip("---\nno closing"), "---\nno closing");
+    }
+
+    /// CRLF で書かれたノート。`parse` は受けるので一覧は正常に出るのに、
+    /// `strip` が剥がせないと編集経路にだけ frontmatter が本文として流れ込み、
+    /// そのまま保存されて固定される。
+    #[test]
+    fn strip_removes_crlf_frontmatter() {
+        assert_eq!(strip("---\r\ntime: x\r\n---\r\nbody line"), "body line");
+    }
+
+    /// 空の frontmatter は開始直後の `---` が閉じ区切り。
+    #[test]
+    fn strip_removes_empty_frontmatter() {
+        assert_eq!(strip("---\n---\nbody line"), "body line");
+    }
+
+    /// `parse` と `strip` は同じノートから同じ本文を返す。行末や空 frontmatter の
+    /// 扱いが片方にしか入っていないのが元のバグで、一覧(`parse`)は正しいのに
+    /// 編集経路(`strip`)だけ frontmatter を本文として抱えた。
+    #[test]
+    fn strip_matches_parse_body() {
+        for content in [
+            // LF
+            "---\ntime: x\n---\nbody line\n",
+            // CRLF
+            "---\r\ntime: x\r\n---\r\nbody line\r\n",
+            // 空 frontmatter
+            "---\n---\nbody line\n",
+            // 本文中に閉じ区切りと同じ行がある
+            "---\ntime: x\n---\nbefore\n---\nafter\n",
+        ] {
+            let (_fm, body): (serde_yaml::Value, &str) = parse(content).unwrap();
+            assert_eq!(strip(content), body, "content: {content:?}");
+        }
     }
 
     #[test]
