@@ -8,11 +8,70 @@
  *
  * 作り物の状態(タイムライン・ノート・テンプレ)は IIFE の中に閉じる。外に出て
  * いるのは、その状態を何も見ない純粋なヘルパだけ。
+ *
+ * TS 化はしない(インライン注入される素の <script> なので)。型は JSDoc で書き、
+ * `tsconfig.dev.json` の checkJs が見る。
  */
 
+/**
+ * ノート 1 件の作り物。省略可能なキーは、本物の frontmatter で
+ * `skip_serializing_if` が落とすものと同じ。
+ * @typedef {object} MockNote
+ * @property {string} time
+ * @property {string[]} tags
+ * @property {string | null} [view]
+ * @property {string} body
+ * @property {string} [updated]
+ * @property {string} [source]
+ * @property {string} [origin]
+ * @property {string} [template]
+ */
+
+/**
+ * 一覧が返す 1 件。commands.ts の `Note` と同じ形。
+ * @typedef {object} NoteSummary
+ * @property {string} path
+ * @property {string} filename
+ * @property {string} time
+ * @property {string[]} tags
+ * @property {string} preview
+ * @property {string} [origin]
+ * @property {string} [template]
+ */
+
+/**
+ * @typedef {object} MockTemplate
+ * @property {string[]} tags
+ * @property {string} body
+ */
+
+/**
+ * @typedef {object} MockGlyph
+ * @property {string} format
+ * @property {string} url
+ */
+
+/**
+ * 行末 JSON の中身。実ファイルと同じく、空のものはキーごと無い。
+ * @typedef {object} MockContext
+ * @property {number} battery
+ * @property {boolean} is_charging
+ * @property {string} network_type
+ * @property {string} os
+ * @property {string} os_version
+ * @property {string} arch
+ * @property {{ latitude: number, longitude: number }} [location]
+ * @property {string} [s]
+ */
+
+/** @param {number} n */
 const pad = (n) => String(n).padStart(2, "0");
 
-/** core の `format_stamp` と同じトークン。strftime には渡さない。 */
+/**
+ * core の `format_stamp` と同じトークン。strftime には渡さない。
+ * @param {Date} date
+ * @param {string} pattern
+ */
 const formatStamp = (date, pattern) =>
   pattern
     .replaceAll("YYYY", String(date.getFullYear()))
@@ -22,10 +81,17 @@ const formatStamp = (date, pattern) =>
     .replaceAll("mm", pad(date.getMinutes()))
     .replaceAll("ss", pad(date.getSeconds()));
 
-/** ノートのファイル名になる `YYYYMMDD_HHMMSS`。 */
+/**
+ * ノートのファイル名になる `YYYYMMDD_HHMMSS`。
+ * @param {Date} date
+ */
 const stampOf = (date) =>
   `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}_${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
 
+/**
+ * @param {string} filename
+ * @param {MockTemplate} template
+ */
 const templateSummary = (filename, template) => ({
   filename,
   name: filename.replace(/\.md$/u, ""),
@@ -35,39 +101,62 @@ const templateSummary = (filename, template) => ({
     .trim(),
 });
 
-/** 本物は data:image/svg+xml;base64 で返す。ここも同じ形にしておく。 */
+/**
+ * 本物は data:image/svg+xml;base64 で返す。ここも同じ形にしておく。
+ * @param {string} svg
+ */
 const svgDataUrl = (svg) => `data:image/svg+xml;base64,${btoa(svg)}`;
 
+/**
+ * @param {string} label
+ * @param {string} fill
+ */
 const glyphSvg = (label, fill) =>
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="${fill}"/><text x="16" y="21" font-size="12" font-family="sans-serif" font-weight="700" text-anchor="middle" fill="#fff">${label}</text></svg>`;
 
+/** @param {number} ms */
 const delay = (ms) =>
   // oxlint-disable-next-line promise/avoid-new
   new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
 
-// core の Revision の代わり。本文が同じなら同じ値、違えば違う値になれば足りる
+/**
+ * core の Revision の代わり。本文が同じなら同じ値、違えば違う値になれば足りる。
+ * @param {string} body
+ */
 const revisionOf = (body) => {
   let hash = 5381;
   for (const ch of body) {
-    hash = ((hash * 33) ^ ch.codePointAt(0)) >>> 0;
+    hash = ((hash * 33) ^ (ch.codePointAt(0) ?? 0)) >>> 0;
   }
   return hash.toString(16);
 };
 
+/**
+ * @param {number} lat
+ * @param {number} lon
+ */
 const placeKey = (lat, lon) => `${lat.toFixed(2)},${lon.toFixed(2)}`;
 
-/** 本流(core)の utils::tags と同じ規則: ASCII の大小は見ない。 */
+/**
+ * 本流(core)の utils::tags と同じ規則: ASCII の大小は見ない。
+ * @param {string} tag
+ */
 const lowerTag = (tag) => tag.replaceAll(/[A-Z]/gu, (c) => c.toLowerCase());
 
-/** core が返す一致位置と同じ数え方。UTF-16 の要素数ではなく文字数で数える。 */
+/**
+ * core が返す一致位置と同じ数え方。UTF-16 の要素数ではなく文字数で数える。
+ * @param {string} text
+ */
 const charCount = (text) => [...text].length;
 
 /**
  * `update_draft` の失敗。本物は Rust 側の JSON がそのまま届くので `kind` を持つ
  * ただのオブジェクトだが、Error に同じキーを生やしても `isStaleSave` の見る形は
  * 変わらない(`typeof` が object で `kind` を持つ)。
+ * @param {"stale" | "other"} kind
+ * @param {string} message
  */
 const saveError = (kind, message) => Object.assign(new Error(message), { kind });
 
@@ -100,10 +189,15 @@ const saveError = (kind, message) => Object.assign(new Error(message), { kind })
   /** 書いた入り口の固定語彙。`undefined` は名乗る前に書かれた記録。 */
   const SOURCES = ["app", "widget", "cli", "mcp", undefined];
 
+  /**
+   * @param {number} dayIndex
+   * @param {number} entryIndex
+   */
   function contextFor(dayIndex, entryIndex) {
     if ((dayIndex + entryIndex) % 3 === 2) {
       return null;
     }
+    /** @type {MockContext} */
     const ctx = {
       battery: 20 + ((dayIndex * 13 + entryIndex * 29) % 80),
       is_charging: entryIndex % 4 === 0,
@@ -128,7 +222,10 @@ const saveError = (kind, message) => Object.assign(new Error(message), { kind })
     return ctx;
   }
 
-  /** date(ISO) -> raw 行の配列(古い順)。 */
+  /**
+   * date(ISO) -> raw 行の配列(古い順)。
+   * @type {Map<string, string[]>}
+   */
   const timeline = new Map();
   const today = new Date();
   for (let d = 0; d < 20; d += 1) {
@@ -147,7 +244,10 @@ const saveError = (kind, message) => Object.assign(new Error(message), { kind })
 
   // ---- ノートのつくりもの ----
 
-  /** タイムラインは実時刻基準で作られるので、origin も同じ基準で合わせる。 */
+  /**
+   * タイムラインは実時刻基準で作られるので、origin も同じ基準で合わせる。
+   * @param {number} days
+   */
   const isoDaysAgo = (days) => {
     const day = new Date(today.getFullYear(), today.getMonth(), today.getDate() - days);
     return `${day.getFullYear()}-${pad(day.getMonth() + 1)}-${pad(day.getDate())}`;
@@ -185,6 +285,7 @@ const saveError = (kind, message) => Object.assign(new Error(message), { kind })
     );
   }
 
+  /** @type {Map<string, MockNote>} */
   const notes = new Map([
     [
       "20260810_090000.md",
@@ -280,6 +381,7 @@ const saveError = (kind, message) => Object.assign(new Error(message), { kind })
     [...notes.entries()]
       .toSorted(([a], [b]) => b.localeCompare(a))
       .map(([filename, note]) => {
+        /** @type {NoteSummary} */
         const summary = {
           path: `/mock/data/${filename}`,
           filename,
@@ -299,7 +401,10 @@ const saveError = (kind, message) => Object.assign(new Error(message), { kind })
 
   // ---- テンプレートのつくりもの ----
 
-  /** filename -> { tags, body }。変数は本物と同じく未解決のまま持つ。 */
+  /**
+   * filename -> { tags, body }。変数は本物と同じく未解決のまま持つ。
+   * @type {Map<string, MockTemplate>}
+   */
   const templates = new Map([
     [
       "daily.md",
@@ -324,6 +429,7 @@ const saveError = (kind, message) => Object.assign(new Error(message), { kind })
     ],
   ]);
 
+  /** @type {Record<string, string[]>} */
   const WEEKDAYS = {
     ja: ["日", "月", "火", "水", "木", "金", "土"],
     en: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
@@ -334,6 +440,9 @@ const saveError = (kind, message) => Object.assign(new Error(message), { kind })
   /**
    * core の `resolve_vars` と同じ規則で解く。ハーネスだけ違う結果を返すと、
    * ブラウザで見た画面が実機の答え合わせにならない。
+   * @param {string} body
+   * @param {string | null} prev
+   * @param {string} locale
    */
   const resolveVars = (body, prev, locale) =>
     body
@@ -366,7 +475,10 @@ const saveError = (kind, message) => Object.assign(new Error(message), { kind })
 
   // ---- グリフのつくりもの ----
 
-  /** name -> { format, url }。 */
+  /**
+   * name -> { format, url }。
+   * @type {Map<string, MockGlyph>}
+   */
   const glyphs = new Map([
     ["236p", { format: "svg", url: svgDataUrl(glyphSvg("236P", "#d9480f")) }],
     ["623k", { format: "svg", url: svgDataUrl(glyphSvg("623K", "#1c7ed6")) }],
@@ -387,20 +499,25 @@ const saveError = (kind, message) => Object.assign(new Error(message), { kind })
 
   const commands = {
     list_timeline_dates: () => [...timeline.keys()].toSorted().toReversed(),
+    /** @param {{ date: string }} args */
     read_timeline_by_date: ({ date }) => timeline.get(date) ?? [],
+    /** @param {{ text: string }} args */
     save_quick_capture: ({ text }) => {
       const now = new Date();
       const iso = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
       const line = `- [${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}] ${text}`;
       timeline.set(iso, [...(timeline.get(iso) ?? []), line]);
     },
+    /** @param {{ date: string, index: number }} args */
     delete_timeline_entry: ({ date, index }) => {
       const lines = timeline.get(date) ?? [];
       lines.splice(index, 1);
     },
     // 実機のジオコーダは即答しない。名前が後から届く画面を再現する
+    /** @param {{ coordinates: [number, number][], locale: string }} args */
     resolve_places: async ({ coordinates, locale }) => {
       await delay(600);
+      /** @type {[string, string][]} */
       const answers = [];
       for (const [lat, lon] of coordinates) {
         const hit = PLACES.find((p) => placeKey(p.lat, p.lon) === placeKey(lat, lon));
@@ -410,6 +527,7 @@ const saveError = (kind, message) => Object.assign(new Error(message), { kind })
       }
       return answers;
     },
+    /** @param {{ query: string, tags: string[] }} args */
     search_all: ({ query, tags }) => {
       const needle = query.trim().toLowerCase();
       // 本流(core)の utils::tags と同じ規則: `#` の有無と ASCII の大小は見ない
@@ -421,11 +539,16 @@ const saveError = (kind, message) => Object.assign(new Error(message), { kind })
       }
       // lib/tags.ts の TAG と同じ。ここは 1 行しか読まないのでコードは切り分けない
       const TAG = /(?<![\p{L}\p{N}_-])#(?<tag>[\p{L}\p{N}_-]+)/gu;
+      /** @param {string} text */
       const parseTags = (text) => [
-        ...new Set([...text.matchAll(TAG)].map((m) => lowerTag(m.groups.tag))),
+        ...new Set([...text.matchAll(TAG)].map((m) => lowerTag(m.groups?.tag ?? ""))),
       ];
+      /** @param {string[]} own */
       const inScope = (own) => scope.every((tag) => own.includes(tag));
-      /** 本流(core)と同じ形: 一致の前後を含む抜粋と、文字数の一致位置。 */
+      /**
+       * 本流(core)と同じ形: 一致の前後を含む抜粋と、文字数の一致位置。
+       * @param {string} text
+       */
       const excerpt = (text) => {
         const flat = text.replaceAll("\n", " ");
         // タグだけで絞った一覧には光らせる場所がない
@@ -477,6 +600,7 @@ const saveError = (kind, message) => Object.assign(new Error(message), { kind })
       return hits.toSorted((a, b) => b.date.localeCompare(a.date)).slice(0, 100);
     },
     list_notes: () => noteList(),
+    /** @param {{ filename: string }} args */
     find_backlinks: ({ filename }) => {
       const needle = `[[${filename.replace(/\.md$/u, "")}]]`;
       const hits = [];
@@ -515,12 +639,14 @@ const saveError = (kind, message) => Object.assign(new Error(message), { kind })
       }
       return hits.toSorted((a, b) => b.date.localeCompare(a.date));
     },
+    /** @param {{ filename: string }} args */
     read_note: async ({ filename }) => {
       // ディスク読みの往復ぶん。ノート切替の描画順の検証に効く
       await delay(30);
       const body = notes.get(filename)?.body ?? "";
       return { body, revision: revisionOf(body) };
     },
+    /** @param {{ filename: string }} args */
     read_note_meta: async ({ filename }) => {
       await delay(30);
       const note = notes.get(filename);
@@ -537,27 +663,32 @@ const saveError = (kind, message) => Object.assign(new Error(message), { kind })
         ...(note.source ? { source: note.source } : {}),
       };
     },
+    /** @param {{ filename: string, time: string, tags: string[] }} args */
     update_note_meta: ({ filename, time, tags }) => {
       const note = notes.get(filename);
       if (note) {
         Object.assign(note, { time, tags });
       }
     },
+    /** @param {{ filename: string, view: string | null }} args */
     set_note_view: ({ filename, view }) => {
       const note = notes.get(filename);
       if (note) {
         note.view = view;
       }
     },
+    /** @param {{ filename: string, origin: string | null }} args */
     set_note_origin: ({ filename, origin }) => {
       const note = notes.get(filename);
       if (note) {
         note.origin = origin ?? undefined;
       }
     },
+    /** @param {{ filename: string }} args */
     delete_note: ({ filename }) => {
       notes.delete(filename);
     },
+    /** @param {{ body: string, tags?: string[], origin?: string }} args */
     create_draft: ({ body, tags, origin }) => {
       const { filename, time } = freeNoteName();
       notes.set(filename, {
@@ -572,8 +703,9 @@ const saveError = (kind, message) => Object.assign(new Error(message), { kind })
       });
       return `/mock/data/${filename}`;
     },
+    /** @param {{ filePath: string, body: string, revision?: string | null }} args */
     update_draft: ({ filePath, body, revision }) => {
-      const filename = filePath.split("/").at(-1);
+      const filename = filePath.split("/").at(-1) ?? filePath;
       const note = notes.get(filename);
       if (!note) {
         throw saveError("other", `note not found: ${filename}`);
@@ -592,6 +724,7 @@ const saveError = (kind, message) => Object.assign(new Error(message), { kind })
       [...templates.entries()]
         .map(([filename, template]) => templateSummary(filename, template))
         .toSorted((a, b) => a.name.localeCompare(b.name)),
+    /** @param {{ filename: string }} args */
     read_template: async ({ filename }) => {
       await delay(30);
       const template = templates.get(filename);
@@ -600,12 +733,15 @@ const saveError = (kind, message) => Object.assign(new Error(message), { kind })
       }
       return { body: template.body, tags: template.tags };
     },
+    /** @param {{ filename: string, body: string, tags?: string[] }} args */
     save_template: ({ filename, body, tags }) => {
       templates.set(filename, { body, tags: tags ?? [] });
     },
+    /** @param {{ filename: string }} args */
     delete_template: ({ filename }) => {
       templates.delete(filename);
     },
+    /** @param {{ filename: string, locale: string }} args */
     create_from_template: ({ filename, locale }) => {
       const template = templates.get(filename);
       if (!template) {
@@ -655,6 +791,7 @@ const saveError = (kind, message) => Object.assign(new Error(message), { kind })
       [...glyphs.entries()]
         .map(([name, glyph]) => ({ name, url: glyph.url }))
         .toSorted((a, b) => a.name.localeCompare(b.name)),
+    /** @param {{ name: string, format: string, dataBase64: string }} args */
     save_glyph: ({ name, format, dataBase64 }) => {
       // core と同じ規則。通らない名前は本物でも保存できない
       if (!/^[a-z0-9][a-z0-9_+-]{0,31}$/u.test(name)) {
@@ -666,14 +803,16 @@ const saveError = (kind, message) => Object.assign(new Error(message), { kind })
       const mime = format === "png" ? "image/png" : "image/svg+xml";
       glyphs.set(name, { format, url: `data:${mime};base64,${dataBase64}` });
     },
+    /** @param {{ name: string }} args */
     delete_glyph: ({ name }) => {
       glyphs.delete(name);
     },
+    /** @param {{ suggestedName: string, dataBase64: string }} args */
     save_export: ({ suggestedName, dataBase64 }) => {
       // ブラウザに保存ダイアログは無い。書き出した中身を別タブで開いて、
       // 目で確かめられるようにする
       const mime = suggestedName.endsWith(".png") ? "image/png" : "image/svg+xml";
-      const bytes = Uint8Array.from(atob(dataBase64), (c) => c.codePointAt(0));
+      const bytes = Uint8Array.from(atob(dataBase64), (c) => c.codePointAt(0) ?? 0);
       window.open(URL.createObjectURL(new Blob([bytes], { type: mime })), "_blank");
       return { saved: true };
     },
@@ -701,7 +840,11 @@ const saveError = (kind, message) => Object.assign(new Error(message), { kind })
 
   globalThis.__TAURI_INTERNALS__ = {
     invoke: async (cmd, args) => {
-      const handler = commands[cmd];
+      // cmd はただの文字列なので、表の側を「名前 → ハンドラ」として引く
+      const table = /** @type {Record<string, (args: Record<string, unknown>) => unknown>} */ (
+        /** @type {unknown} */ (commands)
+      );
+      const handler = table[cmd];
       if (!handler) {
         throw new Error(`mock: unknown command ${cmd}`);
       }
