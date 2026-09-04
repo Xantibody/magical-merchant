@@ -1,7 +1,10 @@
-import { describe, it, expect, beforeAll, beforeEach, afterAll, afterEach } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterAll, afterEach, vi } from "vitest";
 import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
+import { listen } from "@tauri-apps/api/event";
 import type { ClientContext } from "./client-context";
 import { isStaleSave, onLocalMutation, typedInvoke } from "./commands";
+import { describeSyncResult } from "./sync-status";
+import type { SyncResultPayload } from "./sync-status";
 // browser mode に node:fs は無い。Vite の `?raw` がソースをそのまま文字列で渡す。
 // oxlint は `?raw` を知らず、素の .ts に default export を探しに行くので黙らせる
 // oxlint-disable-next-line import/default
@@ -129,6 +132,26 @@ describe("dev/ipc-mock.js", () => {
       }),
     );
     expect(answers.filter((answer) => answer.includes("unknown command"))).toStrictEqual([]);
+  });
+
+  // 同期の結果はコマンドの戻りではなくイベントで届く。モックが流す形が
+  // core の `SyncIssue` からずれると、ブラウザ検証では出ているように見えて
+  // 実機では文言が空になる
+  it("delivers sync results the app can put into words", async () => {
+    const results: SyncResultPayload[] = [];
+    const unlisten = await listen<SyncResultPayload>("sync-complete", (event) =>
+      results.push(event.payload),
+    );
+    const invoke = tauri.__TAURI_INTERNALS__?.invoke;
+    // 成功と失敗を交互に流すので、2 回押せば両方が来る
+    await invoke?.("sync_start", {});
+    await invoke?.("sync_start", {});
+    await vi.waitFor(() => expect(results).toHaveLength(2));
+    unlisten();
+
+    const messages = results.map((result) => describeSyncResult(result).message);
+    expect(messages.every((message) => message.length > 0)).toBe(true);
+    expect(messages.some((message) => message.includes("notes/20260805_101500.md"))).toBe(true);
   });
 });
 
