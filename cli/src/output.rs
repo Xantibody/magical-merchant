@@ -364,7 +364,7 @@ pub(crate) struct CreatedNoteOutput {
 pub(crate) struct UpdatedNoteOutput {
     pub(crate) filename: String,
     /// The copy of the note taken before this write. Pass its `id` to
-    /// `restore_note` to undo.
+    /// `restore_note` to undo; only the newest 20 copies of a note are kept.
     pub(crate) snapshot: Option<SnapshotInfo>,
     /// Fingerprint of the body now on disk; the `revision` for a further
     /// `update_note`.
@@ -375,6 +375,7 @@ pub(crate) struct UpdatedNoteOutput {
 #[derive(Serialize, schemars::JsonSchema)]
 pub(crate) struct SnapshotInfo {
     /// The argument to pass to `read_note_history` / `restore_note`.
+    /// Valid until 20 newer copies of the same note exist.
     pub(crate) id: String,
     /// When the copy was taken, RFC 3339.
     pub(crate) time: String,
