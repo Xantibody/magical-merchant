@@ -36,6 +36,22 @@ use magical_merchant_core::{
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_deep_link::DeepLinkExt as _;
 
+/// 全ファイルを舐める読み取りをメインスレッドから外す。
+///
+/// 同期コマンドはメインスレッドで実行される。一覧・検索・バックリンクは
+/// ノート数と日数に比例して伸び(1 年分で 10〜30ms、実機ではその数倍)、
+/// その間ウィンドウの操作もイベントも止まる。`resolve_places` と同じく
+/// blocking プールで走らせ、メインスレッドには結果だけ返す。
+async fn off_main_thread<T, F>(work: F) -> Result<T, String>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T, String> + Send + 'static,
+{
+    tauri::async_runtime::spawn_blocking(work)
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 fn app_base_dir(handle: &AppHandle) -> Result<std::path::PathBuf, String> {
     handle.path().app_data_dir().map_err(|e| e.to_string())
 }
@@ -144,11 +160,14 @@ pub(crate) fn repair_once(base_dir: &std::path::Path) {
 }
 
 #[tauri::command]
-fn list_notes(handle: AppHandle) -> Result<Vec<NoteSummary>, String> {
+async fn list_notes(handle: AppHandle) -> Result<Vec<NoteSummary>, String> {
     let base_dir = app_base_dir(&handle)?;
-    repair_once(&base_dir);
+    off_main_thread(move || {
+        repair_once(&base_dir);
 
-    magical_merchant_core::list_notes(&base_dir).map_err(|e| e.to_string())
+        magical_merchant_core::list_notes(&base_dir).map_err(|e| e.to_string())
+    })
+    .await
 }
 
 #[tauri::command]
@@ -162,10 +181,13 @@ fn read_note(handle: AppHandle, filename: String) -> Result<NoteRead, String> {
 }
 
 #[tauri::command]
-fn find_backlinks(handle: AppHandle, filename: String) -> Result<Vec<SearchHit>, String> {
+async fn find_backlinks(handle: AppHandle, filename: String) -> Result<Vec<SearchHit>, String> {
     let base_dir = app_base_dir(&handle)?;
     let filename = parse_filename(&filename)?;
-    magical_merchant_core::find_backlinks(&base_dir, &filename).map_err(|e| e.to_string())
+    off_main_thread(move || {
+        magical_merchant_core::find_backlinks(&base_dir, &filename).map_err(|e| e.to_string())
+    })
+    .await
 }
 
 #[tauri::command]
@@ -387,13 +409,16 @@ async fn resolve_places(
 }
 
 #[tauri::command]
-fn search_all(
+async fn search_all(
     handle: AppHandle,
     query: String,
     tags: Vec<String>,
 ) -> Result<Vec<SearchHit>, String> {
     let base_dir = app_base_dir(&handle)?;
-    magical_merchant_core::search_all(&base_dir, &query, &tags).map_err(|e| e.to_string())
+    off_main_thread(move || {
+        magical_merchant_core::search_all(&base_dir, &query, &tags).map_err(|e| e.to_string())
+    })
+    .await
 }
 
 #[tauri::command]
