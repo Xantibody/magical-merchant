@@ -452,6 +452,22 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .manage(sync::AppSyncState::default())
         .setup(|app| {
+            // Android には `log` の受け手が居らず、依存クレートの警告は捨てられる。
+            // 下の android_tls が使う rustls-platform-verifier は証明書を拒んだ
+            // 理由をここにしか書かないので、初期化はその前に済ませる。
+            // リリースで Warn 止まりなのは、Debug まで出すと依存クレートの
+            // 通常時のログが logcat を埋めて肝心の 1 行が流れるため。
+            #[cfg(target_os = "android")]
+            android_logger::init_once(
+                android_logger::Config::default()
+                    .with_max_level(if cfg!(debug_assertions) {
+                        log::LevelFilter::Debug
+                    } else {
+                        log::LevelFilter::Warn
+                    })
+                    .with_tag("magical-merchant"),
+            );
+
             // ブラウザで認証している間に OS がアプリを回収すると、トークンは
             // 起動 URL として届く。`new-url` イベントはアプリが生きていた場合に
             // しか飛ばないので、両方を見ないとログインが黙って失敗する。
