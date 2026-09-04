@@ -43,6 +43,16 @@ describe("isUnsafeKey", () => {
     expect(isUnsafeKey("notes/archive/2026/note.md")).toBe(false);
     expect(isUnsafeKey("notes/file.sync-conflict-20260512-120000.md")).toBe(false);
   });
+
+  /// 抜け出せるのは `..` というパス要素であって、名前の中に並んだ点ではない。
+  /// サーバー駆動同期以前の控えには点が 1 つ多い名前があり、部分一致で弾くと
+  /// その控えだけ永久に同期できない。
+  it("accepts a doubled dot inside a filename", () => {
+    expect(isUnsafeKey("projects/a/done/20260417_023550.sync-conflict-20260511-031336..md")).toBe(
+      false,
+    );
+    expect(isUnsafeKey("notes/..md")).toBe(false);
+  });
 });
 
 describe("isValidHash", () => {

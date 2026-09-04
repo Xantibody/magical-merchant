@@ -7,7 +7,7 @@ use crate::error::CoreError;
 use crate::sync::conflict::conflict_copy_path;
 use crate::utils::frontmatter::{self, NoteFrontmatter};
 use crate::utils::fs::{ensure_dir, list_md_files, write_atomic};
-use crate::utils::paths::{NOTES_DIR, TIMELINE_DIR, conflicts_dir, data_dir};
+use crate::utils::paths::{conflicts_dir, data_dir};
 
 /// 編集画面が frontmatter ごと Milkdown に通していた時期に保存されたノートは、
 /// 本文の先頭に「化けたメタデータ」を抱えている。開始区切りの `---` は `***` に、
@@ -42,13 +42,16 @@ pub(crate) fn repair_all(notes_dir: &Path) -> Result<usize, CoreError> {
     Ok(repaired)
 }
 
-/// 古い版が `data/notes/` と `data/timeline/` に置いた競合コピーを `conflicts/` へ
-/// 移す。移した件数を返す。
+/// 古い版が `data/` に置いた競合コピーを `conflicts/` へ移す。移した件数を返す。
 ///
 /// 控えは同期の走査からは外れていたが、ノート一覧は `data/notes/*.md` を
 /// 素通しで拾うので、元のノートが消えたあとも残骸として並び続けていた。
 /// タイムラインの控えは一覧には出ないが、走査の除外をやめた以上、
 /// 置いたままだと次の同期で新しいファイルとして全端末へ配られる。
+///
+/// 探すのは `data/` 全体。走査が `data/` を丸ごと同期対象にする以上、
+/// 残骸が配られるかどうかは置き場所によらない — 利用者が自分で切った
+/// ディレクトリの下にある控えも、`notes/` にあるのと同じ扱いになる。
 ///
 /// 中身は読まず `rename` するだけ。控えが壊れていても、ノートの形をして
 /// いなくても運べる。起動時、最初の同期より前に呼ぶこと — あとで呼ぶと、
@@ -56,29 +59,39 @@ pub(crate) fn repair_all(notes_dir: &Path) -> Result<usize, CoreError> {
 ///
 /// 1 件の失敗では止まらない。運べなかった控えは次の起動でまた試すだけで、
 /// そのために残りの引っ越しを諦める理由はない。
-pub(crate) fn relocate_conflict_copies(base_dir: &Path) -> Result<usize, CoreError> {
-    let conflicts = conflicts_dir(base_dir);
+pub(crate) fn relocate_conflict_copies(base_dir: &Path) -> usize {
     let data = data_dir(base_dir);
     let mut moved = 0;
-    for dir in [NOTES_DIR, TIMELINE_DIR] {
-        for entry in list_md_files(&data.join(dir))? {
-            let name = entry.file_name();
-            let Some(name) = name.to_str() else {
-                continue;
-            };
-            // 走査キーと同じ形にしてから読ませる。控えの置き場は
-            // ダウンロードで降ってきたぶんと同じ `conflicts/<dir>/…` になる
-            let Some(relative) = conflict_copy_path(&format!("{dir}/{name}")) else {
-                continue;
-            };
-            let target = conflicts.join(relative);
-            if ensure_dir(&target).is_err() || fs::rename(entry.path(), &target).is_err() {
-                continue;
-            }
-            moved += 1;
+    relocate_under(&data, &data, &conflicts_dir(base_dir), &mut moved);
+    moved
+}
+
+fn relocate_under(root: &Path, current: &Path, conflicts: &Path, moved: &mut usize) {
+    let Ok(entries) = fs::read_dir(current) else {
+        return;
+    };
+    for entry in entries.filter_map(Result::ok) {
+        let path = entry.path();
+        if entry.file_type().is_ok_and(|t| t.is_dir()) {
+            relocate_under(root, &path, conflicts, moved);
+            continue;
         }
+        // 走査キーと同じ形にしてから読ませる。控えの置き場は
+        // ダウンロードで降ってきたぶんと同じ `conflicts/<キー>/…` になる
+        let Some(relative) = path
+            .strip_prefix(root)
+            .ok()
+            .and_then(|key| key.to_str())
+            .and_then(conflict_copy_path)
+        else {
+            continue;
+        };
+        let target = conflicts.join(relative);
+        if ensure_dir(&target).is_err() || fs::rename(&path, &target).is_err() {
+            continue;
+        }
+        *moved += 1;
     }
-    Ok(moved)
 }
 
 /// 本文先頭の化けたメタデータ塊を取り除いた本文を返す。塊が無ければ `None`。
@@ -137,7 +150,7 @@ fn filename_time(filename: &str) -> Option<DateTime<FixedOffset>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::paths::notes_dir;
+    use crate::utils::paths::{TIMELINE_DIR, notes_dir};
     use tempfile::TempDir;
 
     /// 実際に壊れていたファイルと同じ形の再現。
@@ -283,7 +296,7 @@ mod tests {
             "orphan copy",
         );
 
-        let moved = relocate_conflict_copies(tmp.path()).unwrap();
+        let moved = relocate_conflict_copies(tmp.path());
 
         assert_eq!(moved, 2);
         let notes: Vec<String> = list_md_files(&notes_dir(tmp.path()))
@@ -313,13 +326,13 @@ mod tests {
             "copy",
         );
 
-        relocate_conflict_copies(tmp.path()).unwrap();
+        assert_eq!(relocate_conflict_copies(tmp.path()), 1);
         let after_first = fs::read_to_string(
             conflicts_dir(tmp.path()).join("notes/20260320_033440/20260511-031336.md"),
         )
         .unwrap();
 
-        assert_eq!(relocate_conflict_copies(tmp.path()).unwrap(), 0);
+        assert_eq!(relocate_conflict_copies(tmp.path()), 0);
         assert_eq!(
             fs::read_to_string(
                 conflicts_dir(tmp.path()).join("notes/20260320_033440/20260511-031336.md")
@@ -344,7 +357,7 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(relocate_conflict_copies(tmp.path()).unwrap(), 1);
+        assert_eq!(relocate_conflict_copies(tmp.path()), 1);
 
         assert!(timeline.join("2026-03-20.md").exists());
         assert!(
@@ -361,13 +374,46 @@ mod tests {
         );
     }
 
+    /// 控えが溜まるのは `notes/` と `timeline/` だけではない。`data/` の下は
+    /// 丸ごと同期の走査対象なので、自分で切ったディレクトリに残った控えも
+    /// 置いたままだと新しいファイルとして全端末へ配られる。
+    #[test]
+    fn conflict_copies_in_a_nested_directory_move_out() {
+        let tmp = TempDir::new().unwrap();
+        let done = data_dir(tmp.path()).join("projects/aaaa/done");
+        fs::create_dir_all(&done).unwrap();
+        fs::write(done.join("20260417_023550_461.md"), "the entry").unwrap();
+        fs::write(
+            done.join("20260417_023550_461.sync-conflict-20260511-031336..md"),
+            "nested copy",
+        )
+        .unwrap();
+
+        assert_eq!(relocate_conflict_copies(tmp.path()), 1);
+
+        assert!(done.join("20260417_023550_461.md").exists());
+        assert!(
+            !done
+                .join("20260417_023550_461.sync-conflict-20260511-031336..md")
+                .exists()
+        );
+        assert_eq!(
+            fs::read_to_string(
+                conflicts_dir(tmp.path())
+                    .join("projects/aaaa/done/20260417_023550_461/20260511-031336.md")
+            )
+            .unwrap(),
+            "nested copy"
+        );
+    }
+
     /// 引っ越しは中身を見ない。控えが壊れていても、ノートで無くても運ぶ。
     #[test]
     fn a_note_that_is_not_a_conflict_copy_stays_put() {
         let tmp = TempDir::new().unwrap();
         seed_note(tmp.path(), "20260320_033440.md", "body");
 
-        assert_eq!(relocate_conflict_copies(tmp.path()).unwrap(), 0);
+        assert_eq!(relocate_conflict_copies(tmp.path()), 0);
         assert!(notes_dir(tmp.path()).join("20260320_033440.md").exists());
         assert!(!conflicts_dir(tmp.path()).exists());
     }
