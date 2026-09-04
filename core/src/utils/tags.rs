@@ -108,31 +108,37 @@ fn collect_line(line: &str, tags: &mut Vec<String>) {
 ///
 /// 大文字小文字の違いは書き手にとって同じタグ。ASCII だけ小文字に寄せる
 /// (日本語に大文字小文字は無く、ロケール依存の変換も持ち込まない)。
+///
+/// 文字を 1 つずつ見ないで `#` まで飛ぶ。`is_alphanumeric` は日本語の
+/// 1 文字ごとに Unicode の表を引くので、本文を全文なぞると一覧の
+/// 読み込みで最も高くつく処理になっていた。タグの有無を決めるのは
+/// `#` の直前の 1 文字と直後のタグ文字だけで、それ以外は見なくてよい。
 fn collect_span(span: &str, tags: &mut Vec<String>) {
-    let mut at_boundary = true;
+    let mut pos = 0;
+    while let Some(offset) = span[pos..].find('#') {
+        let hash = pos + offset;
+        let start = hash + '#'.len_utf8();
+        pos = start;
 
-    let mut chars = span.char_indices().peekable();
-    while let Some((index, c)) = chars.next() {
-        if c != '#' || !at_boundary {
-            at_boundary = !is_tag_char(c);
+        // 直前がタグ文字なら語中の `#`。`#a#b` の 2 つ目もここに入る
+        if span[..hash].chars().next_back().is_some_and(is_tag_char) {
             continue;
         }
 
-        let start = index + '#'.len_utf8();
-        let mut end = start;
-        while chars.peek().is_some_and(|&(_, next)| is_tag_char(next)) {
-            let (offset, next) = chars.next().unwrap_or((end, ' '));
-            end = offset + next.len_utf8();
+        let rest = &span[start..];
+        let len = rest
+            .char_indices()
+            .find(|&(_, c)| !is_tag_char(c))
+            .map_or(rest.len(), |(index, _)| index);
+        if len == 0 {
+            continue;
         }
 
-        if end > start {
-            let tag = span[start..end].to_ascii_lowercase();
-            if !tags.contains(&tag) {
-                tags.push(tag);
-            }
+        let tag = rest[..len].to_ascii_lowercase();
+        if !tags.contains(&tag) {
+            tags.push(tag);
         }
-        // タグを 1 つ読んだ直後の `#` は、直前がタグ文字なので境界ではない。
-        at_boundary = end == start;
+        pos = start + len;
     }
 }
 
@@ -257,5 +263,54 @@ mod tests {
     fn ignores_a_bare_hash() {
         assert_eq!(parse("# "), Vec::<String>::new());
         assert_eq!(parse("#"), Vec::<String>::new());
+    }
+
+    // ──────────── 境界 ────────────
+
+    #[test]
+    fn finds_nothing_in_empty_text() {
+        assert_eq!(parse(""), Vec::<String>::new());
+    }
+
+    /// 本文の末尾の `#` は、その先に 1 文字も無い。
+    #[test]
+    fn ignores_a_hash_at_the_very_end() {
+        assert_eq!(parse("終わり#"), Vec::<String>::new());
+        assert_eq!(parse("end #"), Vec::<String>::new());
+    }
+
+    /// タグの直後の `#` は語中。`#a#b` は `a#b` という 1 語に `#` を付けたもの。
+    #[test]
+    fn a_hash_right_after_a_tag_is_inside_the_word() {
+        assert_eq!(parse("#a#b"), vec!["a"]);
+    }
+
+    /// `##a` の 1 つ目は空タグ、2 つ目の直前は `#` なので境界。
+    #[test]
+    fn a_doubled_hash_still_yields_the_tag() {
+        assert_eq!(parse("##a"), vec!["a"]);
+    }
+
+    /// 漢字・数字・`_`・`-` はどれもタグ文字。直前にあれば語中の `#`。
+    #[test]
+    fn ignores_a_hash_glued_to_the_previous_word() {
+        assert_eq!(parse("設計#tag"), Vec::<String>::new());
+        assert_eq!(parse("v2#tag"), Vec::<String>::new());
+        assert_eq!(parse("a_#tag"), Vec::<String>::new());
+        assert_eq!(parse("a-#tag"), Vec::<String>::new());
+    }
+
+    /// 全角記号は境界。直後の全角文字はタグの中。
+    #[test]
+    fn stops_at_fullwidth_punctuation_and_keeps_multibyte_tags() {
+        assert_eq!(parse("「#タグ」"), vec!["タグ"]);
+        assert_eq!(parse("#タグ!"), vec!["タグ"]);
+        assert_eq!(parse("#2026 年"), vec!["2026"]);
+    }
+
+    /// 1 行に複数のコードスパンがあっても、その間の本文は読む。
+    #[test]
+    fn reads_the_text_between_two_code_spans() {
+        assert_eq!(parse("`a` #one `b` #two `c`"), vec!["one", "two"]);
     }
 }
