@@ -26,7 +26,64 @@ pub struct SyncResult {
     pub deleted_remote: usize,
     pub deleted_local: usize,
     pub conflicts: usize,
-    pub errors: Vec<String>,
+    pub errors: Vec<SyncIssue>,
+}
+
+/// 同期そのものは続いたが、1 つのキーだけこけたときの記録。
+///
+/// core は文章を組まない: 呼び手はアプリ (日本語にもなる UI)・CLI・MCP・
+/// Android の JNI と分かれていて、翻訳表を置ける場所は core ではない。
+/// 素材だけを返し、文にするのは表示する側 (アプリは `lib/i18n.ts` の
+/// `sync.issue`)。`Display` は英語のままでよい CLI とログ用。
+///
+/// `kind` の文字列は TypeScript 側が分岐に使う識別子なので変えない。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum SyncIssue {
+    /// `..` や先頭の `/` を含むキー。手元にもサーバーにも渡さない
+    UnsafeKey {
+        key: String,
+    },
+    /// 走査には出たのに送る段になって見つからない
+    MissingLocalFile {
+        key: String,
+    },
+    ReadFailed {
+        key: String,
+        detail: String,
+    },
+    WriteFailed {
+        key: String,
+        detail: String,
+    },
+    DecodeFailed {
+        key: String,
+        detail: String,
+    },
+    DeleteFailed {
+        key: String,
+        detail: String,
+    },
+    /// 走査から削除までのあいだに書き換わったので、消さずに残した
+    DeleteSkippedChanged {
+        key: String,
+    },
+}
+
+impl std::fmt::Display for SyncIssue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnsafeKey { key } => write!(f, "unsafe key rejected: {key}"),
+            Self::MissingLocalFile { key } => write!(f, "missing local file: {key}"),
+            Self::ReadFailed { key, detail } => write!(f, "read {key}: {detail}"),
+            Self::WriteFailed { key, detail } => write!(f, "write {key}: {detail}"),
+            Self::DecodeFailed { key, detail } => write!(f, "base64 decode {key}: {detail}"),
+            Self::DeleteFailed { key, detail } => write!(f, "delete_local {key}: {detail}"),
+            Self::DeleteSkippedChanged { key } => {
+                write!(f, "delete_local {key}: changed since scan, kept")
+            }
+        }
+    }
 }
 
 /// フロントが「設定へ誘導」「再試行」などを出し分けられるよう、
@@ -65,7 +122,31 @@ impl std::error::Error for SyncError {}
 
 #[cfg(test)]
 mod tests {
-    use super::SyncError;
+    use super::{SyncError, SyncIssue};
+
+    /// TypeScript 側は `kind` で分岐して文言を選ぶ。この形が変わると、
+    /// 型は通ったまま画面の文言だけが消える
+    #[test]
+    fn an_issue_goes_over_the_wire_as_a_kind_and_its_parts() {
+        let json = serde_json::to_value(SyncIssue::DeleteSkippedChanged {
+            key: "notes/a.md".to_string(),
+        })
+        .unwrap();
+
+        assert_eq!(json["kind"], "delete_skipped_changed");
+        assert_eq!(json["key"], "notes/a.md");
+    }
+
+    /// CLI とログは英語のまま。翻訳するのはアプリだけ
+    #[test]
+    fn an_issue_still_prints_the_english_sentence() {
+        let issue = SyncIssue::ReadFailed {
+            key: "notes/a.md".to_string(),
+            detail: "permission denied".to_string(),
+        };
+
+        assert_eq!(issue.to_string(), "read notes/a.md: permission denied");
+    }
 
     #[test]
     fn busy_error_is_tagged_so_ui_can_ignore_it() {

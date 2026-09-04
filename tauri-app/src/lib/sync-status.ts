@@ -1,10 +1,27 @@
+import { t } from "./i18n";
+
+/**
+ * 同期の途中で 1 件だけこけたときの記録 (core の `SyncIssue`)。
+ *
+ * core は文を組まない — CLI や MCP からも呼ばれ、翻訳表を置く場所が無いので、
+ * `kind` と材料だけが届く。日本語にするのは `i18n.ts` の `sync.result.issue`。
+ */
+export type SyncIssue =
+  | { kind: "unsafe_key"; key: string }
+  | { kind: "missing_local_file"; key: string }
+  | { kind: "read_failed"; key: string; detail: string }
+  | { kind: "write_failed"; key: string; detail: string }
+  | { kind: "decode_failed"; key: string; detail: string }
+  | { kind: "delete_failed"; key: string; detail: string }
+  | { kind: "delete_skipped_changed"; key: string };
+
 export interface SyncResultPayload {
   uploaded: number;
   downloaded: number;
   deleted_remote: number;
   deleted_local: number;
   conflicts: number;
-  errors: string[];
+  errors: SyncIssue[];
 }
 
 interface SyncErrorInfo {
@@ -18,19 +35,23 @@ export interface SyncUiState {
 }
 
 export function describeSyncResult(result: SyncResultPayload): SyncUiState {
-  if (result.errors?.length) {
+  const strings = t().sync.result;
+
+  const [first] = result.errors ?? [];
+  if (first) {
     return {
       status: "error",
-      message: `${result.errors.length} item(s) failed — ${result.errors[0]}`,
+      message: strings.failed(result.errors.length, strings.issue(first)),
     };
   }
 
   const changed =
     result.uploaded + result.downloaded + result.deleted_remote + result.deleted_local;
   if (changed === 0 && result.conflicts === 0) {
-    return { status: "success", message: "Already up to date" };
+    return { status: "success", message: strings.upToDate };
   }
 
+  // 矢印と数字は言語を持たない。訳すのは前後の言葉だけ
   const parts: string[] = [];
   if (result.uploaded) {
     parts.push(`↑${result.uploaded}`);
@@ -41,9 +62,9 @@ export function describeSyncResult(result: SyncResultPayload): SyncUiState {
   if (result.deleted_remote + result.deleted_local) {
     parts.push(`−${result.deleted_remote + result.deleted_local}`);
   }
-  let message = `Synced ${parts.join(" ")}`.trim();
+  let message = strings.synced(parts.join(" ")).trim();
   if (result.conflicts) {
-    message += ` · ${result.conflicts} conflict(s) saved as copies`;
+    message += ` · ${strings.conflictsSaved(result.conflicts)}`;
   }
   return { status: "success", message };
 }

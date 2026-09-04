@@ -484,6 +484,35 @@ const saveError = (kind, message) => Object.assign(new Error(message), { kind })
     ["623k", { format: "svg", url: svgDataUrl(glyphSvg("623K", "#1c7ed6")) }],
   ]);
 
+  // ---- イベント ----
+
+  /**
+   * `transformCallback` が預かった受け口。本物ではここを Rust 側が叩く。
+   * ブラウザではモック自身が叩き、同期のように「押したあとで結果が届く」
+   * 経路も動くようにする。
+   * @type {Map<number, (event: { event: string, id: number, payload: unknown }) => void>}
+   */
+  const eventHandlers = new Map();
+
+  /**
+   * イベント名 → 待っている受け口の id。
+   * @type {Map<string, number[]>}
+   */
+  const listeners = new Map();
+
+  /**
+   * @param {string} event
+   * @param {unknown} payload
+   */
+  const emit = (event, payload) => {
+    for (const id of listeners.get(event) ?? []) {
+      eventHandlers.get(id)?.({ event, id, payload });
+    }
+  };
+
+  /** 同期を押された回数。成功と失敗を交互に見せるのに使う */
+  let syncRuns = 0;
+
   // ---- コマンド実装 ----
 
   // まだ使われていない名前と、その名前が名乗る時刻。core の `Notes::create`
@@ -816,8 +845,33 @@ const saveError = (kind, message) => Object.assign(new Error(message), { kind })
       window.open(URL.createObjectURL(new Blob([bytes], { type: mime })), "_blank");
       return { saved: true };
     },
-    sync_start: () => {},
-    sync_status: () => ({}),
+    // 本物と同じく、押した側には何も返さない。結果は sync-complete で届く。
+    // 1 回目は成功、2 回目は失敗を 1 件混ぜて交互に流す: 失敗の文言だけは
+    // core が kind で返して画面側が訳すので、押し直せば両方の道が見られる
+    sync_start: () => {
+      syncRuns += 1;
+      const result =
+        syncRuns % 2 === 0
+          ? {
+              uploaded: 0,
+              downloaded: 1,
+              deleted_remote: 0,
+              deleted_local: 0,
+              conflicts: 0,
+              errors: [{ kind: "delete_skipped_changed", key: "notes/20260805_101500.md" }],
+            }
+          : {
+              uploaded: 2,
+              downloaded: 1,
+              deleted_remote: 0,
+              deleted_local: 0,
+              conflicts: 1,
+              errors: [],
+            };
+      // すぐ返すと「同期中」が一瞬も見えない
+      setTimeout(() => emit("sync-complete", result), 400);
+    },
+    sync_status: () => ({ is_syncing: false, last_synced_at: null, last_error: null }),
     auth_login: () => {},
     auth_status: () => true,
     auth_logout: () => {},
@@ -825,7 +879,14 @@ const saveError = (kind, message) => Object.assign(new Error(message), { kind })
     save_sync_config: () => {},
     is_sync_config_editable: () => true,
 
-    "plugin:event|listen": () => 1,
+    /** @param {{ event: string, handler: number }} args */
+    "plugin:event|listen": ({ event, handler }) => {
+      listeners.set(event, [...(listeners.get(event) ?? []), handler]);
+      // 本物はこの id を unlisten に渡してくる。ハンドラの id をそのまま使う
+      return handler;
+    },
+    // 受け口を外すのは `__TAURI_EVENT_PLUGIN_INTERNALS__` 側 (下)。
+    // こちらは「バックエンドも忘れた」の返事なので何もしない
     "plugin:event|unlisten": () => null,
     "plugin:deep-link|get_current": () => null,
     // ブラウザに全画面にする窓は無い。設定を入れても何も起きないのが正しい
@@ -851,12 +912,28 @@ const saveError = (kind, message) => Object.assign(new Error(message), { kind })
       // await して返す。ハンドラが同期に投げても、本物と同じく reject で届く
       return await handler(args ?? {});
     },
-    transformCallback: () => {
+    /** @param {(event: { event: string, id: number, payload: unknown }) => void} handler */
+    transformCallback: (handler) => {
       callbackId += 1;
+      eventHandlers.set(callbackId, handler);
       return callbackId;
     },
-    unregisterCallback: () => {},
+    /** @param {number} id */
+    unregisterCallback: (id) => {
+      eventHandlers.delete(id);
+    },
     convertFileSrc: (path) => path,
     metadata: { currentWindow: { label: "main" }, currentWebview: { label: "main" } },
+  };
+
+  // unlisten はここを直に呼ぶ (invoke を通らない)。置かないと購読を外す
+  // たびに TypeError で落ちる
+  globalThis.__TAURI_EVENT_PLUGIN_INTERNALS__ = {
+    unregisterListener: (event, eventId) => {
+      listeners.set(
+        event,
+        (listeners.get(event) ?? []).filter((id) => id !== eventId),
+      );
+    },
   };
 })();
