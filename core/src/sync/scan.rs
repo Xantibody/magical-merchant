@@ -176,10 +176,11 @@ fn walk_dir(root: &Path, current: &Path, walk: &mut Walk) -> Result<(), CoreErro
     Ok(())
 }
 
+/// 同期の道具立てそのものは同期しない。競合コピーはここに出てこない —
+/// `data/` の外 (`conflicts/`) に置くので、そもそも走査が届かない。
 fn is_excluded(file_name: &str) -> bool {
-    file_name.contains(".sync-conflict-")
-        || file_name == ".sync-state.json"
-        // サーバー駆動同期以前のクライアントがクラッシュ時に残した一時ファイル
+    file_name == ".sync-state.json"
+        // `write_atomic` が rename の直前に置く一時ファイル。クラッシュで残る
         || file_name.starts_with(".sync-tmp-")
 }
 
@@ -220,24 +221,6 @@ mod tests {
         let notes = data.join("notes");
         fs::create_dir_all(&notes).unwrap();
         fs::write(notes.join("test.md"), "hello").unwrap();
-
-        let files = scan_local_files(dir.path()).unwrap();
-        assert_eq!(files.len(), 1);
-        assert_eq!(files[0].key, "notes/test.md");
-    }
-
-    #[test]
-    fn scan_excludes_conflict_files() {
-        let dir = tempfile::tempdir().unwrap();
-        let data = dir.path().join("data");
-        let notes = data.join("notes");
-        fs::create_dir_all(&notes).unwrap();
-        fs::write(notes.join("test.md"), "hello").unwrap();
-        fs::write(
-            notes.join("test.sync-conflict-20260422-120000.md"),
-            "conflict",
-        )
-        .unwrap();
 
         let files = scan_local_files(dir.path()).unwrap();
         assert_eq!(files.len(), 1);

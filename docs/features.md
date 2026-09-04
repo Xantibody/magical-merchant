@@ -150,9 +150,9 @@ native fullscreen (its own Space, like the green button) from the next launch.
 ## Sync (optional)
 
 A Cloudflare Worker + R2 backend syncs the Markdown files across devices.
-Conflicts keep the local copy and preserve the loser as a
-`.sync-conflict-<timestamp>.md` next to the note. See [sync.md](sync.md) for
-deployment and the change-detection protocol.
+Conflicts keep the local copy and preserve the loser under `conflicts/`,
+outside the synced tree. See [sync.md](sync.md) for deployment and the
+change-detection protocol.
 
 ## Android widgets
 
