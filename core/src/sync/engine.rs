@@ -7,7 +7,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::path::Path;
+use std::path::{Component, Path};
 
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as B64;
@@ -174,8 +174,18 @@ fn server_state_to_remote_files(state: &ServerSyncState) -> Vec<RemoteFile> {
         .collect()
 }
 
+/// data ディレクトリの外を指せないキーか。
+///
+/// 危ないのは `..` という**パス要素**であって、名前の中に並んだ点ではない。
+/// 部分一致で弾くと `….sync-conflict-20260511-031336..md`(サーバー駆動同期
+/// 以前の控えにある、点が 1 つ多い名前)まで巻き込み、その控えを抱えた端末は
+/// 毎回の同期が失敗し続ける。`Path` に読ませれば区切りの解釈は OS に合う。
 fn is_safe_key(key: &str) -> bool {
-    !key.contains("..") && !key.contains('\0') && !key.starts_with('/')
+    !key.is_empty()
+        && !key.contains('\0')
+        && Path::new(key)
+            .components()
+            .all(|c| matches!(c, Component::Normal(_)))
 }
 
 fn build_bulk_request(
@@ -608,6 +618,23 @@ mod tests {
             .files
             .is_empty()
         );
+    }
+
+    /// 抜け出せるのは `..` というパス要素であって、名前の中に並んだ点ではない。
+    /// サーバー駆動同期以前の控えには `….sync-conflict-20260511-031336..md` の
+    /// ように点が 1 つ多い名前があり、部分一致で弾くと毎回の同期が
+    /// 「安全でない名前」で失敗し続ける。
+    #[test]
+    fn a_doubled_dot_inside_a_filename_is_not_traversal() {
+        assert!(is_safe_key(
+            "projects/a/done/20260417_023550.sync-conflict-20260511-031336..md"
+        ));
+        assert!(is_safe_key("notes/..md"));
+
+        assert!(!is_safe_key("../escape.md"));
+        assert!(!is_safe_key("notes/../../escape.md"));
+        assert!(!is_safe_key("/etc/passwd"));
+        assert!(!is_safe_key("notes/a\0.md"));
     }
 
     #[test]
