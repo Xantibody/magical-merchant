@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { createRoot } from "solid-js";
 import { mockIPC, mockWindows, clearMocks } from "@tauri-apps/api/mocks";
 import { t } from "./i18n";
-import { createSyncState } from "./sync";
+import { AUTO_SYNC_DEBOUNCE_MS, createSyncState } from "./sync";
 
 // vi.mock ではなく mockIPC を使う理由は commands.test.ts に書いたとおり
 
@@ -14,6 +14,7 @@ interface TauriInternals {
 const tauri = globalThis as unknown as TauriInternals;
 
 let handlers: Record<string, () => unknown>;
+let calls: string[];
 
 function mockCommands(): void {
   mockWindows("main");
@@ -28,6 +29,7 @@ function mockCommands(): void {
     if (!handler) {
       throw new Error(`unexpected command ${cmd}`);
     }
+    calls.push(cmd);
     return handler();
   });
   tauri.__TAURI_INTERNALS__.transformCallback = () => 1;
@@ -52,6 +54,7 @@ function mount(): {
 
 describe("createSyncState readiness", () => {
   beforeEach(() => {
+    calls = [];
     handlers = {
       get_sync_config: () => ({ workers_url: "", auto_sync: false }),
       auth_status: () => false,
@@ -88,6 +91,60 @@ describe("createSyncState readiness", () => {
       expect(state.message()).toBe(t().sync.configCorrupt);
     });
     expect(state.status()).toBe("error");
+    dispose();
+  });
+});
+
+describe("createSyncState auto sync after a busy result", () => {
+  beforeEach(() => {
+    calls = [];
+    handlers = {
+      get_sync_config: () => ({ workers_url: "https://sync.example", auto_sync: true }),
+      auth_status: () => true,
+      sync_start: () => {
+        // 同じデータディレクトリを別プロセスが握っていた。異常ではない
+        // oxlint-disable-next-line no-throw-literal
+        throw { kind: "busy", message: "Sync already in progress" };
+      },
+    };
+    mockCommands();
+  });
+
+  afterEach(() => {
+    clearMocks();
+    vi.useRealTimers();
+  });
+
+  /// busy は「今は無理」でしかないのに、そのまま捨てると保存したぶんが
+  /// 次に手で同期するまで送られない
+  it("retries once after a busy result", async () => {
+    const { state, dispose } = mount();
+    await vi.waitFor(() => {
+      expect(state.status()).toBe("idle");
+    });
+    vi.useFakeTimers();
+
+    await state.syncNow();
+
+    expect(state.status()).toBe("idle");
+    await vi.advanceTimersByTimeAsync(AUTO_SYNC_DEBOUNCE_MS);
+    expect(calls.filter((c) => c === "sync_start")).toHaveLength(2);
+    dispose();
+  });
+
+  /// 相手がロックを握ったまま止まっていることもある。取り直しは 1 回で切る
+  it("does not retry again when the retry is busy too", async () => {
+    const { state, dispose } = mount();
+    await vi.waitFor(() => {
+      expect(state.status()).toBe("idle");
+    });
+    vi.useFakeTimers();
+
+    await state.syncNow();
+    await vi.advanceTimersByTimeAsync(AUTO_SYNC_DEBOUNCE_MS);
+    await vi.advanceTimersByTimeAsync(AUTO_SYNC_DEBOUNCE_MS);
+
+    expect(calls.filter((c) => c === "sync_start")).toHaveLength(2);
     dispose();
   });
 });
