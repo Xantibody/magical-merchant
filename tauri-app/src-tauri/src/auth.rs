@@ -5,6 +5,7 @@
 #[cfg(not(target_os = "android"))]
 use std::path::Path;
 
+use magical_merchant_core::sync::SyncError;
 use magical_merchant_core::sync::config::{SyncConfig, normalize_workers_url};
 #[cfg(not(target_os = "android"))]
 use magical_merchant_core::sync::token::store_token;
@@ -140,7 +141,9 @@ async fn login_with_loopback(
 #[tauri::command]
 pub(crate) async fn auth_login(handle: AppHandle) -> Result<(), String> {
     let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    let config = SyncConfig::load(&base_dir);
+    let config = SyncConfig::load(&base_dir)
+        .map_err(|e| e.message)?
+        .unwrap_or_default();
 
     if !config.is_configured() {
         return Err("Sync not configured".to_string());
@@ -174,10 +177,15 @@ pub(crate) fn auth_logout(handle: AppHandle) -> Result<(), String> {
     clear_token(&base_dir)
 }
 
+/// 読めなかった設定は `kind: "configCorrupt"` で返す。既定値にすり替えると
+/// 設定画面が空欄で開き、入力し直した URL が壊れたファイルを上書きする
 #[tauri::command]
-pub(crate) fn get_sync_config(handle: AppHandle) -> Result<SyncConfig, String> {
-    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    Ok(SyncConfig::load(&base_dir))
+pub(crate) fn get_sync_config(handle: AppHandle) -> Result<SyncConfig, SyncError> {
+    let base_dir = handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| SyncError::other(e.to_string()))?;
+    Ok(SyncConfig::load(&base_dir)?.unwrap_or_default())
 }
 
 #[tauri::command]

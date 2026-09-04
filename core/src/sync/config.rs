@@ -6,6 +6,8 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
+use super::SyncError;
+
 const SYNC_CONFIG_FILENAME: &str = "sync-config.json";
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
@@ -18,16 +20,24 @@ pub struct SyncConfig {
 }
 
 impl SyncConfig {
-    #[must_use]
-    pub fn load(base_dir: &Path) -> Self {
+    /// 設定が無ければ `None`。読めなかった場合は `None` に丸めない —
+    /// 「未設定」として扱うと設定画面が空欄で開き、ユーザーが URL を
+    /// 入れ直した瞬間に、壊れているだけの設定が上書きされる。
+    pub fn load(base_dir: &Path) -> Result<Option<Self>, SyncError> {
         let path = base_dir.join(SYNC_CONFIG_FILENAME);
         if !path.exists() {
-            return Self::default();
+            return Ok(None);
         }
-        fs::read_to_string(&path)
-            .ok()
-            .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_default()
+        let corrupt = |e: &dyn std::error::Error| {
+            SyncError::new(
+                "configCorrupt",
+                format!("Could not read {SYNC_CONFIG_FILENAME}: {e}"),
+            )
+        };
+        let content = fs::read_to_string(&path).map_err(|e| corrupt(&e))?;
+        serde_json::from_str(&content)
+            .map(Some)
+            .map_err(|e| corrupt(&e))
     }
 
     pub fn save(&self, base_dir: &Path) -> Result<(), String> {
@@ -98,7 +108,7 @@ mod tests {
             ..SyncConfig::default()
         };
         config.save(&base).unwrap();
-        let loaded = SyncConfig::load(&base);
+        let loaded = SyncConfig::load(&base).unwrap().unwrap();
         assert_eq!(loaded.workers_url, "https://sync.example.com");
     }
 
@@ -110,7 +120,7 @@ mod tests {
             auto_sync: true,
         };
         config.save(dir.path()).unwrap();
-        assert!(SyncConfig::load(dir.path()).auto_sync);
+        assert!(SyncConfig::load(dir.path()).unwrap().unwrap().auto_sync);
     }
 
     #[test]
@@ -121,7 +131,7 @@ mod tests {
             r#"{"workers_url":"https://sync.example.com"}"#,
         )
         .unwrap();
-        assert!(!SyncConfig::load(dir.path()).auto_sync);
+        assert!(!SyncConfig::load(dir.path()).unwrap().unwrap().auto_sync);
     }
 
     #[test]
@@ -153,14 +163,27 @@ mod tests {
             ..SyncConfig::default()
         };
         config.save(dir.path()).unwrap();
-        let loaded = SyncConfig::load(dir.path());
+        let loaded = SyncConfig::load(dir.path()).unwrap().unwrap();
         assert_eq!(loaded.workers_url, "https://sync.example.com");
     }
 
     #[test]
     fn sync_config_load_missing_file() {
         let dir = tempfile::tempdir().unwrap();
-        assert_eq!(SyncConfig::load(dir.path()), SyncConfig::default());
+        assert_eq!(SyncConfig::load(dir.path()).unwrap(), None);
+    }
+
+    /// 壊れた設定を「未設定」として返すと、設定画面が空欄で開く。そこに
+    /// URL を入れ直した時点で、読めなかっただけの設定が上書きされる
+    #[test]
+    fn sync_config_load_refuses_a_corrupt_file() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join(SYNC_CONFIG_FILENAME), "{ not json").unwrap();
+
+        let err = SyncConfig::load(dir.path()).unwrap_err();
+
+        assert_eq!(err.kind, "configCorrupt");
+        assert!(err.message.contains(SYNC_CONFIG_FILENAME));
     }
 
     #[test]

@@ -48,11 +48,19 @@ export function describeSyncResult(result: SyncResultPayload): SyncUiState {
   return { status: "success", message };
 }
 
+function toErrorInfo(err: unknown): SyncErrorInfo {
+  return typeof err === "object" && err !== null && "message" in err
+    ? (err as SyncErrorInfo)
+    : { kind: "other", message: String(err) };
+}
+
+/** core が付けた `kind`。分類できない失敗 (投げられた文字列など) は `"other"`。 */
+export function syncErrorKind(err: unknown): string {
+  return toErrorInfo(err).kind;
+}
+
 export function describeSyncError(err: unknown): SyncUiState {
-  const info: SyncErrorInfo =
-    typeof err === "object" && err !== null && "message" in err
-      ? (err as SyncErrorInfo)
-      : { kind: "other", message: String(err) };
+  const info = toErrorInfo(err);
 
   // 別の同期が走っていただけ。アプリ内の再入だけでなく、CLI が同じ
   // データディレクトリのロックを持っているときもここに来る。異常ではないので

@@ -19,6 +19,7 @@ import { isMacDesktop } from "../lib/platform";
 import { isImeComposing } from "../lib/ime";
 import { ROUTES } from "../lib/routes";
 import { useShell } from "../lib/shell";
+import { syncErrorKind } from "../lib/sync-status";
 import { listen } from "@tauri-apps/api/event";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import "../styles/settings.css";
@@ -199,8 +200,12 @@ export default function Settings(): JSX.Element {
     try {
       const config = await typedInvoke("get_sync_config");
       setWorkersUrl(config.workers_url);
-    } catch {
-      // 未設定のまま開いた場合。空欄で始める
+    } catch (error) {
+      // 未設定のまま開いた場合は空欄で始める。壊れているときだけは知らせる —
+      // 空欄と区別が付かないと、入力し直したつもりの保存で上書きしてしまう
+      if (syncErrorKind(error) === "configCorrupt") {
+        setMessage(t().sync.configCorrupt);
+      }
     }
 
     try {
