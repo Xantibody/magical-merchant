@@ -372,12 +372,12 @@ fn to_local_state(
         ..Default::default()
     };
     for (key, record) in &server_state.files {
-        let Ok(last_synced_modified) = record.last_modified.parse() else {
-            continue;
-        };
         if !is_safe_key(key) || unwritten.contains(key) || !data_dir.join(key).exists() {
             continue;
         }
+        let Ok(last_synced_modified) = record.last_modified.parse() else {
+            continue;
+        };
         state.files.insert(
             key.clone(),
             FileSyncRecord {
