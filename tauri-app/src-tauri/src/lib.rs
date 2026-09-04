@@ -392,6 +392,21 @@ fn delete_note(handle: AppHandle, filename: String) -> Result<(), String> {
     magical_merchant_core::delete_note(&base_dir, &filename).map_err(|e| e.to_string())
 }
 
+/// deep link から保存してよい JWT だけを取り出す。
+///
+/// ウィジェットの `magical-merchant://widget/…` も同じスキームで届くので、
+/// `?token=` があるだけでは足りない。ホストが `auth` のものに限り、中身が
+/// 生きた JWT であることも見る — 期限切れを保存すると、有効なトークンを
+/// 上書きしたうえで次の同期が「ログインし直してください」で止まる
+fn token_from_urls(urls: &[url::Url]) -> Option<String> {
+    urls.iter()
+        .filter(|url| url.host_str() == Some("auth"))
+        .flat_map(url::Url::query_pairs)
+        .filter(|(key, _)| key == "token")
+        .map(|(_, value)| value.into_owned())
+        .find(|token| magical_merchant_core::sync::token::is_token_valid(token))
+}
+
 /// OAuth のコールバックで返ってきた JWT を保存する。
 /// 保存結果をフロントに通知しないと、ログイン完了が UI に反映されず
 /// 失敗も握りつぶされてしまう。
@@ -400,12 +415,7 @@ fn delete_note(handle: AppHandle, filename: String) -> Result<(), String> {
 /// のはメインスレッド。deep link のイベントはそのメインスレッドで配送されるため、
 /// ここで直に呼ぶと自分の応答を待って Activity ごと固まる。必ず別スレッドに移す。
 fn store_token_from_urls(handle: &AppHandle, urls: &[url::Url]) {
-    let Some(token) = urls
-        .iter()
-        .flat_map(url::Url::query_pairs)
-        .find(|(key, _)| key == "token")
-        .map(|(_, value)| value.into_owned())
-    else {
+    let Some(token) = token_from_urls(urls) else {
         return;
     };
 
@@ -510,4 +520,56 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+
+    /// 署名は誰も見ない (`sync::token::is_token_valid` と同じ理由) ので 3 つのパートを直に組む
+    fn jwt(expires_in: i64) -> String {
+        let header = URL_SAFE_NO_PAD.encode(r#"{"alg":"HS256","typ":"JWT"}"#);
+        let exp = chrono::Utc::now().timestamp() + expires_in;
+        let claims = URL_SAFE_NO_PAD.encode(format!(r#"{{"exp":{exp}}}"#));
+        format!("{header}.{claims}.not-a-real-signature")
+    }
+
+    fn urls(raw: &[String]) -> Vec<url::Url> {
+        raw.iter().map(|u| url::Url::parse(u).unwrap()).collect()
+    }
+
+    #[test]
+    fn the_auth_callback_token_is_taken() {
+        let token = jwt(3600);
+        let links = urls(&[format!("magical-merchant://auth/callback?token={token}")]);
+
+        assert_eq!(token_from_urls(&links), Some(token));
+    }
+
+    /// ウィジェットの deep link は同じスキームで届く。`?token=` を足すだけで
+    /// 保存先のアカウントを差し替えられてはいけない
+    #[test]
+    fn a_token_on_a_widget_link_is_ignored() {
+        let links = urls(&[format!(
+            "magical-merchant://widget/new-note?token={}",
+            jwt(3600)
+        )]);
+
+        assert_eq!(token_from_urls(&links), None);
+    }
+
+    /// 期限切れを保存すると、次の同期が「ログインし直してください」で
+    /// 止まるだけの状態になり、有効なトークンも上書きされている
+    #[test]
+    fn an_expired_or_malformed_token_is_ignored() {
+        let expired = urls(&[format!(
+            "magical-merchant://auth/callback?token={}",
+            jwt(-100)
+        )]);
+        let garbage = urls(&["magical-merchant://auth/callback?token=not-a-jwt".to_string()]);
+
+        assert_eq!(token_from_urls(&expired), None);
+        assert_eq!(token_from_urls(&garbage), None);
+    }
 }
