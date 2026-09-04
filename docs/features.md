@@ -242,7 +242,9 @@ on updates; the body is all a client sends.
 
 Every overwrite first saves a full copy of the previous version under
 `<data-dir>/history/` (outside the synced `data/`), so any change an
-assistant makes can be brought back. `read_note` also returns a `revision`
+assistant makes can be brought back. The newest 20 copies of each note are
+kept; older ones are dropped as new copies arrive, and a note's copies
+outlive the note itself. `read_note` also returns a `revision`
 of the body; pass it to `update_note` and the write is refused if the note
 changed in between (in the app, from the CLI) instead of overwriting that
 edit:
