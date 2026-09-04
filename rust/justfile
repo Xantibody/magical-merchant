@@ -9,3 +9,18 @@ check:
 
 test:
   cargo test --workspace
+
+# rustls が 2 版に解決されると、Android の同期だけが実機で
+# `UnknownPreconfigured` で落ちる: `android_tls` が組む `ClientConfig` と
+# reqwest が受け取る型が別クレートの同名型になるため。型が合わないことに
+# コンパイラは気づかず (feature 越しに渡るだけ)、CI のビルドもテストも通る。
+# 気づけるのは実機で同期したときだけなので、ロックファイルの側で止める。
+check-rustls:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  found=$(grep -c '^name = "rustls"$' Cargo.lock)
+  if [ "$found" -ne 1 ]; then
+    echo "Cargo.lock resolves rustls to $found versions; Android sync needs exactly 1" >&2
+    grep -A 1 '^name = "rustls"$' Cargo.lock >&2
+    exit 1
+  fi

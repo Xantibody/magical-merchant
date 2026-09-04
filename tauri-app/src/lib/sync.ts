@@ -5,14 +5,14 @@ import type { UnlistenFn } from "@tauri-apps/api/event";
 import { onLocalMutation, typedInvoke } from "./commands";
 import { EVENTS } from "./events";
 import { t } from "./i18n";
-import { describeSyncError, describeSyncResult } from "./sync-status";
+import { describeSyncError, describeSyncResult, syncErrorKind } from "./sync-status";
 import type { SyncResultPayload } from "./sync-status";
 import type { IconName } from "../components/Icon";
 
 export type SyncStatus = "idle" | "syncing" | "success" | "error" | "needs-setup";
 
 /** 自動保存 (1秒 debounce) の連打をまとめてから同期する。 */
-const AUTO_SYNC_DEBOUNCE_MS = 5000;
+export const AUTO_SYNC_DEBOUNCE_MS = 5000;
 
 export interface SyncState {
   status: Accessor<SyncStatus>;
@@ -83,17 +83,42 @@ export function createSyncState(onSynced: () => void): SyncState {
       }
       setStatus("idle");
       setMessage("");
-    } catch {
+    } catch (error) {
+      // 壊れた設定を「未設定」と見せると、設定画面で入力し直させることになり、
+      // その保存が読めなかったファイルを上書きする
+      if (syncErrorKind(error) === "configCorrupt") {
+        setStatus("error");
+        setMessage(t().sync.configCorrupt);
+        return;
+      }
       setStatus("needs-setup");
       setMessage(t().sync.notConfigured);
     }
   };
 
+  // busy で取り直すのは 1 巡につき 1 回だけ。相手がロックを握ったまま
+  // 止まっていることもあり、無条件に取り直すと延々と叩き続ける
+  let busyRetried = false;
+
   const applyError = (err: unknown): void => {
     const ui = describeSyncError(err);
     setStatus(ui.status);
     setMessage(ui.message);
-    // 待機に戻るだけの結果 (別プロセスが同期中) でポップオーバーを開かない
+
+    // 別プロセスが同期中だっただけ。ここで捨てると、保存したぶんが
+    // 次に手で同期するまで送られない
+    if (syncErrorKind(err) === "busy") {
+      if (!busyRetried) {
+        busyRetried = true;
+        // applyError → scheduleAutoSync → syncNow → applyError と輪になって
+        // いるので、どこか 1 つは定義より前から呼ぶしかない
+        // oxlint-disable-next-line no-use-before-define
+        scheduleAutoSync();
+      }
+      return;
+    }
+
+    // 待機に戻るだけの結果でポップオーバーを開かない
     if (ui.status === "error" || ui.status === "needs-setup") {
       setAlertVersion((v) => v + 1);
     }
@@ -136,6 +161,8 @@ export function createSyncState(onSynced: () => void): SyncState {
         setStatus(ui.status);
         setMessage(ui.message);
         if (ui.status === "success") {
+          // 1 巡終わったので、次に busy を踏んだらまた取り直してよい
+          busyRetried = false;
           setLastSyncedAt(new Date());
           onSynced();
         } else {

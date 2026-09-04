@@ -37,7 +37,10 @@ end; anyone who finds it taken gives up with `busy` rather than waiting. Two
 runs would otherwise overwrite each other's `.sync-state.json`, and the keys
 lost that way come back as conflicts on the next sync. The lock lives on the
 open file descriptor, so a crash releases it — there is never a stale lock to
-clear by hand.
+clear by hand. Today the app is the only thing that starts a sync, so the
+lock is a guard for a second process that does not exist yet: the CLI `sync`
+subcommand ([#170](https://github.com/Xantibody/magical-merchant/issues/170))
+is the one it is waiting for.
 
 Turning on **Auto sync** (sync popover, or `autoSync` in the nix-darwin
 module) runs a sync a few seconds after any successful write, so a note taken
