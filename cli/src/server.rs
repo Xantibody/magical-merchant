@@ -43,7 +43,8 @@ note times are RFC 3339 with the offset. Bodies may contain `:name:` \
 shortcodes that the app renders as user-registered images (glyphs); \
 `list_glyphs` gives the vocabulary, and an unregistered `:name:` stays \
 literal text. When write tools are present, every overwrite first saves a \
-copy that `restore_note` can bring back.";
+copy that `restore_note` can bring back; the newest 20 copies of each note \
+are kept.";
 
 /// 書き込みは頼まれたときだけ出す。公開アプリの MCP が既定で書けると、
 /// 「読ませたつもり」の設定で日記が書き換わる。
@@ -502,7 +503,7 @@ impl McpServer {
 
     #[tool(
         name = "update_note",
-        description = "Replace a note's Markdown body, keeping its frontmatter; a copy of the previous version is saved first and can be brought back with restore_note"
+        description = "Replace a note's Markdown body, keeping its frontmatter; a copy of the previous version is saved first and can be brought back with restore_note (the newest 20 copies per note are kept)"
     )]
     fn update_note(
         &self,
@@ -555,7 +556,7 @@ impl McpServer {
 
     #[tool(
         name = "restore_note",
-        description = "Bring a note back to a saved copy; the current version is saved first so the restore itself can be undone"
+        description = "Bring a note back to a saved copy; the current version is saved first so the restore itself can be undone (the newest 20 copies per note are kept)"
     )]
     fn restore_note(
         &self,
