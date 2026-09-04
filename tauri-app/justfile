@@ -7,8 +7,10 @@ setup:
   pnpm install
 
 check: setup
-  oxlint src/
+  oxlint src/ dev/
   tsgo -b --noEmit
+  # dev/ は素の JS。tsconfig.json の include(src) の外なので別に走らせる
+  tsgo --noEmit -p tsconfig.dev.json
   pnpm knip
 
 test: setup
