@@ -34,6 +34,8 @@ pub async fn run(client: &HttpClient, base_dir: &Path) -> Result<SyncResult, Syn
     // 名前付きで束縛すること: `let _ = ` だとその場で解放されてしまう
     let _lock = SyncLock::acquire(base_dir)?;
 
+    sweep_stale_temp_files(base_dir);
+
     // 他端末と同時に同期すると CAS で弾かれる。ユーザーに再試行させる理由はないので
     // 取得し直して自動でやり直す
     for attempt in 1..=MAX_SYNC_ATTEMPTS {
@@ -82,6 +84,42 @@ async fn sync_once(client: &HttpClient, base_dir: &Path) -> Result<SyncResult, S
         .map_err(SyncError::other)?;
 
     Ok(result)
+}
+
+/// これより古い `.sync-tmp-*` は、書き手が落ちて置き去りにしたものと見なす。
+/// 生きている書き込みは `fs::write` から `rename` までの一瞬しか持たない
+const STALE_TMP_AGE: std::time::Duration = std::time::Duration::from_hours(1);
+
+/// `write_atomic` の一時ファイルは rename の前にプロセスが落ちると残る。
+/// `<base>` 直下のものは誰の掃除対象でもないので、ここで拾う。
+///
+/// 年齢で絞るのは、いま別の書き込みが rename を待っている一時ファイルを
+/// 消さないため — 消すとその保存が失敗する。掃除に失敗しても同期には
+/// 関係がないので黙って進む。
+fn sweep_stale_temp_files(base_dir: &Path) {
+    let Ok(entries) = fs::read_dir(base_dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        if !entry
+            .file_name()
+            .to_string_lossy()
+            .starts_with(".sync-tmp-")
+        {
+            continue;
+        }
+        let old_enough = entry
+            .metadata()
+            .and_then(|m| m.modified())
+            .is_ok_and(|modified| {
+                modified
+                    .elapsed()
+                    .is_ok_and(|elapsed| elapsed >= STALE_TMP_AGE)
+            });
+        if old_enough {
+            let _ = fs::remove_file(entry.path());
+        }
+    }
 }
 
 /// これ以下ならユーザーが本当に消したと考えて素通しする。
@@ -683,6 +721,36 @@ mod tests {
 
         assert_eq!(err.kind, "busy");
         drop(held);
+    }
+
+    /// `write_atomic` の一時ファイルは、書いている途中で落ちると `<base>` に
+    /// 残る。誰も消さないので、ロックを持っている同期の入口で拾う
+    #[tokio::test]
+    async fn the_run_entry_sweeps_temp_files_left_by_a_crash() {
+        let dir = tempfile::tempdir().unwrap();
+        let stale = dir.path().join(".sync-tmp-999-0");
+        let in_flight = dir.path().join(".sync-tmp-1000-0");
+        fs::write(&stale, "half written").unwrap();
+        fs::write(&in_flight, "being renamed right now").unwrap();
+        set_age(&stale, STALE_TMP_AGE * 2);
+
+        // 到達できない宛先。掃除はロック取得の直後で、通信より前
+        let client = HttpClient::new(reqwest::Client::new(), "http://127.0.0.1:1", "token");
+        let _ = run(&client, dir.path()).await;
+
+        assert!(!stale.exists());
+        // 他の書き込みが今まさに rename しようとしているものを消すと、
+        // その保存が失敗する
+        assert!(in_flight.exists());
+    }
+
+    fn set_age(path: &Path, age: std::time::Duration) {
+        fs::File::options()
+            .write(true)
+            .open(path)
+            .unwrap()
+            .set_modified(std::time::SystemTime::now() - age)
+            .unwrap();
     }
 
     #[test]
