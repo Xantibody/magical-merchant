@@ -57,8 +57,9 @@ impl ScanCache {
     ///
     /// それでも書き換えは原子的にする。`fs::write` は先に切り詰めるので、
     /// 書いている途中で落ちると半端な JSON が残り、そこから同期が始まると
-    /// 全ファイルを読み直す羽目になる。書き手が同時に 2 つ走りうる
-    /// (アプリと CLI) 場所で、途中の状態を他人に見せない意味もある。
+    /// 全ファイルを読み直す羽目になる。今の書き手はアプリだけだが、
+    /// CLI からの同期 (#170) が入れば 2 つになるので、途中の状態を
+    /// 他人に見せない意味もある。
     fn save(&self, base_dir: &Path) {
         if let Ok(content) = serde_json::to_string(self) {
             let _ = crate::utils::fs::write_atomic(&base_dir.join(CACHE_FILENAME), content);

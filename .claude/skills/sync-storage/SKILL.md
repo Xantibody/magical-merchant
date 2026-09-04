@@ -47,13 +47,14 @@ The Worker owns sync state: `_sync-state/<user>.json` maps every key to a
 content hash + server-issued version stamp. One sync = `GET /sync-state` →
 local scan → diff → one `POST /sync/bulk`.
 
-| Client sees                 | Action                           |
-| --------------------------- | -------------------------------- |
-| Hash differs                | Upload (new hash, new stamp)     |
-| Stamp differs               | Download                         |
-| Both differ                 | Conflict — local wins, new stamp |
-| Gone locally, stamp matches | Delete remote                    |
-| Gone remotely, hash matches | Delete local                     |
+| Client sees                 | Action                            |
+| --------------------------- | --------------------------------- |
+| Hash differs                | Upload (new hash, new stamp)      |
+| Stamp differs               | Download                          |
+| Both differ                 | Conflict — local wins, new stamp  |
+| Gone locally, stamp matches | Delete remote                     |
+| Gone remotely, hash matches | Delete local                      |
+| No state, hashes match      | Nothing to transfer — record only |
 
 - The client **never sends its own state** (would read undownloaded keys as
   deletions and erase notes everywhere)
@@ -61,7 +62,9 @@ local scan → diff → one `POST /sync/bulk`.
 - **One sync per data directory**: `engine::run` takes an exclusive lock on
   `<base>/.sync.lock` at its entry (`core/src/sync/lock.rs`) and fails with
   `kind: "busy"` if another process holds it. The app's `AtomicBool` only
-  drives the "syncing" indicator; the file lock is the authority
+  drives the "syncing" indicator; the file lock is the authority. Only the
+  app starts a sync today — the lock is there for the CLI `sync` subcommand
+  (#170), which does not exist yet
 - Conflicts keep the loser as `….sync-conflict-<ts>.md` in R2 and on disk;
   conflict copies are excluded from scanning
 - Auto sync runs a few seconds after any successful write
