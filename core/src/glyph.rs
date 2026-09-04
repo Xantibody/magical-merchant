@@ -295,6 +295,19 @@ mod tests {
         assert!(!tmp.path().join("data/glyphs/big.png").exists());
     }
 
+    /// 上限ちょうどは通す。`>=` で弾くと、上限を狙って縮めた画像が入らない。
+    #[test]
+    fn an_image_of_exactly_the_limit_is_accepted() {
+        let tmp = TempDir::new().unwrap();
+        let mut big = PNG.to_vec();
+        big.resize(GLYPH_MAX_BYTES, 0);
+
+        save_glyph(tmp.path(), &name("big"), GlyphFormat::Png, &big).unwrap();
+
+        let saved = read_glyph(tmp.path(), &name("big")).unwrap();
+        assert_eq!(saved.bytes.len(), GLYPH_MAX_BYTES);
+    }
+
     /// 拡張子と中身が食い違うファイルは描けないので、入り口で弾く。
     #[test]
     fn content_that_is_not_the_named_format_is_refused() {

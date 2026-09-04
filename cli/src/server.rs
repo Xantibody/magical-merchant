@@ -886,7 +886,25 @@ mod tests {
             limit: None,
         }));
 
-        assert!(result.is_err());
+        assert_eq!(
+            result.err(),
+            Some("'from' (2026-02-01) is after 'to' (2026-01-01)".to_string())
+        );
+    }
+
+    /// 両端は含む。`from == to` は 1 日だけの範囲であって、逆向きではない。
+    #[test]
+    fn a_range_of_a_single_day_is_inclusive_on_both_ends() {
+        let tmp = TempDir::new().unwrap();
+        let ctx = Context::default();
+        write_day(tmp.path(), "2026-01-14", &[(9, "eve", &ctx)]);
+        write_day(tmp.path(), "2026-01-15", &[(9, "day", &ctx)]);
+        write_day(tmp.path(), "2026-01-16", &[(9, "next", &ctx)]);
+
+        let out = range(&server(tmp.path()), "2026-01-15", "2026-01-15", None);
+
+        let texts: Vec<&str> = out.entries.iter().map(|e| e.text.as_str()).collect();
+        assert_eq!(texts, vec!["day"]);
     }
 
     #[test]
@@ -1044,7 +1062,14 @@ mod tests {
             tags: None,
         }));
 
-        assert!(result.is_err());
+        assert_eq!(result.err(), Some("body is empty".to_string()));
+        // 断ったなら何も書かない。空のファイルが残ると一覧に「(空のメモ)」が並ぶ
+        assert!(
+            magical_merchant_core::list_notes(tmp.path())
+                .unwrap()
+                .is_empty()
+        );
+        assert!(!tmp.path().join("data/notes").exists());
     }
 
     #[test]

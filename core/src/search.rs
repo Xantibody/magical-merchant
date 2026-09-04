@@ -7,6 +7,7 @@ use crate::timeline::Timeline;
 use crate::timeline::day::DayLog;
 use crate::utils::markdown::strip_timeline_prefix;
 use crate::utils::tags;
+use crate::utils::text::lowercase;
 use crate::{list_notes, list_timeline_dates};
 
 /// 検索結果がどちらの保管場所から来たか。
@@ -67,7 +68,7 @@ fn timeline_hits(
         };
         // エントリ本文はその日のファイルの部分文字列なので、ファイル全体に無いなら
         // どのエントリにも無い。分割もコンテキスト JSON の判定も丸ごと省ける。
-        if day_filter_applies && !content.to_lowercase().contains(needle) {
+        if day_filter_applies && !lowercase(&content).contains(needle) {
             continue;
         }
 
@@ -80,7 +81,7 @@ fn timeline_hits(
             .enumerate()
         {
             let text = strip_timeline_prefix(&entry);
-            let lowered = text.to_lowercase();
+            let lowered = lowercase(text);
             if !lowered.contains(needle) {
                 continue;
             }
@@ -117,7 +118,7 @@ pub fn search_all(
     query: &str,
     tags: &[String],
 ) -> Result<Vec<SearchHit>, CoreError> {
-    let needle = query.trim().to_lowercase();
+    let needle = lowercase(query.trim());
     let scope: Vec<String> = tags
         .iter()
         .map(|t| tags::normalize(t))
@@ -141,10 +142,10 @@ pub fn search_all(
             haystack.push(' ');
             haystack.push_str(tag);
         }
-        if !haystack.to_lowercase().contains(&needle) {
+        if !lowercase(&haystack).contains(&needle) {
             continue;
         }
-        let lowered = note.preview.to_lowercase();
+        let lowered = lowercase(&note.preview);
         let excerpt = snippet(&note.preview, &lowered, &needle);
         hits.push(SearchHit {
             kind: HitKind::Note,
@@ -194,7 +195,7 @@ pub fn find_backlinks(
         if !body.contains(&needle) {
             continue;
         }
-        let lowered = body.to_lowercase();
+        let lowered = lowercase(&body);
         let excerpt = snippet(&body, &lowered, &needle);
         hits.push(SearchHit {
             kind: HitKind::Note,
@@ -433,13 +434,48 @@ mod tests {
     #[test]
     fn finds_a_note_by_body_and_reports_its_filename() {
         let tmp = TempDir::new().unwrap();
-        draft(&tmp, "R2 のリトライ設計", &[]).unwrap();
+        let path = draft(&tmp, "R2 のリトライ設計", &[]).unwrap();
 
         let hits = search_all(tmp.path(), "リトライ", &[]).unwrap();
 
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].kind, HitKind::Note);
-        assert!(hits[0].filename.is_some());
+        // 開くときに使う名前なので、作られたファイルの名前そのものでなければならない
+        assert_eq!(
+            hits[0].filename.as_deref(),
+            path.file_name().and_then(|n| n.to_str())
+        );
+        assert_eq!(hits[0].index, None);
+    }
+
+    /// 日付を固定して 1 行書く。`save_timeline_entry` は今日にしか書けない。
+    fn write_day(tmp: &TempDir, date: chrono::NaiveDate, text: &str) {
+        let dir = tmp.path().join("data/timeline");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(format!("{}.md", date.format("%Y-%m-%d"))),
+            format!("- [09:00:00] {text}\n"),
+        )
+        .unwrap();
+    }
+
+    /// 返すのは新しい方から 100 件まで。古い方を落とすのは、探しているのは
+    /// たいてい最近書いたものだから。
+    #[test]
+    fn hits_are_capped_at_the_newest_hundred() {
+        let tmp = TempDir::new().unwrap();
+        let oldest = chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
+        for offset in 0..=100 {
+            let date = oldest + chrono::Duration::days(offset);
+            write_day(&tmp, date, &format!("needle {offset}"));
+        }
+
+        let hits = search_all(tmp.path(), "needle", &[]).unwrap();
+
+        assert_eq!(hits.len(), MAX_HITS);
+        assert_eq!(hits[0].date, "2025-04-11");
+        assert_eq!(hits[MAX_HITS - 1].date, "2025-01-02");
+        assert!(hits.iter().all(|h| h.date != "2025-01-01"));
     }
 
     #[test]
@@ -505,6 +541,28 @@ mod tests {
         let hits = search_all(tmp.path(), "needle", &[]).unwrap();
 
         assert_eq!(hits[0].snippet, "needle のあと 改行");
+    }
+
+    /// 前後 40 文字ちょうどなら丸ごと収まり、41 文字目から省略する。
+    /// 文字数で数える — バイトで数えると日本語では 13 文字で切れる。
+    #[test]
+    fn a_snippet_elides_only_beyond_forty_chars_of_context() {
+        let tmp = TempDir::new().unwrap();
+        let exact = format!("{}リトライ{}", "前".repeat(40), "後".repeat(40));
+        let over = format!("{}リトライ{}", "前".repeat(41), "後".repeat(41));
+        draft(&tmp, &exact, &[]).unwrap();
+        draft(&tmp, &over, &[]).unwrap();
+
+        let hits = search_all(tmp.path(), "リトライ", &[]).unwrap();
+
+        let exact_hit = hits.iter().find(|h| h.snippet == exact).unwrap();
+        assert_eq!(exact_hit.match_start, Some(40));
+        let over_hit = hits.iter().find(|h| h.snippet != exact).unwrap();
+        assert_eq!(
+            over_hit.snippet,
+            format!("…{}リトライ{}…", "前".repeat(40), "後".repeat(40))
+        );
+        assert_eq!(over_hit.match_start, Some(41));
     }
 
     #[test]
