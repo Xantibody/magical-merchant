@@ -4,7 +4,7 @@
 //! 再スキャンで state を組み直さない、全消しを拒否する）はコメントでしか
 //! 守られていない。2 本目を書くと必ずドリフトするので分岐させない。
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::Path;
 
@@ -71,13 +71,14 @@ async fn sync_once(client: &HttpClient, base_dir: &Path) -> Result<SyncResult, S
 
     let bulk_resp = client.bulk(bulk_req).await?;
 
-    apply_response(&bulk_resp, &actions, &data_dir, &mut result).map_err(SyncError::other)?;
+    let unwritten = apply_response(&bulk_resp, &actions, &local_files, &data_dir, &mut result);
 
     // サーバーが確定させた状態をそのままローカルにも記録する。
     // ここでローカルを再スキャンして組み直すと、ダウンロード直後の mtime が
     // サーバーの版と食い違い、同じファイルを永久に再取得し続ける
 
-    save_local_state(base_dir, &bulk_resp.new_state, &data_dir).map_err(SyncError::other)?;
+    save_local_state(base_dir, &bulk_resp.new_state, &data_dir, &unwritten)
+        .map_err(SyncError::other)?;
 
     Ok(result)
 }
@@ -221,21 +222,37 @@ fn decode(file: &DownloadedFile) -> Result<Vec<u8>, String> {
         .map_err(|e| format!("base64 decode {}: {e}", file.key))
 }
 
+/// サーバーの返事をローカルに反映する。書けなかったキーを返す。
+///
+/// 1 件の失敗でここを抜けると `save_local_state` に届かず、壊れたキーが
+/// 毎回同じ所で同期を止める。失敗は `result.errors` に積んで先へ進み、
+/// 書けなかったキーは「同期済み」として記録させない。
 fn apply_response(
     bulk_resp: &BulkResponse,
     actions: &[SyncAction],
+    local_files: &[LocalFile],
     data_dir: &Path,
     result: &mut SyncResult,
-) -> Result<(), String> {
+) -> HashSet<String> {
+    let mut unwritten = HashSet::new();
+
     for d in &bulk_resp.downloads {
-        write_under(data_dir, &d.key, &decode(d)?)?;
-        result.downloaded += 1;
+        match decode(d).and_then(|content| write_under(data_dir, &d.key, &content)) {
+            Ok(()) => result.downloaded += 1,
+            Err(e) => {
+                result.errors.push(e);
+                unwritten.insert(d.key.clone());
+            }
+        }
     }
 
     // 競合で負けたリモート側。`.sync-conflict-` はスキャン対象外なので、
     // ローカルに置いても同期ループにはならない
     for d in &bulk_resp.conflict_downloads {
-        write_under(data_dir, &d.key, &decode(d)?)?;
+        if let Err(e) = decode(d).and_then(|content| write_under(data_dir, &d.key, &content)) {
+            result.errors.push(e);
+            unwritten.insert(d.key.clone());
+        }
     }
 
     for action in actions {
@@ -250,27 +267,67 @@ fn apply_response(
                 result.conflicts += 1;
             }
             SyncAction::DeleteLocal { key } => {
-                let path = data_dir.join(key);
-                if path.exists() {
-                    if let Err(e) = fs::remove_file(&path) {
-                        result.errors.push(format!("delete_local {key}: {e}"));
-                    } else {
-                        result.deleted_local += 1;
-                    }
-                } else {
-                    result.deleted_local += 1;
-                }
+                delete_local_file(key, local_files, data_dir, result);
             }
             SyncAction::DownloadNew { .. } | SyncAction::DownloadModified { .. } => {}
         }
     }
 
-    Ok(())
+    unwritten
+}
+
+/// リモートで消されたファイルをローカルからも消す。
+///
+/// scan の判定からここまでにサーバーとの往復が挟まる。その隙に書かれた編集は
+/// まだ誰も知らないので、削除の直前に中身を数え直し、scan 時と違えば残す。
+/// 残ったファイルは次の同期で `UploadModified` として復活する
+fn delete_local_file(
+    key: &str,
+    local_files: &[LocalFile],
+    data_dir: &Path,
+    result: &mut SyncResult,
+) {
+    let path = data_dir.join(key);
+    let content = match fs::read(&path) {
+        Ok(content) => content,
+        // すでに無いなら消す手間が省けただけ
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            result.deleted_local += 1;
+            return;
+        }
+        Err(e) => {
+            result.errors.push(format!("delete_local {key}: {e}"));
+            return;
+        }
+    };
+
+    let scanned = local_files
+        .iter()
+        .find(|f| f.key == key)
+        .map(|f| f.content_hash.as_str());
+    if scanned != Some(scan::compute_hash(&content).as_str()) {
+        result
+            .errors
+            .push(format!("delete_local {key}: changed since scan, kept"));
+        return;
+    }
+
+    if let Err(e) = fs::remove_file(&path) {
+        result.errors.push(format!("delete_local {key}: {e}"));
+    } else {
+        result.deleted_local += 1;
+    }
 }
 
 /// サーバーが確定させた状態を、実際に手元にあるファイルだけに絞って保存する。
 /// 手元に無いものを「同期済み」と記録すると、次の同期でリモート側を消してしまう。
-fn to_local_state(server_state: &ServerSyncState, data_dir: &Path) -> SyncState {
+/// `unwritten` は取得に失敗したキー: ファイル自体は古い版のまま残っているので、
+/// 存在チェックだけでは除けない。
+fn to_local_state(
+    server_state: &ServerSyncState,
+    data_dir: &Path,
+    unwritten: &HashSet<String>,
+) -> SyncState {
     let mut state = SyncState {
         last_sync: Some(Utc::now()),
         ..Default::default()
@@ -279,7 +336,7 @@ fn to_local_state(server_state: &ServerSyncState, data_dir: &Path) -> SyncState 
         let Ok(last_synced_modified) = record.last_modified.parse() else {
             continue;
         };
-        if !is_safe_key(key) || !data_dir.join(key).exists() {
+        if !is_safe_key(key) || unwritten.contains(key) || !data_dir.join(key).exists() {
             continue;
         }
         state.files.insert(
@@ -297,8 +354,9 @@ fn save_local_state(
     base_dir: &Path,
     server_state: &ServerSyncState,
     data_dir: &Path,
+    unwritten: &HashSet<String>,
 ) -> Result<(), String> {
-    to_local_state(server_state, data_dir)
+    to_local_state(server_state, data_dir, unwritten)
         .save(base_dir)
         .map_err(|e| e.to_string())
 }
@@ -395,7 +453,7 @@ mod tests {
         seed(dir.path(), "notes/a.md", "content");
         let state = server_state(&[("notes/a.md", "hash-a", "2026-08-05T00:00:00Z")]);
 
-        let local = to_local_state(&state, dir.path());
+        let local = to_local_state(&state, dir.path(), &HashSet::new());
 
         let record = &local.files["notes/a.md"];
         assert_eq!(record.content_hash, "hash-a");
@@ -412,7 +470,11 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let state = server_state(&[("notes/missing.md", "hash-a", "2026-08-05T00:00:00Z")]);
 
-        assert!(to_local_state(&state, dir.path()).files.is_empty());
+        assert!(
+            to_local_state(&state, dir.path(), &HashSet::new())
+                .files
+                .is_empty()
+        );
     }
 
     #[test]
@@ -420,7 +482,11 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let state = server_state(&[("../escape.md", "hash-a", "2026-08-05T00:00:00Z")]);
 
-        assert!(to_local_state(&state, dir.path()).files.is_empty());
+        assert!(
+            to_local_state(&state, dir.path(), &HashSet::new())
+                .files
+                .is_empty()
+        );
     }
 
     #[test]
@@ -439,7 +505,7 @@ mod tests {
         };
 
         let mut result = SyncResult::default();
-        apply_response(&resp, &[], dir.path(), &mut result).unwrap();
+        apply_response(&resp, &[], &[], dir.path(), &mut result);
 
         assert_eq!(
             fs::read_to_string(dir.path().join("notes/a.md")).unwrap(),
@@ -453,10 +519,114 @@ mod tests {
         assert_eq!(result.downloaded, 1);
     }
 
+    /// bulk が通ったあとの書き込みで 1 件こけたら、そこで抜けずに残りを書く。
+    /// 抜けると `save_local_state` に届かず、壊れた 1 キーが毎回同じ所で
+    /// 同期を止め、次の同期は state 無しで全件 Conflict になる
+    #[test]
+    fn a_failed_download_leaves_the_others_written_and_the_state_saved() {
+        let dir = tempfile::tempdir().unwrap();
+        // 更新版の取得に失敗したので、手元には古い版が残ったまま
+        seed(dir.path(), "notes/bad.md", "stale local copy");
+        let resp = BulkResponse {
+            downloads: vec![
+                DownloadedFile {
+                    key: "notes/bad.md".to_string(),
+                    content_base64: "not base64!!".to_string(),
+                },
+                DownloadedFile {
+                    key: "notes/good.md".to_string(),
+                    content_base64: B64.encode(b"remote"),
+                },
+            ],
+            conflict_downloads: Vec::new(),
+            new_state: server_state(&[
+                ("notes/bad.md", "hash-bad", "2026-08-05T00:00:00Z"),
+                ("notes/good.md", "hash-good", "2026-08-05T00:00:00Z"),
+            ]),
+        };
+
+        let mut result = SyncResult::default();
+        let unwritten = apply_response(&resp, &[], &[], dir.path(), &mut result);
+
+        assert_eq!(
+            fs::read_to_string(dir.path().join("notes/good.md")).unwrap(),
+            "remote"
+        );
+        assert_eq!(
+            fs::read_to_string(dir.path().join("notes/bad.md")).unwrap(),
+            "stale local copy"
+        );
+        assert_eq!(result.downloaded, 1);
+        assert_eq!(result.errors.len(), 1, "errors: {:?}", result.errors);
+
+        // 取れなかったキーを「同期済み」と記録すると、手元の古い版が
+        // 新しいハッシュで確定してしまう
+        let state = to_local_state(&resp.new_state, dir.path(), &unwritten);
+        assert!(state.files.contains_key("notes/good.md"));
+        assert!(!state.files.contains_key("notes/bad.md"));
+    }
+
     fn delete_local(key: &str) -> SyncAction {
         SyncAction::DeleteLocal {
             key: key.to_string(),
         }
+    }
+
+    fn no_response() -> BulkResponse {
+        BulkResponse {
+            downloads: Vec::new(),
+            conflict_downloads: Vec::new(),
+            new_state: server_state(&[]),
+        }
+    }
+
+    #[test]
+    fn a_local_delete_removes_the_file_it_was_computed_from() {
+        let dir = tempfile::tempdir().unwrap();
+        seed(dir.path(), "notes/a.md", "untouched");
+        let locals = vec![local_file("notes/a.md", &scan::compute_hash(b"untouched"))];
+
+        let mut result = SyncResult::default();
+        apply_response(
+            &no_response(),
+            &[delete_local("notes/a.md")],
+            &locals,
+            dir.path(),
+            &mut result,
+        );
+
+        assert!(!dir.path().join("notes/a.md").exists());
+        assert_eq!(result.deleted_local, 1);
+        assert!(result.errors.is_empty(), "errors: {:?}", result.errors);
+    }
+
+    /// scan と削除のあいだにはネットワーク往復が挟まる。その隙に書かれた
+    /// 編集まで消さないよう、削除の直前に中身を見直す
+    #[test]
+    fn a_local_delete_is_skipped_when_the_file_changed_after_the_scan() {
+        let dir = tempfile::tempdir().unwrap();
+        seed(
+            dir.path(),
+            "notes/a.md",
+            "edited while the sync was in flight",
+        );
+        let locals = vec![local_file("notes/a.md", &scan::compute_hash(b"as scanned"))];
+
+        let mut result = SyncResult::default();
+        apply_response(
+            &no_response(),
+            &[delete_local("notes/a.md")],
+            &locals,
+            dir.path(),
+            &mut result,
+        );
+
+        assert_eq!(
+            fs::read_to_string(dir.path().join("notes/a.md")).unwrap(),
+            "edited while the sync was in flight"
+        );
+        assert_eq!(result.deleted_local, 0);
+        assert_eq!(result.errors.len(), 1, "errors: {:?}", result.errors);
     }
 
     /// サーバーの同期状態が壊れて空になったときに、それを「全部削除された」と
@@ -527,6 +697,11 @@ mod tests {
         };
 
         let mut result = SyncResult::default();
-        assert!(apply_response(&resp, &[], dir.path(), &mut result).is_err());
+        let unwritten = apply_response(&resp, &[], &[], dir.path(), &mut result);
+
+        assert!(!dir.path().parent().unwrap().join("escaped.md").exists());
+        assert_eq!(result.downloaded, 0);
+        assert_eq!(result.errors.len(), 1, "errors: {:?}", result.errors);
+        assert!(unwritten.contains("../escaped.md"));
     }
 }
