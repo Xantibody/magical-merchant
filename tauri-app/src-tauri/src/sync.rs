@@ -40,11 +40,15 @@ impl Default for AppSyncState {
 
 // ──────────── HTTP client ────────────
 
-// Android 側は失敗しうるので、両方を同じ型で呼べるように揃える
-#[allow(clippy::unnecessary_wraps)]
+/// `Client::new()` は組み立てに失敗すると panic する。同期はユーザーの操作で
+/// 走るので、TLS の初期化がこけても落とさずエラーとして返す
 #[cfg(not(target_os = "android"))]
 fn http_client() -> Result<reqwest::Client, SyncError> {
-    Ok(reqwest::Client::new())
+    use magical_merchant_core::sync::client::describe;
+
+    reqwest::Client::builder()
+        .build()
+        .map_err(|e| SyncError::other(format!("HTTP client setup failed: {}", describe(&e))))
 }
 
 /// Android だけ端末の検証器を迂回する。理由は `android_tls::sync_tls_config`
