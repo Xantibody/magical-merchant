@@ -99,9 +99,14 @@ function base64Decode(s: string): Uint8Array {
   return bytes;
 }
 
+/// 抜け出せるのは `..` という**パス要素**であって、名前の中に並んだ点ではない。
+/// 部分一致で弾くと `….sync-conflict-20260511-031336..md`(サーバー駆動同期
+/// 以前の控えにある、点が 1 つ多い名前)まで巻き込み、その控えを抱えた端末は
+/// 毎回の同期が失敗し続ける。判定は core の `is_safe_key` と揃える。
 export function isUnsafeKey(key: string): boolean {
   return (
-    key.includes("..") ||
+    key === "" ||
+    key.split("/").some((segment) => segment === ".." || segment === ".") ||
     key.includes("\0") ||
     key.startsWith("/") ||
     key.startsWith(SYNC_STATE_PREFIX)
