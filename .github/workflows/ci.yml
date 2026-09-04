@@ -128,6 +128,9 @@ jobs:
             cargo-${{ runner.os }}-
       - name: check
         run: nix develop .#rust --command just rust::check
+      # 実機の Android でしか出ない不具合なので、ここで止める。理由は rust/justfile
+      - name: rustls resolves to one version
+        run: nix develop .#rust --command just rust::check-rustls
       - name: test
         run: nix develop .#rust --command just rust::test
       - uses: actions/cache/save@v6
