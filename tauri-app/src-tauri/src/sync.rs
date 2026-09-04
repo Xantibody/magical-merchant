@@ -138,6 +138,11 @@ async fn do_sync(handle: &AppHandle) -> Result<SyncResult, SyncError> {
         .path()
         .app_data_dir()
         .map_err(|e| SyncError::other(e.to_string()))?;
+    // タイムラインだけ見て同期を押すと、ノート一覧より先にここへ来る。
+    // 走査より前に競合コピーを `data/` の外へ出しておかないと、残骸が
+    // 新しいノートとして全端末へ配られる
+    crate::repair_once(&base_dir);
+
     let config = SyncConfig::load(&base_dir)?.unwrap_or_default();
     if !config.is_configured() {
         return Err(SyncError::new(

@@ -56,6 +56,16 @@ pub fn history_dir(base_dir: &Path) -> PathBuf {
     base_dir.join("history")
 }
 
+/// 競合で負けた側の控えの置き場。
+///
+/// `data/` の外に置く。同期の走査から外れるのはもちろん、ノート一覧が拾う
+/// `data/notes/*.md` からも外れる。控えは戻すためのもので、書き続ける
+/// ノートとして並ぶものではない。
+#[must_use]
+pub fn conflicts_dir(base_dir: &Path) -> PathBuf {
+    base_dir.join("conflicts")
+}
+
 /// 地名キャッシュの置き場。
 ///
 /// `data/` の外に置く。中身は座標から引き直せる派生物でしかなく、同期に
@@ -106,6 +116,16 @@ mod tests {
         assert_eq!(
             glyphs_dir(Path::new("/app")),
             PathBuf::from("/app/data/glyphs")
+        );
+    }
+
+    /// 控えは history と同じく `data/` の外。中に置くと同期で往復するうえ、
+    /// ノート一覧にも並ぶ。
+    #[test]
+    fn conflict_copies_sit_outside_the_synced_tree() {
+        assert_eq!(
+            conflicts_dir(Path::new("/app")),
+            PathBuf::from("/app/conflicts")
         );
     }
 

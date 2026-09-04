@@ -52,9 +52,9 @@ in-memory store, which loses the token immediately — so on Android the token
 is written to the app-private data directory (mode `600`) instead.
 
 On a conflict the local copy wins the key, and the overwritten remote copy is
-kept both in R2 under `….sync-conflict-<timestamp>.md` and on disk next to
-the note. Conflict copies are excluded from scanning, so they never sync
-back.
+kept both in R2 under `….sync-conflict-<timestamp>.md` and on disk under
+`conflicts/<key without its extension>/<timestamp>.md`. That directory sits
+outside `data/`, so a copy neither syncs back nor appears in the notes list.
 
 ## Deployment
 

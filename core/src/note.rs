@@ -111,6 +111,13 @@ pub fn repair_notes(base_dir: &Path) -> Result<usize, CoreError> {
     repair::repair_all(&crate::utils::paths::notes_dir(base_dir))
 }
 
+/// 古い版が `data/notes/` と `data/timeline/` に置いた競合コピーを `conflicts/` へ
+/// 移す。移した件数を返す。
+/// 呼ぶのは同期を持つアプリだけ、それも最初の同期より前に一度。
+pub fn relocate_conflict_copies(base_dir: &Path) -> Result<usize, CoreError> {
+    repair::relocate_conflict_copies(base_dir)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
