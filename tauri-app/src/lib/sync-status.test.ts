@@ -1,5 +1,7 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
+import { setLocale, t } from "./i18n";
 import { describeSyncResult, describeSyncError } from "./sync-status";
+import type { SyncIssue } from "./sync-status";
 
 const emptyResult = {
   uploaded: 0,
@@ -7,14 +9,17 @@ const emptyResult = {
   deleted_remote: 0,
   deleted_local: 0,
   conflicts: 0,
-  errors: [] as string[],
+  errors: [] as SyncIssue[],
 };
 
 describe("describeSyncResult", () => {
+  // 既定は test-setup の ja。英語を見たいところだけ切り替える
+  afterEach(() => setLocale("ja"));
+
   it("reports up to date when nothing changed", () => {
     const ui = describeSyncResult(emptyResult);
     expect(ui.status).toBe("success");
-    expect(ui.message).toBe("Already up to date");
+    expect(ui.message).toBe(t().sync.result.upToDate);
   });
 
   it("reports upload and download counts", () => {
@@ -27,24 +32,49 @@ describe("describeSyncResult", () => {
   it("counts deletions as changes", () => {
     const ui = describeSyncResult({ ...emptyResult, deleted_remote: 1, deleted_local: 2 });
     expect(ui.status).toBe("success");
-    expect(ui.message).not.toBe("Already up to date");
+    expect(ui.message).not.toBe(t().sync.result.upToDate);
   });
 
   it("mentions conflicts", () => {
     const ui = describeSyncResult({ ...emptyResult, downloaded: 1, conflicts: 2 });
     expect(ui.status).toBe("success");
-    expect(ui.message).toContain("2 conflict(s)");
+    expect(ui.message).toContain("2");
+    expect(ui.message).toContain(t().sync.result.conflictsSaved(2));
   });
 
-  it("reports errors with the first error message", () => {
+  // core は英文ではなく kind とキーを返す。文にするのはここなので、
+  // 選ばれている言語で出る
+  it("reports failures in japanese", () => {
     const ui = describeSyncResult({
       ...emptyResult,
       uploaded: 1,
-      errors: ["upload notes/a.md: Network error: timeout", "upload notes/b.md: HTTP 500"],
+      errors: [
+        { kind: "delete_skipped_changed", key: "notes/a.md" },
+        { kind: "write_failed", key: "notes/b.md", detail: "disk full" },
+      ],
     });
     expect(ui.status).toBe("error");
-    expect(ui.message).toContain("2");
-    expect(ui.message).toContain("upload notes/a.md");
+    expect(ui.message).toContain("2 件が失敗");
+    expect(ui.message).toContain("notes/a.md");
+  });
+
+  it("reports the same failure in english", () => {
+    setLocale("en");
+    const ui = describeSyncResult({
+      ...emptyResult,
+      errors: [{ kind: "delete_skipped_changed", key: "notes/a.md" }],
+    });
+    expect(ui.message).toContain("1 item(s) failed");
+    expect(ui.message).toContain("notes/a.md");
+  });
+
+  // 詳細を落とすと、書き込み失敗の原因 (容量・権限) が画面から消える
+  it("keeps the detail core attached to a failure", () => {
+    const ui = describeSyncResult({
+      ...emptyResult,
+      errors: [{ kind: "write_failed", key: "notes/b.md", detail: "disk full" }],
+    });
+    expect(ui.message).toContain("disk full");
   });
 });
 
