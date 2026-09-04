@@ -70,10 +70,16 @@ pub fn compute(
             }
 
             // Both exist, never synced (first sync with data on both sides)
-            (Some(_), Some(_), None) => {
-                actions.push(SyncAction::Conflict {
-                    key: key.to_string(),
-                });
+            // 中身が同じなら転送するものは何もない。ここを競合にすると、
+            // `.sync-state.json` を消して再同期する復旧手順が、一致している
+            // ファイルまで競合コピーに分裂させてしまう。state はサーバーが
+            // 返す new_state から `save_local_state` が記録し直す
+            (Some(local), Some(remote), None) => {
+                if local.content_hash != remote.content_hash {
+                    actions.push(SyncAction::Conflict {
+                        key: key.to_string(),
+                    });
+                }
             }
 
             // Local only, never synced → upload
@@ -155,10 +161,14 @@ mod tests {
     }
 
     fn remote(key: &str, modified: &str) -> RemoteFile {
+        remote_hashed(key, modified, "remote_hash")
+    }
+
+    fn remote_hashed(key: &str, modified: &str, hash: &str) -> RemoteFile {
         RemoteFile {
             key: key.to_string(),
             last_modified: modified.parse().unwrap(),
-            content_hash: String::new(),
+            content_hash: hash.to_string(),
         }
     }
 
@@ -200,9 +210,13 @@ mod tests {
     }
 
     #[test]
-    fn both_exist_no_state_conflict() {
-        let local_files = vec![local("notes/c.md", "hash_c")];
-        let remote_files = vec![remote("notes/c.md", "2026-04-22T10:00:00Z")];
+    fn both_exist_no_state_different_hash_conflicts() {
+        let local_files = vec![local("notes/c.md", "local_hash")];
+        let remote_files = vec![remote_hashed(
+            "notes/c.md",
+            "2026-04-22T10:00:00Z",
+            "remote_hash",
+        )];
         let actions = compute(&local_files, &remote_files, &SyncState::default());
         assert_eq!(
             actions,
@@ -210,6 +224,20 @@ mod tests {
                 key: "notes/c.md".into()
             }]
         );
+    }
+
+    /// `.sync-state.json` を消して再同期する復旧手順で、中身が一致するファイルまで
+    /// 競合にすると全ノートぶんの `.sync-conflict-*.md` が両側に生まれる
+    #[test]
+    fn both_exist_no_state_same_hash_needs_no_transfer() {
+        let local_files = vec![local("notes/c.md", "same_hash")];
+        let remote_files = vec![remote_hashed(
+            "notes/c.md",
+            "2026-04-22T10:00:00Z",
+            "same_hash",
+        )];
+        let actions = compute(&local_files, &remote_files, &SyncState::default());
+        assert!(actions.is_empty());
     }
 
     #[test]
