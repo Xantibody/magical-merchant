@@ -62,9 +62,9 @@ export function syncErrorKind(err: unknown): string {
 export function describeSyncError(err: unknown): SyncUiState {
   const info = toErrorInfo(err);
 
-  // 別の同期が走っていただけ。アプリ内の再入だけでなく、CLI が同じ
-  // データディレクトリのロックを持っているときもここに来る。異常ではないので
-  // 何も知らせないが、待機に戻すのは必須: "syncing" のまま止めると
+  // 別の同期が走っていただけ。今はアプリ内の再入だけだが、CLI から同期
+  // できるようになれば (#170) 相手がロックを持っている場合も来る。異常では
+  // ないので何も知らせないが、待機に戻すのは必須: "syncing" のまま止めると
   // syncNow の再入ガードに引っかかり、以後どの同期も始まらなくなる
   if (info.kind === "busy") {
     return { status: "idle", message: "" };

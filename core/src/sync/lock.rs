@@ -1,10 +1,14 @@
 //! 同期のプロセス間排他。
 //!
 //! アプリ側の「同期中」フラグ (`AtomicBool`) はプロセス内でしか効かない。
-//! アプリと CLI が同時に同期すると `.sync-state.json` を後勝ちで上書きし合い、
+//! 2 つの同期が同時に走ると `.sync-state.json` を後勝ちで上書きし合い、
 //! `to_local_state` が「手元に無い」として落としたキーが相手の状態から消える。
 //! 次の同期でそれは差分として蘇り、偽の競合コピーになる (`diff.rs`)。
 //! 排他はプロセスをまたぐ必要があるので、ファイルシステムに置く。
+//!
+//! 今のところ同期を始めるのはアプリだけで、プロセスをまたぐ衝突は
+//! 起きない。CLI から同期できるようにする (#170) とそうではなくなるので、
+//! 先回りして 1 つに絞ってある。
 
 use std::fs::{self, File, TryLockError};
 use std::path::Path;
@@ -56,7 +60,7 @@ impl SyncLock {
             Ok(()) => Ok(Self { file }),
             Err(TryLockError::WouldBlock) => Err(SyncError::new(
                 "busy",
-                "Another sync is already running (the app or the CLI). Try again in a moment.",
+                "Another sync is already running. Try again in a moment.",
             )),
             // ロックが取れたか分からないなら同期しない。
             // 排他できていないまま進むほうが高くつく
