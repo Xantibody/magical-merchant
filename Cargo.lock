@@ -2764,7 +2764,6 @@ dependencies = [
  "criterion",
  "jsonwebtoken",
  "keyring",
- "markdown-frontmatter",
  "reqwest",
  "serde",
  "serde_json",
@@ -2774,19 +2773,6 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "url",
-]
-
-[[package]]
-name = "markdown-frontmatter"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02a46ec238a43080a53dc296b015d91fa033030d25bc05863f899915265afd5d"
-dependencies = [
- "serde",
- "serde_json",
- "serde_yaml",
- "thiserror 2.0.18",
- "toml 1.1.2+spec-1.1.0",
 ]
 
 [[package]]
