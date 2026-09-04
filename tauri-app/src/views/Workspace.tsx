@@ -129,6 +129,11 @@ export default function Workspace(): JSX.Element {
    * のは、保存が遅れて届く頃には別のノートが選ばれていることがあるから。
    */
   const revisions = new Map<string, string>();
+  /**
+   * 走っている自動保存のタイマー。「まだディスクに無い本文がある」の合図で、
+   * 読み直しを抑える判断がこれを読む。他の編集セッションの状態と一緒に置く。
+   */
+  let saveTimer: ReturnType<typeof setTimeout> | undefined;
 
   const visibleItems = createMemo<NoteItem[]>(() => {
     const dropped = new Set(hidden());
@@ -185,29 +190,6 @@ export default function Workspace(): JSX.Element {
     (filename) => typedInvoke("find_backlinks", { filename }),
   );
 
-  const openBacklink = (hit: SearchHit): void => {
-    if (hit.kind === "note" && hit.filename) {
-      setSelectedId(hit.filename);
-      setDetailOpen(true);
-    } else {
-      navigate(`${ROUTES.TIMELINE}?day=${hit.date}`);
-    }
-  };
-
-  // ウィジェットの行から `?file=` 付きで来たときだけ、その 1 件を開く。
-  // 一覧が届く前に来ることがあるが、id はファイル名そのものなので先に置ける
-  createEffect(
-    on(
-      () => searchParams.file,
-      (file) => {
-        if (typeof file === "string" && file) {
-          setSelectedId(file);
-          setDetailOpen(true);
-        }
-      },
-    ),
-  );
-
   /** ディスクから読み直して画面に出す。選択の切り替えと、外からの書き換えの後に。 */
   const loadNote = async (item: NoteItem): Promise<void> => {
     try {
@@ -215,12 +197,16 @@ export default function Workspace(): JSX.Element {
         () => typedInvoke("read_note", { filename: item.filename }),
         () => typedInvoke("read_note_meta", { filename: item.filename }),
       );
-      revisions.set(item.filename, content.revision);
       // 一覧を素早くたどると、遅い読みが速い読みを追い越して届く。
-      // いま選ばれているノートへの答えだけを画面に出す
-      if (selected()?.id !== item.id) {
+      // いま選ばれているノートへの答えだけを画面に出す。読み始める前に
+      // 確かめた「編集中でも保存待ちでもない」も、届いた時点でもう一度見る —
+      // 応答を待つあいだにタップして書き始められる。
+      // revision まで見送るのは、画面に出していない版で保存に行くと、
+      // 読んでいない相手の本文の上に書けてしまうから
+      if (selected()?.id !== item.id || editing() || saveTimer) {
         return;
       }
+      revisions.set(item.filename, content.revision);
       // 本文とモードは対で出す。バラすと一瞬だけ違うモードで描かれる
       const titled = splitTitle(content.body);
       batch(() => {
@@ -280,15 +266,7 @@ export default function Workspace(): JSX.Element {
     }
   };
 
-  const select = (item: NoteItem): void => {
-    shell.closePopovers();
-    setSelectedId(item.id);
-    setEditing(false);
-    setDetailOpen(true);
-  };
-
   // ---- 編集（自動保存: 1秒 debounce + 直列化）----
-  let saveTimer: ReturnType<typeof setTimeout> | undefined;
   let saveChain: Promise<void> = Promise.resolve();
 
   /**
@@ -300,11 +278,22 @@ export default function Workspace(): JSX.Element {
     item: NoteItem;
     body: string;
     session: EditSession;
+    /** 写しを取った時点の世代。読み直しをまたいだ写しは書かない。 */
+    generation: number;
   }
+
+  /**
+   * 保存の世代。外からの書き換えに譲って読み直すたびに 1 つ進める。
+   * 譲るより前に `saveChain` に並んだ写しは、読み直した版を知らないまま
+   * 順番が来る。そのまま書くと、いま画面に出ている相手の本文を古い draft で
+   * 潰す — 読み直しで `revisions` が新しくなっているので core も止められない。
+   * `session.lastSavedBody` を合わせるだけでは「同じ本文の写し」しか止まらない。
+   */
+  let saveGeneration = 0;
 
   const snapshotSave = (): PendingSave | undefined => {
     const item = selected();
-    return item ? { item, body: fullBody(), session } : undefined;
+    return item ? { item, body: fullBody(), session, generation: saveGeneration } : undefined;
   };
 
   /**
@@ -314,7 +303,11 @@ export default function Workspace(): JSX.Element {
    * 相手の版がバックアップに回るので、どちらも失わない。
    */
   const yieldToOutsideEdit = async (pending: PendingSave): Promise<void> => {
-    writeBackup(localStorage, pending.item.filename, pending.body);
+    // 退避するのは飛んでいった写しではなく、いま画面にある本文。Stale が
+    // 返るまでの往復のあいだに打った字は、まだファイルにもここにも無い
+    const typed = selected()?.id === pending.item.id ? fullBody() : pending.body;
+    writeBackup(localStorage, pending.item.filename, typed);
+    saveGeneration += 1;
     if (saveTimer) {
       clearTimeout(saveTimer);
       saveTimer = undefined;
@@ -332,8 +325,13 @@ export default function Workspace(): JSX.Element {
     saveChain = (async () => {
       await previous;
       // 触っていない誤タップのセッションを書き込みに変えない。書いても
-      // 内容が変わらないなら、ファイルの mtime を動かして同期を起こすだけ
-      if (!pending || !shouldSave(pending.session, pending.body)) {
+      // 内容が変わらないなら、ファイルの mtime を動かして同期を起こすだけ。
+      // 読み直しをまたいだ写しも書かない(世代が置いていかれている)
+      if (
+        !pending ||
+        pending.generation !== saveGeneration ||
+        !shouldSave(pending.session, pending.body)
+      ) {
         return;
       }
       setSaveStatus("saving");
@@ -367,6 +365,9 @@ export default function Workspace(): JSX.Element {
       clearTimeout(saveTimer);
     }
     saveTimer = setTimeout(() => {
+      // 起きたタイマーは終わったタイマー。掃除しないと「保存待ちがある」が
+      // 立ったままになり、フォーカス復帰の読み直しが二度と通らない
+      saveTimer = undefined;
       void flushSave(pending);
     }, SAVE_DEBOUNCE_MS);
   };
@@ -399,6 +400,69 @@ export default function Workspace(): JSX.Element {
         }
       },
       { defer: true },
+    ),
+  );
+
+  const stopEditing = async (): Promise<void> => {
+    if (saveTimer) {
+      clearTimeout(saveTimer);
+      saveTimer = undefined;
+    }
+    await flushSave();
+    // 書き終えた本文が真実。読み直しを待ってからプレビューを出すと
+    // 一瞬だけ編集前の本文が見える
+    setNoteBody(draft());
+    setEditing(false);
+    // 次に書き始めるときは新しいセッション。戻る先が 1 段ずつ進む
+    sessionFile = null;
+    await refetchNotes();
+  };
+
+  /**
+   * 開いている編集を畳んでから戻る。選択を動かす手前で必ず通す道。
+   * 畳まずに移ると `fullBody()` が「次のノートの題 + 前のノートの本文」に
+   * なり、次の保存がその混ぜ物を隣のノートへ書き込む。読み直しが
+   * `revisions` を更新済みなので Stale でも止まらない。
+   * 編集していないときに `stopEditing` を呼ばないのは、あれが `draft()` を
+   * 本文に据えるから — 開いていない draft は前のノートのものだ。
+   */
+  const settleEdit = (): Promise<void> => (editing() ? stopEditing() : Promise.resolve());
+
+  /**
+   * 選択を差し替える唯一の入口。一覧のタップ・ウィジェットの `?file=`・
+   * 新規作成・テンプレ・バックリンクは全部ここを通る。入口ごとに
+   * 「編集中だったらどうするか」を書くと、書き忘れた入口だけが前のノートの
+   * 本文を次のノートへ持ち込む — 入口が増えても書く場所は 1 つにしておく。
+   */
+  async function switchTo(id: string): Promise<void> {
+    await settleEdit();
+    setSelectedId(id);
+    setDetailOpen(true);
+  }
+
+  const select = (item: NoteItem): void => {
+    shell.closePopovers();
+    void switchTo(item.id);
+  };
+
+  const openBacklink = (hit: SearchHit): void => {
+    if (hit.kind === "note" && hit.filename) {
+      void switchTo(hit.filename);
+    } else {
+      navigate(`${ROUTES.TIMELINE}?day=${hit.date}`);
+    }
+  };
+
+  // ウィジェットの行から `?file=` 付きで来たときだけ、その 1 件を開く。
+  // 一覧が届く前に来ることがあるが、id はファイル名そのものなので先に置ける
+  createEffect(
+    on(
+      () => searchParams.file,
+      (file) => {
+        if (typeof file === "string" && file) {
+          void switchTo(file);
+        }
+      },
     ),
   );
 
@@ -448,8 +512,7 @@ export default function Workspace(): JSX.Element {
     // 書き始める操作ではないから — マインドマップでも踏める
     const noteLink = target?.closest("a.note-link");
     if (noteLink instanceof HTMLElement && noteLink.dataset.file) {
-      setSelectedId(noteLink.dataset.file);
-      setDetailOpen(true);
+      void switchTo(noteLink.dataset.file);
       return;
     }
     // リンクは踏める・図はズームのまま・道具は道具のまま・バックリンク欄は
@@ -492,6 +555,13 @@ export default function Workspace(): JSX.Element {
       return;
     }
     writeBackup(localStorage, item.filename, current);
+    // 入れ替えたので、いまの「戻る先」はこの控え。控えを取り終えた
+    // セッションとして開き直す — 開き直さないと、次に題や本文を触った
+    // ときに新しいセッションが立ち上がり、その最初の保存が復元直前の本文を
+    // 控えに書いて、もう一度押しても戻れなくなる
+    session = beginEditSession(backup);
+    session.committed = true;
+    sessionFile = item.filename;
     const titled = splitTitle(backup);
     batch(() => {
       setNoteTitle(titled.title);
@@ -532,21 +602,6 @@ export default function Workspace(): JSX.Element {
     return backup !== null && backup !== fullBody();
   });
 
-  const stopEditing = async (): Promise<void> => {
-    if (saveTimer) {
-      clearTimeout(saveTimer);
-      saveTimer = undefined;
-    }
-    await flushSave();
-    // 書き終えた本文が真実。読み直しを待ってからプレビューを出すと
-    // 一瞬だけ編集前の本文が見える
-    setNoteBody(draft());
-    setEditing(false);
-    // 次に書き始めるときは新しいセッション。戻る先が 1 段ずつ進む
-    sessionFile = null;
-    await refetchNotes();
-  };
-
   const createNote = async (): Promise<void> => {
     const path = await typedInvoke("create_draft", {
       body: "",
@@ -558,9 +613,8 @@ export default function Workspace(): JSX.Element {
     // 前に開いていたノートの題を書き換えることになる
     const filename = path.split("/").at(-1);
     if (filename) {
-      setSelectedId(filename);
+      await switchTo(filename);
     }
-    setDetailOpen(true);
   };
 
   /**
@@ -579,9 +633,8 @@ export default function Workspace(): JSX.Element {
       await refetchNotes();
       const filename = created.path.split("/").at(-1);
       if (filename) {
-        setSelectedId(filename);
+        await switchTo(filename);
       }
-      setDetailOpen(true);
       if (created.reused) {
         shell.showToast(t().templates.reused(template.name));
       }
@@ -598,7 +651,10 @@ export default function Workspace(): JSX.Element {
   let newNotePointer = "mouse";
 
   // ---- 削除 + Undo（5秒は tombstone、経過後に本削除）----
-  const remove = (item: NoteItem): void => {
+  const remove = async (item: NoteItem): Promise<void> => {
+    // 隣を選ぶ前に編集を畳む。switchTo と同じ理屈だが、削除は詳細ペインを
+    // 開かない(狭い端末では隣を開いたままにする)ので switchTo は通さない
+    await settleEdit();
     // 隠す前に隣を決める。selected は一覧から消えた id を先頭へ倒すので、
     // 何もしないと削除のたびに最上段へ飛ばされる。隣なら目線は動かない。
     // detailOpen は触らない — 今まで通り、端末が狭ければ隣を開いたままにする
@@ -790,7 +846,9 @@ export default function Workspace(): JSX.Element {
                     class="icon-button"
                     title={t().common.delete}
                     aria-label={t().common.delete}
-                    onClick={() => remove(item())}
+                    onClick={() => {
+                      void remove(item());
+                    }}
                   >
                     <Icon name="trash" size={17} />
                   </button>
