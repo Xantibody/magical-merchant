@@ -337,6 +337,37 @@ mod tests {
         assert_eq!(day.devices.len(), 1);
     }
 
+    /// 空行だけの日は記録が無い日。空のエントリを 1 件作ってはいけない。
+    #[test]
+    fn an_empty_body_has_no_entries() {
+        assert!(split_entries("").is_empty());
+        assert!(split_entries("\n\n\n").is_empty());
+    }
+
+    /// 先頭が `- [` でない行から始まる本文。時刻の無い旧い記録を捨てずに
+    /// 最初のエントリとして拾い、続く行はその続きにする。
+    #[test]
+    fn a_body_that_does_not_start_with_a_bullet_keeps_its_first_line() {
+        let entries = split_entries("plain first\nstill first\n- [10:00:00] second\n");
+
+        assert_eq!(
+            entries,
+            vec!["plain first\nstill first", "- [10:00:00] second"]
+        );
+    }
+
+    /// 端末一覧に無い番号を指す行は、壊れた行として触らずに返す。
+    /// 別の端末の情報を付けて返すよりは、そのままのほうがまし。
+    #[test]
+    fn an_entry_pointing_past_the_device_list_is_returned_unchanged() {
+        let mut day = DayLog::default();
+        day.push("known", at(9), &mac(), None);
+        let stray = "- [10:00:00] stray {\"battery\":1,\"d\":5}";
+
+        assert_eq!(day.devices.len(), 1);
+        assert_eq!(day.expand(stray), stray);
+    }
+
     #[test]
     fn a_battery_reading_is_kept_per_entry() {
         let mut day = DayLog::default();

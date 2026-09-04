@@ -842,6 +842,19 @@ mod tests {
         assert!(refuse_wholesale_local_deletion(&actions, &locals).is_ok());
     }
 
+    /// しきい値(3)の 1 つ下。2 件の全消しはまだ「取り返しがつく」側。
+    #[test]
+    fn allows_clearing_a_workspace_just_below_the_threshold() {
+        let locals = vec![
+            local_file("notes/a.md", "h1"),
+            local_file("notes/b.md", "h2"),
+        ];
+        let actions = vec![delete_local("notes/a.md"), delete_local("notes/b.md")];
+
+        assert_eq!(locals.len(), WHOLESALE_DELETION_THRESHOLD - 1);
+        assert!(refuse_wholesale_local_deletion(&actions, &locals).is_ok());
+    }
+
     /// ロックは入口で取る。取れないまま走査や HTTP に進むと、
     /// もう一方のプロセスが書いている最中の状態を読んでしまう。
     /// 到達できない宛先を渡してあるので、通信まで進んでいれば kind は `network` になる。

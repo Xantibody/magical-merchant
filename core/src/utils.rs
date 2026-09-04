@@ -5,4 +5,5 @@ pub mod markdown;
 pub mod paths;
 pub mod place;
 pub mod tags;
+pub mod text;
 pub mod validated;

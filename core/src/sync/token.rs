@@ -141,6 +141,14 @@ mod tests {
         assert!(!is_token_valid(&make_jwt(soon)));
     }
 
+    /// 猶予ちょうど(`exp == now + 300`)は「まだ使える」に入れない。判定は
+    /// `>` なので、テスト側の now より判定時の now が進んでいても結論は同じ。
+    #[test]
+    fn a_token_expiring_exactly_at_the_buffer_is_not_valid() {
+        let at_buffer = chrono::Utc::now().timestamp() + 300;
+        assert!(!is_token_valid(&make_jwt(at_buffer)));
+    }
+
     #[test]
     fn invalid_token_format() {
         assert!(!is_token_valid("not-a-jwt"));

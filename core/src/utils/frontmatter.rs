@@ -81,44 +81,82 @@ pub fn render<T: Serialize>(fm: &T, body: &str) -> Result<String, CoreError> {
 
 /// 本文は `content` を借りて返す。呼び出し側の多くは先頭だけしか使わないので、
 /// ここで所有権を持たせると読み捨てるぶんまで丸ごと複製することになる。
+///
+/// frontmatter が無ければ空の対応表として読む — 全キーが省略可能な型は
+/// 既定値で通り、`time` のような必須キーを持つ型はここで失敗する。
+/// 区切りだけあって中身が無い(`---\n---`)ものも同じ扱い。
+///
+/// YAML は `T` に直接読む。いったん `serde_yaml::Value` を組み立ててから
+/// 変換すると、ノート 1 本ごとに木を 1 つ余分に作って捨てることになり、
+/// 一覧(`list_notes`)で最も広い frame だった。
 pub fn parse<T: DeserializeOwned>(content: &str) -> Result<(T, &str), CoreError> {
-    markdown_frontmatter::parse::<T>(content).map_err(|e| CoreError::Parse(format!("{e:?}")))
+    let (matter, body) = match split(content) {
+        Split::Some { matter, body } => (matter, body),
+        Split::None { body } => ("", body),
+        Split::Unclosed => {
+            return Err(CoreError::Parse(
+                "frontmatter is missing its closing delimiter".to_string(),
+            ));
+        }
+    };
+    let matter = if matter.trim().is_empty() {
+        "{}"
+    } else {
+        matter
+    };
+    let fm = serde_yaml::from_str::<T>(matter).map_err(|e| CoreError::Parse(e.to_string()))?;
+    Ok((fm, body))
 }
 
 /// frontmatter を捨てて本文だけを返す。`parse` と違い YAML の中身は見ないので、
 /// メタデータが壊れているファイルでも本文が画面に漏れ出さない。
 /// 区切りが閉じていなければ frontmatter とはみなさず全文を返す。
-///
-/// 区切りの探し方は `parse` が使う `markdown-frontmatter` の分割と同じ規則に
-/// 揃えてある(先頭の空白は落とす、行末は LF / CRLF / CR のどれでもよい、
-/// 開始直後の `---` も閉じ区切り)。crate は分割位置を公開していないので実装は
-/// 2 つあり、規則が食い違うと一覧(`parse`)は正しいのに編集経路(`strip`)
-/// だけ frontmatter を本文として抱える — `strip_matches_parse_body` がその
-/// 食い違いを見張っている。
 #[must_use]
 pub fn strip(content: &str) -> &str {
-    // `parse` は本文を trim 後の文字列から切り出すので、ここも揃える。
+    match split(content) {
+        Split::Some { body, .. } | Split::None { body } => body,
+        Split::Unclosed => content.trim_start(),
+    }
+}
+
+enum Split<'a> {
+    /// 区切りの内側と、閉じ区切りの次の行からの本文。
+    Some { matter: &'a str, body: &'a str },
+    /// 先頭が `---` ではない。本文は先頭の空白を落とした全文。
+    None { body: &'a str },
+    /// 開き区切りはあるが閉じていない。
+    Unclosed,
+}
+
+/// 区切りの規則はここ 1 か所: 先頭の空白は落とす、行末は LF / CRLF / CR の
+/// どれでもよい、開始直後の `---` も閉じ区切り。`parse` と `strip` が同じ
+/// 分割を使うので、一覧と編集経路で本文の始まりがずれることはない。
+fn split(content: &str) -> Split<'_> {
     let content = content.trim_start();
     let Some(first) = next_line(content, 0) else {
-        return content;
+        return Split::None { body: content };
     };
     if first.text != "---" {
-        return content;
+        return Split::None { body: content };
     }
     let mut pos = first.next_start;
     while let Some(line) = next_line(content, pos) {
         if line.text == "---" {
-            return &content[line.next_start..];
+            return Split::Some {
+                matter: &content[first.next_start..line.start],
+                body: &content[line.next_start..],
+            };
         }
         pos = line.next_start;
     }
-    // 閉じ区切りが無いなら frontmatter ではない
-    content
+    Split::Unclosed
 }
 
 struct Line<'a> {
     /// 行末の改行を含まない行の中身。
     text: &'a str,
+    /// この行の開始位置。
+    start: usize,
     /// 次の行の開始位置。行末が無い(末尾の行)なら文字列の長さ。
     next_start: usize,
 }
@@ -142,6 +180,7 @@ fn next_line(s: &str, pos: usize) -> Option<Line<'_>> {
     }
     Some(Line {
         text: &s[pos..end],
+        start: pos,
         next_start,
     })
 }
@@ -358,14 +397,76 @@ mod tests {
             "---\ntime: x\n---\nbody line\n",
             // CRLF
             "---\r\ntime: x\r\n---\r\nbody line\r\n",
+            // CR だけ
+            "---\rtime: x\r---\rbody line\r",
             // 空 frontmatter
             "---\n---\nbody line\n",
             // 本文中に閉じ区切りと同じ行がある
             "---\ntime: x\n---\nbefore\n---\nafter\n",
+            // 先頭の空白
+            "\n\n  ---\ntime: x\n---\nbody line\n",
+            // frontmatter 無し
+            "body line\n",
         ] {
             let (_fm, body): (serde_yaml::Value, &str) = parse(content).unwrap();
             assert_eq!(strip(content), body, "content: {content:?}");
         }
+    }
+
+    // ──────────── 境界 ────────────
+
+    /// 全キーが省略可能な型は、frontmatter が無くても・空でも既定値で読める。
+    /// 日ファイルの端末一覧がこれ。区切りだけの `---\n---` を壊れた
+    /// メタデータ扱いにすると、`---` の行が本文(エントリ)として残る。
+    #[test]
+    fn an_absent_or_empty_frontmatter_reads_as_defaults() {
+        #[derive(Debug, Default, PartialEq, serde::Deserialize)]
+        struct Optional {
+            #[serde(default)]
+            items: Vec<String>,
+        }
+
+        for content in ["body", "---\n---\nbody", "---\n\n---\nbody"] {
+            let (fm, body): (Optional, &str) = parse(content).unwrap();
+            assert_eq!(fm, Optional::default(), "content: {content:?}");
+            assert_eq!(body, "body", "content: {content:?}");
+        }
+    }
+
+    /// `time` を必須とするノートは、frontmatter が無ければ読めない。
+    /// 一覧はそこで `strip` に倒れ、本文をプレビューに出す。
+    #[test]
+    fn a_note_without_frontmatter_is_a_parse_error() {
+        let result = parse::<NoteFrontmatter>("just body");
+        assert!(matches!(result, Err(CoreError::Parse(_))));
+    }
+
+    /// 開き区切りだけの本文。`parse` は失敗し、`strip` は全文を返す —
+    /// 閉じていないものを frontmatter とみなすと本文が丸ごと消える。
+    #[test]
+    fn an_unclosed_delimiter_is_not_a_frontmatter() {
+        let content = "---\ntime: x\nbody line";
+        assert!(matches!(
+            parse::<serde_yaml::Value>(content),
+            Err(CoreError::Parse(_))
+        ));
+        assert_eq!(strip(content), content);
+    }
+
+    /// 閉じ区切りの直後で終わるファイル。本文は空で、範囲外に触れない。
+    #[test]
+    fn a_closing_delimiter_at_the_very_end_leaves_an_empty_body() {
+        let (_fm, body): (serde_yaml::Value, &str) = parse("---\ntime: x\n---").unwrap();
+        assert_eq!(body, "");
+    }
+
+    /// `---` に前後の空白や余分な記号が付いた行は区切りではない。
+    #[test]
+    fn a_delimiter_must_be_exactly_three_dashes() {
+        for content in ["--- \ntime: x\n---\nbody", "----\ntime: x\n---\nbody"] {
+            assert_eq!(strip(content), content, "content: {content:?}");
+        }
+        assert_eq!(strip("---\ntime: x\n--- \n---\nbody"), "body");
     }
 
     #[test]
