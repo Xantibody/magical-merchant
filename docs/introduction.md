@@ -60,8 +60,8 @@ the typed text behind Revert, the CLI keeps it in a scratch file.
   command layer and the same logic serves the MCP server.
 - **Server-authoritative sync state.** The client never constructs the sync
   state it sends back; it stores what the server confirmed. Conflicts are
-  resolved local-wins, with the losing side kept as a `.sync-conflict-*`
-  copy so no edit is ever silently dropped.
+  resolved local-wins, with the losing side kept under `conflicts/` so no
+  edit is ever silently dropped.
 
 ## On-disk layout
 
@@ -73,6 +73,10 @@ the typed text behind Revert, the CLI keeps it in a scratch file.
 │   └── notes/
 │       └── 20260809_143000.md # one file per note, frontmatter + body
 ├── history/                   # copies taken before CLI / MCP overwrites
+├── conflicts/                 # the losing side of a sync conflict
+│   └── notes/
+│       └── 20260809_143000/
+│           └── 20260511-031336.md
 ├── .sync-state.json           # what the server last confirmed
 └── sync-config.json           # Workers URL, auto-sync flag (shared with the CLI)
 ```
