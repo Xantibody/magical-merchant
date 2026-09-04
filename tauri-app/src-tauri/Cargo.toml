@@ -60,6 +60,11 @@ rustls-platform-verifier = "0.7"
 # rustls は reqwest が既定 feature 付きで持っているものと同じ版に解決させる
 rustls = "0.23"
 webpki-roots = "1"
+# 上の検証器は失敗の理由を `log` にしか書かない。Android の `log` は既定で
+# どこにも出ないので、logcat に橋を架けるここだけが唯一の読み口になる。
+# 自前のログは足さない: 依存クレートの出力を読むためだけの依存
+log = "0.4"
+android_logger = "0.15"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
