@@ -7,6 +7,7 @@ use crate::timeline::Timeline;
 use crate::timeline::day::DayLog;
 use crate::utils::markdown::strip_timeline_prefix;
 use crate::utils::tags;
+use crate::utils::text::lowercase;
 use crate::{list_notes, list_timeline_dates};
 
 /// 検索結果がどちらの保管場所から来たか。
@@ -67,7 +68,7 @@ fn timeline_hits(
         };
         // エントリ本文はその日のファイルの部分文字列なので、ファイル全体に無いなら
         // どのエントリにも無い。分割もコンテキスト JSON の判定も丸ごと省ける。
-        if day_filter_applies && !content.to_lowercase().contains(needle) {
+        if day_filter_applies && !lowercase(&content).contains(needle) {
             continue;
         }
 
@@ -80,7 +81,7 @@ fn timeline_hits(
             .enumerate()
         {
             let text = strip_timeline_prefix(&entry);
-            let lowered = text.to_lowercase();
+            let lowered = lowercase(text);
             if !lowered.contains(needle) {
                 continue;
             }
@@ -117,7 +118,7 @@ pub fn search_all(
     query: &str,
     tags: &[String],
 ) -> Result<Vec<SearchHit>, CoreError> {
-    let needle = query.trim().to_lowercase();
+    let needle = lowercase(query.trim());
     let scope: Vec<String> = tags
         .iter()
         .map(|t| tags::normalize(t))
@@ -141,10 +142,10 @@ pub fn search_all(
             haystack.push(' ');
             haystack.push_str(tag);
         }
-        if !haystack.to_lowercase().contains(&needle) {
+        if !lowercase(&haystack).contains(&needle) {
             continue;
         }
-        let lowered = note.preview.to_lowercase();
+        let lowered = lowercase(&note.preview);
         let excerpt = snippet(&note.preview, &lowered, &needle);
         hits.push(SearchHit {
             kind: HitKind::Note,
@@ -194,7 +195,7 @@ pub fn find_backlinks(
         if !body.contains(&needle) {
             continue;
         }
-        let lowered = body.to_lowercase();
+        let lowered = lowercase(&body);
         let excerpt = snippet(&body, &lowered, &needle);
         hits.push(SearchHit {
             kind: HitKind::Note,
