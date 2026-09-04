@@ -80,8 +80,14 @@ async fn sync_once(client: &HttpClient, base_dir: &Path) -> Result<SyncResult, S
     // ここでローカルを再スキャンして組み直すと、ダウンロード直後の mtime が
     // サーバーの版と食い違い、同じファイルを永久に再取得し続ける
 
-    save_local_state(base_dir, &bulk_resp.new_state, &data_dir, &unwritten)
-        .map_err(SyncError::other)?;
+    save_local_state(
+        base_dir,
+        &bulk_resp.new_state,
+        &data_dir,
+        &unwritten,
+        &local_state,
+    )
+    .map_err(SyncError::other)?;
 
     Ok(result)
 }
@@ -286,11 +292,12 @@ fn apply_response(
     }
 
     // 競合で負けたリモート側。`.sync-conflict-` はスキャン対象外なので、
-    // ローカルに置いても同期ループにはならない
+    // ローカルに置いても同期ループにはならない。
+    // 失敗しても `unwritten` には入れない: 控えのキーは state に載らないので、
+    // 入れたところで何も除けない（サーバー側の控えは残るので中身も失われない）
     for d in &bulk_resp.conflict_downloads {
         if let Err(e) = decode(d).and_then(|content| write_under(data_dir, &d.key, &content)) {
             result.errors.push(e);
-            unwritten.insert(d.key.clone());
         }
     }
 
@@ -362,17 +369,31 @@ fn delete_local_file(
 /// 手元に無いものを「同期済み」と記録すると、次の同期でリモート側を消してしまう。
 /// `unwritten` は取得に失敗したキー: ファイル自体は古い版のまま残っているので、
 /// 存在チェックだけでは除けない。
+///
+/// 取得に失敗したキーには `previous`（同期前に読んだ state）の記録を残す。
+/// 手元にあるのは前回見届けたとおりの版なので、それが実際の状態でもある。
+/// 記録ごと落とすと次の同期が「state 無し・両側にあり・ハッシュ違い」＝
+/// Conflict に落ちて、取り直すだけで済む所に競合コピーが 1 つ増える。
+/// `previous` に記録が無い場合（初回同期での失敗）は落とすのが正しい —
+/// 手元の版を誰も知らないので、突き合わせる先が無い。
 fn to_local_state(
     server_state: &ServerSyncState,
     data_dir: &Path,
     unwritten: &HashSet<String>,
+    previous: &SyncState,
 ) -> SyncState {
     let mut state = SyncState {
         last_sync: Some(Utc::now()),
         ..Default::default()
     };
     for (key, record) in &server_state.files {
-        if !is_safe_key(key) || unwritten.contains(key) || !data_dir.join(key).exists() {
+        if !is_safe_key(key) || !data_dir.join(key).exists() {
+            continue;
+        }
+        if unwritten.contains(key) {
+            if let Some(kept) = previous.files.get(key) {
+                state.files.insert(key.clone(), kept.clone());
+            }
             continue;
         }
         let Ok(last_synced_modified) = record.last_modified.parse() else {
@@ -394,8 +415,9 @@ fn save_local_state(
     server_state: &ServerSyncState,
     data_dir: &Path,
     unwritten: &HashSet<String>,
+    previous: &SyncState,
 ) -> Result<(), String> {
-    to_local_state(server_state, data_dir, unwritten)
+    to_local_state(server_state, data_dir, unwritten, previous)
         .save(base_dir)
         .map_err(|e| e.to_string())
 }
@@ -492,7 +514,7 @@ mod tests {
         seed(dir.path(), "notes/a.md", "content");
         let state = server_state(&[("notes/a.md", "hash-a", "2026-08-05T00:00:00Z")]);
 
-        let local = to_local_state(&state, dir.path(), &HashSet::new());
+        let local = to_local_state(&state, dir.path(), &HashSet::new(), &SyncState::default());
 
         let record = &local.files["notes/a.md"];
         assert_eq!(record.content_hash, "hash-a");
@@ -510,7 +532,7 @@ mod tests {
         let state = server_state(&[("notes/missing.md", "hash-a", "2026-08-05T00:00:00Z")]);
 
         assert!(
-            to_local_state(&state, dir.path(), &HashSet::new())
+            to_local_state(&state, dir.path(), &HashSet::new(), &SyncState::default())
                 .files
                 .is_empty()
         );
@@ -522,7 +544,7 @@ mod tests {
         let state = server_state(&[("../escape.md", "hash-a", "2026-08-05T00:00:00Z")]);
 
         assert!(
-            to_local_state(&state, dir.path(), &HashSet::new())
+            to_local_state(&state, dir.path(), &HashSet::new(), &SyncState::default())
                 .files
                 .is_empty()
         );
@@ -560,12 +582,24 @@ mod tests {
 
     /// bulk が通ったあとの書き込みで 1 件こけたら、そこで抜けずに残りを書く。
     /// 抜けると `save_local_state` に届かず、壊れた 1 キーが毎回同じ所で
-    /// 同期を止め、次の同期は state 無しで全件 Conflict になる
+    /// 同期を止める。失敗したキーは前回の記録を残し、次の同期が
+    /// Conflict ではなく Download としてやり直せるようにする
     #[test]
-    fn a_failed_download_leaves_the_others_written_and_the_state_saved() {
+    fn a_failed_download_is_retried_as_a_download_next_time() {
         let dir = tempfile::tempdir().unwrap();
         // 更新版の取得に失敗したので、手元には古い版が残ったまま
         seed(dir.path(), "notes/bad.md", "stale local copy");
+        // 前回の同期は古い版まで見届けている
+        let previous = SyncState {
+            files: HashMap::from([(
+                "notes/bad.md".to_string(),
+                FileSyncRecord {
+                    last_synced_modified: "2026-08-01T00:00:00Z".parse().unwrap(),
+                    content_hash: "hash-stale".to_string(),
+                },
+            )]),
+            last_sync: None,
+        };
         let resp = BulkResponse {
             downloads: vec![
                 DownloadedFile {
@@ -599,10 +633,34 @@ mod tests {
         assert_eq!(result.errors.len(), 1, "errors: {:?}", result.errors);
 
         // 取れなかったキーを「同期済み」と記録すると、手元の古い版が
-        // 新しいハッシュで確定してしまう
-        let state = to_local_state(&resp.new_state, dir.path(), &unwritten);
-        assert!(state.files.contains_key("notes/good.md"));
-        assert!(!state.files.contains_key("notes/bad.md"));
+        // 新しいハッシュで確定してしまう。かわりに前回の記録をそのまま残す
+        let state = to_local_state(&resp.new_state, dir.path(), &unwritten, &previous);
+        assert_eq!(state.files["notes/good.md"].content_hash, "hash-good");
+        let kept = &state.files["notes/bad.md"];
+        assert_eq!(kept.content_hash, "hash-stale");
+        assert_eq!(
+            kept.last_synced_modified,
+            "2026-08-01T00:00:00Z".parse::<DateTime<Utc>>().unwrap()
+        );
+
+        // その記録があるおかげで、次の同期は「ローカル不変・リモート変更」に
+        // 落ちる。落としてしまうと state 無しの「両側にあってハッシュ違い」＝
+        // Conflict になり、競合コピーが 1 つ増える
+        let next = diff::compute(
+            &[local_file("notes/bad.md", "hash-stale")],
+            &[RemoteFile {
+                key: "notes/bad.md".to_string(),
+                last_modified: "2026-08-05T00:00:00Z".parse().unwrap(),
+                content_hash: "hash-bad".to_string(),
+            }],
+            &state,
+        );
+        assert_eq!(
+            next,
+            vec![SyncAction::DownloadModified {
+                key: "notes/bad.md".to_string()
+            }]
+        );
     }
 
     fn delete_local(key: &str) -> SyncAction {
