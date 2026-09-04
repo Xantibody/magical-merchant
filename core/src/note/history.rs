@@ -8,6 +8,9 @@
 //! 往復し、控えの控えが増える。派生物ではなく退避なので `places.json` とは
 //! 違って壊れていても作り直せないが、失って困るのは戻したいときだけで、
 //! そのときはノート本体が残っている。
+//!
+//! 残すのはノートごとに直近 [`KEEP`] 件。ノート本体が消えても控えは残す —
+//! 消したノートを控えから戻せることが、そもそも控えを取っている理由。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -19,6 +22,13 @@ use crate::error::CoreError;
 use crate::utils::fs::{ensure_dir, list_md_files, resolve_existing, write_atomic};
 use crate::utils::paths::{history_dir, notes_dir};
 use crate::utils::validated::NoteFilename;
+
+/// ノート 1 つあたりに残す控えの数。同じ秒の枝番も 1 件と数える。
+///
+/// 期間で切らないのは、久しぶりに開いたノートの控えが全部消えているのを
+/// 避けるため。戻したいのは大抵、直前の数回。20 は MCP が 1 セッションで
+/// 書き換える回数を余裕で上回る。
+const KEEP: usize = 20;
 
 /// 控え 1 件。`id` がそのまま `restore` の引数。
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -77,6 +87,7 @@ pub fn snapshot_note(
     let target = dir.join(format!("{id}.md"));
     ensure_dir(&target)?;
     write_atomic(&target, &content)?;
+    prune(&dir, &id);
     Ok(Some(Snapshot {
         id,
         time: now,
@@ -92,6 +103,38 @@ pub fn snapshot_note(
 fn sort_key(id: &str) -> (&str, u32) {
     let (stamp, suffix) = id.split_once('-').unwrap_or((id, "1"));
     (stamp, suffix.parse().unwrap_or(0))
+}
+
+/// `KEEP` 件を超えたぶんを古いほうから落とす。呼ぶのは控えを 1 件書いた直後
+/// だけ — 掃除の起点を書き込みに寄せておくと、溜まったまま誰も来ない
+/// ディレクトリが残らない。
+///
+/// いま書いた `written` は数に入れるが落とさない。採番は「最初の空き」なので、
+/// 掃除で空いた素の stamp を同じ秒に取り直すと `sort_key` ではその秒の
+/// 最古になる。時計が戻ったときも同じ。呼び手はその id を「戻せる控え」として
+/// 返すのだから、返した直後に無いのは許されない。
+///
+/// 失敗は無視する。控えを取ること自体は済んでいて、落とせなかったぶんは
+/// 次の snapshot で改めて落ちる。掃除の失敗で書き換えを止める理由はない。
+fn prune(dir: &Path, written: &str) {
+    let Ok(entries) = list_md_files(dir) else {
+        return;
+    };
+    // list_md_files の並びは名前順、つまり枝番が文字列のまま。落とす順は
+    // 一覧と同じ `sort_key` で決め直す。
+    let mut others: Vec<(String, PathBuf)> = entries
+        .into_iter()
+        .filter_map(|entry| {
+            let name = entry.file_name();
+            let id = Path::new(&name).file_stem()?.to_str()?.to_string();
+            Some((id, entry.path()))
+        })
+        .filter(|(id, _)| id != written)
+        .collect();
+    others.sort_by(|a, b| sort_key(&b.0).cmp(&sort_key(&a.0)));
+    for (_, path) in others.iter().skip(KEEP - 1) {
+        let _ = fs::remove_file(path);
+    }
 }
 
 /// 新しいものから順に。
@@ -252,6 +295,92 @@ mod tests {
         assert_eq!(ids[0], "20260101_120000-11");
         assert_eq!(ids[1], "20260101_120000-10");
         assert_eq!(ids.last().unwrap(), "20260101_120000");
+    }
+
+    /// 控えを直に置くための下ごしらえ。`snapshot_note` を並べて呼ぶと途中で
+    /// 秒が変わって枝番が振り直され、いくつ溜まった状態を試したいのかが消える。
+    fn seed_history(base: &Path, filename: &NoteFilename, ids: &[String]) -> PathBuf {
+        let dir = note_history_dir(base, filename);
+        fs::create_dir_all(&dir).unwrap();
+        for id in ids {
+            fs::write(dir.join(format!("{id}.md")), "x").unwrap();
+        }
+        dir
+    }
+
+    /// 溜まる一方だと 1 台のディスクを AI の書き換え回数ぶん食い続ける。
+    /// 上限を超えたぶんは古いほうから落ちる。
+    #[test]
+    fn twenty_one_snapshots_keep_the_newest_twenty() {
+        let tmp = TempDir::new().unwrap();
+        let (_, filename) = note(tmp.path(), "body");
+        let ids: Vec<String> = std::iter::once("20200101_120000".to_string())
+            .chain((2..=20).map(|n| format!("20200101_120000-{n}")))
+            .collect();
+        seed_history(tmp.path(), &filename, &ids);
+
+        snapshot_note(tmp.path(), &filename).unwrap().unwrap();
+
+        let listed: Vec<String> = list_note_history(tmp.path(), &filename)
+            .unwrap()
+            .into_iter()
+            .map(|s| s.id)
+            .collect();
+        assert_eq!(listed.len(), KEEP);
+        assert!(
+            !listed.contains(&"20200101_120000".to_string()),
+            "the oldest copy is the one that goes"
+        );
+        assert_eq!(listed.last().unwrap(), "20200101_120000-2");
+    }
+
+    /// 落とす順も `sort_key` で決める。文字列順のままだと `-10` が `-2` より
+    /// 古い扱いになり、同じ秒に 10 回書き換えたノートで消える控えが逆になる。
+    #[test]
+    fn the_oldest_branch_number_is_the_one_dropped() {
+        let tmp = TempDir::new().unwrap();
+        let (_, filename) = note(tmp.path(), "body");
+        let ids: Vec<String> = (2..=21).map(|n| format!("20200101_120000-{n}")).collect();
+        seed_history(tmp.path(), &filename, &ids);
+
+        snapshot_note(tmp.path(), &filename).unwrap().unwrap();
+
+        let listed: Vec<String> = list_note_history(tmp.path(), &filename)
+            .unwrap()
+            .into_iter()
+            .map(|s| s.id)
+            .collect();
+        assert_eq!(listed.len(), KEEP);
+        assert!(!listed.contains(&"20200101_120000-2".to_string()));
+        assert!(listed.contains(&"20200101_120000-10".to_string()));
+    }
+
+    /// いま書いた控えが `sort_key` で最古になることがある — 掃除で空いた
+    /// 素の stamp を同じ秒に取り直したとき、時計が戻ったとき。それでも
+    /// 返した id のファイルが消えていてはいけない。ここでは未来の stamp を
+    /// 20 件 seed して「新しい控えが一番古く並ぶ」状況を作る。
+    #[test]
+    fn the_copy_just_written_survives_even_when_it_sorts_oldest() {
+        let tmp = TempDir::new().unwrap();
+        let (_, filename) = note(tmp.path(), "body");
+        let ids: Vec<String> = std::iter::once("20990101_120000".to_string())
+            .chain((2..=KEEP).map(|n| format!("20990101_120000-{n}")))
+            .collect();
+        seed_history(tmp.path(), &filename, &ids);
+
+        let written = snapshot_note(tmp.path(), &filename).unwrap().unwrap();
+
+        let listed: Vec<String> = list_note_history(tmp.path(), &filename)
+            .unwrap()
+            .into_iter()
+            .map(|s| s.id)
+            .collect();
+        assert_eq!(listed.len(), KEEP);
+        assert!(
+            listed.contains(&written.id),
+            "the copy just taken must outlive its own prune: {listed:?}"
+        );
+        assert!(!listed.contains(&"20990101_120000".to_string()));
     }
 
     /// 控えの置き場は同期の走査範囲の外。載せると端末間で控えが往復する。

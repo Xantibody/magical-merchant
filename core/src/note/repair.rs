@@ -7,7 +7,7 @@ use crate::error::CoreError;
 use crate::sync::conflict::conflict_copy_path;
 use crate::utils::frontmatter::{self, NoteFrontmatter};
 use crate::utils::fs::{ensure_dir, list_md_files, write_atomic};
-use crate::utils::paths::{NOTES_DIR, conflicts_dir, notes_dir};
+use crate::utils::paths::{NOTES_DIR, TIMELINE_DIR, conflicts_dir, data_dir};
 
 /// 編集画面が frontmatter ごと Milkdown に通していた時期に保存されたノートは、
 /// 本文の先頭に「化けたメタデータ」を抱えている。開始区切りの `---` は `***` に、
@@ -42,10 +42,13 @@ pub(crate) fn repair_all(notes_dir: &Path) -> Result<usize, CoreError> {
     Ok(repaired)
 }
 
-/// 古い版が `data/notes/` に置いた競合コピーを `conflicts/` へ移す。移した件数を返す。
+/// 古い版が `data/notes/` と `data/timeline/` に置いた競合コピーを `conflicts/` へ
+/// 移す。移した件数を返す。
 ///
 /// 控えは同期の走査からは外れていたが、ノート一覧は `data/notes/*.md` を
 /// 素通しで拾うので、元のノートが消えたあとも残骸として並び続けていた。
+/// タイムラインの控えは一覧には出ないが、走査の除外をやめた以上、
+/// 置いたままだと次の同期で新しいファイルとして全端末へ配られる。
 ///
 /// 中身は読まず `rename` するだけ。控えが壊れていても、ノートの形をして
 /// いなくても運べる。起動時、最初の同期より前に呼ぶこと — あとで呼ぶと、
@@ -55,22 +58,25 @@ pub(crate) fn repair_all(notes_dir: &Path) -> Result<usize, CoreError> {
 /// そのために残りの引っ越しを諦める理由はない。
 pub(crate) fn relocate_conflict_copies(base_dir: &Path) -> Result<usize, CoreError> {
     let conflicts = conflicts_dir(base_dir);
+    let data = data_dir(base_dir);
     let mut moved = 0;
-    for entry in list_md_files(&notes_dir(base_dir))? {
-        let name = entry.file_name();
-        let Some(name) = name.to_str() else {
-            continue;
-        };
-        // 走査キーと同じ形にしてから読ませる。控えの置き場は
-        // ダウンロードで降ってきたぶんと同じ `conflicts/notes/…` になる
-        let Some(relative) = conflict_copy_path(&format!("{NOTES_DIR}/{name}")) else {
-            continue;
-        };
-        let target = conflicts.join(relative);
-        if ensure_dir(&target).is_err() || fs::rename(entry.path(), &target).is_err() {
-            continue;
+    for dir in [NOTES_DIR, TIMELINE_DIR] {
+        for entry in list_md_files(&data.join(dir))? {
+            let name = entry.file_name();
+            let Some(name) = name.to_str() else {
+                continue;
+            };
+            // 走査キーと同じ形にしてから読ませる。控えの置き場は
+            // ダウンロードで降ってきたぶんと同じ `conflicts/<dir>/…` になる
+            let Some(relative) = conflict_copy_path(&format!("{dir}/{name}")) else {
+                continue;
+            };
+            let target = conflicts.join(relative);
+            if ensure_dir(&target).is_err() || fs::rename(entry.path(), &target).is_err() {
+                continue;
+            }
+            moved += 1;
         }
-        moved += 1;
     }
     Ok(moved)
 }
@@ -131,6 +137,7 @@ fn filename_time(filename: &str) -> Option<DateTime<FixedOffset>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::utils::paths::notes_dir;
     use tempfile::TempDir;
 
     /// 実際に壊れていたファイルと同じ形の再現。
@@ -319,6 +326,38 @@ mod tests {
             )
             .unwrap(),
             after_first
+        );
+    }
+
+    /// タイムラインの控えも同じ残骸。一覧には並ばない（日付でない名前は
+    /// 捨てられる）が、走査の除外をやめた以上、置いたままだと次の同期で
+    /// 新しいファイルとして全端末へ配られる。
+    #[test]
+    fn conflict_copies_left_in_the_timeline_directory_move_out() {
+        let tmp = TempDir::new().unwrap();
+        let timeline = data_dir(tmp.path()).join(TIMELINE_DIR);
+        fs::create_dir_all(&timeline).unwrap();
+        fs::write(timeline.join("2026-03-20.md"), "the day itself").unwrap();
+        fs::write(
+            timeline.join("2026-03-20.sync-conflict-20260511-031336..md"),
+            "day copy",
+        )
+        .unwrap();
+
+        assert_eq!(relocate_conflict_copies(tmp.path()).unwrap(), 1);
+
+        assert!(timeline.join("2026-03-20.md").exists());
+        assert!(
+            !timeline
+                .join("2026-03-20.sync-conflict-20260511-031336..md")
+                .exists()
+        );
+        assert_eq!(
+            fs::read_to_string(
+                conflicts_dir(tmp.path()).join("timeline/2026-03-20/20260511-031336.md")
+            )
+            .unwrap(),
+            "day copy"
         );
     }
 
