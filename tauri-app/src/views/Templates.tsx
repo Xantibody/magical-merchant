@@ -230,9 +230,10 @@ export default function Templates(): JSX.Element {
     })();
   };
 
-  // ⌘S / Ctrl+S。保存ボタンしか入口がないと、書きながら残せない
+  // ⌘S / Ctrl+S。保存ボタンしか入口がないと、書きながら残せない。
+  // Shift 付きはアプリ全体の「今すぐ同期」なので、ここでは拾わない
   const onKeyDown = (e: KeyboardEvent): void => {
-    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "s") {
       e.preventDefault();
       save();
     }
