@@ -1,27 +1,11 @@
 import { createSignal } from "solid-js";
-import type { IconName } from "../components/Icon";
 
 export type ShikiTheme = "github-dark-default" | "github-light-default";
 
 export type Theme = "system" | "light" | "dark";
 
-/**
- * 切り替わっていく順。ライトから始めるのは、押した人がまず見たいのが
- * 「今と違う見た目」で、システム追従はその後に戻る場所だから。
- */
-const THEMES: readonly Theme[] = ["light", "dark", "system"] as const;
-
-/** アイコンを 1 回押したときの次のテーマ。メニューを出すほどの選択肢ではない。 */
-export function nextTheme(current: Theme): Theme {
-  const at = THEMES.indexOf(current);
-  return THEMES[(at + 1) % THEMES.length];
-}
-
-export const THEME_ICONS: Record<Theme, IconName> = {
-  system: "circle-half",
-  light: "sun",
-  dark: "moon",
-};
+/** 選べるテーマ。Settings がこの順に並べる。 */
+export const THEMES: readonly Theme[] = ["system", "light", "dark"] as const;
 
 const STORAGE_KEY = "theme";
 
@@ -29,16 +13,24 @@ function isTheme(value: unknown): value is Theme {
   return value === "system" || value === "light" || value === "dark";
 }
 
-export function readStoredTheme(): Theme {
+function readStoredTheme(): Theme {
   const saved = localStorage.getItem(STORAGE_KEY);
   return isTheme(saved) ? saved : "system";
 }
 
-function resolveTheme(theme: Theme): "light" | "dark" {
-  if (theme === "system") {
+/**
+ * 選ばれているテーマ。選ぶのは Settings、system の追従を見張るのは AppLayout
+ * と、読み手が二つに分かれたのでモジュールに持たせてある。
+ */
+const [theme, setTheme] = createSignal<Theme>(readStoredTheme());
+
+export { theme };
+
+function resolveTheme(choice: Theme): "light" | "dark" {
+  if (choice === "system") {
     return globalThis.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   }
-  return theme;
+  return choice;
 }
 
 /**
@@ -51,11 +43,17 @@ const [resolvedTheme, setResolvedTheme] = createSignal<"light" | "dark">(
 
 export { resolvedTheme };
 
-export function applyTheme(theme: Theme): void {
-  const resolved = resolveTheme(theme);
+export function applyTheme(choice: Theme): void {
+  const resolved = resolveTheme(choice);
   document.documentElement.dataset.theme = resolved;
   setResolvedTheme(resolved);
-  localStorage.setItem(STORAGE_KEY, theme);
+  localStorage.setItem(STORAGE_KEY, choice);
+}
+
+/** 選び直す。Settings 以外から呼ばれることはない。 */
+export function chooseTheme(choice: Theme): void {
+  setTheme(choice);
+  applyTheme(choice);
 }
 
 export function getShikiTheme(): ShikiTheme {

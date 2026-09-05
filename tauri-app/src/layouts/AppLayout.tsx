@@ -1,19 +1,28 @@
-import { createSignal, createEffect, onCleanup, onMount, For, Show } from "solid-js";
+import { createEffect, createMemo, onCleanup, onMount, For, Show } from "solid-js";
 import type { JSX } from "solid-js";
 import { useLocation, useNavigate, A } from "@solidjs/router";
 import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import Icon from "../components/Icon";
+import type { IconName } from "../components/Icon";
 import CommandPalette from "../components/CommandPalette";
 import SyncPopover from "../components/SyncPopover";
 import UndoToast from "../components/UndoToast";
 import FirstRunCard from "../components/FirstRunCard";
 import { ShellProvider, useShell } from "../lib/shell";
 import { createSyncState, syncIconName } from "../lib/sync";
-import { applyTheme, nextTheme, readStoredTheme, THEME_ICONS } from "../lib/theme";
+import { applyTheme, theme } from "../lib/theme";
 import { locale, t } from "../lib/i18n";
-import type { Theme } from "../lib/theme";
+import { createHints } from "../lib/hints";
+import {
+  isTypingTarget,
+  matchesShortcut,
+  modifierLabel,
+  shortcutLabel,
+  SHORTCUT_LIST_KEY,
+} from "../lib/shortcuts";
+import type { ShortcutName } from "../lib/shortcuts";
 import { MODE_ICONS, MODE_LABELS, ROUTES } from "../lib/routes";
 import type { RoutePath } from "../lib/routes";
 import { typedInvoke } from "../lib/commands";
@@ -24,15 +33,26 @@ import { getDeviceSignals, warmLocation } from "../lib/client-context";
 import { applyStartFullscreen } from "../lib/fullscreen";
 import { loadGlyphs } from "../lib/glyphs";
 
-const TABS: RoutePath[] = [ROUTES.TIMELINE, ROUTES.NOTES];
+const TABS: { path: RoutePath; shortcut: ShortcutName }[] = [
+  { path: ROUTES.TIMELINE, shortcut: "timeline" },
+  { path: ROUTES.NOTES, shortcut: "notes" },
+];
 const BOTTOM_TABS: RoutePath[] = [ROUTES.TIMELINE, ROUTES.NOTES, ROUTES.SETTINGS];
 
-function isMetaK(e: KeyboardEvent): boolean {
-  return (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k";
+/** system を選んでいる人の画面は、端末の設定が変わった瞬間に切り替わる。 */
+function onSchemeChange(): void {
+  if (theme() === "system") {
+    applyTheme("system");
+  }
 }
 
-function isMetaN(e: KeyboardEvent): boolean {
-  return (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "n";
+/** キーとパレットの両方から呼べる操作。 */
+interface ShellCommand {
+  id: string;
+  label: string;
+  icon: IconName;
+  shortcut: ShortcutName;
+  run: () => void;
 }
 
 function Chrome(props: { children?: JSX.Element }): JSX.Element {
@@ -40,18 +60,22 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const [theme, setTheme] = createSignal<Theme>(readStoredTheme());
   const sync = createSyncState(() => shell.refreshData());
+  const hints = createHints();
 
+  // 選ぶのは Settings。ここは覚えている選択を起動時に当て直すだけ
   applyTheme(theme());
-  createEffect(() => applyTheme(theme()));
+
+  // 札は DOM を増やさず、擬似要素として描く。html に印を付ければ全画面に効く
+  createEffect(() => {
+    if (hints.visible()) {
+      document.documentElement.dataset.hints = "";
+    } else {
+      delete document.documentElement.dataset.hints;
+    }
+  });
 
   const media = globalThis.matchMedia("(prefers-color-scheme: dark)");
-  const onSchemeChange = (): void => {
-    if (theme() === "system") {
-      applyTheme("system");
-    }
-  };
   media.addEventListener("change", onSchemeChange);
   onCleanup(() => media.removeEventListener("change", onSchemeChange));
 
@@ -92,6 +116,57 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
       navigate(ROUTES.NOTES);
     })();
   };
+
+  const go = (path: RoutePath) => (): void => {
+    shell.closePalette();
+    navigate(path);
+  };
+
+  /**
+   * キーからも、パレットからも呼べる操作。表を 1 つにしておかないと、
+   * ヘッダーの札に「⌘N」と出ているのにキーが効かない、という食い違いが出る。
+   * ここが `?` で開くショートカット一覧そのものでもある
+   */
+  const commands = createMemo<ShellCommand[]>(() => [
+    {
+      id: "new-note",
+      label: t().palette.newNote,
+      icon: "note-pencil",
+      shortcut: "newNote",
+      run: newNote,
+    },
+    {
+      id: "go-timeline",
+      label: t().palette.openTimeline,
+      icon: MODE_ICONS[ROUTES.TIMELINE],
+      shortcut: "timeline",
+      run: go(ROUTES.TIMELINE),
+    },
+    {
+      id: "go-notes",
+      label: t().palette.openNotes,
+      icon: MODE_ICONS[ROUTES.NOTES],
+      shortcut: "notes",
+      run: go(ROUTES.NOTES),
+    },
+    {
+      id: "sync-now",
+      label: t().sync.now,
+      icon: "cloud-arrow-up",
+      shortcut: "syncNow",
+      run: () => {
+        shell.closePalette();
+        void sync.syncNow();
+      },
+    },
+    {
+      id: "go-settings",
+      label: t().palette.openSettings,
+      icon: MODE_ICONS[ROUTES.SETTINGS],
+      shortcut: "settings",
+      run: go(ROUTES.SETTINGS),
+    },
+  ]);
 
   /**
    * ウィジェットのテンプレボタン。同じテンプレの今日のぶんが既にあれば
@@ -164,14 +239,25 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
     onCleanup(() => unlistenWidget?.());
 
     const onKeyDown = (e: KeyboardEvent): void => {
-      if (isMetaK(e)) {
+      hints.keyDown(e);
+
+      if (matchesShortcut(e, "search")) {
         e.preventDefault();
         openSearch();
         return;
       }
-      if (isMetaN(e)) {
+      for (const command of commands()) {
+        if (matchesShortcut(e, command.shortcut)) {
+          e.preventDefault();
+          command.run();
+          return;
+        }
+      }
+      // 一覧はパレットのコマンド節そのもの。別の画面を作るほどの中身がない。
+      // 修飾キーを伴わないキーなので、書いている最中は文字として通す
+      if (e.key === SHORTCUT_LIST_KEY && !shell.paletteOpen() && !isTypingTarget(e.target)) {
         e.preventDefault();
-        newNote();
+        openSearch();
         return;
       }
       if (e.key === "Escape") {
@@ -181,6 +267,15 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
     };
     globalThis.addEventListener("keydown", onKeyDown);
     onCleanup(() => globalThis.removeEventListener("keydown", onKeyDown));
+
+    // 離した瞬間に消す。窓から出た(⌘Tab)ときは keyup が来ないので blur も見る
+    const hideHints = (): void => hints.hide();
+    globalThis.addEventListener("keyup", hideHints);
+    globalThis.addEventListener("blur", hideHints);
+    onCleanup(() => {
+      globalThis.removeEventListener("keyup", hideHints);
+      globalThis.removeEventListener("blur", hideHints);
+    });
 
     // ポップオーバーの外側をクリックしたら閉じる。ルート要素の onClick では
     // ポータルや overlay の外に出たクリックを取りこぼす
@@ -230,14 +325,15 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
       <header class="header">
         <nav class="header-tabs">
           <For each={TABS}>
-            {(path) => (
+            {(tab) => (
               <A
-                href={path}
+                href={tab.path}
                 class="header-tab"
-                classList={{ "header-tab--active": isActive(path) }}
+                classList={{ "header-tab--active": isActive(tab.path) }}
+                data-key={shortcutLabel(tab.shortcut)}
               >
-                <Icon name={MODE_ICONS[path]} size={16} />
-                {MODE_LABELS[path]}
+                <Icon name={MODE_ICONS[tab.path]} size={16} />
+                {MODE_LABELS[tab.path]}
               </A>
             )}
           </For>
@@ -250,7 +346,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
         <button type="button" class="search-field" onClick={openSearch}>
           <Icon name="magnifying-glass" size={15} />
           <span class="search-field-label">{t().header.searchPlaceholder}</span>
-          <span class="key-badge">⌘K</span>
+          <span class="key-badge">{shortcutLabel("search")}</span>
         </button>
 
         <div class="header-actions">
@@ -283,26 +379,16 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
             title={t().header.sync}
             aria-label={t().header.sync}
             aria-expanded={shell.popover() === "sync"}
+            data-key={shortcutLabel("syncNow")}
             onClick={() => shell.togglePopover("sync")}
           >
             <Icon name={syncIconName(sync.status())} size={18} />
           </button>
-          {/* 3 つしかない選択肢にメニューを出すより、押すたびに次へ回るほうが速い */}
-          <button
-            type="button"
-            class="icon-button header-action header-action--theme"
-            aria-label={t().header.theme(t().theme[theme()])}
-            onClick={() => setTheme(nextTheme(theme()))}
-          >
-            <Icon name={THEME_ICONS[theme()]} size={18} />
-            <span class="header-tooltip" aria-hidden="true">
-              {t().theme[theme()]}
-            </span>
-          </button>
           <A
             href={ROUTES.SETTINGS}
             class="icon-button header-action header-action--settings"
-            title="Settings"
+            title={t().header.settings}
+            data-key={shortcutLabel("settings")}
           >
             <Icon name="gear" size={18} />
           </A>
@@ -328,6 +414,13 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
         </For>
       </nav>
 
+      {/* 札だけでは「なぜ出たか」「どう消すか」が分からない。説明はここ 1 つ */}
+      <Show when={hints.visible()}>
+        <div class="hint-pill" aria-hidden="true">
+          {t().hints.pill(modifierLabel())}
+        </div>
+      </Show>
+
       <UndoToast />
 
       <FirstRunCard
@@ -338,24 +431,13 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
       <Show when={shell.paletteOpen()}>
         <CommandPalette
           scopeTags={shell.paletteScope()?.tags ?? []}
-          commands={[
-            {
-              id: "new-note",
-              label: t().palette.newNote,
-              icon: "note-pencil",
-              shortcut: "⌘N",
-              run: newNote,
-            },
-            {
-              id: "sync-now",
-              label: t().sync.now,
-              icon: "cloud-arrow-up",
-              run: () => {
-                shell.closePalette();
-                void sync.syncNow();
-              },
-            },
-          ]}
+          commands={commands().map((command) => ({
+            id: command.id,
+            label: command.label,
+            icon: command.icon,
+            shortcut: shortcutLabel(command.shortcut),
+            run: command.run,
+          }))}
           onSelectHit={(hit) => {
             shell.closePalette();
             // モードの切り替えだけでは「見つけたのに探し直す」ことになる。
