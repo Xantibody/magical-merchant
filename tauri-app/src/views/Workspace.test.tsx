@@ -37,6 +37,8 @@ const BODY_B = `# ${TITLE_B}\n\n牛乳`;
 
 /** ディスクの中身(filename → 全文)。テストの途中で外から書き換わったことにする。 */
 let disk: Map<string, string>;
+/** frontmatter のうち一覧と詳細が読むぶん。書いていないノートは既定のまま。 */
+let meta: Map<string, { tags?: string[]; view?: string }>;
 /** 呼ばれたコマンドと引数。どのノートに何が書かれたかをこれで見る。 */
 let calls: { cmd: string; args: Record<string, unknown> }[];
 /** read_note を止めておく関門。応答が届く前の操作を再現する。 */
@@ -63,8 +65,10 @@ const summaryOf = (filename: string): Record<string, unknown> => ({
   time:
     `${filename.slice(0, 4)}-${filename.slice(4, 6)}-${filename.slice(6, 8)}` +
     `T${filename.slice(9, 11)}:${filename.slice(11, 13)}:${filename.slice(13, 15)}+09:00`,
-  tags: [],
+  tags: meta.get(filename)?.tags ?? [],
   preview: disk.get(filename) ?? "",
+  // core は書いていないキーを落とす。一覧の読み手が undefined を見る形に揃える
+  ...(meta.get(filename)?.view ? { view: meta.get(filename)?.view } : {}),
 });
 
 const WRITE_COMMANDS = ["update_draft", "create_draft", "set_note_view", "delete_note"];
@@ -87,7 +91,8 @@ const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
   },
   read_note_meta: ({ filename }) => ({
     time: summaryOf(String(filename)).time,
-    tags: [],
+    tags: meta.get(String(filename))?.tags ?? [],
+    ...(meta.get(String(filename))?.view ? { view: meta.get(String(filename))?.view } : {}),
   }),
   create_draft: () => {
     disk.set(FILE_B, "");
@@ -110,7 +115,17 @@ const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
   delete_note: ({ filename }) => {
     disk.delete(String(filename));
   },
-  set_note_view: () => null,
+  set_note_view: ({ filename, view }) => {
+    const name = String(filename);
+    const entry = { ...meta.get(name) };
+    if (typeof view === "string") {
+      entry.view = view;
+    } else {
+      delete entry.view;
+    }
+    meta.set(name, entry);
+    return null;
+  },
 };
 
 let shell: Shell | undefined;
@@ -128,8 +143,8 @@ function WorkspaceRoute(): JSX.Element {
   return <Workspace />;
 }
 
-/** ノート A を 1 件開いた状態まで進める。狭い画面では詳細を開くまで本文が出ない。 */
-async function openNoteA(): Promise<void> {
+/** 一覧だけを描く。詳細を開かないので、見えているのは行そのもの。 */
+function renderWorkspace(): void {
   render(() => (
     <ShellProvider>
       <CaptureShell />
@@ -138,7 +153,15 @@ async function openNoteA(): Promise<void> {
       </MemoryRouter>
     </ShellProvider>
   ));
-  fireEvent.click(await screen.findByRole("button", { name: new RegExp(TITLE_A, "u") }));
+}
+
+const rowOf = (title: string): Promise<HTMLElement> =>
+  screen.findByRole("button", { name: new RegExp(title, "u") });
+
+/** ノート A を 1 件開いた状態まで進める。狭い画面では詳細を開くまで本文が出ない。 */
+async function openNoteA(): Promise<void> {
+  renderWorkspace();
+  fireEvent.click(await rowOf(TITLE_A));
   await waitFor(() => expect(screen.getByText(TEXT_A)).toBeDefined());
 }
 
@@ -176,6 +199,7 @@ async function setupWorkspace(): Promise<void> {
   // 携帯の幅では一覧ペインごと隠れている
   await page.viewport(1280, 800);
   disk = new Map([[FILE_A, BODY_A]]);
+  meta = new Map();
   calls = [];
   shell = undefined;
   navigateTo = undefined;
@@ -202,6 +226,39 @@ function teardownWorkspace(): void {
   clearMocks();
   document.body.innerHTML = "";
 }
+
+describe("Workspace › 一覧の行", () => {
+  beforeEach(setupWorkspace);
+  afterEach(teardownWorkspace);
+
+  // タグは本文にも書いてある。行にも並べると、選ぶ前に読む字が二重になり、
+  // 長い題ほど先に切られる
+  it("keeps a row down to its title and one stamp", async () => {
+    meta.set(FILE_A, { tags: ["sf6", "vega"] });
+    renderWorkspace();
+
+    const row = await rowOf(TITLE_A);
+
+    expect(row.textContent).not.toContain("sf6");
+    // 右端に残るのは 1 つだけ。今日なら時刻、それ以前なら日付
+    expect(row.textContent).toMatch(new RegExp(`^${TITLE_A}(\\d\\d:\\d\\d|\\d\\d/\\d\\d)$`, "u"));
+  });
+
+  // 書けないノートだと開くまで分からないと、書こうとしてから気づくことになる
+  it("marks a read-only note with a lock", async () => {
+    meta.set(FILE_A, { view: "preview" });
+    renderWorkspace();
+
+    await expect(screen.findByTitle("読み取り専用")).resolves.toBeDefined();
+  });
+
+  it("leaves a writable note unmarked", async () => {
+    renderWorkspace();
+    await rowOf(TITLE_A);
+
+    expect(screen.queryByTitle("読み取り専用")).toBeNull();
+  });
+});
 
 describe("Workspace › 外から書き換わったノートの読み直し", () => {
   beforeEach(setupWorkspace);

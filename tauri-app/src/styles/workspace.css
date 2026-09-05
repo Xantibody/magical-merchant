@@ -25,14 +25,15 @@
   padding: 14px 14px 8px;
 }
 
+/* ペインの中で唯一の押し物なので、枠で囲わなくても見つかる */
 .new-note {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   padding: 4px 9px;
-  border: 1px solid var(--app-border);
+  border: none;
   border-radius: var(--radius-2);
-  background: var(--app-input-bg);
+  background: none;
   color: var(--app-text-muted);
   font-size: 12px;
   font-weight: 600;
@@ -42,6 +43,7 @@
 
 .new-note:hover {
   background: var(--app-surface-2);
+  color: var(--app-text);
 }
 
 .list-pane-title {
@@ -74,27 +76,34 @@
   overflow-y: auto;
 }
 
+/* 群の名前は字だけで示す。罫線を引くと、行 1 つぶんの区切りに層が 1 つ増える。
+   長い群を送っているあいだも、いまどこを見ているかは上に残す */
 .list-group-label {
-  padding: 14px 14px 4px;
-  font-size: 13px;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--app-sidebar);
+  padding: 18px 16px 2px;
+  font-size: 11px;
   font-weight: 700;
-  color: var(--app-text-muted);
+  letter-spacing: 0.06em;
+  color: var(--app-text-faint);
 }
 
 .list-scroll > .list-group-label:first-child {
-  padding-top: 6px;
-  color: var(--app-text);
+  padding-top: 8px;
 }
 
+/* 行は 1 行。題と時刻だけを、ベースラインを揃えて並べる */
 .list-row {
   display: flex;
-  flex-direction: column;
-  gap: 3px;
+  align-items: baseline;
+  gap: 8px;
   width: calc(100% - 12px);
   margin: 0 6px;
   text-align: start;
   padding: 8px 10px;
-  border-radius: var(--radius-3);
+  border-radius: var(--radius-2);
   background: none;
   border: none;
   cursor: pointer;
@@ -105,30 +114,31 @@
   background: var(--app-hairline);
 }
 
+/* 選んだ行の合図は背景だけ。太字も足すと、同じことを 2 回言うことになる */
 .list-row--selected {
   background: var(--app-accent-soft);
 }
 
 .list-row-title {
+  flex: 1;
+  min-width: 0;
   font-size: 13.5px;
   color: var(--app-text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 100%;
 }
 
-.list-row--selected .list-row-title {
-  font-weight: 600;
+.list-row .icon {
+  flex-shrink: 0;
+  color: var(--app-text-hint);
 }
 
-.list-row-meta {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  flex-wrap: wrap;
+.list-row-stamp {
+  flex-shrink: 0;
   font-size: 11px;
   color: var(--app-text-faint);
+  font-variant-numeric: tabular-nums;
 }
 
 .notes-empty {
@@ -421,6 +431,30 @@
 
   .workspace--detail .note-title-input {
     display: block;
+  }
+
+  /* 指で押せる高さ。字も本文と同じくらいまで上げる */
+  .list-row {
+    padding: 12px;
+    min-height: 44px;
+    margin: 0 8px;
+    width: calc(100% - 16px);
+  }
+
+  .list-row-title {
+    font-size: 15px;
+  }
+
+  .list-row-stamp {
+    font-size: 12px;
+  }
+
+  .list-group-label {
+    padding: 18px 20px 2px;
+  }
+
+  .list-scroll > .list-group-label:first-child {
+    padding-top: 12px;
   }
 
   .detail-body {

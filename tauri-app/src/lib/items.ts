@@ -1,5 +1,5 @@
 import type { Note } from "./commands";
-import { formatNoteGroupLabel } from "./day-labels";
+import { daysBetween, formatMonthDay, formatNoteGroupLabel, parseIsoDate } from "./day-labels";
 import { t } from "./i18n";
 import { resolveNoteView } from "./note-view";
 import { parseTimelineEntry } from "./parse-timeline";
@@ -246,6 +246,16 @@ export function groupNotes(items: NoteItem[], today: Date): ItemGroup[] {
 export function noteCreatedLabel(item: NoteItem): string {
   const date = item.date.replaceAll("-", "/");
   return [date, item.time].filter(Boolean).join(" ");
+}
+
+/**
+ * 一覧の行の右端に置く 1 つの値。今日のノートは時刻、それ以前は日付。
+ * 今日のノートに「08/04」と出しても、見出しが既に言っていること以上は
+ * 分からない — 時刻なら、さっき書いたどれなのかが読める。
+ */
+export function noteRowStamp(item: NoteItem, today: Date): string {
+  const date = parseIsoDate(item.date);
+  return date && daysBetween(date, today) === 0 ? item.time : formatMonthDay(item.date);
 }
 
 export function itemTitle(item: Item): string {

@@ -60,6 +60,10 @@ const ICONS = {
   eye: () => import("@phosphor-icons/core/assets/regular/eye.svg?raw"),
   "caret-left": () => import("@phosphor-icons/core/assets/regular/caret-left.svg?raw"),
   "brackets-curly": () => import("@phosphor-icons/core/assets/regular/brackets-curly.svg?raw"),
+  "lock-simple": () => import("@phosphor-icons/core/assets/regular/lock-simple.svg?raw"),
+  "lock-simple-open": () => import("@phosphor-icons/core/assets/regular/lock-simple-open.svg?raw"),
+  "dots-three": () => import("@phosphor-icons/core/assets/regular/dots-three.svg?raw"),
+  "circle-notch": () => import("@phosphor-icons/core/assets/regular/circle-notch.svg?raw"),
 } as const;
 
 export type IconName = keyof typeof ICONS;
