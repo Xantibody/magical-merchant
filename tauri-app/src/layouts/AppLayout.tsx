@@ -269,12 +269,13 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
     onCleanup(() => globalThis.removeEventListener("keydown", onKeyDown));
 
     // 離した瞬間に消す。窓から出た(⌘Tab)ときは keyup が来ないので blur も見る
-    const hideHints = (): void => hints.hide();
-    globalThis.addEventListener("keyup", hideHints);
-    globalThis.addEventListener("blur", hideHints);
+    const onKeyUp = (e: KeyboardEvent): void => hints.keyUp(e);
+    const onBlur = (): void => hints.hide();
+    globalThis.addEventListener("keyup", onKeyUp);
+    globalThis.addEventListener("blur", onBlur);
     onCleanup(() => {
-      globalThis.removeEventListener("keyup", hideHints);
-      globalThis.removeEventListener("blur", hideHints);
+      globalThis.removeEventListener("keyup", onKeyUp);
+      globalThis.removeEventListener("blur", onBlur);
     });
 
     // ポップオーバーの外側をクリックしたら閉じる。ルート要素の onClick では

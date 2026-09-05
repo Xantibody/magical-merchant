@@ -18,9 +18,16 @@ export const HINT_HOLD_MS = 300;
 
 const MODIFIER_KEYS = new Set(["Meta", "Control"]);
 
+/**
+ * 押しても単独では何も起きず、⌘ に添えるだけのキー。札に「⌘⇧S」と書いて
+ * おきながら、その ⇧ で札を消すわけにはいかない。
+ */
+const COMPANION_KEYS = new Set(["Shift", "Alt", "CapsLock"]);
+
 export interface Hints {
   visible: Accessor<boolean>;
   keyDown: (e: KeyboardEvent) => void;
+  keyUp: (e: KeyboardEvent) => void;
   hide: () => void;
 }
 
@@ -43,7 +50,7 @@ export function createHints(enabled: boolean = supportsHover()): Hints {
   onCleanup(hide);
 
   const keyDown = (e: KeyboardEvent): void => {
-    if (!enabled) {
+    if (!enabled || COMPANION_KEYS.has(e.key)) {
       return;
     }
     // 修飾キー以外が来たということは、そのショートカットが走るということ。
@@ -61,5 +68,12 @@ export function createHints(enabled: boolean = supportsHover()): Hints {
     }, HINT_HOLD_MS);
   };
 
-  return { visible, keyDown, hide };
+  /** 離した瞬間に消す。⇧ を離しただけなら、⌘ はまだ押されている。 */
+  const keyUp = (e: KeyboardEvent): void => {
+    if (!COMPANION_KEYS.has(e.key)) {
+      hide();
+    }
+  };
+
+  return { visible, keyDown, keyUp, hide };
 }

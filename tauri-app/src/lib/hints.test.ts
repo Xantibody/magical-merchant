@@ -80,6 +80,24 @@ describe("createHints", () => {
     });
   });
 
+  // 札には「⌘⇧S」と書いてある。その ⇧ を押した瞬間に札が消えては、
+  // 読んだ通りに押せない
+  it("stays up while Shift joins the held modifier", () => {
+    withHints(true, (hints) => {
+      hints.keyDown(press("Meta"));
+      vi.advanceTimersByTime(HINT_HOLD_MS);
+
+      hints.keyDown(press("Shift", { metaKey: true, shiftKey: true }));
+      expect(hints.visible()).toBe(true);
+
+      hints.keyUp(press("Shift", { metaKey: true }));
+      expect(hints.visible()).toBe(true);
+
+      hints.keyUp(press("Meta"));
+      expect(hints.visible()).toBe(false);
+    });
+  });
+
   // タッチしかない端末に修飾キーは無い。出す先も無い
   it("never shows anything where there is no hover", () => {
     withHints(false, (hints) => {
