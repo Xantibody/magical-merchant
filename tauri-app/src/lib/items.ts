@@ -1,6 +1,7 @@
 import type { Note } from "./commands";
 import { formatNoteGroupLabel } from "./day-labels";
 import { t } from "./i18n";
+import { resolveNoteView } from "./note-view";
 import { parseTimelineEntry } from "./parse-timeline";
 import { isPreservedEmptyLine } from "./preserved-empty-line";
 import type { DeviceContext } from "./parse-timeline";
@@ -28,6 +29,8 @@ export interface NoteItem {
   preview: string;
   /** 昇格元エントリの日時。タイムラインのチップ表示が使う。 */
   origin?: string;
+  /** 読み取り専用にしたノート。一覧が鍵を出す。 */
+  readOnly: boolean;
 }
 
 export type Item = TimelineItem | NoteItem;
@@ -81,6 +84,7 @@ export function toNoteItems(notes: Note[]): NoteItem[] {
     tags: note.tags,
     preview: note.preview,
     origin: note.origin,
+    readOnly: resolveNoteView(note.view) === "preview",
   }));
 }
 

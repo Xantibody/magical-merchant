@@ -37,6 +37,7 @@
  * @property {string} preview
  * @property {string} [origin]
  * @property {string} [template]
+ * @property {string} [view]
  */
 
 /**
@@ -395,6 +396,9 @@ const saveError = (kind, message) => Object.assign(new Error(message), { kind })
         }
         if (note.template) {
           summary.template = note.template;
+        }
+        if (note.view) {
+          summary.view = note.view;
         }
         return summary;
       });

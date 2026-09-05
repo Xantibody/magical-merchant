@@ -95,6 +95,17 @@ describe("toNoteItems", () => {
     const [item] = toNoteItems([note({ origin: "2026-08-03T08:30:00" })]);
     expect(item.origin).toBe("2026-08-03T08:30:00");
   });
+
+  // 鍵は一覧で出す。開くまで書けないと分からないのでは遅い
+  it("marks a note kept as preview as read-only", () => {
+    expect(toNoteItems([note({ view: "preview" })])[0].readOnly).toBe(true);
+  });
+
+  // マップで見ているだけのノートは書ける。鍵を出すと書けないものに見える
+  it("leaves every other view writable", () => {
+    expect(toNoteItems([note({ view: "mindmap" })])[0].readOnly).toBe(false);
+    expect(toNoteItems([note()])[0].readOnly).toBe(false);
+  });
 });
 
 describe("originKeyOf", () => {
