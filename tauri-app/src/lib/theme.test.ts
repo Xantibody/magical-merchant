@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { getShikiTheme, nextTheme } from "./theme";
+import { chooseTheme, getShikiTheme, theme } from "./theme";
 
 describe("getShikiTheme", () => {
   afterEach(() => {
@@ -21,14 +21,28 @@ describe("getShikiTheme", () => {
   });
 });
 
-describe("nextTheme", () => {
-  it("cycles light → dark → system → light", () => {
-    expect(nextTheme("light")).toBe("dark");
-    expect(nextTheme("dark")).toBe("system");
-    expect(nextTheme("system")).toBe("light");
+describe("chooseTheme", () => {
+  afterEach(() => {
+    chooseTheme("system");
+    localStorage.removeItem("theme");
+    delete document.documentElement.dataset.theme;
   });
 
-  it("comes back to where it started after one round", () => {
-    expect(nextTheme(nextTheme(nextTheme("light")))).toBe("light");
+  // 選ぶのは Settings、当たっている色を読むのは他の画面。同じ値を見せる
+  it("paints the document and remembers the choice", () => {
+    chooseTheme("dark");
+
+    expect(theme()).toBe("dark");
+    expect(document.documentElement.dataset.theme).toBe("dark");
+    expect(localStorage.getItem("theme")).toBe("dark");
+  });
+
+  // system は「今の端末の色」に解決するが、覚えるのは system のまま
+  it("keeps system as system while resolving it for the document", () => {
+    chooseTheme("system");
+
+    expect(theme()).toBe("system");
+    expect(localStorage.getItem("theme")).toBe("system");
+    expect(document.documentElement.dataset.theme).toBe("light");
   });
 });

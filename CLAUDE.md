@@ -30,7 +30,11 @@ ready to record the moment it opens (widgets exist for exactly this).
 ## UI Architecture (current)
 
 - **Header**: mode tabs (Timeline / Notes) + search field (⌘K palette) +
-  calendar jump (Timeline only) + sync + theme cycle + settings
+  calendar jump (Timeline only) + sync + settings. The active tab is marked by
+  weight alone, never a fill; theme lives in Settings, not the header
+- **Shortcuts**: one table in `lib/shortcuts.ts` feeds the key handling, the
+  palette's command rows and the `data-key` badges. Holding ⌘ (Ctrl) for 300ms
+  floats those badges (`lib/hints.ts`); `?` opens the palette as the list
 - **Bottom tabs** (mobile): Timeline / Notes / Settings
 - **Timeline**: single-column day-grouped journal, time rail, tag filter chips,
   floating capture dock; in-place entry editing; select-mode bulk delete

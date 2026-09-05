@@ -19,6 +19,7 @@ import { isMacDesktop } from "../lib/platform";
 import { isImeComposing } from "../lib/ime";
 import { ROUTES } from "../lib/routes";
 import { useShell } from "../lib/shell";
+import { chooseTheme, theme, THEMES } from "../lib/theme";
 import { syncErrorKind } from "../lib/sync-status";
 import { listen } from "@tauri-apps/api/event";
 import type { UnlistenFn } from "@tauri-apps/api/event";
@@ -310,6 +311,28 @@ export default function Settings(): JSX.Element {
                   onClick={() => chooseLocale(preference)}
                 >
                   {label}
+                </button>
+              )}
+            </For>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <h2 class="settings-section-label">THEME</h2>
+          {/* ヘッダーの巡回ボタンから移した。年に数回しか触らないものが、
+              毎回見る場所に居座っていた */}
+          <div class="settings-choices" role="radiogroup" aria-label={t().settings.theme}>
+            <For each={THEMES}>
+              {(choice) => (
+                <button
+                  type="button"
+                  role="radio"
+                  class="settings-choice"
+                  classList={{ "settings-choice--on": theme() === choice }}
+                  aria-checked={theme() === choice}
+                  onClick={() => chooseTheme(choice)}
+                >
+                  {t().theme[choice]}
                 </button>
               )}
             </For>
