@@ -8,10 +8,6 @@
 
 import { toIsoDate } from "./day-labels";
 import type { TimelineItem } from "./items";
-import { countTags } from "./tags";
-import type { TagCount } from "./tags";
-
-const TOP_TAGS = 3;
 
 /** 週の身元は月曜の日付。閉じた週と今の週の比較に使う。 */
 export function digestWeekKey(today: Date): string {
@@ -31,7 +27,6 @@ export interface WeekSummary {
   count: number;
   /** 記録のあった日数。 */
   days: number;
-  topTags: TagCount[];
 }
 
 /** 今週(月曜起点)のエントリだけを数える。 */
@@ -41,7 +36,6 @@ export function summarizeWeek(items: TimelineItem[], today: Date): WeekSummary {
   return {
     count: week.length,
     days: new Set(week.map((item) => item.date)).size,
-    topTags: countTags(week.map((item) => item.text)).slice(0, TOP_TAGS),
   };
 }
 
