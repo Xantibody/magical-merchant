@@ -21,18 +21,36 @@ pub struct Summary {
     /// 開き直すことになる。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub template: Option<String>,
+    /// 表示モード(`preview` / `mindmap`)。一覧が読み取り専用のノートに鍵を
+    /// 出すのに使う。本文を開くまで分からないと、書けないノートを書こうとする。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub view: Option<String>,
 }
 
 impl Summary {
     #[must_use]
     pub fn from_file(path: PathBuf, filename: String, content: &str) -> Self {
-        let (time, tags, body, origin, template) =
+        let (time, tags, body, origin, template, view) =
             if let Ok((fm, body)) = frontmatter::parse::<NoteFrontmatter>(content) {
-                (Some(fm.time), fm.tags, body, fm.origin, fm.template)
+                (
+                    Some(fm.time),
+                    fm.tags,
+                    body,
+                    fm.origin,
+                    fm.template,
+                    fm.view,
+                )
             } else {
                 // parse に失敗しても frontmatter の区切りは剥がす。壊れた
                 // メタデータを本文扱いすると、一覧のタイトルとプレビューに YAML が出る。
-                (None, Vec::new(), frontmatter::strip(content), None, None)
+                (
+                    None,
+                    Vec::new(),
+                    frontmatter::strip(content),
+                    None,
+                    None,
+                    None,
+                )
             };
 
         let tags = tags::merge(tags, body);
@@ -46,6 +64,7 @@ impl Summary {
             preview,
             origin,
             template,
+            view,
         }
     }
 }
@@ -116,6 +135,23 @@ mod tests {
         assert_eq!(preview_of(100).chars().count(), 100);
         assert_eq!(preview_of(101).chars().count(), 100);
         assert_eq!(preview_of(101), "あ".repeat(100));
+    }
+
+    /// 読み取り専用にしたノートは一覧でも鍵で分かる。一覧に乗らないと、
+    /// 開いて書こうとするまで書けないことが分からない。
+    #[test]
+    fn from_file_carries_the_view() {
+        let fm = NoteFrontmatter {
+            view: Some("preview".to_string()),
+            ..at(2026, 9, 5, 21, 14)
+        };
+        let content = frontmatter::render(&fm, "body").unwrap();
+        let summary = Summary::from_file(
+            PathBuf::from("/test/note.md"),
+            "note.md".to_string(),
+            &content,
+        );
+        assert_eq!(summary.view, Some("preview".to_string()));
     }
 
     /// origin はタイムラインのチップ表示が使う。一覧に乗らないと、昇格した
