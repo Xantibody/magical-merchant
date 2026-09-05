@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { render, screen, fireEvent, cleanup, waitFor } from "@solidjs/testing-library";
+import { render, screen, fireEvent, cleanup, waitFor, within } from "@solidjs/testing-library";
 import { mockIPC, mockWindows, clearMocks } from "@tauri-apps/api/mocks";
 import { MemoryRouter, Route } from "@solidjs/router";
 import { ShellProvider } from "../lib/shell";
 import { readStartFullscreen } from "../lib/fullscreen";
+import { chooseTheme } from "../lib/theme";
 import UndoToast from "../components/UndoToast";
 import Settings from "./Settings";
 
@@ -96,6 +97,11 @@ function fileInput(): HTMLInputElement {
 
 function folderInput(): HTMLInputElement {
   return screen.getByLabelText<HTMLInputElement>("フォルダから追加", { selector: "input" });
+}
+
+/** 「システム」は LANGUAGE 側にもある。テーマの組の中だけを見る。 */
+function themeChoice(name: string): HTMLElement {
+  return within(screen.getByRole("radiogroup", { name: "テーマ" })).getByRole("radio", { name });
 }
 
 describe("Settings › GLYPHS", () => {
@@ -293,5 +299,41 @@ describe("Settings › start in fullscreen", () => {
 
     expect(readStartFullscreen()).toBe(false);
     expect(fullscreenCalls).toHaveLength(1);
+  });
+});
+
+// ヘッダーの巡回ボタンから移してきた。年に数回しか触らないものを、毎回見る
+// 場所に置いておく理由がない
+describe("Settings › THEME", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    listens = 0;
+    mockCommands();
+  });
+
+  afterEach(() => {
+    cleanup();
+    clearMocks();
+    // 選択はモジュールに残る。次のテストへ持ち越さないよう戻す
+    chooseTheme("system");
+    localStorage.clear();
+    delete document.documentElement.dataset.theme;
+  });
+
+  it("starts on the remembered choice", async () => {
+    await renderSettings();
+
+    expect(themeChoice("システム").ariaChecked).toBe("true");
+  });
+
+  it("paints the app and remembers the choice", async () => {
+    await renderSettings();
+
+    fireEvent.click(themeChoice("ダーク"));
+
+    expect(document.documentElement.dataset.theme).toBe("dark");
+    expect(localStorage.getItem("theme")).toBe("dark");
+    expect(themeChoice("ダーク").ariaChecked).toBe("true");
+    expect(themeChoice("システム").ariaChecked).toBe("false");
   });
 });
