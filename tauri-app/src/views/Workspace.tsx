@@ -22,7 +22,14 @@ import { isStaleSave, typedInvoke } from "../lib/commands";
 import { getDeviceSignals } from "../lib/client-context";
 import { glyphs } from "../lib/glyphs";
 import { useShell } from "../lib/shell";
-import { groupNotes, itemTitle, neighborOf, noteCreatedLabel, toNoteItems } from "../lib/items";
+import {
+  groupNotes,
+  itemTitle,
+  neighborOf,
+  noteCreatedLabel,
+  noteRowStamp,
+  toNoteItems,
+} from "../lib/items";
 import type { ItemGroup, NoteItem } from "../lib/items";
 import { nextView, readNoteContent, viewToFrontmatter } from "../lib/note-view";
 import type { NoteView } from "../lib/note-view";
@@ -70,11 +77,6 @@ const VIEW_BUTTON: Record<
 
 async function loadNotes(): Promise<NoteItem[]> {
   return toNoteItems(await typedInvoke("list_notes"));
-}
-
-/** 一覧の 2 段目に出す更新日。「08/04」 */
-function noteDate(item: NoteItem): string {
-  return item.date ? formatMonthDay(item.date) : "";
 }
 
 function EmptyNotes(): JSX.Element {
@@ -756,12 +758,11 @@ export default function Workspace(): JSX.Element {
                         onClick={() => select(item as NoteItem)}
                       >
                         <span class="list-row-title">{itemTitle(item)}</span>
-                        <span class="list-row-meta">
-                          {noteDate(item as NoteItem)}
-                          <For each={(item as NoteItem).tags}>
-                            {(tag) => <span class="tag-badge">#{tag}</span>}
-                          </For>
-                        </span>
+                        {/* 書けないノートはここで分かる。開いてから気づくのでは遅い */}
+                        <Show when={(item as NoteItem).readOnly}>
+                          <Icon name="lock-simple" size={12} title={t().notes.readOnly} />
+                        </Show>
+                        <span class="list-row-stamp">{noteRowStamp(item as NoteItem, today)}</span>
                       </button>
                     )}
                   </For>

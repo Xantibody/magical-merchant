@@ -55,9 +55,11 @@ export function formatNoteGroupLabel(iso: string, today: Date): string {
     return t().day.noDate;
   }
   const diff = daysBetween(date, today);
-  if (diff < 0) {
-    return t().day.thisWeek;
+  if (diff === 0) {
+    return t().day.today;
   }
+  // 先の日付のノート(端末の時計がずれている・意図して未来に置いた)は
+  // 今週側に寄せる。「今日」と言い切ると嘘になる
   if (diff < 7) {
     return t().day.thisWeek;
   }

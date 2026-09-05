@@ -12,6 +12,7 @@ import {
   replaceDayItems,
   planBulkDelete,
   neighborOf,
+  noteRowStamp,
 } from "./items";
 import type { Note } from "./commands";
 
@@ -108,6 +109,24 @@ describe("toNoteItems", () => {
   });
 });
 
+describe("noteRowStamp", () => {
+  // 今日のノートに「08/04」と出しても、今日だという以上のことは言わない。
+  // 時刻なら「さっき書いたやつ」が分かる
+  it("gives the time for a note written today", () => {
+    expect(noteRowStamp(toNoteItems([note()])[0], TODAY)).toBe("15:27");
+  });
+
+  it("gives the date for anything older", () => {
+    expect(noteRowStamp(toNoteItems([note({ time: "2026-07-30T09:00:00+09:00" })])[0], TODAY)).toBe(
+      "07/30",
+    );
+  });
+
+  it("says nothing for a note with no timestamp", () => {
+    expect(noteRowStamp(toNoteItems([note({ time: undefined })])[0], TODAY)).toBe("");
+  });
+});
+
 describe("originKeyOf", () => {
   it("points at an entry with the same string promote writes into origin", () => {
     const [item] = toTimelineItems("2026-08-03", ["- [08:30:00] 朝の記録"]);
@@ -178,12 +197,13 @@ describe("groupTimelineByDay", () => {
 });
 
 describe("groupNotes", () => {
-  it("splits this week from last week", () => {
+  it("splits today from this week from last week", () => {
     const items = toNoteItems([
       note({ filename: "a.md", time: "2026-08-04T10:00:00+09:00" }),
-      note({ filename: "b.md", time: "2026-07-25T10:00:00+09:00" }),
+      note({ filename: "b.md", time: "2026-08-01T10:00:00+09:00" }),
+      note({ filename: "c.md", time: "2026-07-25T10:00:00+09:00" }),
     ]);
-    expect(groupNotes(items, TODAY).map((g) => g.label)).toStrictEqual(["今週", "先週"]);
+    expect(groupNotes(items, TODAY).map((g) => g.label)).toStrictEqual(["今日", "今週", "先週"]);
   });
 });
 
