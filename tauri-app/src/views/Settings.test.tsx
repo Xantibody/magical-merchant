@@ -99,6 +99,11 @@ function folderInput(): HTMLInputElement {
   return screen.getByLabelText<HTMLInputElement>("フォルダから追加", { selector: "input" });
 }
 
+/** 「システム」は LANGUAGE 側にもある。テーマの組の中だけを見る。 */
+function themeChoice(name: string): HTMLElement {
+  return within(screen.getByRole("radiogroup", { name: "テーマ" })).getByRole("radio", { name });
+}
+
 describe("Settings › GLYPHS", () => {
   beforeEach(() => {
     saved.length = 0;
@@ -314,10 +319,6 @@ describe("Settings › THEME", () => {
     localStorage.clear();
     delete document.documentElement.dataset.theme;
   });
-
-  // 「システム」は LANGUAGE 側にもある。テーマの組の中だけを見る
-  const themeChoice = (name: string): HTMLElement =>
-    within(screen.getByRole("radiogroup", { name: "テーマ" })).getByRole("radio", { name });
 
   it("starts on the remembered choice", async () => {
     await renderSettings();
