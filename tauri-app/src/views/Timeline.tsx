@@ -337,81 +337,65 @@ export default function Timeline(): JSX.Element {
     <div class="timeline">
       <div class="timeline-scroll">
         <div class="timeline-column">
-          <TagFilter
-            tags={knownTags()}
-            active={tagFilter()}
-            matched={visible().length}
-            onToggle={setTagFilter}
-          />
+          {/* タグ行と週の要約はひと続きの見出し帯。列の 36px ではなく帯の中の
+              14px で寄せる — 要約はタグの続きであって、独立した層ではない。
+              digest を TagFilter より上に挿さないのは、データが遅れて届いたとき
+              最初の描画に存在した行が押し下げられてレイアウトシフトになるから */}
+          <Show when={knownTags().length > 0 || digestVisible()}>
+            <div class="timeline-head">
+              <TagFilter
+                tags={knownTags()}
+                active={tagFilter()}
+                matched={visible().length}
+                onToggle={setTagFilter}
+              />
 
-          {/* TagFilter より下に置く: 上に挿すと、データが遅れて届いたとき
-              最初の描画に存在した行が押し下げられてレイアウトシフトになる。
-              ここなら日リストと同じ「後から現れる領域」の先頭に収まる */}
-          <Show when={digestVisible()}>
-            <section class="digest-card" aria-label={t().timeline.digestTitle}>
-              <header class="digest-head">
-                <span class="digest-title">{t().timeline.digestTitle}</span>
-                <button
-                  type="button"
-                  class="icon-button digest-close"
-                  title={t().timeline.digestClose}
-                  aria-label={t().timeline.digestClose}
-                  onClick={dismissDigest}
-                >
-                  <Icon name="x" size={14} />
-                </button>
-              </header>
-              <Show when={weekSummary().count > 0}>
-                <p class="digest-line">
-                  {t().timeline.digestSummary(weekSummary().days, weekSummary().count)}
-                </p>
-              </Show>
-              <Show when={weekSummary().topTags.length > 0}>
-                <div class="digest-tags">
-                  <For each={weekSummary().topTags}>
-                    {(tag) => (
-                      <button
-                        type="button"
-                        class="digest-tag"
-                        onClick={() => setTagFilter(tag.tag)}
-                      >
-                        #{tag.tag}
-                        <span class="digest-tag-count">{tag.count}</span>
-                      </button>
+              <Show when={digestVisible()}>
+                <section class="digest-line" aria-label={t().timeline.digestTitle}>
+                  <span class="digest-label">{t().timeline.digestTitle}</span>
+                  <Show when={weekSummary().count > 0}>
+                    <span>
+                      {t().timeline.digestSummary(weekSummary().days, weekSummary().count)}
+                    </span>
+                  </Show>
+                  <Show when={yearAgo()}>
+                    {(iso) => (
+                      <>
+                        {/* 中黒は要約と行き先を隔てるだけの字。読み上げには要らない */}
+                        <Show when={weekSummary().count > 0}>
+                          <span class="digest-sep" aria-hidden="true">
+                            ·
+                          </span>
+                        </Show>
+                        <button
+                          type="button"
+                          class="digest-year-ago"
+                          aria-label={t().timeline.lastYearOpen}
+                          onClick={() => jumpToDay(iso())}
+                        >
+                          {t().timeline.lastYear}
+                          <span aria-hidden="true">→</span>
+                        </button>
+                      </>
                     )}
-                  </For>
-                </div>
-              </Show>
-              <Show when={yearAgo()}>
-                {(iso) => (
-                  <button type="button" class="digest-year-ago" onClick={() => jumpToDay(iso())}>
-                    <Icon name="clock-counter-clockwise" size={13} />
-                    {t().timeline.lastYear}
+                  </Show>
+                  <button
+                    type="button"
+                    class="icon-button digest-close"
+                    title={t().timeline.digestClose}
+                    aria-label={t().timeline.digestClose}
+                    onClick={dismissDigest}
+                  >
+                    <Icon name="x" size={12} />
                   </button>
-                )}
+                </section>
               </Show>
-            </section>
+            </div>
           </Show>
 
           <Show when={days().length} fallback={<EmptyTimeline filtered={Boolean(tagFilter())} />}>
-            <div class="timeline-toolbar">
-              <Show
-                when={!selecting()}
-                fallback={<span class="timeline-toolbar-hint">{t().timeline.selectHint}</span>}
-              >
-                <button
-                  type="button"
-                  class="timeline-toolbar-button"
-                  onClick={() => setSelecting(true)}
-                >
-                  <Icon name="check-square" size={14} />
-                  {t().timeline.select}
-                </button>
-              </Show>
-            </div>
-
             <For each={days()}>
-              {(day) => {
+              {(day, index) => {
                 const heading = createMemo(() => formatDayHeading(day.date, today));
                 const orphans = createMemo(() => orphanNotes().get(day.date) ?? []);
                 return (
@@ -421,6 +405,19 @@ export default function Timeline(): JSX.Element {
                       <span class="day-heading-date">{heading().date}</span>
                       <span class="day-heading-count">
                         {t().timeline.entryCount(day.items.length)}
+                        {/* 選択の入り口は、いま書いている日の件数の隣に字で 1 つ。
+                            浮かせた専用のバーを 1 段作らない。入ったあとの操作は
+                            下のバーが引き受けるので、その間は出さない */}
+                        <Show when={index() === 0 && !selecting()}>
+                          <span aria-hidden="true">·</span>
+                          <button
+                            type="button"
+                            class="day-heading-select"
+                            onClick={() => setSelecting(true)}
+                          >
+                            {t().timeline.select}
+                          </button>
+                        </Show>
                       </span>
                     </header>
 
@@ -475,8 +472,12 @@ export default function Timeline(): JSX.Element {
               when={confirming()}
               fallback={
                 <>
+                  {/* 何も選んでいないうちは件数を数えても始まらない。
+                      入り口のバーが消えたぶん、次にすることはここで言う */}
                   <span class="select-bar-label">
-                    {t().timeline.selectedCount(selected().size)}
+                    {selected().size === 0
+                      ? t().timeline.selectHint
+                      : t().timeline.selectedCount(selected().size)}
                   </span>
                   <button
                     type="button"

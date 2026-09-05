@@ -33,9 +33,9 @@
   margin-bottom: 14px;
 }
 
+/* 日の切れ目は見出しの大小と余白が示す。罫線を足すと合図が二重になる */
 .day-group + .day-group .day-heading {
-  border-top: 1px solid var(--app-hairline);
-  padding-top: 28px;
+  padding-top: 20px;
 }
 
 .day-heading-label {
@@ -59,9 +59,27 @@
 
 .day-heading-count {
   margin-left: auto;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
   font-size: 12px;
   color: var(--app-text-hint);
   font-variant-numeric: tabular-nums;
+}
+
+/* 選択モードの入り口。件数の続きの字で、押せることはホバーで返す */
+.day-heading-select {
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+}
+
+.day-heading-select:hover {
+  color: var(--app-text);
 }
 
 /* ---------------- entry ---------------- */
@@ -176,12 +194,13 @@
   color: var(--app-text);
 }
 
-/* このエントリから育ったノート。本文の真下に横並びで、入りきらなければ折り返す */
+/* このエントリから育ったノート。本文の続きとして 1 行ずつ下に積む */
 .entry-notes {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  margin-top: 6px;
   /* 本文と同じ幅で止める。ホバーで出るツールバーの下へ回り込ませない */
   max-width: 552px;
 }
@@ -189,25 +208,23 @@
 /* 元のエントリが消えたノートの避難先。日の見出し直下に残る */
 .origin-chips {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
   margin: 2px 0 10px;
 }
 
+/* 本文の続きの 1 行リンク。枠と下地を持つと、読み物の中に押し物の島ができる */
 .origin-chip {
   position: relative;
   display: inline-flex;
   align-items: center;
   max-width: 100%;
-  border: 1px solid var(--app-border);
-  border-radius: 999px;
-  background: var(--app-surface);
   color: var(--app-text-muted);
 }
 
 .origin-chip:hover,
 .origin-chip:focus-within {
-  background: var(--app-accent-soft);
   color: var(--app-text);
 }
 
@@ -216,13 +233,21 @@
   align-items: center;
   gap: 6px;
   max-width: 100%;
-  padding: 4px 10px;
+  padding: 1px 0;
   border: none;
   background: none;
   color: inherit;
   font-family: inherit;
   font-size: 12px;
   cursor: pointer;
+}
+
+.origin-chip-open:hover {
+  text-decoration: underline;
+}
+
+.origin-chip-open .icon {
+  color: var(--app-text-faint);
 }
 
 .origin-chip-title {
@@ -235,7 +260,7 @@
 .origin-chip-unlink {
   position: absolute;
   top: 50%;
-  right: 6px;
+  right: 0;
   display: none;
   align-items: center;
   justify-content: center;
@@ -267,38 +292,6 @@
 }
 
 /* ---------------- selection mode ---------------- */
-
-/* 入口はリスト右上のテキストボタン 1 つだけ。普段は視界に入らない濃さに抑える */
-.timeline-toolbar {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  min-height: 24px;
-  margin-bottom: -24px;
-}
-
-.timeline-toolbar-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
-  border: none;
-  border-radius: var(--radius-2);
-  background: none;
-  font-size: 12px;
-  color: var(--app-text-faint);
-  cursor: pointer;
-}
-
-.timeline-toolbar-button:hover {
-  background: var(--app-hairline);
-  color: var(--app-text);
-}
-
-.timeline-toolbar-hint {
-  font-size: 12px;
-  color: var(--app-text-faint);
-}
 
 .entry-select {
   display: flex;
@@ -548,86 +541,52 @@
 
 /* ---------------- 週次ダイジェスト ---------------- */
 
-.digest-card {
+/* タグ行と週の要約はひと続きの帯。列の gap より近い 14px で寄せる */
+.timeline-head {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin: 14px 0 4px;
-  padding: 14px 16px;
-  border: 1px solid var(--app-hairline);
-  border-radius: var(--radius-3);
-  background: var(--app-surface-2);
+  gap: 14px;
 }
 
-.digest-head {
+/* カードではなく 1 行。週に一度の要約のために層を足さない */
+.digest-line {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  align-items: baseline;
+  /* 狭い画面では折り返す。1 行に収めるために字を削るほどの中身ではない */
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--app-text-muted);
 }
 
-.digest-title {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
+.digest-label {
   color: var(--app-text-faint);
 }
 
-.digest-close {
+.digest-sep {
   color: var(--app-text-hint);
-  padding: 4px;
-}
-
-.digest-line {
-  margin: 0;
-  font-size: 14px;
-  color: var(--app-text);
-}
-
-.digest-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.digest-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 10px;
-  border: 1px solid var(--app-border);
-  border-radius: 999px;
-  background: var(--app-surface);
-  color: var(--app-text-muted);
-  font-family: inherit;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.digest-tag:hover {
-  background: var(--app-accent-soft);
-  color: var(--app-text);
-}
-
-.digest-tag-count {
-  font-size: 11px;
-  color: var(--app-text-hint);
-  font-variant-numeric: tabular-nums;
 }
 
 .digest-year-ago {
   display: inline-flex;
-  align-items: center;
+  align-items: baseline;
   gap: 6px;
-  align-self: flex-start;
-  padding: 2px 0;
+  padding: 0;
   border: none;
   background: none;
-  color: var(--app-accent);
+  color: inherit;
   font-family: inherit;
-  font-size: 12.5px;
+  font-size: inherit;
   cursor: pointer;
 }
 
 .digest-year-ago:hover {
+  color: var(--app-text);
   text-decoration: underline;
+}
+
+.digest-close {
+  margin-left: auto;
+  padding: 2px;
+  color: var(--app-text-hint);
 }
