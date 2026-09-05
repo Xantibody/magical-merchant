@@ -35,20 +35,17 @@
   padding: 6px 12px;
   border-radius: var(--radius-2);
   font-size: 13px;
-  color: var(--gray-7);
+  color: var(--app-text-muted);
   text-decoration: none;
-}
-
-:root[data-theme="dark"] .header-tab {
-  color: var(--gray-5);
 }
 
 .header-tab:hover {
   background: var(--app-surface-2);
 }
 
+/* 合図は 1 つ。塗りとホバーの下地が同じ灰で、どちらが「いま居る側」なのか
+   ひと目で決まらなかった。字の重さだけに寄せる */
 .header-tab--active {
-  background: var(--app-surface-2);
   color: var(--app-text);
   font-weight: 600;
 }
@@ -93,6 +90,12 @@
   color: var(--app-text-faint);
 }
 
+/* 入力欄そのものに枠があるので、その中の枠は二重になる。字だけで足りる */
+.search-field .key-badge {
+  border: none;
+  padding: 0;
+}
+
 .header-actions {
   display: flex;
   align-items: center;
@@ -111,10 +114,6 @@
 }
 
 .popover-anchor--sync {
-  right: 60px;
-}
-
-.popover-anchor--theme {
   right: 28px;
 }
 
@@ -187,33 +186,7 @@
     display: flex;
   }
 
-  .popover-anchor--sync,
-  .popover-anchor--theme {
+  .popover-anchor--sync {
     right: var(--size-2);
   }
-}
-
-/* テーマは押すたびに回るので、いま何なのかを触れたときに知らせる */
-.header-action--theme {
-  position: relative;
-}
-
-.header-tooltip {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 3px 7px;
-  border-radius: var(--radius-2);
-  background: var(--gray-9);
-  color: var(--gray-0);
-  font-size: 11px;
-  white-space: nowrap;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.1s;
-}
-
-.header-action--theme:hover .header-tooltip {
-  opacity: 1;
 }

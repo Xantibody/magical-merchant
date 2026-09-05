@@ -120,6 +120,45 @@ body {
   background: var(--app-surface-2);
 }
 
+/* ---------------- ヒントレイヤー ---------------- */
+
+/* ⌘ を押し続けているあいだだけ、押せるキーをボタンの肩に浮かせる
+   (`lib/hints.ts`)。札は擬似要素なので、出ていないときの DOM は 1 ノードも
+   増えない — data-key は常に付いていて、描くかどうかを html 側が決める */
+[data-key] {
+  position: relative;
+}
+
+html[data-hints] [data-key]::after {
+  content: attr(data-key);
+  position: absolute;
+  top: -8px;
+  right: -6px;
+  z-index: 10;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--app-toast-bg);
+  color: var(--app-toast-text);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.hint-pill {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  z-index: 130;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--app-toast-bg);
+  color: var(--app-toast-text);
+  font-size: 11.5px;
+  pointer-events: none;
+}
+
 /* ---------------- 共有ボタン ---------------- */
 
 .button-primary,
