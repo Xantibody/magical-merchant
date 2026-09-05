@@ -272,6 +272,26 @@ describe("Templates", () => {
     await waitFor(() => expect(saveButton().disabled).toBe(true));
   });
 
+  it("saves on ⌘S while the body is being written", async () => {
+    const { container } = await openDaily();
+
+    fireEvent.input(bodyInput(container), { target: { value: "直した" } });
+    fireEvent.keyDown(bodyInput(container), { key: "s", metaKey: true });
+
+    await waitFor(() => expect(saved).toHaveLength(1));
+  });
+
+  // ⌘⇧S はアプリ全体の「今すぐ同期」。ここで保存まで走ると、同期のつもりの
+  // 一押しで書きかけがディスクに出ていく
+  it("leaves ⌘⇧S to the sync shortcut", async () => {
+    const { container } = await openDaily();
+
+    fireEvent.input(bodyInput(container), { target: { value: "書きかけ" } });
+    fireEvent.keyDown(bodyInput(container), { key: "S", metaKey: true, shiftKey: true });
+
+    expect(saved).toHaveLength(0);
+  });
+
   // 保存していない変更は戻ると消える。消したことは伝えて、戻す道も残す
   it("discards unsaved changes on the way back, and can put them back", async () => {
     const { container } = await openDaily();
