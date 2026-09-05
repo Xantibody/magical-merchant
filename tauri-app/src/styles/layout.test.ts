@@ -78,6 +78,26 @@ describe("app shell inside the system bars", () => {
   });
 });
 
+function mountTabs(): void {
+  document.body.innerHTML = `
+    <header class="header">
+      <nav class="header-tabs">
+        <a class="header-tab header-tab--active">Timeline</a>
+        <a class="header-tab">Notes</a>
+      </nav>
+    </header>`;
+}
+
+function mountAction(): HTMLElement {
+  document.body.innerHTML = `<button class="icon-button" data-key="⌘N"></button>`;
+  return element("[data-key]");
+}
+
+/** 札は擬似要素なので、出ているかどうかは content でしか見られない。 */
+function badge(target: HTMLElement): string {
+  return getComputedStyle(target, "::after").content;
+}
+
 describe("the header tells you where you are with one signal", () => {
   beforeAll(async () => {
     await import("../index.css");
@@ -86,16 +106,6 @@ describe("the header tells you where you are with one signal", () => {
   afterEach(() => {
     document.body.innerHTML = "";
   });
-
-  function mountTabs(): void {
-    document.body.innerHTML = `
-      <header class="header">
-        <nav class="header-tabs">
-          <a class="header-tab header-tab--active">Timeline</a>
-          <a class="header-tab">Notes</a>
-        </nav>
-      </header>`;
-  }
 
   // 塗りとホバーの下地が同じ灰だったので、いま居る側が塗りなのか、指が
   // 乗っているだけなのかを取り違える
@@ -118,15 +128,6 @@ describe("the hint layer", () => {
     delete document.documentElement.dataset.hints;
     document.body.innerHTML = "";
   });
-
-  function mountAction(): HTMLElement {
-    document.body.innerHTML = `<button class="icon-button" data-key="⌘N"></button>`;
-    return element("[data-key]");
-  }
-
-  function badge(target: HTMLElement): string {
-    return getComputedStyle(target, "::after").content;
-  }
 
   it("draws nothing until the modifier is being held", () => {
     const action = mountAction();
