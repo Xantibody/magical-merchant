@@ -4,7 +4,6 @@ import type { JSX } from "solid-js";
 const ICONS = {
   lightning: () => import("@phosphor-icons/core/assets/regular/lightning.svg?raw"),
   "note-pencil": () => import("@phosphor-icons/core/assets/regular/note-pencil.svg?raw"),
-  "check-square": () => import("@phosphor-icons/core/assets/regular/check-square.svg?raw"),
   list: () => import("@phosphor-icons/core/assets/regular/list.svg?raw"),
   folder: () => import("@phosphor-icons/core/assets/regular/folder.svg?raw"),
   "paper-plane-tilt": () => import("@phosphor-icons/core/assets/regular/paper-plane-tilt.svg?raw"),
