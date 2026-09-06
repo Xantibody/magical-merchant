@@ -8,18 +8,20 @@ import {
   For,
   Show,
   lazy,
+  onMount,
   onCleanup,
 } from "solid-js";
 import type { JSX } from "solid-js";
 import { useNavigate, useSearchParams } from "@solidjs/router";
 import type { Editor } from "@milkdown/kit/core";
 import Icon from "../components/Icon";
-import type { IconName } from "../components/Icon";
 import MarkdownPreview from "../components/MarkdownPreview";
+import NoteMenu from "../components/NoteMenu";
 import NoteMetaPopover from "../components/NoteMetaPopover";
 import TemplatePicker from "../components/TemplatePicker";
 import { isStaleSave, typedInvoke } from "../lib/commands";
 import { getDeviceSignals } from "../lib/client-context";
+import { createDebouncedAccessor } from "../lib/debounce";
 import { glyphs } from "../lib/glyphs";
 import { useShell } from "../lib/shell";
 import {
@@ -28,16 +30,18 @@ import {
   neighborOf,
   noteCreatedLabel,
   noteRowStamp,
+  stepNote,
   toNoteItems,
 } from "../lib/items";
 import type { ItemGroup, NoteItem } from "../lib/items";
-import { nextView, readNoteContent, viewToFrontmatter } from "../lib/note-view";
+import { readNoteContent, viewToFrontmatter } from "../lib/note-view";
 import type { NoteView } from "../lib/note-view";
 import { joinTitle, splitTitle } from "../lib/note-title";
-import { formatMonthDay } from "../lib/day-labels";
+import { formatClock, formatMonthDay } from "../lib/day-labels";
 import { locale, t } from "../lib/i18n";
 import { isImeComposing } from "../lib/ime";
 import { createLongPress } from "../lib/long-press";
+import { isTypingTarget, matchesShortcut, shortcutLabel } from "../lib/shortcuts";
 import {
   beginEditSession,
   readBackup,
@@ -46,14 +50,13 @@ import {
   writeBackup,
 } from "../lib/edit-backup";
 import type { EditSession } from "../lib/edit-backup";
-import type { CaretPoint } from "../components/MilkdownEditor";
 import type { NoteLinkTarget } from "../lib/note-link-plugin";
 import type { SearchHit, Template } from "../lib/commands";
 import { ROUTES } from "../lib/routes";
 import "../styles/workspace.css";
 
-// Milkdown + ProseMirror は編集を始めるまで要らない。一覧とプレビューだけの
-// 表示をこの重さから切り離す
+// Milkdown + ProseMirror は詳細を開くまで要らない。一覧だけを見ている画面を
+// この重さから切り離す(狭い端末では一覧と詳細が入れ替わるので、開くまで来ない)
 const MilkdownEditor = lazy(() => import("../components/MilkdownEditor"));
 const MarkdownToolbar = lazy(() => import("../components/MarkdownToolbar"));
 // markmap-view は d3 を連れてくる。マインドマップにしたノートを開くまで読まない
@@ -61,19 +64,10 @@ const MindmapView = lazy(() => import("../components/MindmapView"));
 
 const UNDO_MS = 5000;
 const SAVE_DEBOUNCE_MS = 1000;
-
-/**
- * 表示モードの見せ方。切替ボタンは「次に何になるか」でこれを引くので、
- * モードが増えてもボタンは 1 つのまま — 増えるのはこの表の 1 行だけ。
- */
-const VIEW_BUTTON: Record<
-  NoteView,
-  { icon: IconName; label: "showEditor" | "showMindmap" | "showPreview" }
-> = {
-  editor: { icon: "note-pencil", label: "showEditor" },
-  mindmap: { icon: "tree-structure", label: "showMindmap" },
-  preview: { icon: "eye", label: "showPreview" },
-};
+/** 「保存しました」を出しておく時間。過ぎたら保存時刻の表示に落ちる。 */
+const SAVED_MS = 2000;
+/** 並べたマップが打鍵に追いつくまでの間。保存(1 秒)より先に図が追いつく。 */
+const MAP_DEBOUNCE_MS = 300;
 
 async function loadNotes(): Promise<NoteItem[]> {
   return toNoteItems(await typedInvoke("list_notes"));
@@ -89,6 +83,43 @@ function EmptyNotes(): JSX.Element {
   );
 }
 
+/** このノートを指している記録。畳んだ 1 行以上の場所は取らない。 */
+function Backlinks(props: { hits: SearchHit[]; onOpen: (hit: SearchHit) => void }): JSX.Element {
+  return (
+    <Show when={props.hits.length > 0}>
+      <details class="backlinks">
+        <summary class="backlinks-summary">{t().notes.backlinks(props.hits.length)}</summary>
+        <div class="backlinks-list">
+          <For each={props.hits}>
+            {(hit) => (
+              <button type="button" class="backlink-row" onClick={() => props.onOpen(hit)}>
+                <Icon name={hit.kind === "note" ? "file-text" : "lightning"} size={14} />
+                <span class="backlink-title">{hit.title || hit.snippet}</span>
+                <span class="backlink-date">{formatMonthDay(hit.date)}</span>
+              </button>
+            )}
+          </For>
+        </div>
+      </details>
+    </Show>
+  );
+}
+
+/**
+ * 本文の右に並べるマップ。打鍵のたびに図を組み替えると、書いている横で
+ * 枝が跳ね続けるので、手が止まってから追いつかせる。
+ */
+function NoteMap(props: { source: () => string }): JSX.Element {
+  const source = createDebouncedAccessor(props.source, MAP_DEBOUNCE_MS);
+  return (
+    <aside class="detail-map" aria-label={t().notes.layMap}>
+      {/* マインドマップの根は H1。タイトルを外した本文を渡すと、
+          根の無い枝だけの図になる */}
+      <MindmapView source={source()} />
+    </aside>
+  );
+}
+
 export default function Workspace(): JSX.Element {
   const shell = useShell();
   const navigate = useNavigate();
@@ -97,18 +128,29 @@ export default function Workspace(): JSX.Element {
 
   const [selectedId, setSelectedId] = createSignal<string | null>(null);
   const [detailOpen, setDetailOpen] = createSignal(false);
-  const [editing, setEditing] = createSignal(false);
-  const [draft, setDraft] = createSignal("");
-  const [saveStatus, setSaveStatus] = createSignal<"idle" | "saving" | "saved">("idle");
+  const [saveStatus, setSaveStatus] = createSignal<"idle" | "saving" | "saved" | "savedAt">("idle");
+  /** 最後に保存できた時刻。「21:40 に保存」の数字。 */
+  const [savedAt, setSavedAt] = createSignal("");
   const [hidden, setHidden] = createSignal<string[]>([]);
-  /** 先頭 H1 を切り離した本文。エディタとプレビューが見るのはこちら。 */
+  /**
+   * 先頭 H1 を切り離した本文。エディタが打鍵のたびに書き戻すので、いつでも
+   * 画面に出ている本文と同じ — 読み取り専用に切り替えた瞬間のプレビューも、
+   * マップも、これを読めば直前まで打っていた本文になる。
+   */
   const [noteBody, setNoteBody] = createSignal("");
   /** 本文先頭の H1。タイトル欄が編集し、保存のたびに本文へ書き戻す。 */
   const [noteTitle, setNoteTitle] = createSignal("");
   const [noteView, setNoteView] = createSignal<NoteView>("editor");
-  /** 本文の読み込みが済んでいるノートの id。`?edit=1` の自動編集開始が待つ。 */
+  /** 本文の読み込みが済んでいるノートの id。`?edit=1` の自動フォーカスが待つ。 */
   const [loadedId, setLoadedId] = createSignal<string | null>(null);
-  /** タッチ端末のツールバーが叩く先。編集をやめると undefined に戻る。 */
+  /**
+   * 本文を外から入れ替えた回数。エディタは自分が持っている文書を正とするので、
+   * 別のノートを開いた・同期で降ってきた・編集前に戻した、のどれかで
+   * 画面の本文が変わったときは作り直すしかない(本文の差し込みは
+   * カーソル・選択・IME を壊す)。この値をキーにして作り直す。
+   */
+  const [bodyEpoch, setBodyEpoch] = createSignal(1);
+  /** タッチ端末のツールバーが叩く先。ノートを開いていない間は undefined。 */
   const [markdownEditor, setMarkdownEditor] = createSignal<Editor | undefined>();
 
   const [notes, { refetch: refetchNotes }] = createResource(loadNotes);
@@ -119,8 +161,6 @@ export default function Workspace(): JSX.Element {
   );
 
   let detailBodyRef: HTMLDivElement | undefined;
-  /** プレビューで押された場所。エディタのマウント時に一度だけ読まれる。 */
-  const [tapCaret, setTapCaret] = createSignal<CaretPoint | undefined>();
   /** いま開いている編集セッション。保存のスキップ判断とバックアップを持つ。 */
   let session = beginEditSession("");
   /** そのセッションがどのノートのものか。null なら開いていない。 */
@@ -136,6 +176,33 @@ export default function Workspace(): JSX.Element {
    * 読み直しを抑える判断がこれを読む。他の編集セッションの状態と一緒に置く。
    */
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
+  /** 「保存しました」を保存時刻の表示に落とすタイマー。 */
+  let savedTimer: ReturnType<typeof setTimeout> | undefined;
+
+  /**
+   * いま人が本文を書いている最中か。エディタは開きっぱなしなので、
+   * 「編集モードに入っているか」では区別が付かない。まだディスクに無い
+   * 打鍵があるか、本文にカーソルが入っているかで見る — どちらの場合も
+   * 本文を差し替えるとカーソル・選択・IME ごと壊す(editor skill)。
+   */
+  const isTyping = (): boolean =>
+    Boolean(saveTimer) || Boolean(detailBodyRef?.contains(document.activeElement));
+
+  /**
+   * 一覧と詳細が並んでいる幅か。狭い端末では詳細を開くまで本文は画面に無いので、
+   * そこで Milkdown を立ち上げると、一覧を見ているだけの人に ProseMirror 一式を
+   * 読ませることになる。
+   */
+  const wideEnough = globalThis.matchMedia("(min-width: 768px)");
+  const [twoPane, setTwoPane] = createSignal(wideEnough.matches);
+  const onWidthChange = (e: MediaQueryListEvent): void => {
+    setTwoPane(e.matches);
+  };
+  wideEnough.addEventListener("change", onWidthChange);
+  onCleanup(() => wideEnough.removeEventListener("change", onWidthChange));
+
+  /** 本文が実際に画面に出ているか。出ていないうちはエディタも作らない。 */
+  const bodyVisible = createMemo<boolean>(() => twoPane() || detailOpen());
 
   const visibleItems = createMemo<NoteItem[]>(() => {
     const dropped = new Set(hidden());
@@ -157,10 +224,24 @@ export default function Workspace(): JSX.Element {
   const selectedKey = createMemo<string | undefined>(() => selected()?.id);
 
   /**
+   * 画面の本文が、いま選んでいるノートのものか。選択を移してから本文が
+   * 届くまでは前のノートの題と本文が残っていて、そこへ打った字は
+   * 「前のノートの本文 + 打った字」として隣のノートへ向かう。初めて開く
+   * 相手には revision も無いので core も止められない。書く・保存する入口は
+   * 全部これを見る。
+   */
+  const loaded = (): boolean => loadedId() === selected()?.id;
+
+  /** 読むだけのノート。frontmatter の `view: preview` がそう言っている。 */
+  const readOnly = createMemo<boolean>(() => noteView() === "preview");
+  /** マップを並べているか。同じ `view` キーに `mindmap` として憶えてある。 */
+  const mapOpen = createMemo<boolean>(() => noteView() === "mindmap");
+
+  /**
    * ファイルに書く本文。タイトル欄とエディタは別々に見せているが、
    * 保存・バックアップ・マインドマップが扱うのは常に結合した全文。
    */
-  const fullBody = (): string => joinTitle(noteTitle(), editing() ? draft() : noteBody());
+  const fullBody = (): string => joinTitle(noteTitle(), noteBody());
 
   /**
    * 書き換える直前の本文でセッションを開く。開いている間は開き直さない —
@@ -192,8 +273,30 @@ export default function Workspace(): JSX.Element {
     (filename) => typedInvoke("find_backlinks", { filename }),
   );
 
-  /** ディスクから読み直して画面に出す。選択の切り替えと、外からの書き換えの後に。 */
-  const loadNote = async (item: NoteItem): Promise<void> => {
+  /**
+   * 画面に出ている本文をまるごと入れ替える。エディタは自分の文書を正とするので、
+   * ここを通ったら作り直す(`bodyEpoch`)。バラして流すと一瞬だけ違うモードで
+   * 描かれるので、題・本文・モードは 1 度に置く。
+   */
+  const showBody = (id: string, title: string, body: string, view: NoteView): void => {
+    // 「保存しました」の 2 秒は前のノートの持ち物。持ち越すと、保存していない
+    // ノートに「21:40 に保存」が出る
+    clearTimeout(savedTimer);
+    batch(() => {
+      setNoteTitle(title);
+      setNoteBody(body);
+      setNoteView(view);
+      setLoadedId(id);
+      setBodyEpoch((epoch) => epoch + 1);
+      setSaveStatus("idle");
+    });
+  };
+
+  /**
+   * ディスクから読み直して画面に出す。選択の切り替えと、外からの書き換えの後に。
+   * `force` は「打った字はもう退避してあるので、書いている最中でも譲る」の合図。
+   */
+  const loadNote = async (item: NoteItem, force = false): Promise<void> => {
     try {
       const content = await readNoteContent(
         () => typedInvoke("read_note", { filename: item.filename }),
@@ -205,27 +308,17 @@ export default function Workspace(): JSX.Element {
       // 応答を待つあいだにタップして書き始められる。
       // revision まで見送るのは、画面に出していない版で保存に行くと、
       // 読んでいない相手の本文の上に書けてしまうから
-      if (selected()?.id !== item.id || editing() || saveTimer) {
+      if (selected()?.id !== item.id || (!force && isTyping())) {
         return;
       }
       revisions.set(item.filename, content.revision);
       // 本文とモードは対で出す。バラすと一瞬だけ違うモードで描かれる
       const titled = splitTitle(content.body);
-      batch(() => {
-        setNoteTitle(titled.title);
-        setNoteBody(titled.body);
-        setNoteView(content.view);
-        setLoadedId(item.id);
-      });
+      showBody(item.id, titled.title, titled.body, content.view);
     } catch {
       // 読めないノートを選んだまま、前のノートの本文を出し続けない
       if (selected()?.id === item.id) {
-        batch(() => {
-          setNoteTitle("");
-          setNoteBody("");
-          setNoteView("editor");
-          setLoadedId(item.id);
-        });
+        showBody(item.id, "", "", "editor");
       }
     }
   };
@@ -240,33 +333,45 @@ export default function Workspace(): JSX.Element {
       // 本文のままだと、次の保存が他人のバックアップを潰す
       sessionFile = null;
       if (!item) {
-        batch(() => {
-          setNoteBody("");
-          setNoteTitle("");
-          setNoteView("editor");
-        });
+        showBody("", "", "", "editor");
         return;
       }
-      void loadNote(item);
+      // 届くまでは「まだ誰の本文でもない」。前のノートのエディタは畳み、
+      // 題も書けなくする。先に空のエディタを立てて本文と一緒に作り直す
+      // より、届いてから 1 度だけ立てるほうが軽い
+      setLoadedId(null);
+      // 別のノートを開いたのは人の意思。待っている保存は `settleEdit` が
+      // 出しきったあとなので、カーソルが本文に残っていても譲ってよい
+      void loadNote(item, true);
     }),
   );
 
-  const cycleNoteView = async (item: NoteItem): Promise<void> => {
-    // 巻き戻し先は切替前の値そのもの。3 値の輪では「次の次」が元に戻らない
+  /**
+   * 表示モードを憶えさせる。`view` は 1 つのキーなので、読み取り専用と
+   * マップは同時には立たない — 後から押したほうが残る。
+   */
+  const setView = async (item: NoteItem, next: NoteView): Promise<void> => {
     const previous = noteView();
-    const next = nextView(previous);
     // 保存を待たずに切り替える。書き込みは frontmatter が壊れたノートで
     // 失敗し得るので、そのときは表示だけ戻す
     setNoteView(next);
+    shell.closePopovers();
     try {
       await typedInvoke("set_note_view", {
         filename: item.filename,
         view: viewToFrontmatter(next),
       });
+      await refetchNotes();
     } catch {
       setNoteView(previous);
     }
   };
+
+  const toggleReadOnly = (item: NoteItem): Promise<void> =>
+    setView(item, readOnly() ? "editor" : "preview");
+
+  const toggleMap = (item: NoteItem): Promise<void> =>
+    setView(item, mapOpen() ? "editor" : "mindmap");
 
   // ---- 編集（自動保存: 1秒 debounce + 直列化）----
   let saveChain: Promise<void> = Promise.resolve();
@@ -295,7 +400,38 @@ export default function Workspace(): JSX.Element {
 
   const snapshotSave = (): PendingSave | undefined => {
     const item = selected();
-    return item ? { item, body: fullBody(), session, generation: saveGeneration } : undefined;
+    // 本文が届いていないノートには写しを取らない。画面にあるのは前のノート
+    return item && loaded()
+      ? { item, body: fullBody(), session, generation: saveGeneration }
+      : undefined;
+  };
+
+  /**
+   * 一覧の行に出る題がディスクと食い違っているか。保存が着地するたびに立て、
+   * 読み直したら下ろす。「待っている保存があるか」で代用すると、自動保存が
+   * 先に着地していたときに読み直しが飛ばされ、行だけ古い題のまま残る。
+   */
+  let listStale = false;
+
+  const refreshListIfStale = async (): Promise<void> => {
+    if (!listStale) {
+      return;
+    }
+    listStale = false;
+    await refetchNotes();
+  };
+
+  /**
+   * 保存できた合図。緑の「保存しました」を出しっぱなしにすると、書いている
+   * あいだじゅう視界の端が光る。2 秒だけ出して、あとは時刻に落ち着かせる。
+   */
+  const markSaved = (): void => {
+    clearTimeout(savedTimer);
+    batch(() => {
+      setSavedAt(formatClock(new Date()));
+      setSaveStatus("saved");
+    });
+    savedTimer = setTimeout(() => setSaveStatus("savedAt"), SAVED_MS);
   };
 
   /**
@@ -315,9 +451,8 @@ export default function Workspace(): JSX.Element {
       saveTimer = undefined;
     }
     if (selected()?.id === pending.item.id) {
-      setEditing(false);
       sessionFile = null;
-      await loadNote(pending.item);
+      await loadNote(pending.item, true);
     }
     await refetchNotes();
     shell.showToast(t().notes.editedElsewhere);
@@ -336,7 +471,13 @@ export default function Workspace(): JSX.Element {
       ) {
         return;
       }
-      setSaveStatus("saving");
+      // 保存の様子はそのノートの持ち物。書き込みが遅い端末では、隣へ移った
+      // あとに着地することがあり、そのまま出すと開いたばかりのノートが
+      // 「保存しました」と言う。画面に出ているノートの保存のときだけ出す
+      const shown = (): boolean => selected()?.id === pending.item.id;
+      if (shown()) {
+        setSaveStatus("saving");
+      }
       try {
         const revision = await typedInvoke("update_draft", {
           filePath: pending.item.path,
@@ -348,10 +489,15 @@ export default function Workspace(): JSX.Element {
         recordSaved(localStorage, pending.item.filename, pending.session, pending.body);
         // 一覧はここでは読み直さない。1 秒おきの保存のたびに全ノートを
         // 読み直すのは低スペック端末に重く、編集中は一覧が見えてもいない。
-        // 編集を終えるときに 1 回だけ読み直す。
-        setSaveStatus("saved");
+        // 書く手が止まったときに 1 回だけ読み直す。
+        listStale = true;
+        if (shown()) {
+          markSaved();
+        }
       } catch (error) {
-        setSaveStatus("idle");
+        if (shown()) {
+          setSaveStatus("idle");
+        }
         if (isStaleSave(error)) {
           await yieldToOutsideEdit(pending);
         }
@@ -375,6 +521,7 @@ export default function Workspace(): JSX.Element {
   };
 
   onCleanup(() => {
+    clearTimeout(savedTimer);
     if (saveTimer) {
       clearTimeout(saveTimer);
       void flushSave();
@@ -392,12 +539,12 @@ export default function Workspace(): JSX.Element {
         // 一覧を取り直しただけでは、開いたままのノートは古い本文を出し続ける。
         // 同期で降ってきた版をここで読み直す。読むだけで、書き戻しはしない
         const item = selected();
-        // エディタが開いている間は絶対に触らない。本文の差し替えは
-        // カーソル・選択・スクロール・IME の状態ごと壊す(editor skill)。
-        // 待っている保存があるときも同じ — タイトル欄に打った字はまだ
-        // ディスクに無いので、読み直せばそれを捨てることになる。
+        // 書いている最中は絶対に触らない。本文の差し替えはカーソル・選択・
+        // スクロール・IME の状態ごと壊す(editor skill)。待っている保存が
+        // あるときも同じ — 打った字はまだディスクに無いので、読み直せば
+        // それを捨てることになる。
         // どちらも次の Step(ファイル監視)でトーストを出して人に決めさせる
-        if (item && !editing() && !saveTimer) {
+        if (item && !isTyping()) {
           void loadNote(item);
         }
       },
@@ -405,30 +552,24 @@ export default function Workspace(): JSX.Element {
     ),
   );
 
-  const stopEditing = async (): Promise<void> => {
+  /**
+   * 待っている保存を出しきってから離れる。選択を動かす手前で必ず通す道。
+   * 出しきらずに移ると `fullBody()` が「次のノートの題 + 前のノートの本文」に
+   * なり、次の保存がその混ぜ物を隣のノートへ書き込む。読み直しが
+   * `revisions` を更新済みなので Stale でも止まらない。
+   * 何も保存していないなら一覧も読み直さない — 行に出る題は変わっていない。
+   */
+  const settleEdit = async (): Promise<void> => {
+    // 次に書き始めるときは新しいセッション。戻る先が 1 段ずつ進む
+    sessionFile = null;
     if (saveTimer) {
       clearTimeout(saveTimer);
       saveTimer = undefined;
+      await flushSave();
     }
-    await flushSave();
-    // 書き終えた本文が真実。読み直しを待ってからプレビューを出すと
-    // 一瞬だけ編集前の本文が見える
-    setNoteBody(draft());
-    setEditing(false);
-    // 次に書き始めるときは新しいセッション。戻る先が 1 段ずつ進む
-    sessionFile = null;
-    await refetchNotes();
+    // 行に出る題は本文の先頭行から導かれる。読み直さないと一覧だけ古い題のまま
+    await refreshListIfStale();
   };
-
-  /**
-   * 開いている編集を畳んでから戻る。選択を動かす手前で必ず通す道。
-   * 畳まずに移ると `fullBody()` が「次のノートの題 + 前のノートの本文」に
-   * なり、次の保存がその混ぜ物を隣のノートへ書き込む。読み直しが
-   * `revisions` を更新済みなので Stale でも止まらない。
-   * 編集していないときに `stopEditing` を呼ばないのは、あれが `draft()` を
-   * 本文に据えるから — 開いていない draft は前のノートのものだ。
-   */
-  const settleEdit = (): Promise<void> => (editing() ? stopEditing() : Promise.resolve());
 
   /**
    * 選択を差し替える唯一の入口。一覧のタップ・ウィジェットの `?file=`・
@@ -468,22 +609,18 @@ export default function Workspace(): JSX.Element {
     ),
   );
 
-  const startEditing = (point?: CaretPoint): void => {
-    if (!selected()) {
-      return;
-    }
-    ensureSession();
-    setTapCaret(point);
-    setDraft(noteBody());
-    setSaveStatus("idle");
-    setEditing(true);
+  /** 本文にカーソルを置く。昇格直後のノートを、そのまま書ける形で渡す。 */
+  const focusBody = (): void => {
+    detailBodyRef?.querySelector<HTMLElement>(".ProseMirror")?.focus();
   };
 
   /**
    * タイトルは本文先頭の H1 そのもの。打つたびに本文と同じ自動保存に乗せる。
-   * 編集モードに入らないのは、エディタが持つのはタイトルを除いた本文だから。
    */
   const editTitle = (value: string): void => {
+    if (!loaded()) {
+      return;
+    }
     ensureSession();
     setNoteTitle(value);
     scheduleSave();
@@ -500,38 +637,19 @@ export default function Workspace(): JSX.Element {
       saveTimer = undefined;
     }
     await flushSave();
-    await refetchNotes();
+    await refreshListIfStale();
   };
 
-  /** プレビューのどこを押しても、その場所から書き始められる。 */
-  const onPreviewClick = (e: MouseEvent): void => {
-    if (editing() || !selected()) {
-      return;
-    }
+  /**
+   * ノートリンクはこのアプリの中で解決する。href を持たない `a` なので、
+   * 読むだけのノートでもマップでも、押されたことをここで拾って開く。
+   */
+  const onBodyClick = (e: MouseEvent): void => {
     const target = e.target instanceof Element ? e.target : null;
-    // ノートリンクはこのアプリの中で解決する。href の無い a なので自前で開く。
-    // 表示モードの手前で見るのは、リンクを辿るのは読む操作であって
-    // 書き始める操作ではないから — マインドマップでも踏める
     const noteLink = target?.closest("a.note-link");
     if (noteLink instanceof HTMLElement && noteLink.dataset.file) {
       void switchTo(noteLink.dataset.file);
-      return;
     }
-    // リンクは踏める・図はズームのまま・道具は道具のまま・バックリンク欄は
-    // 一覧のまま。編集に化けさせない
-    if (target?.closest("a, button, .mermaid-block, .mermaid-zoom, .preview-tools, .backlinks")) {
-      return;
-    }
-    // 書けるのはエディタ表示のときだけ。ここから下は編集を始める話になる
-    if (noteView() !== "editor") {
-      return;
-    }
-    // 本文をなぞってコピーしたいだけのときも編集へ切り替えない
-    const selection = document.getSelection();
-    if (selection && !selection.isCollapsed) {
-      return;
-    }
-    startEditing({ x: e.clientX, y: e.clientY, scrollTop: detailBodyRef?.scrollTop ?? 0 });
   };
 
   /**
@@ -541,8 +659,15 @@ export default function Workspace(): JSX.Element {
   const revertEdit = async (item: NoteItem): Promise<void> => {
     const backup = readBackup(localStorage, item.filename);
     const current = fullBody();
-    if (backup === null || backup === current) {
+    // 届く前の画面の本文は前のノートのもの。それを控えに回してはいけない
+    if (!loaded() || backup === null || backup === current) {
       return;
+    }
+    // 待っている保存は捨てる。いま画面にある本文はこれから控えに回るので、
+    // 同じものをもう一度ディスクへ書きに行く意味がない
+    if (saveTimer) {
+      clearTimeout(saveTimer);
+      saveTimer = undefined;
     }
     try {
       const revision = await typedInvoke("update_draft", {
@@ -565,17 +690,15 @@ export default function Workspace(): JSX.Element {
     session.committed = true;
     sessionFile = item.filename;
     const titled = splitTitle(backup);
-    batch(() => {
-      setNoteTitle(titled.title);
-      setNoteBody(titled.body);
-    });
+    // エディタごと作り直す。差し込みでは戻した本文が画面に出ない
+    showBody(item.id, titled.title, titled.body, noteView());
     shell.closePopovers();
     await refetchNotes();
     shell.showToast(t().notes.reverted);
   };
 
-  // タイムラインからの昇格 (?edit=1) は、本文が届き次第そのまま書き始める。
-  // パラメータは消費したら消す — 再読み込みのたびに編集へ放り込まない
+  // タイムラインからの昇格 (?edit=1) は、本文が届き次第そのまま書ける形で渡す。
+  // パラメータは消費したら消す — 再読み込みのたびにカーソルを奪わない
   createEffect(() => {
     if (searchParams.edit !== "1") {
       return;
@@ -584,24 +707,76 @@ export default function Workspace(): JSX.Element {
     if (!item || item.filename !== searchParams.file || loadedId() !== item.id) {
       return;
     }
-    // 読み取り専用にしたノートは、リンクで叩かれても開くだけ。昇格直後の
+    // 読み取り専用にしたノートには本文欄そのものが無い。昇格直後の
     // ノートは view を持たないので実害は無いが、経路として塞いでおく
-    if (noteView() === "preview") {
+    if (readOnly()) {
       setSearchParams({ edit: undefined }, { replace: true });
       return;
     }
-    startEditing();
+    // 本文が届いた時点では、まだ置く先が無い。エディタは lazy に読まれ、
+    // ProseMirror の DOM は create の後にしか現れない。本文と一緒に作り
+    // 直されるので(`bodyEpoch`)、ここで見えるのは今の本文のエディタだけ
+    if (!markdownEditor()) {
+      return;
+    }
+    focusBody();
     setSearchParams({ edit: undefined }, { replace: true });
   });
 
   const revertable = createMemo<boolean>(() => {
     const item = selected();
-    // 編集中に戻すと、開いているエディタが次の自動保存で復元を上書きする
-    if (!item || editing()) {
+    if (!item) {
       return false;
     }
     const backup = readBackup(localStorage, item.filename);
     return backup !== null && backup !== fullBody();
+  });
+
+  /**
+   * 開いているノートに効くキー。受けるのがここなのは、対象が「いま選んで
+   * いる 1 件」だから — AppLayout の表はどの画面でも同じ意味を持つものだけ。
+   *
+   * エディタに先を譲る(`defaultPrevented`)のは、⌘I が斜体、⌘⇧Z がやり直しに
+   * 割り当たっているから。書いている最中はそちらが正しい。
+   *
+   * ⌘↑ / ⌘↓(文頭・文末へ)と入力欄の ⌘⇧Z(打ち直し)はブラウザ既定の動きで、
+   * 誰も preventDefault しない。こちらはカーソルが文字の中にあるかで見分ける。
+   */
+  onMount(() => {
+    const onKeyDown = (e: KeyboardEvent): void => {
+      const item = selected();
+      if (!item || e.defaultPrevented) {
+        return;
+      }
+      const typing = isTypingTarget(e.target);
+      const step = matchesShortcut(e, "notePrev") ? -1 : Number(matchesShortcut(e, "noteNext"));
+      if (step !== 0) {
+        if (typing) {
+          return;
+        }
+        const next = stepNote(visibleItems(), item.id, step);
+        if (next) {
+          e.preventDefault();
+          void switchTo(next);
+        }
+        return;
+      }
+      if (matchesShortcut(e, "noteActions")) {
+        e.preventDefault();
+        shell.togglePopover("note-menu");
+      } else if (matchesShortcut(e, "noteMap")) {
+        e.preventDefault();
+        void toggleMap(item);
+      } else if (matchesShortcut(e, "noteRevert") && !typing) {
+        e.preventDefault();
+        void revertEdit(item);
+      } else if (matchesShortcut(e, "noteInfo")) {
+        e.preventDefault();
+        shell.togglePopover("note-meta");
+      }
+    };
+    globalThis.addEventListener("keydown", onKeyDown);
+    onCleanup(() => globalThis.removeEventListener("keydown", onKeyDown));
   });
 
   const createNote = async (): Promise<void> => {
@@ -661,10 +836,10 @@ export default function Workspace(): JSX.Element {
     // 何もしないと削除のたびに最上段へ飛ばされる。隣なら目線は動かない。
     // detailOpen は触らない — 今まで通り、端末が狭ければ隣を開いたままにする
     const neighbor = neighborOf(visibleItems(), item.id);
+    shell.closePopovers();
     batch(() => {
       setHidden((ids) => [...ids, item.id]);
       setSelectedId(neighbor);
-      setEditing(false);
     });
 
     const commit = setTimeout(() => {
@@ -773,87 +948,118 @@ export default function Workspace(): JSX.Element {
         </div>
       </div>
 
-      <div class="detail-pane">
+      <div class="detail-pane" classList={{ "detail-pane--map": mapOpen() }}>
         <Show when={selected()} fallback={<div class="detail-empty">{t().notes.noSelection}</div>}>
           {(item) => (
             <>
-              <div class="detail-meta-bar">
-                <button
-                  type="button"
-                  class="icon-button detail-back"
-                  aria-label={t().notes.backToList}
-                  onClick={() => {
-                    // 編集したまま戻ると、一覧の上にツールバーだけが残る。
-                    // 見えなくなった編集対象に効くボタンが浮いていることになる。
-                    void stopEditing();
-                    setDetailOpen(false);
-                  }}
-                >
-                  <Icon name="arrow-left" size={18} />
-                </button>
-                <span class="detail-meta">
-                  {/* ファイル名は同期やウィジェットが指す ID であって人に見せる
-                      ものではない。人が読むのは作成日時 */}
-                  <span class="detail-created">{noteCreatedLabel(item())}</span>
-                  <Show when={editing() && saveStatus() !== "idle"}>
-                    <span class="detail-save-status">
-                      {saveStatus() === "saving" ? t().common.saving : t().common.saved}
-                    </span>
-                  </Show>
-                </span>
-
-                <div class="detail-actions">
-                  {/* 表示モードは 1 つのボタンで一巡する。押したら何になるかを
-                      出すので、on/off を表す aria-pressed は当てはまらない */}
-                  <Show when={!editing()}>
-                    <button
-                      type="button"
-                      class="icon-button"
-                      title={t().notes[VIEW_BUTTON[nextView(noteView())].label]}
-                      aria-label={t().notes[VIEW_BUTTON[nextView(noteView())].label]}
-                      onClick={() => {
-                        void cycleNoteView(item());
-                      }}
-                    >
-                      <Icon name={VIEW_BUTTON[nextView(noteView())].icon} size={17} />
-                    </button>
-                  </Show>
+              {/* 題・記録・操作をひとまとまりに。本文と同じ段に置くので、
+                  ノートについて知りたいことを離れた場所で探さなくていい */}
+              <div class="detail-head">
+                <div class="detail-title-row">
                   <button
                     type="button"
-                    class="icon-button detail-meta-button"
-                    title={t().notes.info}
-                    aria-label={t().notes.info}
-                    aria-expanded={shell.popover() === "note-meta"}
-                    onClick={() => shell.togglePopover("note-meta")}
-                  >
-                    <Icon name="info" size={17} />
-                  </button>
-                  {/* 編集の入り口は本文タップ。鉛筆は出口だけ残す */}
-                  <Show when={editing()}>
-                    <button
-                      type="button"
-                      class="icon-button"
-                      title={t().notes.finishEditing}
-                      aria-label={t().notes.finishEditing}
-                      onClick={() => {
-                        void stopEditing();
-                      }}
-                    >
-                      <Icon name="check" size={17} />
-                    </button>
-                  </Show>
-                  <button
-                    type="button"
-                    class="icon-button"
-                    title={t().common.delete}
-                    aria-label={t().common.delete}
+                    class="icon-button detail-back"
+                    aria-label={t().notes.backToList}
                     onClick={() => {
-                      void remove(item());
+                      void settleEdit();
+                      setDetailOpen(false);
                     }}
                   >
-                    <Icon name="trash" size={17} />
+                    <Icon name="arrow-left" size={18} />
+                  </button>
+
+                  {/* タイトルは本文先頭の H1 そのもの。ここで打ったものが
+                      `# 見出し` として本文に書き戻る(`note-title.ts`)ので、
+                      エディタとプレビューはタイトル行を持たない */}
+                  <input
+                    type="text"
+                    class="note-title-input"
+                    placeholder={t().notes.titlePlaceholder}
+                    aria-label={t().notes.titlePlaceholder}
+                    value={noteTitle()}
+                    // 読み取り専用のノートは題も動かない。disabled にしないのは
+                    // 読めなくなるから — 選んでコピーはできたままにする。
+                    // 本文が届くまでも動かない(まだ前のノートの題が出ている)
+                    readOnly={readOnly() || !loaded()}
+                    onInput={(e) => editTitle(e.currentTarget.value)}
+                    onChange={() => {
+                      void commitTitle();
+                    }}
+                    onKeyDown={(e) => {
+                      // 変換確定の Enter は IME のもの (#102)
+                      if (e.key === "Enter" && !isImeComposing(e)) {
+                        e.preventDefault();
+                        focusBody();
+                      }
+                    }}
+                  />
+
+                  {/* ノート単位の操作はここ 1 つに畳む。どれも滅多に押さない */}
+                  <button
+                    type="button"
+                    class="icon-button note-menu-button"
+                    title={t().notes.actions}
+                    aria-label={t().notes.actions}
+                    aria-expanded={shell.popover() === "note-menu"}
+                    data-key={shortcutLabel("noteActions")}
+                    onClick={() => shell.togglePopover("note-menu")}
+                  >
+                    <Icon name="dots-three" size={17} />
                   </button>
                 </div>
+
+                {/* 作成日時・保存の様子・タグを 1 行で。ファイル名は同期や
+                    ウィジェットが指す ID であって、人に見せるものではない */}
+                <div class="detail-meta-line">
+                  <span>{noteCreatedLabel(item())}</span>
+                  <Show when={saveStatus() !== "idle"}>
+                    <span class="detail-meta-sep" aria-hidden="true">
+                      ·
+                    </span>
+                    <span class="detail-save-status" data-status={saveStatus()}>
+                      <Show when={saveStatus() === "saving"}>
+                        <Icon name="circle-notch" size={11} />
+                      </Show>
+                      <Show when={saveStatus() === "saved"}>
+                        <Icon name="check" size={11} />
+                      </Show>
+                      {saveStatus() === "saving" ? t().common.saving : null}
+                      {saveStatus() === "saved" ? t().common.saved : null}
+                      {saveStatus() === "savedAt" ? t().notes.savedAt(savedAt()) : null}
+                    </span>
+                  </Show>
+                  <Show when={item().tags.length > 0}>
+                    <span class="detail-meta-sep" aria-hidden="true">
+                      ·
+                    </span>
+                    <span class="detail-meta-tags">
+                      {item()
+                        .tags.map((tag) => `#${tag}`)
+                        .join(" ")}
+                    </span>
+                  </Show>
+                </div>
+
+                <Show when={shell.popover() === "note-menu"}>
+                  <NoteMenu
+                    mapOpen={mapOpen()}
+                    readOnly={readOnly()}
+                    revertable={revertable()}
+                    onToggleMap={() => {
+                      void toggleMap(item());
+                    }}
+                    onToggleReadOnly={() => {
+                      void toggleReadOnly(item());
+                    }}
+                    onRevert={() => {
+                      void revertEdit(item());
+                    }}
+                    onInfo={() => shell.togglePopover("note-meta")}
+                    onDelete={() => {
+                      void remove(item());
+                    }}
+                  />
+                </Show>
               </div>
 
               <Show when={shell.popover() === "note-meta"}>
@@ -870,103 +1076,62 @@ export default function Workspace(): JSX.Element {
                 />
               </Show>
 
-              {/* タイトルは本文先頭の H1 そのもの。ここで打ったものが
-                  `# 見出し` として本文に書き戻る(`note-title.ts`)ので、
-                  エディタとプレビューはタイトル行を持たない */}
-              <input
-                type="text"
-                class="note-title-input"
-                placeholder={t().notes.titlePlaceholder}
-                aria-label={t().notes.titlePlaceholder}
-                value={noteTitle()}
-                // 読み取り専用のノートは題も動かない。disabled にしないのは
-                // 読めなくなるから — 選んでコピーはできたままにする
-                readOnly={noteView() === "preview"}
-                onInput={(e) => editTitle(e.currentTarget.value)}
-                onChange={() => {
-                  void commitTitle();
-                }}
-                onKeyDown={(e) => {
-                  // 変換確定の Enter は IME のもの (#102)
-                  if (e.key === "Enter" && !isImeComposing(e)) {
-                    e.preventDefault();
-                    if (noteView() !== "preview") {
-                      startEditing();
-                    }
-                  }
-                }}
-              />
-
-              {/* biome-ignore/eslint 対応: タップは編集開始の補助経路で、
-                  同じ操作はキーボードでは編集終了ボタンと Tab 移動で賄える */}
-              <div
-                class="detail-body"
-                data-view={noteView()}
-                ref={detailBodyRef}
-                role="presentation"
-                onClick={onPreviewClick}
-              >
-                <Show
-                  when={editing()}
-                  fallback={
-                    <Show
-                      when={noteView() === "mindmap"}
-                      fallback={
-                        <>
-                          <MarkdownPreview
-                            source={noteBody()}
-                            noteTitles={noteTitles()}
-                            glyphs={glyphs()}
-                            exportStem={selected()?.filename.replace(/\.md$/u, "")}
-                            onError={(message) => shell.showToast(message)}
-                          />
-                          {/* このノートを指している記録。畳んだ 1 行以上の場所は取らない */}
-                          <Show when={(backlinks() ?? []).length > 0}>
-                            <details class="backlinks">
-                              <summary class="backlinks-summary">
-                                {t().notes.backlinks((backlinks() ?? []).length)}
-                              </summary>
-                              <div class="backlinks-list">
-                                <For each={backlinks()}>
-                                  {(hit) => (
-                                    <button
-                                      type="button"
-                                      class="backlink-row"
-                                      onClick={() => openBacklink(hit)}
-                                    >
-                                      <Icon
-                                        name={hit.kind === "note" ? "file-text" : "lightning"}
-                                        size={14}
-                                      />
-                                      <span class="backlink-title">{hit.title || hit.snippet}</span>
-                                      <span class="backlink-date">{formatMonthDay(hit.date)}</span>
-                                    </button>
-                                  )}
-                                </For>
-                              </div>
-                            </details>
-                          </Show>
-                        </>
-                      }
-                    >
-                      {/* マインドマップの根は H1。タイトルを外した本文を
-                          渡すと、根の無い枝だけの図になる */}
-                      <MindmapView source={fullBody()} />
-                    </Show>
-                  }
+              <div class="detail-panes" classList={{ "detail-panes--map": mapOpen() }}>
+                {/* biome-ignore/eslint 対応: ここで拾うのは href の無い
+                    ノートリンクだけ。書く操作はエディタ自身が受ける */}
+                <div
+                  class="detail-body"
+                  data-view={noteView()}
+                  ref={detailBodyRef}
+                  role="presentation"
+                  onClick={onBodyClick}
                 >
-                  <MilkdownEditor
-                    placeholder={t().notes.bodyPlaceholder}
-                    caret={tapCaret()}
-                    noteLinks={linkTargets}
-                    glyphs={glyphs}
-                    defaultValue={draft()}
-                    onChange={(markdown) => {
-                      setDraft(markdown);
-                      scheduleSave();
-                    }}
-                    onEditorReady={setMarkdownEditor}
-                  />
+                  <Show
+                    when={!readOnly()}
+                    fallback={
+                      <>
+                        <MarkdownPreview
+                          source={noteBody()}
+                          noteTitles={noteTitles()}
+                          glyphs={glyphs()}
+                          exportStem={item().filename.replace(/\.md$/u, "")}
+                          onError={(message) => shell.showToast(message)}
+                        />
+                        <Backlinks hits={backlinks() ?? []} onOpen={openBacklink} />
+                      </>
+                    }
+                  >
+                    {/* エディタは自分の文書を正とするので、本文が入れ替わったら
+                        作り直す。差し込みはカーソルと IME ごと壊す。
+                        本文が届くまでは立てない — 前のノートの本文で立てた
+                        エディタに打った字は、隣のノートへ書かれる */}
+                    <Show when={bodyVisible() && loaded() && bodyEpoch()} keyed>
+                      <MilkdownEditor
+                        placeholder={t().notes.bodyPlaceholder}
+                        noteLinks={linkTargets}
+                        glyphs={glyphs}
+                        defaultValue={noteBody()}
+                        onChange={(markdown) => {
+                          if (!loaded()) {
+                            return;
+                          }
+                          ensureSession();
+                          setNoteBody(markdown);
+                          scheduleSave();
+                        }}
+                        onEditorReady={setMarkdownEditor}
+                      />
+                    </Show>
+                    <Backlinks hits={backlinks() ?? []} onOpen={openBacklink} />
+                  </Show>
+                </div>
+
+                {/* マップは本文を置き換えず、隣に並べる。1100px を切ると
+                    並べる幅が無いので、そこだけ本文と入れ替わる(CSS 側) */}
+                {/* 本文が丸ごと入れ替わったとき(`bodyEpoch`)は待たずに描き直す。
+                    待たせると前のノートの図が 1 拍残る */}
+                <Show when={mapOpen() && bodyEpoch()} keyed>
+                  <NoteMap source={fullBody} />
                 </Show>
               </div>
             </>

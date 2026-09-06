@@ -31,6 +31,14 @@ describe("shortcutLabel", () => {
     expect(shortcutLabel("settings")).toBe("⌘,");
   });
 
+  // 大文字にするだけでは「ARROWUP」になる。矢印は矢印で出す
+  it("draws the arrows rather than naming them", () => {
+    setUserAgent(MAC);
+
+    expect(shortcutLabel("notePrev")).toBe("⌘↑");
+    expect(shortcutLabel("noteNext")).toBe("⌘↓");
+  });
+
   it("spells the modifier out everywhere else", () => {
     setUserAgent(WINDOWS);
 

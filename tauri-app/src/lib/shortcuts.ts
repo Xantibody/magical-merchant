@@ -22,7 +22,21 @@ const SHORTCUTS = {
   notes: { key: "2" },
   syncNow: { key: "s", shift: true },
   settings: { key: "," },
+  // 開いているノートに効くもの。受けるのは Workspace で、押せるのは
+  // ノートを 1 件開いているあいだだけ
+  noteActions: { key: "." },
+  noteMap: { key: "m", shift: true },
+  noteRevert: { key: "z", shift: true },
+  noteInfo: { key: "i" },
+  notePrev: { key: "arrowup" },
+  noteNext: { key: "arrowdown" },
 } as const satisfies Record<string, Shortcut>;
+
+/** 矢印キーは名前をそのまま出しても読めない。札に出すのはこの綴り。 */
+const PRINTED: Partial<Record<string, string>> = {
+  arrowup: "↑",
+  arrowdown: "↓",
+};
 
 export type ShortcutName = keyof typeof SHORTCUTS;
 
@@ -40,7 +54,7 @@ export function modifierLabel(): string {
 /** `⌘⇧S` / `Ctrl+Shift+S`。 */
 export function shortcutLabel(name: ShortcutName): string {
   const { key, shift = false } = SHORTCUTS[name] as Shortcut;
-  const printed = key.toUpperCase();
+  const printed = PRINTED[key] ?? key.toUpperCase();
   return isMacDesktop()
     ? `⌘${shift ? "⇧" : ""}${printed}`
     : `Ctrl+${shift ? "Shift+" : ""}${printed}`;
