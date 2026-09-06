@@ -222,7 +222,7 @@ describe("itemTitle", () => {
 describe("noteCreatedLabel", () => {
   it("shows the creation time instead of the filename", () => {
     const [item] = toNoteItems([note({ time: "2026-05-03T15:39:45+09:00" })]);
-    expect(noteCreatedLabel(item)).toBe("2026/05/03 15:39");
+    expect(noteCreatedLabel(item)).toBe("2026年5月3日 15:39");
   });
 
   it("stays empty when the frontmatter had no readable time", () => {

@@ -38,11 +38,13 @@ ready to record the moment it opens (widgets exist for exactly this).
 - **Bottom tabs** (mobile): Timeline / Notes / Settings
 - **Timeline**: single-column day-grouped journal, time rail, tag filter chips,
   floating capture dock; in-place entry editing; select-mode bulk delete
-- **Notes (Workspace)**: list pane + detail pane; mobile shows one pane at a
-  time (`workspace--detail`); title field above the body (it _is_ the body's
-  leading `# heading`); Milkdown editor is lazy-loaded on first edit;
-  per-note view via frontmatter `view` (`mindmap` / `preview`, one cycle
-  button in the detail header; absent means the editable default)
+- **Notes (Workspace)**: list pane (one line per note) + detail pane; mobile
+  shows one pane at a time (`workspace--detail`); title field above the body
+  (it _is_ the body's leading `# heading`), then a meta line of created time /
+  save state / tags. **There is no edit mode** — the Milkdown editor is open
+  from the moment a note is; frontmatter `view` decides the exception
+  (`preview` = read-only, `mindmap` = map laid alongside, absent = editable).
+  Rare per-note actions live behind one `…` menu (`components/NoteMenu.tsx`)
 - **Command palette** (⌘K): in-memory commands + debounced `search_all`
 - **Language**: Japanese and English only, from one table (`lib/i18n.ts`).
   Every user-visible string goes through `t()`; the choice lives in Settings

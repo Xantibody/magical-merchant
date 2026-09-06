@@ -239,13 +239,30 @@ export function groupNotes(items: NoteItem[], today: Date): ItemGroup[] {
 }
 
 /**
- * 詳細ヘッダの作成日時。「2026/05/03 15:39」
+ * タイトル直下に出す作成日時。「2026年9月5日 21:14」
  * ファイル名は同期やウィジェットが指す不変の ID であって、人に見せる
  * ものではない。人が読むのはこちら。
  */
 export function noteCreatedLabel(item: NoteItem): string {
-  const date = item.date.replaceAll("-", "/");
-  return [date, item.time].filter(Boolean).join(" ");
+  const date = parseIsoDate(item.date);
+  if (!date) {
+    return item.time;
+  }
+  const day = t().day.fullDate(date.getFullYear(), date.getMonth() + 1, date.getDate());
+  return [day, item.time].filter(Boolean).join(" ");
+}
+
+/**
+ * 一覧の並びで 1 つ前(-1)/後ろ(+1)のノート。端では動かない —
+ * キーで送っているうちに知らないノートへ回り込むほうが分かりにくい。
+ */
+export function stepNote(
+  items: NoteItem[],
+  id: string | undefined,
+  step: number,
+): string | undefined {
+  const index = items.findIndex((item) => item.id === id);
+  return index === -1 ? undefined : items[index + step]?.id;
 }
 
 /**

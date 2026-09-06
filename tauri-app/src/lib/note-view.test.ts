@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { nextView, readNoteContent, resolveNoteView, viewToFrontmatter } from "./note-view";
+import { readNoteContent, resolveNoteView, viewToFrontmatter } from "./note-view";
 
 describe("resolveNoteView", () => {
   it("view キーが無いノートはエディタ表示", () => {
@@ -16,14 +16,6 @@ describe("resolveNoteView", () => {
 
   it("知らない値はエディタ表示に倒す(新しい版のアプリが書いたノートかもしれない)", () => {
     expect(resolveNoteView("kanban")).toBe("editor");
-  });
-});
-
-describe("nextView", () => {
-  it("ボタン 1 つで エディタ → マインドマップ → プレビュー と一巡する", () => {
-    expect(nextView("editor")).toBe("mindmap");
-    expect(nextView("mindmap")).toBe("preview");
-    expect(nextView("preview")).toBe("editor");
   });
 });
 

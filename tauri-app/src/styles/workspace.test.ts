@@ -144,18 +144,13 @@ describe("note body: preview and editor draw the same page", () => {
     expect(edited).toStrictEqual(previewed);
   });
 
-  // `view: preview` のノートは同じ MarkdownPreview を読むだけの姿で出す。
-  // 変わるのは「押せば書ける」の合図だけで、字の置き場は 1px も動かない
-  it("draws a read-only note exactly where the editable preview drew it", async () => {
+  // `view: preview` のノートは MarkdownPreview を読むだけの姿で出す。
+  // 押しても書き始まらないので、書けるという合図の I ビームは出さない
+  it("gives a read-only note no I-beam", async () => {
     await page.viewport(1280, 800);
-    const editable = measureBlocks(preview(bodyBlocks("shiki")));
-    const editableCursor = getComputedStyle(element(".markdown-preview")).cursor;
-    const readOnly = measureBlocks(preview(bodyBlocks("shiki")), "preview");
-    const readOnlyCursor = getComputedStyle(element(".markdown-preview")).cursor;
+    mountDetail(preview(bodyBlocks("shiki")), "preview");
 
-    expect(readOnly).toStrictEqual(editable);
-    expect(editableCursor).toBe("text");
-    expect(readOnlyCursor).toBe("default");
+    expect(getComputedStyle(element(".markdown-preview")).cursor).toBe("default");
   });
 
   // mermaid はカーソルが離れている間、エディタでもソースを隠して図だけを見せる。
@@ -299,5 +294,62 @@ describe("note body: preview and editor draw the same page", () => {
     expect(element(".ProseMirror", body).getBoundingClientRect().height).toBeGreaterThanOrEqual(
       inner - 0.5,
     );
+  });
+});
+
+describe("note head: the title column follows the body", () => {
+  beforeAll(async () => {
+    await import("../index.css");
+    await import("./workspace.css");
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  function mountHead(mapOpen: boolean): { head: HTMLElement; body: HTMLElement } {
+    const flag = mapOpen ? "--map" : "";
+    document.body.innerHTML = `
+      <div class="app">
+        <header class="header">header</header>
+        <main class="app-main">
+          <div class="workspace">
+            <div class="list-pane"></div>
+            <div class="detail-pane detail-pane${flag}">
+              <div class="detail-head"><input class="note-title-input" value="題" /></div>
+              <div class="detail-panes detail-panes${flag}">
+                <div class="detail-body"><div class="markdown-preview"><p>本文</p></div></div>
+                ${mapOpen ? '<aside class="detail-map"></aside>' : ""}
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>`;
+    return { head: element(".detail-head"), body: element(".detail-body") };
+  }
+
+  const centerOf = (el: HTMLElement): number => {
+    const rect = el.getBoundingClientRect();
+    return round(rect.left + rect.width / 2);
+  };
+
+  // マップを右に並べると本文の列は左へ寄る。題だけペイン全幅の中央に残ると、
+  // 題と本文の左端が揃わない
+  it.each([
+    ["without the map", false],
+    ["with the map alongside", true],
+  ])("centers the head over the body column (%s)", async (_name, mapOpen) => {
+    await page.viewport(1280, 800);
+    const { head, body } = mountHead(mapOpen);
+
+    expect(centerOf(head)).toBe(centerOf(body));
+  });
+
+  // 並べる幅が無いところではマップが本文と入れ替わる。題は再びペイン全幅の中央
+  it("centers the head over the whole pane once the map replaces the body", async () => {
+    await page.viewport(1000, 800);
+    const { head } = mountHead(true);
+
+    expect(centerOf(head)).toBe(centerOf(element(".detail-pane")));
   });
 });

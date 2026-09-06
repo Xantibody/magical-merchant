@@ -3,24 +3,57 @@ import { render, screen, fireEvent, cleanup, waitFor } from "@solidjs/testing-li
 import { mockIPC, mockWindows, clearMocks } from "@tauri-apps/api/mocks";
 import { page } from "vitest/browser";
 import { MemoryRouter, Route, useNavigate } from "@solidjs/router";
+import { createEffect, onCleanup } from "solid-js";
 import type { JSX } from "solid-js";
+import type { Editor } from "@milkdown/kit/core";
 import { ShellProvider, useShell } from "../lib/shell";
 import type { Shell } from "../lib/shell";
 import Workspace from "./Workspace";
 
 // 本物の Milkdown は ProseMirror 一式を連れてくる。ここで見たいのは
 // 「どのノートに何を書くか」という判断だけなので、開いているという事実と
-// 打鍵の入り口だけを持つ板に差し替える
+// 打鍵の入り口だけを持つ板に差し替える。`.ProseMirror` と contenteditable は
+// 本物と揃える — 「いま書いている最中か」の判断がカーソルの居場所を見る。
+// 立ち上がりも本物と同じく 1 拍遅れる。マウントした瞬間には ProseMirror も
+// onEditorReady も無く、それを待たずに置いたカーソルは空を切る
 let typeInEditor: ((markdown: string) => void) | undefined;
 vi.mock(import("../components/MilkdownEditor"), () => ({
   default: (props: {
     defaultValue?: string;
     onChange?: (markdown: string) => void;
+    onEditorReady?: (editor?: Editor) => void;
   }): JSX.Element => {
     typeInEditor = props.onChange;
     const el = document.createElement("div");
     el.dataset.testid = "editor-body";
     el.textContent = props.defaultValue ?? "";
+    const ready = setTimeout(() => {
+      el.className = "ProseMirror";
+      el.contentEditable = "true";
+      props.onEditorReady?.({} as Editor);
+    }, 0);
+    // 本文が入れ替わると作り直される。畳むときに「もう居ない」を返すのも本物どおり
+    onCleanup(() => {
+      clearTimeout(ready);
+      props.onEditorReady?.();
+    });
+    return el;
+  },
+}));
+
+// エディタが立つと出る道具の列。ここで見たいものは無い
+vi.mock(import("../components/MarkdownToolbar"), () => ({
+  default: (): JSX.Element => null,
+}));
+
+// markmap は d3 を連れてくる。ここで見たいのは「並んでいるか」と「いつ描き直すか」だけ
+vi.mock(import("../components/MindmapView"), () => ({
+  default: (props: { source: string }): JSX.Element => {
+    const el = document.createElement("div");
+    el.dataset.testid = "mindmap";
+    createEffect(() => {
+      el.textContent = props.source;
+    });
     return el;
   },
 }));
@@ -46,6 +79,9 @@ let readGate: Promise<void> | undefined;
 let openGate: (() => void) | undefined;
 /** update_draft が飛んでいる間に起きること。往復の途中の打鍵を再現する。 */
 let duringSave: (() => void) | undefined;
+/** update_draft を止めておく関門。書き込みが遅い端末を再現する。 */
+let writeGate: Promise<void> | undefined;
+let openWriteGate: (() => void) | undefined;
 
 /** 本文の指紋。core と同じ「読んだ版で書く」照合をテストでも同じ形で行う。 */
 const revisionOf = (body: string): string => `rev:${body}`;
@@ -98,8 +134,9 @@ const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
     disk.set(FILE_B, "");
     return `/data/notes/${FILE_B}`;
   },
-  update_draft: ({ filePath, body, revision }) => {
+  update_draft: async ({ filePath, body, revision }) => {
     duringSave?.();
+    await writeGate;
     const filename = String(filePath).split("/").at(-1) ?? "";
     const current = disk.get(filename);
     if (current === undefined) {
@@ -158,21 +195,48 @@ function renderWorkspace(): void {
 const rowOf = (title: string): Promise<HTMLElement> =>
   screen.findByRole("button", { name: new RegExp(title, "u") });
 
+/** 本文のエディタ。立ち上がりきるまでは contenteditable にならない。 */
+function editorBody(): HTMLElement {
+  return screen.getByTestId("editor-body");
+}
+
 /** ノート A を 1 件開いた状態まで進める。狭い画面では詳細を開くまで本文が出ない。 */
 async function openNoteA(): Promise<void> {
   renderWorkspace();
   fireEvent.click(await rowOf(TITLE_A));
-  await waitFor(() => expect(screen.getByText(TEXT_A)).toBeDefined());
+  // 本文が届き、そのエディタが立ち上がりきるまで。エディタは本文が届いて
+  // から立つので、字が出ていて contenteditable になったところを待つ
+  await waitFor(() => {
+    expect(screen.getByText(TEXT_A)).toBeDefined();
+    expect(editorBody().isContentEditable).toBe(true);
+  });
 }
 
 function titleInput(): HTMLInputElement {
   return screen.getByPlaceholderText<HTMLInputElement>("タイトル");
 }
 
-/** タイトル欄の Enter が編集の入り口。エディタは lazy なので届くまで待つ。 */
+/** 「起きないこと」を見るための間。waitFor は起きるまで待つので使えない。 */
+function sleep(ms: number): Promise<void> {
+  // oxlint-disable-next-line promise/avoid-new
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+/**
+ * 本文にカーソルを置く。エディタは開いた時点から在るので、これは
+ * 「書き始める」ではなく「書いている人の手をそこに置く」だけ。
+ */
 async function startEditingBody(): Promise<void> {
   fireEvent.keyDown(titleInput(), { key: "Enter" });
-  await waitFor(() => expect(screen.getByTestId("editor-body")).toBeDefined());
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("editor-body")));
+}
+
+/** 「…」を開いてから、その中の 1 行を押す。 */
+async function runNoteAction(name: string): Promise<void> {
+  fireEvent.click(screen.getByRole("button", { name: "このノートの操作" }));
+  fireEvent.click(await screen.findByRole("button", { name: new RegExp(name, "u") }));
 }
 
 /** 「新規」→「空のノート」。テンプレのシートを経由するのは本物と同じ順序。 */
@@ -193,6 +257,18 @@ const releaseReads = (): void => {
   openGate = undefined;
 };
 
+const blockWrites = (): void => {
+  const gate = Promise.withResolvers<void>();
+  writeGate = gate.promise;
+  openWriteGate = gate.resolve;
+};
+
+const releaseWrites = (): void => {
+  openWriteGate?.();
+  writeGate = undefined;
+  openWriteGate = undefined;
+};
+
 /** ディスク・IPC・画面の幅を、テスト 1 本ぶんの初期状態に戻す。 */
 async function setupWorkspace(): Promise<void> {
   // 一覧と詳細が並ぶ幅。編集中に「+ 新規」を押せるのはこの形のときだけで、
@@ -206,6 +282,7 @@ async function setupWorkspace(): Promise<void> {
   typeInEditor = undefined;
   duringSave = undefined;
   releaseReads();
+  releaseWrites();
   localStorage.clear();
   mockWindows("main");
   mockIPC((cmd, args) => {
@@ -220,8 +297,9 @@ async function setupWorkspace(): Promise<void> {
 }
 
 function teardownWorkspace(): void {
-  // 止めたままの読みを解いてから畳む。待ち続ける promise を残さない
+  // 止めたままの読み書きを解いてから畳む。待ち続ける promise を残さない
   releaseReads();
+  releaseWrites();
   cleanup();
   clearMocks();
   document.body.innerHTML = "";
@@ -257,6 +335,198 @@ describe("Workspace › 一覧の行", () => {
     await rowOf(TITLE_A);
 
     expect(screen.queryByTitle("読み取り専用")).toBeNull();
+  });
+});
+
+describe("Workspace › 常時編集", () => {
+  beforeEach(setupWorkspace);
+  afterEach(teardownWorkspace);
+
+  // 「読む姿」と「書く姿」を行き来させると、書くたびに 1 手ぶん遠くなる
+  it("opens a note with the editor already in it", async () => {
+    await openNoteA();
+
+    expect(screen.getByTestId("editor-body").textContent).toBe(TEXT_A);
+  });
+
+  // 読むだけのノートは、書ける合図をどこにも出さない
+  it("gives a read-only note no editor and no writable title", async () => {
+    meta.set(FILE_A, { view: "preview" });
+    renderWorkspace();
+    fireEvent.click(await rowOf(TITLE_A));
+    await screen.findByText(TEXT_A);
+
+    expect(screen.queryByTestId("editor-body")).toBeNull();
+    expect(titleInput().readOnly).toBe(true);
+  });
+
+  it("locks a note from the menu", async () => {
+    await openNoteA();
+
+    await runNoteAction("読み取り専用にする");
+
+    await waitFor(() => expect(meta.get(FILE_A)?.view).toBe("preview"));
+    await waitFor(() => expect(screen.queryByTestId("editor-body")).toBeNull());
+  });
+
+  // 鍵をかけた瞬間に読む姿へ変わる。そこに出るのが読み込み直後の本文だと、
+  // さっき打った字が消えたように見える
+  it("keeps what was just typed when the note is locked", async () => {
+    await openNoteA();
+    typeInEditor?.("打ちかけの本文");
+
+    await runNoteAction("読み取り専用にする");
+
+    await waitFor(() => expect(screen.queryByTestId("editor-body")).toBeNull());
+    expect(screen.getByText("打ちかけの本文")).toBeDefined();
+  });
+
+  it("opens the menu from the keyboard", async () => {
+    await openNoteA();
+
+    fireEvent.keyDown(globalThis, { key: ".", metaKey: true });
+
+    await waitFor(() => expect(screen.getByRole("menu")).toBeDefined());
+  });
+
+  // 昇格した記録は、開いた瞬間に続きを打てる形で渡す。本文が届いた時点では
+  // エディタがまだ立っていないので、そこで置いたカーソルは空を切る
+  it("puts the caret in a promoted note once its editor is up", async () => {
+    renderWorkspace();
+    await rowOf(TITLE_A);
+
+    navigateTo?.(`/?file=${FILE_A}&edit=1`);
+
+    await waitFor(() => expect(document.activeElement).toBe(editorBody()));
+    expect(editorBody().textContent).toBe(TEXT_A);
+  });
+
+  // 置き換えると、書いていた本文が図を見ているあいだ消える
+  it("lays the map beside the note instead of over it", async () => {
+    await openNoteA();
+
+    await runNoteAction("マップを並べる");
+
+    await waitFor(() => expect(screen.getByTestId("mindmap")).toBeDefined());
+    expect(screen.getByTestId("editor-body")).toBeDefined();
+  });
+
+  // 並べた図を打鍵のたびに組み替えると、書いている横で枝が跳ね続ける。
+  // 手が止まってから追いつかせる
+  it("redraws the map once the typing pauses, not on every keystroke", async () => {
+    await openNoteA();
+    await runNoteAction("マップを並べる");
+    await screen.findByTestId("mindmap");
+
+    typeInEditor?.("打ちかけ");
+    typeInEditor?.("打ちかけの本文");
+
+    expect(screen.getByTestId("mindmap").textContent).not.toContain("打ちかけ");
+    await waitFor(() =>
+      expect(screen.getByTestId("mindmap").textContent).toContain("打ちかけの本文"),
+    );
+  });
+
+  // 隣のノートを開いたときまで待たせると、前のノートの図が 1 拍残る
+  it("draws the next note's map right away", async () => {
+    disk.set(FILE_B, BODY_B);
+    meta.set(FILE_B, { view: "mindmap" });
+    await openNoteA();
+    await runNoteAction("マップを並べる");
+    await screen.findByTestId("mindmap");
+
+    fireEvent.click(await rowOf(TITLE_B));
+
+    await waitFor(() => expect(titleInput().value).toBe(TITLE_B));
+    expect(screen.getByTestId("mindmap").textContent).toContain(TITLE_B);
+  });
+});
+
+describe("Workspace › ノートに効くキー", () => {
+  beforeEach(setupWorkspace);
+  afterEach(teardownWorkspace);
+
+  it("steps to the next note on ⌘↓ from outside the text", async () => {
+    disk.set(FILE_B, BODY_B);
+    await openNoteA();
+
+    fireEvent.keyDown(globalThis, { key: "ArrowDown", metaKey: true });
+
+    await waitFor(() => expect(titleInput().value).toBe(TITLE_B));
+  });
+
+  // macOS の ⌘↑ / ⌘↓ は文頭・文末へ飛ぶキー。ブラウザ既定の動きなので
+  // エディタは preventDefault せず、カーソルの居場所で見分けるしかない
+  it("leaves ⌘↑ and ⌘↓ to the caret while the body is being written", async () => {
+    disk.set(FILE_B, BODY_B);
+    await openNoteA();
+    await startEditingBody();
+
+    fireEvent.keyDown(screen.getByTestId("editor-body"), { key: "ArrowDown", metaKey: true });
+    fireEvent.keyDown(screen.getByTestId("editor-body"), { key: "ArrowUp", metaKey: true });
+
+    await sleep(100);
+    expect(titleInput().value).toBe(TITLE_A);
+  });
+
+  // 入力欄の ⌘⇧Z は打ち直し。題を直している手元で、ノートごと巻き戻さない
+  it("leaves ⌘⇧Z to the title field's redo while the title is being typed", async () => {
+    localStorage.setItem(`note-backup:${FILE_A}`, `# ${TITLE_A}\n\n前の本文`);
+    await openNoteA();
+
+    fireEvent.keyDown(titleInput(), { key: "Z", metaKey: true, shiftKey: true });
+
+    await sleep(100);
+    expect(disk.get(FILE_A)).toBe(BODY_A);
+  });
+});
+
+describe("Workspace › 保存の見え方", () => {
+  beforeEach(setupWorkspace);
+  afterEach(teardownWorkspace);
+
+  // 緑の「保存しました」が点きっぱなしだと、書いているあいだじゅう視界の端が
+  // 光る。2 秒で「何時に保存したか」に落ち着かせる
+  it("settles from the green tick onto the time it saved at", async () => {
+    await openNoteA();
+
+    fireEvent.input(titleInput(), { target: { value: "会議メモ 改" } });
+
+    await screen.findByText("保存しました", {}, { timeout: 3000 });
+    await waitFor(() => expect(screen.getByText(/に保存$/u)).toBeDefined(), { timeout: 4000 });
+  });
+
+  // 2 秒の緑はそのノートの持ち物。隣へ移ったあとに落ちてくる「21:40 に保存」は、
+  // 保存していないノートに保存したと言うことになる
+  it("does not carry the saved time onto the next note", async () => {
+    disk.set(FILE_B, BODY_B);
+    await openNoteA();
+    fireEvent.input(titleInput(), { target: { value: "会議メモ 改" } });
+    await screen.findByText("保存しました", {}, { timeout: 3000 });
+
+    fireEvent.click(await rowOf(TITLE_B));
+    await waitFor(() => expect(titleInput().value).toBe(TITLE_B));
+
+    await sleep(2500);
+    expect(screen.queryByText(/に保存$/u)).toBeNull();
+  });
+
+  // 書き込みが遅い端末では、隣へ移ったあとに前のノートの保存が着地する。
+  // その合図を出すと、開いたばかりのノートが「保存しました」と言う
+  it("keeps a late save's tick off the note opened after it", async () => {
+    disk.set(FILE_B, BODY_B);
+    await openNoteA();
+    blockWrites();
+    fireEvent.input(titleInput(), { target: { value: "会議メモ 改" } });
+    await screen.findByText("保存中…", {}, { timeout: 3000 });
+
+    fireEvent.click(await rowOf(TITLE_B));
+    await waitFor(() => expect(titleInput().value).toBe(TITLE_B));
+    releaseWrites();
+
+    await waitFor(() => expect(disk.get(FILE_A)).toContain("会議メモ 改"));
+    expect(screen.queryByText("保存しました")).toBeNull();
+    expect(screen.queryByText("保存中…")).toBeNull();
   });
 });
 
@@ -362,7 +632,7 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
 
     // 隣のノートの本文が届く前にタイトル欄を離れる = 待っている保存を出しきる
     blockReads();
-    fireEvent.click(screen.getByRole("button", { name: "削除" }));
+    await runNoteAction("削除");
     fireEvent.change(titleInput(), { target: { value: TITLE_A } });
 
     // 打った字は消すノートに着地する。隣のノートには何も書かない
@@ -372,6 +642,42 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     // 5 秒後の本削除はテストの外まで生き残る。UI の「元に戻す」と同じ道で畳む
     await waitFor(() => expect(shell?.toast()?.undo).toBeInstanceOf(Function));
     shell?.toast()?.undo?.();
+  });
+
+  // 隣のノートの本文が届くまで、前のノートのエディタと題が画面に残る。
+  // そこに打った字は「前のノートの本文 + 打った字」を隣のノートへ書き、
+  // 初めて開く相手には revision も無いので core も止められない
+  it("does not write what is typed while the next note is still loading", async () => {
+    disk.set(FILE_B, BODY_B);
+    await openNoteA();
+
+    blockReads();
+    fireEvent.click(await rowOf(TITLE_B));
+    // 選択は移り、記録の段は B の作成日時を出しているが、本文はまだ A のもの
+    await waitFor(() => expect(screen.getByText("2026年9月3日 13:00")).toBeDefined());
+    typeInEditor?.(`${TEXT_A}\n\n届く前に打った行`);
+    fireEvent.input(titleInput(), { target: { value: "届く前に打った題" } });
+    releaseReads();
+
+    await waitFor(() => expect(editorBody().textContent).toBe("牛乳"));
+    await sleep(1500);
+    expect(writesTo(FILE_B)).toStrictEqual([]);
+    expect(disk.get(FILE_B)).toBe(BODY_B);
+    expect(titleInput().value).toBe(TITLE_B);
+  });
+
+  // 自動保存が先に着地していると、離れるときに「待っている保存」が無い。
+  // それでも行の題は変わっているので、一覧は読み直さないと古いまま
+  it("refreshes the list on leaving a note whose autosave already landed", async () => {
+    disk.set(FILE_B, BODY_B);
+    await openNoteA();
+    fireEvent.input(titleInput(), { target: { value: "会議メモ 改" } });
+    await screen.findByText("保存しました", {}, { timeout: 3000 });
+    expect(screen.queryByRole("button", { name: /会議メモ 改/u })).toBeNull();
+
+    fireEvent.click(await rowOf(TITLE_B));
+
+    await expect(rowOf("会議メモ 改")).resolves.toBeDefined();
   });
 
   // フォーカス復帰の読み直しが飛んでいる間にタップして書き始めると、
@@ -445,8 +751,7 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     localStorage.setItem(`note-backup:${FILE_A}`, bodyOld);
     await openNoteA();
 
-    fireEvent.click(screen.getByRole("button", { name: "ノート情報" }));
-    fireEvent.click(await screen.findByRole("button", { name: /編集前に戻す/u }));
+    await runNoteAction("編集前に戻す");
     await waitFor(() => expect(disk.get(FILE_A)).toBe(bodyOld));
     expect(localStorage.getItem(`note-backup:${FILE_A}`)).toBe(BODY_A);
 

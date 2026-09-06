@@ -43,7 +43,13 @@ export function formatDayHeading(iso: string, today: Date): { label: string; dat
   return { label: day, date: weekday };
 }
 
-/** Notes のグループ見出し。「今週 / 先週 / それ以前」 */
+/** 時計の読み。「21:40」 */
+export function formatClock(date: Date): string {
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
 /** 一覧・検索結果の 2 段目に出す短い日付。「08/04」 */
 export function formatMonthDay(iso: string): string {
   return iso.slice(5).replace("-", "/");

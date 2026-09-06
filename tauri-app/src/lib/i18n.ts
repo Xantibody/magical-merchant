@@ -83,12 +83,15 @@ const ja = {
     new: "新規",
     noSelection: "項目がありません",
     backToList: "一覧に戻る",
-    showEditor: "エディタで表示",
-    showMindmap: "マインドマップで表示",
-    showPreview: "読み取り専用で表示",
     info: "ノート情報",
-    finishEditing: "編集を終える",
     readOnly: "読み取り専用",
+    actions: "このノートの操作",
+    layMap: "マップを並べる",
+    hideMap: "マップを閉じる",
+    makeReadOnly: "読み取り専用にする",
+    makeEditable: "編集できるようにする",
+    revert: "編集前に戻す",
+    savedAt: (time: string) => `${time} に保存`,
     titlePlaceholder: "タイトル",
     bodyPlaceholder: "ノートを書く…",
     backlinks: (count: number) => `リンクされている記録 (${count})`,
@@ -317,6 +320,8 @@ const ja = {
     weekdays: ["日曜日", "月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日"],
     /** 日グループの見出しに出す暦日。 */
     monthDay: (month: number, day: number) => `${month}月${day}日`,
+    /** ノートの作成日。年まで言うのはここだけ。 */
+    fullDate: (year: number, month: number, day: number) => `${year}年${month}月${day}日`,
   },
 };
 
@@ -406,12 +411,15 @@ const en: Messages = {
     new: "New",
     noSelection: "Nothing to show",
     backToList: "Back to the list",
-    showEditor: "Show as text",
-    showMindmap: "Show as a mindmap",
-    showPreview: "Show as a read-only preview",
     info: "Note info",
-    finishEditing: "Finish editing",
     readOnly: "Read-only",
+    actions: "Actions for this note",
+    layMap: "Lay the map alongside",
+    hideMap: "Close the map",
+    makeReadOnly: "Make read-only",
+    makeEditable: "Make editable",
+    revert: "Back to before this edit",
+    savedAt: (time: string) => `Saved at ${time}`,
     titlePlaceholder: "Title",
     bodyPlaceholder: "Write a note…",
     backlinks: (count: number) => `Records linking here (${count})`,
@@ -635,6 +643,8 @@ const en: Messages = {
     earlier: "Earlier",
     weekdays: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
     monthDay: (month: number, day: number) => `${SHORT_MONTHS[month - 1] ?? month} ${day}`,
+    fullDate: (year: number, month: number, day: number) =>
+      `${SHORT_MONTHS[month - 1] ?? month} ${day}, ${year}`,
   },
 };
 
