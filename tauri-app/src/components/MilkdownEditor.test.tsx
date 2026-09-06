@@ -89,3 +89,32 @@ describe("MilkdownEditor caret placement", () => {
     await expect.poll(() => caretBlock(editing.editor()), { timeout: 3000 }).toBe(TAIL);
   });
 });
+
+/**
+ * 立ち上がる前に畳まれたエディタは「居る」と言わない。置く側は onEditorReady を
+ * 「ProseMirror がもうある」の合図に使う(昇格したノートにカーソルを置く、
+ * タッチ端末のツールバーを出す)。消えた root に立ったエディタを渡すと、
+ * その合図で置きに行ったカーソルが空を切る。
+ */
+describe("MilkdownEditor torn down while building", () => {
+  afterEach(() => cleanup());
+
+  it("does not report an editor it finished building after being unmounted", async () => {
+    const reported: (Editor | undefined)[] = [];
+    const { unmount } = render(() => (
+      <MilkdownEditor
+        defaultValue="畳まれる前の本文"
+        onEditorReady={(created) => {
+          reported.push(created);
+        }}
+      />
+    ));
+    unmount();
+
+    // 同じ道を後から通る 2 本目が立つころには、1 本目の create も済んでいる
+    const later = await mountEditor(DRAWABLE);
+    await expect.poll(() => later.editor(), { timeout: 5000 }).toBeDefined();
+
+    expect(reported).toStrictEqual([undefined]);
+  });
+});
