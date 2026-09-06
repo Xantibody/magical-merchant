@@ -25,14 +25,15 @@
   padding: 14px 14px 8px;
 }
 
+/* ペインの中で唯一の押し物なので、枠で囲わなくても見つかる */
 .new-note {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   padding: 4px 9px;
-  border: 1px solid var(--app-border);
+  border: none;
   border-radius: var(--radius-2);
-  background: var(--app-input-bg);
+  background: none;
   color: var(--app-text-muted);
   font-size: 12px;
   font-weight: 600;
@@ -42,6 +43,7 @@
 
 .new-note:hover {
   background: var(--app-surface-2);
+  color: var(--app-text);
 }
 
 .list-pane-title {
@@ -74,27 +76,34 @@
   overflow-y: auto;
 }
 
+/* 群の名前は字だけで示す。罫線を引くと、行 1 つぶんの区切りに層が 1 つ増える。
+   長い群を送っているあいだも、いまどこを見ているかは上に残す */
 .list-group-label {
-  padding: 14px 14px 4px;
-  font-size: 13px;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--app-sidebar);
+  padding: 18px 16px 2px;
+  font-size: 11px;
   font-weight: 700;
-  color: var(--app-text-muted);
+  letter-spacing: 0.06em;
+  color: var(--app-text-faint);
 }
 
 .list-scroll > .list-group-label:first-child {
-  padding-top: 6px;
-  color: var(--app-text);
+  padding-top: 8px;
 }
 
+/* 行は 1 行。題と時刻だけを、ベースラインを揃えて並べる */
 .list-row {
   display: flex;
-  flex-direction: column;
-  gap: 3px;
+  align-items: baseline;
+  gap: 8px;
   width: calc(100% - 12px);
   margin: 0 6px;
   text-align: start;
   padding: 8px 10px;
-  border-radius: var(--radius-3);
+  border-radius: var(--radius-2);
   background: none;
   border: none;
   cursor: pointer;
@@ -105,30 +114,31 @@
   background: var(--app-hairline);
 }
 
+/* 選んだ行の合図は背景だけ。太字も足すと、同じことを 2 回言うことになる */
 .list-row--selected {
   background: var(--app-accent-soft);
 }
 
 .list-row-title {
+  flex: 1;
+  min-width: 0;
   font-size: 13.5px;
   color: var(--app-text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 100%;
 }
 
-.list-row--selected .list-row-title {
-  font-weight: 600;
+.list-row .icon {
+  flex-shrink: 0;
+  color: var(--app-text-hint);
 }
 
-.list-row-meta {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  flex-wrap: wrap;
+.list-row-stamp {
+  flex-shrink: 0;
   font-size: 11px;
   color: var(--app-text-faint);
+  font-variant-numeric: tabular-nums;
 }
 
 .notes-empty {
@@ -175,21 +185,21 @@
   position: relative;
 }
 
-.detail-meta-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--size-2);
-  padding: 9px 20px;
-  border-bottom: 1px solid var(--app-hairline);
+/* 題・記録・操作をまとめた段。本文と同じ 640px + 左右 28px の幅に収めるので、
+   ノートについて知りたいことが本文と同じ列に並ぶ */
+.detail-head {
+  position: relative;
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: calc(640px + 28px * 2);
+  margin-inline: auto;
+  padding: 28px 28px 0;
 }
 
-/* ファイル名は同期やウィジェットが指す ID なので画面には出さない。
-   ヘッダに出すのは人が読む作成日時 */
-.detail-created {
-  font-size: 13px;
-  color: var(--app-text-faint);
-  white-space: nowrap;
+.detail-title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
 }
 
 /* 一覧に戻るボタンはモバイルの 1 ペイン時だけ意味がある */
@@ -197,52 +207,139 @@
   display: none;
 }
 
-.detail-meta {
+/* 作成日時・保存の様子・タグの 1 行。すべて同じ薄さで、本文より静かに */
+.detail-meta-line {
   display: flex;
-  align-items: center;
-  gap: var(--size-2);
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
   font-size: 12px;
-  color: var(--app-text-muted);
-  min-width: 0;
+  color: var(--app-text-faint);
+  font-variant-numeric: tabular-nums;
 }
 
-.detail-context {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--app-text-faint);
+.detail-meta-sep {
+  color: var(--app-text-hint);
+}
+
+.detail-meta-tags {
+  color: var(--app-text-muted);
 }
 
 .detail-save-status {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+/* 緑が点くのは保存できた直後の 2 秒だけ。書いているあいだ光り続けさせない */
+.detail-save-status[data-status="saved"] {
+  color: var(--app-ok);
+}
+
+.detail-save-status .icon {
+  align-self: center;
+}
+
+.detail-save-status[data-status="saving"] .icon {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .detail-save-status[data-status="saving"] .icon {
+    animation: none;
+  }
+}
+
+.note-menu-button {
+  flex-shrink: 0;
+  margin: -2px -6px 0 0;
+  padding: 6px;
+  color: var(--app-text-muted);
+}
+
+.note-menu-button:hover,
+.note-menu-button[aria-expanded="true"] {
+  background: var(--app-surface-2);
+  color: var(--app-text);
+}
+
+/* 「…」の真下に右揃えで吊るす */
+.note-menu {
+  position: absolute;
+  top: 60px;
+  right: 28px;
+  z-index: 30;
+  width: 220px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.note-menu-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px;
+  border: none;
+  border-radius: var(--radius-2);
+  background: none;
+  color: var(--app-text);
+  font-family: inherit;
+  font-size: 13px;
+  text-align: start;
+  cursor: pointer;
+}
+
+.note-menu-row:hover:not(:disabled) {
+  background: var(--app-surface-2);
+}
+
+.note-menu-row:disabled {
+  color: var(--app-text-hint);
+  cursor: default;
+}
+
+.note-menu-row .icon {
+  flex-shrink: 0;
+  color: var(--app-text-muted);
+}
+
+.note-menu-row--danger,
+.note-menu-row--danger .icon {
+  color: var(--app-danger);
+}
+
+.note-menu-label {
+  flex: 1;
+}
+
+.note-menu-key {
+  font-size: 11px;
   color: var(--app-text-faint);
 }
 
-.detail-actions {
-  display: flex;
-  gap: 2px;
-  flex-shrink: 0;
-}
-
-.detail-actions .icon-button {
-  color: var(--app-text-muted);
-  padding: 6px;
-}
-
-.detail-actions .icon-button:hover {
-  background: var(--app-surface-2);
-  color: var(--app-text);
+.note-menu-divider {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--app-hairline);
 }
 
 /* タイトルは本文先頭の H1。枠を持たせず、大きな 1 行として本文の続きに
    見えるようにする。スクロールする本文の外に置くので、長いノートでも
    何を書いているノートなのかが消えない */
 .note-title-input {
-  flex: 0 0 auto;
-  width: 100%;
-  /* 本文と同じ 640px の段。左右の padding は .detail-body に合わせる */
-  max-width: calc(640px + 28px * 2);
-  margin-inline: auto;
-  padding: 20px 28px 0;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
   border: none;
   background: none;
   color: var(--app-text);
@@ -261,29 +358,58 @@
   outline: none;
 }
 
-/* タイトルを外に出したぶん、本文の上の余白は詰める */
-.note-title-input + .detail-body {
-  padding-top: 16px;
+/* 本文とマップは横に並ぶ。マップを開いていなければ本文だけが伸びる */
+.detail-panes {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  min-width: 0;
 }
 
 .detail-body {
   flex: 1;
+  min-width: 0;
   overflow-y: auto;
-  padding: 32px 28px 64px;
+  padding: 20px 28px 40px;
   font-size: 15px;
   line-height: 1.8;
 }
 
-/* 本文はどこを押しても編集に入る。テキストカーソルでそれを示す */
-.detail-body .markdown-preview {
-  cursor: text;
-  /* 短い本文でも余白がタップの受け皿になるよう、プレビュー自身を伸ばす */
-  min-height: 100%;
+/* 本文を押しのけず、右に並ぶ。畳むと本文は元の幅に戻る */
+.detail-map {
+  flex: 0 0 400px;
+  min-width: 0;
+  border-left: 1px solid var(--app-hairline);
+  overflow: hidden;
 }
 
-/* `view: preview` は読むだけのノート。押しても書き始まらないので、
-   書けるという合図の I ビームを出さない */
-.detail-body[data-view="preview"] .markdown-preview {
+/* 題の段も本文と同じ列に寄せる。マップのぶん右を空ければ、残りの幅の
+   中央が本文の列の中央になる */
+.detail-pane--map .detail-head {
+  width: calc(100% - 400px);
+  margin-right: 400px;
+}
+
+/* 並べる幅が無いところでは、本文と入れ替わる形に落とす */
+@media (max-width: 1099px) {
+  .detail-panes--map .detail-body {
+    display: none;
+  }
+
+  .detail-map {
+    flex: 1;
+    border-left: none;
+  }
+
+  .detail-pane--map .detail-head {
+    width: 100%;
+    margin-right: auto;
+  }
+}
+
+/* プレビューが出るのは `view: preview` の読むだけのノートだけ。押しても
+   書き始まらないので、書けるという合図の I ビームを出さない */
+.detail-body .markdown-preview {
   cursor: default;
 }
 
@@ -390,9 +516,8 @@
     flex: 0 0 auto;
   }
 
-  .detail-meta-bar,
-  .note-title-input,
-  .detail-body,
+  .detail-head,
+  .detail-panes,
   .detail-empty {
     display: none;
   }
@@ -405,37 +530,73 @@
     flex: 1;
   }
 
-  .workspace--detail .detail-meta-bar,
-  .workspace--detail .note-title-input,
-  .workspace--detail .detail-body {
-    display: flex;
-  }
-
-  .workspace--detail .detail-body {
+  .workspace--detail .detail-head {
     display: block;
   }
 
+  .workspace--detail .detail-panes {
+    display: flex;
+  }
+
+  /* 一覧へ戻る道はここだけ。題と「…」と同じ行に置いて、行を 1 段増やさない */
   .detail-back {
     display: flex;
+    margin: -8px 0 0 -8px;
+    padding: 10px;
   }
 
-  .workspace--detail .note-title-input {
-    display: block;
+  /* 指で押せる高さ。字も本文と同じくらいまで上げる */
+  .list-row {
+    padding: 12px;
+    min-height: 44px;
+    margin: 0 8px;
+    width: calc(100% - 16px);
+  }
+
+  .list-row-title {
+    font-size: 15px;
+  }
+
+  .list-row-stamp {
+    font-size: 12px;
+  }
+
+  .list-group-label {
+    padding: 18px 20px 2px;
+  }
+
+  .list-scroll > .list-group-label:first-child {
+    padding-top: 12px;
+  }
+
+  .detail-head {
+    padding: 4px 20px 0;
   }
 
   .detail-body {
-    padding: 16px 20px;
+    padding: 16px 20px 0;
   }
 
   .note-title-input {
     /* 指で押せる高さを確保する。詰めると本文との境目も分かりにくい */
     min-height: 44px;
-    padding: 12px 20px 0;
     font-size: 19px;
   }
 
-  .note-title-input + .detail-body {
-    padding-top: 10px;
+  .note-menu {
+    top: 44px;
+    right: 20px;
+  }
+
+  /* 指で押せる高さ。字も一覧の行と同じまで上げる */
+  .note-menu-row {
+    min-height: 44px;
+    font-size: 15px;
+  }
+
+  /* ⌘⇧M は押せないキーの案内。触る端末には出さない(テンプレ選択と同じ) */
+  .note-menu-key {
+    display: none;
   }
 
   .capture-bar {
@@ -486,15 +647,13 @@
 
 /* ---- バックリンク(このノートを指している記録) ---- */
 
+/* 本文の末尾に畳んで置く。罫線を引くほど別の話ではない */
 .backlinks {
   margin-top: 40px;
-  border-top: 1px solid var(--app-hairline);
-  padding-top: 10px;
 }
 
 .backlinks-summary {
   font-size: 12px;
-  font-weight: 600;
   color: var(--app-text-faint);
   cursor: pointer;
   user-select: none;

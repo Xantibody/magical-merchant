@@ -2,6 +2,51 @@
    土台は Workspace と同じ 2 ペイン(workspace.css)で、ここにあるのは
    その上に足すぶんだけ。 */
 
+/* ---------------- 詳細ヘッダ ---------------- */
+
+/* ノート側は題の直下の 1 行に畳んだが、テンプレは名前と自動タグを編集する
+   場所なので、操作の並ぶバーが要る。ここだけが使う */
+
+.detail-meta-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--size-2);
+  padding: 9px 20px;
+  border-bottom: 1px solid var(--app-hairline);
+}
+
+.detail-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+  font-size: 12px;
+  color: var(--app-text-muted);
+  min-width: 0;
+}
+
+.detail-created {
+  font-size: 13px;
+  color: var(--app-text-faint);
+  white-space: nowrap;
+}
+
+.detail-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.detail-actions .icon-button {
+  color: var(--app-text-muted);
+  padding: 6px;
+}
+
+.detail-actions .icon-button:hover {
+  background: var(--app-surface-2);
+  color: var(--app-text);
+}
+
 /* ---------------- 選択メニュー / シート ---------------- */
 
 /* PC ではボタンの下のドロップダウン。位置の基準は .list-pane */
@@ -361,6 +406,15 @@
 }
 
 @media (max-width: 767px) {
+  /* 一度に見せるのは片方のペインだけ。ヘッダは詳細を開いたときに出す */
+  .detail-meta-bar {
+    display: none;
+  }
+
+  .workspace--detail .detail-meta-bar {
+    display: flex;
+  }
+
   /* 下から出るシート。押せる高さと安全域はここで確保する */
   .template-picker {
     position: fixed;

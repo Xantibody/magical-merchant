@@ -193,6 +193,16 @@ export default function MilkdownEditor(props: MilkdownEditorProps): JSX.Element 
       .use(props.glyphs ? createGlyphPlugin(props.glyphs) : [])
       .create();
 
+    // create を待つあいだに畳まれていた(一覧を素早く送った・本文が入れ替わった)。
+    // onCleanup はまだ editor を知らずに通り過ぎているので、ここで自分で捨てる。
+    // 置く側は onEditorReady を「ProseMirror がもうある」の合図に使うので、
+    // 消えた root に立ったこれを渡すと、カーソルを置きに行って空を切る
+    if (disposed) {
+      editor.destroy();
+      editor = undefined;
+      return;
+    }
+
     placeCaret(editor);
     props.onEditorReady?.(editor);
   });

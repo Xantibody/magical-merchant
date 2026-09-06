@@ -43,7 +43,13 @@ export function formatDayHeading(iso: string, today: Date): { label: string; dat
   return { label: day, date: weekday };
 }
 
-/** Notes のグループ見出し。「今週 / 先週 / それ以前」 */
+/** 時計の読み。「21:40」 */
+export function formatClock(date: Date): string {
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
 /** 一覧・検索結果の 2 段目に出す短い日付。「08/04」 */
 export function formatMonthDay(iso: string): string {
   return iso.slice(5).replace("-", "/");
@@ -55,9 +61,11 @@ export function formatNoteGroupLabel(iso: string, today: Date): string {
     return t().day.noDate;
   }
   const diff = daysBetween(date, today);
-  if (diff < 0) {
-    return t().day.thisWeek;
+  if (diff === 0) {
+    return t().day.today;
   }
+  // 先の日付のノート(端末の時計がずれている・意図して未来に置いた)は
+  // 今週側に寄せる。「今日」と言い切ると嘘になる
   if (diff < 7) {
     return t().day.thisWeek;
   }
