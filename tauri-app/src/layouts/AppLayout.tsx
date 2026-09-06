@@ -283,9 +283,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
     const onPointerDown = (e: MouseEvent): void => {
       const target = e.target instanceof Element ? e.target : null;
       if (
-        !target?.closest(
-          ".popover, .header-action, .calendar-button, .detail-meta-button, .new-note",
-        )
+        !target?.closest(".popover, .header-action, .calendar-button, .note-menu-button, .new-note")
       ) {
         shell.closePopovers();
       }

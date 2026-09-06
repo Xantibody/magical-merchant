@@ -92,8 +92,14 @@ describe("formatDayHeading", () => {
 });
 
 describe("formatNoteGroupLabel", () => {
-  it("groups the last seven days as this week", () => {
-    expect(formatNoteGroupLabel("2026-08-04", TODAY)).toBe("今週");
+  // いま書いているノートは一覧の先頭にまとまっていてほしい。「今週」に
+  // 混ぜると、さっき作った 1 本を 7 日ぶんの中から探すことになる
+  it("keeps today's notes in their own group", () => {
+    expect(formatNoteGroupLabel("2026-08-04", TODAY)).toBe("今日");
+  });
+
+  it("groups the six days before that as this week", () => {
+    expect(formatNoteGroupLabel("2026-08-03", TODAY)).toBe("今週");
     expect(formatNoteGroupLabel("2026-07-29", TODAY)).toBe("今週");
   });
 

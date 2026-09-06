@@ -12,6 +12,7 @@ import {
   replaceDayItems,
   planBulkDelete,
   neighborOf,
+  noteRowStamp,
 } from "./items";
 import type { Note } from "./commands";
 
@@ -95,6 +96,35 @@ describe("toNoteItems", () => {
     const [item] = toNoteItems([note({ origin: "2026-08-03T08:30:00" })]);
     expect(item.origin).toBe("2026-08-03T08:30:00");
   });
+
+  // 鍵は一覧で出す。開くまで書けないと分からないのでは遅い
+  it("marks a note kept as preview as read-only", () => {
+    expect(toNoteItems([note({ view: "preview" })])[0].readOnly).toBe(true);
+  });
+
+  // マップで見ているだけのノートは書ける。鍵を出すと書けないものに見える
+  it("leaves every other view writable", () => {
+    expect(toNoteItems([note({ view: "mindmap" })])[0].readOnly).toBe(false);
+    expect(toNoteItems([note()])[0].readOnly).toBe(false);
+  });
+});
+
+describe("noteRowStamp", () => {
+  // 今日のノートに「08/04」と出しても、今日だという以上のことは言わない。
+  // 時刻なら「さっき書いたやつ」が分かる
+  it("gives the time for a note written today", () => {
+    expect(noteRowStamp(toNoteItems([note()])[0], TODAY)).toBe("15:27");
+  });
+
+  it("gives the date for anything older", () => {
+    expect(noteRowStamp(toNoteItems([note({ time: "2026-07-30T09:00:00+09:00" })])[0], TODAY)).toBe(
+      "07/30",
+    );
+  });
+
+  it("says nothing for a note with no timestamp", () => {
+    expect(noteRowStamp(toNoteItems([note({ time: undefined })])[0], TODAY)).toBe("");
+  });
 });
 
 describe("originKeyOf", () => {
@@ -167,12 +197,13 @@ describe("groupTimelineByDay", () => {
 });
 
 describe("groupNotes", () => {
-  it("splits this week from last week", () => {
+  it("splits today from this week from last week", () => {
     const items = toNoteItems([
       note({ filename: "a.md", time: "2026-08-04T10:00:00+09:00" }),
-      note({ filename: "b.md", time: "2026-07-25T10:00:00+09:00" }),
+      note({ filename: "b.md", time: "2026-08-01T10:00:00+09:00" }),
+      note({ filename: "c.md", time: "2026-07-25T10:00:00+09:00" }),
     ]);
-    expect(groupNotes(items, TODAY).map((g) => g.label)).toStrictEqual(["今週", "先週"]);
+    expect(groupNotes(items, TODAY).map((g) => g.label)).toStrictEqual(["今日", "今週", "先週"]);
   });
 });
 
@@ -191,7 +222,7 @@ describe("itemTitle", () => {
 describe("noteCreatedLabel", () => {
   it("shows the creation time instead of the filename", () => {
     const [item] = toNoteItems([note({ time: "2026-05-03T15:39:45+09:00" })]);
-    expect(noteCreatedLabel(item)).toBe("2026/05/03 15:39");
+    expect(noteCreatedLabel(item)).toBe("2026年5月3日 15:39");
   });
 
   it("stays empty when the frontmatter had no readable time", () => {

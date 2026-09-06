@@ -11,6 +11,8 @@ export interface Note {
   origin?: string;
   /** 生まれ元のテンプレ名。テンプレから作ったノートだけ持つ。 */
   template?: string;
+  /** frontmatter の表示モード。一覧が読み取り専用の印を出すのに使う。 */
+  view?: string;
 }
 
 interface NoteRead {

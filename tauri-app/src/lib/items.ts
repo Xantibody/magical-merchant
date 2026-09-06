@@ -1,6 +1,7 @@
 import type { Note } from "./commands";
-import { formatNoteGroupLabel } from "./day-labels";
+import { daysBetween, formatMonthDay, formatNoteGroupLabel, parseIsoDate } from "./day-labels";
 import { t } from "./i18n";
+import { resolveNoteView } from "./note-view";
 import { parseTimelineEntry } from "./parse-timeline";
 import { isPreservedEmptyLine } from "./preserved-empty-line";
 import type { DeviceContext } from "./parse-timeline";
@@ -28,6 +29,8 @@ export interface NoteItem {
   preview: string;
   /** 昇格元エントリの日時。タイムラインのチップ表示が使う。 */
   origin?: string;
+  /** 読み取り専用にしたノート。一覧が鍵を出す。 */
+  readOnly: boolean;
 }
 
 export type Item = TimelineItem | NoteItem;
@@ -81,6 +84,7 @@ export function toNoteItems(notes: Note[]): NoteItem[] {
     tags: note.tags,
     preview: note.preview,
     origin: note.origin,
+    readOnly: resolveNoteView(note.view) === "preview",
   }));
 }
 
@@ -235,13 +239,40 @@ export function groupNotes(items: NoteItem[], today: Date): ItemGroup[] {
 }
 
 /**
- * 詳細ヘッダの作成日時。「2026/05/03 15:39」
+ * タイトル直下に出す作成日時。「2026年9月5日 21:14」
  * ファイル名は同期やウィジェットが指す不変の ID であって、人に見せる
  * ものではない。人が読むのはこちら。
  */
 export function noteCreatedLabel(item: NoteItem): string {
-  const date = item.date.replaceAll("-", "/");
-  return [date, item.time].filter(Boolean).join(" ");
+  const date = parseIsoDate(item.date);
+  if (!date) {
+    return item.time;
+  }
+  const day = t().day.fullDate(date.getFullYear(), date.getMonth() + 1, date.getDate());
+  return [day, item.time].filter(Boolean).join(" ");
+}
+
+/**
+ * 一覧の並びで 1 つ前(-1)/後ろ(+1)のノート。端では動かない —
+ * キーで送っているうちに知らないノートへ回り込むほうが分かりにくい。
+ */
+export function stepNote(
+  items: NoteItem[],
+  id: string | undefined,
+  step: number,
+): string | undefined {
+  const index = items.findIndex((item) => item.id === id);
+  return index === -1 ? undefined : items[index + step]?.id;
+}
+
+/**
+ * 一覧の行の右端に置く 1 つの値。今日のノートは時刻、それ以前は日付。
+ * 今日のノートに「08/04」と出しても、見出しが既に言っていること以上は
+ * 分からない — 時刻なら、さっき書いたどれなのかが読める。
+ */
+export function noteRowStamp(item: NoteItem, today: Date): string {
+  const date = parseIsoDate(item.date);
+  return date && daysBetween(date, today) === 0 ? item.time : formatMonthDay(item.date);
 }
 
 export function itemTitle(item: Item): string {
