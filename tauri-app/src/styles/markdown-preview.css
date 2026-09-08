@@ -109,6 +109,54 @@
   margin: var(--size-4) 0;
 }
 
+/* ---- GFM: 表と取り消し線。editor.css と同じ値(理由もそちら)。
+   違うと `view: preview` のノートとエディタで表の高さが変わり、
+   その下の本文がずれる(workspace.test.ts) ---- */
+.markdown-preview table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+  max-inline-size: none;
+  border: none;
+  border-radius: 0;
+  background: none;
+}
+
+.markdown-preview th,
+.markdown-preview td {
+  position: relative;
+  vertical-align: top;
+  padding: var(--size-2);
+  border: 1px solid var(--app-hairline);
+  border-radius: 0;
+  background: none;
+  text-align: start;
+  font-size: var(--font-size-2);
+  max-inline-size: none;
+}
+
+.markdown-preview th {
+  background: var(--app-surface-2);
+  font-weight: var(--font-weight-6);
+}
+
+.markdown-preview tr:hover td {
+  background: none;
+}
+
+.markdown-preview th > p,
+.markdown-preview td > p {
+  margin: 0;
+  font-size: inherit;
+  max-inline-size: none;
+}
+
+/* markdown-it は ~~x~~ を s で出す */
+.markdown-preview s,
+.markdown-preview del {
+  text-decoration: line-through;
+}
+
 /* Mermaid: 図は本文のように折り返せないので、幅に合わせて縮めて置く。
    mermaid が SVG に付ける max-width が原寸なので、拡大はされない。
    上下の間隔は他のブロックと同じ(エディタで図だけを見せる状態と揃える)。

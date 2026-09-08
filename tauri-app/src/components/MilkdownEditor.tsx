@@ -2,6 +2,7 @@ import { onCleanup, onMount } from "solid-js";
 import { Editor, rootCtx, defaultValueCtx, editorViewCtx } from "@milkdown/kit/core";
 import { Selection, TextSelection } from "@milkdown/kit/prose/state";
 import { commonmark } from "@milkdown/kit/preset/commonmark";
+import { gfm } from "@milkdown/kit/preset/gfm";
 import { listener, listenerCtx } from "@milkdown/kit/plugin/listener";
 import { cursor } from "@milkdown/kit/plugin/cursor";
 import { history } from "@milkdown/kit/plugin/history";
@@ -178,6 +179,10 @@ export default function MilkdownEditor(props: MilkdownEditorProps): JSX.Element 
         }
       })
       .use(commonmark)
+      // 表・取り消し線はプレビュー(markdown-it)が既定で描く。エディタが常時
+      // 出る今、ここに無いと開いた瞬間からパイプの段落に崩れる。列幅リサイズ
+      // (columnResizingPlugin)は gfm に含まれず、Markdown にも無いので入れない
+      .use(gfm)
       .use(listener)
       .use(highlight)
       .use(cursor)
