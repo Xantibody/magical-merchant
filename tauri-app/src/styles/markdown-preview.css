@@ -98,6 +98,43 @@
   padding-left: var(--size-5);
 }
 
+/* GFM task list。editor.css と同じ値(理由もそちら)。プレビューでは
+   task-list-markdown が同じ li を出す。読むだけの面なので押しても変わらない */
+.markdown-preview li[data-item-type="task"] {
+  list-style: none;
+  position: relative;
+}
+
+.markdown-preview li[data-item-type="task"]::before {
+  content: "";
+  position: absolute;
+  left: calc(-1 * var(--size-4));
+  top: 0.25em;
+  width: 1em;
+  height: 1em;
+  box-sizing: border-box;
+  border: 1px solid var(--app-border);
+  border-radius: var(--radius-1);
+}
+
+.markdown-preview li[data-item-type="task"][data-checked="true"]::before {
+  background: var(--app-accent);
+  border-color: var(--app-accent);
+}
+
+.markdown-preview li[data-item-type="task"][data-checked="true"]::after {
+  content: "";
+  position: absolute;
+  left: calc(-1 * var(--size-4) + 0.35em);
+  top: 0.4em;
+  width: 0.3em;
+  height: 0.55em;
+  border: solid var(--app-surface);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+
 .markdown-preview a {
   color: var(--app-accent);
   text-decoration: underline;
@@ -107,6 +144,54 @@
   border: none;
   border-top: 1px solid var(--app-border);
   margin: var(--size-4) 0;
+}
+
+/* ---- GFM: 表と取り消し線。editor.css と同じ値(理由もそちら)。
+   違うと `view: preview` のノートとエディタで表の高さが変わり、
+   その下の本文がずれる(workspace.test.ts) ---- */
+.markdown-preview table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+  max-inline-size: none;
+  border: none;
+  border-radius: 0;
+  background: none;
+}
+
+.markdown-preview th,
+.markdown-preview td {
+  position: relative;
+  vertical-align: top;
+  padding: var(--size-2);
+  border: 1px solid var(--app-hairline);
+  border-radius: 0;
+  background: none;
+  text-align: start;
+  font-size: var(--font-size-2);
+  max-inline-size: none;
+}
+
+.markdown-preview th {
+  background: var(--app-surface-2);
+  font-weight: var(--font-weight-6);
+}
+
+.markdown-preview tr:hover td {
+  background: none;
+}
+
+.markdown-preview th > p,
+.markdown-preview td > p {
+  margin: 0;
+  font-size: inherit;
+  max-inline-size: none;
+}
+
+/* markdown-it は ~~x~~ を s で出す */
+.markdown-preview s,
+.markdown-preview del {
+  text-decoration: line-through;
 }
 
 /* Mermaid: 図は本文のように折り返せないので、幅に合わせて縮めて置く。

@@ -2,6 +2,7 @@ import { onCleanup, onMount } from "solid-js";
 import { Editor, rootCtx, defaultValueCtx, editorViewCtx } from "@milkdown/kit/core";
 import { Selection, TextSelection } from "@milkdown/kit/prose/state";
 import { commonmark } from "@milkdown/kit/preset/commonmark";
+import { gfm } from "@milkdown/kit/preset/gfm";
 import { listener, listenerCtx } from "@milkdown/kit/plugin/listener";
 import { cursor } from "@milkdown/kit/plugin/cursor";
 import { history } from "@milkdown/kit/plugin/history";
@@ -16,6 +17,7 @@ import { buildLanguageSuggestions, ensureLanguageDatalist } from "../lib/languag
 import { exitCodeBlockPlugin } from "../lib/exit-code-block-plugin";
 import { codeBlockViewPlugin } from "../lib/code-block-view-plugin";
 import { codeBlockActivePlugin } from "../lib/code-block-active-plugin";
+import { taskItemPlugin } from "../lib/task-item-plugin";
 import { DIAGRAM_SETTLED_EVENT, hasPendingDiagram } from "../lib/diagram-pending";
 import { createPlaceholderPlugin } from "../lib/placeholder-plugin";
 import { createNoteLinkPlugin } from "../lib/note-link-plugin";
@@ -178,6 +180,10 @@ export default function MilkdownEditor(props: MilkdownEditorProps): JSX.Element 
         }
       })
       .use(commonmark)
+      // 表・取り消し線はプレビュー(markdown-it)が既定で描く。エディタが常時
+      // 出る今、ここに無いと開いた瞬間からパイプの段落に崩れる。列幅リサイズ
+      // (columnResizingPlugin)は gfm に含まれず、Markdown にも無いので入れない
+      .use(gfm)
       .use(listener)
       .use(highlight)
       .use(cursor)
@@ -188,6 +194,7 @@ export default function MilkdownEditor(props: MilkdownEditorProps): JSX.Element 
       .use(exitCodeBlockPlugin)
       .use(codeBlockViewPlugin)
       .use(codeBlockActivePlugin)
+      .use(taskItemPlugin)
       .use(props.placeholder ? createPlaceholderPlugin(props.placeholder) : [])
       .use(props.noteLinks ? createNoteLinkPlugin(props.noteLinks) : [])
       .use(props.glyphs ? createGlyphPlugin(props.glyphs) : [])

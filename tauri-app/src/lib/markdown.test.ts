@@ -23,6 +23,19 @@ describe("renderMarkdownSync", () => {
     expect(html).toContain("<li>item2</li>");
   });
 
+  // エディタ(gfm)と同じ li を出す。印は CSS が描くので、文字の `[ ]` は外す
+  it("marks a task list item with its state and drops the bracket", () => {
+    const html = renderMarkdownSync("- [ ] 牛乳\n- [x] パン");
+    expect(html).toContain('<li data-item-type="task" data-checked="false">牛乳</li>');
+    expect(html).toContain('<li data-item-type="task" data-checked="true">パン</li>');
+  });
+
+  it("leaves a bracket that is not a task marker as text", () => {
+    const html = renderMarkdownSync("- [memo] 牛乳\n- [ ]牛乳");
+    expect(html).toContain("<li>[memo] 牛乳</li>");
+    expect(html).toContain("<li>[ ]牛乳</li>");
+  });
+
   it("converts inline code", () => {
     const html = renderMarkdownSync("use `foo()` here");
     expect(html).toContain("<code>foo()</code>");
