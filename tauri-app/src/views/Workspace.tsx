@@ -161,6 +161,7 @@ export default function Workspace(): JSX.Element {
   );
 
   let detailBodyRef: HTMLDivElement | undefined;
+  let listScrollRef: HTMLDivElement | undefined;
   /** いま開いている編集セッション。保存のスキップ判断とバックアップを持つ。 */
   let session = beginEditSession("");
   /** そのセッションがどのノートのものか。null なら開いていない。 */
@@ -918,7 +919,7 @@ export default function Workspace(): JSX.Element {
           />
         </Show>
 
-        <div class="list-scroll">
+        <div class="list-scroll" ref={listScrollRef}>
           <Show when={groups().length} fallback={<EmptyNotes />}>
             <For each={groups()}>
               {(group) => (
@@ -929,6 +930,7 @@ export default function Workspace(): JSX.Element {
                       <button
                         type="button"
                         class="list-row"
+                        data-id={item.id}
                         classList={{ "list-row--selected": selected()?.id === item.id }}
                         onClick={() => select(item as NoteItem)}
                       >
