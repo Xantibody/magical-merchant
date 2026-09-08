@@ -68,6 +68,8 @@ const SAVE_DEBOUNCE_MS = 1000;
 const SAVED_MS = 2000;
 /** 並べたマップが打鍵に追いつくまでの間。保存(1 秒)より先に図が追いつく。 */
 const MAP_DEBOUNCE_MS = 300;
+/** 一覧の中で隣の行へ送るキーと、その向き。 */
+const LIST_STEP_KEYS: Readonly<Record<string, 1 | -1>> = { ArrowUp: -1, ArrowDown: 1 };
 
 async function loadNotes(): Promise<NoteItem[]> {
   return toNoteItems(await typedInvoke("list_notes"));
@@ -780,6 +782,35 @@ export default function Workspace(): JSX.Element {
     onCleanup(() => globalThis.removeEventListener("keydown", onKeyDown));
   });
 
+  /**
+   * 一覧の中の ↑ / ↓。一覧というウィジェットの中の操作なので、⌘ の表
+   * (`SHORTCUTS`)には載せず、`.list-scroll` の中でだけ受ける — 本文の
+   * 外で何も選ばずに押した ↑↓ はページのスクロールで、それは奪わない。
+   * 一覧に入力欄は無いので、`isTypingTarget` の判定も要らない。
+   *
+   * フォーカスは `switchTo` の await を待たずに先に動かす。押した手応えを
+   * 保存の完了まで遅らせない。行の背景は `selectedId` が変わると追いつく。
+   */
+  const onListKeyDown = (e: KeyboardEvent): void => {
+    if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) {
+      return;
+    }
+    const step = LIST_STEP_KEYS[e.key];
+    if (step === undefined) {
+      return;
+    }
+    // 端では何もしない。preventDefault もしないので、一覧のスクロールに落ちる
+    const next = stepNote(visibleItems(), selected()?.id, step);
+    if (!next) {
+      return;
+    }
+    e.preventDefault();
+    const row = listScrollRef?.querySelector<HTMLElement>(`[data-id="${CSS.escape(next)}"]`);
+    row?.focus();
+    row?.scrollIntoView({ block: "nearest" });
+    void switchTo(next);
+  };
+
   const createNote = async (): Promise<void> => {
     const path = await typedInvoke("create_draft", {
       body: "",
@@ -919,7 +950,9 @@ export default function Workspace(): JSX.Element {
           />
         </Show>
 
-        <div class="list-scroll" ref={listScrollRef}>
+        {/* キーを受けるのは中の行(button)で、ここはそれを束ねているだけ。
+            `.detail-body` と同じく、役割を名乗らない入れ物 */}
+        <div class="list-scroll" ref={listScrollRef} role="presentation" onKeyDown={onListKeyDown}>
           <Show when={groups().length} fallback={<EmptyNotes />}>
             <For each={groups()}>
               {(group) => (
