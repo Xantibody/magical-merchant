@@ -1,4 +1,4 @@
-import { render, cleanup } from "@solidjs/testing-library";
+import { render, cleanup, fireEvent } from "@solidjs/testing-library";
 import { describe, it, expect, afterEach } from "vitest";
 import { editorViewCtx } from "@milkdown/kit/core";
 import type { Editor } from "@milkdown/kit/core";
@@ -203,5 +203,70 @@ describe("MilkdownEditor GFM blocks", () => {
     expect(lines).toContain("| 見出し | 値 |");
     expect(lines).toContain("| a | b |");
     expect(lines).toContain("表の下の段落。x");
+  });
+});
+
+/**
+ * gfm は `- [ ]` を li の checked 属性に畳む。文字としての `[ ]` は消えるので、
+ * 印(CSS)と切り替え(task-item-plugin)が無いと、開いた瞬間に状態が見えなくなる。
+ */
+function taskItem(container: HTMLElement): HTMLElement {
+  const item = container.querySelector<HTMLElement>('.ProseMirror li[data-item-type="task"]');
+  if (!item) {
+    throw new Error("expected a task item");
+  }
+  return item;
+}
+
+/** その項目の段落。gfm の li は段落を包む */
+function itemText(item: HTMLElement): HTMLElement {
+  const text = item.querySelector("p");
+  if (!text) {
+    throw new Error("expected the item's paragraph");
+  }
+  return text;
+}
+
+/** 印は li の内容箱の左に描かれる。そこを押す */
+function pressBox(item: HTMLElement): void {
+  const rect = item.getBoundingClientRect();
+  fireEvent.mouseDown(item, { button: 0, clientX: rect.left - 8, clientY: rect.top + 8 });
+}
+
+describe("MilkdownEditor task list", () => {
+  afterEach(() => cleanup());
+
+  it("keeps the checked state on the item instead of in the text", async () => {
+    const { container } = await mountPlain("- [ ] 牛乳\n- [x] パン");
+
+    const items = container.querySelectorAll<HTMLElement>('.ProseMirror li[data-item-type="task"]');
+    expect([...items].map((item) => [item.dataset.checked, item.textContent])).toStrictEqual([
+      ["false", "牛乳"],
+      ["true", "パン"],
+    ]);
+  });
+
+  it("toggles the item from the box and writes it back as [x]", async () => {
+    const changes: string[] = [];
+    const { container } = await mountPlain("- [ ] 牛乳", (markdown) => changes.push(markdown));
+
+    pressBox(taskItem(container));
+
+    await expect.poll(() => taskItem(container).dataset.checked).toBe("true");
+    await expect.poll(() => changes.at(-1)).toContain("[x] 牛乳");
+  });
+
+  // 文字を押すのはカーソルを置く操作。印の外で状態が変わってはいけない
+  it("leaves the item alone when its text is pressed", async () => {
+    const changes: string[] = [];
+    const { container } = await mountPlain("- [ ] 牛乳", (markdown) => changes.push(markdown));
+    const text = itemText(taskItem(container));
+    const rect = text.getBoundingClientRect();
+
+    fireEvent.mouseDown(text, { button: 0, clientX: rect.left + 4, clientY: rect.top + 8 });
+
+    await sleep(100);
+    expect(taskItem(container).dataset.checked).toBe("false");
+    expect(changes).toHaveLength(0);
   });
 });

@@ -31,6 +31,7 @@ at module top-level from anything on the startup path.
 | Custom   | placeholder-plugin                                                                 | empty-document placeholder                                         |
 | Custom   | code-block-view-plugin                                                             | language input + copy + mermaid figure                             |
 | Custom   | code-block-active-plugin                                                           | is-active class on touched code blocks                             |
+| Custom   | task-item-plugin                                                                   | click on the box toggles a task item (gfm keeps only the attr)     |
 
 **Rejected** (do not re-propose): block/tooltip/slash (visible chrome),
 code-block component (CodeMirror ~150KB), indent/upload/image-\*/table-block

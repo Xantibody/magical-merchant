@@ -17,6 +17,7 @@ import { buildLanguageSuggestions, ensureLanguageDatalist } from "../lib/languag
 import { exitCodeBlockPlugin } from "../lib/exit-code-block-plugin";
 import { codeBlockViewPlugin } from "../lib/code-block-view-plugin";
 import { codeBlockActivePlugin } from "../lib/code-block-active-plugin";
+import { taskItemPlugin } from "../lib/task-item-plugin";
 import { DIAGRAM_SETTLED_EVENT, hasPendingDiagram } from "../lib/diagram-pending";
 import { createPlaceholderPlugin } from "../lib/placeholder-plugin";
 import { createNoteLinkPlugin } from "../lib/note-link-plugin";
@@ -193,6 +194,7 @@ export default function MilkdownEditor(props: MilkdownEditorProps): JSX.Element 
       .use(exitCodeBlockPlugin)
       .use(codeBlockViewPlugin)
       .use(codeBlockActivePlugin)
+      .use(taskItemPlugin)
       .use(props.placeholder ? createPlaceholderPlugin(props.placeholder) : [])
       .use(props.noteLinks ? createNoteLinkPlugin(props.noteLinks) : [])
       .use(props.glyphs ? createGlyphPlugin(props.glyphs) : [])
