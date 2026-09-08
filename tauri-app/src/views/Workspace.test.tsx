@@ -455,6 +455,46 @@ describe("Workspace › ノートに効くキー", () => {
     await waitFor(() => expect(titleInput().value).toBe(TITLE_B));
   });
 
+  // 一覧の行に居るときの ↑↓ は、その一覧の中を動くキー。押した先の行へ
+  // フォーカスも移す — 動かさないと、2 度目の ↓ が最初の行から数え直す
+  it("steps to the next note on ↓ inside the list and moves focus with it", async () => {
+    disk.set(FILE_B, BODY_B);
+    await openNoteA();
+    const rowA = await rowOf(TITLE_A);
+    rowA.focus();
+
+    fireEvent.keyDown(rowA, { key: "ArrowDown" });
+
+    await waitFor(() => expect(titleInput().value).toBe(TITLE_B));
+    expect(document.activeElement).toBe(await rowOf(TITLE_B));
+  });
+
+  // 本文の ↓ はカーソルを 1 行下げるキー。一覧の外で押した矢印は奪わない
+  it("leaves a plain ↓ to the caret while the body is being written", async () => {
+    disk.set(FILE_B, BODY_B);
+    await openNoteA();
+    await startEditingBody();
+
+    fireEvent.keyDown(screen.getByTestId("editor-body"), { key: "ArrowDown" });
+
+    await sleep(100);
+    expect(titleInput().value).toBe(TITLE_A);
+  });
+
+  // 端で押した ↑ は行き先が無い。preventDefault もしないので、一覧のスクロールに落ちる
+  it("does nothing on ↑ at the top of the list", async () => {
+    disk.set(FILE_B, BODY_B);
+    await openNoteA();
+    const rowA = await rowOf(TITLE_A);
+    rowA.focus();
+
+    const consumed = !fireEvent.keyDown(rowA, { key: "ArrowUp" });
+
+    await sleep(100);
+    expect(titleInput().value).toBe(TITLE_A);
+    expect(consumed).toBe(false);
+  });
+
   // macOS の ⌘↑ / ⌘↓ は文頭・文末へ飛ぶキー。ブラウザ既定の動きなので
   // エディタは preventDefault せず、カーソルの居場所で見分けるしかない
   it("leaves ⌘↑ and ⌘↓ to the caret while the body is being written", async () => {
