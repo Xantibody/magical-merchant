@@ -18,7 +18,7 @@
     "@milkdown/plugin-highlight": "^7.20.0",
     "@phosphor-icons/core": "^2.1.1",
     "@solidjs/router": "^1.0.0",
-    "@tauri-apps/api": "~2.10",
+    "@tauri-apps/api": "~2.11",
     "@tauri-apps/plugin-deep-link": "^2.4.9",
     "@tauri-apps/plugin-geolocation": "^2.3.2",
     "markdown-it": "^15.0.0",
@@ -30,7 +30,7 @@
   },
   "devDependencies": {
     "@solidjs/testing-library": "^0.8.10",
-    "@tauri-apps/cli": "~2.10",
+    "@tauri-apps/cli": "~2.11",
     "@vitest/browser-playwright": "^4.1.4",
     "jsdom": "^30.0.0",
     "knip": "^6.31.0",
