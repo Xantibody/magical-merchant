@@ -10,6 +10,7 @@ import { renderDiagrams } from "./mermaid";
 import { noteLinkPlugin } from "./note-link-markdown";
 import { isPreservedEmptyLine } from "./preserved-empty-line";
 import { tagPlugin } from "./tag-markdown";
+import { taskListPlugin } from "./task-list-markdown";
 
 /**
  * Milkdown が空行の保存に使う `<br />` 行を、1 行ぶんの高さを持つ空の段落に
@@ -40,6 +41,7 @@ function createRenderer(): MarkdownItInstance {
     linkify: true,
     typographer: true,
   });
+  renderer.use(taskListPlugin);
   renderer.use(tagPlugin);
   renderer.use(preservedEmptyLinePlugin);
   renderer.use(noteLinkPlugin);

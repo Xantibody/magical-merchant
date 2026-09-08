@@ -23,18 +23,20 @@ at module top-level from anything on the startup path.
 
 ## Plugin table
 
-| Category | Plugin                                                                        | Purpose                                |
-| -------- | ----------------------------------------------------------------------------- | -------------------------------------- |
-| Built-in | commonmark, listener, cursor, history, clipboard, trailing, linkTooltipPlugin | base editing                           |
-| External | @milkdown/plugin-highlight                                                    | Shiki syntax highlighting              |
-| Custom   | exit-code-block-plugin                                                        | Mod-Enter exits code blocks            |
-| Custom   | placeholder-plugin                                                            | empty-document placeholder             |
-| Custom   | code-block-view-plugin                                                        | language input + copy + mermaid figure |
-| Custom   | code-block-active-plugin                                                      | is-active class on touched code blocks |
+| Category | Plugin                                                                             | Purpose                                                            |
+| -------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Built-in | commonmark, gfm, listener, cursor, history, clipboard, trailing, linkTooltipPlugin | base editing; gfm = tables, strikethrough (what the preview draws) |
+| External | @milkdown/plugin-highlight                                                         | Shiki syntax highlighting                                          |
+| Custom   | exit-code-block-plugin                                                             | Mod-Enter exits code blocks                                        |
+| Custom   | placeholder-plugin                                                                 | empty-document placeholder                                         |
+| Custom   | code-block-view-plugin                                                             | language input + copy + mermaid figure                             |
+| Custom   | code-block-active-plugin                                                           | is-active class on touched code blocks                             |
+| Custom   | task-item-plugin                                                                   | click on the box toggles a task item (gfm keeps only the attr)     |
 
 **Rejected** (do not re-propose): block/tooltip/slash (visible chrome),
-code-block component (CodeMirror ~150KB), indent/upload/image-\*/table-block/
-list-item-block (no need).
+code-block component (CodeMirror ~150KB), indent/upload/image-\*/table-block
+(component — not the `gfm` preset)/list-item-block (no need), gfm's
+`columnResizingPlugin` (column widths are not Markdown).
 
 ## Rules
 

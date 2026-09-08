@@ -1,7 +1,8 @@
-import { render, cleanup } from "@solidjs/testing-library";
+import { render, cleanup, fireEvent } from "@solidjs/testing-library";
 import { describe, it, expect, afterEach } from "vitest";
 import { editorViewCtx } from "@milkdown/kit/core";
 import type { Editor } from "@milkdown/kit/core";
+import { Selection } from "@milkdown/kit/prose/state";
 import MilkdownEditor from "./MilkdownEditor";
 import type { CaretPoint } from "./MilkdownEditor";
 
@@ -116,5 +117,156 @@ describe("MilkdownEditor torn down while building", () => {
     await expect.poll(() => later.editor(), { timeout: 5000 }).toBeDefined();
 
     expect(reported).toStrictEqual([undefined]);
+  });
+});
+
+/**
+ * 編集モードを無くしてエディタが常時出るようになった(#210)ので、プレビュー
+ * (markdown-it)が描けてエディタが描けない記法は、ノートを開いた瞬間から崩れる。
+ * CommonMark に表と取り消し線は無い — GFM のプリセットで両方を描く。
+ */
+const TABLE = ["| 見出し | 値 |", "| --- | --- |", "| a | b |"].join("\n");
+
+function sleep(ms: number): Promise<void> {
+  // oxlint-disable-next-line promise/avoid-new
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+/** 図の待ちは要らない。ProseMirror が立つまでだけ待って返す */
+async function mountPlain(source: string, onChange?: (markdown: string) => void): Promise<Mounted> {
+  let editor: Editor | undefined;
+  const { container } = render(() => (
+    <MilkdownEditor
+      defaultValue={source}
+      onChange={onChange}
+      onEditorReady={(created) => {
+        editor = created;
+      }}
+    />
+  ));
+
+  await expect
+    .poll(() => container.querySelector(".ProseMirror") !== null, { timeout: 5000 })
+    .toBe(true);
+
+  return { container, editor: () => editor };
+}
+
+describe("MilkdownEditor GFM blocks", () => {
+  afterEach(() => cleanup());
+
+  it("draws a table as a table, not a paragraph of pipes", async () => {
+    const { container } = await mountPlain(TABLE);
+
+    expect(container.querySelectorAll(".ProseMirror table")).toHaveLength(1);
+    expect(container.querySelectorAll(".ProseMirror th")).toHaveLength(2);
+    expect(container.querySelectorAll(".ProseMirror td")).toHaveLength(2);
+  });
+
+  it("draws ~~text~~ struck through", async () => {
+    const { container } = await mountPlain("~~消す~~");
+
+    expect(container.querySelector(".ProseMirror del, .ProseMirror s")?.textContent).toBe("消す");
+  });
+
+  // Milkdown は最初の編集で本文全体を remark で書き直す(表はパディングで揃う)。
+  // それは編集のときだけで、開いただけの本文には触らないこと
+  it("does not rewrite the body just by opening it", async () => {
+    const changes: string[] = [];
+    await mountPlain(TABLE, (markdown) => changes.push(markdown));
+
+    await sleep(100);
+
+    expect(changes).toHaveLength(0);
+  });
+
+  it("keeps the table rows as rows when a paragraph outside it is edited", async () => {
+    const changes: string[] = [];
+    const { editor } = await mountPlain(`${TABLE}\n\n表の下の段落。`, (markdown) =>
+      changes.push(markdown),
+    );
+
+    editor()?.action((ctx) => {
+      const view = ctx.get(editorViewCtx);
+      view.dispatch(view.state.tr.insertText("x", Selection.atEnd(view.state.doc).from));
+    });
+
+    await expect.poll(() => changes.length, { timeout: 3000 }).toBeGreaterThan(0);
+    // remark は列幅を見出しに揃えてパディングする(仕様として受け入れる)。
+    // 見るのは、パイプが文字として逃げずに行のまま残っていること
+    const lines = changes
+      .at(-1)
+      ?.split("\n")
+      .map((line) => line.replaceAll(/\s+/gu, " "));
+    expect(lines).toContain("| 見出し | 値 |");
+    expect(lines).toContain("| a | b |");
+    expect(lines).toContain("表の下の段落。x");
+  });
+});
+
+/**
+ * gfm は `- [ ]` を li の checked 属性に畳む。文字としての `[ ]` は消えるので、
+ * 印(CSS)と切り替え(task-item-plugin)が無いと、開いた瞬間に状態が見えなくなる。
+ */
+function taskItem(container: HTMLElement): HTMLElement {
+  const item = container.querySelector<HTMLElement>('.ProseMirror li[data-item-type="task"]');
+  if (!item) {
+    throw new Error("expected a task item");
+  }
+  return item;
+}
+
+/** その項目の段落。gfm の li は段落を包む */
+function itemText(item: HTMLElement): HTMLElement {
+  const text = item.querySelector("p");
+  if (!text) {
+    throw new Error("expected the item's paragraph");
+  }
+  return text;
+}
+
+/** 印は li の内容箱の左に描かれる。そこを押す */
+function pressBox(item: HTMLElement): void {
+  const rect = item.getBoundingClientRect();
+  fireEvent.mouseDown(item, { button: 0, clientX: rect.left - 8, clientY: rect.top + 8 });
+}
+
+describe("MilkdownEditor task list", () => {
+  afterEach(() => cleanup());
+
+  it("keeps the checked state on the item instead of in the text", async () => {
+    const { container } = await mountPlain("- [ ] 牛乳\n- [x] パン");
+
+    const items = container.querySelectorAll<HTMLElement>('.ProseMirror li[data-item-type="task"]');
+    expect([...items].map((item) => [item.dataset.checked, item.textContent])).toStrictEqual([
+      ["false", "牛乳"],
+      ["true", "パン"],
+    ]);
+  });
+
+  it("toggles the item from the box and writes it back as [x]", async () => {
+    const changes: string[] = [];
+    const { container } = await mountPlain("- [ ] 牛乳", (markdown) => changes.push(markdown));
+
+    pressBox(taskItem(container));
+
+    await expect.poll(() => taskItem(container).dataset.checked).toBe("true");
+    await expect.poll(() => changes.at(-1)).toContain("[x] 牛乳");
+  });
+
+  // 文字を押すのはカーソルを置く操作。印の外で状態が変わってはいけない
+  it("leaves the item alone when its text is pressed", async () => {
+    const changes: string[] = [];
+    const { container } = await mountPlain("- [ ] 牛乳", (markdown) => changes.push(markdown));
+    const text = itemText(taskItem(container));
+    const rect = text.getBoundingClientRect();
+
+    fireEvent.mouseDown(text, { button: 0, clientX: rect.left + 4, clientY: rect.top + 8 });
+
+    await sleep(100);
+    expect(taskItem(container).dataset.checked).toBe("false");
+    expect(changes).toHaveLength(0);
   });
 });

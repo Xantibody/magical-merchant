@@ -218,6 +218,48 @@
   padding-left: var(--size-5);
 }
 
+/* GFM task list。markdown-preview.css と同じ値。
+   `- [ ]` は gfm(remark)が li の checked 属性に畳み、文字には残らない。印は
+   ここで描き、押した切り替えは task-item-plugin が受ける — 印を ul の padding
+   (li の内容箱の左)に置くのは、その plugin が「内容箱より左の押下」で
+   印を見分けるから */
+.milkdown-editor li[data-item-type="task"] {
+  list-style: none;
+  position: relative;
+}
+
+.milkdown-editor li[data-item-type="task"]::before {
+  content: "";
+  position: absolute;
+  left: calc(-1 * var(--size-4));
+  top: 0.25em;
+  width: 1em;
+  height: 1em;
+  box-sizing: border-box;
+  border: 1px solid var(--app-border);
+  border-radius: var(--radius-1);
+  cursor: pointer;
+}
+
+.milkdown-editor li[data-item-type="task"][data-checked="true"]::before {
+  background: var(--app-accent);
+  border-color: var(--app-accent);
+}
+
+/* チェックの線。面の色で抜くので、どちらのテーマでも印の中に収まる */
+.milkdown-editor li[data-item-type="task"][data-checked="true"]::after {
+  content: "";
+  position: absolute;
+  left: calc(-1 * var(--size-4) + 0.35em);
+  top: 0.4em;
+  width: 0.3em;
+  height: 0.55em;
+  border: solid var(--app-surface);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+
 .milkdown-editor a {
   color: var(--app-accent);
   text-decoration: underline;
@@ -227,6 +269,69 @@
   border: none;
   border-top: 1px solid var(--app-border);
   margin: var(--size-4) 0;
+}
+
+/* ---- GFM: 表と取り消し線。markdown-preview.css と同じ値 ---- */
+
+/* 表の DOM は面ごとに違う — プレビュー(markdown-it)は見出し行を thead に出して
+   セルに文字を直に置き、エディタ(prosemirror-tables)は tbody だけで見出し行は
+   tr[data-is-header]、セルの中身は段落。thead/tbody ではなく th / td / tr に書く。
+   normalize は表を fit-content の角丸カードにするが、本文の幅いっぱいの固定列に
+   する(列幅は Markdown に無い。列幅リサイズも入れない) */
+.milkdown-editor table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+  max-inline-size: none;
+  border: none;
+  border-radius: 0;
+  background: none;
+}
+
+.milkdown-editor th,
+.milkdown-editor td {
+  position: relative;
+  vertical-align: top;
+  padding: var(--size-2);
+  border: 1px solid var(--app-hairline);
+  border-radius: 0;
+  background: none;
+  text-align: start;
+  /* セルは段落と同じ大きさで読む(normalize は p にだけ --font-size-2 を当てる) */
+  font-size: var(--font-size-2);
+  max-inline-size: none;
+}
+
+.milkdown-editor th {
+  background: var(--app-surface-2);
+  font-weight: var(--font-weight-6);
+}
+
+/* normalize の行ホバー色は、本文の中の表には余計 */
+.milkdown-editor tr:hover td {
+  background: none;
+}
+
+/* エディタのセルは段落を包む。表の中では文字そのものとして扱う */
+.milkdown-editor th > p,
+.milkdown-editor td > p {
+  margin: 0;
+  font-size: inherit;
+  max-inline-size: none;
+}
+
+/* prosemirror-tables のセル選択の覆い。既定の rgba(200,200,255,.4) はトークンでない */
+.milkdown-editor .selectedCell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: var(--app-accent-soft);
+  pointer-events: none;
+}
+
+.milkdown-editor del {
+  text-decoration: line-through;
 }
 
 .milkdown-editor .empty-node::before {
