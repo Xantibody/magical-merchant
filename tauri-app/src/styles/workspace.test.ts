@@ -7,14 +7,28 @@ import { page } from "vitest/browser";
  * 前提も崩れる。同じ本文を両方の DOM で組み、ブロックごとの幾何を突き合わせる。
  */
 
-/** プレビューのコードブロックは Shiki が `pre.shiki` として出す */
-function bodyBlocks(preClass: string): string {
+/**
+ * 同じ本文を、それぞれの面が実際に出す DOM で組む。
+ * - コードブロック: プレビューは Shiki が `pre.shiki` として出す
+ * - 表: markdown-it は見出し行を `thead` に出し、セルに文字を直に置く。
+ *   Milkdown(prosemirror-tables)は `tbody` だけで、見出し行は
+ *   `tr[data-is-header]`、セルの中身は段落
+ */
+function bodyBlocks(surface: "preview" | "editor"): string {
+  const preClass = surface === "preview" ? "shiki" : "";
+  const table =
+    surface === "preview"
+      ? "<table><thead><tr><th>見出し</th><th>値</th></tr></thead>" +
+        "<tbody><tr><td>a</td><td>b</td></tr></tbody></table>"
+      : '<table><tbody><tr data-is-header="true"><th><p>見出し</p></th><th><p>値</p></th></tr>' +
+        "<tr><td><p>a</p></td><td><p>b</p></td></tr></tbody></table>";
   return `
   <p>一段目の本文。</p>
   <h2>見出し</h2>
   <p>二段目の本文。</p>
   <pre class="${preClass}"><code>const a = 1;</code></pre>
   <blockquote><p>引用</p></blockquote>
+  ${table}
   <p>結び。</p>`;
 }
 
@@ -24,6 +38,9 @@ const BLOCK_SELECTORS = [
   ":scope > p:nth-of-type(2)",
   ":scope > pre",
   ":scope > blockquote",
+  ":scope > table",
+  ":scope > table th:nth-of-type(2)",
+  ":scope > table td:nth-of-type(1)",
   ":scope > p:nth-of-type(3)",
 ];
 
@@ -138,8 +155,8 @@ describe("note body: preview and editor draw the same page", () => {
     ["desktop", 1280, 800],
   ])("keeps every block where the preview drew it (%s)", async (_name, width, height) => {
     await page.viewport(width, height);
-    const previewed = measureBlocks(preview(bodyBlocks("shiki")));
-    const edited = measureBlocks(editor(bodyBlocks("")));
+    const previewed = measureBlocks(preview(bodyBlocks("preview")));
+    const edited = measureBlocks(editor(bodyBlocks("editor")));
 
     expect(edited).toStrictEqual(previewed);
   });
@@ -148,7 +165,7 @@ describe("note body: preview and editor draw the same page", () => {
   // 押しても書き始まらないので、書けるという合図の I ビームは出さない
   it("gives a read-only note no I-beam", async () => {
     await page.viewport(1280, 800);
-    mountDetail(preview(bodyBlocks("shiki")), "preview");
+    mountDetail(preview(bodyBlocks("preview")), "preview");
 
     expect(getComputedStyle(element(".markdown-preview")).cursor).toBe("default");
   });
