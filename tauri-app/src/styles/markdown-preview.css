@@ -98,6 +98,43 @@
   padding-left: var(--size-5);
 }
 
+/* GFM task list。editor.css と同じ値(理由もそちら)。プレビューでは
+   task-list-markdown が同じ li を出す。読むだけの面なので押しても変わらない */
+.markdown-preview li[data-item-type="task"] {
+  list-style: none;
+  position: relative;
+}
+
+.markdown-preview li[data-item-type="task"]::before {
+  content: "";
+  position: absolute;
+  left: calc(-1 * var(--size-4));
+  top: 0.25em;
+  width: 1em;
+  height: 1em;
+  box-sizing: border-box;
+  border: 1px solid var(--app-border);
+  border-radius: var(--radius-1);
+}
+
+.markdown-preview li[data-item-type="task"][data-checked="true"]::before {
+  background: var(--app-accent);
+  border-color: var(--app-accent);
+}
+
+.markdown-preview li[data-item-type="task"][data-checked="true"]::after {
+  content: "";
+  position: absolute;
+  left: calc(-1 * var(--size-4) + 0.35em);
+  top: 0.4em;
+  width: 0.3em;
+  height: 0.55em;
+  border: solid var(--app-surface);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+
 .markdown-preview a {
   color: var(--app-accent);
   text-decoration: underline;
