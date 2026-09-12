@@ -110,6 +110,13 @@ describe("contextRows", () => {
     expect(contextRows({ os: "macos" })).toStrictEqual([{ label: "OS", value: "macos" }]);
   });
 
+  /** 外から移してきたノートも同じ行で名乗る。 */
+  it("names an imported note as imported", () => {
+    expect(contextRows(undefined, "import")).toStrictEqual([
+      { label: "書いたツール", value: "取り込み" },
+    ]);
+  });
+
   /** context が読めなくても、作ったツールだけは分かっていることがある。 */
   it("shows the tool even when there is no context at all", () => {
     expect(contextRows(undefined, "cli")).toStrictEqual([{ label: "書いたツール", value: "CLI" }]);
