@@ -7,6 +7,8 @@
 
 use std::path::Path;
 
+use chrono::{DateTime, FixedOffset};
+
 use magical_merchant_core::utils::device::Context;
 use magical_merchant_core::{CoreError, NoteFilename, Provenance, Revision, Snapshot};
 
@@ -62,8 +64,39 @@ pub(crate) fn create(
     if body.trim().is_empty() {
         return Ok(None);
     }
-    let path =
-        magical_merchant_core::create_draft_note(data_dir, body, tags, &context(), provenance)?;
+    named(&magical_merchant_core::create_draft_note(
+        data_dir,
+        body,
+        tags,
+        &context(),
+        provenance,
+    )?)
+}
+
+/// 書かれた時刻を渡す版。外にあった記録は、その時刻がそのまま ID になる。
+/// 空の本文を作らないのも、`context` を今この端末で書くのも `create` と同じ。
+pub(crate) fn create_at(
+    data_dir: &Path,
+    time: DateTime<FixedOffset>,
+    body: &str,
+    tags: &[String],
+    provenance: Provenance<'_>,
+) -> Result<Option<NoteFilename>, CoreError> {
+    if body.trim().is_empty() {
+        return Ok(None);
+    }
+    named(&magical_merchant_core::create_note_at(
+        data_dir,
+        time,
+        body,
+        tags,
+        &context(),
+        provenance,
+    )?)
+}
+
+/// 書いたファイルのパスを ID に読み替える。呼ぶ側が欲しいのは名前だけ。
+fn named(path: &Path) -> Result<Option<NoteFilename>, CoreError> {
     let name = path
         .file_name()
         .and_then(|n| n.to_str())

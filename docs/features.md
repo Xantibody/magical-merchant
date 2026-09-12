@@ -171,6 +171,7 @@ magical-merchant show                  # the newest note
 magical-merchant edit 20260320_143045  # opens it in $VISUAL / $EDITOR
 magical-merchant edit --last           # the newest note; `edit` never guesses
 echo "# Idea" | magical-merchant new   # or: magical-merchant new --title Idea
+magical-merchant import --time 2019-05-04T12:00:00+09:00 < old-note.md  # keeps that time as the ID
 magical-merchant timeline add -m "shipped it #work"   # capture; without -m, opens the editor
 magical-merchant timeline show [2026-03-20]           # one day, today if omitted
 ```
@@ -184,6 +185,14 @@ stays in a scratch file whose path is printed. Closing the editor without
 changes writes nothing. The app, in turn, refuses to overwrite a note the
 CLI changed while it was open, reloads it, and keeps the typed text behind
 its Revert button.
+
+`import` is the way in for notes written somewhere else. A note's filename
+is its creation time and its permanent ID, so anything moved in would
+otherwise be stamped with the day it was moved; `--time` keeps the day it
+was written, `--tag` and `--template` fill in the frontmatter, and the
+filename it lands under is printed so a migration script can keep a map.
+The body comes from stdin only — nothing about any particular source
+format lives in the app, which is a conversion script's job.
 
 `timeline add` appends to today through the same core call the Android
 widget uses; it only ever appends, so it needs no revision check. `-m` is
