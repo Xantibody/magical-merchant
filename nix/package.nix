@@ -8,7 +8,7 @@
   pnpmConfigHook,
   fetchPnpmDeps,
   fetchurl,
-  typescript-go,
+  typescript,
   pkg-config,
 }:
 let
@@ -77,7 +77,7 @@ stdenv.mkDerivation (finalAttrs: {
     nodejs_22
     pnpm_10
     pnpmConfigHook
-    typescript-go
+    typescript
     pkg-config
   ];
 
