@@ -70,7 +70,7 @@ names resolve, so the tokenizer never touches `12:30:45`.
 - `just verify` = fmt → check → test; CI mirrors `just fmt/check/test` with
   path filters
 - Rust: `just rust::check` (clippy) / `just rust::test`
-- Frontend: `just tauri_app::check` (oxlint + tsgo) / `just tauri_app::test` (Vitest)
+- Frontend: `just tauri_app::check` (oxlint + tsc) / `just tauri_app::test` (Vitest)
 - Browser harness: `just tauri_app::dev-browser` (Vite + IPC mock,
   `BROWSER_MOCK=1`); fixtures are deterministic — extend them when adding
   commands. The mock never reaches production builds
