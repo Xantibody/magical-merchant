@@ -46,7 +46,7 @@ visible.
 | Category | Tools                                            |
 | -------- | ------------------------------------------------ |
 | Rust     | stable toolchain, clippy, rust-analyzer          |
-| Frontend | Node.js 22, pnpm, tsgo (type check), oxlint      |
+| Frontend | Node.js 22, pnpm, tsc (type check), oxlint       |
 | Build    | just, cargo-tauri, go (Android signing patcher)  |
 | Android  | JDK 17, Android SDK (API 36), NDK 29             |
 | Format   | nix fmt (treefmt: nixfmt, rustfmt, taplo, oxfmt) |
@@ -90,7 +90,7 @@ Scope a single crate with cargo directly (`cargo test -p magical-merchant-cli`).
 
 | Command                       | Description                        | CI  |
 | ----------------------------- | ---------------------------------- | --- |
-| `just tauri_app::check`       | oxlint + tsgo type check           | ✓   |
+| `just tauri_app::check`       | oxlint + tsc type check            | ✓   |
 | `just tauri_app::test`        | Vitest (unit + browser tests)      | ✓   |
 | `just tauri_app::dev`         | Start Tauri development server     |     |
 | `just tauri_app::dev-browser` | Vite + IPC mock in a plain browser |     |

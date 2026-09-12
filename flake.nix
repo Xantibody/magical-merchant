@@ -99,7 +99,8 @@
           nodejs_22
           pnpm
           oxlint
-          typescript-go
+          # 旧 typescript-go。パッケージも実行ファイルも tsc に改名された
+          typescript
           just
         ];
 
