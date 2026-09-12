@@ -140,24 +140,15 @@ pub(crate) fn edit(
 
 /// 本文をそのままノートにする。空なら作らない。
 pub(crate) fn create(data_dir: &Path, body: &str) -> Result<Option<NoteFilename>, CoreError> {
-    if body.trim().is_empty() {
-        return Ok(None);
-    }
-    let path = magical_merchant_core::create_draft_note(
+    notes::create(
         data_dir,
         body,
         &[],
-        &notes::context(),
         Provenance {
             source: Some(Source::Cli),
             ..Provenance::default()
         },
-    )?;
-    let name = path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .ok_or_else(|| CoreError::NotFound(path.display().to_string()))?;
-    NoteFilename::parse(name).map(Some)
+    )
 }
 
 /// `seed` だけの一時ファイルをエディタで開き、何か書かれていればその全文を

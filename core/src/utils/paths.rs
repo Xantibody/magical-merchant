@@ -116,7 +116,10 @@ mod tests {
             PathBuf::from("/app/data/notes/20260320_003000.md")
         );
         assert_eq!(
-            note_file_path(Path::new("/app"), jst.with_timezone(&chrono::Utc).fixed_offset()),
+            note_file_path(
+                Path::new("/app"),
+                jst.with_timezone(&chrono::Utc).fixed_offset()
+            ),
             PathBuf::from("/app/data/notes/20260319_153000.md")
         );
     }

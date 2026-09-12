@@ -233,15 +233,14 @@ mod tests {
             is_charging: Some(true),
             ..Context::default()
         };
-        let result =
-            format_note_markdown(
-                "body",
-                &[],
-                fixed_timestamp().fixed_offset(),
-                &ctx,
-                Provenance::default(),
-            )
-                .unwrap();
+        let result = format_note_markdown(
+            "body",
+            &[],
+            fixed_timestamp().fixed_offset(),
+            &ctx,
+            Provenance::default(),
+        )
+        .unwrap();
         let (fm, _body): (NoteFrontmatter, &str) = frontmatter::parse(&result).unwrap();
         let context = fm.context.unwrap();
         assert_eq!(context.battery, Some(100));
