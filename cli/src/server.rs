@@ -475,29 +475,22 @@ impl McpServer {
         &self,
         Parameters(param): Parameters<CreateNoteParam>,
     ) -> Result<Json<CreatedNoteOutput>, String> {
-        if param.body.trim().is_empty() {
-            return Err("body is empty".to_string());
-        }
         let tags = param.tags.unwrap_or_default();
-        let path = magical_merchant_core::create_draft_note(
+        let created = notes::create(
             &self.data_dir,
             &param.body,
             &tags,
-            &notes::context(),
-            // CLI と同じ `notes::context()` を通るので、名乗らないと
+            // CLI と同じ `notes::create` を通るので、名乗らないと
             // エージェントが書いたノートが手で書いたものと区別できない
             Provenance {
                 source: Some(Source::Mcp),
                 ..Provenance::default()
             },
         )
-        .map_err(err)?;
-        let filename = path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .ok_or_else(|| "created note has no filename".to_string())?;
+        .map_err(err)?
+        .ok_or_else(|| "body is empty".to_string())?;
         Ok(Json(CreatedNoteOutput {
-            filename: filename.to_string(),
+            filename: created.as_str().to_string(),
         }))
     }
 
