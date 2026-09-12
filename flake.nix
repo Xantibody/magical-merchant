@@ -23,7 +23,9 @@
       treefmt-nix,
       ...
     }:
-    flake-utils.lib.eachDefaultSystem (
+    # 既定の 4 システムから x86_64-darwin を外す。nixpkgs 26.11 がサポートを落としたので
+    # 並べるだけで評価が throw する。CI (ubuntu / macos-latest) も配布もそこには無い
+    flake-utils.lib.eachSystem [ "aarch64-darwin" "x86_64-linux" "aarch64-linux" ] (
       system:
       let
         overlays = [ (import rust-overlay) ];
