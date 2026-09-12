@@ -8,7 +8,7 @@ setup:
 
 check: setup
   oxlint src/
-  tsgo -p tsconfig.check.json --noEmit
+  tsc -p tsconfig.check.json --noEmit
   pnpm knip
 
 test: setup
