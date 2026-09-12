@@ -50,8 +50,8 @@ impl Notes {
         context: &Context,
         provenance: Provenance<'_>,
     ) -> Result<PathBuf, CoreError> {
-        let mut now = Local::now();
-        let mut file_path = note_file_path(&self.base_dir, now);
+        let mut time = Local::now().fixed_offset();
+        let mut file_path = note_file_path(&self.base_dir, time);
         ensure_dir(&file_path)?;
 
         loop {
@@ -61,13 +61,13 @@ impl Notes {
                 .open(&file_path)
             {
                 Ok(mut file) => {
-                    let markdown = format_note_markdown(body, tags, now, context, provenance)?;
+                    let markdown = format_note_markdown(body, tags, time, context, provenance)?;
                     file.write_all(markdown.as_bytes())?;
                     return Ok(file_path);
                 }
                 Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
-                    now += chrono::Duration::seconds(1);
-                    file_path = note_file_path(&self.base_dir, now);
+                    time += chrono::Duration::seconds(1);
+                    file_path = note_file_path(&self.base_dir, time);
                 }
                 Err(e) => return Err(e.into()),
             }
