@@ -19,6 +19,7 @@ use magical_merchant_core::{CoreError, NoteFilename, Provenance, Revision, Snaps
 /// 終わる CLI にそれを待たせるのは高すぎる。アプリが最後に測った座標を
 /// 使い回す手もあるが、アプリを開いていない日の記録に前の場所が付く。
 /// 分からないことは分からないまま残す。
+// AIDEV-NOTE: Wi-Fi から割り出す道も塞がり済み。SSID/BSSID は測位と同じ許可が要り、伏せられて返る
 pub(crate) fn context() -> Context {
     magical_merchant_core::utils::device::probe()
 }
