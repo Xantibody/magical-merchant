@@ -10,7 +10,10 @@ keywords.workspace = true
 categories.workspace = true
 
 [dependencies]
-magical-merchant-core = { path = "../core", features = ["sync-client"] }
+magical-merchant-core = { path = "../core", features = [
+  "device-probe",
+  "sync-client",
+] }
 rmcp = { version = "3", features = [
   "server",
   "macros",
