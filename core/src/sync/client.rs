@@ -96,6 +96,19 @@ impl HttpClient {
     }
 }
 
+/// OS の信頼ストアで検証する、ふつうの HTTP クライアント。
+///
+/// `Client::new()` は組み立てに失敗すると panic する。同期はユーザーの操作で
+/// 走るので、TLS の初期化がこけても落とさずエラーとして返す。
+/// Android 版はアプリに残る — 端末の検証器を迂回する設定が要り、その判断は
+/// プラットフォームを知っている側にしか置けない。
+#[cfg(not(target_os = "android"))]
+pub fn desktop_http_client() -> Result<reqwest::Client, SyncError> {
+    reqwest::Client::builder()
+        .build()
+        .map_err(|e| SyncError::other(format!("HTTP client setup failed: {}", describe(&e))))
+}
+
 /// 同期エンジンがサーバーに頼むことの全部。
 ///
 /// `HttpClient` が唯一の本番実装で、この trait は試験台のためにある:

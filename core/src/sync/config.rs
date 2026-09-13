@@ -1,5 +1,5 @@
-//! `sync-config.json` — 同期の設定。今読むのはアプリだけで、CLI の
-//! `sync` は未実装 (#170)。
+//! `sync-config.json` — 同期の設定。読むのはアプリと CLI の `sync`、
+//! 書くのはアプリの設定画面だけ。
 
 use std::fs;
 use std::path::Path;

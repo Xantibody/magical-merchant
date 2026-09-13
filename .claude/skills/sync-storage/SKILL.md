@@ -70,9 +70,9 @@ local scan → diff → `POST /sync/bulk`, repeated until nothing is left over.
 - **One sync per data directory**: `engine::run` takes an exclusive lock on
   `<base>/.sync.lock` at its entry (`core/src/sync/lock.rs`) and fails with
   `kind: "busy"` if another process holds it. The app's `AtomicBool` only
-  drives the "syncing" indicator; the file lock is the authority. Only the
-  app starts a sync today — the lock is there for the CLI `sync` subcommand
-  (#170), which does not exist yet
+  drives the "syncing" indicator; the file lock is the authority. Both the
+  app and `magical-merchant sync` start syncs, so the loser really does get
+  `busy` — the CLI says so and exits 1, the app stays quiet
 - Conflicts keep the loser as `….sync-conflict-<ts>.md` in R2, and on disk
   as `conflicts/<key minus extension>/<ts>.md` — outside `data/`, same shape
   as `history/`, so it neither syncs back nor lands in the notes list.
