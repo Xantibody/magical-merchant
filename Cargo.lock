@@ -2747,10 +2747,8 @@ version = "0.4.0"
 dependencies = [
  "android_logger",
  "base64 0.23.1",
- "battery",
  "block2",
  "chrono",
- "hostname",
  "jni 0.22.4",
  "log",
  "magical-merchant-core",
@@ -2801,8 +2799,10 @@ name = "magical-merchant-core"
 version = "0.4.0"
 dependencies = [
  "base64 0.23.1",
+ "battery",
  "chrono",
  "criterion",
+ "hostname",
  "jsonwebtoken",
  "keyring",
  "reqwest",
