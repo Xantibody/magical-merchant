@@ -144,16 +144,16 @@ the entry is already on disk.
 
 ## Module index
 
-| Path                                                 | Responsibility                                                             |
-| ---------------------------------------------------- | -------------------------------------------------------------------------- |
-| [`core/src/timeline/`](../core/src/timeline)         | Day-file parsing, appends, edits; device-list frontmatter compression      |
-| [`core/src/note/`](../core/src/note)                 | Note CRUD and list summaries (frontmatter + preview + tags)                |
-| [`core/src/search.rs`](../core/src/search.rs)        | Substring search across timeline and notes                                 |
-| [`core/src/sync/`](../core/src/sync)                 | Local scan + hashing, diff against server state, conflict naming           |
-| [`tauri-app/src-tauri/`](../tauri-app/src-tauri/src) | Tauri commands, sync HTTP client, OAuth deep-link handling, device context |
-| [`tauri-app/src/`](../tauri-app/src)                 | SolidJS views, Milkdown editor integration, client-side device signals     |
-| [`workers/`](../workers/src)                         | Cloudflare Worker: Google OAuth, JWT, R2-backed bulk sync with ETag CAS    |
-| [`cli/`](../cli/src)                                 | Terminal client (`list` / `show` / `edit` / `new`) and the MCP server      |
+| Path                                                 | Responsibility                                                                   |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------- |
+| [`core/src/timeline/`](../core/src/timeline)         | Day-file parsing, appends, edits; device-list frontmatter compression            |
+| [`core/src/note/`](../core/src/note)                 | Note CRUD and list summaries (frontmatter + preview + tags)                      |
+| [`core/src/search.rs`](../core/src/search.rs)        | Substring search across timeline and notes                                       |
+| [`core/src/sync/`](../core/src/sync)                 | Local scan + hashing, diff against server state, conflict naming                 |
+| [`tauri-app/src-tauri/`](../tauri-app/src-tauri/src) | Tauri commands, sync HTTP client, OAuth deep-link handling, device context       |
+| [`tauri-app/src/`](../tauri-app/src)                 | SolidJS views, Milkdown editor integration, client-side device signals           |
+| [`workers/`](../workers/src)                         | Cloudflare Worker: Google OAuth, JWT, R2-backed bulk sync with ETag CAS          |
+| [`cli/`](../cli/src)                                 | Terminal client (`list` / `show` / `edit` / `new` / `import`) and the MCP server |
 
 > [!NOTE]
 > UI priorities (simple → lightweight → stylish), the Milkdown plugin

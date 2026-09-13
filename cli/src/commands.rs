@@ -4,7 +4,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use chrono::Local;
+use chrono::{DateTime, FixedOffset, Local};
 use magical_merchant_core::{CoreError, NoteFilename, NoteSummary, Provenance, Revision, Source};
 
 use crate::notes::{self, WriteError};
@@ -140,24 +140,42 @@ pub(crate) fn edit(
 
 /// 本文をそのままノートにする。空なら作らない。
 pub(crate) fn create(data_dir: &Path, body: &str) -> Result<Option<NoteFilename>, CoreError> {
-    if body.trim().is_empty() {
-        return Ok(None);
-    }
-    let path = magical_merchant_core::create_draft_note(
+    notes::create(
         data_dir,
         body,
         &[],
-        &notes::context(),
         Provenance {
             source: Some(Source::Cli),
             ..Provenance::default()
         },
-    )?;
-    let name = path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .ok_or_else(|| CoreError::NotFound(path.display().to_string()))?;
-    NoteFilename::parse(name).map(Some)
+    )
+}
+
+// --- import ---
+
+/// 外で書かれたノートを、書かれた時刻のまま取り込む。空なら作らない。
+///
+/// `new` と分けてあるのは時刻と出自だけ — 本文の扱いも frontmatter の
+/// 書き方も同じ経路(`notes::create_at`)を通る。Obsidian なり何なりの
+/// 事情は呼ぶ側(使い捨てのスクリプト)に置き、ここには入れない。
+pub(crate) fn import(
+    data_dir: &Path,
+    time: DateTime<FixedOffset>,
+    body: &str,
+    tags: &[String],
+    template: Option<&str>,
+) -> Result<Option<NoteFilename>, CoreError> {
+    notes::create_at(
+        data_dir,
+        time,
+        body,
+        tags,
+        Provenance {
+            source: Some(Source::Import),
+            template,
+            ..Provenance::default()
+        },
+    )
 }
 
 /// `seed` だけの一時ファイルをエディタで開き、何か書かれていればその全文を
@@ -388,5 +406,96 @@ mod tests {
         assert_eq!(create(tmp.path(), "  \n").unwrap(), None);
         let filename = create(tmp.path(), "from stdin").unwrap().unwrap();
         assert_eq!(body_of(tmp.path(), &filename), "from stdin");
+    }
+
+    fn written_at(text: &str) -> DateTime<FixedOffset> {
+        DateTime::parse_from_rfc3339(text).unwrap()
+    }
+
+    /// 移してきたノートは書かれた時刻のまま並ぶ。ファイル名 = 作成時刻 = ID
+    /// なので、ここで「今」の名前を付けたら元の日付は戻せない。
+    #[test]
+    fn an_imported_note_keeps_the_time_it_was_written_at() {
+        let tmp = TempDir::new().unwrap();
+
+        let filename = import(
+            tmp.path(),
+            written_at("2019-05-04T12:00:00+09:00"),
+            "# 昔のメモ\n\n本文",
+            &["memo".to_string()],
+            None,
+        )
+        .unwrap()
+        .unwrap();
+
+        assert_eq!(filename.as_str(), "20190504_120000.md");
+        let meta = magical_merchant_core::read_note_meta(tmp.path(), &filename).unwrap();
+        assert_eq!(meta.time, written_at("2019-05-04T12:00:00+09:00"));
+        assert_eq!(meta.tags, vec!["memo"]);
+        assert_eq!(body_of(tmp.path(), &filename), "# 昔のメモ\n\n本文");
+    }
+
+    /// 出自は `cli` ではなく `import`。あとから「移してきたぶん」だけを
+    /// 選び直せるのはこの記録だけで、テンプレ名も作成時にしか書けない。
+    #[test]
+    fn an_imported_note_names_import_and_its_template() {
+        let tmp = TempDir::new().unwrap();
+
+        let filename = import(
+            tmp.path(),
+            written_at("2026-01-14T00:00:00+09:00"),
+            "# 2026-01-14",
+            &[],
+            Some("jounal"),
+        )
+        .unwrap()
+        .unwrap();
+
+        let meta = magical_merchant_core::read_note_meta(tmp.path(), &filename).unwrap();
+        assert_eq!(meta.source, Some("import".to_string()));
+        assert_eq!(meta.template, Some("jounal".to_string()));
+    }
+
+    /// 同じ時刻の記録が 2 本あっても、片方が消えることはない。
+    #[test]
+    fn two_imports_of_the_same_time_both_land() {
+        let tmp = TempDir::new().unwrap();
+        let at = |body| {
+            import(
+                tmp.path(),
+                written_at("2019-05-04T12:00:00+09:00"),
+                body,
+                &[],
+                None,
+            )
+            .unwrap()
+            .unwrap()
+        };
+
+        let first = at("one");
+        let second = at("two");
+
+        assert_eq!(first.as_str(), "20190504_120000.md");
+        assert_eq!(second.as_str(), "20190504_120001.md");
+        assert_eq!(list(tmp.path()).unwrap().len(), 2);
+    }
+
+    /// 空のファイルはノートにしない。`new` と同じで、空の記録は残さない。
+    #[test]
+    fn importing_an_empty_body_creates_nothing() {
+        let tmp = TempDir::new().unwrap();
+
+        assert_eq!(
+            import(
+                tmp.path(),
+                written_at("2019-05-04T12:00:00+09:00"),
+                "  \n",
+                &[],
+                None
+            )
+            .unwrap(),
+            None
+        );
+        assert!(list(tmp.path()).unwrap().is_empty());
     }
 }

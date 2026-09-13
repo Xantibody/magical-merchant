@@ -38,6 +38,10 @@ pub enum Source {
     Mcp,
     /// Android のホーム画面ウィジェット。
     Widget,
+    /// 外にあった記録を移してきたぶん。書かれたのはこのアプリの外で、
+    /// 作成時刻も移す側が渡す([`crate::create_note_at`])。`cli` に混ぜると、
+    /// 移してきたぶんだけを選び直す手段が無くなる。
+    Import,
 }
 
 impl Source {
@@ -48,6 +52,7 @@ impl Source {
             Self::Cli => "cli",
             Self::Mcp => "mcp",
             Self::Widget => "widget",
+            Self::Import => "import",
         }
     }
 }

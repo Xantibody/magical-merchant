@@ -1,4 +1,4 @@
-use chrono::{DateTime, Local, NaiveDate};
+use chrono::{DateTime, FixedOffset, NaiveDate};
 use std::path::{Path, PathBuf};
 
 pub const DATA_DIR: &str = "data";
@@ -19,8 +19,12 @@ pub fn timeline_file_path(base_dir: &Path, date: NaiveDate) -> PathBuf {
         .join(format!("{}.md", date.format("%Y-%m-%d")))
 }
 
+/// ファイル名は時刻が指しているその土地の壁時計で決まる。`FixedOffset` で
+/// 受けるのは、frontmatter の `time` と同じ型でそのまま持ち回るため —
+/// ここで端末のタイムゾーンに直すと、`+09:00` の記録を別の土地で作り直した
+/// ときに ID の日付だけがずれる。
 #[must_use]
-pub fn note_file_path(base_dir: &Path, timestamp: DateTime<Local>) -> PathBuf {
+pub fn note_file_path(base_dir: &Path, timestamp: DateTime<FixedOffset>) -> PathBuf {
     data_dir(base_dir)
         .join(NOTES_DIR)
         .join(format!("{}.md", timestamp.format("%Y%m%d_%H%M%S")))
@@ -89,9 +93,35 @@ mod tests {
 
     #[test]
     fn test_note_file_path() {
-        let ts = Local.with_ymd_and_hms(2026, 3, 20, 14, 30, 45).unwrap();
+        let ts = FixedOffset::east_opt(9 * 3600)
+            .unwrap()
+            .with_ymd_and_hms(2026, 3, 20, 14, 30, 45)
+            .unwrap();
         let path = note_file_path(Path::new("/app"), ts);
         assert_eq!(path, PathBuf::from("/app/data/notes/20260320_143045.md"));
+    }
+
+    /// 同じ瞬間でも、時刻が名乗っているオフセットの壁時計で名前が決まる。
+    /// 取り込みは元の記録の `+09:00` をそのまま渡すので、走らせた端末の
+    /// タイムゾーンで日付が動かない。
+    #[test]
+    fn the_filename_follows_the_timestamps_own_offset() {
+        let jst = FixedOffset::east_opt(9 * 3600)
+            .unwrap()
+            .with_ymd_and_hms(2026, 3, 20, 0, 30, 0)
+            .unwrap();
+
+        assert_eq!(
+            note_file_path(Path::new("/app"), jst),
+            PathBuf::from("/app/data/notes/20260320_003000.md")
+        );
+        assert_eq!(
+            note_file_path(
+                Path::new("/app"),
+                jst.with_timezone(&chrono::Utc).fixed_offset()
+            ),
+            PathBuf::from("/app/data/notes/20260319_153000.md")
+        );
     }
 
     #[test]

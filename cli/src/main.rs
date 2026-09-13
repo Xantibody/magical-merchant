@@ -60,6 +60,24 @@ enum Command {
         #[arg(long)]
         title: Option<String>,
     },
+    /// Take in a note written elsewhere, keeping the time it was written
+    ///
+    /// The body is read from stdin; the filename it gets — the note's
+    /// permanent ID — is printed, so a migration script can record where
+    /// each of its files landed.
+    Import {
+        /// When the note was written, RFC 3339 (`2019-05-04T12:00:00+09:00`).
+        /// This becomes the note's filename, so pass the offset it was
+        /// written in rather than letting this machine's timezone decide.
+        #[arg(long)]
+        time: chrono::DateTime<chrono::FixedOffset>,
+        /// A tag to record in the frontmatter, without the `#`. Repeat for more.
+        #[arg(long = "tag")]
+        tags: Vec<String>,
+        /// The template the note came from, recorded as `template:`
+        #[arg(long)]
+        template: Option<String>,
+    },
     /// Read the Timeline or append to today's
     #[command(subcommand)]
     Timeline(TimelineCommand),
@@ -170,6 +188,25 @@ async fn main() -> anyhow::Result<()> {
                 None => eprintln!("nothing written, no note created"),
             }
         }
+        Command::Import {
+            time,
+            tags,
+            template,
+        } => {
+            // `new` と違ってエディタには倒さない。取り込みは何百本を続けて
+            // 流す経路で、そこでエディタが開くのは事故でしかない
+            if std::io::stdin().is_terminal() {
+                anyhow::bail!("import reads the note body from stdin; pipe it in");
+            }
+            let mut body = String::new();
+            std::io::stdin().read_to_string(&mut body)?;
+            let created = commands::import(&data_dir, time, &body, &tags, template.as_deref())?;
+            // 空をただの「作らなかった」で流すと、流し込む側は 1 本
+            // 落ちたことに気付けない。名前を出せないなら失敗として返す
+            let filename =
+                created.ok_or_else(|| anyhow::anyhow!("nothing on stdin, no note created"))?;
+            println!("{filename}");
+        }
         Command::Timeline(command) => run_timeline(&data_dir, command)?,
         Command::Mcp {
             locale,
@@ -250,6 +287,33 @@ mod tests {
         assert!(Cli::try_parse_from(["magical-merchant"]).is_err());
         assert!(Cli::try_parse_from(["magical-merchant", "mcp", "--allow-write"]).is_ok());
         Cli::command().debug_assert();
+    }
+
+    /// 取り込みは時刻が要る。ファイル名 = 作成時刻 = ID なので、時刻を
+    /// 省略できると「今」の名前が付き、元の日付は二度と戻らない。
+    /// 読めない時刻もその場で断る — 529 本流し終えてから気付いては遅い。
+    #[test]
+    fn import_needs_a_time_it_can_read() {
+        let parse = |args: &[&str]| Cli::try_parse_from(args);
+
+        assert!(parse(&["magical-merchant", "import"]).is_err());
+        assert!(parse(&["magical-merchant", "import", "--time", "昨日"]).is_err());
+        assert!(parse(&["magical-merchant", "import", "--time", "2019-05-04"]).is_err());
+        assert!(
+            parse(&[
+                "magical-merchant",
+                "import",
+                "--time",
+                "2019-05-04T12:00:00+09:00",
+                "--tag",
+                "memo",
+                "--tag",
+                "work",
+                "--template",
+                "jounal",
+            ])
+            .is_ok()
+        );
     }
 
     /// `edit` だけは省略で最新に倒さない。書き戻しが起きる側なので、

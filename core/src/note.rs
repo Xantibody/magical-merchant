@@ -31,6 +31,24 @@ pub fn create_draft_note(
     Notes::new(base_dir.to_path_buf()).create(body, tags, context, provenance)
 }
 
+/// 作成時刻を渡してノートを 1 本作る。外にあった記録を移してくるための
+/// 入口で、それ以外は [`create_draft_note`] と同じ(名前の付け方も、同じ秒が
+/// 埋まっていたら 1 秒進めるのも、frontmatter の書き方も core の規則のまま)。
+///
+/// ファイル名は作成時刻そのもの、つまり不変の ID なので、移してきた記録に
+/// 「今」の名前を付けると元の日付は二度と戻らない。時刻は自分のオフセットを
+/// 名乗った値で渡す — 名前もその壁時計で決まる。
+pub fn create_note_at(
+    base_dir: &Path,
+    time: chrono::DateTime<chrono::FixedOffset>,
+    body: &str,
+    tags: &[String],
+    context: &Context,
+    provenance: Provenance<'_>,
+) -> Result<PathBuf, CoreError> {
+    Notes::new(base_dir.to_path_buf()).create_at(time, body, tags, context, provenance)
+}
+
 /// 本文を書き換える。`expected` に読んだときの [`Revision`] を添えると、
 /// そのあいだに本文が変わっていれば [`CoreError::Stale`] で断る。
 /// 返るのは書いた本文の revision — 続けて書くときの `expected` になる。
@@ -188,6 +206,87 @@ mod tests {
         assert!(path.exists());
         let content = fs::read_to_string(&path).unwrap();
         assert!(content.contains("draft body"));
+    }
+
+    /// 時刻を渡して作ったノートは、その時刻の名前で並ぶ。ID は作成時刻
+    /// そのものなので、外から持ち込む記録は元の時刻を名前に写すしかない。
+    #[test]
+    fn a_note_created_at_a_given_time_is_named_after_it() {
+        let tmp = TempDir::new().unwrap();
+
+        let path = create_note_at(
+            tmp.path(),
+            sample_time(),
+            "移してきた本文",
+            &["memo".to_string()],
+            &mock_context(),
+            Provenance::default(),
+        )
+        .unwrap();
+
+        assert_eq!(path.file_name().unwrap(), "20260503_153900.md");
+        let meta = read_note_meta(tmp.path(), &filename_of(&path)).unwrap();
+        assert_eq!(meta.time, sample_time());
+        assert_eq!(meta.tags, vec!["memo"]);
+        assert_eq!(read_note(&path).unwrap(), "移してきた本文");
+    }
+
+    /// 渡された時刻でも衝突の避け方は変わらない。1 本目は残り、2 本目が
+    /// 1 秒進んだ名前を取り、その `time` も進んだほうに揃う。
+    #[test]
+    fn two_notes_given_the_same_time_both_survive_one_second_apart() {
+        let tmp = TempDir::new().unwrap();
+        let at = |body| {
+            create_note_at(
+                tmp.path(),
+                sample_time(),
+                body,
+                &[],
+                &mock_context(),
+                Provenance::default(),
+            )
+            .unwrap()
+        };
+
+        let first = at("one");
+        let second = at("two");
+
+        assert_eq!(first.file_name().unwrap(), "20260503_153900.md");
+        assert_eq!(second.file_name().unwrap(), "20260503_153901.md");
+        assert_eq!(read_note(&first).unwrap(), "one");
+        assert_eq!(read_note(&second).unwrap(), "two");
+        assert_eq!(
+            read_note_meta(tmp.path(), &filename_of(&second))
+                .unwrap()
+                .time,
+            sample_time() + chrono::Duration::seconds(1)
+        );
+    }
+
+    /// 取り込みは自分の名前で名乗る。あとから「どれが移してきたぶんか」を
+    /// 探せるのは、この記録だけ(`cli` に混ぜると区別が付かない)。
+    #[test]
+    fn an_imported_note_names_import_as_its_source() {
+        let tmp = TempDir::new().unwrap();
+
+        let path = create_note_at(
+            tmp.path(),
+            sample_time(),
+            "vault から",
+            &[],
+            &mock_context(),
+            Provenance {
+                source: Some(Source::Import),
+                template: Some("jounal"),
+                ..Provenance::default()
+            },
+        )
+        .unwrap();
+
+        let meta = read_note_meta(tmp.path(), &filename_of(&path)).unwrap();
+        assert_eq!(meta.source, Some("import".to_string()));
+        assert_eq!(meta.template, Some("jounal".to_string()));
+        assert_eq!(meta.updated, None, "取り込んだ時点ではまだ書き直していない");
     }
 
     /// ファイル名は秒までの時刻。同じ秒に 2 本作っても 1 本目を潰さない。
