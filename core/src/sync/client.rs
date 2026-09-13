@@ -94,8 +94,29 @@ impl HttpClient {
     fn auth(&self) -> String {
         format!("Bearer {}", self.token)
     }
+}
 
-    pub(crate) async fn get_sync_state(&self) -> Result<ServerSyncState, SyncError> {
+/// 同期エンジンがサーバーに頼むことの全部。
+///
+/// `HttpClient` が唯一の本番実装で、この trait は試験台のためにある:
+/// reqwest 直結のままだと、1 回の同期が bulk を何回に割ったかを見る場所が
+/// どこにも無い。エンジンはこの 2 つしかサーバーに頼まない。
+///
+/// `async fn` ではなく `impl Future + Send` と書くのは、同期が Tauri の
+/// マルチスレッド runtime に spawn されるから。`async fn` の戻りは既定で
+/// `Send` が付かず、呼び出し側が丸ごと `!Send` になる。
+pub(crate) trait SyncTransport {
+    fn get_sync_state(
+        &self,
+    ) -> impl std::future::Future<Output = Result<ServerSyncState, SyncError>> + Send;
+    fn bulk(
+        &self,
+        req: BulkRequest,
+    ) -> impl std::future::Future<Output = Result<BulkResponse, SyncError>> + Send;
+}
+
+impl SyncTransport for HttpClient {
+    async fn get_sync_state(&self) -> Result<ServerSyncState, SyncError> {
         let resp = self
             .http
             .get(format!("{}/sync-state", self.base_url))
@@ -111,7 +132,7 @@ impl HttpClient {
             .map_err(|e| SyncError::other(format!("Failed to parse sync state: {e}")))
     }
 
-    pub(crate) async fn bulk(&self, req: BulkRequest) -> Result<BulkResponse, SyncError> {
+    async fn bulk(&self, req: BulkRequest) -> Result<BulkResponse, SyncError> {
         let resp = self
             .http
             .post(format!("{}/sync/bulk", self.base_url))

@@ -94,6 +94,29 @@ function validateBulkRequest(body: BulkRequest): string | null {
   return null;
 }
 
+/**
+ * 1 リクエストで引き受ける R2 操作の上限。
+ *
+ * Workers の Free プランは 1 呼び出しにつきサブリクエスト 50 回までで、
+ * R2 バインディングの get / put / delete もそこに数えられる。bulk は
+ * 1 ファイル 1 回(競合だけは退避の get + put と上書きの put で 3 回)、
+ * 加えて同期状態の読み書きで必ず 2 回使う。
+ *
+ * クライアントは 40 で切っている(core の `BULK_OPERATION_BUDGET`)。
+ * ここで断るのは分割を知らない古いクライアントで、そのとき返るのが
+ * Cloudflare の `Too many subrequests` ではなく読める理由になる。
+ */
+const MAX_BULK_OPERATIONS = 45;
+
+function bulkOperationCount(body: BulkRequest): number {
+  return (
+    body.uploads.length +
+    body.downloads.length +
+    body.conflicts.length * 3 +
+    (body.delete_remote.length > 0 ? 1 : 0)
+  );
+}
+
 async function handleSyncBulk(
   bucket: R2Bucket,
   userId: string,
@@ -108,6 +131,13 @@ async function handleSyncBulk(
   const invalid = validateBulkRequest(body);
   if (invalid) {
     return errorResponse(invalid, 400);
+  }
+  const operations = bulkOperationCount(body);
+  if (operations > MAX_BULK_OPERATIONS) {
+    return errorResponse(
+      `Too many operations for one request (${operations} > ${MAX_BULK_OPERATIONS}); split the sync`,
+      413,
+    );
   }
 
   // CAS check
