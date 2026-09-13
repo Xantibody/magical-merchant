@@ -2,7 +2,7 @@ use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
-use chrono::Local;
+use chrono::{DateTime, FixedOffset, Local};
 
 use crate::error::CoreError;
 use crate::utils::device::Context;
@@ -28,21 +28,7 @@ impl Notes {
         notes_dir(&self.base_dir)
     }
 
-    /// ノートを 1 本作る。返るのは書いたファイルのパス。
-    ///
-    /// ファイル名は秒までの時刻で、それがそのままノートの ID になる
-    /// (形式は不変)。同じ秒に 2 本作られたときは空いている秒まで
-    /// 1 秒ずつ進める — 名前を変えるのではなく、まだ誰も使っていない
-    /// 名前を選び直すだけ。frontmatter の `time` も進めたあとの時刻に
-    /// 揃える。名前(一覧の並び)と `time`(表示)がずれると、同じ一覧の
-    /// 中で並びと日時が食い違う。
-    ///
-    /// 予約は `create_new` に任せる。`exists()` で見てから書くと、その
-    /// あいだに別スレッド・別プロセスが同じ名前を取れてしまう。
-    /// 作成は `write_atomic`(tmp → rename)を通さない: rename は既存の
-    /// ファイルを黙って置き換えるので、衝突回避と両立しない。ここで
-    /// 書き途中に落ちても失うのは書きかけの新規ノートだけで、
-    /// 既存の記録は壊れない。
+    /// 今この場でノートを 1 本作る。時刻は `create_at` に渡すだけ。
     pub(crate) fn create(
         &self,
         body: &str,
@@ -50,8 +36,35 @@ impl Notes {
         context: &Context,
         provenance: Provenance<'_>,
     ) -> Result<PathBuf, CoreError> {
-        let mut now = Local::now();
-        let mut file_path = note_file_path(&self.base_dir, now);
+        self.create_at(Local::now().fixed_offset(), body, tags, context, provenance)
+    }
+
+    /// 作成時刻を渡してノートを 1 本作る。返るのは書いたファイルのパス。
+    ///
+    /// ファイル名は秒までの時刻で、それがそのままノートの ID になる
+    /// (形式は不変)。同じ秒に 2 本作られたときは空いている秒まで
+    /// 1 秒ずつ進める — 名前を変えるのではなく、まだ誰も使っていない
+    /// 名前を選び直すだけ。frontmatter の `time` も進めたあとの時刻に
+    /// 揃える。名前(一覧の並び)と `time`(表示)がずれると、同じ一覧の
+    /// 中で並びと日時が食い違う。渡された時刻が過去でも同じで、移して
+    /// きた記録は元の時刻で並び、同じ秒のぶんも 1 本も落ちない。
+    ///
+    /// 予約は `create_new` に任せる。`exists()` で見てから書くと、その
+    /// あいだに別スレッド・別プロセスが同じ名前を取れてしまう。
+    /// 作成は `write_atomic`(tmp → rename)を通さない: rename は既存の
+    /// ファイルを黙って置き換えるので、衝突回避と両立しない。ここで
+    /// 書き途中に落ちても失うのは書きかけの新規ノートだけで、
+    /// 既存の記録は壊れない。
+    pub(crate) fn create_at(
+        &self,
+        time: DateTime<FixedOffset>,
+        body: &str,
+        tags: &[String],
+        context: &Context,
+        provenance: Provenance<'_>,
+    ) -> Result<PathBuf, CoreError> {
+        let mut time = time;
+        let mut file_path = note_file_path(&self.base_dir, time);
         ensure_dir(&file_path)?;
 
         loop {
@@ -61,13 +74,13 @@ impl Notes {
                 .open(&file_path)
             {
                 Ok(mut file) => {
-                    let markdown = format_note_markdown(body, tags, now, context, provenance)?;
+                    let markdown = format_note_markdown(body, tags, time, context, provenance)?;
                     file.write_all(markdown.as_bytes())?;
                     return Ok(file_path);
                 }
                 Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
-                    now += chrono::Duration::seconds(1);
-                    file_path = note_file_path(&self.base_dir, now);
+                    time += chrono::Duration::seconds(1);
+                    file_path = note_file_path(&self.base_dir, time);
                 }
                 Err(e) => return Err(e.into()),
             }
@@ -175,7 +188,7 @@ impl Notes {
     pub(crate) fn update_meta(
         &self,
         filename: &NoteFilename,
-        time: chrono::DateTime<chrono::FixedOffset>,
+        time: DateTime<FixedOffset>,
         tags: &[String],
     ) -> Result<(), CoreError> {
         self.edit_frontmatter(filename, |existing| NoteFrontmatter {

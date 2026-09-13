@@ -7,8 +7,10 @@
 
 use std::path::Path;
 
+use chrono::{DateTime, FixedOffset};
+
 use magical_merchant_core::utils::device::Context;
-use magical_merchant_core::{CoreError, NoteFilename, Revision, Snapshot};
+use magical_merchant_core::{CoreError, NoteFilename, Provenance, Revision, Snapshot};
 
 /// 書き込み時に記録する端末。座標や電池は端末の外から読めないので、
 /// 分かる範囲(OS と CPU)だけを正直に書く。
@@ -46,6 +48,60 @@ pub(crate) enum WriteError {
     Stale(NoteFilename),
     #[error("{0}")]
     Other(#[from] CoreError),
+}
+
+/// ノートを 1 本作る。返るのは付いたファイル名 — ノートの ID そのもの。
+///
+/// 空の本文では作らない(`None`)。打ち損ねやエディタを閉じただけの空が、
+/// 消す手段の無い記録として残るのを避ける。出自は呼び出し側が名乗る:
+/// 同じ経路を通る CLI と MCP を、共有のヘルパに一括で名乗らせない。
+pub(crate) fn create(
+    data_dir: &Path,
+    body: &str,
+    tags: &[String],
+    provenance: Provenance<'_>,
+) -> Result<Option<NoteFilename>, CoreError> {
+    if body.trim().is_empty() {
+        return Ok(None);
+    }
+    named(&magical_merchant_core::create_draft_note(
+        data_dir,
+        body,
+        tags,
+        &context(),
+        provenance,
+    )?)
+}
+
+/// 書かれた時刻を渡す版。外にあった記録は、その時刻がそのまま ID になる。
+/// 空の本文を作らないのも、`context` を今この端末で書くのも `create` と同じ。
+pub(crate) fn create_at(
+    data_dir: &Path,
+    time: DateTime<FixedOffset>,
+    body: &str,
+    tags: &[String],
+    provenance: Provenance<'_>,
+) -> Result<Option<NoteFilename>, CoreError> {
+    if body.trim().is_empty() {
+        return Ok(None);
+    }
+    named(&magical_merchant_core::create_note_at(
+        data_dir,
+        time,
+        body,
+        tags,
+        &context(),
+        provenance,
+    )?)
+}
+
+/// 書いたファイルのパスを ID に読み替える。呼ぶ側が欲しいのは名前だけ。
+fn named(path: &Path) -> Result<Option<NoteFilename>, CoreError> {
+    let name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| CoreError::NotFound(path.display().to_string()))?;
+    NoteFilename::parse(name).map(Some)
 }
 
 pub(crate) fn read(data_dir: &Path, filename: &NoteFilename) -> Result<Read, CoreError> {

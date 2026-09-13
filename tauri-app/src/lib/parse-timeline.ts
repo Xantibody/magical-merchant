@@ -141,6 +141,9 @@ export function sourceLabel(source: string): string {
     case "widget": {
       return labels.sourceWidget;
     }
+    case "import": {
+      return labels.sourceImport;
+    }
     default: {
       return source;
     }

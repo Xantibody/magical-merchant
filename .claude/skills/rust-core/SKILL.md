@@ -25,12 +25,19 @@ description: Rust core crate conventions, Tauri command plumbing, MCP CLI, and t
 
 ## CLI (`cli/`, binary `magical-merchant`)
 
-One binary, two jobs. `commands.rs` holds `list` / `show` / `edit` / `new`;
-`edit` writes the body (never the frontmatter) to a scratch file, runs
-`$VISUAL` / `$EDITOR` (`editor.rs`), and writes back only if the body
-changed. `notes.rs` is the shared write path — snapshot, revision check,
-core `update_note` — used by both `edit` and the MCP `update_note` tool;
-never write a note from the CLI or MCP any other way. A refused edit
+One binary, two jobs. `commands.rs` holds `list` / `show` / `edit` / `new` /
+`import`; `edit` writes the body (never the frontmatter) to a scratch file,
+runs `$VISUAL` / `$EDITOR` (`editor.rs`), and writes back only if the body
+changed. `notes.rs` is the shared write path — creation (empty body refused,
+path turned back into the note's ID) and overwrites (snapshot, revision
+check, core `update_note`) — used by `new` / `import` / `edit` and the MCP
+`create_note` / `update_note` tools; never write a note from the CLI or MCP
+any other way. Each caller names its own `Source`. `import` additionally
+carries the creation time (core `create_note_at`): a note's filename is its
+creation time and its permanent ID, so a note written elsewhere can only
+keep its date if the creating call takes one. It reads the body from stdin
+and prints the filename; quirks of any particular source format belong in a
+conversion script, not in the binary. A refused edit
 (stale, empty, editor failure) keeps the scratch file and prints its path.
 The editor launch is a closure parameter so the flows are unit-tested
 without an editor. `timeline.rs` holds `timeline add / show / dates`;
