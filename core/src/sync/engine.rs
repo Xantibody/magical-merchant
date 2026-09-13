@@ -181,7 +181,17 @@ async fn sync_once<T: SyncTransport + Sync>(
 
     let bulk_resp = client.bulk(bulk_req).await?;
 
-    let mut unsettled = apply_response(&bulk_resp, &actions, &local_files, base_dir, &mut result);
+    let unwritten = apply_response(&bulk_resp, &actions, &local_files, base_dir, &mut result);
+
+    // 送った数ではなく、片付いた数を進み具合とする。書き込みに失敗した
+    // キーは次の round でも同じ順に選ばれるので、送った数で数えると
+    // 「進んでいる」と言いながら同じ 40 件を 200 round 繰り返す
+    let settled = actions
+        .iter()
+        .filter(|a| !unwritten.contains(a.key()))
+        .count();
+
+    let mut unsettled = unwritten;
     // 次の round に回したキーも、取得に失敗したキーと同じ扱いにする。
     // サーバーが確定させた版で記録してしまうと、手元にあるのは古い版なので
     // 次の round には「ローカルの編集」に見え、取りに行くはずだった
@@ -203,7 +213,7 @@ async fn sync_once<T: SyncTransport + Sync>(
 
     Ok(RoundOutcome {
         result,
-        done: actions.len(),
+        done: settled,
         remaining: deferred.len(),
     })
 }
@@ -1061,6 +1071,9 @@ mod tests {
         files: HashMap<String, (Vec<u8>, String, String)>,
         bulk_ops: Vec<usize>,
         uploaded_keys: Vec<String>,
+        /// 手元に書けない状況(読み取り専用・容量不足)の代わり。
+        /// 壊れた base64 を返せば `apply_response` が同じ道を通る
+        corrupt_downloads: bool,
     }
 
     struct FakeServer {
@@ -1072,6 +1085,12 @@ mod tests {
             Self {
                 store: std::sync::Mutex::new(FakeStore::default()),
             }
+        }
+
+        fn corrupting_downloads() -> Self {
+            let server = Self::new();
+            server.store.lock().unwrap().corrupt_downloads = true;
+            server
         }
 
         fn put(&self, key: &str, content: &str, last_modified: &str) {
@@ -1173,7 +1192,11 @@ mod tests {
                     let (content, _, _) = store.files.get(key)?;
                     Some(DownloadedFile {
                         key: key.clone(),
-                        content_base64: B64.encode(content),
+                        content_base64: if store.corrupt_downloads {
+                            "not base64!!".to_string()
+                        } else {
+                            B64.encode(content)
+                        },
                     })
                 })
                 .collect();
@@ -1272,6 +1295,41 @@ mod tests {
                 format!("new {i}")
             );
         }
+    }
+
+    /// 送った数ではなく片付いた数で進み具合を測る。
+    ///
+    /// 手元に 1 件も書けない状況(読み取り専用・容量不足)だと、選ばれた
+    /// 40 件はどれも失敗して記録も進まない。次の round はキー順で同じ
+    /// 40 件を選ぶので、送った数で数えていると「進んでいる」と言いながら
+    /// 200 round 繰り返し、残りの 5 件には一度も手が届かない。
+    #[tokio::test]
+    async fn a_round_where_nothing_could_be_written_stops_instead_of_spinning() {
+        let dir = tempfile::tempdir().unwrap();
+        let server = FakeServer::corrupting_downloads();
+        let mut state = SyncState::default();
+        for i in 0..45 {
+            let key = format!("notes/{i:03}.md");
+            seed(dir.path(), &key, "old");
+            server.put(&key, &format!("new {i}"), "2026-08-05T00:00:00Z");
+            state.files.insert(
+                key,
+                FileSyncRecord {
+                    last_synced_modified: "2026-08-01T00:00:00Z".parse().unwrap(),
+                    content_hash: scan::compute_hash(b"old"),
+                },
+            );
+        }
+        state.save(dir.path()).unwrap();
+
+        let err = run_over(&server, dir.path(), 40, |_| {}).await.unwrap_err();
+
+        assert_eq!(err.kind, "stalled");
+        assert_eq!(
+            server.bulk_ops().len(),
+            1,
+            "1 round で見切りをつける。200 回ぶんの往復を Free プランに投げない"
+        );
     }
 
     /// 送るものが残っているのに 1 件も送れない round は、何度回しても同じ。
