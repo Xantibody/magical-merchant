@@ -69,7 +69,34 @@ fn os_version() -> Option<String> {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+/// Linux は配布物ごとに版の付け方が違うので、`/etc/os-release` に聞く。
+#[cfg(target_os = "linux")]
+fn os_version() -> Option<String> {
+    parse_os_release(&std::fs::read_to_string("/etc/os-release").ok()?)
+}
+
+/// `/etc/os-release` から「配布物の名前 + 版」を組む。
+///
+/// `os` は Linux ではただの "linux" で、版だけを足しても何の Linux か分からない。
+/// 名前と並べて初めて、macOS の "26.6.2" と同じだけのことを語る。版を持たない
+/// rolling release は `PRETTY_NAME` が名前だけを返すので、それをそのまま使う。
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn parse_os_release(contents: &str) -> Option<String> {
+    fn field(contents: &str, key: &str) -> Option<String> {
+        contents.lines().find_map(|line| {
+            let value = line.strip_prefix(key)?.strip_prefix('=')?;
+            let value = value.trim().trim_matches('"').trim();
+            (!value.is_empty()).then(|| value.to_string())
+        })
+    }
+
+    match (field(contents, "NAME"), field(contents, "VERSION_ID")) {
+        (Some(name), Some(version)) => Some(format!("{name} {version}")),
+        _ => field(contents, "PRETTY_NAME"),
+    }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
 const fn os_version() -> Option<String> {
     None
 }
@@ -182,7 +209,56 @@ fn classify_port(port: &str) -> NetworkType {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+/// Linux も既定経路から辿る。経路表は `/proc/net/route` がそのまま持っている
+/// ので、`ip` を起動する必要はない。無線かどうかは `/sys` のマークが答える。
+#[cfg(target_os = "linux")]
+fn network() -> Option<NetworkType> {
+    let route = std::fs::read_to_string("/proc/net/route").ok()?;
+    let Some(interface) = parse_default_route_interface(&route) else {
+        // 既定経路が無い = どこにも出られない。
+        return Some(NetworkType::Offline);
+    };
+
+    let device = std::path::Path::new("/sys/class/net").join(&interface);
+    let wireless = device.join("wireless").exists() || device.join("phy80211").exists();
+
+    Some(classify_interface(&interface, wireless))
+}
+
+/// `/proc/net/route` の、宛先が `00000000` の行のインターフェース名。
+///
+/// 1 行目は見出しなので読み飛ばす。
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn parse_default_route_interface(contents: &str) -> Option<String> {
+    contents.lines().skip(1).find_map(|line| {
+        let mut fields = line.split_whitespace();
+        let interface = fields.next()?;
+        (fields.next()? == "00000000").then(|| interface.to_string())
+    })
+}
+
+/// インターフェース名と `/sys` の無線マークから回線の種類を決める。
+///
+/// USB テザリングは Linux では `usb0` や `enp0s20u1` として現れ、机の上の
+/// 有線と見分けが付かない。macOS のようにハードウェアポートの名前を引けない
+/// ので、携帯回線と言い切れるのは専用の接頭辞を持つものだけ。
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn classify_interface(interface: &str, wireless: bool) -> NetworkType {
+    const MOBILE_PREFIXES: [&str; 4] = ["wwan", "wwp", "ppp", "rmnet"];
+
+    if wireless {
+        NetworkType::WiFi
+    } else if MOBILE_PREFIXES
+        .iter()
+        .any(|prefix| interface.starts_with(prefix))
+    {
+        NetworkType::Mobile
+    } else {
+        NetworkType::Ethernet
+    }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
 const fn network() -> Option<NetworkType> {
     None
 }
@@ -293,5 +369,92 @@ mod macos_tests {
     #[test]
     fn names_the_os_version_on_macos() {
         assert!(probe().os_version.is_some());
+    }
+}
+
+/// Linux 側の読み取りのうち、ファイルの中身を解くところだけを取り出したもの。
+///
+/// 呼ぶのは Linux のビルドだけだが、全プラットフォームでビルドしてテストする。
+/// 手元も CI の macOS ジョブも Linux ではなく、`cfg` で閉じると誰も実行しない
+/// テストになる。ファイルを開く側と違い、ここは中身さえあれば検証できる。
+#[cfg(test)]
+mod linux_tests {
+    use super::*;
+
+    const UBUNTU: &str = r#"PRETTY_NAME="Ubuntu 24.04.1 LTS"
+NAME="Ubuntu"
+VERSION_ID="24.04"
+VERSION="24.04.1 LTS (Noble Numbat)"
+ID=ubuntu
+"#;
+
+    const NIXOS: &str = r#"NAME=NixOS
+ID=nixos
+VERSION="25.05 (Warbler)"
+VERSION_ID="25.05"
+PRETTY_NAME="NixOS 25.05 (Warbler)"
+"#;
+
+    /// `os` が "linux" としか言わないので、版だけでは何の Linux か分からない。
+    /// 名前と版を組にして初めて、macOS の "26.6.2" と同じ重さの記録になる。
+    #[test]
+    fn names_the_distribution_and_its_version() {
+        assert_eq!(parse_os_release(UBUNTU).as_deref(), Some("Ubuntu 24.04"));
+        assert_eq!(parse_os_release(NIXOS).as_deref(), Some("NixOS 25.05"));
+    }
+
+    /// 版を持たない rolling release は名前だけで名乗る。
+    #[test]
+    fn falls_back_to_the_pretty_name_without_a_version() {
+        let arch = "NAME=\"Arch Linux\"\nPRETTY_NAME=\"Arch Linux\"\nID=arch\n";
+
+        assert_eq!(parse_os_release(arch).as_deref(), Some("Arch Linux"));
+    }
+
+    #[test]
+    fn finds_no_version_in_an_empty_or_unreadable_file() {
+        assert_eq!(parse_os_release(""), None);
+        assert_eq!(parse_os_release("ID=ubuntu\n"), None);
+    }
+
+    /// `/proc/net/route` の抜粋。既定経路は宛先が 00000000 の行。
+    const ROUTE: &str = "Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\n\
+        enp0s3\t0002A8C0\t00000000\t0001\t0\t0\t100\t00FFFFFF\n\
+        wlp2s0\t00000000\t0102A8C0\t0003\t0\t0\t600\t00000000\n";
+
+    #[test]
+    fn reads_the_interface_the_default_route_uses() {
+        assert_eq!(
+            parse_default_route_interface(ROUTE).as_deref(),
+            Some("wlp2s0")
+        );
+    }
+
+    /// 既定経路の行が無い = どこにも出られない。
+    #[test]
+    fn finds_no_interface_without_a_default_route() {
+        let only_lan = "Iface\tDestination\tGateway\n\
+            enp0s3\t0002A8C0\t00000000\n";
+
+        assert_eq!(parse_default_route_interface(only_lan), None);
+        assert_eq!(parse_default_route_interface(""), None);
+    }
+
+    /// 実機の Linux で読める場所を見ているかは、パースのテストでは分からない。
+    /// CI の Linux ジョブが通る唯一の確認。
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn names_the_distribution_it_runs_on() {
+        assert!(probe().os_version.is_some());
+    }
+
+    /// 無線かどうかは名前ではなく `/sys` が答える。名前で見分けるのは
+    /// 携帯回線のインターフェースだけで、そちらは慣習の接頭辞しか手がかりが無い。
+    #[test]
+    fn tells_wireless_from_wired() {
+        assert_eq!(classify_interface("wlp2s0", true), NetworkType::WiFi);
+        assert_eq!(classify_interface("enp0s3", false), NetworkType::Ethernet);
+        assert_eq!(classify_interface("wwan0", false), NetworkType::Mobile);
+        assert_eq!(classify_interface("ppp0", false), NetworkType::Mobile);
     }
 }
