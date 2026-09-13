@@ -32,13 +32,17 @@ changed. `notes.rs` is the shared write path — creation (empty body refused,
 path turned back into the note's ID) and overwrites (snapshot, revision
 check, core `update_note`) — used by `new` / `import` / `edit` and the MCP
 `create_note` / `update_note` tools; never write a note from the CLI or MCP
-any other way. Each caller names its own `Source`. `import` additionally
-carries the creation time (core `create_note_at`): a note's filename is its
-creation time and its permanent ID, so a note written elsewhere can only
-keep its date if the creating call takes one. It reads the body from stdin
-and prints the filename; quirks of any particular source format belong in a
-conversion script, not in the binary. A refused edit
-(stale, empty, editor failure) keeps the scratch file and prints its path.
+any other way. Each caller names its own `Source`, and the `Context` it
+records comes from core's `utils::device::probe` — the same probe the app
+runs, so the terminal and the app say the same things about the machine.
+Only the coordinate is missing there; see `notes.rs::context`. `import`
+additionally carries the creation time (core `create_note_at`): a note's
+filename is its creation time and its permanent ID, so a note written
+elsewhere can only keep its date if the creating call takes one. It reads
+the body from stdin and prints the filename; quirks of any particular
+source format belong in a conversion script, not in the binary. A refused
+edit (stale, empty, editor failure) keeps the scratch file and prints its
+path.
 The editor launch is a closure parameter so the flows are unit-tested
 without an editor. `timeline.rs` holds `timeline add / show / dates`;
 `add` only appends (same core call as the Android widget), so it carries

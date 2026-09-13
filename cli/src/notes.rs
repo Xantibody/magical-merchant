@@ -12,14 +12,15 @@ use chrono::{DateTime, FixedOffset};
 use magical_merchant_core::utils::device::Context;
 use magical_merchant_core::{CoreError, NoteFilename, Provenance, Revision, Snapshot};
 
-/// 書き込み時に記録する端末。座標や電池は端末の外から読めないので、
-/// 分かる範囲(OS と CPU)だけを正直に書く。
+/// 書き込み時に記録する端末。測り方はアプリと同じ core の probe で、
+/// 電池もネットワークも OS の版もここで揃う。
+///
+/// 座標だけは載らない。測位は許可を取って数秒待つ仕事で、一行書いて
+/// 終わる CLI にそれを待たせるのは高すぎる。アプリが最後に測った座標を
+/// 使い回す手もあるが、アプリを開いていない日の記録に前の場所が付く。
+/// 分からないことは分からないまま残す。
 pub(crate) fn context() -> Context {
-    Context {
-        os: std::env::consts::OS.to_string(),
-        arch: std::env::consts::ARCH.to_string(),
-        ..Context::default()
-    }
+    magical_merchant_core::utils::device::probe()
 }
 
 /// 読んだ本文と、書き戻すときに添える revision。
@@ -149,6 +150,28 @@ mod tests {
     use super::*;
     use magical_merchant_core::Provenance;
     use tempfile::TempDir;
+
+    /// 端末について言えることは、アプリから書いても CLI から書いても同じ。
+    /// 入り口の違いは `source` が語る担当で、`context` が痩せる理由にはならない。
+    #[test]
+    fn the_recorded_context_says_as_much_about_the_machine_as_the_app_does() {
+        let context = context();
+        let probed = magical_merchant_core::utils::device::probe();
+
+        assert_eq!(context.os, std::env::consts::OS);
+        assert_eq!(context.arch, std::env::consts::ARCH);
+        assert_eq!(context.hostname, probed.hostname);
+        assert_eq!(context.os_version, probed.os_version);
+        assert_eq!(context.locale, probed.locale);
+    }
+
+    /// 座標だけは載せない。1 回で終わる CLI が測位を待つと、`-m` の一行を
+    /// 書くたびに数秒止まる。古い座標で埋めるほうはもっと悪い
+    /// (前に開いた場所が、いま書いた場所として残る)。
+    #[test]
+    fn the_recorded_context_carries_no_location() {
+        assert!(context().location.is_none());
+    }
 
     fn seed(base: &Path, body: &str) -> NoteFilename {
         let path = magical_merchant_core::create_draft_note(
