@@ -89,22 +89,27 @@ async fn run_over<T: SyncTransport + Sync, F: FnMut(RoundProgress)>(
             return Ok(total);
         }
         if outcome.done == 0 {
-            return Err(stalled(outcome.remaining));
+            return Err(stalled(&format!(
+                "Sync stopped making progress with {} change(s) left.",
+                outcome.remaining
+            )));
         }
     }
-    Err(stalled(0))
+    // 途中で止めても壊れない: round ごとに state は書けているので、
+    // 送り終えたぶんは次の同期でやり直しにならない
+    Err(stalled(&format!(
+        "Sync gave up after {MAX_ROUNDS} rounds. What it managed to send is kept; \
+         run it again to continue."
+    )))
 }
 
-/// 送るものが残っているのに 1 つも送れなかった。予算に収まらない action は
-/// 無いので、ここに来るのはバグか、同じキーで詰まり続けているとき。
-/// 黙って回り続けるより止めて見せる。
-fn stalled(remaining: usize) -> SyncError {
+/// 回り続けても終わらない、と分かったとき。予算に収まらない action は
+/// 無い(競合の 3 でも 40 に入る)ので、ここに来るのはバグか、同じキーで
+/// 詰まり続けているとき。黙って回り続けるより止めて見せる。
+fn stalled(what_happened: &str) -> SyncError {
     SyncError::new(
         "stalled",
-        format!(
-            "Sync stopped making progress with {remaining} change(s) left. \
-             Try again; if it keeps happening, report it."
-        ),
+        format!("{what_happened} Try again; if it keeps happening, report it."),
     )
 }
 
