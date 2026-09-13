@@ -20,6 +20,7 @@ use super::client::{
 use super::conflict;
 use super::diff::{self, RemoteFile, SyncAction};
 use super::lock::SyncLock;
+use super::round::{self, BULK_OPERATION_BUDGET};
 use super::scan::{self, LocalFile};
 use super::state::{FileSyncRecord, SyncState};
 use super::{SyncError, SyncIssue, SyncResult};
@@ -27,16 +28,45 @@ use crate::utils::paths;
 
 const MAX_SYNC_ATTEMPTS: usize = 3;
 
-/// 1 回の同期。呼び出し側は認証済みの `HttpClient` を渡す。
-pub async fn run(client: &HttpClient, base_dir: &Path) -> Result<SyncResult, SyncError> {
-    run_over(client, base_dir).await
+/// 1 回の同期で回す round の上限。予算より高くつく action は無い
+/// (競合の 3 でも予算 40 に収まる) ので、ここに当たるのはバグのとき。
+/// 進まない round はその場で `stalled` になるが、念のための天井。
+const MAX_ROUNDS: usize = 200;
+
+/// round が 1 つ終わるたびに呼ばれる。進捗を出すのは CLI だけで、アプリは
+/// spinner を回したままにする。
+#[derive(Debug, Clone, Copy)]
+pub struct RoundProgress {
+    /// 1 から数えた round の番号。全体で何 round になるかは、やってみるまで
+    /// 分からない — 途中で他端末が書けば増える
+    pub round: usize,
+    /// この round で送った action の数
+    pub done: usize,
+    /// 予算に入らず次に回した action の数
+    pub remaining: usize,
 }
 
-/// 本体。`HttpClient` ではなく `SyncTransport` を取るのはテストのため —
-/// 公開する口は `run` 1 つに保って、trait は crate の中に閉じる。
-async fn run_over<T: SyncTransport + Sync>(
+/// 1 回の同期。呼び出し側は認証済みの `HttpClient` を渡す。
+pub async fn run(client: &HttpClient, base_dir: &Path) -> Result<SyncResult, SyncError> {
+    run_over(client, base_dir, BULK_OPERATION_BUDGET, |_| {}).await
+}
+
+/// round ごとに知らせる版。何百本を送るときに、止まって見えないようにする。
+pub async fn run_with_progress<F: FnMut(RoundProgress)>(
+    client: &HttpClient,
+    base_dir: &Path,
+    on_round: F,
+) -> Result<SyncResult, SyncError> {
+    run_over(client, base_dir, BULK_OPERATION_BUDGET, on_round).await
+}
+
+/// 本体。`HttpClient` ではなく `SyncTransport` を取るのも、予算を引数に
+/// するのもテストのため — 公開する口は上の 2 つに保つ。
+async fn run_over<T: SyncTransport + Sync, F: FnMut(RoundProgress)>(
     client: &T,
     base_dir: &Path,
+    budget: usize,
+    mut on_round: F,
 ) -> Result<SyncResult, SyncError> {
     // 同じデータディレクトリを見ている別のプロセスと同時に走ると、
     // 最後に書いたほうの `.sync-state.json` が残って相手の記録が消える。
@@ -46,10 +76,63 @@ async fn run_over<T: SyncTransport + Sync>(
 
     sweep_stale_temp_files(base_dir);
 
+    let mut total = SyncResult::default();
+    for round in 1..=MAX_ROUNDS {
+        let outcome = sync_round(client, base_dir, budget).await?;
+        absorb(&mut total, outcome.result);
+        on_round(RoundProgress {
+            round,
+            done: outcome.done,
+            remaining: outcome.remaining,
+        });
+        if outcome.remaining == 0 {
+            return Ok(total);
+        }
+        if outcome.done == 0 {
+            return Err(stalled(outcome.remaining));
+        }
+    }
+    Err(stalled(0))
+}
+
+/// 送るものが残っているのに 1 つも送れなかった。予算に収まらない action は
+/// 無いので、ここに来るのはバグか、同じキーで詰まり続けているとき。
+/// 黙って回り続けるより止めて見せる。
+fn stalled(remaining: usize) -> SyncError {
+    SyncError::new(
+        "stalled",
+        format!(
+            "Sync stopped making progress with {remaining} change(s) left. \
+             Try again; if it keeps happening, report it."
+        ),
+    )
+}
+
+fn absorb(total: &mut SyncResult, round: SyncResult) {
+    total.uploaded += round.uploaded;
+    total.downloaded += round.downloaded;
+    total.deleted_remote += round.deleted_remote;
+    total.deleted_local += round.deleted_local;
+    total.conflicts += round.conflicts;
+    total.errors.extend(round.errors);
+}
+
+/// 1 round ぶんの結果と、まだ残っている数。
+struct RoundOutcome {
+    result: SyncResult,
+    done: usize,
+    remaining: usize,
+}
+
+async fn sync_round<T: SyncTransport + Sync>(
+    client: &T,
+    base_dir: &Path,
+    budget: usize,
+) -> Result<RoundOutcome, SyncError> {
     // 他端末と同時に同期すると CAS で弾かれる。ユーザーに再試行させる理由はないので
     // 取得し直して自動でやり直す
     for attempt in 1..=MAX_SYNC_ATTEMPTS {
-        let outcome = sync_once(client, base_dir).await;
+        let outcome = sync_once(client, base_dir, budget).await;
         let retryable =
             matches!(&outcome, Err(err) if err.kind == "conflict") && attempt < MAX_SYNC_ATTEMPTS;
         if !retryable {
@@ -62,7 +145,8 @@ async fn run_over<T: SyncTransport + Sync>(
 async fn sync_once<T: SyncTransport + Sync>(
     client: &T,
     base_dir: &Path,
-) -> Result<SyncResult, SyncError> {
+    budget: usize,
+) -> Result<RoundOutcome, SyncError> {
     let server_state = client.get_sync_state().await?;
 
     let local_files =
@@ -72,7 +156,11 @@ async fn sync_once<T: SyncTransport + Sync>(
     let remote_files = server_state_to_remote_files(&server_state);
     let actions = diff::compute(&local_files, &remote_files, &local_state);
 
+    // 全消しの判定は毎 round、分ける前の全部で行う。分けたあとだと、
+    // 40 件ずつの「一部削除」に見えて歯止めが効かない
     refuse_wholesale_local_deletion(&actions, &local_files)?;
+
+    let (actions, deferred) = round::take_round(&actions, budget);
 
     let data_dir = paths::data_dir(base_dir);
     let mut result = SyncResult::default();
@@ -88,7 +176,12 @@ async fn sync_once<T: SyncTransport + Sync>(
 
     let bulk_resp = client.bulk(bulk_req).await?;
 
-    let unwritten = apply_response(&bulk_resp, &actions, &local_files, base_dir, &mut result);
+    let mut unsettled = apply_response(&bulk_resp, &actions, &local_files, base_dir, &mut result);
+    // 次の round に回したキーも、取得に失敗したキーと同じ扱いにする。
+    // サーバーが確定させた版で記録してしまうと、手元にあるのは古い版なので
+    // 次の round には「ローカルの編集」に見え、取りに行くはずだった
+    // ダウンロードがアップロードに化けて新しい版を潰す
+    unsettled.extend(deferred.iter().map(|a| a.key().to_string()));
 
     // サーバーが確定させた状態をそのままローカルにも記録する。
     // ここでローカルを再スキャンして組み直すと、ダウンロード直後の mtime が
@@ -98,12 +191,16 @@ async fn sync_once<T: SyncTransport + Sync>(
         base_dir,
         &bulk_resp.new_state,
         &data_dir,
-        &unwritten,
+        &unsettled,
         &local_state,
     )
     .map_err(SyncError::other)?;
 
-    Ok(result)
+    Ok(RoundOutcome {
+        result,
+        done: actions.len(),
+        remaining: deferred.len(),
+    })
 }
 
 /// これより古い `.sync-tmp-*` は、書き手が落ちて置き去りにしたものと見なす。
@@ -946,5 +1043,242 @@ mod tests {
         assert_eq!(result.downloaded, 0);
         assert_eq!(result.errors.len(), 1, "errors: {:?}", result.errors);
         assert!(unwritten.contains("../escaped.md"));
+    }
+
+    // ──────────── round をまたぐ同期 ────────────
+
+    /// サーバーの代役。R2 と同じく 1 ファイル 1 操作で数え、bulk 1 回あたり
+    /// いくつ使ったかを覚えておく — 予算どおりに切れているかは、送った先で
+    /// しか見られない。
+    #[derive(Default)]
+    struct FakeStore {
+        /// key -> (中身, ハッシュ, `last_modified`)
+        files: HashMap<String, (Vec<u8>, String, String)>,
+        bulk_ops: Vec<usize>,
+        uploaded_keys: Vec<String>,
+    }
+
+    struct FakeServer {
+        store: std::sync::Mutex<FakeStore>,
+    }
+
+    impl FakeServer {
+        fn new() -> Self {
+            Self {
+                store: std::sync::Mutex::new(FakeStore::default()),
+            }
+        }
+
+        fn put(&self, key: &str, content: &str, last_modified: &str) {
+            self.store.lock().unwrap().files.insert(
+                key.to_string(),
+                (
+                    content.as_bytes().to_vec(),
+                    scan::compute_hash(content.as_bytes()),
+                    last_modified.to_string(),
+                ),
+            );
+        }
+
+        fn content(&self, key: &str) -> Option<String> {
+            let content = {
+                let store = self.store.lock().unwrap();
+                store.files.get(key).map(|(content, _, _)| content.clone())
+            };
+            Some(String::from_utf8(content?).unwrap())
+        }
+
+        fn bulk_ops(&self) -> Vec<usize> {
+            self.store.lock().unwrap().bulk_ops.clone()
+        }
+
+        fn uploaded_keys(&self) -> Vec<String> {
+            self.store.lock().unwrap().uploaded_keys.clone()
+        }
+    }
+
+    fn wire_state(files: &HashMap<String, (Vec<u8>, String, String)>) -> ServerSyncState {
+        ServerSyncState {
+            files: files
+                .iter()
+                .map(|(key, (_, hash, last_modified))| {
+                    (
+                        key.clone(),
+                        ServerFileRecord {
+                            hash: hash.clone(),
+                            last_modified: last_modified.clone(),
+                        },
+                    )
+                })
+                .collect(),
+            last_sync: None,
+            etag: None,
+        }
+    }
+
+    // 待つものが何も無いので `async fn` にはしない — 中身が同期なら
+    // `ready` のほうが、future を跨いでロックを持たないことも一目で分かる
+    impl SyncTransport for FakeServer {
+        fn get_sync_state(
+            &self,
+        ) -> impl std::future::Future<Output = Result<ServerSyncState, SyncError>> + Send {
+            let state = {
+                let store = self.store.lock().unwrap();
+                ServerSyncState {
+                    etag: Some("etag".to_string()),
+                    ..wire_state(&store.files)
+                }
+            };
+            std::future::ready(Ok(state))
+        }
+
+        fn bulk(
+            &self,
+            req: BulkRequest,
+        ) -> impl std::future::Future<Output = Result<BulkResponse, SyncError>> + Send {
+            std::future::ready(Ok(self.apply_bulk(&req)))
+        }
+    }
+
+    impl FakeServer {
+        fn apply_bulk(&self, req: &BulkRequest) -> BulkResponse {
+            let mut store = self.store.lock().unwrap();
+            // Worker の数え方をそのまま写す。競合は退避の get + put と
+            // 上書きの put、リモート削除は何本でも 1 回
+            store.bulk_ops.push(
+                req.uploads.len()
+                    + req.downloads.len()
+                    + req.conflicts.len() * 3
+                    + usize::from(!req.delete_remote.is_empty()),
+            );
+
+            for up in &req.uploads {
+                store.uploaded_keys.push(up.key.clone());
+                let content = B64.decode(&up.content_base64).unwrap();
+                store.files.insert(
+                    up.key.clone(),
+                    (content, up.hash.clone(), up.last_modified.clone()),
+                );
+            }
+
+            let downloads: Vec<DownloadedFile> = req
+                .downloads
+                .iter()
+                .filter_map(|key| {
+                    let (content, _, _) = store.files.get(key)?;
+                    Some(DownloadedFile {
+                        key: key.clone(),
+                        content_base64: B64.encode(content),
+                    })
+                })
+                .collect();
+
+            for key in &req.delete_remote {
+                store.files.remove(key);
+            }
+
+            let mut conflict_downloads = Vec::new();
+            for op in &req.conflicts {
+                if let Some(previous) = store.files.get(&op.key).cloned() {
+                    conflict_downloads.push(DownloadedFile {
+                        key: op.conflict_key.clone(),
+                        content_base64: B64.encode(&previous.0),
+                    });
+                    store.files.insert(op.conflict_key.clone(), previous);
+                }
+                let content = B64.decode(&op.content_base64).unwrap();
+                store.files.insert(
+                    op.key.clone(),
+                    (content, op.hash.clone(), op.last_modified.clone()),
+                );
+            }
+
+            BulkResponse {
+                downloads,
+                conflict_downloads,
+                new_state: wire_state(&store.files),
+            }
+        }
+    }
+
+    /// 取り込み直後の Mac がこれ。1 本の bulk に全部を載せると Free プランの
+    /// サブリクエスト上限で Worker が落ち、何度やっても通らない。
+    #[tokio::test]
+    async fn a_hundred_uploads_go_in_rounds_that_each_fit_the_budget() {
+        let dir = tempfile::tempdir().unwrap();
+        for i in 0..100 {
+            seed(
+                dir.path(),
+                &format!("notes/{i:03}.md"),
+                &format!("body {i}"),
+            );
+        }
+        let server = FakeServer::new();
+        let mut rounds = Vec::new();
+
+        let result = run_over(&server, dir.path(), 40, |p| {
+            rounds.push((p.round, p.done, p.remaining));
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(result.uploaded, 100);
+        assert_eq!(rounds, [(1, 40, 60), (2, 40, 20), (3, 20, 0)]);
+        assert_eq!(server.bulk_ops(), [40, 40, 20]);
+        assert_eq!(server.content("notes/099.md").as_deref(), Some("body 99"));
+    }
+
+    /// **持ち越したキーをどう記録するかが芯。**次の round に回した
+    /// ダウンロードを「サーバーの版で同期済み」と書くと、手元に残っている
+    /// 古い版が次の round には「ローカルの編集」に見える。ダウンロードが
+    /// アップロードに化けて、取りに行くはずだった新しい版を潰す。
+    #[tokio::test]
+    async fn a_download_carried_to_the_next_round_does_not_become_an_upload() {
+        let dir = tempfile::tempdir().unwrap();
+        let server = FakeServer::new();
+        let mut state = SyncState::default();
+        for i in 0..45 {
+            let key = format!("notes/{i:03}.md");
+            seed(dir.path(), &key, "old");
+            server.put(&key, &format!("new {i}"), "2026-08-05T00:00:00Z");
+            state.files.insert(
+                key,
+                FileSyncRecord {
+                    last_synced_modified: "2026-08-01T00:00:00Z".parse().unwrap(),
+                    content_hash: scan::compute_hash(b"old"),
+                },
+            );
+        }
+        state.save(dir.path()).unwrap();
+
+        let result = run_over(&server, dir.path(), 40, |_| {}).await.unwrap();
+
+        assert_eq!(result.downloaded, 45);
+        assert_eq!(result.uploaded, 0);
+        assert!(
+            server.uploaded_keys().is_empty(),
+            "持ち越した 5 件が古い版で押し返された: {:?}",
+            server.uploaded_keys()
+        );
+        let data = paths::data_dir(dir.path());
+        for i in 0..45 {
+            assert_eq!(
+                fs::read_to_string(data.join(format!("notes/{i:03}.md"))).unwrap(),
+                format!("new {i}")
+            );
+        }
+    }
+
+    /// 送るものが残っているのに 1 件も送れない round は、何度回しても同じ。
+    /// 無限ループの唯一の入口なので、ここで止める。
+    #[tokio::test]
+    async fn a_round_that_sends_nothing_stops_the_sync() {
+        let dir = tempfile::tempdir().unwrap();
+        seed(dir.path(), "notes/a.md", "body");
+        let server = FakeServer::new();
+
+        let err = run_over(&server, dir.path(), 0, |_| {}).await.unwrap_err();
+
+        assert_eq!(err.kind, "stalled");
     }
 }
