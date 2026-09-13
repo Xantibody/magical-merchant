@@ -216,7 +216,7 @@ fn build_bulk_request(
     let mut conflicts: Vec<WireConflictOp> = Vec::new();
 
     for action in actions {
-        let key = action_key(action);
+        let key = action.key();
         if !is_safe_key(key) {
             result.errors.push(SyncIssue::UnsafeKey {
                 key: key.to_string(),
@@ -471,18 +471,6 @@ fn save_local_state(
     to_local_state(server_state, data_dir, unwritten, previous)
         .save(base_dir)
         .map_err(|e| e.to_string())
-}
-
-fn action_key(action: &SyncAction) -> &str {
-    match action {
-        SyncAction::UploadNew { key }
-        | SyncAction::UploadModified { key }
-        | SyncAction::DownloadNew { key }
-        | SyncAction::DownloadModified { key }
-        | SyncAction::DeleteRemote { key }
-        | SyncAction::DeleteLocal { key }
-        | SyncAction::Conflict { key } => key,
-    }
 }
 
 #[cfg(test)]
