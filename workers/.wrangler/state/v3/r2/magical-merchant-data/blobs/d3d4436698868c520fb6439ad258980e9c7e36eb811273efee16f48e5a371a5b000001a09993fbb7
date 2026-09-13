@@ -1,0 +1,40 @@
+---
+time: 2026-04-10T12:34:31+09:00
+tags: []
+context:
+  os: macos
+  arch: aarch64
+source: import
+---
+# rust
+
+〇〇風マクロが2種類ある
+
+deriveは構造体とenumにしか使えませんでしたが、属性は関数のような他の要素に対しても使えるのです。属性風マクロを使った例を以下に示しています：webアプリケーションフレームワークを使っているときに、routeという関数につける属性名があるとします：
+
+#[route(GET, "/")]
+fn index() {
+
+Spring Bootで見たな
+
+#[proc_macro_attribute]
+pub fn route(attr: TokenStream, item: TokenStream) -> TokenStream {
+
+ああそうか、今までとは違って引数が2つあるんだな
+
+関数風マクロは、関数呼び出しのように見えるマクロを定義します。
+なるほど
+
+let sql = sql!(SELECT * FROM posts WHERE id=1);
+
+これが
+
+#[proc_macro]
+pub fn sql(input: TokenStream) -> TokenStream {
+
+こうなる
+
+まとめ
+おおーマクロ終わったぞ！
+次のプロジェクト学ぼうか悩んだが、それやるぐらいなら自分で書くかー
+やったーおわりー

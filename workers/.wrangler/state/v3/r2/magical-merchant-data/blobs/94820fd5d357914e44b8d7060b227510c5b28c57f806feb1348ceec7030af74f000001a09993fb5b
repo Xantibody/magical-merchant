@@ -1,0 +1,21 @@
+---
+time: 2026-01-18T08:14:23+09:00
+tags:
+- journal
+context:
+  os: macos
+  arch: aarch64
+template: jounal
+source: import
+---
+# 2026-01-17
+
+## 2026年01月17日 (Sun)
+見てわかる通りすごい時間まで起きている
+眠い
+rustはやった
+nixはllm-agent.nixにoverlay対応のprを出した
+tsのyaml解析のマイグレーションをしていた
+aiコーディングのせいで寝不足になりがち
+肉も作った
+色々やったかも

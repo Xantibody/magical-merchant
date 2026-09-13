@@ -1,0 +1,16 @@
+---
+time: 2025-01-01T00:00:01+09:00
+tags:
+- memo
+context:
+  os: macos
+  arch: aarch64
+source: import
+---
+# 電化製品メモ
+
+既存
+- 冷蔵庫
+	- 134l
+-  NW-5SR
+	- 5kg

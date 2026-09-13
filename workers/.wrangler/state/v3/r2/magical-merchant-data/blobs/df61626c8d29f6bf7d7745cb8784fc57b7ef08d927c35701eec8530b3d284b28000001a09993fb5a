@@ -1,0 +1,38 @@
+---
+time: 2026-01-17T00:00:01+09:00
+tags:
+- meta
+context:
+  os: macos
+  arch: aarch64
+source: import
+---
+# Quick Facts
+
+## 現在のフォーカス
+- Rust学習・開発（prl プロジェクト）
+- AIコーディングの活用（Claude Code skill）
+- OSS活動（Slite extension、llm-agent.nix）
+
+## 長期目標
+- EVO2026参加
+
+## 改善したいこと
+- 睡眠リズムの安定化
+- 時間を区切って作業を終える習慣
+- コミュニケーションで曖昧さを減らす（ボールを明確に）
+
+---
+
+## TODO
+
+### 🔥 Critical（今すぐ）
+- 
+
+### 📅 This Week
+- 睡眠時間の区切りを決める（例：2時には寝る）
+- Rust勉強を継続
+
+### 🔄 Ongoing（継続）
+- 睡眠時間の確保
+- 週次振り返りでジャーナルとメモを統合

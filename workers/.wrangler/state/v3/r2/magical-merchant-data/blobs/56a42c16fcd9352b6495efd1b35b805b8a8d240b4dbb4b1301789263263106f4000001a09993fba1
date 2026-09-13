@@ -1,0 +1,12 @@
+---
+time: 2026-03-22T05:19:13+09:00
+tags:
+- memo
+context:
+  os: macos
+  arch: aarch64
+source: import
+---
+# memo
+
+<%* const title = await tp.system.prompt("タイトル"); await tp.file.rename(tp.date.now("YYYYMMDD") + "_" + title); -%>

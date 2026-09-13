@@ -1,0 +1,26 @@
+---
+time: 2026-01-13T00:00:00+09:00
+tags:
+- journal
+context:
+  os: macos
+  arch: aarch64
+template: jounal
+source: import
+---
+# 2026-01-13
+
+## 2026年01月13日 (Tue)
+
+### 今日やったこと
+
+- claude code skillをたくさん生やした
+- ryoppippiからの指摘対応
+	- CIをnix化
+	- 整備
+- linterやformatterを整備
+
+### 気づき・メモ
+- AIコーディングで色々なことができるようになった
+- できすぎて寝不足
+- これをすると瞬間火力はあるけどコンスタントさがなくなってしまうので注意

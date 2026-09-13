@@ -1,0 +1,16 @@
+---
+time: 2026-02-05T05:02:21+09:00
+tags:
+- journal
+context:
+  os: macos
+  arch: aarch64
+template: jounal
+source: import
+---
+# 2026-02-04
+
+## 2026年02月04日 (Wed)
+あまりにも忙しくて遊びたくなってしまった
+soraがおもしろくて遊んでしまった
+とりあえず格ゲーとRustを5mやっとくか

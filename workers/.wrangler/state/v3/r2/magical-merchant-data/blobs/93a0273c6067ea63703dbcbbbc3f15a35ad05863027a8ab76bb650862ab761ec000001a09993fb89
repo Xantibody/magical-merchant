@@ -1,0 +1,23 @@
+---
+time: 2026-02-19T02:41:19+09:00
+tags:
+- journal
+context:
+  os: macos
+  arch: aarch64
+source: import
+---
+# journal
+
+## <% tp.date.now("YYYY年MM月DD日 (ddd)", -1) -%>
+
+<%*
+const yesterday = tp.date.now("YYYY-MM-DD", -1);
+const existing = tp.file.find_tfile(yesterday);
+if (existing) {
+  await app.workspace.getLeaf().openFile(existing);
+  await app.vault.trash(tp.config.target_file, true);
+} else {
+  await tp.file.rename(yesterday);
+}
+-%>

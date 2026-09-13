@@ -1,0 +1,100 @@
+---
+time: 2024-09-01T06:44:00+09:00
+tags:
+- memo
+- tech
+context:
+  os: macos
+  arch: aarch64
+source: import
+---
+# moode9の資料
+
+moode9の資料
+
+[[https://github.com/moode-player/docs/blob/main/setup_guide.md#setup-guide-]{.underline}](https://github.com/moode-player/docs/blob/main/setup_guide.md#setup-guide-)
+
+実店舗で3300ぐらい
+
+焦って買ったけど多分ネットならもっと安く済んだ
+
+反省
+
+よくわからんからだうんろーどした
+
+らずぱいのイメージャーが必要らしい
+
+ちゃんと日本語じゃん
+
+![](media/image2.png){width="6.267716535433071in"
+height="4.444444444444445in"}
+
+moodeあるじゃん
+
+![](media/image3.png){width="6.267716535433071in"
+height="4.361111111111111in"}
+
+OSの基本設定させられた
+
+![](media/image1.png){width="5.59375in" height="6.822916666666667in"}
+
+sshするためのkey
+
+ssh-rsa
+AAAAB3NzaC1yc2EAAAADAQABAAABgQC9lWaGJpB4sPBBhaqmcIh68PVz/RGCOgL9WiMMsvzdw4/7R6ksOyfEAPi+od3jrp+RJ3tt/E+VkYu9kIsGfNdxPbY2WSTbH9B07heDFqvf2xNaqrN6B1p55Xkbq3ziyUUJuvxVGte3Aw+CA/aIVnQ10wVQft9VDUJh7B1OMUlYW3aBTyvFiYrJ+nkBrsAzC7tfKUxg33LzpL1g9OA0CmEmB0dH9RsVukeAKQ/O5WXCkESD5Mylb8/GPViPEqW4Clqy+hInhK50yotfMg5ntPJXV1thrR2JgIfC06hbH/6kucAwwAqgYNkLBJYUPEiiecg2L978OO8x3wnhBESgG3dGf52TTRGUSXFTTRC9C+/bPtHpqAmSh4O1MxhlB3YkbJiGWqPB/MdFcvNegfXPHsN5DW65t2EMN5pfkC0C1vmJHR7/xBUsZJEV4lO24PIKW+DScpdfyRkSpPUYV2g3JHfBpJVposwvYawBNuYiWd7WLCDZ9kUzbERf1bQXzqxV1s8=
+ryu aizawa@DESKTOP-2IJE9EG
+
+はいが有効化されたので使ってみる
+
+![](media/image5.png){width="6.267716535433071in"
+height="4.416666666666667in"}
+
+トラブル発生
+
+hdmi microを買ってきてしまったトラブル発生、miniとは違うらしい
+
+amazonで購入
+
+ついでにRCAケーブル購入
+
+switch on
+
+ついたけどさらに問題発生
+
+B to A?がない
+
+とりあえずつなぐ
+
+ホスト名わすれた
+
+もっかい設定しなおす。。。
+
+起動時にsystemd-networkd-wait-onlineというデーモンがfaildになる
+
+[[https://qiita.com/k0kubun/items/7bc5cd060131d9a4d347]{.underline}](https://qiita.com/k0kubun/items/7bc5cd060131d9a4d347)
+
+/run/systemd/network/10-netplan-eth0.network のせいで失敗するらしい
+
+netplanがなかった
+
+startしたら治った
+
+そしてsshした
+
+![](media/image4.png){width="6.267716535433071in"
+height="3.4722222222222223in"}
+
+できた
+
+スマホから設定画面も行けた
+
+![](media/image6.png){width="6.267716535433071in"
+height="14.277777777777779in"}
+
+[[https://www.amazon.co.jp/gp/product/B094XX899V/ref=ox_sc_act_title_2?smid=A3AQDHGJNEJ1W7&psc=1]{.underline}](https://www.amazon.co.jp/gp/product/B094XX899V/ref=ox_sc_act_title_2?smid=A3AQDHGJNEJ1W7&psc=1)
+
+後半で全部セットを見つける
+
+良いケースも見つからないので泣く泣く購入
+
+spotyfy ぐらい聞けるようにしておく
