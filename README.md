@@ -27,7 +27,8 @@
   home-screen widgets and a read-only MCP server for AI assistants
 - **Your own editor** — a CLI lists notes and opens one in `$EDITOR`; edits
   go back through the same guarded path as the app, so nothing gets
-  overwritten silently
+  overwritten silently. `import` takes in notes written elsewhere, each
+  keeping the day it was written
 - **Japanese and English** — the interface follows your system language and
   can be pinned either way in Settings
 
