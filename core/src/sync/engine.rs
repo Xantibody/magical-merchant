@@ -14,8 +14,8 @@ use base64::engine::general_purpose::STANDARD as B64;
 use chrono::{DateTime, Utc};
 
 use super::client::{
-    BulkRequest, BulkResponse, DownloadedFile, HttpClient, ServerSyncState, WireConflictOp,
-    WireUpload,
+    BulkRequest, BulkResponse, DownloadedFile, HttpClient, ServerSyncState, SyncTransport,
+    WireConflictOp, WireUpload,
 };
 use super::conflict;
 use super::diff::{self, RemoteFile, SyncAction};
@@ -29,6 +29,15 @@ const MAX_SYNC_ATTEMPTS: usize = 3;
 
 /// 1 回の同期。呼び出し側は認証済みの `HttpClient` を渡す。
 pub async fn run(client: &HttpClient, base_dir: &Path) -> Result<SyncResult, SyncError> {
+    run_over(client, base_dir).await
+}
+
+/// 本体。`HttpClient` ではなく `SyncTransport` を取るのはテストのため —
+/// 公開する口は `run` 1 つに保って、trait は crate の中に閉じる。
+async fn run_over<T: SyncTransport + Sync>(
+    client: &T,
+    base_dir: &Path,
+) -> Result<SyncResult, SyncError> {
     // 同じデータディレクトリを見ている別のプロセスと同時に走ると、
     // 最後に書いたほうの `.sync-state.json` が残って相手の記録が消える。
     // 再試行のあいだも手放さないので、ここで 1 回だけ取る。
@@ -50,7 +59,10 @@ pub async fn run(client: &HttpClient, base_dir: &Path) -> Result<SyncResult, Syn
     unreachable!("the loop returns on its last attempt")
 }
 
-async fn sync_once(client: &HttpClient, base_dir: &Path) -> Result<SyncResult, SyncError> {
+async fn sync_once<T: SyncTransport + Sync>(
+    client: &T,
+    base_dir: &Path,
+) -> Result<SyncResult, SyncError> {
     let server_state = client.get_sync_state().await?;
 
     let local_files =
