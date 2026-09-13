@@ -7,6 +7,7 @@ mod editor;
 mod notes;
 mod output;
 mod server;
+mod sync;
 mod timeline;
 
 use std::io::{IsTerminal, Read as _, Write as _};
@@ -78,6 +79,11 @@ enum Command {
         #[arg(long)]
         template: Option<String>,
     },
+    /// Send and receive notes through the sync server, without opening the app
+    ///
+    /// Set the server up and log in from the app's Settings first; this reads
+    /// the URL and the saved login. Progress is printed per round.
+    Sync,
     /// Read the Timeline or append to today's
     #[command(subcommand)]
     Timeline(TimelineCommand),
@@ -207,6 +213,7 @@ async fn main() -> anyhow::Result<()> {
                 created.ok_or_else(|| anyhow::anyhow!("nothing on stdin, no note created"))?;
             println!("{filename}");
         }
+        Command::Sync => sync::run(&data_dir).await?,
         Command::Timeline(command) => run_timeline(&data_dir, command)?,
         Command::Mcp {
             locale,

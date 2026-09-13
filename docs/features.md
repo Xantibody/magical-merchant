@@ -174,6 +174,7 @@ echo "# Idea" | magical-merchant new   # or: magical-merchant new --title Idea
 magical-merchant import --time 2019-05-04T12:00:00+09:00 < old-note.md  # keeps that time as the ID
 magical-merchant timeline add -m "shipped it #work"   # capture; without -m, opens the editor
 magical-merchant timeline show [2026-03-20]           # one day, today if omitted
+magical-merchant sync                  # same sync the app runs, without opening it
 ```
 
 `edit` hands the editor the Markdown body only — the frontmatter is the
@@ -193,6 +194,13 @@ was written, `--tag` and `--template` fill in the frontmatter, and the
 filename it lands under is printed so a migration script can keep a map.
 The body comes from stdin only — nothing about any particular source
 format lives in the app, which is a conversion script's job.
+
+`sync` runs the app's own sync engine from the terminal, reading the server
+URL and the login the app saved — it never asks for either, so there is one
+place where sync is set up. A large sync goes in rounds of at most 40 files,
+and each round prints what it sent and what is left; the app does the same
+thing behind its button. If the app is syncing at that moment, the CLI says
+so and exits 1 rather than waiting.
 
 `timeline add` appends to today through the same core call the Android
 widget uses; it only ever appends, so it needs no revision check. `-m` is
