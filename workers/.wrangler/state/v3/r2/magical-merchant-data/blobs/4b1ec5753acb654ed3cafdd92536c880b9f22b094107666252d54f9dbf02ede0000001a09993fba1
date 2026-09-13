@@ -1,0 +1,27 @@
+---
+time: 2026-03-22T05:19:08+09:00
+tags:
+- weekly
+context:
+  os: macos
+  arch: aarch64
+source: import
+---
+# weekly
+
+## <% tp.date.now("YYYY-[W]ww", -7) %> 週次振り返り
+
+### 前週の目標
+- 
+
+### 今週のハイライト
+- 
+
+### 気づき
+- 
+
+### 次週の目標
+1. 
+2. 
+3. 
+<%* await tp.file.rename(tp.date.now("YYYY-[W]ww", -7)) -%>

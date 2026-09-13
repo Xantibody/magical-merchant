@@ -1,0 +1,16 @@
+---
+time: 2021-05-31T01:43:03+09:00
+tags:
+- memo
+context:
+  os: macos
+  arch: aarch64
+source: import
+---
+# 家のルーター設定する
+
+家のルーター設定する
+・onuへ転送先のmacアドレス登録
+・onuのwifi切る
+
+https://raife.jp/network-router-rtax86u-f660a/

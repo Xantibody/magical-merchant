@@ -40,16 +40,10 @@ impl Default for AppSyncState {
 
 // ──────────── HTTP client ────────────
 
-/// `Client::new()` は組み立てに失敗すると panic する。同期はユーザーの操作で
-/// 走るので、TLS の初期化がこけても落とさずエラーとして返す
+/// デスクトップ版は core のものをそのまま使う。CLI の `sync` も同じ口から
+/// 組むので、TLS の既定がアプリと CLI でずれない
 #[cfg(not(target_os = "android"))]
-fn http_client() -> Result<reqwest::Client, SyncError> {
-    use magical_merchant_core::sync::client::describe;
-
-    reqwest::Client::builder()
-        .build()
-        .map_err(|e| SyncError::other(format!("HTTP client setup failed: {}", describe(&e))))
-}
+use magical_merchant_core::sync::client::desktop_http_client as http_client;
 
 /// Android だけ端末の検証器を迂回する。理由は `android_tls::sync_tls_config`
 #[cfg(target_os = "android")]

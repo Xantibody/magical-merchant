@@ -1,0 +1,22 @@
+---
+time: 2026-01-14T01:06:05+09:00
+tags:
+- journal
+context:
+  os: macos
+  arch: aarch64
+template: jounal
+source: import
+---
+# 2026-01-14
+
+## 2026年01月14日 (Wed)
+
+### 今日やったこと
+- ブログが表示されないバグを修正
+	- shilkiをwasmにしていたため
+- 軽量化のためブログをSSG化
+- 個人で開発していたRustのprlを再度作成
+### 気づき・メモ
+- 寝不足の次の日はどうしても寝不足になってしまう
+- AIコーディングがskill最適化でかなり捗るように

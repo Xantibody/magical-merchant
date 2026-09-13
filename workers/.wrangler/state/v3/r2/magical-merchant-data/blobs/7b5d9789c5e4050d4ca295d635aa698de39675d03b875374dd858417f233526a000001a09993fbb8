@@ -1,0 +1,13 @@
+---
+time: 2026-06-21T02:05:45+09:00
+tags:
+- journal
+context:
+  os: macos
+  arch: aarch64
+template: jounal
+source: import
+---
+# 2026-06-20
+
+## 2026年06月20日 (土)

@@ -1,0 +1,37 @@
+---
+time: 2026-01-12T00:00:00+09:00
+tags:
+- memo
+- self-reflection
+context:
+  os: macos
+  arch: aarch64
+source: import
+---
+# 目標100個
+
+- 目標100個建ててみようと思った
+- tomoyaさんに本かけって言われたがまぁそれはそれで別
+### プログラミング
+- [ ] 1. The Rust Programming Language 日本語版を読破する
+- [ ] 2. rustのrepoを作成し終えてみる
+- [ ] 3.astroでブログを作り直す
+- [ ] denoでslackbotを作る
+- [ ] nixvimを適切な粒度にリファクタする
+- [ ] 自宅サーバーを作成する
+- [ ] k8s鯖をお出迎えする
+- [ ] 音楽サーバを作る
+- [ ] gogigaを動くものにする
+- [ ] OCamlをちょっとやってみる
+- [ ] nixのmodule systemで何か作ってみる
+- [ ] 
+### プライベート
+- ラスベガスのevoに出る
+- 香川に行く
+- 大阪に行く
+- 北海道に行く
+- sf6でベガでMasterを超える
+- sf6でマリーザをMasterにする
+- 遊戯王のオフに出てみる
+- 学んだことをブログに書く
+- 

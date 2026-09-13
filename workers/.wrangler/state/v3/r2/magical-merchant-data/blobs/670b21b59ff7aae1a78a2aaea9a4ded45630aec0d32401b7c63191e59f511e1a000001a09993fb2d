@@ -1,0 +1,33 @@
+---
+time: 2024-04-29T17:38:26+09:00
+tags:
+- memo
+- tech
+context:
+  os: macos
+  arch: aarch64
+source: import
+---
+# - 今回のテーマ
+
+- 今回のテーマ
+
+  - deployments 〜 pod作成
+
+  - screts, configmapで値取得
+
+  - extarnalnameで外部通信
+
+- とりあえずdeploymentsでpod作ってみる
+
+> ---
+
+- ECRいらない
+
+  - dockerでよい？
+
+- deploymentsでpod作る
+
+- replica setを使う？
+
+- podにアクセス

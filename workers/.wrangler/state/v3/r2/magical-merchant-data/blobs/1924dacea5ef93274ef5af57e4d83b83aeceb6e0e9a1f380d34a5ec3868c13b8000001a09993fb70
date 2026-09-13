@@ -1,0 +1,15 @@
+---
+time: 2026-01-19T19:19:36+09:00
+tags:
+- memo
+- tech
+- yugioh
+context:
+  os: macos
+  arch: aarch64
+source: import
+---
+# Rustで遊戯王カードの効果処理を定義したい
+
+めちゃくちゃ面白そう
+トレイトとか使って場合、時を定義したりする

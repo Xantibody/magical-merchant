@@ -1,0 +1,16 @@
+---
+time: 2025-01-01T00:00:04+09:00
+tags:
+- '[SE, requirements, 2025]'
+context:
+  os: macos
+  arch: aarch64
+source: import
+---
+# SEの条件
+## Level3を5つ
+### Java
+### DB
+### AWS
+### セキュリティ
+### OS・サーバ

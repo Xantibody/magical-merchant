@@ -1,0 +1,18 @@
+---
+time: 2021-10-25T09:21:12+09:00
+tags:
+- memo
+context:
+  os: macos
+  arch: aarch64
+source: import
+---
+# in 3
+
+in 3
+out 7
+
+inが長すぎる気がしている
+どこが長いか考える
+
+進数、アルゴリズムは一気に消化する
