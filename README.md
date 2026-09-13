@@ -28,7 +28,7 @@
 - **Your own editor** — a CLI lists notes and opens one in `$EDITOR`; edits
   go back through the same guarded path as the app, so nothing gets
   overwritten silently. `import` takes in notes written elsewhere, each
-  keeping the day it was written
+  keeping the day it was written, and `sync` runs the same sync as the app
 - **Japanese and English** — the interface follows your system language and
   can be pinned either way in Settings
 
