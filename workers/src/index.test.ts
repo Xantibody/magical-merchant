@@ -357,6 +357,41 @@ describe("Workers Sync API", () => {
       });
       expect(res.status).toBe(400);
     });
+
+    function uploads(count: number): Record<string, string>[] {
+      return Array.from({ length: count }, (_, i) => upload(`notes/${i}.md`, `body ${i}`));
+    }
+
+    it("accepts a bulk at the operation limit", async () => {
+      const res = await bulk({ uploads: uploads(45) });
+      expect(res.status).toBe(200);
+    });
+
+    // Free プランは 1 呼び出し 50 サブリクエストで、bulk は R2 を 1 ファイル
+    // 1 回叩く。超えると Cloudflare が落とすので、その手前で理由を返す
+    it("refuses a bulk over the operation limit", async () => {
+      const res = await bulk({ uploads: uploads(46) });
+
+      expect(res.status).toBe(413);
+      const body = await jsonBody<{ error: string }>(res);
+      expect(body.error).toContain("split the sync");
+    });
+
+    // 競合は退避の get + put と上書きの put で 3 回。1 と数えると、
+    // 通した bulk が上限の 3 倍を使う
+    it("counts a conflict as three operations", async () => {
+      const conflicts = Array.from({ length: 16 }, (_, i) => ({
+        key: `notes/${i}.md`,
+        conflict_key: `notes/${i}.sync-conflict.md`,
+        content_base64: b64("mine"),
+        last_modified: "2026-05-12T10:00:00Z",
+        hash: hash("c"),
+      }));
+
+      const res = await bulk({ conflicts });
+
+      expect(res.status).toBe(413);
+    });
   });
 
   describe("unknown routes", () => {
