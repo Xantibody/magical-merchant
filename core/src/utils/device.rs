@@ -1,5 +1,12 @@
 use serde::{Deserialize, Serialize};
 
+/// 端末を計って [`Context`] を埋める部分。`hostname` や電池の残量を OS に
+/// 聞くので、ノートを読み書きするだけの利用者には要らない。
+#[cfg(feature = "device-probe")]
+mod probe;
+#[cfg(feature = "device-probe")]
+pub use probe::{location, probe};
+
 /// どうやって外に繋がっていたか。
 ///
 /// 回線の名前（SSID）は持たない。macOS 14 以降は位置情報の許可がないと

@@ -207,6 +207,14 @@ widget uses; it only ever appends, so it needs no revision check. `-m` is
 the one-liner, a pipe is read as the entry, and with neither the editor
 opens.
 
+Anything written from the terminal records the same device context the app
+records — OS and version, machine name, locale, battery, and network type —
+so what a record says about the machine does not depend on which surface
+wrote it. The coordinate is the exception: measuring one costs a permission
+prompt and a wait that a command running once cannot pay, and reusing the
+app's last fix would claim you wrote somewhere you were not, so records
+written from the terminal carry no location.
+
 The CLI finds the app's data directory on its own; `--data-dir` or
 `MAGICAL_MERCHANT_DATA_DIR` overrides it.
 

@@ -13,6 +13,9 @@ categories.workspace = true
 autobenches = false
 
 [features]
+# 端末を計って Context を埋める部分 (utils::device::probe)。書き込みの入り口
+# だけが要るもので、ノートを読み書きするだけなら hostname も battery も要らない。
+device-probe = ["dep:battery", "dep:hostname"]
 # HTTP を話す同期エンジン。Android の JNI ビルド (widget) と MCP-only の CLI は
 # ノートを読み書きするだけなので、reqwest / keyring を引き込まないでいられるよう
 # 既定では外している。
@@ -32,6 +35,9 @@ serde_yaml = "0.9"
 sha2 = "0.11"
 thiserror = "2"
 
+# ── device-probe only ──
+hostname = { version = "0.4", optional = true }
+
 # ── sync-client only ──
 base64 = { version = "0.23", optional = true }
 # 署名は検証せず exp を覗くだけなので、crypto backend (aws_lc_rs / rust_crypto)
@@ -46,6 +52,11 @@ reqwest = { version = "0.13", default-features = false, features = [
   "rustls",
 ], optional = true }
 url = { version = "2", optional = true }
+
+# Android には battery クレートの実装が無く、ネイティブからは電源が見えない。
+# そちらは WebView / ウィジェットが渡してくる値で埋める。
+[target.'cfg(not(target_os = "android"))'.dependencies]
+battery = { version = "0.7", optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.8.2", default-features = false, features = [
