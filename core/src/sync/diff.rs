@@ -23,6 +23,22 @@ pub enum SyncAction {
     Conflict { key: String },
 }
 
+impl SyncAction {
+    /// どの action もファイル 1 つについての話で、キーはその名前。
+    #[must_use]
+    pub fn key(&self) -> &str {
+        match self {
+            Self::UploadNew { key }
+            | Self::UploadModified { key }
+            | Self::DownloadNew { key }
+            | Self::DownloadModified { key }
+            | Self::DeleteRemote { key }
+            | Self::DeleteLocal { key }
+            | Self::Conflict { key } => key,
+        }
+    }
+}
+
 #[must_use]
 pub fn compute(
     local_files: &[LocalFile],
@@ -130,20 +146,8 @@ pub fn compute(
     }
 
     // Sort for deterministic output
-    actions.sort_by(|a, b| action_key(a).cmp(action_key(b)));
+    actions.sort_by(|a, b| a.key().cmp(b.key()));
     actions
-}
-
-fn action_key(action: &SyncAction) -> &str {
-    match action {
-        SyncAction::UploadNew { key }
-        | SyncAction::UploadModified { key }
-        | SyncAction::DownloadNew { key }
-        | SyncAction::DownloadModified { key }
-        | SyncAction::DeleteRemote { key }
-        | SyncAction::DeleteLocal { key }
-        | SyncAction::Conflict { key } => key,
-    }
 }
 
 #[cfg(test)]
