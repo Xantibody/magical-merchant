@@ -45,7 +45,7 @@ description: Note/timeline storage invariants, sync protocol, widgets and deep l
 
 The Worker owns sync state: `_sync-state/<user>.json` maps every key to a
 content hash + server-issued version stamp. One sync = `GET /sync-state` →
-local scan → diff → one `POST /sync/bulk`.
+local scan → diff → `POST /sync/bulk`, repeated until nothing is left over.
 
 | Client sees                 | Action                            |
 | --------------------------- | --------------------------------- |
@@ -58,6 +58,14 @@ local scan → diff → one `POST /sync/bulk`.
 
 - The client **never sends its own state** (would read undownloaded keys as
   deletions and erase notes everywhere)
+- **A bulk is capped at 40 R2 operations** (`core/src/sync/round.rs`), because
+  Workers Free allows 50 subrequests per invocation and the Worker touches R2
+  once per file (three times per conflict, once for all remote deletes). The
+  engine loops rounds until nothing is deferred; the Worker refuses more than
+  45 with 413. A key carried to the next round **keeps its record from before
+  the sync** — recording the server's version makes the old copy still on disk
+  look like a local edit, and the next round uploads it over the newer remote
+  one. `kind: "stalled"` means a round sent nothing while work remained
 - Writes use `expected_etag` compare-and-swap; losing races retry
 - **One sync per data directory**: `engine::run` takes an exclusive lock on
   `<base>/.sync.lock` at its entry (`core/src/sync/lock.rs`) and fails with
