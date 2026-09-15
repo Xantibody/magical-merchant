@@ -23,11 +23,12 @@ dev: setup
 dev-browser: setup
   pnpm run dev:browser
 
-# Regenerate every icon from the SVG sources in src-tauri/icons/icons.json.
 # 出力は 2 か所に分かれる: src-tauri/icons/ (デスクトップ・iOS、git 管理下) と
 # gen/android の mipmap。後者は gitignore なので init のたびに入れ直す。
 # PNG は同じ内容で書き直されるが icon.icns だけは毎回バイト列が変わるので、
 # 用が無いときに走らせると差分だけが残る。ビルドの依存には入れない。
+
+# アイコンを SVG から全部作り直す
 icons: setup
   pnpm tauri icon src-tauri/icons/icons.json
   cp src-tauri/icons/icon.svg public/icon.svg
@@ -36,6 +37,8 @@ icons: setup
 
 # gen/android は Tauri 既定のランチャーアイコンを持って生成される。
 # 入れ直さないと配信 APK が Tauri のロゴのままになるので、init と一続きにする。
+
+# Android プロジェクト (gen/android) を最初に作る
 android-init: setup
   pnpm tauri android init
   just icons
@@ -47,6 +50,8 @@ android-init: setup
 #   - ホーム画面ウィジェットのソースを入れ、receiver を manifest に登録する
 #     (android-widget/README.md)
 # 署名だけは keystore.properties を要求して失敗しうるので android-sign-setup に分けてある。
+
+# gen/android に TLS とウィジェットのパッチを当て直す (冪等)
 android-setup:
   go run android-tls/apply-tls.go
   go run android-widget/apply-widget.go
@@ -54,27 +59,37 @@ android-setup:
 # リリース署名の設定を、生成された build.gradle.kts に注入する (冪等)。
 # keystore.properties が無いと失敗するので android-setup とは別建て。
 # キーストアの初回準備は android-signing/README.md を参照。
+
+# リリース署名の設定を build.gradle.kts に注入する (冪等)
 android-sign-setup:
   go run android-signing/apply-signing.go
 
 android-dev: setup
   pnpm tauri android dev
 
+# デバッグ APK を建てる
 android-build-debug: android-setup
   pnpm tauri android build --debug --target aarch64
 
-# 署名済みリリース APK。keystore.properties が要る。
 # arm64 のみ: x86 系はエミュレータ専用で実機には要らず、universal だと
 # 4 ABI ぶんの .so で APK が 52MB まで膨らむ。
+
+# 署名済みリリース APK を建てる (keystore.properties が要る)
 android-build-release: android-setup android-sign-setup
   pnpm tauri android build --apk --target aarch64
 
-# ビルドして USB 接続の端末に入れる (-r で上書き更新)。
-# `just android-install` で debug、`just android-install release` で署名済み。
 # --target aarch64 でも Tauri は出力名を universal のままにする。
+
+# 建てて USB 接続の Android 端末に入れる (release で署名済み版)
 android-install variant="debug":
   just android-build-{{variant}}
   adb install -r src-tauri/gen/android/app/build/outputs/apk/universal/{{variant}}/app-universal-{{variant}}.apk
 
+# --- macOS ---
+
+# 出来上がりは ../target/release/bundle/macos/Magical Merchant.app。
+# 手元へ入れるのは nix 側 (docs/install.md)
+
+# 配信する .app を建てる
 build:
   pnpm tauri build --bundles app
