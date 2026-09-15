@@ -2743,7 +2743,7 @@ dependencies = [
 
 [[package]]
 name = "magical-merchant-app"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "android_logger",
  "base64 0.23.1",
@@ -2778,7 +2778,7 @@ dependencies = [
 
 [[package]]
 name = "magical-merchant-cli"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "base64 0.23.1",
@@ -2796,7 +2796,7 @@ dependencies = [
 
 [[package]]
 name = "magical-merchant-core"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "base64 0.23.1",
  "battery",
