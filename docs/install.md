@@ -13,6 +13,21 @@ nix profile install github:Xantibody/magical-merchant/v0.1.0
 nix profile upgrade magical-merchant
 ```
 
+CI publishes every `main` build of the app and the CLI (aarch64-darwin) to
+`https://magical-merchant.cachix.org`. The flake's `nixConfig` names that cache,
+so `nix` asks once whether to trust it; answer yes and nothing is built locally.
+When your user is not in `trusted-users` the prompt is skipped and the cache is
+ignored, so add it to your Nix configuration instead:
+
+```nix
+nix.settings = {
+  extra-substituters = [ "https://magical-merchant.cachix.org" ];
+  extra-trusted-public-keys = [
+    "magical-merchant.cachix.org-1:r8cvPKg3xGAINHclAor7fWiS7YK5pZ1Bxs4XjGnyvp0="
+  ];
+};
+```
+
 To build from a local checkout instead:
 
 ```sh
@@ -66,6 +81,10 @@ The module installs whichever of the desktop app and the CLI are enabled
 and writes a read-only `sync-config.json` from the options above. Both
 read that one file, so the app hides the Settings fields it no longer owns
 and the CLI needs no configuration of its own.
+
+Do not add `inputs.magical-merchant.inputs.nixpkgs.follows` to that input: the
+packages would then be built against your `nixpkgs`, which is not what CI built,
+and the binary cache above would never hit. Let the flake keep its own lock.
 
 ## macOS — manual build
 

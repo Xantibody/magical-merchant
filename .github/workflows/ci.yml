@@ -314,6 +314,21 @@ jobs:
           purge-primary-key: never
       - name: the .app bundle builds
         run: nix build .#default --no-link
+      # ここで組んだ aarch64-darwin の .app と cli を Cachix に置く。手元の
+      # `nix profile install` / darwin-rebuild が Tauri アプリを建て直す 10 分が消える。
+      # skipPush で自動 push を止め、下で出力だけを明示的に push する。自動 push だと
+      # store に restore されなかった回にだけ Rust toolchain ごと上がり、5 GiB を食う。
+      # 明示 push なら restore で組まなかった回でも出力は必ず上がる (post-build-hook は
+      # 組んだときにしか鳴らない)
+      - uses: cachix/cachix-action@v17
+        if: github.ref == 'refs/heads/main'
+        with:
+          name: magical-merchant
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          skipPush: true
+      - name: publish the .app bundle and the CLI
+        if: github.ref == 'refs/heads/main'
+        run: nix build .#default .#cli --no-link --print-out-paths | cachix push magical-merchant
 
   # nix run github:Xantibody/magical-merchant#mcp が AI クライアント側の
   # 起動方法そのもので、.#cli はその中身。cargo で緑でも fileset にファイルが漏れていれば nix だけ落ちる

@@ -1,6 +1,15 @@
 {
   description = "Magical Merchant: Rust core, Tauri app, and Cloudflare Workers sync";
 
+  # CI が main で組んだ .app と cli の置き場。`nix profile install github:…` が
+  # Tauri アプリを手元で建て直さずに済む。push は ci.yml の nix-package-macos だけ
+  nixConfig = {
+    extra-substituters = [ "https://magical-merchant.cachix.org" ];
+    extra-trusted-public-keys = [
+      "magical-merchant.cachix.org-1:r8cvPKg3xGAINHclAor7fWiS7YK5pZ1Bxs4XjGnyvp0="
+    ];
+  };
+
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     rust-overlay = {
