@@ -739,11 +739,12 @@ export default function Workspace(): JSX.Element {
    * 開いているノートに効くキー。受けるのがここなのは、対象が「いま選んで
    * いる 1 件」だから — AppLayout の表はどの画面でも同じ意味を持つものだけ。
    *
-   * エディタに先を譲る(`defaultPrevented`)のは、⌘I が斜体、⌘⇧Z がやり直しに
-   * 割り当たっているから。書いている最中はそちらが正しい。
+   * ここの札は Milkdown と当たらないキーだけを選んである(#211)。それでも
+   * エディタに先を譲る(`defaultPrevented`)のは、あとからエディタが取るキーが
+   * 増えたときに、書いている最中の打鍵をこちらが横取りしないため。
    *
-   * ⌘↑ / ⌘↓(文頭・文末へ)と入力欄の ⌘⇧Z(打ち直し)はブラウザ既定の動きで、
-   * 誰も preventDefault しない。こちらはカーソルが文字の中にあるかで見分ける。
+   * ⌘↑ / ⌘↓(文頭・文末へ)はブラウザ既定の動きで、誰も preventDefault
+   * しない。こちらはカーソルが文字の中にあるかで見分ける。
    */
   onMount(() => {
     const onKeyDown = (e: KeyboardEvent): void => {
@@ -770,7 +771,7 @@ export default function Workspace(): JSX.Element {
       } else if (matchesShortcut(e, "noteMap")) {
         e.preventDefault();
         void toggleMap(item);
-      } else if (matchesShortcut(e, "noteRevert") && !typing) {
+      } else if (matchesShortcut(e, "noteRevert")) {
         e.preventDefault();
         void revertEdit(item);
       } else if (matchesShortcut(e, "noteInfo")) {

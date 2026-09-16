@@ -26,8 +26,10 @@ const SHORTCUTS = {
   // ノートを 1 件開いているあいだだけ
   noteActions: { key: "." },
   noteMap: { key: "m", shift: true },
-  noteRevert: { key: "z", shift: true },
-  noteInfo: { key: "i" },
+  // ⌘⇧ + 頭文字。⌘Z / ⌘⇧Z (やり直し) と ⌘I (斜体) は Milkdown のもので、
+  // 常時編集の本文にカーソルがあるあいだ奪えない (#211)
+  noteRevert: { key: "r", shift: true },
+  noteInfo: { key: "i", shift: true },
   notePrev: { key: "arrowup" },
   noteNext: { key: "arrowdown" },
 } as const satisfies Record<string, Shortcut>;
