@@ -224,6 +224,28 @@ describe("toggleTaskItem", () => {
     }
   });
 
+  it("touches only the innermost item when the cursor is in a nested one", () => {
+    // doc(1 ul(1 li(1 p "one" 6)7 ul(8 li(9 p(10 "two"
+    const state = stateAt(doc(ul(item([p("one"), ul(item(p("two")))]))), 11);
+
+    const { next } = apply(state, toggleTaskItem);
+
+    expect(outline(next.doc)).toBe(
+      'doc(bullet_list(list_item(paragraph("one") bullet_list(list_item[false](paragraph("two"))))))',
+    );
+  });
+
+  it("makes every selected paragraph a task, not just the first", () => {
+    // doc(1 p "one" 6 p(7 "two"
+    const state = stateAt(doc(p("one"), p("two")), 2, 8);
+
+    const { next } = apply(state, toggleTaskItem);
+
+    expect(outline(next.doc)).toBe(
+      'doc(bullet_list(list_item[false](paragraph("one")) list_item[false](paragraph("two"))))',
+    );
+  });
+
   it("keeps a numbered item numbered", () => {
     const { next } = apply(stateAt(doc(ol(item(p("one")))), 4), toggleTaskItem);
 

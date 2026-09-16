@@ -1,5 +1,5 @@
 import { liftListItem, splitListItem, wrapInList } from "@milkdown/kit/prose/schema-list";
-import type { Command, EditorState, Transaction } from "@milkdown/kit/prose/state";
+import type { Command, Transaction } from "@milkdown/kit/prose/state";
 import type { Node, NodeType, ResolvedPos } from "@milkdown/kit/prose/model";
 
 type ListName = "bullet_list" | "ordered_list";
@@ -72,13 +72,26 @@ export const liftItemAtStart: Command = (state, dispatch) => {
   return liftListItem(itemType)(state, dispatch);
 };
 
-/** 選択範囲にかかる list_item を、始点側から順に。 */
-function itemsIn(state: EditorState): { node: Node; pos: number }[] {
-  const itemType = state.schema.nodes.list_item;
-  const { from, to } = state.selection;
+/**
+ * 選択範囲にかかる list_item を、始点側から順に。「かかる」のは項目の最初の
+ * 段落で見る — nodesBetween は入れ子の外側の項目も返すが、内側の項目に
+ * カーソルがあるだけで親の印まで切り替えるのは押した人の意図ではない。
+ */
+function itemsIn(
+  doc: Node,
+  itemType: NodeType,
+  from: number,
+  to: number,
+): { node: Node; pos: number }[] {
   const found: { node: Node; pos: number }[] = [];
-  state.doc.nodesBetween(from, to, (node, pos) => {
-    if (node.type === itemType) {
+  doc.nodesBetween(from, to, (node, pos) => {
+    if (node.type !== itemType) {
+      return;
+    }
+    const first = node.firstChild;
+    const start = pos + 1;
+    const end = first ? start + first.nodeSize : start;
+    if (start <= to && end >= from) {
       found.push({ node, pos });
     }
   });
@@ -137,17 +150,17 @@ export const toggleOrderedList: Command = toggleList("ordered_list");
 export const toggleTaskItem: Command = (state, dispatch) => {
   const { nodes } = state.schema;
   const itemType = nodes.list_item;
-  const items = itemsIn(state);
+  const { from, to } = state.selection;
+  const items = itemsIn(state.doc, itemType, from, to);
   if (items.length === 0) {
     return wrapInList(nodes.bullet_list)(
       state,
       dispatch &&
         ((tr: Transaction) => {
-          const $cursor = tr.selection.$from;
-          const depth = itemAround($cursor, itemType);
-          if (depth !== undefined) {
-            const pos = $cursor.before(depth);
-            tr.setNodeMarkup(pos, undefined, { ...$cursor.node(depth).attrs, checked: false });
+          // 段落ごとに項目ができる。選んだ段落の分だけ印を付ける
+          const wrapped = itemsIn(tr.doc, itemType, tr.selection.from, tr.selection.to);
+          for (const { node, pos } of wrapped) {
+            tr.setNodeMarkup(pos, undefined, { ...node.attrs, checked: false });
           }
           dispatch(tr);
         }),

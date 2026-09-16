@@ -60,35 +60,81 @@ export const exitCodeBlock: Command = (state, dispatch) => {
 const CODE_INDENT = "  ";
 
 /**
+ * 選択にかかるコードブロックの行の、行頭の位置(文書座標)。選択が 1 つの
+ * コードブロックに収まっていなければ undefined。行末ちょうどで終わる選択は
+ * 次の行を含めない。
+ */
+function codeLineStarts(state: EditorState): number[] | undefined {
+  const { $from, $to } = state.selection;
+  if ($from.parent.type.name !== "code_block" || !$from.sameParent($to)) {
+    return undefined;
+  }
+  const text = $from.parent.textContent;
+  const base = $from.start();
+  const starts = [text.lastIndexOf("\n", $from.parentOffset - 1) + 1];
+  for (
+    let i = text.indexOf("\n", starts[0]);
+    i !== -1 && i + 1 < $to.parentOffset;
+    i = text.indexOf("\n", i + 1)
+  ) {
+    starts.push(i + 1);
+  }
+  return starts.map((offset) => base + offset);
+}
+
+/**
  * コードブロックの中の Tab は字下げ。ProseMirror は Tab を扱わないので、
  * 素通しにするとブラウザがフォーカスを次の要素へ移し、書きかけの手が
  * エディタの外に落ちる。2 スペースなのは、Markdown のコードブロックで
  * 一番ありふれた幅だから(タブ文字は表示幅が環境で変わる)。
+ *
+ * 範囲を選んでいれば、その行すべての行頭に入れる。カーソルだけなら
+ * その場に入れる(行の途中の Tab は行頭ではなくそこを空けたい)。
  */
 export const indentCodeLine: Command = (state, dispatch) => {
-  if (state.selection.$from.parent.type.name !== "code_block") {
+  const starts = codeLineStarts(state);
+  if (!starts) {
     return false;
   }
-  dispatch?.(state.tr.insertText(CODE_INDENT).scrollIntoView());
+  if (!dispatch) {
+    return true;
+  }
+  const { tr } = state;
+  if (state.selection.empty) {
+    tr.insertText(CODE_INDENT);
+  } else {
+    // 後ろの行から入れれば、前の行の位置がずれない
+    for (const start of starts.toReversed()) {
+      tr.insertText(CODE_INDENT, start, start);
+    }
+  }
+  dispatch(tr.scrollIntoView());
   return true;
 };
 
 /**
- * コードブロックの中の Shift-Tab は行頭の字下げを一段戻す。戻すものが
- * なくても受けたことにするのは、フォーカスを外へ逃がさないため。
+ * コードブロックの中の Shift-Tab は行頭の字下げを一段戻す。範囲を選んで
+ * いればその行すべて。戻すものがなくても受けたことにするのは、フォーカスを
+ * 外へ逃がさないため。
  */
 export const outdentCodeLine: Command = (state, dispatch) => {
-  const { $from } = state.selection;
-  if ($from.parent.type.name !== "code_block") {
+  const starts = codeLineStarts(state);
+  if (!starts) {
     return false;
   }
-  const text = $from.parent.textContent;
-  const lineStart = text.lastIndexOf("\n", $from.parentOffset - 1) + 1;
-  const indent = /^(?: {1,2}|\t)/u.exec(text.slice(lineStart))?.[0];
-  if (indent && dispatch) {
-    const from = $from.start() + lineStart;
-    dispatch(state.tr.delete(from, from + indent.length).scrollIntoView());
+  if (!dispatch) {
+    return true;
   }
+  const text = state.selection.$from.parent.textContent;
+  const base = state.selection.$from.start();
+  const { tr } = state;
+  for (const start of starts.toReversed()) {
+    const indent = /^(?: {1,2}|\t)/u.exec(text.slice(start - base))?.[0];
+    if (indent) {
+      tr.delete(start, start + indent.length);
+    }
+  }
+  dispatch(tr.scrollIntoView());
   return true;
 };
 

@@ -29,8 +29,8 @@ const p = (text?: string): Node =>
 const code = (text: string): Node => schema.nodes.code_block.create(null, schema.text(text));
 
 /** pos にカーソルを置いた state。 */
-function stateAt(doc: Node, pos: number): EditorState {
-  return EditorState.create({ doc, selection: TextSelection.create(doc, pos) });
+function stateAt(doc: Node, from: number, to = from): EditorState {
+  return EditorState.create({ doc, selection: TextSelection.create(doc, from, to) });
 }
 
 function apply(state: EditorState, command: typeof deleteCurrentBlock): EditorState {
@@ -127,6 +127,18 @@ describe("indentCodeLine", () => {
     expect(next.selection.from).toBe(5);
   });
 
+  it("indents every selected line and keeps the selection's text", () => {
+    const doc = schema.nodes.doc.create(null, [code("a\nb\nc")]);
+    // "a\nb" を選ぶ: 1..4
+    const state = stateAt(doc, 1, 4);
+
+    const next = apply(state, indentCodeLine);
+
+    expect(next.doc.textContent).toBe("  a\n  b\nc");
+    // 選択は同じ文字を指したまま(字下げの分だけずれる)
+    expect(next.doc.textBetween(next.selection.from, next.selection.to)).toBe("a\n  b");
+  });
+
   it("is not for paragraphs", () => {
     const state = stateAt(schema.nodes.doc.create(null, [p("text")]), 2);
 
@@ -144,6 +156,17 @@ describe("outdentCodeLine", () => {
 
     expect(next.doc.textContent).toBe("a\n  b");
     expect(next.selection.from).toBe(5);
+  });
+
+  it("outdents every selected line", () => {
+    const doc = schema.nodes.doc.create(null, [code("  a\n  b\nc")]);
+    // "a\n  b" を選ぶ: 3..8
+    const state = stateAt(doc, 3, 8);
+
+    const next = apply(state, outdentCodeLine);
+
+    expect(next.doc.textContent).toBe("a\nb\nc");
+    expect(next.doc.textBetween(next.selection.from, next.selection.to)).toBe("a\nb");
   });
 
   it("removes a tab too", () => {
