@@ -12,9 +12,6 @@
 
 use std::sync::OnceLock;
 
-use jni::JavaVM;
-use jni::objects::JObject;
-
 static DONE: OnceLock<()> = OnceLock::new();
 
 /// Idempotent: the verifier keeps a process-wide global and re-initialising it
@@ -60,12 +57,10 @@ pub(crate) fn sync_tls_config() -> Result<rustls::ClientConfig, rustls::Error> {
 }
 
 fn install() -> Result<(), jni::errors::Error> {
-    let ctx = ndk_context::android_context();
-    // SAFETY: tao がアプリ起動時に入れたポインタ。プロセスが生きている間有効。
-    let vm = unsafe { JavaVM::from_raw(ctx.vm().cast()) };
-    vm.attach_current_thread(|env| {
-        // SAFETY: 同上。Activity の参照で、借りている間だけ使う。
-        let context = unsafe { JObject::from_raw(env, ctx.context().cast()) };
+    crate::android_context::with_context(|env, context| {
         rustls_platform_verifier::android::init_with_env(env, context)
     })
+    .unwrap_or(Err(jni::errors::Error::NullPtr(
+        "android context not initialised",
+    )))
 }
