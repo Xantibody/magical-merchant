@@ -34,7 +34,7 @@ diff → one `POST /sync/bulk`:
 
 A bulk call carries at most **40 R2 operations** (`BULK_OPERATION_BUDGET` in
 [`core/src/sync/round.rs`](../core/src/sync/round.rs)); what does not fit is
-left for the next round, and rounds repeat until the diff comes out empty, at
+left for the next round, and rounds repeat until one leaves nothing over, at
 most **200** of them (`MAX_ROUNDS` in
 [`core/src/sync/engine.rs`](../core/src/sync/engine.rs)). The budget counts
 operations, not files: an upload or a download costs one, a conflict three
@@ -53,9 +53,11 @@ file: it absorbs one or two more fixed calls per bulk, and a Worker that
 started spending one extra operation _per file_ would blow through it at the
 first full round.
 
-Within a round the order is deletions, then conflicts, then downloads, then
-uploads, so another device's edits are taken in before yours are pushed. The
-state file is written at the end of every round, which is what makes an
+When the budget cannot hold everything, the round is filled in the order
+deletions, conflicts, downloads, uploads — so across rounds another device's
+edits are taken in before yours are pushed. It is a priority for choosing
+work, not a running order: the Worker starts everything in one batch at once.
+The state file is written at the end of every round, which is what makes an
 interrupted sync harmless: whatever was sent is recorded, and the next run
 picks up the rest. A round that settles nothing _and still has work deferred_
 stops the sync with `stalled` instead of spinning — the earlier rounds' work

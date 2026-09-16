@@ -138,7 +138,7 @@ sequenceDiagram
     Sync->>Rust: sync_start
     Rust->>Core: scan local files + diff against server state
     Rust->>Rust: POST /sync/bulk (uploads, downloads, conflicts)
-    Note over Rust: repeated in rounds of at most 40 operations<br/>until the diff is empty
+    Note over Rust: repeated in rounds of at most 40 operations<br/>until nothing is left over for the next one
 ```
 
 The save path never blocks on the network or on a GPS fix: coordinates come
