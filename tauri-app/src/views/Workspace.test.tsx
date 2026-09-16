@@ -509,15 +509,49 @@ describe("Workspace › ノートに効くキー", () => {
     expect(titleInput().value).toBe(TITLE_A);
   });
 
-  // 入力欄の ⌘⇧Z は打ち直し。題を直している手元で、ノートごと巻き戻さない
-  it("leaves ⌘⇧Z to the title field's redo while the title is being typed", async () => {
-    localStorage.setItem(`note-backup:${FILE_A}`, `# ${TITLE_A}\n\n前の本文`);
+  // 常時編集なので、ノートを開いているあいだカーソルはほぼ本文の中にある。
+  // 本文で効かないキーは、無いのと同じ (#211)
+  it("opens the note info on ⌘⇧I while the caret is in the body", async () => {
     await openNoteA();
+    await startEditingBody();
 
-    fireEvent.keyDown(titleInput(), { key: "Z", metaKey: true, shiftKey: true });
+    fireEvent.keyDown(editorBody(), { key: "I", metaKey: true, shiftKey: true });
+
+    await waitFor(() => expect(screen.getByText("作成日時")).toBeDefined());
+  });
+
+  it("reverts on ⌘⇧R while the caret is in the body", async () => {
+    const before = `# ${TITLE_A}\n\n前の本文`;
+    localStorage.setItem(`note-backup:${FILE_A}`, before);
+    await openNoteA();
+    await startEditingBody();
+
+    fireEvent.keyDown(editorBody(), { key: "R", metaKey: true, shiftKey: true });
+
+    await waitFor(() => expect(disk.get(FILE_A)).toBe(before));
+  });
+
+  // ⌘I は Milkdown の斜体。書いている最中はそちらが正しいので、こちらは拾わない
+  it("leaves ⌘I to the editor's italic while the body is being written", async () => {
+    await openNoteA();
+    await startEditingBody();
+
+    fireEvent.keyDown(editorBody(), { key: "i", metaKey: true });
 
     await sleep(100);
-    expect(disk.get(FILE_A)).toBe(BODY_A);
+    expect(screen.queryByText("作成日時")).toBeNull();
+  });
+
+  // 入力欄の ⌘⇧R は何でもない。題を打っている手でも、押したなら戻す
+  it("reverts on ⌘⇧R while the title is being typed", async () => {
+    const before = `# ${TITLE_A}\n\n前の本文`;
+    localStorage.setItem(`note-backup:${FILE_A}`, before);
+    await openNoteA();
+    titleInput().focus();
+
+    fireEvent.keyDown(titleInput(), { key: "R", metaKey: true, shiftKey: true });
+
+    await waitFor(() => expect(disk.get(FILE_A)).toBe(before));
   });
 });
 
