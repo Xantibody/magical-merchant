@@ -2,7 +2,13 @@ import { describe, it, expect } from "vitest";
 import { Schema } from "@milkdown/kit/prose/model";
 import { EditorState, TextSelection, NodeSelection } from "@milkdown/kit/prose/state";
 import type { Node } from "@milkdown/kit/prose/model";
-import { deleteCurrentBlock, exitCodeBlock } from "./block-commands";
+import {
+  deleteCurrentBlock,
+  exitCodeBlock,
+  indentCodeLine,
+  outdentCodeLine,
+  stepPastHr,
+} from "./block-commands";
 
 // 本物の commonmark スキーマは Milkdown の初期化ごと必要になる。コマンドが
 // 見るのはノード名と入れ子だけなので、その形だけを再現した最小スキーマで足りる。
@@ -23,8 +29,8 @@ const p = (text?: string): Node =>
 const code = (text: string): Node => schema.nodes.code_block.create(null, schema.text(text));
 
 /** pos にカーソルを置いた state。 */
-function stateAt(doc: Node, pos: number): EditorState {
-  return EditorState.create({ doc, selection: TextSelection.create(doc, pos) });
+function stateAt(doc: Node, from: number, to = from): EditorState {
+  return EditorState.create({ doc, selection: TextSelection.create(doc, from, to) });
 }
 
 function apply(state: EditorState, command: typeof deleteCurrentBlock): EditorState {
@@ -106,5 +112,135 @@ describe("exitCodeBlock", () => {
     const state = stateAt(doc, 2);
 
     expect(exitCodeBlock(state)).toBe(false);
+  });
+});
+
+describe("indentCodeLine", () => {
+  it("inserts two spaces where the cursor is in a code block", () => {
+    const doc = schema.nodes.doc.create(null, [code("a\nb")]);
+    // code の中は 1 始まり。"a\n" の後ろ = 3
+    const state = stateAt(doc, 3);
+
+    const next = apply(state, indentCodeLine);
+
+    expect(next.doc.textContent).toBe("a\n  b");
+    expect(next.selection.from).toBe(5);
+  });
+
+  it("indents every selected line and keeps the selection's text", () => {
+    const doc = schema.nodes.doc.create(null, [code("a\nb\nc")]);
+    // "a\nb" を選ぶ: 1..4
+    const state = stateAt(doc, 1, 4);
+
+    const next = apply(state, indentCodeLine);
+
+    expect(next.doc.textContent).toBe("  a\n  b\nc");
+    // 選択は同じ文字を指したまま(字下げの分だけずれる)
+    expect(next.doc.textBetween(next.selection.from, next.selection.to)).toBe("a\n  b");
+  });
+
+  it("is not for paragraphs", () => {
+    const state = stateAt(schema.nodes.doc.create(null, [p("text")]), 2);
+
+    expect(indentCodeLine(state)).toBe(false);
+  });
+});
+
+describe("outdentCodeLine", () => {
+  it("removes one level of indentation at the start of the cursor's line", () => {
+    const doc = schema.nodes.doc.create(null, [code("a\n    b")]);
+    // 4 スペースの後ろ = 7
+    const state = stateAt(doc, 7);
+
+    const next = apply(state, outdentCodeLine);
+
+    expect(next.doc.textContent).toBe("a\n  b");
+    expect(next.selection.from).toBe(5);
+  });
+
+  it("outdents every selected line", () => {
+    const doc = schema.nodes.doc.create(null, [code("  a\n  b\nc")]);
+    // "a\n  b" を選ぶ: 3..8
+    const state = stateAt(doc, 3, 8);
+
+    const next = apply(state, outdentCodeLine);
+
+    expect(next.doc.textContent).toBe("a\nb\nc");
+    expect(next.doc.textBetween(next.selection.from, next.selection.to)).toBe("a\nb");
+  });
+
+  it("removes a tab too", () => {
+    const doc = schema.nodes.doc.create(null, [code("\tb")]);
+    const state = stateAt(doc, 3);
+
+    expect(apply(state, outdentCodeLine).doc.textContent).toBe("b");
+  });
+
+  it("still claims the key when there is nothing to remove", () => {
+    const doc = schema.nodes.doc.create(null, [code("b")]);
+    const state = stateAt(doc, 2);
+
+    expect(outdentCodeLine(state)).toBe(true);
+    expect(apply(state, outdentCodeLine).doc.textContent).toBe("b");
+  });
+
+  it("is not for paragraphs", () => {
+    const state = stateAt(schema.nodes.doc.create(null, [p("  text")]), 3);
+
+    expect(outdentCodeLine(state)).toBe(false);
+  });
+});
+
+/** stepPastHr が直すべきものを見つけた前提で、その結果の state。 */
+function applyStep(state: EditorState): EditorState {
+  const tr = stepPastHr(state);
+  if (!tr) {
+    throw new Error("stepPastHr found nothing to fix");
+  }
+  return state.apply(tr);
+}
+
+describe("stepPastHr", () => {
+  it("moves a selected horizontal rule's cursor into a fresh paragraph below it", () => {
+    const doc = schema.nodes.doc.create(null, [p("a"), schema.nodes.hr.create()]);
+    const state = EditorState.create({ doc, selection: NodeSelection.create(doc, 3) });
+
+    const next = applyStep(state);
+
+    expect(next.doc.childCount).toBe(3);
+    expect(next.doc.lastChild?.type.name).toBe("paragraph");
+    expect(next.selection instanceof TextSelection).toBe(true);
+    expect(next.selection.$from.parent).toBe(next.doc.lastChild);
+  });
+
+  it("reuses an empty paragraph that already follows the rule", () => {
+    // 文書末尾では trailing プラグインが先に空段落を足している
+    const doc = schema.nodes.doc.create(null, [p("a"), schema.nodes.hr.create(), p()]);
+    const state = EditorState.create({ doc, selection: NodeSelection.create(doc, 3) });
+
+    const next = applyStep(state);
+
+    expect(next.doc.childCount).toBe(3);
+    expect(next.selection.$from.parent).toBe(next.doc.lastChild);
+  });
+
+  it("still inserts one when the next block has text", () => {
+    const doc = schema.nodes.doc.create(null, [schema.nodes.hr.create(), p("b")]);
+    const state = EditorState.create({ doc, selection: NodeSelection.create(doc, 0) });
+
+    const next = applyStep(state);
+
+    expect(next.doc.childCount).toBe(3);
+    expect(next.doc.child(1).textContent).toBe("");
+    expect(next.selection.$from.parent).toBe(next.doc.child(1));
+  });
+
+  it("leaves a text cursor and other node selections alone", () => {
+    const doc = schema.nodes.doc.create(null, [p("a"), schema.nodes.hr.create(), code("x")]);
+
+    expect(stepPastHr(stateAt(doc, 1))).toBeNull();
+    expect(
+      stepPastHr(EditorState.create({ doc, selection: NodeSelection.create(doc, 4) })),
+    ).toBeNull();
   });
 });
