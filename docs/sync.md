@@ -39,10 +39,12 @@ most **200** of them (`MAX_ROUNDS` in
 [`core/src/sync/engine.rs`](../core/src/sync/engine.rs)). The budget counts
 operations, not files: an upload or a download costs one, a conflict three
 (read the remote copy, keep it aside, store the winner), any number of remote
-deletions costs one together, and a local deletion costs nothing. The ceiling
-is the Workers Free plan's 50 subrequests per invocation, less the two the
-Worker spends reading and writing the state — a 529-note first sync sent in
-one call is simply refused as `Too many subrequests`.
+deletions costs one together, and a local deletion costs nothing. The hard
+ceiling is 48 — the Workers Free plan allows 50 subrequests per invocation and
+the Worker spends two of them reading and writing the state — and the budget
+stops at 40 so that a Worker which grows an operation or two does not break
+the clients already installed. A 529-note first sync sent in one call is
+simply refused as `Too many subrequests`.
 
 Within a round the order is deletions, then conflicts, then downloads, then
 uploads, so another device's edits are taken in before yours are pushed. The
