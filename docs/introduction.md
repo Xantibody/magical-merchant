@@ -32,6 +32,7 @@ flowchart LR
     end
 
     Shell -- "HTTPS: /sync-state, /sync/bulk" --> Worker
+    CLI -- "HTTPS: the same sync<br/>(magical-merchant sync)" --> Worker
     Login["Sign-in webview<br/>(in-app on desktop,<br/>system browser on Android)"] -- "Google OAuth" --> Worker
     Worker -- "JWT via loopback / deep link<br/>magical-merchant://auth" --> Shell
 ```
@@ -78,6 +79,7 @@ the typed text behind Revert, the CLI keeps it in a scratch file.
 │       └── 20260809_143000/
 │           └── 20260511-031336.md
 ├── .sync-state.json           # what the server last confirmed
+├── .sync.lock                 # held for one sync; app and CLI share it
 └── sync-config.json           # Workers URL, auto-sync flag (shared with the CLI)
 ```
 
@@ -136,6 +138,7 @@ sequenceDiagram
     Sync->>Rust: sync_start
     Rust->>Core: scan local files + diff against server state
     Rust->>Rust: POST /sync/bulk (uploads, downloads, conflicts)
+    Note over Rust: repeated in rounds of at most 40 operations<br/>until the diff is empty
 ```
 
 The save path never blocks on the network or on a GPS fix: coordinates come
