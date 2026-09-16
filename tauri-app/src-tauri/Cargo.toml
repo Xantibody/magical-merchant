@@ -45,9 +45,6 @@ tauri-plugin-fs = "2"
 [target.'cfg(target_os = "android")'.dependencies]
 # The home screen widget's capture sheet calls into the core through JNI.
 jni = "0.22"
-# 逆ジオコーディングは端末の Context を要る Java API なので、tao が起動時に
-# 預けた VM と Activity をここから借りる。
-ndk-context = "0.1"
 # reqwest 0.13 が中で使う証明書検証器。Android だけは Java 側の信頼ストアを
 # 渡す初期化が要るので、reqwest 越しではなく直に呼べるところに置く。
 # 0.7 は jni 0.22 を使う版で、上の jni と同じものに解決させるために要る

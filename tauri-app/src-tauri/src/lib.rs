@@ -7,6 +7,8 @@
 #![allow(clippy::needless_pass_by_value)]
 
 #[cfg(target_os = "android")]
+mod android_context;
+#[cfg(target_os = "android")]
 mod android_tls;
 mod auth;
 mod device;
@@ -526,6 +528,13 @@ pub fn run() {
             // 頼むのでは間に合わないので、起動と同時に受け取り始める。
             #[cfg(target_os = "macos")]
             location::start(app.handle());
+
+            // Geocoder と証明書検証器は Context を要る。Activity は破棄され得る
+            // ので、生きている今のうちに Application Context を自前で持つ。
+            #[cfg(target_os = "android")]
+            if let Err(e) = android_context::init() {
+                log::error!("android context init failed: {e}");
+            }
 
             // 同期の HTTPS は端末の信頼ストアで検証する。Android のそれは
             // Java 側にしか無く、初期化を通さないと最初の同期で必ず落ちる。

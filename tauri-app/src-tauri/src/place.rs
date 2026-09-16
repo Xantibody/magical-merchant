@@ -164,20 +164,14 @@ mod platform {
     use super::coarsest_name;
     use jni::objects::{JObject, JString, JValue};
     use jni::strings::JNIStr;
-    use jni::{Env, JavaVM, jni_sig, jni_str};
+    use jni::{Env, jni_sig, jni_str};
 
     /// `Geocoder` は端末の Context と結び付いているので、Rust から素で作れない。
-    /// `ndk_context` が握っている VM と Activity を借りて Java 側を呼ぶ。
+    /// 起動時に取った VM と Application Context を借りて Java 側を呼ぶ。
     pub(super) fn geocode(latitude: f64, longitude: f64, locale: &str) -> Option<String> {
-        let ctx = ndk_context::android_context();
-        // SAFETY: tao がアプリ起動時に入れたポインタ。プロセスが生きている間有効。
-        let vm = unsafe { JavaVM::from_raw(ctx.vm().cast()) };
         // jni 0.22 の attach は `Env` を閉包の中にしか出さない。借りた寿命が
         // スタックの一区間に固定され、アタッチ解除後に持ち出せなくなる
-        vm.attach_current_thread(|env| -> jni::errors::Result<Option<String>> {
-            // SAFETY: 同上。Activity の参照で、借りている間だけ使う。
-            let context = unsafe { JObject::from_raw(env, ctx.context().cast()) };
-
+        crate::android_context::with_context(|env, context| {
             let name = lookup(env, &context, latitude, longitude, locale);
             if name.is_none() {
                 // 圏外の `getFromLocation` は IOException を投げる。積んだままにすると
@@ -185,7 +179,7 @@ mod platform {
                 let _ = env.exception_clear();
             }
             Ok(name)
-        })
+        })?
         .ok()
         .flatten()
     }
