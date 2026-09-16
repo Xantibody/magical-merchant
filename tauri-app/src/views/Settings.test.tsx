@@ -24,6 +24,8 @@ const saved: SavedGlyph[] = [];
 const deleted: string[] = [];
 const fullscreenCalls: unknown[] = [];
 let listens: number;
+/** `plugin:app|version` の答え。取れない端末を作るテストが null に差し替える */
+let appVersion: string | null;
 
 /** Tauri の内部 API に公開の型は無い。テストが触るぶんだけ形を書く */
 interface TauriInternals {
@@ -54,9 +56,16 @@ const HANDLERS: Record<string, (args: unknown) => unknown> = {
     fullscreenCalls.push(args);
     return null;
   },
+  "plugin:app|version": () => {
+    if (appVersion === null) {
+      throw new Error("app.version not allowed");
+    }
+    return appVersion;
+  },
 };
 
 function mockCommands(): void {
+  appVersion = "1.2.3";
   mockWindows("main");
   mockIPC((cmd, args) => {
     const handler = HANDLERS[cmd];
@@ -335,5 +344,36 @@ describe("Settings › THEME", () => {
     expect(localStorage.getItem("theme")).toBe("dark");
     expect(themeChoice("ダーク").ariaChecked).toBe("true");
     expect(themeChoice("システム").ariaChecked).toBe("false");
+  });
+});
+
+// 端末に載っているビルドを名乗らせる唯一の場所。Android はここが無いと、
+// 古いビルドが残っていることを確かめる手掛かりがまったく無い
+describe("Settings › ABOUT", () => {
+  beforeEach(() => {
+    listens = 0;
+    mockCommands();
+  });
+
+  afterEach(() => {
+    cleanup();
+    clearMocks();
+  });
+
+  it("shows the version the app reports", async () => {
+    await renderSettings();
+
+    await expect(screen.findByText("バージョン: 1.2.3")).resolves.toBeDefined();
+  });
+
+  // 権限が無い端末でもここで落とさない。設定は同期の設定を直しに来る画面で、
+  // バージョンが読めないことより開けないことのほうが困る
+  it("says nothing when the version cannot be read", async () => {
+    appVersion = null;
+
+    await renderSettings();
+
+    expect(screen.getByText("設定")).toBeDefined();
+    await waitFor(() => expect(screen.queryByText(/バージョン/u)).toBeNull());
   });
 });

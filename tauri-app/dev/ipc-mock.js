@@ -893,6 +893,9 @@ const saveError = (kind, message) => Object.assign(new Error(message), { kind })
     // こちらは「バックエンドも忘れた」の返事なので何もしない
     "plugin:event|unlisten": () => null,
     "plugin:deep-link|get_current": () => null,
+    // tauri.conf.json の version がそのまま返る。ブラウザには読む先が無いので
+    // 実在しない番号を名乗らせ、実機の表示と見分けが付くようにしておく
+    "plugin:app|version": () => "0.0.0-mock",
     // ブラウザに全画面にする窓は無い。設定を入れても何も起きないのが正しい
     "plugin:window|set_fullscreen": () => null,
     "plugin:geolocation|check_permissions": () => ({

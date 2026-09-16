@@ -261,6 +261,7 @@ const ja = {
     glyphDeleted: "特殊文字を削除しました",
     glyphSaved: (name: string) => `:${name}: を登録しました`,
     glyphSaveFailed: (reason: string) => `登録できませんでした: ${reason}`,
+    version: "バージョン",
   },
   palette: {
     dialogLabel: "検索・コマンド",
@@ -588,6 +589,7 @@ const en: Messages = {
     glyphDeleted: "Glyph deleted",
     glyphSaved: (name: string) => `Registered :${name}:`,
     glyphSaveFailed: (reason: string) => `Could not register it: ${reason}`,
+    version: "Version",
   },
   palette: {
     dialogLabel: "Search and commands",
