@@ -15,8 +15,9 @@ the glyph images under `data/glyphs/` — with no filter on the extension;
 file contents travel base64-encoded, which is why a single glyph is capped
 at 256 KiB.
 
-One sync is a loop of rounds; one round is `GET /sync-state` → local scan →
-diff → one `POST /sync/bulk`:
+One sync is a loop of rounds. One attempt at a round is `GET /sync-state` →
+local scan → diff → one `POST /sync/bulk`, and losing the compare-and-swap
+race repeats the attempt rather than starting a new round, up to three times:
 
 | Client sees                        | Action        | Effect on state       |
 | ---------------------------------- | ------------- | --------------------- |
@@ -53,10 +54,13 @@ file: it absorbs one or two more fixed calls per bulk, and a Worker that
 started spending one extra operation _per file_ would blow through it at the
 first full round.
 
-When the budget cannot hold everything, the round is filled in the order
-deletions, conflicts, downloads, uploads — so across rounds another device's
-edits are taken in before yours are pushed. It is a priority for choosing
-work, not a running order: the Worker starts everything in one batch at once.
+When the budget cannot hold everything, actions are considered in the order
+deletions, conflicts, downloads, uploads, which tends to bring other devices'
+edits in before yours go out. It is a packing preference and nothing stronger:
+the scan keeps going past an action that does not fit, so a one-operation
+upload can still ride along in a round where a three-operation conflict was
+deferred. Inside one bulk the Worker runs everything at once, so there is no
+execution order either.
 The state file is written at the end of every round, so an interrupted sync
 does not start from nothing: the rounds that finished stay recorded. A file
 that reached the client but could not be written is deliberately kept out of
