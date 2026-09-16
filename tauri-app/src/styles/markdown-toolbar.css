@@ -25,7 +25,8 @@
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    padding: var(--size-2) var(--size-3);
+    /* 9 つを 360px 幅の画面に横スクロールなしで並べる幅 */
+    padding: var(--size-2);
     background: none;
     border: none;
     border-radius: var(--radius-2);

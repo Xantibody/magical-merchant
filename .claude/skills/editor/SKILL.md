@@ -50,7 +50,8 @@ code-block component (CodeMirror ~150KB), indent/upload/image-\*/table-block
 - Autosave: 1s debounce + serialized save chain (`update_draft`); don't refetch
   the note list on every save — once, when editing ends
 - Touch devices get `MarkdownToolbar` (lazy, only while an editor exists) for
-  hard-to-type syntax.
+  hard-to-type syntax. List buttons are toggles (`lib/list-commands.ts`): the
+  `- ` / `1. ` input rules do not fire reliably through a mobile IME
 - Key handling order: every `$prose` plugin runs before Milkdown's own keymap,
   so a `$prose` keymap pre-empts a preset key; a `$shortcut` with `priority: 0`
   runs after every preset key and is the place for fallbacks

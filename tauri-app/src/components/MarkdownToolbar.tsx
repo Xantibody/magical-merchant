@@ -10,6 +10,7 @@ import {
 } from "@milkdown/kit/preset/commonmark";
 import type { Command } from "@milkdown/kit/prose/state";
 import { deleteCurrentBlock, exitCodeBlock } from "../lib/block-commands";
+import { toggleBulletList, toggleOrderedList, toggleTaskItem } from "../lib/list-commands";
 import { t } from "../lib/i18n";
 import { createKeyboardTop, keyboardTopStyle } from "../lib/keyboard";
 import Icon from "./Icon";
@@ -44,7 +45,11 @@ const prose =
       command(view.state, view.dispatch);
     });
 
-/** スマホのキーボードの上に出る書式バー。打ちにくい記法だけを並べる。 */
+/**
+ * スマホのキーボードの上に出る書式バー。Slack や Notion、Obsidian のモバイル
+ * 版と同じ並びで、打ちにくい記法から順に: リストの種類(`- ` `1. ` `- [ ]`
+ * は IME 経由だと入力ルールが効きにくい)、字下げ、ブロックの挿入と脱出。
+ */
 export default function MarkdownToolbar(props: MarkdownToolbarProps): JSX.Element {
   const toolbarTop = createKeyboardTop();
 
@@ -70,6 +75,9 @@ export default function MarkdownToolbar(props: MarkdownToolbarProps): JSX.Elemen
   };
 
   const buttons: ToolbarButton[] = [
+    { icon: "list-bullets", label: () => t().editor.bulletList, run: prose(toggleBulletList) },
+    { icon: "list-numbers", label: () => t().editor.orderedList, run: prose(toggleOrderedList) },
+    { icon: "list-checks", label: () => t().editor.taskList, run: prose(toggleTaskItem) },
     {
       icon: "text-outdent",
       label: () => t().editor.outdent,

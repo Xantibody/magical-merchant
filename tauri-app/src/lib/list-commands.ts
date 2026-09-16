@@ -1,5 +1,17 @@
-import { liftListItem, splitListItem } from "@milkdown/kit/prose/schema-list";
-import type { Command, Transaction } from "@milkdown/kit/prose/state";
+import { liftListItem, splitListItem, wrapInList } from "@milkdown/kit/prose/schema-list";
+import type { Command, EditorState, Transaction } from "@milkdown/kit/prose/state";
+import type { Node, NodeType, ResolvedPos } from "@milkdown/kit/prose/model";
+
+type ListName = "bullet_list" | "ordered_list";
+
+/** カーソルを包んでいる list_item と、その深さ。リストの外なら undefined。 */
+function itemAround($pos: ResolvedPos, itemType: NodeType): number | undefined {
+  let { depth } = $pos;
+  while (depth > 0 && $pos.node(depth).type !== itemType) {
+    depth -= 1;
+  }
+  return depth > 0 ? depth : undefined;
+}
 
 /**
  * チェック済みのタスクで Enter を押したとき、新しい項目は未チェックで作る。
@@ -58,4 +70,98 @@ export const liftItemAtStart: Command = (state, dispatch) => {
     return false;
   }
   return liftListItem(itemType)(state, dispatch);
+};
+
+/** 選択範囲にかかる list_item を、始点側から順に。 */
+function itemsIn(state: EditorState): { node: Node; pos: number }[] {
+  const itemType = state.schema.nodes.list_item;
+  const { from, to } = state.selection;
+  const found: { node: Node; pos: number }[] = [];
+  state.doc.nodesBetween(from, to, (node, pos) => {
+    if (node.type === itemType) {
+      found.push({ node, pos });
+    }
+  });
+  return found;
+}
+
+/**
+ * Slack や Notion の書式バーと同じトグル。リストの外なら包み、同じ種類の
+ * 中なら一段外へ出し、別の種類の中ならリストごと種類を変える。
+ *
+ * 種類を変えるときは項目の listType も揃える — syncListOrderPlugin は
+ * 「先頭の項目が ordered の bullet_list」を番号付きに戻すので、リストだけ
+ * 変えても元に戻される。
+ */
+function toggleList(name: ListName): Command {
+  return (state, dispatch) => {
+    const { nodes } = state.schema;
+    const listType = nodes[name];
+    const itemType = nodes.list_item;
+    const { $from } = state.selection;
+    const depth = itemAround($from, itemType);
+    if (depth === undefined) {
+      return wrapInList(listType)(state, dispatch);
+    }
+    const list = $from.node(depth - 1);
+    if (list.type === listType) {
+      return liftListItem(itemType)(state, dispatch);
+    }
+    if (!dispatch) {
+      return true;
+    }
+    const listPos = $from.before(depth - 1);
+    const listKind = name === "ordered_list" ? "ordered" : "bullet";
+    const { tr } = state;
+    tr.setNodeMarkup(listPos, listType, { spread: list.attrs.spread });
+    list.forEach((child, offset) => {
+      tr.setNodeMarkup(listPos + 1 + offset, undefined, {
+        ...child.attrs,
+        listType: listKind,
+        label: listKind === "ordered" ? "1." : "•",
+      });
+    });
+    dispatch(tr.scrollIntoView());
+    return true;
+  };
+}
+
+export const toggleBulletList: Command = toggleList("bullet_list");
+export const toggleOrderedList: Command = toggleList("ordered_list");
+
+/**
+ * タスクの印を付け外しする。gfm は `- [ ]` を list_item の checked に畳む
+ * だけなので、印の有無は checked が boolean か null かで決まる。リストの
+ * 外なら箇条書きに包んでから印を付ける。
+ */
+export const toggleTaskItem: Command = (state, dispatch) => {
+  const { nodes } = state.schema;
+  const itemType = nodes.list_item;
+  const items = itemsIn(state);
+  if (items.length === 0) {
+    return wrapInList(nodes.bullet_list)(
+      state,
+      dispatch &&
+        ((tr: Transaction) => {
+          const $cursor = tr.selection.$from;
+          const depth = itemAround($cursor, itemType);
+          if (depth !== undefined) {
+            const pos = $cursor.before(depth);
+            tr.setNodeMarkup(pos, undefined, { ...$cursor.node(depth).attrs, checked: false });
+          }
+          dispatch(tr);
+        }),
+    );
+  }
+  if (!dispatch) {
+    return true;
+  }
+  // 先頭の項目に合わせて全部を同じ側へ倒す
+  const checked = typeof items[0].node.attrs.checked === "boolean" ? null : false;
+  const { tr } = state;
+  for (const { node, pos } of items) {
+    tr.setNodeMarkup(pos, undefined, { ...node.attrs, checked });
+  }
+  dispatch(tr.scrollIntoView());
+  return true;
 };

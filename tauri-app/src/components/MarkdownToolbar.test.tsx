@@ -32,8 +32,12 @@ describe("MarkdownToolbar", () => {
     expect(toolbar).toBeDefined();
 
     const buttons = screen.getAllByRole("button", { hidden: true });
-    expect(buttons).toHaveLength(6);
+    expect(buttons).toHaveLength(9);
 
+    // リストの種類は入力ルール(`- ` など)が IME 越しに効かないスマホの入口
+    expect(screen.getByLabelText("箇条書き")).toBeDefined();
+    expect(screen.getByLabelText("番号付きリスト")).toBeDefined();
+    expect(screen.getByLabelText("チェックリスト")).toBeDefined();
     expect(screen.getByLabelText("インデントを戻す")).toBeDefined();
     expect(screen.getByLabelText("インデント")).toBeDefined();
     expect(screen.getByLabelText("コードブロック")).toBeDefined();

@@ -3,7 +3,13 @@ import { Schema } from "@milkdown/kit/prose/model";
 import { EditorState, TextSelection } from "@milkdown/kit/prose/state";
 import type { Command } from "@milkdown/kit/prose/state";
 import type { Node } from "@milkdown/kit/prose/model";
-import { liftItemAtStart, splitTaskItem } from "./list-commands";
+import {
+  liftItemAtStart,
+  splitTaskItem,
+  toggleBulletList,
+  toggleOrderedList,
+  toggleTaskItem,
+} from "./list-commands";
 
 // commonmark / gfm の list まわりの形だけを再現した最小スキーマ。属性名と
 // 既定値は Milkdown のもの(list_item の checked は gfm が足す)
@@ -35,6 +41,7 @@ const p = (text?: string): Node =>
 const item = (content: Node | Node[], checked: boolean | null = null): Node =>
   schema.nodes.list_item.create({ checked }, content);
 const ul = (...items: Node[]): Node => schema.nodes.bullet_list.create(null, items);
+const ol = (...items: Node[]): Node => schema.nodes.ordered_list.create(null, items);
 const doc = (...blocks: Node[]): Node => schema.nodes.doc.create(null, blocks);
 
 function stateAt(document: Node, from: number, to = from): EditorState {
@@ -150,5 +157,76 @@ describe("liftItemAtStart", () => {
   it("does nothing outside a list or with a range selected", () => {
     expect(apply(stateAt(doc(p("one")), 1), liftItemAtStart).handled).toBe(false);
     expect(apply(stateAt(doc(ul(item(p("one")))), 3, 5), liftItemAtStart).handled).toBe(false);
+  });
+});
+
+describe("toggleBulletList", () => {
+  it("wraps a paragraph into a bullet list", () => {
+    const { next } = apply(stateAt(doc(p("one")), 2), toggleBulletList);
+
+    expect(outline(next.doc)).toBe('doc(bullet_list(list_item(paragraph("one"))))');
+  });
+
+  it("lifts the item back out when it is already a bullet", () => {
+    const { next } = apply(stateAt(doc(ul(item(p("one")))), 4), toggleBulletList);
+
+    expect(outline(next.doc)).toBe('doc(paragraph("one"))');
+  });
+
+  it("turns an ordered list into a bullet list, items included", () => {
+    const ordered = schema.nodes.list_item.create({ listType: "ordered", label: "1." }, p("one"));
+    const { next } = apply(stateAt(doc(ol(ordered)), 4), toggleBulletList);
+
+    expect(outline(next.doc)).toBe('doc(bullet_list(list_item(paragraph("one"))))');
+    // syncListOrderPlugin は listType が ordered の bullet_list を番号付きに戻す
+    expect(next.doc.firstChild?.firstChild?.attrs.listType).toBe("bullet");
+  });
+});
+
+describe("toggleOrderedList", () => {
+  it("wraps a paragraph into an ordered list", () => {
+    const { next } = apply(stateAt(doc(p("one")), 2), toggleOrderedList);
+
+    expect(outline(next.doc)).toBe('doc(ordered_list(list_item(paragraph("one"))))');
+  });
+
+  it("turns a bullet list into an ordered list, items included", () => {
+    const { next } = apply(stateAt(doc(ul(item(p("one")))), 4), toggleOrderedList);
+
+    expect(outline(next.doc)).toBe('doc(ordered_list(list_item(paragraph("one"))))');
+    expect(next.doc.firstChild?.firstChild?.attrs.listType).toBe("ordered");
+  });
+
+  it("lifts the item back out when it is already numbered", () => {
+    const { next } = apply(stateAt(doc(ol(item(p("one")))), 4), toggleOrderedList);
+
+    expect(outline(next.doc)).toBe('doc(paragraph("one"))');
+  });
+});
+
+describe("toggleTaskItem", () => {
+  it("wraps a paragraph into an unchecked task", () => {
+    const { next } = apply(stateAt(doc(p("one")), 2), toggleTaskItem);
+
+    expect(outline(next.doc)).toBe('doc(bullet_list(list_item[false](paragraph("one"))))');
+  });
+
+  it("gives a bullet item a box", () => {
+    const { next } = apply(stateAt(doc(ul(item(p("one")))), 4), toggleTaskItem);
+
+    expect(outline(next.doc)).toBe('doc(bullet_list(list_item[false](paragraph("one"))))');
+  });
+
+  it("takes the box away from a task item, checked or not", () => {
+    for (const checked of [true, false]) {
+      const { next } = apply(stateAt(doc(ul(item(p("one"), checked))), 4), toggleTaskItem);
+      expect(outline(next.doc)).toBe('doc(bullet_list(list_item(paragraph("one"))))');
+    }
+  });
+
+  it("keeps a numbered item numbered", () => {
+    const { next } = apply(stateAt(doc(ol(item(p("one")))), 4), toggleTaskItem);
+
+    expect(outline(next.doc)).toBe('doc(ordered_list(list_item[false](paragraph("one"))))');
   });
 });
