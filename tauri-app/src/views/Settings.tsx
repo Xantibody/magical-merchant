@@ -21,6 +21,7 @@ import { ROUTES } from "../lib/routes";
 import { useShell } from "../lib/shell";
 import { chooseTheme, theme, THEMES } from "../lib/theme";
 import { syncErrorKind } from "../lib/sync-status";
+import { getVersion } from "@tauri-apps/api/app";
 import { listen } from "@tauri-apps/api/event";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import "../styles/settings.css";
@@ -55,6 +56,18 @@ export default function Settings(): JSX.Element {
   const [localePreference, setLocalePreference] =
     createSignal<LocalePreference>(readStoredLocale());
   const [templates] = createResource(() => typedInvoke("list_templates"));
+  /**
+   * tauri.conf.json の version がそのまま返る。リリースタグと一致するので、
+   * 端末に載っているビルドはこれで見分けられる。読めなければ空にして節ごと
+   * 隠す — バージョンが出ないことより、設定が開けないことのほうが困る
+   */
+  const [version] = createResource(async () => {
+    try {
+      return await getVersion();
+    } catch {
+      return "";
+    }
+  });
   const [glyphList, { refetch: refetchGlyphs }] = createResource(() => typedInvoke("list_glyphs"));
   /** 削除の猶予中で、一覧から隠している名前。 */
   const [hiddenGlyphs, setHiddenGlyphs] = createSignal<string[]>([]);
@@ -590,6 +603,15 @@ export default function Settings(): JSX.Element {
             <p class="settings-hint">{t().settings.signInHint}</p>
           </Show>
         </section>
+
+        <Show when={version()}>
+          <section class="settings-section">
+            <h2 class="settings-section-label">ABOUT</h2>
+            <p class="settings-hint">
+              {t().settings.version}: {version()}
+            </p>
+          </section>
+        </Show>
 
         <Show when={message()}>
           <p class="settings-message">{message()}</p>
