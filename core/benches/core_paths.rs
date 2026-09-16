@@ -12,7 +12,9 @@ use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_m
 use std::hint::black_box;
 
 use magical_merchant_core::sync::scan::scan_local_files;
-use magical_merchant_core::{list_notes, list_timeline_dates, read_timeline, search_all};
+use magical_merchant_core::{
+    find_backlinks, list_notes, list_timeline_dates, read_timeline, search_all,
+};
 
 fn search(c: &mut Criterion) {
     let tmp = fixture::build();
@@ -32,6 +34,18 @@ fn search(c: &mut Criterion) {
         });
     }
     group.finish();
+}
+
+/// ノートを開くたびに走る。索引を持たず毎回全文を走査するので、`search_all` が
+/// 全文検索になったときにどちらも同じ天井に当たる — 並べて測る。
+fn backlinks(c: &mut Criterion) {
+    let tmp = fixture::build();
+    let base = tmp.path();
+    let target = fixture::backlink_target();
+
+    c.bench_function("find_backlinks", |b| {
+        b.iter(|| find_backlinks(black_box(base), black_box(&target)).unwrap());
+    });
 }
 
 fn listing(c: &mut Criterion) {
@@ -66,5 +80,5 @@ fn sync_scan(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, search, listing, sync_scan);
+criterion_group!(benches, search, backlinks, listing, sync_scan);
 criterion_main!(benches);

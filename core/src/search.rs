@@ -109,6 +109,8 @@ fn timeline_hits(
 /// Timeline と Notes を横断して大文字小文字を無視した部分一致で検索する。
 /// 新しいものから順に返す。
 ///
+/// ノートは `find_backlinks` と同じく本文全文を読む。索引は持たない。
+///
 /// `tags` は範囲。渡された全てのタグを持つ記録だけが対象になる(`#` の有無と
 /// ASCII の大小は見ない)。query が空でも tags があれば、そのタグの付いた記録を
 /// 全部返す — 画面でタグを選んで絞った状態を、そのまま検索の入り口にするため。
@@ -130,23 +132,32 @@ pub fn search_all(
 
     let mut hits = timeline_hits(base_dir, &needle, &scope)?;
 
-    let mut haystack = String::new();
+    let mut tag_haystack = String::new();
     for note in list_notes(base_dir)? {
         if !in_scope(&scope, &note.tags) {
             continue;
         }
-        // format! + join だとノート 1 件につき 2 回余分に確保する。
-        haystack.clear();
-        haystack.push_str(&note.preview);
-        for tag in &note.tags {
-            haystack.push(' ');
-            haystack.push_str(tag);
-        }
-        if !lowercase(&haystack).contains(&needle) {
+        // 一覧の preview(先頭 100 文字)ではなく全文。長く書いたノートほど
+        // 後半に書いたことが探せなくなる。`read_note` は frontmatter を剥がす
+        // ので、`time:` や `tags:` の行には当たらない。
+        // 読めないノートは結果に出ないだけ — 1 本のせいで検索全体を失敗させない
+        let Ok(body) = crate::read_note(&note.path) else {
             continue;
+        };
+        let lowered = lowercase(&body);
+        if !lowered.contains(&needle) {
+            // 本文に無ければタグ。format! + join だとノート 1 件につき
+            // 2 回余分に確保するので、1 本の String を使い回す
+            tag_haystack.clear();
+            for tag in &note.tags {
+                tag_haystack.push(' ');
+                tag_haystack.push_str(tag);
+            }
+            if !lowercase(&tag_haystack).contains(&needle) {
+                continue;
+            }
         }
-        let lowered = lowercase(&note.preview);
-        let excerpt = snippet(&note.preview, &lowered, &needle);
+        let excerpt = snippet(&body, &lowered, &needle);
         hits.push(SearchHit {
             kind: HitKind::Note,
             title: first_line(&note.preview).to_string(),
@@ -446,6 +457,42 @@ mod tests {
             path.file_name().and_then(|n| n.to_str())
         );
         assert_eq!(hits[0].index, None);
+    }
+
+    /// 一覧の preview は先頭 100 文字しかない。長く書いたノートほど、後半に
+    /// 書いたことが探せなくなる — 検索が本文全体を見ないと記録を見失う。
+    #[test]
+    fn a_needle_deep_in_a_long_note_is_found() {
+        let tmp = TempDir::new().unwrap();
+        // 題・タグ・先頭 100 文字のどこにも needle を置かない
+        let body = format!(
+            "# 長いノート\n{}\n後半にだけリトライと書いた",
+            "あ".repeat(300)
+        );
+        draft(&tmp, &body, &["memo".to_string()]).unwrap();
+
+        let hits = search_all(tmp.path(), "リトライ", &[]).unwrap();
+
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].kind, HitKind::Note);
+        assert_eq!(hits[0].title, "長いノート");
+        assert!(hits[0].snippet.contains("リトライ"), "{}", hits[0].snippet);
+        // UI はこの位置でハイライトを塗る。抜粋の中を指していないと別の字が光る
+        let start = hits[0].match_start.unwrap();
+        let len = hits[0].match_len.unwrap();
+        let matched: String = hits[0].snippet.chars().skip(start).take(len).collect();
+        assert_eq!(matched, "リトライ");
+    }
+
+    /// 本文全体を読むようになっても、見せるのは本文だけ。frontmatter の
+    /// `tags:` や `time:` に当たると、書いた覚えのない語でノートが出る。
+    #[test]
+    fn the_frontmatter_is_not_searchable() {
+        let tmp = TempDir::new().unwrap();
+        draft(&tmp, "本文", &["sync".to_string()]).unwrap();
+
+        assert!(search_all(tmp.path(), "time", &[]).unwrap().is_empty());
+        assert!(search_all(tmp.path(), "tags", &[]).unwrap().is_empty());
     }
 
     /// 日付を固定して 1 行書く。`save_timeline_entry` は今日にしか書けない。
