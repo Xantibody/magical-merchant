@@ -57,18 +57,25 @@ When the budget cannot hold everything, the round is filled in the order
 deletions, conflicts, downloads, uploads — so across rounds another device's
 edits are taken in before yours are pushed. It is a priority for choosing
 work, not a running order: the Worker starts everything in one batch at once.
-The state file is written at the end of every round, which is what makes an
-interrupted sync harmless: whatever was sent is recorded, and the next run
-picks up the rest. A round that settles nothing _and still has work deferred_
-stops the sync with `stalled` instead of spinning — the earlier rounds' work
-is kept, and the answer is to run sync again. A last round that fails without
-leaving anything over is an ordinary result instead: the sync ends normally
-and the per-file failures are reported in it. The CLI prints a line per round
-(`round 3  40 done, 449 left`); the app keeps its spinner turning instead.
+The state file is written at the end of every round, so an interrupted sync
+does not start from nothing: the rounds that finished stay recorded. A file
+that reached the client but could not be written is deliberately kept out of
+that record, so the next run still sees it as work to do. An interruption
+between the bulk response and the state write loses that round the same way.
 
-Only one sync at a time may touch a data directory. A run takes an exclusive
-lock on `<base>/.sync.lock` before it does anything else and holds it to the
-end; anyone who finds it taken gives up with `busy` rather than waiting. Two
+A round that settles nothing while work is still deferred stops the sync with
+`stalled` rather than spinning; earlier rounds are kept and the answer is to
+run it again. A round that leaves nothing over ends the sync even if files in
+it failed — those come back as per-file errors in the result, not as
+`stalled`. The CLI prints a line per round; the app keeps its spinner turning.
+
+Only one sync at a time may touch a data directory. The engine takes an
+exclusive lock on `<base>/.sync.lock` before it reads or writes anything and
+holds it to the end; anyone who finds it taken gives up with `busy` rather
+than waiting. The lock covers the sync and nothing else: `magical-merchant
+sync` runs its startup repair pass — rewriting malformed notes, moving legacy
+conflict copies — before the engine is called, so that step alone can touch
+the tree while the app is mid-sync. Two
 runs would otherwise overwrite each other's `.sync-state.json`, and the keys
 lost that way come back as conflicts on the next sync. The lock lives on the
 open file descriptor, so a crash releases it — there is never a stale lock to
