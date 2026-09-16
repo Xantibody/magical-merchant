@@ -213,6 +213,28 @@ describe("stepPastHr", () => {
     expect(next.selection.$from.parent).toBe(next.doc.lastChild);
   });
 
+  it("reuses an empty paragraph that already follows the rule", () => {
+    // 文書末尾では trailing プラグインが先に空段落を足している
+    const doc = schema.nodes.doc.create(null, [p("a"), schema.nodes.hr.create(), p()]);
+    const state = EditorState.create({ doc, selection: NodeSelection.create(doc, 3) });
+
+    const next = applyStep(state);
+
+    expect(next.doc.childCount).toBe(3);
+    expect(next.selection.$from.parent).toBe(next.doc.lastChild);
+  });
+
+  it("still inserts one when the next block has text", () => {
+    const doc = schema.nodes.doc.create(null, [schema.nodes.hr.create(), p("b")]);
+    const state = EditorState.create({ doc, selection: NodeSelection.create(doc, 0) });
+
+    const next = applyStep(state);
+
+    expect(next.doc.childCount).toBe(3);
+    expect(next.doc.child(1).textContent).toBe("");
+    expect(next.selection.$from.parent).toBe(next.doc.child(1));
+  });
+
   it("leaves a text cursor and other node selections alone", () => {
     const doc = schema.nodes.doc.create(null, [p("a"), schema.nodes.hr.create(), code("x")]);
 

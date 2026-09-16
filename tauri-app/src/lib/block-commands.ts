@@ -143,6 +143,9 @@ export const outdentCodeLine: Command = (state, dispatch) => {
  * 段落へ置く。Milkdown の insertHrInputRule は置き換えるだけで選択を決めず、
  * 罫線そのものが選ばれた(NodeSelection の)状態で終わる。そこで次の文字を
  * 打つと罫線が消える。返すのは追記する tr で、直す必要がなければ null。
+ *
+ * 直後が空の段落ならそこへ置くだけ。文書の末尾では trailing プラグインが
+ * 先に空段落を足しているので、こちらも足すと空行が 2 つ並ぶ。
  */
 export function stepPastHr(state: EditorState): Transaction | null {
   const { selection } = state;
@@ -151,7 +154,10 @@ export function stepPastHr(state: EditorState): Transaction | null {
   }
   const after = selection.to;
   const { tr } = state;
-  tr.insert(after, state.schema.nodes.paragraph.create());
+  const next = state.doc.resolve(after).nodeAfter;
+  if (!(next?.type.name === "paragraph" && next.content.size === 0)) {
+    tr.insert(after, state.schema.nodes.paragraph.create());
+  }
   tr.setSelection(TextSelection.create(tr.doc, after + 1));
   return tr;
 }
