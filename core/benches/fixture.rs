@@ -6,13 +6,19 @@ use std::fs;
 use std::path::Path;
 
 use chrono::{Duration, NaiveDate};
+use magical_merchant_core::NoteFilename;
 use magical_merchant_core::frontmatter::{self, NoteFrontmatter};
 use tempfile::TempDir;
 
 /// ヘビーユーザーの 1 年分。数値を変えると before/after が比較できなくなるので固定する。
+/// 件数と本文長を振って測りたいときは、この 2 つ(と `NOTE_BODY_LINES`)だけを
+/// 一時的に書き換えて取り直す — fixture の形そのものは変えない。
 pub(crate) const DAYS: i64 = 365;
 pub(crate) const ENTRIES_PER_DAY: usize = 20;
 pub(crate) const NOTES: usize = 500;
+/// 1 ノートの本文行数。preview は先頭 100 文字しか読まれないので、
+/// 全文検索とプレビュー検索の差が出るだけの長さがいる。
+const NOTE_BODY_LINES: usize = 12;
 
 /// 全エントリのうち 1/`RARE_EVERY` だけに現れる語。
 pub(crate) const RARE_NEEDLE: &str = "ゼオライト";
@@ -117,13 +123,18 @@ fn write_notes(base: &Path, rng: &mut Lcg) {
         };
         // preview は先頭 100 文字しか読まれない。本文はそれより十分長くする。
         let mut text = String::new();
-        for line in 0..12 {
-            text.push_str(&body(rng, index * 12 + line));
+        for line in 0..NOTE_BODY_LINES {
+            text.push_str(&body(rng, index * NOTE_BODY_LINES + line));
             text.push('\n');
         }
         let content = frontmatter::render(&fm, &text).expect("render note");
-        fs::write(dir.join(format!("note-{index:04}.md")), content).expect("write note");
+        fs::write(dir.join(note_filename(index)), content).expect("write note");
     }
+}
+
+/// ノートのファイル名。バックリンクの的を指すのに呼び出し側も使う。
+fn note_filename(index: usize) -> String {
+    format!("note-{index:04}.md")
 }
 
 /// 一度だけ生成して全ベンチで共有する。`TempDir` は返り値が生きている間だけ有効。
@@ -134,6 +145,14 @@ pub(crate) fn build() -> TempDir {
     write_timeline(tmp.path(), &mut rng);
     write_notes(tmp.path(), &mut rng);
     tmp
+}
+
+/// バックリンクを引く的のノート。fixture には `[[...]]` を 1 本も書いていない
+/// ので、これは「全ノートと全日を読み切って 1 件も当たらない」最悪ケースになる。
+/// 当たる件数が増えても増えるのは抜粋作りだけで、走査の量は変わらない。
+#[must_use]
+pub(crate) fn backlink_target() -> NoteFilename {
+    NoteFilename::parse(&note_filename(0)).expect("fixture filename is valid")
 }
 
 /// UI が初期表示で読む日付（新しい順に 14 日）。
