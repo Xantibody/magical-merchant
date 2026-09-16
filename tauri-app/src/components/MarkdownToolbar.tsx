@@ -13,6 +13,7 @@ import { deleteCurrentBlock, exitCodeBlock } from "../lib/block-commands";
 import { t } from "../lib/i18n";
 import { createKeyboardTop, keyboardTopStyle } from "../lib/keyboard";
 import Icon from "./Icon";
+import type { IconName } from "./Icon";
 import "../styles/markdown-toolbar.css";
 import type { JSX } from "solid-js";
 
@@ -20,6 +21,30 @@ interface MarkdownToolbarProps {
   editor: Editor | undefined;
 }
 
+/** ボタン 1 つ。label は aria-label と title の両方に使う。 */
+interface ToolbarButton {
+  icon: IconName;
+  label: () => string;
+  run: (editor: Editor) => void;
+}
+
+/** Milkdown に登録されたコマンドを撃つ。 */
+const milkdown =
+  (key: typeof sinkListItemCommand.key) =>
+  (editor: Editor): void => {
+    editor.action((ctx) => ctx.get(commandsCtx).call(key));
+  };
+
+/** Milkdown のコマンド登録を介さない、素の ProseMirror コマンドを撃つ。 */
+const prose =
+  (command: Command) =>
+  (editor: Editor): void =>
+    editor.action((ctx) => {
+      const view = ctx.get(editorViewCtx);
+      command(view.state, view.dispatch);
+    });
+
+/** スマホのキーボードの上に出る書式バー。打ちにくい記法だけを並べる。 */
 export default function MarkdownToolbar(props: MarkdownToolbarProps): JSX.Element {
   const toolbarTop = createKeyboardTop();
 
@@ -44,15 +69,22 @@ export default function MarkdownToolbar(props: MarkdownToolbarProps): JSX.Elemen
     });
   };
 
-  /** Milkdown のコマンド登録を介さない、素の ProseMirror コマンドを撃つ。 */
-  const execCommand = (command: Command) => {
-    exec((e) =>
-      e.action((ctx) => {
-        const view = ctx.get(editorViewCtx);
-        command(view.state, view.dispatch);
-      }),
-    );
-  };
+  const buttons: ToolbarButton[] = [
+    {
+      icon: "text-outdent",
+      label: () => t().editor.outdent,
+      run: milkdown(liftListItemCommand.key),
+    },
+    { icon: "text-indent", label: () => t().editor.indent, run: milkdown(sinkListItemCommand.key) },
+    {
+      icon: "code-block",
+      label: () => t().editor.codeBlock,
+      run: milkdown(createCodeBlockCommand.key),
+    },
+    { icon: "minus", label: () => t().editor.horizontalRule, run: milkdown(insertHrCommand.key) },
+    { icon: "arrow-line-down", label: () => t().editor.exitBlock, run: prose(exitCodeBlock) },
+    { icon: "trash", label: () => t().editor.deleteBlock, run: prose(deleteCurrentBlock) },
+  ];
 
   return (
     <Show when={props.editor}>
@@ -63,68 +95,17 @@ export default function MarkdownToolbar(props: MarkdownToolbarProps): JSX.Elemen
           aria-label="Markdown formatting"
           style={keyboardTopStyle(toolbarTop())}
         >
-          <button
-            type="button"
-            onPointerDown={(e) => e.preventDefault()}
-            onClick={() =>
-              exec((e) => e.action((ctx) => ctx.get(commandsCtx).call(liftListItemCommand.key)))
-            }
-            aria-label="Outdent"
-            title="Outdent"
-          >
-            <Icon name="text-outdent" size={18} />
-          </button>
-          <button
-            type="button"
-            onPointerDown={(e) => e.preventDefault()}
-            onClick={() =>
-              exec((e) => e.action((ctx) => ctx.get(commandsCtx).call(sinkListItemCommand.key)))
-            }
-            aria-label="Indent"
-            title="Indent"
-          >
-            <Icon name="text-indent" size={18} />
-          </button>
-          <button
-            type="button"
-            onPointerDown={(e) => e.preventDefault()}
-            onClick={() =>
-              exec((e) => e.action((ctx) => ctx.get(commandsCtx).call(createCodeBlockCommand.key)))
-            }
-            aria-label="Code block"
-            title="Code block"
-          >
-            <Icon name="code-block" size={18} />
-          </button>
-          <button
-            type="button"
-            onPointerDown={(e) => e.preventDefault()}
-            onClick={() =>
-              exec((e) => e.action((ctx) => ctx.get(commandsCtx).call(insertHrCommand.key)))
-            }
-            aria-label="Horizontal rule"
-            title="Horizontal rule"
-          >
-            <Icon name="minus" size={18} />
-          </button>
-          <button
-            type="button"
-            onPointerDown={(e) => e.preventDefault()}
-            onClick={() => execCommand(exitCodeBlock)}
-            aria-label={t().editor.exitBlock}
-            title={t().editor.exitBlock}
-          >
-            <Icon name="arrow-line-down" size={18} />
-          </button>
-          <button
-            type="button"
-            onPointerDown={(e) => e.preventDefault()}
-            onClick={() => execCommand(deleteCurrentBlock)}
-            aria-label={t().editor.deleteBlock}
-            title={t().editor.deleteBlock}
-          >
-            <Icon name="trash" size={18} />
-          </button>
+          {buttons.map((button) => (
+            <button
+              type="button"
+              onPointerDown={(e) => e.preventDefault()}
+              onClick={() => exec(button.run)}
+              aria-label={button.label()}
+              title={button.label()}
+            >
+              <Icon name={button.icon} size={18} />
+            </button>
+          ))}
         </div>
       </Portal>
     </Show>

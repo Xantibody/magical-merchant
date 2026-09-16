@@ -285,6 +285,10 @@ const ja = {
     diagramFailed: "図を描画できません",
     exitBlock: "ブロックから抜ける",
     deleteBlock: "ブロックを削除",
+    outdent: "インデントを戻す",
+    indent: "インデント",
+    codeBlock: "コードブロック",
+    horizontalRule: "区切り線",
   },
   preview: {
     zoom: "拡大",
@@ -611,6 +615,10 @@ const en: Messages = {
     diagramFailed: "Cannot draw this diagram",
     exitBlock: "Leave the block",
     deleteBlock: "Delete the block",
+    outdent: "Outdent",
+    indent: "Indent",
+    codeBlock: "Code block",
+    horizontalRule: "Horizontal rule",
   },
   preview: {
     zoom: "Zoom",

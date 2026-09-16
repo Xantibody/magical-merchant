@@ -21,7 +21,7 @@ describe("MarkdownToolbar", () => {
     expect(screen.queryByRole("toolbar")).toBeNull();
   });
 
-  it("renders 6 buttons when editor is provided", () => {
+  it("renders every formatting button when editor is provided", () => {
     const editor = createMockEditor();
     render(() => <MarkdownToolbar editor={editor} />);
 
@@ -34,10 +34,10 @@ describe("MarkdownToolbar", () => {
     const buttons = screen.getAllByRole("button", { hidden: true });
     expect(buttons).toHaveLength(6);
 
-    expect(screen.getByLabelText("Outdent")).toBeDefined();
-    expect(screen.getByLabelText("Indent")).toBeDefined();
-    expect(screen.getByLabelText("Code block")).toBeDefined();
-    expect(screen.getByLabelText("Horizontal rule")).toBeDefined();
+    expect(screen.getByLabelText("インデントを戻す")).toBeDefined();
+    expect(screen.getByLabelText("インデント")).toBeDefined();
+    expect(screen.getByLabelText("コードブロック")).toBeDefined();
+    expect(screen.getByLabelText("区切り線")).toBeDefined();
     // スマホには Mod-Enter も範囲選択もない。ブロックの脱出と削除は
     // ツールバーだけが入口になる
     expect(screen.getByLabelText("ブロックから抜ける")).toBeDefined();
@@ -57,7 +57,7 @@ describe("MarkdownToolbar", () => {
     const editor = createMockEditor();
     render(() => <MarkdownToolbar editor={editor} />);
 
-    fireEvent.click(screen.getByLabelText("Outdent"));
+    fireEvent.click(screen.getByLabelText("インデントを戻す"));
 
     expect(editor.action).toHaveBeenCalledWith(expect.any(Function));
   });
