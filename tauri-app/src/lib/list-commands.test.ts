@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { Schema } from "@milkdown/kit/prose/model";
-import { EditorState, TextSelection } from "@milkdown/kit/prose/state";
+import { EditorState, NodeSelection, TextSelection } from "@milkdown/kit/prose/state";
 import type { Command } from "@milkdown/kit/prose/state";
 import type { Node } from "@milkdown/kit/prose/model";
 import {
@@ -17,6 +17,7 @@ const schema = new Schema({
   nodes: {
     doc: { content: "block+" },
     paragraph: { group: "block", content: "text*" },
+    hr: { group: "block" },
     bullet_list: { group: "block", content: "list_item+", attrs: { spread: { default: false } } },
     ordered_list: {
       group: "block",
@@ -96,6 +97,18 @@ describe("splitTaskItem", () => {
     expect(outline(next.doc)).toBe(
       'doc(bullet_list(list_item[false](paragraph()) list_item[true](paragraph("done"))))',
     );
+  });
+
+  it("falls through when a top-level rule is selected instead of text", () => {
+    // doc(1 p "a" 3) hr(3
+    const document = doc(p("a"), schema.nodes.hr.create());
+    const state = EditorState.create({
+      doc: document,
+      selection: NodeSelection.create(document, 3),
+    });
+
+    expect(apply(state, splitTaskItem).handled).toBe(false);
+    expect(apply(state, liftItemAtStart).handled).toBe(false);
   });
 
   it("leaves a plain list item to the default Enter", () => {
@@ -232,6 +245,17 @@ describe("toggleTaskItem", () => {
 
     expect(outline(next.doc)).toBe(
       'doc(bullet_list(list_item(paragraph("one") bullet_list(list_item[false](paragraph("two"))))))',
+    );
+  });
+
+  it("marks the containing item from its second paragraph", () => {
+    // doc(1 ul(1 li(1 p "one" 6)7 p(8 "two"
+    const state = stateAt(doc(ul(item([p("one"), p("two")]))), 9);
+
+    const { next } = apply(state, toggleTaskItem);
+
+    expect(outline(next.doc)).toBe(
+      'doc(bullet_list(list_item[false](paragraph("one") paragraph("two"))))',
     );
   });
 

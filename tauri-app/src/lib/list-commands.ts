@@ -25,6 +25,10 @@ function itemAround($pos: ResolvedPos, itemType: NodeType): number | undefined {
 export const splitTaskItem: Command = (state, dispatch) => {
   const itemType = state.schema.nodes.list_item;
   const { $from } = state.selection;
+  // 罫線などを丸ごと選んでいると depth 0 で、親を持たない
+  if ($from.depth === 0) {
+    return false;
+  }
   const item = $from.node(-1);
   if (item.type !== itemType || item.attrs.checked !== true) {
     return false;
@@ -62,7 +66,7 @@ export const splitTaskItem: Command = (state, dispatch) => {
 export const liftItemAtStart: Command = (state, dispatch) => {
   const itemType = state.schema.nodes.list_item;
   const { $from, empty } = state.selection;
-  if (!empty || $from.parentOffset !== 0) {
+  if (!empty || $from.depth === 0 || $from.parentOffset !== 0) {
     return false;
   }
   // 項目の最初の段落だけ。2 段落目の先頭は段落の結合に任せる
@@ -73,9 +77,12 @@ export const liftItemAtStart: Command = (state, dispatch) => {
 };
 
 /**
- * 選択範囲にかかる list_item を、始点側から順に。「かかる」のは項目の最初の
- * 段落で見る — nodesBetween は入れ子の外側の項目も返すが、内側の項目に
- * カーソルがあるだけで親の印まで切り替えるのは押した人の意図ではない。
+ * 選択範囲にかかる list_item を、始点側から順に。
+ *
+ * カーソルだけなら一番内側の項目 1 つ(緩い項目の 2 段落目でも、その項目)。
+ * 範囲なら「項目の最初の段落」が重なるもの — nodesBetween は入れ子の外側の
+ * 項目も返すが、内側の項目を選んだだけで親の印まで切り替えるのは押した人の
+ * 意図ではない。
  */
 function itemsIn(
   doc: Node,
@@ -83,6 +90,11 @@ function itemsIn(
   from: number,
   to: number,
 ): { node: Node; pos: number }[] {
+  if (from === to) {
+    const $cursor = doc.resolve(from);
+    const depth = itemAround($cursor, itemType);
+    return depth === undefined ? [] : [{ node: $cursor.node(depth), pos: $cursor.before(depth) }];
+  }
   const found: { node: Node; pos: number }[] = [];
   doc.nodesBetween(from, to, (node, pos) => {
     if (node.type !== itemType) {
