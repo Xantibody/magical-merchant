@@ -15,7 +15,8 @@ the glyph images under `data/glyphs/` — with no filter on the extension;
 file contents travel base64-encoded, which is why a single glyph is capped
 at 256 KiB.
 
-One sync is `GET /sync-state` → local scan → diff → one `POST /sync/bulk`:
+One sync is a loop of rounds; one round is `GET /sync-state` → local scan →
+diff → one `POST /sync/bulk`:
 
 | Client sees                        | Action        | Effect on state       |
 | ---------------------------------- | ------------- | --------------------- |
@@ -31,16 +32,39 @@ One sync is `GET /sync-state` → local scan → diff → one `POST /sync/bulk`:
 > and erase the notes on every device. Writes use `expected_etag` for
 > compare-and-swap, and the client retries a losing race automatically.
 
+A bulk call carries at most **40 R2 operations** (`BULK_OPERATION_BUDGET` in
+[`core/src/sync/round.rs`](../core/src/sync/round.rs)); what does not fit is
+left for the next round, and rounds repeat until the diff comes out empty, at
+most **200** of them (`MAX_ROUNDS` in
+[`core/src/sync/engine.rs`](../core/src/sync/engine.rs)). The budget counts
+operations, not files: an upload or a download costs one, a conflict three
+(read the remote copy, keep it aside, store the winner), any number of remote
+deletions costs one together, and a local deletion costs nothing. The ceiling
+is the Workers Free plan's 50 subrequests per invocation, less the two the
+Worker spends reading and writing the state — a 529-note first sync sent in
+one call is simply refused as `Too many subrequests`.
+
+Within a round the order is deletions, then conflicts, then downloads, then
+uploads, so another device's edits are taken in before yours are pushed. The
+state file is written at the end of every round, which is what makes an
+interrupted sync harmless: whatever was sent is recorded, and the next run
+picks up the rest. A round that settles nothing stops the sync with `stalled`
+instead of spinning — again, the earlier rounds' work is kept, and the answer
+is to run sync again. The CLI prints a line per round
+(`round 3  40 done, 449 left`); the app keeps its spinner turning instead.
+
 Only one sync at a time may touch a data directory. A run takes an exclusive
 lock on `<base>/.sync.lock` before it does anything else and holds it to the
 end; anyone who finds it taken gives up with `busy` rather than waiting. Two
 runs would otherwise overwrite each other's `.sync-state.json`, and the keys
 lost that way come back as conflicts on the next sync. The lock lives on the
 open file descriptor, so a crash releases it — there is never a stale lock to
-clear by hand. Today the app is the only thing that starts a sync, so the
-lock is a guard for a second process that does not exist yet: the CLI `sync`
-subcommand ([#170](https://github.com/Xantibody/magical-merchant/issues/170))
-is the one it is waiting for.
+clear by hand. Two processes start syncs today — the app and the CLI's
+`magical-merchant sync` — and they share that one lock. The app treats `busy`
+as nothing worth showing and, with Auto sync on, tries again a few seconds
+later; the CLI says the app is syncing right now and exits non-zero, because
+a command that printed nothing and returned 0 would read as a sync that
+happened.
 
 Turning on **Auto sync** (sync popover, or `autoSync` in the nix-darwin
 module) runs a sync a few seconds after any successful write, so a note taken
@@ -49,7 +73,11 @@ on the phone reaches the Mac without touching the sync button.
 The session JWT lives in the macOS Keychain on desktop. Android has no
 Keychain equivalent that `keyring` supports — it silently falls back to an
 in-memory store, which loses the token immediately — so on Android the token
-is written to the app-private data directory (mode `600`) instead.
+is written to the app-private data directory (mode `600`) instead. Only the
+app can put a token there: the OAuth round trip needs a browser, so
+`magical-merchant sync` reads the entry the app wrote and, when it has
+expired, stops before the first request and asks you to log in from the app's
+Settings.
 
 On a conflict the local copy wins the key, and the overwritten remote copy is
 kept both in R2 under `….sync-conflict-<timestamp>.md` and on disk under
