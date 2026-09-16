@@ -1,0 +1,154 @@
+import { describe, it, expect } from "vitest";
+import { Schema } from "@milkdown/kit/prose/model";
+import { EditorState, TextSelection } from "@milkdown/kit/prose/state";
+import type { Command } from "@milkdown/kit/prose/state";
+import type { Node } from "@milkdown/kit/prose/model";
+import { liftItemAtStart, splitTaskItem } from "./list-commands";
+
+// commonmark / gfm の list まわりの形だけを再現した最小スキーマ。属性名と
+// 既定値は Milkdown のもの(list_item の checked は gfm が足す)
+const schema = new Schema({
+  nodes: {
+    doc: { content: "block+" },
+    paragraph: { group: "block", content: "text*" },
+    bullet_list: { group: "block", content: "list_item+", attrs: { spread: { default: false } } },
+    ordered_list: {
+      group: "block",
+      content: "list_item+",
+      attrs: { order: { default: 1 }, spread: { default: false } },
+    },
+    list_item: {
+      content: "paragraph block*",
+      attrs: {
+        label: { default: "•" },
+        listType: { default: "bullet" },
+        spread: { default: true },
+        checked: { default: null },
+      },
+    },
+    text: {},
+  },
+});
+
+const p = (text?: string): Node =>
+  schema.nodes.paragraph.create(null, text ? schema.text(text) : undefined);
+const item = (content: Node | Node[], checked: boolean | null = null): Node =>
+  schema.nodes.list_item.create({ checked }, content);
+const ul = (...items: Node[]): Node => schema.nodes.bullet_list.create(null, items);
+const doc = (...blocks: Node[]): Node => schema.nodes.doc.create(null, blocks);
+
+function stateAt(document: Node, from: number, to = from): EditorState {
+  return EditorState.create({
+    doc: document,
+    selection: TextSelection.create(document, from, to),
+  });
+}
+
+/** コマンドを撃ち、書き換わった state と「受けたかどうか」を返す。 */
+function apply(state: EditorState, command: Command): { next: EditorState; handled: boolean } {
+  let next = state;
+  const handled = command(state, (tr) => {
+    next = state.apply(tr);
+  });
+  return { next, handled };
+}
+
+/** 文書の骨組みを一行で。属性は checked だけ添える。 */
+function outline(node: Node): string {
+  if (node.isText) {
+    return JSON.stringify(node.text);
+  }
+  const checked =
+    node.attrs.checked === undefined || node.attrs.checked === null
+      ? ""
+      : `[${node.attrs.checked}]`;
+  const children: string[] = [];
+  node.forEach((child) => children.push(outline(child)));
+  return `${node.type.name}${checked}(${children.join(" ")})`;
+}
+
+describe("splitTaskItem", () => {
+  // doc(1 ul(1 li(1 p "done"
+  it("starts the next item unchecked when Enter is pressed at the end of a checked item", () => {
+    const state = stateAt(doc(ul(item(p("done"), true))), 7);
+
+    const { next, handled } = apply(state, splitTaskItem);
+
+    expect(handled).toBe(true);
+    expect(outline(next.doc)).toBe(
+      'doc(bullet_list(list_item[true](paragraph("done")) list_item[false](paragraph())))',
+    );
+    expect(next.selection.$from.node(-1).attrs.checked).toBe(false);
+  });
+
+  it("keeps the check on the text when Enter is pressed at the start of a checked item", () => {
+    const state = stateAt(doc(ul(item(p("done"), true))), 3);
+
+    const { next } = apply(state, splitTaskItem);
+
+    expect(outline(next.doc)).toBe(
+      'doc(bullet_list(list_item[false](paragraph()) list_item[true](paragraph("done"))))',
+    );
+  });
+
+  it("leaves a plain list item to the default Enter", () => {
+    const state = stateAt(doc(ul(item(p("one")))), 6);
+
+    expect(apply(state, splitTaskItem).handled).toBe(false);
+  });
+
+  it("leaves an unchecked task item to the default Enter, which already copies false", () => {
+    const state = stateAt(doc(ul(item(p("todo"), false))), 7);
+
+    expect(apply(state, splitTaskItem).handled).toBe(false);
+  });
+
+  it("leaves an empty checked item to the default Enter, which lifts it out", () => {
+    const state = stateAt(doc(ul(item(p("a"), true), item(p(), true))), 8);
+
+    expect(apply(state, splitTaskItem).handled).toBe(false);
+  });
+});
+
+describe("liftItemAtStart", () => {
+  it("turns the item into a paragraph when Backspace is pressed at its start", () => {
+    // doc(1 ul(1 li(1 p "one" 6)7 li(8 p(9 "two"
+    const state = stateAt(doc(ul(item(p("one")), item(p("two")))), 10);
+
+    const { next, handled } = apply(state, liftItemAtStart);
+
+    expect(handled).toBe(true);
+    expect(outline(next.doc)).toBe(
+      'doc(bullet_list(list_item(paragraph("one"))) paragraph("two"))',
+    );
+  });
+
+  it("lifts a nested item one level, like Shift-Tab", () => {
+    // doc(1 ul(1 li(1 p "one" 6)7 ul(8 li(9 p(10 "two"
+    const state = stateAt(doc(ul(item([p("one"), ul(item(p("two")))]))), 10);
+
+    const { next } = apply(state, liftItemAtStart);
+
+    expect(outline(next.doc)).toBe(
+      'doc(bullet_list(list_item(paragraph("one")) list_item(paragraph("two"))))',
+    );
+  });
+
+  it("does nothing away from the start of the item", () => {
+    const state = stateAt(doc(ul(item(p("one")), item(p("two")))), 11);
+
+    expect(apply(state, liftItemAtStart).handled).toBe(false);
+  });
+
+  it("does nothing in an item's second paragraph", () => {
+    // doc(1 ul(1 li(1 p "one" 6) p(7
+    const state = stateAt(doc(ul(item([p("one"), p("two")]))), 8);
+
+    expect(apply(state, liftItemAtStart).handled).toBe(false);
+  });
+
+  it("does nothing outside a list or with a range selected", () => {
+    expect(apply(stateAt(doc(p("one")), 1), liftItemAtStart).handled).toBe(false);
+    expect(apply(stateAt(doc(ul(item(p("one")))), 3, 5), liftItemAtStart).handled).toBe(false);
+  });
+});

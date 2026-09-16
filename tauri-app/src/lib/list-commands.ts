@@ -1,0 +1,61 @@
+import { liftListItem, splitListItem } from "@milkdown/kit/prose/schema-list";
+import type { Command, Transaction } from "@milkdown/kit/prose/state";
+
+/**
+ * チェック済みのタスクで Enter を押したとき、新しい項目は未チェックで作る。
+ *
+ * ProseMirror の splitListItem は項目の属性をそのまま複製するので、済んだ
+ * タスクの次に打つ項目まで済んだことになってしまう。Notion や GitHub の
+ * 編集画面と同じく、文字を持って行く側が印を持ち、空で生まれる側は外す。
+ * 空の項目での Enter はリストから抜ける(splitListItem がそうする)ので、
+ * そのときは触るものがない。
+ */
+export const splitTaskItem: Command = (state, dispatch) => {
+  const itemType = state.schema.nodes.list_item;
+  const { $from } = state.selection;
+  const item = $from.node(-1);
+  if (item.type !== itemType || item.attrs.checked !== true) {
+    return false;
+  }
+  const textMoves = $from.parentOffset === 0;
+  return splitListItem(itemType)(
+    state,
+    dispatch &&
+      ((tr: Transaction) => {
+        const $cursor = tr.selection.$from;
+        const landed = $cursor.node(-1);
+        if (landed.type === itemType) {
+          // 先頭で押したときは文字が新しい項目へ移り、空になった前の項目が「新しい」側
+          const pos = textMoves
+            ? $cursor.before(-1) - (tr.doc.resolve($cursor.before(-1)).nodeBefore?.nodeSize ?? 0)
+            : $cursor.before(-1);
+          const target = tr.doc.nodeAt(pos);
+          if (target?.type === itemType && target.attrs.checked === true) {
+            tr.setNodeMarkup(pos, undefined, { ...target.attrs, checked: false });
+          }
+        }
+        dispatch(tr);
+      }),
+  );
+};
+
+/**
+ * 項目の先頭で Backspace を押したら、Shift-Tab と同じく一段外へ出す。
+ *
+ * Milkdown の既定は joinBackward で、前の項目の 2 段落目として吸い込まれる。
+ * 見た目は印のない行が前の項目にぶら下がる形で、Markdown も `- one\n\n  two`
+ * という緩い項目になる。Notion のように印を外して段落にする方が、押した
+ * 人の「この行を項目でなくしたい」に合う。
+ */
+export const liftItemAtStart: Command = (state, dispatch) => {
+  const itemType = state.schema.nodes.list_item;
+  const { $from, empty } = state.selection;
+  if (!empty || $from.parentOffset !== 0) {
+    return false;
+  }
+  // 項目の最初の段落だけ。2 段落目の先頭は段落の結合に任せる
+  if ($from.node(-1).type !== itemType || $from.index(-1) !== 0) {
+    return false;
+  }
+  return liftListItem(itemType)(state, dispatch);
+};

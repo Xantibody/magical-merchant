@@ -2,7 +2,13 @@ import { describe, it, expect } from "vitest";
 import { Schema } from "@milkdown/kit/prose/model";
 import { EditorState, TextSelection, NodeSelection } from "@milkdown/kit/prose/state";
 import type { Node } from "@milkdown/kit/prose/model";
-import { deleteCurrentBlock, exitCodeBlock } from "./block-commands";
+import {
+  deleteCurrentBlock,
+  exitCodeBlock,
+  indentCodeLine,
+  outdentCodeLine,
+  stepPastHr,
+} from "./block-commands";
 
 // 本物の commonmark スキーマは Milkdown の初期化ごと必要になる。コマンドが
 // 見るのはノード名と入れ子だけなので、その形だけを再現した最小スキーマで足りる。
@@ -106,5 +112,90 @@ describe("exitCodeBlock", () => {
     const state = stateAt(doc, 2);
 
     expect(exitCodeBlock(state)).toBe(false);
+  });
+});
+
+describe("indentCodeLine", () => {
+  it("inserts two spaces where the cursor is in a code block", () => {
+    const doc = schema.nodes.doc.create(null, [code("a\nb")]);
+    // code の中は 1 始まり。"a\n" の後ろ = 3
+    const state = stateAt(doc, 3);
+
+    const next = apply(state, indentCodeLine);
+
+    expect(next.doc.textContent).toBe("a\n  b");
+    expect(next.selection.from).toBe(5);
+  });
+
+  it("is not for paragraphs", () => {
+    const state = stateAt(schema.nodes.doc.create(null, [p("text")]), 2);
+
+    expect(indentCodeLine(state)).toBe(false);
+  });
+});
+
+describe("outdentCodeLine", () => {
+  it("removes one level of indentation at the start of the cursor's line", () => {
+    const doc = schema.nodes.doc.create(null, [code("a\n    b")]);
+    // 4 スペースの後ろ = 7
+    const state = stateAt(doc, 7);
+
+    const next = apply(state, outdentCodeLine);
+
+    expect(next.doc.textContent).toBe("a\n  b");
+    expect(next.selection.from).toBe(5);
+  });
+
+  it("removes a tab too", () => {
+    const doc = schema.nodes.doc.create(null, [code("\tb")]);
+    const state = stateAt(doc, 3);
+
+    expect(apply(state, outdentCodeLine).doc.textContent).toBe("b");
+  });
+
+  it("still claims the key when there is nothing to remove", () => {
+    const doc = schema.nodes.doc.create(null, [code("b")]);
+    const state = stateAt(doc, 2);
+
+    expect(outdentCodeLine(state)).toBe(true);
+    expect(apply(state, outdentCodeLine).doc.textContent).toBe("b");
+  });
+
+  it("is not for paragraphs", () => {
+    const state = stateAt(schema.nodes.doc.create(null, [p("  text")]), 3);
+
+    expect(outdentCodeLine(state)).toBe(false);
+  });
+});
+
+/** stepPastHr が直すべきものを見つけた前提で、その結果の state。 */
+function applyStep(state: EditorState): EditorState {
+  const tr = stepPastHr(state);
+  if (!tr) {
+    throw new Error("stepPastHr found nothing to fix");
+  }
+  return state.apply(tr);
+}
+
+describe("stepPastHr", () => {
+  it("moves a selected horizontal rule's cursor into a fresh paragraph below it", () => {
+    const doc = schema.nodes.doc.create(null, [p("a"), schema.nodes.hr.create()]);
+    const state = EditorState.create({ doc, selection: NodeSelection.create(doc, 3) });
+
+    const next = applyStep(state);
+
+    expect(next.doc.childCount).toBe(3);
+    expect(next.doc.lastChild?.type.name).toBe("paragraph");
+    expect(next.selection instanceof TextSelection).toBe(true);
+    expect(next.selection.$from.parent).toBe(next.doc.lastChild);
+  });
+
+  it("leaves a text cursor and other node selections alone", () => {
+    const doc = schema.nodes.doc.create(null, [p("a"), schema.nodes.hr.create(), code("x")]);
+
+    expect(stepPastHr(stateAt(doc, 1))).toBeNull();
+    expect(
+      stepPastHr(EditorState.create({ doc, selection: NodeSelection.create(doc, 4) })),
+    ).toBeNull();
   });
 });

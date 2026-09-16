@@ -1,5 +1,5 @@
 import { NodeSelection, TextSelection } from "@milkdown/kit/prose/state";
-import type { Command } from "@milkdown/kit/prose/state";
+import type { Command, EditorState, Transaction } from "@milkdown/kit/prose/state";
 
 /**
  * カーソルのあるブロックを丸ごと消す。キーボードだけなら範囲選択して消せるが、
@@ -56,3 +56,56 @@ export const exitCodeBlock: Command = (state, dispatch) => {
   dispatch(tr.scrollIntoView());
   return true;
 };
+
+const CODE_INDENT = "  ";
+
+/**
+ * コードブロックの中の Tab は字下げ。ProseMirror は Tab を扱わないので、
+ * 素通しにするとブラウザがフォーカスを次の要素へ移し、書きかけの手が
+ * エディタの外に落ちる。2 スペースなのは、Markdown のコードブロックで
+ * 一番ありふれた幅だから(タブ文字は表示幅が環境で変わる)。
+ */
+export const indentCodeLine: Command = (state, dispatch) => {
+  if (state.selection.$from.parent.type.name !== "code_block") {
+    return false;
+  }
+  dispatch?.(state.tr.insertText(CODE_INDENT).scrollIntoView());
+  return true;
+};
+
+/**
+ * コードブロックの中の Shift-Tab は行頭の字下げを一段戻す。戻すものが
+ * なくても受けたことにするのは、フォーカスを外へ逃がさないため。
+ */
+export const outdentCodeLine: Command = (state, dispatch) => {
+  const { $from } = state.selection;
+  if ($from.parent.type.name !== "code_block") {
+    return false;
+  }
+  const text = $from.parent.textContent;
+  const lineStart = text.lastIndexOf("\n", $from.parentOffset - 1) + 1;
+  const indent = /^(?: {1,2}|\t)/u.exec(text.slice(lineStart))?.[0];
+  if (indent && dispatch) {
+    const from = $from.start() + lineStart;
+    dispatch(state.tr.delete(from, from + indent.length).scrollIntoView());
+  }
+  return true;
+};
+
+/**
+ * 入力ルールが `---` を水平線に置き換えたあと、カーソルを罫線の下の新しい
+ * 段落へ置く。Milkdown の insertHrInputRule は置き換えるだけで選択を決めず、
+ * 罫線そのものが選ばれた(NodeSelection の)状態で終わる。そこで次の文字を
+ * 打つと罫線が消える。返すのは追記する tr で、直す必要がなければ null。
+ */
+export function stepPastHr(state: EditorState): Transaction | null {
+  const { selection } = state;
+  if (!(selection instanceof NodeSelection) || selection.node.type.name !== "hr") {
+    return null;
+  }
+  const after = selection.to;
+  const { tr } = state;
+  tr.insert(after, state.schema.nodes.paragraph.create());
+  tr.setSelection(TextSelection.create(tr.doc, after + 1));
+  return tr;
+}

@@ -23,15 +23,18 @@ at module top-level from anything on the startup path.
 
 ## Plugin table
 
-| Category | Plugin                                                                             | Purpose                                                            |
-| -------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| Built-in | commonmark, gfm, listener, cursor, history, clipboard, trailing, linkTooltipPlugin | base editing; gfm = tables, strikethrough (what the preview draws) |
-| External | @milkdown/plugin-highlight                                                         | Shiki syntax highlighting                                          |
-| Custom   | exit-code-block-plugin                                                             | Mod-Enter exits code blocks                                        |
-| Custom   | placeholder-plugin                                                                 | empty-document placeholder                                         |
-| Custom   | code-block-view-plugin                                                             | language input + copy + mermaid figure                             |
-| Custom   | code-block-active-plugin                                                           | is-active class on touched code blocks                             |
-| Custom   | task-item-plugin                                                                   | click on the box toggles a task item (gfm keeps only the attr)     |
+| Category | Plugin                                                                             | Purpose                                                                            |
+| -------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Built-in | commonmark, gfm, listener, cursor, history, clipboard, trailing, linkTooltipPlugin | base editing; gfm = tables, strikethrough (what the preview draws)                 |
+| External | @milkdown/plugin-highlight                                                         | Shiki syntax highlighting                                                          |
+| Custom   | exit-code-block-plugin                                                             | Mod-Enter exits code blocks                                                        |
+| Custom   | placeholder-plugin                                                                 | empty-document placeholder                                                         |
+| Custom   | code-block-view-plugin                                                             | language input + copy + mermaid figure                                             |
+| Custom   | code-block-active-plugin                                                           | is-active class on touched code blocks                                             |
+| Custom   | task-item-plugin                                                                   | click on the box toggles a task item (gfm keeps only the attr)                     |
+| Custom   | list-keymap-plugin                                                                 | Enter after a checked task starts unchecked; Backspace at an item's start lifts it |
+| Custom   | tab-keymap-plugin                                                                  | Tab / Shift-Tab never leave the editor; in code blocks they indent                 |
+| Custom   | hr-selection-plugin                                                                | after the `---` rule the cursor lands below the rule, not on it                    |
 
 **Rejected** (do not re-propose): block/tooltip/slash (visible chrome),
 code-block component (CodeMirror ~150KB), indent/upload/image-\*/table-block
@@ -47,6 +50,9 @@ code-block component (CodeMirror ~150KB), indent/upload/image-\*/table-block
 - Autosave: 1s debounce + serialized save chain (`update_draft`); don't refetch
   the note list on every save — once, when editing ends
 - Touch devices get `MarkdownToolbar` (lazy, only while an editor exists) for
-  hard-to-type syntax
+  hard-to-type syntax.
+- Key handling order: every `$prose` plugin runs before Milkdown's own keymap,
+  so a `$prose` keymap pre-empts a preset key; a `$shortcut` with `priority: 0`
+  runs after every preset key and is the place for fallbacks
 - Stale async reads: after any await, re-check the selection still points at
   the note you loaded before writing state (see Workspace body loader)

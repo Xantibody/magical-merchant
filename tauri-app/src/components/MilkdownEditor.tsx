@@ -18,6 +18,9 @@ import { exitCodeBlockPlugin } from "../lib/exit-code-block-plugin";
 import { codeBlockViewPlugin } from "../lib/code-block-view-plugin";
 import { codeBlockActivePlugin } from "../lib/code-block-active-plugin";
 import { taskItemPlugin } from "../lib/task-item-plugin";
+import { listKeymapPlugin } from "../lib/list-keymap-plugin";
+import { tabKeymapPlugin } from "../lib/tab-keymap-plugin";
+import { hrSelectionPlugin } from "../lib/hr-selection-plugin";
 import { DIAGRAM_SETTLED_EVENT, hasPendingDiagram } from "../lib/diagram-pending";
 import { createPlaceholderPlugin } from "../lib/placeholder-plugin";
 import { createNoteLinkPlugin } from "../lib/note-link-plugin";
@@ -195,6 +198,9 @@ export default function MilkdownEditor(props: MilkdownEditorProps): JSX.Element 
       .use(codeBlockViewPlugin)
       .use(codeBlockActivePlugin)
       .use(taskItemPlugin)
+      .use(listKeymapPlugin)
+      .use(tabKeymapPlugin)
+      .use(hrSelectionPlugin)
       .use(props.placeholder ? createPlaceholderPlugin(props.placeholder) : [])
       .use(props.noteLinks ? createNoteLinkPlugin(props.noteLinks) : [])
       .use(props.glyphs ? createGlyphPlugin(props.glyphs) : [])
