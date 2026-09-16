@@ -47,17 +47,21 @@ be asked for. The Worker refuses anything above 45 itself, with
 `413 Too many operations for one request` (`MAX_BULK_OPERATIONS` in
 [`workers/src/index.ts`](../workers/src/index.ts)) — that is what a client too
 old to split gets, in place of Cloudflare's unexplained
-`Too many subrequests`. The client stops at 40, which leaves the Worker room
-to spend an operation or two more per file without breaking the installs
-already in the field.
+`Too many subrequests`. The client stops at 40, five short of the Worker's
+guard and eight short of the platform's. That margin is per request, not per
+file: it absorbs one or two more fixed calls per bulk, and a Worker that
+started spending one extra operation _per file_ would blow through it at the
+first full round.
 
 Within a round the order is deletions, then conflicts, then downloads, then
 uploads, so another device's edits are taken in before yours are pushed. The
 state file is written at the end of every round, which is what makes an
 interrupted sync harmless: whatever was sent is recorded, and the next run
-picks up the rest. A round that settles nothing stops the sync with `stalled`
-instead of spinning — again, the earlier rounds' work is kept, and the answer
-is to run sync again. The CLI prints a line per round
+picks up the rest. A round that settles nothing _and still has work deferred_
+stops the sync with `stalled` instead of spinning — the earlier rounds' work
+is kept, and the answer is to run sync again. A last round that fails without
+leaving anything over is an ordinary result instead: the sync ends normally
+and the per-file failures are reported in it. The CLI prints a line per round
 (`round 3  40 done, 449 left`); the app keeps its spinner turning instead.
 
 Only one sync at a time may touch a data directory. A run takes an exclusive
