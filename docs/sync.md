@@ -39,12 +39,17 @@ most **200** of them (`MAX_ROUNDS` in
 [`core/src/sync/engine.rs`](../core/src/sync/engine.rs)). The budget counts
 operations, not files: an upload or a download costs one, a conflict three
 (read the remote copy, keep it aside, store the winner), any number of remote
-deletions costs one together, and a local deletion costs nothing. The hard
-ceiling is 48 — the Workers Free plan allows 50 subrequests per invocation and
-the Worker spends two of them reading and writing the state — and the budget
-stops at 40 so that a Worker which grows an operation or two does not break
-the clients already installed. A 529-note first sync sent in one call is
-simply refused as `Too many subrequests`.
+deletions costs one together, and a local deletion costs nothing.
+
+Three numbers guard the same limit. The Free plan allows 50 subrequests per
+invocation and the Worker spends two of them on the state, so 48 is all R2 can
+be asked for. The Worker refuses anything above 45 itself, with
+`413 Too many operations for one request` (`MAX_BULK_OPERATIONS` in
+[`workers/src/index.ts`](../workers/src/index.ts)) — that is what a client too
+old to split gets, in place of Cloudflare's unexplained
+`Too many subrequests`. The client stops at 40, which leaves the Worker room
+to spend an operation or two more per file without breaking the installs
+already in the field.
 
 Within a round the order is deletions, then conflicts, then downloads, then
 uploads, so another device's edits are taken in before yours are pushed. The
