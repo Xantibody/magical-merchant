@@ -1,3 +1,5 @@
+import { base64Decode, base64Encode } from "./base64";
+
 interface FileSyncRecord {
   hash: string;
   /// 同期状態のバージョン印。サーバーだけが発行するので、
@@ -79,24 +81,6 @@ export async function saveSyncState(
 
   await bucket.put(key, body);
   return true;
-}
-
-function base64Encode(bytes: ArrayBuffer): string {
-  const arr = new Uint8Array(bytes);
-  let binary = "";
-  for (const byte of arr) {
-    binary += String.fromCodePoint(byte);
-  }
-  return btoa(binary);
-}
-
-function base64Decode(s: string): Uint8Array {
-  const binary = atob(s);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.codePointAt(i) ?? 0;
-  }
-  return bytes;
 }
 
 /// 抜け出せるのは `..` という**パス要素**であって、名前の中に並んだ点ではない。
