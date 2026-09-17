@@ -618,6 +618,17 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   };
 
   /**
+   * ファイルを動かす前の `settleEdit`。予約が無くても、発火済みの保存が端末の
+   * 信号や書き込みをまだ待っていることがある。切り替えなら待たなくてよい
+   * (保存は自分の path を持って着地する)が、rename の後に着地する書き込みは
+   * 移動前の path に向かい、移した先には古い本文だけが残る。
+   */
+  const settleWrites = async (): Promise<void> => {
+    await settleEdit();
+    await saveChain;
+  };
+
+  /**
    * 選択を差し替える唯一の入口。一覧のタップ・ウィジェットの `?file=`・
    * 新規作成・テンプレ・バックリンクは全部ここを通る。入口ごとに
    * 「編集中だったらどうするか」を書くと、書き忘れた入口だけが前のノートの
@@ -1031,7 +1042,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
    */
   const promoteToCodex = async (item: NoteItem): Promise<void> => {
     shell.closePopovers();
-    await settleEdit();
+    await settleWrites();
     await typedInvoke("promote_note_to_codex", { filename: item.filename });
     await refetchNotes();
     // タイムラインの origin チップも一覧から導出される。面が変わっても

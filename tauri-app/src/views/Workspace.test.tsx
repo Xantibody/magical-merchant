@@ -979,6 +979,27 @@ describe("Workspace › Codex の面", () => {
     await waitFor(() => expect(titleInput().value).toBe(TITLE_A));
   });
 
+  // 予約が発火済みで書き込みが飛んでいる最中に昇格すると、書き込みは移動前の
+  // path に向かい、Codex には古い本文だけが残る。書き終わるまで移さない
+  it("waits for an in-flight save before moving the file", async () => {
+    await openNoteA();
+    await startEditingBody();
+    blockWrites();
+    typeInEditor?.(`# ${TITLE_A}\n\n足した行`);
+    await waitFor(() => expect(countOf("update_draft")).toBe(1), { timeout: 3000 });
+
+    await runNoteAction("Codex にする");
+    fireEvent.click(await screen.findByRole("button", { name: "Codex にする" }));
+    await sleep(100);
+    expect(countOf("promote_note_to_codex")).toBe(0);
+
+    releaseWrites();
+    await waitFor(() => expect(countOf("promote_note_to_codex")).toBe(1));
+    expect(calls.findIndex((c) => c.cmd === "promote_note_to_codex")).toBeGreaterThan(
+      calls.findIndex((c) => c.cmd === "update_draft"),
+    );
+  });
+
   it("offers no way back from a codex", async () => {
     addCodex();
     renderWorkspace();
