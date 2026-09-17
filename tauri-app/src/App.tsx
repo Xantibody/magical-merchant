@@ -9,6 +9,9 @@ import type { JSX } from "solid-js";
 // Workspace は Milkdown + ProseMirror + Shiki を引き連れており、
 // これを外すだけで起動時に parse する JS が大きく減る。
 const Workspace = lazy(() => import("./views/Workspace"));
+// Codex は同じ Workspace の別の面。読むディレクトリが違うだけで、開いたら
+// 書く形は同じなので、画面を 2 つ持たない
+const Codex = (): JSX.Element => <Workspace kind="codex" />;
 const Settings = lazy(() => import("./views/Settings"));
 // テンプレート管理は Settings の下の画面。開く人はさらに少ないので
 // 先読みもしない
@@ -33,6 +36,7 @@ export default function App(): JSX.Element {
     <Router root={AppLayout}>
       <Route path={ROUTES.TIMELINE} component={Timeline} />
       <Route path={ROUTES.NOTES} component={Workspace} />
+      <Route path={ROUTES.CODEX} component={Codex} />
       <Route path={ROUTES.SETTINGS} component={Settings} />
       <Route path={ROUTES.TEMPLATES} component={Templates} />
     </Router>

@@ -72,6 +72,8 @@ const BODY_B = `# ${TITLE_B}\n\n牛乳`;
 let disk: Map<string, string>;
 /** frontmatter のうち一覧と詳細が読むぶん。書いていないノートは既定のまま。 */
 let meta: Map<string, { tags?: string[]; view?: string }>;
+/** どの置き場に居るか。書いていないノートは Note。 */
+let kinds: Map<string, "note" | "codex">;
 /** 呼ばれたコマンドと引数。どのノートに何が書かれたかをこれで見る。 */
 let calls: { cmd: string; args: Record<string, unknown> }[];
 /** read_note を止めておく関門。応答が届く前の操作を再現する。 */
@@ -96,7 +98,8 @@ const writesTo = (filename: string): Record<string, unknown>[] =>
 
 /** 一覧の 1 行。時刻はファイル名(= ID)から導く。 */
 const summaryOf = (filename: string): Record<string, unknown> => ({
-  path: `/data/notes/${filename}`,
+  kind: kinds.get(filename) ?? "note",
+  path: `/data/${kinds.get(filename) ?? "notes"}/${filename}`,
   filename,
   time:
     `${filename.slice(0, 4)}-${filename.slice(4, 6)}-${filename.slice(6, 8)}` +
@@ -152,6 +155,9 @@ const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
   delete_note: ({ filename }) => {
     disk.delete(String(filename));
   },
+  promote_note_to_codex: ({ filename }) => {
+    kinds.set(String(filename), "codex");
+  },
   set_note_view: ({ filename, view }) => {
     const name = String(filename);
     const entry = { ...meta.get(name) };
@@ -180,6 +186,13 @@ function WorkspaceRoute(): JSX.Element {
   return <Workspace />;
 }
 
+/** 同じ画面の Codex の面。`/codex` に載るのは App.tsx と同じ形。 */
+function CodexRoute(): JSX.Element {
+  const navigate = useNavigate();
+  navigateTo = (to) => navigate(to);
+  return <Workspace kind="codex" />;
+}
+
 /** 一覧だけを描く。詳細を開かないので、見えているのは行そのもの。 */
 function renderWorkspace(): void {
   render(() => (
@@ -187,6 +200,7 @@ function renderWorkspace(): void {
       <CaptureShell />
       <MemoryRouter>
         <Route path="/" component={WorkspaceRoute} />
+        <Route path="/codex" component={CodexRoute} />
       </MemoryRouter>
     </ShellProvider>
   ));
@@ -276,6 +290,7 @@ async function setupWorkspace(): Promise<void> {
   await page.viewport(1280, 800);
   disk = new Map([[FILE_A, BODY_A]]);
   meta = new Map();
+  kinds = new Map();
   calls = [];
   shell = undefined;
   navigateTo = undefined;
@@ -832,5 +847,87 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     fireEvent.input(titleInput(), { target: { value: "別の題" } });
     await waitFor(() => expect(countOf("update_draft")).toBe(2), { timeout: 3000 });
     expect(localStorage.getItem(`note-backup:${FILE_A}`)).toBe(BODY_A);
+  });
+});
+
+// Codex は同じ画面の別の面。置き場(ディレクトリ)が違うだけで、開いたら
+// 書く形は Note と同じ(#255)
+describe("Workspace › Codex の面", () => {
+  beforeEach(setupWorkspace);
+  afterEach(teardownWorkspace);
+
+  const FILE_C = "20260903_140000.md";
+  const TITLE_C = "育てる文書";
+  const BODY_C = `# ${TITLE_C}\n\n書き足していく`;
+
+  const addCodex = (): void => {
+    disk.set(FILE_C, BODY_C);
+    kinds.set(FILE_C, "codex");
+  };
+
+  it("lists only the notes of its own surface", async () => {
+    addCodex();
+    renderWorkspace();
+
+    await rowOf(TITLE_A);
+    expect(screen.queryByRole("button", { name: new RegExp(TITLE_C, "u") })).toBeNull();
+
+    navigateTo?.("/codex");
+    await rowOf(TITLE_C);
+    expect(screen.queryByRole("button", { name: new RegExp(TITLE_A, "u") })).toBeNull();
+  });
+
+  // ウィジェットや [[リンク]] は ID しか知らないので /notes に着く。相手が
+  // Codex なら、その面へ送り直す
+  it("forwards ?file= that points at a codex to the Codex surface", async () => {
+    addCodex();
+    renderWorkspace();
+    await rowOf(TITLE_A);
+
+    navigateTo?.(`/?file=${FILE_C}`);
+
+    await rowOf(TITLE_C);
+    expect(screen.queryByRole("button", { name: new RegExp(TITLE_A, "u") })).toBeNull();
+    await waitFor(() => expect(titleInput().value).toBe(TITLE_C));
+  });
+
+  it("makes a codex from the menu after a confirmation and lands on it", async () => {
+    await openNoteA();
+
+    await runNoteAction("Codex にする");
+    // 戻れない操作なので、押した瞬間には動かない
+    expect(countOf("promote_note_to_codex")).toBe(0);
+    fireEvent.click(await screen.findByRole("button", { name: "Codex にする" }));
+
+    await waitFor(() => expect(kinds.get(FILE_A)).toBe("codex"));
+    // 着地したのは Codex の面。同じノートが開いたまま
+    await waitFor(() => expect(screen.getByText("CODEX")).toBeDefined());
+    await rowOf(TITLE_A);
+    await waitFor(() => expect(titleInput().value).toBe(TITLE_A));
+  });
+
+  it("offers no way back from a codex", async () => {
+    addCodex();
+    renderWorkspace();
+    navigateTo?.("/codex");
+    fireEvent.click(await rowOf(TITLE_C));
+    await waitFor(() => expect(titleInput().value).toBe(TITLE_C));
+
+    fireEvent.click(screen.getByRole("button", { name: "このノートの操作" }));
+
+    await screen.findByRole("button", { name: /読み取り専用にする/u });
+    expect(screen.queryByRole("button", { name: "Codex にする" })).toBeNull();
+  });
+
+  it("creates a new document in the surface it is on", async () => {
+    addCodex();
+    renderWorkspace();
+    navigateTo?.("/codex");
+    await rowOf(TITLE_C);
+
+    fireEvent.click(screen.getByRole("button", { name: /新規/u }));
+
+    await waitFor(() => expect(countOf("create_draft")).toBe(1));
+    expect(calls.find((c) => c.cmd === "create_draft")?.args.kind).toBe("codex");
   });
 });

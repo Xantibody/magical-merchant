@@ -18,6 +18,8 @@
   and a per-note mindmap or read-only view
 - **Scrawl grows into Note** — promote a Scrawl entry into a note; the two
   stay linked through the note's `origin` frontmatter
+- **Note grows into Codex** — a document you keep adding to; it lives in its
+  own tab, keeps the versions you commit, and syncs them with everything else
 - **`[[links]]` and backlinks** — link notes by immutable file ID with
   autocomplete, optionally with `|display text`; every note lists the records
   that point at it

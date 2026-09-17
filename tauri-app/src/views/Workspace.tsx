@@ -51,8 +51,9 @@ import {
 } from "../lib/edit-backup";
 import type { EditSession } from "../lib/edit-backup";
 import type { NoteLinkTarget } from "../lib/note-link-plugin";
-import type { SearchHit, Template } from "../lib/commands";
-import { ROUTES } from "../lib/routes";
+import type { NoteKind, SearchHit, Template } from "../lib/commands";
+import { noteRoute } from "../lib/note-route";
+import { HIT_ICONS, ROUTES } from "../lib/routes";
 import "../styles/workspace.css";
 
 // Milkdown + ProseMirror は詳細を開くまで要らない。一覧だけを見ている画面を
@@ -75,12 +76,14 @@ async function loadNotes(): Promise<NoteItem[]> {
   return toNoteItems(await typedInvoke("list_notes"));
 }
 
-function EmptyNotes(): JSX.Element {
+function EmptyNotes(props: { kind: NoteKind }): JSX.Element {
+  const words = (): { empty: string; emptyHint: string } =>
+    props.kind === "codex" ? t().codex : t().notes;
   return (
     <div class="notes-empty">
-      <Icon name="note-pencil" size={24} />
-      <p class="notes-empty-title">{t().notes.empty}</p>
-      <p class="notes-empty-body">{t().notes.emptyHint}</p>
+      <Icon name={props.kind === "codex" ? "book" : "note-pencil"} size={24} />
+      <p class="notes-empty-title">{words().empty}</p>
+      <p class="notes-empty-body">{words().emptyHint}</p>
     </div>
   );
 }
@@ -95,7 +98,7 @@ function Backlinks(props: { hits: SearchHit[]; onOpen: (hit: SearchHit) => void 
           <For each={props.hits}>
             {(hit) => (
               <button type="button" class="backlink-row" onClick={() => props.onOpen(hit)}>
-                <Icon name={hit.kind === "note" ? "file-text" : "lightning"} size={14} />
+                <Icon name={HIT_ICONS[hit.kind]} size={14} />
                 <span class="backlink-title">{hit.title || hit.snippet}</span>
                 <span class="backlink-date">{formatMonthDay(hit.date)}</span>
               </button>
@@ -122,7 +125,13 @@ function NoteMap(props: { source: () => string }): JSX.Element {
   );
 }
 
-export default function Workspace(): JSX.Element {
+interface WorkspaceProps {
+  /** どの面か。同じ画面が `/notes` と `/codex` の両方に載る。 */
+  kind?: NoteKind;
+}
+
+export default function Workspace(props: WorkspaceProps): JSX.Element {
+  const kind = (): NoteKind => props.kind ?? "note";
   const shell = useShell();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -207,10 +216,19 @@ export default function Workspace(): JSX.Element {
   /** 本文が実際に画面に出ているか。出ていないうちはエディタも作らない。 */
   const bodyVisible = createMemo<boolean>(() => twoPane() || detailOpen());
 
+  // 一覧は両方の置き場を 1 度に持ってくる。面ごとに絞るのはここ — IPC を
+  // 面の数だけ増やすより、`?file=` の転送先を知るために全部持っているほうがいい
   const visibleItems = createMemo<NoteItem[]>(() => {
     const dropped = new Set(hidden());
-    return (notes() ?? []).filter((item) => !dropped.has(item.id));
+    return (notes() ?? []).filter((item) => item.kind === kind() && !dropped.has(item.id));
   });
+
+  /**
+   * ID しか知らない入口(`?file=`・`[[リンク]]`・バックリンク)の相手が
+   * どの面に居るか。一覧が届く前は分からないので undefined。
+   */
+  const kindOf = (filename: string): NoteKind | undefined =>
+    notes()?.find((item) => item.filename === filename)?.kind;
 
   const groups = createMemo<ItemGroup[]>(() => groupNotes(visibleItems(), today));
 
@@ -591,9 +609,22 @@ export default function Workspace(): JSX.Element {
     void switchTo(item.id);
   };
 
+  /**
+   * ID で指されたノートを開く。相手が別の面に居れば、その面へ送る —
+   * この面の一覧に無い id を選んでも、先頭のノートに倒れるだけ。
+   */
+  const openFile = (filename: string): void => {
+    const other = kindOf(filename);
+    if (other && other !== kind()) {
+      navigate(noteRoute(other, filename));
+      return;
+    }
+    void switchTo(filename);
+  };
+
   const openBacklink = (hit: SearchHit): void => {
-    if (hit.kind === "note" && hit.filename) {
-      void switchTo(hit.filename);
+    if (hit.kind !== "timeline" && hit.filename) {
+      openFile(hit.filename);
     } else {
       navigate(`${ROUTES.TIMELINE}?day=${hit.date}`);
     }
@@ -611,6 +642,20 @@ export default function Workspace(): JSX.Element {
       },
     ),
   );
+
+  // ウィジェットや `[[リンク]]` は ID しか知らず `/notes?file=` に着く。相手が
+  // Codex なら、一覧が届いた時点で `/codex?file=` へ置き換える。この面には
+  // 居ないノートなので、履歴に残しても戻る先にならない
+  createEffect(() => {
+    const { file } = searchParams;
+    if (typeof file !== "string" || !file) {
+      return;
+    }
+    const other = kindOf(file);
+    if (other && other !== kind()) {
+      navigate(noteRoute(other, file), { replace: true });
+    }
+  });
 
   /** 本文にカーソルを置く。昇格直後のノートを、そのまま書ける形で渡す。 */
   const focusBody = (): void => {
@@ -651,7 +696,7 @@ export default function Workspace(): JSX.Element {
     const target = e.target instanceof Element ? e.target : null;
     const noteLink = target?.closest("a.note-link");
     if (noteLink instanceof HTMLElement && noteLink.dataset.file) {
-      void switchTo(noteLink.dataset.file);
+      openFile(noteLink.dataset.file);
     }
   };
 
@@ -816,6 +861,7 @@ export default function Workspace(): JSX.Element {
     const path = await typedInvoke("create_draft", {
       body: "",
       tags: [],
+      kind: kind(),
       client: await getDeviceSignals(),
     });
     await refetchNotes();
@@ -857,8 +903,30 @@ export default function Workspace(): JSX.Element {
    * 触る端末では長押しがテンプレの入口。タップは今までどおり空のノートで、
    * 「開いてすぐ書ける」を 1 手増やさない。
    */
-  const newNoteLongPress = createLongPress(() => shell.togglePopover("new-note-menu"));
+  const newNoteLongPress = createLongPress(() => {
+    if (kind() === "note") {
+      shell.togglePopover("new-note-menu");
+    }
+  });
   let newNotePointer = "mouse";
+
+  /**
+   * Note を Codex の置き場へ移す。ID も本文も変わらず、面だけが変わる。
+   * 戻す経路は無いので Undo ではなく、メニュー側の確認で受けている。
+   * 移した先の面へ着地させる — この面の一覧からは消えるので、残ると
+   * 先頭のノートに倒れて「消えた」ように見える。
+   */
+  const promoteToCodex = async (item: NoteItem): Promise<void> => {
+    shell.closePopovers();
+    await settleEdit();
+    await typedInvoke("promote_note_to_codex", { filename: item.filename });
+    await refetchNotes();
+    // タイムラインの origin チップも一覧から導出される。面が変わっても
+    // 繋がりは残るので、向こうにも読み直させる
+    shell.refreshData();
+    navigate(noteRoute("codex", item.filename));
+    shell.showToast(t().codex.promoted);
+  };
 
   // ---- 削除 + Undo（5秒は tombstone、経過後に本削除）----
   const remove = async (item: NoteItem): Promise<void> => {
@@ -902,7 +970,7 @@ export default function Workspace(): JSX.Element {
     <div class="workspace" classList={{ "workspace--detail": detailOpen() }}>
       <div class="list-pane">
         <div class="list-pane-head">
-          <span class="list-pane-title">NOTES</span>
+          <span class="list-pane-title">{kind() === "codex" ? "CODEX" : "NOTES"}</span>
           <button
             type="button"
             class="new-note long-press"
@@ -920,7 +988,9 @@ export default function Workspace(): JSX.Element {
               if (!newNoteLongPress.shouldClick()) {
                 return;
               }
-              if (newNotePointer === "mouse") {
+              // テンプレは Note の入口。Codex の面では空の 1 本を作るだけ —
+              // `create_from_template` は置き場を選べない
+              if (newNotePointer === "mouse" && kind() === "note") {
                 shell.togglePopover("new-note-menu");
               } else {
                 void createNote();
@@ -954,7 +1024,7 @@ export default function Workspace(): JSX.Element {
         {/* キーを受けるのは中の行(button)で、ここはそれを束ねているだけ。
             `.detail-body` と同じく、役割を名乗らない入れ物 */}
         <div class="list-scroll" ref={listScrollRef} role="presentation" onKeyDown={onListKeyDown}>
-          <Show when={groups().length} fallback={<EmptyNotes />}>
+          <Show when={groups().length} fallback={<EmptyNotes kind={kind()} />}>
             <For each={groups()}>
               {(group) => (
                 <>
@@ -1078,6 +1148,7 @@ export default function Workspace(): JSX.Element {
 
                 <Show when={shell.popover() === "note-menu"}>
                   <NoteMenu
+                    kind={kind()}
                     mapOpen={mapOpen()}
                     readOnly={readOnly()}
                     revertable={revertable()}
@@ -1091,6 +1162,9 @@ export default function Workspace(): JSX.Element {
                       void revertEdit(item());
                     }}
                     onInfo={() => shell.togglePopover("note-meta")}
+                    onPromote={() => {
+                      void promoteToCodex(item());
+                    }}
                     onDelete={() => {
                       void remove(item());
                     }}

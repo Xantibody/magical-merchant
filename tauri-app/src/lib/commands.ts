@@ -1,7 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { ClientContext } from "./client-context";
 
+/** どの面に住むか。`codex` は書き足し続けて版を刻む文書。置き場(ディレクトリ)で決まる。 */
+export type NoteKind = "note" | "codex";
+
 export interface Note {
+  kind: NoteKind;
   path: string;
   filename: string;
   time?: string;
@@ -107,7 +111,7 @@ interface NoteMeta {
   source?: string;
 }
 
-type HitKind = "timeline" | "note";
+export type HitKind = "timeline" | NoteKind;
 
 export interface SearchHit {
   kind: HitKind;
@@ -154,7 +158,7 @@ interface CommandMap {
     result: [string, string][];
   };
   create_draft: {
-    args: { body: string; tags: string[]; origin?: string } & ClientArgs;
+    args: { body: string; tags: string[]; origin?: string; kind?: NoteKind } & ClientArgs;
     result: string;
   };
   /**
@@ -174,6 +178,8 @@ interface CommandMap {
   /** 昇格元エントリとの繋がりを書き換える。`null` で関係を解く。 */
   set_note_origin: { args: { filename: string; origin: string | null }; result: void };
   delete_note: { args: { filename: string }; result: void };
+  /** Note を Codex の置き場へ移す。ID は変わらない。すでに Codex なら何もしない。 */
+  promote_note_to_codex: { args: { filename: string }; result: void };
   list_templates: { args: void; result: Template[] };
   read_template: { args: { filename: string }; result: TemplateDetail };
   save_template: { args: { filename: string; body: string; tags: string[] }; result: void };
@@ -219,6 +225,7 @@ const MUTATING: ReadonlySet<CommandName> = new Set<CommandName>([
   "set_note_view",
   "set_note_origin",
   "delete_note",
+  "promote_note_to_codex",
   "save_template",
   "delete_template",
   "create_from_template",

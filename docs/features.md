@@ -95,6 +95,19 @@ derived by scanning at read time; there is no index to corrupt or sync.
 
 ![Backlinks](images/backlinks.png)
 
+## Codex — a Note that keeps growing
+
+Some notes are never finished: a reading log, a project journal, a page you
+keep adding to. Codex is its own tab (Scrawl → Note → Codex) for exactly
+those. Any Note becomes a Codex from its `…` menu; the file keeps its ID and
+every link to it, it just moves from `data/notes/` to `data/codex/`. The move
+is one-way — a Codex is defined by the history it accumulates, and that
+history has nowhere to go if the document turns back into a plain Note.
+
+A Codex opens in the same editor as a Note. What it adds is on purpose: the
+body is a draft until you commit a version, and the versions travel with the
+file through sync, so the history is the same on every device.
+
 ## Glyphs — your own inline symbols
 
 Some things have no character: fighting-game command notation, a custom

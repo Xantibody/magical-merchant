@@ -18,6 +18,7 @@
  * `skip_serializing_if` が落とすものと同じ。
  * @typedef {object} MockNote
  * @property {string} time
+ * @property {"note" | "codex"} [kind] 置き場。無ければ Note
  * @property {string[]} tags
  * @property {string | null} [view]
  * @property {string} body
@@ -30,6 +31,7 @@
 /**
  * 一覧が返す 1 件。commands.ts の `Note` と同じ形。
  * @typedef {object} NoteSummary
+ * @property {"note" | "codex"} kind
  * @property {string} path
  * @property {string} filename
  * @property {string} time
@@ -291,6 +293,8 @@ const saveError = (kind, message) => Object.assign(new Error(message), { kind })
     [
       "20260810_090000.md",
       {
+        // Codex の面の検証用。Note からのリンク(リンク集)が面を跨いで開くこと
+        kind: "codex",
         time: "2026-08-10T09:00:00+09:00",
         tags: ["perf"],
         view: null,
@@ -300,6 +304,7 @@ const saveError = (kind, message) => Object.assign(new Error(message), { kind })
     [
       "20260812_140000.md",
       {
+        kind: "codex",
         time: "2026-08-12T14:00:00+09:00",
         tags: ["design"],
         view: "mindmap",
@@ -384,6 +389,7 @@ const saveError = (kind, message) => Object.assign(new Error(message), { kind })
       .map(([filename, note]) => {
         /** @type {NoteSummary} */
         const summary = {
+          kind: note.kind ?? "note",
           path: `/mock/data/${filename}`,
           filename,
           time: note.time,
@@ -620,7 +626,7 @@ const saveError = (kind, message) => Object.assign(new Error(message), { kind })
       for (const [filename, note] of notes) {
         if (note.body.toLowerCase().includes(needle) && inScope(note.tags)) {
           hits.push({
-            kind: "note",
+            kind: note.kind ?? "note",
             title: note.body.split("\n")[0].replace(/^#+\s*/u, ""),
             date: note.time.slice(0, 10),
             filename,
@@ -658,7 +664,7 @@ const saveError = (kind, message) => Object.assign(new Error(message), { kind })
       for (const [name, note] of notes) {
         if (name !== filename && note.body.includes(needle)) {
           hits.push({
-            kind: "note",
+            kind: note.kind ?? "note",
             title: note.body.split("\n")[0].replace(/^#+\s*/u, ""),
             snippet: note.body.slice(0, 90),
             date: note.time.slice(0, 10),
@@ -721,10 +727,18 @@ const saveError = (kind, message) => Object.assign(new Error(message), { kind })
     delete_note: ({ filename }) => {
       notes.delete(filename);
     },
-    /** @param {{ body: string, tags?: string[], origin?: string }} args */
-    create_draft: ({ body, tags, origin }) => {
+    /** @param {{ filename: string }} args */
+    promote_note_to_codex: ({ filename }) => {
+      const note = notes.get(filename);
+      if (note) {
+        note.kind = "codex";
+      }
+    },
+    /** @param {{ body: string, tags?: string[], origin?: string, kind?: "note" | "codex" }} args */
+    create_draft: ({ body, tags, origin, kind }) => {
       const { filename, time } = freeNoteName();
       notes.set(filename, {
+        ...(kind === "codex" ? { kind } : {}),
         time: time.toISOString(),
         tags: tags ?? [],
         view: null,

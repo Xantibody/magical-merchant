@@ -102,6 +102,14 @@ const ja = {
     editedElsewhere:
       "別の場所で書き換えられたので読み直しました。入力した本文は「戻す」で呼び出せます",
   },
+  codex: {
+    empty: "育てる文書がまだありません",
+    emptyHint: "Note の「…」から Codex にするか、新規から始めます。",
+    promote: "Codex にする",
+    promoteConfirm: "Codex にすると Note には戻せません",
+    promoteYes: "Codex にする",
+    promoted: "Codex にしました",
+  },
   templates: {
     title: "テンプレート",
     manage: "テンプレートを管理",
@@ -274,6 +282,7 @@ const ja = {
     newNote: "新規ノート",
     openTimeline: "Scrawl を開く",
     openNotes: "Note を開く",
+    openCodex: "Codex を開く",
     openSettings: "設定を開く",
     scopeTag: (tag: string) => `#${tag} で絞り込み`,
     removeScope: "絞り込みを外す",
@@ -438,6 +447,14 @@ const en: Messages = {
     revertFailed: "Could not restore it",
     editedElsewhere:
       "This note was changed elsewhere and has been reloaded. Revert brings your text back",
+  },
+  codex: {
+    empty: "Nothing is growing yet",
+    emptyHint: "Turn a Note into a Codex from its … menu, or start one with New.",
+    promote: "Make a Codex",
+    promoteConfirm: "A Codex cannot go back to being a Note",
+    promoteYes: "Make a Codex",
+    promoted: "Made a Codex",
   },
   templates: {
     title: "Templates",
@@ -609,6 +626,7 @@ const en: Messages = {
     newNote: "New note",
     openTimeline: "Open Scrawl",
     openNotes: "Open Note",
+    openCodex: "Open Codex",
     openSettings: "Open Settings",
     scopeTag: (tag: string) => `Scoped to #${tag}`,
     removeScope: "Remove the scope",

@@ -16,7 +16,7 @@ const RECENT_LIMIT = 5;
 
 function noteHit(item: NoteItem): SearchHit {
   return {
-    kind: "note",
+    kind: item.kind,
     title: item.title,
     snippet: "",
     date: item.date,

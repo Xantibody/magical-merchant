@@ -20,6 +20,7 @@ const SHORTCUTS = {
   newNote: { key: "n" },
   timeline: { key: "1" },
   notes: { key: "2" },
+  codex: { key: "3" },
   syncNow: { key: "s", shift: true },
   settings: { key: "," },
   // 開いているノートに効くもの。受けるのは Workspace で、押せるのは

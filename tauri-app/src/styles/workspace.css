@@ -711,3 +711,19 @@
   color: var(--app-text-hint);
   font-variant-numeric: tabular-nums;
 }
+
+/* 「Codex にする」の確認。行の代わりに同じ幅へ出す — 別のダイアログを
+   開くほどの重さではないが、戻れない操作なので一段挟む */
+.note-menu-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 2px 2px;
+}
+
+.note-menu-confirm-label {
+  padding: 2px 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--app-text-muted);
+}

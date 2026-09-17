@@ -5,6 +5,7 @@ const ICONS = {
   lightning: () => import("@phosphor-icons/core/assets/regular/lightning.svg?raw"),
   "scribble-loop": () => import("@phosphor-icons/core/assets/regular/scribble-loop.svg?raw"),
   "note-pencil": () => import("@phosphor-icons/core/assets/regular/note-pencil.svg?raw"),
+  book: () => import("@phosphor-icons/core/assets/regular/book.svg?raw"),
   list: () => import("@phosphor-icons/core/assets/regular/list.svg?raw"),
   folder: () => import("@phosphor-icons/core/assets/regular/folder.svg?raw"),
   "paper-plane-tilt": () => import("@phosphor-icons/core/assets/regular/paper-plane-tilt.svg?raw"),

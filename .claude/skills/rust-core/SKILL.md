@@ -79,6 +79,17 @@ synced `data/`), and writes always use core's note functions so the
 frontmatter stays compliant. No delete tool; do not add one without
 discussion. Packaged as `nix run .#cli` (`nix/cli.nix`); `.#mcp` wraps it.
 
+Notes come in two kinds (`core/src/note/kind.rs`, `NoteKind`), decided by
+directory alone: `data/notes/` is a Note, `data/codex/` is a Codex. The
+repository (`note/repository.rs`) lists both, `Notes::locate` finds an ID in
+either (Codex first), and `promote_note_to_codex` is a bare `rename`. Do not
+encode the kind in frontmatter — a build that does not know the key drops it
+on save. `relocate_duplicate_ids` handles the one way an ID can end up in
+both directories (promotion on one device, offline edit on another).
+`create_draft_codex` is a separate entry point so the CLI/MCP/template callers
+of `create_draft_note` stay untouched. Codex versions live in
+`data/codex/<stem>/` (`note/version.rs`) and are committed explicitly.
+
 Glyphs (`core/src/glyph.rs`): user images under `data/glyphs/<name>.<png|svg>`
 that `:name:` renders inline. `GlyphName` (`utils/validated.rs`) fixes the
 charset — the same regex lives in `lib/glyphs.ts`; fix both. Only registered

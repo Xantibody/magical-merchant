@@ -25,6 +25,7 @@ import {
 import type { ShortcutName } from "../lib/shortcuts";
 import { MODE_ICONS, MODE_LABELS, ROUTES } from "../lib/routes";
 import type { RoutePath } from "../lib/routes";
+import { noteRoute } from "../lib/note-route";
 import { typedInvoke } from "../lib/commands";
 import { paletteScopeAt } from "../lib/search-scope";
 import { firstWidgetAction } from "../lib/widget-actions";
@@ -36,8 +37,9 @@ import { loadGlyphs } from "../lib/glyphs";
 const TABS: { path: RoutePath; shortcut: ShortcutName }[] = [
   { path: ROUTES.TIMELINE, shortcut: "timeline" },
   { path: ROUTES.NOTES, shortcut: "notes" },
+  { path: ROUTES.CODEX, shortcut: "codex" },
 ];
-const BOTTOM_TABS: RoutePath[] = [ROUTES.TIMELINE, ROUTES.NOTES, ROUTES.SETTINGS];
+const BOTTOM_TABS: RoutePath[] = [ROUTES.TIMELINE, ROUTES.NOTES, ROUTES.CODEX, ROUTES.SETTINGS];
 
 /** system を選んでいる人の画面は、端末の設定が変わった瞬間に切り替わる。 */
 function onSchemeChange(): void {
@@ -150,6 +152,13 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
       run: go(ROUTES.NOTES),
     },
     {
+      id: "go-codex",
+      label: t().palette.openCodex,
+      icon: MODE_ICONS[ROUTES.CODEX],
+      shortcut: "codex",
+      run: go(ROUTES.CODEX),
+    },
+    {
       id: "sync-now",
       label: t().sync.now,
       icon: "cloud-arrow-up",
@@ -183,7 +192,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
         });
         shell.refreshData();
         const filename = created.path.split("/").at(-1);
-        navigate(filename ? `${ROUTES.NOTES}?file=${encodeURIComponent(filename)}` : ROUTES.NOTES);
+        navigate(noteRoute("note", filename));
       } catch {
         // 消したテンプレを指したままのウィジェットが残っていることがある。
         // 押しても何も起きないより、一覧を開いて理由を出す
@@ -210,7 +219,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
     // ?file= はルーターに預ける。Workspace の選択状態を外から触れるように
     // 引き上げるより、開きたいノートを URL に持たせるほうが素直
     if (action.name === "note" && action.file) {
-      navigate(`${ROUTES.NOTES}?file=${encodeURIComponent(action.file)}`);
+      navigate(noteRoute("note", action.file));
     }
   };
 
@@ -438,8 +447,8 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
             shell.closePalette();
             // モードの切り替えだけでは「見つけたのに探し直す」ことになる。
             // ノートはその 1 件を、タイムラインはその日を URL で指す
-            if (hit.kind === "note" && hit.filename) {
-              navigate(`${ROUTES.NOTES}?file=${encodeURIComponent(hit.filename)}`);
+            if (hit.kind !== "timeline" && hit.filename) {
+              navigate(noteRoute(hit.kind, hit.filename));
             } else {
               navigate(`${ROUTES.TIMELINE}?day=${hit.date}`);
             }

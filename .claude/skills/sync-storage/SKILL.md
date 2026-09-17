@@ -78,6 +78,13 @@ local scan → diff → `POST /sync/bulk`, repeated until nothing is left over.
   as `history/`, so it neither syncs back nor lands in the notes list.
   The name is built and read back in `core/src/sync/conflict.rs` only
 - Auto sync runs a few seconds after any successful write
+- `data/codex/` syncs like everything else under `data/`: the Codex file and
+  its `codex/<stem>/*.md` versions are ordinary keys. A build that predates
+  Codex simply never lists that directory. After every successful sync (and
+  once at startup) the app runs `relocate_duplicate_ids`: promotion on one
+  device plus an offline edit on another can land the same ID in both
+  `notes/` and `codex/`; the Codex wins and the `notes/` copy goes to
+  `conflicts/notes/<stem>/<ts>.md`
 - JWT: macOS Keychain; Android falls back to app-private file (mode 600) —
   keyring's in-memory fallback silently loses tokens
 - TLS: desktop verifies through the OS trust store (rustls-platform-verifier);

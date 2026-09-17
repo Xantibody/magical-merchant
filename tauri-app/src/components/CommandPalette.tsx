@@ -11,6 +11,7 @@ import { isImeComposing } from "../lib/ime";
 import { toNoteItems } from "../lib/items";
 import { countNoteTags, dayJumpHits, recentNoteHits } from "../lib/palette-home";
 import { scopeLabel, searchRequest } from "../lib/search-scope";
+import { HIT_ICONS } from "../lib/routes";
 import { splitSnippet } from "../lib/snippet-highlight";
 import type { SnippetParts } from "../lib/snippet-highlight";
 
@@ -175,7 +176,7 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
 
     const hitRows: PaletteRow[] = (hits() ?? []).map((hit, i) => ({
       key: `hit:${i}`,
-      icon: hit.kind === "note" ? "file-text" : "lightning",
+      icon: HIT_ICONS[hit.kind],
       label: hit.title || hit.snippet,
       meta: formatMonthDay(hit.date),
       highlight: splitSnippet(hit.snippet, hit.match_start, hit.match_len),

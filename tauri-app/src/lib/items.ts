@@ -1,4 +1,4 @@
-import type { Note } from "./commands";
+import type { Note, NoteKind } from "./commands";
 import { daysBetween, formatMonthDay, formatNoteGroupLabel, parseIsoDate } from "./day-labels";
 import { t } from "./i18n";
 import { resolveNoteView } from "./note-view";
@@ -18,7 +18,8 @@ export interface TimelineItem {
 }
 
 export interface NoteItem {
-  kind: "note";
+  /** `codex` も Note と同じ形の 1 件。面が違うだけで、行の作りは同じ。 */
+  kind: NoteKind;
   id: string;
   filename: string;
   path: string;
@@ -74,7 +75,7 @@ export function toTimelineItems(date: string, raws: string[]): TimelineItem[] {
 
 export function toNoteItems(notes: Note[]): NoteItem[] {
   return notes.map((note) => ({
-    kind: "note",
+    kind: note.kind,
     id: note.filename,
     filename: note.filename,
     path: note.path,
