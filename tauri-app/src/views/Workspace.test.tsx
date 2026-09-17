@@ -1104,6 +1104,17 @@ describe("Workspace › Codex の版", () => {
     expect(writesTo(FILE_C)).toHaveLength(1);
   });
 
+  // 版は他の端末でも刻まれる。同期の読み直しで本文と一覧は新しくなるのに、
+  // メタ行の「版 N」だけ古いままでは信用できない
+  it("refreshes the version status when data changes elsewhere", async () => {
+    await openCodexC();
+    await waitFor(() => expect(metaLine()?.textContent).toBe("版なし"));
+
+    versions.set(FILE_C, [{ id: "v1", message: "別の端末で", body: BODY_C }]);
+    shell?.refreshData();
+
+    await waitFor(() => expect(metaLine()?.textContent).toBe("版 1"));
+  });
 
   // Note から Codex に移しても [[ID]] は同じ ID を指し続ける。面で絞った
   // 解決表だと、移した瞬間にリンクの題が消えて補完からも落ちる

@@ -593,6 +593,11 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
         if (item && !isTyping()) {
           void loadNote(item);
         }
+        // 版の数と「変更あり」も同期で変わる。ファイル名は同じなので
+        // resource は自分では取り直さない
+        if (kind() === "codex") {
+          void refetchVersionStatus();
+        }
       },
       { defer: true },
     ),
