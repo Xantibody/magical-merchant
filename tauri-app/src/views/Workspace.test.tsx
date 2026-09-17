@@ -1086,6 +1086,25 @@ describe("Workspace › Codex の版", () => {
     expect(document.querySelector(".version-history")).not.toBeNull();
   });
 
+  // 刻むのはディスクの本文。発火済みで飛んでいる保存を待たないと、最後の
+  // 打鍵が入っていない版を「刻めた」と言ってしまう
+  it("waits for an in-flight save before offering to commit", async () => {
+    await openCodexC();
+    await startEditingBody();
+    blockWrites();
+    typeInEditor?.(`# ${TITLE_C}\n\n${TEXT_C}\n\n足した行`);
+    await waitFor(() => expect(countOf("update_draft")).toBe(1), { timeout: 3000 });
+
+    await runNoteAction("版を刻む");
+    await sleep(100);
+    expect(screen.queryByPlaceholderText("この版のひとこと(任意)")).toBeNull();
+
+    releaseWrites();
+    await screen.findByPlaceholderText("この版のひとこと(任意)");
+    expect(writesTo(FILE_C)).toHaveLength(1);
+  });
+
+
   // Note から Codex に移しても [[ID]] は同じ ID を指し続ける。面で絞った
   // 解決表だと、移した瞬間にリンクの題が消えて補完からも落ちる
   it("resolves [[links]] and offers completion across both surfaces", async () => {

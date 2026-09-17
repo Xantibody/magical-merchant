@@ -789,7 +789,8 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     if (kind() !== "codex" || !loaded()) {
       return;
     }
-    await settleEdit();
+    // 刻むのはディスクの本文。飛んでいる保存を待たないと最後の打鍵が版に入らない
+    await settleWrites();
     shell.togglePopover("commit-version");
   };
 
@@ -816,7 +817,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   const toggleHistory = async (): Promise<void> => {
     shell.closePopovers();
     if (!historyOpen()) {
-      await settleEdit();
+      await settleWrites();
     }
     setHistoryOpen((open) => !open);
   };
