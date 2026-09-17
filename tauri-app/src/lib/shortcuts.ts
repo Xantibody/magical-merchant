@@ -20,6 +20,7 @@ const SHORTCUTS = {
   newNote: { key: "n" },
   timeline: { key: "1" },
   notes: { key: "2" },
+  codex: { key: "3" },
   syncNow: { key: "s", shift: true },
   settings: { key: "," },
   // 開いているノートに効くもの。受けるのは Workspace で、押せるのは
@@ -30,6 +31,8 @@ const SHORTCUTS = {
   // 常時編集の本文にカーソルがあるあいだ奪えない (#211)
   noteRevert: { key: "r", shift: true },
   noteInfo: { key: "i", shift: true },
+  // 「刻む」の K。⌘K(検索)とは ⇧ で分かれる。Codex を開いているあいだだけ
+  codexCommit: { key: "k", shift: true },
   notePrev: { key: "arrowup" },
   noteNext: { key: "arrowdown" },
 } as const satisfies Record<string, Shortcut>;

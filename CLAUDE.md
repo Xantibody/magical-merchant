@@ -1,8 +1,10 @@
 # Magical Merchant
 
-A minimal note-taking app: Rust core + Tauri 2 + SolidJS. Two surfaces —
-**Timeline** (quick capture journal) and **Notes** (Markdown workspace) —
-plus Android home-screen widgets and R2 sync.
+A minimal note-taking app: Rust core + Tauri 2 + SolidJS. Three surfaces —
+**Scrawl** (quick capture journal; route and code still say `timeline`),
+**Note** (Markdown workspace; code says `notes`) and **Codex** (a Note that
+grows and keeps explicitly committed versions; same `Workspace` view with
+`kind="codex"`) — plus Android home-screen widgets and R2 sync.
 
 ## Design Priorities (in order)
 
@@ -29,22 +31,29 @@ ready to record the moment it opens (widgets exist for exactly this).
 
 ## UI Architecture (current)
 
-- **Header**: mode tabs (Timeline / Notes) + search field (⌘K palette) +
-  calendar jump (Timeline only) + sync + settings. The active tab is marked by
+- **Header**: mode tabs (Scrawl / Note / Codex) + search field (⌘K palette) +
+  calendar jump (Scrawl only) + sync + settings. The active tab is marked by
   weight alone, never a fill; theme lives in Settings, not the header
 - **Shortcuts**: one table in `lib/shortcuts.ts` feeds the key handling, the
   palette's command rows and the `data-key` badges. Holding ⌘ (Ctrl) for 300ms
   floats those badges (`lib/hints.ts`); `?` opens the palette as the list
-- **Bottom tabs** (mobile): Timeline / Notes / Settings
-- **Timeline**: single-column day-grouped journal, time rail, tag filter chips,
+- **Bottom tabs** (mobile): Scrawl / Note / Codex / Settings
+- **Scrawl** (`views/Timeline.tsx`): single-column day-grouped journal, time rail, tag filter chips,
   floating capture dock; in-place entry editing; select-mode bulk delete
-- **Notes (Workspace)**: list pane (one line per note) + detail pane; mobile
+- **Note** (`views/Workspace.tsx`): list pane (one line per note) + detail pane; mobile
   shows one pane at a time (`workspace--detail`); title field above the body
   (it _is_ the body's leading `# heading`), then a meta line of created time /
   save state / tags. **There is no edit mode** — the Milkdown editor is open
   from the moment a note is; frontmatter `view` decides the exception
   (`preview` = read-only, `mindmap` = map laid alongside, absent = editable).
   Rare per-note actions live behind one `…` menu (`components/NoteMenu.tsx`)
+- **Codex** (`views/Workspace.tsx` with `kind="codex"`, route `/codex`): the
+  same view over `data/codex/`. Adds to the `…` menu: 版を刻む… (commit a
+  version with a message, `components/CommitPopover.tsx`) and 履歴 (the
+  version list + diff against the draft, `components/VersionHistory.tsx`);
+  the meta line shows the version count and whether the draft has moved on.
+  Versions are never committed automatically. A Note gets "Codex にする" in
+  the same menu; there is no way back
 - **Command palette** (⌘K): in-memory commands + debounced `search_all`
 - **Language**: Japanese and English only, from one table (`lib/i18n.ts`).
   Every user-visible string goes through `t()`; the choice lives in Settings
@@ -53,6 +62,8 @@ ready to record the moment it opens (widgets exist for exactly this).
 ## Invariants (never break)
 
 - Note **filename is an immutable ID** (`YYYYMMDD_HHMMSS.md`); never rename
+- A note's **kind is its directory** (`data/notes/` vs `data/codex/`), never a
+  frontmatter key; Note → Codex is a one-way `rename` and the ID stays
 - Frontmatter is **preserved verbatim**; any new key must be a typed field on
   `NoteFrontmatter` in Rust core (unknown keys are dropped on save)
 - The **editor/preview only ever see the body**, never frontmatter (and never

@@ -4,7 +4,7 @@ use serde::Serialize;
 
 use crate::error::CoreError;
 use crate::list_timeline_dates;
-use crate::note::Notes;
+use crate::note::{NoteKind, Notes};
 use crate::timeline::Timeline;
 use crate::timeline::day::DayLog;
 use crate::utils::markdown::strip_timeline_prefix;
@@ -17,6 +17,16 @@ use crate::utils::text::lowercase;
 pub enum HitKind {
     Timeline,
     Note,
+    Codex,
+}
+
+impl From<NoteKind> for HitKind {
+    fn from(kind: NoteKind) -> Self {
+        match kind {
+            NoteKind::Note => Self::Note,
+            NoteKind::Codex => Self::Codex,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -158,7 +168,7 @@ pub fn search_all(
         }
         let excerpt = snippet(body, &lowered, &needle);
         hits.push(SearchHit {
-            kind: HitKind::Note,
+            kind: note.kind.into(),
             title: first_line(&note.preview).to_string(),
             snippet: excerpt.text,
             date: note
@@ -203,7 +213,7 @@ pub fn find_backlinks(
         let lowered = lowercase(body);
         let excerpt = snippet(body, &lowered, &needle);
         hits.push(SearchHit {
-            kind: HitKind::Note,
+            kind: note.kind.into(),
             title: first_line(&note.preview).to_string(),
             snippet: excerpt.text,
             date: note
@@ -321,7 +331,7 @@ mod tests {
     use super::*;
     use crate::utils::device::{Context, Source};
     use crate::utils::frontmatter::Provenance;
-    use crate::{create_draft_note, save_timeline_entry};
+    use crate::{create_draft_codex, create_draft_note, save_timeline_entry};
     use tempfile::TempDir;
 
     fn context() -> Context {
@@ -331,6 +341,25 @@ mod tests {
     /// 検索に引っかける普通のノート。出自は検索の対象ではないので名乗らない。
     fn draft(tmp: &TempDir, body: &str, tags: &[String]) -> Result<std::path::PathBuf, CoreError> {
         create_draft_note(tmp.path(), body, tags, &context(), Provenance::default())
+    }
+
+    /// Codex のヒットは Codex と名乗る。開く先の面が違う。
+    #[test]
+    fn a_hit_in_a_codex_says_so() {
+        let tmp = TempDir::new().unwrap();
+        create_draft_codex(
+            tmp.path(),
+            "育てる文書",
+            &[],
+            &context(),
+            Provenance::default(),
+        )
+        .unwrap();
+
+        let hits = search_all(tmp.path(), "育てる", &[]).unwrap();
+
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].kind, HitKind::Codex);
     }
 
     /// 一覧ペインは `# ` を落とした題を出す。パレットとバックリンクだけ

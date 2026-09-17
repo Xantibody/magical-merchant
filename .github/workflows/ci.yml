@@ -108,8 +108,12 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
-      # Free disk space は置かない。store 3G + target で 21GB の空きに収まる。
-      # rm -rf に 87 秒かかっていた
+      # store 3G + target で 21GB の空きに「収まっていた」が、2026-09-17 から
+      # 同じキャッシュ・同じ image で cargo の crate 取得が ENOSPC で落ちる。
+      # android と同じく、キャッシュ復元と並行してバックグラウンドで消す
+      # (前面で消すと 87 秒かかる)
+      - name: Free disk space (background)
+        run: nohup sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache >/dev/null 2>&1 &
       - uses: nixbuild/nix-quick-install-action@v35
       - uses: nix-community/cache-nix-action@v7
         with:
@@ -293,10 +297,13 @@ jobs:
         run: nix build .#pnpm-deps --no-link
 
   # nix build .#default が macOS 配布そのもの。バンドラは codesign や xattr を
-  # 外部コマンドとして呼ぶので、ubuntu で緑でも darwin sandbox でだけ落ちる
+  # 外部コマンドとして呼ぶので、ubuntu で緑でも darwin sandbox でだけ落ちる。
+  # 走らせるのは main への push だけ。macOS runner は分単価が ubuntu の 10 倍で、
+  # このジョブ 1 回が他の全ジョブの合計より高い。PR で拾えるのは darwin sandbox
+  # 特有の失敗だけで、それは merge 後の 1 回で足りる
   nix-package-macos:
     needs: changes
-    if: needs.changes.outputs.nix-package == 'true'
+    if: needs.changes.outputs.nix-package == 'true' && github.ref == 'refs/heads/main'
     runs-on: macos-latest
     timeout-minutes: 45
     steps:

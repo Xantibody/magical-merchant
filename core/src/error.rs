@@ -21,6 +21,10 @@ pub enum CoreError {
     #[error("Stale: {0} changed since it was read")]
     Stale(String),
 
+    /// 版を持てるのは Codex だけ。普通のノートに刻もうとした。
+    #[error("Not a Codex: {0}")]
+    NotCodex(String),
+
     #[error("Sync error: {0}")]
     Sync(String),
 

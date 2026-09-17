@@ -18,6 +18,7 @@
  * `skip_serializing_if` が落とすものと同じ。
  * @typedef {object} MockNote
  * @property {string} time
+ * @property {"note" | "codex"} [kind] 置き場。無ければ Note
  * @property {string[]} tags
  * @property {string | null} [view]
  * @property {string} body
@@ -30,6 +31,7 @@
 /**
  * 一覧が返す 1 件。commands.ts の `Note` と同じ形。
  * @typedef {object} NoteSummary
+ * @property {"note" | "codex"} kind
  * @property {string} path
  * @property {string} filename
  * @property {string} time
@@ -161,6 +163,86 @@ const charCount = (text) => [...text].length;
  */
 const saveError = (kind, message) => Object.assign(new Error(message), { kind });
 
+/**
+ * Codex の版 1 つ。core は `data/codex/<stem>/<id>.md` に置くが、ここでは本文ごと持つ。
+ * @typedef {object} MockVersion
+ * @property {string} id
+ * @property {string} time
+ * @property {string | null} message
+ * @property {string} body
+ */
+
+/**
+ * core の版 ID と同じ形: 時刻の刻印 + 本文の指紋 8 桁。
+ * @param {string} time
+ * @param {string} body
+ */
+const versionIdOf = (time, body) =>
+  `${time.slice(0, 19).replaceAll(/[-:]/gu, "").replace("T", "_")}-${revisionOf(body).padStart(8, "0").slice(0, 8)}`;
+
+/** @param {MockVersion} version */
+const versionSummary = ({ id, time, message, body }) => ({
+  id,
+  time,
+  message,
+  bytes: new TextEncoder().encode(body).length,
+});
+
+/**
+ * core の `diff_note_versions`(similar の unified_diff、前後 3 行)の真似。
+ * 行の LCS を引いて 1 つのハンクにまとめる。同じなら空文字列。
+ * @param {string} from
+ * @param {string} to
+ * @param {string} fromName
+ * @param {string} toName
+ */
+const unifiedDiff = (from, to, fromName, toName) => {
+  if (from === to) {
+    return "";
+  }
+  const a = from.split("\n");
+  const b = to.split("\n");
+  const table = Array.from({ length: a.length + 1 }, () => new Uint16Array(b.length + 1));
+  for (let i = a.length - 1; i >= 0; i -= 1) {
+    for (let j = b.length - 1; j >= 0; j -= 1) {
+      table[i][j] =
+        a[i] === b[j] ? table[i + 1][j + 1] + 1 : Math.max(table[i + 1][j], table[i][j + 1]);
+    }
+  }
+  /** @type {{ sign: " " | "-" | "+", text: string, old: number, new: number }[]} */
+  const ops = [];
+  let i = 0;
+  let j = 0;
+  while (i < a.length || j < b.length) {
+    if (i < a.length && j < b.length && a[i] === b[j]) {
+      ops.push({ sign: " ", text: a[i], old: i, new: j });
+      i += 1;
+      j += 1;
+    } else if (j >= b.length || (i < a.length && table[i + 1][j] >= table[i][j + 1])) {
+      ops.push({ sign: "-", text: a[i], old: i, new: j });
+      i += 1;
+    } else {
+      ops.push({ sign: "+", text: b[j], old: i, new: j });
+      j += 1;
+    }
+  }
+  const changed = ops.map((op, index) => (op.sign === " " ? -1 : index)).filter((x) => x >= 0);
+  const start = Math.max(0, (changed[0] ?? 0) - 3);
+  const end = Math.min(ops.length, (changed.at(-1) ?? 0) + 4);
+  const hunk = ops.slice(start, end);
+  const first = hunk[0] ?? { old: 0, new: 0 };
+  const oldCount = hunk.filter((op) => op.sign !== "+").length;
+  const newCount = hunk.filter((op) => op.sign !== "-").length;
+  const header = `@@ -${first.old + 1},${oldCount} +${first.new + 1},${newCount} @@`;
+  return [
+    `--- ${fromName}`,
+    `+++ ${toName}`,
+    header,
+    ...hunk.map((op) => op.sign + op.text),
+    "",
+  ].join("\n");
+};
+
 (() => {
   if (globalThis.__TAURI_INTERNALS__) {
     return;
@@ -286,11 +368,71 @@ const saveError = (kind, message) => Object.assign(new Error(message), { kind })
     );
   }
 
+  const designBody = `# 設計の見取り図\n\n## UI\n\n- ヘッダ\n- タイムライン\n  - 入力バー\n  - 日付ジャンプ\n\n## コア\n\n- 保存\n- 同期\n  - 認証\n  - 競合`;
+
+  /**
+   * Codex ごとの版。新しい順。1 本だけ版を持たせ、最新の版は下書きと同じ
+   * (「変更あり」が消えた状態)にしてある
+   * @type {Map<string, MockVersion[]>}
+   */
+  const versions = new Map([
+    [
+      "20260812_140000.md",
+      [
+        {
+          id: versionIdOf("2026-08-14T10:00:00+09:00", designBody),
+          time: "2026-08-14T10:00:00+09:00",
+          message: "同期の下に認証と競合を足した",
+          body: designBody,
+        },
+        {
+          id: versionIdOf("2026-08-13T09:30:00+09:00", "before"),
+          time: "2026-08-13T09:30:00+09:00",
+          message: null,
+          body: "# 設計の見取り図\n\n## UI\n\n- ヘッダ\n- タイムライン\n  - 入力バー\n  - 日付ジャンプ\n\n## コア\n\n- 保存\n- 同期",
+        },
+        {
+          id: versionIdOf("2026-08-12T14:05:00+09:00", "first"),
+          time: "2026-08-12T14:05:00+09:00",
+          message: "最初の骨組み",
+          body: "# 設計の見取り図\n\n## UI\n\n- ヘッダ\n- タイムライン\n\n## コア\n\n- 保存",
+        },
+      ],
+    ],
+  ]);
+
+  /**
+   * Codex でなければ core と同じく断る。版のコマンドは全部ここを通る。
+   * @param {string} filename
+   */
+  const codexOf = (filename) => {
+    const note = notes.get(filename);
+    if (!note || note.kind !== "codex") {
+      throw saveError("other", `not a codex: ${filename}`);
+    }
+    return note;
+  };
+
+  /**
+   * @param {string} filename
+   * @param {string} id
+   */
+  const versionOf = (filename, id) => {
+    codexOf(filename);
+    const version = (versions.get(filename) ?? []).find((v) => v.id === id);
+    if (!version) {
+      throw saveError("other", `version not found: ${id}`);
+    }
+    return version;
+  };
+
   /** @type {Map<string, MockNote>} */
   const notes = new Map([
     [
       "20260810_090000.md",
       {
+        // Codex の面の検証用。Note からのリンク(リンク集)が面を跨いで開くこと
+        kind: "codex",
         time: "2026-08-10T09:00:00+09:00",
         tags: ["perf"],
         view: null,
@@ -300,12 +442,13 @@ const saveError = (kind, message) => Object.assign(new Error(message), { kind })
     [
       "20260812_140000.md",
       {
+        kind: "codex",
         time: "2026-08-12T14:00:00+09:00",
         tags: ["design"],
         view: "mindmap",
         // エージェントが書いたノート。メタデータパネルの「書いたツール」検証用
         source: "mcp",
-        body: `# 設計の見取り図\n\n## UI\n\n- ヘッダ\n- タイムライン\n  - 入力バー\n  - 日付ジャンプ\n\n## コア\n\n- 保存\n- 同期\n  - 認証\n  - 競合`,
+        body: designBody,
       },
     ],
     [
@@ -384,6 +527,7 @@ const saveError = (kind, message) => Object.assign(new Error(message), { kind })
       .map(([filename, note]) => {
         /** @type {NoteSummary} */
         const summary = {
+          kind: note.kind ?? "note",
           path: `/mock/data/${filename}`,
           filename,
           time: note.time,
@@ -620,7 +764,7 @@ const saveError = (kind, message) => Object.assign(new Error(message), { kind })
       for (const [filename, note] of notes) {
         if (note.body.toLowerCase().includes(needle) && inScope(note.tags)) {
           hits.push({
-            kind: "note",
+            kind: note.kind ?? "note",
             title: note.body.split("\n")[0].replace(/^#+\s*/u, ""),
             date: note.time.slice(0, 10),
             filename,
@@ -658,7 +802,7 @@ const saveError = (kind, message) => Object.assign(new Error(message), { kind })
       for (const [name, note] of notes) {
         if (name !== filename && note.body.includes(needle)) {
           hits.push({
-            kind: "note",
+            kind: note.kind ?? "note",
             title: note.body.split("\n")[0].replace(/^#+\s*/u, ""),
             snippet: note.body.slice(0, 90),
             date: note.time.slice(0, 10),
@@ -720,11 +864,21 @@ const saveError = (kind, message) => Object.assign(new Error(message), { kind })
     /** @param {{ filename: string }} args */
     delete_note: ({ filename }) => {
       notes.delete(filename);
+      // core は codex/<stem>/ ごと消す
+      versions.delete(filename);
     },
-    /** @param {{ body: string, tags?: string[], origin?: string }} args */
-    create_draft: ({ body, tags, origin }) => {
+    /** @param {{ filename: string }} args */
+    promote_note_to_codex: ({ filename }) => {
+      const note = notes.get(filename);
+      if (note) {
+        note.kind = "codex";
+      }
+    },
+    /** @param {{ body: string, tags?: string[], origin?: string, kind?: "note" | "codex" }} args */
+    create_draft: ({ body, tags, origin, kind }) => {
       const { filename, time } = freeNoteName();
       notes.set(filename, {
+        ...(kind === "codex" ? { kind } : {}),
         time: time.toISOString(),
         tags: tags ?? [],
         view: null,
@@ -735,6 +889,58 @@ const saveError = (kind, message) => Object.assign(new Error(message), { kind })
         ...(origin ? { origin } : {}),
       });
       return `/mock/data/${filename}`;
+    },
+    // ---- Codex の版。core と同じく Codex にしか効かない ----
+    /** @param {{ filename: string, message?: string | null }} args */
+    commit_note_version: ({ filename, message }) => {
+      const note = codexOf(filename);
+      const time = new Date().toISOString();
+      const version = {
+        id: versionIdOf(time, note.body),
+        time,
+        message: message ?? null,
+        body: note.body,
+      };
+      const own = versions.get(filename) ?? [];
+      // 同じ ID(同じ秒・同じ本文)はもう刻んである
+      if (!own.some((v) => v.id === version.id)) {
+        versions.set(filename, [version, ...own]);
+      }
+      return versionSummary(version);
+    },
+    /** @param {{ filename: string }} args */
+    list_note_versions: ({ filename }) => {
+      codexOf(filename);
+      return (versions.get(filename) ?? []).map((version) => versionSummary(version));
+    },
+    /** @param {{ filename: string, id: string }} args */
+    read_note_version: ({ filename, id }) => versionOf(filename, id).body,
+    /** @param {{ filename: string, from: string }} args */
+    diff_note_versions: ({ filename, from }) =>
+      unifiedDiff(versionOf(filename, from).body, codexOf(filename).body, from, "draft"),
+    /** @param {{ filename: string, id: string, revision?: string | null }} args */
+    restore_note_version: ({ filename, id, revision }) => {
+      const note = codexOf(filename);
+      const restored = versionOf(filename, id).body;
+      const expected = revision ?? null;
+      if (expected !== null && expected !== revisionOf(note.body)) {
+        throw saveError("stale", `Stale: ${filename} changed since it was read`);
+      }
+      // 戻す前の下書きを先に刻む。戻したことも戻せる
+      const time = new Date().toISOString();
+      versions.set(filename, [
+        { id: versionIdOf(time, note.body), time, message: "before restore", body: note.body },
+        ...(versions.get(filename) ?? []),
+      ]);
+      note.body = restored;
+      note.updated = time;
+      return revisionOf(restored);
+    },
+    /** @param {{ filename: string }} args */
+    note_version_status: ({ filename }) => {
+      const note = codexOf(filename);
+      const own = versions.get(filename) ?? [];
+      return { count: own.length, dirty: own.length > 0 && own[0].body !== note.body };
     },
     /** @param {{ filePath: string, body: string, revision?: string | null }} args */
     update_draft: ({ filePath, body, revision }) => {

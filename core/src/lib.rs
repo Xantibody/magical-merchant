@@ -18,9 +18,12 @@ pub use glyph::{
 };
 pub use note::error::NoteError;
 pub use note::{
-    NoteSummary, Revision, Snapshot, create_draft_note, create_note_at, delete_note,
-    list_note_history, list_notes, read_note, read_note_by_filename, read_note_history,
-    read_note_meta, relocate_conflict_copies, repair_notes, restore_note, snapshot_note,
+    BEFORE_RESTORE, DRAFT, NoteKind, NoteSummary, Revision, Snapshot, Version, VersionStatus,
+    commit_note_version, create_draft_codex, create_draft_note, create_note_at, delete_note,
+    diff_note_versions, list_note_history, list_note_versions, list_notes, locate_note,
+    note_version_status, promote_note_to_codex, read_note, read_note_by_filename,
+    read_note_history, read_note_meta, read_note_version, relocate_conflict_copies,
+    relocate_duplicate_ids, repair_notes, restore_note, restore_note_version, snapshot_note,
     update_note, update_note_meta, update_note_origin, update_note_view,
 };
 pub use search::{HitKind, SearchHit, find_backlinks, search_all};

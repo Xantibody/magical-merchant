@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 pub const DATA_DIR: &str = "data";
 pub const TIMELINE_DIR: &str = "timeline";
 pub const NOTES_DIR: &str = "notes";
+pub const CODEX_DIR: &str = "codex";
 pub const TEMPLATES_DIR: &str = "templates";
 pub const GLYPHS_DIR: &str = "glyphs";
 
@@ -49,6 +50,17 @@ pub fn templates_dir(base_dir: &Path) -> PathBuf {
 #[must_use]
 pub fn glyphs_dir(base_dir: &Path) -> PathBuf {
     data_dir(base_dir).join(GLYPHS_DIR)
+}
+
+/// Codex(書き足し続ける文書)とその版の置き場。
+///
+/// `data/` の中に置くのは同期されてほしいから — 履歴が端末ごとに違っては
+/// 蓄積にならない。`notes/` と分けるのは、Codex を知らない版の `list_notes`
+/// が読まない場所に置くため。frontmatter のキーで分けると、知らない版が
+/// 保存した瞬間にキーが落ちて普通のノートに戻る。
+#[must_use]
+pub fn codex_dir(base_dir: &Path) -> PathBuf {
+    data_dir(base_dir).join(CODEX_DIR)
 }
 
 /// 書き換え前のノートの控えの置き場。
@@ -146,6 +158,15 @@ mod tests {
         assert_eq!(
             glyphs_dir(Path::new("/app")),
             PathBuf::from("/app/data/glyphs")
+        );
+    }
+
+    /// Codex の版は `data/` の中。人が刻んだ記録なので他の端末にも届く。
+    #[test]
+    fn codex_versions_live_inside_the_synced_tree() {
+        assert_eq!(
+            codex_dir(Path::new("/app")),
+            PathBuf::from("/app/data/codex")
         );
     }
 

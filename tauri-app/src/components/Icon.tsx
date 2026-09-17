@@ -3,7 +3,10 @@ import type { JSX } from "solid-js";
 
 const ICONS = {
   lightning: () => import("@phosphor-icons/core/assets/regular/lightning.svg?raw"),
+  "scribble-loop": () => import("@phosphor-icons/core/assets/regular/scribble-loop.svg?raw"),
   "note-pencil": () => import("@phosphor-icons/core/assets/regular/note-pencil.svg?raw"),
+  book: () => import("@phosphor-icons/core/assets/regular/book.svg?raw"),
+  "book-bookmark": () => import("@phosphor-icons/core/assets/regular/book-bookmark.svg?raw"),
   list: () => import("@phosphor-icons/core/assets/regular/list.svg?raw"),
   folder: () => import("@phosphor-icons/core/assets/regular/folder.svg?raw"),
   "paper-plane-tilt": () => import("@phosphor-icons/core/assets/regular/paper-plane-tilt.svg?raw"),
@@ -16,6 +19,8 @@ const ICONS = {
   "arrow-line-down": () => import("@phosphor-icons/core/assets/regular/arrow-line-down.svg?raw"),
   "clock-counter-clockwise": () =>
     import("@phosphor-icons/core/assets/regular/clock-counter-clockwise.svg?raw"),
+  "arrow-counter-clockwise": () =>
+    import("@phosphor-icons/core/assets/regular/arrow-counter-clockwise.svg?raw"),
   pencil: () => import("@phosphor-icons/core/assets/regular/pencil.svg?raw"),
   trash: () => import("@phosphor-icons/core/assets/regular/trash.svg?raw"),
   plus: () => import("@phosphor-icons/core/assets/regular/plus.svg?raw"),

@@ -62,6 +62,11 @@ describe("matchesShortcut", () => {
     expect(matchesShortcut(press("1", { ctrlKey: true }), "timeline")).toBe(true);
   });
 
+  // 面は 1・2・3 の並びで開く。Codex が 3 つ目
+  it("opens the third surface on the third digit", () => {
+    expect(matchesShortcut(press("3", { metaKey: true }), "codex")).toBe(true);
+  });
+
   it("does not fire without the modifier", () => {
     expect(matchesShortcut(press("1"), "timeline")).toBe(false);
   });

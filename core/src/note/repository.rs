@@ -9,9 +9,9 @@ use crate::utils::device::Context;
 use crate::utils::frontmatter::{self, NoteFrontmatter, Provenance};
 use crate::utils::fs::{ensure_dir, list_md_files, write_atomic};
 use crate::utils::markdown::format_note_markdown;
-use crate::utils::paths::{note_file_path, notes_dir};
 use crate::utils::validated::NoteFilename;
 
+use super::kind::NoteKind;
 use super::revision::Revision;
 use super::summary::Summary as NoteSummary;
 
@@ -24,10 +24,6 @@ impl Notes {
         Self { base_dir }
     }
 
-    fn notes_dir(&self) -> PathBuf {
-        notes_dir(&self.base_dir)
-    }
-
     /// 今この場でノートを 1 本作る。時刻は `create_at` に渡すだけ。
     pub(crate) fn create(
         &self,
@@ -37,6 +33,25 @@ impl Notes {
         provenance: Provenance<'_>,
     ) -> Result<PathBuf, CoreError> {
         self.create_at(Local::now().fixed_offset(), body, tags, context, provenance)
+    }
+
+    /// 今この場で Codex を 1 本作る。置き場が違うだけで、名前も frontmatter も
+    /// ノートと同じ。
+    pub(crate) fn create_codex(
+        &self,
+        body: &str,
+        tags: &[String],
+        context: &Context,
+        provenance: Provenance<'_>,
+    ) -> Result<PathBuf, CoreError> {
+        self.create_kind_at(
+            NoteKind::Codex,
+            Local::now().fixed_offset(),
+            body,
+            tags,
+            context,
+            provenance,
+        )
     }
 
     /// 作成時刻を渡してノートを 1 本作る。返るのは書いたファイルのパス。
@@ -63,11 +78,32 @@ impl Notes {
         context: &Context,
         provenance: Provenance<'_>,
     ) -> Result<PathBuf, CoreError> {
+        self.create_kind_at(NoteKind::Note, time, body, tags, context, provenance)
+    }
+
+    /// ID は種別をまたいで 1 つの名前空間。もう片方の置き場に同じ名前が
+    /// あれば、それも「埋まっている秒」として 1 秒進める。こちらは
+    /// `exists()` で見るので隙間はあるが、2 つの置き場・2 つのプロセス・
+    /// 同じ秒が重なったときだけで、その実害は `relocate_duplicate_ids` が拾う。
+    fn create_kind_at(
+        &self,
+        kind: NoteKind,
+        time: DateTime<FixedOffset>,
+        body: &str,
+        tags: &[String],
+        context: &Context,
+        provenance: Provenance<'_>,
+    ) -> Result<PathBuf, CoreError> {
         let mut time = time;
-        let mut file_path = note_file_path(&self.base_dir, time);
+        let mut file_path = kind.file_path(&self.base_dir, time);
         ensure_dir(&file_path)?;
 
         loop {
+            if kind.other().file_path(&self.base_dir, time).exists() {
+                time += chrono::Duration::seconds(1);
+                file_path = kind.file_path(&self.base_dir, time);
+                continue;
+            }
             match OpenOptions::new()
                 .write(true)
                 .create_new(true)
@@ -80,7 +116,7 @@ impl Notes {
                 }
                 Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
                     time += chrono::Duration::seconds(1);
-                    file_path = note_file_path(&self.base_dir, time);
+                    file_path = kind.file_path(&self.base_dir, time);
                 }
                 Err(e) => return Err(e.into()),
             }
@@ -103,20 +139,65 @@ impl Notes {
     /// 組を Vec で返すと、大きな保管庫では山の使用量が本文の合計になる。
     ///
     /// 読めなかったノートは `list` と同じく空の要約と空の本文になる。
+    ///
+    /// 両方の置き場を 1 つの一覧に混ぜ、ファイル名(作成時刻)の新しい順に
+    /// 並べる。面ごとの絞り込みは呼ぶ側が `kind` で行う。
     pub(crate) fn scan(&self, mut visit: impl FnMut(NoteSummary, &str)) -> Result<(), CoreError> {
-        let notes_dir = self.notes_dir();
-        for entry in list_md_files(&notes_dir)? {
+        let mut entries: Vec<(NoteKind, fs::DirEntry)> = Vec::new();
+        for kind in [NoteKind::Note, NoteKind::Codex] {
+            for entry in list_md_files(&kind.dir(&self.base_dir))? {
+                entries.push((kind, entry));
+            }
+        }
+        entries.sort_by_cached_key(|(_, e)| std::cmp::Reverse(e.file_name()));
+
+        for (kind, entry) in entries {
             let path = entry.path();
             let filename = entry.file_name().to_string_lossy().to_string();
             let content = fs::read_to_string(&path).unwrap_or_default();
-            let summary = NoteSummary::from_file(path, filename, &content);
+            let summary = NoteSummary::from_file(kind, path, filename, &content);
             visit(summary, frontmatter::strip(&content));
         }
         Ok(())
     }
 
+    /// ID だけでノートを探す。見つかった置き場が種別。Codex を先に見るのは、
+    /// 昇格直後に同期が古い `notes/` 側を戻してきても Codex のほうを
+    /// 開くため — 版を刻んでいる側が本物で、戻ってきたほうは
+    /// `relocate_duplicate_ids` が片付ける。
+    pub(crate) fn locate(&self, filename: &NoteFilename) -> Result<(NoteKind, PathBuf), CoreError> {
+        for kind in [NoteKind::Codex, NoteKind::Note] {
+            match crate::utils::fs::resolve_existing(&kind.dir(&self.base_dir), filename.as_str()) {
+                Ok(path) => return Ok((kind, path)),
+                Err(CoreError::NotFound(_)) => {}
+                Err(e) => return Err(e),
+            }
+        }
+        Err(CoreError::NotFound(
+            NoteKind::Note
+                .dir(&self.base_dir)
+                .join(filename.as_str())
+                .to_string_lossy()
+                .to_string(),
+        ))
+    }
+
     fn existing_note_path(&self, filename: &NoteFilename) -> Result<PathBuf, CoreError> {
-        crate::utils::fs::resolve_existing(&self.notes_dir(), filename.as_str())
+        Ok(self.locate(filename)?.1)
+    }
+
+    /// ノートを Codex の置き場へ移す。ID(ファイル名)も中身も変えない —
+    /// 同じファイルシステム内の rename なので原子的で、読みかけの相手が
+    /// 途中の状態を見ることはない。すでに Codex なら何もしない。
+    pub(crate) fn promote_to_codex(&self, filename: &NoteFilename) -> Result<(), CoreError> {
+        let (kind, path) = self.locate(filename)?;
+        if kind == NoteKind::Codex {
+            return Ok(());
+        }
+        let target = NoteKind::Codex.dir(&self.base_dir).join(filename.as_str());
+        ensure_dir(&target)?;
+        fs::rename(path, target)?;
+        Ok(())
     }
 
     pub(crate) fn read(&self, filename: &NoteFilename) -> Result<String, CoreError> {
@@ -233,8 +314,17 @@ impl Notes {
         })
     }
 
+    /// Codex は版のディレクトリ(`codex/<stem>/`)ごと消す。本体だけ消すと、
+    /// 誰のものでもない版が同期で配られ続ける。
     pub(crate) fn delete(&self, filename: &NoteFilename) -> Result<(), CoreError> {
-        fs::remove_file(self.existing_note_path(filename)?)?;
+        let (kind, path) = self.locate(filename)?;
+        fs::remove_file(path)?;
+        if kind == NoteKind::Codex {
+            let versions = super::version::versions_dir(&self.base_dir, filename);
+            if versions.is_dir() {
+                fs::remove_dir_all(versions)?;
+            }
+        }
         Ok(())
     }
 }

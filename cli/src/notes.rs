@@ -137,7 +137,8 @@ pub(crate) fn overwrite(
     // 無いファイルを frontmatter ごとでっち上げてしまう
     let snapshot = magical_merchant_core::snapshot_note(data_dir, filename)?
         .ok_or_else(|| WriteError::NotFound(filename.clone()))?;
-    let path = magical_merchant_core::utils::paths::notes_dir(data_dir).join(filename.as_str());
+    // 置き場は core に聞く。Codex にしたノートは `notes/` には居ない
+    let (_, path) = magical_merchant_core::locate_note(data_dir, filename)?;
     let revision = match magical_merchant_core::update_note(&path, body, &context(), expected) {
         Ok(revision) => revision,
         Err(CoreError::Stale(_)) => return Err(WriteError::Stale(filename.clone())),
@@ -188,6 +189,31 @@ mod tests {
 
     fn body_of(base: &Path, filename: &NoteFilename) -> String {
         magical_merchant_core::read_note_by_filename(base, filename).unwrap()
+    }
+
+    /// Codex にしたノートも同じ ID で書ける。書く先は Codex の置き場で、
+    /// `notes/` に同じ ID の普通のノートを作り直さない。
+    #[test]
+    fn overwriting_a_codex_writes_where_it_lives() {
+        let tmp = TempDir::new().unwrap();
+        let filename = seed(tmp.path(), "before");
+        magical_merchant_core::promote_note_to_codex(tmp.path(), &filename).unwrap();
+
+        overwrite(tmp.path(), &filename, "after", None).unwrap();
+
+        assert_eq!(body_of(tmp.path(), &filename), "after");
+        assert!(
+            tmp.path()
+                .join("data/codex")
+                .join(filename.as_str())
+                .exists()
+        );
+        assert!(
+            !tmp.path()
+                .join("data/notes")
+                .join(filename.as_str())
+                .exists()
+        );
     }
 
     #[test]

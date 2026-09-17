@@ -15,6 +15,19 @@ import { createSignal } from "solid-js";
 import type { SyncIssue } from "./sync-status";
 
 export type Locale = "ja" | "en";
+
+/**
+ * 版どうしのバイト差。`+1.2 KB` / `−340 B` / `±0`。単位はどちらの言語でも
+ * 同じ綴りなので、表を 2 つ持たず 1 つの関数を両方から指す。
+ */
+function sizeDelta(bytes: number): string {
+  if (bytes === 0) {
+    return "±0";
+  }
+  const sign = bytes > 0 ? "+" : "−";
+  const size = Math.abs(bytes);
+  return size < 1024 ? `${sign}${size} B` : `${sign}${(size / 1024).toFixed(1)} KB`;
+}
 /** 設定に残す値。`system` は端末の言語に従う。 */
 export type LocalePreference = Locale | "system";
 
@@ -47,7 +60,7 @@ const ja = {
     pill: (modifier: string) => `${modifier} を離すと消える · ? で一覧`,
   },
   timeline: {
-    promote: "ノートにする",
+    promote: "Note にする",
     unlink: (title: string) => `「${title}」との関係を解除`,
     unlinked: "ノートとの関係を解除しました",
     emptyFiltered: "このタグの記録はまだありません。",
@@ -101,6 +114,34 @@ const ja = {
     revertFailed: "戻せませんでした",
     editedElsewhere:
       "別の場所で書き換えられたので読み直しました。入力した本文は「戻す」で呼び出せます",
+  },
+  codex: {
+    empty: "育てる文書がまだありません",
+    emptyHint: "Note の「…」から Codex にするか、新規から始めます。",
+    promote: "Codex にする",
+    promoteConfirm: "Codex にすると Note には戻せません",
+    promoteYes: "Codex にする",
+    promoted: "Codex にしました",
+    commit: "版を刻む…",
+    commitPlaceholder: "この版のひとこと(任意)",
+    commitYes: "刻む",
+    committed: "版を刻みました",
+    history: "履歴",
+    draft: "下書き",
+    restore: "この版に戻す",
+    restored: "この版に戻しました。戻す前の下書きは履歴にあります",
+    restoreFailed: "戻せませんでした",
+    same: "同じ内容です",
+    noVersions: "まだ版がありません",
+    close: "閉じる",
+    status: (count: number, dirty: boolean): string => {
+      if (count === 0) {
+        return "版なし";
+      }
+      return dirty ? `版 ${count} · 変更あり` : `版 ${count}`;
+    },
+    sizeDelta,
+    beforeRestore: "戻す前",
   },
   templates: {
     title: "テンプレート",
@@ -272,8 +313,9 @@ const ja = {
     empty: "一致するものがありません",
     count: (count: number) => `${count}件`,
     newNote: "新規ノート",
-    openTimeline: "Timeline を開く",
-    openNotes: "Notes を開く",
+    openTimeline: "Scrawl を開く",
+    openNotes: "Note を開く",
+    openCodex: "Codex を開く",
     openSettings: "設定を開く",
     scopeTag: (tag: string) => `#${tag} で絞り込み`,
     removeScope: "絞り込みを外す",
@@ -382,7 +424,7 @@ const en: Messages = {
     pill: (modifier: string) => `Let go of ${modifier} to hide · ? for the list`,
   },
   timeline: {
-    promote: "Turn into a note",
+    promote: "Make a Note",
     unlink: (title: string) => `Unlink “${title}”`,
     unlinked: "Note unlinked from this day",
     emptyFiltered: "Nothing recorded with this tag yet.",
@@ -438,6 +480,35 @@ const en: Messages = {
     revertFailed: "Could not restore it",
     editedElsewhere:
       "This note was changed elsewhere and has been reloaded. Revert brings your text back",
+  },
+  codex: {
+    empty: "Nothing is growing yet",
+    emptyHint: "Turn a Note into a Codex from its … menu, or start one with New.",
+    promote: "Make a Codex",
+    promoteConfirm: "A Codex cannot go back to being a Note",
+    promoteYes: "Make a Codex",
+    promoted: "Made a Codex",
+    commit: "Commit a version…",
+    commitPlaceholder: "A word about this version (optional)",
+    commitYes: "Commit",
+    committed: "Committed a version",
+    history: "History",
+    draft: "Draft",
+    restore: "Restore this version",
+    restored: "Restored this version. The draft from before is in the history",
+    restoreFailed: "Could not restore it",
+    same: "Same content",
+    noVersions: "No versions yet",
+    close: "Close",
+    status: (count: number, dirty: boolean): string => {
+      if (count === 0) {
+        return "No versions";
+      }
+      const versions = `${count} version${count === 1 ? "" : "s"}`;
+      return dirty ? `${versions} · changed` : versions;
+    },
+    sizeDelta,
+    beforeRestore: "before restore",
   },
   templates: {
     title: "Templates",
@@ -603,12 +674,13 @@ const en: Messages = {
     commands: "Commands",
     dates: "Dates",
     recentNotes: "Recent notes",
-    hits: "Notes and entries",
+    hits: "Notes and Scrawl entries",
     empty: "Nothing matches",
     count: (count: number) => `${count}`,
     newNote: "New note",
-    openTimeline: "Open Timeline",
-    openNotes: "Open Notes",
+    openTimeline: "Open Scrawl",
+    openNotes: "Open Note",
+    openCodex: "Open Codex",
     openSettings: "Open Settings",
     scopeTag: (tag: string) => `Scoped to #${tag}`,
     removeScope: "Remove the scope",

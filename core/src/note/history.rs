@@ -11,6 +11,9 @@
 //!
 //! 残すのはノートごとに直近 [`KEEP`] 件。ノート本体が消えても控えは残す —
 //! 消したノートを控えから戻せることが、そもそも控えを取っている理由。
+//!
+//! Codex の版は別物で [`super::version`] にある。あちらは人が刻み、
+//! 文書の一部として同期される。こちらは機械が退避し、端末に留まる。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -19,7 +22,8 @@ use chrono::{DateTime, Local, NaiveDateTime};
 use serde::Serialize;
 
 use crate::error::CoreError;
-use crate::utils::fs::{ensure_dir, list_md_files, resolve_existing, write_atomic};
+use crate::note::repository::Notes;
+use crate::utils::fs::{ensure_dir, list_md_files, write_atomic};
 use crate::utils::paths::{history_dir, notes_dir};
 use crate::utils::validated::NoteFilename;
 
@@ -66,8 +70,9 @@ pub fn snapshot_note(
     base_dir: &Path,
     filename: &NoteFilename,
 ) -> Result<Option<Snapshot>, CoreError> {
-    let path = match resolve_existing(&notes_dir(base_dir), filename.as_str()) {
-        Ok(path) => path,
+    // 置き場は問わない。Codex にしたノートも同じ ID で控えを取る
+    let path = match Notes::new(base_dir.to_path_buf()).locate(filename) {
+        Ok((_, path)) => path,
         Err(CoreError::NotFound(_)) => return Ok(None),
         Err(e) => return Err(e),
     };
@@ -184,7 +189,13 @@ pub fn restore_note(
 ) -> Result<Option<Snapshot>, CoreError> {
     let content = read_note_history(base_dir, filename, id)?;
     let before = snapshot_note(base_dir, filename)?;
-    let target = notes_dir(base_dir).join(filename.as_str());
+    // いまある場所へ戻す。Codex の控えを `notes/` に書くと、同じ ID の
+    // 普通のノートが隣に生まれる。消えたノートの控えは `notes/` に戻る
+    let target = match Notes::new(base_dir.to_path_buf()).locate(filename) {
+        Ok((_, path)) => path,
+        Err(CoreError::NotFound(_)) => notes_dir(base_dir).join(filename.as_str()),
+        Err(e) => return Err(e),
+    };
     ensure_dir(&target)?;
     write_atomic(&target, content)?;
     Ok(before)
@@ -195,8 +206,29 @@ mod tests {
     use super::*;
     use crate::utils::device::Context;
     use crate::utils::frontmatter::{self, NoteFrontmatter, Provenance};
-    use crate::{create_draft_note, read_note_by_filename, update_note};
+    use crate::{create_draft_note, promote_note_to_codex, read_note_by_filename, update_note};
     use tempfile::TempDir;
+
+    /// Codex にしたノートも同じ ID で控えが取れ、戻る先は Codex の置き場。
+    /// `notes/` に戻すと同じ ID の普通のノートが隣に生まれる。
+    #[test]
+    fn a_codex_is_snapshotted_and_restored_where_it_lives() {
+        let tmp = TempDir::new().unwrap();
+        let (old_path, filename) = note(tmp.path(), "before");
+        promote_note_to_codex(tmp.path(), &filename).unwrap();
+        let codex_path = tmp.path().join("data/codex").join(filename.as_str());
+
+        let snap = snapshot_note(tmp.path(), &filename).unwrap().unwrap();
+        update_note(&codex_path, "after", &Context::default(), None).unwrap();
+        restore_note(tmp.path(), &filename, &snap.id).unwrap();
+
+        assert_eq!(
+            read_note_by_filename(tmp.path(), &filename).unwrap(),
+            "before"
+        );
+        assert!(codex_path.exists());
+        assert!(!old_path.exists());
+    }
 
     fn note(base: &Path, body: &str) -> (PathBuf, NoteFilename) {
         let path =

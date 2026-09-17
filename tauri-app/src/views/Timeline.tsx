@@ -32,7 +32,7 @@ import {
 } from "../lib/items";
 import type { NoteItem, TimelineItem } from "../lib/items";
 import { places } from "../lib/places";
-import { ROUTES } from "../lib/routes";
+import { noteRoute } from "../lib/note-route";
 import { countTags, parseTags } from "../lib/tags";
 import {
   digestWeekKey,
@@ -241,11 +241,11 @@ export default function Timeline(): JSX.Element {
       return;
     }
     shell.refreshData();
-    navigate(`${ROUTES.NOTES}?file=${encodeURIComponent(filename)}&edit=1`);
+    navigate(`${noteRoute("note", filename)}&edit=1`);
   };
 
   const openNote = (note: NoteItem): void => {
-    navigate(`${ROUTES.NOTES}?file=${encodeURIComponent(note.filename)}`);
+    navigate(noteRoute(note.kind, note.filename));
   };
 
   /**

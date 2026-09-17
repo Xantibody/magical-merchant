@@ -32,8 +32,9 @@ use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as B64;
 use device::ClientContext;
 use magical_merchant_core::{
-    CreatedNote, GlyphFormat, GlyphName, GlyphSummary, NoteFilename, NoteMeta, NoteSummary,
-    Provenance, Revision, SearchHit, Source, TemplateDetail, TemplateSummary, VarLocale,
+    CreatedNote, GlyphFormat, GlyphName, GlyphSummary, NoteFilename, NoteKind, NoteMeta,
+    NoteSummary, Provenance, Revision, SearchHit, Source, TemplateDetail, TemplateSummary,
+    VarLocale, Version, VersionStatus,
 };
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_deep_link::DeepLinkExt as _;
@@ -74,6 +75,7 @@ fn save_quick_capture(
         .map_err(|e| e.to_string())
 }
 
+/// `kind` は置き場の指定で、`codex` なら版を刻む文書として作る。省略は普通のノート。
 #[tauri::command]
 fn create_draft(
     handle: AppHandle,
@@ -81,23 +83,30 @@ fn create_draft(
     tags: Vec<String>,
     client: ClientContext,
     origin: Option<String>,
+    kind: Option<NoteKind>,
 ) -> Result<String, String> {
     let base_dir = app_base_dir(&handle)?;
     let context = device::get_context(client);
     // origin 付きはタイムラインエントリからの昇格。出自を frontmatter に刻む
-    let path = magical_merchant_core::create_draft_note(
-        &base_dir,
-        &body,
-        &tags,
-        &context,
-        Provenance {
-            origin: origin.as_deref(),
-            source: Some(Source::App),
-            ..Provenance::default()
-        },
-    )
-    .map_err(|e| e.to_string())?;
+    let provenance = Provenance {
+        origin: origin.as_deref(),
+        source: Some(Source::App),
+        ..Provenance::default()
+    };
+    let create = match kind.unwrap_or(NoteKind::Note) {
+        NoteKind::Note => magical_merchant_core::create_draft_note,
+        NoteKind::Codex => magical_merchant_core::create_draft_codex,
+    };
+    let path = create(&base_dir, &body, &tags, &context, provenance).map_err(|e| e.to_string())?;
     Ok(path.to_string_lossy().to_string())
+}
+
+/// ノートを Codex にする。ID は変わらない。戻す入口は無い。
+#[tauri::command]
+fn promote_note_to_codex(handle: AppHandle, filename: String) -> Result<(), String> {
+    let base_dir = app_base_dir(&handle)?;
+    let filename = parse_filename(&filename)?;
+    magical_merchant_core::promote_note_to_codex(&base_dir, &filename).map_err(|e| e.to_string())
 }
 
 /// 保存の失敗。`stale` はフロントが「読み直して知らせる」に分岐するための印。
@@ -158,6 +167,9 @@ pub(crate) fn repair_once(base_dir: &std::path::Path) {
         let _ = magical_merchant_core::repair_notes(base_dir);
         // 古い版が `data/` に置いた競合コピー
         let _ = magical_merchant_core::relocate_conflict_copies(base_dir);
+        // 昇格と他端末のオフライン編集が重なって notes/ と codex/ の両方に
+        // 降りてきた同じ ID
+        let _ = magical_merchant_core::relocate_duplicate_ids(base_dir);
     });
 }
 
@@ -423,6 +435,87 @@ async fn search_all(
     .await
 }
 
+/// いまの下書きを版として刻む。呼ぶのは人が「版を刻む」と言ったときだけ。
+#[tauri::command]
+fn commit_note_version(
+    handle: AppHandle,
+    filename: String,
+    message: Option<String>,
+) -> Result<Version, String> {
+    let base_dir = app_base_dir(&handle)?;
+    let filename = parse_filename(&filename)?;
+    magical_merchant_core::commit_note_version(&base_dir, &filename, message.as_deref())
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn list_note_versions(handle: AppHandle, filename: String) -> Result<Vec<Version>, String> {
+    let base_dir = app_base_dir(&handle)?;
+    let filename = parse_filename(&filename)?;
+    magical_merchant_core::list_note_versions(&base_dir, &filename).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn read_note_version(handle: AppHandle, filename: String, id: String) -> Result<String, String> {
+    let base_dir = app_base_dir(&handle)?;
+    let filename = parse_filename(&filename)?;
+    magical_merchant_core::read_note_version(&base_dir, &filename, &id).map_err(|e| e.to_string())
+}
+
+/// 版 `from` からいまの下書きへの unified diff。版どうしは比べない —
+/// 画面が出すのは「この版から何が変わったか」だけ。
+#[tauri::command]
+fn diff_note_versions(handle: AppHandle, filename: String, from: String) -> Result<String, String> {
+    let base_dir = app_base_dir(&handle)?;
+    let filename = parse_filename(&filename)?;
+    magical_merchant_core::diff_note_versions(&base_dir, &filename, &from, None)
+        .map_err(|e| e.to_string())
+}
+
+/// 版の本文を下書きにする。`revision` は `update_draft` と同じ意味で、
+/// 食い違えば `stale`。戻す前の下書きは core が版として刻んでから書く。
+#[tauri::command]
+fn restore_note_version(
+    handle: AppHandle,
+    filename: String,
+    id: String,
+    client: ClientContext,
+    revision: Option<String>,
+) -> Result<String, SaveError> {
+    let base_dir = app_base_dir(&handle).map_err(|message| SaveError {
+        kind: "other",
+        message,
+    })?;
+    let filename = parse_filename(&filename).map_err(|message| SaveError {
+        kind: "other",
+        message,
+    })?;
+    let context = device::get_context(client);
+    let expected = revision.map(Revision::from);
+    magical_merchant_core::restore_note_version(
+        &base_dir,
+        &filename,
+        &id,
+        &context,
+        expected.as_ref(),
+    )
+    .map(|r| r.to_string())
+    .map_err(|e| SaveError {
+        kind: match e {
+            magical_merchant_core::CoreError::Stale(_) => "stale",
+            _ => "other",
+        },
+        message: e.to_string(),
+    })
+}
+
+#[tauri::command]
+fn note_version_status(handle: AppHandle, filename: String) -> Result<VersionStatus, String> {
+    let base_dir = app_base_dir(&handle)?;
+    let filename = parse_filename(&filename)?;
+    magical_merchant_core::note_version_status(&base_dir, &filename).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn delete_note(handle: AppHandle, filename: String) -> Result<(), String> {
     let base_dir = app_base_dir(&handle)?;
@@ -546,6 +639,13 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             save_quick_capture,
             create_draft,
+            promote_note_to_codex,
+            commit_note_version,
+            list_note_versions,
+            read_note_version,
+            diff_note_versions,
+            restore_note_version,
+            note_version_status,
             update_draft,
             list_notes,
             read_note,

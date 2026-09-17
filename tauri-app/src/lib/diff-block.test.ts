@@ -51,6 +51,25 @@ describe("renderDiffBlock", () => {
     ]);
   });
 
+  // core の diff_note_versions(similar の unified_diff)が返す文字列そのもの。
+  // 版の履歴ペインはフェンスを通さずこれを直接渡すので、ヘッダの版 ID と
+  // `draft` が色付きにならず、hunk・追加・削除が既存のクラスに落ちること
+  it("renders what core's version diff returns, header and all", () => {
+    const fromCore =
+      "--- 20260917_140300-0123abcd\n+++ draft\n@@ -1,3 +1,4 @@\n a\n-b\n+B\n c\n+d\n";
+
+    expect(lines(fromCore)).toStrictEqual([
+      { className: "diff-line", text: "--- 20260917_140300-0123abcd" },
+      { className: "diff-line", text: "+++ draft" },
+      { className: "diff-line diff-hunk", text: "@@ -1,3 +1,4 @@" },
+      { className: "diff-line", text: " a" },
+      { className: "diff-line diff-del", text: "-b" },
+      { className: "diff-line diff-add", text: "+B" },
+      { className: "diff-line", text: " c" },
+      { className: "diff-line diff-add", text: "+d" },
+    ]);
+  });
+
   it("leaves a context line uncoloured", () => {
     expect(lines(" unchanged\n")).toStrictEqual([{ className: "diff-line", text: " unchanged" }]);
   });

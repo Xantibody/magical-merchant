@@ -71,8 +71,12 @@ the typed text behind Revert, the CLI keeps it in a scratch file.
 ├── data/                      # everything under here syncs
 │   ├── timeline/
 │   │   └── 2026-08-09.md      # one file per day, entries appended
-│   └── notes/
-│       └── 20260809_143000.md # one file per note, frontmatter + body
+│   ├── notes/
+│   │   └── 20260809_143000.md # one file per note, frontmatter + body
+│   └── codex/                 # notes that grow; the directory is what makes them a Codex
+│       ├── 20260810_090000.md # same ID format — promotion is a rename
+│       └── 20260810_090000/   # explicitly committed versions of that Codex
+│           └── 20260811_120000-3f9a1c2e.md
 ├── history/                   # copies taken before CLI / MCP overwrites (newest 20 per note)
 ├── conflicts/                 # the losing side of a sync conflict
 │   └── notes/

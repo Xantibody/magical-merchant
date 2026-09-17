@@ -3,7 +3,14 @@ import type { Accessor, JSX } from "solid-js";
 import type { PaletteScope } from "./search-scope";
 
 /** 同時に開けるポップオーバーは 1 つだけ。 */
-type PopoverName = "sync" | "calendar" | "note-meta" | "note-menu" | "new-note-menu" | null;
+type PopoverName =
+  | "sync"
+  | "calendar"
+  | "note-meta"
+  | "note-menu"
+  | "new-note-menu"
+  | "commit-version"
+  | null;
 
 interface Toast {
   message: string;
