@@ -15,8 +15,8 @@
 //! 同じ秒に刻むとぶつかる。内容のハッシュを添えると、ぶつかるのは「同じ秒に
 //! 同じ本文」のときだけで、それは同じ版なので 1 つに畳まれて正しい。
 //!
-//! `PoC` の段階では、版の置き場だけ `data/codex/<stem>/` に置き、ノート本体は
-//! まだ `data/notes/` から読む。Codex 用ディレクトリへの移動は別バッチ。
+//! 版を持てるのは `data/codex/` にある Codex だけ。普通のノートには刻めず、
+//! 残骸の版があっても履歴として見せない。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -105,15 +105,22 @@ fn version_path(dir: &Path, id: &str) -> Result<PathBuf, CoreError> {
     Ok(dir.join(format!("{id}.md")))
 }
 
-/// 版を持てるのは Codex だけ。普通のノートの本文を返してしまうと、
-/// `data/codex/<stem>/` に本体の無い版が生まれ、同期で配られ続ける。
-fn read_body(base_dir: &Path, filename: &NoteFilename) -> Result<String, CoreError> {
+/// 版を持てるのは Codex だけ。読む側も書く側もまずこれを通す — 普通の
+/// ノートに版のディレクトリが残っていても(同期の途中、消し損ね)、それは
+/// 誰のものでもない残骸で、一覧に見せる履歴ではない。
+fn ensure_codex(base_dir: &Path, filename: &NoteFilename) -> Result<Notes, CoreError> {
     let notes = Notes::new(base_dir.to_path_buf());
     let (kind, _) = notes.locate(filename)?;
     if kind != NoteKind::Codex {
         return Err(CoreError::NotCodex(filename.as_str().to_string()));
     }
-    notes.read(filename)
+    Ok(notes)
+}
+
+/// いまの下書き。普通のノートの本文を返してしまうと、`data/codex/<stem>/` に
+/// 本体の無い版が生まれ、同期で配られ続ける。
+fn read_body(base_dir: &Path, filename: &NoteFilename) -> Result<String, CoreError> {
+    ensure_codex(base_dir, filename)?.read(filename)
 }
 
 fn read_version_file(path: &Path) -> Result<(VersionFrontmatter, String), CoreError> {
@@ -163,6 +170,7 @@ pub fn list_note_versions(
     base_dir: &Path,
     filename: &NoteFilename,
 ) -> Result<Vec<Version>, CoreError> {
+    ensure_codex(base_dir, filename)?;
     let dir = versions_dir(base_dir, filename);
     let mut versions: Vec<Version> = list_md_files(&dir)?
         .into_iter()
@@ -191,6 +199,7 @@ pub fn read_note_version(
     filename: &NoteFilename,
     id: &str,
 ) -> Result<String, CoreError> {
+    ensure_codex(base_dir, filename)?;
     let path = version_path(&versions_dir(base_dir, filename), id)?;
     if !path.exists() {
         return Err(CoreError::NotFound(path.to_string_lossy().to_string()));
@@ -305,6 +314,23 @@ mod tests {
         assert!(!versions_dir(tmp.path(), &filename).exists());
         assert!(matches!(
             note_version_status(tmp.path(), &filename),
+            Err(CoreError::NotCodex(_))
+        ));
+
+        // 残骸の版があっても、普通のノートの履歴として見せない
+        let orphan = versions_dir(tmp.path(), &filename);
+        fs::create_dir_all(&orphan).unwrap();
+        fs::write(
+            orphan.join("20260503_153900-00000000.md"),
+            "---\ntime: 2026-05-03T15:39:00+09:00\n---\n残骸",
+        )
+        .unwrap();
+        assert!(matches!(
+            list_note_versions(tmp.path(), &filename),
+            Err(CoreError::NotCodex(_))
+        ));
+        assert!(matches!(
+            read_note_version(tmp.path(), &filename, "20260503_153900-00000000"),
             Err(CoreError::NotCodex(_))
         ));
     }
