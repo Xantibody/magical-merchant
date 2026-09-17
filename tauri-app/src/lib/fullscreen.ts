@@ -7,7 +7,6 @@
  * 緑ボタンと同じネイティブの全画面(専用 Space)に入れる。
  */
 
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isMacDesktop } from "./platform";
 
 const STORAGE_KEY = "start-fullscreen";
@@ -26,6 +25,9 @@ export function writeStartFullscreen(on: boolean): void {
  */
 export async function enterFullscreen(): Promise<void> {
   try {
+    // window モジュールは dpi/image を連れて 14 kB ある。ここと Settings
+    // からしか呼ばれないので、起動バンドルには入れない
+    const { getCurrentWindow } = await import("@tauri-apps/api/window");
     await getCurrentWindow().setFullscreen(true);
   } catch {
     // 窓が無い(ハーネス・テスト)か、権限が無い。どちらも見た目が変わらないだけ

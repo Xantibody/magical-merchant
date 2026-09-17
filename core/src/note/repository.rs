@@ -88,20 +88,31 @@ impl Notes {
     }
 
     pub(crate) fn list(&self) -> Result<Vec<NoteSummary>, CoreError> {
-        let notes_dir = self.notes_dir();
-        let entries = list_md_files(&notes_dir)?;
-
-        let summaries = entries
-            .into_iter()
-            .map(|entry| {
-                let path = entry.path();
-                let filename = entry.file_name().to_string_lossy().to_string();
-                let content = fs::read_to_string(&path).unwrap_or_default();
-                NoteSummary::from_file(path, filename, &content)
-            })
-            .collect();
-
+        let mut summaries = Vec::new();
+        self.scan(|summary, _| summaries.push(summary))?;
         Ok(summaries)
+    }
+
+    /// 全ノートを 1 回ずつ読み、要約と frontmatter を剥がした本文を `visit` に
+    /// 渡す。全ノートの本文を見る経路(検索・バックリンク)が `list` の後に
+    /// 1 本ずつ読み直すと、ノート 1 件につき open(2) が 2 回になる。macOS では
+    /// open が経路全体の 6 割を占めるので、要約を作るために読んだ内容をそのまま
+    /// 渡す。
+    ///
+    /// 本文は 1 本ずつ貸すだけで、全ノートぶんを同時には持たない。要約と本文の
+    /// 組を Vec で返すと、大きな保管庫では山の使用量が本文の合計になる。
+    ///
+    /// 読めなかったノートは `list` と同じく空の要約と空の本文になる。
+    pub(crate) fn scan(&self, mut visit: impl FnMut(NoteSummary, &str)) -> Result<(), CoreError> {
+        let notes_dir = self.notes_dir();
+        for entry in list_md_files(&notes_dir)? {
+            let path = entry.path();
+            let filename = entry.file_name().to_string_lossy().to_string();
+            let content = fs::read_to_string(&path).unwrap_or_default();
+            let summary = NoteSummary::from_file(path, filename, &content);
+            visit(summary, frontmatter::strip(&content));
+        }
+        Ok(())
     }
 
     fn existing_note_path(&self, filename: &NoteFilename) -> Result<PathBuf, CoreError> {

@@ -3,12 +3,13 @@ use std::path::Path;
 use serde::Serialize;
 
 use crate::error::CoreError;
+use crate::list_timeline_dates;
+use crate::note::Notes;
 use crate::timeline::Timeline;
 use crate::timeline::day::DayLog;
 use crate::utils::markdown::strip_timeline_prefix;
 use crate::utils::tags;
 use crate::utils::text::lowercase;
-use crate::{list_notes, list_timeline_dates};
 
 /// 検索結果がどちらの保管場所から来たか。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -133,18 +134,16 @@ pub fn search_all(
     let mut hits = timeline_hits(base_dir, &needle, &scope)?;
 
     let mut tag_haystack = String::new();
-    for note in list_notes(base_dir)? {
+    // 一覧の preview(先頭 100 文字)ではなく全文。長く書いたノートほど
+    // 後半に書いたことが探せなくなる。本文は frontmatter を剥がしてあるので、
+    // `time:` や `tags:` の行には当たらない。
+    // 読めないノートは空の本文で来て、needle にもタグにも当たらず結果に
+    // 出ないだけ — 1 本のせいで検索全体を失敗させない
+    Notes::new(base_dir.to_path_buf()).scan(|note, body| {
         if !in_scope(&scope, &note.tags) {
-            continue;
+            return;
         }
-        // 一覧の preview(先頭 100 文字)ではなく全文。長く書いたノートほど
-        // 後半に書いたことが探せなくなる。`read_note` は frontmatter を剥がす
-        // ので、`time:` や `tags:` の行には当たらない。
-        // 読めないノートは結果に出ないだけ — 1 本のせいで検索全体を失敗させない
-        let Ok(body) = crate::read_note(&note.path) else {
-            continue;
-        };
-        let lowered = lowercase(&body);
+        let lowered = lowercase(body);
         if !lowered.contains(&needle) {
             // 本文に無ければタグ。format! + join だとノート 1 件につき
             // 2 回余分に確保するので、1 本の String を使い回す
@@ -154,10 +153,10 @@ pub fn search_all(
                 tag_haystack.push_str(tag);
             }
             if !lowercase(&tag_haystack).contains(&needle) {
-                continue;
+                return;
             }
         }
-        let excerpt = snippet(&body, &lowered, &needle);
+        let excerpt = snippet(body, &lowered, &needle);
         hits.push(SearchHit {
             kind: HitKind::Note,
             title: first_line(&note.preview).to_string(),
@@ -172,7 +171,7 @@ pub fn search_all(
             match_start: excerpt.match_start,
             match_len: excerpt.match_start.map(|_| needle.chars().count()),
         });
-    }
+    })?;
 
     hits.sort_by(|a, b| b.date.cmp(&a.date));
     hits.truncate(MAX_HITS);
@@ -195,19 +194,14 @@ pub fn find_backlinks(
 
     let mut hits = timeline_hits(base_dir, &needle, &[])?;
 
-    for note in list_notes(base_dir)? {
-        if note.filename == target.as_str() {
-            continue;
+    // 読めないノートは空の本文で来て、バックリンク欄から消えるだけ。
+    // 開けない一覧を出すより良い
+    Notes::new(base_dir.to_path_buf()).scan(|note, body| {
+        if note.filename == target.as_str() || !body.contains(&needle) {
+            return;
         }
-        // 読めないノートはバックリンク欄から消えるだけ。開けない一覧を出すより良い
-        let Ok(body) = crate::read_note(&note.path) else {
-            continue;
-        };
-        if !body.contains(&needle) {
-            continue;
-        }
-        let lowered = lowercase(&body);
-        let excerpt = snippet(&body, &lowered, &needle);
+        let lowered = lowercase(body);
+        let excerpt = snippet(body, &lowered, &needle);
         hits.push(SearchHit {
             kind: HitKind::Note,
             title: first_line(&note.preview).to_string(),
@@ -222,7 +216,7 @@ pub fn find_backlinks(
             match_start: excerpt.match_start,
             match_len: excerpt.match_start.map(|_| needle.chars().count()),
         });
-    }
+    })?;
 
     for hit in &mut hits {
         extend_match_to_link_end(hit);
