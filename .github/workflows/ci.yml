@@ -108,8 +108,12 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
-      # Free disk space は置かない。store 3G + target で 21GB の空きに収まる。
-      # rm -rf に 87 秒かかっていた
+      # store 3G + target で 21GB の空きに「収まっていた」が、2026-09-17 から
+      # 同じキャッシュ・同じ image で cargo の crate 取得が ENOSPC で落ちる。
+      # android と同じく、キャッシュ復元と並行してバックグラウンドで消す
+      # (前面で消すと 87 秒かかる)
+      - name: Free disk space (background)
+        run: nohup sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache >/dev/null 2>&1 &
       - uses: nixbuild/nix-quick-install-action@v35
       - uses: nix-community/cache-nix-action@v7
         with:
