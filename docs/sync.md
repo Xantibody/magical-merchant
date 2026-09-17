@@ -88,10 +88,12 @@ a command that printed nothing and returned 0 would read as a sync that
 happened.
 
 > [!NOTE]
-> The lock does not yet cover everything the CLI does. `magical-merchant sync`
-> runs its repair pass — rewriting malformed notes, moving legacy conflict
-> copies — before the engine is called, so those writes can land while the app
-> is mid-sync ([#250](https://github.com/Xantibody/magical-merchant/issues/250)).
+> The lock does not yet cover the repair pass that rewrites malformed notes
+> and moves legacy conflict copies. Both entry points run it before the engine
+> is called — the CLI on every `sync`, the app once per process, which makes
+> the first sync after launch the one that can do it — so either side can
+> write to the tree while the other holds the lock
+> ([#250](https://github.com/Xantibody/magical-merchant/issues/250)).
 
 Turning on **Auto sync** (sync popover, or `autoSync` in the nix-darwin
 module) runs a sync a few seconds after any successful write, so a note taken
