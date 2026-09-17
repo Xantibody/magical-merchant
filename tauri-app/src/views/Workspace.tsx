@@ -649,18 +649,18 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
    * ID で指されたノートを開く。相手が別の面に居れば、その面へ送る —
    * この面の一覧に無い id を選んでも、先頭のノートに倒れるだけ。
    */
-  const openFile = (filename: string): void => {
+  const openFile = async (filename: string): Promise<void> => {
     const other = kindOf(filename);
     if (other && other !== kind()) {
       navigate(noteRoute(other, filename));
       return;
     }
-    void switchTo(filename);
+    await switchTo(filename);
   };
 
   const openBacklink = (hit: SearchHit): void => {
     if (hit.kind !== "timeline" && hit.filename) {
-      openFile(hit.filename);
+      void openFile(hit.filename);
     } else {
       navigate(`${ROUTES.TIMELINE}?day=${hit.date}`);
     }
@@ -732,7 +732,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     const target = e.target instanceof Element ? e.target : null;
     const noteLink = target?.closest("a.note-link");
     if (noteLink instanceof HTMLElement && noteLink.dataset.file) {
-      openFile(noteLink.dataset.file);
+      void openFile(noteLink.dataset.file);
     }
   };
 
@@ -1013,8 +1013,10 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       });
       await refetchNotes();
       const filename = created.path.split("/").at(-1);
+      // 「同じテンプレの今日の 1 本」が Codex になっていることもある。
+      // この面の一覧に無い id を選ぶと先頭のノートに倒れるので、面ごと送る
       if (filename) {
-        await switchTo(filename);
+        await openFile(filename);
       }
       if (created.reused) {
         shell.showToast(t().templates.reused(template.name));
