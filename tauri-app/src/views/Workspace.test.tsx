@@ -1043,6 +1043,26 @@ describe("Workspace › Codex の版", () => {
     expect(versions.get(FILE_C)).toBeUndefined();
   });
 
+  // 履歴はディスクの本文と版を比べる。画面にしか無い打鍵を残して開くと、
+  // 「戻す」がそれを「戻す前」の版にも下書きにも入れずに消してしまう
+  it("flushes pending edits before showing history", async () => {
+    await openCodexC();
+    await waitFor(() => expect(metaLine()?.textContent).toBe("版なし"));
+
+    await startEditingBody();
+    typeInEditor?.(`# ${TITLE_C}\n\n${TEXT_C}\n\n足した行`);
+    await runNoteAction("履歴");
+
+    await waitFor(() => expect(countOf("list_note_versions")).toBe(1));
+    expect(writesTo(FILE_C)).toHaveLength(1);
+    const saved = calls.findIndex((c) => c.cmd === "update_draft");
+    const listed = calls.findIndex((c) => c.cmd === "list_note_versions");
+    expect(saved).toBeGreaterThanOrEqual(0);
+    expect(listed).toBeGreaterThan(saved);
+    expect(document.querySelector(".version-history")).not.toBeNull();
+  });
+
+
   it("commits with the message typed, and Enter during IME does not", async () => {
     await openCodexC();
     await waitFor(() => expect(metaLine()?.textContent).toBe("版なし"));

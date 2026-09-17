@@ -790,8 +790,16 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     shell.showToast(t().codex.committed);
   };
 
-  const toggleHistory = (): void => {
+  /**
+   * 履歴を開く前に、待っている保存を出しきる。履歴はディスクの本文と版を
+   * 比べる画面で、「戻す」もディスクの本文を「戻す前」として刻む — 画面に
+   * しか無い打鍵を残したまま開くと、その打鍵はどちらにも入らずに消える。
+   */
+  const toggleHistory = async (): Promise<void> => {
     shell.closePopovers();
+    if (!historyOpen()) {
+      await settleEdit();
+    }
     setHistoryOpen((open) => !open);
   };
 
@@ -1279,7 +1287,9 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                     onCommit={() => {
                       void openCommit();
                     }}
-                    onHistory={toggleHistory}
+                    onHistory={() => {
+                      void toggleHistory();
+                    }}
                     onDelete={() => {
                       void remove(item());
                     }}
