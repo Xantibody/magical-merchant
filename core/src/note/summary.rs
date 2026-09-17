@@ -29,6 +29,12 @@ pub struct Summary {
     /// 出すのに使う。本文を開くまで分からないと、書けないノートを書こうとする。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub view: Option<String>,
+    /// 刻んだ版の数。Codex の行だけが持ち、一覧が角折りページの記号に出す。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub version_count: Option<usize>,
+    /// 最新の版から下書きが動いたか。Codex の行だけ。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dirty: Option<bool>,
 }
 
 impl Summary {
@@ -70,6 +76,8 @@ impl Summary {
             origin,
             template,
             view,
+            version_count: None,
+            dirty: None,
         }
     }
 }

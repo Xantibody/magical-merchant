@@ -57,12 +57,14 @@ pub struct Version {
     pub bytes: u64,
 }
 
-/// 開いている 1 本の「版 N · 最後の版から変更あり」。
+/// 開いている 1 本の「版 N から +X B」。
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 pub struct VersionStatus {
     pub count: usize,
     /// 最新の版と下書きの本文が違うか。版が無ければ false。
     pub dirty: bool,
+    /// 下書きのバイト数から最新の版のバイト数を引いた差。版が無ければ 0。
+    pub bytes_delta: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -260,7 +262,24 @@ pub fn restore_note_version(
     Notes::update(&path, &restored, context, expected)
 }
 
-/// 版の数と、最新の版から下書きが変わっているか。
+/// 版を 1 つ消す。刻んだ直後の「取り消す」のためにある — 版は人が刻む印
+/// なので、それ以外の経路(MCP・CLI・同期の片付け)からは呼ばない。
+/// 本文には触れない。
+pub fn delete_note_version(
+    base_dir: &Path,
+    filename: &NoteFilename,
+    id: &str,
+) -> Result<(), CoreError> {
+    ensure_codex(base_dir, filename)?;
+    let path = version_path(&versions_dir(base_dir, filename), id)?;
+    if !path.exists() {
+        return Err(CoreError::NotFound(path.to_string_lossy().to_string()));
+    }
+    fs::remove_file(path)?;
+    Ok(())
+}
+
+/// 版の数と、最新の版から下書きがどれだけ動いたか。
 pub fn note_version_status(
     base_dir: &Path,
     filename: &NoteFilename,
@@ -268,14 +287,43 @@ pub fn note_version_status(
     // 版が無くても本文は読む — 普通のノートには `NotCodex` で答える
     let body = read_body(base_dir, filename)?;
     let versions = list_note_versions(base_dir, filename)?;
-    let dirty = match versions.first() {
-        Some(latest) => read_note_version(base_dir, filename, &latest.id)? != body,
-        None => false,
+    let (dirty, bytes_delta) = match versions.first() {
+        Some(latest) => (
+            read_note_version(base_dir, filename, &latest.id)? != body,
+            // 本文が i64 を超えることはない。超えたらそれは差ではなく別の問題
+            i64::try_from(body.len()).unwrap_or(i64::MAX)
+                - i64::try_from(latest.bytes).unwrap_or(i64::MAX),
+        ),
+        None => (false, 0),
     };
     Ok(VersionStatus {
         count: versions.len(),
         dirty,
+        bytes_delta,
     })
+}
+
+/// 一覧の行ぶんの「版 N」と「動いたか」。版のファイルは 1 つも開かない —
+/// 版 ID の末尾は本文の SHA-256 の先頭 8 hex なので、いちばん新しい名前の
+/// 末尾と下書きの指紋を比べれば足りる。
+///
+/// 「いちばん新しい」はファイル名(刻んだ端末の壁時計)で決める。
+/// [`list_note_versions`] は frontmatter の瞬間で並べるので、時差のある
+/// 2 端末が近い時刻に刻んだときだけ両者が食い違いうる。行の印のためにそこ
+/// まで払わない — 開けば [`note_version_status`] が本文を読んで正確に答える。
+///
+/// `dir` は本体のパスから `.md` を外した場所([`versions_dir`] と同じ)。
+/// 一覧の走査は `NoteFilename` を持たずにここへ来る。
+pub(crate) fn list_status(dir: &Path, body: &str) -> Result<(usize, bool), CoreError> {
+    // list_md_files は名前の降順。先頭が最新
+    let entries = list_md_files(dir)?;
+    let dirty = entries.first().is_some_and(|newest| {
+        let name = newest.file_name();
+        let stem = Path::new(&name).file_stem().and_then(|s| s.to_str());
+        stem.and_then(|s| s.rsplit_once('-'))
+            .is_some_and(|(_, hash)| hash != short_hash(body))
+    });
+    Ok((entries.len(), dirty))
 }
 
 #[cfg(test)]
@@ -349,7 +397,8 @@ mod tests {
             note_version_status(tmp.path(), &filename).unwrap(),
             VersionStatus {
                 count: 0,
-                dirty: false
+                dirty: false,
+                bytes_delta: 0
             }
         );
     }
@@ -371,7 +420,8 @@ mod tests {
             note_version_status(tmp.path(), &filename).unwrap(),
             VersionStatus {
                 count: 1,
-                dirty: false
+                dirty: false,
+                bytes_delta: 0
             }
         );
     }
@@ -563,7 +613,8 @@ mod tests {
             note_version_status(tmp.path(), &filename).unwrap(),
             VersionStatus {
                 count: 1,
-                dirty: true
+                dirty: true,
+                bytes_delta: 0
             }
         );
     }
@@ -584,5 +635,112 @@ mod tests {
         }
         let err = read_note_version(tmp.path(), &filename, "20260917_140300-0123abcd").unwrap_err();
         assert!(matches!(err, CoreError::NotFound(_)), "{err}");
+    }
+
+    /// 一覧の行に出す版の数と「動いたか」。版の本文は読まず、ファイル名の
+    /// ハッシュだけで比べる。
+    #[test]
+    fn the_list_carries_the_version_count_and_whether_the_draft_moved() {
+        let tmp = TempDir::new().unwrap();
+        let (path, filename) = note(tmp.path(), "one");
+        let row = |base: &Path| {
+            crate::list_notes(base)
+                .unwrap()
+                .into_iter()
+                .find(|s| s.filename == filename.as_str())
+                .unwrap()
+        };
+
+        let none = row(tmp.path());
+        assert_eq!(none.version_count, Some(0));
+        assert_eq!(none.dirty, Some(false));
+
+        commit_note_version(tmp.path(), &filename, None).unwrap();
+        let clean = row(tmp.path());
+        assert_eq!(clean.version_count, Some(1));
+        assert_eq!(clean.dirty, Some(false));
+
+        update_note(&path, "two", &Context::default(), None).unwrap();
+        let moved = row(tmp.path());
+        assert_eq!(moved.version_count, Some(1));
+        assert_eq!(moved.dirty, Some(true));
+    }
+
+    /// 普通のノートの行には版の欄そのものが無い。
+    #[test]
+    fn a_plain_note_row_has_no_version_fields() {
+        let tmp = TempDir::new().unwrap();
+        create_draft_note(
+            tmp.path(),
+            "plain",
+            &[],
+            &Context::default(),
+            Provenance::default(),
+        )
+        .unwrap();
+
+        let rows = crate::list_notes(tmp.path()).unwrap();
+
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].version_count, None);
+        assert_eq!(rows[0].dirty, None);
+    }
+
+    /// 「版 N から +X B」の X。最新の版と下書きのバイト差。
+    #[test]
+    fn the_status_measures_the_draft_against_the_latest_version() {
+        let tmp = TempDir::new().unwrap();
+        let (path, filename) = note(tmp.path(), "one");
+        assert_eq!(
+            note_version_status(tmp.path(), &filename)
+                .unwrap()
+                .bytes_delta,
+            0,
+            "版が無ければ差も無い"
+        );
+
+        commit_note_version(tmp.path(), &filename, None).unwrap();
+        update_note(&path, "one and more", &Context::default(), None).unwrap();
+
+        let status = note_version_status(tmp.path(), &filename).unwrap();
+        assert_eq!(status.bytes_delta, 9, "12 バイトから 3 バイトを引いた差");
+
+        update_note(&path, "o", &Context::default(), None).unwrap();
+        assert_eq!(
+            note_version_status(tmp.path(), &filename)
+                .unwrap()
+                .bytes_delta,
+            -2
+        );
+    }
+
+    /// 刻んだ直後の「取り消す」。版のファイルを消すだけで、本文には触れない。
+    #[test]
+    fn deleting_a_version_removes_only_that_version() {
+        let tmp = TempDir::new().unwrap();
+        let (path, filename) = note(tmp.path(), "one");
+        let first = commit_note_version(tmp.path(), &filename, None).unwrap();
+        update_note(&path, "two", &Context::default(), None).unwrap();
+        let second = commit_note_version(tmp.path(), &filename, None).unwrap();
+
+        delete_note_version(tmp.path(), &filename, &second.id).unwrap();
+
+        let ids: Vec<String> = list_note_versions(tmp.path(), &filename)
+            .unwrap()
+            .into_iter()
+            .map(|v| v.id)
+            .collect();
+        assert_eq!(ids, vec![first.id]);
+        assert_eq!(read_note_by_filename(tmp.path(), &filename).unwrap(), "two");
+        // 二度目は無い
+        assert!(matches!(
+            delete_note_version(tmp.path(), &filename, &second.id),
+            Err(CoreError::NotFound(_))
+        ));
+        // 名前の形が違えば置き場の外に手を出さない
+        assert!(matches!(
+            delete_note_version(tmp.path(), &filename, "../../x"),
+            Err(CoreError::PathTraversal(_))
+        ));
     }
 }
