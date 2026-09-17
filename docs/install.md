@@ -43,11 +43,19 @@ the MCP server behind `mcp`) is its own package and needs none of the app's tool
 ```sh
 nix profile install github:Xantibody/magical-merchant#cli
 magical-merchant list
+magical-merchant sync
 ```
 
-It reads the same data directory and `sync-config.json` the app uses.
-Signing in for sync stays in the app; the CLI only edits local files, and
-the app's next sync carries the changes.
+It reads the same data directory and `sync-config.json` the app uses, so
+`magical-merchant sync` runs the sync the app's own button runs — there is no
+Workers URL to repeat here, and both surfaces take the same `.sync.lock`, so
+whichever one arrives second gives up (`busy`) instead of overwriting the
+other's state.
+
+Signing in stays in the app. The CLI reads the token the app saved (the
+Keychain on macOS) and never opens a browser of its own; once that login has
+expired it stops before touching the network and tells you to log in again
+from the app's Settings.
 
 ## macOS — nix-darwin module
 

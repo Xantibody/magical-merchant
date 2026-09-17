@@ -197,10 +197,15 @@ format lives in the app, which is a conversion script's job.
 
 `sync` runs the app's own sync engine from the terminal, reading the server
 URL and the login the app saved — it never asks for either, so there is one
-place where sync is set up. A large sync goes in rounds of at most 40 files,
-and each round prints what it sent and what is left; the app does the same
-thing behind its button. If the app is syncing at that moment, the CLI says
-so and exits 1 rather than waiting.
+place where sync is set up — and it stops with "log in again from the app" as
+soon as that login has expired. A large sync goes in rounds of at most 40
+operations (an upload or a download is one, a conflict three), and each round
+prints how far it got and how much it deferred to the next one; the app runs
+the same rounds behind its button, silently. Anything short of a clean sync
+exits non-zero; a run that reaches the end also lists the files it could not
+handle, while one that gives up part way prints only why it stopped. If the
+app is syncing at that moment, the CLI says so and exits 1 rather than
+waiting.
 
 `timeline add` appends to today through the same core call the Android
 widget uses; it only ever appends, so it needs no revision check. `-m` is
