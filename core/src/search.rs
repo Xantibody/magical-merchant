@@ -139,11 +139,11 @@ pub fn search_all(
     // `time:` や `tags:` の行には当たらない。
     // 読めないノートは空の本文で来て、needle にもタグにも当たらず結果に
     // 出ないだけ — 1 本のせいで検索全体を失敗させない
-    for (note, body) in Notes::new(base_dir.to_path_buf()).list_with_bodies()? {
+    Notes::new(base_dir.to_path_buf()).scan(|note, body| {
         if !in_scope(&scope, &note.tags) {
-            continue;
+            return;
         }
-        let lowered = lowercase(&body);
+        let lowered = lowercase(body);
         if !lowered.contains(&needle) {
             // 本文に無ければタグ。format! + join だとノート 1 件につき
             // 2 回余分に確保するので、1 本の String を使い回す
@@ -153,10 +153,10 @@ pub fn search_all(
                 tag_haystack.push_str(tag);
             }
             if !lowercase(&tag_haystack).contains(&needle) {
-                continue;
+                return;
             }
         }
-        let excerpt = snippet(&body, &lowered, &needle);
+        let excerpt = snippet(body, &lowered, &needle);
         hits.push(SearchHit {
             kind: HitKind::Note,
             title: first_line(&note.preview).to_string(),
@@ -171,7 +171,7 @@ pub fn search_all(
             match_start: excerpt.match_start,
             match_len: excerpt.match_start.map(|_| needle.chars().count()),
         });
-    }
+    })?;
 
     hits.sort_by(|a, b| b.date.cmp(&a.date));
     hits.truncate(MAX_HITS);
@@ -196,15 +196,12 @@ pub fn find_backlinks(
 
     // 読めないノートは空の本文で来て、バックリンク欄から消えるだけ。
     // 開けない一覧を出すより良い
-    for (note, body) in Notes::new(base_dir.to_path_buf()).list_with_bodies()? {
-        if note.filename == target.as_str() {
-            continue;
+    Notes::new(base_dir.to_path_buf()).scan(|note, body| {
+        if note.filename == target.as_str() || !body.contains(&needle) {
+            return;
         }
-        if !body.contains(&needle) {
-            continue;
-        }
-        let lowered = lowercase(&body);
-        let excerpt = snippet(&body, &lowered, &needle);
+        let lowered = lowercase(body);
+        let excerpt = snippet(body, &lowered, &needle);
         hits.push(SearchHit {
             kind: HitKind::Note,
             title: first_line(&note.preview).to_string(),
@@ -219,7 +216,7 @@ pub fn find_backlinks(
             match_start: excerpt.match_start,
             match_len: excerpt.match_start.map(|_| needle.chars().count()),
         });
-    }
+    })?;
 
     for hit in &mut hits {
         extend_match_to_link_end(hit);

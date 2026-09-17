@@ -612,18 +612,19 @@ mod tests {
     }
 
     /// 検索とバックリンクは全ノートの本文を読む。一覧の後に 1 本ずつ
-    /// `read_note` すると open(2) が 2 回になるので、要約と本文を一緒に返す。
+    /// `read_note` すると open(2) が 2 回になるので、要約と本文を一緒に渡す。
     #[test]
-    fn list_with_bodies_pairs_each_summary_with_its_body_without_frontmatter() {
+    fn scan_visits_each_summary_with_its_body_without_frontmatter() {
         let tmp = TempDir::new().unwrap();
         let path = draft(&tmp, "# Title\nbody #memo", &[]).unwrap();
 
-        let listed = Notes::new(tmp.path().to_path_buf())
-            .list_with_bodies()
+        let mut visited = Vec::new();
+        Notes::new(tmp.path().to_path_buf())
+            .scan(|summary, body| visited.push((summary, body.to_string())))
             .unwrap();
 
-        assert_eq!(listed.len(), 1);
-        let (summary, body) = &listed[0];
+        assert_eq!(visited.len(), 1);
+        let (summary, body) = &visited[0];
         assert_eq!(summary.path, path);
         assert_eq!(summary.tags, vec!["memo".to_string()]);
         assert_eq!(body, "# Title\nbody #memo");
