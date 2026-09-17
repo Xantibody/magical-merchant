@@ -223,10 +223,13 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
 
   // 一覧は両方の置き場を 1 度に持ってくる。面ごとに絞るのはここ — IPC を
   // 面の数だけ増やすより、`?file=` の転送先を知るために全部持っているほうがいい
-  const visibleItems = createMemo<NoteItem[]>(() => {
+  const allItems = createMemo<NoteItem[]>(() => {
     const dropped = new Set(hidden());
-    return (notes() ?? []).filter((item) => item.kind === kind() && !dropped.has(item.id));
+    return (notes() ?? []).filter((item) => !dropped.has(item.id));
   });
+  const visibleItems = createMemo<NoteItem[]>(() =>
+    allItems().filter((item) => item.kind === kind()),
+  );
 
   /**
    * ID しか知らない入口(`?file=`・`[[リンク]]`・バックリンク)の相手が
@@ -282,14 +285,18 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     sessionFile = item.filename;
   };
 
-  /** `[[ID]]` → タイトルの解決表。プレビューが毎回これを引いて描く。 */
+  /**
+   * `[[ID]]` → タイトルの解決表。プレビューが毎回これを引いて描く。
+   * 面で絞らない — Note から Codex へ移した相手も、リンクは同じ ID のまま
+   * 指し続けるし、開けば向こうの面へ送られる。
+   */
   const noteTitles = createMemo<ReadonlyMap<string, string>>(
-    () => new Map(visibleItems().map((item) => [item.filename.replace(/\.md$/u, ""), item.title])),
+    () => new Map(allItems().map((item) => [item.filename.replace(/\.md$/u, ""), item.title])),
   );
 
-  /** `[[` 補完の候補。自分自身へのリンクは出さない。 */
+  /** `[[` 補完の候補。両方の面から。自分自身へのリンクは出さない。 */
   const linkTargets = (): NoteLinkTarget[] =>
-    visibleItems()
+    allItems()
       .filter((item) => item.id !== selected()?.id)
       .map((item) => ({ id: item.filename.replace(/\.md$/u, ""), title: item.title }));
 

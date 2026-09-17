@@ -22,11 +22,14 @@ vi.mock(import("../components/MilkdownEditor"), () => ({
     defaultValue?: string;
     onChange?: (markdown: string) => void;
     onEditorReady?: (editor?: Editor) => void;
+    noteLinks?: () => { id: string }[];
   }): JSX.Element => {
     typeInEditor = props.onChange;
     const el = document.createElement("div");
     el.dataset.testid = "editor-body";
     el.textContent = props.defaultValue ?? "";
+    // `[[` 補完の候補は本物なら入力中に引く。板は ID だけ並べて見せる
+    el.dataset.noteLinks = (props.noteLinks?.() ?? []).map((t) => t.id).join(",");
     const ready = setTimeout(() => {
       el.className = "ProseMirror";
       el.contentEditable = "true";
@@ -1062,6 +1065,17 @@ describe("Workspace › Codex の版", () => {
     expect(document.querySelector(".version-history")).not.toBeNull();
   });
 
+  // Note から Codex に移しても [[ID]] は同じ ID を指し続ける。面で絞った
+  // 解決表だと、移した瞬間にリンクの題が消えて補完からも落ちる
+  it("resolves [[links]] and offers completion across both surfaces", async () => {
+    disk.set(FILE_C, BODY_C);
+    kinds.set(FILE_C, "codex");
+    renderWorkspace();
+    fireEvent.click(await rowOf(TITLE_A));
+    await waitFor(() => expect(editorBody().isContentEditable).toBe(true));
+
+    expect(editorBody().dataset.noteLinks?.split(",")).toContain(FILE_C.replace(/\.md$/u, ""));
+  });
 
   it("commits with the message typed, and Enter during IME does not", async () => {
     await openCodexC();
