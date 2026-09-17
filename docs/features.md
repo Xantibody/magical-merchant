@@ -201,9 +201,11 @@ place where sync is set up — and it stops with "log in again from the app" as
 soon as that login has expired. A large sync goes in rounds of at most 40
 operations (an upload or a download is one, a conflict three), and each round
 prints how far it got and how much it deferred to the next one; the app runs
-the same rounds behind its button, silently. Files that failed are listed at
-the end and make the exit code non-zero. If the app is syncing at that moment,
-the CLI says so and exits 1 rather than waiting.
+the same rounds behind its button, silently. Anything short of a clean sync
+exits non-zero; a run that reaches the end also lists the files it could not
+handle, while one that gives up part way prints only why it stopped. If the
+app is syncing at that moment, the CLI says so and exits 1 rather than
+waiting.
 
 `timeline add` appends to today through the same core call the Android
 widget uses; it only ever appends, so it needs no revision check. `-m` is
