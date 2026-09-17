@@ -9,14 +9,14 @@
 
 ## Features
 
-- **Timeline journal** — a day-grouped capture log with tags, device/place
+- **Scrawl** (formerly Timeline) — a day-grouped capture journal with tags, device/place
   context, a calendar jump, and a weekly digest (including _one year ago
   today_)
-- **Markdown notes** — a Typora-style Milkdown editor; a title field that is
+- **Note** (formerly Notes) — Markdown files in a Typora-style Milkdown editor; a title field that is
   the body's own `# heading`, tap anywhere in the preview to edit, autosave
   with a local one-step revert, Shiki code highlighting, Mermaid diagrams,
   and a per-note mindmap or read-only view
-- **Entries grow into notes** — promote a timeline entry into a note; the two
+- **Scrawl grows into Note** — promote a Scrawl entry into a note; the two
   stay linked through the note's `origin` frontmatter
 - **`[[links]]` and backlinks** — link notes by immutable file ID with
   autocomplete, optionally with `|display text`; every note lists the records

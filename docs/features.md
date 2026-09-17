@@ -3,9 +3,9 @@
 A walkthrough of every surface in Magical Merchant. Screenshots are taken
 from the browser verification harness with fixture data.
 
-## Timeline — a journal that captures first
+## Scrawl — a journal that captures first
 
-The Timeline is a single-column, day-grouped journal. The capture bar at the
+Scrawl (formerly Timeline) is a single-column, day-grouped journal. The capture bar at the
 bottom is always ready: type, send, and the entry lands on today with a
 timestamp. Entries record the device context they were written in (device,
 network, battery, and a place name resolved from the coordinate), tags typed
@@ -21,7 +21,7 @@ of the week, per device.
 
 ### Mobile
 
-The same journal on a phone. Bottom tabs switch between Timeline, Notes and
+The same journal on a phone. Bottom tabs switch between Scrawl, Note and
 Settings; the capture bar floats above the keyboard.
 
 ![Mobile timeline](images/mobile-timeline.png)
@@ -35,9 +35,9 @@ origin entry, and the timeline shows a chip (📄 title →) on that day linking
 to the note — derived on every render, so reordering or deleting entries never
 breaks the link.
 
-## Notes — a Typora-style Markdown workspace
+## Note — a Typora-style Markdown workspace
 
-Notes are plain Markdown files. The list pane groups them by date; the detail
+Note (formerly Notes) holds plain Markdown files. The list pane groups them by date; the detail
 pane shows a rendered preview with a **title field** above it. The title is
 the note's leading `# heading` — there is no separate title in the
 frontmatter, so the file stays readable in any Markdown tool and the heading
@@ -125,10 +125,10 @@ to that day.
 Searches can be scoped to tags, from any screen. Every `#tag` you type in the
 palette counts as scope rather than text: `#SF6 #ベガ #置き攻め` lists every
 note and entry carrying all three tags (AND), and `#sf6 コンボ` looks for
-"コンボ" only inside `#sf6`. Tags are matched the way the Timeline chips are,
+"コンボ" only inside `#sf6`. Tags are matched the way the Scrawl chips are,
 so `#SF6` and `#sf6` are the same tag. Picking a tag from the entry points adds
 it as a chip in front of the input; a chip is removed by clicking it, or with
-Backspace in an empty field (last chip first). When the Timeline is filtered
+Backspace in an empty field (last chip first). When Scrawl is filtered
 by a tag, `⌘K` opens the palette with that chip already set. Scoped results
 show their count, and the empty message names the tags it looked inside.
 

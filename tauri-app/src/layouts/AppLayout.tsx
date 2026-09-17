@@ -336,7 +336,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
         </nav>
 
         <span class="header-title">
-          {MODE_LABELS[location.pathname as RoutePath] ?? "Timeline"}
+          {MODE_LABELS[location.pathname as RoutePath] ?? MODE_LABELS[ROUTES.TIMELINE]}
         </span>
 
         <button type="button" class="search-field" onClick={openSearch}>

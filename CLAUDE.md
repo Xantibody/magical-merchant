@@ -1,7 +1,8 @@
 # Magical Merchant
 
 A minimal note-taking app: Rust core + Tauri 2 + SolidJS. Two surfaces —
-**Timeline** (quick capture journal) and **Notes** (Markdown workspace) —
+**Scrawl** (quick capture journal; route and code still say `timeline`) and
+**Note** (Markdown workspace; code says `notes`) —
 plus Android home-screen widgets and R2 sync.
 
 ## Design Priorities (in order)
@@ -29,16 +30,16 @@ ready to record the moment it opens (widgets exist for exactly this).
 
 ## UI Architecture (current)
 
-- **Header**: mode tabs (Timeline / Notes) + search field (⌘K palette) +
-  calendar jump (Timeline only) + sync + settings. The active tab is marked by
+- **Header**: mode tabs (Scrawl / Note) + search field (⌘K palette) +
+  calendar jump (Scrawl only) + sync + settings. The active tab is marked by
   weight alone, never a fill; theme lives in Settings, not the header
 - **Shortcuts**: one table in `lib/shortcuts.ts` feeds the key handling, the
   palette's command rows and the `data-key` badges. Holding ⌘ (Ctrl) for 300ms
   floats those badges (`lib/hints.ts`); `?` opens the palette as the list
-- **Bottom tabs** (mobile): Timeline / Notes / Settings
-- **Timeline**: single-column day-grouped journal, time rail, tag filter chips,
+- **Bottom tabs** (mobile): Scrawl / Note / Settings
+- **Scrawl** (`views/Timeline.tsx`): single-column day-grouped journal, time rail, tag filter chips,
   floating capture dock; in-place entry editing; select-mode bulk delete
-- **Notes (Workspace)**: list pane (one line per note) + detail pane; mobile
+- **Note** (`views/Workspace.tsx`): list pane (one line per note) + detail pane; mobile
   shows one pane at a time (`workspace--detail`); title field above the body
   (it _is_ the body's leading `# heading`), then a meta line of created time /
   save state / tags. **There is no edit mode** — the Milkdown editor is open
