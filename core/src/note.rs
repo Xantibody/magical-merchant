@@ -611,6 +611,24 @@ mod tests {
         assert_eq!(read_note(&path).unwrap(), "# Title\nbody");
     }
 
+    /// 検索とバックリンクは全ノートの本文を読む。一覧の後に 1 本ずつ
+    /// `read_note` すると open(2) が 2 回になるので、要約と本文を一緒に返す。
+    #[test]
+    fn list_with_bodies_pairs_each_summary_with_its_body_without_frontmatter() {
+        let tmp = TempDir::new().unwrap();
+        let path = draft(&tmp, "# Title\nbody #memo", &[]).unwrap();
+
+        let listed = Notes::new(tmp.path().to_path_buf())
+            .list_with_bodies()
+            .unwrap();
+
+        assert_eq!(listed.len(), 1);
+        let (summary, body) = &listed[0];
+        assert_eq!(summary.path, path);
+        assert_eq!(summary.tags, vec!["memo".to_string()]);
+        assert_eq!(body, "# Title\nbody #memo");
+    }
+
     #[test]
     fn read_note_by_filename_returns_body_without_frontmatter() {
         let tmp = TempDir::new().unwrap();

@@ -88,20 +88,42 @@ impl Notes {
     }
 
     pub(crate) fn list(&self) -> Result<Vec<NoteSummary>, CoreError> {
+        self.read_all(|summary, _| summary)
+    }
+
+    /// 要約と frontmatter を剥がした本文を一緒に返す。全ノートの本文を見る
+    /// 経路(検索・バックリンク)が `list` の後に 1 本ずつ読み直すと、ノート
+    /// 1 件につき open(2) が 2 回になる。macOS では open が経路全体の 6 割を
+    /// 占めるので、要約を作るために読んだ内容をそのまま渡す。
+    ///
+    /// 読めなかったノートは `list` と同じく空の要約と空の本文になる。
+    pub(crate) fn list_with_bodies(&self) -> Result<Vec<(NoteSummary, String)>, CoreError> {
+        self.read_all(|summary, content| {
+            let body = frontmatter::strip(content).to_string();
+            (summary, body)
+        })
+    }
+
+    /// 全ノートを 1 回ずつ読み、要約と生の内容から `project` で作った値を集める。
+    fn read_all<T>(
+        &self,
+        mut project: impl FnMut(NoteSummary, &str) -> T,
+    ) -> Result<Vec<T>, CoreError> {
         let notes_dir = self.notes_dir();
         let entries = list_md_files(&notes_dir)?;
 
-        let summaries = entries
+        let items = entries
             .into_iter()
             .map(|entry| {
                 let path = entry.path();
                 let filename = entry.file_name().to_string_lossy().to_string();
                 let content = fs::read_to_string(&path).unwrap_or_default();
-                NoteSummary::from_file(path, filename, &content)
+                let summary = NoteSummary::from_file(path, filename, &content);
+                project(summary, &content)
             })
             .collect();
 
-        Ok(summaries)
+        Ok(items)
     }
 
     fn existing_note_path(&self, filename: &NoteFilename) -> Result<PathBuf, CoreError> {
