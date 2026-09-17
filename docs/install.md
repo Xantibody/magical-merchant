@@ -14,10 +14,10 @@ nix profile upgrade magical-merchant
 ```
 
 CI publishes every `main` build of the app and the CLI (aarch64-darwin) to
-`https://magical-merchant.cachix.org`. The flake's `nixConfig` names that cache,
-so `nix` asks once whether to trust it; answer yes and nothing is built locally.
-When your user is not in `trusted-users` the prompt is skipped and the cache is
-ignored, so add it to your Nix configuration instead:
+`https://magical-merchant.cachix.org`. The flake does not name that cache — a
+substituter declared in `nixConfig` is ignored unless your user is in
+`trusted-users`, which it is not under a stock install. Add it to your own Nix
+configuration instead, and nothing is built locally:
 
 ```nix
 nix.settings = {
