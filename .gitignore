@@ -65,3 +65,6 @@ profiles/
 # Vitest browser mode leaves failure screenshots next to the test
 .vitest-attachments/
 __screenshots__/
+
+# Wrangler / miniflare local state. It mirrors the R2 bucket, i.e. real notes
+.wrangler/
