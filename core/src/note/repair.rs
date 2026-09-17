@@ -1,13 +1,13 @@
 use std::fs;
 use std::path::Path;
 
-use chrono::{DateTime, FixedOffset, Local, NaiveDateTime, TimeZone as _};
+use chrono::{DateTime, FixedOffset, Local, NaiveDateTime, TimeZone as _, Utc};
 
 use crate::error::CoreError;
-use crate::sync::conflict::conflict_copy_path;
+use crate::sync::conflict::{conflict_copy_path, conflict_filename};
 use crate::utils::frontmatter::{self, NoteFrontmatter};
 use crate::utils::fs::{ensure_dir, list_md_files, write_atomic};
-use crate::utils::paths::{conflicts_dir, data_dir};
+use crate::utils::paths::{NOTES_DIR, codex_dir, conflicts_dir, data_dir, notes_dir};
 
 /// 編集画面が frontmatter ごと Milkdown に通していた時期に保存されたノートは、
 /// 本文の先頭に「化けたメタデータ」を抱えている。開始区切りの `---` は `***` に、
@@ -63,6 +63,39 @@ pub(crate) fn relocate_conflict_copies(base_dir: &Path) -> usize {
     let data = data_dir(base_dir);
     let mut moved = 0;
     relocate_under(&data, &data, &conflicts_dir(base_dir), &mut moved);
+    moved
+}
+
+/// 同じ ID が `notes/` と `codex/` の両方にあるとき、`notes/` 側を控えにする。
+///
+/// 昇格は rename なので 1 台の中では両方に同時に在ることはないが、別の端末が
+/// 同期の前に同じノートを編集していると、同期はその `notes/` 側を新しい
+/// ファイルとして配る。Codex 側が本物 — 版を刻んでいるのはそちら。負けた側は
+/// 消さず、同期の競合コピーと同じ `conflicts/notes/<stem>/<時刻>.md` に置く。
+///
+/// `relocate_conflict_copies` と同じく、1 件の失敗では止まらない。
+pub(crate) fn relocate_duplicate_ids(base_dir: &Path) -> usize {
+    let codex = codex_dir(base_dir);
+    let conflicts = conflicts_dir(base_dir);
+    let Ok(entries) = list_md_files(&notes_dir(base_dir)) else {
+        return 0;
+    };
+    let mut moved = 0;
+    for entry in entries {
+        let name = entry.file_name();
+        if !codex.join(&name).is_file() {
+            continue;
+        }
+        let key = format!("{NOTES_DIR}/{}", name.to_string_lossy());
+        let Some(relative) = conflict_copy_path(&conflict_filename(&key, Utc::now())) else {
+            continue;
+        };
+        let target = conflicts.join(relative);
+        if ensure_dir(&target).is_err() || fs::rename(entry.path(), &target).is_err() {
+            continue;
+        }
+        moved += 1;
+    }
     moved
 }
 

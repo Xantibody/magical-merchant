@@ -1,11 +1,13 @@
 pub(crate) mod error;
 mod history;
+mod kind;
 mod repair;
 pub(crate) mod repository;
 mod revision;
 mod summary;
 
 pub use history::{Snapshot, list_note_history, read_note_history, restore_note, snapshot_note};
+pub use kind::NoteKind;
 pub(crate) use repository::Notes;
 pub use revision::Revision;
 pub use summary::Summary as NoteSummary;
@@ -29,6 +31,27 @@ pub fn create_draft_note(
     provenance: Provenance<'_>,
 ) -> Result<PathBuf, CoreError> {
     Notes::new(base_dir.to_path_buf()).create(body, tags, context, provenance)
+}
+
+/// Codex(書き足し続けて版を刻む文書)を 1 本作る。置き場が `data/codex/`
+/// になるだけで、名前の付け方も frontmatter も [`create_draft_note`] と同じ。
+/// 引数に `kind` を足さず別の入口にしたのは、Codex を知らない呼び出し
+/// (CLI・MCP・テンプレ)を 1 つも書き換えないため。
+pub fn create_draft_codex(
+    base_dir: &Path,
+    body: &str,
+    tags: &[String],
+    context: &Context,
+    provenance: Provenance<'_>,
+) -> Result<PathBuf, CoreError> {
+    Notes::new(base_dir.to_path_buf()).create_codex(body, tags, context, provenance)
+}
+
+/// ノートを Codex にする。ID も中身も変わらず、置き場が `data/codex/` に
+/// 移るだけ。戻す入口は無い — 版を刻み始めた文書を普通のノートに戻すと、
+/// 刻んだ版が誰のものでもなくなる。すでに Codex なら何もしない。
+pub fn promote_note_to_codex(base_dir: &Path, filename: &NoteFilename) -> Result<(), CoreError> {
+    Notes::new(base_dir.to_path_buf()).promote_to_codex(filename)
 }
 
 /// 作成時刻を渡してノートを 1 本作る。外にあった記録を移してくるための
@@ -134,6 +157,13 @@ pub fn repair_notes(base_dir: &Path) -> Result<usize, CoreError> {
 #[must_use]
 pub fn relocate_conflict_copies(base_dir: &Path) -> usize {
     repair::relocate_conflict_copies(base_dir)
+}
+
+/// 同じ ID が `notes/` と `codex/` の両方にあれば、`notes/` 側を `conflicts/` へ
+/// 移す。移した件数を返す。同期を持つアプリが、同期の前と後に呼ぶ。
+#[must_use]
+pub fn relocate_duplicate_ids(base_dir: &Path) -> usize {
+    repair::relocate_duplicate_ids(base_dir)
 }
 
 #[cfg(test)]
@@ -957,5 +987,151 @@ mod tests {
         let result = update_note_meta(tmp.path(), &filename, sample_time(), &[]);
 
         assert!(matches!(result, Err(CoreError::NotFound(_))));
+    }
+
+    fn codex(tmp: &TempDir, body: &str) -> PathBuf {
+        create_draft_codex(
+            tmp.path(),
+            body,
+            &[],
+            &mock_context(),
+            Provenance::default(),
+        )
+        .unwrap()
+    }
+
+    /// Codex は `notes/` ではなく `codex/` に置く。種別は置き場で決まり、
+    /// ID(ファイル名)だけで両方の置き場から見つかる。
+    #[test]
+    fn a_codex_lives_in_its_own_directory_and_is_found_by_filename() {
+        let tmp = TempDir::new().unwrap();
+        let path = codex(&tmp, "育てる文書");
+        let filename = filename_of(&path);
+
+        assert!(path.starts_with(tmp.path().join("data/codex")));
+        let listed = list_notes(tmp.path()).unwrap();
+        assert_eq!(listed[0].kind, NoteKind::Codex);
+        assert_eq!(listed[0].path, path);
+        assert_eq!(
+            read_note_by_filename(tmp.path(), &filename).unwrap(),
+            "育てる文書"
+        );
+        assert!(read_note_meta(tmp.path(), &filename).is_ok());
+
+        let note = draft(&tmp, "普通のノート", &[]).unwrap();
+        let listed = list_notes(tmp.path()).unwrap();
+        let of = |p: &Path| listed.iter().find(|s| s.path == p).unwrap().kind;
+        assert_eq!(of(&note), NoteKind::Note);
+        assert_eq!(of(&path), NoteKind::Codex);
+    }
+
+    /// ID は種別をまたいで 1 つの名前空間。同じ秒に Note と Codex を作っても
+    /// 同じ名前にはならず、後から来たほうが 1 秒進む。
+    #[test]
+    fn a_note_and_a_codex_never_share_an_id() {
+        let tmp = TempDir::new().unwrap();
+        let note = create_note_at(
+            tmp.path(),
+            sample_time(),
+            "note",
+            &[],
+            &mock_context(),
+            Provenance::default(),
+        )
+        .unwrap();
+        fs::create_dir_all(tmp.path().join("data/codex")).unwrap();
+        fs::copy(&note, tmp.path().join("data/codex/20260503_153901.md")).unwrap();
+
+        let second = create_note_at(
+            tmp.path(),
+            sample_time(),
+            "another",
+            &[],
+            &mock_context(),
+            Provenance::default(),
+        )
+        .unwrap();
+
+        assert_eq!(second.file_name().unwrap(), "20260503_153902.md");
+    }
+
+    /// 昇格は置き場が変わるだけ。ID も、frontmatter も本文も 1 バイト変わらない。
+    #[test]
+    fn promoting_moves_the_file_without_touching_its_bytes() {
+        let tmp = TempDir::new().unwrap();
+        let path = draft(&tmp, "育てる #memo", &[]).unwrap();
+        let filename = filename_of(&path);
+        let before = fs::read(&path).unwrap();
+
+        promote_note_to_codex(tmp.path(), &filename).unwrap();
+        promote_note_to_codex(tmp.path(), &filename).unwrap();
+
+        assert!(!path.exists());
+        let moved = tmp.path().join("data/codex").join(filename.as_str());
+        assert_eq!(fs::read(&moved).unwrap(), before);
+        let listed = list_notes(tmp.path()).unwrap();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].kind, NoteKind::Codex);
+        assert_eq!(listed[0].path, moved);
+    }
+
+    #[test]
+    fn promoting_a_missing_note_is_not_found() {
+        let tmp = TempDir::new().unwrap();
+        let filename = NoteFilename::parse("20260503_153900.md").unwrap();
+
+        let result = promote_note_to_codex(tmp.path(), &filename);
+
+        assert!(matches!(result, Err(CoreError::NotFound(_))));
+    }
+
+    /// frontmatter の差し替えと削除も ID だけで Codex に届く。
+    #[test]
+    fn a_codex_is_edited_and_deleted_by_filename() {
+        let tmp = TempDir::new().unwrap();
+        let path = codex(&tmp, "育てる文書");
+        let filename = filename_of(&path);
+        let versions = tmp.path().join("data/codex/20990101_000000");
+        let versions = versions.with_file_name(filename.as_str().trim_end_matches(".md"));
+        fs::create_dir_all(&versions).unwrap();
+        fs::write(versions.join("20260503_153900-00000000.md"), "v").unwrap();
+
+        update_note_view(tmp.path(), &filename, Some("mindmap")).unwrap();
+        assert_eq!(
+            read_note_meta(tmp.path(), &filename).unwrap().view,
+            Some("mindmap".to_string())
+        );
+
+        delete_note(tmp.path(), &filename).unwrap();
+
+        assert!(!path.exists());
+        // 版のディレクトリごと消える。本体だけ消すと版が同期で配られ続ける
+        assert!(!versions.exists());
+    }
+
+    /// 昇格と、別の端末でのオフライン編集が同じ ID に重なると、同期は
+    /// notes/ 側を新しいファイルとして配る。Codex 側を残し、notes/ 側は
+    /// 競合コピーと同じ場所に控える。
+    #[test]
+    fn a_duplicate_id_in_notes_is_moved_to_conflicts() {
+        let tmp = TempDir::new().unwrap();
+        let path = codex(&tmp, "codex 側");
+        let filename = filename_of(&path);
+        let stale = tmp.path().join("data/notes").join(filename.as_str());
+        fs::create_dir_all(stale.parent().unwrap()).unwrap();
+        fs::write(&stale, "notes 側").unwrap();
+
+        assert_eq!(relocate_duplicate_ids(tmp.path()), 1);
+
+        assert!(!stale.exists());
+        assert!(fs::read_to_string(&path).unwrap().contains("codex 側"));
+        let stem = filename.as_str().trim_end_matches(".md");
+        let copies: Vec<_> = fs::read_dir(tmp.path().join("conflicts/notes").join(stem))
+            .unwrap()
+            .filter_map(Result::ok)
+            .collect();
+        assert_eq!(copies.len(), 1);
+        assert_eq!(fs::read_to_string(copies[0].path()).unwrap(), "notes 側");
+        assert_eq!(relocate_duplicate_ids(tmp.path()), 0);
     }
 }

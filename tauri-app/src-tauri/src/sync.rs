@@ -87,6 +87,11 @@ pub(crate) async fn sync_start(
 
     match &result {
         Ok(sync_result) => {
+            // 他端末の昇格と自分のオフライン編集が同じ ID で降りてくると、
+            // notes/ と codex/ の両方に並ぶ。Codex 側を残し、notes/ 側を控えに
+            if let Ok(base_dir) = crate::app_base_dir(&handle) {
+                let _ = magical_merchant_core::relocate_duplicate_ids(&base_dir);
+            }
             *state
                 .last_synced_at
                 .lock()

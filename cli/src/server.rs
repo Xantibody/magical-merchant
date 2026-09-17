@@ -214,7 +214,7 @@ fn err<E: std::fmt::Display>(e: E) -> String {
 impl McpServer {
     #[tool(
         name = "list_notes",
-        description = "List all notes, newest first, with their tags, a short preview, and where they came from"
+        description = "List all notes, newest first, with their tags, a short preview, and where they came from. `kind` is `codex` for a document that grows and keeps versions"
     )]
     fn list_notes(&self) -> Result<Json<NoteListOutput>, String> {
         let notes = magical_merchant_core::list_notes(&self.data_dir).map_err(err)?;

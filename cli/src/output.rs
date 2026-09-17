@@ -17,6 +17,9 @@ pub(crate) struct NoteListOutput {
 pub(crate) struct NoteInfo {
     /// The argument to pass to `read_note`.
     pub(crate) filename: String,
+    /// `note` for a single document, `codex` for a document that grows and
+    /// keeps explicitly committed versions.
+    pub(crate) kind: String,
     /// Creation time, RFC 3339 with the device's UTC offset.
     pub(crate) time: Option<String>,
     pub(crate) tags: Vec<String>,
@@ -33,6 +36,7 @@ impl From<NoteSummary> for NoteInfo {
     fn from(n: NoteSummary) -> Self {
         Self {
             filename: n.filename,
+            kind: n.kind.as_str().to_string(),
             time: n.time.map(|t| t.to_rfc3339()),
             tags: n.tags,
             preview: n.preview,
@@ -93,6 +97,7 @@ impl From<SearchHit> for SearchHitInfo {
         let kind = match h.kind {
             magical_merchant_core::HitKind::Timeline => "timeline",
             magical_merchant_core::HitKind::Note => "note",
+            magical_merchant_core::HitKind::Codex => "codex",
         };
         Self {
             kind: kind.to_string(),

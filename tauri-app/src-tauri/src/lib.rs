@@ -32,8 +32,9 @@ use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as B64;
 use device::ClientContext;
 use magical_merchant_core::{
-    CreatedNote, GlyphFormat, GlyphName, GlyphSummary, NoteFilename, NoteMeta, NoteSummary,
-    Provenance, Revision, SearchHit, Source, TemplateDetail, TemplateSummary, VarLocale,
+    CreatedNote, GlyphFormat, GlyphName, GlyphSummary, NoteFilename, NoteKind, NoteMeta,
+    NoteSummary, Provenance, Revision, SearchHit, Source, TemplateDetail, TemplateSummary,
+    VarLocale,
 };
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_deep_link::DeepLinkExt as _;
@@ -74,6 +75,7 @@ fn save_quick_capture(
         .map_err(|e| e.to_string())
 }
 
+/// `kind` は置き場の指定で、`codex` なら版を刻む文書として作る。省略は普通のノート。
 #[tauri::command]
 fn create_draft(
     handle: AppHandle,
@@ -81,23 +83,30 @@ fn create_draft(
     tags: Vec<String>,
     client: ClientContext,
     origin: Option<String>,
+    kind: Option<NoteKind>,
 ) -> Result<String, String> {
     let base_dir = app_base_dir(&handle)?;
     let context = device::get_context(client);
     // origin 付きはタイムラインエントリからの昇格。出自を frontmatter に刻む
-    let path = magical_merchant_core::create_draft_note(
-        &base_dir,
-        &body,
-        &tags,
-        &context,
-        Provenance {
-            origin: origin.as_deref(),
-            source: Some(Source::App),
-            ..Provenance::default()
-        },
-    )
-    .map_err(|e| e.to_string())?;
+    let provenance = Provenance {
+        origin: origin.as_deref(),
+        source: Some(Source::App),
+        ..Provenance::default()
+    };
+    let create = match kind.unwrap_or(NoteKind::Note) {
+        NoteKind::Note => magical_merchant_core::create_draft_note,
+        NoteKind::Codex => magical_merchant_core::create_draft_codex,
+    };
+    let path = create(&base_dir, &body, &tags, &context, provenance).map_err(|e| e.to_string())?;
     Ok(path.to_string_lossy().to_string())
+}
+
+/// ノートを Codex にする。ID は変わらない。戻す入口は無い。
+#[tauri::command]
+fn promote_note_to_codex(handle: AppHandle, filename: String) -> Result<(), String> {
+    let base_dir = app_base_dir(&handle)?;
+    let filename = parse_filename(&filename)?;
+    magical_merchant_core::promote_note_to_codex(&base_dir, &filename).map_err(|e| e.to_string())
 }
 
 /// 保存の失敗。`stale` はフロントが「読み直して知らせる」に分岐するための印。
@@ -158,6 +167,9 @@ pub(crate) fn repair_once(base_dir: &std::path::Path) {
         let _ = magical_merchant_core::repair_notes(base_dir);
         // 古い版が `data/` に置いた競合コピー
         let _ = magical_merchant_core::relocate_conflict_copies(base_dir);
+        // 昇格と他端末のオフライン編集が重なって notes/ と codex/ の両方に
+        // 降りてきた同じ ID
+        let _ = magical_merchant_core::relocate_duplicate_ids(base_dir);
     });
 }
 
@@ -546,6 +558,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             save_quick_capture,
             create_draft,
+            promote_note_to_codex,
             update_draft,
             list_notes,
             read_note,

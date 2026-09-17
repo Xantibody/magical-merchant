@@ -6,8 +6,12 @@ use serde::Serialize;
 use crate::utils::frontmatter::{self, NoteFrontmatter};
 use crate::utils::tags;
 
+use super::kind::NoteKind;
+
 #[derive(Debug, Clone, Serialize)]
 pub struct Summary {
+    /// どちらの置き場から来たか。一覧は面ごとに種別で絞る。
+    pub kind: NoteKind,
     pub path: PathBuf,
     pub filename: String,
     pub time: Option<DateTime<FixedOffset>>,
@@ -29,7 +33,7 @@ pub struct Summary {
 
 impl Summary {
     #[must_use]
-    pub fn from_file(path: PathBuf, filename: String, content: &str) -> Self {
+    pub fn from_file(kind: NoteKind, path: PathBuf, filename: String, content: &str) -> Self {
         let (time, tags, body, origin, template, view) =
             if let Ok((fm, body)) = frontmatter::parse::<NoteFrontmatter>(content) {
                 (
@@ -57,6 +61,7 @@ impl Summary {
         let preview: String = body.chars().take(100).collect();
 
         Self {
+            kind,
             path,
             filename,
             time,
@@ -99,6 +104,7 @@ mod tests {
         };
         let content = frontmatter::render(&fm, "# Title\nBody").unwrap();
         let summary = Summary::from_file(
+            NoteKind::Note,
             PathBuf::from("/test/note.md"),
             "note.md".to_string(),
             &content,
@@ -124,6 +130,7 @@ mod tests {
             let body = "あ".repeat(len);
             let content = frontmatter::render(&at(2026, 3, 20, 14, 30), &body).unwrap();
             Summary::from_file(
+                NoteKind::Note,
                 PathBuf::from("/test/note.md"),
                 "note.md".to_string(),
                 &content,
@@ -147,6 +154,7 @@ mod tests {
         };
         let content = frontmatter::render(&fm, "body").unwrap();
         let summary = Summary::from_file(
+            NoteKind::Note,
             PathBuf::from("/test/note.md"),
             "note.md".to_string(),
             &content,
@@ -164,6 +172,7 @@ mod tests {
         };
         let content = frontmatter::render(&fm, "body").unwrap();
         let summary = Summary::from_file(
+            NoteKind::Note,
             PathBuf::from("/test/note.md"),
             "note.md".to_string(),
             &content,
@@ -181,6 +190,7 @@ mod tests {
         };
         let content = frontmatter::render(&fm, "本文 #rust").unwrap();
         let summary = Summary::from_file(
+            NoteKind::Note,
             PathBuf::from("/test/note.md"),
             "note.md".to_string(),
             &content,
@@ -194,6 +204,7 @@ mod tests {
     fn broken_frontmatter_does_not_leak_into_preview() {
         let content = "---\ntime: [broken\n---\n# Title\nbody";
         let summary = Summary::from_file(
+            NoteKind::Note,
             PathBuf::from("/test/note.md"),
             "note.md".to_string(),
             content,
@@ -205,6 +216,7 @@ mod tests {
     #[test]
     fn test_from_file_with_invalid_content() {
         let summary = Summary::from_file(
+            NoteKind::Note,
             PathBuf::from("/test/note.md"),
             "note.md".to_string(),
             "no frontmatter here",
