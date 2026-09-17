@@ -2,8 +2,8 @@ import { createEffect, createMemo, onCleanup, onMount, For, Show } from "solid-j
 import type { JSX } from "solid-js";
 import { useLocation, useNavigate, A } from "@solidjs/router";
 import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
+import { listen, TauriEvent } from "@tauri-apps/api/event";
 import type { UnlistenFn } from "@tauri-apps/api/event";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import Icon from "../components/Icon";
 import type { IconName } from "../components/Icon";
 import CommandPalette from "../components/CommandPalette";
@@ -303,15 +303,12 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
     onCleanup(() => document.removeEventListener("visibilitychange", onVisible));
 
     // デスクトップでは窓を隠さずに他のアプリへ移るので visibilitychange が
-    // 来ない。窓のフォーカスが戻ったことは Tauri 側からしか分からない
+    // 来ない。窓のフォーカスが戻ったことは Tauri 側からしか分からない。
+    // AIDEV-NOTE: getCurrentWindow().onFocusChanged は使わない。window モジュールが dpi/image を連れて起動バンドルの 13% になる
     let unlistenFocus: UnlistenFn | undefined;
     void (async () => {
       try {
-        unlistenFocus = await getCurrentWindow().onFocusChanged(({ payload: focused }) => {
-          if (focused) {
-            shell.refreshData();
-          }
-        });
+        unlistenFocus = await listen(TauriEvent.WINDOW_FOCUS, () => shell.refreshData());
       } catch {
         // 窓が無い(ブラウザハーネス・テスト)。visibilitychange だけで動く
       }
