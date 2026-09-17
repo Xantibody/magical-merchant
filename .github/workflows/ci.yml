@@ -293,10 +293,13 @@ jobs:
         run: nix build .#pnpm-deps --no-link
 
   # nix build .#default が macOS 配布そのもの。バンドラは codesign や xattr を
-  # 外部コマンドとして呼ぶので、ubuntu で緑でも darwin sandbox でだけ落ちる
+  # 外部コマンドとして呼ぶので、ubuntu で緑でも darwin sandbox でだけ落ちる。
+  # 走らせるのは main への push だけ。macOS runner は分単価が ubuntu の 10 倍で、
+  # このジョブ 1 回が他の全ジョブの合計より高い。PR で拾えるのは darwin sandbox
+  # 特有の失敗だけで、それは merge 後の 1 回で足りる
   nix-package-macos:
     needs: changes
-    if: needs.changes.outputs.nix-package == 'true'
+    if: needs.changes.outputs.nix-package == 'true' && github.ref == 'refs/heads/main'
     runs-on: macos-latest
     timeout-minutes: 45
     steps:
