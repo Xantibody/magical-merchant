@@ -85,6 +85,10 @@ local scan → diff → `POST /sync/bulk`, repeated until nothing is left over.
   device plus an offline edit on another can land the same ID in both
   `notes/` and `codex/`; the Codex wins and the `notes/` copy goes to
   `conflicts/notes/<stem>/<ts>.md`
+- `history/` (local, machine-taken before an overwrite) and `data/codex/<stem>/`
+  (synced, committed by a person) are different things; never move one into
+  the other. A note's filename never changes, but its directory does move once,
+  `notes/` → `codex/`, on promotion
 - JWT: macOS Keychain; Android falls back to app-private file (mode 600) —
   keyring's in-memory fallback silently loses tokens
 - TLS: desktop verifies through the OS trust store (rustls-platform-verifier);

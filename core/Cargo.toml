@@ -33,6 +33,12 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml = "0.9"
 sha2 = "0.11"
+# Codex の版どうしの unified diff。既定の feature は inline (語単位) と bytes まで
+# 抱えるので、行単位のテキスト diff に要る 2 つだけにする。依存は 0 のまま。
+similar = { version = "3", default-features = false, features = [
+  "std",
+  "text",
+] }
 thiserror = "2"
 
 # ── device-probe only ──
@@ -52,7 +58,6 @@ reqwest = { version = "0.13", default-features = false, features = [
   "rustls",
 ], optional = true }
 url = { version = "2", optional = true }
-
 # Android には battery クレートの実装が無く、ネイティブからは電源が見えない。
 # そちらは WebView / ウィジェットが渡してくる値で埋める。
 [target.'cfg(not(target_os = "android"))'.dependencies]

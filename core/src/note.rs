@@ -5,12 +5,17 @@ mod repair;
 pub(crate) mod repository;
 mod revision;
 mod summary;
+mod version;
 
 pub use history::{Snapshot, list_note_history, read_note_history, restore_note, snapshot_note};
 pub use kind::NoteKind;
 pub(crate) use repository::Notes;
 pub use revision::Revision;
 pub use summary::Summary as NoteSummary;
+pub use version::{
+    BEFORE_RESTORE, DRAFT, Version, VersionStatus, commit_note_version, diff_note_versions,
+    list_note_versions, note_version_status, read_note_version, restore_note_version,
+};
 
 use std::path::{Path, PathBuf};
 

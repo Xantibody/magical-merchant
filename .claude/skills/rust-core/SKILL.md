@@ -87,8 +87,19 @@ encode the kind in frontmatter — a build that does not know the key drops it
 on save. `relocate_duplicate_ids` handles the one way an ID can end up in
 both directories (promotion on one device, offline edit on another).
 `create_draft_codex` is a separate entry point so the CLI/MCP/template callers
-of `create_draft_note` stay untouched. Codex versions live in
-`data/codex/<stem>/` (`note/version.rs`) and are committed explicitly.
+of `create_draft_note` stay untouched.
+
+Codex versions (`core/src/note/version.rs`) are not `history.rs`: history is
+a machine-taken, local-only safety copy before an MCP/CLI overwrite; a version
+is committed by a person, lives at `data/codex/<stem>/<YYYYMMDD_HHMMSS-<8 hex
+of the body's SHA-256>>.md` with `time`/`message` frontmatter and the body
+only, and syncs as part of the document. Nothing commits automatically.
+`commit_note_version` / `list_note_versions` / `read_note_version` /
+`diff_note_versions` (unified diff via `similar`, Myers) /
+`restore_note_version` (revision-guarded, commits a `before restore` version
+first) / `note_version_status` all refuse a plain Note with
+`CoreError::NotCodex`. MCP does not expose them; the files are plain Markdown,
+so `diff -u` works in a terminal.
 
 Glyphs (`core/src/glyph.rs`): user images under `data/glyphs/<name>.<png|svg>`
 that `:name:` renders inline. `GlyphName` (`utils/validated.rs`) fixes the

@@ -320,9 +320,7 @@ impl Notes {
         let (kind, path) = self.locate(filename)?;
         fs::remove_file(path)?;
         if kind == NoteKind::Codex {
-            let versions = NoteKind::Codex
-                .dir(&self.base_dir)
-                .join(filename.as_str().trim_end_matches(".md"));
+            let versions = super::version::versions_dir(&self.base_dir, filename);
             if versions.is_dir() {
                 fs::remove_dir_all(versions)?;
             }
