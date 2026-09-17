@@ -97,9 +97,13 @@ only, and syncs as part of the document. Nothing commits automatically.
 `commit_note_version` / `list_note_versions` / `read_note_version` /
 `diff_note_versions` (unified diff via `similar`, Myers) /
 `restore_note_version` (revision-guarded, commits a `before restore` version
-first) / `note_version_status` all refuse a plain Note with
-`CoreError::NotCodex`. MCP does not expose them; the files are plain Markdown,
-so `diff -u` works in a terminal.
+first) / `note_version_status` (count, dirty, `bytes_delta`) /
+`delete_note_version` (only for the app's undo toast right after a commit)
+all refuse a plain Note with `CoreError::NotCodex`. `list_notes` puts
+`version_count` / `dirty` on every Codex row without opening a version file:
+the newest file name's hash suffix is compared with the draft's. MCP does not
+expose any of them; the files are plain Markdown, so `diff -u` works in a
+terminal.
 
 Glyphs (`core/src/glyph.rs`): user images under `data/glyphs/<name>.<png|svg>`
 that `:name:` renders inline. `GlyphName` (`utils/validated.rs`) fixes the

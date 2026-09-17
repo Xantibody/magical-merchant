@@ -17,6 +17,10 @@ export interface Note {
   template?: string;
   /** frontmatter の表示モード。一覧が読み取り専用の印を出すのに使う。 */
   view?: string;
+  /** 刻んだ版の数。Codex の行だけが持つ。 */
+  version_count?: number;
+  /** 最新の版から下書きが動いたか。Codex の行だけ。 */
+  dirty?: boolean;
 }
 
 /** Codex の版 1 つ。`id` がそのまま read / diff / restore の引数。 */
@@ -30,10 +34,12 @@ export interface Version {
   bytes: number;
 }
 
-/** 版の数と、最新の版から下書きが変わっているか。 */
-interface VersionStatus {
+/** 版の数と、最新の版から下書きがどれだけ動いたか。 */
+export interface VersionStatus {
   count: number;
   dirty: boolean;
+  /** 下書きのバイト数から最新の版のを引いた差。版が無ければ 0。 */
+  bytes_delta: number;
 }
 
 interface NoteRead {
@@ -217,6 +223,8 @@ interface CommandMap {
     args: { filename: string; id: string; revision?: string | null } & ClientArgs;
     result: string;
   };
+  /** 刻んだ直後の「取り消す」だけが呼ぶ。版のファイルを消すだけで本文には触れない。 */
+  delete_note_version: { args: { filename: string; id: string }; result: void };
   note_version_status: { args: { filename: string }; result: VersionStatus };
   list_templates: { args: void; result: Template[] };
   read_template: { args: { filename: string }; result: TemplateDetail };
@@ -266,6 +274,7 @@ const MUTATING: ReadonlySet<CommandName> = new Set<CommandName>([
   "promote_note_to_codex",
   "commit_note_version",
   "restore_note_version",
+  "delete_note_version",
   "save_template",
   "delete_template",
   "create_from_template",

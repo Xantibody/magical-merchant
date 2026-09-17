@@ -40,6 +40,8 @@
  * @property {string} [origin]
  * @property {string} [template]
  * @property {string} [view]
+ * @property {number} [version_count]
+ * @property {boolean} [dirty]
  */
 
 /**
@@ -544,6 +546,12 @@ const unifiedDiff = (from, to, fromName, toName) => {
         if (note.view) {
           summary.view = note.view;
         }
+        // core と同じく Codex の行だけ。版の数と、最新の版から下書きが動いたか
+        if (summary.kind === "codex") {
+          const own = versions.get(filename) ?? [];
+          summary.version_count = own.length;
+          summary.dirty = own.length > 0 && own[0].body !== note.body;
+        }
         return summary;
       });
 
@@ -940,7 +948,24 @@ const unifiedDiff = (from, to, fromName, toName) => {
     note_version_status: ({ filename }) => {
       const note = codexOf(filename);
       const own = versions.get(filename) ?? [];
-      return { count: own.length, dirty: own.length > 0 && own[0].body !== note.body };
+      const [latest] = own;
+      return {
+        count: own.length,
+        dirty: latest !== undefined && latest.body !== note.body,
+        bytes_delta: latest
+          ? new TextEncoder().encode(note.body).length -
+            new TextEncoder().encode(latest.body).length
+          : 0,
+      };
+    },
+    /** @param {{ filename: string, id: string }} args */
+    delete_note_version: ({ filename, id }) => {
+      versionOf(filename, id);
+      versions.set(
+        filename,
+        (versions.get(filename) ?? []).filter((v) => v.id !== id),
+      );
+      return null;
     },
     /** @param {{ filePath: string, body: string, revision?: string | null }} args */
     update_draft: ({ filePath, body, revision }) => {

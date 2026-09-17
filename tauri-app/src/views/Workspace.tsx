@@ -16,13 +16,15 @@ import { useNavigate, useSearchParams } from "@solidjs/router";
 import type { Editor } from "@milkdown/kit/core";
 import Icon from "../components/Icon";
 import MarkdownPreview from "../components/MarkdownPreview";
-import CommitPopover from "../components/CommitPopover";
 import NoteMenu from "../components/NoteMenu";
 import NoteMetaPopover from "../components/NoteMetaPopover";
 import TemplatePicker from "../components/TemplatePicker";
+import VersionSlider from "../components/VersionSlider";
+import VersionSpine from "../components/VersionSpine";
 import { isStaleSave, typedInvoke } from "../lib/commands";
 import { getDeviceSignals } from "../lib/client-context";
 import { createDebouncedAccessor } from "../lib/debounce";
+import { markedBody } from "../lib/diff-marks";
 import { glyphs } from "../lib/glyphs";
 import { useShell } from "../lib/shell";
 import {
@@ -43,6 +45,8 @@ import { locale, t } from "../lib/i18n";
 import { isImeComposing } from "../lib/ime";
 import { createLongPress } from "../lib/long-press";
 import { isTypingTarget, matchesShortcut, shortcutLabel } from "../lib/shortcuts";
+import { daysSince, spanSince, withDeltas } from "../lib/versions";
+import type { VersionRow } from "../lib/versions";
 import {
   beginEditSession,
   readBackup,
@@ -52,7 +56,7 @@ import {
 } from "../lib/edit-backup";
 import type { EditSession } from "../lib/edit-backup";
 import type { NoteLinkTarget } from "../lib/note-link-plugin";
-import type { NoteKind, SearchHit, Template } from "../lib/commands";
+import type { NoteKind, SearchHit, Template, VersionStatus } from "../lib/commands";
 import { noteRoute } from "../lib/note-route";
 import { HIT_ICONS, ROUTES } from "../lib/routes";
 import "../styles/workspace.css";
@@ -63,8 +67,6 @@ const MilkdownEditor = lazy(() => import("../components/MilkdownEditor"));
 const MarkdownToolbar = lazy(() => import("../components/MarkdownToolbar"));
 // markmap-view は d3 を連れてくる。マインドマップにしたノートを開くまで読まない
 const MindmapView = lazy(() => import("../components/MindmapView"));
-// 版の一覧と差分。Codex の「履歴」を押すまで読まない
-const VersionHistory = lazy(() => import("../components/VersionHistory"));
 
 const UNDO_MS = 5000;
 const SAVE_DEBOUNCE_MS = 1000;
@@ -89,6 +91,43 @@ function EmptyNotes(props: { kind: NoteKind }): JSX.Element {
       <p class="notes-empty-body">{words().emptyHint}</p>
     </div>
   );
+}
+
+/**
+ * 一覧の行の右端、日付の左に置く角折りのページ。中に版の数。枠の色が
+ * 「版なし / 版あり / 下書きが動いている」を言う。字は足さない — 行は 1 行のまま。
+ */
+function PageMark(props: { count: number; dirty: boolean }): JSX.Element {
+  const state = (): "none" | "clean" | "dirty" => {
+    if (props.count === 0) {
+      return "none";
+    }
+    return props.dirty ? "dirty" : "clean";
+  };
+  return (
+    <span
+      class="page-mark"
+      data-state={state()}
+      title={t().codex.pageMark(props.count, props.dirty)}
+      aria-hidden="true"
+    >
+      <span class="page-mark-face" />
+      <Show when={props.count > 0}>
+        <span class="page-mark-fold" />
+        <span class="page-mark-count">{props.count}</span>
+      </Show>
+    </span>
+  );
+}
+
+/** メタ行の「版 4 から +312 B」。動いていなければ「版 4」、無ければ「版なし」。 */
+function versionStatusLabel(status: VersionStatus): string {
+  if (status.count === 0) {
+    return t().codex.noVersions;
+  }
+  return status.dirty
+    ? t().codex.deltaFromLatest(status.count, status.bytes_delta)
+    : t().codex.versionN(status.count);
 }
 
 /** このノートを指している記録。畳んだ 1 行以上の場所は取らない。 */
@@ -155,8 +194,13 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   /** 本文先頭の H1。タイトル欄が編集し、保存のたびに本文へ書き戻す。 */
   const [noteTitle, setNoteTitle] = createSignal("");
   const [noteView, setNoteView] = createSignal<NoteView>("editor");
-  /** 本文の場所に履歴(版の一覧と差分)を出しているか。Codex だけ。 */
+  /**
+   * 履歴を開いているか。Codex だけ。開くと背骨が広がり、本文は読み取り専用に
+   * なって、選んだ版との差が欄外の印になる。本文は消えない。
+   */
   const [historyOpen, setHistoryOpen] = createSignal(false);
+  /** 履歴で選んでいる版。開いた瞬間は最新の版。 */
+  const [selectedVersionId, setSelectedVersionId] = createSignal<string | null>(null);
   /** 本文の読み込みが済んでいるノートの id。`?edit=1` の自動フォーカスが待つ。 */
   const [loadedId, setLoadedId] = createSignal<string | null>(null);
   /**
@@ -220,6 +264,18 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
 
   /** 本文が実際に画面に出ているか。出ていないうちはエディタも作らない。 */
   const bodyVisible = createMemo<boolean>(() => twoPane() || detailOpen());
+
+  /**
+   * 背骨を 200px に広げて本文の横に並べられる幅か。マップと同じ境で、
+   * 足りなければ背骨は 56px のままにして、履歴は題の下の横向きのカードで送る。
+   */
+  const spineRoom = globalThis.matchMedia("(min-width: 1100px)");
+  const [spineWide, setSpineWide] = createSignal(spineRoom.matches);
+  const onSpineRoomChange = (e: MediaQueryListEvent): void => {
+    setSpineWide(e.matches);
+  };
+  spineRoom.addEventListener("change", onSpineRoomChange);
+  onCleanup(() => spineRoom.removeEventListener("change", onSpineRoomChange));
 
   // 一覧は両方の置き場を 1 度に持ってくる。面ごとに絞るのはここ — IPC を
   // 面の数だけ増やすより、`?file=` の転送先を知るために全部持っているほうがいい
@@ -306,12 +362,54 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     (filename) => typedInvoke("find_backlinks", { filename }),
   );
 
-  // 版の数と「最新の版から変わったか」。開いている 1 本ぶんだけ読む —
-  // 一覧に乗せると全 Codex の最新の版を読むことになる
+  // 版の数と「最新の版からどれだけ動いたか」。本文を版と比べるので、開いて
+  // いる 1 本ぶんだけ読む(一覧の行の印は core が名前の指紋だけで出している)
   const [versionStatus, { refetch: refetchVersionStatus }] = createResource(
     () => (kind() === "codex" ? selected()?.filename : undefined),
     (filename) => typedInvoke("note_version_status", { filename }),
   );
+  // 版そのもの。背骨は畳んでいても版の数だけ点を打つので、Codex を開いたら読む
+  const [versions, { refetch: refetchVersions }] = createResource(
+    () => (kind() === "codex" ? selected()?.filename : undefined),
+    (filename) => typedInvoke("list_note_versions", { filename }),
+  );
+  const versionRows = createMemo<VersionRow[]>(() => withDeltas(versions() ?? []));
+
+  /** 版が増減したら、数と背骨と一覧の印を一緒に読み直す。 */
+  const refreshVersions = (): void => {
+    void refetchVersionStatus();
+    void refetchVersions();
+  };
+
+  // 選んだ版から下書きへの差分。履歴を開いているあいだだけ
+  const [diff] = createResource(
+    () => {
+      const id = selectedVersionId();
+      const filename = selected()?.filename;
+      return historyOpen() && id !== null && filename ? { filename, from: id } : undefined;
+    },
+    (args) => typedInvoke("diff_note_versions", args),
+  );
+
+  /**
+   * 欄外の印を打った本文。差分が空(同じ内容)なら印は無く、本文はそのまま。
+   * 履歴を開くときに保存を出しきってあるので、画面の本文はディスクと同じ。
+   */
+  const marked = createMemo(() => {
+    const text = diff();
+    return text ? markedBody(fullBody(), text) : undefined;
+  });
+  /** 選んだ版が下書きと同じ。背骨の 2 行目が「同じ内容」と言う。 */
+  const sameAsDraft = (): boolean => selectedVersionId() !== null && !diff.loading && diff() === "";
+
+  /** 「9 か月で 4 回刻んだ」。最初の版からの経過は版の一覧から。 */
+  const cadence = (): string | undefined => {
+    const rows = versionRows();
+    const oldest = rows.at(-1);
+    return oldest
+      ? t().codex.cadence(rows.length, spanSince(oldest.version.time, new Date()))
+      : undefined;
+  };
 
   /**
    * 画面に出ている本文をまるごと入れ替える。エディタは自分の文書を正とするので、
@@ -374,6 +472,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       sessionFile = null;
       // 履歴は開いていたノートの持ち物
       setHistoryOpen(false);
+      setSelectedVersionId(null);
       if (!item) {
         showBody("", "", "", "editor");
         return;
@@ -535,7 +634,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
         listStale = true;
         if (shown()) {
           markSaved();
-          // 「変更あり」は最新の版と下書きの比較。書くたびに答えが変わる
+          // 「版 N から +X B」は最新の版と下書きの比較。書くたびに答えが変わる
           if (kind() === "codex") {
             void refetchVersionStatus();
           }
@@ -593,10 +692,10 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
         if (item && !isTyping()) {
           void loadNote(item);
         }
-        // 版の数と「変更あり」も同期で変わる。ファイル名は同じなので
-        // resource は自分では取り直さない
+        // 版も同期で増える。ファイル名は同じなので resource は自分では
+        // 取り直さない
         if (kind() === "codex") {
-          void refetchVersionStatus();
+          refreshVersions();
         }
       },
       { defer: true },
@@ -787,45 +886,110 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   };
 
   /**
-   * 「版を刻む…」の入口。待っている保存を出しきってから一言を聞く —
-   * 刻むのはディスクにある本文で、画面にしかない打鍵は含まれない。
+   * いまの下書きを版として刻む。ここが唯一の入口で、自動では刻まない。
+   * 保存・離脱・昇格のどれにも掛けない — 版は人が「ここまで」と言った印。
+   *
+   * 押した瞬間に刻む。一言は聞かない — 版の名前は「版 N · 日付」で足り、
+   * 聞くと刻むこと自体が億劫になる。代わりにトーストで要約を言い、
+   * 猶予のあいだは取り消せる(版のファイルを消すだけ)。
    */
-  const openCommit = async (): Promise<void> => {
+  const commitVersion = async (item: NoteItem): Promise<void> => {
     if (kind() !== "codex" || !loaded()) {
       return;
     }
+    shell.closePopovers();
     // 刻むのはディスクの本文。飛んでいる保存を待たないと最後の打鍵が版に入らない
     await settleWrites();
-    shell.togglePopover("commit-version");
-  };
-
-  /**
-   * いまの下書きを版として刻む。ここが唯一の入口で、自動では刻まない。
-   * 保存・離脱・昇格のどれにも掛けない — 版は人が「ここまで」と言った印。
-   */
-  const commitVersion = async (item: NoteItem, message: string | null): Promise<void> => {
-    shell.closePopovers();
+    const before = versions() ?? [];
+    let version;
     try {
-      await typedInvoke("commit_note_version", { filename: item.filename, message });
+      version = await typedInvoke("commit_note_version", {
+        filename: item.filename,
+        message: null,
+      });
     } catch {
+      shell.showToast(t().codex.commitFailed);
       return;
     }
-    void refetchVersionStatus();
-    shell.showToast(t().codex.committed);
+    // 同じ秒に同じ本文を刻むと core は前の版をそのまま返す。増えていない
+    // ものは取り消せない — 消すと前からあった版が消える
+    const existed = before.some((v) => v.id === version.id);
+    const [latest] = before;
+    const count = existed ? before.length : before.length + 1;
+    const summary = [
+      latest
+        ? t().codex.deltaFromLatest(before.length, version.bytes - latest.bytes)
+        : t().codex.sizeOf(version.bytes),
+      latest && daysSince(latest.time, new Date()) > 0
+        ? t().codex.sinceDays(daysSince(latest.time, new Date()))
+        : undefined,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    refreshVersions();
+    // 一覧の角折りページも数と枠が変わる
+    void refetchNotes();
+    const undo = existed
+      ? undefined
+      : (): void => {
+          void (async () => {
+            try {
+              await typedInvoke("delete_note_version", {
+                filename: item.filename,
+                id: version.id,
+              });
+            } catch {
+              return;
+            }
+            refreshVersions();
+            void refetchNotes();
+          })();
+        };
+    shell.showToast(t().codex.committed(count), undo, summary);
   };
 
   /**
    * 履歴を開く前に、待っている保存を出しきる。履歴はディスクの本文と版を
    * 比べる画面で、「戻す」もディスクの本文を「戻す前」として刻む — 画面に
    * しか無い打鍵を残したまま開くと、その打鍵はどちらにも入らずに消える。
+   * 開いた瞬間に選ぶのは最新の版。
    */
-  const toggleHistory = async (): Promise<void> => {
+  const openHistory = async (): Promise<void> => {
     shell.closePopovers();
-    if (!historyOpen()) {
-      await settleWrites();
+    if (historyOpen()) {
+      return;
     }
-    setHistoryOpen((open) => !open);
+    await settleWrites();
+    // 版は他の端末でも刻まれる。比べる画面を開く瞬間は読み直しに安い
+    refreshVersions();
+    batch(() => {
+      setSelectedVersionId(versions()?.[0]?.id ?? null);
+      setHistoryOpen(true);
+    });
   };
+
+  const closeHistory = (): void => {
+    batch(() => {
+      setHistoryOpen(false);
+      setSelectedVersionId(null);
+    });
+  };
+
+  // 開いたときにまだ版が届いていなければ、届いた最新の版を選ぶ。取り消しで
+  // 選んでいた版が消えたときも最新へ寄せる
+  createEffect(() => {
+    if (!historyOpen()) {
+      return;
+    }
+    const rows = versions();
+    if (!rows) {
+      return;
+    }
+    const chosen = selectedVersionId();
+    if (chosen === null || !rows.some((v) => v.id === chosen)) {
+      setSelectedVersionId(rows[0]?.id ?? null);
+    }
+  });
 
   /**
    * 版の本文を下書きにする。core が先に「戻す前」を刻むので、戻したことも
@@ -865,10 +1029,10 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     }
     // 戻した本文はディスクにある。読み直せば画面もそれになる
     sessionFile = null;
-    setHistoryOpen(false);
+    closeHistory();
     await loadNote(item, true);
     await refetchNotes();
-    void refetchVersionStatus();
+    refreshVersions();
     shell.showToast(t().codex.restored);
   };
 
@@ -951,7 +1115,10 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
         shell.togglePopover("note-meta");
       } else if (matchesShortcut(e, "codexCommit")) {
         e.preventDefault();
-        void openCommit();
+        void commitVersion(item);
+      } else if (e.key === "Escape" && historyOpen()) {
+        e.preventDefault();
+        closeHistory();
       }
     };
     globalThis.addEventListener("keydown", onKeyDown);
@@ -1167,13 +1334,23 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                         type="button"
                         class="list-row"
                         data-id={item.id}
-                        classList={{ "list-row--selected": selected()?.id === item.id }}
+                        classList={{
+                          "list-row--selected": selected()?.id === item.id,
+                          "list-row--codex": kind() === "codex",
+                        }}
                         onClick={() => select(item as NoteItem)}
                       >
                         <span class="list-row-title">{itemTitle(item)}</span>
                         {/* 書けないノートはここで分かる。開いてから気づくのでは遅い */}
                         <Show when={(item as NoteItem).readOnly}>
                           <Icon name="lock-simple" size={12} title={t().notes.readOnly} />
+                        </Show>
+                        {/* Codex の行だけ、角折りのページに版の数。Note との違いの 1 つ目 */}
+                        <Show when={kind() === "codex"}>
+                          <PageMark
+                            count={(item as NoteItem).versionCount ?? 0}
+                            dirty={(item as NoteItem).dirty ?? false}
+                          />
                         </Show>
                         <span class="list-row-stamp">{noteRowStamp(item as NoteItem, today)}</span>
                       </button>
@@ -1186,7 +1363,14 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
         </div>
       </div>
 
-      <div class="detail-pane" classList={{ "detail-pane--map": mapOpen() }}>
+      <div
+        class="detail-pane"
+        classList={{
+          "detail-pane--map": mapOpen(),
+          "detail-pane--spine": kind() === "codex",
+          "detail-pane--history": kind() === "codex" && historyOpen(),
+        }}
+      >
         <Show when={selected()} fallback={<div class="detail-empty">{t().notes.noSelection}</div>}>
           {(item) => (
             <>
@@ -1250,16 +1434,29 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                     ウィジェットが指す ID であって、人に見せるものではない */}
                 <div class="detail-meta-line">
                   <span>{noteCreatedLabel(item())}</span>
-                  {/* Codex は版の数を常に出す。下書きが最新の版から離れたら「変更あり」 */}
+                  {/* Codex は育ち具合を常に出す: 最新の版からの距離と、いつから何回刻んだか */}
                   <Show when={kind() === "codex" && versionStatus()}>
                     {(status) => (
                       <>
                         <span class="detail-meta-sep" aria-hidden="true">
                           ·
                         </span>
-                        <span class="detail-version-status">
-                          {t().codex.status(status().count, status().dirty)}
+                        <span
+                          class="detail-version-status"
+                          classList={{ "detail-meta-tags": status().dirty }}
+                        >
+                          {versionStatusLabel(status())}
                         </span>
+                        <Show when={cadence()}>
+                          {(text) => (
+                            <>
+                              <span class="detail-meta-sep" aria-hidden="true">
+                                ·
+                              </span>
+                              <span class="detail-version-cadence">{text()}</span>
+                            </>
+                          )}
+                        </Show>
                       </>
                     )}
                   </Show>
@@ -1311,26 +1508,30 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                       void promoteToCodex(item());
                     }}
                     onCommit={() => {
-                      void openCommit();
+                      void commitVersion(item());
                     }}
                     onHistory={() => {
-                      void toggleHistory();
+                      void openHistory();
                     }}
                     onDelete={() => {
                       void remove(item());
                     }}
                   />
                 </Show>
-              </div>
 
-              <Show when={shell.popover() === "commit-version"}>
-                <CommitPopover
-                  onCommit={(message) => {
-                    void commitVersion(item(), message);
-                  }}
-                  onClose={() => shell.closePopovers()}
-                />
-              </Show>
+                {/* 並べる幅が無いところでは、背骨を横に倒して題の下に置く */}
+                <Show when={kind() === "codex" && historyOpen() && !spineWide()}>
+                  <VersionSlider
+                    rows={versionRows()}
+                    selectedId={selectedVersionId()}
+                    now={new Date()}
+                    onSelect={setSelectedVersionId}
+                    onCommit={() => {
+                      void commitVersion(item());
+                    }}
+                  />
+                </Show>
+              </div>
 
               <Show when={shell.popover() === "note-meta"}>
                 <NoteMetaPopover
@@ -1350,6 +1551,30 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                 class="detail-panes"
                 classList={{ "detail-panes--map": mapOpen() && !historyOpen() }}
               >
+                {/* 背骨。Codex の本文の左に常にあり、履歴を開くとここが伸びる。
+                    Note には無い(違いの 2 つ目)。携帯の幅では CSS が畳む */}
+                <Show when={kind() === "codex" && twoPane()}>
+                  <VersionSpine
+                    rows={versionRows()}
+                    dirty={versionStatus()?.dirty ?? false}
+                    bytesDelta={versionStatus()?.bytes_delta ?? 0}
+                    open={historyOpen() && spineWide()}
+                    selectedId={selectedVersionId()}
+                    same={sameAsDraft()}
+                    readOnly={readOnly()}
+                    onOpen={() => {
+                      void openHistory();
+                    }}
+                    onClose={closeHistory}
+                    onSelect={setSelectedVersionId}
+                    onRestore={(id) => {
+                      void restoreVersion(item(), id);
+                    }}
+                    onCommit={() => {
+                      void commitVersion(item());
+                    }}
+                  />
+                </Show>
                 {/* biome-ignore/eslint 対応: ここで拾うのは href の無い
                     ノートリンクだけ。書く操作はエディタ自身が受ける */}
                 <div
@@ -1359,17 +1584,17 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                   role="presentation"
                   onClick={onBodyClick}
                 >
-                  {/* 履歴は本文の場所に置き換わる。エディタは畳む — 開いたまま
-                      下に残すと、戻した本文と古い文書が同時に在ることになる */}
+                  {/* 履歴を開いているあいだ、本文は読み取り専用になり、選んだ版との
+                      差が欄外の印になる。エディタは畳む — 開いたまま下に残すと、
+                      戻した本文と古い文書が同時に在ることになる */}
                   <Show when={historyOpen()}>
-                    <VersionHistory
-                      filename={item().filename}
-                      dirty={versionStatus()?.dirty ?? false}
-                      readOnly={readOnly()}
-                      onRestore={(id) => {
-                        void restoreVersion(item(), id);
-                      }}
-                      onClose={() => setHistoryOpen(false)}
+                    <MarkdownPreview
+                      source={marked()?.source ?? noteBody()}
+                      marks={marked()?.marks ?? []}
+                      noteTitles={noteTitles()}
+                      glyphs={glyphs()}
+                      exportStem={item().filename.replace(/\.md$/u, "")}
+                      onError={(message) => shell.showToast(message)}
                     />
                   </Show>
                   <Show when={!historyOpen()}>
@@ -1422,6 +1647,30 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                   <NoteMap source={fullBody} />
                 </Show>
               </div>
+
+              {/* カードで送っているときの「閉じる」「この版に戻す」。背骨が
+                  広がっているときは背骨の足元にある */}
+              <Show when={kind() === "codex" && historyOpen() && !spineWide()}>
+                <div class="history-actions">
+                  <button type="button" class="button-secondary" onClick={closeHistory}>
+                    {t().codex.close}
+                  </button>
+                  <button
+                    type="button"
+                    class="button-secondary"
+                    disabled={readOnly() || selectedVersionId() === null}
+                    onClick={() => {
+                      const id = selectedVersionId();
+                      if (id !== null) {
+                        void restoreVersion(item(), id);
+                      }
+                    }}
+                  >
+                    <Icon name="arrow-counter-clockwise" size={14} />
+                    {t().codex.restore}
+                  </button>
+                </div>
+              </Show>
             </>
           )}
         </Show>

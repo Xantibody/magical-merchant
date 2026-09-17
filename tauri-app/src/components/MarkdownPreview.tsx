@@ -10,6 +10,7 @@ import { resolvedTheme } from "../lib/theme";
 import DiagramZoom from "./DiagramZoom";
 import "../styles/markdown-preview.css";
 import type { ExportFormat } from "../lib/diagram-export";
+import type { LineMark } from "../lib/diff-marks";
 import type { ZoomedDiagram } from "./DiagramZoom";
 import type { JSX } from "solid-js";
 
@@ -23,6 +24,11 @@ interface MarkdownPreviewProps {
   exportStem?: string;
   /** 書き出しに失敗したとき、利用者に見せる文。無ければ黙って失敗する */
   onError?: (message: string) => void;
+  /**
+   * 履歴を開いているあいだの行ごとの印(`lib/diff-marks.ts`)。あれば欄外に
+   * +/− を立てる。本文の色も字も変えない。
+   */
+  marks?: readonly (LineMark | undefined)[];
 }
 
 /** コピー後にチェック表示を戻すまでの時間。エディタの node view と同じ */
@@ -52,14 +58,15 @@ export default function MarkdownPreview(props: MarkdownPreviewProps): JSX.Elemen
     on(
       // mermaid はテーマの色を SVG に焼き込むので、切り替えたら描き直すしかない。
       // 道具のラベルも描画結果に焼き込まれるので、言語が変わっても描き直す
-      () => [props.source, resolvedTheme(), props.noteTitles, props.glyphs, t()] as const,
-      async ([source, , noteTitles, glyphs]) => {
+      () =>
+        [props.source, resolvedTheme(), props.noteTitles, props.glyphs, t(), props.marks] as const,
+      async ([source, , noteTitles, glyphs, , marks]) => {
         const currentVersion = ++renderVersion;
         if (!source) {
           setHtml("");
           return;
         }
-        const rendered = await renderMarkdown(source, noteTitles, glyphs);
+        const rendered = await renderMarkdown(source, noteTitles, glyphs, marks);
         if (currentVersion === renderVersion) {
           setHtml(rendered);
         }
@@ -177,6 +184,7 @@ export default function MarkdownPreview(props: MarkdownPreviewProps): JSX.Elemen
       <div
         ref={root}
         class="markdown-preview"
+        classList={{ "markdown-preview--marked": props.marks !== undefined }}
         innerHTML={html()}
         onClick={onClick}
         role="presentation"

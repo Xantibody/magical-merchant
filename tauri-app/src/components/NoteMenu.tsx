@@ -68,7 +68,17 @@ export default function NoteMenu(props: NoteMenuProps): JSX.Element {
         when={!confirming()}
         fallback={
           <div class="note-menu-confirm">
-            <span class="note-menu-confirm-label">{t().codex.promoteConfirm}</span>
+            {/* 戻れないことより先に、何が増えるかを言う。押すかどうかは
+                それで決まる */}
+            <span class="note-menu-confirm-title">
+              <Icon name="book" size={15} />
+              {t().codex.promote}
+            </span>
+            <p class="note-menu-confirm-label">{t().codex.promoteBody1}</p>
+            <p class="note-menu-confirm-label">
+              {t().codex.promoteBody2}
+              <strong>{t().codex.promoteBody2Strong}</strong>
+            </p>
             <button type="button" class="button-primary" onClick={() => props.onPromote()}>
               {t().codex.promoteYes}
             </button>

@@ -11,6 +11,9 @@ export default function UndoToast(): JSX.Element {
       {(toast) => (
         <div class="undo-toast" role="status">
           <span>{toast().message}</span>
+          <Show when={toast().detail}>
+            {(detail) => <span class="undo-toast-detail">{detail()}</span>}
+          </Show>
           <Show when={toast().undo}>
             {(undo) => (
               <button
