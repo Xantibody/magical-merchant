@@ -89,6 +89,16 @@ pub fn update_note(
     Notes::update(file_path, body, context, expected)
 }
 
+/// ID からノートの種別と実際の置き場を引く。本文を書き換える入口(CLI・MCP)
+/// はこれで得た path を [`update_note`] に渡す — `notes/` を決め打ちすると、
+/// Codex にしたノートが「無い」ことになるか、隣に普通のノートを作り直す。
+pub fn locate_note(
+    base_dir: &Path,
+    filename: &NoteFilename,
+) -> Result<(NoteKind, PathBuf), CoreError> {
+    Notes::new(base_dir.to_path_buf()).locate(filename)
+}
+
 pub fn list_notes(base_dir: &Path) -> Result<Vec<NoteSummary>, CoreError> {
     Notes::new(base_dir.to_path_buf()).list()
 }
