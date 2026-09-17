@@ -72,7 +72,7 @@
   font-size: 0.9em;
 }
 
-/* コードブロックは内容量と無関係な一定サイズから始める(sample の Notion は
+/* コードブロックは内容量と無関係な一定サイズから始める(参考の Notion は
    width: 100% の箱に padding 24px 22px)。Open Props の normalize が
    pre を max-inline-size: max-content で内容にフィットさせるので解除する */
 .milkdown-editor pre {
