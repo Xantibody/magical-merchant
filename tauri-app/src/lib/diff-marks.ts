@@ -53,14 +53,20 @@ export function markLines(draft: string, diff: string): MarkedBody {
     }
   };
 
+  /** 最初のハンクより前は `+++` / `---` のヘッダ。本文の行ではない。 */
+  let inHunk = false;
+
   for (const line of linesOf(diff)) {
     const hunk = HUNK.exec(line);
     if (hunk?.groups) {
       const start = Number(hunk.groups.newStart);
       const length = hunk.groups.newLen === undefined ? 1 : Number(hunk.groups.newLen);
       take(length === 0 ? start : start - 1);
+      inHunk = true;
     }
-    switch (hunk ? "@" : line[0]) {
+    // ハンクの中では `+---`(罫線が増えた)も本文の行。ヘッダと見分けるのは
+    // 位置であって綴りではない
+    switch (hunk || !inHunk ? "@" : line[0]) {
       case " ": {
         out.push(line.slice(1));
         marks.push(undefined);
@@ -68,21 +74,12 @@ export function markLines(draft: string, diff: string): MarkedBody {
         break;
       }
       case "+": {
-        // ヘッダの `+++ draft` はハンクの外だが、本文の行が `++` で始まる
-        // こともある。ヘッダはハンクより前にしか来ないので、最初のハンク
-        // までは読み飛ばす
-        if (out.length === 0 && cursor === 0 && line.startsWith("+++")) {
-          break;
-        }
         out.push(line.slice(1));
         marks.push("add");
         cursor += 1;
         break;
       }
       case "-": {
-        if (out.length === 0 && cursor === 0 && line.startsWith("---")) {
-          break;
-        }
         out.push(line.slice(1));
         marks.push("del");
         break;

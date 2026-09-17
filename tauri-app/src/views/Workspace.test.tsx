@@ -1252,6 +1252,23 @@ describe("Workspace › Codex の版", () => {
     await waitFor(() => expect(screen.getByTestId("editor-body")).toBeDefined());
   });
 
+  // 開いた瞬間に選ぶ最新の版は、開くときに読み直した一覧のもの。手元の一覧で
+  // 選ぶと、別の端末で刻まれた新しい版があっても 1 つ古いほうが開く
+  it("selects the version that is newest at the moment the history opens", async () => {
+    versions.set(FILE_C, [{ id: "v1", message: null, body: BODY_C }]);
+    await openCodexC();
+    await waitFor(() => expect(metaLine()?.textContent).toBe("版 1"));
+
+    versions.set(FILE_C, [
+      { id: "v2", message: null, body: BODY_C },
+      { id: "v1", message: null, body: BODY_C },
+    ]);
+    await runNoteAction("履歴");
+
+    const newest = await screen.findByRole("button", { name: /^版 2/u });
+    await waitFor(() => expect(newest.getAttribute("aria-current")).toBe("true"));
+  });
+
   // 背骨は畳んでいても Codex の本文の左に常にある。Note には無い
   it("keeps a collapsed spine beside a codex and none beside a note", async () => {
     await openCodexC();

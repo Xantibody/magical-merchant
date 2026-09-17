@@ -960,10 +960,13 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       return;
     }
     await settleWrites();
-    // 版は他の端末でも刻まれる。比べる画面を開く瞬間は読み直しに安い
-    refreshVersions();
+    // 版は他の端末でも刻まれる。比べる画面を開く瞬間は読み直しに安い。
+    // 選ぶ最新の版は読み直した一覧から — 手元の一覧で選ぶと、届いた一覧に
+    // その版が残っている限り、より新しい版があっても古いほうを開き続ける
+    void refetchVersionStatus();
+    const rows = (await refetchVersions()) ?? versions();
     batch(() => {
-      setSelectedVersionId(versions()?.[0]?.id ?? null);
+      setSelectedVersionId(rows?.[0]?.id ?? null);
       setHistoryOpen(true);
     });
   };

@@ -39,6 +39,17 @@ describe("markLines", () => {
     expect(one).toStrictEqual({ source: "A\nB", marks: ["del", "add"] });
   });
 
+  // 題の無い Codex の先頭に罫線が増えると、最初の本文の行が `+---` で始まる。
+  // ヘッダは最初のハンクより前にしか無い
+  it("keeps a first line that spells like a header once the hunk has begun", () => {
+    const diff = "--- v\n+++ draft\n@@ -0,0 +1,2 @@\n+---\n+++x\n";
+
+    expect(markLines("---\n++x", diff)).toStrictEqual({
+      source: "---\n++x",
+      marks: ["add", "add"],
+    });
+  });
+
   it("ignores the missing-newline hint and body lines that look like headers", () => {
     const diff =
       "--- v\n+++ draft\n@@ -1,2 +1,2 @@\n a\n-b\n\\ No newline at end of file\n+--- dash\n";
