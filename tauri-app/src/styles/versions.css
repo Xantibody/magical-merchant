@@ -1,0 +1,130 @@
+/* 「版を刻む…」の一言。「…」メニューと同じ場所に吊るし、入力欄 1 つと
+   ボタン 1 つだけ。刻むのは日に何度もない操作なので、常設の欄にはしない */
+.commit-popover {
+  position: absolute;
+  top: 60px;
+  right: 28px;
+  z-index: 30;
+  width: 300px;
+  padding: 8px;
+  display: flex;
+  gap: 6px;
+}
+
+.commit-input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--radius-2);
+  background: var(--app-input-bg);
+  color: var(--app-text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.commit-input:focus {
+  outline: 2px solid var(--app-accent-soft);
+  outline-offset: -1px;
+}
+
+/* 履歴は本文の場所に置き換わる。列は本文と同じ幅で、上に版、下に差分 */
+.version-history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-3);
+}
+
+.version-history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.version-history-title {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--app-text-muted);
+}
+
+.version-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.version-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: var(--radius-2);
+  background: transparent;
+  color: var(--app-text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.version-row:hover {
+  background: var(--app-surface-2);
+}
+
+.version-row[aria-current="true"] {
+  background: var(--app-accent-soft);
+}
+
+/* 下書きの行は選べない。今ここにある本文そのものなので、比べる相手がない */
+.version-row--draft {
+  cursor: default;
+  color: var(--app-text-muted);
+}
+
+.version-time {
+  color: var(--app-text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.version-message {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.version-delta {
+  color: var(--app-text-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.version-diff {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.version-diff-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.version-empty {
+  font-size: 13px;
+  color: var(--app-text-muted);
+}
+
+@media (max-width: 767px) {
+  .version-row {
+    min-height: 44px;
+  }
+
+  .commit-popover {
+    left: 12px;
+    right: 12px;
+    width: auto;
+  }
+}

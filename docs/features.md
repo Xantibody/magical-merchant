@@ -108,6 +108,24 @@ A Codex opens in the same editor as a Note. What it adds is on purpose: the
 body is a draft until you commit a version, and the versions travel with the
 file through sync, so the history is the same on every device.
 
+Nothing is committed for you. 版を刻む… in the `…` menu saves the draft,
+asks for a one-line message (it may stay empty) and writes a version; the
+meta line then reads 版 3 or 版 3 · 変更あり so you can see at a glance
+whether the draft has moved on since the last commit. 履歴 replaces the
+body with the list of versions, newest first, each with its time, message
+and size change. Pick one to see what changed between that version and the
+current draft, as a unified diff in the same colours as a ```diff fence.
+この版に戻す makes that version the draft again, and the draft you are
+leaving is committed first as _before restore_, so a restore is itself
+undoable from the same list. A read-only Codex cannot be restored, for the
+same reason it cannot be edited.
+
+On disk a version is `data/codex/<id>/<time>-<hash>.md`: plain Markdown with
+`time` and `message` frontmatter, so `diff -u` in a terminal works as well as
+the app does. Versions are not the local `history/` copies the CLI and MCP
+take before overwriting — those are a safety net on one device; versions are
+part of the document.
+
 ## Glyphs — your own inline symbols
 
 Some things have no character: fighting-game command notation, a custom

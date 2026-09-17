@@ -74,6 +74,8 @@ let disk: Map<string, string>;
 let meta: Map<string, { tags?: string[]; view?: string }>;
 /** どの置き場に居るか。書いていないノートは Note。 */
 let kinds: Map<string, "note" | "codex">;
+/** Codex の版(新しい順)。本文ごと持ち、差分はここから作る。 */
+let versions: Map<string, { id: string; message: string | null; body: string }[]>;
 /** 呼ばれたコマンドと引数。どのノートに何が書かれたかをこれで見る。 */
 let calls: { cmd: string; args: Record<string, unknown> }[];
 /** read_note を止めておく関門。応答が届く前の操作を再現する。 */
@@ -158,6 +160,70 @@ const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
   promote_note_to_codex: ({ filename }) => {
     kinds.set(String(filename), "codex");
   },
+  commit_note_version: ({ filename, message }) => {
+    const name = String(filename);
+    const body = disk.get(name) ?? "";
+    const version = {
+      id: `v${countOf("commit_note_version")}`,
+      message: (message as string | null) ?? null,
+      body,
+    };
+    versions.set(name, [version, ...(versions.get(name) ?? [])]);
+    return {
+      id: version.id,
+      time: "2026-09-17T14:03:00+09:00",
+      message: version.message,
+      bytes: body.length,
+    };
+  },
+  list_note_versions: ({ filename }) =>
+    (versions.get(String(filename)) ?? []).map((v) => ({
+      id: v.id,
+      time: "2026-09-17T14:03:00+09:00",
+      message: v.message,
+      bytes: v.body.length,
+    })),
+  // core の unified diff の形だけ真似る。行の突き合わせはしない
+  diff_note_versions: ({ filename, from }) => {
+    const name = String(filename);
+    const version = versions.get(name)?.find((v) => v.id === from);
+    const draft = disk.get(name) ?? "";
+    if (!version || version.body === draft) {
+      return "";
+    }
+    return [
+      `--- ${String(from)}`,
+      "+++ draft",
+      "@@ -1 +1 @@",
+      ...version.body.split("\n").map((line) => `-${line}`),
+      ...draft.split("\n").map((line) => `+${line}`),
+      "",
+    ].join("\n");
+  },
+  restore_note_version: ({ filename, id, revision }) => {
+    const name = String(filename);
+    const current = disk.get(name) ?? "";
+    if (typeof revision === "string" && revision !== revisionOf(current)) {
+      throw saveError("stale", `Stale: ${name} changed since it was read`);
+    }
+    const version = versions.get(name)?.find((v) => v.id === id);
+    if (!version) {
+      throw saveError("other", `version not found: ${String(id)}`);
+    }
+    versions.set(name, [
+      { id: "before", message: "before restore", body: current },
+      ...(versions.get(name) ?? []),
+    ]);
+    disk.set(name, version.body);
+    return revisionOf(version.body);
+  },
+  note_version_status: ({ filename }) => {
+    const own = versions.get(String(filename)) ?? [];
+    return {
+      count: own.length,
+      dirty: own.length > 0 && own[0]?.body !== disk.get(String(filename)),
+    };
+  },
   set_note_view: ({ filename, view }) => {
     const name = String(filename);
     const entry = { ...meta.get(name) };
@@ -230,6 +296,9 @@ function titleInput(): HTMLInputElement {
   return screen.getByPlaceholderText<HTMLInputElement>("タイトル");
 }
 
+/** Codex のメタ行に出る版の数。 */
+const metaLine = (): HTMLElement | null => document.querySelector(".detail-version-status");
+
 /** 「起きないこと」を見るための間。waitFor は起きるまで待つので使えない。 */
 function sleep(ms: number): Promise<void> {
   // oxlint-disable-next-line promise/avoid-new
@@ -291,6 +360,7 @@ async function setupWorkspace(): Promise<void> {
   disk = new Map([[FILE_A, BODY_A]]);
   meta = new Map();
   kinds = new Map();
+  versions = new Map();
   calls = [];
   shell = undefined;
   navigateTo = undefined;
@@ -929,5 +999,133 @@ describe("Workspace › Codex の面", () => {
 
     await waitFor(() => expect(countOf("create_draft")).toBe(1));
     expect(calls.find((c) => c.cmd === "create_draft")?.args.kind).toBe("codex");
+  });
+});
+
+describe("Workspace › Codex の版", () => {
+  beforeEach(setupWorkspace);
+  afterEach(teardownWorkspace);
+
+  const FILE_C = "20260903_140000.md";
+  const FILE_D = "20260903_150000.md";
+  const TITLE_C = "育てる文書";
+  const TEXT_C = "書き足していく";
+  const BODY_C = `# ${TITLE_C}\n\n${TEXT_C}`;
+  const TITLE_D = "もう 1 本";
+
+  /** Codex を 1 本開いた状態まで進める。 */
+  async function openCodexC(): Promise<void> {
+    disk.set(FILE_C, BODY_C);
+    kinds.set(FILE_C, "codex");
+    renderWorkspace();
+    navigateTo?.("/codex");
+    fireEvent.click(await rowOf(TITLE_C));
+    await waitFor(() => {
+      expect(screen.getByText(TEXT_C)).toBeDefined();
+      expect(editorBody().isContentEditable).toBe(true);
+    });
+  }
+
+  // 版は人が刻む印。保存にも、別のノートへの移動にも掛けない
+  it("never commits a version on its own", async () => {
+    disk.set(FILE_D, `# ${TITLE_D}\n\n本文`);
+    kinds.set(FILE_D, "codex");
+    await openCodexC();
+    await waitFor(() => expect(metaLine()?.textContent).toBe("版なし"));
+
+    await startEditingBody();
+    typeInEditor?.(`# ${TITLE_C}\n\n${TEXT_C}\n\n足した行`);
+    await waitFor(() => expect(writesTo(FILE_C)).toHaveLength(1), { timeout: 3000 });
+    fireEvent.click(await rowOf(TITLE_D));
+    await waitFor(() => expect(titleInput().value).toBe(TITLE_D));
+
+    expect(countOf("commit_note_version")).toBe(0);
+    expect(versions.get(FILE_C)).toBeUndefined();
+  });
+
+  it("commits with the message typed, and Enter during IME does not", async () => {
+    await openCodexC();
+    await waitFor(() => expect(metaLine()?.textContent).toBe("版なし"));
+
+    await runNoteAction("版を刻む");
+    const input = await screen.findByPlaceholderText<HTMLInputElement>("この版のひとこと(任意)");
+    fireEvent.input(input, { target: { value: "第 3 章を足した" } });
+    // 変換確定の Enter は IME のもの (#102)
+    fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+    await sleep(50);
+    expect(countOf("commit_note_version")).toBe(0);
+
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => expect(countOf("commit_note_version")).toBe(1));
+    expect(calls.find((c) => c.cmd === "commit_note_version")?.args).toStrictEqual({
+      filename: FILE_C,
+      message: "第 3 章を足した",
+    });
+    await waitFor(() => expect(metaLine()?.textContent).toBe("版 1"));
+    // 一言の欄は刻んだら畳む
+    expect(screen.queryByPlaceholderText("この版のひとこと(任意)")).toBeNull();
+  });
+
+  it("shows a version's diff against the draft, or says they are the same", async () => {
+    await openCodexC();
+    versions.set(FILE_C, [
+      { id: "v2", message: null, body: BODY_C },
+      { id: "v1", message: "最初の骨組み", body: `# ${TITLE_C}\n\n最初の一行` },
+    ]);
+
+    await runNoteAction("履歴");
+
+    const older = await screen.findByRole("button", { name: /最初の骨組み/u });
+    fireEvent.click(older);
+    await waitFor(() => {
+      expect(document.querySelectorAll(".diff-del").length).toBeGreaterThan(0);
+      expect(document.querySelectorAll(".diff-add").length).toBeGreaterThan(0);
+    });
+    expect(calls.find((c) => c.cmd === "diff_note_versions")?.args).toStrictEqual({
+      filename: FILE_C,
+      from: "v1",
+    });
+    // 履歴が本文の場所に出ているあいだ、エディタは畳まれている
+    expect(screen.queryByTestId("editor-body")).toBeNull();
+
+    const [newest] = screen.getAllByRole("button", { name: /±0|\+\d/u });
+    fireEvent.click(newest as HTMLElement);
+    await screen.findByText("同じ内容です");
+  });
+
+  it("restores a version with the revision it read and swaps the body in", async () => {
+    await openCodexC();
+    const OLD_BODY = `# ${TITLE_C}\n\n最初の一行`;
+    versions.set(FILE_C, [{ id: "v1", message: "最初の骨組み", body: OLD_BODY }]);
+
+    await runNoteAction("履歴");
+    fireEvent.click(await screen.findByRole("button", { name: /最初の骨組み/u }));
+    fireEvent.click(await screen.findByRole("button", { name: "この版に戻す" }));
+
+    await waitFor(() => expect(countOf("restore_note_version")).toBe(1));
+    const args = calls.find((c) => c.cmd === "restore_note_version")?.args;
+    expect(args?.filename).toBe(FILE_C);
+    expect(args?.id).toBe("v1");
+    // 読んだときの指紋で書く。外で書き換えられていれば core が断る
+    expect(args?.revision).toBe(revisionOf(BODY_C));
+    // 戻した本文が画面に出て、履歴は畳まれる
+    await waitFor(() => expect(screen.getByText("最初の一行")).toBeDefined());
+    expect(document.querySelector(".version-history")).toBeNull();
+    // 戻す前の下書きが最新の版になり、戻した本文はそれと違うので「変更あり」
+    await waitFor(() => expect(metaLine()?.textContent).toBe("版 2 · 変更あり"));
+  });
+
+  it("cannot restore into a read-only codex", async () => {
+    await openCodexC();
+    versions.set(FILE_C, [{ id: "v1", message: "最初の骨組み", body: "# x" }]);
+    await runNoteAction("読み取り専用にする");
+    await waitFor(() => expect(screen.queryByTestId("editor-body")).toBeNull());
+
+    await runNoteAction("履歴");
+    fireEvent.click(await screen.findByRole("button", { name: /最初の骨組み/u }));
+
+    const restore = await screen.findByRole<HTMLButtonElement>("button", { name: "この版に戻す" });
+    expect(restore.disabled).toBe(true);
   });
 });

@@ -15,6 +15,19 @@ import { createSignal } from "solid-js";
 import type { SyncIssue } from "./sync-status";
 
 export type Locale = "ja" | "en";
+
+/**
+ * 版どうしのバイト差。`+1.2 KB` / `−340 B` / `±0`。単位はどちらの言語でも
+ * 同じ綴りなので、表を 2 つ持たず 1 つの関数を両方から指す。
+ */
+function sizeDelta(bytes: number): string {
+  if (bytes === 0) {
+    return "±0";
+  }
+  const sign = bytes > 0 ? "+" : "−";
+  const size = Math.abs(bytes);
+  return size < 1024 ? `${sign}${size} B` : `${sign}${(size / 1024).toFixed(1)} KB`;
+}
 /** 設定に残す値。`system` は端末の言語に従う。 */
 export type LocalePreference = Locale | "system";
 
@@ -109,6 +122,26 @@ const ja = {
     promoteConfirm: "Codex にすると Note には戻せません",
     promoteYes: "Codex にする",
     promoted: "Codex にしました",
+    commit: "版を刻む…",
+    commitPlaceholder: "この版のひとこと(任意)",
+    commitYes: "刻む",
+    committed: "版を刻みました",
+    history: "履歴",
+    draft: "下書き",
+    restore: "この版に戻す",
+    restored: "この版に戻しました。戻す前の下書きは履歴にあります",
+    restoreFailed: "戻せませんでした",
+    same: "同じ内容です",
+    noVersions: "まだ版がありません",
+    close: "閉じる",
+    status: (count: number, dirty: boolean): string => {
+      if (count === 0) {
+        return "版なし";
+      }
+      return dirty ? `版 ${count} · 変更あり` : `版 ${count}`;
+    },
+    sizeDelta,
+    beforeRestore: "戻す前",
   },
   templates: {
     title: "テンプレート",
@@ -455,6 +488,27 @@ const en: Messages = {
     promoteConfirm: "A Codex cannot go back to being a Note",
     promoteYes: "Make a Codex",
     promoted: "Made a Codex",
+    commit: "Commit a version…",
+    commitPlaceholder: "A word about this version (optional)",
+    commitYes: "Commit",
+    committed: "Committed a version",
+    history: "History",
+    draft: "Draft",
+    restore: "Restore this version",
+    restored: "Restored this version. The draft from before is in the history",
+    restoreFailed: "Could not restore it",
+    same: "Same content",
+    noVersions: "No versions yet",
+    close: "Close",
+    status: (count: number, dirty: boolean): string => {
+      if (count === 0) {
+        return "No versions";
+      }
+      const versions = `${count} version${count === 1 ? "" : "s"}`;
+      return dirty ? `${versions} · changed` : versions;
+    },
+    sizeDelta,
+    beforeRestore: "before restore",
   },
   templates: {
     title: "Templates",

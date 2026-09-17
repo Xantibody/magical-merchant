@@ -47,6 +47,13 @@ ready to record the moment it opens (widgets exist for exactly this).
   from the moment a note is; frontmatter `view` decides the exception
   (`preview` = read-only, `mindmap` = map laid alongside, absent = editable).
   Rare per-note actions live behind one `…` menu (`components/NoteMenu.tsx`)
+- **Codex** (`views/Workspace.tsx` with `kind="codex"`, route `/codex`): the
+  same view over `data/codex/`. Adds to the `…` menu: 版を刻む… (commit a
+  version with a message, `components/CommitPopover.tsx`) and 履歴 (the
+  version list + diff against the draft, `components/VersionHistory.tsx`);
+  the meta line shows the version count and whether the draft has moved on.
+  Versions are never committed automatically. A Note gets "Codex にする" in
+  the same menu; there is no way back
 - **Command palette** (⌘K): in-memory commands + debounced `search_all`
 - **Language**: Japanese and English only, from one table (`lib/i18n.ts`).
   Every user-visible string goes through `t()`; the choice lives in Settings

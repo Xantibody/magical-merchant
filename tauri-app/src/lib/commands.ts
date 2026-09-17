@@ -19,6 +19,23 @@ export interface Note {
   view?: string;
 }
 
+/** Codex の版 1 つ。`id` がそのまま read / diff / restore の引数。 */
+export interface Version {
+  id: string;
+  /** 刻んだ時刻。オフセット付き RFC 3339。 */
+  time: string;
+  /** 刻んだ人が添えた一言。無ければ null。 */
+  message: string | null;
+  /** 本文のバイト数。隣の版との差を出すのに使う。 */
+  bytes: number;
+}
+
+/** 版の数と、最新の版から下書きが変わっているか。 */
+interface VersionStatus {
+  count: number;
+  dirty: boolean;
+}
+
 interface NoteRead {
   body: string;
   /** 本文の指紋。`update_draft` に添えて、外からの書き換えの上に書かない。 */
@@ -180,6 +197,27 @@ interface CommandMap {
   delete_note: { args: { filename: string }; result: void };
   /** Note を Codex の置き場へ移す。ID は変わらない。すでに Codex なら何もしない。 */
   promote_note_to_codex: { args: { filename: string }; result: void };
+  // ---- Codex の版。どれも Codex にしか効かず、Note に呼ぶと `kind: "other"` で断られる ----
+  /** いまの下書きを版として刻む。人が押したときだけ。自動では呼ばない。 */
+  commit_note_version: { args: { filename: string; message?: string | null }; result: Version };
+  /** 新しい順。 */
+  list_note_versions: { args: { filename: string }; result: Version[] };
+  /** 版の本文だけ。frontmatter は含まない。 */
+  read_note_version: { args: { filename: string; id: string }; result: string };
+  /**
+   * 版 `from` → いまの下書きの unified diff。同じなら空文字列。
+   * 先頭は `--- <from>` / `+++ draft`。
+   */
+  diff_note_versions: { args: { filename: string; from: string }; result: string };
+  /**
+   * 版の本文を下書きにする。先にいまの下書きを「戻す前」として刻む。
+   * `revision` は `update_draft` と同じ照合で、返るのも新しい revision。
+   */
+  restore_note_version: {
+    args: { filename: string; id: string; revision?: string | null } & ClientArgs;
+    result: string;
+  };
+  note_version_status: { args: { filename: string }; result: VersionStatus };
   list_templates: { args: void; result: Template[] };
   read_template: { args: { filename: string }; result: TemplateDetail };
   save_template: { args: { filename: string; body: string; tags: string[] }; result: void };
@@ -226,6 +264,8 @@ const MUTATING: ReadonlySet<CommandName> = new Set<CommandName>([
   "set_note_origin",
   "delete_note",
   "promote_note_to_codex",
+  "commit_note_version",
+  "restore_note_version",
   "save_template",
   "delete_template",
   "create_from_template",

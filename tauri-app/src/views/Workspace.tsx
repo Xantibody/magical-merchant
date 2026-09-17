@@ -16,6 +16,7 @@ import { useNavigate, useSearchParams } from "@solidjs/router";
 import type { Editor } from "@milkdown/kit/core";
 import Icon from "../components/Icon";
 import MarkdownPreview from "../components/MarkdownPreview";
+import CommitPopover from "../components/CommitPopover";
 import NoteMenu from "../components/NoteMenu";
 import NoteMetaPopover from "../components/NoteMetaPopover";
 import TemplatePicker from "../components/TemplatePicker";
@@ -62,6 +63,8 @@ const MilkdownEditor = lazy(() => import("../components/MilkdownEditor"));
 const MarkdownToolbar = lazy(() => import("../components/MarkdownToolbar"));
 // markmap-view は d3 を連れてくる。マインドマップにしたノートを開くまで読まない
 const MindmapView = lazy(() => import("../components/MindmapView"));
+// 版の一覧と差分。Codex の「履歴」を押すまで読まない
+const VersionHistory = lazy(() => import("../components/VersionHistory"));
 
 const UNDO_MS = 5000;
 const SAVE_DEBOUNCE_MS = 1000;
@@ -152,6 +155,8 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   /** 本文先頭の H1。タイトル欄が編集し、保存のたびに本文へ書き戻す。 */
   const [noteTitle, setNoteTitle] = createSignal("");
   const [noteView, setNoteView] = createSignal<NoteView>("editor");
+  /** 本文の場所に履歴(版の一覧と差分)を出しているか。Codex だけ。 */
+  const [historyOpen, setHistoryOpen] = createSignal(false);
   /** 本文の読み込みが済んでいるノートの id。`?edit=1` の自動フォーカスが待つ。 */
   const [loadedId, setLoadedId] = createSignal<string | null>(null);
   /**
@@ -294,6 +299,13 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     (filename) => typedInvoke("find_backlinks", { filename }),
   );
 
+  // 版の数と「最新の版から変わったか」。開いている 1 本ぶんだけ読む —
+  // 一覧に乗せると全 Codex の最新の版を読むことになる
+  const [versionStatus, { refetch: refetchVersionStatus }] = createResource(
+    () => (kind() === "codex" ? selected()?.filename : undefined),
+    (filename) => typedInvoke("note_version_status", { filename }),
+  );
+
   /**
    * 画面に出ている本文をまるごと入れ替える。エディタは自分の文書を正とするので、
    * ここを通ったら作り直す(`bodyEpoch`)。バラして流すと一瞬だけ違うモードで
@@ -353,6 +365,8 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       // 別のノートに移ったら編集セッションは畳む。戻る先が前のノートの
       // 本文のままだと、次の保存が他人のバックアップを潰す
       sessionFile = null;
+      // 履歴は開いていたノートの持ち物
+      setHistoryOpen(false);
       if (!item) {
         showBody("", "", "", "editor");
         return;
@@ -514,6 +528,10 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
         listStale = true;
         if (shown()) {
           markSaved();
+          // 「変更あり」は最新の版と下書きの比較。書くたびに答えが変わる
+          if (kind() === "codex") {
+            void refetchVersionStatus();
+          }
         }
       } catch (error) {
         if (shown()) {
@@ -745,6 +763,83 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     shell.showToast(t().notes.reverted);
   };
 
+  /**
+   * 「版を刻む…」の入口。待っている保存を出しきってから一言を聞く —
+   * 刻むのはディスクにある本文で、画面にしかない打鍵は含まれない。
+   */
+  const openCommit = async (): Promise<void> => {
+    if (kind() !== "codex" || !loaded()) {
+      return;
+    }
+    await settleEdit();
+    shell.togglePopover("commit-version");
+  };
+
+  /**
+   * いまの下書きを版として刻む。ここが唯一の入口で、自動では刻まない。
+   * 保存・離脱・昇格のどれにも掛けない — 版は人が「ここまで」と言った印。
+   */
+  const commitVersion = async (item: NoteItem, message: string | null): Promise<void> => {
+    shell.closePopovers();
+    try {
+      await typedInvoke("commit_note_version", { filename: item.filename, message });
+    } catch {
+      return;
+    }
+    void refetchVersionStatus();
+    shell.showToast(t().codex.committed);
+  };
+
+  const toggleHistory = (): void => {
+    shell.closePopovers();
+    setHistoryOpen((open) => !open);
+  };
+
+  /**
+   * 版の本文を下書きにする。core が先に「戻す前」を刻むので、戻したことも
+   * 履歴から戻せる。書き込みは `update_draft` と同じ照合を通るので、
+   * 読んでから外で書き換えられていれば同じ経路で譲る。
+   */
+  const restoreVersion = async (item: NoteItem, id: string): Promise<void> => {
+    if (!loaded() || readOnly()) {
+      return;
+    }
+    // 待っている保存は捨てる。戻すのはディスクの本文で、画面の打鍵は
+    // 「戻す前」の版には入らないが、履歴を開いた時点で settleEdit 済み
+    if (saveTimer) {
+      clearTimeout(saveTimer);
+      saveTimer = undefined;
+    }
+    try {
+      const revision = await typedInvoke("restore_note_version", {
+        filename: item.filename,
+        id,
+        client: await getDeviceSignals(),
+        revision: revisions.get(item.filename) ?? null,
+      });
+      revisions.set(item.filename, revision);
+    } catch (error) {
+      if (isStaleSave(error)) {
+        await yieldToOutsideEdit({
+          item,
+          body: fullBody(),
+          session,
+          generation: saveGeneration,
+        });
+      } else {
+        shell.showToast(t().codex.restoreFailed);
+      }
+      return;
+    }
+    // 戻した本文はディスクにある。読み直せば画面もそれになる
+    sessionFile = null;
+    setHistoryOpen(false);
+    await loadNote(item, true);
+    await refetchNotes();
+    void refetchVersionStatus();
+    shell.showToast(t().codex.restored);
+  };
+
   // タイムラインからの昇格 (?edit=1) は、本文が届き次第そのまま書ける形で渡す。
   // パラメータは消費したら消す — 再読み込みのたびにカーソルを奪わない
   createEffect(() => {
@@ -822,6 +917,9 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       } else if (matchesShortcut(e, "noteInfo")) {
         e.preventDefault();
         shell.togglePopover("note-meta");
+      } else if (matchesShortcut(e, "codexCommit")) {
+        e.preventDefault();
+        void openCommit();
       }
     };
     globalThis.addEventListener("keydown", onKeyDown);
@@ -1118,6 +1216,19 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                     ウィジェットが指す ID であって、人に見せるものではない */}
                 <div class="detail-meta-line">
                   <span>{noteCreatedLabel(item())}</span>
+                  {/* Codex は版の数を常に出す。下書きが最新の版から離れたら「変更あり」 */}
+                  <Show when={kind() === "codex" && versionStatus()}>
+                    {(status) => (
+                      <>
+                        <span class="detail-meta-sep" aria-hidden="true">
+                          ·
+                        </span>
+                        <span class="detail-version-status">
+                          {t().codex.status(status().count, status().dirty)}
+                        </span>
+                      </>
+                    )}
+                  </Show>
                   <Show when={saveStatus() !== "idle"}>
                     <span class="detail-meta-sep" aria-hidden="true">
                       ·
@@ -1165,12 +1276,25 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                     onPromote={() => {
                       void promoteToCodex(item());
                     }}
+                    onCommit={() => {
+                      void openCommit();
+                    }}
+                    onHistory={toggleHistory}
                     onDelete={() => {
                       void remove(item());
                     }}
                   />
                 </Show>
               </div>
+
+              <Show when={shell.popover() === "commit-version"}>
+                <CommitPopover
+                  onCommit={(message) => {
+                    void commitVersion(item(), message);
+                  }}
+                  onClose={() => shell.closePopovers()}
+                />
+              </Show>
 
               <Show when={shell.popover() === "note-meta"}>
                 <NoteMetaPopover
@@ -1186,53 +1310,71 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                 />
               </Show>
 
-              <div class="detail-panes" classList={{ "detail-panes--map": mapOpen() }}>
+              <div
+                class="detail-panes"
+                classList={{ "detail-panes--map": mapOpen() && !historyOpen() }}
+              >
                 {/* biome-ignore/eslint 対応: ここで拾うのは href の無い
                     ノートリンクだけ。書く操作はエディタ自身が受ける */}
                 <div
                   class="detail-body"
-                  data-view={noteView()}
+                  data-view={historyOpen() ? "history" : noteView()}
                   ref={detailBodyRef}
                   role="presentation"
                   onClick={onBodyClick}
                 >
-                  <Show
-                    when={!readOnly()}
-                    fallback={
-                      <>
-                        <MarkdownPreview
-                          source={noteBody()}
-                          noteTitles={noteTitles()}
-                          glyphs={glyphs()}
-                          exportStem={item().filename.replace(/\.md$/u, "")}
-                          onError={(message) => shell.showToast(message)}
-                        />
-                        <Backlinks hits={backlinks() ?? []} onOpen={openBacklink} />
-                      </>
-                    }
-                  >
-                    {/* エディタは自分の文書を正とするので、本文が入れ替わったら
+                  {/* 履歴は本文の場所に置き換わる。エディタは畳む — 開いたまま
+                      下に残すと、戻した本文と古い文書が同時に在ることになる */}
+                  <Show when={historyOpen()}>
+                    <VersionHistory
+                      filename={item().filename}
+                      dirty={versionStatus()?.dirty ?? false}
+                      readOnly={readOnly()}
+                      onRestore={(id) => {
+                        void restoreVersion(item(), id);
+                      }}
+                      onClose={() => setHistoryOpen(false)}
+                    />
+                  </Show>
+                  <Show when={!historyOpen()}>
+                    <Show
+                      when={!readOnly()}
+                      fallback={
+                        <>
+                          <MarkdownPreview
+                            source={noteBody()}
+                            noteTitles={noteTitles()}
+                            glyphs={glyphs()}
+                            exportStem={item().filename.replace(/\.md$/u, "")}
+                            onError={(message) => shell.showToast(message)}
+                          />
+                          <Backlinks hits={backlinks() ?? []} onOpen={openBacklink} />
+                        </>
+                      }
+                    >
+                      {/* エディタは自分の文書を正とするので、本文が入れ替わったら
                         作り直す。差し込みはカーソルと IME ごと壊す。
                         本文が届くまでは立てない — 前のノートの本文で立てた
                         エディタに打った字は、隣のノートへ書かれる */}
-                    <Show when={bodyVisible() && loaded() && bodyEpoch()} keyed>
-                      <MilkdownEditor
-                        placeholder={t().notes.bodyPlaceholder}
-                        noteLinks={linkTargets}
-                        glyphs={glyphs}
-                        defaultValue={noteBody()}
-                        onChange={(markdown) => {
-                          if (!loaded()) {
-                            return;
-                          }
-                          ensureSession();
-                          setNoteBody(markdown);
-                          scheduleSave();
-                        }}
-                        onEditorReady={setMarkdownEditor}
-                      />
+                      <Show when={bodyVisible() && loaded() && bodyEpoch()} keyed>
+                        <MilkdownEditor
+                          placeholder={t().notes.bodyPlaceholder}
+                          noteLinks={linkTargets}
+                          glyphs={glyphs}
+                          defaultValue={noteBody()}
+                          onChange={(markdown) => {
+                            if (!loaded()) {
+                              return;
+                            }
+                            ensureSession();
+                            setNoteBody(markdown);
+                            scheduleSave();
+                          }}
+                          onEditorReady={setMarkdownEditor}
+                        />
+                      </Show>
+                      <Backlinks hits={backlinks() ?? []} onOpen={openBacklink} />
                     </Show>
-                    <Backlinks hits={backlinks() ?? []} onOpen={openBacklink} />
                   </Show>
                 </div>
 
@@ -1240,7 +1382,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                     並べる幅が無いので、そこだけ本文と入れ替わる(CSS 側) */}
                 {/* 本文が丸ごと入れ替わったとき(`bodyEpoch`)は待たずに描き直す。
                     待たせると前のノートの図が 1 拍残る */}
-                <Show when={mapOpen() && bodyEpoch()} keyed>
+                <Show when={mapOpen() && !historyOpen() && bodyEpoch()} keyed>
                   <NoteMap source={fullBody} />
                 </Show>
               </div>

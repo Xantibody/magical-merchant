@@ -18,6 +18,10 @@ interface NoteMenuProps {
   onRevert: () => void;
   onInfo: () => void;
   onPromote: () => void;
+  /** Codex だけ。いまの下書きを版として刻む。 */
+  onCommit: () => void;
+  /** Codex だけ。版の一覧と差分を本文の場所に出す。 */
+  onHistory: () => void;
   onDelete: () => void;
 }
 
@@ -92,8 +96,22 @@ export default function NoteMenu(props: NoteMenuProps): JSX.Element {
             onClick={() => setConfirming(true)}
           />
         </Show>
+        <Show when={props.kind === "codex"}>
+          <Row
+            icon={<Icon name="book-bookmark" size={15} />}
+            label={t().codex.commit}
+            shortcut="codexCommit"
+            onClick={() => props.onCommit()}
+          />
+          <Row
+            icon={<Icon name="clock-counter-clockwise" size={15} />}
+            label={t().codex.history}
+            onClick={() => props.onHistory()}
+          />
+        </Show>
+        {/* 時計の矢印は履歴に譲った。こちらは 1 段だけ巻き戻す矢印 */}
         <Row
-          icon={<Icon name="clock-counter-clockwise" size={15} />}
+          icon={<Icon name="arrow-counter-clockwise" size={15} />}
           label={t().notes.revert}
           shortcut="noteRevert"
           disabled={!props.revertable}
