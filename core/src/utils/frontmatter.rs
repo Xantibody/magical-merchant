@@ -119,6 +119,15 @@ pub fn strip(content: &str) -> &str {
     }
 }
 
+/// 区切りが 1 つも無いか。`parse` が失敗したとき、「記録が壊れている」のか
+/// 「そもそも記録が無い」のかを分けるためにある — 前者を作り直すと元の記録が
+/// 消えるが、後者には消えるものが無い。
+// AIDEV-NOTE: 「閉じた区切りがあるか」ではなく作り直してよい側を聞く。否定形だと Unclosed が許可側に落ちた
+#[must_use]
+pub fn is_plain_markdown(content: &str) -> bool {
+    matches!(split(content), Split::None { .. })
+}
+
 enum Split<'a> {
     /// 区切りの内側と、閉じ区切りの次の行からの本文。
     Some { matter: &'a str, body: &'a str },

@@ -428,14 +428,14 @@ of the body; pass it to `update_note` and the write is refused if the note
 changed in between (in the app, from the CLI) instead of overwriting that
 edit:
 
-| Tool                | Description                                                          |
-| ------------------- | -------------------------------------------------------------------- |
-| `create_note`       | Create a note from a Markdown body (first line `# Title`)            |
-| `update_note`       | Replace a note's body, optionally only if its `revision` still holds |
-| `list_note_history` | List the saved copies of a note, newest first                        |
-| `read_note_history` | Read the body of one saved copy                                      |
-| `restore_note`      | Bring a note back to a saved copy (the current version is saved too) |
-| `save_glyph`        | Register or replace a glyph image (png/svg, base64, up to 256 KiB)   |
+| Tool                | Description                                                                                                         |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `create_note`       | Create a note from a Markdown body (first line `# Title`)                                                           |
+| `update_note`       | Replace a note's body, optionally only if its `revision` still holds                                                |
+| `list_note_history` | List the saved copies of a note, newest first                                                                       |
+| `read_note_history` | Read one saved copy, with the note's current `revision`                                                             |
+| `restore_note`      | Bring a note back to a saved copy, optionally only if its `revision` still holds (the current version is saved too) |
+| `save_glyph`        | Register or replace a glyph image (png/svg, base64, up to 256 KiB)                                                  |
 
 | Flag / variable                                  | Description                                                         |
 | ------------------------------------------------ | ------------------------------------------------------------------- |

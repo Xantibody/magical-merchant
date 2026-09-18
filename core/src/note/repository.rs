@@ -221,7 +221,22 @@ impl Notes {
     ///   空で上書きすると過去のノートから分類が消える
     /// - context: どの端末で書いたかの記録。編集端末で上書きしない
     ///
-    /// frontmatter が読めないファイルだけ、今この場の時刻と端末で作り直す。
+    /// frontmatter が読めないファイルは断る([`CoreError::Parse`])。今この場の
+    /// 時刻と端末で作り直すと、`time` / `tags` / `origin` / `view` / `template` /
+    /// `source` が 1 文字の編集で消え、ファイル名(= 作成時刻)とも食い違う。
+    /// 記録をでっち上げて書くくらいなら断る — `edit_frontmatter` と同じ判断。
+    /// 区切りが 1 つも無いファイルだけは、消える記録が無いので今までどおり書く。
+    /// 開いた区切りが閉じていないファイルは「記録が無い」ではなく「壊れている」:
+    /// `---` の下の行は記録のつもりで書かれていて、本文で上書きすれば消える。
+    ///
+    /// 文字として読めないファイルも断る([`CoreError::NotText`])。中身を
+    /// 読めていないので、`expected` の照合も frontmatter の引き継ぎもできず、
+    /// 書けば読めなかったバイト列ごと本文で上書きすることになる。
+    ///
+    /// 無いファイルには書かない([`CoreError::NotFound`])。ここは既にある
+    /// ノートの本文を差し替える経路で、作る経路は `create` 系にしかない。
+    /// 書けてしまうと、消したノートや Codex へ移したノートが、開いたままの
+    /// 画面からの遅れた保存で古い置き場に生き返る。
     ///
     /// 唯一ここが書き足すのが `updated`。本文を書き直したのはこの経路だけで、
     /// メタデータや表示モードの差し替えは「書き直し」ではない。
@@ -234,7 +249,14 @@ impl Notes {
         context: &Context,
         expected: Option<&Revision>,
     ) -> Result<Revision, CoreError> {
-        let existing = fs::read_to_string(path).unwrap_or_default();
+        let existing = fs::read_to_string(path).map_err(|e| match e.kind() {
+            io::ErrorKind::NotFound => CoreError::NotFound(path.display().to_string()),
+            // 文字として読めないファイルは、書き直しても読み直しても同じ理由で
+            // 断られる。`Io` に混ぜると呼ぶ側には一時的な不調と区別が付かず、
+            // 諦めた保存が「あとで通る」ものとして扱われる
+            io::ErrorKind::InvalidData => CoreError::NotText(path.display().to_string()),
+            _ => CoreError::Io(e),
+        })?;
         if let Some(expected) = expected {
             let current = Revision::of(frontmatter::strip(&existing));
             if current != *expected {
@@ -246,16 +268,20 @@ impl Notes {
             }
         }
         let now = Local::now();
-        let fm = frontmatter::parse::<NoteFrontmatter>(&existing).map_or_else(
-            |_| NoteFrontmatter {
-                context: Some(context.clone()),
-                ..NoteFrontmatter::new(now.into())
-            },
-            |(fm, _)| NoteFrontmatter {
+        let fm = match frontmatter::parse::<NoteFrontmatter>(&existing) {
+            Ok((fm, _)) => NoteFrontmatter {
                 updated: Some(now.into()),
                 ..fm
             },
-        );
+            // 記録が無いファイル(外から置かれた素の Markdown)には書いてよい。
+            // 区切りが 1 つも無いものだけがここに来る — 閉じていない区切りは
+            // 「壊れた記録」で、下の行ごと作り直すと消える
+            Err(_) if frontmatter::is_plain_markdown(&existing) => NoteFrontmatter {
+                context: Some(context.clone()),
+                ..NoteFrontmatter::new(now.into())
+            },
+            Err(e) => return Err(e),
+        };
 
         let markdown = frontmatter::render(&fm, body)?;
         write_atomic(path, markdown)?;

@@ -457,6 +457,99 @@ mod tests {
         assert_eq!(read_note(&path).unwrap(), "again");
     }
 
+    /// frontmatter が読めないノートには本文を書き戻さない。今の時刻と
+    /// 今の端末でっち上げて書くと、作成時刻・タグ・出自・表示モードが
+    /// 1 文字の編集で消え、ファイル名と `time` も食い違う。
+    /// メタデータ編集(`update_note_meta`)が断るのと同じ理由。
+    #[test]
+    fn update_note_refuses_a_note_whose_frontmatter_cannot_be_read() {
+        let tmp = TempDir::new().unwrap();
+        let notes_dir = tmp.path().join("data/notes");
+        fs::create_dir_all(&notes_dir).unwrap();
+        let broken = "---\ntime: [broken\ntags: [仕事]\n---\n本文";
+        let path = notes_dir.join("20260101_120000.md");
+        fs::write(&path, broken).unwrap();
+
+        let result = update_note(&path, "書き足した", &mock_context(), None);
+
+        assert!(matches!(result, Err(CoreError::Parse(_))));
+        assert_eq!(fs::read_to_string(&path).unwrap(), broken);
+    }
+
+    /// 閉じ区切りが無いファイルも「記録が壊れている」側。`---` の下の行は
+    /// 記録のつもりで書かれたもので、素の Markdown として作り直せば丸ごと
+    /// 消える。書き込みが途中で切れた・同期が半分だけ配ったファイルがこの姿に
+    /// なるので、ここを素通しにすると `parse` の拒否も画面の退避も効かない。
+    #[test]
+    fn update_note_refuses_a_note_whose_frontmatter_delimiter_is_unclosed() {
+        let tmp = TempDir::new().unwrap();
+        let notes_dir = tmp.path().join("data/notes");
+        fs::create_dir_all(&notes_dir).unwrap();
+        let truncated = "---\ntime: 2026-01-01T12:00:00+09:00\ntags:\n  - 仕事\n";
+        let path = notes_dir.join("20260101_120000.md");
+        fs::write(&path, truncated).unwrap();
+
+        let result = update_note(&path, "書き足した", &mock_context(), None);
+
+        assert!(matches!(result, Err(CoreError::Parse(_))));
+        assert_eq!(fs::read_to_string(&path).unwrap(), truncated);
+    }
+
+    /// 文字として読めないファイル(不正な UTF-8)。同期や外の道具が、開いて
+    /// いるノートを壊れたバイト列や別形式のファイルで置き換えると、この姿に
+    /// なる。`Io` のまま返すと、呼ぶ側には「ディスクが一時的に不調」と
+    /// 区別が付かず、読み直しでは直らない拒否が「あとで再試行すればよい」に
+    /// 見える。名前の付いた拒否として返し、打った字を退避させる。
+    #[test]
+    fn update_note_refuses_a_note_whose_bytes_are_not_text() {
+        let tmp = TempDir::new().unwrap();
+        let notes_dir = tmp.path().join("data/notes");
+        fs::create_dir_all(&notes_dir).unwrap();
+        let garbled: &[u8] = b"---\ntime: 2026-01-01T12:00:00+09:00\n---\n\xff\xfe";
+        let path = notes_dir.join("20260101_120000.md");
+        fs::write(&path, garbled).unwrap();
+
+        let result = update_note(&path, "書き足した", &mock_context(), None);
+
+        assert!(
+            matches!(result, Err(CoreError::NotText(ref name)) if name.contains("20260101_120000.md"))
+        );
+        assert_eq!(fs::read(&path).unwrap(), garbled);
+    }
+
+    /// 区切りが 1 つも無いファイル(外から置かれた素の Markdown)は今までどおり
+    /// 記録を付けて書く。壊れた記録と違って、作り直しても消えるものが無い。
+    #[test]
+    fn update_note_gives_a_plain_markdown_file_its_first_frontmatter() {
+        let tmp = TempDir::new().unwrap();
+        let notes_dir = tmp.path().join("data/notes");
+        fs::create_dir_all(&notes_dir).unwrap();
+        let path = notes_dir.join("20260101_120000.md");
+        fs::write(&path, "よそで書いた本文").unwrap();
+
+        update_note(&path, "書き足した", &mock_context(), None).unwrap();
+
+        let filename = NoteFilename::parse("20260101_120000.md").unwrap();
+        let meta = read_note_meta(tmp.path(), &filename).unwrap();
+        assert_eq!(meta.context.unwrap().battery, Some(50));
+        assert_eq!(read_note(&path).unwrap(), "書き足した");
+    }
+
+    /// 消えたノートへの保存は、ノートを作り直す入口ではない。書き手が
+    /// 開いたままのタブから遅れて保存すると、消したノート・Codex に移した
+    /// ノートが古い置き場に本文だけの姿で生き返る。
+    #[test]
+    fn update_note_refuses_a_file_that_is_not_there_and_creates_nothing() {
+        let tmp = TempDir::new().unwrap();
+        let path = draft(&tmp, "original", &[]).unwrap();
+        delete_note(tmp.path(), &filename_of(&path)).unwrap();
+
+        let result = update_note(&path, "back from the dead", &mock_context(), None);
+
+        assert!(matches!(result, Err(CoreError::NotFound(_))));
+        assert!(!path.exists());
+    }
+
     /// 指紋は本文だけから取る。編集中に表示モードを切り替えても、
     /// 自分の保存が「古い」ことにはならない。
     #[test]

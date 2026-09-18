@@ -21,6 +21,14 @@ pub enum CoreError {
     #[error("Stale: {0} changed since it was read")]
     Stale(String),
 
+    /// ファイルの中身が文字として読めない(不正な UTF-8)。同期や外の道具が
+    /// 置いていったバイト列で、書き直しても読み直しても直らない。
+    /// [`Self::Io`] と分けるのは、あとで再試行すれば通る失敗ではないから —
+    /// 呼ぶ側は拒否として扱い、打った字を退避させる。
+    /// [`Self::Parse`](記録が読めない)とも分ける: 直す手当てが違う。
+    #[error("Not text: {0} is not valid UTF-8")]
+    NotText(String),
+
     /// 版を持てるのは Codex だけ。普通のノートに刻もうとした。
     #[error("Not a Codex: {0}")]
     NotCodex(String),

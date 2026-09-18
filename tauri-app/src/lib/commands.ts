@@ -48,19 +48,55 @@ interface NoteRead {
   revision: string;
 }
 
-/** `update_draft` の失敗。`stale` は「読んでから誰かが書き換えた」。 */
+/**
+ * `update_draft` の失敗。`stale` は「読んでから誰かが書き換えた」、
+ * `broken` は「ノート先頭の記録が読めないので core が断った」、
+ * `missing` は「ノートがもう無いので core が断った」、
+ * `notText` は「ファイルの中身が文字として読めないので core が断った」。
+ */
 interface SaveError {
-  kind: "stale" | "other";
+  kind: "stale" | "broken" | "missing" | "notText" | "other";
   message: string;
 }
 
+function saveErrorKind(error: unknown): string | undefined {
+  return typeof error === "object" && error !== null && "kind" in error
+    ? (error as SaveError).kind
+    : undefined;
+}
+
 export function isStaleSave(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "kind" in error &&
-    (error as SaveError).kind === "stale"
-  );
+  return saveErrorKind(error) === "stale";
+}
+
+/**
+ * 記録が壊れていて書けないノート。Stale と違って読み直しても直らないので、
+ * 呼ぶ側は打った字を退避して人に知らせる。
+ */
+export function isBrokenNoteSave(error: unknown): boolean {
+  return saveErrorKind(error) === "broken";
+}
+
+/**
+ * 保存しようとした先のノートがもう無い。開いたあとに消された、あるいは
+ * Codex へ移った。core はここでノートを作り直さないので、`broken` と同じく
+ * 読み直しても直らない — 呼ぶ側は打った字を退避して人に知らせる。
+ */
+export function isMissingNoteSave(error: unknown): boolean {
+  return saveErrorKind(error) === "missing";
+}
+
+/**
+ * 保存しようとした先のファイルが文字として読めない(不正な UTF-8)。同期や
+ * 外の道具が置いていったバイト列で、`broken` と同じく読み直しても直らない —
+ * 呼ぶ側は打った字を退避して人に知らせる。
+ *
+ * `broken` と分けるのは伝わる意味が違うから。壊れているのは先頭の記録では
+ * なくファイルそのもので、`read_note` も同じ理由で断られる。つまり開き直して
+ * 「戻す」で控えを画面に出す道が無い — そこまで案内すると嘘になる。
+ */
+export function isNotTextNoteSave(error: unknown): boolean {
+  return saveErrorKind(error) === "notText";
 }
 
 /** テンプレ一覧の 1 件。 */
@@ -191,7 +227,7 @@ interface CommandMap {
    * 返るのは書いた本文の revision。
    */
   update_draft: {
-    args: { filePath: string; body: string; revision?: string | null } & ClientArgs;
+    args: { filename: string; body: string; revision?: string | null } & ClientArgs;
     result: string;
   };
   list_notes: { args: void; result: Note[] };

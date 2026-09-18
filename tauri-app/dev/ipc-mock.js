@@ -161,7 +161,7 @@ const charCount = (text) => [...text].length;
  * `update_draft` の失敗。本物は Rust 側の JSON がそのまま届くので `kind` を持つ
  * ただのオブジェクトだが、Error に同じキーを生やしても `isStaleSave` の見る形は
  * 変わらない(`typeof` が object で `kind` を持つ)。
- * @param {"stale" | "other"} kind
+ * @param {"stale" | "broken" | "missing" | "notText" | "other"} kind
  * @param {string} message
  */
 const saveError = (kind, message) => Object.assign(new Error(message), { kind });
@@ -982,12 +982,12 @@ const unifiedDiff = (from, to, fromName, toName) => {
       );
       return null;
     },
-    /** @param {{ filePath: string, body: string, revision?: string | null }} args */
-    update_draft: ({ filePath, body, revision }) => {
-      const filename = filePath.split("/").at(-1) ?? filePath;
+    /** @param {{ filename: string, body: string, revision?: string | null }} args */
+    update_draft: ({ filename, body, revision }) => {
       const note = notes.get(filename);
       if (!note) {
-        throw saveError("other", `note not found: ${filename}`);
+        // core はノートを作り直さない。消えたノートへの保存は探す段で断られる
+        throw saveError("missing", `Not found: ${filename}`);
       }
       // core と同じ照合。読んでから誰かが書き換えていれば、その上に書かない
       const expected = revision ?? null;

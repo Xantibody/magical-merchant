@@ -23,6 +23,7 @@ use serde::Serialize;
 
 use crate::error::CoreError;
 use crate::note::repository::Notes;
+use crate::note::revision::Revision;
 use crate::utils::fs::{ensure_dir, list_md_files, write_atomic};
 use crate::utils::paths::{history_dir, notes_dir};
 use crate::utils::validated::NoteFilename;
@@ -182,12 +183,29 @@ pub fn read_note_history(
 
 /// 控えの中身をノートに書き戻す。戻す前にいまの全文も控えに取るので、
 /// 戻したこと自体も戻せる。
+///
+/// `expected` は読んだときの本文の指紋。復元も本文を丸ごと差し替える書き込み
+/// なので、[`crate::update_note`] と同じ照合を通す — 履歴を読んでから戻すまでの
+/// あいだにアプリで打った字が、断りなく消えないように。`None` は読まずに戻す
+/// 呼び出し(消したノートを控えから戻す)のために残してある。
 pub fn restore_note(
     base_dir: &Path,
     filename: &NoteFilename,
     id: &str,
+    expected: Option<&Revision>,
 ) -> Result<Option<Snapshot>, CoreError> {
     let content = read_note_history(base_dir, filename, id)?;
+    if let Some(expected) = expected {
+        // 読めないノート(消えている)も食い違いとして断る。指紋を持っている
+        // ということは、在ったものを読んだということ
+        let current = Notes::new(base_dir.to_path_buf())
+            .read(filename)
+            .ok()
+            .map(|body| Revision::of(&body));
+        if current.as_ref() != Some(expected) {
+            return Err(CoreError::Stale(filename.as_str().to_string()));
+        }
+    }
     let before = snapshot_note(base_dir, filename)?;
     // いまある場所へ戻す。Codex の控えを `notes/` に書くと、同じ ID の
     // 普通のノートが隣に生まれる。消えたノートの控えは `notes/` に戻る
@@ -220,7 +238,7 @@ mod tests {
 
         let snap = snapshot_note(tmp.path(), &filename).unwrap().unwrap();
         update_note(&codex_path, "after", &Context::default(), None).unwrap();
-        restore_note(tmp.path(), &filename, &snap.id).unwrap();
+        restore_note(tmp.path(), &filename, &snap.id, None).unwrap();
 
         assert_eq!(
             read_note_by_filename(tmp.path(), &filename).unwrap(),
@@ -267,7 +285,7 @@ mod tests {
         let snap = snapshot_note(tmp.path(), &filename).unwrap().unwrap();
         update_note(&path, "after", &Context::default(), None).unwrap();
 
-        let undo = restore_note(tmp.path(), &filename, &snap.id)
+        let undo = restore_note(tmp.path(), &filename, &snap.id, None)
             .unwrap()
             .unwrap();
 
@@ -278,6 +296,62 @@ mod tests {
         // 戻す直前の「after」も控えに残っている
         let content = read_note_history(tmp.path(), &filename, &undo.id).unwrap();
         assert!(content.ends_with("after"));
+    }
+
+    /// 履歴を読んでから戻すまでのあいだに、アプリで打った字は消させない。
+    /// MCP から見ると復元も「本文を丸ごと差し替える書き込み」で、`update_note` が
+    /// 断る状況をこちらだけ通すと、同じ書き手が同じノートを守りなしで潰せる。
+    #[test]
+    fn restoring_over_a_body_that_moved_since_it_was_read_is_refused() {
+        let tmp = TempDir::new().unwrap();
+        let (path, filename) = note(tmp.path(), "first");
+        let snap = snapshot_note(tmp.path(), &filename).unwrap().unwrap();
+        update_note(&path, "second", &Context::default(), None).unwrap();
+        // エージェントが読んだのはここ
+        let read = Revision::of("second");
+        // 読んだあとにアプリが打った
+        update_note(&path, "third", &Context::default(), None).unwrap();
+
+        let result = restore_note(tmp.path(), &filename, &snap.id, Some(&read));
+
+        assert!(matches!(result, Err(CoreError::Stale(ref name)) if name == filename.as_str()));
+        assert_eq!(
+            read_note_by_filename(tmp.path(), &filename).unwrap(),
+            "third"
+        );
+        assert_eq!(
+            list_note_history(tmp.path(), &filename).unwrap().len(),
+            1,
+            "断られた復元は控えを増やさない"
+        );
+    }
+
+    /// 読んだ指紋のまま戻すのは通る。返るのは戻す直前の控え。
+    #[test]
+    fn restoring_with_the_revision_it_read_goes_through() {
+        let tmp = TempDir::new().unwrap();
+        let (path, filename) = note(tmp.path(), "first");
+        let snap = snapshot_note(tmp.path(), &filename).unwrap().unwrap();
+        update_note(&path, "second", &Context::default(), None).unwrap();
+
+        let undo = restore_note(
+            tmp.path(),
+            &filename,
+            &snap.id,
+            Some(&Revision::of("second")),
+        )
+        .unwrap()
+        .unwrap();
+
+        assert_eq!(
+            read_note_by_filename(tmp.path(), &filename).unwrap(),
+            "first"
+        );
+        assert!(
+            read_note_history(tmp.path(), &filename, &undo.id)
+                .unwrap()
+                .ends_with("second")
+        );
     }
 
     /// 同じ秒に 2 回書き換えたとき、1 回目の控えが 2 回目に潰されない。
@@ -455,7 +529,7 @@ mod tests {
         let snap = snapshot_note(tmp.path(), &filename).unwrap().unwrap();
         update_note(&path, "after", &Context::default(), None).unwrap();
 
-        restore_note(tmp.path(), &filename, &snap.id).unwrap();
+        restore_note(tmp.path(), &filename, &snap.id, None).unwrap();
 
         let content = fs::read_to_string(&path).unwrap();
         let (fm, _) = frontmatter::parse::<NoteFrontmatter>(&content).unwrap();

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, onTestFinished, vi } from "vitest";
 import { render, screen, fireEvent, cleanup, waitFor, within } from "@solidjs/testing-library";
 import { mockIPC, mockWindows, clearMocks } from "@tauri-apps/api/mocks";
 import { page } from "vitest/browser";
@@ -61,6 +61,9 @@ vi.mock(import("../components/MindmapView"), () => ({
   },
 }));
 
+/** 自動保存の debounce。Workspace.tsx と揃える。 */
+const SAVE_DEBOUNCE_MS = 1000;
+
 const FILE_A = "20260903_120000.md";
 const FILE_B = "20260903_130000.md";
 const TITLE_A = "会議メモ";
@@ -89,6 +92,15 @@ let duringSave: (() => void) | undefined;
 /** update_draft を止めておく関門。書き込みが遅い端末を再現する。 */
 let writeGate: Promise<void> | undefined;
 let openWriteGate: (() => void) | undefined;
+/** 先頭の記録が読めないノート。core がこれに書き込みを断る。 */
+let brokenMeta: Set<string>;
+/**
+ * 中身が文字として読めないノート(不正な UTF-8)。同期や外の道具が置いていった
+ * バイト列で、core は読む段で断る — 書き込みも、そのあとの読み直しも。
+ */
+let notText: Set<string>;
+/** read_note を失敗させる。ディスクが一時的に読めない端末を再現する。 */
+let readFails: boolean;
 
 /** 本文の指紋。core と同じ「読んだ版で書く」照合をテストでも同じ形で行う。 */
 const revisionOf = (body: string): string => `rev:${body}`;
@@ -97,9 +109,7 @@ const countOf = (command: string): number => calls.filter((c) => c.cmd === comma
 
 /** そのノートへの書き込みだけを取り出す。隣のノートへ着地していないかを見る。 */
 const writesTo = (filename: string): Record<string, unknown>[] =>
-  calls
-    .filter((c) => c.cmd === "update_draft" && String(c.args.filePath).endsWith(filename))
-    .map((c) => c.args);
+  calls.filter((c) => c.cmd === "update_draft" && c.args.filename === filename).map((c) => c.args);
 
 /** 一覧の 1 行。時刻はファイル名(= ID)から導く。 */
 const summaryOf = (filename: string): Record<string, unknown> => ({
@@ -134,6 +144,10 @@ const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
   find_backlinks: () => [],
   read_note: async ({ filename }) => {
     await readGate;
+    // 文字として読めないファイルは読む段で断られる。開き直しても本文は載らない
+    if (readFails || notText.has(String(filename))) {
+      throw new Error(`could not read: ${String(filename)}`);
+    }
     const body = disk.get(String(filename));
     if (body === undefined) {
       throw new Error(`note not found: ${String(filename)}`);
@@ -149,19 +163,28 @@ const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
     disk.set(FILE_B, "");
     return `/data/notes/${FILE_B}`;
   },
-  update_draft: async ({ filePath, body, revision }) => {
+  update_draft: async ({ filename, body, revision }) => {
     duringSave?.();
     await writeGate;
-    const filename = String(filePath).split("/").at(-1) ?? "";
-    const current = disk.get(filename);
+    const name = String(filename);
+    const current = disk.get(name);
+    // core はノートを作り直さない。消えたノートへの保存は探す段で断られる
     if (current === undefined) {
-      throw saveError("other", `note not found: ${filename}`);
+      throw saveError("missing", `Not found: ${name}`);
+    }
+    // core は中身を読めないファイルには書かない。読み直しでも直らない
+    if (notText.has(name)) {
+      throw saveError("notText", `Not text: ${name} is not valid UTF-8`);
+    }
+    // core は記録をでっち上げて書くより断る。読み直しても直らない
+    if (brokenMeta.has(name)) {
+      throw saveError("broken", `Parse error: ${name}`);
     }
     // core と同じ照合。読んでから誰かが書き換えていれば、その上に書かない
     if (typeof revision === "string" && revision !== revisionOf(current)) {
-      throw saveError("stale", `Stale: ${filename} changed since it was read`);
+      throw saveError("stale", `Stale: ${name} changed since it was read`);
     }
-    disk.set(filename, String(body));
+    disk.set(name, String(body));
     return revisionOf(String(body));
   },
   delete_note: ({ filename }) => {
@@ -391,6 +414,9 @@ async function setupWorkspace(): Promise<void> {
   meta = new Map();
   kinds = new Map();
   versions = new Map();
+  brokenMeta = new Set();
+  notText = new Set();
+  readFails = false;
   calls = [];
   shell = undefined;
   navigateTo = undefined;
@@ -959,6 +985,399 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     expect(disk.get(FILE_A)).toBe("# 読み直したあとの題\n\n他の端末で足された行");
   });
 
+  // 読み直しが失敗しても、画面の本文は入れ替えない。空のエディタを立てると
+  // 「空のノート」に見え、次の打鍵が数文字だけの本文をディスクへ書きに行く
+  it("keeps the draft on screen when a refresh read fails mid-edit", async () => {
+    await openNoteA();
+
+    blockReads();
+    readFails = true;
+    shell?.refreshData();
+    await startEditingBody();
+    typeInEditor?.(`${TEXT_A}\n\n読めなかったあとの行`);
+    releaseReads();
+
+    await waitFor(() => expect(countOf("update_draft")).toBe(1), { timeout: 3000 });
+    // エディタは作り直されていない。作り直されると打っていた本文が空に戻る
+    expect(screen.getByText(TEXT_A)).toBeDefined();
+    // 指紋も読めた版のまま。読み直せなかったのだから進みようがない
+    expect(writesTo(FILE_A)[0]?.revision).toBe(revisionOf(BODY_A));
+    expect(disk.get(FILE_A)).toContain("読めなかったあとの行");
+  });
+
+  // 読めなかったノートには書かない。指紋を持たない保存は core の照合を
+  // 素通りするので、打った数文字がそのままファイル全体になる
+  it("writes nothing to a note whose body could not be read", async () => {
+    readFails = true;
+    renderWorkspace();
+    fireEvent.click(await rowOf(TITLE_A));
+    await waitFor(() => expect(countOf("read_note")).toBe(1));
+    // 読みが断られきるまで。ここで空のエディタが立つかどうかを見る
+    await sleep(50);
+
+    // 読めなかった本文をエディタに載せない。載せると「空のノート」に見える
+    expect(screen.queryByTestId("editor-body")).toBeNull();
+    typeInEditor?.("数文字");
+    await sleep(SAVE_DEBOUNCE_MS + 500);
+
+    expect(countOf("update_draft")).toBe(0);
+    expect(disk.get(FILE_A)).toBe(BODY_A);
+  });
+
+  // 記録が壊れたノートは core が書き込みごと断る。読み直しても直らないので、
+  // 打った字を退避しておかないと、打鍵のたびに黙って捨てられる
+  it("backs up the draft and says so when the note's frontmatter cannot be read", async () => {
+    brokenMeta.add(FILE_A);
+    await openNoteA();
+    await startEditingBody();
+    typeInEditor?.(`${TEXT_A}\n\n壊れたノートに足した行`);
+
+    await waitFor(() => expect(countOf("update_draft")).toBe(1), { timeout: 3000 });
+    await waitFor(() => expect(shell?.toast()?.message).toMatch(/保存できません/u));
+    expect(localStorage.getItem(`note-backup:${FILE_A}`)).toContain("壊れたノートに足した行");
+    // 断られた書き込みは何も変えない
+    expect(disk.get(FILE_A)).toBe(BODY_A);
+  });
+
+  // 断られたときに退避するのも、Stale と同じく「飛んでいった写し」ではなく
+  // いま画面にある本文。往復のあいだに打った字はファイルにも控えにも無く、
+  // 警告を見てそのまま閉じられたらそこで消える
+  it("backs up the draft as it stands when the save is refused as broken", async () => {
+    brokenMeta.add(FILE_A);
+    await openNoteA();
+    await startEditingBody();
+    typeInEditor?.(`${TEXT_A}\n\n一回目`);
+    duringSave = () => {
+      duringSave = undefined;
+      typeInEditor?.(`${TEXT_A}\n\n二回目`);
+    };
+
+    await waitFor(() => expect(shell?.toast()?.message).toMatch(/保存できません/u), {
+      timeout: 3000,
+    });
+    // 次の debounce が届く前に見る。ここが「一回目」なら、閉じた人は二回目を失う
+    expect(countOf("update_draft")).toBe(1);
+    expect(localStorage.getItem(`note-backup:${FILE_A}`)).toContain("二回目");
+  });
+
+  // 「いま画面にある本文」が打った本人のものだとは限らない。往復のあいだに
+  // A → B → A と移ると、選んでいるノートは A に戻っていても、画面の本文は
+  // まだ B のまま(A の読み直しが届いていない)。そこで画面のぶんを退避すると、
+  // A の控えが B の本文になり、断られた打鍵はどこにも残らない
+  it("keeps the refused note's own draft when the selection went away and back", async () => {
+    disk.set(FILE_B, BODY_B);
+    brokenMeta.add(FILE_A);
+    await openNoteA();
+    await startEditingBody();
+    typeInEditor?.(`${TEXT_A}\n\n一回目`);
+
+    // 保存が飛んだところで止める。予約はもう消えているので、この先の選択の
+    // 差し替えは飛んでいる保存を待ってくれない
+    blockWrites();
+    await waitFor(() => expect(countOf("update_draft")).toBe(1), { timeout: 3000 });
+
+    fireEvent.click(await rowOf(TITLE_B));
+    await waitFor(() => expect(titleInput().value).toBe(TITLE_B));
+    // A へ戻るが、本文は届かない。選択だけが A で、画面にあるのは B の本文
+    blockReads();
+    fireEvent.click(await rowOf(TITLE_A));
+    await waitFor(() => expect(screen.getByText("牛乳")).toBeDefined());
+
+    releaseWrites();
+    await waitFor(() => expect(shell?.toast()?.message).toMatch(/保存できません/u), {
+      timeout: 3000,
+    });
+    const backup = localStorage.getItem(`note-backup:${FILE_A}`);
+    expect(backup).toContain("一回目");
+    expect(backup).not.toContain("牛乳");
+    // 画面に出ているのは A の打鍵ではない。名乗って控えの在り処を言う
+    expect(shell?.toast()?.message).toContain(TITLE_A);
+  });
+
+  // 開いてから消えたノート。core は「作り直す入口ではない」と断るので、
+  // 壊れた記録と同じく読み直しても直らない。退避しないと、離れた時点で
+  // 打った字がどこにも残らないまま消える
+  it("backs up the draft and says so when the note is already gone", async () => {
+    await openNoteA();
+    await startEditingBody();
+    // 打鍵から保存が飛ぶまでのあいだに、別の画面・別の端末がこれを消す
+    duringSave = () => disk.delete(FILE_A);
+    typeInEditor?.(`${TEXT_A}\n\n消えたノートに足した行`);
+
+    await waitFor(() => expect(countOf("update_draft")).toBe(1), { timeout: 3000 });
+    await waitFor(() => expect(shell?.toast()?.message).toMatch(/もう在りません/u));
+    expect(localStorage.getItem(`note-backup:${FILE_A}`)).toContain("消えたノートに足した行");
+    // 無いノートは一覧を取り直せば行ごと消える。開き直して「戻す」で呼び出す
+    // 道も無いので、呼び出せるとは言わない — 言えば人はそれを信じて閉じる
+    expect(shell?.toast()?.message).not.toMatch(/戻す/u);
+    expect(shell?.toast()?.message).toMatch(/写して/u);
+  });
+
+  // 開いているノートが、同期や外の道具に文字として読めないバイト列で
+  // 置き換えられた。core は読む段で書き込みを断るが、それを一時的な失敗と
+  // して黙って捨てると、打った字はディスクにも控えにも残らず、警告も出ない
+  // ままそのノートを閉じられる
+  it("backs up the draft and says so when the note is no longer text", async () => {
+    await openNoteA();
+    await startEditingBody();
+    // 打鍵から保存が飛ぶまでのあいだに、同期が読めないバイト列を置いていく
+    duringSave = () => notText.add(FILE_A);
+    typeInEditor?.(`${TEXT_A}\n\n読めなくなったノートに足した行`);
+
+    await waitFor(() => expect(countOf("update_draft")).toBe(1), { timeout: 3000 });
+    await waitFor(() => expect(shell?.toast()?.message).toMatch(/文字として読めない/u));
+    expect(localStorage.getItem(`note-backup:${FILE_A}`)).toContain(
+      "読めなくなったノートに足した行",
+    );
+    // 開き直しても本文が読めないので、「戻す」で取り出せるとは言わない
+    expect(shell?.toast()?.message).not.toMatch(/戻す/u);
+    expect(shell?.toast()?.message).toMatch(/写して/u);
+    // 断られた書き込みは何も変えない
+    expect(disk.get(FILE_A)).toBe(BODY_A);
+  });
+
+  // 「画面にあるうちに写して」が届くのは、断られたノートが画面に出ている
+  // ときだけ。往復のあいだに隣へ移っていると、画面にあるのは別のノートの
+  // 本文で、指した先には写すものが無い。名乗って、控えの在り処を言う
+  it("names the vanished note instead of pointing at the note now on screen", async () => {
+    disk.set(FILE_B, BODY_B);
+    await openNoteA();
+    await startEditingBody();
+    typeInEditor?.(`${TEXT_A}\n\n消えたノートに足した行`);
+
+    // 保存が飛んだところで止める。予約は消えているので、この先の選択の
+    // 差し替えは飛んでいる保存を待たない
+    blockWrites();
+    await waitFor(() => expect(countOf("update_draft")).toBe(1), { timeout: 3000 });
+    // 往復のあいだに、別の画面・別の端末が A を消す
+    disk.delete(FILE_A);
+
+    fireEvent.click(await rowOf(TITLE_B));
+    await waitFor(() => expect(titleInput().value).toBe(TITLE_B));
+    releaseWrites();
+
+    await waitFor(() => expect(shell?.toast()?.message).toMatch(/もう在りません/u), {
+      timeout: 3000,
+    });
+    const message = shell?.toast()?.message;
+    // どのノートの話かを名乗る。画面に出ている B の話だと読まれない
+    expect(message).toContain(TITLE_A);
+    // 画面にも「戻す」にも無いものを指さない
+    expect(message).not.toMatch(/画面にあるうち|写して|戻す/u);
+    // 控えが端末に在ることは言う。失うより残すほうがよい
+    expect(message).toMatch(/この端末に控え/u);
+    expect(localStorage.getItem(`note-backup:${FILE_A}`)).toContain("消えたノートに足した行");
+  });
+
+  // Stale も同じ穴だった。往復のあいだに隣へ移っていると、選択が外れた A は
+  // 読み直されないのに「読み直しました。『戻す』で呼び出せます」と言う —
+  // 画面にあるのは B なので、B を読み直して B を戻す話に読める。A を名乗り、
+  // A を開き直してからだと言う。書けるノートなので取り出す道はある
+  it("names the note changed elsewhere instead of pointing at the note now on screen", async () => {
+    disk.set(FILE_B, BODY_B);
+    await openNoteA();
+    await startEditingBody();
+    typeInEditor?.(`${TEXT_A}\n\n譲る前に打った行`);
+
+    // 保存が飛んだところで止める。予約は消えているので、この先の選択の
+    // 差し替えは飛んでいる保存を待たない
+    blockWrites();
+    await waitFor(() => expect(countOf("update_draft")).toBe(1), { timeout: 3000 });
+    // 往復のあいだに、別の画面・別の端末が A を書き換える
+    disk.set(FILE_A, BODY_A_SYNCED);
+
+    fireEvent.click(await rowOf(TITLE_B));
+    await waitFor(() => expect(titleInput().value).toBe(TITLE_B));
+    releaseWrites();
+
+    await waitFor(() => expect(shell?.toast()?.message).toContain(TITLE_A), { timeout: 3000 });
+    const message = shell?.toast()?.message;
+    // 選択が外れた A は読み直していない。読み直したと言えば、人は画面に
+    // 出ている B が入れ替わったのだと読む
+    expect(message).not.toMatch(/読み直しました/u);
+    // 控えは在り、ノートは書ける。開き直してからなら「戻す」で取り出せる
+    expect(message).toMatch(/この端末に控え/u);
+    expect(message).toMatch(/開き直/u);
+    expect(message).toMatch(/戻す/u);
+    // 画面は B のまま。A を読み直すのは開き直したときだけ
+    expect(titleInput().value).toBe(TITLE_B);
+    expect(localStorage.getItem(`note-backup:${FILE_A}`)).toContain("譲る前に打った行");
+  });
+
+  // Stale の言い分は「読み直したか」で変わるのに、読み直す前の状態で決めて
+  // いた。読み直しが読めずに引き返すと、画面には打った本文が残っているのに
+  // 「読み直しました」と言う — 人はディスクのぶんが出ていると思って写すのを
+  // やめる
+  it("does not claim a reload that the read never delivered", async () => {
+    await openNoteA();
+    await startEditingBody();
+    typeInEditor?.(`${TEXT_A}\n\n譲る前に打った行`);
+    duringSave = () => {
+      duringSave = undefined;
+      // 別の端末が書き換え、そのうえ読み直しも通らない端末
+      disk.set(FILE_A, BODY_A_SYNCED);
+      readFails = true;
+    };
+
+    await waitFor(() => expect(shell?.toast()?.message).toMatch(/別の場所で書き換えられていた/u), {
+      timeout: 3000,
+    });
+    // エディタは作り直されていない。画面にあるのは打った本文のままで、
+    // ディスクのぶんは載っていない — 読み直したとは言えない
+    expect(screen.getByText(TEXT_A)).toBeDefined();
+    expect(screen.queryByText("他の端末で足された行")).toBeNull();
+    expect(shell?.toast()?.message).not.toMatch(/読み直しました/u);
+    // 控えは在る。画面にあるうちに写せることを言う
+    expect(shell?.toast()?.message).toMatch(/この端末に控え/u);
+    expect(shell?.toast()?.message).toMatch(/写して/u);
+    expect(localStorage.getItem(`note-backup:${FILE_A}`)).toContain("譲る前に打った行");
+  });
+
+  // 控えも残せず、しかも読み直せなかったとき。画面にはまだ打った本文が
+  // 在るのに「失われました」と言うと、人は諦めてそのまま閉じる
+  it("does not say the draft is gone while it is still on screen", async () => {
+    const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("QuotaExceededError");
+    });
+    onTestFinished(() => setItem.mockRestore());
+    await openNoteA();
+    await startEditingBody();
+    typeInEditor?.(`${TEXT_A}\n\n控えられなかった行`);
+    duringSave = () => {
+      duringSave = undefined;
+      disk.set(FILE_A, BODY_A_SYNCED);
+      readFails = true;
+    };
+
+    await waitFor(() => expect(shell?.toast()?.message).toMatch(/写して/u), { timeout: 3000 });
+    // エディタは作り直されていない。画面にはまだ打った本文が在るのだから、
+    // 失われたとは言わない
+    expect(screen.getByText(TEXT_A)).toBeDefined();
+    expect(screen.queryByText("他の端末で足された行")).toBeNull();
+    expect(shell?.toast()?.message).not.toMatch(/失われました/u);
+  });
+
+  // 読み直しの答えが届く前に隣のノートへ移ると、読み直しは見送られる。
+  // 譲る前の「画面に出ていた」で言うと、画面にあるのは別のノートなのに
+  // そのノートを指して「読み直しました」と言うことになる
+  it("names the note it yielded when the screen moved on during the read", async () => {
+    disk.set(FILE_B, BODY_B);
+    await openNoteA();
+    await startEditingBody();
+    typeInEditor?.(`${TEXT_A}\n\n譲る前に打った行`);
+    duringSave = () => {
+      duringSave = undefined;
+      disk.set(FILE_A, BODY_A_SYNCED);
+      // 譲ったあとの読み直しを止めておく
+      blockReads();
+    };
+
+    // 読み直しが飛んだところ(開いたときの 1 回 + 譲ったあとの 1 回)
+    await waitFor(() => expect(countOf("read_note")).toBe(2), { timeout: 3000 });
+    fireEvent.click(await rowOf(TITLE_B));
+    releaseReads();
+    await waitFor(() => expect(titleInput().value).toBe(TITLE_B));
+
+    await waitFor(() => expect(shell?.toast()?.message).toContain(TITLE_A), { timeout: 3000 });
+    // A の読み直しは画面に載っていない。載ったと言えば、人は画面に出ている
+    // B が入れ替わったのだと読む
+    expect(shell?.toast()?.message).not.toMatch(/読み直しました/u);
+    expect(localStorage.getItem(`note-backup:${FILE_A}`)).toContain("譲る前に打った行");
+  });
+
+  // 退避そのものが失敗する端末(localStorage が満杯・無効)。ディスクへの
+  // 保存は既に断られているので、ここで「戻す」で呼び出せると言うと、
+  // 人はそれを信じて閉じ、唯一の写しごと失う
+  it("warns instead of promising Revert when the backup cannot be written", async () => {
+    const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("QuotaExceededError");
+    });
+    onTestFinished(() => setItem.mockRestore());
+    brokenMeta.add(FILE_A);
+    await openNoteA();
+    await startEditingBody();
+    typeInEditor?.(`${TEXT_A}\n\n退避できなかった行`);
+
+    await waitFor(() => expect(countOf("update_draft")).toBe(1), { timeout: 3000 });
+    await waitFor(() => expect(shell?.toast()?.message).toMatch(/失われます/u));
+    // 在りもしない写しを指して「戻す」と言わない
+    expect(shell?.toast()?.message).not.toMatch(/戻す/u);
+    expect(localStorage.getItem(`note-backup:${FILE_A}`)).toBeNull();
+  });
+
+  // Stale の退避も同じ端末では残らない。そこで「『戻す』で呼び出せます」と
+  // 言うと、人はそれを信じて閉じる。読み直しで画面の本文もディスクのぶんに
+  // 入れ替わっているので、写す相手ももう無い — 失われたことだけを言う
+  it("promises no Revert when a stale save's backup cannot be written", async () => {
+    const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("QuotaExceededError");
+    });
+    onTestFinished(() => setItem.mockRestore());
+    await openNoteA();
+    await startEditingBody();
+    typeInEditor?.(`${TEXT_A}\n\n控えられなかった行`);
+    disk.set(FILE_A, BODY_A_SYNCED);
+
+    await waitFor(() => expect(shell?.toast()?.message).toMatch(/失われました/u), {
+      timeout: 3000,
+    });
+    // 読み直しは着いている。画面の本文はディスクのぶんで、打った字はもう無い
+    expect(screen.getByText("他の端末で足された行")).toBeDefined();
+    expect(shell?.toast()?.message).not.toMatch(/戻す|写して/u);
+    expect(localStorage.getItem(`note-backup:${FILE_A}`)).toBeNull();
+  });
+
+  // 壊れた記録のノートは「戻す」の書き込みも同じ理由で断る。書けないことを
+  // 理由に控えを見せないと、退避は残っているのに取り出す道がどこにも無い
+  it("shows the backup on screen when the note it belongs to cannot be written", async () => {
+    const typed = `# ${TITLE_A}\n\n壊れたノートで打った行`;
+    localStorage.setItem(`note-backup:${FILE_A}`, typed);
+    brokenMeta.add(FILE_A);
+    await openNoteA();
+
+    await runNoteAction("編集前に戻す");
+
+    // 打った字が実際に画面へ戻る。ここから選んで写せる
+    await waitFor(() => expect(screen.getByText("壊れたノートで打った行")).toBeDefined());
+    expect(shell?.toast()?.message).toMatch(/ディスクには書けない/u);
+    // 断られた書き込みは何も変えない。控えはまだ唯一の写しなので入れ替えない
+    expect(disk.get(FILE_A)).toBe(BODY_A);
+    expect(localStorage.getItem(`note-backup:${FILE_A}`)).toBe(typed);
+  });
+
+  // 文字として読めなくなったノートも「戻す」の書き込みを断る。書けないことを
+  // 理由に控えを見せないと、開いているあいだに取り出す最後の道が閉じる —
+  // 開き直せば本文ごと読めないので、次の機会はもう無い
+  it("shows the backup on screen when the note it belongs to is no longer text", async () => {
+    const typed = `# ${TITLE_A}\n\n読めなくなる前に打った行`;
+    localStorage.setItem(`note-backup:${FILE_A}`, typed);
+    await openNoteA();
+    // 開いたあとにファイルが読めないバイト列になった。画面の本文はまだ在る
+    notText.add(FILE_A);
+
+    await runNoteAction("編集前に戻す");
+
+    await waitFor(() => expect(screen.getByText("読めなくなる前に打った行")).toBeDefined());
+    expect(shell?.toast()?.message).toMatch(/ディスクには書けない/u);
+    expect(disk.get(FILE_A)).toBe(BODY_A);
+    expect(localStorage.getItem(`note-backup:${FILE_A}`)).toBe(typed);
+  });
+
+  // 読み直せば書けるノートでは、控えを画面に出して終わりにしない。画面と
+  // ディスクが黙って食い違い、次の保存が相手の本文を控えで潰す
+  it("still refuses to revert when the write is turned down as stale", async () => {
+    localStorage.setItem(`note-backup:${FILE_A}`, `# ${TITLE_A}\n\n控えの行`);
+    await openNoteA();
+    // 読んでから押すまでに、別の端末がこれを書き換えた
+    disk.set(FILE_A, BODY_A_SYNCED);
+
+    await runNoteAction("編集前に戻す");
+
+    await waitFor(() => expect(shell?.toast()?.message).toBe("戻せませんでした"));
+    expect(screen.queryByText("控えの行")).toBeNull();
+    expect(disk.get(FILE_A)).toBe(BODY_A_SYNCED);
+  });
+
   // 復元は入れ替え。戻した直後の「戻る先」を次の保存で押し出すと、
   // もう一度押しても戻れない
   it("keeps the reverted body reachable after the next save", async () => {
@@ -1333,6 +1752,37 @@ describe("Workspace › Codex の版", () => {
     expect(document.querySelector(".version-spine--open")).toBeNull();
     // 戻す前の下書きが最新の版になり、戻した本文はそれと違うので距離が出る
     await waitFor(() => expect(metaLine()?.textContent).toMatch(/^版 2 から /u));
+  });
+
+  // 戻す書き込みは通ったのに、そのあとの読み直しが画面に届かないことがある。
+  // 画面は戻す前の本文なのに指紋だけ戻した後のものになり、そのまま次の打鍵を
+  // 保存すると core の照合を素通りして、いま戻した版を黙って潰す
+  it("does not claim a restore the screen never received, nor overwrite it on the next save", async () => {
+    await openCodexC();
+    const OLD_BODY = `# ${TITLE_C}\n\n最初の一行`;
+    versions.set(FILE_C, [{ id: "v1", message: "最初の骨組み", body: OLD_BODY }]);
+
+    await runNoteAction("履歴");
+    fireEvent.click(await screen.findByRole("button", { name: /^版 1/u }));
+    // 戻す書き込みは通るが、そのあとの読み直しでディスクが読めない
+    readFails = true;
+    fireEvent.click(await screen.findByRole("button", { name: "この版に戻す" }));
+
+    await waitFor(() => expect(countOf("restore_note_version")).toBe(1));
+    expect(disk.get(FILE_C)).toBe(OLD_BODY);
+    // 戻したとは言わない。画面に出せなかったことを言う
+    await waitFor(() => expect(shell?.toast()?.message).toMatch(/画面に出せませんでした/u));
+    expect(shell?.toast()?.message).not.toMatch(/戻す前の下書きは履歴にあります/u);
+    // 画面にあるのは戻す前の本文のまま
+    expect(screen.getByText(TEXT_C)).toBeDefined();
+
+    // その本文に書き足しても、いま戻した版は残る
+    readFails = false;
+    await waitFor(() => expect(editorBody().isContentEditable).toBe(true));
+    await startEditingBody();
+    typeInEditor?.(`${TEXT_C}\n\n足した行`);
+    await waitFor(() => expect(writesTo(FILE_C)).toHaveLength(1), { timeout: 3000 });
+    expect(disk.get(FILE_C)).toBe(OLD_BODY);
   });
 
   it("cannot restore into a read-only codex", async () => {

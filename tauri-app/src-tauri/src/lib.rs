@@ -109,39 +109,75 @@ fn promote_note_to_codex(handle: AppHandle, filename: String) -> Result<(), Stri
     magical_merchant_core::promote_note_to_codex(&base_dir, &filename).map_err(|e| e.to_string())
 }
 
-/// 保存の失敗。`stale` はフロントが「読み直して知らせる」に分岐するための印。
+/// 保存の失敗。フロントが分岐するための印を持つ。
+///
+/// - `stale`: 読んでから誰かが書き換えた。読み直して知らせる
+/// - `broken`: ノート先頭の記録が読めず、core が書き込みを断った。
+///   打った字は退避して知らせる — 何度書き直しても通らない
+/// - `missing`: ノートがもう無い(消された・Codex へ移った)。core は
+///   作り直さないので、これも打った字を退避して知らせる
+/// - `notText`: ファイルの中身が文字として読めない(不正な UTF-8)。
+///   `broken` と分けるのは、伝わる意味と手当てが違うから — 記録の書き直しでは
+///   直らず、開き直しても本文が読めないので「戻す」で取り出す道も無い
 #[derive(Debug, Clone, serde::Serialize)]
 struct SaveError {
     kind: &'static str,
     message: String,
 }
 
+impl SaveError {
+    /// core を通らずに落ちたぶん(データディレクトリが引けない、ファイル名が
+    /// ノートの名前になっていない)。分ける印が無いので `other` に落とす。
+    const fn other(message: String) -> Self {
+        Self {
+            kind: "other",
+            message,
+        }
+    }
+}
+
+impl From<magical_merchant_core::CoreError> for SaveError {
+    fn from(e: magical_merchant_core::CoreError) -> Self {
+        Self {
+            kind: match e {
+                magical_merchant_core::CoreError::Stale(_) => "stale",
+                magical_merchant_core::CoreError::Parse(_) => "broken",
+                magical_merchant_core::CoreError::NotFound(_) => "missing",
+                magical_merchant_core::CoreError::NotText(_) => "notText",
+                _ => "other",
+            },
+            message: e.to_string(),
+        }
+    }
+}
+
 /// `revision` は `read_note` が返した本文の指紋。添えると、そのあいだに
 /// CLI や MCP が同じノートを書き換えていれば `stale` で断られる。
 /// 返るのは書いた本文の revision — 次の保存に添える。
+///
+/// 受け取るのは ID(ファイル名)だけで、置き場は core に聞く。WebView から
+/// 渡された絶対パスをそのまま書くと、`data/` の外にも、消したノートや
+/// Codex にしたノートの跡にも書けてしまう。
+// AIDEV-NOTE: 他のノートコマンドと同じ parse_filename → locate の道。path 受けには戻さない
 #[tauri::command]
 fn update_draft(
-    file_path: String,
+    handle: AppHandle,
+    filename: String,
     body: String,
     client: ClientContext,
     revision: Option<String>,
 ) -> Result<String, SaveError> {
+    let base_dir = app_base_dir(&handle).map_err(SaveError::other)?;
+    let filename = parse_filename(&filename).map_err(SaveError::other)?;
+    // core の拒否は 1 か所で印に変える。ここで文字列に潰すと、探せなかった
+    // 理由が `update_note` の同じ理由と別の印で届く
+    let (_, path) =
+        magical_merchant_core::locate_note(&base_dir, &filename).map_err(SaveError::from)?;
     let context = device::get_context(client);
     let expected = revision.map(Revision::from);
-    magical_merchant_core::update_note(
-        std::path::Path::new(&file_path),
-        &body,
-        &context,
-        expected.as_ref(),
-    )
-    .map(|r| r.to_string())
-    .map_err(|e| SaveError {
-        kind: match e {
-            magical_merchant_core::CoreError::Stale(_) => "stale",
-            _ => "other",
-        },
-        message: e.to_string(),
-    })
+    magical_merchant_core::update_note(&path, &body, &context, expected.as_ref())
+        .map(|r| r.to_string())
+        .map_err(SaveError::from)
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -492,14 +528,8 @@ fn restore_note_version(
     client: ClientContext,
     revision: Option<String>,
 ) -> Result<String, SaveError> {
-    let base_dir = app_base_dir(&handle).map_err(|message| SaveError {
-        kind: "other",
-        message,
-    })?;
-    let filename = parse_filename(&filename).map_err(|message| SaveError {
-        kind: "other",
-        message,
-    })?;
+    let base_dir = app_base_dir(&handle).map_err(SaveError::other)?;
+    let filename = parse_filename(&filename).map_err(SaveError::other)?;
     let context = device::get_context(client);
     let expected = revision.map(Revision::from);
     magical_merchant_core::restore_note_version(
@@ -510,13 +540,7 @@ fn restore_note_version(
         expected.as_ref(),
     )
     .map(|r| r.to_string())
-    .map_err(|e| SaveError {
-        kind: match e {
-            magical_merchant_core::CoreError::Stale(_) => "stale",
-            _ => "other",
-        },
-        message: e.to_string(),
-    })
+    .map_err(SaveError::from)
 }
 
 /// 刻んだ直後の「取り消す」。版のファイルを消すだけで、本文には触れない。
@@ -706,6 +730,24 @@ pub fn run() {
 mod tests {
     use super::*;
     use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+
+    /// 文字として読めないノートへの保存は、読み直しても直らない拒否。
+    /// `other` に落とすと画面はこれを一時的な失敗として黙って捨て、打った字は
+    /// ディスクにも控えにも残らないまま、警告も出ないで閉じられる。
+    #[test]
+    fn a_note_that_is_not_text_is_refused_under_its_own_mark() {
+        let not_text = SaveError::from(magical_merchant_core::CoreError::NotText(
+            "a.md".to_string(),
+        ));
+        // 一時的な失敗は印を持たないまま。次の打鍵で通る望みがあるので、
+        // 退避して「もう書けません」と言う相手ではない
+        let io = SaveError::from(magical_merchant_core::CoreError::Io(std::io::Error::other(
+            "disk full",
+        )));
+
+        assert_eq!(not_text.kind, "notText");
+        assert_eq!(io.kind, "other");
+    }
 
     /// 署名は誰も見ない (`sync::token::is_token_valid` と同じ理由) ので 3 つのパートを直に組む
     fn jwt(expires_in: i64) -> String {

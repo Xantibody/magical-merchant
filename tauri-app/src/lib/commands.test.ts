@@ -43,7 +43,7 @@ describe("typedInvoke local mutation notifications", () => {
 
   // 自動同期の合図。呼び出し側ごとに書くと必ず取りこぼす
   it("notifies after a write command succeeds", async () => {
-    await typedInvoke("update_draft", { filePath: "a.md", body: "x", client: CLIENT });
+    await typedInvoke("update_draft", { filename: "a.md", body: "x", client: CLIENT });
     expect(seen).toHaveLength(1);
   });
 
@@ -69,7 +69,7 @@ describe("typedInvoke local mutation notifications", () => {
 
   it("stops notifying once unsubscribed", async () => {
     stop();
-    await typedInvoke("update_draft", { filePath: "a.md", body: "x", client: CLIENT });
+    await typedInvoke("update_draft", { filename: "a.md", body: "x", client: CLIENT });
     expect(seen).toHaveLength(0);
   });
 });
