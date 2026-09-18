@@ -106,6 +106,22 @@ describe("createLongPress", () => {
     expect(press.shouldClick()).toBe(true);
   });
 
+  // contextmenu を preventDefault した後に click を出さない機種がある。
+  // 飲み込む札を残したままにすると、次の tap が道連れになる
+  it("lets the next tap through when no click followed the long press", () => {
+    const press = createLongPress(vi.fn<() => void>(), HOLD_MS);
+
+    press.onPointerDown(touchDown());
+    vi.advanceTimersByTime(HOLD_MS);
+    press.onPointerUp();
+
+    press.onPointerDown(touchDown());
+    vi.advanceTimersByTime(100);
+    press.onPointerUp();
+
+    expect(press.shouldClick()).toBe(true);
+  });
+
   // 押しっぱなしは WebView から見るとテキスト選択の始まり。放っておくと
   // 「コピー」のメニューが長押しの手応えに割り込む
   it("keeps the platform context menu from opening", () => {

@@ -65,6 +65,10 @@ export function createLongPress(onLongPress: () => void, holdMs = 500): LongPres
         return;
       }
       cancel();
+      // 前の長押しに続く click は、来るならこの pointerdown より前に来る。
+      // まだ札が立っているなら click を出さない機種で、この tap に罪はない
+      // AIDEV-NOTE: 札を落とすのは次の pointerdown。猶予タイマーにすると「どれだけ待つか」が機種依存になる
+      fired = false;
       // 揺れの許容は押すたびに測り直す。少しずつ流れた指でも 2 回目が
       // 始めから許容いっぱいということにはならない
       origin = { clientX: e.clientX, clientY: e.clientY };
