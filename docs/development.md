@@ -91,8 +91,10 @@ Scope a single crate with cargo directly (`cargo test -p magical-merchant-cli`).
 
 `check-rustls` is not part of `just check`, and it guards something no test
 can: two `rustls` versions make `android_tls`'s `ClientConfig` a different
-crate's type from reqwest's. That compiles, passes CI, and then fails on the
-device with `UnknownPreconfigured`.
+crate's type from reqwest's. That compiles, and clippy and the test run stay
+green on it; CI catches it only because this recipe is a step of its own
+(`rustls resolves to one version`). Without that step the first sign would be
+a device that fails every sync with `UnknownPreconfigured`.
 
 ### Frontend recipes (`tauri_app::`)
 
