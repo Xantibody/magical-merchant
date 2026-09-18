@@ -10,10 +10,13 @@ permissions:
   contents: read
   pull-requests: read
 
-# 連続 push で古い run を走らせ続けない
+# 連続 push で古い run を走らせ続けない。ただし main は殺さない:
+# キャッシュの save と Cachix への push は main の run でしか起きないので、
+# 15 分内に 2 度 merge すると、保存する唯一の run が消える。main では
+# 後の run が前の run の完了を待って並ぶ (同じ group なので直列にはなる)
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 # キャッシュは main でだけ保存する (save/purge の条件と actions/cache の
 # restore/save 分割はすべてこのため)。PR ごとに保存すると重複分で repo の
