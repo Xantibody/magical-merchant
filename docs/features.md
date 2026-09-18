@@ -37,16 +37,24 @@ breaks the link.
 
 ## Note — a Typora-style Markdown workspace
 
-Note (formerly Notes) holds plain Markdown files. The list pane groups them by date; the detail
-pane shows a rendered preview with a **title field** above it. The title is
-the note's leading `# heading` — there is no separate title in the
-frontmatter, so the file stays readable in any Markdown tool and the heading
-can never drift from the title. Press Enter in the field to drop into the
-body. **Tap anywhere in the preview to start
-editing** — the caret lands on the character you tapped. Saving is automatic
+Note (formerly Notes) holds plain Markdown files. The list pane gives each
+note one line, grouped by how recently it was created; the detail pane shows
+the body with a **title field** above it. The title is the note's leading `# heading` — there is no separate title
+in the frontmatter, so the file stays readable in any Markdown tool and the
+heading can never drift from the title. Press Enter in the field to drop into
+the body.
+
+**There is no edit mode.** The editor is live from the moment the note is
+open — what you see is already the thing you type into, so there is no button
+to find and no state to be in the wrong one of. Saving is automatic
 (debounced), and the first content-changing save of a session keeps the
-pre-edit body on the device, so ノート情報 → 編集前に戻す can undo an
-accidental edit — press it again to swap back.
+pre-edit body on the device, so the `…` menu's 編集前に戻す (`⌘⇧R`) can undo
+an accidental edit — press it again to swap back.
+
+Everything else a single note needs is behind that one `…` button (`⌘.`),
+because none of it is used often enough to sit in the way of writing: lay the
+map alongside, make the note read-only, revert, ノート情報, delete, and — for
+a Note — Codex にする.
 
 The ノート情報 panel is also where a note's records live: the creation time
 (editable), the tags, the device context it was captured on, and — once the
@@ -55,9 +63,10 @@ pinned to the filename order, so the update time is the only place a rewrite
 shows up. Changing metadata or the view mode is not a rewrite and leaves it
 alone.
 
-A note that is done being written can be parked in a **read-only view**
-(frontmatter `view: preview`): the same rendered page, except that tapping
-the body no longer starts an edit and the title field is fixed. The choice
+A note that is done being written can be parked in a **read-only view** —
+`…` → 読み取り専用にする, frontmatter `view: preview`. The editor is not
+raised at all: the body is a rendered page, the title field is fixed, and the
+list row wears a small padlock so you know before you open it. The choice
 lives in the file, so it follows the note to every device.
 
 ![Editor with note links](images/editor-links.png)
@@ -69,11 +78,12 @@ mermaid skips `%%` lines, so the note still draws anywhere else. Hovering a
 code block or a figure reveals a small toolbar: copy the code, or open the
 diagram full screen and save it as SVG or PNG (the file is named after the
 note and the diagram's position). The full-screen view zooms around the
-cursor with the wheel or a pinch, drags to pan, and closes with Esc. A per-note
-**mindmap view** (frontmatter `view: mindmap`) turns the heading/list
-structure into a markmap. One button in the note's header cycles the three
-views — editor, mindmap, read-only — and shows the icon of whichever comes
-next:
+cursor with the wheel or a pinch, drags to pan, and closes with Esc. A
+per-note **map** — `…` → マップを並べる (`⌘⇧M`), frontmatter `view: mindmap` —
+turns the heading and list structure into a markmap. It is laid _alongside_
+the body rather than in place of it, so the text you are reading it against
+stays on screen; only below 1100px, where there is no room for two, does it
+take the body's place:
 
 ![Mindmap view](images/mindmap.png)
 

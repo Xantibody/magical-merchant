@@ -12,10 +12,11 @@
 - **Scrawl** (formerly Timeline) — a day-grouped capture journal with tags, device/place
   context, a calendar jump, and a weekly digest (including _one year ago
   today_)
-- **Note** (formerly Notes) — Markdown files in a Typora-style Milkdown editor; a title field that is
-  the body's own `# heading`, tap anywhere in the preview to edit, autosave
-  with a local one-step revert, Shiki code highlighting, Mermaid diagrams,
-  and a per-note mindmap or read-only view
+- **Note** (formerly Notes) — Markdown files in a Typora-style Milkdown
+  editor with no edit mode: the editor is live from the moment a note is
+  open. A title field that is the body's own `# heading`, autosave with a
+  local one-step revert, Shiki code highlighting, Mermaid diagrams, and a
+  per-note markmap laid alongside the text or a read-only view
 - **Scrawl grows into Note** — promote a Scrawl entry into a note; the two
   stay linked through the note's `origin` frontmatter
 - **Note grows into Codex** — a document you keep adding to; it lives in its
