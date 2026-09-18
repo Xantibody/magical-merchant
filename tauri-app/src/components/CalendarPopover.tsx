@@ -11,8 +11,8 @@ import {
 import type { DaySummary } from "../lib/calendar";
 import { toIsoDate } from "../lib/day-labels";
 import { t } from "../lib/i18n";
-import { getNetworkIcon } from "../lib/parse-timeline";
-import type { DeviceContext } from "../lib/parse-timeline";
+import { getNetworkIcon } from "../lib/parse-scrawl";
+import type { DeviceContext } from "../lib/parse-scrawl";
 
 interface CalendarPopoverProps {
   /** 記録のある日 (`YYYY-MM-DD`)。太字で示す。 */
@@ -92,7 +92,7 @@ export default function CalendarPopover(props: CalendarPopoverProps): JSX.Elemen
 
       <div class="calendar-summary">
         <span class="calendar-summary-title">
-          {pickedLabel()} — {t().timeline.entryCount(summary().count)}
+          {pickedLabel()} — {t().scrawl.entryCount(summary().count)}
         </span>
         <Show when={summary().count > 0}>
           <span class="calendar-summary-row">

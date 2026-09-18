@@ -18,7 +18,7 @@ interface Shortcut {
 const SHORTCUTS = {
   search: { key: "k" },
   newNote: { key: "n" },
-  timeline: { key: "1" },
+  scrawl: { key: "1" },
   notes: { key: "2" },
   codex: { key: "3" },
   syncNow: { key: "s", shift: true },

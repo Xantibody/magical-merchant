@@ -30,9 +30,9 @@ and Settings; the capture bar floats above the keyboard.
 ### Promote an entry into a note
 
 When a quick capture grows into something bigger, promote it: hover an entry
-(PC) or long-press it (touch) and choose ノートにする. A new note opens ready
+(PC) or long-press it (touch) and choose Note にする. A new note opens ready
 to write, carrying the entry text and tags. The note's frontmatter records the
-origin entry, and the timeline shows a chip (📄 title →) on that day linking
+origin entry, and Scrawl shows a chip (📄 title →) on that day linking
 to the note — derived on every render, so reordering or deleting entries never
 breaks the link.
 
@@ -54,10 +54,10 @@ an accidental edit — press it again to swap back.
 
 Everything else a single note needs is behind that one `…` button (`⌘.`),
 because none of it is used often enough to sit in the way of writing: lay the
-map alongside, make the note read-only, revert, ノート情報, delete, and — for
+map alongside, make the note read-only, revert, Note 情報, delete, and — for
 a Note — Codex にする.
 
-The ノート情報 panel is also where a note's records live: the creation time
+The Note 情報 panel is also where a note's records live: the creation time
 (editable), the tags, the device context it was captured on, and — once the
 body has been rewritten at least once — the **update time**. Creation time is
 pinned to the filename order, so the update time is the only place a rewrite
@@ -70,7 +70,7 @@ raised at all: the body is a rendered page, the title field is fixed, and the
 list row wears a small padlock so you know before you open it. The choice
 lives in the file, so it follows the note to every device.
 
-![Editor with note links](images/editor-links.png)
+![Editor with Note links](images/editor-links.png)
 
 Code blocks are highlighted with Shiki; a ` ```diff ` fence colours its `+`
 and `-` lines instead. ` ```mermaid ` fences render as diagrams, and a leading
@@ -101,9 +101,9 @@ target's current title; click one to open the note. Write
 the link still points at the same note. A link whose target is gone stays
 visible as its raw stored form rather than pretending to be a note.
 
-![Resolved note links](images/note-links.png)
+![Resolved Note links](images/note-links.png)
 
-Every note shows the records that link to it — other notes and timeline
+Every note shows the records that link to it — other notes and Scrawl
 entries alike — in a collapsible リンクされている記録 footer. Backlinks are
 derived by scanning at read time; there is no index to corrupt or sync.
 
@@ -184,9 +184,9 @@ are part of the document and sync with it.
 
 Some things have no character: fighting-game command notation, a custom
 mark, a logo. Register a small PNG or SVG under a short name in
-Settings → GLYPHS and write `:name:` anywhere — a note or a timeline entry —
+Settings → GLYPHS and write `:name:` anywhere — a Note or a Scrawl entry —
 to show it inline, the way an emoji shortcode works. The preview, the
-editor and the timeline all render it; the editor shows the source text
+editor and Scrawl all render it; the editor shows the source text
 again when the caret touches it, so the stored Markdown stays plain text.
 
 Only registered names render: `12:30:45` and an unknown `:foo:` stay as
@@ -204,7 +204,7 @@ straight into `data/glyphs/` are picked up as well.
 `⌘K` opens the palette. Before you type anything it offers entry points:
 recent notes, today/yesterday (only when they have entries), and your most
 used tags. Search results highlight the matched text in a context snippet, and
-selecting a hit lands exactly — a note opens that note, a timeline hit scrolls
+selecting a hit lands exactly — a note opens that note, a Scrawl hit scrolls
 to that day.
 
 Searches can be scoped to tags, from any screen. Every `#tag` you type in the
@@ -230,7 +230,7 @@ moment and a badge floats on the shoulder of the buttons in the chrome — the
 three mode tabs, sync, Settings, and the open note's `…` — with a pill
 explaining how to make them go away; let go and they are gone. The search
 field carries its `⌘K` printed in the field itself, so it needs no badge, and
-`⌘N` is shown where 新規ノート is, in the palette. And `?`, pressed anywhere
+`⌘N` is shown where 新規 Note is, in the palette. And `?`, pressed anywhere
 you are not typing, opens the palette on that command list.
 
 The ones worth learning first:
@@ -247,11 +247,11 @@ That list is the palette's command section, so it holds the six global
 commands and nothing else — a new note, the three modes, sync now, and `⌘,`
 for Settings. The keys that need a note open are not in it: they are written
 down the right-hand side of the note's own `…` menu, the one `⌘.` opens —
-`⌘⇧M` for the map, `⌘⇧R` to revert, `⌘⇧I` for ノート情報, `⌘⇧K` to commit a
+`⌘⇧M` for the map, `⌘⇧R` to revert, `⌘⇧I` for Note 情報, `⌘⇧K` to commit a
 Codex version. `⌘↑` / `⌘↓` walk the list pane and are printed nowhere at
 all; they answer only while the caret is outside every field you can type
 in — not just the title and the body, but the palette's search box and the
-time and tag fields of ノート情報 as well — so they step through notes once
+time and tag fields of Note 情報 as well — so they step through notes once
 you have clicked away from what you are writing. With the caret in any of
 them they are left alone, and stay the jump to the top or the bottom of
 what you are typing. Where a Mac reads ⌘⇧, every other platform reads
@@ -286,12 +286,12 @@ change-detection protocol.
 
 Four home-screen widgets ship with the APK:
 
-| Widget             | Size | What a tap does                                                                                                              |
-| ------------------ | ---- | ---------------------------------------------------------------------------------------------------------------------------- |
-| タイムラインに記録 | 4×1  | Opens a sheet over the home screen and appends to today's Scrawl through a JNI call into the core — the app is never started |
-| 新しいノート       | 4×1  | `magical-merchant://widget/new-note`                                                                                         |
-| 最近のノート       | 4×2  | The four newest notes; a row opens that note, the header plus makes a new one                                                |
-| テンプレート       | 4×3  | Three templates; a row creates today's note from it (or opens the one that already exists)                                   |
+| Widget        | Size | What a tap does                                                                                                              |
+| ------------- | ---- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Scrawl に記録 | 4×1  | Opens a sheet over the home screen and appends to today's Scrawl through a JNI call into the core — the app is never started |
+| 新しい Note   | 4×1  | `magical-merchant://widget/new-note`                                                                                         |
+| 最近の Note   | 4×2  | The four newest notes; a row opens that note, the header plus makes a new one                                                |
+| テンプレート  | 4×3  | Three templates; a row creates today's note from it (or opens the one that already exists)                                   |
 
 All four are deep links into the app except the capture bar, which is the one
 that exists so that recording costs nothing — no launch, no wait.
@@ -308,8 +308,8 @@ magical-merchant edit 20260320_143045  # opens it in $VISUAL / $EDITOR
 magical-merchant edit --last           # the newest note; `edit` never guesses
 echo "# Idea" | magical-merchant new   # or: magical-merchant new --title Idea
 magical-merchant import --time 2019-05-04T12:00:00+09:00 < old-note.md  # keeps that time as the ID
-magical-merchant timeline add -m "shipped it #work"   # capture; without -m, opens the editor
-magical-merchant timeline show [2026-03-20]           # one day, today if omitted
+magical-merchant scrawl add -m "shipped it #work"   # capture; without -m, opens the editor
+magical-merchant scrawl show [2026-03-20]           # one day, today if omitted
 magical-merchant sync                  # same sync the app runs, without opening it
 ```
 
@@ -343,7 +343,7 @@ handle, while one that gives up part way prints only why it stopped. If the
 app is syncing at that moment, the CLI says so and exits 1 rather than
 waiting.
 
-`timeline add` appends to today through the same core call the Android
+`scrawl add` appends to today through the same core call the Android
 widget uses; it only ever appends, so it needs no revision check. `-m` is
 the one-liner, a pipe is read as the entry, and with neither the editor
 opens.
@@ -385,20 +385,20 @@ written — local time, GPS coordinates (and the place name the app resolved
 for them), battery, network type, and which device wrote it — so an agent
 can line the journal up with other time- or location-based data.
 
-| Tool                  | Description                                                                                          |
-| --------------------- | ---------------------------------------------------------------------------------------------------- |
-| `list_notes`          | List all notes with their `kind` (`note` / `codex`), tags, a short preview, and their origin         |
-| `read_note`           | Read a note's metadata (time, tags, context) and Markdown body                                       |
-| `backlinks`           | List the records that link to a note with `[[…]]`                                                    |
-| `search`              | Search notes, codex and timeline entries, optionally within a set of tags; each hit says which it is |
-| `list_timeline_dates` | List the dates that have timeline entries                                                            |
-| `read_timeline`       | Read one day's entries with time, text, tags, location, and device                                   |
-| `read_timeline_range` | Read entries between two days, optionally filtered by tag                                            |
-| `list_places`         | Places (~1 km cells) records were written at, with names and counts                                  |
-| `list_tags`           | Every `#tag` with note and entry counts                                                              |
-| `list_templates`      | List note templates                                                                                  |
-| `read_template`       | Read a template's body and tags                                                                      |
-| `list_glyphs`         | Registered glyphs with the `:name:` shortcode that renders each one                                  |
+| Tool                | Description                                                                                        |
+| ------------------- | -------------------------------------------------------------------------------------------------- |
+| `list_notes`        | List all notes with their `kind` (`note` / `codex`), tags, a short preview, and their origin       |
+| `read_note`         | Read a note's metadata (time, tags, context) and Markdown body                                     |
+| `backlinks`         | List the records that link to a note with `[[…]]`                                                  |
+| `search`            | Search notes, codex and Scrawl entries, optionally within a set of tags; each hit says which it is |
+| `list_scrawl_dates` | List the dates that have Scrawl entries                                                            |
+| `read_scrawl`       | Read one day's entries with time, text, tags, location, and device                                 |
+| `read_scrawl_range` | Read entries between two days, optionally filtered by tag                                          |
+| `list_places`       | Places (~1 km cells) records were written at, with names and counts                                |
+| `list_tags`         | Every `#tag` with note and entry counts                                                            |
+| `list_templates`    | List note templates                                                                                |
+| `read_template`     | Read a template's body and tags                                                                    |
+| `list_glyphs`       | Registered glyphs with the `:name:` shortcode that renders each one                                |
 
 What an agent cannot do is keep a Codex's history: there is no tool to
 commit, list, diff or restore a version. Committing is a person saying
@@ -443,6 +443,6 @@ edit:
 | `--locale` / `MAGICAL_MERCHANT_LOCALE`           | Preferred language for place names, `ja` or `en` (default `en`)     |
 | `--allow-write` / `MAGICAL_MERCHANT_ALLOW_WRITE` | Offer the writing tools (off by default)                            |
 
-Timeline times are the recording device's local wall-clock time without a
+Scrawl times are the recording device's local wall-clock time without a
 UTC offset; note times are RFC 3339 with the offset. Place names come from
 the app's own geocoding cache — the server never calls a network service.

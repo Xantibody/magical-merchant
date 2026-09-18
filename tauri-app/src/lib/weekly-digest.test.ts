@@ -1,14 +1,14 @@
 import { describe, it, expect } from "vitest";
 import { digestWeekKey, isDigestDismissed, summarizeWeek, yearAgoToday } from "./weekly-digest";
-import type { TimelineItem } from "./items";
+import type { ScrawlItem } from "./items";
 
 /** 2026-08-16 は日曜。その週の月曜は 08-10。 */
 const SUNDAY = new Date(2026, 7, 16);
 const MONDAY = new Date(2026, 7, 10);
 
-function entry(date: string, text: string): TimelineItem {
+function entry(date: string, text: string): ScrawlItem {
   return {
-    kind: "timeline",
+    kind: "scrawl",
     id: `${date}#0`,
     date,
     index: 0,

@@ -25,7 +25,7 @@ export interface ParsedEntry {
   context: DeviceContext | null;
 }
 
-export function parseTimelineEntry(raw: string): ParsedEntry {
+export function parseScrawlEntry(raw: string): ParsedEntry {
   const timeMatch = raw.match(/^- \[(?<time>\d{2}:\d{2}:\d{2})\] /u);
   if (!timeMatch) {
     return { time: "", text: raw, context: null };
@@ -98,7 +98,7 @@ export function getNetworkIcon(ctx: DeviceContext): IconName | null {
 
 /**
  * 回線の呼び名。記録に残っているのは `WiFi` のような素の値で、これは
- * 読むための言い換え。タイムラインの行にもメタデータパネルにも出る。
+ * 読むための言い換え。Scrawl の行にもメタデータパネルにも出る。
  */
 export function networkLabel(type: string): string {
   const labels = t().meta;

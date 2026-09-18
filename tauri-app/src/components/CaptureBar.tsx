@@ -7,7 +7,7 @@ import { matchTagPrefix, sameTag, tagDraftAt } from "../lib/tags";
 import type { TagCount } from "../lib/tags";
 
 interface CaptureBarProps {
-  /** どのタブを見ていても Timeline に記録する。 */
+  /** どのタブを見ていても Scrawl に記録する。 */
   onSend: (text: string) => Promise<void>;
   /** 補完に出す、これまでに使ったタグ。 */
   knownTags?: TagCount[];

@@ -170,7 +170,7 @@ interface NoteMeta {
   source?: string;
 }
 
-export type HitKind = "timeline" | NoteKind;
+export type HitKind = "scrawl" | NoteKind;
 
 export interface SearchHit {
   kind: HitKind;
@@ -198,10 +198,10 @@ interface ClientArgs {
 
 interface CommandMap {
   save_quick_capture: { args: { text: string } & ClientArgs; result: void };
-  list_timeline_dates: { args: void; result: string[] };
-  read_timeline_by_date: { args: { date: string }; result: string[] };
+  list_scrawl_dates: { args: void; result: string[] };
+  read_scrawl_by_date: { args: { date: string }; result: string[] };
   /** `raw` は画面が読んだときの行。index だけでは、読んだあとに入った追記でずれる。 */
-  delete_timeline_entry: { args: { date: string; index: number; raw: string }; result: void };
+  delete_scrawl_entry: { args: { date: string; index: number; raw: string }; result: void };
   /**
    * `tags` は範囲。全部を持つ記録だけが返り、query が空でも tags があれば
    * そのタグの付いた記録を全部返す。
@@ -301,7 +301,7 @@ export type CommandName = keyof CommandMap;
 /** `data/` の下のファイルを書き換えるコマンド。同期の合図になる。 */
 const MUTATING: ReadonlySet<CommandName> = new Set<CommandName>([
   "save_quick_capture",
-  "delete_timeline_entry",
+  "delete_scrawl_entry",
   "create_draft",
   "update_draft",
   "update_note_meta",

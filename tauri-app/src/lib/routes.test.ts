@@ -6,13 +6,13 @@ import { MODE_ICONS, MODE_LABELS, ROUTES } from "./routes";
 // ラテン文字のまま(#255)
 describe("surface names", () => {
   it("calls the capture journal Scrawl, the workspace Note, the growing document Codex", () => {
-    expect(MODE_LABELS[ROUTES.TIMELINE]).toBe("Scrawl");
+    expect(MODE_LABELS[ROUTES.SCRAWL]).toBe("Scrawl");
     expect(MODE_LABELS[ROUTES.NOTES]).toBe("Note");
     expect(MODE_LABELS[ROUTES.CODEX]).toBe("Codex");
   });
 
   it("marks Scrawl with a scribble, not a lightning bolt", () => {
-    expect(MODE_ICONS[ROUTES.TIMELINE]).toBe("scribble-loop");
+    expect(MODE_ICONS[ROUTES.SCRAWL]).toBe("scribble-loop");
   });
 
   it("gives Codex its own surface and a book", () => {

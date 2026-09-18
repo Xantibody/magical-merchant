@@ -38,8 +38,8 @@ describe("searchRequest", () => {
       });
     });
 
-    // タグの文字は Timeline のチップと同じ規則。打った綴りがそのまま範囲になる
-    it("keeps the spelling of typed tags the way the timeline chips do", () => {
+    // タグの文字は Scrawl のチップと同じ規則。打った綴りがそのまま範囲になる
+    it("keeps the spelling of typed tags the way the scrawl chips do", () => {
       expect(searchRequest("#SF6", [])).toStrictEqual({ query: "", tags: ["SF6"] });
     });
 
@@ -74,16 +74,16 @@ describe("scopeLabel", () => {
 });
 
 describe("paletteScopeAt", () => {
-  it("carries the timeline's active tag into the palette", () => {
-    expect(paletteScopeAt(ROUTES.TIMELINE, "sync")).toStrictEqual({ tags: ["sync"] });
+  it("carries the scrawl's active tag into the palette", () => {
+    expect(paletteScopeAt(ROUTES.SCRAWL, "sync")).toStrictEqual({ tags: ["sync"] });
   });
 
   it("opens an unscoped palette when no tag is active", () => {
-    expect(paletteScopeAt(ROUTES.TIMELINE, null)).toBeUndefined();
+    expect(paletteScopeAt(ROUTES.SCRAWL, null)).toBeUndefined();
   });
 
   // Notes 画面には絞り込みチップが無い。見えていない範囲を黙って掛けない
-  it("ignores the timeline tag on other routes", () => {
+  it("ignores the scrawl tag on other routes", () => {
     expect(paletteScopeAt(ROUTES.NOTES, "sync")).toBeUndefined();
   });
 });

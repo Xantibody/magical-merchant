@@ -17,7 +17,7 @@ import androidx.core.view.WindowInsetsCompat
 import com.magical_merchant.app.R
 
 /**
- * The capture sheet the Timeline widget opens (design 1b).
+ * The capture sheet the Scrawl widget opens (design 1b).
  *
  * A translucent activity rather than something inside the widget: RemoteViews
  * cannot host an EditText, so typing has to happen in a real window. It stays

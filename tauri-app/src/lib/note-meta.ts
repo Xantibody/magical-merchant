@@ -9,7 +9,7 @@
 
 import type { NoteContext } from "./commands";
 import { t } from "./i18n";
-import { networkLabel, sourceLabel } from "./parse-timeline";
+import { networkLabel, sourceLabel } from "./parse-scrawl";
 import { normalizeTag, sameTag } from "./tags";
 
 /** RFC 3339 の time を datetime-local input の値(分まで)にする。 */

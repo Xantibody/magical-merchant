@@ -58,8 +58,8 @@ describe("shortcutLabel", () => {
 describe("matchesShortcut", () => {
   // 修飾キーがどちらで来るかは端末とキーボード次第なので、両方受ける
   it("accepts either Meta or Control", () => {
-    expect(matchesShortcut(press("1", { metaKey: true }), "timeline")).toBe(true);
-    expect(matchesShortcut(press("1", { ctrlKey: true }), "timeline")).toBe(true);
+    expect(matchesShortcut(press("1", { metaKey: true }), "scrawl")).toBe(true);
+    expect(matchesShortcut(press("1", { ctrlKey: true }), "scrawl")).toBe(true);
   });
 
   // 面は 1・2・3 の並びで開く。Codex が 3 つ目
@@ -68,7 +68,7 @@ describe("matchesShortcut", () => {
   });
 
   it("does not fire without the modifier", () => {
-    expect(matchesShortcut(press("1"), "timeline")).toBe(false);
+    expect(matchesShortcut(press("1"), "scrawl")).toBe(false);
   });
 
   // ⌘S(そんな割り当ては無い)で同期が走ると、書いたものが消えたように見える

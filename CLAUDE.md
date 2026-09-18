@@ -1,7 +1,8 @@
 # Magical Merchant
 
 A minimal note-taking app: Rust core + Tauri 2 + SolidJS. Three surfaces —
-**Scrawl** (quick capture journal; route and code still say `timeline`),
+**Scrawl** (quick capture journal; only the `/` route and `data/timeline/` keep
+the old name),
 **Note** (Markdown workspace; code says `notes`) and **Codex** (a Note that
 grows and keeps explicitly committed versions; same `Workspace` view with
 `kind="codex"`) — plus Android home-screen widgets and R2 sync.
@@ -38,7 +39,7 @@ ready to record the moment it opens (widgets exist for exactly this).
   palette's command rows and the `data-key` badges. Holding ⌘ (Ctrl) for 300ms
   floats those badges (`lib/hints.ts`); `?` opens the palette as the list
 - **Bottom tabs** (mobile): Scrawl / Note / Codex / Settings
-- **Scrawl** (`views/Timeline.tsx`): single-column day-grouped journal, time rail, tag filter chips,
+- **Scrawl** (`views/Scrawl.tsx`): single-column day-grouped journal, time rail, tag filter chips,
   floating capture dock; in-place entry editing; select-mode bulk delete
 - **Note** (`views/Workspace.tsx`): list pane (one line per note) + detail pane; mobile
   shows one pane at a time (`workspace--detail`); title field above the body
@@ -81,6 +82,12 @@ ready to record the moment it opens (widgets exist for exactly this).
 - Every **body write goes through core `update_note` with the revision the
   writer read**; a mismatch is refused (`Stale`), never resolved by overwriting
 - Every new Tauri command gets a handler in `tauri-app/dev/ipc-mock.js`
+- **Scrawl / Note / Codex are proper nouns**, and nothing spells them any other
+  way — strings in both languages, `widget_strings.xml`, docs, MCP tools, the
+  CLI subcommand, modules, files, types, CSS classes. Two things keep the old
+  word because changing them would move data, and both are one constant away
+  from the rest: `data/timeline/` and the sync keys under it (`SCRAWL_DIR` in
+  `paths.rs`) and the `/` route. `i18n.test.ts` fails on a translated name
 - Keep the DOM small; never re-render whole documents via innerHTML
 
 ## Workflow

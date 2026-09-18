@@ -54,9 +54,9 @@ the typed text behind Revert, the CLI keeps it in a scratch file.
   Sync is a separate, debounced background step; if it never runs, the app
   is still fully functional.
 - **Plain Markdown on disk.** The store is human-readable files, one per
-  note and one per timeline day. There is no database to migrate or corrupt;
+  note and one per Scrawl day. There is no database to migrate or corrupt;
   sync and search operate on the same files the user could read themselves.
-- **Framework-independent core.** All business logic (timeline, notes,
+- **Framework-independent core.** All business logic (scrawl, notes,
   search, sync diffing) lives in `core/` so the Tauri shell stays a thin
   command layer and the same logic serves the MCP server.
 - **Server-authoritative sync state.** The client never constructs the sync
@@ -69,7 +69,7 @@ the typed text behind Revert, the CLI keeps it in a scratch file.
 ```
 <app data dir>/
 ├── data/                      # everything under here syncs
-│   ├── timeline/
+│   ├── timeline/               # Scrawl; the directory keeps the old name
 │   │   └── 2026-08-09.md      # one file per day, entries appended
 │   ├── notes/
 │   │   └── 20260809_143000.md # one file per note, frontmatter + body
@@ -87,7 +87,7 @@ the typed text behind Revert, the CLI keeps it in a scratch file.
 └── sync-config.json           # Workers URL, auto-sync flag (shared with the CLI)
 ```
 
-A timeline day file lists the devices used that day once in its
+A Scrawl day file lists the devices used that day once in its
 frontmatter; each entry line carries a time prefix and a trailing JSON
 context (battery, network, location) that references the device list by
 index. Reading expands entries back to self-contained lines, so callers
@@ -99,14 +99,14 @@ never see the on-disk compression.
 flowchart TD
     App["App.tsx (Router)"]
     Layout["AppLayout<br/>header, tabs, palette, sync state"]
-    Timeline["Timeline (eager — launch view)"]
+    Scrawl["Scrawl (eager — launch view)"]
     Workspace["Workspace (lazy)<br/>serves /notes and /codex"]
     Settings["Settings (lazy)"]
     Editor["MilkdownEditor + MarkdownToolbar (lazy)<br/>Milkdown / ProseMirror / Shiki"]
     Preview["MarkdownPreview<br/>markdown-it + Shiki + Mermaid"]
 
     App --> Layout
-    Layout --> Timeline
+    Layout --> Scrawl
     Layout --> Workspace
     Layout --> Settings
     Workspace --> Editor
@@ -119,7 +119,7 @@ the editor mounts as soon as a note's body arrives, and the preview is the
 exception rather than the default state (a note parked at `view: preview`,
 or a Codex whose history is open and whose body is showing diff marks).
 
-The timeline is the launch view, so everything the editor drags in
+Scrawl is the launch view, so everything the editor drags in
 (Milkdown, ProseMirror, Shiki) is split out of the startup bundle and
 prefetched during idle time. All Tauri commands go through `typedInvoke`
 (`lib/commands.ts`), which types every command and notifies listeners on
@@ -140,7 +140,7 @@ sequenceDiagram
     UI->>Ctx: getClientContext()
     Note over Ctx: last known fix returned immediately —<br/>cold GPS waits at most 1.5s
     UI->>Rust: save_quick_capture(text, context)
-    Rust->>Core: save_timeline_entry
+    Rust->>Core: save_scrawl_entry
     Core->>Core: append to data/timeline/YYYY-MM-DD.md
     Rust-->>UI: ok — entry visible, input cleared
     UI--)Sync: local mutation event
@@ -159,18 +159,18 @@ the entry is already on disk.
 
 | Path                                                        | Responsibility                                                                                                                                   |
 | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [`core/src/timeline/`](../core/src/timeline)                | Day-file parsing, appends, edits; device-list frontmatter compression                                                                            |
+| [`core/src/scrawl/`](../core/src/scrawl)                    | Day-file parsing, appends, edits; device-list frontmatter compression                                                                            |
 | [`core/src/note/`](../core/src/note)                        | Note CRUD and list summaries (frontmatter + preview + tags); see the four files below                                                            |
 | [`core/src/note/kind.rs`](../core/src/note/kind.rs)         | `Note` vs `Codex` — decided by the directory, never by a frontmatter key                                                                         |
 | [`core/src/note/version.rs`](../core/src/note/version.rs)   | Codex versions: commit, list, diff, restore, delete; version IDs and the `before restore` marker                                                 |
 | [`core/src/note/revision.rs`](../core/src/note/revision.rs) | The body fingerprint every writer must present, and the one place a stale write is refused                                                       |
 | [`core/src/note/repair.rs`](../core/src/note/repair.rs)     | Repair passes: notes saved while the editor still saw frontmatter, legacy conflict copies, and an ID that ended up in both `notes/` and `codex/` |
-| [`core/src/search.rs`](../core/src/search.rs)               | Substring search across timeline, notes and codex                                                                                                |
+| [`core/src/search.rs`](../core/src/search.rs)               | Substring search across Scrawl, notes and codex                                                                                                  |
 | [`core/src/sync/`](../core/src/sync)                        | Local scan + hashing, diff against server state, conflict naming                                                                                 |
 | [`tauri-app/src-tauri/`](../tauri-app/src-tauri/src)        | Tauri commands, sync HTTP client, OAuth deep-link handling, device context                                                                       |
 | [`tauri-app/src/`](../tauri-app/src)                        | SolidJS views, Milkdown editor integration, client-side device signals                                                                           |
 | [`workers/`](../workers/src)                                | Cloudflare Worker: Google OAuth, JWT, R2-backed bulk sync with ETag CAS                                                                          |
-| [`cli/`](../cli/src)                                        | Terminal client (`list` / `show` / `edit` / `new` / `import` / `timeline` / `sync`) and the MCP server (`mcp`)                                   |
+| [`cli/`](../cli/src)                                        | Terminal client (`list` / `show` / `edit` / `new` / `import` / `scrawl` / `sync`) and the MCP server (`mcp`)                                     |
 
 > [!NOTE]
 > UI priorities (simple → lightweight → stylish), the Milkdown plugin

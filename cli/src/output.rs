@@ -3,7 +3,7 @@
 
 use magical_merchant_core::utils::device::{Context, NetworkType};
 use magical_merchant_core::{
-    GlyphSummary, NoteSummary, SearchHit, Snapshot, TemplateSummary, TimelineEntry,
+    GlyphSummary, NoteSummary, ScrawlEntry, SearchHit, Snapshot, TemplateSummary,
 };
 use rmcp::schemars;
 use serde::Serialize;
@@ -25,7 +25,7 @@ pub(crate) struct NoteInfo {
     pub(crate) tags: Vec<String>,
     /// First 100 characters of the body.
     pub(crate) preview: String,
-    /// Local datetime (`YYYY-MM-DDTHH:MM:SS`) of the timeline entry this note
+    /// Local datetime (`YYYY-MM-DDTHH:MM:SS`) of the scrawl entry this note
     /// was promoted from, if any.
     pub(crate) origin: Option<String>,
     /// Name of the template this note was created from, if any.
@@ -79,7 +79,7 @@ pub(crate) struct SearchOutput {
 
 #[derive(Serialize, schemars::JsonSchema)]
 pub(crate) struct SearchHitInfo {
-    /// Which store the hit came from: `timeline`, `note`, or `codex`.
+    /// Which store the hit came from: `scrawl`, `note`, or `codex`.
     pub(crate) kind: String,
     pub(crate) title: String,
     pub(crate) snippet: String,
@@ -87,7 +87,7 @@ pub(crate) struct SearchHitInfo {
     pub(crate) date: String,
     /// Set for note hits; the argument to pass to `read_note`.
     pub(crate) filename: Option<String>,
-    /// Set for timeline hits; the entry's position within its day.
+    /// Set for scrawl hits; the entry's position within its day.
     pub(crate) index: Option<usize>,
     pub(crate) tags: Vec<String>,
 }
@@ -95,7 +95,7 @@ pub(crate) struct SearchHitInfo {
 impl From<SearchHit> for SearchHitInfo {
     fn from(h: SearchHit) -> Self {
         let kind = match h.kind {
-            magical_merchant_core::HitKind::Timeline => "timeline",
+            magical_merchant_core::HitKind::Scrawl => "scrawl",
             magical_merchant_core::HitKind::Note => "note",
             magical_merchant_core::HitKind::Codex => "codex",
         };
@@ -112,26 +112,26 @@ impl From<SearchHit> for SearchHitInfo {
 }
 
 #[derive(Serialize, schemars::JsonSchema)]
-pub(crate) struct TimelineDatesOutput {
+pub(crate) struct ScrawlDatesOutput {
     /// `YYYY-MM-DD`, newest first.
     pub(crate) dates: Vec<String>,
 }
 
 #[derive(Serialize, schemars::JsonSchema)]
-pub(crate) struct TimelineOutput {
+pub(crate) struct ScrawlOutput {
     /// Chronological order.
     pub(crate) entries: Vec<EntryInfo>,
     /// True when more entries matched than were returned.
     pub(crate) truncated: bool,
 }
 
-/// One timeline entry with its recorded context flattened into fields an
+/// One scrawl entry with its recorded context flattened into fields an
 /// agent can filter and join on.
 #[derive(Serialize, schemars::JsonSchema)]
 pub(crate) struct EntryInfo {
     /// `YYYY-MM-DD`.
     pub(crate) date: String,
-    /// Position within the day; pass to `read_timeline` results to refer back.
+    /// Position within the day; pass to `read_scrawl` results to refer back.
     pub(crate) index: usize,
     /// Local wall-clock time on the recording device, `HH:MM:SS`. Entries
     /// carry no UTC offset; treat as the device's local time.
@@ -226,12 +226,7 @@ impl ContextInfo {
 }
 
 impl EntryInfo {
-    pub(crate) fn new(
-        date: &str,
-        index: usize,
-        entry: TimelineEntry,
-        place: Option<String>,
-    ) -> Self {
+    pub(crate) fn new(date: &str, index: usize, entry: ScrawlEntry, place: Option<String>) -> Self {
         let time = entry.time.map(|t| t.format("%H:%M:%S").to_string());
         let datetime = time.as_ref().map(|t| format!("{date}T{t}"));
         Self {
@@ -263,7 +258,7 @@ pub(crate) struct PlaceInfo {
     pub(crate) longitude: f64,
     /// Municipality-level name, when the app has resolved it before.
     pub(crate) place: Option<String>,
-    /// Timeline entries written here.
+    /// Scrawl entries written here.
     pub(crate) entries: usize,
     /// Notes created here.
     pub(crate) notes: usize,
@@ -283,7 +278,7 @@ pub(crate) struct TagInfo {
     pub(crate) tag: String,
     /// Notes carrying the tag.
     pub(crate) notes: usize,
-    /// Timeline entries carrying the tag.
+    /// Scrawl entries carrying the tag.
     pub(crate) entries: usize,
 }
 

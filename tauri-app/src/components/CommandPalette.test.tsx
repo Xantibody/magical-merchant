@@ -5,7 +5,7 @@ import CommandPalette from "./CommandPalette";
 import type { Note, SearchHit } from "../lib/commands";
 
 const TAGGED_HIT: SearchHit = {
-  kind: "timeline",
+  kind: "scrawl",
   title: "走った #sync",
   snippet: "走った #sync",
   date: "2026-09-01",

@@ -5,7 +5,7 @@ import { page } from "vitest/browser";
 import { MemoryRouter, Route } from "@solidjs/router";
 import { ShellProvider, useShell } from "../lib/shell";
 import type { Shell } from "../lib/shell";
-import Timeline from "./Timeline";
+import Scrawl from "./Scrawl";
 
 /**
  * 日付は動く。「今週」と「1年前の今日」はどちらも今日から数えた場所なので、
@@ -51,8 +51,8 @@ const DAYS: Record<string, string[]> = {
 let days: Record<string, string[]>;
 
 const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
-  list_timeline_dates: () => [...RECENT_DATES, YEAR_AGO],
-  read_timeline_by_date: ({ date }) => days[String(date)] ?? [],
+  list_scrawl_dates: () => [...RECENT_DATES, YEAR_AGO],
+  read_scrawl_by_date: ({ date }) => days[String(date)] ?? [],
   list_notes: () => [],
   // 追記なので、その日のいちばん新しい 1 件になる
   save_quick_capture: ({ text }) => {
@@ -72,19 +72,19 @@ function ShellHandle(): null {
 }
 
 /** 一覧が届くまで待つ。時刻の欄はエントリ 1 件につき 1 つだけ出る。 */
-async function openTimeline(): Promise<void> {
+async function openScrawl(): Promise<void> {
   render(() => (
     <ShellProvider>
       <ShellHandle />
       <MemoryRouter>
-        <Route path="/" component={Timeline} />
+        <Route path="/" component={Scrawl} />
       </MemoryRouter>
     </ShellProvider>
   ));
   await screen.findByText("21:34");
 }
 
-/** 浮いている記録欄。Timeline が描かれた後にだけ在る。 */
+/** 浮いている記録欄。Scrawl が描かれた後にだけ在る。 */
 function captureInput(): HTMLTextAreaElement {
   const input = document.querySelector<HTMLTextAreaElement>(".capture-input");
   if (!input) {
@@ -93,7 +93,7 @@ function captureInput(): HTMLTextAreaElement {
   return input;
 }
 
-async function setupTimeline(): Promise<void> {
+async function setupScrawl(): Promise<void> {
   await page.viewport(1280, 800);
   localStorage.clear();
   days = structuredClone(DAYS);
@@ -107,20 +107,20 @@ async function setupTimeline(): Promise<void> {
   });
 }
 
-function teardownTimeline(): void {
+function teardownScrawl(): void {
   cleanup();
   clearMocks();
   document.body.innerHTML = "";
 }
 
-describe("Timeline › 週次ダイジェスト", () => {
-  beforeEach(setupTimeline);
-  afterEach(teardownTimeline);
+describe("Scrawl › 週次ダイジェスト", () => {
+  beforeEach(setupScrawl);
+  afterEach(teardownScrawl);
 
   // カードだった頃は上位タグを並べていたが、同じタグはすぐ上のチップ行に
   // もう出ている。二度読ませるぶん、週の要約は 1 行に畳める
   it("says the week in one line, with the year-ago jump as its only link", async () => {
-    await openTimeline();
+    await openScrawl();
 
     const digest = screen.getByRole("region", { name: "今週" });
 
@@ -133,7 +133,7 @@ describe("Timeline › 週次ダイジェスト", () => {
   });
 
   it("stays closed for the rest of the week", async () => {
-    await openTimeline();
+    await openScrawl();
     expect(screen.getByRole("region", { name: "今週" })).toBeDefined();
 
     fireEvent.click(screen.getByRole("button", { name: "今週は閉じる" }));
@@ -142,14 +142,14 @@ describe("Timeline › 週次ダイジェスト", () => {
   });
 });
 
-describe("Timeline › タグの絞り込み", () => {
-  beforeEach(setupTimeline);
-  afterEach(teardownTimeline);
+describe("Scrawl › タグの絞り込み", () => {
+  beforeEach(setupScrawl);
+  afterEach(teardownScrawl);
 
   // チップに出る綴りは最初に見たものひとつで、件数はそれに畳んだ数。絞り込みが
   // 完全一致だと、代表でない綴りの記録が消えて数と一覧が食い違う
   it("keeps every spelling of the chip's tag, and the count agrees", async () => {
-    await openTimeline();
+    await openScrawl();
 
     fireEvent.click(screen.getByRole("button", { name: "#Memo" }));
 
@@ -162,7 +162,7 @@ describe("Timeline › タグの絞り込み", () => {
   // 大小違いで記録すると入れ替わる。選択の判定が完全一致だと、絞り込みは
   // 効いたままなのに印が消え、押しても解除できない行が残る
   it("keeps the chip selected when a newer spelling takes over, and still clears it", async () => {
-    await openTimeline();
+    await openScrawl();
     fireEvent.click(screen.getByRole("button", { name: "#run" }));
     expect(screen.getByText("#run で絞り込み中 · 1件")).toBeDefined();
 
@@ -182,13 +182,13 @@ describe("Timeline › タグの絞り込み", () => {
   });
 });
 
-describe("Timeline › 選択の入り口", () => {
-  beforeEach(setupTimeline);
-  afterEach(teardownTimeline);
+describe("Scrawl › 選択の入り口", () => {
+  beforeEach(setupScrawl);
+  afterEach(teardownScrawl);
 
   // 浮かせた専用のバーを 1 段作らず、いま書いている日の件数の隣に字で置く
   it("sits beside the first day's count and nowhere else", async () => {
-    await openTimeline();
+    await openScrawl();
 
     const buttons = screen.getAllByRole("button", { name: "選択" });
 
@@ -200,7 +200,7 @@ describe("Timeline › 選択の入り口", () => {
 
   // 入ったあとの操作は下のバーが引き受ける。同じ役目を 2 か所に出さない
   it("hands over to the bottom bar once selecting", async () => {
-    await openTimeline();
+    await openScrawl();
 
     fireEvent.click(screen.getByRole("button", { name: "選択" }));
 
@@ -211,9 +211,9 @@ describe("Timeline › 選択の入り口", () => {
   });
 });
 
-describe("Timeline › 選択中の読み直し", () => {
-  beforeEach(setupTimeline);
-  afterEach(teardownTimeline);
+describe("Scrawl › 選択中の読み直し", () => {
+  beforeEach(setupScrawl);
+  afterEach(teardownScrawl);
 
   /**
    * 選択は `date#index` で行を指す。確認バーを出したまま別アプリへ移り、
@@ -221,7 +221,7 @@ describe("Timeline › 選択中の読み直し", () => {
    * 隣の記録を指す。読み直したら選択は畳む — 隣を消してからでは遅い。
    */
   it("drops the selection when the list is reloaded under it", async () => {
-    await openTimeline();
+    await openScrawl();
     fireEvent.click(screen.getByRole("button", { name: "選択" }));
     fireEvent.click(screen.getByRole("button", { name: /朝ラン/u }));
     fireEvent.click(screen.getByRole("button", { name: "削除 (1件)" }));
@@ -243,7 +243,7 @@ describe("Timeline › 選択中の読み直し", () => {
    * 同じ index は隣の記録を指す。日を足す経路でも選択は畳む。
    */
   it("drops the selection when a jump to an unloaded day reloads the list", async () => {
-    await openTimeline();
+    await openScrawl();
     fireEvent.click(screen.getByRole("button", { name: "選択" }));
     fireEvent.click(screen.getByRole("button", { name: /朝ラン/u }));
     fireEvent.click(screen.getByRole("button", { name: "削除 (1件)" }));
@@ -262,7 +262,7 @@ describe("Timeline › 選択中の読み直し", () => {
 
   // 黙って消えると、押したはずの削除が効かなかったようにしか見えない
   it("says why the selection went away", async () => {
-    await openTimeline();
+    await openScrawl();
     fireEvent.click(screen.getByRole("button", { name: "選択" }));
     fireEvent.click(screen.getByRole("button", { name: /朝ラン/u }));
 
@@ -275,7 +275,7 @@ describe("Timeline › 選択中の読み直し", () => {
 
   // 選んでいないときの読み直しは、ただの再取得。言うことは何も無い
   it("stays quiet when nothing was selected", async () => {
-    await openTimeline();
+    await openScrawl();
 
     shell.refreshData();
 

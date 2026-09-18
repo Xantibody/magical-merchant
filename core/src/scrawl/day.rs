@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::error::CoreError;
 use crate::utils::device::{Context, DeviceIdentity, Source};
 use crate::utils::frontmatter;
-use crate::utils::markdown::{format_timeline_line, split_context_json, split_time_prefix};
+use crate::utils::markdown::{format_scrawl_line, split_context_json, split_time_prefix};
 
 /// 日ファイルの先頭に置く、その日に使われた端末の一覧。
 ///
@@ -42,7 +42,7 @@ const fn is_unknown_device(device: &usize) -> bool {
     *device == 0
 }
 
-/// 1 日ぶんのタイムライン。ディスク上は端末情報を先頭にまとめた圧縮形、
+/// 1 日ぶんの Scrawl。ディスク上は端末情報を先頭にまとめた圧縮形、
 /// 読み出しでは分割前と同じ「行末に完全なコンテキストが載った行」に戻す。
 #[derive(Debug, Default, PartialEq, Eq)]
 pub(crate) struct DayLog {
@@ -94,7 +94,7 @@ impl DayLog {
             source: source.map(|s| s.as_str().to_string()),
         };
         self.entries
-            .push(format_timeline_line(text, timestamp, &stored));
+            .push(format_scrawl_line(text, timestamp, &stored));
     }
 
     /// 分割前と同じ形の行に戻す。呼び出し側にディスク上の都合は見せない。
@@ -250,7 +250,7 @@ mod tests {
 
         let entries = DayLog::parse(&day.render().unwrap()).expanded();
 
-        let expected = format_timeline_line("hello", at(9), &mac());
+        let expected = format_scrawl_line("hello", at(9), &mac());
         assert_eq!(entries, vec![expected]);
     }
 

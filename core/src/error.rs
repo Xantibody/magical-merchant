@@ -1,7 +1,7 @@
 use thiserror::Error;
 
 use crate::note::error::NoteError;
-use crate::timeline::error::TimelineError;
+use crate::scrawl::error::ScrawlError;
 
 #[derive(Debug, Error)]
 pub enum CoreError {
@@ -54,11 +54,11 @@ impl From<NoteError> for CoreError {
     }
 }
 
-impl From<TimelineError> for CoreError {
-    fn from(err: TimelineError) -> Self {
+impl From<ScrawlError> for CoreError {
+    fn from(err: ScrawlError) -> Self {
         match err {
-            TimelineError::Io(e) => Self::Io(e),
-            TimelineError::Parse(s) => Self::Parse(s),
+            ScrawlError::Io(e) => Self::Io(e),
+            ScrawlError::Parse(s) => Self::Parse(s),
         }
     }
 }

@@ -61,7 +61,7 @@ internal object WidgetBridge {
     }
 
     /**
-     * Appends [text] to today's timeline file under [baseDir]. False on failure.
+     * Appends [text] to today's scrawl file under [baseDir]. False on failure.
      *
      * [clientJson] is [WidgetContext]'s output — what Kotlin could see of the
      * device. Call [saveCapture] rather than this: forgetting the JSON here
@@ -84,7 +84,7 @@ internal object WidgetBridge {
      *
      * This is `dataDir`, not `filesDir`: Tauri's PathPlugin answers `getDataDir`
      * with `Context.getDataDir()`, and `filesDir` is the `files/` subdirectory of
-     * it — writing there would produce a second, invisible timeline that the app
+     * it — writing there would produce a second, invisible scrawl that the app
      * never reads and sync never uploads.
      */
     fun baseDir(context: Context): String = context.applicationContext.dataDir.absolutePath
@@ -111,7 +111,7 @@ internal object WidgetBridge {
         // Rust answers false for every kind of refusal (`widget_bridge.rs` folds
         // the Err into a bool), so say at least that the call was reached.
         if (!saved) {
-            WidgetLog.warn("timeline entry not written (${text.length} chars); the sheet stays open")
+            WidgetLog.warn("scrawl entry not written (${text.length} chars); the sheet stays open")
         }
         return saved
     }

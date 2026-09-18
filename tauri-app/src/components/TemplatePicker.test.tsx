@@ -61,11 +61,11 @@ describe("TemplatePicker", () => {
     expect(onPick).toHaveBeenCalledExactlyOnceWith(TEMPLATES[0]);
   });
 
-  // タップで空のノートを作る道は、テンプレが増えても塞がない
+  // タップで空の Note を作る道は、テンプレが増えても塞がない
   it("keeps the empty note as its own row", () => {
     const { onPickEmpty } = renderPicker();
 
-    fireEvent.click(screen.getByText("空のノート"));
+    fireEvent.click(screen.getByText("空の Note"));
 
     expect(onPickEmpty).toHaveBeenCalledTimes(1);
   });
@@ -83,6 +83,6 @@ describe("TemplatePicker", () => {
     renderPicker([]);
 
     expect(screen.queryByText("テンプレートから")).toBeNull();
-    expect(screen.getByText("空のノート")).toBeDefined();
+    expect(screen.getByText("空の Note")).toBeDefined();
   });
 });

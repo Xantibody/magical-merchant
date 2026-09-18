@@ -82,7 +82,7 @@ function mountTabs(): void {
   document.body.innerHTML = `
     <header class="header">
       <nav class="header-tabs">
-        <a class="header-tab header-tab--active">Timeline</a>
+        <a class="header-tab header-tab--active">Scrawl</a>
         <a class="header-tab">Notes</a>
       </nav>
     </header>`;

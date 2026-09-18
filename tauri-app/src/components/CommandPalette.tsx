@@ -60,7 +60,7 @@ function searchHits(source: SearchSource): Promise<SearchHit[]> {
 }
 
 /**
- * search_all は全タイムライン + 全ノートのファイル走査で、実機では 1 回
+ * search_all は全 Scrawl + 全ノートのファイル走査で、実機では 1 回
  * 100ms を超えうる。打鍵ごとに発行せず、指が止まってからまとめて聞く。
  * コマンドの絞り込みはメモリ内なので query を直に見て即時に効かせる。
  */
@@ -112,7 +112,7 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
   const [home] = createResource(async () => {
     const [notes, dates] = await Promise.all([
       typedInvoke("list_notes"),
-      typedInvoke("list_timeline_dates"),
+      typedInvoke("list_scrawl_dates"),
     ]);
     const items = toNoteItems(notes);
     return {

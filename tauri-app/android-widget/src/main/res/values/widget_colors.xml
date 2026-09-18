@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Light-theme widget tokens, mirroring the app's design tokens
-     (design_handoff_timeline_redesign, 1b). The night variant lives in
+     (design_handoff_scrawl_redesign, 1b). The night variant lives in
      values-night/widget_colors.xml. -->
 <resources>
     <color name="widget_bg">#F8F9FA</color>

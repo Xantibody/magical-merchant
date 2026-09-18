@@ -8,7 +8,7 @@
 import { createSignal } from "solid-js";
 import { typedInvoke } from "./commands";
 import { locale } from "./i18n";
-import type { DeviceContext } from "./parse-timeline";
+import type { DeviceContext } from "./parse-scrawl";
 
 interface Coordinate {
   latitude: number;
@@ -73,7 +73,7 @@ export function createPlaceStore(): PlaceStore {
         setNames((known) => new Map([...known, ...resolved]));
       }
     } catch {
-      // 地名は記録の飾りでしかない。引けなかったことでタイムラインを
+      // 地名は記録の飾りでしかない。引けなかったことで Scrawl を
       // 止めるほうが害が大きいので、座標のまま見せて黙る。
     }
   };

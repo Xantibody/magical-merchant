@@ -10,7 +10,7 @@ content hash and a **server-issued version stamp**; both the Worker and each
 client store exactly those values, so change detection never depends on the
 filesystem mtime or on a device's clock.
 
-Everything under `data/` takes part — timeline days, notes, the Codex
+Everything under `data/` takes part — Scrawl days, notes, the Codex
 documents and their committed versions under `data/codex/`, templates, and
 the glyph images under `data/glyphs/` — with no filter on the extension;
 file contents travel base64-encoded, which is why a single glyph is capped

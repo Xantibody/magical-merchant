@@ -4,9 +4,9 @@
 
 mod glyph;
 mod note;
+mod scrawl;
 pub mod sync;
 mod template;
-mod timeline;
 pub mod utils;
 
 mod error;
@@ -26,15 +26,14 @@ pub use note::{
     relocate_duplicate_ids, repair_notes, restore_note, restore_note_version, snapshot_note,
     update_note, update_note_meta, update_note_origin, update_note_view,
 };
+pub use scrawl::error::ScrawlError;
+pub use scrawl::{
+    delete_scrawl_entry, list_scrawl_dates, read_scrawl, save_scrawl_entry, update_scrawl_entry,
+};
 pub use search::{HitKind, SearchHit, find_backlinks, search_all};
 pub use template::{
     CreatedNote, TemplateDetail, TemplateSummary, VarLocale, create_note_from_template,
     delete_template, list_templates, read_template, save_template,
-};
-pub use timeline::error::TimelineError;
-pub use timeline::{
-    delete_timeline_entry, list_timeline_dates, read_timeline, save_timeline_entry,
-    update_timeline_entry,
 };
 pub use utils::device::Context as DeviceContext;
 /// 書いた入り口の固定語彙。作成の入口はどれもこれを 1 つ受け取る。
@@ -44,5 +43,5 @@ pub use utils::frontmatter;
 pub use utils::frontmatter::NoteFrontmatter as NoteMeta;
 /// ノートを作るときにだけ書ける出自。作成の入口はこれを 1 つ受け取る。
 pub use utils::frontmatter::Provenance;
-pub use utils::markdown::{TimelineEntry, parse_timeline_entry};
+pub use utils::markdown::{ScrawlEntry, parse_scrawl_entry};
 pub use utils::validated::{GlyphFormat, GlyphName, NoteFilename};

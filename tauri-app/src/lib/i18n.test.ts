@@ -35,7 +35,7 @@ describe("t", () => {
 
   it("fills in the numbers a sentence needs", () => {
     setLocale("en");
-    expect(t().timeline.selectedCount(3)).toContain("3");
+    expect(t().scrawl.selectedCount(3)).toContain("3");
   });
 });
 
@@ -53,15 +53,25 @@ function shapeOf(value: unknown): unknown {
 
 const JAPANESE = /[ぁ-んァ-ヶ一-龥]/u;
 
-/** 日本語の混じっている文字列のキーを、`a.b.c` の形で集める。 */
-function japaneseKeys(value: unknown, path: string): string[] {
+/**
+ * 面の名を訳した綴り。3 面は固有名詞なので、どちらの言語でも Scrawl /
+ * Note / Codex と書く(#255)。英語は小文字の綴りだけを拾う — `\b` と
+ * 大文字小文字の区別で、正しい `Note` には当たらない。
+ */
+const TRANSLATED_SURFACE_NAME = /ノート|メモ|タイムライン|\b(?:notes?|timelines?)\b/u;
+
+/**
+ * `re` に当たる文字列のキーを、`a.b.c` の形で集める。見るのは文字列だけで、
+ * 関数が組み立てる文は通らない。
+ */
+function keysMatching(value: unknown, path: string, re: RegExp): string[] {
   if (typeof value === "string") {
-    return JAPANESE.test(value) ? [path] : [];
+    return re.test(value) ? [path] : [];
   }
   if (typeof value !== "object" || value === null) {
     return [];
   }
-  return Object.entries(value).flatMap(([key, inner]) => japaneseKeys(inner, `${path}.${key}`));
+  return Object.entries(value).flatMap(([key, inner]) => keysMatching(inner, `${path}.${key}`, re));
 }
 
 describe("the two tables", () => {
@@ -73,6 +83,13 @@ describe("the two tables", () => {
 
   it("leaves no english string in japanese characters", () => {
     // 言語の選択肢だけは、その言語自身の名前で出す
-    expect(japaneseKeys(messages.en, "en")).toStrictEqual(["en.settings.languageJa"]);
+    expect(keysMatching(messages.en, "en", JAPANESE)).toStrictEqual(["en.settings.languageJa"]);
+  });
+
+  // 訳した綴りが 1 つ混じると、同じ面がタブでは Note、文の中では「ノート」と
+  // 名乗る。ラベル(`routes.ts`)だけを改名した #255 の続き
+  it("never spells a surface name any way but Scrawl, Note and Codex", () => {
+    expect(keysMatching(messages.ja, "ja", TRANSLATED_SURFACE_NAME)).toStrictEqual([]);
+    expect(keysMatching(messages.en, "en", TRANSLATED_SURFACE_NAME)).toStrictEqual([]);
   });
 });

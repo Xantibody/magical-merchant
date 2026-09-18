@@ -1,4 +1,4 @@
-//! `timeline add` / `timeline show` / `timeline dates`。
+//! `scrawl add` / `scrawl show` / `scrawl dates`。
 //!
 //! 追記だけで上書きはしない。ノートと違ってアプリが同じ日を開いていても
 //! 行が増えるだけなので、revision の照合は要らない。Android のウィジェットが
@@ -7,7 +7,7 @@
 use std::path::Path;
 
 use chrono::{Local, NaiveDate, NaiveTime};
-use magical_merchant_core::{CoreError, Source, parse_timeline_entry};
+use magical_merchant_core::{CoreError, Source, parse_scrawl_entry};
 
 use crate::notes;
 
@@ -19,7 +19,7 @@ pub(crate) fn add(data_dir: &Path, text: &str) -> Result<bool, CoreError> {
     }
     // 入り口は `notes::context()` に混ぜない。あれは MCP とも共有していて、
     // 端末しか見ていないので CLI と MCP を同じものとして書いてしまう
-    magical_merchant_core::save_timeline_entry(data_dir, text, &notes::context(), Source::Cli)?;
+    magical_merchant_core::save_scrawl_entry(data_dir, text, &notes::context(), Source::Cli)?;
     Ok(true)
 }
 
@@ -41,11 +41,11 @@ pub(crate) fn resolve_date(arg: Option<&str>) -> Result<NaiveDate, CoreError> {
 }
 
 pub(crate) fn show(data_dir: &Path, date: NaiveDate) -> Result<Vec<Entry>, CoreError> {
-    let lines = magical_merchant_core::read_timeline(data_dir, date)?;
+    let lines = magical_merchant_core::read_scrawl(data_dir, date)?;
     Ok(lines
         .iter()
         .map(|line| {
-            let entry = parse_timeline_entry(line);
+            let entry = parse_scrawl_entry(line);
             Entry {
                 time: entry.time,
                 text: entry.text,
@@ -55,7 +55,7 @@ pub(crate) fn show(data_dir: &Path, date: NaiveDate) -> Result<Vec<Entry>, CoreE
 }
 
 pub(crate) fn dates(data_dir: &Path) -> Result<Vec<NaiveDate>, CoreError> {
-    magical_merchant_core::list_timeline_dates(data_dir)
+    magical_merchant_core::list_scrawl_dates(data_dir)
 }
 
 #[cfg(test)]

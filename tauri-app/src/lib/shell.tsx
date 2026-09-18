@@ -25,11 +25,11 @@ export interface Shell {
   openPalette: (scope?: PaletteScope) => void;
   closePalette: () => void;
   /**
-   * Timeline で絞り込んでいるタグ。Timeline の中だけで持つと ⌘K の
+   * Scrawl で絞り込んでいるタグ。Scrawl の中だけで持つと ⌘K の
    * 処理(AppLayout)から見えないので、ここに引き上げてある。
    */
-  timelineTag: Accessor<string | null>;
-  setTimelineTag: (tag: string | null) => void;
+  scrawlTag: Accessor<string | null>;
+  setScrawlTag: (tag: string | null) => void;
   toast: Accessor<Toast | null>;
   showToast: (message: string, undo?: () => void, detail?: string) => void;
   dismissToast: () => void;
@@ -52,7 +52,7 @@ export function ShellProvider(props: { children: JSX.Element }): JSX.Element {
   const [popover, setPopover] = createSignal<PopoverName>(null);
   const [paletteOpen, setPaletteOpen] = createSignal(false);
   const [paletteScope, setPaletteScope] = createSignal<PaletteScope | null>(null);
-  const [timelineTag, setTimelineTag] = createSignal<string | null>(null);
+  const [scrawlTag, setScrawlTag] = createSignal<string | null>(null);
   const [toast, setToast] = createSignal<Toast | null>(null);
   const [dataVersion, setDataVersion] = createSignal(0);
 
@@ -80,8 +80,8 @@ export function ShellProvider(props: { children: JSX.Element }): JSX.Element {
       setPaletteOpen(true);
     },
     closePalette: () => setPaletteOpen(false),
-    timelineTag,
-    setTimelineTag,
+    scrawlTag,
+    setScrawlTag,
     toast,
     showToast: (message, undo, detail) => {
       clearToastTimer();

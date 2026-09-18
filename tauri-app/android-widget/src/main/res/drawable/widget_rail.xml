@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The timeline rail from the app: a 2dp vertical line with a 10dp dot at the
+<!-- The scrawl rail from the app: a 2dp vertical line with a 10dp dot at the
      entry position. android:width/height on <item> needs API 23; minSdk is 24. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item

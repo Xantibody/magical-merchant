@@ -8,7 +8,7 @@ use magical_merchant_core::utils::frontmatter;
 use magical_merchant_core::utils::paths::place_cache_path;
 use magical_merchant_core::utils::place::{PlaceCache, place_key};
 use magical_merchant_core::{
-    GlyphFormat, GlyphName, NoteFilename, Provenance, Revision, Source, parse_timeline_entry,
+    GlyphFormat, GlyphName, NoteFilename, Provenance, Revision, Source, parse_scrawl_entry,
 };
 use rmcp::handler::server::tool::ToolRouter;
 use rmcp::handler::server::wrapper::{Json, Parameters};
@@ -24,8 +24,8 @@ use crate::notes;
 use crate::output::{
     ContextInfo, CreatedNoteOutput, EntryInfo, GlyphListOutput, HistoryOutput,
     HistoryVersionOutput, NoteListOutput, NoteOutput, PlaceInfo, PlacesOutput, SavedGlyphOutput,
-    SearchOutput, TagInfo, TagsOutput, TemplateListOutput, TemplateOutput, TimelineDatesOutput,
-    TimelineOutput, UpdatedNoteOutput,
+    ScrawlDatesOutput, ScrawlOutput, SearchOutput, TagInfo, TagsOutput, TemplateListOutput,
+    TemplateOutput, UpdatedNoteOutput,
 };
 
 /// 範囲読みの 1 回あたりの上限。日記は年単位で溜まるので、青天井にすると
@@ -40,12 +40,12 @@ const READ_ONLY_OPENING: &str = "Read-only access to";
 const WRITABLE_OPENING: &str = "Read and write access to";
 
 const INSTRUCTIONS_BODY: &str = " a Magical Merchant journal: \
-a Timeline of timestamped entries (one file per day) and Notes (Markdown \
+a Scrawl of timestamped entries (one file per day) and Notes (Markdown \
 files). Every record carries the device state at the moment it was written: \
 local time, GPS coordinates when available, battery, network, and which \
-device wrote it. Use `read_timeline_range` to pull entries for a period, \
+device wrote it. Use `read_scrawl_range` to pull entries for a period, \
 `list_places` to see where records were written, and `search` to find text. \
-Timeline times are the device's local wall-clock time without a UTC offset; \
+Scrawl times are the device's local wall-clock time without a UTC offset; \
 note times are RFC 3339 with the offset. Bodies may contain `:name:` \
 shortcodes that the app renders as user-registered images (glyphs); \
 `list_glyphs` gives the vocabulary, and an unregistered `:name:` stays \
@@ -107,13 +107,13 @@ impl McpServer {
 
     fn day_entries(&self, cache: &PlaceCache, date: NaiveDate) -> Result<Vec<EntryInfo>, String> {
         let formatted = date.format("%Y-%m-%d").to_string();
-        let lines = magical_merchant_core::read_timeline(&self.data_dir, date)
-            .map_err(|e| e.to_string())?;
+        let lines =
+            magical_merchant_core::read_scrawl(&self.data_dir, date).map_err(|e| e.to_string())?;
         Ok(lines
             .iter()
             .enumerate()
             .map(|(index, line)| {
-                let entry = parse_timeline_entry(line);
+                let entry = parse_scrawl_entry(line);
                 let place = entry
                     .context
                     .location
@@ -305,7 +305,7 @@ impl McpServer {
 
     #[tool(
         name = "backlinks",
-        description = "List the notes and timeline entries that link to a note with [[filename-stem]]"
+        description = "List the notes and scrawl entries that link to a note with [[filename-stem]]"
     )]
     fn backlinks(
         &self,
@@ -320,7 +320,7 @@ impl McpServer {
 
     #[tool(
         name = "search",
-        description = "Search notes and timeline entries for a substring, ignoring case; newest first. Pass `tags` to search only records carrying every listed #tag, or `tags` with an empty query to list every record carrying them"
+        description = "Search notes and scrawl entries for a substring, ignoring case; newest first. Pass `tags` to search only records carrying every listed #tag, or `tags` with an empty query to list every record carrying them"
     )]
     fn search(
         &self,
@@ -334,12 +334,12 @@ impl McpServer {
     }
 
     #[tool(
-        name = "list_timeline_dates",
-        description = "List the dates (YYYY-MM-DD) that have timeline entries, newest first"
+        name = "list_scrawl_dates",
+        description = "List the dates (YYYY-MM-DD) that have scrawl entries, newest first"
     )]
-    fn list_timeline_dates(&self) -> Result<Json<TimelineDatesOutput>, String> {
-        let dates = magical_merchant_core::list_timeline_dates(&self.data_dir).map_err(err)?;
-        Ok(Json(TimelineDatesOutput {
+    fn list_scrawl_dates(&self) -> Result<Json<ScrawlDatesOutput>, String> {
+        let dates = magical_merchant_core::list_scrawl_dates(&self.data_dir).map_err(err)?;
+        Ok(Json(ScrawlDatesOutput {
             dates: dates
                 .iter()
                 .map(|d| d.format("%Y-%m-%d").to_string())
@@ -348,29 +348,29 @@ impl McpServer {
     }
 
     #[tool(
-        name = "read_timeline",
-        description = "Read every timeline entry of one day (YYYY-MM-DD) with its time, text, tags, location, and device context"
+        name = "read_scrawl",
+        description = "Read every scrawl entry of one day (YYYY-MM-DD) with its time, text, tags, location, and device context"
     )]
-    fn read_timeline(
+    fn read_scrawl(
         &self,
         Parameters(param): Parameters<DateParam>,
-    ) -> Result<Json<TimelineOutput>, String> {
+    ) -> Result<Json<ScrawlOutput>, String> {
         let date = parse_date(&param.date)?;
         let entries = self.day_entries(&self.places(), date)?;
-        Ok(Json(TimelineOutput {
+        Ok(Json(ScrawlOutput {
             entries,
             truncated: false,
         }))
     }
 
     #[tool(
-        name = "read_timeline_range",
-        description = "Read timeline entries between two days (inclusive), oldest first, optionally filtered by tag; use this to line records up with other time-based data"
+        name = "read_scrawl_range",
+        description = "Read scrawl entries between two days (inclusive), oldest first, optionally filtered by tag; use this to line records up with other time-based data"
     )]
-    fn read_timeline_range(
+    fn read_scrawl_range(
         &self,
         Parameters(param): Parameters<RangeParam>,
-    ) -> Result<Json<TimelineOutput>, String> {
+    ) -> Result<Json<ScrawlOutput>, String> {
         let from = parse_date(&param.from)?;
         let to = parse_date(&param.to)?;
         if from > to {
@@ -387,7 +387,7 @@ impl McpServer {
         let mut truncated = false;
         // 日付一覧から絞る。範囲の全日を開きに行くと、書いていない日の
         // ぶんだけ無駄に stat が積み上がる。
-        let mut dates: Vec<NaiveDate> = magical_merchant_core::list_timeline_dates(&self.data_dir)
+        let mut dates: Vec<NaiveDate> = magical_merchant_core::list_scrawl_dates(&self.data_dir)
             .map_err(err)?
             .into_iter()
             .filter(|d| (from..=to).contains(d))
@@ -410,7 +410,7 @@ impl McpServer {
                 entries.push(entry);
             }
         }
-        Ok(Json(TimelineOutput { entries, truncated }))
+        Ok(Json(ScrawlOutput { entries, truncated }))
     }
 
     #[tool(
@@ -445,10 +445,10 @@ impl McpServer {
             }
         };
 
-        for date in magical_merchant_core::list_timeline_dates(&self.data_dir).map_err(err)? {
+        for date in magical_merchant_core::list_scrawl_dates(&self.data_dir).map_err(err)? {
             let formatted = date.format("%Y-%m-%d").to_string();
-            for line in magical_merchant_core::read_timeline(&self.data_dir, date).map_err(err)? {
-                if let Some(l) = parse_timeline_entry(&line).context.location {
+            for line in magical_merchant_core::read_scrawl(&self.data_dir, date).map_err(err)? {
+                if let Some(l) = parse_scrawl_entry(&line).context.location {
                     visit(l.latitude, l.longitude, &formatted, false);
                 }
             }
@@ -474,7 +474,7 @@ impl McpServer {
 
     #[tool(
         name = "list_tags",
-        description = "List every #tag used across notes and timeline entries with usage counts, most-used first"
+        description = "List every #tag used across notes and scrawl entries with usage counts, most-used first"
     )]
     fn list_tags(&self) -> Result<Json<TagsOutput>, String> {
         use magical_merchant_core::utils::tags;
@@ -490,9 +490,9 @@ impl McpServer {
                 counts.entry(tags::fold_tag(&tag)).or_insert((tag, 0, 0)).1 += 1;
             }
         }
-        for date in magical_merchant_core::list_timeline_dates(&self.data_dir).map_err(err)? {
-            for line in magical_merchant_core::read_timeline(&self.data_dir, date).map_err(err)? {
-                let entry = parse_timeline_entry(&line);
+        for date in magical_merchant_core::list_scrawl_dates(&self.data_dir).map_err(err)? {
+            for line in magical_merchant_core::read_scrawl(&self.data_dir, date).map_err(err)? {
+                let entry = parse_scrawl_entry(&line);
                 for tag in tags::parse(&entry.text) {
                     counts.entry(tags::fold_tag(&tag)).or_insert((tag, 0, 0)).2 += 1;
                 }
@@ -650,7 +650,7 @@ impl McpServer {
 
     #[tool(
         name = "list_glyphs",
-        description = "List the user-registered glyph images and the `:name:` shortcode that renders each one inline in a note or timeline entry"
+        description = "List the user-registered glyph images and the `:name:` shortcode that renders each one inline in a note or scrawl entry"
     )]
     fn list_glyphs(&self) -> Result<Json<GlyphListOutput>, String> {
         let glyphs = magical_merchant_core::list_glyphs(&self.data_dir).map_err(err)?;
@@ -727,7 +727,7 @@ mod tests {
     use super::*;
     use chrono::{Local, TimeZone};
     use magical_merchant_core::utils::device::{Context, Location};
-    use magical_merchant_core::utils::markdown::format_timeline_line;
+    use magical_merchant_core::utils::markdown::format_scrawl_line;
     use magical_merchant_core::utils::place::cache_key;
     use std::fs;
     use tempfile::TempDir;
@@ -750,7 +750,7 @@ mod tests {
         }
     }
 
-    /// 日付を固定して書く。`save_timeline_entry` は今日にしか書けない。
+    /// 日付を固定して書く。`save_scrawl_entry` は今日にしか書けない。
     fn write_day(base: &Path, date: &str, entries: &[(u32, &str, &Context)]) {
         let dir = base.join("data/timeline");
         fs::create_dir_all(&dir).unwrap();
@@ -761,7 +761,7 @@ mod tests {
                 let at = Local
                     .from_local_datetime(&day.and_hms_opt(*hour, 0, 0).unwrap())
                     .unwrap();
-                format_timeline_line(text, at, ctx)
+                format_scrawl_line(text, at, ctx)
             })
             .collect();
         fs::write(dir.join(format!("{date}.md")), lines.join("\n") + "\n").unwrap();
@@ -793,9 +793,9 @@ mod tests {
             .collect()
     }
 
-    fn range(server: &McpServer, from: &str, to: &str, tag: Option<&str>) -> TimelineOutput {
+    fn range(server: &McpServer, from: &str, to: &str, tag: Option<&str>) -> ScrawlOutput {
         server
-            .read_timeline_range(Parameters(RangeParam {
+            .read_scrawl_range(Parameters(RangeParam {
                 from: from.to_string(),
                 to: to.to_string(),
                 tag: tag.map(str::to_string),
@@ -816,7 +816,7 @@ mod tests {
         name_shibuya(tmp.path(), "ja");
 
         let out = server(tmp.path())
-            .read_timeline(Parameters(DateParam {
+            .read_scrawl(Parameters(DateParam {
                 date: "2026-04-30".to_string(),
             }))
             .unwrap()
@@ -847,7 +847,7 @@ mod tests {
         );
 
         let out = server(tmp.path())
-            .read_timeline(Parameters(DateParam {
+            .read_scrawl(Parameters(DateParam {
                 date: "2026-04-30".to_string(),
             }))
             .unwrap()
@@ -933,7 +933,7 @@ mod tests {
         );
 
         let out = server(tmp.path())
-            .read_timeline_range(Parameters(RangeParam {
+            .read_scrawl_range(Parameters(RangeParam {
                 from: "2026-01-01".to_string(),
                 to: "2026-12-31".to_string(),
                 tag: None,
@@ -950,7 +950,7 @@ mod tests {
     fn a_backwards_range_is_refused() {
         let tmp = TempDir::new().unwrap();
 
-        let result = server(tmp.path()).read_timeline_range(Parameters(RangeParam {
+        let result = server(tmp.path()).read_scrawl_range(Parameters(RangeParam {
             from: "2026-02-01".to_string(),
             to: "2026-01-01".to_string(),
             tag: None,

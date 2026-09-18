@@ -70,10 +70,10 @@ const ja = {
   hints: {
     pill: (modifier: string) => `${modifier} を離すと消える · ? で一覧`,
   },
-  timeline: {
+  scrawl: {
     promote: "Note にする",
     unlink: (title: string) => `「${title}」との関係を解除`,
-    unlinked: "ノートとの関係を解除しました",
+    unlinked: "Note との関係を解除しました",
     emptyFiltered: "このタグの記録はまだありません。",
     emptyToday: "今日はまだ何も記録していません。",
     emptyFilteredHint: "上のチップで絞り込みを外せます。",
@@ -103,14 +103,14 @@ const ja = {
     filtering: (tag: string, matched: number) => `#${tag} で絞り込み中 · ${matched}件`,
   },
   notes: {
-    empty: "ノートがありません",
+    empty: "Note がありません",
     emptyHint: "新規から始めると、ここに並びます。",
     new: "新規",
     noSelection: "項目がありません",
     backToList: "一覧に戻る",
-    info: "ノート情報",
+    info: "Note 情報",
     readOnly: "読み取り専用",
-    actions: "このノートの操作",
+    actions: "この Note の操作",
     layMap: "マップを並べる",
     hideMap: "マップを閉じる",
     makeReadOnly: "読み取り専用にする",
@@ -118,10 +118,10 @@ const ja = {
     revert: "編集前に戻す",
     savedAt: (time: string) => `${time} に保存`,
     titlePlaceholder: "タイトル",
-    bodyPlaceholder: "ノートを書く…",
+    bodyPlaceholder: "Note を書く…",
     backlinks: (count: number) => `リンクされている記録 (${count})`,
-    untitled: "(空のメモ)",
-    deleted: "ノートを削除しました",
+    untitled: "(空の Note)",
+    deleted: "Note を削除しました",
     reverted: "編集前の内容に戻しました",
     revertFailed: "戻せませんでした",
     editedElsewhere:
@@ -134,19 +134,19 @@ const ja = {
     staleNotReloaded:
       "別の場所で書き換えられていたので保存できませんでした。ディスクの本文は読み直せず、画面にあるのは入力した本文のままです。この端末に控えましたが、別の場所へも写してください",
     brokenMeta:
-      "このノートの先頭の記録が読めないので保存できません。入力した本文はこの端末に控えました。開き直せば「戻す」で画面に出せます",
+      "この Note の先頭の記録が読めないので保存できません。入力した本文はこの端末に控えました。開き直せば「戻す」で画面に出せます",
     /**
      * ファイルそのものが文字として読めない。壊れているのは先頭の記録ではなく
      * 中身なので `brokenMeta` とは言い分を分ける — 開き直しても `read_note` が
      * 同じ理由で断られ、「戻す」で控えを画面に出す道が無い。
      */
     notTextNote:
-      "このノートのファイルは文字として読めないので保存できません。入力した本文はこの端末に控えましたが、開き直しても読めないので、画面にあるうちに別の場所へ写してください",
-    /** 無いノートは行ごと消えるので、「戻す」で呼び出せるとは言えない。 */
+      "この Note のファイルは文字として読めないので保存できません。入力した本文はこの端末に控えましたが、開き直しても読めないので、画面にあるうちに別の場所へ写してください",
+    /** 無い Note は行ごと消えるので、「戻す」で呼び出せるとは言えない。 */
     missingNote:
-      "このノートはもう在りません。保存できないので、入力した本文は画面にあるうちに別の場所へ写してください",
+      "この Note はもう在りません。保存できないので、入力した本文は画面にあるうちに別の場所へ写してください",
     shownFromBackup:
-      "この端末に控えた本文を画面に出しました。このノートのディスクには書けないので、別の場所へ写してください",
+      "この端末に控えた本文を画面に出しました。この Note のディスクには書けないので、別の場所へ写してください",
     saveNotKept:
       "保存できず、この端末にも控えを残せませんでした。閉じると入力した本文は失われます。別の場所へ写してください",
     /**
@@ -156,21 +156,21 @@ const ja = {
     staleNotKept:
       "別の場所で書き換えられていたので保存できず、この端末にも控えを残せませんでした。入力した本文は失われました",
     /**
-     * 断られたノートが画面に出ていないときの言い分。画面にあるのは別のノートの
-     * 本文なので、「画面にあるうちに写して」は届かない。どのノートかを名乗り、
+     * 断られた Note が画面に出ていないときの言い分。画面にあるのは別の Note の
+     * 本文なので、「画面にあるうちに写して」は届かない。どの Note かを名乗り、
      * 控えの在り処と、いま取り出せるかどうかだけを言う。
      */
     editedElsewhereAway: (title: string) =>
       `「${title}」は別の場所で書き換えられていたので保存できませんでした。入力した本文はこの端末に控えました。「${title}」を開き直して「戻す」を押せば画面に出せます`,
     missingNoteAway: (title: string) =>
-      `「${title}」はもう在りません。入力した本文はこの端末に控えましたが、消えたノートを開く道が無いので、今は画面に出せません`,
+      `「${title}」はもう在りません。入力した本文はこの端末に控えましたが、消えた Note を開く道が無いので、今は画面に出せません`,
     brokenMetaAway: (title: string) =>
       `「${title}」は先頭の記録が読めないので保存できません。入力した本文はこの端末に控えました。開き直して「戻す」で画面に出せます`,
     notTextNoteAway: (title: string) =>
-      `「${title}」のファイルは文字として読めないので保存できません。入力した本文はこの端末に控えましたが、読めないノートを開く道が無いので、今は画面に出せません`,
+      `「${title}」のファイルは文字として読めないので保存できません。入力した本文はこの端末に控えましたが、読めない Note を開く道が無いので、今は画面に出せません`,
     saveNotKeptAway: (title: string) =>
       `「${title}」は保存できず、この端末にも控えを残せませんでした。入力した本文は失われました`,
-    loadFailed: "このノートを読めませんでした。書き換えないよう、本文は開いていません",
+    loadFailed: "この Note を読めませんでした。書き換えないよう、本文は開いていません",
   },
   codex: {
     empty: "育てる文書がまだありません",
@@ -233,10 +233,10 @@ const ja = {
     title: "テンプレート",
     manage: "テンプレートを管理",
     manageLink: "テンプレートを管理…",
-    manageHint: "ノート作成時に使うテンプレートの作成・編集",
+    manageHint: "Note を作るときのテンプレートの作成・編集",
     fromTemplate: "テンプレートから",
-    emptyNote: "空のノート",
-    newNote: "新規ノート",
+    emptyNote: "空の Note",
+    newNote: "新規 Note",
     new: "新規",
     empty: "テンプレートがありません",
     emptyHint: "新規から作ると、ここに並びます。",
@@ -252,7 +252,7 @@ const ja = {
     varDate: "日付",
     varTime: "時刻",
     varWeekday: "曜日",
-    varPrev: "前回のノート",
+    varPrev: "前回の Note",
     todayPreview: "今日作ると",
     nameTaken: "同じ名前のテンプレートがあります",
     fileHint: "テンプレは templates/*.md の素の Markdown ファイル。同期にもそのまま乗る",
@@ -260,7 +260,7 @@ const ja = {
     unsaved: "未保存",
     discarded: "保存していない変更を破棄しました",
     saveFailed: "テンプレートを保存できませんでした",
-    createFailed: "テンプレートからノートを作れませんでした",
+    createFailed: "テンプレートから Note を作れませんでした",
     reused: (name: string) => `今日の「${name}」を開きました`,
     count: (count: number) => `${count}件`,
     backToSettings: "設定に戻る",
@@ -394,12 +394,12 @@ const ja = {
     dialogLabel: "検索・コマンド",
     commands: "コマンド",
     dates: "日付",
-    recentNotes: "最近のノート",
-    hits: "ノート・エントリ",
+    recentNotes: "最近の Note",
+    hits: "Note と Scrawl のエントリ",
     empty: "一致するものがありません",
     count: (count: number) => `${count}件`,
-    newNote: "新規ノート",
-    openTimeline: "Scrawl を開く",
+    newNote: "新規 Note",
+    openScrawl: "Scrawl を開く",
     openNotes: "Note を開く",
     openCodex: "Codex を開く",
     openSettings: "設定を開く",
@@ -457,7 +457,7 @@ const ja = {
     weekdays: ["日曜日", "月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日"],
     /** 日グループの見出しに出す暦日。 */
     monthDay: (month: number, day: number) => `${month}月${day}日`,
-    /** ノートの作成日。年まで言うのはここだけ。 */
+    /** Note の作成日。年まで言うのはここだけ。 */
     fullDate: (year: number, month: number, day: number) => `${year}年${month}月${day}日`,
   },
 };
@@ -509,7 +509,7 @@ const en: Messages = {
   hints: {
     pill: (modifier: string) => `Let go of ${modifier} to hide · ? for the list`,
   },
-  timeline: {
+  scrawl: {
     promote: "Make a Note",
     unlink: (title: string) => `Unlink “${title}”`,
     unlinked: "Note unlinked from this day",
@@ -544,14 +544,14 @@ const en: Messages = {
     filtering: (tag: string, matched: number) => `Filtered by #${tag} · ${matched}`,
   },
   notes: {
-    empty: "No notes yet",
+    empty: "No Notes yet",
     emptyHint: "Start one with New and it lands here.",
     new: "New",
     noSelection: "Nothing to show",
     backToList: "Back to the list",
     info: "Note info",
     readOnly: "Read-only",
-    actions: "Actions for this note",
+    actions: "Actions for this Note",
     layMap: "Lay the map alongside",
     hideMap: "Close the map",
     makeReadOnly: "Make read-only",
@@ -559,24 +559,24 @@ const en: Messages = {
     revert: "Back to before this edit",
     savedAt: (time: string) => `Saved at ${time}`,
     titlePlaceholder: "Title",
-    bodyPlaceholder: "Write a note…",
+    bodyPlaceholder: "Write a Note…",
     backlinks: (count: number) => `Records linking here (${count})`,
-    untitled: "(empty note)",
+    untitled: "(empty Note)",
     deleted: "Note deleted",
     reverted: "Restored the body from before the edit",
     revertFailed: "Could not restore it",
     editedElsewhere:
-      "This note was changed elsewhere and has been reloaded. Revert brings your text back",
+      "This Note was changed elsewhere and has been reloaded. Revert brings your text back",
     staleNotReloaded:
       "It was changed elsewhere, so it was not saved. The copy on disk could not be reloaded, so what is on screen is still your own text. It is kept on this device, but copy it somewhere else as well",
     brokenMeta:
-      "This note's frontmatter cannot be read, so it was not saved. Your text is kept on this device — reopen the note and Revert puts it back on screen",
+      "This Note's frontmatter cannot be read, so it was not saved. Your text is kept on this device — reopen the Note and Revert puts it back on screen",
     notTextNote:
-      "This note's file is not readable text, so it was not saved. Your text is kept on this device, but reopening the note cannot read it — copy your text somewhere else while it is still on screen",
+      "This Note's file is not readable text, so it was not saved. Your text is kept on this device, but reopening the Note cannot read it — copy your text somewhere else while it is still on screen",
     missingNote:
-      "This note no longer exists, so it cannot be saved. Copy your text somewhere else while it is still on screen",
+      "This Note no longer exists, so it cannot be saved. Copy your text somewhere else while it is still on screen",
     shownFromBackup:
-      "The copy kept on this device is back on screen. It cannot be written to this note, so copy it somewhere else",
+      "The copy kept on this device is back on screen. It cannot be written to this Note, so copy it somewhere else",
     saveNotKept:
       "It could not be saved, and no copy could be kept on this device either. Closing this loses your text — copy it somewhere else",
     staleNotKept:
@@ -584,14 +584,14 @@ const en: Messages = {
     editedElsewhereAway: (title: string) =>
       `"${title}" was changed elsewhere, so it was not saved. Your text is kept on this device — reopen "${title}" and Revert puts it back on screen`,
     missingNoteAway: (title: string) =>
-      `"${title}" no longer exists. Your text is kept on this device, but a deleted note cannot be opened, so it cannot be put on screen yet`,
+      `"${title}" no longer exists. Your text is kept on this device, but a deleted Note cannot be opened, so it cannot be put on screen yet`,
     brokenMetaAway: (title: string) =>
       `"${title}" cannot be saved because its frontmatter cannot be read. Your text is kept on this device — reopen it and Revert puts it back on screen`,
     notTextNoteAway: (title: string) =>
-      `"${title}" cannot be saved because its file is not readable text. Your text is kept on this device, but a note that cannot be read cannot be opened, so it cannot be put on screen yet`,
+      `"${title}" cannot be saved because its file is not readable text. Your text is kept on this device, but a Note that cannot be read cannot be opened, so it cannot be put on screen yet`,
     saveNotKeptAway: (title: string) =>
       `"${title}" could not be saved, and no copy could be kept on this device either. Your text is gone`,
-    loadFailed: "This note could not be read, so its body stays closed rather than be overwritten",
+    loadFailed: "This Note could not be read, so its body stays closed rather than be overwritten",
   },
   codex: {
     empty: "Nothing is growing yet",
@@ -612,7 +612,7 @@ const en: Messages = {
     restore: "Restore this version",
     restored: "Restored this version. The draft from before is in the history",
     restoredNotShown:
-      "Restored this version, but its body could not be put on screen. Please reopen the note",
+      "Restored this version, but its body could not be put on screen. Please reopen the Codex",
     restoreFailed: "Could not restore it",
     same: "Same content",
     sameShort: "same",
@@ -647,10 +647,10 @@ const en: Messages = {
     title: "Templates",
     manage: "Manage templates",
     manageLink: "Manage templates…",
-    manageHint: "Create and edit the templates you start notes from",
+    manageHint: "Create and edit the templates you start Notes from",
     fromTemplate: "From a template",
-    emptyNote: "Empty note",
-    newNote: "New note",
+    emptyNote: "Empty Note",
+    newNote: "New Note",
     new: "New",
     empty: "No templates yet",
     emptyHint: "Create one with New and it lands here.",
@@ -666,7 +666,7 @@ const en: Messages = {
     varDate: "date",
     varTime: "time",
     varWeekday: "weekday",
-    varPrev: "previous note",
+    varPrev: "previous Note",
     todayPreview: "Made today",
     nameTaken: "A template with this name already exists",
     fileHint: "Templates are plain Markdown in templates/*.md and sync as they are",
@@ -674,7 +674,7 @@ const en: Messages = {
     unsaved: "Unsaved",
     discarded: "Discarded the unsaved changes",
     saveFailed: "Could not save the template",
-    createFailed: "Could not create a note from this template",
+    createFailed: "Could not create a Note from this template",
     reused: (name: string) => `Opened today's “${name}”`,
     count: (count: number) => `${count}`,
     backToSettings: "Back to settings",
@@ -785,7 +785,7 @@ const en: Messages = {
     startFullscreenHint: "Applies from the next launch",
     glyphs: "Glyphs",
     glyphsHint:
-      "Register an image and write :name: in a note or entry to show it there. PNG or SVG, up to 256 KB.",
+      "Register an image and write :name: in a Note or a Scrawl entry to show it there. PNG or SVG, up to 256 KB.",
     glyphsEmpty: "Nothing registered yet",
     addGlyph: "Add an image",
     addGlyphsFolder: "Add a folder",
@@ -806,12 +806,12 @@ const en: Messages = {
     dialogLabel: "Search and commands",
     commands: "Commands",
     dates: "Dates",
-    recentNotes: "Recent notes",
+    recentNotes: "Recent Notes",
     hits: "Notes and Scrawl entries",
     empty: "Nothing matches",
     count: (count: number) => `${count}`,
-    newNote: "New note",
-    openTimeline: "Open Scrawl",
+    newNote: "New Note",
+    openScrawl: "Open Scrawl",
     openNotes: "Open Note",
     openCodex: "Open Codex",
     openSettings: "Open Settings",

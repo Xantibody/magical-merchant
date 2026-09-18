@@ -13,7 +13,7 @@ import Icon from "../components/Icon";
 import CaptureBar from "../components/CaptureBar";
 import CalendarPopover from "../components/CalendarPopover";
 import TagFilter from "../components/TagFilter";
-import TimelineEntry, { OriginChip } from "../components/TimelineEntry";
+import ScrawlEntry, { OriginChip } from "../components/ScrawlEntry";
 import { useNavigate, useSearchParams } from "@solidjs/router";
 import { typedInvoke } from "../lib/commands";
 import { getClientContext } from "../lib/client-context";
@@ -21,16 +21,16 @@ import { useShell } from "../lib/shell";
 import { formatDayHeading, toIsoDate } from "../lib/day-labels";
 import { t } from "../lib/i18n";
 import {
-  groupTimelineByDay,
+  groupScrawlByDay,
   notesByOrigin,
   orphanNotesByDate,
   originKeyOf,
   planBulkDelete,
   replaceDayItems,
   toNoteItems,
-  toTimelineItems,
+  toScrawlItems,
 } from "../lib/items";
-import type { NoteItem, TimelineItem } from "../lib/items";
+import type { NoteItem, ScrawlItem } from "../lib/items";
 import { places } from "../lib/places";
 import { noteRoute } from "../lib/note-route";
 import { countTags, parseTags, sameTag } from "../lib/tags";
@@ -40,7 +40,7 @@ import {
   summarizeWeek,
   yearAgoToday,
 } from "../lib/weekly-digest";
-import type { DeviceContext } from "../lib/parse-timeline";
+import type { DeviceContext } from "../lib/parse-scrawl";
 
 /** 一覧に最初から載せる日数。カレンダーで遡ったぶんは都度足す。 */
 const RECENT_DAYS = 14;
@@ -48,8 +48,8 @@ const RECENT_DAYS = 14;
 /** 週次ダイジェストを閉じた週(月曜の日付)。端末ローカルの表示状態。 */
 const DIGEST_DISMISS_KEY = "weekly-digest-dismissed";
 
-interface TimelineData {
-  items: TimelineItem[];
+interface ScrawlData {
+  items: ScrawlItem[];
   /** 記録のある全日付(新しい順)。ダイジェストの「1年前の今日」判定が使う。 */
   dates: string[];
 }
@@ -59,36 +59,36 @@ interface TimelineData {
  * 描画が別フラッシュになり、先に出た日リストへ後からダイジェストが
  * 割り込んでレイアウトシフトを起こす。
  */
-async function loadTimeline(extraDates: string[]): Promise<TimelineData> {
-  const dates = await typedInvoke("list_timeline_dates");
+async function loadScrawl(extraDates: string[]): Promise<ScrawlData> {
+  const dates = await typedInvoke("list_scrawl_dates");
   const wanted = [...new Set([...dates.slice(0, RECENT_DAYS), ...extraDates])].toSorted((a, b) =>
     b.localeCompare(a),
   );
   const days = await Promise.all(
     wanted.map(async (date) =>
-      toTimelineItems(date, await typedInvoke("read_timeline_by_date", { date })),
+      toScrawlItems(date, await typedInvoke("read_scrawl_by_date", { date })),
     ),
   );
   return { items: days.flat(), dates };
 }
 
-function EmptyTimeline(props: { filtered: boolean }): JSX.Element {
+function EmptyScrawl(props: { filtered: boolean }): JSX.Element {
   return (
-    <div class="timeline-empty">
-      <span class="timeline-empty-rail" aria-hidden="true" />
+    <div class="scrawl-empty">
+      <span class="scrawl-empty-rail" aria-hidden="true" />
       <div>
-        <p class="timeline-empty-title">
-          {props.filtered ? t().timeline.emptyFiltered : t().timeline.emptyToday}
+        <p class="scrawl-empty-title">
+          {props.filtered ? t().scrawl.emptyFiltered : t().scrawl.emptyToday}
         </p>
-        <p class="timeline-empty-hint">
-          {props.filtered ? t().timeline.emptyFilteredHint : t().timeline.emptyHint}
+        <p class="scrawl-empty-hint">
+          {props.filtered ? t().scrawl.emptyFilteredHint : t().scrawl.emptyHint}
         </p>
       </div>
     </div>
   );
 }
 
-export default function Timeline(): JSX.Element {
+export default function Scrawl(): JSX.Element {
   const shell = useShell();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -98,8 +98,8 @@ export default function Timeline(): JSX.Element {
   /** カレンダーで選ばれた、これから見せたい日。表示できたら消す。 */
   const [jumpTo, setJumpTo] = createSignal<string | null>(null);
   /** 絞り込み中のタグ。1 つだけ選べる。⌘K に引き継ぐので shell が持つ。 */
-  const tagFilter = shell.timelineTag;
-  const setTagFilter = shell.setTimelineTag;
+  const tagFilter = shell.scrawlTag;
+  const setTagFilter = shell.setScrawlTag;
   /** 選択モード。入っている間だけ本文がクリックで選択できる。 */
   const [selecting, setSelecting] = createSignal(false);
   const [selected, setSelected] = createSignal<ReadonlySet<string>>(new Set());
@@ -123,11 +123,11 @@ export default function Timeline(): JSX.Element {
       return;
     }
     exitSelecting();
-    shell.showToast(t().timeline.selectionCleared);
+    shell.showToast(t().scrawl.selectionCleared);
   };
 
-  const [timeline, { refetch, mutate }] = createResource(extraDates, loadTimeline);
-  // 昇格ノートのチップに使う。タイムラインの描画は待たない — ノート一覧が
+  const [scrawl, { refetch, mutate }] = createResource(extraDates, loadScrawl);
+  // 昇格ノートのチップに使う。Scrawl の描画は待たない — ノート一覧が
   // 届いてからチップだけ後から現れる
   const [notes, { refetch: refetchNotes }] = createResource(async () =>
     toNoteItems(await typedInvoke("list_notes")),
@@ -153,7 +153,7 @@ export default function Timeline(): JSX.Element {
   // 畳むのは日を足す関数の中ではなく源の側 — 足し手が増えても穴が開かない
   createEffect(on(extraDates, dropSelectionForReload, { defer: true }));
 
-  const entries = createMemo(() => timeline()?.items ?? []);
+  const entries = createMemo(() => scrawl()?.items ?? []);
   // 地名は記録の一部ではないので、これを待って一覧を出さない。座標のまま先に
   // 並べ、引けたものから名前に差し替わる。
   createEffect(() => {
@@ -171,11 +171,11 @@ export default function Timeline(): JSX.Element {
     return entries().filter((item) => parseTags(item.text).some((own) => sameTag(own, tag)));
   });
 
-  const days = createMemo(() => groupTimelineByDay(visible()));
+  const days = createMemo(() => groupScrawlByDay(visible()));
 
   // エントリの日時 → ノート。チップは元のエントリの真下に付く
   const originNotes = createMemo(() => notesByOrigin(notes() ?? []));
-  const notesFor = (item: TimelineItem): NoteItem[] => originNotes().get(originKeyOf(item)) ?? [];
+  const notesFor = (item: ScrawlItem): NoteItem[] => originNotes().get(originKeyOf(item)) ?? [];
 
   // 元のエントリが消えたノートだけ、これまでどおり日の見出し直下に出す
   const orphanNotes = createMemo(() => orphanNotesByDate(notes() ?? [], entries()));
@@ -185,7 +185,7 @@ export default function Timeline(): JSX.Element {
     localStorage.getItem(DIGEST_DISMISS_KEY),
   );
   const weekSummary = createMemo(() => summarizeWeek(entries(), today));
-  const yearAgo = createMemo(() => yearAgoToday(today, timeline()?.dates ?? []));
+  const yearAgo = createMemo(() => yearAgoToday(today, scrawl()?.dates ?? []));
   const digestVisible = createMemo(() => {
     if (isDigestDismissed(digestDismissed(), today)) {
       return false;
@@ -224,22 +224,20 @@ export default function Timeline(): JSX.Element {
    */
   createEffect(() => {
     const iso = jumpTo();
-    if (!iso || timeline.loading) {
+    if (!iso || scrawl.loading) {
       return;
     }
     document.querySelector(`[data-day="${iso}"]`)?.scrollIntoView({ block: "start" });
     setJumpTo(null);
   });
-  const recordedDates = createMemo(() => [
-    ...new Set((timeline()?.items ?? []).map((i) => i.date)),
-  ]);
+  const recordedDates = createMemo(() => [...new Set((scrawl()?.items ?? []).map((i) => i.date))]);
 
   const contextsFor = (iso: string): (DeviceContext | null)[] =>
-    (timeline()?.items ?? []).filter((i) => i.date === iso).map((i) => i.context);
+    (scrawl()?.items ?? []).filter((i) => i.date === iso).map((i) => i.context);
 
   /** 書いた日だけ読み直す。全日の読み直しは保存 1 回に日数ぶんの IPC を払う。 */
   const reloadDay = async (date: string): Promise<void> => {
-    const items = toTimelineItems(date, await typedInvoke("read_timeline_by_date", { date }));
+    const items = toScrawlItems(date, await typedInvoke("read_scrawl_by_date", { date }));
     mutate((prev) => ({
       items: replaceDayItems(prev?.items ?? [], date, items),
       dates: prev?.dates ?? [],
@@ -256,7 +254,7 @@ export default function Timeline(): JSX.Element {
    * エントリ側のファイルには何も書かない — ノートの frontmatter `origin`
    * だけが両者を繋ぎ、チップは毎回そこから導出される。
    */
-  const promote = async (item: TimelineItem): Promise<void> => {
+  const promote = async (item: ScrawlItem): Promise<void> => {
     const path = await typedInvoke("create_draft", {
       body: item.text,
       tags: parseTags(item.text),
@@ -287,7 +285,7 @@ export default function Timeline(): JSX.Element {
     }
     await typedInvoke("set_note_origin", { filename: note.filename, origin: null });
     await refetchNotes();
-    shell.showToast(t().timeline.unlinked, () => {
+    shell.showToast(t().scrawl.unlinked, () => {
       void (async () => {
         await typedInvoke("set_note_origin", { filename: note.filename, origin });
         await refetchNotes();
@@ -322,7 +320,7 @@ export default function Timeline(): JSX.Element {
       // 同じ日の index は前の削除で行が繰り上がると意味が変わるので、並列にせず順に消す
       for (const target of plan) {
         // oxlint-disable-next-line no-await-in-loop
-        await typedInvoke("delete_timeline_entry", {
+        await typedInvoke("delete_scrawl_entry", {
           date: target.date,
           index: target.index,
           raw: target.raw,
@@ -332,7 +330,7 @@ export default function Timeline(): JSX.Element {
         [...new Set(plan.map((target) => target.date))].map((date) => reloadDay(date)),
       );
       exitSelecting();
-      shell.showToast(t().timeline.deleted(plan.length));
+      shell.showToast(t().scrawl.deleted(plan.length));
     } finally {
       setDeleting(false);
     }
@@ -359,15 +357,15 @@ export default function Timeline(): JSX.Element {
   });
 
   return (
-    <div class="timeline">
-      <div class="timeline-scroll">
-        <div class="timeline-column">
+    <div class="scrawl">
+      <div class="scrawl-scroll">
+        <div class="scrawl-column">
           {/* タグ行と週の要約はひと続きの見出し帯。列の 36px ではなく帯の中の
               14px で寄せる — 要約はタグの続きであって、独立した層ではない。
               digest を TagFilter より上に挿さないのは、データが遅れて届いたとき
               最初の描画に存在した行が押し下げられてレイアウトシフトになるから */}
           <Show when={knownTags().length > 0 || digestVisible()}>
-            <div class="timeline-head">
+            <div class="scrawl-head">
               <TagFilter
                 tags={knownTags()}
                 active={tagFilter()}
@@ -376,12 +374,10 @@ export default function Timeline(): JSX.Element {
               />
 
               <Show when={digestVisible()}>
-                <section class="digest-line" aria-label={t().timeline.digestTitle}>
-                  <span class="digest-label">{t().timeline.digestTitle}</span>
+                <section class="digest-line" aria-label={t().scrawl.digestTitle}>
+                  <span class="digest-label">{t().scrawl.digestTitle}</span>
                   <Show when={weekSummary().count > 0}>
-                    <span>
-                      {t().timeline.digestSummary(weekSummary().days, weekSummary().count)}
-                    </span>
+                    <span>{t().scrawl.digestSummary(weekSummary().days, weekSummary().count)}</span>
                   </Show>
                   <Show when={yearAgo()}>
                     {(iso) => (
@@ -395,10 +391,10 @@ export default function Timeline(): JSX.Element {
                         <button
                           type="button"
                           class="digest-year-ago"
-                          aria-label={t().timeline.lastYearOpen}
+                          aria-label={t().scrawl.lastYearOpen}
                           onClick={() => jumpToDay(iso())}
                         >
-                          {t().timeline.lastYear}
+                          {t().scrawl.lastYear}
                           <span aria-hidden="true">→</span>
                         </button>
                       </>
@@ -407,8 +403,8 @@ export default function Timeline(): JSX.Element {
                   <button
                     type="button"
                     class="icon-button digest-close"
-                    title={t().timeline.digestClose}
-                    aria-label={t().timeline.digestClose}
+                    title={t().scrawl.digestClose}
+                    aria-label={t().scrawl.digestClose}
                     onClick={dismissDigest}
                   >
                     <Icon name="x" size={12} />
@@ -418,7 +414,7 @@ export default function Timeline(): JSX.Element {
             </div>
           </Show>
 
-          <Show when={days().length} fallback={<EmptyTimeline filtered={Boolean(tagFilter())} />}>
+          <Show when={days().length} fallback={<EmptyScrawl filtered={Boolean(tagFilter())} />}>
             <For each={days()}>
               {(day, index) => {
                 const heading = createMemo(() => formatDayHeading(day.date, today));
@@ -429,7 +425,7 @@ export default function Timeline(): JSX.Element {
                       <h2 class="day-heading-label">{heading().label}</h2>
                       <span class="day-heading-date">{heading().date}</span>
                       <span class="day-heading-count">
-                        {t().timeline.entryCount(day.items.length)}
+                        {t().scrawl.entryCount(day.items.length)}
                         {/* 選択の入り口は、いま書いている日の件数の隣に字で 1 つ。
                             浮かせた専用のバーを 1 段作らない。入ったあとの操作は
                             下のバーが引き受けるので、その間は出さない */}
@@ -440,7 +436,7 @@ export default function Timeline(): JSX.Element {
                             class="day-heading-select"
                             onClick={() => setSelecting(true)}
                           >
-                            {t().timeline.select}
+                            {t().scrawl.select}
                           </button>
                         </Show>
                       </span>
@@ -466,7 +462,7 @@ export default function Timeline(): JSX.Element {
 
                     <For each={day.items}>
                       {(item) => (
-                        <TimelineEntry
+                        <ScrawlEntry
                           item={item}
                           notes={notesFor(item)}
                           selecting={selecting()}
@@ -492,7 +488,7 @@ export default function Timeline(): JSX.Element {
 
       <div class="capture-dock">
         <Show when={selecting()} fallback={<CaptureBar onSend={capture} knownTags={knownTags()} />}>
-          <div class="select-bar" role="toolbar" aria-label={t().timeline.bulkDelete}>
+          <div class="select-bar" role="toolbar" aria-label={t().scrawl.bulkDelete}>
             <Show
               when={confirming()}
               fallback={
@@ -501,8 +497,8 @@ export default function Timeline(): JSX.Element {
                       入り口のバーが消えたぶん、次にすることはここで言う */}
                   <span class="select-bar-label">
                     {selected().size === 0
-                      ? t().timeline.selectHint
-                      : t().timeline.selectedCount(selected().size)}
+                      ? t().scrawl.selectHint
+                      : t().scrawl.selectedCount(selected().size)}
                   </span>
                   <button
                     type="button"
@@ -511,7 +507,7 @@ export default function Timeline(): JSX.Element {
                     onClick={() => setConfirming(true)}
                   >
                     <Icon name="trash" size={14} />
-                    {t().timeline.deleteCount(selected().size)}
+                    {t().scrawl.deleteCount(selected().size)}
                   </button>
                   <button type="button" class="select-bar-plain" onClick={exitSelecting}>
                     {t().common.cancel}
@@ -519,7 +515,7 @@ export default function Timeline(): JSX.Element {
                 </>
               }
             >
-              <span class="select-bar-label">{t().timeline.confirmDelete(selected().size)}</span>
+              <span class="select-bar-label">{t().scrawl.confirmDelete(selected().size)}</span>
               <button
                 type="button"
                 class="select-bar-danger"
@@ -528,7 +524,7 @@ export default function Timeline(): JSX.Element {
                   void runDelete();
                 }}
               >
-                {t().timeline.confirmDeleteYes}
+                {t().scrawl.confirmDeleteYes}
               </button>
               <button type="button" class="select-bar-plain" onClick={() => setConfirming(false)}>
                 {t().common.back}

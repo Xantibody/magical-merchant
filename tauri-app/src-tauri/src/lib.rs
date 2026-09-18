@@ -71,7 +71,7 @@ fn save_quick_capture(
 ) -> Result<(), String> {
     let base_dir = app_base_dir(&handle)?;
     let context = device::get_context(client);
-    magical_merchant_core::save_timeline_entry(&base_dir, &text, &context, Source::App)
+    magical_merchant_core::save_scrawl_entry(&base_dir, &text, &context, Source::App)
         .map_err(|e| e.to_string())
 }
 
@@ -87,7 +87,7 @@ fn create_draft(
 ) -> Result<String, String> {
     let base_dir = app_base_dir(&handle)?;
     let context = device::get_context(client);
-    // origin 付きはタイムラインエントリからの昇格。出自を frontmatter に刻む
+    // origin 付きは Scrawl エントリからの昇格。出自を frontmatter に刻む
     let provenance = Provenance {
         origin: origin.as_deref(),
         source: Some(Source::App),
@@ -418,9 +418,9 @@ fn delete_glyph(handle: AppHandle, name: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn list_timeline_dates(handle: AppHandle) -> Result<Vec<String>, String> {
+fn list_scrawl_dates(handle: AppHandle) -> Result<Vec<String>, String> {
     let base_dir = app_base_dir(&handle)?;
-    let dates = magical_merchant_core::list_timeline_dates(&base_dir).map_err(|e| e.to_string())?;
+    let dates = magical_merchant_core::list_scrawl_dates(&base_dir).map_err(|e| e.to_string())?;
     Ok(dates
         .iter()
         .map(|d| d.format("%Y-%m-%d").to_string())
@@ -428,15 +428,15 @@ fn list_timeline_dates(handle: AppHandle) -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
-fn read_timeline_by_date(handle: AppHandle, date: String) -> Result<Vec<String>, String> {
+fn read_scrawl_by_date(handle: AppHandle, date: String) -> Result<Vec<String>, String> {
     let base_dir = app_base_dir(&handle)?;
     let naive = chrono::NaiveDate::parse_from_str(&date, "%Y-%m-%d").map_err(|e| e.to_string())?;
-    magical_merchant_core::read_timeline(&base_dir, naive).map_err(|e| e.to_string())
+    magical_merchant_core::read_scrawl(&base_dir, naive).map_err(|e| e.to_string())
 }
 
 /// `raw` は画面が読んだときの行。index と合わせて「どの記録か」を指す。
 #[tauri::command]
-fn delete_timeline_entry(
+fn delete_scrawl_entry(
     handle: AppHandle,
     date: String,
     index: usize,
@@ -444,7 +444,7 @@ fn delete_timeline_entry(
 ) -> Result<(), String> {
     let base_dir = app_base_dir(&handle)?;
     let naive = chrono::NaiveDate::parse_from_str(&date, "%Y-%m-%d").map_err(|e| e.to_string())?;
-    magical_merchant_core::delete_timeline_entry(&base_dir, naive, index, &raw)
+    magical_merchant_core::delete_scrawl_entry(&base_dir, naive, index, &raw)
         .map_err(|e| e.to_string())
 }
 
@@ -706,9 +706,9 @@ pub fn run() {
             read_glyphs,
             save_glyph,
             delete_glyph,
-            list_timeline_dates,
-            read_timeline_by_date,
-            delete_timeline_entry,
+            list_scrawl_dates,
+            read_scrawl_by_date,
+            delete_scrawl_entry,
             search_all,
             resolve_places,
             delete_note,

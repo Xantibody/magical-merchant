@@ -5,18 +5,18 @@
 //! list reads every note. Folding them into one call would make opening the
 //! sheet — the thing that has to feel instant — wait on the whole notes tree.
 //!
-//! Kotlin never parses a timeline line. The `- [HH:MM:SS] text {json}` shape is
+//! Kotlin never parses a scrawl line. The `- [HH:MM:SS] text {json}` shape is
 //! taken apart here with the same core helpers the app uses, so a change to the
 //! format cannot leave the widget rendering a stray JSON tail.
 
 use std::path::Path;
 
 use chrono::Local;
-use magical_merchant_core::utils::markdown::{strip_timeline_prefix, timeline_entry_time};
+use magical_merchant_core::utils::markdown::{scrawl_entry_time, strip_scrawl_prefix};
 use magical_merchant_core::utils::tags;
 use serde::Serialize;
 
-/// 4x2 のノートウィジェットに収まる行数。
+/// 4x2 の Note ウィジェットに収まる行数。
 const NOTE_LIMIT: usize = 4;
 /// テンプレウィジェットのボタン数。押せる高さ(46dp)で並べるとこれが上限。
 const TEMPLATE_LIMIT: usize = 3;
@@ -24,7 +24,7 @@ const TEMPLATE_LIMIT: usize = 3;
 const TAG_LIMIT: usize = 3;
 /// バーは 1 行しか出せない。長い記録は先頭だけ見せる。
 const PREVIEW_CHARS: usize = 60;
-const UNTITLED: &str = "(空のメモ)";
+const UNTITLED: &str = "(空の Note)";
 
 /// キャプチャバーとシートが要るぶん。今日の日ファイル 1 枚で足りる。
 #[derive(Debug, Default, Serialize)]
@@ -72,8 +72,8 @@ struct TemplateRow {
 /// Unreadable trees come back empty rather than as an error: a widget with no
 /// data still has to draw something, and "not opened yet" is a normal state.
 pub(crate) fn collect_capture(base_dir: &Path) -> CaptureData {
-    let today = magical_merchant_core::read_timeline(base_dir, Local::now().date_naive())
-        .unwrap_or_default();
+    let today =
+        magical_merchant_core::read_scrawl(base_dir, Local::now().date_naive()).unwrap_or_default();
 
     CaptureData {
         last: last_entry(&today),
@@ -105,10 +105,10 @@ pub(crate) fn collect_templates(base_dir: &Path) -> TemplatesData {
 /// 行は追記順なので、最後の 1 行がいちばん新しい。
 fn last_entry(entries: &[String]) -> Option<LastEntry> {
     let raw = entries.last()?;
-    let text = strip_timeline_prefix(raw);
+    let text = strip_scrawl_prefix(raw);
     Some(LastEntry {
         // 秒はバーの幅を食うだけで、いつ書いたかは分かる。
-        time: timeline_entry_time(raw)
+        time: scrawl_entry_time(raw)
             .map(|t| t[..5].to_string())
             .unwrap_or_default(),
         text: truncate(text, PREVIEW_CHARS),
@@ -122,7 +122,7 @@ fn top_tags(entries: &[String]) -> Vec<String> {
     let mut counts: Vec<(String, usize)> = Vec::new();
     for tag in entries
         .iter()
-        .flat_map(|entry| tags::parse(strip_timeline_prefix(entry)))
+        .flat_map(|entry| tags::parse(strip_scrawl_prefix(entry)))
     {
         match counts
             .iter_mut()
@@ -161,7 +161,7 @@ fn recent_notes(mut notes: Vec<magical_merchant_core::NoteSummary>) -> Vec<NoteR
         .collect()
 }
 
-/// 本文の最初の中身がある行。アプリのノート一覧と同じ見出しにする。
+/// 本文の最初の中身がある行。アプリの Note 一覧と同じ見出しにする。
 fn title_of(preview: &str) -> String {
     let line = preview
         .lines()

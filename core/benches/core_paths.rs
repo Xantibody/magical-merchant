@@ -13,7 +13,7 @@ use std::hint::black_box;
 
 use magical_merchant_core::sync::scan::scan_local_files;
 use magical_merchant_core::{
-    find_backlinks, list_notes, list_timeline_dates, read_timeline, search_all,
+    find_backlinks, list_notes, list_scrawl_dates, read_scrawl, search_all,
 };
 
 fn search(c: &mut Criterion) {
@@ -56,16 +56,16 @@ fn listing(c: &mut Criterion) {
         b.iter(|| list_notes(black_box(base)).unwrap());
     });
 
-    c.bench_function("list_timeline_dates", |b| {
-        b.iter(|| list_timeline_dates(black_box(base)).unwrap());
+    c.bench_function("list_scrawl_dates", |b| {
+        b.iter(|| list_scrawl_dates(black_box(base)).unwrap());
     });
 
-    // 起動直後にタイムラインタブが読む分。
+    // 起動直後に Scrawl タブが読む分。
     let dates = fixture::recent_dates();
-    c.bench_function("read_timeline_recent_14", |b| {
+    c.bench_function("read_scrawl_recent_14", |b| {
         b.iter(|| {
             for date in &dates {
-                black_box(read_timeline(black_box(base), *date).unwrap());
+                black_box(read_scrawl(black_box(base), *date).unwrap());
             }
         });
     });

@@ -2,7 +2,7 @@ pub(crate) mod day;
 pub(crate) mod error;
 pub(crate) mod repository;
 
-pub(crate) use repository::Timeline;
+pub(crate) use repository::Scrawl;
 
 use std::path::Path;
 
@@ -14,43 +14,43 @@ use crate::utils::device::{Context, Source};
 /// 今日のファイルに 1 行足す。`source` は書き手が名乗る入り口で、
 /// アプリ・CLI・MCP・ウィジェットは同じ core 関数を通るため、ここで
 /// 名乗らないと記録からは区別が付かない。
-pub fn save_timeline_entry(
+pub fn save_scrawl_entry(
     base_dir: &Path,
     text: &str,
     context: &Context,
     source: Source,
 ) -> Result<(), CoreError> {
-    Timeline::new(base_dir.to_path_buf()).save_entry(text, context, source)
+    Scrawl::new(base_dir.to_path_buf()).save_entry(text, context, source)
 }
 
-pub fn list_timeline_dates(base_dir: &Path) -> Result<Vec<NaiveDate>, CoreError> {
-    Timeline::new(base_dir.to_path_buf()).list_dates()
+pub fn list_scrawl_dates(base_dir: &Path) -> Result<Vec<NaiveDate>, CoreError> {
+    Scrawl::new(base_dir.to_path_buf()).list_dates()
 }
 
-pub fn read_timeline(base_dir: &Path, date: NaiveDate) -> Result<Vec<String>, CoreError> {
-    Timeline::new(base_dir.to_path_buf()).read(date)
+pub fn read_scrawl(base_dir: &Path, date: NaiveDate) -> Result<Vec<String>, CoreError> {
+    Scrawl::new(base_dir.to_path_buf()).read(date)
 }
 
-/// `raw` は書き手が読んだときの行(`read_timeline` が返した形そのもの)。
+/// `raw` は書き手が読んだときの行(`read_scrawl` が返した形そのもの)。
 /// 行を指す index だけでは、読んでから書くまでに入った追記や同期でずれる。
-pub fn update_timeline_entry(
+pub fn update_scrawl_entry(
     base_dir: &Path,
     date: NaiveDate,
     index: usize,
     raw: &str,
     text: &str,
 ) -> Result<(), CoreError> {
-    Timeline::new(base_dir.to_path_buf()).update_entry(date, index, raw, text)
+    Scrawl::new(base_dir.to_path_buf()).update_entry(date, index, raw, text)
 }
 
-/// `raw` は `update_timeline_entry` と同じ、書き手が読んだときの行。
-pub fn delete_timeline_entry(
+/// `raw` は `update_scrawl_entry` と同じ、書き手が読んだときの行。
+pub fn delete_scrawl_entry(
     base_dir: &Path,
     date: NaiveDate,
     index: usize,
     raw: &str,
 ) -> Result<(), CoreError> {
-    Timeline::new(base_dir.to_path_buf()).delete_entry(date, index, raw)
+    Scrawl::new(base_dir.to_path_buf()).delete_entry(date, index, raw)
 }
 
 #[cfg(test)]
@@ -69,9 +69,9 @@ mod tests {
     }
 
     #[test]
-    fn test_save_timeline_entry_creates_file() {
+    fn test_save_scrawl_entry_creates_file() {
         let tmp = TempDir::new().unwrap();
-        save_timeline_entry(tmp.path(), "hello", &mock_context(), Source::App).unwrap();
+        save_scrawl_entry(tmp.path(), "hello", &mock_context(), Source::App).unwrap();
 
         let today = Local::now().format("%Y-%m-%d").to_string();
         let file = tmp.path().join("data/timeline").join(format!("{today}.md"));
@@ -87,7 +87,7 @@ mod tests {
     #[test]
     fn a_saved_entry_names_the_tool_that_wrote_it() {
         let tmp = TempDir::new().unwrap();
-        save_timeline_entry(tmp.path(), "hello", &mock_context(), Source::Widget).unwrap();
+        save_scrawl_entry(tmp.path(), "hello", &mock_context(), Source::Widget).unwrap();
 
         let today = Local::now().format("%Y-%m-%d").to_string();
         let content =
@@ -97,10 +97,10 @@ mod tests {
     }
 
     #[test]
-    fn test_save_timeline_entry_appends() {
+    fn test_save_scrawl_entry_appends() {
         let tmp = TempDir::new().unwrap();
-        save_timeline_entry(tmp.path(), "first", &mock_context(), Source::App).unwrap();
-        save_timeline_entry(tmp.path(), "second", &mock_context(), Source::App).unwrap();
+        save_scrawl_entry(tmp.path(), "first", &mock_context(), Source::App).unwrap();
+        save_scrawl_entry(tmp.path(), "second", &mock_context(), Source::App).unwrap();
 
         let today = Local::now().format("%Y-%m-%d").to_string();
         let file = tmp.path().join("data/timeline").join(format!("{today}.md"));
@@ -113,30 +113,30 @@ mod tests {
     }
 
     #[test]
-    fn test_read_timeline_empty() {
+    fn test_read_scrawl_empty() {
         let tmp = TempDir::new().unwrap();
         let today = Local::now().date_naive();
-        let lines = read_timeline(tmp.path(), today).unwrap();
+        let lines = read_scrawl(tmp.path(), today).unwrap();
         assert!(lines.is_empty());
     }
 
     #[test]
-    fn test_list_timeline_dates_empty() {
+    fn test_list_scrawl_dates_empty() {
         let tmp = TempDir::new().unwrap();
-        let dates = list_timeline_dates(tmp.path()).unwrap();
+        let dates = list_scrawl_dates(tmp.path()).unwrap();
         assert!(dates.is_empty());
     }
 
     #[test]
-    fn test_list_timeline_dates_returns_sorted_desc() {
+    fn test_list_scrawl_dates_returns_sorted_desc() {
         let tmp = TempDir::new().unwrap();
-        let timeline_dir = tmp.path().join("data").join("timeline");
-        fs::create_dir_all(&timeline_dir).unwrap();
-        fs::write(timeline_dir.join("2026-01-15.md"), "entry").unwrap();
-        fs::write(timeline_dir.join("2026-03-01.md"), "entry").unwrap();
-        fs::write(timeline_dir.join("2026-02-10.md"), "entry").unwrap();
+        let scrawl_dir = tmp.path().join("data").join("timeline");
+        fs::create_dir_all(&scrawl_dir).unwrap();
+        fs::write(scrawl_dir.join("2026-01-15.md"), "entry").unwrap();
+        fs::write(scrawl_dir.join("2026-03-01.md"), "entry").unwrap();
+        fs::write(scrawl_dir.join("2026-02-10.md"), "entry").unwrap();
 
-        let dates = list_timeline_dates(tmp.path()).unwrap();
+        let dates = list_scrawl_dates(tmp.path()).unwrap();
         assert_eq!(dates.len(), 3);
         assert_eq!(dates[0], NaiveDate::from_ymd_opt(2026, 3, 1).unwrap());
         assert_eq!(dates[1], NaiveDate::from_ymd_opt(2026, 2, 10).unwrap());
@@ -144,40 +144,40 @@ mod tests {
     }
 
     #[test]
-    fn test_list_timeline_dates_skips_invalid_filenames() {
+    fn test_list_scrawl_dates_skips_invalid_filenames() {
         let tmp = TempDir::new().unwrap();
-        let timeline_dir = tmp.path().join("data").join("timeline");
-        fs::create_dir_all(&timeline_dir).unwrap();
-        fs::write(timeline_dir.join("2026-01-15.md"), "entry").unwrap();
-        fs::write(timeline_dir.join("README.md"), "readme").unwrap();
-        fs::write(timeline_dir.join("not-a-date.md"), "invalid").unwrap();
+        let scrawl_dir = tmp.path().join("data").join("timeline");
+        fs::create_dir_all(&scrawl_dir).unwrap();
+        fs::write(scrawl_dir.join("2026-01-15.md"), "entry").unwrap();
+        fs::write(scrawl_dir.join("README.md"), "readme").unwrap();
+        fs::write(scrawl_dir.join("not-a-date.md"), "invalid").unwrap();
 
-        let dates = list_timeline_dates(tmp.path()).unwrap();
+        let dates = list_scrawl_dates(tmp.path()).unwrap();
         assert_eq!(dates.len(), 1);
         assert_eq!(dates[0], NaiveDate::from_ymd_opt(2026, 1, 15).unwrap());
     }
 
     #[test]
-    fn test_read_timeline_groups_multiline_entries() {
+    fn test_read_scrawl_groups_multiline_entries() {
         let tmp = TempDir::new().unwrap();
-        save_timeline_entry(tmp.path(), "line1\nline2", &mock_context(), Source::App).unwrap();
-        save_timeline_entry(tmp.path(), "second", &mock_context(), Source::App).unwrap();
+        save_scrawl_entry(tmp.path(), "line1\nline2", &mock_context(), Source::App).unwrap();
+        save_scrawl_entry(tmp.path(), "second", &mock_context(), Source::App).unwrap();
 
         let today = Local::now().date_naive();
-        let entries = read_timeline(tmp.path(), today).unwrap();
+        let entries = read_scrawl(tmp.path(), today).unwrap();
         assert_eq!(entries.len(), 2);
         assert!(entries[0].contains("line1\nline2"));
         assert!(entries[1].contains("second"));
     }
 
     #[test]
-    fn test_read_timeline_returns_entries() {
+    fn test_read_scrawl_returns_entries() {
         let tmp = TempDir::new().unwrap();
-        save_timeline_entry(tmp.path(), "first", &mock_context(), Source::App).unwrap();
-        save_timeline_entry(tmp.path(), "second", &mock_context(), Source::App).unwrap();
+        save_scrawl_entry(tmp.path(), "first", &mock_context(), Source::App).unwrap();
+        save_scrawl_entry(tmp.path(), "second", &mock_context(), Source::App).unwrap();
 
         let today = Local::now().date_naive();
-        let lines = read_timeline(tmp.path(), today).unwrap();
+        let lines = read_scrawl(tmp.path(), today).unwrap();
         assert_eq!(lines.len(), 2);
         assert!(lines[0].contains("first"));
         assert!(lines[1].contains("second"));
