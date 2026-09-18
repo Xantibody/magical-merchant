@@ -14,10 +14,11 @@ day.
 
 ![Scrawl](images/timeline.png)
 
-At the top, a **weekly digest** appears once per week: how many entries on how
-many days, the most used tags (tap to filter), and — when that day has
-entries — a jump to _one year ago today_. Dismissing it hides it for the rest
-of the week, per device.
+At the top, a **weekly digest** appears once per week: one line saying how
+many entries on how many days and — when that day has entries — a jump to
+_one year ago today_. It sits under the tag chips rather than above them, so
+a digest that arrives late never pushes the chips down. Dismissing it hides
+it for the rest of the week, per device.
 
 ### Mobile
 
@@ -85,7 +86,10 @@ the body rather than in place of it, so the text you are reading it against
 stays on screen; only below 1100px, where there is no room for two, does it
 take the body's place:
 
-![A note with its markmap alongside](images/mindmap.png)
+![A document with its markmap alongside](images/mindmap.png)
+
+The shot is taken on a Codex, which is why a version spine stands to the left
+of the body; the map itself is the same on either surface.
 
 ## Note links and backlinks
 
