@@ -383,8 +383,7 @@ can line the journal up with other time- or location-based data.
 | `read_template`       | Read a template's body and tags                                                                      |
 | `list_glyphs`         | Registered glyphs with the `:name:` shortcode that renders each one                                  |
 
-A Codex is visible but not writable as one: an agent can see that a
-document keeps versions, read it and search it, but there is no tool to
+What an agent cannot do is keep a Codex's history: there is no tool to
 commit, list, diff or restore a version. Committing is a person saying
 "this far", which is not a decision to hand to a model; the versions are
 plain Markdown under `data/codex/<id>/`, so an agent that has been given
@@ -396,7 +395,12 @@ plain Markdown, so a body can hold anything the app renders — Mermaid
 diagrams in a fenced `mermaid` block, `[[YYYYMMDD_HHMMSS]]` links to other
 notes, `#tags`, `:name:` glyph shortcodes (ask `list_glyphs` for the
 vocabulary). The server writes the frontmatter itself and keeps it intact
-on updates; the body is all a client sends.
+on updates; the body is all a client sends. A Codex's draft is written the
+same way: `update_note` resolves the ID with `locate_note`, which looks in
+`data/codex/` before `data/notes/`, so an agent edits the body of a
+document that keeps versions without having to know it is one, and
+`list_note_history` / `restore_note` reach it too. Making a Codex is still
+the app's — `create_note` only ever writes into `data/notes/`.
 
 Every overwrite first saves a full copy of the previous version under
 `<data-dir>/history/` (outside the synced `data/`), so any change an
