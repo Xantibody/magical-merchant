@@ -190,6 +190,12 @@ const ja = {
     now: "いま",
     restore: "この版に戻す",
     restored: "この版に戻しました。戻す前の下書きは履歴にあります",
+    /**
+     * 戻す書き込みは通ったが、そのあとの読み直しが画面に届かなかった。戻ったとは
+     * 言えない — 画面に出ているのは戻す前の本文なので、開き直す一手まで言う。
+     */
+    restoredNotShown:
+      "この版に戻しましたが、戻した本文を画面に出せませんでした。開き直してください",
     restoreFailed: "戻せませんでした",
     same: "同じ内容です",
     sameShort: "同じ内容",
@@ -603,6 +609,8 @@ const en: Messages = {
     now: "now",
     restore: "Restore this version",
     restored: "Restored this version. The draft from before is in the history",
+    restoredNotShown:
+      "Restored this version, but its body could not be put on screen. Please reopen the note",
     restoreFailed: "Could not restore it",
     same: "Same content",
     sameShort: "same",

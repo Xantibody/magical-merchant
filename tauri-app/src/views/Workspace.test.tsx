@@ -1728,6 +1728,37 @@ describe("Workspace › Codex の版", () => {
     await waitFor(() => expect(metaLine()?.textContent).toMatch(/^版 2 から /u));
   });
 
+  // 戻す書き込みは通ったのに、そのあとの読み直しが画面に届かないことがある。
+  // 画面は戻す前の本文なのに指紋だけ戻した後のものになり、そのまま次の打鍵を
+  // 保存すると core の照合を素通りして、いま戻した版を黙って潰す
+  it("does not claim a restore the screen never received, nor overwrite it on the next save", async () => {
+    await openCodexC();
+    const OLD_BODY = `# ${TITLE_C}\n\n最初の一行`;
+    versions.set(FILE_C, [{ id: "v1", message: "最初の骨組み", body: OLD_BODY }]);
+
+    await runNoteAction("履歴");
+    fireEvent.click(await screen.findByRole("button", { name: /^版 1/u }));
+    // 戻す書き込みは通るが、そのあとの読み直しでディスクが読めない
+    readFails = true;
+    fireEvent.click(await screen.findByRole("button", { name: "この版に戻す" }));
+
+    await waitFor(() => expect(countOf("restore_note_version")).toBe(1));
+    expect(disk.get(FILE_C)).toBe(OLD_BODY);
+    // 戻したとは言わない。画面に出せなかったことを言う
+    await waitFor(() => expect(shell?.toast()?.message).toMatch(/画面に出せませんでした/u));
+    expect(shell?.toast()?.message).not.toMatch(/戻す前の下書きは履歴にあります/u);
+    // 画面にあるのは戻す前の本文のまま
+    expect(screen.getByText(TEXT_C)).toBeDefined();
+
+    // その本文に書き足しても、いま戻した版は残る
+    readFails = false;
+    await waitFor(() => expect(editorBody().isContentEditable).toBe(true));
+    await startEditingBody();
+    typeInEditor?.(`${TEXT_C}\n\n足した行`);
+    await waitFor(() => expect(writesTo(FILE_C)).toHaveLength(1), { timeout: 3000 });
+    expect(disk.get(FILE_C)).toBe(OLD_BODY);
+  });
+
   it("cannot restore into a read-only codex", async () => {
     await openCodexC();
     versions.set(FILE_C, [{ id: "v1", message: "最初の骨組み", body: "# x" }]);

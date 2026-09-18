@@ -1180,12 +1180,14 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       clearTimeout(saveTimer);
       saveTimer = undefined;
     }
+    // 画面に出ている本文を読んだときの指紋。読み直しが届かなかったときの戻る先
+    const read = revisions.get(item.filename);
     try {
       const revision = await typedInvoke("restore_note_version", {
         filename: item.filename,
         id,
         client: await getDeviceSignals(),
-        revision: revisions.get(item.filename) ?? null,
+        revision: read ?? null,
       });
       revisions.set(item.filename, revision);
     } catch (error) {
@@ -1208,10 +1210,24 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     // 戻した本文はディスクにある。読み直せば画面もそれになる
     sessionFile = null;
     closeHistory();
-    await loadNote(item, true);
+    const shown = await loadNote(item, true);
+    if (!shown) {
+      // 読み直しが画面へ届かなかった。戻した本文はディスクに在るのに、画面には
+      // まだ戻す前の本文が出ている。指紋だけ戻した後のものにしておくと、次の
+      // 打鍵の保存が core の照合を素通りし、いま戻した版を黙って潰す。
+      // 指紋を「画面に出ている本文を読んだときのもの」へ戻し、対を崩さない。
+      // 次の保存は Stale で断られ、打った字は控えに退避されて読み直しがもう一度
+      // 走る(`yieldToOutsideEdit`)。
+      // AIDEV-NOTE: 編集を止める案(`loadedId` を落とす)は捨てた。打った字ごと退避する既存の Stale の道に乗せるほうが失わない
+      if (read === undefined) {
+        revisions.delete(item.filename);
+      } else {
+        revisions.set(item.filename, read);
+      }
+    }
     await refetchNotes();
     refreshVersions();
-    shell.showToast(t().codex.restored);
+    shell.showToast(shown ? t().codex.restored : t().codex.restoredNotShown);
   };
 
   // タイムラインからの昇格 (?edit=1) は、本文が届き次第そのまま書ける形で渡す。
