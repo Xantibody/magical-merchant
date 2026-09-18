@@ -1,8 +1,7 @@
 # Magical Merchant
 
 A minimal note-taking app: Rust core + Tauri 2 + SolidJS. Three surfaces —
-**Scrawl** (quick capture journal; only the `/` route and `data/timeline/` keep
-the old name),
+**Scrawl** (quick capture journal),
 **Note** (Markdown workspace; code says `notes`) and **Codex** (a Note that
 grows and keeps explicitly committed versions; same `Workspace` view with
 `kind="codex"`) — plus Android home-screen widgets and R2 sync.
@@ -84,10 +83,13 @@ ready to record the moment it opens (widgets exist for exactly this).
 - Every new Tauri command gets a handler in `tauri-app/dev/ipc-mock.js`
 - **Scrawl / Note / Codex are proper nouns**, and nothing spells them any other
   way — strings in both languages, `widget_strings.xml`, docs, MCP tools, the
-  CLI subcommand, modules, files, types, CSS classes. Two things keep the old
-  word because changing them would move data, and both are one constant away
-  from the rest: `data/timeline/` and the sync keys under it (`SCRAWL_DIR` in
-  `paths.rs`) and the `/` route. `i18n.test.ts` fails on a translated name
+  CLI subcommand, modules, files, types, CSS classes, `data/scrawl/`. Only the
+  `/` route still reads as the old name, and a path has no word in it.
+  `i18n.test.ts` fails on a translated name
+- A tree written before the rename carries `data/timeline/`. **Every entry that
+  can write a day file migrates it first** (`migrate_scrawl_dir`, called from
+  the sync lock, app start, CLI start and the widget's JNI) — after the scan it
+  would be too late, and the sync would carry both spellings
 - Keep the DOM small; never re-render whole documents via innerHTML
 
 ## Workflow

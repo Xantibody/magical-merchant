@@ -2,9 +2,7 @@ use chrono::{DateTime, FixedOffset, NaiveDate};
 use std::path::{Path, PathBuf};
 
 pub const DATA_DIR: &str = "data";
-// AIDEV-NOTE: 面の名は Scrawl だが置き場は `timeline` のまま — 改名は全端末の
-// 同期キーが変わり、既存の記録を移す処理が要る。値だけ旧名、名前は面に合わせた
-pub const SCRAWL_DIR: &str = "timeline";
+pub const SCRAWL_DIR: &str = "scrawl";
 pub const NOTES_DIR: &str = "notes";
 pub const CODEX_DIR: &str = "codex";
 pub const TEMPLATES_DIR: &str = "templates";
@@ -102,7 +100,7 @@ mod tests {
     fn test_scrawl_file_path() {
         let date = NaiveDate::from_ymd_opt(2026, 3, 20).unwrap();
         let path = scrawl_file_path(Path::new("/app"), date);
-        assert_eq!(path, PathBuf::from("/app/data/timeline/2026-03-20.md"));
+        assert_eq!(path, PathBuf::from("/app/data/scrawl/2026-03-20.md"));
     }
 
     #[test]

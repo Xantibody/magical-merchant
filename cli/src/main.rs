@@ -142,6 +142,9 @@ async fn main() -> anyhow::Result<()> {
         .or_else(default_data_dir)
         .ok_or_else(|| anyhow::anyhow!("no data directory: pass --data-dir"))?;
     server::exists_or_hint(&data_dir).map_err(|e| anyhow::anyhow!(e))?;
+    // 改名前の `data/timeline/`。読む前に済ませないと、一覧も同期も
+    // 旧い置き場を素通りする
+    let _ = magical_merchant_core::migrate_scrawl_dir(&data_dir);
 
     match cli.command {
         Command::List => {

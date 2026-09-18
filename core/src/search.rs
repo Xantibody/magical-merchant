@@ -525,7 +525,7 @@ mod tests {
 
     /// 日付を固定して 1 行書く。`save_scrawl_entry` は今日にしか書けない。
     fn write_day(tmp: &TempDir, date: chrono::NaiveDate, text: &str) {
-        let dir = tmp.path().join("data/timeline");
+        let dir = tmp.path().join("data/scrawl");
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(
             dir.join(format!("{}.md", date.format("%Y-%m-%d"))),

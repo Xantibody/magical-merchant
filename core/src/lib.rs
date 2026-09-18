@@ -27,6 +27,7 @@ pub use note::{
     update_note, update_note_meta, update_note_origin, update_note_view,
 };
 pub use scrawl::error::ScrawlError;
+pub use scrawl::migrate::{ScrawlDirMigration, migrate_scrawl_dir};
 pub use scrawl::{
     delete_scrawl_entry, list_scrawl_dates, read_scrawl, save_scrawl_entry, update_scrawl_entry,
 };

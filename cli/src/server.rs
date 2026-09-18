@@ -752,7 +752,7 @@ mod tests {
 
     /// 日付を固定して書く。`save_scrawl_entry` は今日にしか書けない。
     fn write_day(base: &Path, date: &str, entries: &[(u32, &str, &Context)]) {
-        let dir = base.join("data/timeline");
+        let dir = base.join("data/scrawl");
         fs::create_dir_all(&dir).unwrap();
         let day = NaiveDate::parse_from_str(date, "%Y-%m-%d").unwrap();
         let lines: Vec<String> = entries

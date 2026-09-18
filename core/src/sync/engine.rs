@@ -97,6 +97,9 @@ async fn run_over<T: SyncTransport + Sync, F: FnMut(RoundProgress)>(
 ///
 /// AIDEV-NOTE: 呼び出し側でロックを取る案は不可。flock は fd 単位なので engine の acquire が busy を返す
 fn repair_tree(base_dir: &Path) {
+    // 改名前の `data/timeline/`。走査より前に動かさないと、同期が旧い
+    // キーのまま組み上げる
+    let _ = crate::migrate_scrawl_dir(base_dir);
     // 過去の編集で本文の先頭に混入した化けメタデータ
     let _ = crate::repair_notes(base_dir);
     // 古い版が `data/` に置いた競合コピー。走査より前に外へ出さないと、

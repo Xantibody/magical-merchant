@@ -74,11 +74,20 @@ local scan → diff → `POST /sync/bulk`, repeated until nothing is left over.
   app and `magical-merchant sync` start syncs, so the loser really does get
   `busy` — the CLI says so and exits 1, the app stays quiet
 - **Repair runs under that lock**, never outside it: `repair_tree` in
-  `engine.rs` (malformed notes, legacy conflict copies, duplicate IDs) fires
-  right after the lock is taken and before the first scan, and the duplicate-ID
-  pass runs again before a successful sync returns. A caller cannot take the
-  lock on the engine's behalf — it is a flock on the engine's own descriptor,
-  so the engine would then answer `busy` to itself
+  `engine.rs` (the `data/timeline/` → `data/scrawl/` move, malformed notes,
+  legacy conflict copies, duplicate IDs) fires right after the lock is taken
+  and before the first scan, and the duplicate-ID pass runs again before a
+  successful sync returns. A caller cannot take the lock on the engine's
+  behalf — it is a flock on the engine's own descriptor, so the engine would
+  then answer `busy` to itself
+- **`data/timeline/` is the pre-rename name of `data/scrawl/`.**
+  `migrate_scrawl_dir` moves it, and every entry that can write a day file
+  calls it before reading: the sync lock, app start, CLI start, the widget's
+  JNI. The remote sees the move as `UploadNew` on the new keys plus
+  `DeleteRemote` on the old ones, so one sync finishes it — but a device still
+  on an older build then loses its `data/timeline/` to that delete and shows an
+  empty Scrawl until it is updated. Same-named days are left in the old
+  directory rather than merged; day files grow by appending
 - Conflicts keep the loser as `….sync-conflict-<ts>.md` in R2, and on disk
   as `conflicts/<key minus extension>/<ts>.md` — outside `data/`, same shape
   as `history/`, so it neither syncs back nor lands in the notes list.
