@@ -7,6 +7,7 @@ import { exportName, rasterize, sizedSvg, textToBase64 } from "../lib/diagram-ex
 import { t } from "../lib/i18n";
 import { renderMarkdown } from "../lib/markdown";
 import { resolvedTheme } from "../lib/theme";
+import { zoomSize } from "../lib/zoom-transform";
 import DiagramZoom from "./DiagramZoom";
 import "../styles/markdown-preview.css";
 import type { ExportFormat } from "../lib/diagram-export";
@@ -113,16 +114,13 @@ export default function MarkdownPreview(props: MarkdownPreviewProps): JSX.Elemen
     if (!diagram) {
       return;
     }
-    // 原寸は viewBox。mermaid が max-width に書く値と同じだが、数値で欲しい。
-    // viewBox を持たない SVG は縮めて描いている今の大きさを原寸とみなす
     const { svg } = diagram;
-    const box = svg.viewBox.baseVal;
-    const rect = svg.getBoundingClientRect();
-    setZoomed({
-      svg: svg.outerHTML,
-      width: box.width > 0 ? box.width : rect.width,
-      height: box.height > 0 ? box.height : rect.height,
-    });
+    const size = zoomSize(svg.viewBox.baseVal, svg.getBoundingClientRect());
+    // 測れない図は開かない。0×0 で開くと閉じるボタンだけの白い画面になる
+    if (!size) {
+      return;
+    }
+    setZoomed({ svg: svg.outerHTML, ...size });
   };
 
   /** ネイティブの保存ダイアログへ。キャンセルは失敗ではないので何も言わない */

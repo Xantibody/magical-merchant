@@ -1,7 +1,7 @@
 import { render, cleanup } from "@solidjs/testing-library";
 import { page, userEvent } from "vitest/browser";
 import type { Locator } from "vitest/browser";
-import { describe, it, expect, afterEach, beforeEach } from "vitest";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
 import MarkdownPreview from "./MarkdownPreview";
 
@@ -167,6 +167,29 @@ describe("MarkdownPreview", () => {
       expect(calls[0].args.suggestedName).toBe("diagram-1.png");
       // PNG の先頭 8 バイト (\x89PNG\r\n\x1a\n) の base64
       expect(calls[0].args.dataBase64).toMatch(/^iVBORw0KGgo/u);
+    });
+
+    /**
+     * canvas は大きすぎる図に対して `data:,` を返す。空の base64 を渡すと、
+     * 中身の無い PNG がダイアログを通って「保存しました」になる — 0 バイトの
+     * ファイルができたことは開くまで分からない
+     */
+    it("never hands an empty png to the save command", async () => {
+      const toDataURL = vi
+        .spyOn(HTMLCanvasElement.prototype, "toDataURL")
+        .mockReturnValue("data:,");
+      const errors: string[] = [];
+      const { baseElement } = render(() => (
+        <MarkdownPreview source={FLOWCHART} onError={(message) => errors.push(message)} />
+      ));
+      const screen = page.elementLocator(baseElement);
+
+      await expect.element(screen.locator(".mermaid-figure svg")).toBeInTheDocument();
+      await userEvent.click(screen.locator('[data-action="png"]'));
+
+      await expect.poll(() => errors).toStrictEqual(["図を保存できませんでした"]);
+      expect(calls).toStrictEqual([]);
+      toDataURL.mockRestore();
     });
 
     it("reports a failed save instead of staying silent", async () => {
