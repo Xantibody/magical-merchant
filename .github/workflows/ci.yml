@@ -53,13 +53,19 @@ jobs:
               - 'flake.lock'
               - 'justfile'
               - 'rust/justfile'
+            # tauri_app::check が読むものは漏らさず並べる (tauri-app/justfile:9-14)。
+            # knip.jsonc だけを直した PR でジョブが飛ぶと、落ちるのは merge 後の main
             frontend:
               - 'tauri-app/src/**'
               - 'tauri-app/dev/**'
+              - 'tauri-app/index.html'
+              - 'tauri-app/public/**'
               - '.oxlintrc.json'
               - 'tauri-app/.oxlintrc.json'
+              - 'tauri-app/knip.jsonc'
               - 'tauri-app/package.json'
               - 'tauri-app/pnpm-lock.yaml'
+              - 'tauri-app/pnpm-workspace.yaml'
               - 'tauri-app/tsconfig.json'
               - 'tauri-app/tsconfig.dev.json'
               - 'tauri-app/vite.config.ts'
@@ -95,6 +101,8 @@ jobs:
               - 'flake.lock'
             android:
               - 'tauri-app/android-widget/**'
+              # android-build-debug は android-setup 経由で apply-tls.go も回す
+              - 'tauri-app/android-tls/**'
               - 'tauri-app/src-tauri/**'
               - 'tauri-app/justfile'
               - 'Cargo.lock'
