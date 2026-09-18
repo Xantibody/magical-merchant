@@ -133,7 +133,7 @@ re-inserts its own marked block):
 
 | Patcher                            | What it adds                                                                                 |
 | ---------------------------------- | -------------------------------------------------------------------------------------------- |
-| `android-tls/apply-tls.go`         | The Kotlin half of `rustls-platform-verifier`, so reqwest reaches the Android trust store    |
+| `android-tls/apply-tls.go`         | The Kotlin half of `rustls-platform-verifier`, which the sync client currently bypasses      |
 | `android-widget/apply-widget.go`   | The widget sources, and the four receivers + capture activity + list service in the manifest |
 | `android-signing/apply-signing.go` | The release signing config, read from the gitignored `keystore.properties`                   |
 
@@ -141,6 +141,18 @@ re-inserts its own marked block):
 both build recipes; `android-sign-setup` runs the third, needs
 `keystore.properties`, and so hangs off `android-build-release` only. Call
 either by hand after regenerating `gen/android` some other way.
+
+When an Android certificate error turns up, start from the fact that the
+verifier those patches wire in is not the one the sync client uses:
+`android_tls::sync_tls_config` builds a `ClientConfig` over the
+`webpki-roots` bundle and `sync.rs` hands it to reqwest with
+`tls_backend_preconfigured`, so the request is verified against Mozilla's
+roots and never asks the device. The platform verifier is still installed and
+initialised at startup — the Kotlin component, `android_tls::init()` — because
+the bypass exists only until `rustls-platform-verifier` stops reporting
+Android's "no OCSP responder" as a revoked certificate (upstream #221), and
+the wiring has to be there when it does. Anything the device trusts and
+Mozilla does not, sync will refuse today.
 
 > [!NOTE]
 > **CI column**: ✓ = recipes executed by GitHub Actions (`ci.yml`). CI uses
