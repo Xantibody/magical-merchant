@@ -79,7 +79,7 @@ pub(crate) struct SearchOutput {
 
 #[derive(Serialize, schemars::JsonSchema)]
 pub(crate) struct SearchHitInfo {
-    /// Which store the hit came from: `timeline` or `note`.
+    /// Which store the hit came from: `timeline`, `note`, or `codex`.
     pub(crate) kind: String,
     pub(crate) title: String,
     pub(crate) snippet: String,
