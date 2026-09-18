@@ -609,10 +609,21 @@ describe("Workers Sync API", () => {
   // `notes/<id>.md` を取り合い、両者の state が延々と押し合う
   describe("the ALLOWED_SUBS allowlist", () => {
     it("lets anyone in while it is unset", async () => {
-      const res = await send(request("/sync-state"), { ALLOWED_SUBS: "" });
+      const res = await send(request("/sync-state"), { ALLOWED_SUBS: undefined });
 
       expect(res.status).toBe(200);
     });
+
+    // 置いたのに空、は設定の失敗。「未設定」と同じに読むと、締めたつもりの
+    // その瞬間にバケットが誰にでも開く
+    it.each(["", " ", ",", " , ", ",,"])(
+      "refuses everyone when it is set to %o",
+      async (allowedSubs) => {
+        const res = await send(request("/sync-state"), { ALLOWED_SUBS: allowedSubs });
+
+        expect(res.status).toBe(403);
+      },
+    );
 
     it("lets a listed sub in, ignoring the spaces around it", async () => {
       const res = await send(request("/sync-state"), { ALLOWED_SUBS: "somebody, user-123 " });

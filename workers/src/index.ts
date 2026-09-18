@@ -218,16 +218,22 @@ async function verifyJwt(token: string, secret: string): Promise<JwtPayload | nu
  * 同じ Worker にログインすると同じキーを取り合って永久に往復する。
  *
  * `ALLOWED_SUBS` に Google の `sub` をカンマ区切りで並べると、その人だけが
- * 通る。未設定なら従来どおり誰でも通す — 既存の配備を黙って締め出さない。
+ * 通る。変数そのものが無いときだけ従来どおり誰でも通す — 既存の配備を
+ * 黙って締め出さない。
  *
  * AIDEV-NOTE: キーを `${sub}/` で名前空間に分ける案は既存オブジェクトの移行が要るため却下。1 バケット 1 人を守る
+ * AIDEV-NOTE: 「置いたが空」は未設定と別物として閉じる。同一視すると、締めたつもりの設定ミスがバケットを全開にする
  */
 function isAllowedSub(allowedSubs: string | undefined, sub: string): boolean {
-  const entries = (allowedSubs ?? "")
+  if (allowedSubs === undefined) {
+    return true;
+  }
+  // 空要素は落とす。残すと `sub` が空文字のトークンが `ALLOWED_SUBS=""` に一致する
+  return allowedSubs
     .split(",")
     .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0);
-  return entries.length === 0 || entries.includes(sub);
+    .filter((entry) => entry.length > 0)
+    .includes(sub);
 }
 
 function generateState(): string {
