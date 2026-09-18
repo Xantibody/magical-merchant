@@ -47,7 +47,7 @@ visible.
 | -------- | ------------------------------------------------ |
 | Rust     | stable toolchain, clippy, rust-analyzer          |
 | Frontend | Node.js 22, pnpm, tsc (type check), oxlint       |
-| Build    | just, cargo-tauri, go (Android signing patcher)  |
+| Build    | just, cargo-tauri, go (the Android patchers)     |
 | Android  | JDK 17, Android SDK (API 36), NDK 29             |
 | Format   | nix fmt (treefmt: nixfmt, rustfmt, taplo, oxfmt) |
 
@@ -109,10 +109,21 @@ Scope a single crate with cargo directly (`cargo test -p magical-merchant-cli`).
 | `just tauri_app::android-build-release`     | Build a signed release APK                          |     |
 | `just tauri_app::android-install [variant]` | Build and install over USB (`debug` / `release`)    |     |
 
-`android-setup` runs on its own from `android-init` and from both build
-recipes; `android-sign-setup` needs `keystore.properties` and so hangs off
-`android-build-release` only. Call either by hand after regenerating
-`gen/android` some other way.
+`src-tauri/gen/android/` is generated and gitignored, so everything the
+project needs on top of what `tauri android init` writes is re-applied by a
+Go program each time. There are three, all idempotent (each strips and
+re-inserts its own marked block):
+
+| Patcher                            | What it adds                                                                                 |
+| ---------------------------------- | -------------------------------------------------------------------------------------------- |
+| `android-tls/apply-tls.go`         | The Kotlin half of `rustls-platform-verifier`, so reqwest reaches the Android trust store    |
+| `android-widget/apply-widget.go`   | The widget sources, and the four receivers + capture activity + list service in the manifest |
+| `android-signing/apply-signing.go` | The release signing config, read from the gitignored `keystore.properties`                   |
+
+`android-setup` runs the first two, on its own from `android-init` and from
+both build recipes; `android-sign-setup` runs the third, needs
+`keystore.properties`, and so hangs off `android-build-release` only. Call
+either by hand after regenerating `gen/android` some other way.
 
 > [!NOTE]
 > **CI column**: ✓ = recipes executed by GitHub Actions (`ci.yml`). CI uses

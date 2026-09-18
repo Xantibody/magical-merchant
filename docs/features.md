@@ -258,9 +258,17 @@ change-detection protocol.
 
 ## Android widgets
 
-Three home-screen widgets ship with the APK: a Timeline capture bar (writes
-through JNI without launching the app), a "new note" bar, and a recent notes
-list that deep-links into the app.
+Four home-screen widgets ship with the APK:
+
+| Widget             | Size | What a tap does                                                                                                              |
+| ------------------ | ---- | ---------------------------------------------------------------------------------------------------------------------------- |
+| タイムラインに記録 | 4×1  | Opens a sheet over the home screen and appends to today's Scrawl through a JNI call into the core — the app is never started |
+| 新しいノート       | 4×1  | `magical-merchant://widget/new-note`                                                                                         |
+| 最近のノート       | 4×2  | The four newest notes; a row opens that note, the header plus makes a new one                                                |
+| テンプレート       | 4×3  | Three templates; a row creates today's note from it (or opens the one that already exists)                                   |
+
+All four are deep links into the app except the capture bar, which is the one
+that exists so that recording costs nothing — no launch, no wait.
 
 ## Terminal (CLI)
 
