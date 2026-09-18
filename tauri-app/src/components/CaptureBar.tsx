@@ -3,7 +3,7 @@ import type { JSX } from "solid-js";
 import Icon from "./Icon";
 import { t } from "../lib/i18n";
 import { isImeComposing } from "../lib/ime";
-import { matchTagPrefix, tagDraftAt } from "../lib/tags";
+import { matchTagPrefix, sameTag, tagDraftAt } from "../lib/tags";
 import type { TagCount } from "../lib/tags";
 
 interface CaptureBarProps {
@@ -47,10 +47,14 @@ export default function CaptureBar(props: CaptureBarProps): JSX.Element {
     return matchTagPrefix(props.knownTags ?? [], typing).slice(0, MAX_SUGGESTIONS);
   });
 
-  /** 打ちかけの語をそのまま新しいタグとして確定できる。 */
+  /**
+   * 打ちかけの語をそのまま新しいタグとして確定できる。
+   * 大小だけ違う候補があるなら新しくない — 並べて出すと、すでにある
+   * タグを「作る」ように見えてしまう。
+   */
   const isNew = createMemo(() => {
     const typing = draft();
-    return Boolean(typing) && !suggestions().some((s) => s.tag === typing);
+    return typing !== null && typing !== "" && !suggestions().some((s) => sameTag(s.tag, typing));
   });
 
   const rows = createMemo(() => suggestions().length + (isNew() ? 1 : 0));
