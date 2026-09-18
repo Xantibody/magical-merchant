@@ -492,8 +492,12 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   /**
    * ディスクから読み直して画面に出す。選択の切り替えと、外からの書き換えの後に。
    * `force` は「打った字はもう退避してあるので、書いている最中でも譲る」の合図。
+   *
+   * 返るのは「読み直しを実際に画面へ載せたか」。読めなかったぶんと、届く前に
+   * 選択が移って見送ったぶんは `false` — 呼ぶ側が「読み直しました」と言う前に
+   * 確かめられるように、載せたかどうかはここからしか分からない。
    */
-  const loadNote = async (item: NoteItem, force = false): Promise<void> => {
+  const loadNote = async (item: NoteItem, force = false): Promise<boolean> => {
     try {
       const content = await readNoteContent(
         () => typedInvoke("read_note", { filename: item.filename }),
@@ -506,12 +510,13 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       // revision まで見送るのは、画面に出していない版で保存に行くと、
       // 読んでいない相手の本文の上に書けてしまうから
       if (selected()?.id !== item.id || (!force && isTyping())) {
-        return;
+        return false;
       }
       revisions.set(item.filename, content.revision);
       // 本文とモードは対で出す。バラすと一瞬だけ違うモードで描かれる
       const titled = splitTitle(content.body);
       showBody(item.id, titled.title, titled.body, content.view);
+      return true;
     } catch {
       // 読めなかったことを本文の入れ替えにしない。空のエディタを立てると
       // 「空のノート」に見え、そこへ打った数文字がノート全体になる。
@@ -519,6 +524,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       if (selected()?.id === item.id && (force || !isTyping())) {
         shell.showToast(t().notes.loadFailed);
       }
+      return false;
     }
   };
 
