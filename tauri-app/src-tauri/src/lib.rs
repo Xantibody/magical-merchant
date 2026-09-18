@@ -120,6 +120,17 @@ struct SaveError {
     message: String,
 }
 
+impl SaveError {
+    /// core を通らずに落ちたぶん(データディレクトリが引けない、ファイル名が
+    /// ノートの名前になっていない)。分ける印が無いので `other` に落とす。
+    const fn other(message: String) -> Self {
+        Self {
+            kind: "other",
+            message,
+        }
+    }
+}
+
 impl From<magical_merchant_core::CoreError> for SaveError {
     fn from(e: magical_merchant_core::CoreError) -> Self {
         Self {
@@ -149,14 +160,12 @@ fn update_draft(
     client: ClientContext,
     revision: Option<String>,
 ) -> Result<String, SaveError> {
-    let refused = |message: String| SaveError {
-        kind: "other",
-        message,
-    };
-    let base_dir = app_base_dir(&handle).map_err(refused)?;
-    let filename = parse_filename(&filename).map_err(refused)?;
-    let (_, path) = magical_merchant_core::locate_note(&base_dir, &filename)
-        .map_err(|e| refused(e.to_string()))?;
+    let base_dir = app_base_dir(&handle).map_err(SaveError::other)?;
+    let filename = parse_filename(&filename).map_err(SaveError::other)?;
+    // core の拒否は 1 か所で印に変える。ここで文字列に潰すと、探せなかった
+    // 理由が `update_note` の同じ理由と別の印で届く
+    let (_, path) =
+        magical_merchant_core::locate_note(&base_dir, &filename).map_err(SaveError::from)?;
     let context = device::get_context(client);
     let expected = revision.map(Revision::from);
     magical_merchant_core::update_note(&path, &body, &context, expected.as_ref())
@@ -502,14 +511,8 @@ fn restore_note_version(
     client: ClientContext,
     revision: Option<String>,
 ) -> Result<String, SaveError> {
-    let base_dir = app_base_dir(&handle).map_err(|message| SaveError {
-        kind: "other",
-        message,
-    })?;
-    let filename = parse_filename(&filename).map_err(|message| SaveError {
-        kind: "other",
-        message,
-    })?;
+    let base_dir = app_base_dir(&handle).map_err(SaveError::other)?;
+    let filename = parse_filename(&filename).map_err(SaveError::other)?;
     let context = device::get_context(client);
     let expected = revision.map(Revision::from);
     magical_merchant_core::restore_note_version(
