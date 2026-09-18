@@ -3,13 +3,21 @@ import { describe, it, expect, beforeAll, afterEach, vi } from "vitest";
 import { SignJWT } from "jose";
 import worker, { deepLinkPage } from "./index";
 
-function makeJwt(
-  payload: { sub: string; email: string; exp: number },
-  secret = env.JWT_SECRET,
-): Promise<string> {
+interface JwtOptions {
+  sub: string;
+  email: string;
+  exp: number;
+  alg?: string;
+  issuer?: string;
+  audience?: string;
+}
+
+function makeJwt(payload: JwtOptions, secret = env.JWT_SECRET): Promise<string> {
   const key = new TextEncoder().encode(secret);
   return new SignJWT({ email: payload.email })
-    .setProtectedHeader({ alg: "HS256" })
+    .setProtectedHeader({ alg: payload.alg ?? "HS256" })
+    .setIssuer(payload.issuer ?? "magical-merchant-sync")
+    .setAudience(payload.audience ?? "magical-merchant-app")
     .setSubject(payload.sub)
     .setExpirationTime(payload.exp)
     .sign(key);
@@ -209,6 +217,24 @@ describe("OAuth entry and exit", () => {
       expect(res.headers.get("Location")).toContain(`${LOOPBACK_REDIRECT}?token=`);
     });
 
+    // 発行側と検証側で iss / aud がずれると、ログインは通るのに最初の
+    // 同期が 401 で返る。往復させて 1 本で押さえる
+    it("issues a token the sync routes accept", async () => {
+      stubGoogle();
+      const callback = await authCallback(LOOPBACK_REDIRECT);
+      const location = callback.headers.get("Location");
+      vi.unstubAllGlobals();
+      const issued = new URL(String(location)).searchParams.get("token");
+
+      const res = await send(
+        new Request("http://localhost/sync-state", {
+          headers: { Authorization: `Bearer ${issued}` },
+        }),
+      );
+
+      expect(res.status).toBe(200);
+    });
+
     it("hands the token to the deep link as a tappable page", async () => {
       stubGoogle();
 
@@ -285,6 +311,29 @@ describe("Workers Sync API", () => {
           headers: { Authorization: `Bearer ${expiredToken}` },
         }),
       );
+      expect(res.status).toBe(401);
+    });
+
+    // 署名方式・発行者・宛先は発行側が決めるもの。検証側が「トークンに
+    // 書いてある通り」で受けると、その選択が持ち込む側の手に残る
+    it.each([
+      { name: "another algorithm", claims: { alg: "HS512" } },
+      { name: "another issuer", claims: { issuer: "https://evil.example" } },
+      { name: "another audience", claims: { audience: "somebody-else" } },
+    ])("rejects a JWT signed for $name", async ({ claims }) => {
+      const token = await makeJwt({
+        sub: "user-123",
+        email: "test@example.com",
+        exp: Math.floor(Date.now() / 1000) + 3600,
+        ...claims,
+      });
+
+      const res = await send(
+        new Request("http://localhost/sync-state", {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+      );
+
       expect(res.status).toBe(401);
     });
   });

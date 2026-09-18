@@ -164,10 +164,20 @@ async function handleSyncBulk(
   return jsonResponse(response);
 }
 
+/**
+ * 発行者と宛先。`jwtVerify` は既定では iss も aud も見ないので、名前を
+ * 決めて両端で突き合わせる。同じ秘密鍵を別の用途にも使ってしまったとき、
+ * そちらのトークンがこの Worker を素通りするのを防ぐ。
+ */
+const JWT_ISSUER = "magical-merchant-sync";
+const JWT_AUDIENCE = "magical-merchant-app";
+
 function signJwt(payload: JwtPayload, secret: string): Promise<string> {
   const key = new TextEncoder().encode(secret);
   return new SignJWT({ email: payload.email })
     .setProtectedHeader({ alg: "HS256" })
+    .setIssuer(JWT_ISSUER)
+    .setAudience(JWT_AUDIENCE)
     .setSubject(payload.sub)
     .setExpirationTime(payload.exp)
     .sign(key);
@@ -176,7 +186,12 @@ function signJwt(payload: JwtPayload, secret: string): Promise<string> {
 async function verifyJwt(token: string, secret: string): Promise<JwtPayload | null> {
   try {
     const key = new TextEncoder().encode(secret);
-    const { payload } = await jwtVerify(token, key);
+    // AIDEV-NOTE: algorithms は必ず絞る。ヘッダの alg を信じると、署名方式の選択が相手の手に残る
+    const { payload } = await jwtVerify(token, key, {
+      algorithms: ["HS256"],
+      issuer: JWT_ISSUER,
+      audience: JWT_AUDIENCE,
+    });
     if (
       typeof payload.sub !== "string" ||
       typeof payload.email !== "string" ||
