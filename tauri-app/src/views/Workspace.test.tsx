@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { render, screen, fireEvent, cleanup, waitFor } from "@solidjs/testing-library";
+import { render, screen, fireEvent, cleanup, waitFor, within } from "@solidjs/testing-library";
 import { mockIPC, mockWindows, clearMocks } from "@tauri-apps/api/mocks";
 import { page } from "vitest/browser";
 import { MemoryRouter, Route, useNavigate } from "@solidjs/router";
@@ -113,6 +113,13 @@ const summaryOf = (filename: string): Record<string, unknown> => ({
   preview: disk.get(filename) ?? "",
   // core は書いていないキーを落とす。一覧の読み手が undefined を見る形に揃える
   ...(meta.get(filename)?.view ? { view: meta.get(filename)?.view } : {}),
+  // Codex の行だけ版の数と「動いたか」
+  ...(kinds.get(filename) === "codex"
+    ? {
+        version_count: (versions.get(filename) ?? []).length,
+        dirty: (versions.get(filename)?.[0]?.body ?? disk.get(filename)) !== disk.get(filename),
+      }
+    : {}),
 });
 
 const WRITE_COMMANDS = ["update_draft", "create_draft", "set_note_view", "delete_note"];
@@ -222,10 +229,19 @@ const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
   },
   note_version_status: ({ filename }) => {
     const own = versions.get(String(filename)) ?? [];
+    const draft = disk.get(String(filename)) ?? "";
     return {
       count: own.length,
-      dirty: own.length > 0 && own[0]?.body !== disk.get(String(filename)),
+      dirty: own.length > 0 && own[0]?.body !== draft,
+      bytes_delta: own[0] ? draft.length - own[0].body.length : 0,
     };
+  },
+  delete_note_version: ({ filename, id }) => {
+    const name = String(filename);
+    versions.set(
+      name,
+      (versions.get(name) ?? []).filter((v) => v.id !== id),
+    );
   },
   set_note_view: ({ filename, view }) => {
     const name = String(filename);
@@ -302,6 +318,15 @@ function titleInput(): HTMLInputElement {
 /** Codex のメタ行に出る版の数。 */
 const metaLine = (): HTMLElement | null => document.querySelector(".detail-version-status");
 
+/**
+ * 一覧の行の角折りページ。読み直した一覧は行を作り直すので、掴んでいた行では
+ * なく、いまその題を名乗る行の印を見る。
+ */
+const markOf = (title: string): HTMLElement | null =>
+  screen
+    .getByRole("button", { name: new RegExp(title, "u") })
+    .querySelector<HTMLElement>(".page-mark");
+
 /** 「起きないこと」を見るための間。waitFor は起きるまで待つので使えない。 */
 function sleep(ms: number): Promise<void> {
   // oxlint-disable-next-line promise/avoid-new
@@ -322,7 +347,9 @@ async function startEditingBody(): Promise<void> {
 /** 「…」を開いてから、その中の 1 行を押す。 */
 async function runNoteAction(name: string): Promise<void> {
   fireEvent.click(screen.getByRole("button", { name: "このノートの操作" }));
-  fireEvent.click(await screen.findByRole("button", { name: new RegExp(name, "u") }));
+  // 背骨も「履歴」と名乗る。押すのはメニューの行
+  const menu = await screen.findByRole("menu");
+  fireEvent.click(await within(menu).findByRole("button", { name: new RegExp(name, "u") }));
 }
 
 /** 「新規」→「空のノート」。テンプレのシートを経由するのは本物と同じ順序。 */
@@ -1013,6 +1040,27 @@ describe("Workspace › Codex の面", () => {
     expect(screen.queryByRole("button", { name: "Codex にする" })).toBeNull();
   });
 
+  // 一覧の行の右端、日付の左に角折りのページ。中の数が版の数で、枠の色が
+  // 「動いたか」。Note の行には無い
+  it("marks each codex row with a page that counts its versions", async () => {
+    addCodex();
+    versions.set(FILE_C, [{ id: "v1", message: null, body: BODY_C }]);
+    renderWorkspace();
+    navigateTo?.("/codex");
+
+    await rowOf(TITLE_C);
+    expect(markOf(TITLE_C)?.dataset.state).toBe("clean");
+    expect(markOf(TITLE_C)?.querySelector(".page-mark-count")?.textContent).toBe("1");
+
+    disk.set(FILE_C, `${BODY_C}\n\n動いた`);
+    shell?.refreshData();
+    await waitFor(() => expect(markOf(TITLE_C)?.dataset.state).toBe("dirty"));
+
+    navigateTo?.("/");
+    await rowOf(TITLE_A);
+    expect(markOf(TITLE_A)).toBeNull();
+  });
+
   it("creates a new document in the surface it is on", async () => {
     addCodex();
     renderWorkspace();
@@ -1077,18 +1125,15 @@ describe("Workspace › Codex の版", () => {
     typeInEditor?.(`# ${TITLE_C}\n\n${TEXT_C}\n\n足した行`);
     await runNoteAction("履歴");
 
-    await waitFor(() => expect(countOf("list_note_versions")).toBe(1));
+    // 背骨が広がった時点で、打った字はもうディスクにある
+    await waitFor(() => expect(document.querySelector(".version-spine--open")).not.toBeNull());
     expect(writesTo(FILE_C)).toHaveLength(1);
-    const saved = calls.findIndex((c) => c.cmd === "update_draft");
-    const listed = calls.findIndex((c) => c.cmd === "list_note_versions");
-    expect(saved).toBeGreaterThanOrEqual(0);
-    expect(listed).toBeGreaterThan(saved);
-    expect(document.querySelector(".version-history")).not.toBeNull();
+    expect(disk.get(FILE_C)).toContain("足した行");
   });
 
   // 刻むのはディスクの本文。発火済みで飛んでいる保存を待たないと、最後の
   // 打鍵が入っていない版を「刻めた」と言ってしまう
-  it("waits for an in-flight save before offering to commit", async () => {
+  it("waits for an in-flight save before committing", async () => {
     await openCodexC();
     await startEditingBody();
     blockWrites();
@@ -1097,11 +1142,12 @@ describe("Workspace › Codex の版", () => {
 
     await runNoteAction("版を刻む");
     await sleep(100);
-    expect(screen.queryByPlaceholderText("この版のひとこと(任意)")).toBeNull();
+    expect(countOf("commit_note_version")).toBe(0);
 
     releaseWrites();
-    await screen.findByPlaceholderText("この版のひとこと(任意)");
+    await waitFor(() => expect(countOf("commit_note_version")).toBe(1));
     expect(writesTo(FILE_C)).toHaveLength(1);
+    expect(versions.get(FILE_C)?.[0]?.body).toContain("足した行");
   });
 
   // 版は他の端末でも刻まれる。同期の読み直しで本文と一覧は新しくなるのに、
@@ -1128,55 +1174,117 @@ describe("Workspace › Codex の版", () => {
     expect(editorBody().dataset.noteLinks?.split(",")).toContain(FILE_C.replace(/\.md$/u, ""));
   });
 
-  it("commits with the message typed, and Enter during IME does not", async () => {
+  // 一言は聞かない。押した瞬間に刻み、トーストで要約を言い、猶予のあいだは
+  // 取り消せる — 取り消しは版のファイルを消すだけで、本文には触れない
+  it("commits at once without a message and can be undone from the toast", async () => {
     await openCodexC();
     await waitFor(() => expect(metaLine()?.textContent).toBe("版なし"));
 
     await runNoteAction("版を刻む");
-    const input = await screen.findByPlaceholderText<HTMLInputElement>("この版のひとこと(任意)");
-    fireEvent.input(input, { target: { value: "第 3 章を足した" } });
-    // 変換確定の Enter は IME のもの (#102)
-    fireEvent.keyDown(input, { key: "Enter", isComposing: true });
-    await sleep(50);
-    expect(countOf("commit_note_version")).toBe(0);
-
-    fireEvent.keyDown(input, { key: "Enter" });
 
     await waitFor(() => expect(countOf("commit_note_version")).toBe(1));
     expect(calls.find((c) => c.cmd === "commit_note_version")?.args).toStrictEqual({
       filename: FILE_C,
-      message: "第 3 章を足した",
+      message: null,
     });
     await waitFor(() => expect(metaLine()?.textContent).toBe("版 1"));
-    // 一言の欄は刻んだら畳む
-    expect(screen.queryByPlaceholderText("この版のひとこと(任意)")).toBeNull();
+    // 背骨にも点が 1 つ増える(下書きの中空 + 版の塗り)
+    expect(document.querySelectorAll(".version-spine .version-dot")).toHaveLength(2);
+    expect(shell?.toast()?.message).toBe("版 1 を刻みました");
+    expect(shell?.toast()?.detail).toBe(`${BODY_C.length} B`);
+
+    shell?.toast()?.undo?.();
+
+    await waitFor(() => expect(countOf("delete_note_version")).toBe(1));
+    expect(calls.find((c) => c.cmd === "delete_note_version")?.args).toStrictEqual({
+      filename: FILE_C,
+      id: "v1",
+    });
+    await waitFor(() => expect(metaLine()?.textContent).toBe("版なし"));
+    expect(disk.get(FILE_C)).toBe(BODY_C);
   });
 
-  it("shows a version's diff against the draft, or says they are the same", async () => {
+  it("commits from the keyboard too", async () => {
+    await openCodexC();
+
+    fireEvent.keyDown(globalThis, { key: "k", metaKey: true, shiftKey: true });
+
+    await waitFor(() => expect(countOf("commit_note_version")).toBe(1));
+  });
+
+  // 履歴を開いても本文は消えない。背骨が広がって最新の版が選ばれ、版との差は
+  // 本文の欄外の印になる。エディタは畳み、読むだけの本文になる
+  it("opens the history beside the body with the latest version selected", async () => {
     await openCodexC();
     versions.set(FILE_C, [
       { id: "v2", message: null, body: BODY_C },
-      { id: "v1", message: "最初の骨組み", body: `# ${TITLE_C}\n\n最初の一行` },
+      { id: "v1", message: null, body: `# ${TITLE_C}\n\n最初の一行` },
     ]);
 
     await runNoteAction("履歴");
 
-    const older = await screen.findByRole("button", { name: /最初の骨組み/u });
-    fireEvent.click(older);
+    const newest = await screen.findByRole("button", { name: /^版 2/u });
+    await waitFor(() => expect(newest.getAttribute("aria-current")).toBe("true"));
+    expect(screen.queryByTestId("editor-body")).toBeNull();
+    // 最新の版は下書きと同じ。印は 1 つも立たず、行がそう言う
+    await waitFor(() => expect(newest.textContent).toContain("同じ内容"));
+    expect(screen.getByText(TEXT_C)).toBeDefined();
+    expect(document.querySelector(".diff-mark")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /^版 1/u }));
+
     await waitFor(() => {
-      expect(document.querySelectorAll(".diff-del").length).toBeGreaterThan(0);
-      expect(document.querySelectorAll(".diff-add").length).toBeGreaterThan(0);
+      expect(document.querySelectorAll(".diff-mark--del").length).toBeGreaterThan(0);
+      expect(document.querySelectorAll(".diff-mark--add").length).toBeGreaterThan(0);
     });
-    expect(calls.find((c) => c.cmd === "diff_note_versions")?.args).toStrictEqual({
+    // 開いた瞬間の版 2 との比較が先に走っている。見るのは押した後のほう
+    expect(calls.findLast((c) => c.cmd === "diff_note_versions")?.args).toStrictEqual({
       filename: FILE_C,
       from: "v1",
     });
-    // 履歴が本文の場所に出ているあいだ、エディタは畳まれている
-    expect(screen.queryByTestId("editor-body")).toBeNull();
+    // 消えた行は選んだ版にしか無い行。下書きの本文に差し込まれて読める
+    expect(screen.getByText("最初の一行")).toBeDefined();
+    expect(screen.getByText(TEXT_C)).toBeDefined();
 
-    const [newest] = screen.getAllByRole("button", { name: /±0|\+\d/u });
-    fireEvent.click(newest as HTMLElement);
-    await screen.findByText("同じ内容です");
+    // Esc で閉じる。背骨は畳まれ、エディタが戻る
+    fireEvent.keyDown(globalThis, { key: "Escape" });
+    await waitFor(() => expect(document.querySelector(".version-spine--open")).toBeNull());
+    await waitFor(() => expect(screen.getByTestId("editor-body")).toBeDefined());
+  });
+
+  // 開いた瞬間に選ぶ最新の版は、開くときに読み直した一覧のもの。手元の一覧で
+  // 選ぶと、別の端末で刻まれた新しい版があっても 1 つ古いほうが開く
+  it("selects the version that is newest at the moment the history opens", async () => {
+    versions.set(FILE_C, [{ id: "v1", message: null, body: BODY_C }]);
+    await openCodexC();
+    await waitFor(() => expect(metaLine()?.textContent).toBe("版 1"));
+
+    versions.set(FILE_C, [
+      { id: "v2", message: null, body: BODY_C },
+      { id: "v1", message: null, body: BODY_C },
+    ]);
+    await runNoteAction("履歴");
+
+    const newest = await screen.findByRole("button", { name: /^版 2/u });
+    await waitFor(() => expect(newest.getAttribute("aria-current")).toBe("true"));
+  });
+
+  // 背骨は畳んでいても Codex の本文の左に常にある。Note には無い
+  it("keeps a collapsed spine beside a codex and none beside a note", async () => {
+    await openCodexC();
+
+    await waitFor(() => expect(document.querySelector(".version-spine-rail")).not.toBeNull());
+    expect(document.querySelector(".version-spine--open")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "履歴" }));
+    await waitFor(() => expect(document.querySelector(".version-spine--open")).not.toBeNull());
+    // 版が無ければ、次の一手(刻む)がそこにある
+    expect(screen.getByText("まだ版がありません。いまの本文が最初の版になります。")).toBeDefined();
+
+    teardownWorkspace();
+    await setupWorkspace();
+    await openNoteA();
+    expect(document.querySelector(".version-spine")).toBeNull();
   });
 
   it("restores a version with the revision it read and swaps the body in", async () => {
@@ -1185,7 +1293,7 @@ describe("Workspace › Codex の版", () => {
     versions.set(FILE_C, [{ id: "v1", message: "最初の骨組み", body: OLD_BODY }]);
 
     await runNoteAction("履歴");
-    fireEvent.click(await screen.findByRole("button", { name: /最初の骨組み/u }));
+    fireEvent.click(await screen.findByRole("button", { name: /^版 1/u }));
     fireEvent.click(await screen.findByRole("button", { name: "この版に戻す" }));
 
     await waitFor(() => expect(countOf("restore_note_version")).toBe(1));
@@ -1196,9 +1304,9 @@ describe("Workspace › Codex の版", () => {
     expect(args?.revision).toBe(revisionOf(BODY_C));
     // 戻した本文が画面に出て、履歴は畳まれる
     await waitFor(() => expect(screen.getByText("最初の一行")).toBeDefined());
-    expect(document.querySelector(".version-history")).toBeNull();
-    // 戻す前の下書きが最新の版になり、戻した本文はそれと違うので「変更あり」
-    await waitFor(() => expect(metaLine()?.textContent).toBe("版 2 · 変更あり"));
+    expect(document.querySelector(".version-spine--open")).toBeNull();
+    // 戻す前の下書きが最新の版になり、戻した本文はそれと違うので距離が出る
+    await waitFor(() => expect(metaLine()?.textContent).toMatch(/^版 2 から /u));
   });
 
   it("cannot restore into a read-only codex", async () => {
@@ -1208,7 +1316,7 @@ describe("Workspace › Codex の版", () => {
     await waitFor(() => expect(screen.queryByTestId("editor-body")).toBeNull());
 
     await runNoteAction("履歴");
-    fireEvent.click(await screen.findByRole("button", { name: /最初の骨組み/u }));
+    fireEvent.click(await screen.findByRole("button", { name: /^版 1/u }));
 
     const restore = await screen.findByRole<HTMLButtonElement>("button", { name: "この版に戻す" });
     expect(restore.disabled).toBe(true);

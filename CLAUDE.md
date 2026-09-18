@@ -48,12 +48,21 @@ ready to record the moment it opens (widgets exist for exactly this).
   (`preview` = read-only, `mindmap` = map laid alongside, absent = editable).
   Rare per-note actions live behind one `…` menu (`components/NoteMenu.tsx`)
 - **Codex** (`views/Workspace.tsx` with `kind="codex"`, route `/codex`): the
-  same view over `data/codex/`. Adds to the `…` menu: 版を刻む… (commit a
-  version with a message, `components/CommitPopover.tsx`) and 履歴 (the
-  version list + diff against the draft, `components/VersionHistory.tsx`);
-  the meta line shows the version count and whether the draft has moved on.
-  Versions are never committed automatically. A Note gets "Codex にする" in
-  the same menu; there is no way back
+  same view over `data/codex/`. Three things tell it from a Note: the list
+  row carries a folded-corner page with the version count (frame darkens when
+  the draft has moved on); a **spine** stands to the left of the body
+  (`components/VersionSpine.tsx`, 56px of dots while writing, 200px of
+  version rows when the history is open; absent on phones); the meta line
+  reads "版 4 から +312 B · 9 か月で 4 回刻んだ". The `…` menu adds 版を刻む
+  (commits **at once**, no message — the toast summarises and offers undo,
+  which deletes the file just written) and 履歴. Opening the history never
+  replaces the body: it becomes read-only and each changed block gets a
+  `+`/`−` in the gutter (`lib/diff-marks.ts` → `lib/line-marks-markdown.ts`;
+  deleted lines are struck through where they used to be). Below 1100px the
+  spine stays collapsed and a horizontal card under the title
+  (`components/VersionSlider.tsx`) sends versions. Versions are never
+  committed automatically. A Note gets "Codex にする" in the same menu; there
+  is no way back
 - **Command palette** (⌘K): in-memory commands + debounced `search_all`
 - **Language**: Japanese and English only, from one table (`lib/i18n.ts`).
   Every user-visible string goes through `t()`; the choice lives in Settings

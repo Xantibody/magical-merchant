@@ -28,6 +28,17 @@ function sizeDelta(bytes: number): string {
   const size = Math.abs(bytes);
   return size < 1024 ? `${sign}${size} B` : `${sign}${(size / 1024).toFixed(1)} KB`;
 }
+
+/** 大きさそのもの。いちばん古い版は差ではなくこれを出す。`820 B` / `1.1 KB`。 */
+function sizeOf(bytes: number): string {
+  return bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
+}
+
+/** 「N か月で M 回刻んだ」の期間。月が満ちていなければ日で。 */
+interface Span {
+  months: number;
+  days: number;
+}
 /** 設定に残す値。`system` は端末の言語に従う。 */
 export type LocalePreference = Locale | "system";
 
@@ -119,28 +130,51 @@ const ja = {
     empty: "育てる文書がまだありません",
     emptyHint: "Note の「…」から Codex にするか、新規から始めます。",
     promote: "Codex にする",
-    promoteConfirm: "Codex にすると Note には戻せません",
+    /** 「Codex にする」の確認。何が増えるかを先に言い、戻れないことは最後に。 */
+    promoteBody1:
+      "書き足し続ける文書になります。区切りごとに版を刻み、前の版からどれだけ変わったかを見返せます。",
+    promoteBody2: "Codex タブへ移ります。ID とリンクはそのまま。",
+    promoteBody2Strong: "Note には戻せません。",
     promoteYes: "Codex にする",
     promoted: "Codex にしました",
-    commit: "版を刻む…",
-    commitPlaceholder: "この版のひとこと(任意)",
-    commitYes: "刻む",
-    committed: "版を刻みました",
+    commit: "版を刻む",
+    committed: (n: number) => `版 ${n} を刻みました`,
+    commitFailed: "刻めませんでした",
     history: "履歴",
     draft: "下書き",
+    now: "いま",
     restore: "この版に戻す",
     restored: "この版に戻しました。戻す前の下書きは履歴にあります",
     restoreFailed: "戻せませんでした",
     same: "同じ内容です",
-    noVersions: "まだ版がありません",
+    sameShort: "同じ内容",
+    noVersions: "版なし",
+    noVersionsHint: "まだ版がありません。いまの本文が最初の版になります。",
     close: "閉じる",
-    status: (count: number, dirty: boolean): string => {
+    /** 「版 4」。背骨の行・メタ行・一覧の記号の説明。 */
+    versionN: (n: number) => `版 ${n}`,
+    /** 「版 4 から +312 B」。最新の版からの距離。 */
+    deltaFromLatest: (n: number, delta: number) => `版 ${n} から ${sizeDelta(delta)}`,
+    /** 「9 か月で 4 回刻んだ」。最初の版からの経過と版の数。 */
+    cadence: (count: number, span: Span): string => {
+      if (span.months >= 1) {
+        return `${span.months} か月で ${count} 回刻んだ`;
+      }
+      return span.days >= 1 ? `${span.days} 日で ${count} 回刻んだ` : `今日 ${count} 回刻んだ`;
+    },
+    /** 「7 日ぶり」。刻んだ直後のトースト。 */
+    sinceDays: (days: number) => `${days} 日ぶり`,
+    /** 一覧の角折りページの説明。 */
+    pageMark: (count: number, dirty: boolean): string => {
       if (count === 0) {
         return "版なし";
       }
       return dirty ? `版 ${count} · 変更あり` : `版 ${count}`;
     },
+    /** 横向きの背骨の左端。最初の版の月。 */
+    monthOf: (month: number) => `${month}月`,
     sizeDelta,
+    sizeOf,
     beforeRestore: "戻す前",
   },
   templates: {
@@ -485,29 +519,48 @@ const en: Messages = {
     empty: "Nothing is growing yet",
     emptyHint: "Turn a Note into a Codex from its … menu, or start one with New.",
     promote: "Make a Codex",
-    promoteConfirm: "A Codex cannot go back to being a Note",
+    promoteBody1:
+      "It becomes a document you keep adding to. Commit a version at each milestone and look back at how much changed since the last one.",
+    promoteBody2: "It moves to the Codex tab. Its ID and links stay the same.",
+    promoteBody2Strong: "It cannot go back to being a Note.",
     promoteYes: "Make a Codex",
     promoted: "Made a Codex",
-    commit: "Commit a version…",
-    commitPlaceholder: "A word about this version (optional)",
-    commitYes: "Commit",
-    committed: "Committed a version",
+    commit: "Commit a version",
+    committed: (n: number) => `Committed version ${n}`,
+    commitFailed: "Could not commit it",
     history: "History",
     draft: "Draft",
+    now: "now",
     restore: "Restore this version",
     restored: "Restored this version. The draft from before is in the history",
     restoreFailed: "Could not restore it",
     same: "Same content",
-    noVersions: "No versions yet",
+    sameShort: "same",
+    noVersions: "No versions",
+    noVersionsHint: "No versions yet. The current text becomes the first one.",
     close: "Close",
-    status: (count: number, dirty: boolean): string => {
+    versionN: (n: number) => `v${n}`,
+    deltaFromLatest: (n: number, delta: number) => `${sizeDelta(delta)} since v${n}`,
+    cadence: (count: number, span: Span): string => {
+      const versions = `${count} version${count === 1 ? "" : "s"}`;
+      if (span.months >= 1) {
+        return `${versions} in ${span.months} month${span.months === 1 ? "" : "s"}`;
+      }
+      return span.days >= 1
+        ? `${versions} in ${span.days} day${span.days === 1 ? "" : "s"}`
+        : `${versions} today`;
+    },
+    sinceDays: (days: number) => `after ${days} day${days === 1 ? "" : "s"}`,
+    pageMark: (count: number, dirty: boolean): string => {
       if (count === 0) {
         return "No versions";
       }
       const versions = `${count} version${count === 1 ? "" : "s"}`;
       return dirty ? `${versions} · changed` : versions;
     },
+    monthOf: (month: number) => SHORT_MONTHS[month - 1] ?? String(month),
     sizeDelta,
+    sizeOf,
     beforeRestore: "before restore",
   },
   templates: {

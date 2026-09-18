@@ -509,6 +509,14 @@ fn restore_note_version(
     })
 }
 
+/// 刻んだ直後の「取り消す」。版のファイルを消すだけで、本文には触れない。
+#[tauri::command]
+fn delete_note_version(handle: AppHandle, filename: String, id: String) -> Result<(), String> {
+    let base_dir = app_base_dir(&handle)?;
+    let filename = parse_filename(&filename)?;
+    magical_merchant_core::delete_note_version(&base_dir, &filename, &id).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn note_version_status(handle: AppHandle, filename: String) -> Result<VersionStatus, String> {
     let base_dir = app_base_dir(&handle)?;
@@ -645,6 +653,7 @@ pub fn run() {
             read_note_version,
             diff_note_versions,
             restore_note_version,
+            delete_note_version,
             note_version_status,
             update_draft,
             list_notes,

@@ -155,8 +155,16 @@ impl Notes {
             let path = entry.path();
             let filename = entry.file_name().to_string_lossy().to_string();
             let content = fs::read_to_string(&path).unwrap_or_default();
-            let summary = NoteSummary::from_file(kind, path, filename, &content);
-            visit(summary, frontmatter::strip(&content));
+            let body = frontmatter::strip(&content);
+            // 版の置き場は本体の隣、`.md` を外した名前。版の本文は読まない
+            let versions = path.with_extension("");
+            let mut summary = NoteSummary::from_file(kind, path, filename, &content);
+            if kind == NoteKind::Codex {
+                let (count, dirty) = super::version::list_status(&versions, body)?;
+                summary.version_count = Some(count);
+                summary.dirty = Some(dirty);
+            }
+            visit(summary, body);
         }
         Ok(())
     }

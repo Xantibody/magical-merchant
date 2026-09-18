@@ -148,6 +148,81 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Codex の行。角折りのページを日付の左に置くぶん、字ではなく箱の中心で
+   揃え、上下を 1px ずつ詰めて Note の行と同じ高さに保つ */
+.list-row--codex {
+  align-items: center;
+  padding: 7px 10px;
+}
+
+/* 角折りのページ。中に版の数。形は clip-path だけで、画像も追加依存も無い。
+   外の span が枠の色、内の span が同じ形の面、右上に折り目の三角 */
+.page-mark {
+  position: relative;
+  flex-shrink: 0;
+  display: inline-block;
+  width: 14px;
+  height: 17px;
+  background: var(--app-border);
+  clip-path: polygon(0 0, 64% 0, 100% 30%, 100% 100%, 0 100%);
+}
+
+.page-mark-face {
+  position: absolute;
+  inset: 1px;
+  background: var(--app-sidebar);
+  clip-path: polygon(0 0, 64% 0, 100% 30%, 100% 100%, 0 100%);
+}
+
+.page-mark-fold {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 5px;
+  height: 5px;
+  background: var(--app-border);
+  clip-path: polygon(0 0, 0 100%, 100% 100%);
+}
+
+.page-mark-count {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 2px;
+  text-align: center;
+  font-size: 8.5px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--app-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 版あり: 枠は薄く、数は読める濃さ。下書きが動いていれば枠を濃くする */
+.page-mark[data-state="clean"] {
+  background: var(--app-text-faint);
+}
+
+.page-mark[data-state="clean"] .page-mark-fold {
+  background: var(--app-text-faint);
+}
+
+.page-mark[data-state="clean"] .page-mark-face,
+.page-mark[data-state="dirty"] .page-mark-face {
+  background: var(--app-input-bg);
+}
+
+.page-mark[data-state="dirty"] {
+  background: var(--app-accent);
+}
+
+.page-mark[data-state="dirty"] .page-mark-fold {
+  background: var(--app-accent);
+}
+
+.page-mark[data-state="dirty"] .page-mark-count {
+  color: var(--app-text);
+}
+
 .notes-empty {
   display: flex;
   flex-direction: column;
@@ -190,17 +265,44 @@
   min-width: 0;
   min-height: 0;
   position: relative;
+  /* 本文の列の左右に並ぶもの: 背骨(Codex)とマップ。題の段はこの幅を
+     除いた残りの中央に本文の列を置く */
+  --spine-w: 0px;
+  --map-w: 0px;
+}
+
+.detail-pane--spine {
+  --spine-w: 56px;
+}
+
+.detail-pane--history {
+  --spine-w: 200px;
+}
+
+.detail-pane--map {
+  --map-w: 400px;
 }
 
 /* 題・記録・操作をまとめた段。本文と同じ 640px + 左右 28px の幅に収めるので、
-   ノートについて知りたいことが本文と同じ列に並ぶ */
+   ノートについて知りたいことが本文と同じ列に並ぶ。背骨とマップのぶんを
+   除いた残りの中央に置くのは padding で — 幅を max-width で切って margin auto
+   にすると、残りが 696px より広いとき本文の列の中央から外れる */
 .detail-head {
   position: relative;
   flex: 0 0 auto;
-  width: 100%;
-  max-width: calc(640px + 28px * 2);
-  margin-inline: auto;
-  padding: 28px 28px 0;
+  width: calc(100% - var(--spine-w) - var(--map-w));
+  margin-left: var(--spine-w);
+  padding: 28px max(28px, calc((100% - var(--spine-w) - var(--map-w) - 640px) / 2)) 0;
+  transition:
+    width 0.18s var(--ease-3),
+    margin-left 0.18s var(--ease-3),
+    padding 0.18s var(--ease-3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .detail-head {
+    transition: none;
+  }
 }
 
 .detail-title-row {
@@ -365,12 +467,21 @@
   outline: none;
 }
 
-/* 本文とマップは横に並ぶ。マップを開いていなければ本文だけが伸びる */
+/* 本文とマップは横に並ぶ。マップを開いていなければ本文だけが伸びる。
+   背骨(Codex)のぶんだけ左を空ける — 背骨はペインの高さいっぱいに立つ */
 .detail-panes {
   flex: 1;
   display: flex;
   min-height: 0;
   min-width: 0;
+  margin-left: var(--spine-w);
+  transition: margin-left 0.18s var(--ease-3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .detail-panes {
+    transition: none;
+  }
 }
 
 .detail-body {
@@ -390,14 +501,8 @@
   overflow: hidden;
 }
 
-/* 題の段も本文と同じ列に寄せる。マップのぶん右を空ければ、残りの幅の
-   中央が本文の列の中央になる */
-.detail-pane--map .detail-head {
-  width: calc(100% - 400px);
-  margin-right: 400px;
-}
-
-/* 並べる幅が無いところでは、本文と入れ替わる形に落とす */
+/* 並べる幅が無いところでは、本文と入れ替わる形に落とす。背骨も 56px の
+   まま広がらず、履歴は題の下の横向きのカードになる */
 @media (max-width: 1099px) {
   .detail-panes--map .detail-body {
     display: none;
@@ -408,9 +513,12 @@
     border-left: none;
   }
 
-  .detail-pane--map .detail-head {
-    width: 100%;
-    margin-right: auto;
+  .detail-pane--map {
+    --map-w: 0px;
+  }
+
+  .detail-pane--history {
+    --spine-w: 56px;
   }
 }
 
@@ -580,6 +688,16 @@
     padding: 4px 20px 0;
   }
 
+  /* 背骨は並べる幅が無い。履歴は … から開き、題の下のカードで送る */
+  .detail-pane--spine,
+  .detail-pane--history {
+    --spine-w: 0px;
+  }
+
+  .version-spine {
+    display: none;
+  }
+
   .detail-body {
     padding: 16px 20px 0;
   }
@@ -721,9 +839,33 @@
   padding: 4px 2px 2px;
 }
 
+.note-menu-confirm-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.note-menu-confirm-title .icon {
+  color: var(--app-text-muted);
+}
+
 .note-menu-confirm-label {
+  margin: 0;
   padding: 2px 6px;
   font-size: 12px;
   line-height: 1.5;
   color: var(--app-text-muted);
+}
+
+/* 戻れないことだけ、少しだけ濃く */
+.note-menu-confirm-label strong {
+  font-weight: inherit;
+  color: var(--gray-7);
+}
+
+:root[data-theme="dark"] .note-menu-confirm-label strong {
+  color: var(--gray-4);
 }

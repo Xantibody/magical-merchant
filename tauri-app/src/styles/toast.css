@@ -27,3 +27,9 @@
   padding: 0;
   font-family: inherit;
 }
+
+/* 本文の横に薄く添える要約。「版 4 から +312 B · 7 日ぶり」 */
+.undo-toast-detail {
+  color: var(--app-text-faint);
+  font-variant-numeric: tabular-nums;
+}

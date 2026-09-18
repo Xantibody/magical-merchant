@@ -3,19 +3,14 @@ import type { Accessor, JSX } from "solid-js";
 import type { PaletteScope } from "./search-scope";
 
 /** 同時に開けるポップオーバーは 1 つだけ。 */
-type PopoverName =
-  | "sync"
-  | "calendar"
-  | "note-meta"
-  | "note-menu"
-  | "new-note-menu"
-  | "commit-version"
-  | null;
+type PopoverName = "sync" | "calendar" | "note-meta" | "note-menu" | "new-note-menu" | null;
 
 interface Toast {
   message: string;
   /** 与えられていれば「元に戻す」を出す。 */
   undo?: () => void;
+  /** 本文の横に薄く添える要約。「版 4 から +312 B · 7 日ぶり」 */
+  detail?: string;
 }
 
 const TOAST_MS = 5000;
@@ -36,7 +31,7 @@ export interface Shell {
   timelineTag: Accessor<string | null>;
   setTimelineTag: (tag: string | null) => void;
   toast: Accessor<Toast | null>;
-  showToast: (message: string, undo?: () => void) => void;
+  showToast: (message: string, undo?: () => void, detail?: string) => void;
   dismissToast: () => void;
   /** データを読み直させる合図。増えたら再取得する。 */
   dataVersion: Accessor<number>;
@@ -88,9 +83,9 @@ export function ShellProvider(props: { children: JSX.Element }): JSX.Element {
     timelineTag,
     setTimelineTag,
     toast,
-    showToast: (message, undo) => {
+    showToast: (message, undo, detail) => {
       clearToastTimer();
-      setToast({ message, undo });
+      setToast({ message, undo, detail });
       toastTimer = setTimeout(() => setToast(null), TOAST_MS);
     },
     dismissToast: () => {

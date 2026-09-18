@@ -258,3 +258,66 @@ describe("renderMarkdown with mermaid", () => {
     expect(kinds).toStrictEqual(["diagram", "code", "diagram"]);
   });
 });
+
+// 履歴を開いているあいだの欄外の印。差分を別枠に描かず、本文のブロックに
+// class と記号だけを足す。本文の色・字は変えない
+describe("renderMarkdown with line marks", () => {
+  it("marks the block a line belongs to and leaves the rest alone", async () => {
+    const html = await renderMarkdown("そのまま\n\n増えた\n\n消えた", undefined, undefined, [
+      undefined,
+      undefined,
+      "add",
+      undefined,
+      "del",
+    ]);
+
+    expect(html).toContain("<p>そのまま</p>");
+    expect(html).toContain(
+      '<p class="diff-mark diff-mark--add"><span class="diff-sign" aria-hidden="true">+</span>増えた</p>',
+    );
+    expect(html).toContain(
+      '<p class="diff-mark diff-mark--del"><span class="diff-sign" aria-hidden="true">−</span>消えた</p>',
+    );
+  });
+
+  // 詰めた箇条書きの段落は描かれない。印は項目に上がる
+  it("lifts the mark of a tight list item onto the li", async () => {
+    const html = await renderMarkdown("- 残る\n- 増えた", undefined, undefined, [undefined, "add"]);
+
+    expect(html).toContain("<li>残る</li>");
+    expect(html).toContain('<li class="diff-mark diff-mark--add"><span class="diff-sign"');
+  });
+
+  // 段落の一部の行だけが消えたときは、段落は「変わった」で、その行の字だけを消す
+  it("strikes only the deleted lines inside a paragraph that survived", async () => {
+    const html = await renderMarkdown("一行目\n二行目\n三行目", undefined, undefined, [
+      undefined,
+      "del",
+      undefined,
+    ]);
+
+    expect(html).toContain('<p class="diff-mark diff-mark--add">');
+    expect(html).toContain('<s class="diff-del-line">二行目</s>');
+    expect(html).not.toContain('<s class="diff-del-line">一行目');
+  });
+
+  it("puts the mark on a fenced block and a heading", async () => {
+    const html = await renderMarkdown("# 見出し\n\n```\ncode\n```", undefined, undefined, [
+      "add",
+      undefined,
+      "del",
+      "del",
+      "del",
+    ]);
+
+    expect(html).toContain('<h1 class="diff-mark diff-mark--add">');
+    expect(html).toMatch(/<pre class="diff-mark diff-mark--del[^"]*"/u);
+  });
+
+  it("draws nothing extra without marks", async () => {
+    const html = await renderMarkdown("本文");
+
+    expect(html).not.toContain("diff-mark");
+    expect(html).not.toContain("diff-sign");
+  });
+});

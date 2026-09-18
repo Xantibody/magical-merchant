@@ -6,6 +6,9 @@ import { extractCaption } from "./diagram-caption";
 import { renderDiffBlock } from "./diff-block";
 import { glyphPlugin } from "./glyph-markdown";
 import { t } from "./i18n";
+import { lineMarksPlugin } from "./line-marks-markdown";
+import type { LineMarksEnv } from "./line-marks-markdown";
+import type { LineMark } from "./diff-marks";
 import { renderDiagrams } from "./mermaid";
 import { noteLinkPlugin } from "./note-link-markdown";
 import { isPreservedEmptyLine } from "./preserved-empty-line";
@@ -46,6 +49,7 @@ function createRenderer(): MarkdownItInstance {
   renderer.use(preservedEmptyLinePlugin);
   renderer.use(noteLinkPlugin);
   renderer.use(glyphPlugin);
+  renderer.use(lineMarksPlugin);
   return renderer;
 }
 
@@ -63,9 +67,11 @@ export function renderMarkdownSync(
 interface FenceBlock {
   code: string;
   lang: string;
+  /** 履歴を開いているあいだの欄外の印。フェンスは別経路で描くのでここに持つ。 */
+  mark?: LineMark;
 }
 
-interface RenderEnv extends Env {
+interface RenderEnv extends Env, LineMarksEnv {
   fenceBlocks?: FenceBlock[];
   noteTitles?: ReadonlyMap<string, string>;
   /** `:name:` → データ URL。無ければ保存形のまま出る。 */
@@ -84,6 +90,28 @@ export const FENCE_SLOT = `${NUL}fence${NUL}`;
 
 function plainBlock(code: string): string {
   return `<pre><code>${fenceMd.utils.escapeHtml(code)}</code></pre>`;
+}
+
+/**
+ * 欄外の印をブロックの開始タグに載せる。段落なら plugin が token に付けるが、
+ * フェンスの描画結果は Shiki や mermaid から来る文字列なので、ここで class を
+ * 足す。記号の span はブロックの中の先頭に置き、CSS が余白へ寄せる。
+ */
+function withMark(html: string, mark: LineMark | undefined): string {
+  if (!mark) {
+    return html;
+  }
+  const open = html.indexOf(">");
+  if (open === -1) {
+    return html;
+  }
+  const cls = `diff-mark diff-mark--${mark}`;
+  const tag = html.slice(0, open);
+  const opened = tag.includes(' class="')
+    ? tag.replace(' class="', ` class="${cls} `)
+    : `${tag} class="${cls}"`;
+  const sign = `<span class="diff-sign" aria-hidden="true">${mark === "add" ? "+" : "−"}</span>`;
+  return `${opened}>${sign}${html.slice(open + 1)}`;
 }
 
 /**
@@ -118,7 +146,10 @@ function codeBlock(pre: string, block: FenceBlock): string {
   const tools = `<div class="preview-tools">${lang}${toolButton("copy", t().editor.copyCode, copyIcon)}</div>`;
   // Shiki の付けた class を先頭に残す。後ろに足せば `<pre class="shiki` で数えられる
   const source = fenceMd.utils.escapeHtml(block.code);
-  return `${pre.slice(0, openEnd)} data-source="${source}"${pre.slice(openEnd, end)}${tools}${pre.slice(end)}`;
+  return withMark(
+    `${pre.slice(0, openEnd)} data-source="${source}"${pre.slice(openEnd, end)}${tools}${pre.slice(end)}`,
+    block.mark,
+  );
 }
 
 function diagramTools(): string {
@@ -137,7 +168,12 @@ fenceMd.renderer.rules.fence = (tokens, idx, _options, renderEnv) => {
   if (!env) {
     return plainBlock(token.content);
   }
-  (env.fenceBlocks ??= []).push({ code: token.content, lang: token.info.trim() });
+  const meta = token.meta as { mark?: LineMark } | null;
+  (env.fenceBlocks ??= []).push({
+    code: token.content,
+    lang: token.info.trim(),
+    mark: meta?.mark,
+  });
   return FENCE_SLOT;
 };
 
@@ -177,14 +213,15 @@ async function highlightBlocks(blocks: FenceBlock[]): Promise<string[]> {
  * エディタの node view も出す — 片方だけ背が高くなると、押した座標の文字に
  * カーソルを置く前提が崩れて図の下の本文がずれる (#168)。
  */
-function diagramBlock(svg: string, source: string): string {
-  const caption = extractCaption(source);
+function diagramBlock(svg: string, block: FenceBlock): string {
+  const caption = extractCaption(block.code);
   const figcaption = caption
     ? `<figcaption class="mermaid-caption">${fenceMd.utils.escapeHtml(caption)}</figcaption>`
     : "";
-  return (
+  return withMark(
     `<figure class="mermaid-block"><div class="mermaid-figure">${svg}</div>` +
-    `${figcaption}${diagramTools()}</figure>`
+      `${figcaption}${diagramTools()}</figure>`,
+    block.mark,
   );
 }
 
@@ -227,7 +264,7 @@ async function renderFences(blocks: FenceBlock[]): Promise<string[]> {
       default: {
         const svg = svgs[diagramIndex++];
         // 描けなかった図はソースを読ませる。読めるなら写せてもよい
-        return svg ? diagramBlock(svg, block.code) : codeBlock(plainBlock(block.code), block);
+        return svg ? diagramBlock(svg, block) : codeBlock(plainBlock(block.code), block);
       }
     }
   });
@@ -247,8 +284,9 @@ export async function renderMarkdown(
   source: string,
   noteTitles?: ReadonlyMap<string, string>,
   glyphs?: ReadonlyMap<string, string>,
+  marks?: readonly (LineMark | undefined)[],
 ): Promise<string> {
-  const env: RenderEnv = { noteTitles, glyphs };
+  const env: RenderEnv = { noteTitles, glyphs, marks };
   const html = fenceMd.render(source, env);
 
   const blocks = env.fenceBlocks;
