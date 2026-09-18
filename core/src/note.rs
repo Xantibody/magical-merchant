@@ -476,6 +476,25 @@ mod tests {
         assert_eq!(fs::read_to_string(&path).unwrap(), broken);
     }
 
+    /// 閉じ区切りが無いファイルも「記録が壊れている」側。`---` の下の行は
+    /// 記録のつもりで書かれたもので、素の Markdown として作り直せば丸ごと
+    /// 消える。書き込みが途中で切れた・同期が半分だけ配ったファイルがこの姿に
+    /// なるので、ここを素通しにすると `parse` の拒否も画面の退避も効かない。
+    #[test]
+    fn update_note_refuses_a_note_whose_frontmatter_delimiter_is_unclosed() {
+        let tmp = TempDir::new().unwrap();
+        let notes_dir = tmp.path().join("data/notes");
+        fs::create_dir_all(&notes_dir).unwrap();
+        let truncated = "---\ntime: 2026-01-01T12:00:00+09:00\ntags:\n  - 仕事\n";
+        let path = notes_dir.join("20260101_120000.md");
+        fs::write(&path, truncated).unwrap();
+
+        let result = update_note(&path, "書き足した", &mock_context(), None);
+
+        assert!(matches!(result, Err(CoreError::Parse(_))));
+        assert_eq!(fs::read_to_string(&path).unwrap(), truncated);
+    }
+
     /// 区切りが 1 つも無いファイル(外から置かれた素の Markdown)は今までどおり
     /// 記録を付けて書く。壊れた記録と違って、作り直しても消えるものが無い。
     #[test]

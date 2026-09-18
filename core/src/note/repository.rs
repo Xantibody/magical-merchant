@@ -226,6 +226,8 @@ impl Notes {
     /// `source` が 1 文字の編集で消え、ファイル名(= 作成時刻)とも食い違う。
     /// 記録をでっち上げて書くくらいなら断る — `edit_frontmatter` と同じ判断。
     /// 区切りが 1 つも無いファイルだけは、消える記録が無いので今までどおり書く。
+    /// 開いた区切りが閉じていないファイルは「記録が無い」ではなく「壊れている」:
+    /// `---` の下の行は記録のつもりで書かれていて、本文で上書きすれば消える。
     ///
     /// 無いファイルには書かない([`CoreError::NotFound`])。ここは既にある
     /// ノートの本文を差し替える経路で、作る経路は `create` 系にしかない。
@@ -266,8 +268,10 @@ impl Notes {
                 updated: Some(now.into()),
                 ..fm
             },
-            // 記録が無いファイル(外から置かれた素の Markdown)には書いてよい
-            Err(_) if !frontmatter::has_frontmatter(&existing) => NoteFrontmatter {
+            // 記録が無いファイル(外から置かれた素の Markdown)には書いてよい。
+            // 区切りが 1 つも無いものだけがここに来る — 閉じていない区切りは
+            // 「壊れた記録」で、下の行ごと作り直すと消える
+            Err(_) if frontmatter::is_plain_markdown(&existing) => NoteFrontmatter {
                 context: Some(context.clone()),
                 ..NoteFrontmatter::new(now.into())
             },
