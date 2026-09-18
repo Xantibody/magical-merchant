@@ -128,6 +128,8 @@ const ja = {
     brokenMeta:
       "このノートの先頭の記録が読めないので保存できません。入力した本文は「戻す」で呼び出せます",
     missingNote: "このノートはもう在りません。入力した本文は「戻す」で呼び出せます",
+    saveNotKept:
+      "保存できず、この端末にも控えを残せませんでした。閉じると入力した本文は失われます。別の場所へ写してください",
     loadFailed: "このノートを読めませんでした。書き換えないよう、本文は開いていません",
   },
   codex: {
@@ -521,6 +523,8 @@ const en: Messages = {
     brokenMeta:
       "This note's frontmatter cannot be read, so it was not saved. Revert brings your text back",
     missingNote: "This note no longer exists, so it was not saved. Revert brings your text back",
+    saveNotKept:
+      "It could not be saved, and no copy could be kept on this device either. Closing this loses your text — copy it somewhere else",
     loadFailed: "This note could not be read, so its body stays closed rather than be overwritten",
   },
   codex: {

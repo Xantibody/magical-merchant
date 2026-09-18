@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { beginEditSession, readBackup, recordSaved, shouldSave, writeBackup } from "./edit-backup";
+import {
+  beginEditSession,
+  readBackup,
+  recordSaved,
+  shouldSave,
+  tryWriteBackup,
+  writeBackup,
+} from "./edit-backup";
 import type { BackupStore } from "./edit-backup";
 
 function memoryStore(): BackupStore {
@@ -111,5 +118,19 @@ describe("readBackup / writeBackup", () => {
 
     expect(() => writeBackup(broken, FILE, "本文")).not.toThrow();
     expect(readBackup(broken, FILE)).toBeNull();
+  });
+
+  // ディスクへの保存が既に断られている場面では、退避も失敗したのかを
+  // 知る必要がある。書けたことにすると「戻す」で呼び出せると案内してしまう
+  it("reports whether the copy actually landed", () => {
+    const broken: BackupStore = {
+      getItem: () => null,
+      setItem: () => {
+        throw new Error("quota");
+      },
+    };
+
+    expect(tryWriteBackup(memoryStore(), FILE, "本文")).toBe(true);
+    expect(tryWriteBackup(broken, FILE, "本文")).toBe(false);
   });
 });

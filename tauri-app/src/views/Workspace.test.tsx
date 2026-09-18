@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, onTestFinished, vi } from "vitest";
 import { render, screen, fireEvent, cleanup, waitFor, within } from "@solidjs/testing-library";
 import { mockIPC, mockWindows, clearMocks } from "@tauri-apps/api/mocks";
 import { page } from "vitest/browser";
@@ -1015,6 +1015,26 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     await waitFor(() => expect(countOf("update_draft")).toBe(1), { timeout: 3000 });
     await waitFor(() => expect(shell?.toast()?.message).toMatch(/もう在りません/u));
     expect(localStorage.getItem(`note-backup:${FILE_A}`)).toContain("消えたノートに足した行");
+  });
+
+  // 退避そのものが失敗する端末(localStorage が満杯・無効)。ディスクへの
+  // 保存は既に断られているので、ここで「戻す」で呼び出せると言うと、
+  // 人はそれを信じて閉じ、唯一の写しごと失う
+  it("warns instead of promising Revert when the backup cannot be written", async () => {
+    const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("QuotaExceededError");
+    });
+    onTestFinished(() => setItem.mockRestore());
+    brokenMeta.add(FILE_A);
+    await openNoteA();
+    await startEditingBody();
+    typeInEditor?.(`${TEXT_A}\n\n退避できなかった行`);
+
+    await waitFor(() => expect(countOf("update_draft")).toBe(1), { timeout: 3000 });
+    await waitFor(() => expect(shell?.toast()?.message).toMatch(/失われます/u));
+    // 在りもしない写しを指して「戻す」と言わない
+    expect(shell?.toast()?.message).not.toMatch(/戻す/u);
+    expect(localStorage.getItem(`note-backup:${FILE_A}`)).toBeNull();
   });
 
   // 復元は入れ替え。戻した直後の「戻る先」を次の保存で押し出すと、

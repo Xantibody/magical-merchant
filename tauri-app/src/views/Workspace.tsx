@@ -52,6 +52,7 @@ import {
   readBackup,
   recordSaved,
   shouldSave,
+  tryWriteBackup,
   writeBackup,
 } from "../lib/edit-backup";
 import type { EditSession } from "../lib/edit-backup";
@@ -657,9 +658,13 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
         } else if (isBrokenNoteSave(error) || isMissingNoteSave(error)) {
           // どちらも読み直しでは直らない。壊れた記録は書き直しても同じ理由で
           // 断られ、消えたノートは core が作り直さない。次の打鍵にも望みが
-          // 無いので、打った字はここで退避して、黙って消えないようにする
-          writeBackup(localStorage, pending.item.filename, pending.body);
-          shell.showToast(isMissingNoteSave(error) ? t().notes.missingNote : t().notes.brokenMeta);
+          // 無いので、打った字はここで退避して、黙って消えないようにする。
+          // ディスクへは既に書けていないので、退避が残ったかまで確かめる —
+          // 残らなかったのに「戻す」で呼び出せると言うと、人はそれを信じて
+          // 閉じ、画面にしか無い唯一の写しごと失う
+          const kept = tryWriteBackup(localStorage, pending.item.filename, pending.body);
+          const refused = isMissingNoteSave(error) ? t().notes.missingNote : t().notes.brokenMeta;
+          shell.showToast(kept ? refused : t().notes.saveNotKept);
         }
       }
     })();

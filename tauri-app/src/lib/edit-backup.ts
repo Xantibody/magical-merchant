@@ -32,13 +32,25 @@ export function readBackup(store: BackupStore, filename: string): string | null 
   }
 }
 
-/** バックアップは善意の保険。容量超過などで書けなくても本流を落とさない。 */
-export function writeBackup(store: BackupStore, filename: string, body: string): void {
+/**
+ * 退避が実際に残ったかを返す。ディスクへの保存が既に断られている場面で
+ * 使う — そこで書けたことにして「戻す」で呼び出せると言うと、人はそれを
+ * 信じて閉じ、唯一の写しごと失う。
+ */
+export function tryWriteBackup(store: BackupStore, filename: string, body: string): boolean {
   try {
     store.setItem(KEY_PREFIX + filename, body);
+    return true;
   } catch {
-    // 書けなかったら戻る先が増えないだけ。保存自体は成功している
+    // 容量超過・localStorage が使えない端末
+    return false;
   }
+}
+
+/** バックアップは善意の保険。容量超過などで書けなくても本流を落とさない。 */
+export function writeBackup(store: BackupStore, filename: string, body: string): void {
+  // 書けなかったら戻る先が増えないだけ。保存自体は成功している
+  tryWriteBackup(store, filename, body);
 }
 
 export function beginEditSession(body: string): EditSession {
