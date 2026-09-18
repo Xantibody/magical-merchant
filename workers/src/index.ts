@@ -203,8 +203,31 @@ function getCookie(request: Request, name: string): string | null {
   return match ? match[1] : null;
 }
 
-function isAllowedRedirect(redirect: string): boolean {
-  return redirect.startsWith("magical-merchant://") || redirect.startsWith("http://127.0.0.1:");
+/**
+ * `app_redirect` は認証のあと JWT を載せて送り返す先。ここを緩めると、
+ * リンクを踏ませるだけで 3 日有効のトークンが第三者の URL に渡る。
+ *
+ * 通すのはアプリが実際に送る 2 つの形だけ — deep link の
+ * `magical-merchant://…` と、ループバックの `http://127.0.0.1:<port>/…`。
+ *
+ * AIDEV-NOTE: 文字列の前方一致では不十分。`http://127.0.0.1:1@evil.example/` は host が evil.example で userinfo が 127.0.0.1
+ */
+function parseAppRedirect(redirect: string): URL | null {
+  let url: URL;
+  try {
+    url = new URL(redirect);
+  } catch {
+    return null;
+  }
+  if (url.protocol === "magical-merchant:") {
+    return url;
+  }
+  const loopback =
+    url.protocol === "http:" &&
+    url.hostname === "127.0.0.1" &&
+    url.username === "" &&
+    url.password === "";
+  return loopback ? url : null;
 }
 
 function escapeHtml(value: string): string {
@@ -262,7 +285,7 @@ function getJwtExpiry(env: Env): number {
 function handleAuthGoogle(url: URL, env: Env): Response {
   const state = generateState();
   const appRedirect = url.searchParams.get("app_redirect") ?? "magical-merchant://auth/callback";
-  if (!isAllowedRedirect(appRedirect)) {
+  if (!parseAppRedirect(appRedirect)) {
     return errorResponse("Invalid app_redirect", 400);
   }
   const redirectUri = `${url.origin}/auth/callback`;
@@ -357,7 +380,10 @@ async function handleAuthCallback(request: Request, url: URL, env: Env): Promise
     // 不正な %-エンコーディングで例外 → 500 になるのを防ぐ
     return errorResponse("Invalid redirect", 400);
   }
-  if (!isAllowedRedirect(appRedirect)) {
+  // 入口で通した値が cookie 経由で戻るだけだが、ここでも見る。cookie を
+  // 直に差し替えられたら、その一手でトークンの宛先が変わってしまう
+  const parsedRedirect = parseAppRedirect(appRedirect);
+  if (!parsedRedirect) {
     return errorResponse("Invalid redirect", 400);
   }
   const separator = appRedirect.includes("?") ? "&" : "?";
@@ -376,7 +402,7 @@ async function handleAuthCallback(request: Request, url: URL, env: Env): Promise
   ]);
 
   // Loopback redirects use 302, deep links use JS redirect
-  if (appRedirect.startsWith("http://127.0.0.1")) {
+  if (parsedRedirect.protocol === "http:") {
     clearCookies.set("Location", redirectUrl);
     return new Response(null, { status: 302, headers: clearCookies });
   }

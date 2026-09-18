@@ -1,5 +1,5 @@
 import { env, createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
-import { describe, it, expect, beforeAll, afterEach } from "vitest";
+import { describe, it, expect, beforeAll, afterEach, vi } from "vitest";
 import { SignJWT } from "jose";
 import worker, { deepLinkPage } from "./index";
 
@@ -125,6 +125,126 @@ async function clearBucket(): Promise<void> {
     await env.BUCKET.delete(listed.objects.map((o) => o.key));
   }
 }
+
+/** Google の 2 往復 (code → access token → userinfo) を差し替える。 */
+function stubGoogle(): void {
+  vi.stubGlobal("fetch", (input: RequestInfo | URL): Promise<Response> => {
+    const target = input instanceof Request ? input.url : String(input);
+    if (target.startsWith("https://oauth2.googleapis.com/token")) {
+      return Promise.resolve(Response.json({ access_token: "google-access-token" }));
+    }
+    if (target.startsWith("https://openidconnect.googleapis.com/v1/userinfo")) {
+      return Promise.resolve(Response.json({ sub: "user-123", email: "test@example.com" }));
+    }
+    throw new Error(`unexpected fetch to ${target}`);
+  });
+}
+
+function authGoogle(appRedirect: string): Promise<Response> {
+  const query = `?app_redirect=${encodeURIComponent(appRedirect)}`;
+  return send(new Request(`http://localhost/auth/google${query}`));
+}
+
+/** 入口を通った直後の状態、つまり state と app_redirect の cookie を持った戻り。 */
+function authCallback(appRedirect: string): Promise<Response> {
+  const cookie = [
+    "__oauth_state=state-abc",
+    `__oauth_app_redirect=${encodeURIComponent(appRedirect)}`,
+  ].join("; ");
+  return send(
+    new Request("http://localhost/auth/callback?code=auth-code&state=state-abc", {
+      headers: { Cookie: cookie },
+    }),
+  );
+}
+
+const LOOPBACK_REDIRECT = "http://127.0.0.1:1421/callback/1f0c1b5e";
+
+// リダイレクト先を検証し損ねると、リンクを踏ませるだけで 3 日有効の JWT が
+// 第三者の URL へ 302 で渡る。/auth/* はここまでテストが 1 本も無かった
+describe("OAuth entry and exit", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  describe("gET /auth/google", () => {
+    it("sends a loopback redirect on to Google", async () => {
+      const res = await authGoogle(LOOPBACK_REDIRECT);
+
+      expect(res.status).toBe(302);
+      expect(res.headers.get("Location")).toContain("accounts.google.com");
+    });
+
+    it("sends a deep link redirect on to Google", async () => {
+      const res = await authGoogle("magical-merchant://auth/callback");
+
+      expect(res.status).toBe(302);
+    });
+
+    // `http://127.0.0.1:1@evil.example/` の host は evil.example、127.0.0.1 は
+    // userinfo。前方一致で見ていたころはこれが素通りしていた
+    it.each([
+      "http://127.0.0.1:1@evil.example/",
+      "http://127.0.0.1.evil.example/callback",
+      "http://evil.example/callback",
+      "https://127.0.0.1:1421/callback",
+      "http://localhost:1421/callback",
+      "magical-merchant-evil://auth/callback",
+      "not a url",
+      "",
+    ])("refuses app_redirect %o", async (appRedirect) => {
+      const res = await authGoogle(appRedirect);
+
+      expect(res.status).toBe(400);
+    });
+  });
+
+  describe("gET /auth/callback", () => {
+    it("hands the token to the loopback listener", async () => {
+      stubGoogle();
+
+      const res = await authCallback(LOOPBACK_REDIRECT);
+
+      expect(res.status).toBe(302);
+      expect(res.headers.get("Location")).toContain(`${LOOPBACK_REDIRECT}?token=`);
+    });
+
+    it("hands the token to the deep link as a tappable page", async () => {
+      stubGoogle();
+
+      const res = await authCallback("magical-merchant://auth/callback");
+
+      expect(res.status).toBe(200);
+      await expect(res.text()).resolves.toContain("magical-merchant://auth/callback?token=");
+    });
+
+    // cookie を差し替えられても宛先は変えさせない。入口で通した値でも、
+    // 出口でもう一度見るのはそのため
+    it.each(["http://127.0.0.1:1@evil.example/", "http://evil.example/callback"])(
+      "refuses to send the token to %o",
+      async (appRedirect) => {
+        stubGoogle();
+
+        const res = await authCallback(appRedirect);
+
+        expect(res.status).toBe(400);
+        expect(res.headers.get("Location")).toBeNull();
+      },
+    );
+
+    it("refuses a callback whose state does not match the cookie", async () => {
+      stubGoogle();
+
+      const res = await send(
+        new Request("http://localhost/auth/callback?code=auth-code&state=forged", {
+          headers: { Cookie: "__oauth_state=state-abc" },
+        }),
+      );
+
+      expect(res.status).toBe(403);
+    });
+  });
+});
 
 describe("Workers Sync API", () => {
   beforeAll(async () => {
