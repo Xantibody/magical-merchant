@@ -114,13 +114,6 @@ jobs:
               - 'nix/cli.nix'
               - 'flake.nix'
               - 'flake.lock'
-            # core/** はここに入れない。core が壊れれば rust ジョブが先に落ちるし、
-            # 15 分のビルドを core の変更のたびに足すと待ち時間だけが増える。
-            # android 限定でコンパイルされる widget_bridge.rs は src-tauri なので拾える
-            # このジョブの定義そのものを変えたときは workflow_dispatch で回す。
-            # 手動実行だけは filter を通さないので全ジョブが走る。
-            # ci.yml をここに入れると、フロントのジョブを 1 行直しただけで
-            # 12 分の APK ビルドが乗る
             nix-mcp:
               - 'nix/cli.nix'
               - 'cli/**'
@@ -129,6 +122,13 @@ jobs:
               - 'Cargo.lock'
               - 'flake.nix'
               - 'flake.lock'
+            # core/** はここに入れない。core が壊れれば rust ジョブが先に落ちるし、
+            # 15 分のビルドを core の変更のたびに足すと待ち時間だけが増える。
+            # android 限定でコンパイルされる widget_bridge.rs は src-tauri なので拾える
+            # このジョブの定義そのものを変えたときは workflow_dispatch で回す。
+            # 手動実行だけは filter を通さないので全ジョブが走る。
+            # ci.yml をここに入れると、フロントのジョブを 1 行直しただけで
+            # 12 分の APK ビルドが乗る
             android:
               - 'tauri-app/android-widget/**'
               # android-build-debug は android-setup 経由で apply-tls.go も回す
