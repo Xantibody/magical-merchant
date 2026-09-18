@@ -205,6 +205,29 @@ describe("OAuth entry and exit", () => {
 
       expect(res.status).toBe(400);
     });
+
+    // Android の intent-filter が本物のアプリに割り当てているホストは
+    // `auth` と `widget` だけ。スキームだけを見ていたころは、別のホストを
+    // 登録した悪意あるアプリに `?token=` ごと配送されていた
+    it.each([
+      "magical-merchant://steal/callback",
+      "magical-merchant://widget/new-note",
+      "magical-merchant://auth@evil.example/callback",
+      "magical-merchant://auth/callback/../steal",
+      "magical-merchant://auth/steal",
+      "magical-merchant://auth/",
+      "magical-merchant://auth",
+      "magical-merchant:auth/callback",
+      "magical-merchant://AUTH/callback",
+      // クエリを足せると、戻り先の URL が `?token=` より前で終わらない
+      "magical-merchant://auth/callback?next=evil",
+      // 断片が付くと `?token=` はその後ろに回り、アプリには届かない
+      "magical-merchant://auth/callback#frag",
+    ])("refuses the deep link %o", async (appRedirect) => {
+      const res = await authGoogle(appRedirect);
+
+      expect(res.status).toBe(400);
+    });
   });
 
   describe("gET /auth/callback", () => {
@@ -246,17 +269,18 @@ describe("OAuth entry and exit", () => {
 
     // cookie を差し替えられても宛先は変えさせない。入口で通した値でも、
     // 出口でもう一度見るのはそのため
-    it.each(["http://127.0.0.1:1@evil.example/", "http://evil.example/callback"])(
-      "refuses to send the token to %o",
-      async (appRedirect) => {
-        stubGoogle();
+    it.each([
+      "http://127.0.0.1:1@evil.example/",
+      "http://evil.example/callback",
+      "magical-merchant://steal/callback",
+    ])("refuses to send the token to %o", async (appRedirect) => {
+      stubGoogle();
 
-        const res = await authCallback(appRedirect);
+      const res = await authCallback(appRedirect);
 
-        expect(res.status).toBe(400);
-        expect(res.headers.get("Location")).toBeNull();
-      },
-    );
+      expect(res.status).toBe(400);
+      expect(res.headers.get("Location")).toBeNull();
+    });
 
     it("refuses a callback whose state does not match the cookie", async () => {
       stubGoogle();

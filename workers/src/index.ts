@@ -244,13 +244,24 @@ function getCookie(request: Request, name: string): string | null {
 }
 
 /**
+ * deep link で認証の戻り先になれる唯一の形。`tauri.conf.json` の
+ * intent-filter は `auth` と `widget` の 2 ホストしか本物のアプリに
+ * 割り当てておらず、認証が使うのはそのうち `auth/callback` だけ。
+ */
+const DEEP_LINK_PROTOCOL = "magical-merchant:";
+const DEEP_LINK_HOST = "auth";
+const DEEP_LINK_PATH = "/callback";
+
+/**
  * `app_redirect` は認証のあと JWT を載せて送り返す先。ここを緩めると、
  * リンクを踏ませるだけで 3 日有効のトークンが第三者の URL に渡る。
  *
  * 通すのはアプリが実際に送る 2 つの形だけ — deep link の
- * `magical-merchant://…` と、ループバックの `http://127.0.0.1:<port>/…`。
+ * `magical-merchant://auth/callback` そのものと、ループバックの
+ * `http://127.0.0.1:<port>/…`。
  *
  * AIDEV-NOTE: 文字列の前方一致では不十分。`http://127.0.0.1:1@evil.example/` は host が evil.example で userinfo が 127.0.0.1
+ * AIDEV-NOTE: deep link はスキームだけでは絞れない。別アプリが magical-merchant://steal/… を登録すれば JWT がそのアプリに届く
  */
 function parseAppRedirect(redirect: string): URL | null {
   let url: URL;
@@ -259,15 +270,20 @@ function parseAppRedirect(redirect: string): URL | null {
   } catch {
     return null;
   }
-  if (url.protocol === "magical-merchant:") {
-    return url;
+  // 本物らしい文字列を userinfo に置いて host を隠す形は、どちらの入口でも捨てる
+  if (url.username !== "" || url.password !== "") {
+    return null;
   }
-  const loopback =
-    url.protocol === "http:" &&
-    url.hostname === "127.0.0.1" &&
-    url.username === "" &&
-    url.password === "";
-  return loopback ? url : null;
+  if (url.protocol === DEEP_LINK_PROTOCOL) {
+    // クエリも断片も付けさせない。付くと `?token=` を足す先が末尾でなくなる
+    const exact =
+      url.hostname === DEEP_LINK_HOST &&
+      url.pathname === DEEP_LINK_PATH &&
+      url.search === "" &&
+      url.hash === "";
+    return exact ? url : null;
+  }
+  return url.protocol === "http:" && url.hostname === "127.0.0.1" ? url : null;
 }
 
 function escapeHtml(value: string): string {
