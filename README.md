@@ -29,7 +29,8 @@
 - **Keys you are shown, not told** — hold ⌘ and every button that has a
   shortcut wears it; `?` opens the palette as the list of all of them
 - **Optional sync** — Cloudflare Workers + R2, conflict-safe, with Android
-  home-screen widgets and a read-only MCP server for AI assistants
+  home-screen widgets and an MCP server for AI assistants — read-only unless
+  you start it with `--allow-write`
 - **Your own editor** — a CLI lists notes and opens one in `$EDITOR`; edits
   go back through the same guarded path as the app, so nothing gets
   overwritten silently. `import` takes in notes written elsewhere, each

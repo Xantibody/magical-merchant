@@ -335,9 +335,10 @@ The CLI finds the app's data directory on its own; `--data-dir` or
 
 ## AI access (MCP)
 
-`magical-merchant mcp` exposes the same core as read-only
+`magical-merchant mcp` exposes the same core as
 [Model Context Protocol](https://modelcontextprotocol.io/) tools for AI
-assistants; `nix run …#mcp` is that command. It finds the app's data
+assistants; `nix run …#mcp` is that command. It is read-only by default and
+says so in the instructions it hands the client. It finds the app's data
 directory on its own, so the usual client configuration is just the launch
 command:
 
@@ -358,22 +359,30 @@ written — local time, GPS coordinates (and the place name the app resolved
 for them), battery, network type, and which device wrote it — so an agent
 can line the journal up with other time- or location-based data.
 
-| Tool                  | Description                                                         |
-| --------------------- | ------------------------------------------------------------------- |
-| `list_notes`          | List all notes with tags, a short preview, and their origin         |
-| `read_note`           | Read a note's metadata (time, tags, context) and Markdown body      |
-| `backlinks`           | List the records that link to a note with `[[…]]`                   |
-| `search`              | Search notes and timeline entries, optionally within a set of tags  |
-| `list_timeline_dates` | List the dates that have timeline entries                           |
-| `read_timeline`       | Read one day's entries with time, text, tags, location, and device  |
-| `read_timeline_range` | Read entries between two days, optionally filtered by tag           |
-| `list_places`         | Places (~1 km cells) records were written at, with names and counts |
-| `list_tags`           | Every `#tag` with note and entry counts                             |
-| `list_templates`      | List note templates                                                 |
-| `read_template`       | Read a template's body and tags                                     |
-| `list_glyphs`         | Registered glyphs with the `:name:` shortcode that renders each one |
+| Tool                  | Description                                                                                          |
+| --------------------- | ---------------------------------------------------------------------------------------------------- |
+| `list_notes`          | List all notes with their `kind` (`note` / `codex`), tags, a short preview, and their origin         |
+| `read_note`           | Read a note's metadata (time, tags, context) and Markdown body                                       |
+| `backlinks`           | List the records that link to a note with `[[…]]`                                                    |
+| `search`              | Search notes, codex and timeline entries, optionally within a set of tags; each hit says which it is |
+| `list_timeline_dates` | List the dates that have timeline entries                                                            |
+| `read_timeline`       | Read one day's entries with time, text, tags, location, and device                                   |
+| `read_timeline_range` | Read entries between two days, optionally filtered by tag                                            |
+| `list_places`         | Places (~1 km cells) records were written at, with names and counts                                  |
+| `list_tags`           | Every `#tag` with note and entry counts                                                              |
+| `list_templates`      | List note templates                                                                                  |
+| `read_template`       | Read a template's body and tags                                                                      |
+| `list_glyphs`         | Registered glyphs with the `:name:` shortcode that renders each one                                  |
 
-With `--allow-write` the server also offers writing tools. Notes are
+A Codex is visible but not writable as one: an agent can see that a
+document keeps versions, read it and search it, but there is no tool to
+commit, list, diff or restore a version. Committing is a person saying
+"this far", which is not a decision to hand to a model; the versions are
+plain Markdown under `data/codex/<id>/`, so an agent that has been given
+the data directory can still read them with `diff -u`.
+
+With `--allow-write` the server also offers writing tools, and its
+instructions say so instead of claiming to be read-only. Notes are
 plain Markdown, so a body can hold anything the app renders — Mermaid
 diagrams in a fenced `mermaid` block, `[[YYYYMMDD_HHMMSS]]` links to other
 notes, `#tags`, `:name:` glyph shortcodes (ask `list_glyphs` for the

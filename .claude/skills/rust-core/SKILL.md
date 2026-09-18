@@ -60,10 +60,16 @@ which is why the CLI now pulls in reqwest and keyring.
 The MCP server runs only under the `mcp` subcommand (a bare invocation
 prints help). `nix run .#mcp` is a wrapper that adds the subcommand.
 
-`server.rs` exposes core as read-only MCP tools (output shapes
-in `output.rs`): `list_notes`, `read_note`, `backlinks`, `search`,
+`server.rs` exposes core as MCP tools (output shapes in `output.rs`). Twelve
+are always there: `list_notes`, `read_note`, `backlinks`, `search`,
 `list_timeline_dates`, `read_timeline`, `read_timeline_range`, `list_places`,
-`list_tags`, `list_templates`, `read_template`, `list_glyphs`. Timeline entries go out as
+`list_tags`, `list_templates`, `read_template`, `list_glyphs`. Six more
+(`WRITE_TOOLS`) appear only with `--allow-write`, by not removing their
+routes — a tool that is listed and always refuses gives a model nothing to do
+but retry. `McpServer::new` picks the `INSTRUCTIONS` opening from the same
+flag; the two must not disagree, since a client reads the instructions before
+the tool list. `list_notes` and `search` report `kind` (`note` / `codex` /
+`timeline`), so an agent can tell a Codex from a Note. Timeline entries go out as
 values (`parse_timeline_entry` in core), never as raw lines — external
 consumers join on time and location, so keep those fields structured. Place
 names come only from the app's `places.json` cache; the server must stay
@@ -101,9 +107,9 @@ first) / `note_version_status` (count, dirty, `bytes_delta`) /
 `delete_note_version` (only for the app's undo toast right after a commit)
 all refuse a plain Note with `CoreError::NotCodex`. `list_notes` puts
 `version_count` / `dirty` on every Codex row without opening a version file:
-the newest file name's hash suffix is compared with the draft's. MCP does not
-expose any of them; the files are plain Markdown, so `diff -u` works in a
-terminal.
+the newest file name's hash suffix is compared with the draft's. MCP exposes
+none of these version APIs — only `kind: "codex"` on `list_notes` / `search`
+rows; the files are plain Markdown, so `diff -u` works in a terminal.
 
 Glyphs (`core/src/glyph.rs`): user images under `data/glyphs/<name>.<png|svg>`
 that `:name:` renders inline. `GlyphName` (`utils/validated.rs`) fixes the
