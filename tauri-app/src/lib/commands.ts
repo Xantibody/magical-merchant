@@ -50,10 +50,11 @@ interface NoteRead {
 
 /**
  * `update_draft` の失敗。`stale` は「読んでから誰かが書き換えた」、
- * `broken` は「ノート先頭の記録が読めないので core が断った」。
+ * `broken` は「ノート先頭の記録が読めないので core が断った」、
+ * `missing` は「ノートがもう無いので core が断った」。
  */
 interface SaveError {
-  kind: "stale" | "broken" | "other";
+  kind: "stale" | "broken" | "missing" | "other";
   message: string;
 }
 
@@ -73,6 +74,15 @@ export function isStaleSave(error: unknown): boolean {
  */
 export function isBrokenNoteSave(error: unknown): boolean {
   return saveErrorKind(error) === "broken";
+}
+
+/**
+ * 保存しようとした先のノートがもう無い。開いたあとに消された、あるいは
+ * Codex へ移った。core はここでノートを作り直さないので、`broken` と同じく
+ * 読み直しても直らない — 呼ぶ側は打った字を退避して人に知らせる。
+ */
+export function isMissingNoteSave(error: unknown): boolean {
+  return saveErrorKind(error) === "missing";
 }
 
 /** テンプレ一覧の 1 件。 */

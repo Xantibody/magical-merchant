@@ -162,8 +162,9 @@ const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
     await writeGate;
     const name = String(filename);
     const current = disk.get(name);
+    // core はノートを作り直さない。消えたノートへの保存は探す段で断られる
     if (current === undefined) {
-      throw saveError("other", `note not found: ${name}`);
+      throw saveError("missing", `Not found: ${name}`);
     }
     // core は記録をでっち上げて書くより断る。読み直しても直らない
     if (brokenMeta.has(name)) {
@@ -999,6 +1000,21 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     expect(localStorage.getItem(`note-backup:${FILE_A}`)).toContain("壊れたノートに足した行");
     // 断られた書き込みは何も変えない
     expect(disk.get(FILE_A)).toBe(BODY_A);
+  });
+
+  // 開いてから消えたノート。core は「作り直す入口ではない」と断るので、
+  // 壊れた記録と同じく読み直しても直らない。退避しないと、離れた時点で
+  // 打った字がどこにも残らないまま消える
+  it("backs up the draft and says so when the note is already gone", async () => {
+    await openNoteA();
+    await startEditingBody();
+    // 打鍵から保存が飛ぶまでのあいだに、別の画面・別の端末がこれを消す
+    duringSave = () => disk.delete(FILE_A);
+    typeInEditor?.(`${TEXT_A}\n\n消えたノートに足した行`);
+
+    await waitFor(() => expect(countOf("update_draft")).toBe(1), { timeout: 3000 });
+    await waitFor(() => expect(shell?.toast()?.message).toMatch(/もう在りません/u));
+    expect(localStorage.getItem(`note-backup:${FILE_A}`)).toContain("消えたノートに足した行");
   });
 
   // 復元は入れ替え。戻した直後の「戻る先」を次の保存で押し出すと、

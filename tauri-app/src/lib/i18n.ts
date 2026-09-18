@@ -127,6 +127,7 @@ const ja = {
       "別の場所で書き換えられたので読み直しました。入力した本文は「戻す」で呼び出せます",
     brokenMeta:
       "このノートの先頭の記録が読めないので保存できません。入力した本文は「戻す」で呼び出せます",
+    missingNote: "このノートはもう在りません。入力した本文は「戻す」で呼び出せます",
     loadFailed: "このノートを読めませんでした。書き換えないよう、本文は開いていません",
   },
   codex: {
@@ -519,6 +520,7 @@ const en: Messages = {
       "This note was changed elsewhere and has been reloaded. Revert brings your text back",
     brokenMeta:
       "This note's frontmatter cannot be read, so it was not saved. Revert brings your text back",
+    missingNote: "This note no longer exists, so it was not saved. Revert brings your text back",
     loadFailed: "This note could not be read, so its body stays closed rather than be overwritten",
   },
   codex: {

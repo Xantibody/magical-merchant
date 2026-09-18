@@ -114,6 +114,8 @@ fn promote_note_to_codex(handle: AppHandle, filename: String) -> Result<(), Stri
 /// - `stale`: 読んでから誰かが書き換えた。読み直して知らせる
 /// - `broken`: ノート先頭の記録が読めず、core が書き込みを断った。
 ///   打った字は退避して知らせる — 何度書き直しても通らない
+/// - `missing`: ノートがもう無い(消された・Codex へ移った)。core は
+///   作り直さないので、これも打った字を退避して知らせる
 #[derive(Debug, Clone, serde::Serialize)]
 struct SaveError {
     kind: &'static str,
@@ -137,6 +139,7 @@ impl From<magical_merchant_core::CoreError> for SaveError {
             kind: match e {
                 magical_merchant_core::CoreError::Stale(_) => "stale",
                 magical_merchant_core::CoreError::Parse(_) => "broken",
+                magical_merchant_core::CoreError::NotFound(_) => "missing",
                 _ => "other",
             },
             message: e.to_string(),
