@@ -110,8 +110,10 @@ local scan → diff → `POST /sync/bulk`, repeated until nothing is left over.
 
 - Timeline capture widget appends via **JNI directly into core** — the app
   never starts. Core changes must stay callable from JNI
-- "New note" / recent-notes widgets open `magical-merchant://widget/…` deep
-  links; handled in AppLayout (`onOpenUrl` + `getCurrent` for cold start);
-  note rows navigate with `?file=<filename>`
+- "New note" / recent-notes / templates widgets open
+  `magical-merchant://widget/…` deep links; handled in AppLayout (`onOpenUrl`
+  and `getCurrent` for cold start); note rows navigate with `?file=<filename>`,
+  template rows with `?name=<stem>`
 - Widget sources live in `tauri-app/android-widget/`, injected by
-  `just android-setup`
+  `just tauri_app::android-setup` (`apply-widget.go` registers the four
+  receivers in the manifest)

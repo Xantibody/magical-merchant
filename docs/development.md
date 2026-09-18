@@ -47,7 +47,7 @@ visible.
 | -------- | ------------------------------------------------ |
 | Rust     | stable toolchain, clippy, rust-analyzer          |
 | Frontend | Node.js 22, pnpm, tsc (type check), oxlint       |
-| Build    | just, cargo-tauri, go (Android signing patcher)  |
+| Build    | just, cargo-tauri, go (the Android patchers)     |
 | Android  | JDK 17, Android SDK (API 36), NDK 29             |
 | Format   | nix fmt (treefmt: nixfmt, rustfmt, taplo, oxfmt) |
 
@@ -66,36 +66,53 @@ fetch what they need:
 
 ### Root recipes
 
-| Command       | Description                         | CI  |
-| ------------- | ----------------------------------- | --- |
-| `just fmt`    | Format all files (`nix fmt`)        | ✓   |
-| `just check`  | Lint + type check (Rust + frontend) | ✓   |
-| `just test`   | Run all tests (Rust + frontend)     | ✓   |
-| `just verify` | `fmt` → `check` → `test`            |     |
-| `just dev`    | Start Tauri development server      |     |
+| Command       | Description                                                    | CI  |
+| ------------- | -------------------------------------------------------------- | --- |
+| `just fmt`    | Format all files (`nix fmt`)                                   | ✓   |
+| `just check`  | `rust::check` + `tauri_app::check` + `workers::check`          | ✓   |
+| `just test`   | `rust::test` + `tauri_app::test` + `workers::test`             | ✓   |
+| `just verify` | `fmt` → `check` → `test`. Run it before calling something done |     |
+| `just dev`    | `tauri_app::dev` — the one recipe worth a short name           |     |
 
 Everything else is reached through its module — `just tauri_app::…`,
 `just rust::…`, `just workers::…`. Run `just --list <module>` to see them.
+CI does not call `verify`; it calls the three module recipes directly, in
+jobs that a path filter can skip.
 
 ### Rust recipes (`rust::`)
 
-| Command            | Description                        | CI  |
-| ------------------ | ---------------------------------- | --- |
-| `just rust::check` | `cargo clippy` for all Rust crates | ✓   |
-| `just rust::test`  | `cargo test` for all Rust crates   | ✓   |
+| Command                   | Description                                             | CI  |
+| ------------------------- | ------------------------------------------------------- | --- |
+| `just rust::check`        | `cargo clippy --workspace --all-targets -- -D warnings` | ✓   |
+| `just rust::test`         | `cargo test --workspace`                                | ✓   |
+| `just rust::check-rustls` | Fails unless `Cargo.lock` resolves exactly one `rustls` | ✓   |
 
 Scope a single crate with cargo directly (`cargo test -p magical-merchant-cli`).
 
+`check-rustls` is not part of `just check`, and it guards something no test
+can: two `rustls` versions make `android_tls`'s `ClientConfig` a different
+crate's type from reqwest's. That compiles, and clippy and the test run stay
+green on it; CI catches it only because this recipe is a step of its own
+(`rustls resolves to one version`). Without that step the first sign would be
+a device that fails every sync with `UnknownPreconfigured`.
+
 ### Frontend recipes (`tauri_app::`)
 
-| Command                       | Description                        | CI  |
-| ----------------------------- | ---------------------------------- | --- |
-| `just tauri_app::check`       | oxlint + tsc type check            | ✓   |
-| `just tauri_app::test`        | Vitest (unit + browser tests)      | ✓   |
-| `just tauri_app::dev`         | Start Tauri development server     |     |
-| `just tauri_app::dev-browser` | Vite + IPC mock in a plain browser |     |
-| `just tauri_app::build`       | Build macOS .app (Apple Silicon)   |     |
-| `just tauri_app::icons`       | Regenerate icons from the SVG      |     |
+| Command                       | Description                                        | CI  |
+| ----------------------------- | -------------------------------------------------- | --- |
+| `just tauri_app::check`       | oxlint, `tsc -b`, `tsc -p tsconfig.dev.json`, knip | ✓   |
+| `just tauri_app::test`        | Vitest (unit + browser tests)                      | ✓   |
+| `just tauri_app::dev`         | Start Tauri development server                     |     |
+| `just tauri_app::dev-browser` | Vite + IPC mock in a plain browser                 |     |
+| `just tauri_app::build`       | Build macOS .app (Apple Silicon)                   |     |
+| `just tauri_app::icons`       | Regenerate icons from the SVG                      |     |
+
+### Worker recipes (`workers::`)
+
+| Command               | Description         | CI  |
+| --------------------- | ------------------- | --- |
+| `just workers::check` | oxlint + tsc + knip | ✓   |
+| `just workers::test`  | Vitest              | ✓   |
 
 ### Android recipes (`tauri_app::`)
 
@@ -109,10 +126,33 @@ Scope a single crate with cargo directly (`cargo test -p magical-merchant-cli`).
 | `just tauri_app::android-build-release`     | Build a signed release APK                          |     |
 | `just tauri_app::android-install [variant]` | Build and install over USB (`debug` / `release`)    |     |
 
-`android-setup` runs on its own from `android-init` and from both build
-recipes; `android-sign-setup` needs `keystore.properties` and so hangs off
-`android-build-release` only. Call either by hand after regenerating
-`gen/android` some other way.
+`src-tauri/gen/android/` is generated and gitignored, so everything the
+project needs on top of what `tauri android init` writes is re-applied by a
+Go program each time. There are three, all idempotent (each strips and
+re-inserts its own marked block):
+
+| Patcher                            | What it adds                                                                                 |
+| ---------------------------------- | -------------------------------------------------------------------------------------------- |
+| `android-tls/apply-tls.go`         | The Kotlin half of `rustls-platform-verifier`, which the sync client currently bypasses      |
+| `android-widget/apply-widget.go`   | The widget sources, and the four receivers + capture activity + list service in the manifest |
+| `android-signing/apply-signing.go` | The release signing config, read from the gitignored `keystore.properties`                   |
+
+`android-setup` runs the first two, on its own from `android-init` and from
+both build recipes; `android-sign-setup` runs the third, needs
+`keystore.properties`, and so hangs off `android-build-release` only. Call
+either by hand after regenerating `gen/android` some other way.
+
+When an Android certificate error turns up, start from the fact that the
+verifier those patches wire in is not the one the sync client uses:
+`android_tls::sync_tls_config` builds a `ClientConfig` over the
+`webpki-roots` bundle and `sync.rs` hands it to reqwest with
+`tls_backend_preconfigured`, so the request is verified against Mozilla's
+roots and never asks the device. The platform verifier is still installed and
+initialised at startup — the Kotlin component, `android_tls::init()` — because
+the bypass exists only until `rustls-platform-verifier` stops reporting
+Android's "no OCSP responder" as a revoked certificate (upstream #221), and
+the wiring has to be there when it does. Anything the device trusts and
+Mozilla does not, sync will refuse today.
 
 > [!NOTE]
 > **CI column**: ✓ = recipes executed by GitHub Actions (`ci.yml`). CI uses
@@ -123,12 +163,15 @@ recipes; `android-sign-setup` needs `keystore.properties` and so hangs off
 `nix fmt` ([treefmt-nix](https://github.com/numtide/treefmt-nix)) provides
 unified formatting for all languages. CI runs `nix fmt -- --fail-on-change`.
 
-| Formatter | Target        |
-| --------- | ------------- |
-| nixfmt    | `*.nix`       |
-| rustfmt   | `*.rs`        |
-| taplo     | `*.toml`      |
-| oxfmt     | `*.js` `*.ts` |
+| Formatter | Target                                                                   |
+| --------- | ------------------------------------------------------------------------ |
+| nixfmt    | `*.nix`                                                                  |
+| rustfmt   | `*.rs`                                                                   |
+| taplo     | `*.toml`                                                                 |
+| oxfmt     | `*.ts` `*.tsx` `*.js` `*.json` `*.jsonc` `*.css` `*.md` `*.yml` and more |
+
+Markdown included — a docs change that is not formatted fails CI the same
+way a source change does.
 
 ## Environment variables
 

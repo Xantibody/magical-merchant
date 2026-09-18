@@ -17,9 +17,14 @@ Reject any implementation violating these, regardless of feature completeness.
 
 ## Loading discipline
 
-Milkdown + ProseMirror load **lazily** on first edit (`lazy(() => import(...))`
-in Workspace). markmap (d3) and Mermaid load on first use. Never import these
-at module top-level from anything on the startup path.
+Milkdown + ProseMirror load **lazily** (`lazy(() => import(...))` in
+Workspace) — not on first edit, because there is no edit mode: the editor
+mounts as soon as a note's body arrives, so the trigger is opening a note.
+`MarkdownToolbar` waits for the editor instance, so merely listing notes does
+not pull the editor bundle in. markmap (d3) and Mermaid load on first use.
+Never import any of these at module top-level from anything on the startup
+path — `Workspace` itself is lazy, prefetched during idle time from
+`App.tsx`.
 
 ## Plugin table
 

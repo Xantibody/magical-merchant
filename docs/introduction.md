@@ -100,18 +100,24 @@ flowchart TD
     App["App.tsx (Router)"]
     Layout["AppLayout<br/>header, tabs, palette, sync state"]
     Timeline["Timeline (eager — launch view)"]
-    Workspace["Workspace (lazy)"]
+    Workspace["Workspace (lazy)<br/>serves /notes and /codex"]
     Settings["Settings (lazy)"]
-    Editor["MilkdownEditor + Toolbar (lazy)<br/>Milkdown / ProseMirror / Shiki"]
+    Editor["MilkdownEditor + MarkdownToolbar (lazy)<br/>Milkdown / ProseMirror / Shiki"]
     Preview["MarkdownPreview<br/>markdown-it + Shiki + Mermaid"]
 
     App --> Layout
     Layout --> Timeline
     Layout --> Workspace
     Layout --> Settings
-    Workspace --> Preview
-    Workspace -. "on edit" .-> Editor
+    Workspace --> Editor
+    Workspace -. "read-only note,<br/>or a Codex history" .-> Preview
 ```
+
+One view serves both Markdown surfaces: `/codex` is `Workspace` with
+`kind="codex"`, reading a different directory. There is **no edit mode** —
+the editor mounts as soon as a note's body arrives, and the preview is the
+exception rather than the default state (a note parked at `view: preview`,
+or a Codex whose history is open and whose body is showing diff marks).
 
 The timeline is the launch view, so everything the editor drags in
 (Milkdown, ProseMirror, Shiki) is split out of the startup bundle and
@@ -151,16 +157,20 @@ the entry is already on disk.
 
 ## Module index
 
-| Path                                                 | Responsibility                                                                            |
-| ---------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| [`core/src/timeline/`](../core/src/timeline)         | Day-file parsing, appends, edits; device-list frontmatter compression                     |
-| [`core/src/note/`](../core/src/note)                 | Note CRUD and list summaries (frontmatter + preview + tags)                               |
-| [`core/src/search.rs`](../core/src/search.rs)        | Substring search across timeline and notes                                                |
-| [`core/src/sync/`](../core/src/sync)                 | Local scan + hashing, diff against server state, conflict naming                          |
-| [`tauri-app/src-tauri/`](../tauri-app/src-tauri/src) | Tauri commands, sync HTTP client, OAuth deep-link handling, device context                |
-| [`tauri-app/src/`](../tauri-app/src)                 | SolidJS views, Milkdown editor integration, client-side device signals                    |
-| [`workers/`](../workers/src)                         | Cloudflare Worker: Google OAuth, JWT, R2-backed bulk sync with ETag CAS                   |
-| [`cli/`](../cli/src)                                 | Terminal client (`list` / `show` / `edit` / `new` / `import` / `sync`) and the MCP server |
+| Path                                                        | Responsibility                                                                                                                                   |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [`core/src/timeline/`](../core/src/timeline)                | Day-file parsing, appends, edits; device-list frontmatter compression                                                                            |
+| [`core/src/note/`](../core/src/note)                        | Note CRUD and list summaries (frontmatter + preview + tags); see the four files below                                                            |
+| [`core/src/note/kind.rs`](../core/src/note/kind.rs)         | `Note` vs `Codex` — decided by the directory, never by a frontmatter key                                                                         |
+| [`core/src/note/version.rs`](../core/src/note/version.rs)   | Codex versions: commit, list, diff, restore, delete; version IDs and the `before restore` marker                                                 |
+| [`core/src/note/revision.rs`](../core/src/note/revision.rs) | The body fingerprint every writer must present, and the one place a stale write is refused                                                       |
+| [`core/src/note/repair.rs`](../core/src/note/repair.rs)     | Repair passes: notes saved while the editor still saw frontmatter, legacy conflict copies, and an ID that ended up in both `notes/` and `codex/` |
+| [`core/src/search.rs`](../core/src/search.rs)               | Substring search across timeline, notes and codex                                                                                                |
+| [`core/src/sync/`](../core/src/sync)                        | Local scan + hashing, diff against server state, conflict naming                                                                                 |
+| [`tauri-app/src-tauri/`](../tauri-app/src-tauri/src)        | Tauri commands, sync HTTP client, OAuth deep-link handling, device context                                                                       |
+| [`tauri-app/src/`](../tauri-app/src)                        | SolidJS views, Milkdown editor integration, client-side device signals                                                                           |
+| [`workers/`](../workers/src)                                | Cloudflare Worker: Google OAuth, JWT, R2-backed bulk sync with ETag CAS                                                                          |
+| [`cli/`](../cli/src)                                        | Terminal client (`list` / `show` / `edit` / `new` / `import` / `timeline` / `sync`) and the MCP server (`mcp`)                                   |
 
 > [!NOTE]
 > UI priorities (simple → lightweight → stylish), the Milkdown plugin
