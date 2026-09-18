@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, cleanup, within } from "@solidjs/testing-library";
+import { render, screen, fireEvent, cleanup, within, waitFor } from "@solidjs/testing-library";
 import { mockIPC, mockWindows, clearMocks } from "@tauri-apps/api/mocks";
 import { page } from "vitest/browser";
 import { MemoryRouter, Route } from "@solidjs/router";
-import { ShellProvider } from "../lib/shell";
+import { ShellProvider, useShell } from "../lib/shell";
+import type { Shell } from "../lib/shell";
 import Timeline from "./Timeline";
 
 /**
@@ -29,10 +30,22 @@ const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
   list_notes: () => [],
 };
 
+/**
+ * 画面の外から再読込を頼む口。同期やフォーカス復帰が押すのと同じ
+ * `refreshData` で、トーストもここから読む。
+ */
+let shell: Shell;
+
+function ShellHandle(): null {
+  shell = useShell();
+  return null;
+}
+
 /** 一覧が届くまで待つ。時刻の欄はエントリ 1 件につき 1 つだけ出る。 */
 async function openTimeline(): Promise<void> {
   render(() => (
     <ShellProvider>
+      <ShellHandle />
       <MemoryRouter>
         <Route path="/" component={Timeline} />
       </MemoryRouter>
@@ -115,5 +128,57 @@ describe("Timeline › 選択の入り口", () => {
     expect(screen.getByRole("toolbar", { name: "まとめて削除" }).textContent).toContain(
       "消すエントリを選んでください",
     );
+  });
+});
+
+describe("Timeline › 選択中の読み直し", () => {
+  beforeEach(setupTimeline);
+  afterEach(teardownTimeline);
+
+  /**
+   * 選択は `date#index` で行を指す。確認バーを出したまま別アプリへ移り、
+   * 戻ったときの自動再読込が同じ日の前へ 1 行足していると、同じ index は
+   * 隣の記録を指す。読み直したら選択は畳む — 隣を消してからでは遅い。
+   */
+  it("drops the selection when the list is reloaded under it", async () => {
+    await openTimeline();
+    fireEvent.click(screen.getByRole("button", { name: "選択" }));
+    fireEvent.click(screen.getByRole("button", { name: /朝ラン/u }));
+    fireEvent.click(screen.getByRole("button", { name: "削除 (1件)" }));
+    expect(screen.getByRole("toolbar", { name: "まとめて削除" }).textContent).toContain(
+      "1件のエントリを削除します",
+    );
+
+    shell.refreshData();
+
+    await waitFor(() => {
+      expect(screen.queryByRole("toolbar", { name: "まとめて削除" })).toBeNull();
+    });
+    expect(screen.getByRole("button", { name: "選択" })).toBeDefined();
+  });
+
+  // 黙って消えると、押したはずの削除が効かなかったようにしか見えない
+  it("says why the selection went away", async () => {
+    await openTimeline();
+    fireEvent.click(screen.getByRole("button", { name: "選択" }));
+    fireEvent.click(screen.getByRole("button", { name: /朝ラン/u }));
+
+    shell.refreshData();
+
+    await waitFor(() => {
+      expect(shell.toast()?.message).toBe("一覧を読み直したので選択を解除しました");
+    });
+  });
+
+  // 選んでいないときの読み直しは、ただの再取得。言うことは何も無い
+  it("stays quiet when nothing was selected", async () => {
+    await openTimeline();
+
+    shell.refreshData();
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "選択" })).toBeDefined();
+    });
+    expect(shell.toast()).toBeNull();
   });
 });

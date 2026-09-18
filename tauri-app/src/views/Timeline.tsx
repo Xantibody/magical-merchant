@@ -107,6 +107,12 @@ export default function Timeline(): JSX.Element {
   const [confirming, setConfirming] = createSignal(false);
   /** 削除の実行中。連打で同じ行を二度消さないための鍵。 */
   const [deleting, setDeleting] = createSignal(false);
+  /** 選択にまつわる 3 つを一度に畳む。抜け方はどこから戻っても同じ。 */
+  const exitSelecting = (): void => {
+    setSelecting(false);
+    setSelected(new Set<string>());
+    setConfirming(false);
+  };
 
   const [timeline, { refetch, mutate }] = createResource(extraDates, loadTimeline);
   // 昇格ノートのチップに使う。タイムラインの描画は待たない — ノート一覧が
@@ -121,6 +127,13 @@ export default function Timeline(): JSX.Element {
     on(
       shell.dataVersion,
       () => {
+        // 選択は `date#index` で行を指す。読み直しで同じ日の前に行が増えると
+        // その index は隣の記録を指すので、行が入れ替わる前に選択ごと畳む。
+        // 選び直しは確認バーを 1 つ押し直すだけ、誤削除は取り返しがつかない
+        if (selecting()) {
+          exitSelecting();
+          shell.showToast(t().timeline.selectionCleared);
+        }
         void refetch();
         void refetchNotes();
       },
@@ -269,12 +282,6 @@ export default function Timeline(): JSX.Element {
   };
 
   // ---- まとめて削除（選択 → 確認 → 実行）----
-  const exitSelecting = (): void => {
-    setSelecting(false);
-    setSelected(new Set<string>());
-    setConfirming(false);
-  };
-
   const toggleSelected = (id: string): void => {
     // 選び直したら確認は仕切り直す。件数の変わった確認をそのまま実行させない
     setConfirming(false);

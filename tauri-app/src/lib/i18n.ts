@@ -89,6 +89,7 @@ const ja = {
     entryCount: (count: number) => `${count}件`,
     bulkDelete: "まとめて削除",
     selectedCount: (count: number) => `${count}件選択中`,
+    selectionCleared: "一覧を読み直したので選択を解除しました",
     deleteCount: (count: number) => `削除 (${count}件)`,
     confirmDelete: (count: number) => `${count}件のエントリを削除します。よろしいですか？`,
     confirmDeleteYes: "削除する",
@@ -477,6 +478,7 @@ const en: Messages = {
     entryCount: (count: number) => `${count}`,
     bulkDelete: "Delete several",
     selectedCount: (count: number) => `${count} selected`,
+    selectionCleared: "The list was reloaded, so the selection was cleared",
     deleteCount: (count: number) => `Delete (${count})`,
     confirmDelete: (count: number) =>
       `Delete ${count} ${count === 1 ? "entry" : "entries"}. Are you sure?`,
