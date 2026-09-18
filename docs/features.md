@@ -12,7 +12,7 @@ network, battery, and a place name resolved from the coordinate), tags typed
 as `#tag` become filter chips, and the calendar button jumps to any recorded
 day.
 
-![Timeline](images/timeline.png)
+![Scrawl](images/timeline.png)
 
 At the top, a **weekly digest** appears once per week: how many entries on how
 many days, the most used tags (tap to filter), and — when that day has
@@ -21,10 +21,10 @@ of the week, per device.
 
 ### Mobile
 
-The same journal on a phone. Bottom tabs switch between Scrawl, Note and
-Settings; the capture bar floats above the keyboard.
+The same journal on a phone. Bottom tabs switch between Scrawl, Note, Codex
+and Settings; the capture bar floats above the keyboard.
 
-![Mobile timeline](images/mobile-timeline.png)
+![Scrawl on a phone](images/mobile-timeline.png)
 
 ### Promote an entry into a note
 
@@ -39,9 +39,10 @@ breaks the link.
 
 Note (formerly Notes) holds plain Markdown files. The list pane gives each
 note one line, grouped by how recently it was created; the detail pane shows
-the body with a **title field** above it. The title is the note's leading `# heading` — there is no separate title
-in the frontmatter, so the file stays readable in any Markdown tool and the
-heading can never drift from the title. Press Enter in the field to drop into
+the body with a **title field** above it. The title is the note's leading
+`# heading` — there is no separate title in the frontmatter, so the file
+stays readable in any Markdown tool and the heading can never drift from
+the title. Press Enter in the field to drop into
 the body.
 
 **There is no edit mode.** The editor is live from the moment the note is
@@ -85,7 +86,7 @@ the body rather than in place of it, so the text you are reading it against
 stays on screen; only below 1100px, where there is no room for two, does it
 take the body's place:
 
-![Mindmap view](images/mindmap.png)
+![A note with its markmap alongside](images/mindmap.png)
 
 ## Note links and backlinks
 

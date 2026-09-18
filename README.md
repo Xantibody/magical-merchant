@@ -5,7 +5,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License"></a>
 </div>
 
-![Timeline](docs/images/timeline.png)
+![Scrawl](docs/images/timeline.png)
 
 ## Features
 
