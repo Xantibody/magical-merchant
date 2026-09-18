@@ -20,7 +20,13 @@ const YEAR_AGO = isoOf(new Date(NOW.getFullYear() - 1, NOW.getMonth(), NOW.getDa
 
 const DAYS: Record<string, string[]> = {
   [TODAY]: ["- [08:15:00] 朝ラン 5km #運動", "- [21:34:00] ベガのラッシュ止まらん #SF6"],
-  [YEAR_AGO]: ["- [12:00:00] 去年のきょう"],
+  // 同じタグを大小違いで書いた 2 件。チップは 1 つに畳まれるので、絞り込みも
+  // 同じ畳み方でなければ片方が一覧から消える
+  [YEAR_AGO]: [
+    "- [12:00:00] 去年のきょう",
+    "- [12:30:00] 小文字で書いた #memo",
+    "- [12:40:00] 大文字で書いた #Memo",
+  ],
 };
 
 const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
@@ -86,6 +92,23 @@ describe("Timeline › 週次ダイジェスト", () => {
     fireEvent.click(screen.getByRole("button", { name: "今週は閉じる" }));
 
     expect(screen.queryByRole("region", { name: "今週" })).toBeNull();
+  });
+});
+
+describe("Timeline › タグの絞り込み", () => {
+  beforeEach(setupTimeline);
+  afterEach(teardownTimeline);
+
+  // チップに出る綴りは最初に見たものひとつで、件数はそれに畳んだ数。絞り込みが
+  // 完全一致だと、代表でない綴りの記録が消えて数と一覧が食い違う
+  it("keeps every spelling of the chip's tag, and the count agrees", async () => {
+    await openTimeline();
+
+    fireEvent.click(screen.getByRole("button", { name: "#Memo" }));
+
+    expect(screen.getByText("大文字で書いた")).toBeDefined();
+    expect(screen.getByText("小文字で書いた")).toBeDefined();
+    expect(screen.getByText("#Memo で絞り込み中 · 2件")).toBeDefined();
   });
 });
 
