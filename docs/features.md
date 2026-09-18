@@ -137,8 +137,10 @@ enter:
   card under the title that you drag or tap to send versions.
 - **The meta line** under the title reads how far the draft has travelled and
   how often you commit — 版 4 から +312 B · 9 か月で 4 回刻んだ
-  ("+312 B since v4 · 4 versions in 9 months"). A draft that matches the
-  newest version says only 版 4; a Codex with no versions says 版なし.
+  ("+312 B since v4 · 4 versions in 9 months"). The two halves are
+  independent: a draft that matches the newest version drops the distance and
+  reads 版 4 · 9 か月で 4 回刻んだ, and a Codex with no versions has no
+  cadence to report either, so the line is just 版なし.
 
 Nothing is committed for you, and committing asks nothing of you. 版を刻む in
 the `…` menu (`⌘⇧K`) flushes whatever save is still in flight and writes the
