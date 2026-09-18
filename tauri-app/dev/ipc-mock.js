@@ -967,9 +967,8 @@ const unifiedDiff = (from, to, fromName, toName) => {
       );
       return null;
     },
-    /** @param {{ filePath: string, body: string, revision?: string | null }} args */
-    update_draft: ({ filePath, body, revision }) => {
-      const filename = filePath.split("/").at(-1) ?? filePath;
+    /** @param {{ filename: string, body: string, revision?: string | null }} args */
+    update_draft: ({ filename, body, revision }) => {
       const note = notes.get(filename);
       if (!note) {
         throw saveError("other", `note not found: ${filename}`);

@@ -190,7 +190,7 @@ interface CommandMap {
    * 返るのは書いた本文の revision。
    */
   update_draft: {
-    args: { filePath: string; body: string; revision?: string | null } & ClientArgs;
+    args: { filename: string; body: string; revision?: string | null } & ClientArgs;
     result: string;
   };
   list_notes: { args: void; result: Note[] };

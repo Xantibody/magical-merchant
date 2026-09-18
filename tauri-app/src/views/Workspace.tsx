@@ -621,7 +621,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       }
       try {
         const revision = await typedInvoke("update_draft", {
-          filePath: pending.item.path,
+          filename: pending.item.filename,
           body: pending.body,
           client: await getDeviceSignals(),
           revision: revisions.get(pending.item.filename) ?? null,
@@ -859,7 +859,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     }
     try {
       const revision = await typedInvoke("update_draft", {
-        filePath: item.path,
+        filename: item.filename,
         body: backup,
         client: await getDeviceSignals(),
         revision: revisions.get(item.filename) ?? null,

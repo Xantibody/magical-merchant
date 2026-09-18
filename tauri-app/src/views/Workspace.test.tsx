@@ -97,9 +97,7 @@ const countOf = (command: string): number => calls.filter((c) => c.cmd === comma
 
 /** そのノートへの書き込みだけを取り出す。隣のノートへ着地していないかを見る。 */
 const writesTo = (filename: string): Record<string, unknown>[] =>
-  calls
-    .filter((c) => c.cmd === "update_draft" && String(c.args.filePath).endsWith(filename))
-    .map((c) => c.args);
+  calls.filter((c) => c.cmd === "update_draft" && c.args.filename === filename).map((c) => c.args);
 
 /** 一覧の 1 行。時刻はファイル名(= ID)から導く。 */
 const summaryOf = (filename: string): Record<string, unknown> => ({
@@ -149,19 +147,19 @@ const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
     disk.set(FILE_B, "");
     return `/data/notes/${FILE_B}`;
   },
-  update_draft: async ({ filePath, body, revision }) => {
+  update_draft: async ({ filename, body, revision }) => {
     duringSave?.();
     await writeGate;
-    const filename = String(filePath).split("/").at(-1) ?? "";
-    const current = disk.get(filename);
+    const name = String(filename);
+    const current = disk.get(name);
     if (current === undefined) {
-      throw saveError("other", `note not found: ${filename}`);
+      throw saveError("other", `note not found: ${name}`);
     }
     // core と同じ照合。読んでから誰かが書き換えていれば、その上に書かない
     if (typeof revision === "string" && revision !== revisionOf(current)) {
-      throw saveError("stale", `Stale: ${filename} changed since it was read`);
+      throw saveError("stale", `Stale: ${name} changed since it was read`);
     }
-    disk.set(filename, String(body));
+    disk.set(name, String(body));
     return revisionOf(String(body));
   },
   delete_note: ({ filename }) => {

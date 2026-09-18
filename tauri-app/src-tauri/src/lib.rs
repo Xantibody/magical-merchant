@@ -119,29 +119,38 @@ struct SaveError {
 /// `revision` は `read_note` が返した本文の指紋。添えると、そのあいだに
 /// CLI や MCP が同じノートを書き換えていれば `stale` で断られる。
 /// 返るのは書いた本文の revision — 次の保存に添える。
+///
+/// 受け取るのは ID(ファイル名)だけで、置き場は core に聞く。WebView から
+/// 渡された絶対パスをそのまま書くと、`data/` の外にも、消したノートや
+/// Codex にしたノートの跡にも書けてしまう。
+// AIDEV-NOTE: 他のノートコマンドと同じ parse_filename → locate の道。path 受けには戻さない
 #[tauri::command]
 fn update_draft(
-    file_path: String,
+    handle: AppHandle,
+    filename: String,
     body: String,
     client: ClientContext,
     revision: Option<String>,
 ) -> Result<String, SaveError> {
+    let refused = |message: String| SaveError {
+        kind: "other",
+        message,
+    };
+    let base_dir = app_base_dir(&handle).map_err(refused)?;
+    let filename = parse_filename(&filename).map_err(refused)?;
+    let (_, path) = magical_merchant_core::locate_note(&base_dir, &filename)
+        .map_err(|e| refused(e.to_string()))?;
     let context = device::get_context(client);
     let expected = revision.map(Revision::from);
-    magical_merchant_core::update_note(
-        std::path::Path::new(&file_path),
-        &body,
-        &context,
-        expected.as_ref(),
-    )
-    .map(|r| r.to_string())
-    .map_err(|e| SaveError {
-        kind: match e {
-            magical_merchant_core::CoreError::Stale(_) => "stale",
-            _ => "other",
-        },
-        message: e.to_string(),
-    })
+    magical_merchant_core::update_note(&path, &body, &context, expected.as_ref())
+        .map(|r| r.to_string())
+        .map_err(|e| SaveError {
+            kind: match e {
+                magical_merchant_core::CoreError::Stale(_) => "stale",
+                _ => "other",
+            },
+            message: e.to_string(),
+        })
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
