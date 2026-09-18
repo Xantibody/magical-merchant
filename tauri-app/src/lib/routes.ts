@@ -29,9 +29,12 @@ export const MODE_LABELS: Record<RoutePath, string> = {
   [ROUTES.TEMPLATES]: "Templates",
 };
 
-/** 検索・バックリンクの行に出す、記録の種類の印。面のアイコンと揃える。 */
+/**
+ * 検索・バックリンクの行に出す、記録の種類の印。住んでいる面のアイコンを
+ * そのまま引く — 直に綴ると、タブの印を変えたときに行の印だけが取り残される。
+ */
 export const HIT_ICONS: Record<HitKind, IconName> = {
-  scrawl: "lightning",
-  note: "file-text",
+  scrawl: MODE_ICONS[ROUTES.SCRAWL],
+  note: MODE_ICONS[ROUTES.NOTES],
   codex: MODE_ICONS[ROUTES.CODEX],
 };
