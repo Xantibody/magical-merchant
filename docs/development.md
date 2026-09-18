@@ -66,36 +66,51 @@ fetch what they need:
 
 ### Root recipes
 
-| Command       | Description                         | CI  |
-| ------------- | ----------------------------------- | --- |
-| `just fmt`    | Format all files (`nix fmt`)        | ✓   |
-| `just check`  | Lint + type check (Rust + frontend) | ✓   |
-| `just test`   | Run all tests (Rust + frontend)     | ✓   |
-| `just verify` | `fmt` → `check` → `test`            |     |
-| `just dev`    | Start Tauri development server      |     |
+| Command       | Description                                                    | CI  |
+| ------------- | -------------------------------------------------------------- | --- |
+| `just fmt`    | Format all files (`nix fmt`)                                   | ✓   |
+| `just check`  | `rust::check` + `tauri_app::check` + `workers::check`          | ✓   |
+| `just test`   | `rust::test` + `tauri_app::test` + `workers::test`             | ✓   |
+| `just verify` | `fmt` → `check` → `test`. Run it before calling something done |     |
+| `just dev`    | `tauri_app::dev` — the one recipe worth a short name           |     |
 
 Everything else is reached through its module — `just tauri_app::…`,
 `just rust::…`, `just workers::…`. Run `just --list <module>` to see them.
+CI does not call `verify`; it calls the three module recipes directly, in
+jobs that a path filter can skip.
 
 ### Rust recipes (`rust::`)
 
-| Command            | Description                        | CI  |
-| ------------------ | ---------------------------------- | --- |
-| `just rust::check` | `cargo clippy` for all Rust crates | ✓   |
-| `just rust::test`  | `cargo test` for all Rust crates   | ✓   |
+| Command                   | Description                                             | CI  |
+| ------------------------- | ------------------------------------------------------- | --- |
+| `just rust::check`        | `cargo clippy --workspace --all-targets -- -D warnings` | ✓   |
+| `just rust::test`         | `cargo test --workspace`                                | ✓   |
+| `just rust::check-rustls` | Fails unless `Cargo.lock` resolves exactly one `rustls` | ✓   |
 
 Scope a single crate with cargo directly (`cargo test -p magical-merchant-cli`).
 
+`check-rustls` is not part of `just check`, and it guards something no test
+can: two `rustls` versions make `android_tls`'s `ClientConfig` a different
+crate's type from reqwest's. That compiles, passes CI, and then fails on the
+device with `UnknownPreconfigured`.
+
 ### Frontend recipes (`tauri_app::`)
 
-| Command                       | Description                        | CI  |
-| ----------------------------- | ---------------------------------- | --- |
-| `just tauri_app::check`       | oxlint + tsc type check            | ✓   |
-| `just tauri_app::test`        | Vitest (unit + browser tests)      | ✓   |
-| `just tauri_app::dev`         | Start Tauri development server     |     |
-| `just tauri_app::dev-browser` | Vite + IPC mock in a plain browser |     |
-| `just tauri_app::build`       | Build macOS .app (Apple Silicon)   |     |
-| `just tauri_app::icons`       | Regenerate icons from the SVG      |     |
+| Command                       | Description                                        | CI  |
+| ----------------------------- | -------------------------------------------------- | --- |
+| `just tauri_app::check`       | oxlint, `tsc -b`, `tsc -p tsconfig.dev.json`, knip | ✓   |
+| `just tauri_app::test`        | Vitest (unit + browser tests)                      | ✓   |
+| `just tauri_app::dev`         | Start Tauri development server                     |     |
+| `just tauri_app::dev-browser` | Vite + IPC mock in a plain browser                 |     |
+| `just tauri_app::build`       | Build macOS .app (Apple Silicon)                   |     |
+| `just tauri_app::icons`       | Regenerate icons from the SVG                      |     |
+
+### Worker recipes (`workers::`)
+
+| Command               | Description         | CI  |
+| --------------------- | ------------------- | --- |
+| `just workers::check` | oxlint + tsc + knip | ✓   |
+| `just workers::test`  | Vitest              | ✓   |
 
 ### Android recipes (`tauri_app::`)
 
@@ -134,12 +149,15 @@ either by hand after regenerating `gen/android` some other way.
 `nix fmt` ([treefmt-nix](https://github.com/numtide/treefmt-nix)) provides
 unified formatting for all languages. CI runs `nix fmt -- --fail-on-change`.
 
-| Formatter | Target        |
-| --------- | ------------- |
-| nixfmt    | `*.nix`       |
-| rustfmt   | `*.rs`        |
-| taplo     | `*.toml`      |
-| oxfmt     | `*.js` `*.ts` |
+| Formatter | Target                                                                   |
+| --------- | ------------------------------------------------------------------------ |
+| nixfmt    | `*.nix`                                                                  |
+| rustfmt   | `*.rs`                                                                   |
+| taplo     | `*.toml`                                                                 |
+| oxfmt     | `*.ts` `*.tsx` `*.js` `*.json` `*.jsonc` `*.css` `*.md` `*.yml` and more |
+
+Markdown included — a docs change that is not formatted fails CI the same
+way a source change does.
 
 ## Environment variables
 
