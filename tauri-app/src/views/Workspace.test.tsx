@@ -1064,6 +1064,8 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     const backup = localStorage.getItem(`note-backup:${FILE_A}`);
     expect(backup).toContain("一回目");
     expect(backup).not.toContain("牛乳");
+    // 画面に出ているのは A の打鍵ではない。名乗って控えの在り処を言う
+    expect(shell?.toast()?.message).toContain(TITLE_A);
   });
 
   // 開いてから消えたノート。core は「作り直す入口ではない」と断るので、
@@ -1173,6 +1175,87 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     expect(message).toMatch(/戻す/u);
     // 画面は B のまま。A を読み直すのは開き直したときだけ
     expect(titleInput().value).toBe(TITLE_B);
+    expect(localStorage.getItem(`note-backup:${FILE_A}`)).toContain("譲る前に打った行");
+  });
+
+  // Stale の言い分は「読み直したか」で変わるのに、読み直す前の状態で決めて
+  // いた。読み直しが読めずに引き返すと、画面には打った本文が残っているのに
+  // 「読み直しました」と言う — 人はディスクのぶんが出ていると思って写すのを
+  // やめる
+  it("does not claim a reload that the read never delivered", async () => {
+    await openNoteA();
+    await startEditingBody();
+    typeInEditor?.(`${TEXT_A}\n\n譲る前に打った行`);
+    duringSave = () => {
+      duringSave = undefined;
+      // 別の端末が書き換え、そのうえ読み直しも通らない端末
+      disk.set(FILE_A, BODY_A_SYNCED);
+      readFails = true;
+    };
+
+    await waitFor(() => expect(shell?.toast()?.message).toMatch(/別の場所で書き換えられていた/u), {
+      timeout: 3000,
+    });
+    // エディタは作り直されていない。画面にあるのは打った本文のままで、
+    // ディスクのぶんは載っていない — 読み直したとは言えない
+    expect(screen.getByText(TEXT_A)).toBeDefined();
+    expect(screen.queryByText("他の端末で足された行")).toBeNull();
+    expect(shell?.toast()?.message).not.toMatch(/読み直しました/u);
+    // 控えは在る。画面にあるうちに写せることを言う
+    expect(shell?.toast()?.message).toMatch(/この端末に控え/u);
+    expect(shell?.toast()?.message).toMatch(/写して/u);
+    expect(localStorage.getItem(`note-backup:${FILE_A}`)).toContain("譲る前に打った行");
+  });
+
+  // 控えも残せず、しかも読み直せなかったとき。画面にはまだ打った本文が
+  // 在るのに「失われました」と言うと、人は諦めてそのまま閉じる
+  it("does not say the draft is gone while it is still on screen", async () => {
+    const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("QuotaExceededError");
+    });
+    onTestFinished(() => setItem.mockRestore());
+    await openNoteA();
+    await startEditingBody();
+    typeInEditor?.(`${TEXT_A}\n\n控えられなかった行`);
+    duringSave = () => {
+      duringSave = undefined;
+      disk.set(FILE_A, BODY_A_SYNCED);
+      readFails = true;
+    };
+
+    await waitFor(() => expect(shell?.toast()?.message).toMatch(/写して/u), { timeout: 3000 });
+    // エディタは作り直されていない。画面にはまだ打った本文が在るのだから、
+    // 失われたとは言わない
+    expect(screen.getByText(TEXT_A)).toBeDefined();
+    expect(screen.queryByText("他の端末で足された行")).toBeNull();
+    expect(shell?.toast()?.message).not.toMatch(/失われました/u);
+  });
+
+  // 読み直しの答えが届く前に隣のノートへ移ると、読み直しは見送られる。
+  // 譲る前の「画面に出ていた」で言うと、画面にあるのは別のノートなのに
+  // そのノートを指して「読み直しました」と言うことになる
+  it("names the note it yielded when the screen moved on during the read", async () => {
+    disk.set(FILE_B, BODY_B);
+    await openNoteA();
+    await startEditingBody();
+    typeInEditor?.(`${TEXT_A}\n\n譲る前に打った行`);
+    duringSave = () => {
+      duringSave = undefined;
+      disk.set(FILE_A, BODY_A_SYNCED);
+      // 譲ったあとの読み直しを止めておく
+      blockReads();
+    };
+
+    // 読み直しが飛んだところ(開いたときの 1 回 + 譲ったあとの 1 回)
+    await waitFor(() => expect(countOf("read_note")).toBe(2), { timeout: 3000 });
+    fireEvent.click(await rowOf(TITLE_B));
+    releaseReads();
+    await waitFor(() => expect(titleInput().value).toBe(TITLE_B));
+
+    await waitFor(() => expect(shell?.toast()?.message).toContain(TITLE_A), { timeout: 3000 });
+    // A の読み直しは画面に載っていない。載ったと言えば、人は画面に出ている
+    // B が入れ替わったのだと読む
+    expect(shell?.toast()?.message).not.toMatch(/読み直しました/u);
     expect(localStorage.getItem(`note-backup:${FILE_A}`)).toContain("譲る前に打った行");
   });
 

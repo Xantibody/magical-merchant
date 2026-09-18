@@ -125,6 +125,13 @@ const ja = {
     revertFailed: "戻せませんでした",
     editedElsewhere:
       "別の場所で書き換えられたので読み直しました。入力した本文は「戻す」で呼び出せます",
+    /**
+     * 譲ったのに読み直しが画面に載らなかったとき(読めなかった・届く前に
+     * 打ち始めた)。画面にあるのはまだ入力した本文なので、「読み直しました」
+     * と言うと、人はディスクのぶんを見ているつもりで写すのをやめる。
+     */
+    staleNotReloaded:
+      "別の場所で書き換えられていたので保存できませんでした。ディスクの本文は読み直せず、画面にあるのは入力した本文のままです。この端末に控えましたが、別の場所へも写してください",
     brokenMeta:
       "このノートの先頭の記録が読めないので保存できません。入力した本文はこの端末に控えました。開き直せば「戻す」で画面に出せます",
     /**
@@ -552,6 +559,8 @@ const en: Messages = {
     revertFailed: "Could not restore it",
     editedElsewhere:
       "This note was changed elsewhere and has been reloaded. Revert brings your text back",
+    staleNotReloaded:
+      "It was changed elsewhere, so it was not saved. The copy on disk could not be reloaded, so what is on screen is still your own text. It is kept on this device, but copy it somewhere else as well",
     brokenMeta:
       "This note's frontmatter cannot be read, so it was not saved. Your text is kept on this device — reopen the note and Revert puts it back on screen",
     notTextNote:

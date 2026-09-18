@@ -147,7 +147,19 @@ const refusedForGood = (error: unknown): boolean =>
   isBrokenNoteSave(error) || isMissingNoteSave(error) || isNotTextNoteSave(error);
 
 /**
- * 断られた保存の言い分。`shown` は「断られたノートがいま画面に出ているか」で、
+ * 断られた保存のあと、画面に何が出ているか。言い分はこれで決まる。
+ *
+ * - `draft`: 断られたノートが選ばれていて、本文は打ったぶんのまま。
+ *   「画面にあるうちに写して」が届く唯一の場合
+ * - `reloaded`: そのノートは選ばれているが、本文は読み直しで入れ替わった
+ *   (譲ったぶんでも、A → B → A と戻って着いたぶんでも同じ)。打った字は
+ *   もう画面に無いので、控えから取り出す話しかできない
+ * - `away`: 画面にあるのは別のノート。画面の本文を指す案内は届かない
+ */
+type RefusedScreen = "draft" | "reloaded" | "away";
+
+/**
+ * 断られた保存の言い分。`screen` は「断られたノートの打鍵がいま画面に出ているか」。
  * 出ていないなら画面の本文を指す案内は届かない — 画面にあるのは別のノートで、
  * 写す相手がそこに無い。名乗ってから、控えの在り処と取り出せるかだけを言う。
  * 消えたノートと、文字として読めないノートの控えは、控えとしては残るが、いま
@@ -155,33 +167,46 @@ const refusedForGood = (error: unknown): boolean =>
  * 「戻す」もそこで引き返す。
  * Stale だけはノートが書ける状態で残るので、開き直せば「戻す」で取り出せる —
  * ただし読み直しは選んでいるノートにしか走らないので、画面に無いぶんは
- * 「開き直してから」を先に言う。
+ * 「開き直してから」を先に言う。読み直しそのものが失敗した(`draft`)ときは、
+ * 打った本文がまだ画面に残っているので、それを指して写してもらう。
  * AIDEV-NOTE: 孤児の控え(消えた・読めないノートのぶん)を開く一覧が無いので、取り出せないことを文言で正直に言うに留める(道は別 PR)
  */
-function refusalToast(error: unknown, kept: boolean, item: NoteItem, shown: boolean): string {
+function refusalToast(
+  error: unknown,
+  kept: boolean,
+  item: NoteItem,
+  screen: RefusedScreen,
+): string {
   const words = t().notes;
-  const stale = isStaleSave(error);
+  // 打鍵が画面に残っているときだけ、画面の本文を指す案内が届く
+  const onScreen = screen === "draft";
   if (!kept) {
-    if (!shown) {
-      return words.saveNotKeptAway(item.title);
+    if (onScreen) {
+      return words.saveNotKept;
     }
-    // Stale では画面の本文がディスクのぶんに入れ替わっている。控えも無いので、
-    // 「画面にあるうちに写して」と言っても、もう写す相手がいない
-    return stale ? words.staleNotKept : words.saveNotKept;
+    // 読み直しが載ったぶんは、画面の本文もディスクのぶんに入れ替わっている。
+    // 控えも無いので、打った字はもうどこにも無い
+    if (screen === "reloaded" && isStaleSave(error)) {
+      return words.staleNotKept;
+    }
+    return words.saveNotKeptAway(item.title);
   }
-  if (stale) {
-    return shown ? words.editedElsewhere : words.editedElsewhereAway(item.title);
+  if (isStaleSave(error)) {
+    if (screen === "reloaded") {
+      return words.editedElsewhere;
+    }
+    return onScreen ? words.staleNotReloaded : words.editedElsewhereAway(item.title);
   }
   if (isMissingNoteSave(error)) {
-    return shown ? words.missingNote : words.missingNoteAway(item.title);
+    return onScreen ? words.missingNote : words.missingNoteAway(item.title);
   }
   // 文字として読めないファイルは、記録が壊れているのとは手当てが違う。
   // 直すのは frontmatter ではなくファイルそのもので、開き直しても
   // `read_note` が同じ理由で断られるので「戻す」で取り出す道も無い
   if (isNotTextNoteSave(error)) {
-    return shown ? words.notTextNote : words.notTextNoteAway(item.title);
+    return onScreen ? words.notTextNote : words.notTextNoteAway(item.title);
   }
-  return shown ? words.brokenMeta : words.brokenMetaAway(item.title);
+  return onScreen ? words.brokenMeta : words.brokenMetaAway(item.title);
 }
 
 /** このノートを指している記録。畳んだ 1 行以上の場所は取らない。 */
@@ -664,6 +689,22 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     bodyEpoch() === pending.bodyEpoch ? fullBody() : pending.body;
 
   /**
+   * 断られた保存のあと、画面に何が出ているか。譲る前の姿ではなく、読み直しが
+   * 済んだ「いま」を見る — 読めずに引き返すことも、往復のあいだに隣へ
+   * 移られることもあり、そのどちらでも画面は譲る前と違う。
+   *
+   * 打鍵がまだ画面に在るかは `bodyEpoch` で見る(`typedBody` と同じ理由)。
+   * 読み直しが載れば epoch は進むが、A → B → A と戻って別の読み込みが
+   * 載った場合も進む — どちらも「画面にもう打った字は無い」で同じ扱いでよい。
+   */
+  const refusedScreen = (pending: PendingSave, reloaded: boolean): RefusedScreen => {
+    if (selected()?.id !== pending.item.id) {
+      return "away";
+    }
+    return reloaded || bodyEpoch() !== pending.bodyEpoch ? "reloaded" : "draft";
+  };
+
+  /**
    * 読んでから書くまでに、CLI や MCP が同じノートを書き換えていた。
    * 相手の本文の上には書かず、打った字はこの端末のバックアップに退避して
    * ディスクの本文を読み直す。「戻す」を押せば退避した本文と入れ替わる —
@@ -683,13 +724,13 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       clearTimeout(saveTimer);
       saveTimer = undefined;
     }
-    const shown = selected()?.id === pending.item.id;
-    if (shown) {
+    let reloaded = false;
+    if (selected()?.id === pending.item.id) {
       sessionFile = null;
-      await loadNote(pending.item, true);
+      reloaded = await loadNote(pending.item, true);
     }
     await refetchNotes();
-    shell.showToast(refusalToast(error, kept, pending.item, shown));
+    shell.showToast(refusalToast(error, kept, pending.item, refusedScreen(pending, reloaded)));
   };
   const flushSave = (pending = snapshotSave()): Promise<void> => {
     const previous = saveChain;
@@ -754,7 +795,8 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
           // 残らなかったのに「戻す」で呼び出せると言うと、人はそれを信じて
           // 閉じ、画面にしか無い唯一の写しごと失う
           const kept = tryWriteBackup(localStorage, pending.item.filename, typedBody(pending));
-          shell.showToast(refusalToast(error, kept, pending.item, shown()));
+          // ここは読み直しを走らせない。画面にあるのは打鍵の続きか、別のノート
+          shell.showToast(refusalToast(error, kept, pending.item, refusedScreen(pending, false)));
         }
       }
     })();
