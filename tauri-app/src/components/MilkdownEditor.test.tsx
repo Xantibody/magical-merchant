@@ -1,6 +1,7 @@
 import { render, cleanup, fireEvent } from "@solidjs/testing-library";
 import { describe, it, expect, afterEach } from "vitest";
 import { editorViewCtx } from "@milkdown/kit/core";
+import { getMarkdown } from "@milkdown/kit/utils";
 import type { Editor } from "@milkdown/kit/core";
 import { Selection } from "@milkdown/kit/prose/state";
 import MilkdownEditor from "./MilkdownEditor";
@@ -268,5 +269,31 @@ describe("MilkdownEditor task list", () => {
     await sleep(100);
     expect(taskItem(container).dataset.checked).toBe("false");
     expect(changes).toHaveLength(0);
+  });
+});
+
+describe("MilkdownEditor Markdown style", () => {
+  afterEach(() => cleanup());
+
+  // 書き戻しは手で書いた綴りを保つ。remark-stringify の既定は箇条書きを
+  // `* `、罫線を `***`、強調を `_x_` に直すので、1 字直しただけで
+  // Codex の版との差分がリスト全行に立っていた
+  it("writes lists, rules and emphasis back the way they were written", async () => {
+    const source = [
+      "- 親",
+      "  - 子",
+      "",
+      "1. 一",
+      "2. 二",
+      "",
+      "- [ ] 用事",
+      "",
+      "---",
+      "",
+      "*強め* **強い**",
+    ].join("\n");
+    const { editor } = await mountPlain(source);
+
+    expect(editor()?.action(getMarkdown())).toBe(`${source}\n`);
   });
 });

@@ -45,6 +45,10 @@ code-block component (CodeMirror ~150KB), indent/upload/image-\*/table-block
 
 - **Frontmatter never enters the editor.** Milkdown serializes it back as
   escaped text and corrupts the file. Read/write body only (`note-view.ts`)
+- **The serializer writes `- ` bullets and `---` rules** (`remarkStringifyOptionsCtx`
+  in `MilkdownEditor.tsx`). remark-stringify's defaults are `* ` / `***`, which
+  rewrote every list line of a hand-written note on the first edit and lit up
+  a Codex diff end to end. Keep any new style choice there, with a test
 - **IME**: Enter during composition belongs to the IME — guard every
   Enter-to-commit with `isImeComposing(e)` (see #102, CommandPalette)
 - Autosave: 1s debounce + serialized save chain (`update_draft`); don't refetch

@@ -1,5 +1,11 @@
 import { onCleanup, onMount } from "solid-js";
-import { Editor, rootCtx, defaultValueCtx, editorViewCtx } from "@milkdown/kit/core";
+import {
+  Editor,
+  rootCtx,
+  defaultValueCtx,
+  editorViewCtx,
+  remarkStringifyOptionsCtx,
+} from "@milkdown/kit/core";
 import { Selection, TextSelection } from "@milkdown/kit/prose/state";
 import { commonmark } from "@milkdown/kit/preset/commonmark";
 import { gfm } from "@milkdown/kit/preset/gfm";
@@ -171,6 +177,14 @@ export default function MilkdownEditor(props: MilkdownEditorProps): JSX.Element 
     editor = await Editor.make()
       .config((ctx) => {
         ctx.set(rootCtx, root);
+        // 書き戻しの綴り。remark-stringify の既定(箇条書き `* `、罫線 `***`)は
+        // 手で書いた `- ` / `---` を全部直してしまい、1 字の手直しが Codex の
+        // 版との差分でリスト全行に立つ。ファイルの側の綴りに合わせる
+        ctx.update(remarkStringifyOptionsCtx, (options) => ({
+          ...options,
+          bullet: "-" as const,
+          rule: "-" as const,
+        }));
         if (props.defaultValue) {
           ctx.set(defaultValueCtx, props.defaultValue);
         }
