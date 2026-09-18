@@ -42,8 +42,7 @@ note one line, grouped by how recently it was created; the detail pane shows
 the body with a **title field** above it. The title is the note's leading
 `# heading` — there is no separate title in the frontmatter, so the file
 stays readable in any Markdown tool and the heading can never drift from
-the title. Press Enter in the field to drop into
-the body.
+the title. Press Enter in the field to drop into the body.
 
 **There is no edit mode.** The editor is live from the moment the note is
 open — what you see is already the thing you type into, so there is no button
@@ -204,6 +203,38 @@ by a tag, `⌘K` opens the palette with that chip already set. Scoped results
 show their count, and the empty message names the tags it looked inside.
 
 ![Command palette](images/palette.png)
+
+The palette also lists the app's **commands** — new note, the three modes,
+sync now, settings — each with its key down the right-hand side.
+
+## Keyboard
+
+There is no cheat sheet to look up, because the app can show you the keys in
+the place they belong. Hold ⌘ (Ctrl on anything that is not a Mac) for a
+moment and a badge floats on the shoulder of every button that has one, with
+a pill explaining how to make them go away; let go and they are gone. And
+`?`, pressed anywhere you are not typing, opens the palette on that command
+list.
+
+The ones worth learning first:
+
+| Key                | What it does             |
+| ------------------ | ------------------------ |
+| `⌘K`               | The search palette       |
+| `⌘N`               | A new note               |
+| `⌘1` / `⌘2` / `⌘3` | Scrawl / Note / Codex    |
+| `⌘.`               | The open note's `…` menu |
+| `⌘⇧S`              | Sync now                 |
+
+The rest are in that same list: `⌘,` for Settings, and — with a note
+open — `⌘⇧M` for the map, `⌘⇧R` to revert, `⌘⇧I` for ノート情報, `⌘⇧K` to
+commit a Codex version, and `⌘↑` / `⌘↓` to walk the list pane without
+leaving the body. Where a Mac reads ⌘⇧, every other platform reads
+Ctrl+Shift.
+
+The badges, the palette's right-hand column and the key handling all read one
+table in [`tauri-app/src/lib/shortcuts.ts`](../tauri-app/src/lib/shortcuts.ts),
+so a key that is written in two places cannot come to mean two things.
 
 ## Language
 

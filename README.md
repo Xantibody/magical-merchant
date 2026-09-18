@@ -26,6 +26,8 @@
   that point at it
 - **`⌘K` palette** — recent notes / today / tags before you type, full-text
   search with highlighted matches, exact landing on the note or day
+- **Keys you are shown, not told** — hold ⌘ and every button that has a
+  shortcut wears it; `?` opens the palette as the list of all of them
 - **Optional sync** — Cloudflare Workers + R2, conflict-safe, with Android
   home-screen widgets and a read-only MCP server for AI assistants
 - **Your own editor** — a CLI lists notes and opens one in `$EDITOR`; edits
