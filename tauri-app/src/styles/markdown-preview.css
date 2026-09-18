@@ -37,23 +37,30 @@
   /* ホバーツールの位置決めの基準(editor.css の pre と同じ) */
   position: relative;
   /* normalize の max-content フィットを解除して本文幅に(editor.css と同じ理由)。
-     padding も editor.css の pre と同じ。違うと編集に入るときにコードブロックの
-     高さが変わり、その下の本文がずれる */
+     余白の合計も editor.css の pre と同じ。違うと編集に入るときにコードブロックの
+     高さが変わり、その下の本文がずれる。横のぶんは code に置いてある */
   max-inline-size: none;
   width: 100%;
   background: var(--app-surface-2);
-  padding: var(--size-5);
+  padding-block: var(--size-5);
   border-radius: var(--radius-2);
-  overflow-x: auto;
 }
 
+/* 横に長い行はスクロールで見せる。スクロール箱を pre ではなく code にするのは、
+   pre がスクロールすると右上のホバーツール(絶対配置)が中身と一緒に流れて
+   いくため。sticky では直せない — 貼り付け先の包含ブロックはスクロールしない
+   側の content box なので、貼るために動ける余地がそもそも無い。
+   横の padding をここへ移すのは、diff の行が負のマージンで背景を余白まで
+   届かせており、スクロール箱の外に出ると切られてしまうから */
 .markdown-preview pre code {
   background: none;
-  padding: 0;
+  /* 上下は 0 に戻す(インラインの code の 0.1em を引き継がせない) */
+  padding: 0 var(--size-5);
   /* editor.css と同じくブロックにする。インラインのままだと pre 自身の
      行の高さ(strut)が乗り、コードブロックがエディタより数 px 高くなる */
   display: block;
   min-height: 1em;
+  overflow-x: auto;
 }
 
 /* diff: 行そのものに色を敷く。背景は pre の padding まで届かせないと
