@@ -20,19 +20,28 @@ const YEAR_AGO = isoOf(new Date(NOW.getFullYear() - 1, NOW.getMonth(), NOW.getDa
 
 const DAYS: Record<string, string[]> = {
   [TODAY]: ["- [08:15:00] 朝ラン 5km #運動", "- [21:34:00] ベガのラッシュ止まらん #SF6"],
-  // 同じタグを大小違いで書いた 2 件。チップは 1 つに畳まれるので、絞り込みも
-  // 同じ畳み方でなければ片方が一覧から消える
   [YEAR_AGO]: [
+    // 綴りが 1 つしかないタグ。後から大文字で記録すると代表表記が入れ替わる
+    "- [11:00:00] 小文字だけで書いた #run",
     "- [12:00:00] 去年のきょう",
+    // 同じタグを大小違いで書いた 2 件。チップは 1 つに畳まれるので、絞り込みも
+    // 同じ畳み方でなければ片方が一覧から消える
     "- [12:30:00] 小文字で書いた #memo",
     "- [12:40:00] 大文字で書いた #Memo",
   ],
 };
 
+/** 記録すると書き換わるので、テストごとに作り直す。 */
+let days: Record<string, string[]>;
+
 const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
   list_timeline_dates: () => [TODAY, YEAR_AGO],
-  read_timeline_by_date: ({ date }) => DAYS[String(date)] ?? [],
+  read_timeline_by_date: ({ date }) => days[String(date)] ?? [],
   list_notes: () => [],
+  // 追記なので、その日のいちばん新しい 1 件になる
+  save_quick_capture: ({ text }) => {
+    days[TODAY]?.push(`- [22:00:00] ${String(text)}`);
+  },
 };
 
 /** 一覧が届くまで待つ。時刻の欄はエントリ 1 件につき 1 つだけ出る。 */
@@ -47,9 +56,19 @@ async function openTimeline(): Promise<void> {
   await screen.findByText("21:34");
 }
 
+/** 浮いている記録欄。Timeline が描かれた後にだけ在る。 */
+function captureInput(): HTMLTextAreaElement {
+  const input = document.querySelector<HTMLTextAreaElement>(".capture-input");
+  if (!input) {
+    throw new Error("capture-input not found");
+  }
+  return input;
+}
+
 async function setupTimeline(): Promise<void> {
   await page.viewport(1280, 800);
   localStorage.clear();
+  days = structuredClone(DAYS);
   mockWindows("main");
   mockIPC((cmd, args) => {
     const handler = HANDLERS[cmd];
@@ -109,6 +128,29 @@ describe("Timeline › タグの絞り込み", () => {
     expect(screen.getByText("大文字で書いた")).toBeDefined();
     expect(screen.getByText("小文字で書いた")).toBeDefined();
     expect(screen.getByText("#Memo で絞り込み中 · 2件")).toBeDefined();
+  });
+
+  // チップの綴りは「いちばん新しい 1 件の綴り」なので、絞り込み中に同じタグを
+  // 大小違いで記録すると入れ替わる。選択の判定が完全一致だと、絞り込みは
+  // 効いたままなのに印が消え、押しても解除できない行が残る
+  it("keeps the chip selected when a newer spelling takes over, and still clears it", async () => {
+    await openTimeline();
+    fireEvent.click(screen.getByRole("button", { name: "#run" }));
+    expect(screen.getByText("#run で絞り込み中 · 1件")).toBeDefined();
+
+    // 末尾の空白まで打った状態にする。タグを打ちかけたままの Enter は
+    // 候補の確定に取られて、送信にならない
+    fireEvent.input(captureInput(), { target: { value: "きょうも走った #Run " } });
+    fireEvent.keyDown(captureInput(), { key: "Enter" });
+
+    const chip = await screen.findByRole("button", { name: "#Run" });
+    expect(chip.classList.contains("tag-chip--active")).toBe(true);
+    expect(screen.getByText("#Run で絞り込み中 · 2件")).toBeDefined();
+
+    fireEvent.click(chip);
+
+    expect(screen.queryByText(/で絞り込み中/u)).toBeNull();
+    expect(screen.getByText("ベガのラッシュ止まらん")).toBeDefined();
   });
 });
 
