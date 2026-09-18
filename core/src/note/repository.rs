@@ -229,6 +229,10 @@ impl Notes {
     /// 開いた区切りが閉じていないファイルは「記録が無い」ではなく「壊れている」:
     /// `---` の下の行は記録のつもりで書かれていて、本文で上書きすれば消える。
     ///
+    /// 文字として読めないファイルも断る([`CoreError::NotText`])。中身を
+    /// 読めていないので、`expected` の照合も frontmatter の引き継ぎもできず、
+    /// 書けば読めなかったバイト列ごと本文で上書きすることになる。
+    ///
     /// 無いファイルには書かない([`CoreError::NotFound`])。ここは既にある
     /// ノートの本文を差し替える経路で、作る経路は `create` 系にしかない。
     /// 書けてしまうと、消したノートや Codex へ移したノートが、開いたままの
@@ -245,12 +249,13 @@ impl Notes {
         context: &Context,
         expected: Option<&Revision>,
     ) -> Result<Revision, CoreError> {
-        let existing = fs::read_to_string(path).map_err(|e| {
-            if e.kind() == io::ErrorKind::NotFound {
-                CoreError::NotFound(path.display().to_string())
-            } else {
-                CoreError::Io(e)
-            }
+        let existing = fs::read_to_string(path).map_err(|e| match e.kind() {
+            io::ErrorKind::NotFound => CoreError::NotFound(path.display().to_string()),
+            // 文字として読めないファイルは、書き直しても読み直しても同じ理由で
+            // 断られる。`Io` に混ぜると呼ぶ側には一時的な不調と区別が付かず、
+            // 諦めた保存が「あとで通る」ものとして扱われる
+            io::ErrorKind::InvalidData => CoreError::NotText(path.display().to_string()),
+            _ => CoreError::Io(e),
         })?;
         if let Some(expected) = expected {
             let current = Revision::of(frontmatter::strip(&existing));
