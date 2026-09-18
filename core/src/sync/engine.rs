@@ -75,8 +75,36 @@ async fn run_over<T: SyncTransport + Sync, F: FnMut(RoundProgress)>(
     let _lock = SyncLock::acquire(base_dir)?;
 
     sweep_stale_temp_files(base_dir);
+    repair_tree(base_dir);
 
-    run_rounds(client, base_dir, budget, &mut on_round).await
+    let result = run_rounds(client, base_dir, budget, &mut on_round).await;
+
+    if result.is_ok() {
+        // 同じ ID が notes/ と codex/ に並ぶのはダウンロードの直後なので、
+        // 走り終えたぶんをもう一度見る。ロックはまだ手元にある
+        let _ = crate::relocate_duplicate_ids(base_dir);
+    }
+    result
+}
+
+/// 走査より前に済ませるツリーの繕い。同期を始める側がそれぞれ呼んでいたのを
+/// ここへ移した: 修復はファイルを動かすので、ロックの外でやると、もう一方の
+/// プロセスが走査している最中のツリーを書き換えてしまう。動かされたノートは
+/// 相手にローカル消失と映り、リモートの本体まで消える (#250)。
+///
+/// 直せなくても同期はできるので、失敗は握りつぶしてログにも残さない —
+/// 繕えなかったことを理由に同期を止めるほうが高くつく。
+///
+/// AIDEV-NOTE: 呼び出し側でロックを取る案は不可。flock は fd 単位なので engine の acquire が busy を返す
+fn repair_tree(base_dir: &Path) {
+    // 過去の編集で本文の先頭に混入した化けメタデータ
+    let _ = crate::repair_notes(base_dir);
+    // 古い版が `data/` に置いた競合コピー。走査より前に外へ出さないと、
+    // 残骸が新しいノートとして全端末へ配られる
+    let _ = crate::relocate_conflict_copies(base_dir);
+    // 他端末の昇格と自分のオフライン編集が重なって、同じ ID が notes/ と
+    // codex/ の両方にあるとき。Codex 側が本物で、notes/ 側を控えにする
+    let _ = crate::relocate_duplicate_ids(base_dir);
 }
 
 /// round を回し切るまで。`run_over` から切り出してあるのは、ロックを持って
@@ -1017,6 +1045,100 @@ mod tests {
         let err = run(&client, dir.path()).await.unwrap_err();
 
         assert_eq!(err.kind, "busy");
+        drop(held);
+    }
+
+    /// 壊れたノート 1 本ぶん。開始区切りの成れの果て・時刻として読める行・
+    /// ダッシュだけの終了行が揃って初めて「化けたメタデータ」になる
+    /// (`note/repair.rs`)。実際に壊れていたファイルの再現はそちらにある。
+    const MANGLED: &str = concat!(
+        "---\n",
+        "time: 2026-05-03T15:39:10+09:00\n",
+        "tags: []\n",
+        "---\n",
+        "***\n",
+        "\n",
+        "time: 2026-05-03T15:47:06+09:00\n",
+        "------\n",
+        "\n",
+        "# 本文\n",
+    );
+
+    /// 修復は走査より前、かつロックの内側。外で走っていたころは、もう一方の
+    /// プロセスが走査している最中にツリーを書き換えられた (#250)。
+    /// 到達できない宛先を渡してあるので、直っていれば通信より前に走っている。
+    #[tokio::test]
+    async fn the_run_entry_repairs_the_tree_once_it_holds_the_lock() {
+        let dir = tempfile::tempdir().unwrap();
+        // 古い版が `data/` に置いた競合コピー。走査が拾うと残骸が全端末へ配られる
+        let leftover = "notes/20260320_033440.sync-conflict-20260511-031336.md";
+        seed(dir.path(), leftover, "leftover");
+        seed(dir.path(), "notes/20260320_033440.md", "the note");
+        seed(dir.path(), "notes/20260503_153910.md", MANGLED);
+
+        let client = HttpClient::new(reqwest::Client::new(), "http://127.0.0.1:1", "token");
+        let _ = run(&client, dir.path()).await;
+
+        let data = paths::data_dir(dir.path());
+        assert!(
+            !data.join(leftover).exists(),
+            "競合コピーが data/ に残っている"
+        );
+        assert!(
+            paths::conflicts_dir(dir.path())
+                .join("notes/20260320_033440/20260511-031336.md")
+                .exists()
+        );
+        assert!(
+            data.join("notes/20260320_033440.md").exists(),
+            "本体は動かさない"
+        );
+        let repaired = fs::read_to_string(data.join("notes/20260503_153910.md")).unwrap();
+        assert!(
+            !repaired.contains("***"),
+            "化けたメタデータが残っている:\n{repaired}"
+        );
+    }
+
+    /// 同期のあとに走っていた重複 ID の片付けも内側へ。外だと、解放した
+    /// ロックの隙に相手が走査を始める。
+    #[tokio::test]
+    async fn the_run_entry_relocates_an_id_that_landed_in_both_kinds() {
+        let dir = tempfile::tempdir().unwrap();
+        seed(dir.path(), "notes/20260320_033440.md", "the offline edit");
+        seed(dir.path(), "codex/20260320_033440.md", "the codex");
+
+        let client = HttpClient::new(reqwest::Client::new(), "http://127.0.0.1:1", "token");
+        let _ = run(&client, dir.path()).await;
+
+        let data = paths::data_dir(dir.path());
+        assert!(!data.join("notes/20260320_033440.md").exists());
+        assert!(
+            data.join("codex/20260320_033440.md").exists(),
+            "Codex 側が本物"
+        );
+        assert_eq!(
+            fs::read_dir(paths::conflicts_dir(dir.path()).join("notes/20260320_033440"))
+                .unwrap()
+                .count(),
+            1
+        );
+    }
+
+    /// ロックを取れなかった側は 1 バイトも書かない。相手が走査している最中に
+    /// ツリーを書き換えるのが、そもそも直したかったこと。
+    #[tokio::test]
+    async fn a_refused_run_does_not_repair_either() {
+        let dir = tempfile::tempdir().unwrap();
+        let leftover = "notes/20260320_033440.sync-conflict-20260511-031336.md";
+        seed(dir.path(), leftover, "leftover");
+        let held = SyncLock::acquire(dir.path()).unwrap();
+
+        let client = HttpClient::new(reqwest::Client::new(), "http://127.0.0.1:1", "token");
+        let err = run(&client, dir.path()).await.unwrap_err();
+
+        assert_eq!(err.kind, "busy");
+        assert!(paths::data_dir(dir.path()).join(leftover).exists());
         drop(held);
     }
 
