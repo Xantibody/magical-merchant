@@ -113,6 +113,18 @@ export default function Timeline(): JSX.Element {
     setSelected(new Set<string>());
     setConfirming(false);
   };
+  /**
+   * 一覧を読み直す前に選択を畳む。選択は `date#index` で行を指すので、
+   * 読み直しで同じ日の前に行が増えるとその index は隣の記録を指す。
+   * 選び直しは確認バーを 1 つ押し直すだけ、誤削除は取り返しがつかない。
+   */
+  const dropSelectionForReload = (): void => {
+    if (!selecting()) {
+      return;
+    }
+    exitSelecting();
+    shell.showToast(t().timeline.selectionCleared);
+  };
 
   const [timeline, { refetch, mutate }] = createResource(extraDates, loadTimeline);
   // 昇格ノートのチップに使う。タイムラインの描画は待たない — ノート一覧が
@@ -127,19 +139,19 @@ export default function Timeline(): JSX.Element {
     on(
       shell.dataVersion,
       () => {
-        // 選択は `date#index` で行を指す。読み直しで同じ日の前に行が増えると
-        // その index は隣の記録を指すので、行が入れ替わる前に選択ごと畳む。
-        // 選び直しは確認バーを 1 つ押し直すだけ、誤削除は取り返しがつかない
-        if (selecting()) {
-          exitSelecting();
-          shell.showToast(t().timeline.selectionCleared);
-        }
+        // 行が入れ替わる前に選択ごと畳む
+        dropSelectionForReload();
         void refetch();
         void refetchNotes();
       },
       { defer: true },
     ),
   );
+
+  // 読み直しの引き金は refetch だけではない。extraDates はリソースの源なので、
+  // カレンダーや「1年前の今日」が日を足すだけでも一覧は丸ごと取り直される。
+  // 畳むのは日を足す関数の中ではなく源の側 — 足し手が増えても穴が開かない
+  createEffect(on(extraDates, dropSelectionForReload, { defer: true }));
 
   const entries = createMemo(() => timeline()?.items ?? []);
   // 地名は記録の一部ではないので、これを待って一覧を出さない。座標のまま先に

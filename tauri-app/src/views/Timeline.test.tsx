@@ -24,8 +24,16 @@ const DAYS: Record<string, string[]> = {
   [YEAR_AGO]: ["- [12:00:00] 去年のきょう"],
 };
 
+/**
+ * 一覧が最初に載せるのは直近 14 日ぶんだけ。記録のある日をその数だけ並べると
+ * 1 年前は載らない日になり、そこへ飛ぶと一覧ごと読み直される。
+ */
+const RECENT_DATES = Array.from({ length: 14 }, (_, back) =>
+  isoOf(new Date(NOW.getFullYear(), NOW.getMonth(), NOW.getDate() - back)),
+);
+
 const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
-  list_timeline_dates: () => [TODAY, YEAR_AGO],
+  list_timeline_dates: () => [...RECENT_DATES, YEAR_AGO],
   read_timeline_by_date: ({ date }) => DAYS[String(date)] ?? [],
   list_notes: () => [],
 };
@@ -155,6 +163,29 @@ describe("Timeline › 選択中の読み直し", () => {
       expect(screen.queryByRole("toolbar", { name: "まとめて削除" })).toBeNull();
     });
     expect(screen.getByRole("button", { name: "選択" })).toBeDefined();
+  });
+
+  /**
+   * 読み直しを起こすのは `refreshData` だけではない。まだ載っていない日へ
+   * 飛ぶと、リソースは一覧ごと取り直す — そのあいだに外から書かれていれば
+   * 同じ index は隣の記録を指す。日を足す経路でも選択は畳む。
+   */
+  it("drops the selection when a jump to an unloaded day reloads the list", async () => {
+    await openTimeline();
+    fireEvent.click(screen.getByRole("button", { name: "選択" }));
+    fireEvent.click(screen.getByRole("button", { name: /朝ラン/u }));
+    fireEvent.click(screen.getByRole("button", { name: "削除 (1件)" }));
+    expect(screen.getByRole("toolbar", { name: "まとめて削除" })).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: "1年前の今日の記録を見る" }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("toolbar", { name: "まとめて削除" })).toBeNull();
+    });
+    expect(screen.getByRole("button", { name: "選択" })).toBeDefined();
+    expect(shell.toast()?.message).toBe("一覧を読み直したので選択を解除しました");
+    // 飛んだ先はちゃんと足されている（選択を畳むだけで終わっていない）
+    await expect(screen.findByText("去年のきょう")).resolves.toBeDefined();
   });
 
   // 黙って消えると、押したはずの削除が効かなかったようにしか見えない
