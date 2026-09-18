@@ -224,10 +224,12 @@ sync now, settings — each with its key down the right-hand side.
 
 There is no cheat sheet to look up, because the app can show you the keys in
 the place they belong. Hold ⌘ (Ctrl on anything that is not a Mac) for a
-moment and a badge floats on the shoulder of every button that has one, with
-a pill explaining how to make them go away; let go and they are gone. And
-`?`, pressed anywhere you are not typing, opens the palette on that command
-list.
+moment and a badge floats on the shoulder of the buttons in the chrome — the
+three mode tabs, sync, Settings, and the open note's `…` — with a pill
+explaining how to make them go away; let go and they are gone. The search
+field carries its `⌘K` printed in the field itself, so it needs no badge, and
+`⌘N` is shown where 新規ノート is, in the palette. And `?`, pressed anywhere
+you are not typing, opens the palette on that command list.
 
 The ones worth learning first:
 
