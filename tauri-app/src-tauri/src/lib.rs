@@ -395,11 +395,18 @@ fn read_timeline_by_date(handle: AppHandle, date: String) -> Result<Vec<String>,
     magical_merchant_core::read_timeline(&base_dir, naive).map_err(|e| e.to_string())
 }
 
+/// `raw` は画面が読んだときの行。index と合わせて「どの記録か」を指す。
 #[tauri::command]
-fn delete_timeline_entry(handle: AppHandle, date: String, index: usize) -> Result<(), String> {
+fn delete_timeline_entry(
+    handle: AppHandle,
+    date: String,
+    index: usize,
+    raw: String,
+) -> Result<(), String> {
     let base_dir = app_base_dir(&handle)?;
     let naive = chrono::NaiveDate::parse_from_str(&date, "%Y-%m-%d").map_err(|e| e.to_string())?;
-    magical_merchant_core::delete_timeline_entry(&base_dir, naive, index).map_err(|e| e.to_string())
+    magical_merchant_core::delete_timeline_entry(&base_dir, naive, index, &raw)
+        .map_err(|e| e.to_string())
 }
 
 /// 座標を地名に直す。引けたものだけを `"緯度,経度"` のキー付きで返す。

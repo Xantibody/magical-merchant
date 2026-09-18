@@ -182,6 +182,8 @@ export function replaceDayItems(
 export interface DeleteTarget {
   date: string;
   index: number;
+  /** 選んだ時点で読めていた行。core が「同じ記録か」を確かめるのに使う。 */
+  raw: string;
 }
 
 /**
@@ -191,18 +193,16 @@ export interface DeleteTarget {
  * 並べることでズレを起こさない。日どうしの順は選択順を尊重する。
  */
 export function planBulkDelete(targets: DeleteTarget[]): DeleteTarget[] {
-  const byDate = new Map<string, number[]>();
-  for (const { date, index } of targets) {
-    const indexes = byDate.get(date);
-    if (indexes) {
-      indexes.push(index);
+  const byDate = new Map<string, DeleteTarget[]>();
+  for (const target of targets) {
+    const group = byDate.get(target.date);
+    if (group) {
+      group.push(target);
     } else {
-      byDate.set(date, [index]);
+      byDate.set(target.date, [target]);
     }
   }
-  return [...byDate].flatMap(([date, indexes]) =>
-    indexes.toSorted((a, b) => b - a).map((index) => ({ date, index })),
-  );
+  return [...byDate.values()].flatMap((group) => group.toSorted((a, b) => b.index - a.index));
 }
 
 /**

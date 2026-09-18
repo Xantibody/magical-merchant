@@ -272,7 +272,11 @@ describe("replaceDayItems", () => {
   });
 });
 
-const target = (date: string, index: number) => ({ date, index });
+const target = (date: string, index: number) => ({
+  date,
+  index,
+  raw: `- [0${index}:00:00] ${date} の ${index} 行目`,
+});
 
 describe("planBulkDelete", () => {
   it("deletes within a day from the highest index so earlier deletes cannot shift later ones", () => {

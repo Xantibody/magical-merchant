@@ -164,7 +164,8 @@ interface CommandMap {
   save_quick_capture: { args: { text: string } & ClientArgs; result: void };
   list_timeline_dates: { args: void; result: string[] };
   read_timeline_by_date: { args: { date: string }; result: string[] };
-  delete_timeline_entry: { args: { date: string; index: number }; result: void };
+  /** `raw` は画面が読んだときの行。index だけでは、読んだあとに入った追記でずれる。 */
+  delete_timeline_entry: { args: { date: string; index: number; raw: string }; result: void };
   /**
    * `tags` は範囲。全部を持つ記録だけが返り、query が空でも tags があれば
    * そのタグの付いた記録を全部返す。

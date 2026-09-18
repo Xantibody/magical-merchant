@@ -31,21 +31,26 @@ pub fn read_timeline(base_dir: &Path, date: NaiveDate) -> Result<Vec<String>, Co
     Timeline::new(base_dir.to_path_buf()).read(date)
 }
 
+/// `raw` は書き手が読んだときの行(`read_timeline` が返した形そのもの)。
+/// 行を指す index だけでは、読んでから書くまでに入った追記や同期でずれる。
 pub fn update_timeline_entry(
     base_dir: &Path,
     date: NaiveDate,
     index: usize,
+    raw: &str,
     text: &str,
 ) -> Result<(), CoreError> {
-    Timeline::new(base_dir.to_path_buf()).update_entry(date, index, text)
+    Timeline::new(base_dir.to_path_buf()).update_entry(date, index, raw, text)
 }
 
+/// `raw` は `update_timeline_entry` と同じ、書き手が読んだときの行。
 pub fn delete_timeline_entry(
     base_dir: &Path,
     date: NaiveDate,
     index: usize,
+    raw: &str,
 ) -> Result<(), CoreError> {
-    Timeline::new(base_dir.to_path_buf()).delete_entry(date, index)
+    Timeline::new(base_dir.to_path_buf()).delete_entry(date, index, raw)
 }
 
 #[cfg(test)]
