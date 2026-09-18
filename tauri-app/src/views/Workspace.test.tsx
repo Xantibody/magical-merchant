@@ -1002,6 +1002,27 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     expect(disk.get(FILE_A)).toBe(BODY_A);
   });
 
+  // 断られたときに退避するのも、Stale と同じく「飛んでいった写し」ではなく
+  // いま画面にある本文。往復のあいだに打った字はファイルにも控えにも無く、
+  // 警告を見てそのまま閉じられたらそこで消える
+  it("backs up the draft as it stands when the save is refused as broken", async () => {
+    brokenMeta.add(FILE_A);
+    await openNoteA();
+    await startEditingBody();
+    typeInEditor?.(`${TEXT_A}\n\n一回目`);
+    duringSave = () => {
+      duringSave = undefined;
+      typeInEditor?.(`${TEXT_A}\n\n二回目`);
+    };
+
+    await waitFor(() => expect(shell?.toast()?.message).toMatch(/保存できません/u), {
+      timeout: 3000,
+    });
+    // 次の debounce が届く前に見る。ここが「一回目」なら、閉じた人は二回目を失う
+    expect(countOf("update_draft")).toBe(1);
+    expect(localStorage.getItem(`note-backup:${FILE_A}`)).toContain("二回目");
+  });
+
   // 開いてから消えたノート。core は「作り直す入口ではない」と断るので、
   // 壊れた記録と同じく読み直しても直らない。退避しないと、離れた時点で
   // 打った字がどこにも残らないまま消える

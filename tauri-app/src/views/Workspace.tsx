@@ -579,16 +579,22 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   };
 
   /**
+   * 断られた保存から退避する本文。飛んでいった写しではなく、いま画面にある
+   * ぶん — 端末の信号待ちと IPC の往復のあいだに打った字は、まだファイルにも
+   * 控えにも無い。写しのほうを退避すると、その打鍵だけが黙って消える。
+   * 画面が隣のノートへ移っていたときだけ、飛んでいった写しに戻る。
+   */
+  const typedBody = (pending: PendingSave): string =>
+    selected()?.id === pending.item.id ? fullBody() : pending.body;
+
+  /**
    * 読んでから書くまでに、CLI や MCP が同じノートを書き換えていた。
    * 相手の本文の上には書かず、打った字はこの端末のバックアップに退避して
    * ディスクの本文を読み直す。「戻す」を押せば退避した本文と入れ替わる —
    * 相手の版がバックアップに回るので、どちらも失わない。
    */
   const yieldToOutsideEdit = async (pending: PendingSave): Promise<void> => {
-    // 退避するのは飛んでいった写しではなく、いま画面にある本文。Stale が
-    // 返るまでの往復のあいだに打った字は、まだファイルにもここにも無い
-    const typed = selected()?.id === pending.item.id ? fullBody() : pending.body;
-    writeBackup(localStorage, pending.item.filename, typed);
+    writeBackup(localStorage, pending.item.filename, typedBody(pending));
     saveGeneration += 1;
     if (saveTimer) {
       clearTimeout(saveTimer);
@@ -662,7 +668,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
           // ディスクへは既に書けていないので、退避が残ったかまで確かめる —
           // 残らなかったのに「戻す」で呼び出せると言うと、人はそれを信じて
           // 閉じ、画面にしか無い唯一の写しごと失う
-          const kept = tryWriteBackup(localStorage, pending.item.filename, pending.body);
+          const kept = tryWriteBackup(localStorage, pending.item.filename, typedBody(pending));
           const refused = isMissingNoteSave(error) ? t().notes.missingNote : t().notes.brokenMeta;
           shell.showToast(kept ? refused : t().notes.saveNotKept);
         }
