@@ -73,15 +73,25 @@ local scan → diff → `POST /sync/bulk`, repeated until nothing is left over.
   drives the "syncing" indicator; the file lock is the authority. Both the
   app and `magical-merchant sync` start syncs, so the loser really does get
   `busy` — the CLI says so and exits 1, the app stays quiet
+- **Repair runs under that lock**, never outside it: `repair_tree` in
+  `engine.rs` (malformed notes, legacy conflict copies, duplicate IDs) fires
+  right after the lock is taken and before the first scan, and the duplicate-ID
+  pass runs again before a successful sync returns. A caller cannot take the
+  lock on the engine's behalf — it is a flock on the engine's own descriptor,
+  so the engine would then answer `busy` to itself
 - Conflicts keep the loser as `….sync-conflict-<ts>.md` in R2, and on disk
   as `conflicts/<key minus extension>/<ts>.md` — outside `data/`, same shape
   as `history/`, so it neither syncs back nor lands in the notes list.
-  The name is built and read back in `core/src/sync/conflict.rs` only
+  The name is built and read back in `core/src/sync/conflict.rs` only.
+  `<ts>` is precise to the second, so two copies of one key can want the same
+  name: a relocation never overwrites, the second takes `<ts>-2.md`
+  (`rename_without_clobber` in `core/src/utils/fs.rs`)
 - Auto sync runs a few seconds after any successful write
 - `data/codex/` syncs like everything else under `data/`: the Codex file and
   its `codex/<stem>/*.md` versions are ordinary keys. A build that predates
-  Codex simply never lists that directory. After every successful sync (and
-  once at startup) the app runs `relocate_duplicate_ids`: promotion on one
+  Codex simply never lists that directory. The sync engine runs
+  `relocate_duplicate_ids` under the lock (the app also runs it once at
+  startup, for the note list): promotion on one
   device plus an offline edit on another can land the same ID in both
   `notes/` and `codex/`; the Codex wins and the `notes/` copy goes to
   `conflicts/notes/<stem>/<ts>.md`

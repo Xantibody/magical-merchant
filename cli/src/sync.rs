@@ -83,32 +83,10 @@ fn summary(result: &SyncResult) -> String {
     )
 }
 
-/// 走査より前に、アプリが一覧と同期の前に必ず通しているのと同じ修復を
-/// かける。
-///
-/// 古い版は競合コピーを `data/` の中に置いていた。それを抱えたまま同期に
-/// 入ると、走査がただのノートとして拾い、残骸が全端末へ配られる。これまで
-/// 同期を始めるのはアプリだけで、アプリは `repair_once` を必ず通っていた。
-/// CLI から始められるようになった以上、同じ関門をこちらにも置く。
-fn repair(data_dir: &Path) {
-    // 直せなくても同期はできる。直せなかったことを理由に止めるほうが損
-    let _ = magical_merchant_core::repair_notes(data_dir);
-    let _ = magical_merchant_core::relocate_conflict_copies(data_dir);
-}
-
-/// エンジンに入る前に済ませること。修復と資格情報の解決を 1 つにまとめて
-/// あるのは、どちらか片方だけを通る道を作らないため — 修復を飛ばした同期は
-/// 古い競合コピーを全端末に配る。
-fn prepare<F>(data_dir: &Path, read_token: F) -> Result<Credentials, SyncError>
-where
-    F: Fn(&Path) -> Result<Option<String>, String>,
-{
-    repair(data_dir);
-    credentials(data_dir, read_token)
-}
-
 pub(crate) async fn run(data_dir: &Path) -> anyhow::Result<()> {
-    let credentials = prepare(data_dir, token::get_token)?;
+    // 走査より前の修復はエンジンの中、同期ロックの内側にある。ここで先に
+    // かけると、アプリが同期しているさなかにツリーを書き換えてしまう
+    let credentials = credentials(data_dir, token::get_token)?;
     let client = HttpClient::new(
         desktop_http_client()?,
         &credentials.workers_url,
@@ -171,31 +149,6 @@ mod tests {
     #[allow(clippy::unnecessary_wraps, reason = "credentials が求める読み手の形")]
     fn no_token(_: &Path) -> Result<Option<String>, String> {
         Ok(None)
-    }
-
-    /// 古い版が `data/` に残した競合コピーを、走査より前に外へ出す。
-    /// 残っていると走査がただのノートとして拾い、同期が残骸を全端末へ配る。
-    /// これまでこの関門を通っていたのはアプリだけだった。
-    ///
-    /// `repair` ではなく `prepare` を呼ぶ: 確かめたいのは修復が動くことでは
-    /// なく、エンジンへ向かう道が必ず修復を通ること。
-    #[test]
-    fn a_legacy_conflict_copy_is_moved_out_on_the_way_to_the_engine() {
-        let dir = configured();
-        let notes = dir.path().join("data/notes");
-        std::fs::create_dir_all(&notes).unwrap();
-        let stale = notes.join("20260320_033440.sync-conflict-20260511-031336.md");
-        std::fs::write(&stale, "leftover").unwrap();
-        std::fs::write(notes.join("20260320_033440.md"), "the note").unwrap();
-        let live = jwt(chrono::Utc::now().timestamp() + 3600);
-
-        prepare(dir.path(), |_| Ok(Some(live.clone()))).unwrap();
-
-        assert!(!stale.exists(), "競合コピーが data/ に残っている");
-        assert!(
-            notes.join("20260320_033440.md").exists(),
-            "本体は動かさない"
-        );
     }
 
     /// 同期の設定はアプリの画面にしかない。CLI に URL を打たせると、
