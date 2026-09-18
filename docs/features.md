@@ -232,11 +232,13 @@ for Settings. The keys that need a note open are not in it: they are written
 down the right-hand side of the note's own `…` menu, the one `⌘.` opens —
 `⌘⇧M` for the map, `⌘⇧R` to revert, `⌘⇧I` for ノート情報, `⌘⇧K` to commit a
 Codex version. `⌘↑` / `⌘↓` walk the list pane and are printed nowhere at
-all; they answer only while the caret is outside the title field and the
-body, so they step through notes once you have clicked away from what you
-are writing. With the caret in the text they are left alone, and stay the
-jump to the top or the bottom of what you are typing. Where a Mac reads
-⌘⇧, every other platform reads Ctrl+Shift.
+all; they answer only while the caret is outside every field you can type
+in — not just the title and the body, but the palette's search box and the
+time and tag fields of ノート情報 as well — so they step through notes once
+you have clicked away from what you are writing. With the caret in any of
+them they are left alone, and stay the jump to the top or the bottom of
+what you are typing. Where a Mac reads ⌘⇧, every other platform reads
+Ctrl+Shift.
 
 The badges, the palette's right-hand column, the keys in the note menu and
 the key handling itself all read one table in
