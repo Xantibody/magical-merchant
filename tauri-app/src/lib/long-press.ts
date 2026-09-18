@@ -8,16 +8,29 @@
 
 interface PointerLike {
   pointerType: string;
+  clientX: number;
+  clientY: number;
+}
+
+interface PointLike {
+  clientX: number;
+  clientY: number;
 }
 
 interface Cancelable {
   preventDefault: () => void;
 }
 
+/**
+ * 指の揺れとして見逃す移動量(px)。これを超えたらスクロールの始まり。
+ */
+// AIDEV-NOTE: 10px は Chrome のタッチスロップ(8px)より少し広く取った値。0 だと置いた指の jitter で 500ms を完走できない(#253)
+const SLIP_PX = 10;
+
 export interface LongPress {
   onPointerDown: (e: PointerLike) => void;
   onPointerUp: () => void;
-  onPointerMove: () => void;
+  onPointerMove: (e: PointLike) => void;
   onPointerCancel: () => void;
   /**
    * 長押しを割り当てた要素の上では OS のメニューを出さない。押しっぱなしは
@@ -36,6 +49,8 @@ export interface LongPress {
 export function createLongPress(onLongPress: () => void, holdMs = 500): LongPress {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let fired = false;
+  /** 指が降りた場所。ここからの距離だけが「動いた」の判断材料。 */
+  let origin: PointLike | undefined;
 
   const cancel = (): void => {
     if (timer) {
@@ -50,6 +65,9 @@ export function createLongPress(onLongPress: () => void, holdMs = 500): LongPres
         return;
       }
       cancel();
+      // 揺れの許容は押すたびに測り直す。少しずつ流れた指でも 2 回目が
+      // 始めから許容いっぱいということにはならない
+      origin = { clientX: e.clientX, clientY: e.clientY };
       timer = setTimeout(() => {
         timer = undefined;
         fired = true;
@@ -57,7 +75,20 @@ export function createLongPress(onLongPress: () => void, holdMs = 500): LongPres
       }, holdMs);
     },
     onPointerUp: cancel,
-    onPointerMove: cancel,
+    /**
+     * 指を置いているだけでも pointermove は絶え間なく来る。1 回で捨てると
+     * 長押しは実機で完走しないので、降りた場所から離れたときだけ諦める。
+     */
+    onPointerMove: (e) => {
+      if (!timer || !origin) {
+        return;
+      }
+      const dx = e.clientX - origin.clientX;
+      const dy = e.clientY - origin.clientY;
+      if (dx * dx + dy * dy > SLIP_PX * SLIP_PX) {
+        cancel();
+      }
+    },
     onPointerCancel: () => {
       cancel();
       // 押している間に OS がジェスチャを横取りした場合。click は来ない
