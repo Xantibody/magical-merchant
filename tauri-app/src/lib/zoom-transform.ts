@@ -36,8 +36,42 @@ function clamp(value: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, value));
 }
 
-/** 画面の真ん中に、余白を残して収まる大きさで置く */
+/**
+ * 測れた辺かどうか。隠れている面や描き終える前の SVG は 0 を返し、
+ * 属性の無い SVGRect は NaN を返す。どちらも割り算に入れてはいけない
+ */
+function measured(length: number): boolean {
+  return Number.isFinite(length) && length > 0;
+}
+
+/**
+ * 開いたときの原寸。mermaid は viewBox に原寸を書くのでそれを読み、viewBox を
+ * 持たない SVG は縮めて描いている今の大きさ(`getBoundingClientRect`)で代用する。
+ * どちらも測れなければ答えを返さない — 0×0 で開いても白い画面が出るだけ
+ */
+export function zoomSize(viewBox: Size, rendered: Size): Size | undefined {
+  const width = measured(viewBox.width) ? viewBox.width : rendered.width;
+  const height = measured(viewBox.height) ? viewBox.height : rendered.height;
+  return measured(width) && measured(height) ? { width, height } : undefined;
+}
+
+/** 倍率を測れないときに置く場所。原寸のまま左上に */
+const NATURAL: Transform = { scale: 1, tx: 0, ty: 0 };
+
+/**
+ * 画面の真ん中に、余白を残して収まる大きさで置く。どちらかが測れていなければ
+ * 原寸のまま置く — 0 で割った倍率は NaN や Infinity になり、transform ごと
+ * 無視されて図が消え、倍率の表示が「NaN%」になる
+ */
 export function fitToViewport(viewport: Size, diagram: Size): Transform {
+  if (
+    !measured(viewport.width) ||
+    !measured(viewport.height) ||
+    !measured(diagram.width) ||
+    !measured(diagram.height)
+  ) {
+    return NATURAL;
+  }
   const scale = clamp(
     Math.min(
       (viewport.width - FIT_PADDING) / diagram.width,

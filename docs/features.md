@@ -12,19 +12,20 @@ network, battery, and a place name resolved from the coordinate), tags typed
 as `#tag` become filter chips, and the calendar button jumps to any recorded
 day.
 
-![Timeline](images/timeline.png)
+![Scrawl](images/timeline.png)
 
-At the top, a **weekly digest** appears once per week: how many entries on how
-many days, the most used tags (tap to filter), and — when that day has
-entries — a jump to _one year ago today_. Dismissing it hides it for the rest
-of the week, per device.
+At the top, a **weekly digest** appears once per week: one line saying how
+many entries on how many days and — when that day has entries — a jump to
+_one year ago today_. It sits under the tag chips rather than above them, so
+a digest that arrives late never pushes the chips down. Dismissing it hides
+it for the rest of the week, per device.
 
 ### Mobile
 
-The same journal on a phone. Bottom tabs switch between Scrawl, Note and
-Settings; the capture bar floats above the keyboard.
+The same journal on a phone. Bottom tabs switch between Scrawl, Note, Codex
+and Settings; the capture bar floats above the keyboard.
 
-![Mobile timeline](images/mobile-timeline.png)
+![Scrawl on a phone](images/mobile-timeline.png)
 
 ### Promote an entry into a note
 
@@ -37,16 +38,24 @@ breaks the link.
 
 ## Note — a Typora-style Markdown workspace
 
-Note (formerly Notes) holds plain Markdown files. The list pane groups them by date; the detail
-pane shows a rendered preview with a **title field** above it. The title is
-the note's leading `# heading` — there is no separate title in the
-frontmatter, so the file stays readable in any Markdown tool and the heading
-can never drift from the title. Press Enter in the field to drop into the
-body. **Tap anywhere in the preview to start
-editing** — the caret lands on the character you tapped. Saving is automatic
+Note (formerly Notes) holds plain Markdown files. The list pane gives each
+note one line, grouped by how recently it was created; the detail pane shows
+the body with a **title field** above it. The title is the note's leading
+`# heading` — there is no separate title in the frontmatter, so the file
+stays readable in any Markdown tool and the heading can never drift from
+the title. Press Enter in the field to drop into the body.
+
+**There is no edit mode.** The editor is live from the moment the note is
+open — what you see is already the thing you type into, so there is no button
+to find and no state to be in the wrong one of. Saving is automatic
 (debounced), and the first content-changing save of a session keeps the
-pre-edit body on the device, so ノート情報 → 編集前に戻す can undo an
-accidental edit — press it again to swap back.
+pre-edit body on the device, so the `…` menu's 編集前に戻す (`⌘⇧R`) can undo
+an accidental edit — press it again to swap back.
+
+Everything else a single note needs is behind that one `…` button (`⌘.`),
+because none of it is used often enough to sit in the way of writing: lay the
+map alongside, make the note read-only, revert, ノート情報, delete, and — for
+a Note — Codex にする.
 
 The ノート情報 panel is also where a note's records live: the creation time
 (editable), the tags, the device context it was captured on, and — once the
@@ -55,9 +64,10 @@ pinned to the filename order, so the update time is the only place a rewrite
 shows up. Changing metadata or the view mode is not a rewrite and leaves it
 alone.
 
-A note that is done being written can be parked in a **read-only view**
-(frontmatter `view: preview`): the same rendered page, except that tapping
-the body no longer starts an edit and the title field is fixed. The choice
+A note that is done being written can be parked in a **read-only view** —
+`…` → 読み取り専用にする, frontmatter `view: preview`. The editor is not
+raised at all: the body is a rendered page, the title field is fixed, and the
+list row wears a small padlock so you know before you open it. The choice
 lives in the file, so it follows the note to every device.
 
 ![Editor with note links](images/editor-links.png)
@@ -69,13 +79,17 @@ mermaid skips `%%` lines, so the note still draws anywhere else. Hovering a
 code block or a figure reveals a small toolbar: copy the code, or open the
 diagram full screen and save it as SVG or PNG (the file is named after the
 note and the diagram's position). The full-screen view zooms around the
-cursor with the wheel or a pinch, drags to pan, and closes with Esc. A per-note
-**mindmap view** (frontmatter `view: mindmap`) turns the heading/list
-structure into a markmap. One button in the note's header cycles the three
-views — editor, mindmap, read-only — and shows the icon of whichever comes
-next:
+cursor with the wheel or a pinch, drags to pan, and closes with Esc. A
+per-note **map** — `…` → マップを並べる (`⌘⇧M`), frontmatter `view: mindmap` —
+turns the heading and list structure into a markmap. It is laid _alongside_
+the body rather than in place of it, so the text you are reading it against
+stays on screen; only below 1100px, where there is no room for two, does it
+take the body's place:
 
-![Mindmap view](images/mindmap.png)
+![A document with its markmap alongside](images/mindmap.png)
+
+The shot is taken on a Codex, which is why a version spine stands to the left
+of the body; the map itself is the same on either surface.
 
 ## Note links and backlinks
 
@@ -104,27 +118,67 @@ every link to it, it just moves from `data/notes/` to `data/codex/`. The move
 is one-way — a Codex is defined by the history it accumulates, and that
 history has nowhere to go if the document turns back into a plain Note.
 
-A Codex opens in the same editor as a Note. What it adds is on purpose: the
-body is a draft until you commit a version, and the versions travel with the
-file through sync, so the history is the same on every device.
+A Codex opens in the same editor as a Note — same title field, same
+always-open body, same autosave. What it adds is on purpose: the body is a
+draft until you commit a version, and the versions travel with the file
+through sync, so the history is the same on every device.
 
-Nothing is committed for you. 版を刻む… in the `…` menu saves the draft,
-asks for a one-line message (it may stay empty) and writes a version; the
-meta line then reads 版 3 or 版 3 · 変更あり so you can see at a glance
-whether the draft has moved on since the last commit. 履歴 replaces the
-body with the list of versions, newest first, each with its time, message
-and size change. Pick one to see what changed between that version and the
-current draft, as a unified diff in the same colours as a ```diff fence.
-この版に戻す makes that version the draft again, and the draft you are
-leaving is committed first as _before restore_, so a restore is itself
-undoable from the same list. A read-only Codex cannot be restored, for the
-same reason it cannot be edited.
+Three things tell a Codex from a Note, and none of them is a mode you have to
+enter:
 
-On disk a version is `data/codex/<id>/<time>-<hash>.md`: plain Markdown with
-`time` and `message` frontmatter, so `diff -u` in a terminal works as well as
-the app does. Versions are not the local `history/` copies the CLI and MCP
-take before overwriting — those are a safety net on one device; versions are
-part of the document.
+- **The list row** carries a folded-corner page with the number of versions
+  in it. Its frame says which of three states the document is in — no
+  versions yet, versions and the draft matching the newest one, or the draft
+  having moved on since then. The row stays one line.
+- **A spine** stands to the left of the body: a narrow rail of dots, one per
+  version, while you write, widening into the version list when you open the
+  history. It needs room to stand beside the body, so it is absent on phones,
+  and below 1100px it stays collapsed and the history arrives as a horizontal
+  card under the title that you drag or tap to send versions.
+- **The meta line** under the title reads how far the draft has travelled and
+  how often you commit — 版 4 から +312 B · 9 か月で 4 回刻んだ
+  ("+312 B since v4 · 4 versions in 9 months"). The two halves are
+  independent: a draft that matches the newest version drops the distance and
+  reads 版 4 · 9 か月で 4 回刻んだ, and a Codex with no versions has no
+  cadence to report either, so the line is just 版なし.
+
+Nothing is committed for you, and committing asks nothing of you. 版を刻む in
+the `…` menu (`⌘⇧K`) flushes whatever save is still in flight and writes the
+version at once — no message prompt, because a version is named by its number
+and its day, and being asked for a sentence is what stops people committing at
+all. The toast that follows does the summarising (版 5 を刻みました · 版 4 から
++312 B · 7 日ぶり) and carries an Undo that deletes the file just written.
+
+履歴 in the same menu opens the spine rather than replacing the body. The body
+stays where it is and turns read-only, and the difference between the version
+you picked and the draft appears in its margin: a `+` beside every block that
+changed, a `−` beside every block that is gone — struck through and faint, in
+the place it used to occupy. Walk the versions with the spine (`↑`/`↓` once
+a row has focus) or with the card, and the marks move with them; `Esc`
+closes the history and the editor comes back. この版に戻す makes that version
+the draft again, and the draft you are leaving is committed first as
+_before restore_, so a restore is itself undoable from the same list. A
+read-only Codex cannot be restored, for the same reason it cannot be edited.
+
+On disk a version is
+`data/codex/<id>/<YYYYMMDD_HHMMSS>-<first 8 hex of the body's SHA-256>.md`:
+plain Markdown with `time` and `message` frontmatter, so `diff -u` in a
+terminal works as well as the app does. The app leaves `message` empty — the
+only one it writes is `before restore`, and the history shows that version as
+戻す前 instead of a date. Committing the same body twice in the same second
+on one device is one version: the file is already there and comes back
+untouched. Two devices are not that story. The name carries the committing
+device's wall clock cut to the second, so two devices on different offsets
+write two names for the same instant and the same body, and the history
+shows two rows. Line the offsets up and the names do match — but `time` in
+the frontmatter is the full timestamp, nanoseconds and offset included, so
+the bytes differ, and sync meets a key it has no record for whose two sides
+disagree: that is a conflict. The local copy keeps the key and the other is
+set aside under `conflicts/codex/<id>/<version>/<timestamp>.md`, outside
+`data/`. Nothing is lost either way; what you get is a version that did
+not fold. Versions are not the local `history/` copies the CLI and MCP
+take before overwriting — those are a safety net on one device; versions
+are part of the document and sync with it.
 
 ## Glyphs — your own inline symbols
 
@@ -165,6 +219,49 @@ show their count, and the empty message names the tags it looked inside.
 
 ![Command palette](images/palette.png)
 
+The palette also lists the app's **commands** — new note, the three modes,
+sync now, settings — each with its key down the right-hand side.
+
+## Keyboard
+
+There is no cheat sheet to look up, because the app can show you the keys in
+the place they belong. Hold ⌘ (Ctrl on anything that is not a Mac) for a
+moment and a badge floats on the shoulder of the buttons in the chrome — the
+three mode tabs, sync, Settings, and the open note's `…` — with a pill
+explaining how to make them go away; let go and they are gone. The search
+field carries its `⌘K` printed in the field itself, so it needs no badge, and
+`⌘N` is shown where 新規ノート is, in the palette. And `?`, pressed anywhere
+you are not typing, opens the palette on that command list.
+
+The ones worth learning first:
+
+| Key                | What it does             |
+| ------------------ | ------------------------ |
+| `⌘K`               | The search palette       |
+| `⌘N`               | A new note               |
+| `⌘1` / `⌘2` / `⌘3` | Scrawl / Note / Codex    |
+| `⌘.`               | The open note's `…` menu |
+| `⌘⇧S`              | Sync now                 |
+
+That list is the palette's command section, so it holds the six global
+commands and nothing else — a new note, the three modes, sync now, and `⌘,`
+for Settings. The keys that need a note open are not in it: they are written
+down the right-hand side of the note's own `…` menu, the one `⌘.` opens —
+`⌘⇧M` for the map, `⌘⇧R` to revert, `⌘⇧I` for ノート情報, `⌘⇧K` to commit a
+Codex version. `⌘↑` / `⌘↓` walk the list pane and are printed nowhere at
+all; they answer only while the caret is outside every field you can type
+in — not just the title and the body, but the palette's search box and the
+time and tag fields of ノート情報 as well — so they step through notes once
+you have clicked away from what you are writing. With the caret in any of
+them they are left alone, and stay the jump to the top or the bottom of
+what you are typing. Where a Mac reads ⌘⇧, every other platform reads
+Ctrl+Shift.
+
+The badges, the palette's right-hand column, the keys in the note menu and
+the key handling itself all read one table in
+[`tauri-app/src/lib/shortcuts.ts`](../tauri-app/src/lib/shortcuts.ts),
+so a key that is written in two places cannot come to mean two things.
+
 ## Language
 
 The interface speaks Japanese or English. It follows the system language on
@@ -187,9 +284,17 @@ change-detection protocol.
 
 ## Android widgets
 
-Three home-screen widgets ship with the APK: a Timeline capture bar (writes
-through JNI without launching the app), a "new note" bar, and a recent notes
-list that deep-links into the app.
+Four home-screen widgets ship with the APK:
+
+| Widget             | Size | What a tap does                                                                                                              |
+| ------------------ | ---- | ---------------------------------------------------------------------------------------------------------------------------- |
+| タイムラインに記録 | 4×1  | Opens a sheet over the home screen and appends to today's Scrawl through a JNI call into the core — the app is never started |
+| 新しいノート       | 4×1  | `magical-merchant://widget/new-note`                                                                                         |
+| 最近のノート       | 4×2  | The four newest notes; a row opens that note, the header plus makes a new one                                                |
+| テンプレート       | 4×3  | Three templates; a row creates today's note from it (or opens the one that already exists)                                   |
+
+All four are deep links into the app except the capture bar, which is the one
+that exists so that recording costs nothing — no launch, no wait.
 
 ## Terminal (CLI)
 
@@ -256,9 +361,10 @@ The CLI finds the app's data directory on its own; `--data-dir` or
 
 ## AI access (MCP)
 
-`magical-merchant mcp` exposes the same core as read-only
+`magical-merchant mcp` exposes the same core as
 [Model Context Protocol](https://modelcontextprotocol.io/) tools for AI
-assistants; `nix run …#mcp` is that command. It finds the app's data
+assistants; `nix run …#mcp` is that command. It is read-only by default and
+says so in the instructions it hands the client. It finds the app's data
 directory on its own, so the usual client configuration is just the launch
 command:
 
@@ -279,27 +385,39 @@ written — local time, GPS coordinates (and the place name the app resolved
 for them), battery, network type, and which device wrote it — so an agent
 can line the journal up with other time- or location-based data.
 
-| Tool                  | Description                                                         |
-| --------------------- | ------------------------------------------------------------------- |
-| `list_notes`          | List all notes with tags, a short preview, and their origin         |
-| `read_note`           | Read a note's metadata (time, tags, context) and Markdown body      |
-| `backlinks`           | List the records that link to a note with `[[…]]`                   |
-| `search`              | Search notes and timeline entries, optionally within a set of tags  |
-| `list_timeline_dates` | List the dates that have timeline entries                           |
-| `read_timeline`       | Read one day's entries with time, text, tags, location, and device  |
-| `read_timeline_range` | Read entries between two days, optionally filtered by tag           |
-| `list_places`         | Places (~1 km cells) records were written at, with names and counts |
-| `list_tags`           | Every `#tag` with note and entry counts                             |
-| `list_templates`      | List note templates                                                 |
-| `read_template`       | Read a template's body and tags                                     |
-| `list_glyphs`         | Registered glyphs with the `:name:` shortcode that renders each one |
+| Tool                  | Description                                                                                          |
+| --------------------- | ---------------------------------------------------------------------------------------------------- |
+| `list_notes`          | List all notes with their `kind` (`note` / `codex`), tags, a short preview, and their origin         |
+| `read_note`           | Read a note's metadata (time, tags, context) and Markdown body                                       |
+| `backlinks`           | List the records that link to a note with `[[…]]`                                                    |
+| `search`              | Search notes, codex and timeline entries, optionally within a set of tags; each hit says which it is |
+| `list_timeline_dates` | List the dates that have timeline entries                                                            |
+| `read_timeline`       | Read one day's entries with time, text, tags, location, and device                                   |
+| `read_timeline_range` | Read entries between two days, optionally filtered by tag                                            |
+| `list_places`         | Places (~1 km cells) records were written at, with names and counts                                  |
+| `list_tags`           | Every `#tag` with note and entry counts                                                              |
+| `list_templates`      | List note templates                                                                                  |
+| `read_template`       | Read a template's body and tags                                                                      |
+| `list_glyphs`         | Registered glyphs with the `:name:` shortcode that renders each one                                  |
 
-With `--allow-write` the server also offers writing tools. Notes are
+What an agent cannot do is keep a Codex's history: there is no tool to
+commit, list, diff or restore a version. Committing is a person saying
+"this far", which is not a decision to hand to a model; the versions are
+plain Markdown under `data/codex/<id>/`, so an agent that has been given
+the data directory can still read them with `diff -u`.
+
+With `--allow-write` the server also offers writing tools, and its
+instructions say so instead of claiming to be read-only. Notes are
 plain Markdown, so a body can hold anything the app renders — Mermaid
 diagrams in a fenced `mermaid` block, `[[YYYYMMDD_HHMMSS]]` links to other
 notes, `#tags`, `:name:` glyph shortcodes (ask `list_glyphs` for the
 vocabulary). The server writes the frontmatter itself and keeps it intact
-on updates; the body is all a client sends.
+on updates; the body is all a client sends. A Codex's draft is written the
+same way: `update_note` resolves the ID with `locate_note`, which looks in
+`data/codex/` before `data/notes/`, so an agent edits the body of a
+document that keeps versions without having to know it is one, and
+`list_note_history` / `restore_note` reach it too. Making a Codex is still
+the app's — `create_note` only ever writes into `data/notes/`.
 
 Every overwrite first saves a full copy of the previous version under
 `<data-dir>/history/` (outside the synced `data/`), so any change an

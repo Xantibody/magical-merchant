@@ -1,26 +1,42 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="widget_timeline_label">TIMELINE</string>
-    <string name="widget_capture_placeholder">いま何してる?</string>
-    <string name="widget_capture_continue">続きを記録…</string>
-    <string name="widget_capture_bar_label">タイムラインに記録</string>
-    <string name="widget_capture_bar_description">ホーム画面からタイムラインに書き込みます</string>
+<!--
+    Default = English; Japanese lives in values-ja/.
 
-    <string name="quick_capture_send">記録する</string>
-    <string name="quick_capture_failed">保存できませんでした</string>
+    The app picks its language in Settings and keeps the choice inside the
+    WebView (lib/i18n.ts). A widget process never starts the WebView, so that
+    setting is unreachable from here and the split has to be the platform's:
+    the launcher resolves these against the device locale, which also covers the
+    <receiver> labels in the widget picker (android-widget/apply-widget.go).
+    Wording follows the app's own English table where it already has one.
+
+    Keep this file and values-ja/ at the same set of names — a name present in
+    only one of them falls back silently and puts an English string into a
+    Japanese widget.
+-->
+<resources>
+    <!-- The app calls this surface Scrawl; only the route and the code still say
+         timeline, so the resource name stays and the value follows the UI. -->
+    <string name="widget_timeline_label">SCRAWL</string>
+    <string name="widget_capture_placeholder">What\'s on your mind?</string>
+    <string name="widget_capture_continue">Keep going…</string>
+    <string name="widget_capture_bar_label">Scrawl</string>
+    <string name="widget_capture_bar_description">Writes to Scrawl from the home screen</string>
+
+    <string name="quick_capture_send">Send</string>
+    <string name="quick_capture_failed">Could not save</string>
 
     <string name="widget_notes_label">NOTES</string>
-    <string name="widget_notes_new_title">新しいノート</string>
-    <string name="widget_notes_new_placeholder">タップして書き始める</string>
-    <string name="widget_notes_new_widget_label">新しいノート</string>
-    <string name="widget_notes_new_description">新しいノートを開いて書き始めます</string>
-    <string name="widget_notes_list_label">最近のノート</string>
-    <string name="widget_notes_list_description">最近のノートを開きます</string>
-    <string name="widget_notes_empty">ノートがありません</string>
+    <string name="widget_notes_new_title">New note</string>
+    <string name="widget_notes_new_placeholder">Tap to start writing</string>
+    <string name="widget_notes_new_widget_label">New note</string>
+    <string name="widget_notes_new_description">Opens a new note, ready to write in</string>
+    <string name="widget_notes_list_label">Recent notes</string>
+    <string name="widget_notes_list_description">Opens one of your recent notes</string>
+    <string name="widget_notes_empty">No notes yet</string>
 
     <string name="widget_templates_label">TEMPLATES</string>
     <string name="widget_templates_app">Magical Merchant</string>
-    <string name="widget_templates_widget_label">テンプレート</string>
-    <string name="widget_templates_description">テンプレートからノートを作ります</string>
-    <string name="widget_templates_empty">テンプレートを作る</string>
+    <string name="widget_templates_widget_label">Templates</string>
+    <string name="widget_templates_description">Makes a note from a template</string>
+    <string name="widget_templates_empty">Make a template</string>
 </resources>

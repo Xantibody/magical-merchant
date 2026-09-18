@@ -27,6 +27,17 @@ class TemplatesWidgetProvider : AppWidgetProvider() {
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray,
     ) {
+        // Same reason as the capture bar: a throw out of onUpdate kills the
+        // broadcast and freezes the widget on its last frame.
+        runCatching { render(context, appWidgetManager, appWidgetIds) }
+            .onFailure { WidgetLog.error("templates not redrawn", it) }
+    }
+
+    private fun render(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetIds: IntArray,
+    ) {
         val templates = WidgetBridge.readTemplateRows(context)
         val views = RemoteViews(context.packageName, R.layout.widget_templates).apply {
             SLOTS.forEachIndexed { index, slot ->

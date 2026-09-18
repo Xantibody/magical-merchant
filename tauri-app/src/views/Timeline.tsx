@@ -107,6 +107,24 @@ export default function Timeline(): JSX.Element {
   const [confirming, setConfirming] = createSignal(false);
   /** 削除の実行中。連打で同じ行を二度消さないための鍵。 */
   const [deleting, setDeleting] = createSignal(false);
+  /** 選択にまつわる 3 つを一度に畳む。抜け方はどこから戻っても同じ。 */
+  const exitSelecting = (): void => {
+    setSelecting(false);
+    setSelected(new Set<string>());
+    setConfirming(false);
+  };
+  /**
+   * 一覧を読み直す前に選択を畳む。選択は `date#index` で行を指すので、
+   * 読み直しで同じ日の前に行が増えるとその index は隣の記録を指す。
+   * 選び直しは確認バーを 1 つ押し直すだけ、誤削除は取り返しがつかない。
+   */
+  const dropSelectionForReload = (): void => {
+    if (!selecting()) {
+      return;
+    }
+    exitSelecting();
+    shell.showToast(t().timeline.selectionCleared);
+  };
 
   const [timeline, { refetch, mutate }] = createResource(extraDates, loadTimeline);
   // 昇格ノートのチップに使う。タイムラインの描画は待たない — ノート一覧が
@@ -121,12 +139,19 @@ export default function Timeline(): JSX.Element {
     on(
       shell.dataVersion,
       () => {
+        // 行が入れ替わる前に選択ごと畳む
+        dropSelectionForReload();
         void refetch();
         void refetchNotes();
       },
       { defer: true },
     ),
   );
+
+  // 読み直しの引き金は refetch だけではない。extraDates はリソースの源なので、
+  // カレンダーや「1年前の今日」が日を足すだけでも一覧は丸ごと取り直される。
+  // 畳むのは日を足す関数の中ではなく源の側 — 足し手が増えても穴が開かない
+  createEffect(on(extraDates, dropSelectionForReload, { defer: true }));
 
   const entries = createMemo(() => timeline()?.items ?? []);
   // 地名は記録の一部ではないので、これを待って一覧を出さない。座標のまま先に
@@ -271,12 +296,6 @@ export default function Timeline(): JSX.Element {
   };
 
   // ---- まとめて削除（選択 → 確認 → 実行）----
-  const exitSelecting = (): void => {
-    setSelecting(false);
-    setSelected(new Set<string>());
-    setConfirming(false);
-  };
-
   const toggleSelected = (id: string): void => {
     // 選び直したら確認は仕切り直す。件数の変わった確認をそのまま実行させない
     setConfirming(false);
@@ -303,7 +322,11 @@ export default function Timeline(): JSX.Element {
       // 同じ日の index は前の削除で行が繰り上がると意味が変わるので、並列にせず順に消す
       for (const target of plan) {
         // oxlint-disable-next-line no-await-in-loop
-        await typedInvoke("delete_timeline_entry", { date: target.date, index: target.index });
+        await typedInvoke("delete_timeline_entry", {
+          date: target.date,
+          index: target.index,
+          raw: target.raw,
+        });
       }
       await Promise.all(
         [...new Set(plan.map((target) => target.date))].map((date) => reloadDay(date)),

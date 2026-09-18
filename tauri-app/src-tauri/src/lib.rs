@@ -151,15 +151,18 @@ struct NoteRead {
     revision: String,
 }
 
-/// 起動してから一度だけの後始末。最初の一覧より前に、そして最初の同期より前に。
+/// 起動してから一度だけの後始末。最初の一覧より前に。
 ///
 /// setup でやらないのは、Android の `app_data_dir` がメインスレッドから
 /// 呼べないのと、修復前の一覧が一瞬でも画面に出るのを避けるため。
 /// どちらも失敗しても黙って進む — ノートが読めなくなるよりはましで、
 /// 次の起動でまた試す。
 ///
-/// 引っ越しを同期より前に済ませるのが要点。あとになると、`data/` に
-/// 残った競合コピーを走査が拾って、残骸を全端末へ配ってしまう。
+/// 同期のための修復ではない。それはエンジンが `.sync.lock` の内側でやる
+/// (`core/src/sync/engine.rs`)。ここに残っているのは、同期を一度もしない
+/// 使い方でも一覧が壊れたノートを並べないようにするため。
+///
+/// AIDEV-NOTE: 起動時のこれはロックの外。CLI の同期と重なる窓は残る — 閉じるなら `try_lock` して取れなければ飛ばす
 pub(crate) fn repair_once(base_dir: &std::path::Path) {
     static REPAIR: std::sync::Once = std::sync::Once::new();
     REPAIR.call_once(|| {
@@ -395,11 +398,18 @@ fn read_timeline_by_date(handle: AppHandle, date: String) -> Result<Vec<String>,
     magical_merchant_core::read_timeline(&base_dir, naive).map_err(|e| e.to_string())
 }
 
+/// `raw` は画面が読んだときの行。index と合わせて「どの記録か」を指す。
 #[tauri::command]
-fn delete_timeline_entry(handle: AppHandle, date: String, index: usize) -> Result<(), String> {
+fn delete_timeline_entry(
+    handle: AppHandle,
+    date: String,
+    index: usize,
+    raw: String,
+) -> Result<(), String> {
     let base_dir = app_base_dir(&handle)?;
     let naive = chrono::NaiveDate::parse_from_str(&date, "%Y-%m-%d").map_err(|e| e.to_string())?;
-    magical_merchant_core::delete_timeline_entry(&base_dir, naive, index).map_err(|e| e.to_string())
+    magical_merchant_core::delete_timeline_entry(&base_dir, naive, index, &raw)
+        .map_err(|e| e.to_string())
 }
 
 /// 座標を地名に直す。引けたものだけを `"緯度,経度"` のキー付きで返す。

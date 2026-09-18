@@ -96,10 +96,15 @@ export async function renderDiagrams(sources: string[]): Promise<(string | null)
     startOnLoad: false,
     // ノートは同期先から降ってくることもある。ラベルの HTML は DOMPurify に通す
     securityLevel: "strict",
-    // ラベルを foreignObject(HTML)ではなく SVG の text で描く。foreignObject が
-    // あると PNG に描くときに canvas が汚染されて書き出せない。ラベル内の
-    // <br/> や太字の見え方は変わる
-    flowchart: { htmlLabels: false },
+    // ラベルを foreignObject(HTML)ではなく SVG の text で描く。<img> として
+    // 読んだ SVG の中の foreignObject はブラウザが描かないので、残っていると
+    // PNG から文字だけが消える。ラベル内の <br/> や太字の見え方は変わる。
+    // AIDEV-NOTE: 図ごとの htmlLabels(flowchart.htmlLabels)は mermaid 11 で無効。根元のこれだけが効く
+    htmlLabels: false,
+    // `secure` に載せた鍵は図の中の `%%{init: …}%%` から書き換えられない。mermaid の
+    // sanitize は入れ子にも同じ名前で降りるので、flowchart.htmlLabels もこれで落ちる。
+    // AIDEV-NOTE: 既定の secure は配列。initialize の配列は置換ではなく和で混ざるので既定の鍵は残る
+    secure: ["htmlLabels"],
     ...themeConfig(),
   });
 

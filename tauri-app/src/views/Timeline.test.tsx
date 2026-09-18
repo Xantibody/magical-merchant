@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, cleanup, within } from "@solidjs/testing-library";
+import { render, screen, fireEvent, cleanup, within, waitFor } from "@solidjs/testing-library";
 import { mockIPC, mockWindows, clearMocks } from "@tauri-apps/api/mocks";
 import { page } from "vitest/browser";
 import { MemoryRouter, Route } from "@solidjs/router";
-import { ShellProvider } from "../lib/shell";
+import { ShellProvider, useShell } from "../lib/shell";
+import type { Shell } from "../lib/shell";
 import Timeline from "./Timeline";
 
 /**
@@ -18,24 +19,39 @@ const NOW = new Date();
 const TODAY = isoOf(NOW);
 const YEAR_AGO = isoOf(new Date(NOW.getFullYear() - 1, NOW.getMonth(), NOW.getDate()));
 
+/**
+ * 一覧が最初に載せるのは直近 14 日ぶんだけ。記録のある日をその数だけ並べると
+ * 1 年前は載らない日になり、そこへ飛ぶと一覧ごと読み直される。
+ */
+const RECENT_DATES = Array.from({ length: 14 }, (_, back) =>
+  isoOf(new Date(NOW.getFullYear(), NOW.getMonth(), NOW.getDate() - back)),
+);
+
+/**
+ * タグの綴りを見るための日。最初から載っていて、かつ「今週」(月曜起点)には
+ * 決して入らない 10 日前に置く — 今日へ足すと週の要約の件数が動き、1 年前へ
+ * 置くと最初は載らない日になってしまう。
+ */
+const TAG_DAY = isoOf(new Date(NOW.getFullYear(), NOW.getMonth(), NOW.getDate() - 10));
+
 const DAYS: Record<string, string[]> = {
   [TODAY]: ["- [08:15:00] 朝ラン 5km #運動", "- [21:34:00] ベガのラッシュ止まらん #SF6"],
-  [YEAR_AGO]: [
+  [TAG_DAY]: [
     // 綴りが 1 つしかないタグ。後から大文字で記録すると代表表記が入れ替わる
     "- [11:00:00] 小文字だけで書いた #run",
-    "- [12:00:00] 去年のきょう",
     // 同じタグを大小違いで書いた 2 件。チップは 1 つに畳まれるので、絞り込みも
     // 同じ畳み方でなければ片方が一覧から消える
     "- [12:30:00] 小文字で書いた #memo",
     "- [12:40:00] 大文字で書いた #Memo",
   ],
+  [YEAR_AGO]: ["- [12:00:00] 去年のきょう"],
 };
 
 /** 記録すると書き換わるので、テストごとに作り直す。 */
 let days: Record<string, string[]>;
 
 const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
-  list_timeline_dates: () => [TODAY, YEAR_AGO],
+  list_timeline_dates: () => [...RECENT_DATES, YEAR_AGO],
   read_timeline_by_date: ({ date }) => days[String(date)] ?? [],
   list_notes: () => [],
   // 追記なので、その日のいちばん新しい 1 件になる
@@ -44,10 +60,22 @@ const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
   },
 };
 
+/**
+ * 画面の外から再読込を頼む口。同期やフォーカス復帰が押すのと同じ
+ * `refreshData` で、トーストもここから読む。
+ */
+let shell: Shell;
+
+function ShellHandle(): null {
+  shell = useShell();
+  return null;
+}
+
 /** 一覧が届くまで待つ。時刻の欄はエントリ 1 件につき 1 つだけ出る。 */
 async function openTimeline(): Promise<void> {
   render(() => (
     <ShellProvider>
+      <ShellHandle />
       <MemoryRouter>
         <Route path="/" component={Timeline} />
       </MemoryRouter>
@@ -180,5 +208,80 @@ describe("Timeline › 選択の入り口", () => {
     expect(screen.getByRole("toolbar", { name: "まとめて削除" }).textContent).toContain(
       "消すエントリを選んでください",
     );
+  });
+});
+
+describe("Timeline › 選択中の読み直し", () => {
+  beforeEach(setupTimeline);
+  afterEach(teardownTimeline);
+
+  /**
+   * 選択は `date#index` で行を指す。確認バーを出したまま別アプリへ移り、
+   * 戻ったときの自動再読込が同じ日の前へ 1 行足していると、同じ index は
+   * 隣の記録を指す。読み直したら選択は畳む — 隣を消してからでは遅い。
+   */
+  it("drops the selection when the list is reloaded under it", async () => {
+    await openTimeline();
+    fireEvent.click(screen.getByRole("button", { name: "選択" }));
+    fireEvent.click(screen.getByRole("button", { name: /朝ラン/u }));
+    fireEvent.click(screen.getByRole("button", { name: "削除 (1件)" }));
+    expect(screen.getByRole("toolbar", { name: "まとめて削除" }).textContent).toContain(
+      "1件のエントリを削除します",
+    );
+
+    shell.refreshData();
+
+    await waitFor(() => {
+      expect(screen.queryByRole("toolbar", { name: "まとめて削除" })).toBeNull();
+    });
+    expect(screen.getByRole("button", { name: "選択" })).toBeDefined();
+  });
+
+  /**
+   * 読み直しを起こすのは `refreshData` だけではない。まだ載っていない日へ
+   * 飛ぶと、リソースは一覧ごと取り直す — そのあいだに外から書かれていれば
+   * 同じ index は隣の記録を指す。日を足す経路でも選択は畳む。
+   */
+  it("drops the selection when a jump to an unloaded day reloads the list", async () => {
+    await openTimeline();
+    fireEvent.click(screen.getByRole("button", { name: "選択" }));
+    fireEvent.click(screen.getByRole("button", { name: /朝ラン/u }));
+    fireEvent.click(screen.getByRole("button", { name: "削除 (1件)" }));
+    expect(screen.getByRole("toolbar", { name: "まとめて削除" })).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: "1年前の今日の記録を見る" }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("toolbar", { name: "まとめて削除" })).toBeNull();
+    });
+    expect(screen.getByRole("button", { name: "選択" })).toBeDefined();
+    expect(shell.toast()?.message).toBe("一覧を読み直したので選択を解除しました");
+    // 飛んだ先はちゃんと足されている（選択を畳むだけで終わっていない）
+    await expect(screen.findByText("去年のきょう")).resolves.toBeDefined();
+  });
+
+  // 黙って消えると、押したはずの削除が効かなかったようにしか見えない
+  it("says why the selection went away", async () => {
+    await openTimeline();
+    fireEvent.click(screen.getByRole("button", { name: "選択" }));
+    fireEvent.click(screen.getByRole("button", { name: /朝ラン/u }));
+
+    shell.refreshData();
+
+    await waitFor(() => {
+      expect(shell.toast()?.message).toBe("一覧を読み直したので選択を解除しました");
+    });
+  });
+
+  // 選んでいないときの読み直しは、ただの再取得。言うことは何も無い
+  it("stays quiet when nothing was selected", async () => {
+    await openTimeline();
+
+    shell.refreshData();
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "選択" })).toBeDefined();
+    });
+    expect(shell.toast()).toBeNull();
   });
 });

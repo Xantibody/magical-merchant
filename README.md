@@ -5,17 +5,18 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License"></a>
 </div>
 
-![Timeline](docs/images/timeline.png)
+![Scrawl](docs/images/timeline.png)
 
 ## Features
 
 - **Scrawl** (formerly Timeline) — a day-grouped capture journal with tags, device/place
   context, a calendar jump, and a weekly digest (including _one year ago
   today_)
-- **Note** (formerly Notes) — Markdown files in a Typora-style Milkdown editor; a title field that is
-  the body's own `# heading`, tap anywhere in the preview to edit, autosave
-  with a local one-step revert, Shiki code highlighting, Mermaid diagrams,
-  and a per-note mindmap or read-only view
+- **Note** (formerly Notes) — Markdown files in a Typora-style Milkdown
+  editor with no edit mode: the editor is live from the moment a note is
+  open. A title field that is the body's own `# heading`, autosave with a
+  local one-step revert, Shiki code highlighting, Mermaid diagrams, and a
+  per-note markmap laid alongside the text or a read-only view
 - **Scrawl grows into Note** — promote a Scrawl entry into a note; the two
   stay linked through the note's `origin` frontmatter
 - **Note grows into Codex** — a document you keep adding to; it lives in its
@@ -25,8 +26,15 @@
   that point at it
 - **`⌘K` palette** — recent notes / today / tags before you type, full-text
   search with highlighted matches, exact landing on the note or day
+- **Keys you are shown, not told** — hold ⌘ and a badge floats on the
+  buttons in the chrome: the three mode tabs, sync, Settings, and the open
+  note's `…`. `?` opens the palette on its command list — the six global
+  commands, and only those. The note-scoped keys the `…` menu has a row for
+  are printed beside those rows; `⌘↑` / `⌘↓`, which step through the list,
+  are printed nowhere
 - **Optional sync** — Cloudflare Workers + R2, conflict-safe, with Android
-  home-screen widgets and a read-only MCP server for AI assistants
+  home-screen widgets and an MCP server for AI assistants — read-only unless
+  you start it with `--allow-write`
 - **Your own editor** — a CLI lists notes and opens one in `$EDITOR`; edits
   go back through the same guarded path as the app, so nothing gets
   overwritten silently. `import` takes in notes written elsewhere, each

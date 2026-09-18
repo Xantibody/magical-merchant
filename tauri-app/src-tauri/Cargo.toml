@@ -33,11 +33,23 @@ reqwest = { version = "0.13", default-features = false, features = [
   "json",
   "rustls",
 ] }
-tokio = { version = "1", features = ["macros", "sync"] }
+# ループバックのコールバックの口は tokio で待つ。net / time / io-util / rt は
+# これまで依存側の feature unification 頼みで有効になっていた — 上流が feature
+# を絞った日に落ちるので、使うものは全部ここに書く
+tokio = { version = "1", features = [
+  "io-util",
+  "macros",
+  "net",
+  "rt",
+  "sync",
+  "time",
+] }
 url = "2"
 sha2 = "0.11"
 tauri-plugin-opener = "2"
 urlencoding = "2.1.3"
+# ループバックのコールバックを 1 回限りにする nonce。tauri が既に持っている
+uuid = { version = "1", features = ["v4"] }
 base64 = "0.23"
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"

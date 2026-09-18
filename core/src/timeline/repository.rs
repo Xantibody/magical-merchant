@@ -74,14 +74,18 @@ impl Timeline {
         }
     }
 
+    /// `raw` は書き手が読んだときの行。index がその行を指していなければ書かない。
     pub(crate) fn update_entry(
         &self,
         date: NaiveDate,
         index: usize,
+        raw: &str,
         text: &str,
     ) -> Result<(), CoreError> {
-        self.rewrite(date, |entries| {
-            let entry = entries
+        self.rewrite(date, |day| {
+            expect_same_entry(day, index, raw)?;
+            let entry = day
+                .entries_mut()
                 .get_mut(index)
                 .ok_or_else(|| CoreError::NotFound(format!("timeline entry {index}")))?;
             *entry = replace_entry_text(entry, text);
@@ -89,19 +93,35 @@ impl Timeline {
         })
     }
 
-    pub(crate) fn delete_entry(&self, date: NaiveDate, index: usize) -> Result<(), CoreError> {
-        self.rewrite(date, |entries| {
-            if index >= entries.len() {
-                return Err(CoreError::NotFound(format!("timeline entry {index}")));
-            }
-            entries.remove(index);
+    /// `raw` は `update_entry` と同じ、書き手が読んだときの行。
+    pub(crate) fn delete_entry(
+        &self,
+        date: NaiveDate,
+        index: usize,
+        raw: &str,
+    ) -> Result<(), CoreError> {
+        self.rewrite(date, |day| {
+            // 範囲の確認も `expect_same_entry` が済ませている — 行が無ければ
+            // 読んだ行とは一致しようがない
+            expect_same_entry(day, index, raw)?;
+            day.entries_mut().remove(index);
             Ok(())
         })
     }
 
+    /// 日を読んで `edit` に渡し、空になっていなければ書き戻す。
+    /// 渡すのが行の `Vec` ではなく `DayLog` なのは、行だけでは畳まれた端末
+    /// 情報を戻せず、読み手が見たのと同じ行を組み立てられないため。
+    ///
+    /// 読んでから書くまでは不可分ではない。`write_atomic` が原子なのは書き込み
+    /// 1 回きりで、`read_raw` → `expect_same_entry` → 書き の間に同じ日へ書かれ
+    /// れば、古い `DayLog` を突き合わせて書き戻す — 割り込んだ記録は消える。
+    /// 塞ぐにはこの日ファイルへ書く全員が 1 つのロックを取る必要がある:
+    /// `save_entry` と、同期の `write_under` / `delete_local_file`。
+    // AIDEV-NOTE: 読み→照合→書きは不可分でない。SyncLock 流用は capture が busy で落ちるので見送り、排他は別 PR
     fn rewrite<F>(&self, date: NaiveDate, edit: F) -> Result<(), CoreError>
     where
-        F: FnOnce(&mut Vec<String>) -> Result<(), CoreError>,
+        F: FnOnce(&mut DayLog) -> Result<(), CoreError>,
     {
         let file_path = timeline_file_path(&self.base_dir, date);
         let Some(content) = self.read_raw(date)? else {
@@ -109,7 +129,7 @@ impl Timeline {
         };
 
         let mut day = DayLog::parse(&content);
-        edit(day.entries_mut())?;
+        edit(&mut day)?;
 
         if day.is_empty() {
             fs::remove_file(&file_path)?;
@@ -119,6 +139,24 @@ impl Timeline {
         write_atomic(&file_path, day.render()?)?;
         Ok(())
     }
+}
+
+/// `index` がいま指している行が、書き手の読んだ `raw` と同じかを確かめる。
+///
+/// 日ファイルは追記で育つので、index は「読んだときの位置」でしかない。同期や
+/// ウィジェットがその日の前へ 1 行足せば、同じ index は隣の記録を指す。
+///
+/// 突き合わせるのは `read` が返した展開後の行。ディスク上の行は端末情報が
+/// frontmatter に畳まれていて、書き手はそれを見ていない。
+// AIDEV-NOTE: ずれは NotFound ではなく Stale — 出口が「読み直して再試行」で、消えた行とは違う
+fn expect_same_entry(day: &DayLog, index: usize, raw: &str) -> Result<(), CoreError> {
+    let Some(entry) = day.expanded_at(index) else {
+        return Err(CoreError::NotFound(format!("timeline entry {index}")));
+    };
+    if entry == raw {
+        return Ok(());
+    }
+    Err(CoreError::Stale(format!("timeline entry {index}")))
 }
 
 /// 本文だけを差し替え、時刻プレフィックスと末尾のコンテキスト JSON は元のまま残す。
@@ -162,7 +200,14 @@ mod tests {
             "- [10:00:00] second {\"battery\":70}",
         ]);
 
-        timeline.update_entry(date(), 1, "rewritten").unwrap();
+        timeline
+            .update_entry(
+                date(),
+                1,
+                "- [10:00:00] second {\"battery\":70}",
+                "rewritten",
+            )
+            .unwrap();
 
         let entries = timeline.read(date()).unwrap();
         assert_eq!(entries[0], "- [09:00:00] first {\"battery\":80}");
@@ -173,7 +218,9 @@ mod tests {
     fn update_entry_keeps_entries_without_context() {
         let (_tmp, timeline) = seed(&["- [09:00:00] plain"]);
 
-        timeline.update_entry(date(), 0, "edited").unwrap();
+        timeline
+            .update_entry(date(), 0, "- [09:00:00] plain", "edited")
+            .unwrap();
 
         assert_eq!(timeline.read(date()).unwrap(), vec!["- [09:00:00] edited"]);
     }
@@ -182,7 +229,14 @@ mod tests {
     fn update_entry_preserves_multiline_text() {
         let (_tmp, timeline) = seed(&["- [09:00:00] one {\"battery\":80}"]);
 
-        timeline.update_entry(date(), 0, "line1\nline2").unwrap();
+        timeline
+            .update_entry(
+                date(),
+                0,
+                "- [09:00:00] one {\"battery\":80}",
+                "line1\nline2",
+            )
+            .unwrap();
 
         assert_eq!(
             timeline.read(date()).unwrap(),
@@ -194,9 +248,69 @@ mod tests {
     fn update_entry_rejects_an_index_past_the_end() {
         let (_tmp, timeline) = seed(&["- [09:00:00] only"]);
 
-        let result = timeline.update_entry(date(), 1, "nope");
+        let result = timeline.update_entry(date(), 1, "- [09:00:00] only", "nope");
 
         assert!(matches!(result, Err(CoreError::NotFound(_))));
+    }
+
+    /// 読んでから書くまでに同じ日の前へ 1 行入ると、同じ index は隣の記録を
+    /// 指す。読んだ行と違うものを指していたら、書かずに断る。
+    #[test]
+    fn update_entry_refuses_a_line_it_did_not_read() {
+        let (_tmp, timeline) = seed(&["- [08:00:00] slipped in", "- [09:00:00] the one I read"]);
+
+        let result = timeline.update_entry(date(), 0, "- [09:00:00] the one I read", "edited");
+
+        assert!(matches!(result, Err(CoreError::Stale(_))));
+        assert_eq!(
+            timeline.read(date()).unwrap(),
+            vec!["- [08:00:00] slipped in", "- [09:00:00] the one I read"]
+        );
+    }
+
+    /// 誤削除はやり直しがきかない。指した行が読んだものと違うなら、
+    /// ファイルには 1 バイトも触れずに断る。
+    #[test]
+    fn delete_entry_refuses_a_line_it_did_not_read() {
+        let (tmp, timeline) = seed(&["- [08:00:00] slipped in", "- [09:00:00] the one I read"]);
+        let before = fs::read_to_string(timeline_file_path(tmp.path(), date())).unwrap();
+
+        let result = timeline.delete_entry(date(), 0, "- [09:00:00] the one I read");
+
+        assert!(matches!(result, Err(CoreError::Stale(_))));
+        assert_eq!(
+            fs::read_to_string(timeline_file_path(tmp.path(), date())).unwrap(),
+            before
+        );
+    }
+
+    /// 突き合わせるのは `read` が返した形。ディスク上の行は端末情報が
+    /// frontmatter へ畳まれているので、そのまま比べると端末を書いた日の
+    /// 削除がすべて断られる。
+    #[test]
+    fn delete_entry_matches_the_line_the_reader_was_given() {
+        let tmp = TempDir::new().unwrap();
+        let timeline = Timeline::new(tmp.path().to_path_buf());
+        let context = Context {
+            battery: Some(56),
+            os: "macos".to_string(),
+            hostname: Some("MacBook".to_string()),
+            ..Context::default()
+        };
+        timeline.save_entry("first", &context, Source::App).unwrap();
+        timeline
+            .save_entry("second", &context, Source::App)
+            .unwrap();
+
+        let today = Local::now().date_naive();
+        let raw = timeline.read(today).unwrap()[1].clone();
+        assert!(raw.contains("\"hostname\":\"MacBook\""));
+
+        timeline.delete_entry(today, 1, &raw).unwrap();
+
+        let entries = timeline.read(today).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert!(entries[0].contains("first"));
     }
 
     #[test]
@@ -207,7 +321,9 @@ mod tests {
             "- [11:00:00] third",
         ]);
 
-        timeline.delete_entry(date(), 1).unwrap();
+        timeline
+            .delete_entry(date(), 1, "- [10:00:00] second")
+            .unwrap();
 
         assert_eq!(
             timeline.read(date()).unwrap(),
@@ -219,7 +335,9 @@ mod tests {
     fn delete_entry_removes_the_file_once_the_day_is_empty() {
         let (tmp, timeline) = seed(&["- [09:00:00] only"]);
 
-        timeline.delete_entry(date(), 0).unwrap();
+        timeline
+            .delete_entry(date(), 0, "- [09:00:00] only")
+            .unwrap();
 
         assert!(!timeline_file_path(tmp.path(), date()).exists());
         assert!(timeline.read(date()).unwrap().is_empty());
@@ -229,7 +347,7 @@ mod tests {
     fn delete_entry_rejects_an_index_past_the_end() {
         let (_tmp, timeline) = seed(&["- [09:00:00] only"]);
 
-        let result = timeline.delete_entry(date(), 5);
+        let result = timeline.delete_entry(date(), 5, "- [09:00:00] only");
 
         assert!(matches!(result, Err(CoreError::NotFound(_))));
     }
@@ -272,7 +390,14 @@ mod tests {
         let (_tmp, timeline) =
             seed(&["- [09:00:00] old {\"battery\":80,\"os\":\"macos\",\"arch\":\"aarch64\"}"]);
 
-        timeline.update_entry(date(), 0, "edited").unwrap();
+        timeline
+            .update_entry(
+                date(),
+                0,
+                "- [09:00:00] old {\"battery\":80,\"os\":\"macos\",\"arch\":\"aarch64\"}",
+                "edited",
+            )
+            .unwrap();
 
         assert_eq!(
             timeline.read(date()).unwrap(),
@@ -287,7 +412,14 @@ mod tests {
         let (_tmp, timeline) =
             seed(&["- [09:00:00] on the phone {\"battery\":80,\"s\":\"widget\"}"]);
 
-        timeline.update_entry(date(), 0, "edited").unwrap();
+        timeline
+            .update_entry(
+                date(),
+                0,
+                "- [09:00:00] on the phone {\"battery\":80,\"s\":\"widget\"}",
+                "edited",
+            )
+            .unwrap();
 
         assert_eq!(
             timeline.read(date()).unwrap(),
@@ -313,7 +445,8 @@ mod tests {
             .unwrap();
 
         let today = Local::now().date_naive();
-        timeline.update_entry(today, 0, "rewritten").unwrap();
+        let raw = timeline.read(today).unwrap()[0].clone();
+        timeline.update_entry(today, 0, &raw, "rewritten").unwrap();
 
         let entries = timeline.read(today).unwrap();
         assert_eq!(entries.len(), 2);
@@ -328,7 +461,7 @@ mod tests {
         let timeline = Timeline::new(tmp.path().to_path_buf());
 
         assert!(matches!(
-            timeline.delete_entry(date(), 0),
+            timeline.delete_entry(date(), 0, "- [09:00:00] gone"),
             Err(CoreError::NotFound(_))
         ));
     }
@@ -337,7 +470,9 @@ mod tests {
     fn text_that_looks_like_json_is_not_mistaken_for_context() {
         let (_tmp, timeline) = seed(&["- [09:00:00] see {not json"]);
 
-        timeline.update_entry(date(), 0, "edited").unwrap();
+        timeline
+            .update_entry(date(), 0, "- [09:00:00] see {not json", "edited")
+            .unwrap();
 
         assert_eq!(timeline.read(date()).unwrap(), vec!["- [09:00:00] edited"]);
     }

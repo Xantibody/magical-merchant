@@ -10,10 +10,13 @@ permissions:
   contents: read
   pull-requests: read
 
-# 連続 push で古い run を走らせ続けない
+# 連続 push で古い run を走らせ続けない。ただし main は殺さない:
+# キャッシュの save と Cachix への push は main の run でしか起きないので、
+# 15 分内に 2 度 merge すると、保存する唯一の run が消える。main では
+# 後の run が前の run の完了を待って並ぶ (同じ group なので直列にはなる)
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 # キャッシュは main でだけ保存する (save/purge の条件と actions/cache の
 # restore/save 分割はすべてこのため)。PR ごとに保存すると重複分で repo の
@@ -29,17 +32,23 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      # push / workflow_dispatch では filter を回さないので空になる → 全ジョブ実行
+      # workflow_dispatch では filter を回さないので空になる → 全ジョブ実行。
+      # 手で回すのは「filter を信用したくないとき」なので、そこだけは全部走らせる
       rust: ${{ steps.filter.outputs.rust || 'true' }}
       frontend: ${{ steps.filter.outputs.frontend || 'true' }}
       workers: ${{ steps.filter.outputs.workers || 'true' }}
       nix-package: ${{ steps.filter.outputs.nix-package || 'true' }}
+      macos-package: ${{ steps.filter.outputs.macos-package || 'true' }}
       nix-mcp: ${{ steps.filter.outputs.nix-mcp || 'true' }}
       android: ${{ steps.filter.outputs.android || 'true' }}
     steps:
       - uses: actions/checkout@v7
+      # AIDEV-NOTE: base は既定 (= 既定ブランチ) のまま。push では action 側が github.event.before に読み替える
+      # base を明示しないのは、既定ブランチと push 先が同じとき action が
+      # payload.before を使い、初回 push (全 0 の SHA) も自前で捌くため。
+      # base: ${{ github.event.before }} と書くと後者を自分で持つことになる
       - uses: dorny/paths-filter@v4
-        if: github.event_name == 'pull_request'
+        if: github.event_name != 'workflow_dispatch'
         id: filter
         with:
           filters: |
@@ -53,13 +62,19 @@ jobs:
               - 'flake.lock'
               - 'justfile'
               - 'rust/justfile'
+            # tauri_app::check が読むものは漏らさず並べる (tauri-app/justfile:9-14)。
+            # knip.jsonc だけを直した PR でジョブが飛ぶと、落ちるのは merge 後の main
             frontend:
               - 'tauri-app/src/**'
               - 'tauri-app/dev/**'
+              - 'tauri-app/index.html'
+              - 'tauri-app/public/**'
               - '.oxlintrc.json'
               - 'tauri-app/.oxlintrc.json'
+              - 'tauri-app/knip.jsonc'
               - 'tauri-app/package.json'
               - 'tauri-app/pnpm-lock.yaml'
+              - 'tauri-app/pnpm-workspace.yaml'
               - 'tauri-app/tsconfig.json'
               - 'tauri-app/tsconfig.dev.json'
               - 'tauri-app/vite.config.ts'
@@ -78,13 +93,27 @@ jobs:
               - 'nix/package.nix'
               - 'flake.nix'
               - 'flake.lock'
-            # core/** はここに入れない。core が壊れれば rust ジョブが先に落ちるし、
-            # 15 分のビルドを core の変更のたびに足すと待ち時間だけが増える。
-            # android 限定でコンパイルされる widget_bridge.rs は src-tauri なので拾える
-            # このジョブの定義そのものを変えたときは workflow_dispatch で回す。
-            # push / 手動実行では filter を通さないので全ジョブが走る。
-            # ci.yml をここに入れると、フロントのジョブを 1 行直しただけで
-            # 12 分の APK ビルドが乗る
+            # AIDEV-NOTE: nix/package.nix と nix/cli.nix の fileset の写し。ここが狭いと Cachix が古い .app を持ったままになる
+            # nix-package (pnpmDeps.hash の検証だけ) より広い。macOS のジョブは
+            # .#default と .#cli を建てて Cachix に push するので、その 2 つの
+            # 入力が動いたら必ず走らせる。手元の nix profile install が 10 分の
+            # 建て直しに戻らないことが、10 倍レートを払う理由そのもの
+            macos-package:
+              - 'core/**'
+              - 'cli/**'
+              - 'tauri-app/src/**'
+              - 'tauri-app/src-tauri/**'
+              - 'tauri-app/index.html'
+              - 'tauri-app/package.json'
+              - 'tauri-app/pnpm-lock.yaml'
+              - 'tauri-app/vite.config.ts'
+              - 'tauri-app/tsconfig.json'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'nix/package.nix'
+              - 'nix/cli.nix'
+              - 'flake.nix'
+              - 'flake.lock'
             nix-mcp:
               - 'nix/cli.nix'
               - 'cli/**'
@@ -93,8 +122,17 @@ jobs:
               - 'Cargo.lock'
               - 'flake.nix'
               - 'flake.lock'
+            # core/** はここに入れない。core が壊れれば rust ジョブが先に落ちるし、
+            # 15 分のビルドを core の変更のたびに足すと待ち時間だけが増える。
+            # android 限定でコンパイルされる widget_bridge.rs は src-tauri なので拾える
+            # このジョブの定義そのものを変えたときは workflow_dispatch で回す。
+            # 手動実行だけは filter を通さないので全ジョブが走る。
+            # ci.yml をここに入れると、フロントのジョブを 1 行直しただけで
+            # 12 分の APK ビルドが乗る
             android:
               - 'tauri-app/android-widget/**'
+              # android-build-debug は android-setup 経由で apply-tls.go も回す
+              - 'tauri-app/android-tls/**'
               - 'tauri-app/src-tauri/**'
               - 'tauri-app/justfile'
               - 'Cargo.lock'
@@ -303,7 +341,7 @@ jobs:
   # 特有の失敗だけで、それは merge 後の 1 回で足りる
   nix-package-macos:
     needs: changes
-    if: needs.changes.outputs.nix-package == 'true' && github.ref == 'refs/heads/main'
+    if: needs.changes.outputs.macos-package == 'true' && github.ref == 'refs/heads/main'
     runs-on: macos-latest
     timeout-minutes: 45
     steps:

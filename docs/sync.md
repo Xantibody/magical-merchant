@@ -10,10 +10,26 @@ content hash and a **server-issued version stamp**; both the Worker and each
 client store exactly those values, so change detection never depends on the
 filesystem mtime or on a device's clock.
 
-Everything under `data/` takes part — timeline days, notes, templates, and
+Everything under `data/` takes part — timeline days, notes, the Codex
+documents and their committed versions under `data/codex/`, templates, and
 the glyph images under `data/glyphs/` — with no filter on the extension;
 file contents travel base64-encoded, which is why a single glyph is capped
-at 256 KiB.
+at 256 KiB. A version is an ordinary key like any other, which is what makes
+a Codex's history the same on every device. No directory is on an allow-list:
+`scan_local_files` walks `data/` from the root and the only names it skips
+are the sync state and `write_atomic`'s temporary files, so a build that
+predates Codex carries `codex/` up and down with everything else. It just
+has nowhere to show it — its notes list reads `data/notes/` alone, so the
+document and its versions sit on disk unlisted until that device is
+updated. Nothing is dropped and nothing is deleted in the meantime.
+
+A Codex is a Note that was renamed from `notes/` to `codex/`, and a rename is
+two keys to the protocol, not one. If one device promotes a note while
+another edits it offline, the same ID can arrive in both directories; the app
+runs `relocate_duplicate_ids` after every successful sync, and once per
+process in the repair pass below, which keeps the Codex and moves the
+`notes/` copy to `conflicts/notes/<stem>/<timestamp>.md` — the same place a
+sync conflict goes.
 
 One sync is a loop of rounds. One attempt at a round is `GET /sync-state` →
 local scan → diff → one `POST /sync/bulk`, and losing the compare-and-swap
@@ -87,13 +103,17 @@ later; the CLI says the app is syncing right now and exits non-zero, because
 a command that printed nothing and returned 0 would read as a sync that
 happened.
 
-> [!NOTE]
-> The lock does not yet cover the repair pass that rewrites malformed notes
-> and moves legacy conflict copies. Both entry points run it before the engine
-> is called — the CLI on every `sync`, the app once per process, which makes
-> the first sync after launch the one that can do it — so either side can
-> write to the tree while the other holds the lock
-> ([#250](https://github.com/Xantibody/magical-merchant/issues/250)).
+The repair pass runs inside that lock. As soon as the lock is taken, and
+before the first scan, the engine rewrites malformed notes, moves legacy
+conflict copies out of `data/`, and relocates an ID that ended up in both
+`notes/` and `codex/`; the last of those runs once more before a successful
+sync returns, because a download is what lands the same ID in both. All three
+are best-effort — a repair that could not be done is no reason to refuse to
+sync. Neither entry point repairs on its own way in: that would write to a
+tree the other process may be scanning, and a caller cannot hold the lock for
+the engine because the lock lives on the file descriptor the engine itself
+opens. The app still repairs once per process before its first note list,
+which is about what the list shows rather than about syncing.
 
 Turning on **Auto sync** (sync popover, or `autoSync` in the nix-darwin
 module) runs a sync a few seconds after any successful write, so a note taken
@@ -112,6 +132,11 @@ On a conflict the local copy wins the key, and the overwritten remote copy is
 kept both in R2 under `….sync-conflict-<timestamp>.md` and on disk under
 `conflicts/<key without its extension>/<timestamp>.md`. That directory sits
 outside `data/`, so a copy neither syncs back nor appears in the notes list.
+The timestamp is only precise to the second, so two copies of the same key can
+ask for the same name — the repair pass runs twice per sync, and a download
+between the two passes is enough. The second copy is filed as
+`<timestamp>-2.md`; a copy is never overwritten, because a copy that can be
+replaced is no better than not keeping one.
 
 ## Deployment
 
@@ -167,6 +192,21 @@ wrangler secret put JWT_SECRET
 | `GOOGLE_CLIENT_SECRET` | Secret             | Google OAuth Client Secret       | —                 |
 | `JWT_SECRET`           | Secret             | HMAC-SHA256 signing key for JWTs | —                 |
 | `JWT_EXPIRY_SECONDS`   | Secret or `[vars]` | Token lifetime in seconds        | `259200` (3 days) |
+| `ALLOWED_SUBS`         | `[vars]`           | Google `sub`s allowed to sync    | unset: everyone   |
+
+> [!IMPORTANT]
+> **One bucket holds one person.** Keys are stored as they arrive —
+> `notes/<id>.md` — and the only thing kept per user is the sync state,
+> `_sync-state/<sub>.json`. A second Google account signing in to the same
+> Worker gets a state of its own but the same files, and the two states push
+> the same keys back and forth forever. Keeping the OAuth consent screen in
+> testing mode hides that door rather than closing it, so list your own `sub`
+> in `ALLOWED_SUBS` (`workers/wrangler.toml`, comma-separated) and redeploy:
+> every other `sub` is then answered with `403`. Read it from the payload of
+> the JWT the sign-in hands back, or from the Google Cloud Console user list.
+> Leave the variable out entirely and anyone who passes the consent screen
+> still gets in; set it to an empty value and nobody does — a misconfigured
+> allowlist stops your own sync with `403` rather than reopening the bucket.
 
 ### 6. App configuration
 

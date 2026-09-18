@@ -36,12 +36,20 @@ export function naturalSize(svg: string): Size | undefined {
 /**
  * 単体のファイルとして開いたときに原寸で出るよう、viewBox の実寸を
  * width / height に入れ、mermaid が本文用に付けた `max-width` を外す。
- * 外さないとビューアによっては幅 100% で開いて縦横比が崩れる
+ * 外さないとビューアによっては幅 100% で開いて縦横比が崩れる。
+ *
+ * ラベルが foreignObject(HTML)のまま残っている図は、書き出さずに投げる。
+ * `<img>` として読んだ SVG の中の foreignObject はブラウザが描かないので、
+ * PNG は「有効な data URL」のまま文字だけが抜け、保存まで黙って通ってしまう。
+ * AIDEV-NOTE: mermaid 側の secure htmlLabels が本命。ここは図種や将来の抜け道に対する最後の砦
  */
 export function sizedSvg(svg: string): string {
   const element = parseSvg(svg);
   if (!element) {
     throw new Error("not an svg");
+  }
+  if (element.querySelector("foreignObject")) {
+    throw new Error("svg has html labels");
   }
   const size = naturalSize(svg);
   if (size) {
@@ -70,6 +78,44 @@ export function textToBase64(text: string): string {
 }
 
 /**
+ * canvas に置ける画素数の上限。WebKit がいちばん厳しく 16M px で、それを超えた
+ * canvas は確保に失敗したまま黙って空を返す。長い sequence 図は縦にいくらでも
+ * 伸びるので、原寸の 2 倍で描くとこの上限に届く
+ */
+export const MAX_PNG_PIXELS = 16_777_216;
+
+/** `toDataURL("image/png")` が成功したときに必ず付く頭 */
+const PNG_DATA_URL_PREFIX = "data:image/png;base64,";
+
+/**
+ * 図の原寸から、実際に用意する canvas の大きさ(px)。上限に収まらない図は
+ * 解像度を諦めて縮める — 書き出せないより、粗くても絵が出るほうがいい。
+ * 端数を切り上げないのは、丸めで上限をまたがないため
+ */
+export function pngCanvasSize(size: Size): Size {
+  const scale = Math.min(PNG_SCALE, Math.sqrt(MAX_PNG_PIXELS / (size.width * size.height)));
+  return {
+    width: Math.max(1, Math.floor(size.width * scale)),
+    height: Math.max(1, Math.floor(size.height * scale)),
+  };
+}
+
+/**
+ * `toDataURL` の返り値から base64 の中身だけを取り出す。canvas が PNG を
+ * 作れなかったときは例外ではなく `data:,` が返るので、カンマ以降をそのまま
+ * 切ると空の base64 が保存まで届き、0 バイトの PNG が「保存しました」になる
+ */
+export function pngBase64(dataUrl: string): string {
+  const base64 = dataUrl.startsWith(PNG_DATA_URL_PREFIX)
+    ? dataUrl.slice(PNG_DATA_URL_PREFIX.length)
+    : "";
+  if (!base64) {
+    throw new Error("canvas produced no png");
+  }
+  return base64;
+}
+
+/**
  * SVG を PNG に描き、base64 で返す。`background` で塗るのは、透明のままだと
  * 暗い背景のビューアで線が消えるため。画像は data URL で読む — Blob URL でも
  * 描けるが、同一生成元の扱いが環境で揺れ、canvas が汚染されると書き出せない
@@ -85,8 +131,9 @@ export async function rasterize(svg: string, background: string): Promise<string
   await image.decode();
 
   const canvas = document.createElement("canvas");
-  canvas.width = Math.round(size.width * PNG_SCALE);
-  canvas.height = Math.round(size.height * PNG_SCALE);
+  const { width, height } = pngCanvasSize(size);
+  canvas.width = width;
+  canvas.height = height;
   const context = canvas.getContext("2d");
   if (!context) {
     throw new Error("canvas is unavailable");
@@ -96,8 +143,7 @@ export async function rasterize(svg: string, background: string): Promise<string
   context.drawImage(image, 0, 0, canvas.width, canvas.height);
 
   // toBlob と違って同期で、結果はそのまま base64。汚染されていれば例外
-  const dataUrl = canvas.toDataURL("image/png");
-  return dataUrl.slice(dataUrl.indexOf(",") + 1);
+  return pngBase64(canvas.toDataURL("image/png"));
 }
 
 /**

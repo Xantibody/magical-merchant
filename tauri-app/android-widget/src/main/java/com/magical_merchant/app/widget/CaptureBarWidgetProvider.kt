@@ -24,8 +24,13 @@ class CaptureBarWidgetProvider : AppWidgetProvider() {
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray,
     ) {
-        val views = render(context)
-        appWidgetIds.forEach { appWidgetManager.updateAppWidget(it, views) }
+        // A provider that throws takes the broadcast down and the launcher keeps
+        // the frame it already has, which reads as a widget that quietly stopped
+        // updating. Skipping one 30-minute period is the smaller failure.
+        runCatching {
+            val views = render(context)
+            appWidgetIds.forEach { appWidgetManager.updateAppWidget(it, views) }
+        }.onFailure { WidgetLog.error("capture bar not redrawn", it) }
     }
 
     companion object {
@@ -36,17 +41,22 @@ class CaptureBarWidgetProvider : AppWidgetProvider() {
          *
          * Called after a capture so the tail is current without waiting for the
          * next scheduled update — the user just wrote the line they are looking at.
+         *
+         * Guarded like [onUpdate], and for a sharper reason: this runs inside
+         * the capture sheet, right after a write that succeeded. A throw here
+         * would surface as a crash on send, of the entry that was in fact saved.
          */
         fun refresh(context: Context) {
-            val manager = AppWidgetManager.getInstance(context)
-            val ids = manager.getAppWidgetIds(
-                ComponentName(context, CaptureBarWidgetProvider::class.java),
-            )
-            if (ids.isEmpty()) {
-                return
-            }
-            val views = render(context)
-            ids.forEach { manager.updateAppWidget(it, views) }
+            runCatching {
+                val manager = AppWidgetManager.getInstance(context)
+                val ids = manager.getAppWidgetIds(
+                    ComponentName(context, CaptureBarWidgetProvider::class.java),
+                )
+                if (ids.isNotEmpty()) {
+                    val views = render(context)
+                    ids.forEach { manager.updateAppWidget(it, views) }
+                }
+            }.onFailure { WidgetLog.error("capture bar not refreshed after a capture", it) }
         }
 
         private fun render(context: Context): RemoteViews {

@@ -32,7 +32,14 @@ use crate::output::{
 /// 1 回の呼び出しがモデルの文脈を使い切る。
 const DEFAULT_LIMIT: usize = 500;
 
-const INSTRUCTIONS: &str = "Read-only access to a Magical Merchant journal: \
+/// 案内の冒頭。ここだけが起動の別で変わる。
+///
+/// 書ける起動で "Read-only" と名乗ると、道具が並んでいてもクライアントは
+/// 書かない — 案内は一覧より先に読まれ、そこで決まる。
+const READ_ONLY_OPENING: &str = "Read-only access to";
+const WRITABLE_OPENING: &str = "Read and write access to";
+
+const INSTRUCTIONS_BODY: &str = " a Magical Merchant journal: \
 a Timeline of timestamped entries (one file per day) and Notes (Markdown \
 files). Every record carries the device state at the moment it was written: \
 local time, GPS coordinates when available, battery, network, and which \
@@ -60,6 +67,8 @@ const WRITE_TOOLS: [&str; 6] = [
 pub(crate) struct McpServer {
     data_dir: PathBuf,
     locale: String,
+    /// クライアントへの案内。並べた道具と食い違わないよう、起動のときに選ぶ。
+    instructions: String,
     tool_router: ToolRouter<Self>,
 }
 
@@ -73,9 +82,15 @@ impl McpServer {
                 tool_router.remove_route(name);
             }
         }
+        let opening = if allow_write {
+            WRITABLE_OPENING
+        } else {
+            READ_ONLY_OPENING
+        };
         Self {
             data_dir,
             locale,
+            instructions: format!("{opening}{INSTRUCTIONS_BODY}"),
             tool_router,
         }
     }
@@ -650,7 +665,7 @@ impl ServerHandler for McpServer {
         let mut info = ServerInfo::new(ServerCapabilities::builder().enable_tools().build());
         info.server_info.name = "magical-merchant".into();
         info.server_info.version = env!("CARGO_PKG_VERSION").into();
-        info.instructions = Some(INSTRUCTIONS.into());
+        info.instructions = Some(self.instructions.clone());
         info
     }
 
@@ -1114,6 +1129,23 @@ mod tests {
             assert!(!read_only.contains(&name.to_string()), "{name} leaked");
             assert!(with_writes.contains(&name.to_string()), "{name} missing");
         }
+    }
+
+    /// 案内は並べた道具と揃う。書ける起動が read-only と名乗っては、
+    /// 道具を消したときと同じ結果になる。
+    #[test]
+    fn the_instructions_say_which_of_the_two_servers_this_is() {
+        let tmp = TempDir::new().unwrap();
+
+        let read_only = server(tmp.path()).get_info().instructions.unwrap();
+        let with_writes = writable(tmp.path()).get_info().instructions.unwrap();
+
+        assert!(read_only.starts_with("Read-only access to"));
+        assert!(!with_writes.contains("Read-only"));
+        assert!(with_writes.starts_with("Read and write access to"));
+        // 冒頭より後ろは同じ案内
+        assert!(with_writes.ends_with("the newest 20 copies of each note are kept."));
+        assert!(read_only.ends_with("the newest 20 copies of each note are kept."));
     }
 
     #[test]

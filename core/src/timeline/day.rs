@@ -102,6 +102,12 @@ impl DayLog {
         self.entries.iter().map(|e| self.expand(e)).collect()
     }
 
+    /// `expanded()` の 1 件ぶん。行を 1 本だけ照合する呼び出しに、日ぜんぶを
+    /// 組み直す手間を払わせない。
+    pub(crate) fn expanded_at(&self, index: usize) -> Option<String> {
+        self.entries.get(index).map(|e| self.expand(e))
+    }
+
     pub(crate) const fn entries_mut(&mut self) -> &mut Vec<String> {
         &mut self.entries
     }

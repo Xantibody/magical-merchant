@@ -1,15 +1,23 @@
 import { env, createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
-import { describe, it, expect, beforeAll, afterEach } from "vitest";
+import { describe, it, expect, beforeAll, afterEach, vi } from "vitest";
 import { SignJWT } from "jose";
 import worker, { deepLinkPage } from "./index";
 
-function makeJwt(
-  payload: { sub: string; email: string; exp: number },
-  secret = env.JWT_SECRET,
-): Promise<string> {
+interface JwtOptions {
+  sub: string;
+  email: string;
+  exp: number;
+  alg?: string;
+  issuer?: string;
+  audience?: string;
+}
+
+function makeJwt(payload: JwtOptions, secret = env.JWT_SECRET): Promise<string> {
   const key = new TextEncoder().encode(secret);
   return new SignJWT({ email: payload.email })
-    .setProtectedHeader({ alg: "HS256" })
+    .setProtectedHeader({ alg: payload.alg ?? "HS256" })
+    .setIssuer(payload.issuer ?? "magical-merchant-sync")
+    .setAudience(payload.audience ?? "magical-merchant-app")
     .setSubject(payload.sub)
     .setExpirationTime(payload.exp)
     .sign(key);
@@ -29,9 +37,9 @@ function request(
   return new Request(`http://localhost${path}`, { ...options, headers });
 }
 
-async function send(req: Request): Promise<Response> {
+async function send(req: Request, overrides: Partial<typeof env> = {}): Promise<Response> {
   const ctx = createExecutionContext();
-  const res = await worker.fetch(req, env, ctx);
+  const res = await worker.fetch(req, { ...env, ...overrides }, ctx);
   await waitOnExecutionContext(ctx);
   return res;
 }
@@ -126,6 +134,178 @@ async function clearBucket(): Promise<void> {
   }
 }
 
+/** Google の 2 往復 (code → access token → userinfo) を差し替える。 */
+function stubGoogle(): void {
+  vi.stubGlobal("fetch", (input: RequestInfo | URL): Promise<Response> => {
+    const target = input instanceof Request ? input.url : String(input);
+    if (target.startsWith("https://oauth2.googleapis.com/token")) {
+      return Promise.resolve(Response.json({ access_token: "google-access-token" }));
+    }
+    if (target.startsWith("https://openidconnect.googleapis.com/v1/userinfo")) {
+      return Promise.resolve(Response.json({ sub: "user-123", email: "test@example.com" }));
+    }
+    throw new Error(`unexpected fetch to ${target}`);
+  });
+}
+
+function authGoogle(appRedirect: string): Promise<Response> {
+  const query = `?app_redirect=${encodeURIComponent(appRedirect)}`;
+  return send(new Request(`http://localhost/auth/google${query}`));
+}
+
+/** 入口を通った直後の状態、つまり state と app_redirect の cookie を持った戻り。 */
+function authCallback(appRedirect: string): Promise<Response> {
+  const cookie = [
+    "__oauth_state=state-abc",
+    `__oauth_app_redirect=${encodeURIComponent(appRedirect)}`,
+  ].join("; ");
+  return send(
+    new Request("http://localhost/auth/callback?code=auth-code&state=state-abc", {
+      headers: { Cookie: cookie },
+    }),
+  );
+}
+
+const LOOPBACK_REDIRECT = "http://127.0.0.1:1421/callback/1f0c1b5e";
+
+// リダイレクト先を検証し損ねると、リンクを踏ませるだけで 3 日有効の JWT が
+// 第三者の URL へ 302 で渡る。/auth/* はここまでテストが 1 本も無かった
+describe("OAuth entry and exit", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  describe("gET /auth/google", () => {
+    it("sends a loopback redirect on to Google", async () => {
+      const res = await authGoogle(LOOPBACK_REDIRECT);
+
+      expect(res.status).toBe(302);
+      expect(res.headers.get("Location")).toContain("accounts.google.com");
+    });
+
+    it("sends a deep link redirect on to Google", async () => {
+      const res = await authGoogle("magical-merchant://auth/callback");
+
+      expect(res.status).toBe(302);
+    });
+
+    // `http://127.0.0.1:1@evil.example/` の host は evil.example、127.0.0.1 は
+    // userinfo。前方一致で見ていたころはこれが素通りしていた
+    it.each([
+      "http://127.0.0.1:1@evil.example/",
+      "http://127.0.0.1.evil.example/callback",
+      "http://evil.example/callback",
+      "https://127.0.0.1:1421/callback",
+      "http://localhost:1421/callback",
+      "magical-merchant-evil://auth/callback",
+      "not a url",
+      "",
+      // ループバックでも `?token=` は末尾に足される。クエリや断片が先に
+      // 付いていると、listener はトークンを 1 文字も受け取れない
+      `${LOOPBACK_REDIRECT}?next=evil`,
+      `${LOOPBACK_REDIRECT}#`,
+    ])("refuses app_redirect %o", async (appRedirect) => {
+      const res = await authGoogle(appRedirect);
+
+      expect(res.status).toBe(400);
+    });
+
+    // Android の intent-filter が本物のアプリに割り当てているホストは
+    // `auth` と `widget` だけ。スキームだけを見ていたころは、別のホストを
+    // 登録した悪意あるアプリに `?token=` ごと配送されていた
+    it.each([
+      "magical-merchant://steal/callback",
+      "magical-merchant://widget/new-note",
+      "magical-merchant://auth@evil.example/callback",
+      "magical-merchant://auth/callback/../steal",
+      "magical-merchant://auth/steal",
+      "magical-merchant://auth/",
+      "magical-merchant://auth",
+      "magical-merchant:auth/callback",
+      "magical-merchant://AUTH/callback",
+      // クエリを足せると、戻り先の URL が `?token=` より前で終わらない
+      "magical-merchant://auth/callback?next=evil",
+      // 断片が付くと `?token=` はその後ろに回り、アプリには届かない。
+      // 空の断片・空のクエリは URL 解析が hash / search を "" と報告するので、
+      // 条件を並べて見ていたころは素通りしていた
+      "magical-merchant://auth/callback#frag",
+      "magical-merchant://auth/callback#",
+      "magical-merchant://auth/callback?",
+    ])("refuses the deep link %o", async (appRedirect) => {
+      const res = await authGoogle(appRedirect);
+
+      expect(res.status).toBe(400);
+    });
+  });
+
+  describe("gET /auth/callback", () => {
+    it("hands the token to the loopback listener", async () => {
+      stubGoogle();
+
+      const res = await authCallback(LOOPBACK_REDIRECT);
+
+      expect(res.status).toBe(302);
+      expect(res.headers.get("Location")).toContain(`${LOOPBACK_REDIRECT}?token=`);
+    });
+
+    // 発行側と検証側で iss / aud がずれると、ログインは通るのに最初の
+    // 同期が 401 で返る。往復させて 1 本で押さえる
+    it("issues a token the sync routes accept", async () => {
+      stubGoogle();
+      const callback = await authCallback(LOOPBACK_REDIRECT);
+      const location = callback.headers.get("Location");
+      vi.unstubAllGlobals();
+      const issued = new URL(String(location)).searchParams.get("token");
+
+      const res = await send(
+        new Request("http://localhost/sync-state", {
+          headers: { Authorization: `Bearer ${issued}` },
+        }),
+      );
+
+      expect(res.status).toBe(200);
+    });
+
+    it("hands the token to the deep link as a tappable page", async () => {
+      stubGoogle();
+
+      const res = await authCallback("magical-merchant://auth/callback");
+
+      expect(res.status).toBe(200);
+      await expect(res.text()).resolves.toContain("magical-merchant://auth/callback?token=");
+    });
+
+    // cookie を差し替えられても宛先は変えさせない。入口で通した値でも、
+    // 出口でもう一度見るのはそのため
+    it.each([
+      "http://127.0.0.1:1@evil.example/",
+      "http://evil.example/callback",
+      "magical-merchant://steal/callback",
+      // ここを通すと、返す HTML のリンクが `…/callback#?token=` になる
+      "magical-merchant://auth/callback#",
+    ])("refuses to send the token to %o", async (appRedirect) => {
+      stubGoogle();
+
+      const res = await authCallback(appRedirect);
+
+      expect(res.status).toBe(400);
+      expect(res.headers.get("Location")).toBeNull();
+    });
+
+    it("refuses a callback whose state does not match the cookie", async () => {
+      stubGoogle();
+
+      const res = await send(
+        new Request("http://localhost/auth/callback?code=auth-code&state=forged", {
+          headers: { Cookie: "__oauth_state=state-abc" },
+        }),
+      );
+
+      expect(res.status).toBe(403);
+    });
+  });
+});
+
 describe("Workers Sync API", () => {
   beforeAll(async () => {
     validToken = await makeJwt({
@@ -165,6 +345,29 @@ describe("Workers Sync API", () => {
           headers: { Authorization: `Bearer ${expiredToken}` },
         }),
       );
+      expect(res.status).toBe(401);
+    });
+
+    // 署名方式・発行者・宛先は発行側が決めるもの。検証側が「トークンに
+    // 書いてある通り」で受けると、その選択が持ち込む側の手に残る
+    it.each([
+      { name: "another algorithm", claims: { alg: "HS512" } },
+      { name: "another issuer", claims: { issuer: "https://evil.example" } },
+      { name: "another audience", claims: { audience: "somebody-else" } },
+    ])("rejects a JWT signed for $name", async ({ claims }) => {
+      const token = await makeJwt({
+        sub: "user-123",
+        email: "test@example.com",
+        exp: Math.floor(Date.now() / 1000) + 3600,
+        ...claims,
+      });
+
+      const res = await send(
+        new Request("http://localhost/sync-state", {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+      );
+
       expect(res.status).toBe(401);
     });
   });
@@ -332,6 +535,24 @@ describe("Workers Sync API", () => {
       expect(res.status).toBe(400);
     });
 
+    // `null` も `1` も JSON としては正しい。オブジェクトでない body を
+    // そのまま読みに行くと例外になり、Cloudflare の HTML 500 が返る
+    it.each(["null", "1", '"a string"'])(
+      "rejects a body that is not an object: %s",
+      async (body) => {
+        const res = await send(
+          request("/sync/bulk", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body,
+          }),
+        );
+
+        expect(res.status).toBe(400);
+        expect(res.headers.get("Content-Type")).toContain("application/json");
+      },
+    );
+
     it("rejects missing required fields", async () => {
       const res = await send(
         request("/sync/bulk", {
@@ -391,6 +612,59 @@ describe("Workers Sync API", () => {
       const res = await bulk({ conflicts });
 
       expect(res.status).toBe(413);
+    });
+  });
+
+  // R2 のキーはユーザー別に分かれていない。2 人目が入ると同じ
+  // `notes/<id>.md` を取り合い、両者の state が延々と押し合う
+  describe("the ALLOWED_SUBS allowlist", () => {
+    it("lets anyone in while it is unset", async () => {
+      const res = await send(request("/sync-state"), { ALLOWED_SUBS: undefined });
+
+      expect(res.status).toBe(200);
+    });
+
+    // 置いたのに空、は設定の失敗。「未設定」と同じに読むと、締めたつもりの
+    // その瞬間にバケットが誰にでも開く
+    it.each(["", " ", ",", " , ", ",,"])(
+      "refuses everyone when it is set to %o",
+      async (allowedSubs) => {
+        const res = await send(request("/sync-state"), { ALLOWED_SUBS: allowedSubs });
+
+        expect(res.status).toBe(403);
+      },
+    );
+
+    it("lets a listed sub in, ignoring the spaces around it", async () => {
+      const res = await send(request("/sync-state"), { ALLOWED_SUBS: "somebody, user-123 " });
+
+      expect(res.status).toBe(200);
+    });
+
+    it("refuses a sub that is not listed", async () => {
+      const res = await send(request("/sync-state"), { ALLOWED_SUBS: "somebody-else" });
+
+      expect(res.status).toBe(403);
+    });
+
+    it("refuses a bulk from a sub that is not listed", async () => {
+      const res = await send(
+        request("/sync/bulk", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            uploads: [upload("notes/a.md", "mine")],
+            downloads: [],
+            delete_remote: [],
+            conflicts: [],
+            expected_etag: null,
+          }),
+        }),
+        { ALLOWED_SUBS: "somebody-else" },
+      );
+
+      expect(res.status).toBe(403);
+      await expect(env.BUCKET.get("notes/a.md")).resolves.toBeNull();
     });
   });
 
