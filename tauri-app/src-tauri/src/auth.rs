@@ -105,49 +105,72 @@ fn callback_token(request_text: &str, callback_path: &str) -> Option<String> {
         .filter(|token| is_token_valid(token))
 }
 
-/// 1 本の接続に許す読み取り時間。ブラウザは繋いだ直後にリクエストを送る
-/// ので、これだけあれば本物には足りる。
+/// 1 本の接続を抱えていられる時間。ブラウザは繋いだ直後にリクエストを送る
+/// ので、これだけあれば本物には足りる。並行に読むぶん、この上限が延びても
+/// コールバックの受け付けは遅れない — 遅れるのは黙った接続を畳む時刻だけ。
 #[cfg(not(target_os = "android"))]
 const CONNECTION_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// 繋いできた 1 本を読んで、保存してよいトークンだけを返す。返事は結果に
+/// 関わらず書く — 本物には案内を、それ以外には 404 を。
+#[cfg(not(target_os = "android"))]
+async fn read_callback_token(
+    mut stream: tokio::net::TcpStream,
+    callback_path: &str,
+    read_timeout: std::time::Duration,
+) -> Option<String> {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let mut buf = vec![0u8; 4096];
+    // 繋いだまま何も送ってこない接続をいつまでも抱えない。時間切れも
+    // 読み取り失敗も、この 1 本を捨てる理由
+    let Ok(Ok(n)) = tokio::time::timeout(read_timeout, stream.read(&mut buf)).await else {
+        return None;
+    };
+    let token = callback_token(&String::from_utf8_lossy(&buf[..n]), callback_path);
+
+    let response = if token.is_some() {
+        CALLBACK_RESPONSE
+    } else {
+        NOT_FOUND_RESPONSE
+    };
+    let _ = stream.write_all(response.as_bytes()).await;
+
+    token
+}
 
 /// nonce の一致したコールバックが来るまで待つ。一致しないものは 404 で
 /// 捨てて待ち続ける — 先に繋いだだけの相手にログインを横取りさせない。
 ///
-/// 接続は 1 本ずつ順に読むので、1 本の読み取りに上限が要る。nonce は横取り
-/// を防ぐが、繋いで黙っているだけの相手は止められない。
+/// 読むのは並行、受け付けは止めない。ポートは総当たりで見つかるので、
+/// ローカルのプロセスは好きな本数だけ繋いでこられる。
 ///
-/// AIDEV-NOTE: 接続を並行に捌く案は却下。順に読んで 1 本ずつ見切るほうが、待ち行列も所有権も増えない
+/// AIDEV-NOTE: 接続は並行に読む。順に読む案は却下 — 黙った接続を 60 本並べるだけで 300 秒の窓を食い潰せた
 #[cfg(not(target_os = "android"))]
 async fn accept_callback_token(
     listener: &tokio::net::TcpListener,
     callback_path: &str,
     read_timeout: std::time::Duration,
 ) -> Result<String, String> {
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let mut reading = tokio::task::JoinSet::new();
 
     loop {
-        let (mut stream, _) = listener
-            .accept()
-            .await
-            .map_err(|e| format!("Failed to accept connection: {e}"))?;
-
-        let mut buf = vec![0u8; 4096];
-        // 何も送ってこない接続を待ち続けると、繋いだだけの相手にログインを
-        // 止められる。時間切れも読み取り失敗も、この 1 本を捨てて次を待つ理由
-        let Ok(Ok(n)) = tokio::time::timeout(read_timeout, stream.read(&mut buf)).await else {
-            continue;
-        };
-        let token = callback_token(&String::from_utf8_lossy(&buf[..n]), callback_path);
-
-        let response = if token.is_some() {
-            CALLBACK_RESPONSE
-        } else {
-            NOT_FOUND_RESPONSE
-        };
-        let _ = stream.write_all(response.as_bytes()).await;
-
-        if let Some(token) = token {
-            return Ok(token);
+        tokio::select! {
+            accepted = listener.accept() => {
+                let (stream, _) = accepted
+                    .map_err(|e| format!("Failed to accept connection: {e}"))?;
+                let callback_path = callback_path.to_owned();
+                reading.spawn(async move {
+                    read_callback_token(stream, &callback_path, read_timeout).await
+                });
+            }
+            // 無効だった 1 本は、次を待つ理由にしかならない。空の JoinSet は
+            // 即 None を返し、その回はこの枝が外れて accept だけを待つ
+            Some(read) = reading.join_next() => {
+                if let Ok(Some(token)) = read {
+                    return Ok(token);
+                }
+            }
         }
     }
 }
@@ -300,6 +323,80 @@ mod tests {
         .expect("the silent connection must not keep the callback waiting");
 
         assert_eq!(accepted, Ok(token));
+    }
+
+    /// 黙った接続を並べるのは、1 本を無限に居座らせるのと同じ効き目を持つ。
+    /// 1 本ずつ順に読むと、読み取りの上限 × 並べた本数だけコールバックの
+    /// 受け付けが遅れ、外側の 5 分をまるごと食い潰せる
+    #[tokio::test]
+    async fn many_silent_connections_do_not_hold_up_the_callback() {
+        use tokio::io::AsyncWriteExt as _;
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        // 60 本 × 5 秒 = 300 秒。本物の読み取り上限のまま、外側の窓と同じ長さ
+        let mut silent = Vec::new();
+        for _ in 0..60 {
+            silent.push(tokio::net::TcpStream::connect(addr).await.unwrap());
+        }
+
+        let token = jwt(3600);
+        let mut browser = tokio::net::TcpStream::connect(addr).await.unwrap();
+        browser
+            .write_all(get(&format!("{CALLBACK_PATH}?token={token}")).as_bytes())
+            .await
+            .unwrap();
+
+        let accepted = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            accept_callback_token(&listener, CALLBACK_PATH, CONNECTION_READ_TIMEOUT),
+        )
+        .await
+        .expect("queued silent connections must not delay the callback");
+
+        assert_eq!(accepted, Ok(token));
+        // 待っている間ずっと繋がっていないと、並べた意味がない
+        drop(silent);
+    }
+
+    /// nonce の違うものを先に何本も読んでも、待っている側が拾うのは
+    /// 一致した 1 本だけ。並行に読むと「無効だった」が複数返ってくるので、
+    /// そのどれかで待つのをやめないことを固定する
+    #[tokio::test]
+    async fn the_valid_token_wins_over_connections_read_alongside_it() {
+        use tokio::io::AsyncWriteExt as _;
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let stolen = jwt(3600);
+        let mut impostors = Vec::new();
+        for _ in 0..10 {
+            let mut impostor = tokio::net::TcpStream::connect(addr).await.unwrap();
+            impostor
+                .write_all(get(&format!("/callback/other?token={stolen}")).as_bytes())
+                .await
+                .unwrap();
+            impostors.push(impostor);
+        }
+
+        let token = jwt(3600);
+        let mut browser = tokio::net::TcpStream::connect(addr).await.unwrap();
+        browser
+            .write_all(get(&format!("{CALLBACK_PATH}?token={token}")).as_bytes())
+            .await
+            .unwrap();
+
+        let accepted = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            accept_callback_token(&listener, CALLBACK_PATH, CONNECTION_READ_TIMEOUT),
+        )
+        .await
+        .expect("a mismatched nonce must not end the wait");
+
+        assert_eq!(accepted, Ok(token));
+        drop(impostors);
     }
 }
 
