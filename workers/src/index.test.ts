@@ -37,9 +37,9 @@ function request(
   return new Request(`http://localhost${path}`, { ...options, headers });
 }
 
-async function send(req: Request): Promise<Response> {
+async function send(req: Request, overrides: Partial<typeof env> = {}): Promise<Response> {
   const ctx = createExecutionContext();
-  const res = await worker.fetch(req, env, ctx);
+  const res = await worker.fetch(req, { ...env, ...overrides }, ctx);
   await waitOnExecutionContext(ctx);
   return res;
 }
@@ -560,6 +560,48 @@ describe("Workers Sync API", () => {
       const res = await bulk({ conflicts });
 
       expect(res.status).toBe(413);
+    });
+  });
+
+  // R2 のキーはユーザー別に分かれていない。2 人目が入ると同じ
+  // `notes/<id>.md` を取り合い、両者の state が延々と押し合う
+  describe("the ALLOWED_SUBS allowlist", () => {
+    it("lets anyone in while it is unset", async () => {
+      const res = await send(request("/sync-state"), { ALLOWED_SUBS: "" });
+
+      expect(res.status).toBe(200);
+    });
+
+    it("lets a listed sub in, ignoring the spaces around it", async () => {
+      const res = await send(request("/sync-state"), { ALLOWED_SUBS: "somebody, user-123 " });
+
+      expect(res.status).toBe(200);
+    });
+
+    it("refuses a sub that is not listed", async () => {
+      const res = await send(request("/sync-state"), { ALLOWED_SUBS: "somebody-else" });
+
+      expect(res.status).toBe(403);
+    });
+
+    it("refuses a bulk from a sub that is not listed", async () => {
+      const res = await send(
+        request("/sync/bulk", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            uploads: [upload("notes/a.md", "mine")],
+            downloads: [],
+            delete_remote: [],
+            conflicts: [],
+            expected_etag: null,
+          }),
+        }),
+        { ALLOWED_SUBS: "somebody-else" },
+      );
+
+      expect(res.status).toBe(403);
+      await expect(env.BUCKET.get("notes/a.md")).resolves.toBeNull();
     });
   });
 

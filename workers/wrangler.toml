@@ -5,3 +5,11 @@ compatibility_date = "2025-04-01"
 [[r2_buckets]]
 binding = "BUCKET"
 bucket_name = "magical-merchant-data"
+
+[vars]
+# 1 バケット = 1 人。R2 のキーはユーザーごとに分かれていないので、別の
+# アカウントで入ると同じノートを取り合う。通す Google の `sub` をカンマ
+# 区切りで並べると、その人だけが同期できる (未設定なら誰でも通る)。
+# sub は https://<worker>/auth/google でログインしたあとの JWT の payload、
+# または Google Cloud Console のユーザー一覧で確認できる。
+# ALLOWED_SUBS = "123456789012345678901"

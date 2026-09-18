@@ -8,6 +8,7 @@ export interface Env {
   GOOGLE_CLIENT_SECRET: string;
   JWT_SECRET: string;
   JWT_EXPIRY_SECONDS?: string;
+  ALLOWED_SUBS?: string;
 }
 
 interface JwtPayload {
@@ -203,6 +204,24 @@ async function verifyJwt(token: string, secret: string): Promise<JwtPayload | nu
   } catch {
     return null;
   }
+}
+
+/**
+ * 1 バケット = 1 人。ノートは `notes/<id>.md` のまま置かれ、ユーザーごとに
+ * 分かれているのは同期状態 (`_sync-state/<sub>.json`) だけなので、別の人が
+ * 同じ Worker にログインすると同じキーを取り合って永久に往復する。
+ *
+ * `ALLOWED_SUBS` に Google の `sub` をカンマ区切りで並べると、その人だけが
+ * 通る。未設定なら従来どおり誰でも通す — 既存の配備を黙って締め出さない。
+ *
+ * AIDEV-NOTE: キーを `${sub}/` で名前空間に分ける案は既存オブジェクトの移行が要るため却下。1 バケット 1 人を守る
+ */
+function isAllowedSub(allowedSubs: string | undefined, sub: string): boolean {
+  const entries = (allowedSubs ?? "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+  return entries.length === 0 || entries.includes(sub);
 }
 
 function generateState(): string {
@@ -448,6 +467,10 @@ export default {
     const claims = await verifyJwt(token, env.JWT_SECRET);
     if (!claims) {
       return errorResponse("Unauthorized", 401);
+    }
+
+    if (!isAllowedSub(env.ALLOWED_SUBS, claims.sub)) {
+      return errorResponse("This bucket belongs to somebody else", 403);
     }
 
     if (pathname === "/sync-state" && method === "GET") {
