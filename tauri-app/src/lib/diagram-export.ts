@@ -36,12 +36,20 @@ export function naturalSize(svg: string): Size | undefined {
 /**
  * 単体のファイルとして開いたときに原寸で出るよう、viewBox の実寸を
  * width / height に入れ、mermaid が本文用に付けた `max-width` を外す。
- * 外さないとビューアによっては幅 100% で開いて縦横比が崩れる
+ * 外さないとビューアによっては幅 100% で開いて縦横比が崩れる。
+ *
+ * ラベルが foreignObject(HTML)のまま残っている図は、書き出さずに投げる。
+ * `<img>` として読んだ SVG の中の foreignObject はブラウザが描かないので、
+ * PNG は「有効な data URL」のまま文字だけが抜け、保存まで黙って通ってしまう。
+ * AIDEV-NOTE: mermaid 側の secure htmlLabels が本命。ここは図種や将来の抜け道に対する最後の砦
  */
 export function sizedSvg(svg: string): string {
   const element = parseSvg(svg);
   if (!element) {
     throw new Error("not an svg");
+  }
+  if (element.querySelector("foreignObject")) {
+    throw new Error("svg has html labels");
   }
   const size = naturalSize(svg);
   if (size) {

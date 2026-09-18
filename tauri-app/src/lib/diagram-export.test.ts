@@ -17,6 +17,15 @@ const MERMAID_SVG =
   '<rect x="0" y="0" width="320" height="120" fill="#fff"></rect>' +
   "<text>A&nbsp;B</text></svg>";
 
+/** ラベルが HTML のまま残った図。<img> として読むとこの中身だけ描かれない */
+const HTML_LABEL_SVG =
+  '<svg id="mermaid-2" width="100%" viewBox="0 0 320.5 120" ' +
+  'style="max-width: 320.5px;" role="graphics-document">' +
+  '<rect x="0" y="0" width="320" height="120" fill="#fff"></rect>' +
+  '<foreignObject width="35" height="24">' +
+  '<div xmlns="http://www.w3.org/1999/xhtml"><span>Start</span></div>' +
+  "</foreignObject></svg>";
+
 function bytesOf(base64: string): Uint8Array {
   return Uint8Array.from(atob(base64), (char) => char.codePointAt(0) ?? 0);
 }
@@ -53,6 +62,15 @@ describe("sizedSvg", () => {
 
   it("refuses anything that is not an svg", () => {
     expect(() => sizedSvg("<p>no</p>")).toThrow("not an svg");
+  });
+
+  /**
+   * mermaid 側で htmlLabels を封じてあるが、図ごとのディレクティブや将来の図種で
+   * 抜ける道が残る。foreignObject は <img> 越しに描かれないので、通すと文字の
+   * 抜けた PNG が「保存しました」で終わる。書き出す手前で止めるのが最後の砦
+   */
+  it("refuses an svg whose labels are still html", () => {
+    expect(() => sizedSvg(HTML_LABEL_SVG)).toThrow("svg has html labels");
   });
 });
 
@@ -109,6 +127,11 @@ describe("rasterize", () => {
     await expect(rasterize(MERMAID_SVG, "#ffffff")).rejects.toThrow("canvas produced no png");
 
     toDataURL.mockRestore();
+  });
+
+  /** PNG の道でも同じ。canvas は文字の無い絵を「有効な PNG」として返してしまう */
+  it("refuses an svg whose labels are still html", async () => {
+    await expect(rasterize(HTML_LABEL_SVG, "#ffffff")).rejects.toThrow("svg has html labels");
   });
 });
 
