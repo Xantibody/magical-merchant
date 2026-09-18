@@ -10,10 +10,21 @@ content hash and a **server-issued version stamp**; both the Worker and each
 client store exactly those values, so change detection never depends on the
 filesystem mtime or on a device's clock.
 
-Everything under `data/` takes part — timeline days, notes, templates, and
+Everything under `data/` takes part — timeline days, notes, the Codex
+documents and their committed versions under `data/codex/`, templates, and
 the glyph images under `data/glyphs/` — with no filter on the extension;
 file contents travel base64-encoded, which is why a single glyph is capped
-at 256 KiB.
+at 256 KiB. A version is an ordinary key like any other, which is what makes
+a Codex's history the same on every device, and a build that predates Codex
+simply never walks that directory.
+
+A Codex is a Note that was renamed from `notes/` to `codex/`, and a rename is
+two keys to the protocol, not one. If one device promotes a note while
+another edits it offline, the same ID can arrive in both directories; the app
+runs `relocate_duplicate_ids` after every successful sync, and once per
+process in the repair pass below, which keeps the Codex and moves the
+`notes/` copy to
+`conflicts/notes/<stem>/<timestamp>.md` — the same place a sync conflict goes.
 
 One sync is a loop of rounds. One attempt at a round is `GET /sync-state` →
 local scan → diff → one `POST /sync/bulk`, and losing the compare-and-swap
