@@ -65,26 +65,62 @@ internal object WidgetBridge {
      */
     fun baseDir(context: Context): String = context.applicationContext.dataDir.absolutePath
 
-    /** Saves [text] with everything [WidgetContext] could gather. False on failure. */
-    fun saveCapture(context: Context, text: String): Boolean =
-        saveQuickCapture(baseDir(context), text, WidgetContext.collect(context))
+    /**
+     * Saves [text] with everything [WidgetContext] could gather. False on failure.
+     *
+     * The three reads have always been wrapped; this one used to call across JNI
+     * bare, and it is the single call whose input cannot be reconstructed. An
+     * `UnsatisfiedLinkError` — the failure the KDoc above warns about — took the
+     * sheet down with the typed line still in it. As `false` it reaches the
+     * caller's toast instead, which leaves the sheet open so the line can be
+     * sent again.
+     */
+    // AIDEV-NOTE: never let this throw — the sheet is the only copy of the text; a crash here loses what the user wrote.
+    fun saveCapture(context: Context, text: String): Boolean {
+        val saved = runCatching {
+            saveQuickCapture(baseDir(context), text, WidgetContext.collect(context))
+        }.getOrElse { error ->
+            WidgetLog.error("saveQuickCapture threw; the sheet keeps the text", error)
+            false
+        }
+
+        // Rust answers false for every kind of refusal (`widget_bridge.rs` folds
+        // the Err into a bool), so say at least that the call was reached.
+        if (!saved) {
+            WidgetLog.warn("timeline entry not written (${text.length} chars); the sheet stays open")
+        }
+        return saved
+    }
 
     /**
      * Reads and parses. Never throws: these run from widget callbacks that have
      * a few seconds to draw something, and a torn or absent data tree is a
      * normal state — the app may simply not have been opened yet.
+     *
+     * Normal, but not silent: an empty result is logged because it is also what
+     * a broken JNI link and an unparseable payload look like from here.
      */
     fun readCapture(context: Context): CaptureData =
-        runCatching { parseCapture(read(context, ::readCaptureData)) }.getOrElse { CaptureData() }
+        runCatching { parseCapture(read(context, ::readCaptureData)) }
+            .getOrElse { failed("capture data", it, CaptureData()) }
 
     fun readNoteRows(context: Context): List<NoteRow> =
-        runCatching { parseNotes(read(context, ::readNotes)) }.getOrElse { emptyList() }
+        runCatching { parseNotes(read(context, ::readNotes)) }
+            .getOrElse { failed("notes", it, emptyList()) }
 
     fun readTemplateRows(context: Context): List<TemplateRow> =
-        runCatching { parseTemplates(read(context, ::readTemplates)) }.getOrElse { emptyList() }
+        runCatching { parseTemplates(read(context, ::readTemplates)) }
+            .getOrElse { failed("templates", it, emptyList()) }
+
+    private fun <T> failed(what: String, error: Throwable, fallback: T): T {
+        WidgetLog.error("could not read $what; the widget draws empty", error)
+        return fallback
+    }
 
     private fun read(context: Context, call: (String) -> String?): String =
-        runCatching { call(baseDir(context)) }.getOrNull().orEmpty().ifEmpty { "{}" }
+        runCatching { call(baseDir(context)) }
+            .onFailure { WidgetLog.error("JNI read failed", it) }
+            .getOrNull().orEmpty().ifEmpty { "{}" }
 
     private fun parseCapture(raw: String): CaptureData {
         val root = JSONObject(raw)
