@@ -55,8 +55,13 @@ const MAX_HITS: usize = 100;
 
 /// 検索の範囲を切るタグ(`tags::normalize` 済み)。空なら切らない。
 /// 複数あれば全部を持つ記録だけが残る。
-fn in_scope(scope: &[String], tags: &[String]) -> bool {
-    scope.iter().all(|wanted| tags.contains(wanted))
+///
+/// 両側とも打たれた綴りのままなので、突き合わせで大小を無視する。
+/// チップを押して絞った範囲が、本文の `#CognitiveBias` に当たるように。
+fn in_scope(scope: &[String], own: &[String]) -> bool {
+    scope
+        .iter()
+        .all(|wanted| own.iter().any(|tag| tags::same_tag(tag, wanted)))
 }
 
 /// タイムライン全日を走査して needle(小文字化済み)に一致し、`scope` の
@@ -407,7 +412,7 @@ mod tests {
 
         let hits = search_all(tmp.path(), "直す", &[]).unwrap();
 
-        assert_eq!(hits[0].tags, vec!["sync", "設計"]);
+        assert_eq!(hits[0].tags, vec!["Sync", "設計"]);
     }
 
     #[test]
@@ -751,6 +756,33 @@ mod tests {
         assert!(hits.iter().any(|h| h.kind == HitKind::Note));
         // 本文には光らせる場所がない
         assert!(hits.iter().all(|h| h.match_start.is_none()));
+    }
+
+    /// 一覧のチップは打った綴りで出るが、打ち込む側は大小を合わせない。
+    /// 範囲と記録のどちらを大文字で書いても同じ結果になること。
+    #[test]
+    fn a_tag_scope_ignores_case_on_both_sides() {
+        let tmp = TempDir::new().unwrap();
+        save_timeline_entry(
+            tmp.path(),
+            "歪みを疑う #CognitiveBias",
+            &context(),
+            Source::App,
+        )
+        .unwrap();
+        draft(&tmp, "偏りの記録 #cognitivebias", &[]).unwrap();
+
+        let hits = search_all(tmp.path(), "", &scope(&["cognitivebias"])).unwrap();
+        assert_eq!(hits.len(), 2);
+        // 打った綴りのまま返る
+        assert!(hits.iter().any(|h| h.tags == vec!["CognitiveBias"]));
+
+        assert_eq!(
+            search_all(tmp.path(), "", &scope(&["#CognitiveBias"]))
+                .unwrap()
+                .len(),
+            2
+        );
     }
 
     #[test]

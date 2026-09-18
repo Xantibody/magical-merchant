@@ -996,7 +996,8 @@ mod tests {
 
         assert_eq!(out.body, "# 題\n本文 #rust");
         assert!(!out.body.contains("---"));
-        assert_eq!(out.tags, vec!["memo", "rust"]);
+        // frontmatter に書かれた綴りのまま出る
+        assert_eq!(out.tags, vec!["Memo", "rust"]);
         assert!(out.time.is_some());
         assert_eq!(out.updated, None);
         let context = out.context.unwrap();

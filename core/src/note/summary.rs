@@ -189,9 +189,10 @@ mod tests {
     }
 
     /// タグ欄で `Rust` と付けていた頃のノートに本文で `#rust` と書いたら、
-    /// 一覧に同じ分類が 2 つ並ぶ。同一性は本文側の規則(ASCII 小文字)で決める。
+    /// 一覧に同じ分類が 2 つ並ぶ。大小を無視して 1 つに畳み、綴りは
+    /// frontmatter 側を残す。
     #[test]
-    fn frontmatter_tags_are_normalized_like_body_tags() {
+    fn frontmatter_tags_are_merged_with_body_tags_ignoring_case() {
         let fm = NoteFrontmatter {
             tags: vec!["Rust".to_string()],
             ..at(2026, 3, 20, 14, 30)
@@ -203,7 +204,7 @@ mod tests {
             "note.md".to_string(),
             &content,
         );
-        assert_eq!(summary.tags, vec!["rust"]);
+        assert_eq!(summary.tags, vec!["Rust"]);
     }
 
     /// frontmatter が YAML として壊れているノート。時刻とタグは諦めるが、
