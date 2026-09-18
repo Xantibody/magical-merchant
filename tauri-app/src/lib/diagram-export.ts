@@ -69,17 +69,42 @@ export function textToBase64(text: string): string {
   return btoa(binary);
 }
 
-/** 図の原寸から、実際に用意する canvas の大きさ(px) */
+/**
+ * canvas に置ける画素数の上限。WebKit がいちばん厳しく 16M px で、それを超えた
+ * canvas は確保に失敗したまま黙って空を返す。長い sequence 図は縦にいくらでも
+ * 伸びるので、原寸の 2 倍で描くとこの上限に届く
+ */
+export const MAX_PNG_PIXELS = 16_777_216;
+
+/** `toDataURL("image/png")` が成功したときに必ず付く頭 */
+const PNG_DATA_URL_PREFIX = "data:image/png;base64,";
+
+/**
+ * 図の原寸から、実際に用意する canvas の大きさ(px)。上限に収まらない図は
+ * 解像度を諦めて縮める — 書き出せないより、粗くても絵が出るほうがいい。
+ * 端数を切り上げないのは、丸めで上限をまたがないため
+ */
 export function pngCanvasSize(size: Size): Size {
+  const scale = Math.min(PNG_SCALE, Math.sqrt(MAX_PNG_PIXELS / (size.width * size.height)));
   return {
-    width: Math.round(size.width * PNG_SCALE),
-    height: Math.round(size.height * PNG_SCALE),
+    width: Math.max(1, Math.floor(size.width * scale)),
+    height: Math.max(1, Math.floor(size.height * scale)),
   };
 }
 
-/** `toDataURL` の返り値から base64 の中身だけを取り出す */
+/**
+ * `toDataURL` の返り値から base64 の中身だけを取り出す。canvas が PNG を
+ * 作れなかったときは例外ではなく `data:,` が返るので、カンマ以降をそのまま
+ * 切ると空の base64 が保存まで届き、0 バイトの PNG が「保存しました」になる
+ */
 export function pngBase64(dataUrl: string): string {
-  return dataUrl.slice(dataUrl.indexOf(",") + 1);
+  const base64 = dataUrl.startsWith(PNG_DATA_URL_PREFIX)
+    ? dataUrl.slice(PNG_DATA_URL_PREFIX.length)
+    : "";
+  if (!base64) {
+    throw new Error("canvas produced no png");
+  }
+  return base64;
 }
 
 /**

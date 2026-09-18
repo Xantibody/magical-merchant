@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
+  MAX_PNG_PIXELS,
   exportName,
   naturalSize,
   pngBase64,
@@ -59,11 +60,36 @@ describe("pngCanvasSize", () => {
   it("draws at twice the natural size, so the text is not blurred on a retina screen", () => {
     expect(pngCanvasSize({ width: 320.5, height: 120 })).toStrictEqual({ width: 641, height: 240 });
   });
+
+  // 上限を超えた canvas は例外を投げずに空を返す。原寸を諦めてでも絵は出す
+  it("gives up resolution rather than the area limit for a huge diagram", () => {
+    const size = pngCanvasSize({ width: 8000, height: 6000 });
+
+    expect(size.width * size.height).toBeLessThanOrEqual(MAX_PNG_PIXELS);
+    expect(size.width / size.height).toBeCloseTo(8000 / 6000, 3);
+  });
+
+  it("never asks for a canvas with no pixels in it", () => {
+    expect(pngCanvasSize({ width: 0.2, height: 0.2 })).toStrictEqual({ width: 1, height: 1 });
+  });
 });
 
 describe("pngBase64", () => {
   it("takes the payload out of a png data url", () => {
     expect(pngBase64("data:image/png;base64,iVBORw0KGgo=")).toBe("iVBORw0KGgo=");
+  });
+
+  /**
+   * canvas が PNG を作れないとき(面積の上限超過)、`toDataURL` は例外ではなく
+   * `data:,` を返す。カンマ以降を切って送ると空の base64 が保存まで届き、
+   * 0 バイトの PNG が「保存しました」になる
+   */
+  it("refuses a data url that carries no png", () => {
+    expect(() => pngBase64("data:,")).toThrow("canvas produced no png");
+  });
+
+  it("refuses a png data url with nothing after the comma", () => {
+    expect(() => pngBase64("data:image/png;base64,")).toThrow("canvas produced no png");
   });
 });
 
@@ -75,6 +101,16 @@ describe("rasterize", () => {
     expect(base64).toMatch(/^iVBORw0KGgo/u);
     const bitmap = await createImageBitmap(new Blob([bytesOf(base64)], { type: "image/png" }));
     expect([bitmap.width, bitmap.height]).toStrictEqual([641, 240]);
+  });
+
+  it("fails loudly when the canvas hands back an empty data url", async () => {
+    const toDataURL = vi
+      .spyOn(HTMLCanvasElement.prototype, "toDataURL")
+      .mockReturnValue("data:,");
+
+    await expect(rasterize(MERMAID_SVG, "#ffffff")).rejects.toThrow("canvas produced no png");
+
+    toDataURL.mockRestore();
   });
 });
 
