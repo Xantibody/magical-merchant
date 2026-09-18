@@ -70,14 +70,55 @@ fn closed_signal(window: &tauri::WebviewWindow) -> tokio::sync::oneshot::Receive
     rx
 }
 
+/// ブラウザに返す唯一のページ。窓はこのあとアプリが畳むので、案内だけ置く。
+#[cfg(not(target_os = "android"))]
+const CALLBACK_RESPONSE: &str = concat!(
+    "HTTP/1.1 200 OK\r\n",
+    "Content-Type: text/html; charset=utf-8\r\n",
+    "Connection: close\r\n\r\n",
+    "<html><body><p>You can close this window.</p></body></html>"
+);
+
+/// 生の HTTP リクエストから `?token=` を読む。リクエスト行の 2 番目が
+/// 要求先で、ループバックに届く以上そこは常に絶対パス。
+#[cfg(not(target_os = "android"))]
+fn token_from_request(request_text: &str) -> Option<String> {
+    let target = request_text.lines().next()?.split_whitespace().nth(1)?;
+    let url = Url::parse("http://127.0.0.1/").ok()?.join(target).ok()?;
+    url.query_pairs()
+        .find(|(key, _)| key == "token")
+        .map(|(_, value)| value.into_owned())
+}
+
+/// コールバックの接続を 1 つ受け、トークンを読んでブラウザに返事をする。
+#[cfg(not(target_os = "android"))]
+async fn accept_callback_token(
+    listener: &tokio::net::TcpListener,
+) -> Result<Option<String>, String> {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let (mut stream, _) = listener
+        .accept()
+        .await
+        .map_err(|e| format!("Failed to accept connection: {e}"))?;
+
+    let mut buf = vec![0u8; 4096];
+    let n = stream
+        .read(&mut buf)
+        .await
+        .map_err(|e| format!("Failed to read: {e}"))?;
+    let token = token_from_request(&String::from_utf8_lossy(&buf[..n]));
+
+    let _ = stream.write_all(CALLBACK_RESPONSE.as_bytes()).await;
+    Ok(token)
+}
+
 #[cfg(not(target_os = "android"))]
 async fn login_with_loopback(
     handle: &AppHandle,
     base_dir: &Path,
     config: &SyncConfig,
 ) -> Result<(), String> {
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
-
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
         .map_err(|e| format!("Failed to bind loopback: {e}"))?;
@@ -90,29 +131,10 @@ async fn login_with_loopback(
     let closed = closed_signal(&window);
 
     let accepted = tokio::select! {
-        result = tokio::time::timeout(std::time::Duration::from_secs(300), listener.accept()) => result,
+        result = tokio::time::timeout(std::time::Duration::from_secs(300), accept_callback_token(&listener)) => result,
         _ = closed => return Err("Login was cancelled.".to_string()),
     };
-    let (mut stream, _) = accepted
-        .map_err(|_| "Login timed out. Please try again.".to_string())?
-        .map_err(|e| format!("Failed to accept connection: {e}"))?;
-
-    let mut buf = vec![0u8; 4096];
-    let n = stream
-        .read(&mut buf)
-        .await
-        .map_err(|e| format!("Failed to read: {e}"))?;
-    let request_str = String::from_utf8_lossy(&buf[..n]);
-
-    let request_line = request_str.lines().next().unwrap_or("");
-    let path = request_line.split_whitespace().nth(1).unwrap_or("");
-    let full_url = format!("http://127.0.0.1:{port}{path}");
-
-    let token = Url::parse(&full_url).ok().and_then(|url| {
-        url.query_pairs()
-            .find(|(k, _)| k == "token")
-            .map(|(_, v)| v.to_string())
-    });
+    let token = accepted.map_err(|_| "Login timed out. Please try again.".to_string())??;
 
     let outcome = match &token {
         Some(token) => {
@@ -126,14 +148,45 @@ async fn login_with_loopback(
 
     // 窓は結果に関わらず畳む。成否は設定画面が伝えるので、たどり着いた
     // コールバックの画面をアプリの手前に残しておく理由がない
-    let body = "<html><body><p>You can close this window.</p></body></html>";
-    let response = format!(
-        "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nConnection: close\r\n\r\n{body}"
-    );
-    let _ = stream.write_all(response.as_bytes()).await;
     let _ = window.close();
 
     outcome
+}
+
+#[cfg(all(test, not(target_os = "android")))]
+mod tests {
+    use super::*;
+
+    fn get(target: &str) -> String {
+        format!("GET {target} HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+    }
+
+    #[test]
+    fn the_token_is_read_from_the_request_line() {
+        let request = get("/callback?token=abc.def.ghi");
+
+        assert_eq!(
+            token_from_request(&request),
+            Some("abc.def.ghi".to_string())
+        );
+    }
+
+    #[test]
+    fn a_request_without_a_token_yields_none() {
+        assert_eq!(token_from_request(&get("/callback")), None);
+    }
+
+    /// ブラウザはコールバックを描いたあと favicon も取りに来る
+    #[test]
+    fn a_request_for_something_else_yields_none() {
+        assert_eq!(token_from_request(&get("/favicon.ico")), None);
+    }
+
+    #[test]
+    fn a_request_that_is_not_http_yields_none() {
+        assert_eq!(token_from_request(""), None);
+        assert_eq!(token_from_request("garbage"), None);
+    }
 }
 
 // Tauri commands
