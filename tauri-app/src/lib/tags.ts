@@ -42,7 +42,7 @@ export interface TagSegment {
  * (日本語に大文字小文字は無く、ロケール依存の変換も持ち込まない)。
  * 同じ規則が `core/src/utils/tags.rs` の `fold_tag` にもある。
  */
-export function foldTag(tag: string): string {
+function foldTag(tag: string): string {
   return tag.replaceAll(/[A-Z]/gu, (c) => c.toLowerCase());
 }
 
