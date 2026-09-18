@@ -75,6 +75,12 @@ pub(crate) fn relocate_conflict_copies(base_dir: &Path) -> usize {
 ///
 /// `relocate_conflict_copies` と同じく、1 件の失敗では止まらない。
 pub(crate) fn relocate_duplicate_ids(base_dir: &Path) -> usize {
+    relocate_duplicate_ids_at(base_dir, Utc::now())
+}
+
+/// 控えの時刻を渡す版。同じ秒に 2 回走った状況をテストが作れるようにするため
+/// だけに切ってある — 秒精度の名前が衝突したときどうなるかが、ここの要点なので。
+fn relocate_duplicate_ids_at(base_dir: &Path, now: DateTime<Utc>) -> usize {
     let codex = codex_dir(base_dir);
     let conflicts = conflicts_dir(base_dir);
     let Ok(entries) = list_md_files(&notes_dir(base_dir)) else {
@@ -87,7 +93,7 @@ pub(crate) fn relocate_duplicate_ids(base_dir: &Path) -> usize {
             continue;
         }
         let key = format!("{NOTES_DIR}/{}", name.to_string_lossy());
-        let Some(relative) = conflict_copy_path(&conflict_filename(&key, Utc::now())) else {
+        let Some(relative) = conflict_copy_path(&conflict_filename(&key, now)) else {
             continue;
         };
         let target = conflicts.join(relative);
