@@ -193,6 +193,19 @@ pub(crate) struct HistoryParam {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+pub(crate) struct RestoreNoteParam {
+    /// The note filename, e.g. `20260320_143045.md`
+    filename: String,
+    /// A snapshot id from `list_note_history` or `update_note`
+    id: String,
+    /// The `revision` that `read_note` or `read_note_history` returned for the
+    /// note as it stands now. When given, the restore is refused if the note
+    /// changed since that read, so an edit made in the app in the meantime is
+    /// not silently thrown away.
+    revision: Option<String>,
+}
+
+#[derive(Deserialize, schemars::JsonSchema)]
 pub(crate) struct TemplateParam {
     /// The template filename, e.g. `daily.md`
     filename: String,
@@ -544,20 +557,30 @@ impl McpServer {
         Ok(Json(HistoryVersionOutput {
             id: param.id,
             body: frontmatter::strip(&content).to_string(),
+            // 戻すときに添える指紋。控えの本文ではなく、いまのノートの本文のもの
+            revision: notes::read(&self.data_dir, &filename)
+                .ok()
+                .map(|r| r.revision.to_string()),
         }))
     }
 
     #[tool(
         name = "restore_note",
-        description = "Bring a note back to a saved copy; the current version is saved first so the restore itself can be undone (the newest 20 copies per note are kept)"
+        description = "Bring a note back to a saved copy; the current version is saved first so the restore itself can be undone (the newest 20 copies per note are kept). Pass the revision you last read so an edit made in the meantime is not thrown away"
     )]
     fn restore_note(
         &self,
-        Parameters(param): Parameters<HistoryParam>,
+        Parameters(param): Parameters<RestoreNoteParam>,
     ) -> Result<Json<UpdatedNoteOutput>, String> {
         let filename = parse_filename(&param.filename)?;
-        let snapshot = magical_merchant_core::restore_note(&self.data_dir, &filename, &param.id)
-            .map_err(err)?;
+        let expected = param.revision.map(Revision::from);
+        let snapshot = magical_merchant_core::restore_note(
+            &self.data_dir,
+            &filename,
+            &param.id,
+            expected.as_ref(),
+        )
+        .map_err(err)?;
         Ok(Json(UpdatedNoteOutput {
             filename: filename.as_str().to_string(),
             snapshot: snapshot.map(Into::into),
@@ -1110,9 +1133,10 @@ mod tests {
         assert_eq!(old.body, "before");
 
         server
-            .restore_note(Parameters(HistoryParam {
+            .restore_note(Parameters(RestoreNoteParam {
                 filename: created.filename.clone(),
                 id: snapshot.id,
+                revision: None,
             }))
             .unwrap();
         assert_eq!(
@@ -1126,6 +1150,82 @@ mod tests {
             .unwrap()
             .0;
         assert_eq!(history.snapshots.len(), 2, "the restore also left a copy");
+    }
+
+    /// 復元も本文を丸ごと差し替える書き込み。履歴を読んでから戻すまでに
+    /// アプリで打った字は、`update_note` と同じように守られる。
+    #[test]
+    fn restoring_with_a_stale_revision_is_refused() {
+        let tmp = TempDir::new().unwrap();
+        let server = writable(tmp.path());
+        let created = server
+            .create_note(Parameters(CreateNoteParam {
+                body: "before".to_string(),
+                tags: None,
+            }))
+            .unwrap()
+            .0;
+        let filename = NoteFilename::parse(&created.filename).unwrap();
+        let updated = server
+            .update_note(Parameters(UpdateNoteParam {
+                filename: created.filename.clone(),
+                body: "after".to_string(),
+                revision: None,
+            }))
+            .unwrap()
+            .0;
+        let snapshot = updated.snapshot.unwrap();
+        // 控えを読んだ時点の指紋。ここから戻すつもりでいる
+        let old = server
+            .read_note_history(Parameters(HistoryParam {
+                filename: created.filename.clone(),
+                id: snapshot.id.clone(),
+            }))
+            .unwrap()
+            .0;
+        // 読んだあとにアプリが打った
+        magical_merchant_core::update_note(
+            &tmp.path().join("data/notes").join(&created.filename),
+            "from the app",
+            &Context::default(),
+            None,
+        )
+        .unwrap();
+
+        let result = server.restore_note(Parameters(RestoreNoteParam {
+            filename: created.filename.clone(),
+            id: snapshot.id.clone(),
+            revision: old.revision,
+        }));
+
+        let Err(message) = result else {
+            panic!("a stale revision must be refused");
+        };
+        assert!(message.contains("changed since it was read"));
+        assert_eq!(
+            magical_merchant_core::read_note_by_filename(tmp.path(), &filename).unwrap(),
+            "from the app"
+        );
+
+        // 読み直した指紋なら通る
+        let fresh = server
+            .read_note_history(Parameters(HistoryParam {
+                filename: created.filename.clone(),
+                id: snapshot.id.clone(),
+            }))
+            .unwrap()
+            .0;
+        server
+            .restore_note(Parameters(RestoreNoteParam {
+                filename: created.filename,
+                id: snapshot.id,
+                revision: fresh.revision,
+            }))
+            .unwrap();
+        assert_eq!(
+            magical_merchant_core::read_note_by_filename(tmp.path(), &filename).unwrap(),
+            "before"
+        );
     }
 
     const SVG: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\"><circle r=\"4\"/></svg>";

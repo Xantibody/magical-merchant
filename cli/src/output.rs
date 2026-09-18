@@ -408,4 +408,8 @@ pub(crate) struct HistoryVersionOutput {
     pub(crate) id: String,
     /// Markdown body of that version, without the frontmatter.
     pub(crate) body: String,
+    /// The note's revision as it stands now — pass it to `restore_note` so a
+    /// change made in the meantime is not thrown away. Absent if the note is
+    /// gone (a copy outlives the note it was taken from).
+    pub(crate) revision: Option<String>,
 }
