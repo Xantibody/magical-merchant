@@ -74,16 +74,16 @@ impl Timeline {
         }
     }
 
-    /// `raw` は書き手が読んだときの行。どの記録を指していたのかの控えで、
-    /// まだ照合には使っていない。
+    /// `raw` は書き手が読んだときの行。index がその行を指していなければ書かない。
     pub(crate) fn update_entry(
         &self,
         date: NaiveDate,
         index: usize,
-        _raw: &str,
+        raw: &str,
         text: &str,
     ) -> Result<(), CoreError> {
         self.rewrite(date, |day| {
+            expect_same_entry(day, index, raw)?;
             let entry = day
                 .entries_mut()
                 .get_mut(index)
@@ -98,14 +98,13 @@ impl Timeline {
         &self,
         date: NaiveDate,
         index: usize,
-        _raw: &str,
+        raw: &str,
     ) -> Result<(), CoreError> {
         self.rewrite(date, |day| {
-            let entries = day.entries_mut();
-            if index >= entries.len() {
-                return Err(CoreError::NotFound(format!("timeline entry {index}")));
-            }
-            entries.remove(index);
+            // 範囲の確認も `expect_same_entry` が済ませている — 行が無ければ
+            // 読んだ行とは一致しようがない
+            expect_same_entry(day, index, raw)?;
+            day.entries_mut().remove(index);
             Ok(())
         })
     }
@@ -133,6 +132,24 @@ impl Timeline {
         write_atomic(&file_path, day.render()?)?;
         Ok(())
     }
+}
+
+/// `index` がいま指している行が、書き手の読んだ `raw` と同じかを確かめる。
+///
+/// 日ファイルは追記で育つので、index は「読んだときの位置」でしかない。同期や
+/// ウィジェットがその日の前へ 1 行足せば、同じ index は隣の記録を指す。
+///
+/// 突き合わせるのは `read` が返した展開後の行。ディスク上の行は端末情報が
+/// frontmatter に畳まれていて、書き手はそれを見ていない。
+// AIDEV-NOTE: ずれは NotFound ではなく Stale — 出口が「読み直して再試行」で、消えた行とは違う
+fn expect_same_entry(day: &DayLog, index: usize, raw: &str) -> Result<(), CoreError> {
+    let Some(entry) = day.expanded_at(index) else {
+        return Err(CoreError::NotFound(format!("timeline entry {index}")));
+    };
+    if entry == raw {
+        return Ok(());
+    }
+    Err(CoreError::Stale(format!("timeline entry {index}")))
 }
 
 /// 本文だけを差し替え、時刻プレフィックスと末尾のコンテキスト JSON は元のまま残す。
@@ -227,6 +244,66 @@ mod tests {
         let result = timeline.update_entry(date(), 1, "- [09:00:00] only", "nope");
 
         assert!(matches!(result, Err(CoreError::NotFound(_))));
+    }
+
+    /// 読んでから書くまでに同じ日の前へ 1 行入ると、同じ index は隣の記録を
+    /// 指す。読んだ行と違うものを指していたら、書かずに断る。
+    #[test]
+    fn update_entry_refuses_a_line_it_did_not_read() {
+        let (_tmp, timeline) = seed(&["- [08:00:00] slipped in", "- [09:00:00] the one I read"]);
+
+        let result = timeline.update_entry(date(), 0, "- [09:00:00] the one I read", "edited");
+
+        assert!(matches!(result, Err(CoreError::Stale(_))));
+        assert_eq!(
+            timeline.read(date()).unwrap(),
+            vec!["- [08:00:00] slipped in", "- [09:00:00] the one I read"]
+        );
+    }
+
+    /// 誤削除はやり直しがきかない。指した行が読んだものと違うなら、
+    /// ファイルには 1 バイトも触れずに断る。
+    #[test]
+    fn delete_entry_refuses_a_line_it_did_not_read() {
+        let (tmp, timeline) = seed(&["- [08:00:00] slipped in", "- [09:00:00] the one I read"]);
+        let before = fs::read_to_string(timeline_file_path(tmp.path(), date())).unwrap();
+
+        let result = timeline.delete_entry(date(), 0, "- [09:00:00] the one I read");
+
+        assert!(matches!(result, Err(CoreError::Stale(_))));
+        assert_eq!(
+            fs::read_to_string(timeline_file_path(tmp.path(), date())).unwrap(),
+            before
+        );
+    }
+
+    /// 突き合わせるのは `read` が返した形。ディスク上の行は端末情報が
+    /// frontmatter へ畳まれているので、そのまま比べると端末を書いた日の
+    /// 削除がすべて断られる。
+    #[test]
+    fn delete_entry_matches_the_line_the_reader_was_given() {
+        let tmp = TempDir::new().unwrap();
+        let timeline = Timeline::new(tmp.path().to_path_buf());
+        let context = Context {
+            battery: Some(56),
+            os: "macos".to_string(),
+            hostname: Some("MacBook".to_string()),
+            ..Context::default()
+        };
+        timeline.save_entry("first", &context, Source::App).unwrap();
+        timeline
+            .save_entry("second", &context, Source::App)
+            .unwrap();
+
+        let today = Local::now().date_naive();
+        let raw = timeline.read(today).unwrap()[1].clone();
+        assert!(raw.contains("\"hostname\":\"MacBook\""));
+
+        timeline.delete_entry(today, 1, &raw).unwrap();
+
+        let entries = timeline.read(today).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert!(entries[0].contains("first"));
     }
 
     #[test]

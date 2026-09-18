@@ -694,8 +694,12 @@ const unifiedDiff = (from, to, fromName, toName) => {
       timeline.set(iso, [...(timeline.get(iso) ?? []), line]);
     },
     /** @param {{ date: string, index: number, raw: string }} args */
-    delete_timeline_entry: ({ date, index }) => {
+    delete_timeline_entry: ({ date, index, raw }) => {
       const lines = timeline.get(date) ?? [];
+      // core と同じ守り。index が読んだ行を指していなければ消さない
+      if (lines[index] !== raw) {
+        throw new Error(`Stale: timeline entry ${index}`);
+      }
       lines.splice(index, 1);
     },
     // 実機のジオコーダは即答しない。名前が後から届く画面を再現する
