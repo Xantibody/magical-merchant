@@ -82,7 +82,10 @@ local scan → diff → `POST /sync/bulk`, repeated until nothing is left over.
 - Conflicts keep the loser as `….sync-conflict-<ts>.md` in R2, and on disk
   as `conflicts/<key minus extension>/<ts>.md` — outside `data/`, same shape
   as `history/`, so it neither syncs back nor lands in the notes list.
-  The name is built and read back in `core/src/sync/conflict.rs` only
+  The name is built and read back in `core/src/sync/conflict.rs` only.
+  `<ts>` is precise to the second, so two copies of one key can want the same
+  name: a relocation never overwrites, the second takes `<ts>-2.md`
+  (`rename_without_clobber` in `core/src/utils/fs.rs`)
 - Auto sync runs a few seconds after any successful write
 - `data/codex/` syncs like everything else under `data/`: the Codex file and
   its `codex/<stem>/*.md` versions are ordinary keys. A build that predates

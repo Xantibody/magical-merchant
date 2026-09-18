@@ -60,6 +60,67 @@ pub fn write_atomic<C: AsRef<[u8]>>(path: &Path, contents: C) -> Result<(), Core
     Ok(())
 }
 
+/// 枝番を諦める上限。控えが同じ秒に 100 本並ぶことはないので、ここに当たるのは
+/// バグのとき。数え続けて固まるより、その 1 件を運ばず次の起動へ回す。
+const MAX_SPARE_NAMES: u32 = 100;
+
+/// `from` を `to` へ移す。`to` が塞がっていたら `-2`, `-3` … と枝番を足した
+/// 隣へ置き、実際に置いた場所を返す。
+///
+/// `write_atomic` とは逆で、既にあるものを消さないことがこの関数の仕事。
+/// 控えの名前は秒までしか持たないので、同じ秒に 2 回退避すると同じ名前を
+/// 指す。`fs::rename` は Unix では宛先を黙って消すため、素直に呼ぶと先に
+/// 取った控えが失われる — 控えは失った編集を取り戻すためだけのものなので、
+/// 消える控えは置かないのと同じ。
+///
+/// AIDEV-NOTE: 空き確認は `create_new`(`O_EXCL`)で。`exists()` → `rename` は見てから移すまでの隙に負ける
+pub fn rename_without_clobber(from: &Path, to: &Path) -> Result<PathBuf, CoreError> {
+    for n in 1..=MAX_SPARE_NAMES {
+        let candidate = if n == 1 {
+            to.to_path_buf()
+        } else {
+            spare_name(to, n)
+        };
+        let reserved = match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&candidate)
+        {
+            Ok(_) => true,
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => false,
+            Err(e) => return Err(e.into()),
+        };
+        if reserved {
+            // 名前は押さえた。中身を入れるのは自分が作った空ファイルの
+            // 上への rename なので、ここで消えるのは自分の目印だけ
+            return fs::rename(from, &candidate)
+                .map(|()| candidate.clone())
+                .inspect_err(|_| {
+                    let _ = fs::remove_file(&candidate);
+                })
+                .map_err(CoreError::from);
+        }
+    }
+    Err(CoreError::Io(std::io::Error::new(
+        std::io::ErrorKind::AlreadyExists,
+        format!("{} and its spare names are all taken", to.display()),
+    )))
+}
+
+/// `a/b.md` の 2 番目 → `a/b-2.md`。拡張子は残す — 控えも `.md` のまま
+/// 読めないと、戻すときに開けない。
+fn spare_name(path: &Path, n: u32) -> PathBuf {
+    let stem = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("conflict");
+    let name = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map_or_else(|| format!("{stem}-{n}"), |ext| format!("{stem}-{n}.{ext}"));
+    path.with_file_name(name)
+}
+
 /// `e.path()` はディレクトリ名まで含めた `PathBuf` を確保する。拡張子を見るだけなら
 /// ファイル名で足りるので、エントリごとの確保をそのぶん小さくできる。
 fn is_md(entry: &DirEntry) -> bool {
@@ -160,6 +221,64 @@ mod tests {
             .map(|e| e.unwrap().file_name().to_string_lossy().to_string())
             .collect();
         assert_eq!(names, vec!["note.md"]);
+    }
+
+    #[test]
+    fn rename_without_clobber_moves_to_a_free_name() {
+        let tmp = TempDir::new().unwrap();
+        let from = tmp.path().join("a.md");
+        let to = tmp.path().join("b.md");
+        fs::write(&from, "body").unwrap();
+
+        assert_eq!(rename_without_clobber(&from, &to).unwrap(), to);
+
+        assert!(!from.exists());
+        assert_eq!(fs::read_to_string(&to).unwrap(), "body");
+    }
+
+    /// 宛先が塞がっていても消さない。控えは失った編集を取り戻すためのもので、
+    /// 上書きされる控えは置かないのと同じ。
+    #[test]
+    fn rename_without_clobber_keeps_what_is_already_there() {
+        let tmp = TempDir::new().unwrap();
+        let from = tmp.path().join("a.md");
+        let to = tmp.path().join("b.md");
+        fs::write(&from, "newcomer").unwrap();
+        fs::write(&to, "the one already there").unwrap();
+
+        let landed = rename_without_clobber(&from, &to).unwrap();
+
+        assert_eq!(landed, tmp.path().join("b-2.md"));
+        assert_eq!(fs::read_to_string(&to).unwrap(), "the one already there");
+        assert_eq!(fs::read_to_string(&landed).unwrap(), "newcomer");
+    }
+
+    /// 枝番は空くまで進む。拡張子は落とさない — `.md` でないと戻すとき読めない。
+    #[test]
+    fn rename_without_clobber_counts_up_until_a_name_is_free() {
+        let tmp = TempDir::new().unwrap();
+        let to = tmp.path().join("b.md");
+        fs::write(&to, "first").unwrap();
+        fs::write(tmp.path().join("b-2.md"), "second").unwrap();
+        let from = tmp.path().join("a.md");
+        fs::write(&from, "third").unwrap();
+
+        let landed = rename_without_clobber(&from, &to).unwrap();
+
+        assert_eq!(landed, tmp.path().join("b-3.md"));
+        assert_eq!(fs::read_to_string(&landed).unwrap(), "third");
+    }
+
+    /// 元が無ければ何も置いていかない。押さえた名前を空ファイルのまま
+    /// 残すと、次の控えが「塞がっている」と読んで枝番へ逃げ続ける。
+    #[test]
+    fn rename_without_clobber_leaves_no_placeholder_when_the_move_fails() {
+        let tmp = TempDir::new().unwrap();
+        let to = tmp.path().join("b.md");
+
+        assert!(rename_without_clobber(&tmp.path().join("nope.md"), &to).is_err());
+
+        assert!(!to.exists());
     }
 
     /// クラッシュで万一残っても、`.md` でないのでノート一覧には現れず、

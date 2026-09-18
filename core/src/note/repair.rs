@@ -6,7 +6,7 @@ use chrono::{DateTime, FixedOffset, Local, NaiveDateTime, TimeZone as _, Utc};
 use crate::error::CoreError;
 use crate::sync::conflict::{conflict_copy_path, conflict_filename};
 use crate::utils::frontmatter::{self, NoteFrontmatter};
-use crate::utils::fs::{ensure_dir, list_md_files, write_atomic};
+use crate::utils::fs::{ensure_dir, list_md_files, rename_without_clobber, write_atomic};
 use crate::utils::paths::{NOTES_DIR, codex_dir, conflicts_dir, data_dir, notes_dir};
 
 /// 編集画面が frontmatter ごと Milkdown に通していた時期に保存されたノートは、
@@ -97,7 +97,7 @@ fn relocate_duplicate_ids_at(base_dir: &Path, now: DateTime<Utc>) -> usize {
             continue;
         };
         let target = conflicts.join(relative);
-        if ensure_dir(&target).is_err() || fs::rename(entry.path(), &target).is_err() {
+        if ensure_dir(&target).is_err() || rename_without_clobber(&entry.path(), &target).is_err() {
             continue;
         }
         moved += 1;
@@ -126,7 +126,7 @@ fn relocate_under(root: &Path, current: &Path, conflicts: &Path, moved: &mut usi
             continue;
         };
         let target = conflicts.join(relative);
-        if ensure_dir(&target).is_err() || fs::rename(&path, &target).is_err() {
+        if ensure_dir(&target).is_err() || rename_without_clobber(&path, &target).is_err() {
             continue;
         }
         *moved += 1;
@@ -455,5 +455,72 @@ mod tests {
         assert_eq!(relocate_conflict_copies(tmp.path()), 0);
         assert!(notes_dir(tmp.path()).join("20260320_033440.md").exists());
         assert!(!conflicts_dir(tmp.path()).exists());
+    }
+
+    // ──────────── 重複 ID の引っ越し ────────────
+
+    fn seed_codex(base: &Path, name: &str, content: &str) {
+        let codex = codex_dir(base);
+        fs::create_dir_all(&codex).unwrap();
+        fs::write(codex.join(name), content).unwrap();
+    }
+
+    fn conflict_copies(base: &Path, stem: &str) -> Vec<String> {
+        let dir = conflicts_dir(base).join(NOTES_DIR).join(stem);
+        let mut found: Vec<String> = fs::read_dir(&dir)
+            .unwrap()
+            .filter_map(Result::ok)
+            .map(|e| fs::read_to_string(e.path()).unwrap())
+            .collect();
+        found.sort();
+        found
+    }
+
+    /// 1 回の同期で、入口と成功の直前の 2 回走る。あいだのダウンロードが
+    /// 同じ ID を `notes/` に戻すので、同じ秒に 2 回退避することが実際に起きる。
+    /// 控えの名前は秒までしか持たないので、2 回目の宛先は 1 回目と同じ。
+    /// そこで素直に `rename` すると、Unix では黙って 1 回目の控えが消える。
+    #[test]
+    fn a_second_relocation_in_the_same_second_keeps_the_first_copy() {
+        let tmp = TempDir::new().unwrap();
+        let now = Utc.with_ymd_and_hms(2026, 5, 11, 3, 13, 36).unwrap();
+        seed_codex(tmp.path(), "20260320_033440.md", "the codex");
+        seed_note(tmp.path(), "20260320_033440.md", "the offline edit");
+
+        assert_eq!(relocate_duplicate_ids_at(tmp.path(), now), 1);
+        // ダウンロードが同じ ID をもう一度 `notes/` に置いた
+        seed_note(tmp.path(), "20260320_033440.md", "the downloaded one");
+        assert_eq!(relocate_duplicate_ids_at(tmp.path(), now), 1);
+
+        assert_eq!(
+            conflict_copies(tmp.path(), "20260320_033440"),
+            vec!["the downloaded one", "the offline edit"]
+        );
+        assert!(!notes_dir(tmp.path()).join("20260320_033440.md").exists());
+        assert!(codex_dir(tmp.path()).join("20260320_033440.md").exists());
+    }
+
+    /// 古い名前(点が 1 つ多い)と今の名前は同じ控えを指す。どちらも
+    /// `notes/<stem>/<時刻>.md` へ行くので、同じ引っ越しの中で衝突する。
+    #[test]
+    fn two_copies_of_the_same_second_both_survive_the_move() {
+        let tmp = TempDir::new().unwrap();
+        seed_note(
+            tmp.path(),
+            "20260320_033440.sync-conflict-20260511-031336.md",
+            "new shape",
+        );
+        seed_note(
+            tmp.path(),
+            "20260320_033440.sync-conflict-20260511-031336..md",
+            "old shape",
+        );
+
+        assert_eq!(relocate_conflict_copies(tmp.path()), 2);
+
+        assert_eq!(
+            conflict_copies(tmp.path(), "20260320_033440"),
+            vec!["new shape", "old shape"]
+        );
     }
 }

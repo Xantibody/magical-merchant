@@ -116,6 +116,11 @@ On a conflict the local copy wins the key, and the overwritten remote copy is
 kept both in R2 under `….sync-conflict-<timestamp>.md` and on disk under
 `conflicts/<key without its extension>/<timestamp>.md`. That directory sits
 outside `data/`, so a copy neither syncs back nor appears in the notes list.
+The timestamp is only precise to the second, so two copies of the same key can
+ask for the same name — the repair pass runs twice per sync, and a download
+between the two passes is enough. The second copy is filed as
+`<timestamp>-2.md`; a copy is never overwritten, because a copy that can be
+replaced is no better than not keeping one.
 
 ## Deployment
 
