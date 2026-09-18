@@ -151,8 +151,8 @@ the place it used to occupy. Walk the versions with the spine (`↑`/`↓` once
 a row has focus) or with the card, and the marks move with them; `Esc`
 closes the history and the editor comes back. この版に戻す makes that version
 the draft again, and the draft you are leaving is committed first as
-_before restore_, so a restore is itself undoable from the same list. A read-only Codex cannot be restored, for the
-same reason it cannot be edited.
+_before restore_, so a restore is itself undoable from the same list. A
+read-only Codex cannot be restored, for the same reason it cannot be edited.
 
 On disk a version is
 `data/codex/<id>/<YYYYMMDD_HHMMSS>-<first 8 hex of the body's SHA-256>.md`:

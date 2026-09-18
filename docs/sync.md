@@ -23,8 +23,8 @@ two keys to the protocol, not one. If one device promotes a note while
 another edits it offline, the same ID can arrive in both directories; the app
 runs `relocate_duplicate_ids` after every successful sync, and once per
 process in the repair pass below, which keeps the Codex and moves the
-`notes/` copy to
-`conflicts/notes/<stem>/<timestamp>.md` — the same place a sync conflict goes.
+`notes/` copy to `conflicts/notes/<stem>/<timestamp>.md` — the same place a
+sync conflict goes.
 
 One sync is a loop of rounds. One attempt at a round is `GET /sync-state` →
 local scan → diff → one `POST /sync/bulk`, and losing the compare-and-swap
