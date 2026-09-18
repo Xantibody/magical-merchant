@@ -200,6 +200,10 @@ describe("OAuth entry and exit", () => {
       "magical-merchant-evil://auth/callback",
       "not a url",
       "",
+      // ループバックでも `?token=` は末尾に足される。クエリや断片が先に
+      // 付いていると、listener はトークンを 1 文字も受け取れない
+      `${LOOPBACK_REDIRECT}?next=evil`,
+      `${LOOPBACK_REDIRECT}#`,
     ])("refuses app_redirect %o", async (appRedirect) => {
       const res = await authGoogle(appRedirect);
 
@@ -221,8 +225,12 @@ describe("OAuth entry and exit", () => {
       "magical-merchant://AUTH/callback",
       // クエリを足せると、戻り先の URL が `?token=` より前で終わらない
       "magical-merchant://auth/callback?next=evil",
-      // 断片が付くと `?token=` はその後ろに回り、アプリには届かない
+      // 断片が付くと `?token=` はその後ろに回り、アプリには届かない。
+      // 空の断片・空のクエリは URL 解析が hash / search を "" と報告するので、
+      // 条件を並べて見ていたころは素通りしていた
       "magical-merchant://auth/callback#frag",
+      "magical-merchant://auth/callback#",
+      "magical-merchant://auth/callback?",
     ])("refuses the deep link %o", async (appRedirect) => {
       const res = await authGoogle(appRedirect);
 
@@ -273,6 +281,8 @@ describe("OAuth entry and exit", () => {
       "http://127.0.0.1:1@evil.example/",
       "http://evil.example/callback",
       "magical-merchant://steal/callback",
+      // ここを通すと、返す HTML のリンクが `…/callback#?token=` になる
+      "magical-merchant://auth/callback#",
     ])("refuses to send the token to %o", async (appRedirect) => {
       stubGoogle();
 

@@ -255,8 +255,7 @@ function getCookie(request: Request, name: string): string | null {
  * 割り当てておらず、認証が使うのはそのうち `auth/callback` だけ。
  */
 const DEEP_LINK_PROTOCOL = "magical-merchant:";
-const DEEP_LINK_HOST = "auth";
-const DEEP_LINK_PATH = "/callback";
+const DEEP_LINK_REDIRECT = "magical-merchant://auth/callback";
 
 /**
  * `app_redirect` は認証のあと JWT を載せて送り返す先。ここを緩めると、
@@ -268,6 +267,7 @@ const DEEP_LINK_PATH = "/callback";
  *
  * AIDEV-NOTE: 文字列の前方一致では不十分。`http://127.0.0.1:1@evil.example/` は host が evil.example で userinfo が 127.0.0.1
  * AIDEV-NOTE: deep link はスキームだけでは絞れない。別アプリが magical-merchant://steal/… を登録すれば JWT がそのアプリに届く
+ * AIDEV-NOTE: 条件の並置ではなく正規化した href と丸ごと比べる。`…/callback#` は hash を "" と報告するので条件では抜ける
  */
 function parseAppRedirect(redirect: string): URL | null {
   let url: URL;
@@ -281,15 +281,16 @@ function parseAppRedirect(redirect: string): URL | null {
     return null;
   }
   if (url.protocol === DEEP_LINK_PROTOCOL) {
-    // クエリも断片も付けさせない。付くと `?token=` を足す先が末尾でなくなる
-    const exact =
-      url.hostname === DEEP_LINK_HOST &&
-      url.pathname === DEEP_LINK_PATH &&
-      url.search === "" &&
-      url.hash === "";
-    return exact ? url : null;
+    // 通る形は 1 つしかない。ならば条件を数えるより、正規化した URL を
+    // その 1 つと丸ごと比べる方が確実
+    return url.href === DEEP_LINK_REDIRECT ? url : null;
   }
-  return url.protocol === "http:" && url.hostname === "127.0.0.1" ? url : null;
+  if (url.protocol !== "http:" || url.hostname !== "127.0.0.1") {
+    return null;
+  }
+  // ループバックも同じ理由でクエリと断片を許さない。`?token=` は末尾に
+  // 足されるので、先に `?` や `#` があるとトークンが listener に届かない
+  return url.href === `${url.origin}${url.pathname}` ? url : null;
 }
 
 function escapeHtml(value: string): string {
@@ -346,7 +347,7 @@ function getJwtExpiry(env: Env): number {
 /** OAuth の入口: Google の同意画面へ 302 で送り出す。 */
 function handleAuthGoogle(url: URL, env: Env): Response {
   const state = generateState();
-  const appRedirect = url.searchParams.get("app_redirect") ?? "magical-merchant://auth/callback";
+  const appRedirect = url.searchParams.get("app_redirect") ?? DEEP_LINK_REDIRECT;
   if (!parseAppRedirect(appRedirect)) {
     return errorResponse("Invalid app_redirect", 400);
   }
@@ -435,9 +436,7 @@ async function handleAuthCallback(request: Request, url: URL, env: Env): Promise
   const appRedirectCookie = getCookie(request, "__oauth_app_redirect");
   let appRedirect: string;
   try {
-    appRedirect = appRedirectCookie
-      ? decodeURIComponent(appRedirectCookie)
-      : "magical-merchant://auth/callback";
+    appRedirect = appRedirectCookie ? decodeURIComponent(appRedirectCookie) : DEEP_LINK_REDIRECT;
   } catch {
     // 不正な %-エンコーディングで例外 → 500 になるのを防ぐ
     return errorResponse("Invalid redirect", 400);
@@ -448,8 +447,9 @@ async function handleAuthCallback(request: Request, url: URL, env: Env): Promise
   if (!parsedRedirect) {
     return errorResponse("Invalid redirect", 400);
   }
-  const separator = appRedirect.includes("?") ? "&" : "?";
-  const redirectUrl = `${appRedirect}${separator}token=${encodeURIComponent(jwt)}`;
+  // 送り先は正規化した URL から組む。検証を通った文字列でも、生のままだと
+  // `?token=` の前に何が付いているかは検証の形に依存してしまう
+  const redirectUrl = `${parsedRedirect.href}?token=${encodeURIComponent(jwt)}`;
 
   const clearCookies = new Headers([
     ["Content-Type", "text/html; charset=utf-8"],
