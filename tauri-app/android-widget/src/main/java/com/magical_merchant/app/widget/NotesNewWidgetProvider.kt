@@ -9,8 +9,9 @@ import com.magical_merchant.app.R
 /**
  * 2b (top bar) — "new note" (4x1).
  *
- * Presentation only: a tap opens the app on the new-note deep link. The recent
- * notes list (RemoteViewsService + ListView) is phase 3 and is not here.
+ * Presentation only: a tap opens the app on the new-note deep link. Nothing is
+ * read, so this is the one provider that never touches [WidgetBridge] — the
+ * recent notes are [NotesListWidgetProvider]'s 4x2, a separate widget.
  */
 class NotesNewWidgetProvider : AppWidgetProvider() {
     override fun onUpdate(

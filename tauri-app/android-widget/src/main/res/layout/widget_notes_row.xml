@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- One note in the 2b list: title with the update date trailing it, mirroring
-     the app's notes list two-line row compressed to one. -->
+<!-- One note in the 2b list: title with the creation date trailing it, mirroring
+     the app's notes list two-line row compressed to one. The date is the note's
+     frontmatter `time` (widget_summary.rs), which is when it was made and never
+     moves; `updated` is not read here. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_notes_row"
     android:layout_width="match_parent"
