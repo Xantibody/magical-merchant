@@ -76,6 +76,17 @@ async fn run_over<T: SyncTransport + Sync, F: FnMut(RoundProgress)>(
 
     sweep_stale_temp_files(base_dir);
 
+    run_rounds(client, base_dir, budget, &mut on_round).await
+}
+
+/// round を回し切るまで。`run_over` から切り出してあるのは、ロックを持って
+/// いるあいだにやることを入口の数行で読めるようにするため。
+async fn run_rounds<T: SyncTransport + Sync, F: FnMut(RoundProgress)>(
+    client: &T,
+    base_dir: &Path,
+    budget: usize,
+    on_round: &mut F,
+) -> Result<SyncResult, SyncError> {
     let mut total = SyncResult::default();
     for round in 1..=MAX_ROUNDS {
         let outcome = sync_round(client, base_dir, budget).await?;
