@@ -15,8 +15,13 @@ documents and their committed versions under `data/codex/`, templates, and
 the glyph images under `data/glyphs/` — with no filter on the extension;
 file contents travel base64-encoded, which is why a single glyph is capped
 at 256 KiB. A version is an ordinary key like any other, which is what makes
-a Codex's history the same on every device, and a build that predates Codex
-simply never walks that directory.
+a Codex's history the same on every device. No directory is on an allow-list:
+`scan_local_files` walks `data/` from the root and the only names it skips
+are the sync state and `write_atomic`'s temporary files, so a build that
+predates Codex carries `codex/` up and down with everything else. It just
+has nowhere to show it — its notes list reads `data/notes/` alone, so the
+document and its versions sit on disk unlisted until that device is
+updated. Nothing is dropped and nothing is deleted in the meantime.
 
 A Codex is a Note that was renamed from `notes/` to `codex/`, and a rename is
 two keys to the protocol, not one. If one device promotes a note while
