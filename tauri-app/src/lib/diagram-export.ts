@@ -69,6 +69,19 @@ export function textToBase64(text: string): string {
   return btoa(binary);
 }
 
+/** 図の原寸から、実際に用意する canvas の大きさ(px) */
+export function pngCanvasSize(size: Size): Size {
+  return {
+    width: Math.round(size.width * PNG_SCALE),
+    height: Math.round(size.height * PNG_SCALE),
+  };
+}
+
+/** `toDataURL` の返り値から base64 の中身だけを取り出す */
+export function pngBase64(dataUrl: string): string {
+  return dataUrl.slice(dataUrl.indexOf(",") + 1);
+}
+
 /**
  * SVG を PNG に描き、base64 で返す。`background` で塗るのは、透明のままだと
  * 暗い背景のビューアで線が消えるため。画像は data URL で読む — Blob URL でも
@@ -85,8 +98,9 @@ export async function rasterize(svg: string, background: string): Promise<string
   await image.decode();
 
   const canvas = document.createElement("canvas");
-  canvas.width = Math.round(size.width * PNG_SCALE);
-  canvas.height = Math.round(size.height * PNG_SCALE);
+  const { width, height } = pngCanvasSize(size);
+  canvas.width = width;
+  canvas.height = height;
   const context = canvas.getContext("2d");
   if (!context) {
     throw new Error("canvas is unavailable");
@@ -96,8 +110,7 @@ export async function rasterize(svg: string, background: string): Promise<string
   context.drawImage(image, 0, 0, canvas.width, canvas.height);
 
   // toBlob と違って同期で、結果はそのまま base64。汚染されていれば例外
-  const dataUrl = canvas.toDataURL("image/png");
-  return dataUrl.slice(dataUrl.indexOf(",") + 1);
+  return pngBase64(canvas.toDataURL("image/png"));
 }
 
 /**

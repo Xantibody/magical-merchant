@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { exportName, naturalSize, rasterize, sizedSvg, textToBase64 } from "./diagram-export";
+import {
+  exportName,
+  naturalSize,
+  pngBase64,
+  pngCanvasSize,
+  rasterize,
+  sizedSvg,
+  textToBase64,
+} from "./diagram-export";
 
 /** mermaid が返す形。width 100% と max-width で本文幅に収まるようにしてある */
 const MERMAID_SVG =
@@ -44,6 +52,18 @@ describe("sizedSvg", () => {
 
   it("refuses anything that is not an svg", () => {
     expect(() => sizedSvg("<p>no</p>")).toThrow("not an svg");
+  });
+});
+
+describe("pngCanvasSize", () => {
+  it("draws at twice the natural size, so the text is not blurred on a retina screen", () => {
+    expect(pngCanvasSize({ width: 320.5, height: 120 })).toStrictEqual({ width: 641, height: 240 });
+  });
+});
+
+describe("pngBase64", () => {
+  it("takes the payload out of a png data url", () => {
+    expect(pngBase64("data:image/png;base64,iVBORw0KGgo=")).toBe("iVBORw0KGgo=");
   });
 });
 
