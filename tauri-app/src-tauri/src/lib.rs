@@ -116,6 +116,9 @@ fn promote_note_to_codex(handle: AppHandle, filename: String) -> Result<(), Stri
 ///   打った字は退避して知らせる — 何度書き直しても通らない
 /// - `missing`: ノートがもう無い(消された・Codex へ移った)。core は
 ///   作り直さないので、これも打った字を退避して知らせる
+/// - `notText`: ファイルの中身が文字として読めない(不正な UTF-8)。
+///   `broken` と分けるのは、伝わる意味と手当てが違うから — 記録の書き直しでは
+///   直らず、開き直しても本文が読めないので「戻す」で取り出す道も無い
 #[derive(Debug, Clone, serde::Serialize)]
 struct SaveError {
     kind: &'static str,
@@ -140,6 +143,7 @@ impl From<magical_merchant_core::CoreError> for SaveError {
                 magical_merchant_core::CoreError::Stale(_) => "stale",
                 magical_merchant_core::CoreError::Parse(_) => "broken",
                 magical_merchant_core::CoreError::NotFound(_) => "missing",
+                magical_merchant_core::CoreError::NotText(_) => "notText",
                 _ => "other",
             },
             message: e.to_string(),
@@ -716,6 +720,24 @@ pub fn run() {
 mod tests {
     use super::*;
     use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+
+    /// 文字として読めないノートへの保存は、読み直しても直らない拒否。
+    /// `other` に落とすと画面はこれを一時的な失敗として黙って捨て、打った字は
+    /// ディスクにも控えにも残らないまま、警告も出ないで閉じられる。
+    #[test]
+    fn a_note_that_is_not_text_is_refused_under_its_own_mark() {
+        let not_text = SaveError::from(magical_merchant_core::CoreError::NotText(
+            "a.md".to_string(),
+        ));
+        // 一時的な失敗は印を持たないまま。次の打鍵で通る望みがあるので、
+        // 退避して「もう書けません」と言う相手ではない
+        let io = SaveError::from(magical_merchant_core::CoreError::Io(std::io::Error::other(
+            "disk full",
+        )));
+
+        assert_eq!(not_text.kind, "notText");
+        assert_eq!(io.kind, "other");
+    }
 
     /// 署名は誰も見ない (`sync::token::is_token_valid` と同じ理由) ので 3 つのパートを直に組む
     fn jwt(expires_in: i64) -> String {

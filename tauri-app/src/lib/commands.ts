@@ -51,10 +51,11 @@ interface NoteRead {
 /**
  * `update_draft` の失敗。`stale` は「読んでから誰かが書き換えた」、
  * `broken` は「ノート先頭の記録が読めないので core が断った」、
- * `missing` は「ノートがもう無いので core が断った」。
+ * `missing` は「ノートがもう無いので core が断った」、
+ * `notText` は「ファイルの中身が文字として読めないので core が断った」。
  */
 interface SaveError {
-  kind: "stale" | "broken" | "missing" | "other";
+  kind: "stale" | "broken" | "missing" | "notText" | "other";
   message: string;
 }
 
@@ -83,6 +84,19 @@ export function isBrokenNoteSave(error: unknown): boolean {
  */
 export function isMissingNoteSave(error: unknown): boolean {
   return saveErrorKind(error) === "missing";
+}
+
+/**
+ * 保存しようとした先のファイルが文字として読めない(不正な UTF-8)。同期や
+ * 外の道具が置いていったバイト列で、`broken` と同じく読み直しても直らない —
+ * 呼ぶ側は打った字を退避して人に知らせる。
+ *
+ * `broken` と分けるのは伝わる意味が違うから。壊れているのは先頭の記録では
+ * なくファイルそのもので、`read_note` も同じ理由で断られる。つまり開き直して
+ * 「戻す」で控えを画面に出す道が無い — そこまで案内すると嘘になる。
+ */
+export function isNotTextNoteSave(error: unknown): boolean {
+  return saveErrorKind(error) === "notText";
 }
 
 /** テンプレ一覧の 1 件。 */

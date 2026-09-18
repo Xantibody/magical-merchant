@@ -160,7 +160,7 @@ const charCount = (text) => [...text].length;
  * `update_draft` の失敗。本物は Rust 側の JSON がそのまま届くので `kind` を持つ
  * ただのオブジェクトだが、Error に同じキーを生やしても `isStaleSave` の見る形は
  * 変わらない(`typeof` が object で `kind` を持つ)。
- * @param {"stale" | "broken" | "missing" | "other"} kind
+ * @param {"stale" | "broken" | "missing" | "notText" | "other"} kind
  * @param {string} message
  */
 const saveError = (kind, message) => Object.assign(new Error(message), { kind });

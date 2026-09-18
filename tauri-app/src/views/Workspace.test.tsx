@@ -94,6 +94,11 @@ let writeGate: Promise<void> | undefined;
 let openWriteGate: (() => void) | undefined;
 /** 先頭の記録が読めないノート。core がこれに書き込みを断る。 */
 let brokenMeta: Set<string>;
+/**
+ * 中身が文字として読めないノート(不正な UTF-8)。同期や外の道具が置いていった
+ * バイト列で、core は読む段で断る — 書き込みも、そのあとの読み直しも。
+ */
+let notText: Set<string>;
 /** read_note を失敗させる。ディスクが一時的に読めない端末を再現する。 */
 let readFails: boolean;
 
@@ -139,7 +144,8 @@ const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
   find_backlinks: () => [],
   read_note: async ({ filename }) => {
     await readGate;
-    if (readFails) {
+    // 文字として読めないファイルは読む段で断られる。開き直しても本文は載らない
+    if (readFails || notText.has(String(filename))) {
       throw new Error(`could not read: ${String(filename)}`);
     }
     const body = disk.get(String(filename));
@@ -165,6 +171,10 @@ const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
     // core はノートを作り直さない。消えたノートへの保存は探す段で断られる
     if (current === undefined) {
       throw saveError("missing", `Not found: ${name}`);
+    }
+    // core は中身を読めないファイルには書かない。読み直しでも直らない
+    if (notText.has(name)) {
+      throw saveError("notText", `Not text: ${name} is not valid UTF-8`);
     }
     // core は記録をでっち上げて書くより断る。読み直しても直らない
     if (brokenMeta.has(name)) {
@@ -405,6 +415,7 @@ async function setupWorkspace(): Promise<void> {
   kinds = new Map();
   versions = new Map();
   brokenMeta = new Set();
+  notText = new Set();
   readFails = false;
   calls = [];
   shell = undefined;
@@ -1074,6 +1085,29 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     expect(shell?.toast()?.message).toMatch(/写して/u);
   });
 
+  // 開いているノートが、同期や外の道具に文字として読めないバイト列で
+  // 置き換えられた。core は読む段で書き込みを断るが、それを一時的な失敗と
+  // して黙って捨てると、打った字はディスクにも控えにも残らず、警告も出ない
+  // ままそのノートを閉じられる
+  it("backs up the draft and says so when the note is no longer text", async () => {
+    await openNoteA();
+    await startEditingBody();
+    // 打鍵から保存が飛ぶまでのあいだに、同期が読めないバイト列を置いていく
+    duringSave = () => notText.add(FILE_A);
+    typeInEditor?.(`${TEXT_A}\n\n読めなくなったノートに足した行`);
+
+    await waitFor(() => expect(countOf("update_draft")).toBe(1), { timeout: 3000 });
+    await waitFor(() => expect(shell?.toast()?.message).toMatch(/文字として読めない/u));
+    expect(localStorage.getItem(`note-backup:${FILE_A}`)).toContain(
+      "読めなくなったノートに足した行",
+    );
+    // 開き直しても本文が読めないので、「戻す」で取り出せるとは言わない
+    expect(shell?.toast()?.message).not.toMatch(/戻す/u);
+    expect(shell?.toast()?.message).toMatch(/写して/u);
+    // 断られた書き込みは何も変えない
+    expect(disk.get(FILE_A)).toBe(BODY_A);
+  });
+
   // 「画面にあるうちに写して」が届くのは、断られたノートが画面に出ている
   // ときだけ。往復のあいだに隣へ移っていると、画面にあるのは別のノートの
   // 本文で、指した先には写すものが無い。名乗って、控えの在り処を言う
@@ -1198,6 +1232,24 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     await waitFor(() => expect(screen.getByText("壊れたノートで打った行")).toBeDefined());
     expect(shell?.toast()?.message).toMatch(/ディスクには書けない/u);
     // 断られた書き込みは何も変えない。控えはまだ唯一の写しなので入れ替えない
+    expect(disk.get(FILE_A)).toBe(BODY_A);
+    expect(localStorage.getItem(`note-backup:${FILE_A}`)).toBe(typed);
+  });
+
+  // 文字として読めなくなったノートも「戻す」の書き込みを断る。書けないことを
+  // 理由に控えを見せないと、開いているあいだに取り出す最後の道が閉じる —
+  // 開き直せば本文ごと読めないので、次の機会はもう無い
+  it("shows the backup on screen when the note it belongs to is no longer text", async () => {
+    const typed = `# ${TITLE_A}\n\n読めなくなる前に打った行`;
+    localStorage.setItem(`note-backup:${FILE_A}`, typed);
+    await openNoteA();
+    // 開いたあとにファイルが読めないバイト列になった。画面の本文はまだ在る
+    notText.add(FILE_A);
+
+    await runNoteAction("編集前に戻す");
+
+    await waitFor(() => expect(screen.getByText("読めなくなる前に打った行")).toBeDefined());
+    expect(shell?.toast()?.message).toMatch(/ディスクには書けない/u);
     expect(disk.get(FILE_A)).toBe(BODY_A);
     expect(localStorage.getItem(`note-backup:${FILE_A}`)).toBe(typed);
   });

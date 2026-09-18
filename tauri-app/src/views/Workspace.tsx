@@ -21,7 +21,13 @@ import NoteMetaPopover from "../components/NoteMetaPopover";
 import TemplatePicker from "../components/TemplatePicker";
 import VersionSlider from "../components/VersionSlider";
 import VersionSpine from "../components/VersionSpine";
-import { isBrokenNoteSave, isMissingNoteSave, isStaleSave, typedInvoke } from "../lib/commands";
+import {
+  isBrokenNoteSave,
+  isMissingNoteSave,
+  isNotTextNoteSave,
+  isStaleSave,
+  typedInvoke,
+} from "../lib/commands";
 import { getDeviceSignals } from "../lib/client-context";
 import { createDebouncedAccessor } from "../lib/debounce";
 import { markedBody } from "../lib/diff-marks";
@@ -132,15 +138,25 @@ function versionStatusLabel(status: VersionStatus): string {
 }
 
 /**
+ * 読み直しでは直らない拒否か。壊れた記録・消えたノート・文字として読めない
+ * ファイルの 3 つ。どれも次の打鍵に望みが無いので、打った字はその場で退避する。
+ * 判断を 1 か所に置くのは、印が増えたときに退避の経路から漏れると、打った字が
+ * ディスクにも控えにも残らないまま黙って消えるから。
+ */
+const refusedForGood = (error: unknown): boolean =>
+  isBrokenNoteSave(error) || isMissingNoteSave(error) || isNotTextNoteSave(error);
+
+/**
  * 断られた保存の言い分。`shown` は「断られたノートがいま画面に出ているか」で、
  * 出ていないなら画面の本文を指す案内は届かない — 画面にあるのは別のノートで、
  * 写す相手がそこに無い。名乗ってから、控えの在り処と取り出せるかだけを言う。
- * 消えたノートの控えは、控えとしては残るが、いま取り出す道が無い。開き直しても
- * `read_note` が断られるので本文は載らず、「戻す」もそこで引き返す。
+ * 消えたノートと、文字として読めないノートの控えは、控えとしては残るが、いま
+ * 取り出す道が無い。開き直しても `read_note` が断られるので本文は載らず、
+ * 「戻す」もそこで引き返す。
  * Stale だけはノートが書ける状態で残るので、開き直せば「戻す」で取り出せる —
  * ただし読み直しは選んでいるノートにしか走らないので、画面に無いぶんは
  * 「開き直してから」を先に言う。
- * AIDEV-NOTE: 孤児の控えを開く一覧が無いので、画面に無いノートの拒否は文言で正直に言うに留める(取り出す道は別 PR)
+ * AIDEV-NOTE: 孤児の控え(消えた・読めないノートのぶん)を開く一覧が無いので、取り出せないことを文言で正直に言うに留める(道は別 PR)
  */
 function refusalToast(error: unknown, kept: boolean, item: NoteItem, shown: boolean): string {
   const words = t().notes;
@@ -158,6 +174,12 @@ function refusalToast(error: unknown, kept: boolean, item: NoteItem, shown: bool
   }
   if (isMissingNoteSave(error)) {
     return shown ? words.missingNote : words.missingNoteAway(item.title);
+  }
+  // 文字として読めないファイルは、記録が壊れているのとは手当てが違う。
+  // 直すのは frontmatter ではなくファイルそのもので、開き直しても
+  // `read_note` が同じ理由で断られるので「戻す」で取り出す道も無い
+  if (isNotTextNoteSave(error)) {
+    return shown ? words.notTextNote : words.notTextNoteAway(item.title);
   }
   return shown ? words.brokenMeta : words.brokenMetaAway(item.title);
 }
@@ -717,10 +739,11 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
         }
         if (isStaleSave(error)) {
           await yieldToOutsideEdit(pending, error);
-        } else if (isBrokenNoteSave(error) || isMissingNoteSave(error)) {
-          // どちらも読み直しでは直らない。壊れた記録は書き直しても同じ理由で
-          // 断られ、消えたノートは core が作り直さない。次の打鍵にも望みが
-          // 無いので、打った字はここで退避して、黙って消えないようにする。
+        } else if (refusedForGood(error)) {
+          // どれも読み直しでは直らない。壊れた記録は書き直しても同じ理由で
+          // 断られ、消えたノートは core が作り直さず、文字として読めない
+          // ファイルは読む段で断られる。次の打鍵にも望みが無いので、打った字は
+          // ここで退避して、黙って消えないようにする。
           // ディスクへは既に書けていないので、退避が残ったかまで確かめる —
           // 残らなかったのに「戻す」で呼び出せると言うと、人はそれを信じて
           // 閉じ、画面にしか無い唯一の写しごと失う
@@ -926,9 +949,9 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
    * もう一度押せば戻せる — 戻る先は常にちょうど 1 段。
    *
    * ディスクへ書けないノートでは入れ替えをやめ、控えを画面に出すだけにする。
-   * 控えを作る理由(壊れた記録・消えたノート)はそのまま書き込みを断る理由
-   * でもあるので、書けたときしか見せないと、退避は残っているのに取り出す道が
-   * どこにも無くなる。画面に出れば人は選んで写せる。
+   * 控えを作る理由(壊れた記録・消えたノート・文字として読めないファイル)は
+   * そのまま書き込みを断る理由でもあるので、書けたときしか見せないと、退避は
+   * 残っているのに取り出す道がどこにも無くなる。画面に出れば人は選んで写せる。
    */
   const revertEdit = async (item: NoteItem): Promise<void> => {
     const backup = readBackup(localStorage, item.filename);
@@ -955,7 +978,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     } catch (error) {
       // 読み直せば書けるノート(Stale・一時的な失敗)では見せずに終わる。
       // ディスクと画面が黙って食い違い、次の保存が相手の本文を控えで潰す
-      if (!isBrokenNoteSave(error) && !isMissingNoteSave(error)) {
+      if (!refusedForGood(error)) {
         shell.showToast(t().notes.revertFailed);
         return;
       }
