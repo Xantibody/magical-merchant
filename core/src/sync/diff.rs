@@ -189,6 +189,35 @@ mod tests {
         assert!(actions.is_empty());
     }
 
+    /// `data/timeline/` を `data/scrawl/` へ移したあとの最初の同期
+    /// (`scrawl/migrate.rs`)。ローカルには新しいキーしかなく、リモートと
+    /// state には旧いキーしかない。片方を送り、片方を消せば移り切る —
+    /// ここが競合や再ダウンロードになると、移行が同じ日を二重に残す。
+    #[test]
+    fn a_renamed_directory_uploads_the_new_keys_and_deletes_the_old_ones() {
+        let local_files = vec![local("scrawl/2026-03-20.md", "hash_day")];
+        let remote_files = vec![remote("timeline/2026-03-20.md", "2026-04-22T10:00:00Z")];
+        let mut state = SyncState::default();
+        state.files.insert(
+            "timeline/2026-03-20.md".into(),
+            record("remote_hash", "2026-04-22T10:00:00Z"),
+        );
+
+        let actions = compute(&local_files, &remote_files, &state);
+
+        assert_eq!(
+            actions,
+            vec![
+                SyncAction::UploadNew {
+                    key: "scrawl/2026-03-20.md".into()
+                },
+                SyncAction::DeleteRemote {
+                    key: "timeline/2026-03-20.md".into()
+                },
+            ]
+        );
+    }
+
     #[test]
     fn local_only_no_state_uploads() {
         let local_files = vec![local("notes/a.md", "hash_a")];

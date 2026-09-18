@@ -202,6 +202,8 @@ struct NoteRead {
 pub(crate) fn repair_once(base_dir: &std::path::Path) {
     static REPAIR: std::sync::Once = std::sync::Once::new();
     REPAIR.call_once(|| {
+        // 改名前の `data/timeline/`
+        let _ = magical_merchant_core::migrate_scrawl_dir(base_dir);
         // 過去の編集で本文に混入した化けメタデータ
         let _ = magical_merchant_core::repair_notes(base_dir);
         // 古い版が `data/` に置いた競合コピー

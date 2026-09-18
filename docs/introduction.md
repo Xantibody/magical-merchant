@@ -69,7 +69,7 @@ the typed text behind Revert, the CLI keeps it in a scratch file.
 ```
 <app data dir>/
 ├── data/                      # everything under here syncs
-│   ├── timeline/               # Scrawl; the directory keeps the old name
+│   ├── scrawl/
 │   │   └── 2026-08-09.md      # one file per day, entries appended
 │   ├── notes/
 │   │   └── 20260809_143000.md # one file per note, frontmatter + body
@@ -141,7 +141,7 @@ sequenceDiagram
     Note over Ctx: last known fix returned immediately —<br/>cold GPS waits at most 1.5s
     UI->>Rust: save_quick_capture(text, context)
     Rust->>Core: save_scrawl_entry
-    Core->>Core: append to data/timeline/YYYY-MM-DD.md
+    Core->>Core: append to data/scrawl/YYYY-MM-DD.md
     Rust-->>UI: ok — entry visible, input cleared
     UI--)Sync: local mutation event
     Note over Sync: 5s debounce, only if auto-sync is on

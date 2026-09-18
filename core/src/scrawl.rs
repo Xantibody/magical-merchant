@@ -1,5 +1,6 @@
 pub(crate) mod day;
 pub(crate) mod error;
+pub(crate) mod migrate;
 pub(crate) mod repository;
 
 pub(crate) use repository::Scrawl;
@@ -74,7 +75,7 @@ mod tests {
         save_scrawl_entry(tmp.path(), "hello", &mock_context(), Source::App).unwrap();
 
         let today = Local::now().format("%Y-%m-%d").to_string();
-        let file = tmp.path().join("data/timeline").join(format!("{today}.md"));
+        let file = tmp.path().join("data/scrawl").join(format!("{today}.md"));
         assert!(file.exists());
 
         let content = fs::read_to_string(&file).unwrap();
@@ -91,8 +92,7 @@ mod tests {
 
         let today = Local::now().format("%Y-%m-%d").to_string();
         let content =
-            fs::read_to_string(tmp.path().join("data/timeline").join(format!("{today}.md")))
-                .unwrap();
+            fs::read_to_string(tmp.path().join("data/scrawl").join(format!("{today}.md"))).unwrap();
         assert!(content.contains("\"s\":\"widget\""));
     }
 
@@ -103,7 +103,7 @@ mod tests {
         save_scrawl_entry(tmp.path(), "second", &mock_context(), Source::App).unwrap();
 
         let today = Local::now().format("%Y-%m-%d").to_string();
-        let file = tmp.path().join("data/timeline").join(format!("{today}.md"));
+        let file = tmp.path().join("data/scrawl").join(format!("{today}.md"));
         let content = fs::read_to_string(&file).unwrap();
 
         let lines: Vec<&str> = content.lines().collect();
@@ -130,7 +130,7 @@ mod tests {
     #[test]
     fn test_list_scrawl_dates_returns_sorted_desc() {
         let tmp = TempDir::new().unwrap();
-        let scrawl_dir = tmp.path().join("data").join("timeline");
+        let scrawl_dir = tmp.path().join("data").join("scrawl");
         fs::create_dir_all(&scrawl_dir).unwrap();
         fs::write(scrawl_dir.join("2026-01-15.md"), "entry").unwrap();
         fs::write(scrawl_dir.join("2026-03-01.md"), "entry").unwrap();
@@ -146,7 +146,7 @@ mod tests {
     #[test]
     fn test_list_scrawl_dates_skips_invalid_filenames() {
         let tmp = TempDir::new().unwrap();
-        let scrawl_dir = tmp.path().join("data").join("timeline");
+        let scrawl_dir = tmp.path().join("data").join("scrawl");
         fs::create_dir_all(&scrawl_dir).unwrap();
         fs::write(scrawl_dir.join("2026-01-15.md"), "entry").unwrap();
         fs::write(scrawl_dir.join("README.md"), "readme").unwrap();

@@ -406,14 +406,14 @@ mod tests {
         );
         assert_eq!(
             fs::read_to_string(
-                conflicts_dir(tmp.path()).join("timeline/2026-03-20/20260511-031336.md")
+                conflicts_dir(tmp.path()).join("scrawl/2026-03-20/20260511-031336.md")
             )
             .unwrap(),
             "day copy"
         );
     }
 
-    /// 控えが溜まるのは `notes/` と `timeline/` だけではない。`data/` の下は
+    /// 控えが溜まるのは `notes/` と `scrawl/` だけではない。`data/` の下は
     /// 丸ごと同期の走査対象なので、自分で切ったディレクトリに残った控えも
     /// 置いたままだと新しいファイルとして全端末へ配られる。
     #[test]
