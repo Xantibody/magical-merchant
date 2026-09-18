@@ -456,20 +456,14 @@ impl McpServer {
         let mut counts: BTreeMap<String, (String, usize, usize)> = BTreeMap::new();
         for note in magical_merchant_core::list_notes(&self.data_dir).map_err(err)? {
             for tag in note.tags {
-                counts
-                    .entry(tags::fold_tag(&tag))
-                    .or_insert((tag, 0, 0))
-                    .1 += 1;
+                counts.entry(tags::fold_tag(&tag)).or_insert((tag, 0, 0)).1 += 1;
             }
         }
         for date in magical_merchant_core::list_timeline_dates(&self.data_dir).map_err(err)? {
             for line in magical_merchant_core::read_timeline(&self.data_dir, date).map_err(err)? {
                 let entry = parse_timeline_entry(&line);
                 for tag in tags::parse(&entry.text) {
-                    counts
-                        .entry(tags::fold_tag(&tag))
-                        .or_insert((tag, 0, 0))
-                        .2 += 1;
+                    counts.entry(tags::fold_tag(&tag)).or_insert((tag, 0, 0)).2 += 1;
                 }
             }
         }

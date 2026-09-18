@@ -10,7 +10,7 @@
 import type { NoteContext } from "./commands";
 import { t } from "./i18n";
 import { networkLabel, sourceLabel } from "./parse-timeline";
-import { normalizeTag } from "./tags";
+import { normalizeTag, sameTag } from "./tags";
 
 /** RFC 3339 の time を datetime-local input の値(分まで)にする。 */
 export function toDatetimeLocal(rfc3339: string): string {
@@ -49,8 +49,8 @@ export function formatRecordedAt(rfc3339?: string): string {
  * 同一性は本文の `#記法` と同じ規則で見る(`tags.ts`)。
  */
 export function addTag(tags: string[], raw: string): string[] {
-  const tag = normalizeTag(raw.trim().replace(/^#+/u, ""));
-  if (!tag || tags.includes(tag)) {
+  const tag = normalizeTag(raw);
+  if (!tag || tags.some((own) => sameTag(own, tag))) {
     return tags;
   }
   return [...tags, tag];

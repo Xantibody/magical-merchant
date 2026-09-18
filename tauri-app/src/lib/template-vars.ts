@@ -12,7 +12,7 @@
 
 import { t } from "./i18n";
 import type { Locale } from "./i18n";
-import { normalizeTag } from "./tags";
+import { sameTag } from "./tags";
 
 const WEEKDAYS: Record<Locale, string[]> = {
   ja: ["日", "月", "火", "水", "木", "金", "土"],
@@ -86,18 +86,21 @@ export function hasVariable(text: string): boolean {
 }
 
 /**
- * 自動タグを 1 つ足す。ノートのタグ(`note-meta.ts` の addTag)と違い、
- * 変数を含むものは打たれた形のまま残す — `{{date:YYYY-MM}}` を小文字に
- * 寄せると `YYYY` がトークンでなくなり、その月ではなく "yyyy-mm" という
- * 文字列がタグになる。解決したあとの値は core があらためて正規化する。
+ * 自動タグを 1 つ足す。綴りは打たれた形のまま残す。
+ *
+ * 重複の判定だけノートのタグ(`note-meta.ts` の addTag)と違う: 変数を含む
+ * ものは 1 文字も畳まずに比べる — `{{date:YYYY-MM}}` と `{{date:yyyy-mm}}`
+ * は別のトークンで、畳んで同じ扱いにすると後から書いたほうが黙って消える。
  */
 export function addTemplateTag(tags: string[], raw: string): string[] {
-  const trimmed = raw.trim().replace(/^#+/u, "");
-  if (!trimmed) {
+  const tag = raw.trim().replace(/^#+/u, "");
+  if (!tag) {
     return tags;
   }
-  const tag = hasVariable(trimmed) ? trimmed : normalizeTag(trimmed);
-  return tags.includes(tag) ? tags : [...tags, tag];
+  const duplicate = hasVariable(tag)
+    ? tags.includes(tag)
+    : tags.some((own) => !hasVariable(own) && sameTag(own, tag));
+  return duplicate ? tags : [...tags, tag];
 }
 
 /** ハイライト用に、変数とそれ以外へ切り分ける。 */

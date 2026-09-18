@@ -89,7 +89,7 @@ describe("CommandPalette with a tag scope", () => {
     fireEvent.input(input, { target: { value: "#SF6 #ベガ コンボ" } });
 
     await waitFor(() =>
-      expect(searches).toContainEqual({ query: "コンボ", tags: ["sf6", "ベガ"] }),
+      expect(searches).toContainEqual({ query: "コンボ", tags: ["SF6", "ベガ"] }),
     );
     expect(chips()).toStrictEqual([]);
   });

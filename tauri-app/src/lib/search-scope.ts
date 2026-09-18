@@ -10,7 +10,7 @@
  */
 
 import { ROUTES } from "./routes";
-import { normalizeTag, parseTags, splitTagged } from "./tags";
+import { normalizeTag, parseTags, sameTag, splitTagged } from "./tags";
 
 export interface PaletteScope {
   /** 絞り込んでいるタグ(`#` なし)。全部の付いた記録だけが残る。 */
@@ -35,7 +35,13 @@ export function searchRequest(
     .join("")
     .replaceAll(/\s+/gu, " ")
     .trim();
-  const tags = [...new Set([...scope.map((tag) => normalizeTag(tag)), ...parseTags(query)])];
+  // 綴りは打った形のまま渡す(core が畳んで突き合わせる)。重複だけ大小を無視して落とす
+  const tags: string[] = [];
+  for (const tag of [...scope.map((t) => normalizeTag(t)), ...parseTags(query)]) {
+    if (tag && !tags.some((own) => sameTag(own, tag))) {
+      tags.push(tag);
+    }
+  }
   if (!text && tags.length === 0) {
     return null;
   }

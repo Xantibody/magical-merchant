@@ -8,8 +8,8 @@ import {
 } from "./note-meta";
 
 describe("addTag", () => {
-  it("normalizes an ascii tag the same way the body syntax does", () => {
-    expect(addTag([], "#Rust")).toStrictEqual(["rust"]);
+  it("keeps the spelling the way the body syntax does", () => {
+    expect(addTag([], "#CognitiveBias")).toStrictEqual(["CognitiveBias"]);
   });
 
   it("drops a tag that differs only in case", () => {

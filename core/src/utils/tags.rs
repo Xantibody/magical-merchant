@@ -307,10 +307,7 @@ mod tests {
     /// すでに小文字で保存されたタグは、そのまま小文字で出る。
     #[test]
     fn leaves_tags_saved_in_lowercase_alone() {
-        assert_eq!(
-            merge(vec!["memo".to_string()], "本文 #memo"),
-            vec!["memo"]
-        );
+        assert_eq!(merge(vec!["memo".to_string()], "本文 #memo"), vec!["memo"]);
     }
 
     #[test]

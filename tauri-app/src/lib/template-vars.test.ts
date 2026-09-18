@@ -90,8 +90,8 @@ describe("hasVariable", () => {
 });
 
 describe("addTemplateTag", () => {
-  it("drops the leading hash and lowercases a plain tag", () => {
-    expect(addTemplateTag([], "#Daily")).toStrictEqual(["daily"]);
+  it("drops the leading hash and keeps the spelling of a plain tag", () => {
+    expect(addTemplateTag([], "#Daily")).toStrictEqual(["Daily"]);
   });
 
   // 小文字に寄せると `YYYY` がトークンでなくなり、その月ではなく
@@ -102,6 +102,7 @@ describe("addTemplateTag", () => {
 
   it("does not add the same tag twice", () => {
     expect(addTemplateTag(["daily"], "daily")).toStrictEqual(["daily"]);
+    expect(addTemplateTag(["daily"], "Daily")).toStrictEqual(["daily"]);
   });
 
   it("ignores an empty input", () => {
