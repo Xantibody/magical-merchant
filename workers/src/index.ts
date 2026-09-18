@@ -123,12 +123,18 @@ async function handleSyncBulk(
   userId: string,
   request: Request,
 ): Promise<Response> {
-  let body: BulkRequest;
+  let parsed: unknown;
   try {
-    body = (await request.json()) as BulkRequest;
+    parsed = await request.json();
   } catch {
     return errorResponse("Invalid JSON", 400);
   }
+  // `null` も `1` も JSON としては正しい。そのまま先のフィールドを読むと
+  // 例外になり、読めない HTML の 500 が返る
+  if (typeof parsed !== "object" || parsed === null) {
+    return errorResponse("Invalid request: expected a JSON object", 400);
+  }
+  const body = parsed as BulkRequest;
   const invalid = validateBulkRequest(body);
   if (invalid) {
     return errorResponse(invalid, 400);

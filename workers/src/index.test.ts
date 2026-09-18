@@ -501,6 +501,24 @@ describe("Workers Sync API", () => {
       expect(res.status).toBe(400);
     });
 
+    // `null` も `1` も JSON としては正しい。オブジェクトでない body を
+    // そのまま読みに行くと例外になり、Cloudflare の HTML 500 が返る
+    it.each(["null", "1", '"a string"'])(
+      "rejects a body that is not an object: %s",
+      async (body) => {
+        const res = await send(
+          request("/sync/bulk", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body,
+          }),
+        );
+
+        expect(res.status).toBe(400);
+        expect(res.headers.get("Content-Type")).toContain("application/json");
+      },
+    );
+
     it("rejects missing required fields", async () => {
       const res = await send(
         request("/sync/bulk", {
