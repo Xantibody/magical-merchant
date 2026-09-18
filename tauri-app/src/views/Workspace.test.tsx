@@ -1074,6 +1074,39 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     expect(shell?.toast()?.message).toMatch(/写して/u);
   });
 
+  // 「画面にあるうちに写して」が届くのは、断られたノートが画面に出ている
+  // ときだけ。往復のあいだに隣へ移っていると、画面にあるのは別のノートの
+  // 本文で、指した先には写すものが無い。名乗って、控えの在り処を言う
+  it("names the vanished note instead of pointing at the note now on screen", async () => {
+    disk.set(FILE_B, BODY_B);
+    await openNoteA();
+    await startEditingBody();
+    typeInEditor?.(`${TEXT_A}\n\n消えたノートに足した行`);
+
+    // 保存が飛んだところで止める。予約は消えているので、この先の選択の
+    // 差し替えは飛んでいる保存を待たない
+    blockWrites();
+    await waitFor(() => expect(countOf("update_draft")).toBe(1), { timeout: 3000 });
+    // 往復のあいだに、別の画面・別の端末が A を消す
+    disk.delete(FILE_A);
+
+    fireEvent.click(await rowOf(TITLE_B));
+    await waitFor(() => expect(titleInput().value).toBe(TITLE_B));
+    releaseWrites();
+
+    await waitFor(() => expect(shell?.toast()?.message).toMatch(/もう在りません/u), {
+      timeout: 3000,
+    });
+    const message = shell?.toast()?.message;
+    // どのノートの話かを名乗る。画面に出ている B の話だと読まれない
+    expect(message).toContain(TITLE_A);
+    // 画面にも「戻す」にも無いものを指さない
+    expect(message).not.toMatch(/画面にあるうち|写して|戻す/u);
+    // 控えが端末に在ることは言う。失うより残すほうがよい
+    expect(message).toMatch(/この端末に控え/u);
+    expect(localStorage.getItem(`note-backup:${FILE_A}`)).toContain("消えたノートに足した行");
+  });
+
   // 退避そのものが失敗する端末(localStorage が満杯・無効)。ディスクへの
   // 保存は既に断られているので、ここで「戻す」で呼び出せると言うと、
   // 人はそれを信じて閉じ、唯一の写しごと失う

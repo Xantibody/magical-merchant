@@ -131,6 +131,25 @@ function versionStatusLabel(status: VersionStatus): string {
     : t().codex.versionN(status.count);
 }
 
+/**
+ * 断られた保存の言い分。`shown` は「断られたノートがいま画面に出ているか」で、
+ * 出ていないなら画面の本文を指す案内は届かない — 画面にあるのは別のノートで、
+ * 写す相手がそこに無い。名乗ってから、控えの在り処と取り出せるかだけを言う。
+ * 消えたノートの控えは、控えとしては残るが、いま取り出す道が無い。開き直しても
+ * `read_note` が断られるので本文は載らず、「戻す」もそこで引き返す。
+ * AIDEV-NOTE: 孤児の控えを開く一覧が無いので、画面に無いノートの拒否は文言で正直に言うに留める(取り出す道は別 PR)
+ */
+function refusalToast(error: unknown, kept: boolean, item: NoteItem, shown: boolean): string {
+  const words = t().notes;
+  if (!kept) {
+    return shown ? words.saveNotKept : words.saveNotKeptAway(item.title);
+  }
+  if (isMissingNoteSave(error)) {
+    return shown ? words.missingNote : words.missingNoteAway(item.title);
+  }
+  return shown ? words.brokenMeta : words.brokenMetaAway(item.title);
+}
+
 /** このノートを指している記録。畳んだ 1 行以上の場所は取らない。 */
 function Backlinks(props: { hits: SearchHit[]; onOpen: (hit: SearchHit) => void }): JSX.Element {
   return (
@@ -686,8 +705,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
           // 残らなかったのに「戻す」で呼び出せると言うと、人はそれを信じて
           // 閉じ、画面にしか無い唯一の写しごと失う
           const kept = tryWriteBackup(localStorage, pending.item.filename, typedBody(pending));
-          const refused = isMissingNoteSave(error) ? t().notes.missingNote : t().notes.brokenMeta;
-          shell.showToast(kept ? refused : t().notes.saveNotKept);
+          shell.showToast(refusalToast(error, kept, pending.item, shown()));
         }
       }
     })();

@@ -134,6 +134,17 @@ const ja = {
       "この端末に控えた本文を画面に出しました。このノートのディスクには書けないので、別の場所へ写してください",
     saveNotKept:
       "保存できず、この端末にも控えを残せませんでした。閉じると入力した本文は失われます。別の場所へ写してください",
+    /**
+     * 断られたノートが画面に出ていないときの言い分。画面にあるのは別のノートの
+     * 本文なので、「画面にあるうちに写して」は届かない。どのノートかを名乗り、
+     * 控えの在り処と、いま取り出せるかどうかだけを言う。
+     */
+    missingNoteAway: (title: string) =>
+      `「${title}」はもう在りません。入力した本文はこの端末に控えましたが、消えたノートを開く道が無いので、今は画面に出せません`,
+    brokenMetaAway: (title: string) =>
+      `「${title}」は先頭の記録が読めないので保存できません。入力した本文はこの端末に控えました。開き直して「戻す」で画面に出せます`,
+    saveNotKeptAway: (title: string) =>
+      `「${title}」は保存できず、この端末にも控えを残せませんでした。入力した本文は失われました`,
     loadFailed: "このノートを読めませんでした。書き換えないよう、本文は開いていません",
   },
   codex: {
@@ -532,6 +543,12 @@ const en: Messages = {
       "The copy kept on this device is back on screen. It cannot be written to this note, so copy it somewhere else",
     saveNotKept:
       "It could not be saved, and no copy could be kept on this device either. Closing this loses your text — copy it somewhere else",
+    missingNoteAway: (title: string) =>
+      `"${title}" no longer exists. Your text is kept on this device, but a deleted note cannot be opened, so it cannot be put on screen yet`,
+    brokenMetaAway: (title: string) =>
+      `"${title}" cannot be saved because its frontmatter cannot be read. Your text is kept on this device — reopen it and Revert puts it back on screen`,
+    saveNotKeptAway: (title: string) =>
+      `"${title}" could not be saved, and no copy could be kept on this device either. Your text is gone`,
     loadFailed: "This note could not be read, so its body stays closed rather than be overwritten",
   },
   codex: {
