@@ -1107,6 +1107,41 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     expect(localStorage.getItem(`note-backup:${FILE_A}`)).toContain("消えたノートに足した行");
   });
 
+  // Stale も同じ穴だった。往復のあいだに隣へ移っていると、選択が外れた A は
+  // 読み直されないのに「読み直しました。『戻す』で呼び出せます」と言う —
+  // 画面にあるのは B なので、B を読み直して B を戻す話に読める。A を名乗り、
+  // A を開き直してからだと言う。書けるノートなので取り出す道はある
+  it("names the note changed elsewhere instead of pointing at the note now on screen", async () => {
+    disk.set(FILE_B, BODY_B);
+    await openNoteA();
+    await startEditingBody();
+    typeInEditor?.(`${TEXT_A}\n\n譲る前に打った行`);
+
+    // 保存が飛んだところで止める。予約は消えているので、この先の選択の
+    // 差し替えは飛んでいる保存を待たない
+    blockWrites();
+    await waitFor(() => expect(countOf("update_draft")).toBe(1), { timeout: 3000 });
+    // 往復のあいだに、別の画面・別の端末が A を書き換える
+    disk.set(FILE_A, BODY_A_SYNCED);
+
+    fireEvent.click(await rowOf(TITLE_B));
+    await waitFor(() => expect(titleInput().value).toBe(TITLE_B));
+    releaseWrites();
+
+    await waitFor(() => expect(shell?.toast()?.message).toContain(TITLE_A), { timeout: 3000 });
+    const message = shell?.toast()?.message;
+    // 選択が外れた A は読み直していない。読み直したと言えば、人は画面に
+    // 出ている B が入れ替わったのだと読む
+    expect(message).not.toMatch(/読み直しました/u);
+    // 控えは在り、ノートは書ける。開き直してからなら「戻す」で取り出せる
+    expect(message).toMatch(/この端末に控え/u);
+    expect(message).toMatch(/開き直/u);
+    expect(message).toMatch(/戻す/u);
+    // 画面は B のまま。A を読み直すのは開き直したときだけ
+    expect(titleInput().value).toBe(TITLE_B);
+    expect(localStorage.getItem(`note-backup:${FILE_A}`)).toContain("譲る前に打った行");
+  });
+
   // 退避そのものが失敗する端末(localStorage が満杯・無効)。ディスクへの
   // 保存は既に断られているので、ここで「戻す」で呼び出せると言うと、
   // 人はそれを信じて閉じ、唯一の写しごと失う
@@ -1124,6 +1159,28 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     await waitFor(() => expect(shell?.toast()?.message).toMatch(/失われます/u));
     // 在りもしない写しを指して「戻す」と言わない
     expect(shell?.toast()?.message).not.toMatch(/戻す/u);
+    expect(localStorage.getItem(`note-backup:${FILE_A}`)).toBeNull();
+  });
+
+  // Stale の退避も同じ端末では残らない。そこで「『戻す』で呼び出せます」と
+  // 言うと、人はそれを信じて閉じる。読み直しで画面の本文もディスクのぶんに
+  // 入れ替わっているので、写す相手ももう無い — 失われたことだけを言う
+  it("promises no Revert when a stale save's backup cannot be written", async () => {
+    const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("QuotaExceededError");
+    });
+    onTestFinished(() => setItem.mockRestore());
+    await openNoteA();
+    await startEditingBody();
+    typeInEditor?.(`${TEXT_A}\n\n控えられなかった行`);
+    disk.set(FILE_A, BODY_A_SYNCED);
+
+    await waitFor(() => expect(shell?.toast()?.message).toMatch(/失われました/u), {
+      timeout: 3000,
+    });
+    // 読み直しは着いている。画面の本文はディスクのぶんで、打った字はもう無い
+    expect(screen.getByText("他の端末で足された行")).toBeDefined();
+    expect(shell?.toast()?.message).not.toMatch(/戻す|写して/u);
     expect(localStorage.getItem(`note-backup:${FILE_A}`)).toBeNull();
   });
 

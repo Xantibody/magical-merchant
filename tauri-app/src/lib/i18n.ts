@@ -135,10 +135,18 @@ const ja = {
     saveNotKept:
       "保存できず、この端末にも控えを残せませんでした。閉じると入力した本文は失われます。別の場所へ写してください",
     /**
+     * Stale で控えも残せなかったとき。画面の本文はディスクのぶんに入れ替わって
+     * いるので、「画面にあるうちに写して」と言っても写す相手がもう無い。
+     */
+    staleNotKept:
+      "別の場所で書き換えられていたので保存できず、この端末にも控えを残せませんでした。入力した本文は失われました",
+    /**
      * 断られたノートが画面に出ていないときの言い分。画面にあるのは別のノートの
      * 本文なので、「画面にあるうちに写して」は届かない。どのノートかを名乗り、
      * 控えの在り処と、いま取り出せるかどうかだけを言う。
      */
+    editedElsewhereAway: (title: string) =>
+      `「${title}」は別の場所で書き換えられていたので保存できませんでした。入力した本文はこの端末に控えました。「${title}」を開き直して「戻す」を押せば画面に出せます`,
     missingNoteAway: (title: string) =>
       `「${title}」はもう在りません。入力した本文はこの端末に控えましたが、消えたノートを開く道が無いので、今は画面に出せません`,
     brokenMetaAway: (title: string) =>
@@ -543,6 +551,10 @@ const en: Messages = {
       "The copy kept on this device is back on screen. It cannot be written to this note, so copy it somewhere else",
     saveNotKept:
       "It could not be saved, and no copy could be kept on this device either. Closing this loses your text — copy it somewhere else",
+    staleNotKept:
+      "It was changed elsewhere, so it was not saved, and no copy could be kept on this device either. Your text is gone",
+    editedElsewhereAway: (title: string) =>
+      `"${title}" was changed elsewhere, so it was not saved. Your text is kept on this device — reopen "${title}" and Revert puts it back on screen`,
     missingNoteAway: (title: string) =>
       `"${title}" no longer exists. Your text is kept on this device, but a deleted note cannot be opened, so it cannot be put on screen yet`,
     brokenMetaAway: (title: string) =>

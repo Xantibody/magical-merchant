@@ -137,12 +137,24 @@ function versionStatusLabel(status: VersionStatus): string {
  * 写す相手がそこに無い。名乗ってから、控えの在り処と取り出せるかだけを言う。
  * 消えたノートの控えは、控えとしては残るが、いま取り出す道が無い。開き直しても
  * `read_note` が断られるので本文は載らず、「戻す」もそこで引き返す。
+ * Stale だけはノートが書ける状態で残るので、開き直せば「戻す」で取り出せる —
+ * ただし読み直しは選んでいるノートにしか走らないので、画面に無いぶんは
+ * 「開き直してから」を先に言う。
  * AIDEV-NOTE: 孤児の控えを開く一覧が無いので、画面に無いノートの拒否は文言で正直に言うに留める(取り出す道は別 PR)
  */
 function refusalToast(error: unknown, kept: boolean, item: NoteItem, shown: boolean): string {
   const words = t().notes;
+  const stale = isStaleSave(error);
   if (!kept) {
-    return shown ? words.saveNotKept : words.saveNotKeptAway(item.title);
+    if (!shown) {
+      return words.saveNotKeptAway(item.title);
+    }
+    // Stale では画面の本文がディスクのぶんに入れ替わっている。控えも無いので、
+    // 「画面にあるうちに写して」と言っても、もう写す相手がいない
+    return stale ? words.staleNotKept : words.saveNotKept;
+  }
+  if (stale) {
+    return shown ? words.editedElsewhere : words.editedElsewhereAway(item.title);
   }
   if (isMissingNoteSave(error)) {
     return shown ? words.missingNote : words.missingNoteAway(item.title);
@@ -628,20 +640,28 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
    * 相手の本文の上には書かず、打った字はこの端末のバックアップに退避して
    * ディスクの本文を読み直す。「戻す」を押せば退避した本文と入れ替わる —
    * 相手の版がバックアップに回るので、どちらも失わない。
+   *
+   * 読み直すのは、譲ったノートがまだ選ばれているときだけ。往復のあいだに
+   * 隣へ移っていれば画面にあるのは別のノートで、そこへディスクの本文を
+   * 流し込むわけにはいかない。言い分もそれに合わせる — 断られた保存の
+   * 言い分は `refusalToast` が一手に決める。
    */
-  const yieldToOutsideEdit = async (pending: PendingSave): Promise<void> => {
-    writeBackup(localStorage, pending.item.filename, typedBody(pending));
+  const yieldToOutsideEdit = async (pending: PendingSave, error: unknown): Promise<void> => {
+    // 「戻す」で呼び出せると言う前に、控えが実際に残ったかを見る。
+    // 満杯・無効の localStorage では残らず、そこで約束すると人は信じて閉じる
+    const kept = tryWriteBackup(localStorage, pending.item.filename, typedBody(pending));
     saveGeneration += 1;
     if (saveTimer) {
       clearTimeout(saveTimer);
       saveTimer = undefined;
     }
-    if (selected()?.id === pending.item.id) {
+    const shown = selected()?.id === pending.item.id;
+    if (shown) {
       sessionFile = null;
       await loadNote(pending.item, true);
     }
     await refetchNotes();
-    shell.showToast(t().notes.editedElsewhere);
+    shell.showToast(refusalToast(error, kept, pending.item, shown));
   };
   const flushSave = (pending = snapshotSave()): Promise<void> => {
     const previous = saveChain;
@@ -696,7 +716,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
           setSaveStatus("idle");
         }
         if (isStaleSave(error)) {
-          await yieldToOutsideEdit(pending);
+          await yieldToOutsideEdit(pending, error);
         } else if (isBrokenNoteSave(error) || isMissingNoteSave(error)) {
           // どちらも読み直しでは直らない。壊れた記録は書き直しても同じ理由で
           // 断られ、消えたノートは core が作り直さない。次の打鍵にも望みが
@@ -1099,13 +1119,16 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       revisions.set(item.filename, revision);
     } catch (error) {
       if (isStaleSave(error)) {
-        await yieldToOutsideEdit({
-          item,
-          body: fullBody(),
-          session,
-          generation: saveGeneration,
-          bodyEpoch: bodyEpoch(),
-        });
+        await yieldToOutsideEdit(
+          {
+            item,
+            body: fullBody(),
+            session,
+            generation: saveGeneration,
+            bodyEpoch: bodyEpoch(),
+          },
+          error,
+        );
       } else {
         shell.showToast(t().codex.restoreFailed);
       }
