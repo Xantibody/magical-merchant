@@ -6,6 +6,7 @@ import {
   toCss,
   wheelFactor,
   zoomAtPoint,
+  zoomSize,
 } from "./zoom-transform";
 import type { Transform } from "./zoom-transform";
 
@@ -15,6 +16,23 @@ const VIEWPORT = { width: 1000, height: 800 };
 function diagramPoint(transform: Transform, x: number, y: number): [number, number] {
   return [(x - transform.tx) / transform.scale, (y - transform.ty) / transform.scale];
 }
+
+describe("zoomSize", () => {
+  it("reads the natural size out of the viewBox", () => {
+    expect(zoomSize({ width: 320, height: 120 }, { width: 700, height: 262 })).toStrictEqual({
+      width: 320,
+      height: 120,
+    });
+  });
+
+  // viewBox の無い SVG は原寸が書かれていない。縮めて描いている今の大きさで代用する
+  it("falls back to the drawn size when there is no viewBox", () => {
+    expect(zoomSize({ width: 0, height: 0 }, { width: 700, height: 262 })).toStrictEqual({
+      width: 700,
+      height: 262,
+    });
+  });
+});
 
 describe("fitToViewport", () => {
   it("shrinks a wide diagram until it sits inside the padded viewport", () => {

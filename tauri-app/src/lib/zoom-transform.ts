@@ -36,6 +36,17 @@ function clamp(value: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, value));
 }
 
+/**
+ * 開いたときの原寸。mermaid は viewBox に原寸を書くのでそれを読み、viewBox を
+ * 持たない SVG は縮めて描いている今の大きさ(`getBoundingClientRect`)で代用する
+ */
+export function zoomSize(viewBox: Size, rendered: Size): Size {
+  return {
+    width: viewBox.width > 0 ? viewBox.width : rendered.width,
+    height: viewBox.height > 0 ? viewBox.height : rendered.height,
+  };
+}
+
 /** 画面の真ん中に、余白を残して収まる大きさで置く */
 export function fitToViewport(viewport: Size, diagram: Size): Transform {
   const scale = clamp(
