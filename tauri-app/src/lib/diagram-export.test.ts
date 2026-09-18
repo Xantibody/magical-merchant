@@ -104,9 +104,7 @@ describe("rasterize", () => {
   });
 
   it("fails loudly when the canvas hands back an empty data url", async () => {
-    const toDataURL = vi
-      .spyOn(HTMLCanvasElement.prototype, "toDataURL")
-      .mockReturnValue("data:,");
+    const toDataURL = vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue("data:,");
 
     await expect(rasterize(MERMAID_SVG, "#ffffff")).rejects.toThrow("canvas produced no png");
 

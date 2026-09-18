@@ -2,7 +2,9 @@ import { describe, it, expect } from "vitest";
 import { renderDiagrams } from "./mermaid";
 
 const FLOWCHART = ["flowchart TD", "  A[Start] --> B[End]"].join("\n");
-const SEQUENCE = ["sequenceDiagram", "  Alice->>Bob: こんにちは", "  Bob-->>Alice: やあ"].join("\n");
+const SEQUENCE = ["sequenceDiagram", "  Alice->>Bob: こんにちは", "  Bob-->>Alice: やあ"].join(
+  "\n",
+);
 
 /** 描けた図だけを取り出す。null は描画に失敗した図 */
 function drawn(svgs: (string | null)[]): string[] {
@@ -33,6 +35,6 @@ describe("renderDiagrams", () => {
   });
 
   it("has no answer for a diagram it cannot parse", async () => {
-    expect(await renderDiagrams(["not a diagram at all"])).toStrictEqual([null]);
+    await expect(renderDiagrams(["not a diagram at all"])).resolves.toStrictEqual([null]);
   });
 });
