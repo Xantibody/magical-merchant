@@ -36,7 +36,7 @@ export function OriginChip(props: OriginChipProps): JSX.Element {
         }}
         onPointerDown={(e) => press.onPointerDown(e)}
         onPointerUp={() => press.onPointerUp()}
-        onPointerMove={() => press.onPointerMove()}
+        onPointerMove={(e) => press.onPointerMove(e)}
         onPointerCancel={() => press.onPointerCancel()}
         onContextMenu={(e) => press.onContextMenu(e)}
       >
@@ -115,7 +115,7 @@ export default function TimelineEntry(props: TimelineEntryProps): JSX.Element {
             class="entry-text long-press"
             onPointerDown={(e) => press.onPointerDown(e)}
             onPointerUp={() => press.onPointerUp()}
-            onPointerMove={() => press.onPointerMove()}
+            onPointerMove={(e) => press.onPointerMove(e)}
             onPointerCancel={() => press.onPointerCancel()}
             onContextMenu={(e) => press.onContextMenu(e)}
           >

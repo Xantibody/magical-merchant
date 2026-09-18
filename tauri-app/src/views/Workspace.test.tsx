@@ -453,6 +453,32 @@ describe("Workspace › 一覧の行", () => {
   });
 });
 
+describe("Workspace › 触る端末からのテンプレート", () => {
+  beforeEach(setupWorkspace);
+  afterEach(teardownWorkspace);
+
+  // 触る端末でテンプレートのシートを開く道は「新規」の長押ししかない。
+  // 指は押しているあいだ数 px 揺れ続けるので、その揺れで長押しが切れると
+  // シートには一生たどり着けず、離した指が空のノートを作る(#253)
+  it("opens the template sheet on a long press the finger jitters through", async () => {
+    renderWorkspace();
+    const newNote = await screen.findByRole("button", { name: /新規/u });
+
+    fireEvent.pointerDown(newNote, { pointerType: "touch", clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(newNote, { pointerType: "touch", clientX: 103, clientY: 102 });
+    fireEvent.pointerMove(newNote, { pointerType: "touch", clientX: 99, clientY: 104 });
+
+    // 長押しの 500ms は本物の時間で待つ
+    await screen.findByRole("menuitem", { name: /空のノート/u }, { timeout: 2000 });
+
+    // シートが出たあとに離した指の click は飲み込む。開いたうえに
+    // 空のノートまで増えていたら、長押しは入り口として使えない
+    fireEvent.pointerUp(newNote, { pointerType: "touch", clientX: 99, clientY: 104 });
+    fireEvent.click(newNote);
+    expect(countOf("create_draft")).toBe(0);
+  });
+});
+
 describe("Workspace › 常時編集", () => {
   beforeEach(setupWorkspace);
   afterEach(teardownWorkspace);
