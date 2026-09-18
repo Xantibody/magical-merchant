@@ -32,8 +32,32 @@ internal data class CaptureData(
  * default proguard file from build.gradle.kts would break this silently.
  */
 internal object WidgetBridge {
-    init {
-        System.loadLibrary("magical_merchant_app_lib")
+    /** What every read falls back to, so the parsers only ever see valid JSON. */
+    private const val EMPTY_JSON = "{}"
+
+    /**
+     * Whether the native half is there. Loaded on first use, not from `init`.
+     *
+     * An `init` block that throws poisons the object for the life of the
+     * process: the first touch raises `ExceptionInInitializerError` and every
+     * one after it `NoClassDefFoundError`, both from inside an
+     * `AppWidgetProvider` callback, where they take the update down rather than
+     * draw anything. A device whose ABI has no `.so` — a split APK gone wrong,
+     * a sideload — would show four dead widgets and no explanation.
+     *
+     * As a lazy flag the same failure is one logged line and widgets that draw
+     * empty, which is the state they already have before the app is first
+     * opened. The `false` sticks on purpose: a missing library does not appear
+     * later, and retrying it on every 30-minute update would only relink a
+     * failure.
+     */
+    // AIDEV-NOTE: lazy flag, not `init { loadLibrary }` — a throwing init poisons the object and every callback after.
+    private val libraryLoaded: Boolean by lazy {
+        runCatching { System.loadLibrary("magical_merchant_app_lib") }
+            .onFailure {
+                WidgetLog.error("magical_merchant_app_lib not loaded; widgets stay empty", it)
+            }
+            .isSuccess
     }
 
     /**
@@ -75,10 +99,10 @@ internal object WidgetBridge {
      * caller's toast instead, which leaves the sheet open so the line can be
      * sent again.
      */
-    // AIDEV-NOTE: never let this throw — the sheet is the only copy of the text; a crash here loses what the user wrote.
+    // AIDEV-NOTE: never let this throw — the sheet is the only copy of the text; a crash loses what was written.
     fun saveCapture(context: Context, text: String): Boolean {
         val saved = runCatching {
-            saveQuickCapture(baseDir(context), text, WidgetContext.collect(context))
+            libraryLoaded && saveQuickCapture(baseDir(context), text, WidgetContext.collect(context))
         }.getOrElse { error ->
             WidgetLog.error("saveQuickCapture threw; the sheet keeps the text", error)
             false
@@ -117,10 +141,14 @@ internal object WidgetBridge {
         return fallback
     }
 
-    private fun read(context: Context, call: (String) -> String?): String =
-        runCatching { call(baseDir(context)) }
+    private fun read(context: Context, call: (String) -> String?): String {
+        if (!libraryLoaded) {
+            return EMPTY_JSON
+        }
+        return runCatching { call(baseDir(context)) }
             .onFailure { WidgetLog.error("JNI read failed", it) }
-            .getOrNull().orEmpty().ifEmpty { "{}" }
+            .getOrNull().orEmpty().ifEmpty { EMPTY_JSON }
+    }
 
     private fun parseCapture(raw: String): CaptureData {
         val root = JSONObject(raw)
