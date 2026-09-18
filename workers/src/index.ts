@@ -8,6 +8,7 @@ export interface Env {
   GOOGLE_CLIENT_SECRET: string;
   JWT_SECRET: string;
   JWT_EXPIRY_SECONDS?: string;
+  ALLOWED_SUBS?: string;
 }
 
 interface JwtPayload {
@@ -122,12 +123,18 @@ async function handleSyncBulk(
   userId: string,
   request: Request,
 ): Promise<Response> {
-  let body: BulkRequest;
+  let parsed: unknown;
   try {
-    body = (await request.json()) as BulkRequest;
+    parsed = await request.json();
   } catch {
     return errorResponse("Invalid JSON", 400);
   }
+  // `null` も `1` も JSON としては正しい。そのまま先のフィールドを読むと
+  // 例外になり、読めない HTML の 500 が返る
+  if (typeof parsed !== "object" || parsed === null) {
+    return errorResponse("Invalid request: expected a JSON object", 400);
+  }
+  const body = parsed as BulkRequest;
   const invalid = validateBulkRequest(body);
   if (invalid) {
     return errorResponse(invalid, 400);
@@ -164,10 +171,20 @@ async function handleSyncBulk(
   return jsonResponse(response);
 }
 
+/**
+ * 発行者と宛先。`jwtVerify` は既定では iss も aud も見ないので、名前を
+ * 決めて両端で突き合わせる。同じ秘密鍵を別の用途にも使ってしまったとき、
+ * そちらのトークンがこの Worker を素通りするのを防ぐ。
+ */
+const JWT_ISSUER = "magical-merchant-sync";
+const JWT_AUDIENCE = "magical-merchant-app";
+
 function signJwt(payload: JwtPayload, secret: string): Promise<string> {
   const key = new TextEncoder().encode(secret);
   return new SignJWT({ email: payload.email })
     .setProtectedHeader({ alg: "HS256" })
+    .setIssuer(JWT_ISSUER)
+    .setAudience(JWT_AUDIENCE)
     .setSubject(payload.sub)
     .setExpirationTime(payload.exp)
     .sign(key);
@@ -176,7 +193,12 @@ function signJwt(payload: JwtPayload, secret: string): Promise<string> {
 async function verifyJwt(token: string, secret: string): Promise<JwtPayload | null> {
   try {
     const key = new TextEncoder().encode(secret);
-    const { payload } = await jwtVerify(token, key);
+    // AIDEV-NOTE: algorithms は必ず絞る。ヘッダの alg を信じると、署名方式の選択が相手の手に残る
+    const { payload } = await jwtVerify(token, key, {
+      algorithms: ["HS256"],
+      issuer: JWT_ISSUER,
+      audience: JWT_AUDIENCE,
+    });
     if (
       typeof payload.sub !== "string" ||
       typeof payload.email !== "string" ||
@@ -188,6 +210,30 @@ async function verifyJwt(token: string, secret: string): Promise<JwtPayload | nu
   } catch {
     return null;
   }
+}
+
+/**
+ * 1 バケット = 1 人。ノートは `notes/<id>.md` のまま置かれ、ユーザーごとに
+ * 分かれているのは同期状態 (`_sync-state/<sub>.json`) だけなので、別の人が
+ * 同じ Worker にログインすると同じキーを取り合って永久に往復する。
+ *
+ * `ALLOWED_SUBS` に Google の `sub` をカンマ区切りで並べると、その人だけが
+ * 通る。変数そのものが無いときだけ従来どおり誰でも通す — 既存の配備を
+ * 黙って締め出さない。
+ *
+ * AIDEV-NOTE: キーを `${sub}/` で名前空間に分ける案は既存オブジェクトの移行が要るため却下。1 バケット 1 人を守る
+ * AIDEV-NOTE: 「置いたが空」は未設定と別物として閉じる。同一視すると、締めたつもりの設定ミスがバケットを全開にする
+ */
+function isAllowedSub(allowedSubs: string | undefined, sub: string): boolean {
+  if (allowedSubs === undefined) {
+    return true;
+  }
+  // 空要素は落とす。残すと `sub` が空文字のトークンが `ALLOWED_SUBS=""` に一致する
+  return allowedSubs
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0)
+    .includes(sub);
 }
 
 function generateState(): string {
@@ -203,8 +249,48 @@ function getCookie(request: Request, name: string): string | null {
   return match ? match[1] : null;
 }
 
-function isAllowedRedirect(redirect: string): boolean {
-  return redirect.startsWith("magical-merchant://") || redirect.startsWith("http://127.0.0.1:");
+/**
+ * deep link で認証の戻り先になれる唯一の形。`tauri.conf.json` の
+ * intent-filter は `auth` と `widget` の 2 ホストしか本物のアプリに
+ * 割り当てておらず、認証が使うのはそのうち `auth/callback` だけ。
+ */
+const DEEP_LINK_PROTOCOL = "magical-merchant:";
+const DEEP_LINK_REDIRECT = "magical-merchant://auth/callback";
+
+/**
+ * `app_redirect` は認証のあと JWT を載せて送り返す先。ここを緩めると、
+ * リンクを踏ませるだけで 3 日有効のトークンが第三者の URL に渡る。
+ *
+ * 通すのはアプリが実際に送る 2 つの形だけ — deep link の
+ * `magical-merchant://auth/callback` そのものと、ループバックの
+ * `http://127.0.0.1:<port>/…`。
+ *
+ * AIDEV-NOTE: 文字列の前方一致では不十分。`http://127.0.0.1:1@evil.example/` は host が evil.example で userinfo が 127.0.0.1
+ * AIDEV-NOTE: deep link はスキームだけでは絞れない。別アプリが magical-merchant://steal/… を登録すれば JWT がそのアプリに届く
+ * AIDEV-NOTE: 条件の並置ではなく正規化した href と丸ごと比べる。`…/callback#` は hash を "" と報告するので条件では抜ける
+ */
+function parseAppRedirect(redirect: string): URL | null {
+  let url: URL;
+  try {
+    url = new URL(redirect);
+  } catch {
+    return null;
+  }
+  // 本物らしい文字列を userinfo に置いて host を隠す形は、どちらの入口でも捨てる
+  if (url.username !== "" || url.password !== "") {
+    return null;
+  }
+  if (url.protocol === DEEP_LINK_PROTOCOL) {
+    // 通る形は 1 つしかない。ならば条件を数えるより、正規化した URL を
+    // その 1 つと丸ごと比べる方が確実
+    return url.href === DEEP_LINK_REDIRECT ? url : null;
+  }
+  if (url.protocol !== "http:" || url.hostname !== "127.0.0.1") {
+    return null;
+  }
+  // ループバックも同じ理由でクエリと断片を許さない。`?token=` は末尾に
+  // 足されるので、先に `?` や `#` があるとトークンが listener に届かない
+  return url.href === `${url.origin}${url.pathname}` ? url : null;
 }
 
 function escapeHtml(value: string): string {
@@ -261,8 +347,8 @@ function getJwtExpiry(env: Env): number {
 /** OAuth の入口: Google の同意画面へ 302 で送り出す。 */
 function handleAuthGoogle(url: URL, env: Env): Response {
   const state = generateState();
-  const appRedirect = url.searchParams.get("app_redirect") ?? "magical-merchant://auth/callback";
-  if (!isAllowedRedirect(appRedirect)) {
+  const appRedirect = url.searchParams.get("app_redirect") ?? DEEP_LINK_REDIRECT;
+  if (!parseAppRedirect(appRedirect)) {
     return errorResponse("Invalid app_redirect", 400);
   }
   const redirectUri = `${url.origin}/auth/callback`;
@@ -350,18 +436,20 @@ async function handleAuthCallback(request: Request, url: URL, env: Env): Promise
   const appRedirectCookie = getCookie(request, "__oauth_app_redirect");
   let appRedirect: string;
   try {
-    appRedirect = appRedirectCookie
-      ? decodeURIComponent(appRedirectCookie)
-      : "magical-merchant://auth/callback";
+    appRedirect = appRedirectCookie ? decodeURIComponent(appRedirectCookie) : DEEP_LINK_REDIRECT;
   } catch {
     // 不正な %-エンコーディングで例外 → 500 になるのを防ぐ
     return errorResponse("Invalid redirect", 400);
   }
-  if (!isAllowedRedirect(appRedirect)) {
+  // 入口で通した値が cookie 経由で戻るだけだが、ここでも見る。cookie を
+  // 直に差し替えられたら、その一手でトークンの宛先が変わってしまう
+  const parsedRedirect = parseAppRedirect(appRedirect);
+  if (!parsedRedirect) {
     return errorResponse("Invalid redirect", 400);
   }
-  const separator = appRedirect.includes("?") ? "&" : "?";
-  const redirectUrl = `${appRedirect}${separator}token=${encodeURIComponent(jwt)}`;
+  // 送り先は正規化した URL から組む。検証を通った文字列でも、生のままだと
+  // `?token=` の前に何が付いているかは検証の形に依存してしまう
+  const redirectUrl = `${parsedRedirect.href}?token=${encodeURIComponent(jwt)}`;
 
   const clearCookies = new Headers([
     ["Content-Type", "text/html; charset=utf-8"],
@@ -376,7 +464,7 @@ async function handleAuthCallback(request: Request, url: URL, env: Env): Promise
   ]);
 
   // Loopback redirects use 302, deep links use JS redirect
-  if (appRedirect.startsWith("http://127.0.0.1")) {
+  if (parsedRedirect.protocol === "http:") {
     clearCookies.set("Location", redirectUrl);
     return new Response(null, { status: 302, headers: clearCookies });
   }
@@ -407,6 +495,10 @@ export default {
     const claims = await verifyJwt(token, env.JWT_SECRET);
     if (!claims) {
       return errorResponse("Unauthorized", 401);
+    }
+
+    if (!isAllowedSub(env.ALLOWED_SUBS, claims.sub)) {
+      return errorResponse("This bucket belongs to somebody else", 403);
     }
 
     if (pathname === "/sync-state" && method === "GET") {

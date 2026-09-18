@@ -176,6 +176,21 @@ wrangler secret put JWT_SECRET
 | `GOOGLE_CLIENT_SECRET` | Secret             | Google OAuth Client Secret       | —                 |
 | `JWT_SECRET`           | Secret             | HMAC-SHA256 signing key for JWTs | —                 |
 | `JWT_EXPIRY_SECONDS`   | Secret or `[vars]` | Token lifetime in seconds        | `259200` (3 days) |
+| `ALLOWED_SUBS`         | `[vars]`           | Google `sub`s allowed to sync    | unset: everyone   |
+
+> [!IMPORTANT]
+> **One bucket holds one person.** Keys are stored as they arrive —
+> `notes/<id>.md` — and the only thing kept per user is the sync state,
+> `_sync-state/<sub>.json`. A second Google account signing in to the same
+> Worker gets a state of its own but the same files, and the two states push
+> the same keys back and forth forever. Keeping the OAuth consent screen in
+> testing mode hides that door rather than closing it, so list your own `sub`
+> in `ALLOWED_SUBS` (`workers/wrangler.toml`, comma-separated) and redeploy:
+> every other `sub` is then answered with `403`. Read it from the payload of
+> the JWT the sign-in hands back, or from the Google Cloud Console user list.
+> Leave the variable out entirely and anyone who passes the consent screen
+> still gets in; set it to an empty value and nobody does — a misconfigured
+> allowlist stops your own sync with `403` rather than reopening the bucket.
 
 ### 6. App configuration
 
