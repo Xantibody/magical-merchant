@@ -126,8 +126,12 @@ const ja = {
     editedElsewhere:
       "別の場所で書き換えられたので読み直しました。入力した本文は「戻す」で呼び出せます",
     brokenMeta:
-      "このノートの先頭の記録が読めないので保存できません。入力した本文は「戻す」で呼び出せます",
-    missingNote: "このノートはもう在りません。入力した本文は「戻す」で呼び出せます",
+      "このノートの先頭の記録が読めないので保存できません。入力した本文はこの端末に控えました。開き直せば「戻す」で画面に出せます",
+    /** 無いノートは行ごと消えるので、「戻す」で呼び出せるとは言えない。 */
+    missingNote:
+      "このノートはもう在りません。保存できないので、入力した本文は画面にあるうちに別の場所へ写してください",
+    shownFromBackup:
+      "この端末に控えた本文を画面に出しました。このノートのディスクには書けないので、別の場所へ写してください",
     saveNotKept:
       "保存できず、この端末にも控えを残せませんでした。閉じると入力した本文は失われます。別の場所へ写してください",
     loadFailed: "このノートを読めませんでした。書き換えないよう、本文は開いていません",
@@ -521,8 +525,11 @@ const en: Messages = {
     editedElsewhere:
       "This note was changed elsewhere and has been reloaded. Revert brings your text back",
     brokenMeta:
-      "This note's frontmatter cannot be read, so it was not saved. Revert brings your text back",
-    missingNote: "This note no longer exists, so it was not saved. Revert brings your text back",
+      "This note's frontmatter cannot be read, so it was not saved. Your text is kept on this device — reopen the note and Revert puts it back on screen",
+    missingNote:
+      "This note no longer exists, so it cannot be saved. Copy your text somewhere else while it is still on screen",
+    shownFromBackup:
+      "The copy kept on this device is back on screen. It cannot be written to this note, so copy it somewhere else",
     saveNotKept:
       "It could not be saved, and no copy could be kept on this device either. Closing this loses your text — copy it somewhere else",
     loadFailed: "This note could not be read, so its body stays closed rather than be overwritten",

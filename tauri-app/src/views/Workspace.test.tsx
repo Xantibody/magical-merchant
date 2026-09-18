@@ -1036,6 +1036,10 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     await waitFor(() => expect(countOf("update_draft")).toBe(1), { timeout: 3000 });
     await waitFor(() => expect(shell?.toast()?.message).toMatch(/もう在りません/u));
     expect(localStorage.getItem(`note-backup:${FILE_A}`)).toContain("消えたノートに足した行");
+    // 無いノートは一覧を取り直せば行ごと消える。開き直して「戻す」で呼び出す
+    // 道も無いので、呼び出せるとは言わない — 言えば人はそれを信じて閉じる
+    expect(shell?.toast()?.message).not.toMatch(/戻す/u);
+    expect(shell?.toast()?.message).toMatch(/写して/u);
   });
 
   // 退避そのものが失敗する端末(localStorage が満杯・無効)。ディスクへの
@@ -1056,6 +1060,39 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     // 在りもしない写しを指して「戻す」と言わない
     expect(shell?.toast()?.message).not.toMatch(/戻す/u);
     expect(localStorage.getItem(`note-backup:${FILE_A}`)).toBeNull();
+  });
+
+  // 壊れた記録のノートは「戻す」の書き込みも同じ理由で断る。書けないことを
+  // 理由に控えを見せないと、退避は残っているのに取り出す道がどこにも無い
+  it("shows the backup on screen when the note it belongs to cannot be written", async () => {
+    const typed = `# ${TITLE_A}\n\n壊れたノートで打った行`;
+    localStorage.setItem(`note-backup:${FILE_A}`, typed);
+    brokenMeta.add(FILE_A);
+    await openNoteA();
+
+    await runNoteAction("編集前に戻す");
+
+    // 打った字が実際に画面へ戻る。ここから選んで写せる
+    await waitFor(() => expect(screen.getByText("壊れたノートで打った行")).toBeDefined());
+    expect(shell?.toast()?.message).toMatch(/ディスクには書けない/u);
+    // 断られた書き込みは何も変えない。控えはまだ唯一の写しなので入れ替えない
+    expect(disk.get(FILE_A)).toBe(BODY_A);
+    expect(localStorage.getItem(`note-backup:${FILE_A}`)).toBe(typed);
+  });
+
+  // 読み直せば書けるノートでは、控えを画面に出して終わりにしない。画面と
+  // ディスクが黙って食い違い、次の保存が相手の本文を控えで潰す
+  it("still refuses to revert when the write is turned down as stale", async () => {
+    localStorage.setItem(`note-backup:${FILE_A}`, `# ${TITLE_A}\n\n控えの行`);
+    await openNoteA();
+    // 読んでから押すまでに、別の端末がこれを書き換えた
+    disk.set(FILE_A, BODY_A_SYNCED);
+
+    await runNoteAction("編集前に戻す");
+
+    await waitFor(() => expect(shell?.toast()?.message).toBe("戻せませんでした"));
+    expect(screen.queryByText("控えの行")).toBeNull();
+    expect(disk.get(FILE_A)).toBe(BODY_A_SYNCED);
   });
 
   // 復元は入れ替え。戻した直後の「戻る先」を次の保存で押し出すと、

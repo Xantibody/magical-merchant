@@ -869,6 +869,11 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   /**
    * この端末に残した「編集前の本文」と今の本文を入れ替える。入れ替えなので
    * もう一度押せば戻せる — 戻る先は常にちょうど 1 段。
+   *
+   * ディスクへ書けないノートでは入れ替えをやめ、控えを画面に出すだけにする。
+   * 控えを作る理由(壊れた記録・消えたノート)はそのまま書き込みを断る理由
+   * でもあるので、書けたときしか見せないと、退避は残っているのに取り出す道が
+   * どこにも無くなる。画面に出れば人は選んで写せる。
    */
   const revertEdit = async (item: NoteItem): Promise<void> => {
     const backup = readBackup(localStorage, item.filename);
@@ -883,6 +888,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       clearTimeout(saveTimer);
       saveTimer = undefined;
     }
+    let written = true;
     try {
       const revision = await typedInvoke("update_draft", {
         filename: item.filename,
@@ -891,15 +897,24 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
         revision: revisions.get(item.filename) ?? null,
       });
       revisions.set(item.filename, revision);
-    } catch {
-      shell.showToast(t().notes.revertFailed);
-      return;
+    } catch (error) {
+      // 読み直せば書けるノート(Stale・一時的な失敗)では見せずに終わる。
+      // ディスクと画面が黙って食い違い、次の保存が相手の本文を控えで潰す
+      if (!isBrokenNoteSave(error) && !isMissingNoteSave(error)) {
+        shell.showToast(t().notes.revertFailed);
+        return;
+      }
+      written = false;
     }
-    writeBackup(localStorage, item.filename, current);
-    // 入れ替えたので、いまの「戻る先」はこの控え。控えを取り終えた
-    // セッションとして開き直す — 開き直さないと、次に題や本文を触った
-    // ときに新しいセッションが立ち上がり、その最初の保存が復元直前の本文を
-    // 控えに書いて、もう一度押しても戻れなくなる
+    if (written) {
+      // 入れ替えたので、いまの「戻る先」は入れ替える前の本文。書けなかった
+      // ときは入れ替えない — 控えはまだこの字の唯一の写しで、押すたびに
+      // 同じものを出せる
+      writeBackup(localStorage, item.filename, current);
+    }
+    // 控えを取り終えたセッションとして開き直す — 開き直さないと、次に題や
+    // 本文を触ったときに新しいセッションが立ち上がり、その最初の保存が
+    // 復元直前の本文を控えに書いて、もう一度押しても戻れなくなる
     session = beginEditSession(backup);
     session.committed = true;
     sessionFile = item.filename;
@@ -907,8 +922,12 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     // エディタごと作り直す。差し込みでは戻した本文が画面に出ない
     showBody(item.id, titled.title, titled.body, noteView());
     shell.closePopovers();
-    await refetchNotes();
-    shell.showToast(t().notes.reverted);
+    if (written) {
+      // 行に出る題は本文の先頭行から導かれる。書いていないなら変わっていない。
+      // 消えたノートではここで行ごと消え、出したばかりの控えが画面から落ちる
+      await refetchNotes();
+    }
+    shell.showToast(written ? t().notes.reverted : t().notes.shownFromBackup);
   };
 
   /**
