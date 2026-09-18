@@ -5,6 +5,18 @@ const FLOWCHART = ["flowchart TD", "  A[Start] --> B[End]"].join("\n");
 const SEQUENCE = ["sequenceDiagram", "  Alice->>Bob: こんにちは", "  Bob-->>Alice: やあ"].join(
   "\n",
 );
+/** ノート側から初期化を上書きしにくる図。同期先から降ってきた本文でも起こりうる */
+const HTML_LABEL_DIRECTIVE = [
+  '%%{init: {"htmlLabels": true}}%%',
+  "flowchart TD",
+  "  A[Start] --> B[End]",
+].join("\n");
+/** 古い書き方の同じ攻撃。flowchart.htmlLabels も同じ名前なので同じ守りに入る */
+const FLOWCHART_HTML_LABEL_DIRECTIVE = [
+  '%%{init: {"flowchart": {"htmlLabels": true}}}%%',
+  "flowchart TD",
+  "  A[Start] --> B[End]",
+].join("\n");
 
 /** 描けた図だけを取り出す。null は描画に失敗した図 */
 function drawn(svgs: (string | null)[]): string[] {
@@ -26,6 +38,19 @@ describe("renderDiagrams", () => {
 
     expect(flowchart).not.toContain("foreignObject");
     expect(sequence).not.toContain("foreignObject");
+  });
+
+  /**
+   * 図の中の `%%{init: …}%%` は初期化の後から設定を書き換えられる。htmlLabels を
+   * 取り返されると PNG は「成功」したまま文字だけが抜けるので、ここで止める
+   */
+  it("does not let a diagram directive turn html labels back on", async () => {
+    const [root, scoped] = drawn(
+      await renderDiagrams([HTML_LABEL_DIRECTIVE, FLOWCHART_HTML_LABEL_DIRECTIVE]),
+    );
+
+    expect(root).not.toContain("foreignObject");
+    expect(scoped).not.toContain("foreignObject");
   });
 
   it("keeps the label text itself", async () => {

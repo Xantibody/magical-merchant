@@ -101,6 +101,10 @@ export async function renderDiagrams(sources: string[]): Promise<(string | null)
     // PNG から文字だけが消える。ラベル内の <br/> や太字の見え方は変わる。
     // AIDEV-NOTE: 図ごとの htmlLabels(flowchart.htmlLabels)は mermaid 11 で無効。根元のこれだけが効く
     htmlLabels: false,
+    // `secure` に載せた鍵は図の中の `%%{init: …}%%` から書き換えられない。mermaid の
+    // sanitize は入れ子にも同じ名前で降りるので、flowchart.htmlLabels もこれで落ちる。
+    // AIDEV-NOTE: 既定の secure は配列。initialize の配列は置換ではなく和で混ざるので既定の鍵は残る
+    secure: ["htmlLabels"],
     ...themeConfig(),
   });
 
