@@ -159,11 +159,20 @@ On disk a version is
 plain Markdown with `time` and `message` frontmatter, so `diff -u` in a
 terminal works as well as the app does. The app leaves `message` empty — the
 only one it writes is `before restore`, and the history shows that version as
-戻す前 instead of a date. Two devices committing the same body in the same
-second land on the same file, which is the same version, so it folds into one.
-Versions are not the local `history/` copies the CLI and MCP take before
-overwriting — those are a safety net on one device; versions are part of the
-document and sync with it.
+戻す前 instead of a date. Committing the same body twice in the same second
+on one device is one version: the file is already there and comes back
+untouched. Two devices are not that story. The name carries the committing
+device's wall clock cut to the second, so two devices on different offsets
+write two names for the same instant and the same body, and the history
+shows two rows. Line the offsets up and the names do match — but `time` in
+the frontmatter is the full timestamp, nanoseconds and offset included, so
+the bytes differ, and sync meets a key it has no record for whose two sides
+disagree: that is a conflict. The local copy keeps the key and the other is
+set aside under `conflicts/codex/<id>/<version>/<timestamp>.md`, outside
+`data/`. Nothing is lost either way; what you get is a version that did
+not fold. Versions are not the local `history/` copies the CLI and MCP
+take before overwriting — those are a safety net on one device; versions
+are part of the document and sync with it.
 
 ## Glyphs — your own inline symbols
 
