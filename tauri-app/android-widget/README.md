@@ -1,18 +1,27 @@
 # Android Home Screen Widgets
 
-Four widgets from the design (`2a` = Timeline capture bar, `2b` = notes,
+Four widgets from the design (`2a` = Scrawl capture bar, `2b` = notes,
 `1e` = templates):
 
 | Widget                     | Size | Look                                                                         | Tap                                                             |
 | -------------------------- | ---- | ---------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| `CaptureBarWidgetProvider` | 4×1  | `TIMELINE` + clock, rail, prompt, and today's last entry once there is one   | `QuickCaptureActivity` — writes without opening the app         |
-| `NotesNewWidgetProvider`   | 4×1  | `NOTES` + 「新しいノート」, rail, 「タップして書き始める」, plus square      | `magical-merchant://widget/new-note`                            |
+| `CaptureBarWidgetProvider` | 4×1  | `SCRAWL` + clock, rail, prompt, and today's last entry once there is one     | `QuickCaptureActivity` — writes without opening the app         |
+| `NotesNewWidgetProvider`   | 4×1  | `NOTES` + "new note", rail, "tap to start writing", plus square              | `magical-merchant://widget/new-note`                            |
 | `NotesListWidgetProvider`  | 4×2  | `NOTES` header with a plus, then the four most recent notes and their dates  | row → `…/widget/note?file=…`, plus → `…/widget/new-note`        |
 | `TemplatesWidgetProvider`  | 4×3  | `TEMPLATES` header, then up to three templates — first filled, rest outlined | row → `…/widget/template?name=…`, header → `…/widget/templates` |
 
-Once the day has an entry the capture bar's prompt becomes 「続きを記録…」 with
+Once the day has an entry the capture bar's prompt becomes "keep going…" with
 that entry's time and head below it, and the sheet grows chips for today's
 most-used tags, which insert at the caret.
+
+## What language a widget speaks
+
+The device's, not the app's. The language chosen in Settings lives in the
+WebView (`lib/i18n.ts`) and a widget process never starts one, so the strings
+split the platform's way instead: `res/values/` is English, `res/values-ja/` is
+Japanese, and the launcher resolves both the layouts and the `<receiver>` labels
+in the widget picker. Keep the two files at the same set of names — a name in
+only one of them falls back silently.
 
 ## How the capture bar writes
 
@@ -37,6 +46,20 @@ Two names are load-bearing and fail only at runtime if they drift apart:
   three read functions) is the JNI mangling of this package + object + method
   (`_` in a package component escapes to `_1`). Renaming the Kotlin side means
   renaming the Rust symbol.
+
+The typed text exists in exactly one place — the sheet — so nothing on this
+path is allowed to throw. `WidgetBridge.saveCapture` answers `false` for every
+failure, including an `UnsatisfiedLinkError`, and `QuickCaptureActivity` shows a
+toast and leaves the sheet open rather than dismissing it.
+
+`false` is all the sheet gets: the Rust side folds its `Err` into a bool, and
+`android_logger` is initialised in Tauri's `setup`, which a widget process never
+runs, so nothing Rust logs from here reaches logcat. What the Kotlin half knows
+it says under one tag:
+
+```sh
+adb logcat -s MagicalWidget
+```
 
 The base directory is `Context.getDataDir()`, **not** `filesDir` — Tauri's
 `PathPlugin` answers `getDataDir` with the former, and writing to `files/`
