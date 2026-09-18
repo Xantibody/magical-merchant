@@ -52,6 +52,22 @@ export function sameTag(a: string, b: string): boolean {
 }
 
 /**
+ * 大小だけ違う綴りを 1 つに畳む。出てきた順で、残すのは先に見たほう。
+ *
+ * 「どの綴りを代表にするか」をここ 1 箇所に閉じ込める。本文から拾うのも
+ * frontmatter から来るのも、同じ答えでなければ画面ごとに違う字が出る。
+ */
+function foldUnique(tags: string[]): string[] {
+  const seen = new Map<string, string>();
+  for (const tag of tags) {
+    if (!seen.has(foldTag(tag))) {
+      seen.set(foldTag(tag), tag);
+    }
+  }
+  return [...seen.values()];
+}
+
+/**
  * 外から渡されたタグを、`parseTags` が返す形に揃える。
  *
  * 落とすのは飾りの `#` と前後の空白だけで、綴りには触らない。大小を無視した
@@ -68,24 +84,27 @@ export function normalizeTag(tag: string): string {
  * `#Memo` と `#memo` は 1 つになり、残るのは先に出てきたほう。
  */
 export function parseTags(text: string): string[] {
-  const seen = new Map<string, string>();
+  const tags: string[] = [];
   for (const match of text.matchAll(TAG)) {
     const tag = match.groups?.tag;
-    if (tag && !seen.has(foldTag(tag))) {
-      seen.set(foldTag(tag), tag);
+    if (tag) {
+      tags.push(tag);
     }
   }
-  return [...seen.values()];
+  return foldUnique(tags);
 }
 
 /**
- * よく使うものから順に数える。同数なら名前順にして並びが揺れないようにする。
- * 大小だけ違う綴りは同じタグ。チップに出すのは最初に見た綴り。
+ * 既にタグとして取り出されたものを数える。1 つの配列が 1 件。
+ *
+ * ノートのタグは frontmatter に書かれたまま core から届くので、1 枚が
+ * `Memo` と `memo` の両方を名乗ることがある。畳んだ鍵で数えて、同じ件を
+ * 二度足さない — チップの件数は「何件に付いているか」でなければならない。
  */
-export function countTags(texts: string[]): TagCount[] {
+export function countTagLists(lists: string[][]): TagCount[] {
   const counts = new Map<string, TagCount>();
-  for (const text of texts) {
-    for (const tag of parseTags(text)) {
+  for (const list of lists) {
+    for (const tag of foldUnique(list)) {
       const seen = counts.get(foldTag(tag));
       if (seen) {
         seen.count += 1;
@@ -95,6 +114,14 @@ export function countTags(texts: string[]): TagCount[] {
     }
   }
   return [...counts.values()].toSorted((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
+}
+
+/**
+ * よく使うものから順に数える。同数なら名前順にして並びが揺れないようにする。
+ * 大小だけ違う綴りは同じタグ。チップに出すのは最初に見た綴り。
+ */
+export function countTags(texts: string[]): TagCount[] {
+  return countTagLists(texts.map((text) => parseTags(text)));
 }
 
 /** 本文をタグとそれ以外に切り分ける。色を付けて描くために使う。 */

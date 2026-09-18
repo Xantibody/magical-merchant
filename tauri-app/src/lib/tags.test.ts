@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { countTags, matchTagPrefix, parseTags, splitTagged, tagDraftAt } from "./tags";
+import {
+  countTagLists,
+  countTags,
+  matchTagPrefix,
+  parseTags,
+  splitTagged,
+  tagDraftAt,
+} from "./tags";
 
 describe("parseTags", () => {
   it("picks up a tag written in the body", () => {
@@ -83,6 +90,26 @@ describe("countTags", () => {
     expect(countTags(["#CognitiveBias", "#cognitivebias"])).toStrictEqual([
       { tag: "CognitiveBias", count: 2 },
     ]);
+  });
+});
+
+describe("countTagLists", () => {
+  it("counts one list as one item, most used first", () => {
+    expect(countTagLists([["a", "b"], ["a"], []])).toStrictEqual([
+      { tag: "a", count: 2 },
+      { tag: "b", count: 1 },
+    ]);
+  });
+
+  it("keeps the spelling it saw first for tags that differ only in case", () => {
+    expect(countTagLists([["Memo"], ["memo"], ["MEMO"]])).toStrictEqual([
+      { tag: "Memo", count: 3 },
+    ]);
+  });
+
+  // frontmatter は書かれたまま残るので、1 件が両方の綴りを名乗ることがある
+  it("counts a list once even when it carries both spellings", () => {
+    expect(countTagLists([["Memo", "memo"]])).toStrictEqual([{ tag: "Memo", count: 1 }]);
   });
 });
 

@@ -53,6 +53,24 @@ describe("countNoteTags", () => {
     ]);
   });
 
+  // チップが 2 つに割れると、同じ分類を 2 回押し分けることになる
+  it("counts notes that spell a tag differently as one chip", () => {
+    const tags = countNoteTags([
+      item({ filename: "a.md", tags: ["Memo"] }),
+      item({ filename: "b.md", tags: ["memo"] }),
+      item({ filename: "c.md", tags: ["MEMO"] }),
+    ]);
+
+    expect(tags).toStrictEqual([{ tag: "Memo", count: 3 }]);
+  });
+
+  // frontmatter は書かれたまま残るので、1 枚が両方の綴りを名乗ることがある
+  it("counts a note once even when it carries both spellings", () => {
+    expect(countNoteTags([item({ tags: ["Memo", "memo"] })])).toStrictEqual([
+      { tag: "Memo", count: 1 },
+    ]);
+  });
+
   it("is empty when no note has tags", () => {
     expect(countNoteTags([item()])).toStrictEqual([]);
   });

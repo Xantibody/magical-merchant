@@ -10,6 +10,7 @@ import type { SearchHit } from "./commands";
 import { toIsoDate } from "./day-labels";
 import { t } from "./i18n";
 import type { NoteItem } from "./items";
+import { countTagLists } from "./tags";
 import type { TagCount } from "./tags";
 
 const RECENT_LIMIT = 5;
@@ -31,17 +32,14 @@ export function recentNoteHits(items: NoteItem[]): SearchHit[] {
   return items.slice(0, RECENT_LIMIT).map((item) => noteHit(item));
 }
 
-/** ノートに付いたタグを数える。多い順。 */
+/**
+ * ノートに付いたタグを数える。多い順。
+ *
+ * 数え方は本文の `#タグ` と同じ(`tags.ts`)。生の綴りで数えると `Memo` と
+ * `memo` が別の行になり、同じ分類を件数ごと押し分けることになる。
+ */
 export function countNoteTags(items: NoteItem[]): TagCount[] {
-  const counts = new Map<string, number>();
-  for (const item of items) {
-    for (const tag of item.tags) {
-      counts.set(tag, (counts.get(tag) ?? 0) + 1);
-    }
-  }
-  return [...counts]
-    .map(([tag, count]) => ({ tag, count }))
-    .toSorted((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
+  return countTagLists(items.map((item) => item.tags));
 }
 
 export interface DayJump {
