@@ -112,6 +112,13 @@ impl Timeline {
     /// 日を読んで `edit` に渡し、空になっていなければ書き戻す。
     /// 渡すのが行の `Vec` ではなく `DayLog` なのは、行だけでは畳まれた端末
     /// 情報を戻せず、読み手が見たのと同じ行を組み立てられないため。
+    ///
+    /// 読んでから書くまでは不可分ではない。`write_atomic` が原子なのは書き込み
+    /// 1 回きりで、`read_raw` → `expect_same_entry` → 書き の間に同じ日へ書かれ
+    /// れば、古い `DayLog` を突き合わせて書き戻す — 割り込んだ記録は消える。
+    /// 塞ぐにはこの日ファイルへ書く全員が 1 つのロックを取る必要がある:
+    /// `save_entry` と、同期の `write_under` / `delete_local_file`。
+    // AIDEV-NOTE: 読み→照合→書きは不可分でない。SyncLock 流用は capture が busy で落ちるので見送り、排他は別 PR
     fn rewrite<F>(&self, date: NaiveDate, edit: F) -> Result<(), CoreError>
     where
         F: FnOnce(&mut DayLog) -> Result<(), CoreError>,
