@@ -34,6 +34,24 @@ pub const fn same_tag(a: &str, b: &str) -> bool {
     a.eq_ignore_ascii_case(b)
 }
 
+/// 大小だけ違う綴りを 1 つに畳む。出てきた順で、残すのは先に見たほう。
+///
+/// 「どの綴りを代表にするか」を決めるのはこの規則だけ。本文から拾うのも
+/// frontmatter から来るのも、同じ答えでなければ画面ごとに違う字が出る。
+/// `collect_span` は拾いながら同じ規則で落とす — 捨てる綴りを確保せずに
+/// 済ませるため。同じ規則が `tauri-app/src/lib/tags.ts` の `foldUnique` にもある。
+///
+/// AIDEV-NOTE: 鍵の Map ではなく線形走査。タグは 1 枚あたり数個で、確保を増やさないほうが一覧の読み込みに効く。
+fn fold_unique(tags: impl IntoIterator<Item = String>) -> Vec<String> {
+    let mut folded: Vec<String> = Vec::new();
+    for tag in tags {
+        if !folded.iter().any(|seen| same_tag(seen, &tag)) {
+            folded.push(tag);
+        }
+    }
+    folded
+}
+
 /// 本文から `#タグ` を、出てきた順に重複なく返す。
 ///
 /// `#` の直前がタグに使える文字でないこと。`https://example.com#frag` のような
@@ -75,14 +93,13 @@ pub fn parse(text: &str) -> Vec<String> {
 /// タグ欄で付けていた頃のもので、消すと過去のノートから分類が消える。
 /// 大小だけ違うものは 1 つに畳み、綴りは frontmatter 側を残す — ノートが
 /// 自分で名乗っている形だから。ファイルの中身には手を付けない。
+///
+/// frontmatter は書かれたまま届くので、その中だけで `Memo` と `memo` が
+/// 並ぶこともある。畳むのは本文と突き合わせるときだけではない: ノートが
+/// 名乗る一覧に同じ分類が二度出ると、数える側はその 1 枚を 2 枚と読む。
 #[must_use]
-pub fn merge(mut tags: Vec<String>, body: &str) -> Vec<String> {
-    for tag in parse(body) {
-        if !tags.iter().any(|seen| same_tag(seen, &tag)) {
-            tags.push(tag);
-        }
-    }
-    tags
+pub fn merge(tags: Vec<String>, body: &str) -> Vec<String> {
+    fold_unique(tags.into_iter().chain(parse(body)))
 }
 
 /// 外から渡されたタグを、`parse` が返す形に揃える。
@@ -308,6 +325,29 @@ mod tests {
     #[test]
     fn leaves_tags_saved_in_lowercase_alone() {
         assert_eq!(merge(vec!["memo".to_string()], "本文 #memo"), vec!["memo"]);
+    }
+
+    /// frontmatter は書かれたまま届くので、1 枚が `Memo` と `memo` の両方を
+    /// 名乗ることがある。ノートが同じ分類を二度名乗ると、数える側はその 1 枚を
+    /// 2 件と読む。
+    #[test]
+    fn merging_folds_two_spellings_that_came_from_the_frontmatter() {
+        assert_eq!(
+            merge(vec!["Memo".to_string(), "memo".to_string()], "本文"),
+            vec!["Memo"]
+        );
+    }
+
+    /// 代表の綴りを決める規則は 1 つ。出てきた順で、残すのは先に見たほう。
+    #[test]
+    fn folding_a_list_keeps_the_first_spelling_of_each_tag() {
+        let tags = ["Memo", "rust", "MEMO", "Rust", "設計"].map(String::from);
+        assert_eq!(fold_unique(tags.to_vec()), vec!["Memo", "rust", "設計"]);
+    }
+
+    #[test]
+    fn folding_an_empty_list_yields_nothing() {
+        assert_eq!(fold_unique(Vec::new()), Vec::<String>::new());
     }
 
     #[test]

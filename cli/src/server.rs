@@ -452,7 +452,10 @@ impl McpServer {
         use magical_merchant_core::utils::tags;
 
         // 鍵は畳んだ形、名乗るのは最初に見た綴り。`#CognitiveBias` と
-        // `#cognitivebias` が 2 行に割れると、どちらを打てばいいか分からない
+        // `#cognitivebias` が 2 行に割れると、どちらを打てばいいか分からない。
+        // `notes`/`entries` は「何枚・何件に付いているか」。1 つの記録が同じ
+        // 分類を二度名乗らないのは `tags::merge` と `tags::parse` が畳んで
+        // 返すからで、ここでは記録ごとに畳み直していない
         let mut counts: BTreeMap<String, (String, usize, usize)> = BTreeMap::new();
         for note in magical_merchant_core::list_notes(&self.data_dir).map_err(err)? {
             for tag in note.tags {
@@ -1038,6 +1041,27 @@ mod tests {
         // 最初に見た綴りで名乗る
         assert_eq!(out.tags[0].tag, "CognitiveBias");
         assert_eq!((out.tags[0].notes, out.tags[0].entries), (1, 1));
+    }
+
+    /// `notes` は「何枚に付いているか」。frontmatter は書かれたまま届くので、
+    /// 1 枚が `Memo` と `memo` の両方を名乗ることがある。畳んだ数え方を
+    /// しないと、その 1 枚が 2 枚に見えて並び順まで動く。
+    #[test]
+    fn one_note_naming_a_tag_in_two_cases_counts_once() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path().join("data/notes");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(
+            dir.join("20260115_090000.md"),
+            "---\ntime: 2026-01-15T09:00:00+09:00\ntags:\n  - Memo\n  - memo\n---\n\n# 走り書き\n",
+        )
+        .unwrap();
+
+        let out = server(tmp.path()).list_tags().unwrap().0;
+
+        assert_eq!(out.tags.len(), 1);
+        assert_eq!(out.tags[0].tag, "Memo");
+        assert_eq!((out.tags[0].notes, out.tags[0].entries), (1, 0));
     }
 
     #[test]
