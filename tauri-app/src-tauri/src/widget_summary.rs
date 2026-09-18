@@ -118,12 +118,16 @@ fn last_entry(entries: &[String]) -> Option<LastEntry> {
 fn top_tags(entries: &[String]) -> Vec<String> {
     // 出現順を保ったまま数える。同数のタグが実行ごとに入れ替わると、
     // 同じ画面を開いただけでチップの並びが変わって見える。
+    // 大小だけ違うものは同じタグ。綴りは最初に見たほうを出す。
     let mut counts: Vec<(String, usize)> = Vec::new();
     for tag in entries
         .iter()
         .flat_map(|entry| tags::parse(strip_timeline_prefix(entry)))
     {
-        match counts.iter_mut().find(|(name, _)| *name == tag) {
+        match counts
+            .iter_mut()
+            .find(|(name, _)| tags::same_tag(name, &tag))
+        {
             Some((_, count)) => *count += 1,
             None => counts.push((tag, 1)),
         }
@@ -232,6 +236,17 @@ mod tests {
             "- [10:00:00] #a and #b".to_string(),
         ];
         assert_eq!(top_tags(&entries), vec!["#b", "#a"]);
+    }
+
+    /// 大小だけ違う綴りは同じタグ。別々に数えると、同じ分類の
+    /// チップがウィジェットに二重に並ぶ。
+    #[test]
+    fn tags_that_differ_only_in_case_are_one_chip() {
+        let entries = vec![
+            "- [09:00:00] #CognitiveBias を疑う".to_string(),
+            "- [10:00:00] また #cognitivebias".to_string(),
+        ];
+        assert_eq!(top_tags(&entries), vec!["#CognitiveBias"]);
     }
 
     /// 4 つ目からはチップが 1 行に収まらないので落とす。落ちるのは

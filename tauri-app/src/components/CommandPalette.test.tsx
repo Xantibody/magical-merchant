@@ -27,7 +27,15 @@ const TAGGED_NOTES: Note[] = [
   },
 ];
 
-function renderPalette(scopeTags: string[], hits: SearchHit[] = [TAGGED_HIT]) {
+function note(filename: string, tags: string[]): Note {
+  return { path: `notes/${filename}`, filename, time: "2026-09-01T09:00:00", tags, preview: "" };
+}
+
+function renderPalette(
+  scopeTags: string[],
+  hits: SearchHit[] = [TAGGED_HIT],
+  notes: Note[] = TAGGED_NOTES,
+) {
   const searches: unknown[] = [];
   mockIPC((cmd, args) => {
     if (cmd === "search_all") {
@@ -35,7 +43,7 @@ function renderPalette(scopeTags: string[], hits: SearchHit[] = [TAGGED_HIT]) {
       return hits;
     }
     if (cmd === "list_notes") {
-      return TAGGED_NOTES;
+      return notes;
     }
     return [];
   });
@@ -89,7 +97,7 @@ describe("CommandPalette with a tag scope", () => {
     fireEvent.input(input, { target: { value: "#SF6 #ベガ コンボ" } });
 
     await waitFor(() =>
-      expect(searches).toContainEqual({ query: "コンボ", tags: ["sf6", "ベガ"] }),
+      expect(searches).toContainEqual({ query: "コンボ", tags: ["SF6", "ベガ"] }),
     );
     expect(chips()).toStrictEqual([]);
   });
@@ -133,6 +141,18 @@ describe("CommandPalette with a tag scope", () => {
 
     expect(chips()).toStrictEqual(["#sf6"]);
     await waitFor(() => expect(searches).toContainEqual({ query: "", tags: ["sf6"] }));
+  });
+
+  // 大小だけ違う綴りで 2 行並ぶと、同じ分類が別々の件数で 2 回出る
+  it("shows one home tag row for spellings that differ only in case", async () => {
+    const { container } = renderPalette([], [], [note("a.md", ["Memo"]), note("b.md", ["memo"])]);
+
+    await waitFor(() => {
+      const rows = [...container.querySelectorAll<HTMLButtonElement>(".palette-row")].filter((r) =>
+        r.textContent?.toLowerCase().includes("#memo"),
+      );
+      expect(rows.map((r) => r.textContent)).toStrictEqual(["#Memo2件"]);
+    });
   });
 
   it("names every tag in the empty message", async () => {

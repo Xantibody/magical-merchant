@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { countTags, matchTagPrefix, parseTags, splitTagged, tagDraftAt } from "./tags";
+import {
+  countTagLists,
+  countTags,
+  matchTagPrefix,
+  parseTags,
+  splitTagged,
+  tagDraftAt,
+} from "./tags";
 
 describe("parseTags", () => {
   it("picks up a tag written in the body", () => {
@@ -28,9 +35,14 @@ describe("parseTags", () => {
     expect(parseTags("C#")).toStrictEqual([]);
   });
 
-  // core の tags.rs と同じ約束。別々に数えると同じ分類が二重に並ぶ
-  it("normalizes ascii tags to lowercase", () => {
-    expect(parseTags("#Rust と #rust と #RUST")).toStrictEqual(["rust"]);
+  // core の tags.rs と同じ約束。打った綴りをそのまま返す
+  it("keeps the spelling a tag was written with", () => {
+    expect(parseTags("#CognitiveBias を疑う")).toStrictEqual(["CognitiveBias"]);
+  });
+
+  // 別々に数えると同じ分類が二重に並ぶ。残すのは最初に見た綴り
+  it("folds case when deduping and keeps the first spelling", () => {
+    expect(parseTags("#Rust と #rust と #RUST")).toStrictEqual(["Rust"]);
   });
 
   it("keeps japanese tags as written", () => {
@@ -71,6 +83,33 @@ describe("countTags", () => {
 
   it("breaks ties by name so the order does not wander", () => {
     expect(countTags(["#b #a"]).map((t) => t.tag)).toStrictEqual(["a", "b"]);
+  });
+
+  // チップが 2 つに割れると、同じ分類を 2 回押し分けることになる
+  it("counts tags that differ only in case as one chip", () => {
+    expect(countTags(["#CognitiveBias", "#cognitivebias"])).toStrictEqual([
+      { tag: "CognitiveBias", count: 2 },
+    ]);
+  });
+});
+
+describe("countTagLists", () => {
+  it("counts one list as one item, most used first", () => {
+    expect(countTagLists([["a", "b"], ["a"], []])).toStrictEqual([
+      { tag: "a", count: 2 },
+      { tag: "b", count: 1 },
+    ]);
+  });
+
+  it("keeps the spelling it saw first for tags that differ only in case", () => {
+    expect(countTagLists([["Memo"], ["memo"], ["MEMO"]])).toStrictEqual([
+      { tag: "Memo", count: 3 },
+    ]);
+  });
+
+  // frontmatter は書かれたまま残るので、1 件が両方の綴りを名乗ることがある
+  it("counts a list once even when it carries both spellings", () => {
+    expect(countTagLists([["Memo", "memo"]])).toStrictEqual([{ tag: "Memo", count: 1 }]);
   });
 });
 
@@ -137,6 +176,13 @@ describe("matchTagPrefix", () => {
 
   it("ignores case", () => {
     expect(matchTagPrefix(known, "SYN").map((t) => t.tag)).toStrictEqual(["sync", "syntax"]);
+  });
+
+  // 候補の綴りは打った形のまま残るので、両側を畳まないと補完が出ない
+  it("ignores case on the known tag too", () => {
+    expect(
+      matchTagPrefix([{ tag: "CognitiveBias", count: 1 }], "cog").map((t) => t.tag),
+    ).toStrictEqual(["CognitiveBias"]);
   });
 
   it("returns nothing when no tag starts with the draft", () => {

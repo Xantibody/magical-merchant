@@ -34,13 +34,13 @@ describe("searchRequest", () => {
     it("turns several typed tags into an AND scope", () => {
       expect(searchRequest("#SF6 #ベガ #置き攻め", [])).toStrictEqual({
         query: "",
-        tags: ["sf6", "ベガ", "置き攻め"],
+        tags: ["SF6", "ベガ", "置き攻め"],
       });
     });
 
-    // タグの文字は Timeline のチップと同じ規則で寄せる。大文字の SF6 も sf6 と同じタグ
-    it("normalises typed tags the way the timeline chips do", () => {
-      expect(searchRequest("#SF6", [])).toStrictEqual({ query: "", tags: ["sf6"] });
+    // タグの文字は Timeline のチップと同じ規則。打った綴りがそのまま範囲になる
+    it("keeps the spelling of typed tags the way the timeline chips do", () => {
+      expect(searchRequest("#SF6", [])).toStrictEqual({ query: "", tags: ["SF6"] });
     });
 
     it("keeps the remaining text as the query, without the tag tokens", () => {
@@ -57,6 +57,7 @@ describe("searchRequest", () => {
 
     it("does not repeat a tag that is both typed and chipped", () => {
       expect(searchRequest("#sync #sync", ["sync"])).toStrictEqual({ query: "", tags: ["sync"] });
+      expect(searchRequest("#Sync", ["sync"])).toStrictEqual({ query: "", tags: ["sync"] });
     });
 
     // `C#` や URL の `#frag` はタグではない。本文の規則(tags.ts)をそのまま使う

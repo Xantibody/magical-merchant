@@ -19,11 +19,6 @@ const NOW = new Date();
 const TODAY = isoOf(NOW);
 const YEAR_AGO = isoOf(new Date(NOW.getFullYear() - 1, NOW.getMonth(), NOW.getDate()));
 
-const DAYS: Record<string, string[]> = {
-  [TODAY]: ["- [08:15:00] 朝ラン 5km #運動", "- [21:34:00] ベガのラッシュ止まらん #SF6"],
-  [YEAR_AGO]: ["- [12:00:00] 去年のきょう"],
-};
-
 /**
  * 一覧が最初に載せるのは直近 14 日ぶんだけ。記録のある日をその数だけ並べると
  * 1 年前は載らない日になり、そこへ飛ぶと一覧ごと読み直される。
@@ -32,10 +27,37 @@ const RECENT_DATES = Array.from({ length: 14 }, (_, back) =>
   isoOf(new Date(NOW.getFullYear(), NOW.getMonth(), NOW.getDate() - back)),
 );
 
+/**
+ * タグの綴りを見るための日。最初から載っていて、かつ「今週」(月曜起点)には
+ * 決して入らない 10 日前に置く — 今日へ足すと週の要約の件数が動き、1 年前へ
+ * 置くと最初は載らない日になってしまう。
+ */
+const TAG_DAY = isoOf(new Date(NOW.getFullYear(), NOW.getMonth(), NOW.getDate() - 10));
+
+const DAYS: Record<string, string[]> = {
+  [TODAY]: ["- [08:15:00] 朝ラン 5km #運動", "- [21:34:00] ベガのラッシュ止まらん #SF6"],
+  [TAG_DAY]: [
+    // 綴りが 1 つしかないタグ。後から大文字で記録すると代表表記が入れ替わる
+    "- [11:00:00] 小文字だけで書いた #run",
+    // 同じタグを大小違いで書いた 2 件。チップは 1 つに畳まれるので、絞り込みも
+    // 同じ畳み方でなければ片方が一覧から消える
+    "- [12:30:00] 小文字で書いた #memo",
+    "- [12:40:00] 大文字で書いた #Memo",
+  ],
+  [YEAR_AGO]: ["- [12:00:00] 去年のきょう"],
+};
+
+/** 記録すると書き換わるので、テストごとに作り直す。 */
+let days: Record<string, string[]>;
+
 const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
   list_timeline_dates: () => [...RECENT_DATES, YEAR_AGO],
-  read_timeline_by_date: ({ date }) => DAYS[String(date)] ?? [],
+  read_timeline_by_date: ({ date }) => days[String(date)] ?? [],
   list_notes: () => [],
+  // 追記なので、その日のいちばん新しい 1 件になる
+  save_quick_capture: ({ text }) => {
+    days[TODAY]?.push(`- [22:00:00] ${String(text)}`);
+  },
 };
 
 /**
@@ -62,9 +84,19 @@ async function openTimeline(): Promise<void> {
   await screen.findByText("21:34");
 }
 
+/** 浮いている記録欄。Timeline が描かれた後にだけ在る。 */
+function captureInput(): HTMLTextAreaElement {
+  const input = document.querySelector<HTMLTextAreaElement>(".capture-input");
+  if (!input) {
+    throw new Error("capture-input not found");
+  }
+  return input;
+}
+
 async function setupTimeline(): Promise<void> {
   await page.viewport(1280, 800);
   localStorage.clear();
+  days = structuredClone(DAYS);
   mockWindows("main");
   mockIPC((cmd, args) => {
     const handler = HANDLERS[cmd];
@@ -107,6 +139,46 @@ describe("Timeline › 週次ダイジェスト", () => {
     fireEvent.click(screen.getByRole("button", { name: "今週は閉じる" }));
 
     expect(screen.queryByRole("region", { name: "今週" })).toBeNull();
+  });
+});
+
+describe("Timeline › タグの絞り込み", () => {
+  beforeEach(setupTimeline);
+  afterEach(teardownTimeline);
+
+  // チップに出る綴りは最初に見たものひとつで、件数はそれに畳んだ数。絞り込みが
+  // 完全一致だと、代表でない綴りの記録が消えて数と一覧が食い違う
+  it("keeps every spelling of the chip's tag, and the count agrees", async () => {
+    await openTimeline();
+
+    fireEvent.click(screen.getByRole("button", { name: "#Memo" }));
+
+    expect(screen.getByText("大文字で書いた")).toBeDefined();
+    expect(screen.getByText("小文字で書いた")).toBeDefined();
+    expect(screen.getByText("#Memo で絞り込み中 · 2件")).toBeDefined();
+  });
+
+  // チップの綴りは「いちばん新しい 1 件の綴り」なので、絞り込み中に同じタグを
+  // 大小違いで記録すると入れ替わる。選択の判定が完全一致だと、絞り込みは
+  // 効いたままなのに印が消え、押しても解除できない行が残る
+  it("keeps the chip selected when a newer spelling takes over, and still clears it", async () => {
+    await openTimeline();
+    fireEvent.click(screen.getByRole("button", { name: "#run" }));
+    expect(screen.getByText("#run で絞り込み中 · 1件")).toBeDefined();
+
+    // 末尾の空白まで打った状態にする。タグを打ちかけたままの Enter は
+    // 候補の確定に取られて、送信にならない
+    fireEvent.input(captureInput(), { target: { value: "きょうも走った #Run " } });
+    fireEvent.keyDown(captureInput(), { key: "Enter" });
+
+    const chip = await screen.findByRole("button", { name: "#Run" });
+    expect(chip.classList.contains("tag-chip--active")).toBe(true);
+    expect(screen.getByText("#Run で絞り込み中 · 2件")).toBeDefined();
+
+    fireEvent.click(chip);
+
+    expect(screen.queryByText(/で絞り込み中/u)).toBeNull();
+    expect(screen.getByText("ベガのラッシュ止まらん")).toBeDefined();
   });
 });
 

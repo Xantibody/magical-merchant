@@ -33,7 +33,7 @@ import {
 import type { NoteItem, TimelineItem } from "../lib/items";
 import { places } from "../lib/places";
 import { noteRoute } from "../lib/note-route";
-import { countTags, parseTags } from "../lib/tags";
+import { countTags, parseTags, sameTag } from "../lib/tags";
 import {
   digestWeekKey,
   isDigestDismissed,
@@ -166,7 +166,9 @@ export default function Timeline(): JSX.Element {
     if (!tag) {
       return entries();
     }
-    return entries().filter((item) => parseTags(item.text).includes(tag));
+    // 突き合わせは sameTag。チップは大小違いの綴りを 1 つに畳んで数えるので、
+    // ここが完全一致だと代表でない綴りの記録が落ちて、件数とも食い違う
+    return entries().filter((item) => parseTags(item.text).some((own) => sameTag(own, tag)));
   });
 
   const days = createMemo(() => groupTimelineByDay(visible()));

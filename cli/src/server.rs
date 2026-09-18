@@ -364,7 +364,10 @@ impl McpServer {
             return Err(format!("'from' ({from}) is after 'to' ({to})"));
         }
         let limit = param.limit.unwrap_or(DEFAULT_LIMIT);
-        let tag = param.tag.map(|t| t.trim_start_matches('#').to_lowercase());
+        // 呼ぶ側は一覧で見た綴りを正確には打たない。`#` の有無と大小は見ない
+        let tag = param
+            .tag
+            .map(|t| magical_merchant_core::utils::tags::normalize(&t));
         let cache = self.places();
 
         let mut entries = Vec::new();
@@ -379,7 +382,12 @@ impl McpServer {
         dates.sort_unstable();
         'days: for date in dates {
             for entry in self.day_entries(&cache, date)? {
-                if tag.as_ref().is_some_and(|t| !entry.tags.contains(t)) {
+                if tag.as_ref().is_some_and(|t| {
+                    !entry
+                        .tags
+                        .iter()
+                        .any(|own| magical_merchant_core::utils::tags::same_tag(own, t))
+                }) {
                     continue;
                 }
                 if entries.len() >= limit {
@@ -456,23 +464,30 @@ impl McpServer {
         description = "List every #tag used across notes and timeline entries with usage counts, most-used first"
     )]
     fn list_tags(&self) -> Result<Json<TagsOutput>, String> {
-        let mut counts: BTreeMap<String, (usize, usize)> = BTreeMap::new();
+        use magical_merchant_core::utils::tags;
+
+        // 鍵は畳んだ形、名乗るのは最初に見た綴り。`#CognitiveBias` と
+        // `#cognitivebias` が 2 行に割れると、どちらを打てばいいか分からない。
+        // `notes`/`entries` は「何枚・何件に付いているか」。1 つの記録が同じ
+        // 分類を二度名乗らないのは `tags::merge` と `tags::parse` が畳んで
+        // 返すからで、ここでは記録ごとに畳み直していない
+        let mut counts: BTreeMap<String, (String, usize, usize)> = BTreeMap::new();
         for note in magical_merchant_core::list_notes(&self.data_dir).map_err(err)? {
             for tag in note.tags {
-                counts.entry(tag).or_default().0 += 1;
+                counts.entry(tags::fold_tag(&tag)).or_insert((tag, 0, 0)).1 += 1;
             }
         }
         for date in magical_merchant_core::list_timeline_dates(&self.data_dir).map_err(err)? {
             for line in magical_merchant_core::read_timeline(&self.data_dir, date).map_err(err)? {
                 let entry = parse_timeline_entry(&line);
-                for tag in magical_merchant_core::utils::tags::parse(&entry.text) {
-                    counts.entry(tag).or_default().1 += 1;
+                for tag in tags::parse(&entry.text) {
+                    counts.entry(tags::fold_tag(&tag)).or_insert((tag, 0, 0)).2 += 1;
                 }
             }
         }
         let mut tags: Vec<TagInfo> = counts
-            .into_iter()
-            .map(|(tag, (notes, entries))| TagInfo {
+            .into_values()
+            .map(|(tag, notes, entries)| TagInfo {
                 tag,
                 notes,
                 entries,
@@ -859,6 +874,31 @@ mod tests {
         );
     }
 
+    /// エージェントは一覧で見た綴りをそのまま渡すとは限らない。
+    /// 記録側・引数側のどちらが大文字でも同じエントリに当たること。
+    #[test]
+    fn a_range_filters_by_tag_ignoring_case() {
+        let tmp = TempDir::new().unwrap();
+        let ctx = Context::default();
+        write_day(
+            tmp.path(),
+            "2026-01-15",
+            &[(9, "歪みを疑う #CognitiveBias", &ctx), (10, "休憩", &ctx)],
+        );
+
+        let server = server(tmp.path());
+        let hit = range(&server, "2026-01-01", "2026-12-31", Some("cognitivebias"));
+        assert_eq!(hit.entries.len(), 1);
+        // 打った綴りのまま返る
+        assert_eq!(hit.entries[0].tags, vec!["CognitiveBias"]);
+        assert_eq!(
+            range(&server, "2026-01-01", "2026-12-31", Some("#COGNITIVEBIAS"))
+                .entries
+                .len(),
+            1
+        );
+    }
+
     #[test]
     fn a_range_stops_at_the_limit_and_says_so() {
         let tmp = TempDir::new().unwrap();
@@ -990,6 +1030,55 @@ mod tests {
         assert_eq!(out.tags[0].tag, "run");
     }
 
+    /// 綴りだけ違う `#CognitiveBias` と `#cognitivebias` は 1 つの分類。
+    /// 二重に並ぶと、どちらを打てばいいのか分からなくなる。
+    #[test]
+    fn tags_that_differ_only_in_case_are_counted_as_one() {
+        let tmp = TempDir::new().unwrap();
+        let ctx = Context::default();
+        write_day(
+            tmp.path(),
+            "2026-01-15",
+            &[(9, "また #cognitivebias", &ctx)],
+        );
+        magical_merchant_core::create_draft_note(
+            tmp.path(),
+            "歪みを疑う #CognitiveBias",
+            &[],
+            &ctx,
+            Provenance::default(),
+        )
+        .unwrap();
+
+        let out = server(tmp.path()).list_tags().unwrap().0;
+
+        assert_eq!(out.tags.len(), 1);
+        // 最初に見た綴りで名乗る
+        assert_eq!(out.tags[0].tag, "CognitiveBias");
+        assert_eq!((out.tags[0].notes, out.tags[0].entries), (1, 1));
+    }
+
+    /// `notes` は「何枚に付いているか」。frontmatter は書かれたまま届くので、
+    /// 1 枚が `Memo` と `memo` の両方を名乗ることがある。畳んだ数え方を
+    /// しないと、その 1 枚が 2 枚に見えて並び順まで動く。
+    #[test]
+    fn one_note_naming_a_tag_in_two_cases_counts_once() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path().join("data/notes");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(
+            dir.join("20260115_090000.md"),
+            "---\ntime: 2026-01-15T09:00:00+09:00\ntags:\n  - Memo\n  - memo\n---\n\n# 走り書き\n",
+        )
+        .unwrap();
+
+        let out = server(tmp.path()).list_tags().unwrap().0;
+
+        assert_eq!(out.tags.len(), 1);
+        assert_eq!(out.tags[0].tag, "Memo");
+        assert_eq!((out.tags[0].notes, out.tags[0].entries), (1, 0));
+    }
+
     #[test]
     fn a_note_comes_back_as_metadata_plus_body() {
         let tmp = TempDir::new().unwrap();
@@ -1011,7 +1100,8 @@ mod tests {
 
         assert_eq!(out.body, "# 題\n本文 #rust");
         assert!(!out.body.contains("---"));
-        assert_eq!(out.tags, vec!["memo", "rust"]);
+        // frontmatter に書かれた綴りのまま出る
+        assert_eq!(out.tags, vec!["Memo", "rust"]);
         assert!(out.time.is_some());
         assert_eq!(out.updated, None);
         let context = out.context.unwrap();

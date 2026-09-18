@@ -145,10 +145,11 @@ const revisionOf = (body) => {
 const placeKey = (lat, lon) => `${lat.toFixed(2)},${lon.toFixed(2)}`;
 
 /**
- * 本流(core)の utils::tags と同じ規則: ASCII の大小は見ない。
+ * 本流(core)の utils::tags::fold_tag と同じ規則: 同一性は ASCII の大小を見ない。
+ * 綴りは畳まずに持ち回るので、これを使うのは突き合わせのときだけ。
  * @param {string} tag
  */
-const lowerTag = (tag) => tag.replaceAll(/[A-Z]/gu, (c) => c.toLowerCase());
+const foldTag = (tag) => tag.replaceAll(/[A-Z]/gu, (c) => c.toLowerCase());
 
 /**
  * core が返す一致位置と同じ数え方。UTF-16 の要素数ではなく文字数で数える。
@@ -267,7 +268,8 @@ const unifiedDiff = (from, to, fromName, toName) => {
     "買い物リスト: 牛乳、卵、コーヒー豆",
     "同期の競合をどう見せるか検討 #sync",
     "タイムラインの仮想化はまだ要らない、件数を先に測る",
-    "読書メモ: 設計の背景を残すことについて",
+    // 大文字を含むタグ。チップに打った綴りのまま出ることを画面で確かめる
+    "読書メモ: 設計の背景を残すことについて #CognitiveBias",
     "ウィジェットからの起動導線を確認した",
   ];
 
@@ -721,19 +723,28 @@ const unifiedDiff = (from, to, fromName, toName) => {
       const needle = query.trim().toLowerCase();
       // 本流(core)の utils::tags と同じ規則: `#` の有無と ASCII の大小は見ない
       const scope = tags
-        .map((tag) => lowerTag(tag.trim().replace(/^#/u, "")))
+        .map((tag) => foldTag(tag.trim().replace(/^#/u, "")))
         .filter((tag) => tag.length > 0);
       if (!needle && scope.length === 0) {
         return [];
       }
       // lib/tags.ts の TAG と同じ。ここは 1 行しか読まないのでコードは切り分けない
       const TAG = /(?<![\p{L}\p{N}_-])#(?<tag>[\p{L}\p{N}_-]+)/gu;
+      // 綴りは打たれたまま返す。畳むのは重複を落とすときだけで、残るのは先に出たほう
       /** @param {string} text */
-      const parseTags = (text) => [
-        ...new Set([...text.matchAll(TAG)].map((m) => lowerTag(m.groups?.tag ?? ""))),
-      ];
+      const parseTags = (text) => {
+        /** @type {Map<string, string>} */
+        const seen = new Map();
+        for (const m of text.matchAll(TAG)) {
+          const tag = m.groups?.tag ?? "";
+          if (!seen.has(foldTag(tag))) {
+            seen.set(foldTag(tag), tag);
+          }
+        }
+        return [...seen.values()];
+      };
       /** @param {string[]} own */
-      const inScope = (own) => scope.every((tag) => own.includes(tag));
+      const inScope = (own) => scope.every((tag) => own.some((t) => foldTag(t) === tag));
       /**
        * 本流(core)と同じ形: 一致の前後を含む抜粋と、文字数の一致位置。
        * @param {string} text
