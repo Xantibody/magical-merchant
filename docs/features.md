@@ -226,14 +226,18 @@ The ones worth learning first:
 | `⌘.`               | The open note's `…` menu |
 | `⌘⇧S`              | Sync now                 |
 
-The rest are in that same list: `⌘,` for Settings, and — with a note
-open — `⌘⇧M` for the map, `⌘⇧R` to revert, `⌘⇧I` for ノート情報, `⌘⇧K` to
-commit a Codex version, and `⌘↑` / `⌘↓` to walk the list pane without
-leaving the body. Where a Mac reads ⌘⇧, every other platform reads
+That list is the palette's command section, so it holds the six global
+commands and nothing else — a new note, the three modes, sync now, and `⌘,`
+for Settings. The keys that need a note open are not in it: they are written
+down the right-hand side of the note's own `…` menu, the one `⌘.` opens —
+`⌘⇧M` for the map, `⌘⇧R` to revert, `⌘⇧I` for ノート情報, `⌘⇧K` to commit a
+Codex version. `⌘↑` / `⌘↓` walk the list pane without leaving the body, and
+are printed nowhere at all. Where a Mac reads ⌘⇧, every other platform reads
 Ctrl+Shift.
 
-The badges, the palette's right-hand column and the key handling all read one
-table in [`tauri-app/src/lib/shortcuts.ts`](../tauri-app/src/lib/shortcuts.ts),
+The badges, the palette's right-hand column, the keys in the note menu and
+the key handling itself all read one table in
+[`tauri-app/src/lib/shortcuts.ts`](../tauri-app/src/lib/shortcuts.ts),
 so a key that is written in two places cannot come to mean two things.
 
 ## Language
