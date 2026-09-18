@@ -457,6 +457,21 @@ mod tests {
         assert_eq!(read_note(&path).unwrap(), "again");
     }
 
+    /// 消えたノートへの保存は、ノートを作り直す入口ではない。書き手が
+    /// 開いたままのタブから遅れて保存すると、消したノート・Codex に移した
+    /// ノートが古い置き場に本文だけの姿で生き返る。
+    #[test]
+    fn update_note_refuses_a_file_that_is_not_there_and_creates_nothing() {
+        let tmp = TempDir::new().unwrap();
+        let path = draft(&tmp, "original", &[]).unwrap();
+        delete_note(tmp.path(), &filename_of(&path)).unwrap();
+
+        let result = update_note(&path, "back from the dead", &mock_context(), None);
+
+        assert!(matches!(result, Err(CoreError::NotFound(_))));
+        assert!(!path.exists());
+    }
+
     /// 指紋は本文だけから取る。編集中に表示モードを切り替えても、
     /// 自分の保存が「古い」ことにはならない。
     #[test]

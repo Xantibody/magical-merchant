@@ -133,8 +133,8 @@ pub(crate) fn overwrite(
             return Err(WriteError::Stale(filename.clone()));
         }
     }
-    // 控えが取れなかった(存在しない)ノートには書かない。update は
-    // 無いファイルを frontmatter ごとでっち上げてしまう
+    // 控えが取れなかった(存在しない)ノートには書かない。core も無い
+    // ファイルは断るが、ここで先に見ると「見つからない」と名指しで言える
     let snapshot = magical_merchant_core::snapshot_note(data_dir, filename)?
         .ok_or_else(|| WriteError::NotFound(filename.clone()))?;
     // 置き場は core に聞く。Codex にしたノートは `notes/` には居ない

@@ -223,6 +223,11 @@ impl Notes {
     ///
     /// frontmatter が読めないファイルだけ、今この場の時刻と端末で作り直す。
     ///
+    /// 無いファイルには書かない([`CoreError::NotFound`])。ここは既にある
+    /// ノートの本文を差し替える経路で、作る経路は `create` 系にしかない。
+    /// 書けてしまうと、消したノートや Codex へ移したノートが、開いたままの
+    /// 画面からの遅れた保存で古い置き場に生き返る。
+    ///
     /// 唯一ここが書き足すのが `updated`。本文を書き直したのはこの経路だけで、
     /// メタデータや表示モードの差し替えは「書き直し」ではない。
     ///
@@ -234,7 +239,13 @@ impl Notes {
         context: &Context,
         expected: Option<&Revision>,
     ) -> Result<Revision, CoreError> {
-        let existing = fs::read_to_string(path).unwrap_or_default();
+        let existing = fs::read_to_string(path).map_err(|e| {
+            if e.kind() == io::ErrorKind::NotFound {
+                CoreError::NotFound(path.display().to_string())
+            } else {
+                CoreError::Io(e)
+            }
+        })?;
         if let Some(expected) = expected {
             let current = Revision::of(frontmatter::strip(&existing));
             if current != *expected {
