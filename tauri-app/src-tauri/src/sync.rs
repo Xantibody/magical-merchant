@@ -87,11 +87,8 @@ pub(crate) async fn sync_start(
 
     match &result {
         Ok(sync_result) => {
-            // 他端末の昇格と自分のオフライン編集が同じ ID で降りてくると、
-            // notes/ と codex/ の両方に並ぶ。Codex 側を残し、notes/ 側を控えに
-            if let Ok(base_dir) = crate::app_base_dir(&handle) {
-                let _ = magical_merchant_core::relocate_duplicate_ids(&base_dir);
-            }
+            // 降りてきた重複 ID の片付けはエンジンの中。ロックを手放したあとに
+            // やると、待っていた CLI が走査を始めた最中にノートを動かすことになる
             *state
                 .last_synced_at
                 .lock()
@@ -137,11 +134,8 @@ async fn do_sync(handle: &AppHandle) -> Result<SyncResult, SyncError> {
         .path()
         .app_data_dir()
         .map_err(|e| SyncError::other(e.to_string()))?;
-    // タイムラインだけ見て同期を押すと、ノート一覧より先にここへ来る。
-    // 走査より前に競合コピーを `data/` の外へ出しておかないと、残骸が
-    // 新しいノートとして全端末へ配られる
-    crate::repair_once(&base_dir);
-
+    // 走査より前の修復はエンジンがロックの内側でやる。タイムラインだけ見て
+    // 同期を押した(=一覧の `repair_once` を通っていない)場合もそこで直る
     let config = SyncConfig::load(&base_dir)?.unwrap_or_default();
     if !config.is_configured() {
         return Err(SyncError::new(
