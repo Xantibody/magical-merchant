@@ -37,8 +37,9 @@ open result/Applications/Magical\ Merchant.app
 
 ## macOS / Linux — CLI
 
-The terminal client (`list` / `show` / `edit` / `new` / `import` / `sync`, and
-the MCP server behind `mcp`) is its own package and needs none of the app's toolchain:
+The terminal client (`list` / `show` / `edit` / `new` / `import` /
+`timeline add|show|dates` / `sync`, and the MCP server behind `mcp`) is its
+own package and needs none of the app's toolchain:
 
 ```sh
 nix profile install github:Xantibody/magical-merchant#cli
