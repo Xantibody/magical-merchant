@@ -457,6 +457,43 @@ mod tests {
         assert_eq!(read_note(&path).unwrap(), "again");
     }
 
+    /// frontmatter が読めないノートには本文を書き戻さない。今の時刻と
+    /// 今の端末でっち上げて書くと、作成時刻・タグ・出自・表示モードが
+    /// 1 文字の編集で消え、ファイル名と `time` も食い違う。
+    /// メタデータ編集(`update_note_meta`)が断るのと同じ理由。
+    #[test]
+    fn update_note_refuses_a_note_whose_frontmatter_cannot_be_read() {
+        let tmp = TempDir::new().unwrap();
+        let notes_dir = tmp.path().join("data/notes");
+        fs::create_dir_all(&notes_dir).unwrap();
+        let broken = "---\ntime: [broken\ntags: [仕事]\n---\n本文";
+        let path = notes_dir.join("20260101_120000.md");
+        fs::write(&path, broken).unwrap();
+
+        let result = update_note(&path, "書き足した", &mock_context(), None);
+
+        assert!(matches!(result, Err(CoreError::Parse(_))));
+        assert_eq!(fs::read_to_string(&path).unwrap(), broken);
+    }
+
+    /// 区切りが 1 つも無いファイル(外から置かれた素の Markdown)は今までどおり
+    /// 記録を付けて書く。壊れた記録と違って、作り直しても消えるものが無い。
+    #[test]
+    fn update_note_gives_a_plain_markdown_file_its_first_frontmatter() {
+        let tmp = TempDir::new().unwrap();
+        let notes_dir = tmp.path().join("data/notes");
+        fs::create_dir_all(&notes_dir).unwrap();
+        let path = notes_dir.join("20260101_120000.md");
+        fs::write(&path, "よそで書いた本文").unwrap();
+
+        update_note(&path, "書き足した", &mock_context(), None).unwrap();
+
+        let filename = NoteFilename::parse("20260101_120000.md").unwrap();
+        let meta = read_note_meta(tmp.path(), &filename).unwrap();
+        assert_eq!(meta.context.unwrap().battery, Some(50));
+        assert_eq!(read_note(&path).unwrap(), "書き足した");
+    }
+
     /// 消えたノートへの保存は、ノートを作り直す入口ではない。書き手が
     /// 開いたままのタブから遅れて保存すると、消したノート・Codex に移した
     /// ノートが古い置き場に本文だけの姿で生き返る。

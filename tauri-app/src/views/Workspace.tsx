@@ -21,7 +21,7 @@ import NoteMetaPopover from "../components/NoteMetaPopover";
 import TemplatePicker from "../components/TemplatePicker";
 import VersionSlider from "../components/VersionSlider";
 import VersionSpine from "../components/VersionSpine";
-import { isStaleSave, typedInvoke } from "../lib/commands";
+import { isBrokenNoteSave, isStaleSave, typedInvoke } from "../lib/commands";
 import { getDeviceSignals } from "../lib/client-context";
 import { createDebouncedAccessor } from "../lib/debounce";
 import { markedBody } from "../lib/diff-marks";
@@ -645,6 +645,11 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
         }
         if (isStaleSave(error)) {
           await yieldToOutsideEdit(pending);
+        } else if (isBrokenNoteSave(error)) {
+          // 読み直しでは直らない。次の打鍵も同じ理由で断られるので、
+          // 打った字はここで退避して、黙って消えないようにする
+          writeBackup(localStorage, pending.item.filename, pending.body);
+          shell.showToast(t().notes.brokenMeta);
         }
       }
     })();

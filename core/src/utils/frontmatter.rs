@@ -119,6 +119,14 @@ pub fn strip(content: &str) -> &str {
     }
 }
 
+/// 閉じた区切りの組があるか。`parse` が失敗したとき、「記録が壊れている」のか
+/// 「そもそも記録が無い」のかを分けるためにある — 前者を作り直すと元の記録が
+/// 消えるが、後者には消えるものが無い。
+#[must_use]
+pub fn has_frontmatter(content: &str) -> bool {
+    matches!(split(content), Split::Some { .. })
+}
+
 enum Split<'a> {
     /// 区切りの内側と、閉じ区切りの次の行からの本文。
     Some { matter: &'a str, body: &'a str },

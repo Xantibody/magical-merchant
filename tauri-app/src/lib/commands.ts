@@ -48,19 +48,31 @@ interface NoteRead {
   revision: string;
 }
 
-/** `update_draft` の失敗。`stale` は「読んでから誰かが書き換えた」。 */
+/**
+ * `update_draft` の失敗。`stale` は「読んでから誰かが書き換えた」、
+ * `broken` は「ノート先頭の記録が読めないので core が断った」。
+ */
 interface SaveError {
-  kind: "stale" | "other";
+  kind: "stale" | "broken" | "other";
   message: string;
 }
 
+function saveErrorKind(error: unknown): string | undefined {
+  return typeof error === "object" && error !== null && "kind" in error
+    ? (error as SaveError).kind
+    : undefined;
+}
+
 export function isStaleSave(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "kind" in error &&
-    (error as SaveError).kind === "stale"
-  );
+  return saveErrorKind(error) === "stale";
+}
+
+/**
+ * 記録が壊れていて書けないノート。Stale と違って読み直しても直らないので、
+ * 呼ぶ側は打った字を退避して人に知らせる。
+ */
+export function isBrokenNoteSave(error: unknown): boolean {
+  return saveErrorKind(error) === "broken";
 }
 
 /** テンプレ一覧の 1 件。 */

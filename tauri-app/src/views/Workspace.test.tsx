@@ -89,6 +89,8 @@ let duringSave: (() => void) | undefined;
 /** update_draft を止めておく関門。書き込みが遅い端末を再現する。 */
 let writeGate: Promise<void> | undefined;
 let openWriteGate: (() => void) | undefined;
+/** 先頭の記録が読めないノート。core がこれに書き込みを断る。 */
+let brokenMeta: Set<string>;
 
 /** 本文の指紋。core と同じ「読んだ版で書く」照合をテストでも同じ形で行う。 */
 const revisionOf = (body: string): string => `rev:${body}`;
@@ -154,6 +156,10 @@ const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
     const current = disk.get(name);
     if (current === undefined) {
       throw saveError("other", `note not found: ${name}`);
+    }
+    // core は記録をでっち上げて書くより断る。読み直しても直らない
+    if (brokenMeta.has(name)) {
+      throw saveError("broken", `Parse error: ${name}`);
     }
     // core と同じ照合。読んでから誰かが書き換えていれば、その上に書かない
     if (typeof revision === "string" && revision !== revisionOf(current)) {
@@ -389,6 +395,7 @@ async function setupWorkspace(): Promise<void> {
   meta = new Map();
   kinds = new Map();
   versions = new Map();
+  brokenMeta = new Set();
   calls = [];
   shell = undefined;
   navigateTo = undefined;
@@ -929,6 +936,21 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     });
     expect(countOf("update_draft")).toBe(2);
     expect(disk.get(FILE_A)).toBe("# 読み直したあとの題\n\n他の端末で足された行");
+  });
+
+  // 記録が壊れたノートは core が書き込みごと断る。読み直しても直らないので、
+  // 打った字を退避しておかないと、打鍵のたびに黙って捨てられる
+  it("backs up the draft and says so when the note's frontmatter cannot be read", async () => {
+    brokenMeta.add(FILE_A);
+    await openNoteA();
+    await startEditingBody();
+    typeInEditor?.(`${TEXT_A}\n\n壊れたノートに足した行`);
+
+    await waitFor(() => expect(countOf("update_draft")).toBe(1), { timeout: 3000 });
+    await waitFor(() => expect(shell?.toast()?.message).toMatch(/保存できません/u));
+    expect(localStorage.getItem(`note-backup:${FILE_A}`)).toContain("壊れたノートに足した行");
+    // 断られた書き込みは何も変えない
+    expect(disk.get(FILE_A)).toBe(BODY_A);
   });
 
   // 復元は入れ替え。戻した直後の「戻る先」を次の保存で押し出すと、

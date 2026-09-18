@@ -109,11 +109,28 @@ fn promote_note_to_codex(handle: AppHandle, filename: String) -> Result<(), Stri
     magical_merchant_core::promote_note_to_codex(&base_dir, &filename).map_err(|e| e.to_string())
 }
 
-/// 保存の失敗。`stale` はフロントが「読み直して知らせる」に分岐するための印。
+/// 保存の失敗。フロントが分岐するための印を持つ。
+///
+/// - `stale`: 読んでから誰かが書き換えた。読み直して知らせる
+/// - `broken`: ノート先頭の記録が読めず、core が書き込みを断った。
+///   打った字は退避して知らせる — 何度書き直しても通らない
 #[derive(Debug, Clone, serde::Serialize)]
 struct SaveError {
     kind: &'static str,
     message: String,
+}
+
+impl From<magical_merchant_core::CoreError> for SaveError {
+    fn from(e: magical_merchant_core::CoreError) -> Self {
+        Self {
+            kind: match e {
+                magical_merchant_core::CoreError::Stale(_) => "stale",
+                magical_merchant_core::CoreError::Parse(_) => "broken",
+                _ => "other",
+            },
+            message: e.to_string(),
+        }
+    }
 }
 
 /// `revision` は `read_note` が返した本文の指紋。添えると、そのあいだに
@@ -144,13 +161,7 @@ fn update_draft(
     let expected = revision.map(Revision::from);
     magical_merchant_core::update_note(&path, &body, &context, expected.as_ref())
         .map(|r| r.to_string())
-        .map_err(|e| SaveError {
-            kind: match e {
-                magical_merchant_core::CoreError::Stale(_) => "stale",
-                _ => "other",
-            },
-            message: e.to_string(),
-        })
+        .map_err(SaveError::from)
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -509,13 +520,7 @@ fn restore_note_version(
         expected.as_ref(),
     )
     .map(|r| r.to_string())
-    .map_err(|e| SaveError {
-        kind: match e {
-            magical_merchant_core::CoreError::Stale(_) => "stale",
-            _ => "other",
-        },
-        message: e.to_string(),
-    })
+    .map_err(SaveError::from)
 }
 
 /// 刻んだ直後の「取り消す」。版のファイルを消すだけで、本文には触れない。
