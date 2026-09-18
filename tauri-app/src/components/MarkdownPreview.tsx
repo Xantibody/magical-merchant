@@ -116,6 +116,10 @@ export default function MarkdownPreview(props: MarkdownPreviewProps): JSX.Elemen
     }
     const { svg } = diagram;
     const size = zoomSize(svg.viewBox.baseVal, svg.getBoundingClientRect());
+    // 測れない図は開かない。0×0 で開くと閉じるボタンだけの白い画面になる
+    if (!size) {
+      return;
+    }
     setZoomed({ svg: svg.outerHTML, ...size });
   };
 

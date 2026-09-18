@@ -32,6 +32,18 @@ describe("zoomSize", () => {
       height: 262,
     });
   });
+
+  /**
+   * 隠れている面の SVG も、描き終える前の SVG も 0 で測れる。0 のまま開くと
+   * 何も映らない画面が出たうえ、倍率の計算が 0 除算で NaN になる
+   */
+  it("has no answer when neither the viewBox nor the rect can be measured", () => {
+    expect(zoomSize({ width: 0, height: 0 }, { width: 0, height: 0 })).toBeUndefined();
+  });
+
+  it("has no answer for a size that is not a finite number", () => {
+    expect(zoomSize({ width: Number.NaN, height: 120 }, { width: 0, height: 0 })).toBeUndefined();
+  });
 });
 
 describe("fitToViewport", () => {
@@ -56,6 +68,34 @@ describe("fitToViewport", () => {
     const transform = fitToViewport({ width: 50, height: 50 }, { width: 100, height: 100 });
 
     expect(transform.scale).toBe(MIN_SCALE);
+  });
+
+  /**
+   * 0 で割ると倍率は NaN か Infinity になり、transform はまるごと無視されて
+   * 図が消え、右下の表示が「NaN%」になる。測れないときは原寸のまま置く
+   */
+  it("stays at natural size when the diagram has no size", () => {
+    expect(fitToViewport(VIEWPORT, { width: 0, height: 0 })).toStrictEqual({
+      scale: 1,
+      tx: 0,
+      ty: 0,
+    });
+  });
+
+  it("stays at natural size when the viewport has not been measured", () => {
+    expect(fitToViewport({ width: 0, height: 0 }, { width: 200, height: 100 })).toStrictEqual({
+      scale: 1,
+      tx: 0,
+      ty: 0,
+    });
+  });
+
+  it("stays at natural size when a measurement is not a finite number", () => {
+    expect(fitToViewport(VIEWPORT, { width: Number.NaN, height: 100 })).toStrictEqual({
+      scale: 1,
+      tx: 0,
+      ty: 0,
+    });
   });
 });
 
