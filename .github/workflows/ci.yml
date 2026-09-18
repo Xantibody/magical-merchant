@@ -34,6 +34,7 @@ jobs:
       frontend: ${{ steps.filter.outputs.frontend || 'true' }}
       workers: ${{ steps.filter.outputs.workers || 'true' }}
       nix-package: ${{ steps.filter.outputs.nix-package || 'true' }}
+      macos-package: ${{ steps.filter.outputs.macos-package || 'true' }}
       nix-mcp: ${{ steps.filter.outputs.nix-mcp || 'true' }}
       android: ${{ steps.filter.outputs.android || 'true' }}
     steps:
@@ -82,6 +83,27 @@ jobs:
               - 'tauri-app/pnpm-lock.yaml'
               - 'tauri-app/package.json'
               - 'nix/package.nix'
+              - 'flake.nix'
+              - 'flake.lock'
+            # AIDEV-NOTE: nix/package.nix と nix/cli.nix の fileset の写し。ここが狭いと Cachix が古い .app を持ったままになる
+            # nix-package (pnpmDeps.hash の検証だけ) より広い。macOS のジョブは
+            # .#default と .#cli を建てて Cachix に push するので、その 2 つの
+            # 入力が動いたら必ず走らせる。手元の nix profile install が 10 分の
+            # 建て直しに戻らないことが、10 倍レートを払う理由そのもの
+            macos-package:
+              - 'core/**'
+              - 'cli/**'
+              - 'tauri-app/src/**'
+              - 'tauri-app/src-tauri/**'
+              - 'tauri-app/index.html'
+              - 'tauri-app/package.json'
+              - 'tauri-app/pnpm-lock.yaml'
+              - 'tauri-app/vite.config.ts'
+              - 'tauri-app/tsconfig.json'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'nix/package.nix'
+              - 'nix/cli.nix'
               - 'flake.nix'
               - 'flake.lock'
             # core/** はここに入れない。core が壊れれば rust ジョブが先に落ちるし、
@@ -311,7 +333,7 @@ jobs:
   # 特有の失敗だけで、それは merge 後の 1 回で足りる
   nix-package-macos:
     needs: changes
-    if: needs.changes.outputs.nix-package == 'true' && github.ref == 'refs/heads/main'
+    if: needs.changes.outputs.macos-package == 'true' && github.ref == 'refs/heads/main'
     runs-on: macos-latest
     timeout-minutes: 45
     steps:
