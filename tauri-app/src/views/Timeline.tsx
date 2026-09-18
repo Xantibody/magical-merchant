@@ -301,7 +301,11 @@ export default function Timeline(): JSX.Element {
       // 同じ日の index は前の削除で行が繰り上がると意味が変わるので、並列にせず順に消す
       for (const target of plan) {
         // oxlint-disable-next-line no-await-in-loop
-        await typedInvoke("delete_timeline_entry", { date: target.date, index: target.index });
+        await typedInvoke("delete_timeline_entry", {
+          date: target.date,
+          index: target.index,
+          raw: target.raw,
+        });
       }
       await Promise.all(
         [...new Set(plan.map((target) => target.date))].map((date) => reloadDay(date)),

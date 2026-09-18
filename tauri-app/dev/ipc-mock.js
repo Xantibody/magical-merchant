@@ -693,7 +693,7 @@ const unifiedDiff = (from, to, fromName, toName) => {
       const line = `- [${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}] ${text}`;
       timeline.set(iso, [...(timeline.get(iso) ?? []), line]);
     },
-    /** @param {{ date: string, index: number }} args */
+    /** @param {{ date: string, index: number, raw: string }} args */
     delete_timeline_entry: ({ date, index }) => {
       const lines = timeline.get(date) ?? [];
       lines.splice(index, 1);
