@@ -1023,6 +1023,38 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     expect(localStorage.getItem(`note-backup:${FILE_A}`)).toContain("二回目");
   });
 
+  // 「いま画面にある本文」が打った本人のものだとは限らない。往復のあいだに
+  // A → B → A と移ると、選んでいるノートは A に戻っていても、画面の本文は
+  // まだ B のまま(A の読み直しが届いていない)。そこで画面のぶんを退避すると、
+  // A の控えが B の本文になり、断られた打鍵はどこにも残らない
+  it("keeps the refused note's own draft when the selection went away and back", async () => {
+    disk.set(FILE_B, BODY_B);
+    brokenMeta.add(FILE_A);
+    await openNoteA();
+    await startEditingBody();
+    typeInEditor?.(`${TEXT_A}\n\n一回目`);
+
+    // 保存が飛んだところで止める。予約はもう消えているので、この先の選択の
+    // 差し替えは飛んでいる保存を待ってくれない
+    blockWrites();
+    await waitFor(() => expect(countOf("update_draft")).toBe(1), { timeout: 3000 });
+
+    fireEvent.click(await rowOf(TITLE_B));
+    await waitFor(() => expect(titleInput().value).toBe(TITLE_B));
+    // A へ戻るが、本文は届かない。選択だけが A で、画面にあるのは B の本文
+    blockReads();
+    fireEvent.click(await rowOf(TITLE_A));
+    await waitFor(() => expect(screen.getByText("牛乳")).toBeDefined());
+
+    releaseWrites();
+    await waitFor(() => expect(shell?.toast()?.message).toMatch(/保存できません/u), {
+      timeout: 3000,
+    });
+    const backup = localStorage.getItem(`note-backup:${FILE_A}`);
+    expect(backup).toContain("一回目");
+    expect(backup).not.toContain("牛乳");
+  });
+
   // 開いてから消えたノート。core は「作り直す入口ではない」と断るので、
   // 壊れた記録と同じく読み直しても直らない。退避しないと、離れた時点で
   // 打った字がどこにも残らないまま消える

@@ -209,6 +209,11 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
    * 別のノートを開いた・同期で降ってきた・編集前に戻した、のどれかで
    * 画面の本文が変わったときは作り直すしかない(本文の差し込みは
    * カーソル・選択・IME を壊す)。この値をキーにして作り直す。
+   *
+   * 同時に「いまの読み込みセッション」の名前でもある。1 つの値は 1 回の
+   * `showBody` — つまり 1 つのノートの 1 回の読み込み — にしか対応しないので、
+   * 揃っていれば画面にあるのはそのとき出した本文とその後の打鍵だけ。
+   * 断られた保存の退避(`typedBody`)がこれを見る。
    */
   const [bodyEpoch, setBodyEpoch] = createSignal(1);
   /** タッチ端末のツールバーが叩く先。ノートを開いていない間は undefined。 */
@@ -531,6 +536,12 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     session: EditSession;
     /** 写しを取った時点の世代。読み直しをまたいだ写しは書かない。 */
     generation: number;
+    /**
+     * 写しを取った時点の `bodyEpoch`。断られたときに「画面の本文はまだこの
+     * 写しの続きか」を見るのに使う。ノートの id では足りない — A → B → A と
+     * 戻れば id は揃うのに、本文は B のものか A を読み直したものになっている。
+     */
+    bodyEpoch: number;
   }
 
   /**
@@ -546,7 +557,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     const item = selected();
     // 本文が届いていないノートには写しを取らない。画面にあるのは前のノート
     return item && loaded()
-      ? { item, body: fullBody(), session, generation: saveGeneration }
+      ? { item, body: fullBody(), session, generation: saveGeneration, bodyEpoch: bodyEpoch() }
       : undefined;
   };
 
@@ -582,10 +593,16 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
    * 断られた保存から退避する本文。飛んでいった写しではなく、いま画面にある
    * ぶん — 端末の信号待ちと IPC の往復のあいだに打った字は、まだファイルにも
    * 控えにも無い。写しのほうを退避すると、その打鍵だけが黙って消える。
-   * 画面が隣のノートへ移っていたときだけ、飛んでいった写しに戻る。
+   *
+   * ただし画面のぶんを使えるのは、写しを取った読み込みがまだ続いている
+   * あいだだけ。見るのは `bodyEpoch` — ノートの id を見ても、往復のあいだに
+   * A → B → A と移れば id は揃ったまま、画面の本文は B のものか A を
+   * 読み直したものになっている。それを退避すると、断られた打鍵ごと A の
+   * 控えを別のノートの本文で潰す。epoch は本文を外から入れ替えるたびに
+   * 進むので、揃っているなら画面にあるのは「この写し + その後の打鍵」だけ。
    */
   const typedBody = (pending: PendingSave): string =>
-    selected()?.id === pending.item.id ? fullBody() : pending.body;
+    bodyEpoch() === pending.bodyEpoch ? fullBody() : pending.body;
 
   /**
    * 読んでから書くまでに、CLI や MCP が同じノートを書き換えていた。
@@ -1069,6 +1086,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
           body: fullBody(),
           session,
           generation: saveGeneration,
+          bodyEpoch: bodyEpoch(),
         });
       } else {
         shell.showToast(t().codex.restoreFailed);
