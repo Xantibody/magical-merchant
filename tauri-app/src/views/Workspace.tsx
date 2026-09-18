@@ -454,9 +454,11 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       const titled = splitTitle(content.body);
       showBody(item.id, titled.title, titled.body, content.view);
     } catch {
-      // 読めないノートを選んだまま、前のノートの本文を出し続けない
-      if (selected()?.id === item.id) {
-        showBody(item.id, "", "", "editor");
+      // 読めなかったことを本文の入れ替えにしない。空のエディタを立てると
+      // 「空のノート」に見え、そこへ打った数文字がノート全体になる。
+      // `loadedId` を進めないので、本文も題も書ける状態にならない
+      if (selected()?.id === item.id && (force || !isTyping())) {
+        shell.showToast(t().notes.loadFailed);
       }
     }
   };
@@ -616,6 +618,13 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       // あとに着地することがあり、そのまま出すと開いたばかりのノートが
       // 「保存しました」と言う。画面に出ているノートの保存のときだけ出す
       const shown = (): boolean => selected()?.id === pending.item.id;
+      // 指紋を持たないノートには書かない。`revision` 無しの保存は core の
+      // 照合を素通りするので、読めていない本文の上に画面のぶんを丸ごと
+      // 書いてしまう。読み直しが通れば指紋が入り、次の保存から書ける
+      const expected = revisions.get(pending.item.filename);
+      if (expected === undefined) {
+        return;
+      }
       if (shown()) {
         setSaveStatus("saving");
       }
@@ -624,7 +633,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
           filename: pending.item.filename,
           body: pending.body,
           client: await getDeviceSignals(),
-          revision: revisions.get(pending.item.filename) ?? null,
+          revision: expected,
         });
         revisions.set(pending.item.filename, revision);
         recordSaved(localStorage, pending.item.filename, pending.session, pending.body);

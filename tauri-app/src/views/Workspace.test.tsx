@@ -61,6 +61,9 @@ vi.mock(import("../components/MindmapView"), () => ({
   },
 }));
 
+/** 自動保存の debounce。Workspace.tsx と揃える。 */
+const SAVE_DEBOUNCE_MS = 1000;
+
 const FILE_A = "20260903_120000.md";
 const FILE_B = "20260903_130000.md";
 const TITLE_A = "会議メモ";
@@ -91,6 +94,8 @@ let writeGate: Promise<void> | undefined;
 let openWriteGate: (() => void) | undefined;
 /** 先頭の記録が読めないノート。core がこれに書き込みを断る。 */
 let brokenMeta: Set<string>;
+/** read_note を失敗させる。ディスクが一時的に読めない端末を再現する。 */
+let readFails: boolean;
 
 /** 本文の指紋。core と同じ「読んだ版で書く」照合をテストでも同じ形で行う。 */
 const revisionOf = (body: string): string => `rev:${body}`;
@@ -134,6 +139,9 @@ const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
   find_backlinks: () => [],
   read_note: async ({ filename }) => {
     await readGate;
+    if (readFails) {
+      throw new Error(`could not read: ${String(filename)}`);
+    }
     const body = disk.get(String(filename));
     if (body === undefined) {
       throw new Error(`note not found: ${String(filename)}`);
@@ -396,6 +404,7 @@ async function setupWorkspace(): Promise<void> {
   kinds = new Map();
   versions = new Map();
   brokenMeta = new Set();
+  readFails = false;
   calls = [];
   shell = undefined;
   navigateTo = undefined;
@@ -936,6 +945,45 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     });
     expect(countOf("update_draft")).toBe(2);
     expect(disk.get(FILE_A)).toBe("# 読み直したあとの題\n\n他の端末で足された行");
+  });
+
+  // 読み直しが失敗しても、画面の本文は入れ替えない。空のエディタを立てると
+  // 「空のノート」に見え、次の打鍵が数文字だけの本文をディスクへ書きに行く
+  it("keeps the draft on screen when a refresh read fails mid-edit", async () => {
+    await openNoteA();
+
+    blockReads();
+    readFails = true;
+    shell?.refreshData();
+    await startEditingBody();
+    typeInEditor?.(`${TEXT_A}\n\n読めなかったあとの行`);
+    releaseReads();
+
+    await waitFor(() => expect(countOf("update_draft")).toBe(1), { timeout: 3000 });
+    // エディタは作り直されていない。作り直されると打っていた本文が空に戻る
+    expect(screen.getByText(TEXT_A)).toBeDefined();
+    // 指紋も読めた版のまま。読み直せなかったのだから進みようがない
+    expect(writesTo(FILE_A)[0]?.revision).toBe(revisionOf(BODY_A));
+    expect(disk.get(FILE_A)).toContain("読めなかったあとの行");
+  });
+
+  // 読めなかったノートには書かない。指紋を持たない保存は core の照合を
+  // 素通りするので、打った数文字がそのままファイル全体になる
+  it("writes nothing to a note whose body could not be read", async () => {
+    readFails = true;
+    renderWorkspace();
+    fireEvent.click(await rowOf(TITLE_A));
+    await waitFor(() => expect(countOf("read_note")).toBe(1));
+    // 読みが断られきるまで。ここで空のエディタが立つかどうかを見る
+    await sleep(50);
+
+    // 読めなかった本文をエディタに載せない。載せると「空のノート」に見える
+    expect(screen.queryByTestId("editor-body")).toBeNull();
+    typeInEditor?.("数文字");
+    await sleep(SAVE_DEBOUNCE_MS + 500);
+
+    expect(countOf("update_draft")).toBe(0);
+    expect(disk.get(FILE_A)).toBe(BODY_A);
   });
 
   // 記録が壊れたノートは core が書き込みごと断る。読み直しても直らないので、
