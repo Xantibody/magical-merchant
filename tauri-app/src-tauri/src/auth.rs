@@ -105,12 +105,23 @@ fn callback_token(request_text: &str, callback_path: &str) -> Option<String> {
         .filter(|token| is_token_valid(token))
 }
 
+/// 1 本の接続に許す読み取り時間。ブラウザは繋いだ直後にリクエストを送る
+/// ので、これだけあれば本物には足りる。
+#[cfg(not(target_os = "android"))]
+const CONNECTION_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
 /// nonce の一致したコールバックが来るまで待つ。一致しないものは 404 で
 /// 捨てて待ち続ける — 先に繋いだだけの相手にログインを横取りさせない。
+///
+/// 接続は 1 本ずつ順に読むので、1 本の読み取りに上限が要る。nonce は横取り
+/// を防ぐが、繋いで黙っているだけの相手は止められない。
+///
+/// AIDEV-NOTE: 接続を並行に捌く案は却下。順に読んで 1 本ずつ見切るほうが、待ち行列も所有権も増えない
 #[cfg(not(target_os = "android"))]
 async fn accept_callback_token(
     listener: &tokio::net::TcpListener,
     callback_path: &str,
+    read_timeout: std::time::Duration,
 ) -> Result<String, String> {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -121,10 +132,11 @@ async fn accept_callback_token(
             .map_err(|e| format!("Failed to accept connection: {e}"))?;
 
         let mut buf = vec![0u8; 4096];
-        let n = stream
-            .read(&mut buf)
-            .await
-            .map_err(|e| format!("Failed to read: {e}"))?;
+        // 何も送ってこない接続を待ち続けると、繋いだだけの相手にログインを
+        // 止められる。時間切れも読み取り失敗も、この 1 本を捨てて次を待つ理由
+        let Ok(Ok(n)) = tokio::time::timeout(read_timeout, stream.read(&mut buf)).await else {
+            continue;
+        };
         let token = callback_token(&String::from_utf8_lossy(&buf[..n]), callback_path);
 
         let response = if token.is_some() {
@@ -161,7 +173,7 @@ async fn login_with_loopback(
     let closed = closed_signal(&window);
 
     let accepted = tokio::select! {
-        result = tokio::time::timeout(std::time::Duration::from_secs(300), accept_callback_token(&listener, &callback_path)) => result,
+        result = tokio::time::timeout(std::time::Duration::from_secs(300), accept_callback_token(&listener, &callback_path, CONNECTION_READ_TIMEOUT)) => result,
         _ = closed => return Err("Login was cancelled.".to_string()),
     };
 
@@ -254,6 +266,40 @@ mod tests {
     fn a_request_that_is_not_http_is_ignored() {
         assert_eq!(callback_token("", CALLBACK_PATH), None);
         assert_eq!(callback_token("garbage", CALLBACK_PATH), None);
+    }
+
+    /// ポートは総当たりで見つかる。繋いだきり何も送らないローカルプロセスが
+    /// 1 つあるだけでログインが通らなくなると、nonce は守れていても利用者は
+    /// 外側の 5 分を待たされる
+    #[tokio::test]
+    async fn a_silent_connection_does_not_hold_up_the_callback() {
+        use tokio::io::AsyncWriteExt as _;
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        // accept の順は繋いだ順。黙っている側が先に取り出される
+        let _silent = tokio::net::TcpStream::connect(addr).await.unwrap();
+
+        let token = jwt(3600);
+        let mut browser = tokio::net::TcpStream::connect(addr).await.unwrap();
+        browser
+            .write_all(get(&format!("{CALLBACK_PATH}?token={token}")).as_bytes())
+            .await
+            .unwrap();
+
+        let accepted = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            accept_callback_token(
+                &listener,
+                CALLBACK_PATH,
+                std::time::Duration::from_millis(50),
+            ),
+        )
+        .await
+        .expect("the silent connection must not keep the callback waiting");
+
+        assert_eq!(accepted, Ok(token));
     }
 }
 
