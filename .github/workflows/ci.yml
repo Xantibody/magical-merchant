@@ -29,7 +29,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      # push / workflow_dispatch では filter を回さないので空になる → 全ジョブ実行
+      # workflow_dispatch では filter を回さないので空になる → 全ジョブ実行。
+      # 手で回すのは「filter を信用したくないとき」なので、そこだけは全部走らせる
       rust: ${{ steps.filter.outputs.rust || 'true' }}
       frontend: ${{ steps.filter.outputs.frontend || 'true' }}
       workers: ${{ steps.filter.outputs.workers || 'true' }}
@@ -39,8 +40,12 @@ jobs:
       android: ${{ steps.filter.outputs.android || 'true' }}
     steps:
       - uses: actions/checkout@v7
+      # AIDEV-NOTE: base は既定 (= 既定ブランチ) のまま。push では action 側が github.event.before に読み替える
+      # base を明示しないのは、既定ブランチと push 先が同じとき action が
+      # payload.before を使い、初回 push (全 0 の SHA) も自前で捌くため。
+      # base: ${{ github.event.before }} と書くと後者を自分で持つことになる
       - uses: dorny/paths-filter@v4
-        if: github.event_name == 'pull_request'
+        if: github.event_name != 'workflow_dispatch'
         id: filter
         with:
           filters: |
@@ -110,7 +115,7 @@ jobs:
             # 15 分のビルドを core の変更のたびに足すと待ち時間だけが増える。
             # android 限定でコンパイルされる widget_bridge.rs は src-tauri なので拾える
             # このジョブの定義そのものを変えたときは workflow_dispatch で回す。
-            # push / 手動実行では filter を通さないので全ジョブが走る。
+            # 手動実行だけは filter を通さないので全ジョブが走る。
             # ci.yml をここに入れると、フロントのジョブを 1 行直しただけで
             # 12 分の APK ビルドが乗る
             nix-mcp:
