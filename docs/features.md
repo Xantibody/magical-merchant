@@ -104,27 +104,56 @@ every link to it, it just moves from `data/notes/` to `data/codex/`. The move
 is one-way — a Codex is defined by the history it accumulates, and that
 history has nowhere to go if the document turns back into a plain Note.
 
-A Codex opens in the same editor as a Note. What it adds is on purpose: the
-body is a draft until you commit a version, and the versions travel with the
-file through sync, so the history is the same on every device.
+A Codex opens in the same editor as a Note — same title field, same
+always-open body, same autosave. What it adds is on purpose: the body is a
+draft until you commit a version, and the versions travel with the file
+through sync, so the history is the same on every device.
 
-Nothing is committed for you. 版を刻む… in the `…` menu saves the draft,
-asks for a one-line message (it may stay empty) and writes a version; the
-meta line then reads 版 3 or 版 3 · 変更あり so you can see at a glance
-whether the draft has moved on since the last commit. 履歴 replaces the
-body with the list of versions, newest first, each with its time, message
-and size change. Pick one to see what changed between that version and the
-current draft, as a unified diff in the same colours as a ```diff fence.
-この版に戻す makes that version the draft again, and the draft you are
-leaving is committed first as _before restore_, so a restore is itself
-undoable from the same list. A read-only Codex cannot be restored, for the
+Three things tell a Codex from a Note, and none of them is a mode you have to
+enter:
+
+- **The list row** carries a folded-corner page with the number of versions
+  in it. Its frame says which of three states the document is in — no
+  versions yet, versions and the draft matching the newest one, or the draft
+  having moved on since then. The row stays one line.
+- **A spine** stands to the left of the body: a narrow rail of dots, one per
+  version, while you write, widening into the version list when you open the
+  history. It needs room to stand beside the body, so it is absent on phones,
+  and below 1100px it stays collapsed and the history arrives as a horizontal
+  card under the title that you drag or tap to send versions.
+- **The meta line** under the title reads how far the draft has travelled and
+  how often you commit — 版 4 から +312 B · 9 か月で 4 回刻んだ
+  ("+312 B since v4 · 4 versions in 9 months"). A draft that matches the
+  newest version says only 版 4; a Codex with no versions says 版なし.
+
+Nothing is committed for you, and committing asks nothing of you. 版を刻む in
+the `…` menu (`⌘⇧K`) flushes whatever save is still in flight and writes the
+version at once — no message prompt, because a version is named by its number
+and its day, and being asked for a sentence is what stops people committing at
+all. The toast that follows does the summarising (版 5 を刻みました · 版 4 から
++312 B · 7 日ぶり) and carries an Undo that deletes the file just written.
+
+履歴 in the same menu opens the spine rather than replacing the body. The body
+stays where it is and turns read-only, and the difference between the version
+you picked and the draft appears in its margin: a `+` beside every block that
+changed, a `−` beside every block that is gone — struck through and faint, in
+the place it used to occupy. Walk the versions with the spine (`↑`/`↓` once
+a row has focus) or with the card, and the marks move with them; `Esc`
+closes the history and the editor comes back. この版に戻す makes that version
+the draft again, and the draft you are leaving is committed first as
+_before restore_, so a restore is itself undoable from the same list. A read-only Codex cannot be restored, for the
 same reason it cannot be edited.
 
-On disk a version is `data/codex/<id>/<time>-<hash>.md`: plain Markdown with
-`time` and `message` frontmatter, so `diff -u` in a terminal works as well as
-the app does. Versions are not the local `history/` copies the CLI and MCP
-take before overwriting — those are a safety net on one device; versions are
-part of the document.
+On disk a version is
+`data/codex/<id>/<YYYYMMDD_HHMMSS>-<first 8 hex of the body's SHA-256>.md`:
+plain Markdown with `time` and `message` frontmatter, so `diff -u` in a
+terminal works as well as the app does. The app leaves `message` empty — the
+only one it writes is `before restore`, and the history shows that version as
+戻す前 instead of a date. Two devices committing the same body in the same
+second land on the same file, which is the same version, so it folds into one.
+Versions are not the local `history/` copies the CLI and MCP take before
+overwriting — those are a safety net on one device; versions are part of the
+document and sync with it.
 
 ## Glyphs — your own inline symbols
 
