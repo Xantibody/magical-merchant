@@ -101,6 +101,10 @@ body {
 .long-press {
   user-select: none;
   -webkit-touch-callout: none;
+  /* ダブルタップ拡大を外す。それを待たれているあいだにブラウザがジェスチャを
+     取ると pointercancel が飛び、長押しは手応えの前に落ちる */
+  /* AIDEV-NOTE: none ではなく manipulation — none だと .entry-text に指を置いた Scrawl がスクロールできなくなる */
+  touch-action: manipulation;
 }
 
 .icon-button {
