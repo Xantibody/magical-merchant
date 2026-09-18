@@ -16,6 +16,16 @@ fn is_tag_char(c: char) -> bool {
     c.is_alphanumeric() || c == '_' || c == '-'
 }
 
+/// タグの同一性を決める鍵。突き合わせと数え上げにだけ使う。
+///
+/// 大文字小文字の違いは書き手にとって同じタグ。ASCII だけ小文字に寄せる
+/// (日本語に大文字小文字は無く、ロケール依存の変換も持ち込まない)。
+/// 同じ規則が `tauri-app/src/lib/tags.ts` の `foldTag` にもある。
+#[must_use]
+pub fn fold_tag(tag: &str) -> String {
+    tag.to_ascii_lowercase()
+}
+
 /// 本文から `#タグ` を、出てきた順に重複なく返す。
 ///
 /// `#` の直前がタグに使える文字でないこと。`https://example.com#frag` のような
@@ -59,7 +69,7 @@ pub fn parse(text: &str) -> Vec<String> {
 #[must_use]
 pub fn merge(mut tags: Vec<String>, body: &str) -> Vec<String> {
     for tag in &mut tags {
-        tag.make_ascii_lowercase();
+        *tag = fold_tag(tag);
     }
     for tag in parse(body) {
         if !tags.contains(&tag) {
@@ -76,7 +86,7 @@ pub fn merge(mut tags: Vec<String>, body: &str) -> Vec<String> {
 /// 空になったら「タグではない」ので、呼び出し側は捨てること。
 #[must_use]
 pub fn normalize(tag: &str) -> String {
-    tag.trim().trim_start_matches('#').to_ascii_lowercase()
+    fold_tag(tag.trim().trim_start_matches('#'))
 }
 
 /// 行がコードフェンスの区切りなら、その記号と本数を返す。
@@ -134,7 +144,7 @@ fn collect_span(span: &str, tags: &mut Vec<String>) {
             continue;
         }
 
-        let tag = rest[..len].to_ascii_lowercase();
+        let tag = fold_tag(&rest[..len]);
         if !tags.contains(&tag) {
             tags.push(tag);
         }

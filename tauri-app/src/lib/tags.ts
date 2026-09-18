@@ -36,12 +36,22 @@ export interface TagSegment {
 }
 
 /**
- * タグの同一性。大文字小文字の違いは書き手にとって同じタグなので ASCII だけ
- * 小文字に寄せる(日本語に大文字小文字は無く、ロケール依存の変換も持ち込まない)。
- * 本文に書かれた文字そのものは変えない — 色を付けて描くのは打ったとおりの形。
+ * タグの同一性を決める鍵。突き合わせと数え上げにだけ使う。
+ *
+ * 大文字小文字の違いは書き手にとって同じタグなので ASCII だけ小文字に寄せる
+ * (日本語に大文字小文字は無く、ロケール依存の変換も持ち込まない)。
+ * 同じ規則が `core/src/utils/tags.rs` の `fold_tag` にもある。
+ */
+export function foldTag(tag: string): string {
+  return tag.replaceAll(/[A-Z]/gu, (c) => c.toLowerCase());
+}
+
+/**
+ * タグの同一性。本文に書かれた文字そのものは変えない — 色を付けて描くのは
+ * 打ったとおりの形。
  */
 export function normalizeTag(tag: string): string {
-  return tag.replaceAll(/[A-Z]/gu, (c) => c.toLowerCase());
+  return foldTag(tag);
 }
 
 /** 本文の `#タグ` を、出てきた順に重複なく返す。 */
