@@ -79,38 +79,65 @@ const CALLBACK_RESPONSE: &str = concat!(
     "<html><body><p>You can close this window.</p></body></html>"
 );
 
-/// 生の HTTP リクエストから `?token=` を読む。リクエスト行の 2 番目が
-/// 要求先で、ループバックに届く以上そこは常に絶対パス。
+/// 待っている間に来る、コールバックではないリクエストへの返事。
 #[cfg(not(target_os = "android"))]
-fn token_from_request(request_text: &str) -> Option<String> {
+const NOT_FOUND_RESPONSE: &str = "HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n";
+
+/// 生の HTTP リクエストから、保存してよいトークンだけを読む。
+///
+/// ループバックの口はサインインの間ずっと開いていて、ローカルの誰でも
+/// 叩ける。パスの nonce は「この窓から始めたログインの戻りである」ことの
+/// 唯一の証で、JWT の期限はその中身が使えることの最低限の確認。
+#[cfg(not(target_os = "android"))]
+fn callback_token(request_text: &str, callback_path: &str) -> Option<String> {
     let target = request_text.lines().next()?.split_whitespace().nth(1)?;
+    // AIDEV-NOTE: 絶対 URL 形式の要求先は捨てる。join がホストごと差し替え、パスだけ一致させられる
+    if !target.starts_with('/') {
+        return None;
+    }
     let url = Url::parse("http://127.0.0.1/").ok()?.join(target).ok()?;
+    if url.path() != callback_path {
+        return None;
+    }
     url.query_pairs()
         .find(|(key, _)| key == "token")
         .map(|(_, value)| value.into_owned())
+        .filter(|token| is_token_valid(token))
 }
 
-/// コールバックの接続を 1 つ受け、トークンを読んでブラウザに返事をする。
+/// nonce の一致したコールバックが来るまで待つ。一致しないものは 404 で
+/// 捨てて待ち続ける — 先に繋いだだけの相手にログインを横取りさせない。
 #[cfg(not(target_os = "android"))]
 async fn accept_callback_token(
     listener: &tokio::net::TcpListener,
-) -> Result<Option<String>, String> {
+    callback_path: &str,
+) -> Result<String, String> {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-    let (mut stream, _) = listener
-        .accept()
-        .await
-        .map_err(|e| format!("Failed to accept connection: {e}"))?;
+    loop {
+        let (mut stream, _) = listener
+            .accept()
+            .await
+            .map_err(|e| format!("Failed to accept connection: {e}"))?;
 
-    let mut buf = vec![0u8; 4096];
-    let n = stream
-        .read(&mut buf)
-        .await
-        .map_err(|e| format!("Failed to read: {e}"))?;
-    let token = token_from_request(&String::from_utf8_lossy(&buf[..n]));
+        let mut buf = vec![0u8; 4096];
+        let n = stream
+            .read(&mut buf)
+            .await
+            .map_err(|e| format!("Failed to read: {e}"))?;
+        let token = callback_token(&String::from_utf8_lossy(&buf[..n]), callback_path);
 
-    let _ = stream.write_all(CALLBACK_RESPONSE.as_bytes()).await;
-    Ok(token)
+        let response = if token.is_some() {
+            CALLBACK_RESPONSE
+        } else {
+            NOT_FOUND_RESPONSE
+        };
+        let _ = stream.write_all(response.as_bytes()).await;
+
+        if let Some(token) = token {
+            return Ok(token);
+        }
+    }
 }
 
 #[cfg(not(target_os = "android"))]
@@ -124,27 +151,28 @@ async fn login_with_loopback(
         .map_err(|e| format!("Failed to bind loopback: {e}"))?;
     let port = listener.local_addr().map_err(|e| e.to_string())?.port();
 
-    let app_redirect = format!("http://127.0.0.1:{port}/callback");
+    // 戻り先はこのログイン 1 回きりのもの。ポートは総当たりで見つかるが、
+    // nonce は推測できないので、ここに届いた token だけが自分のものだと言える
+    let callback_path = format!("/callback/{}", uuid::Uuid::new_v4());
+    let app_redirect = format!("http://127.0.0.1:{port}{callback_path}");
     let auth_url = build_auth_url(&config.workers_url, &app_redirect);
 
     let window = open_auth_window(handle, &auth_url)?;
     let closed = closed_signal(&window);
 
     let accepted = tokio::select! {
-        result = tokio::time::timeout(std::time::Duration::from_secs(300), accept_callback_token(&listener)) => result,
+        result = tokio::time::timeout(std::time::Duration::from_secs(300), accept_callback_token(&listener, &callback_path)) => result,
         _ = closed => return Err("Login was cancelled.".to_string()),
     };
-    let token = accepted.map_err(|_| "Login timed out. Please try again.".to_string())??;
 
-    let outcome = match &token {
-        Some(token) => {
-            store_token(base_dir, token)?;
-            // SyncButton などが認証状態を即時反映できるよう通知する
+    let outcome = accepted
+        .map_err(|_| "Login timed out. Please try again.".to_string())
+        .and_then(|token| token)
+        .and_then(|token| store_token(base_dir, &token))
+        // SyncButton などが認証状態を即時反映できるよう通知する
+        .inspect(|()| {
             let _ = tauri::Emitter::emit(handle, "auth-success", ());
-            Ok(())
-        }
-        None => Err("Login failed: no token received.".to_string()),
-    };
+        });
 
     // 窓は結果に関わらず畳む。成否は設定画面が伝えるので、たどり着いた
     // コールバックの画面をアプリの手前に残しておく理由がない
@@ -156,36 +184,76 @@ async fn login_with_loopback(
 #[cfg(all(test, not(target_os = "android")))]
 mod tests {
     use super::*;
+    use base64::Engine as _;
+    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+
+    const CALLBACK_PATH: &str = "/callback/11111111-2222-3333-4444-555555555555";
+
+    /// 署名は誰も見ない (`sync::token::is_token_valid` と同じ理由) ので 3 つのパートを直に組む
+    fn jwt(expires_in: i64) -> String {
+        let header = URL_SAFE_NO_PAD.encode(r#"{"alg":"HS256","typ":"JWT"}"#);
+        let exp = chrono::Utc::now().timestamp() + expires_in;
+        let claims = URL_SAFE_NO_PAD.encode(format!(r#"{{"exp":{exp}}}"#));
+        format!("{header}.{claims}.not-a-real-signature")
+    }
 
     fn get(target: &str) -> String {
         format!("GET {target} HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
     }
 
     #[test]
-    fn the_token_is_read_from_the_request_line() {
-        let request = get("/callback?token=abc.def.ghi");
+    fn the_token_on_the_callback_path_is_taken() {
+        let token = jwt(3600);
+        let request = get(&format!("{CALLBACK_PATH}?token={token}"));
 
-        assert_eq!(
-            token_from_request(&request),
-            Some("abc.def.ghi".to_string())
-        );
+        assert_eq!(callback_token(&request, CALLBACK_PATH), Some(token));
+    }
+
+    /// nonce を知らない相手が先に繋いでも、待っている側は何も受け取らない。
+    /// これを取り違えると、以後の同期が相手のアカウントへ向く
+    #[test]
+    fn a_token_on_another_path_is_ignored() {
+        let request = get(&format!("/callback?token={}", jwt(3600)));
+
+        assert_eq!(callback_token(&request, CALLBACK_PATH), None);
+    }
+
+    /// 期限切れを保存すると、生きているトークンを潰したうえで
+    /// 次の同期が「ログインし直してください」で止まる
+    #[test]
+    fn an_expired_token_is_ignored() {
+        let request = get(&format!("{CALLBACK_PATH}?token={}", jwt(-100)));
+
+        assert_eq!(callback_token(&request, CALLBACK_PATH), None);
     }
 
     #[test]
-    fn a_request_without_a_token_yields_none() {
-        assert_eq!(token_from_request(&get("/callback")), None);
-    }
+    fn a_malformed_token_is_ignored() {
+        let request = get(&format!("{CALLBACK_PATH}?token=not-a-jwt"));
 
-    /// ブラウザはコールバックを描いたあと favicon も取りに来る
-    #[test]
-    fn a_request_for_something_else_yields_none() {
-        assert_eq!(token_from_request(&get("/favicon.ico")), None);
+        assert_eq!(callback_token(&request, CALLBACK_PATH), None);
     }
 
     #[test]
-    fn a_request_that_is_not_http_yields_none() {
-        assert_eq!(token_from_request(""), None);
-        assert_eq!(token_from_request("garbage"), None);
+    fn a_request_without_a_token_is_ignored() {
+        assert_eq!(callback_token(&get(CALLBACK_PATH), CALLBACK_PATH), None);
+    }
+
+    /// 絶対 URL 形式のリクエスト行はパスだけ一致させられる
+    #[test]
+    fn an_absolute_request_target_is_ignored() {
+        let request = get(&format!(
+            "http://evil.example{CALLBACK_PATH}?token={}",
+            jwt(3600)
+        ));
+
+        assert_eq!(callback_token(&request, CALLBACK_PATH), None);
+    }
+
+    #[test]
+    fn a_request_that_is_not_http_is_ignored() {
+        assert_eq!(callback_token("", CALLBACK_PATH), None);
+        assert_eq!(callback_token("garbage", CALLBACK_PATH), None);
     }
 }
 
