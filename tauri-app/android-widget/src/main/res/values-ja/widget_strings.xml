@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    日本語。既定(英語)は values/ にあり、名前の集合はそちらと揃える。
+    片方にしか無い名前は黙って既定に落ち、日本語の端末に英語が出る。
+-->
+<resources>
+    <!-- アプリ上の名前は Scrawl。route と code だけが timeline のまま -->
+    <string name="widget_timeline_label">SCRAWL</string>
+    <string name="widget_capture_placeholder">いま何してる?</string>
+    <string name="widget_capture_continue">続きを記録…</string>
+    <string name="widget_capture_bar_label">Scrawl に記録</string>
+    <string name="widget_capture_bar_description">ホーム画面から Scrawl に書き込みます</string>
+
+    <string name="quick_capture_send">記録する</string>
+    <string name="quick_capture_failed">保存できませんでした</string>
+
+    <string name="widget_notes_label">NOTES</string>
+    <string name="widget_notes_new_title">新しいノート</string>
+    <string name="widget_notes_new_placeholder">タップして書き始める</string>
+    <string name="widget_notes_new_widget_label">新しいノート</string>
+    <string name="widget_notes_new_description">新しいノートを開いて書き始めます</string>
+    <string name="widget_notes_list_label">最近のノート</string>
+    <string name="widget_notes_list_description">最近のノートを開きます</string>
+    <string name="widget_notes_empty">ノートがありません</string>
+
+    <string name="widget_templates_label">TEMPLATES</string>
+    <string name="widget_templates_app">Magical Merchant</string>
+    <string name="widget_templates_widget_label">テンプレート</string>
+    <string name="widget_templates_description">テンプレートからノートを作ります</string>
+    <string name="widget_templates_empty">テンプレートを作る</string>
+</resources>
