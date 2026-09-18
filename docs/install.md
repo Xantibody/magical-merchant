@@ -38,7 +38,7 @@ open result/Applications/Magical\ Merchant.app
 ## macOS / Linux — CLI
 
 The terminal client (`list` / `show` / `edit` / `new` / `import` /
-`timeline add|show|dates` / `sync`, and the MCP server behind `mcp`) is its
+`scrawl add|show|dates` / `sync`, and the MCP server behind `mcp`) is its
 own package and needs none of the app's toolchain:
 
 ```sh
@@ -135,7 +135,7 @@ for creating the keystore and for building locally.
 ## Android — home screen widgets
 
 Four widgets ship with the APK. The Scrawl capture bar (4×1) opens a sheet
-over the home screen and appends straight to today's timeline through a JNI
+over the home screen and appends straight to today's Scrawl through a JNI
 call into `magical_merchant_core` — the app is never started. The "new note"
 bar (4×1), the recent notes list (4×2) and the templates grid (4×3) open the
 app on `magical-merchant://widget/…` deep links. Sources live in

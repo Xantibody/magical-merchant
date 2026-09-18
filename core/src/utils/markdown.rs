@@ -9,7 +9,7 @@ use crate::utils::frontmatter::{self, NoteFrontmatter, Provenance};
 /// 行末に載せるものは `Context` そのものとは限らない。日ファイルでは
 /// 端末情報を先頭に追い出した縮約版を書く。
 #[must_use]
-pub fn format_timeline_line<C: Serialize>(
+pub fn format_scrawl_line<C: Serialize>(
     text: &str,
     timestamp: DateTime<Local>,
     context: &C,
@@ -46,14 +46,14 @@ pub(crate) fn split_context_json(rest: &str) -> Option<&str> {
 
 /// 時刻プレフィックスと記録時コンテキストを取り除き、ユーザーが書いた本文だけを返す。
 #[must_use]
-pub fn strip_timeline_prefix(entry: &str) -> &str {
+pub fn strip_scrawl_prefix(entry: &str) -> &str {
     let rest = split_time_prefix(entry).map_or(entry, |(_, rest)| rest);
     split_context_json(rest).map_or(rest, |json| rest[..rest.len() - json.len()].trim_end())
 }
 
 /// エントリの `HH:MM:SS`。プレフィックスが無い旧い行では `None`。
 #[must_use]
-pub fn timeline_entry_time(entry: &str) -> Option<&str> {
+pub fn scrawl_entry_time(entry: &str) -> Option<&str> {
     let (prefix, _) = split_time_prefix(entry)?;
     prefix
         .strip_prefix("- [")
@@ -65,7 +65,7 @@ pub fn timeline_entry_time(entry: &str) -> Option<&str> {
 /// 画面は行のまま扱えるが、外部(MCP)に渡すときは書式ではなく値が要る。
 /// 突き合わせたいのは「いつ・どこで」であって、`- [` の位置ではない。
 #[derive(Debug, Clone, PartialEq)]
-pub struct TimelineEntry {
+pub struct ScrawlEntry {
     /// 端末のローカル時刻。旧い行では `None`。
     pub time: Option<NaiveTime>,
     /// 書き手が打った本文だけ。
@@ -88,21 +88,20 @@ struct StoredEntry {
     source: Option<String>,
 }
 
-/// 保存された行を [`TimelineEntry`] に戻す。
+/// 保存された行を [`ScrawlEntry`] に戻す。
 ///
 /// 読めない部分は本文に倒す。行末が JSON として壊れていても、時刻の括弧が
 /// 無くても、書かれた文字は失わない。
 #[must_use]
-pub fn parse_timeline_entry(entry: &str) -> TimelineEntry {
-    let time =
-        timeline_entry_time(entry).and_then(|t| NaiveTime::parse_from_str(t, "%H:%M:%S").ok());
+pub fn parse_scrawl_entry(entry: &str) -> ScrawlEntry {
+    let time = scrawl_entry_time(entry).and_then(|t| NaiveTime::parse_from_str(t, "%H:%M:%S").ok());
     let rest = split_time_prefix(entry).map_or(entry, |(_, rest)| rest);
     let stored = split_context_json(rest)
         .and_then(|json| serde_json::from_str::<StoredEntry>(json).ok())
         .unwrap_or_default();
-    TimelineEntry {
+    ScrawlEntry {
         time,
-        text: strip_timeline_prefix(entry).to_string(),
+        text: strip_scrawl_prefix(entry).to_string(),
         context: stored.context,
         source: stored.source,
     }
@@ -146,36 +145,36 @@ mod tests {
     }
 
     #[test]
-    fn test_format_timeline_line() {
-        let result = format_timeline_line("hello world", fixed_timestamp(), &test_context());
+    fn test_format_scrawl_line() {
+        let result = format_scrawl_line("hello world", fixed_timestamp(), &test_context());
         assert!(result.starts_with("- [14:30:45] hello world "));
         assert!(result.contains("\"battery\":82"));
         assert!(result.contains("\"is_charging\":false"));
     }
 
     #[test]
-    fn test_format_timeline_line_empty_context() {
+    fn test_format_scrawl_line_empty_context() {
         let ctx = Context::default();
-        let result = format_timeline_line("text", fixed_timestamp(), &ctx);
+        let result = format_scrawl_line("text", fixed_timestamp(), &ctx);
         assert_eq!(result, "- [14:30:45] text");
     }
 
     #[test]
-    fn test_format_timeline_line_multiline() {
-        let result = format_timeline_line("line1\nline2", fixed_timestamp(), &test_context());
+    fn test_format_scrawl_line_multiline() {
+        let result = format_scrawl_line("line1\nline2", fixed_timestamp(), &test_context());
         assert!(result.contains("line1\nline2"));
     }
 
     #[test]
-    fn test_timeline_entry_time() {
-        let line = format_timeline_line("hello", fixed_timestamp(), &test_context());
-        assert_eq!(timeline_entry_time(&line), Some("14:30:45"));
+    fn test_scrawl_entry_time() {
+        let line = format_scrawl_line("hello", fixed_timestamp(), &test_context());
+        assert_eq!(scrawl_entry_time(&line), Some("14:30:45"));
     }
 
     /// 時刻を持たない旧い行。落として扱う側に判断させる。
     #[test]
-    fn test_timeline_entry_time_without_prefix() {
-        assert_eq!(timeline_entry_time("- plain bullet"), None);
+    fn test_scrawl_entry_time_without_prefix() {
+        assert_eq!(scrawl_entry_time("- plain bullet"), None);
     }
 
     /// 括弧の中は `HH:MM:SS` の 8 文字だけを時刻と見る。本文が `- [` で
@@ -257,9 +256,9 @@ mod tests {
             os: "macos".to_string(),
             ..Context::default()
         };
-        let line = format_timeline_line("hello world", fixed_timestamp(), &ctx);
+        let line = format_scrawl_line("hello world", fixed_timestamp(), &ctx);
 
-        let entry = parse_timeline_entry(&line);
+        let entry = parse_scrawl_entry(&line);
 
         assert_eq!(entry.time, NaiveTime::from_hms_opt(14, 30, 45));
         assert_eq!(entry.text, "hello world");
@@ -270,7 +269,7 @@ mod tests {
     /// それでも読む側は「どこから来た記録か」を知りたい。
     #[test]
     fn a_line_reports_the_source_that_wrote_it() {
-        let entry = parse_timeline_entry("- [09:00:00] tapped {\"battery\":30,\"s\":\"widget\"}");
+        let entry = parse_scrawl_entry("- [09:00:00] tapped {\"battery\":30,\"s\":\"widget\"}");
 
         assert_eq!(entry.text, "tapped");
         assert_eq!(entry.source.as_deref(), Some("widget"));
@@ -280,7 +279,7 @@ mod tests {
     /// 名乗っていない行(この語彙より前に書かれたもの)は空欄のまま。
     #[test]
     fn a_line_without_a_source_reports_none() {
-        let entry = parse_timeline_entry("- [09:00:00] typed {\"battery\":30}");
+        let entry = parse_scrawl_entry("- [09:00:00] typed {\"battery\":30}");
 
         assert_eq!(entry.source, None);
     }
@@ -288,7 +287,7 @@ mod tests {
     /// 時刻もコンテキストも持たない旧い行。本文だけは落とさない。
     #[test]
     fn a_bare_line_is_all_text() {
-        let entry = parse_timeline_entry("- plain bullet");
+        let entry = parse_scrawl_entry("- plain bullet");
 
         assert_eq!(entry.time, None);
         assert_eq!(entry.text, "- plain bullet");
@@ -297,9 +296,9 @@ mod tests {
 
     #[test]
     fn a_multiline_entry_keeps_its_newlines() {
-        let line = format_timeline_line("line1\nline2", fixed_timestamp(), &Context::default());
+        let line = format_scrawl_line("line1\nline2", fixed_timestamp(), &Context::default());
 
-        let entry = parse_timeline_entry(&line);
+        let entry = parse_scrawl_entry(&line);
 
         assert_eq!(entry.text, "line1\nline2");
     }
@@ -308,7 +307,7 @@ mod tests {
     /// 読めない JSON は本文のまま残す。
     #[test]
     fn a_trailing_brace_in_the_text_is_not_a_context() {
-        let entry = parse_timeline_entry("- [09:00:00] fn main() {");
+        let entry = parse_scrawl_entry("- [09:00:00] fn main() {");
 
         assert_eq!(entry.text, "fn main() {");
         assert_eq!(entry.context, Context::default());

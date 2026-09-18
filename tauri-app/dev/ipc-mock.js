@@ -6,7 +6,7 @@
  * `@tauri-apps/api` が `window.__TAURI_INTERNALS__` を読む頃には必ず居る。
  * プロダクションビルドには一切含まれない。
  *
- * 作り物の状態(タイムライン・ノート・テンプレ)は IIFE の中に閉じる。外に出て
+ * 作り物の状態(Scrawl・ノート・テンプレ)は IIFE の中に閉じる。外に出て
  * いるのは、その状態を何も見ない純粋なヘルパだけ。
  *
  * TS 化はしない(インライン注入される素の <script> なので)。型は JSDoc で書き、
@@ -251,7 +251,7 @@ const unifiedDiff = (from, to, fromName, toName) => {
     return;
   }
 
-  // ---- タイムラインのつくりもの ----
+  // ---- Scrawl のつくりもの ----
 
   // 地名は OS が言語ごとに違う答えを返す。ハーネスでもそれを真似る
   const PLACES = [
@@ -267,7 +267,7 @@ const unifiedDiff = (from, to, fromName, toName) => {
     "mermaid の描画が重い気がするので後で測る #perf",
     "買い物リスト: 牛乳、卵、コーヒー豆",
     "同期の競合をどう見せるか検討 #sync",
-    "タイムラインの仮想化はまだ要らない、件数を先に測る",
+    "Scrawl の仮想化はまだ要らない、件数を先に測る",
     // 大文字を含むタグ。チップに打った綴りのまま出ることを画面で確かめる
     "読書メモ: 設計の背景を残すことについて #CognitiveBias",
     "ウィジェットからの起動導線を確認した",
@@ -313,7 +313,7 @@ const unifiedDiff = (from, to, fromName, toName) => {
    * date(ISO) -> raw 行の配列(古い順)。
    * @type {Map<string, string[]>}
    */
-  const timeline = new Map();
+  const scrawl = new Map();
   const today = new Date();
   for (let d = 0; d < 20; d += 1) {
     const day = new Date(today.getFullYear(), today.getMonth(), today.getDate() - d);
@@ -326,13 +326,13 @@ const unifiedDiff = (from, to, fromName, toName) => {
       const suffix = ctx ? ` ${JSON.stringify(ctx)}` : "";
       lines.push(`- [${time}] ${TEXTS[(d + i) % TEXTS.length]}${suffix}`);
     }
-    timeline.set(iso, lines);
+    scrawl.set(iso, lines);
   }
 
   // ---- ノートのつくりもの ----
 
   /**
-   * タイムラインは実時刻基準で作られるので、origin も同じ基準で合わせる。
+   * Scrawl は実時刻基準で作られるので、origin も同じ基準で合わせる。
    * @param {number} days
    */
   const isoDaysAgo = (days) => {
@@ -372,7 +372,7 @@ const unifiedDiff = (from, to, fromName, toName) => {
     );
   }
 
-  const designBody = `# 設計の見取り図\n\n## UI\n\n- ヘッダ\n- タイムライン\n  - 入力バー\n  - 日付ジャンプ\n\n## コア\n\n- 保存\n- 同期\n  - 認証\n  - 競合`;
+  const designBody = `# 設計の見取り図\n\n## UI\n\n- ヘッダ\n- Scrawl\n  - 入力バー\n  - 日付ジャンプ\n\n## コア\n\n- 保存\n- 同期\n  - 認証\n  - 競合`;
 
   /**
    * Codex ごとの版。新しい順。1 本だけ版を持たせ、最新の版は下書きと同じ
@@ -393,13 +393,13 @@ const unifiedDiff = (from, to, fromName, toName) => {
           id: versionIdOf("2026-08-13T09:30:00+09:00", "before"),
           time: "2026-08-13T09:30:00+09:00",
           message: null,
-          body: "# 設計の見取り図\n\n## UI\n\n- ヘッダ\n- タイムライン\n  - 入力バー\n  - 日付ジャンプ\n\n## コア\n\n- 保存\n- 同期",
+          body: "# 設計の見取り図\n\n## UI\n\n- ヘッダ\n- Scrawl\n  - 入力バー\n  - 日付ジャンプ\n\n## コア\n\n- 保存\n- 同期",
         },
         {
           id: versionIdOf("2026-08-12T14:05:00+09:00", "first"),
           time: "2026-08-12T14:05:00+09:00",
           message: "最初の骨組み",
-          body: "# 設計の見取り図\n\n## UI\n\n- ヘッダ\n- タイムライン\n\n## コア\n\n- 保存",
+          body: "# 設計の見取り図\n\n## UI\n\n- ヘッダ\n- Scrawl\n\n## コア\n\n- 保存",
         },
       ],
     ],
@@ -516,13 +516,13 @@ const unifiedDiff = (from, to, fromName, toName) => {
   ]);
 
   // バックリンク検証用: 昨日のエントリからも 短いメモ を指しておく
-  timeline.get(isoDaysAgo(1))?.push(`- [21:00:00] 昨日の続きは [[20260813_083000]] にまとめた`);
+  scrawl.get(isoDaysAgo(1))?.push(`- [21:00:00] 昨日の続きは [[20260813_083000]] にまとめた`);
 
   // 週次ダイジェストの「1年前の今日」検証用
   {
     const yearAgo = new Date(today.getFullYear() - 1, today.getMonth(), today.getDate());
     const iso = `${yearAgo.getFullYear()}-${pad(yearAgo.getMonth() + 1)}-${pad(yearAgo.getDate())}`;
-    timeline.set(iso, [`- [12:00:00] 一年前のきょうの記録`]);
+    scrawl.set(iso, [`- [12:00:00] 一年前のきょうの記録`]);
   }
 
   const noteList = () =>
@@ -685,22 +685,22 @@ const unifiedDiff = (from, to, fromName, toName) => {
   };
 
   const commands = {
-    list_timeline_dates: () => [...timeline.keys()].toSorted().toReversed(),
+    list_scrawl_dates: () => [...scrawl.keys()].toSorted().toReversed(),
     /** @param {{ date: string }} args */
-    read_timeline_by_date: ({ date }) => timeline.get(date) ?? [],
+    read_scrawl_by_date: ({ date }) => scrawl.get(date) ?? [],
     /** @param {{ text: string }} args */
     save_quick_capture: ({ text }) => {
       const now = new Date();
       const iso = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
       const line = `- [${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}] ${text}`;
-      timeline.set(iso, [...(timeline.get(iso) ?? []), line]);
+      scrawl.set(iso, [...(scrawl.get(iso) ?? []), line]);
     },
     /** @param {{ date: string, index: number, raw: string }} args */
-    delete_timeline_entry: ({ date, index, raw }) => {
-      const lines = timeline.get(date) ?? [];
+    delete_scrawl_entry: ({ date, index, raw }) => {
+      const lines = scrawl.get(date) ?? [];
       // core と同じ守り。index が読んだ行を指していなければ消さない
       if (lines[index] !== raw) {
-        throw new Error(`Stale: timeline entry ${index}`);
+        throw new Error(`Stale: scrawl entry ${index}`);
       }
       lines.splice(index, 1);
     },
@@ -766,7 +766,7 @@ const unifiedDiff = (from, to, fromName, toName) => {
         };
       };
       const hits = [];
-      for (const [iso, lines] of timeline) {
+      for (const [iso, lines] of scrawl) {
         lines.forEach((raw, index) => {
           const text = raw.replace(/^- \[\d\d:\d\d:\d\d\] /u, "").replace(/ \{.*\}$/u, "");
           const own = parseTags(text);
@@ -774,7 +774,7 @@ const unifiedDiff = (from, to, fromName, toName) => {
             return;
           }
           hits.push({
-            kind: "timeline",
+            kind: "scrawl",
             title: text.split("\n")[0],
             date: iso,
             filename: null,
@@ -804,12 +804,12 @@ const unifiedDiff = (from, to, fromName, toName) => {
     find_backlinks: ({ filename }) => {
       const needle = `[[${filename.replace(/\.md$/u, "")}]]`;
       const hits = [];
-      for (const [iso, lines] of timeline) {
+      for (const [iso, lines] of scrawl) {
         lines.forEach((raw, index) => {
           const text = raw.replace(/^- \[\d\d:\d\d:\d\d\] /u, "").replace(/ \{.*\}$/u, "");
           if (text.includes(needle)) {
             hits.push({
-              kind: "timeline",
+              kind: "scrawl",
               title: text.split("\n")[0],
               snippet: text.slice(0, 90),
               date: iso,

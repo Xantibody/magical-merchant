@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildMonthGrid, shiftMonth, formatMonthTitle, summarizeDay } from "./calendar";
-import type { DeviceContext } from "./parse-timeline";
+import type { DeviceContext } from "./parse-scrawl";
 
 function ctx(overrides: Partial<DeviceContext> = {}): DeviceContext {
   return { os: "", arch: "", ...overrides };

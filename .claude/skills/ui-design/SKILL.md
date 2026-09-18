@@ -21,7 +21,7 @@ Spacing/typography/radius use Open Props (`var(--size-*)`, `var(--radius-*)`,
 
 ## Structural conventions
 
-- One CSS file per surface in `styles/` (timeline.css, workspace.css,
+- One CSS file per surface in `styles/` (scrawl.css, workspace.css,
   popover.css, palette.css…); shared primitives live in base.css
   (`.popover`, `.icon-button`, `.button-primary/secondary`)
 - Icons: Phosphor SVGs through `<Icon name size />`; register new names in

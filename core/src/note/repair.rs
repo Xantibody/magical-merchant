@@ -46,7 +46,7 @@ pub(crate) fn repair_all(notes_dir: &Path) -> Result<usize, CoreError> {
 ///
 /// 控えは同期の走査からは外れていたが、ノート一覧は `data/notes/*.md` を
 /// 素通しで拾うので、元のノートが消えたあとも残骸として並び続けていた。
-/// タイムラインの控えは一覧には出ないが、走査の除外をやめた以上、
+/// Scrawl の控えは一覧には出ないが、走査の除外をやめた以上、
 /// 置いたままだと次の同期で新しいファイルとして全端末へ配られる。
 ///
 /// 探すのは `data/` 全体。走査が `data/` を丸ごと同期対象にする以上、
@@ -189,7 +189,7 @@ fn filename_time(filename: &str) -> Option<DateTime<FixedOffset>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::paths::{TIMELINE_DIR, notes_dir};
+    use crate::utils::paths::{SCRAWL_DIR, notes_dir};
     use tempfile::TempDir;
 
     /// 実際に壊れていたファイルと同じ形の再現。
@@ -381,26 +381,26 @@ mod tests {
         );
     }
 
-    /// タイムラインの控えも同じ残骸。一覧には並ばない（日付でない名前は
+    /// Scrawl の控えも同じ残骸。一覧には並ばない（日付でない名前は
     /// 捨てられる）が、走査の除外をやめた以上、置いたままだと次の同期で
     /// 新しいファイルとして全端末へ配られる。
     #[test]
-    fn conflict_copies_left_in_the_timeline_directory_move_out() {
+    fn conflict_copies_left_in_the_scrawl_directory_move_out() {
         let tmp = TempDir::new().unwrap();
-        let timeline = data_dir(tmp.path()).join(TIMELINE_DIR);
-        fs::create_dir_all(&timeline).unwrap();
-        fs::write(timeline.join("2026-03-20.md"), "the day itself").unwrap();
+        let scrawl = data_dir(tmp.path()).join(SCRAWL_DIR);
+        fs::create_dir_all(&scrawl).unwrap();
+        fs::write(scrawl.join("2026-03-20.md"), "the day itself").unwrap();
         fs::write(
-            timeline.join("2026-03-20.sync-conflict-20260511-031336..md"),
+            scrawl.join("2026-03-20.sync-conflict-20260511-031336..md"),
             "day copy",
         )
         .unwrap();
 
         assert_eq!(relocate_conflict_copies(tmp.path()), 1);
 
-        assert!(timeline.join("2026-03-20.md").exists());
+        assert!(scrawl.join("2026-03-20.md").exists());
         assert!(
-            !timeline
+            !scrawl
                 .join("2026-03-20.sync-conflict-20260511-031336..md")
                 .exists()
         );

@@ -1,6 +1,6 @@
 /* 単欄のジャーナル。時刻レールに沿って一日を読み物として流す */
 
-.timeline {
+.scrawl {
   flex: 1;
   position: relative;
   display: flex;
@@ -9,14 +9,14 @@
   min-width: 0;
 }
 
-.timeline-scroll {
+.scrawl-scroll {
   flex: 1;
   overflow-y: auto;
   /* 下端はフローティングの入力バーが覆う。その下に本文を残さない */
   padding: 44px 32px 140px;
 }
 
-.timeline-column {
+.scrawl-column {
   max-width: 680px;
   margin: 0 auto;
   display: flex;
@@ -389,13 +389,13 @@
 
 /* ---------------- empty ---------------- */
 
-.timeline-empty {
+.scrawl-empty {
   display: grid;
   grid-template-columns: 56px 28px 1fr;
   padding-top: 8px;
 }
 
-.timeline-empty-rail {
+.scrawl-empty-rail {
   grid-column: 2;
   width: 2px;
   min-height: 64px;
@@ -403,13 +403,13 @@
   background: repeating-linear-gradient(to bottom, var(--app-border) 0 4px, transparent 4px 9px);
 }
 
-.timeline-empty-title {
+.scrawl-empty-title {
   margin: 0;
   font-size: 15px;
   color: var(--app-text-faint);
 }
 
-.timeline-empty-hint {
+.scrawl-empty-hint {
   margin: 4px 0 0;
   font-size: 13px;
   color: var(--app-text-hint);
@@ -469,21 +469,21 @@
 /* ---------------- mobile ---------------- */
 
 @media (max-width: 767px) {
-  .timeline-scroll {
+  .scrawl-scroll {
     padding: 12px 20px 96px;
   }
 
-  .timeline-column {
+  .scrawl-column {
     gap: 22px;
   }
 
   .entry,
-  .timeline-empty {
+  .scrawl-empty {
     grid-template-columns: 44px 24px 1fr;
   }
 
   .entry-rail-line,
-  .timeline-empty-rail {
+  .scrawl-empty-rail {
     left: 11px;
     margin-left: 11px;
   }
@@ -542,7 +542,7 @@
 /* ---------------- 週次ダイジェスト ---------------- */
 
 /* タグ行と週の要約はひと続きの帯。列の gap より近い 14px で寄せる */
-.timeline-head {
+.scrawl-head {
   display: flex;
   flex-direction: column;
   gap: 14px;

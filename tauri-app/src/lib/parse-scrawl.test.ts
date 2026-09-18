@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { parseTimelineEntry, getBatteryIcon, getNetworkIcon, getOsLabel } from "./parse-timeline";
+import { parseScrawlEntry, getBatteryIcon, getNetworkIcon, getOsLabel } from "./parse-scrawl";
 
-describe("parseTimelineEntry", () => {
+describe("parseScrawlEntry", () => {
   it("parses entry with context JSON", () => {
     const raw = '- [14:30:45] hello world {"battery":82,"is_charging":false}';
-    const result = parseTimelineEntry(raw);
+    const result = parseScrawlEntry(raw);
     expect(result.time).toBe("14:30:45");
     expect(result.text).toBe("hello world");
     expect(result.context).toStrictEqual({ battery: 82, is_charging: false });
@@ -12,7 +12,7 @@ describe("parseTimelineEntry", () => {
 
   it("parses entry without context (old format)", () => {
     const raw = "- [14:30:45] hello world";
-    const result = parseTimelineEntry(raw);
+    const result = parseScrawlEntry(raw);
     expect(result.time).toBe("14:30:45");
     expect(result.text).toBe("hello world");
     expect(result.context).toBeNull();
@@ -20,7 +20,7 @@ describe("parseTimelineEntry", () => {
 
   it("handles text containing braces", () => {
     const raw = '- [14:30:45] code {foo} {"battery":50}';
-    const result = parseTimelineEntry(raw);
+    const result = parseScrawlEntry(raw);
     expect(result.time).toBe("14:30:45");
     expect(result.text).toBe("code {foo}");
     expect(result.context).toStrictEqual({ battery: 50 });
@@ -28,7 +28,7 @@ describe("parseTimelineEntry", () => {
 
   it("normalizes empty object {} to null", () => {
     const raw = "- [14:30:45] text {}";
-    const result = parseTimelineEntry(raw);
+    const result = parseScrawlEntry(raw);
     expect(result.time).toBe("14:30:45");
     expect(result.text).toBe("text");
     expect(result.context).toBeNull();
@@ -36,7 +36,7 @@ describe("parseTimelineEntry", () => {
 
   it("treats invalid JSON as part of text", () => {
     const raw = "- [14:30:45] text {invalid";
-    const result = parseTimelineEntry(raw);
+    const result = parseScrawlEntry(raw);
     expect(result.time).toBe("14:30:45");
     expect(result.text).toBe("text {invalid");
     expect(result.context).toBeNull();
@@ -44,7 +44,7 @@ describe("parseTimelineEntry", () => {
 
   it("returns raw text for non-matching format", () => {
     const raw = "just some text";
-    const result = parseTimelineEntry(raw);
+    const result = parseScrawlEntry(raw);
     expect(result.time).toBe("");
     expect(result.text).toBe("just some text");
     expect(result.context).toBeNull();

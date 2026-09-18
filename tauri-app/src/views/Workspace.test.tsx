@@ -369,16 +369,16 @@ async function startEditingBody(): Promise<void> {
 
 /** 「…」を開いてから、その中の 1 行を押す。 */
 async function runNoteAction(name: string): Promise<void> {
-  fireEvent.click(screen.getByRole("button", { name: "このノートの操作" }));
+  fireEvent.click(screen.getByRole("button", { name: "この Note の操作" }));
   // 背骨も「履歴」と名乗る。押すのはメニューの行
   const menu = await screen.findByRole("menu");
   fireEvent.click(await within(menu).findByRole("button", { name: new RegExp(name, "u") }));
 }
 
-/** 「新規」→「空のノート」。テンプレのシートを経由するのは本物と同じ順序。 */
+/** 「新規」→「空の Note」。テンプレのシートを経由するのは本物と同じ順序。 */
 async function createEmptyNote(): Promise<void> {
   fireEvent.click(screen.getByRole("button", { name: /新規/u }));
-  fireEvent.click(await screen.findByRole("menuitem", { name: /空のノート/u }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: /空の Note/u }));
 }
 
 const blockReads = (): void => {
@@ -495,10 +495,10 @@ describe("Workspace › 触る端末からのテンプレート", () => {
     fireEvent.pointerMove(newNote, { pointerType: "touch", clientX: 99, clientY: 104 });
 
     // 長押しの 500ms は本物の時間で待つ
-    await screen.findByRole("menuitem", { name: /空のノート/u }, { timeout: 2000 });
+    await screen.findByRole("menuitem", { name: /空の Note/u }, { timeout: 2000 });
 
     // シートが出たあとに離した指の click は飲み込む。開いたうえに
-    // 空のノートまで増えていたら、長押しは入り口として使えない
+    // 空の Note まで増えていたら、長押しは入り口として使えない
     fireEvent.pointerUp(newNote, { pointerType: "touch", clientX: 99, clientY: 104 });
     fireEvent.click(newNote);
     expect(countOf("create_draft")).toBe(0);
@@ -1446,7 +1446,7 @@ describe("Workspace › Codex の面", () => {
 
     await waitFor(() => expect(kinds.get(FILE_A)).toBe("codex"));
     // 着地したのは Codex の面。同じノートが開いたまま
-    await waitFor(() => expect(screen.getByText("CODEX")).toBeDefined());
+    await waitFor(() => expect(screen.getByText("Codex")).toBeDefined());
     await rowOf(TITLE_A);
     await waitFor(() => expect(titleInput().value).toBe(TITLE_A));
   });
@@ -1479,7 +1479,7 @@ describe("Workspace › Codex の面", () => {
     fireEvent.click(await rowOf(TITLE_C));
     await waitFor(() => expect(titleInput().value).toBe(TITLE_C));
 
-    fireEvent.click(screen.getByRole("button", { name: "このノートの操作" }));
+    fireEvent.click(screen.getByRole("button", { name: "この Note の操作" }));
 
     await screen.findByRole("button", { name: /読み取り専用にする/u });
     expect(screen.queryByRole("button", { name: "Codex にする" })).toBeNull();

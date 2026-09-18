@@ -1,13 +1,13 @@
 /**
- * タイムライン先頭に週 1 回だけ出すふりかえりカードの材料。
+ * Scrawl 先頭に週 1 回だけ出すふりかえりカードの材料。
  *
- * すべて読み込み済みのタイムラインと日付一覧からの集計で、core にも
+ * すべて読み込み済みの Scrawl と日付一覧からの集計で、core にも
  * データファイルにも何も書かない。閉じた記録だけを端末ローカル
  * (localStorage)に持つ — どの端末で閉じたかは他の端末に関係ない。
  */
 
 import { toIsoDate } from "./day-labels";
-import type { TimelineItem } from "./items";
+import type { ScrawlItem } from "./items";
 
 /** 週の身元は月曜の日付。閉じた週と今の週の比較に使う。 */
 export function digestWeekKey(today: Date): string {
@@ -30,7 +30,7 @@ export interface WeekSummary {
 }
 
 /** 今週(月曜起点)のエントリだけを数える。 */
-export function summarizeWeek(items: TimelineItem[], today: Date): WeekSummary {
+export function summarizeWeek(items: ScrawlItem[], today: Date): WeekSummary {
   const start = digestWeekKey(today);
   const week = items.filter((item) => item.date >= start && item.date <= toIsoDate(today));
   return {

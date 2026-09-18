@@ -46,11 +46,14 @@
   color: var(--app-text);
 }
 
+/* AIDEV-NOTE: 総大文字は CSS の仕事 — 文字列を "NOTES" と書くと、面の名が
+   MODE_LABELS ともう 1 箇所に分かれ、読み上げも N-O-T-E-S になる */
 .list-pane-title {
   font-size: 11px;
   font-weight: 700;
   color: var(--app-text-faint);
   letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .calendar-button {

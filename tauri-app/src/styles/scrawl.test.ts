@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeAll, afterEach } from "vitest";
 
 /**
- * 入力バーはタイムラインの上に浮いている。スクロール領域の下 padding が
+ * 入力バーは Scrawl の上に浮いている。スクロール領域の下 padding が
  * バーより薄いと、一番下のエントリが最後までスクロールしても隠れたままになる。
  * 目で見て気づくのはたいてい書いた直後の一件が読めないときで、遅い。
  */
-function mountTimeline(entries: number): void {
+function mountScrawl(entries: number): void {
   const rows = Array.from(
     { length: entries },
     (_, i) => `
@@ -20,9 +20,9 @@ function mountTimeline(entries: number): void {
     <div class="app">
       <header class="header">header</header>
       <main class="app-main">
-        <div class="timeline">
-          <div class="timeline-scroll">
-            <div class="timeline-column">
+        <div class="scrawl">
+          <div class="scrawl-scroll">
+            <div class="scrawl-column">
               <section class="day-group" data-day="2026-08-05">
                 <header class="day-heading"><h2 class="day-heading-label">今日</h2></header>
                 ${rows}
@@ -48,7 +48,7 @@ function element(selector: string): HTMLElement {
   return found;
 }
 
-describe("timeline under the floating capture bar", () => {
+describe("scrawl under the floating capture bar", () => {
   beforeAll(async () => {
     await import("../index.css");
   });
@@ -58,8 +58,8 @@ describe("timeline under the floating capture bar", () => {
   });
 
   it("lets the last entry scroll clear of the capture bar", () => {
-    mountTimeline(60);
-    const scroll = element(".timeline-scroll");
+    mountScrawl(60);
+    const scroll = element(".scrawl-scroll");
     scroll.scrollTop = scroll.scrollHeight;
 
     const lastEntry = [...document.querySelectorAll<HTMLElement>(".entry")].at(-1);
@@ -68,19 +68,19 @@ describe("timeline under the floating capture bar", () => {
     expect(lastEntry?.getBoundingClientRect().bottom).toBeLessThanOrEqual(dockTop);
   });
 
-  it("keeps the capture bar inside the timeline", () => {
-    mountTimeline(3);
+  it("keeps the capture bar inside the scrawl", () => {
+    mountScrawl(3);
 
-    const timeline = element(".timeline").getBoundingClientRect();
+    const scrawl = element(".scrawl").getBoundingClientRect();
     const dock = element(".capture-dock").getBoundingClientRect();
 
-    expect(dock.bottom).toBeLessThanOrEqual(timeline.bottom + 0.5);
-    expect(dock.top).toBeGreaterThanOrEqual(timeline.top);
+    expect(dock.bottom).toBeLessThanOrEqual(scrawl.bottom + 0.5);
+    expect(dock.top).toBeGreaterThanOrEqual(scrawl.top);
   });
 
   // 本文が短くても長くても、時刻とレールと本文の 3 列がずれない
   it("lines the entries up on one rail", () => {
-    mountTimeline(3);
+    mountScrawl(3);
     const rails = [...document.querySelectorAll<HTMLElement>(".entry-rail-dot")].map(
       (dot) => dot.getBoundingClientRect().left,
     );
@@ -92,10 +92,10 @@ describe("timeline under the floating capture bar", () => {
 /** タグ行・ダイジェスト・日見出し・昇格リンクを、区切りが見える形で並べる。 */
 function mountChrome(): void {
   document.body.innerHTML = `
-    <div class="timeline">
-      <div class="timeline-scroll">
-        <div class="timeline-column">
-          <div class="timeline-head">
+    <div class="scrawl">
+      <div class="scrawl-scroll">
+        <div class="scrawl-column">
+          <div class="scrawl-head">
             <div class="tag-filter">
               <span class="tag-filter-label">TAGS</span>
               <div class="tag-filter-chips"><button class="tag-chip" type="button">#SF6</button></div>
@@ -133,7 +133,7 @@ const ONE_LINE = 24;
 
 const TRANSPARENT = "rgba(0, 0, 0, 0)";
 
-describe("timeline chrome", () => {
+describe("scrawl chrome", () => {
   beforeAll(async () => {
     await import("../index.css");
   });

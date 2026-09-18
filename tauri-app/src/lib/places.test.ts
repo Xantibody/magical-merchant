@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
 import { setLocale } from "./i18n";
 import { createPlaceStore, placeKey } from "./places";
-import type { DeviceContext } from "./parse-timeline";
+import type { DeviceContext } from "./parse-scrawl";
 
 function at(latitude: number, longitude: number): DeviceContext {
   return { os: "android", arch: "aarch64", location: { latitude, longitude } };
@@ -74,7 +74,7 @@ describe("createPlaceStore", () => {
   });
 
   /**
-   * 圏外では 1 件も返らない。同じ座標をその都度聞き直すと、タイムラインが
+   * 圏外では 1 件も返らない。同じ座標をその都度聞き直すと、Scrawl が
    * 再描画されるたびに返らない IPC を積み上げる。
    */
   it("does not retry a coordinate the OS could not name", async () => {
@@ -128,7 +128,7 @@ describe("createPlaceStore", () => {
     expect(calls).toHaveLength(0);
   });
 
-  /** 地名が出ないことより、タイムラインが出ないことのほうが困る。 */
+  /** 地名が出ないことより、Scrawl が出ないことのほうが困る。 */
   it("stays quiet when the lookup fails", async () => {
     const store = createPlaceStore();
     const failed = vi.fn<() => void>();

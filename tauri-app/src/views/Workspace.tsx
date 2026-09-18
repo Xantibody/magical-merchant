@@ -65,7 +65,7 @@ import type { EditSession } from "../lib/edit-backup";
 import type { NoteLinkTarget } from "../lib/note-link-plugin";
 import type { NoteKind, SearchHit, Template, VersionStatus } from "../lib/commands";
 import { noteRoute } from "../lib/note-route";
-import { HIT_ICONS, ROUTES } from "../lib/routes";
+import { HIT_ICONS, MODE_LABELS, ROUTES } from "../lib/routes";
 import "../styles/workspace.css";
 
 // Milkdown + ProseMirror は詳細を開くまで要らない。一覧だけを見ている画面を
@@ -915,10 +915,10 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   };
 
   const openBacklink = (hit: SearchHit): void => {
-    if (hit.kind !== "timeline" && hit.filename) {
+    if (hit.kind !== "scrawl" && hit.filename) {
       void openFile(hit.filename);
     } else {
-      navigate(`${ROUTES.TIMELINE}?day=${hit.date}`);
+      navigate(`${ROUTES.SCRAWL}?day=${hit.date}`);
     }
   };
 
@@ -1230,7 +1230,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     shell.showToast(shown ? t().codex.restored : t().codex.restoredNotShown);
   };
 
-  // タイムラインからの昇格 (?edit=1) は、本文が届き次第そのまま書ける形で渡す。
+  // Scrawl からの昇格 (?edit=1) は、本文が届き次第そのまま書ける形で渡す。
   // パラメータは消費したら消す — 再読み込みのたびにカーソルを奪わない
   createEffect(() => {
     if (searchParams.edit !== "1") {
@@ -1414,7 +1414,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     await settleWrites();
     await typedInvoke("promote_note_to_codex", { filename: item.filename });
     await refetchNotes();
-    // タイムラインの origin チップも一覧から導出される。面が変わっても
+    // Scrawl の origin チップも一覧から導出される。面が変わっても
     // 繋がりは残るので、向こうにも読み直させる
     shell.refreshData();
     navigate(noteRoute("codex", item.filename));
@@ -1441,7 +1441,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
         await typedInvoke("delete_note", { filename: item.filename });
         await refetchNotes();
         setHidden((ids) => ids.filter((id) => id !== item.id));
-        // タイムラインの origin チップはノート一覧から導出される。Undo の
+        // Scrawl の origin チップはノート一覧から導出される。Undo の
         // 猶予中に他のビューへ移られるとこの refetch は届かないので、版を
         // 上げて向こうの一覧も読み直させる
         shell.refreshData();
@@ -1463,7 +1463,9 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     <div class="workspace" classList={{ "workspace--detail": detailOpen() }}>
       <div class="list-pane">
         <div class="list-pane-head">
-          <span class="list-pane-title">{kind() === "codex" ? "CODEX" : "NOTES"}</span>
+          <span class="list-pane-title">
+            {MODE_LABELS[kind() === "codex" ? ROUTES.CODEX : ROUTES.NOTES]}
+          </span>
           <button
             type="button"
             class="new-note long-press"

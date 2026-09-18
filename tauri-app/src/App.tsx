@@ -1,7 +1,7 @@
 import { lazy } from "solid-js";
 import { Router, Route } from "@solidjs/router";
 import AppLayout from "./layouts/AppLayout";
-import Timeline from "./views/Timeline";
+import Scrawl from "./views/Scrawl";
 import { ROUTES } from "./lib/routes";
 import type { JSX } from "solid-js";
 
@@ -34,7 +34,7 @@ export default function App(): JSX.Element {
   prefetchLazyViews();
   return (
     <Router root={AppLayout}>
-      <Route path={ROUTES.TIMELINE} component={Timeline} />
+      <Route path={ROUTES.SCRAWL} component={Scrawl} />
       <Route path={ROUTES.NOTES} component={Workspace} />
       <Route path={ROUTES.CODEX} component={Codex} />
       <Route path={ROUTES.SETTINGS} component={Settings} />

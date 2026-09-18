@@ -1,7 +1,7 @@
 /**
  * パレットの zero-query 状態(何も打っていないとき)に出す入り口。
  *
- * どれも既にある IPC(list_notes / list_timeline_dates)から導出するだけで、
+ * どれも既にある IPC(list_notes / list_scrawl_dates)から導出するだけで、
  * 新しいコマンドは増やさない。行は既存の SearchHit の形に寄せて、選んだ
  * ときの着地を検索ヒットと同じ経路に流す。
  */
@@ -60,7 +60,7 @@ export function dayJumpHits(recordedDates: string[], today: Date): DayJump[] {
     .map(([label, iso]) => ({
       label,
       hit: {
-        kind: "timeline",
+        kind: "scrawl",
         title: label,
         snippet: "",
         date: iso,

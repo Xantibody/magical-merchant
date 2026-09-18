@@ -1,7 +1,7 @@
 <div align="center">
   <img src="tauri-app/src-tauri/icons/icon.svg" width="128" height="128" alt="Magical Merchant">
   <h1>Magical Merchant</h1>
-  <p>A local-first journal and Markdown workspace — quick capture on a timeline, notes that grow out of it. Rust core, Tauri 2 + SolidJS, minimal UI.</p>
+  <p>A local-first journal and Markdown workspace — quick capture in Scrawl, Notes that grow out of it. Rust core, Tauri 2 + SolidJS, minimal UI.</p>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License"></a>
 </div>
 

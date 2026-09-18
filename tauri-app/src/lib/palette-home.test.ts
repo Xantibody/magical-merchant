@@ -81,7 +81,7 @@ describe("dayJumpHits", () => {
     const hits = dayJumpHits(["2026-08-16", "2026-08-15", "2026-08-10"], TODAY);
 
     expect(hits.map((h) => h.label)).toStrictEqual(["今日", "昨日"]);
-    expect(hits[0]?.hit).toMatchObject({ kind: "timeline", date: "2026-08-16" });
+    expect(hits[0]?.hit).toMatchObject({ kind: "scrawl", date: "2026-08-16" });
   });
 
   // 記録のない日をパレットに出すと、選んでも何も表示されない着地になる

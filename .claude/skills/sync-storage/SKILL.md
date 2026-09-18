@@ -1,6 +1,6 @@
 ---
 name: sync-storage
-description: Note/timeline storage invariants, sync protocol, widgets and deep links. Use when touching file formats, frontmatter, sync, conflict handling, or Android widgets.
+description: Note/Scrawl storage invariants, sync protocol, widgets and deep links. Use when touching file formats, frontmatter, sync, conflict handling, or Android widgets.
 ---
 
 # Storage & Sync
@@ -108,7 +108,7 @@ local scan → diff → `POST /sync/bulk`, repeated until nothing is left over.
 
 ## Widgets & deep links
 
-- Timeline capture widget appends via **JNI directly into core** — the app
+- Scrawl capture widget appends via **JNI directly into core** — the app
   never starts. Core changes must stay callable from JNI
 - "New note" / recent-notes / templates widgets open
   `magical-merchant://widget/…` deep links; handled in AppLayout (`onOpenUrl`

@@ -44,7 +44,7 @@ source format belong in a conversion script, not in the binary. A refused
 edit (stale, empty, editor failure) keeps the scratch file and prints its
 path.
 The editor launch is a closure parameter so the flows are unit-tested
-without an editor. `timeline.rs` holds `timeline add / show / dates`;
+without an editor. `scrawl.rs` holds `scrawl add / show / dates`;
 `add` only appends (same core call as the Android widget), so it carries
 no revision. Entry editing by index is deliberately absent — an index
 shifts under a concurrent append.
@@ -62,15 +62,15 @@ prints help). `nix run .#mcp` is a wrapper that adds the subcommand.
 
 `server.rs` exposes core as MCP tools (output shapes in `output.rs`). Twelve
 are always there: `list_notes`, `read_note`, `backlinks`, `search`,
-`list_timeline_dates`, `read_timeline`, `read_timeline_range`, `list_places`,
+`list_scrawl_dates`, `read_scrawl`, `read_scrawl_range`, `list_places`,
 `list_tags`, `list_templates`, `read_template`, `list_glyphs`. Six more
 (`WRITE_TOOLS`) appear only with `--allow-write`, by not removing their
 routes — a tool that is listed and always refuses gives a model nothing to do
 but retry. `McpServer::new` picks the `INSTRUCTIONS` opening from the same
 flag; the two must not disagree, since a client reads the instructions before
 the tool list. `list_notes` and `search` report `kind` (`note` / `codex` /
-`timeline`), so an agent can tell a Codex from a Note. Timeline entries go out as
-values (`parse_timeline_entry` in core), never as raw lines — external
+`scrawl`), so an agent can tell a Codex from a Note. Scrawl entries go out as
+values (`parse_scrawl_entry` in core), never as raw lines — external
 consumers join on time and location, so keep those fields structured. Place
 names come only from the app's `places.json` cache; the server must stay
 offline. New core read APIs should be considered for MCP exposure.

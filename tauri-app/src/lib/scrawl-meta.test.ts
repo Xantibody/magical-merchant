@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { entryMeta } from "./timeline-meta";
-import type { DeviceContext } from "./parse-timeline";
+import { entryMeta } from "./scrawl-meta";
+import type { DeviceContext } from "./parse-scrawl";
 
 function context(overrides: Partial<DeviceContext> = {}): DeviceContext {
   return { os: "macos", arch: "aarch64", ...overrides };

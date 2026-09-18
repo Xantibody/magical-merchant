@@ -28,7 +28,7 @@ use crate::widget_summary;
 /// a value the Rust side already knows.
 const WIDGET_SOURCE: Source = Source::Widget;
 
-/// Appends `text` to today's timeline file under `base_dir`.
+/// Appends `text` to today's scrawl file under `base_dir`.
 ///
 /// The symbol name is the JNI mangling of
 /// `com.magical_merchant.app.widget.WidgetBridge.saveQuickCapture`: dots become
@@ -65,7 +65,7 @@ pub extern "system" fn Java_com_magical_1merchant_app_widget_WidgetBridge_saveQu
                 .map(|json| device::parse_client_context(&json))
                 .unwrap_or_default();
             let context = device::get_context(client);
-            let saved = magical_merchant_core::save_timeline_entry(
+            let saved = magical_merchant_core::save_scrawl_entry(
                 Path::new(&base_dir),
                 &text,
                 &context,

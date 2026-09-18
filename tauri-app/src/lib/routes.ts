@@ -2,7 +2,7 @@ import type { IconName } from "../components/Icon";
 import type { HitKind } from "./commands";
 
 export const ROUTES = {
-  TIMELINE: "/",
+  SCRAWL: "/",
   NOTES: "/notes",
   CODEX: "/codex",
   SETTINGS: "/settings",
@@ -12,7 +12,7 @@ export const ROUTES = {
 export type RoutePath = (typeof ROUTES)[keyof typeof ROUTES];
 
 export const MODE_ICONS: Record<RoutePath, IconName> = {
-  [ROUTES.TIMELINE]: "scribble-loop",
+  [ROUTES.SCRAWL]: "scribble-loop",
   [ROUTES.NOTES]: "note-pencil",
   [ROUTES.CODEX]: "book",
   [ROUTES.SETTINGS]: "gear",
@@ -22,16 +22,19 @@ export const MODE_ICONS: Record<RoutePath, IconName> = {
 // テンプレート管理は Settings の下にある画面で、タブには出ない。
 // ヘッダの題だけがここを引く
 export const MODE_LABELS: Record<RoutePath, string> = {
-  [ROUTES.TIMELINE]: "Scrawl",
+  [ROUTES.SCRAWL]: "Scrawl",
   [ROUTES.NOTES]: "Note",
   [ROUTES.CODEX]: "Codex",
   [ROUTES.SETTINGS]: "Settings",
   [ROUTES.TEMPLATES]: "Templates",
 };
 
-/** 検索・バックリンクの行に出す、記録の種類の印。面のアイコンと揃える。 */
+/**
+ * 検索・バックリンクの行に出す、記録の種類の印。住んでいる面のアイコンを
+ * そのまま引く — 直に綴ると、タブの印を変えたときに行の印だけが取り残される。
+ */
 export const HIT_ICONS: Record<HitKind, IconName> = {
-  timeline: "lightning",
-  note: "file-text",
+  scrawl: MODE_ICONS[ROUTES.SCRAWL],
+  note: MODE_ICONS[ROUTES.NOTES],
   codex: MODE_ICONS[ROUTES.CODEX],
 };

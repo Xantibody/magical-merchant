@@ -2,9 +2,9 @@ import { createMemo, For, Show } from "solid-js";
 import type { JSX } from "solid-js";
 import Icon from "./Icon";
 import TagText from "./TagText";
-import type { NoteItem, TimelineItem } from "../lib/items";
+import type { NoteItem, ScrawlItem } from "../lib/items";
 import { createLongPress } from "../lib/long-press";
-import { entryMeta } from "../lib/timeline-meta";
+import { entryMeta } from "../lib/scrawl-meta";
 import { places } from "../lib/places";
 import { t } from "../lib/i18n";
 
@@ -17,7 +17,7 @@ interface OriginChipProps {
 /**
  * 昇格ノートへの入り口。開くのがタップ、繋がりを解くのが隠しアクション。
  * 通常は各エントリの真下に出るが、元のエントリが消えたノートの避難先として
- * Timeline が日見出しの直下にも並べる。
+ * Scrawl が日見出しの直下にも並べる。
  */
 export function OriginChip(props: OriginChipProps): JSX.Element {
   // モバイルの解除は長押し。PC はホバーで出る × が受ける
@@ -49,8 +49,8 @@ export function OriginChip(props: OriginChipProps): JSX.Element {
       <button
         type="button"
         class="origin-chip-unlink"
-        title={t().timeline.unlink(props.note.title)}
-        aria-label={t().timeline.unlink(props.note.title)}
+        title={t().scrawl.unlink(props.note.title)}
+        aria-label={t().scrawl.unlink(props.note.title)}
         onClick={() => props.onUnlink(props.note)}
       >
         <Icon name="x" size={12} />
@@ -59,8 +59,8 @@ export function OriginChip(props: OriginChipProps): JSX.Element {
   );
 }
 
-interface TimelineEntryProps {
-  item: TimelineItem;
+interface ScrawlEntryProps {
+  item: ScrawlItem;
   /** このエントリから育ったノート。チップとして本文の真下に出す。 */
   notes: NoteItem[];
   selecting: boolean;
@@ -71,7 +71,7 @@ interface TimelineEntryProps {
   onUnlinkNote: (note: NoteItem) => void;
 }
 
-export default function TimelineEntry(props: TimelineEntryProps): JSX.Element {
+export default function ScrawlEntry(props: ScrawlEntryProps): JSX.Element {
   const meta = createMemo(() => entryMeta(props.item.context, places.nameOf));
   // モバイルの入り口は長押し。タップには何も割り当てない
   const press = createLongPress(() => props.onPromote());
@@ -151,8 +151,8 @@ export default function TimelineEntry(props: TimelineEntryProps): JSX.Element {
             <button
               type="button"
               class="icon-button entry-action"
-              title={t().timeline.promote}
-              aria-label={t().timeline.promote}
+              title={t().scrawl.promote}
+              aria-label={t().scrawl.promote}
               onClick={() => props.onPromote()}
             >
               <Icon name="note-pencil" size={15} />

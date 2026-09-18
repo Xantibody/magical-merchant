@@ -6,9 +6,9 @@ mod commands;
 mod editor;
 mod notes;
 mod output;
+mod scrawl;
 mod server;
 mod sync;
-mod timeline;
 
 use std::io::{IsTerminal, Read as _, Write as _};
 use std::path::{Path, PathBuf};
@@ -84,9 +84,9 @@ enum Command {
     /// Set the server up and log in from the app's Settings first; this reads
     /// the URL and the saved login. Progress is printed per round.
     Sync,
-    /// Read the Timeline or append to today's
+    /// Read the Scrawl or append to today's
     #[command(subcommand)]
-    Timeline(TimelineCommand),
+    Scrawl(ScrawlCommand),
     /// Serve the journal to an AI client over MCP (stdio)
     Mcp {
         /// Preferred language for place names (`ja` or `en`). Falls back to
@@ -102,7 +102,7 @@ enum Command {
 }
 
 #[derive(Subcommand)]
-enum TimelineCommand {
+enum ScrawlCommand {
     /// Append an entry to today: -m for a one-liner, stdin when piped,
     /// otherwise $VISUAL / $EDITOR
     Add {
@@ -214,7 +214,7 @@ async fn main() -> anyhow::Result<()> {
             println!("{filename}");
         }
         Command::Sync => sync::run(&data_dir).await?,
-        Command::Timeline(command) => run_timeline(&data_dir, command)?,
+        Command::Scrawl(command) => run_scrawl(&data_dir, command)?,
         Command::Mcp {
             locale,
             allow_write,
@@ -228,9 +228,9 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn run_timeline(data_dir: &Path, command: TimelineCommand) -> anyhow::Result<()> {
+fn run_scrawl(data_dir: &Path, command: ScrawlCommand) -> anyhow::Result<()> {
     match command {
-        TimelineCommand::Add { message } => {
+        ScrawlCommand::Add { message } => {
             let text = match message {
                 Some(text) => Some(text),
                 None if std::io::stdin().is_terminal() => {
@@ -245,17 +245,17 @@ fn run_timeline(data_dir: &Path, command: TimelineCommand) -> anyhow::Result<()>
                     Some(text)
                 }
             };
-            let added = text.is_some_and(|t| timeline::add(data_dir, &t).is_ok_and(|a| a));
+            let added = text.is_some_and(|t| scrawl::add(data_dir, &t).is_ok_and(|a| a));
             if added {
-                eprintln!("added to today's timeline");
+                eprintln!("added to today's scrawl");
             } else {
                 eprintln!("nothing written, no entry added");
             }
         }
-        TimelineCommand::Show { date } => {
-            let date = timeline::resolve_date(date.as_deref())?;
+        ScrawlCommand::Show { date } => {
+            let date = scrawl::resolve_date(date.as_deref())?;
             let mut out = std::io::stdout().lock();
-            for entry in timeline::show(data_dir, date)? {
+            for entry in scrawl::show(data_dir, date)? {
                 let time = entry
                     .time
                     .map_or_else(|| "--:--".to_string(), |t| t.format("%H:%M").to_string());
@@ -265,9 +265,9 @@ fn run_timeline(data_dir: &Path, command: TimelineCommand) -> anyhow::Result<()>
                 quiet_on_closed_pipe(writeln!(out, "{time}  {text}"))?;
             }
         }
-        TimelineCommand::Dates => {
+        ScrawlCommand::Dates => {
             let mut out = std::io::stdout().lock();
-            for date in timeline::dates(data_dir)? {
+            for date in scrawl::dates(data_dir)? {
                 quiet_on_closed_pipe(writeln!(out, "{date}"))?;
             }
         }

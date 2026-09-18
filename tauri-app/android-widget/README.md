@@ -29,7 +29,7 @@ RemoteViews cannot host an `EditText`, so the bar opens a translucent
 `QuickCaptureActivity` (design 1b: scrim + bottom sheet + IME) over the home
 screen. Sending calls `WidgetBridge.saveQuickCapture`, a JNI function whose Rust
 side lives in [`../src-tauri/src/widget_bridge.rs`](../src-tauri/src/widget_bridge.rs)
-and calls the same `magical_merchant_core::save_timeline_entry` the in-app
+and calls the same `magical_merchant_core::save_scrawl_entry` the in-app
 capture bar uses.
 
 Nothing about the `DayLog` format is reimplemented in Kotlin. Appending from
@@ -63,7 +63,7 @@ adb logcat -s MagicalWidget
 
 The base directory is `Context.getDataDir()`, **not** `filesDir` — Tauri's
 `PathPlugin` answers `getDataDir` with the former, and writing to `files/`
-would build a second timeline the app never reads.
+would build a second scrawl the app never reads.
 
 ### What the entry knows about the device
 
@@ -94,7 +94,7 @@ list reads every note, and the templates read opens only `data/templates/`. The
 notes read happens in `RemoteViewsFactory.onDataSetChanged`, which the platform
 calls off the main thread; the other two are cheap enough for `onUpdate`.
 
-Kotlin never takes a timeline line apart. `- [HH:MM:SS] text {json}` is parsed
+Kotlin never takes a scrawl line apart. `- [HH:MM:SS] text {json}` is parsed
 in [`../src-tauri/src/widget_summary.rs`](../src-tauri/src/widget_summary.rs)
 with the same core helpers the app uses.
 
@@ -170,9 +170,9 @@ just android-install
 
 Then long-press the home screen → ウィジェット → Magical Merchant. Toggle the
 system dark theme to check the night palette, and confirm a sent entry lands in
-`data/timeline/YYYY-MM-DD.md`:
+`data/scrawl/YYYY-MM-DD.md`:
 
 ```sh
 adb shell run-as com.magical_merchant.app \
-  cat /data/data/com.magical_merchant.app/data/timeline/$(date +%F).md
+  cat /data/data/com.magical_merchant.app/data/scrawl/$(date +%F).md
 ```

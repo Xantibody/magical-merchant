@@ -11,7 +11,7 @@ import android.widget.RemoteViews
 import com.magical_merchant.app.R
 
 /**
- * 2a — the Timeline capture bar (4x1).
+ * 2a — the Scrawl capture bar (4x1).
  *
  * The whole surface opens [QuickCaptureActivity] over the home screen; the app
  * itself is never started, which is the point of the widget. Once the day has

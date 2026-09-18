@@ -2,12 +2,12 @@ import type { Note, NoteKind } from "./commands";
 import { daysBetween, formatMonthDay, formatNoteGroupLabel, parseIsoDate } from "./day-labels";
 import { t } from "./i18n";
 import { resolveNoteView } from "./note-view";
-import { parseTimelineEntry } from "./parse-timeline";
+import { parseScrawlEntry } from "./parse-scrawl";
 import { isPreservedEmptyLine } from "./preserved-empty-line";
-import type { DeviceContext } from "./parse-timeline";
+import type { DeviceContext } from "./parse-scrawl";
 
-export interface TimelineItem {
-  kind: "timeline";
+export interface ScrawlItem {
+  kind: "scrawl";
   id: string;
   date: string;
   index: number;
@@ -28,7 +28,7 @@ export interface NoteItem {
   title: string;
   tags: string[];
   preview: string;
-  /** 昇格元エントリの日時。タイムラインのチップ表示が使う。 */
+  /** 昇格元エントリの日時。Scrawl のチップ表示が使う。 */
   origin?: string;
   /** 読み取り専用にしたノート。一覧が鍵を出す。 */
   readOnly: boolean;
@@ -38,7 +38,7 @@ export interface NoteItem {
   dirty?: boolean;
 }
 
-export type Item = TimelineItem | NoteItem;
+export type Item = ScrawlItem | NoteItem;
 
 export interface ItemGroup {
   label: string;
@@ -55,16 +55,16 @@ function firstLine(text: string): string {
 }
 
 /**
- * 1 日ぶんの行を、新しい順（画面と同じ並び）の TimelineItem にする。
+ * 1 日ぶんの行を、新しい順（画面と同じ並び）の ScrawlItem にする。
  * ファイルは追記なので行は古い順に並ぶ。index には元の行位置を残す。
  * 更新・削除はこの index で行を指すので、並べ替えは index を振った後にやる。
  */
-export function toTimelineItems(date: string, raws: string[]): TimelineItem[] {
+export function toScrawlItems(date: string, raws: string[]): ScrawlItem[] {
   return raws
     .map((raw, index) => {
-      const parsed = parseTimelineEntry(raw);
+      const parsed = parseScrawlEntry(raw);
       return {
-        kind: "timeline" as const,
+        kind: "scrawl" as const,
         id: `${date}#${index}`,
         date,
         index,
@@ -96,7 +96,7 @@ export function toNoteItems(notes: Note[]): NoteItem[] {
 }
 
 /** エントリを origin の書式（`YYYY-MM-DDTHH:MM:SS`）で指す鍵。昇格時と同じ組み立て。 */
-export function originKeyOf(item: TimelineItem): string {
+export function originKeyOf(item: ScrawlItem): string {
   return `${item.date}T${item.time}`;
 }
 
@@ -128,10 +128,7 @@ export function notesByOrigin(items: NoteItem[]): Map<string, NoteItem[]> {
  * 隠れているだけのエントリを「消えた」と読むと、絞り込むたびに無関係な
  * チップが見出しへ湧いてしまう。
  */
-export function orphanNotesByDate(
-  notes: NoteItem[],
-  items: TimelineItem[],
-): Map<string, NoteItem[]> {
+export function orphanNotesByDate(notes: NoteItem[], items: ScrawlItem[]): Map<string, NoteItem[]> {
   const known = new Set(items.map((item) => originKeyOf(item)));
   const map = new Map<string, NoteItem[]>();
   for (const note of notes) {
@@ -164,15 +161,15 @@ function groupBy(items: Item[], labelOf: (item: Item) => string): ItemGroup[] {
 }
 
 /**
- * 新しい順に並んだタイムラインの、1 日ぶんだけを差し替える。
+ * 新しい順に並んだ Scrawl の、1 日ぶんだけを差し替える。
  * 記録のたびに全日を読み直すと保存 1 回に日数ぶんの IPC がかかるので、
  * 書いた日だけ読み直してここで継ぎ合わせる。
  */
 export function replaceDayItems(
-  items: TimelineItem[],
+  items: ScrawlItem[],
   date: string,
-  dayItems: TimelineItem[],
-): TimelineItem[] {
+  dayItems: ScrawlItem[],
+): ScrawlItem[] {
   const kept = items.filter((item) => item.date !== date);
   const at = kept.findIndex((item) => item.date < date);
   const insertAt = at === -1 ? kept.length : at;
@@ -187,7 +184,7 @@ export interface DeleteTarget {
 }
 
 /**
- * まとめて消すときの実行順を決める。delete_timeline_entry は date + index で
+ * まとめて消すときの実行順を決める。delete_scrawl_entry は date + index で
  * 行を指すので、同じ日の中で小さい index から消すと残りの行が繰り上がって
  * 後続の index が別の行を指してしまう。日ごとにまとめ、index の大きい順に
  * 並べることでズレを起こさない。日どうしの順は選択順を尊重する。
@@ -218,18 +215,18 @@ export function neighborOf(items: readonly { id: string }[], id: string): string
   return items[at - 1]?.id ?? items[at + 1]?.id ?? null;
 }
 
-export interface TimelineDay {
+export interface ScrawlDay {
   /** `YYYY-MM-DD`。見出しの文字は表示側で作る。 */
   date: string;
-  items: TimelineItem[];
+  items: ScrawlItem[];
 }
 
 /**
  * 暦日でまとめる。見出しの文字ではなく日付そのもので束ねるのは、
  * 「7月29日」のように見出しが日付から作られる日が複数あるため。
  */
-export function groupTimelineByDay(items: TimelineItem[]): TimelineDay[] {
-  const days: TimelineDay[] = [];
+export function groupScrawlByDay(items: ScrawlItem[]): ScrawlDay[] {
+  const days: ScrawlDay[] = [];
   for (const item of items) {
     const last = days.at(-1);
     if (last?.date === item.date) {
@@ -283,5 +280,5 @@ export function noteRowStamp(item: NoteItem, today: Date): string {
 }
 
 export function itemTitle(item: Item): string {
-  return item.kind === "timeline" ? firstLine(item.text) || untitled() : item.title;
+  return item.kind === "scrawl" ? firstLine(item.text) || untitled() : item.title;
 }

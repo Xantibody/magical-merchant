@@ -51,7 +51,7 @@ const SUBJECTS: &[&str] = &[
     "同期処理",
     "エディタ",
     "検索",
-    "タイムライン",
+    "Scrawl",
     "R2 バケット",
     "Milkdown",
     "Tauri コマンド",
@@ -85,9 +85,9 @@ const fn start_date() -> NaiveDate {
     NaiveDate::from_ymd_opt(2025, 1, 1).expect("literal date")
 }
 
-fn write_timeline(base: &Path, rng: &mut Lcg) {
-    let dir = base.join("data").join("timeline");
-    fs::create_dir_all(&dir).expect("create timeline dir");
+fn write_scrawl(base: &Path, rng: &mut Lcg) {
+    let dir = base.join("data").join("scrawl");
+    fs::create_dir_all(&dir).expect("create scrawl dir");
 
     for day in 0..DAYS {
         let date = start_date() + Duration::days(day);
@@ -100,7 +100,7 @@ fn write_timeline(base: &Path, rng: &mut Lcg) {
             let _ = writeln!(file, "- [{hour:02}:{minute:02}:00] {text} {CONTEXT_JSON}");
         }
         fs::write(dir.join(format!("{}.md", date.format("%Y-%m-%d"))), file)
-            .expect("write timeline day");
+            .expect("write scrawl day");
     }
 }
 
@@ -142,7 +142,7 @@ fn note_filename(index: usize) -> String {
 pub(crate) fn build() -> TempDir {
     let tmp = TempDir::new().expect("create tempdir");
     let mut rng = Lcg(0x2026_0804);
-    write_timeline(tmp.path(), &mut rng);
+    write_scrawl(tmp.path(), &mut rng);
     write_notes(tmp.path(), &mut rng);
     tmp
 }

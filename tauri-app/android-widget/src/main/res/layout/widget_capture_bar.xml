@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 2a — Timeline capture bar (4x1).
-     Left: TIMELINE label over the current time. Then the timeline rail, the
+<!-- 2a — Scrawl capture bar (4x1).
+     Left: SCRAWL label over the current time. Then the scrawl rail, the
      capture placeholder, and a send square. Static RemoteViews: the whole bar
      is one tap target, and TextClock keeps the minute fresh without a
      scheduled update. -->
@@ -26,7 +26,7 @@
             android:layout_height="wrap_content"
             android:letterSpacing="0.08"
             android:maxLines="1"
-            android:text="@string/widget_timeline_label"
+            android:text="@string/widget_scrawl_label"
             android:textColor="@color/widget_muted"
             android:textSize="9.5sp"
             android:textStyle="bold" />

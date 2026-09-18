@@ -15,8 +15,8 @@
 -->
 <resources>
     <!-- The app calls this surface Scrawl; only the route and the code still say
-         timeline, so the resource name stays and the value follows the UI. -->
-    <string name="widget_timeline_label">SCRAWL</string>
+         scrawl, so the resource name stays and the value follows the UI. -->
+    <string name="widget_scrawl_label">SCRAWL</string>
     <string name="widget_capture_placeholder">What\'s on your mind?</string>
     <string name="widget_capture_continue">Keep going…</string>
     <string name="widget_capture_bar_label">Scrawl</string>
@@ -25,18 +25,18 @@
     <string name="quick_capture_send">Send</string>
     <string name="quick_capture_failed">Could not save</string>
 
-    <string name="widget_notes_label">NOTES</string>
-    <string name="widget_notes_new_title">New note</string>
+    <string name="widget_notes_label">NOTE</string>
+    <string name="widget_notes_new_title">New Note</string>
     <string name="widget_notes_new_placeholder">Tap to start writing</string>
-    <string name="widget_notes_new_widget_label">New note</string>
-    <string name="widget_notes_new_description">Opens a new note, ready to write in</string>
-    <string name="widget_notes_list_label">Recent notes</string>
-    <string name="widget_notes_list_description">Opens one of your recent notes</string>
-    <string name="widget_notes_empty">No notes yet</string>
+    <string name="widget_notes_new_widget_label">New Note</string>
+    <string name="widget_notes_new_description">Opens a new Note, ready to write in</string>
+    <string name="widget_notes_list_label">Recent Notes</string>
+    <string name="widget_notes_list_description">Opens one of your recent Notes</string>
+    <string name="widget_notes_empty">No Notes yet</string>
 
     <string name="widget_templates_label">TEMPLATES</string>
     <string name="widget_templates_app">Magical Merchant</string>
     <string name="widget_templates_widget_label">Templates</string>
-    <string name="widget_templates_description">Makes a note from a template</string>
+    <string name="widget_templates_description">Makes a Note from a template</string>
     <string name="widget_templates_empty">Make a template</string>
 </resources>

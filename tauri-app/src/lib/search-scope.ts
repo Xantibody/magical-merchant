@@ -1,7 +1,7 @@
 /**
  * パレット検索の範囲。
  *
- * Timeline でタグを選んで絞った状態と ⌘K の検索は、もともと別々だった。
+ * Scrawl でタグを選んで絞った状態と ⌘K の検索は、もともと別々だった。
  * 絞ったまま探せるように、選んでいるタグをパレットに引き継いで
  * `search_all` の範囲として渡す。
  *
@@ -23,7 +23,7 @@ export interface PaletteScope {
  *
  * 打った文字の中の `#タグ` も範囲に数える。チップにするには行を選ぶ手間が
  * 要るが、打つだけなら手が止まらない。本文の `#タグ` と同じ規則(tags.ts)で
- * 拾うので、Timeline のチップと同じ字に寄る。残った文字だけが本文の検索語。
+ * 拾うので、Scrawl のチップと同じ字に寄る。残った文字だけが本文の検索語。
  */
 export function searchRequest(
   query: string,
@@ -56,15 +56,15 @@ export function scopeLabel(tags: string[]): string {
 /**
  * ⌘K を押した場所で、パレットに引き継ぐ範囲を決める。
  *
- * 引き継ぐのは Timeline にいるときだけ。他の画面ではチップが見えておらず、
+ * 引き継ぐのは Scrawl にいるときだけ。他の画面ではチップが見えておらず、
  * 見えていない絞り込みを黙って掛けると「無いはずがない」検索結果になる。
  */
 export function paletteScopeAt(
   pathname: string,
-  timelineTag: string | null,
+  scrawlTag: string | null,
 ): PaletteScope | undefined {
-  if (pathname === ROUTES.TIMELINE && timelineTag) {
-    return { tags: [timelineTag] };
+  if (pathname === ROUTES.SCRAWL && scrawlTag) {
+    return { tags: [scrawlTag] };
   }
   return undefined;
 }

@@ -1,5 +1,5 @@
 import { t } from "./i18n";
-import type { DeviceContext } from "./parse-timeline";
+import type { DeviceContext } from "./parse-scrawl";
 
 export interface MonthCell {
   date: Date;

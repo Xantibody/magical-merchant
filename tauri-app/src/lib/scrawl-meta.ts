@@ -1,6 +1,6 @@
 import type { IconName } from "../components/Icon";
-import { getBatteryIcon, getNetworkIcon, networkLabel, sourceLabel } from "./parse-timeline";
-import type { DeviceContext } from "./parse-timeline";
+import { getBatteryIcon, getNetworkIcon, networkLabel, sourceLabel } from "./parse-scrawl";
+import type { DeviceContext } from "./parse-scrawl";
 
 /** エントリ本文の下に並べる、記録時の状況ひとつ。 */
 export interface MetaSegment {

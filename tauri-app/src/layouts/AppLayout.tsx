@@ -35,11 +35,11 @@ import { applyStartFullscreen } from "../lib/fullscreen";
 import { loadGlyphs } from "../lib/glyphs";
 
 const TABS: { path: RoutePath; shortcut: ShortcutName }[] = [
-  { path: ROUTES.TIMELINE, shortcut: "timeline" },
+  { path: ROUTES.SCRAWL, shortcut: "scrawl" },
   { path: ROUTES.NOTES, shortcut: "notes" },
   { path: ROUTES.CODEX, shortcut: "codex" },
 ];
-const BOTTOM_TABS: RoutePath[] = [ROUTES.TIMELINE, ROUTES.NOTES, ROUTES.CODEX, ROUTES.SETTINGS];
+const BOTTOM_TABS: RoutePath[] = [ROUTES.SCRAWL, ROUTES.NOTES, ROUTES.CODEX, ROUTES.SETTINGS];
 
 /** system を選んでいる人の画面は、端末の設定が変わった瞬間に切り替わる。 */
 function onSchemeChange(): void {
@@ -91,11 +91,11 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
   const isActive = (path: RoutePath): boolean => location.pathname === path;
 
   /**
-   * Timeline でタグを選んで絞っているなら、その中を探す。全体を探したければ
+   * Scrawl でタグを選んで絞っているなら、その中を探す。全体を探したければ
    * パレットのチップを外せばよく、逆(絞り込みを後から思い出す)は難しい
    */
   const openSearch = (): void => {
-    shell.openPalette(paletteScopeAt(location.pathname, shell.timelineTag()));
+    shell.openPalette(paletteScopeAt(location.pathname, shell.scrawlTag()));
   };
 
   // グリフの登録表は起動時に 1 回と、データが入れ替わった合図(同期の
@@ -138,11 +138,11 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
       run: newNote,
     },
     {
-      id: "go-timeline",
-      label: t().palette.openTimeline,
-      icon: MODE_ICONS[ROUTES.TIMELINE],
-      shortcut: "timeline",
-      run: go(ROUTES.TIMELINE),
+      id: "go-scrawl",
+      label: t().palette.openScrawl,
+      icon: MODE_ICONS[ROUTES.SCRAWL],
+      shortcut: "scrawl",
+      run: go(ROUTES.SCRAWL),
     },
     {
       id: "go-notes",
@@ -345,7 +345,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
         </nav>
 
         <span class="header-title">
-          {MODE_LABELS[location.pathname as RoutePath] ?? MODE_LABELS[ROUTES.TIMELINE]}
+          {MODE_LABELS[location.pathname as RoutePath] ?? MODE_LABELS[ROUTES.SCRAWL]}
         </span>
 
         <button type="button" class="search-field" onClick={openSearch}>
@@ -365,8 +365,8 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
           >
             <Icon name="magnifying-glass" size={18} />
           </button>
-          {/* ポップオーバー本体は Timeline が持つ。記録のある日を知っているのは向こう */}
-          <Show when={isActive(ROUTES.TIMELINE)}>
+          {/* ポップオーバー本体は Scrawl が持つ。記録のある日を知っているのは向こう */}
+          <Show when={isActive(ROUTES.SCRAWL)}>
             <button
               type="button"
               class="icon-button header-action"
@@ -446,11 +446,11 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
           onSelectHit={(hit) => {
             shell.closePalette();
             // モードの切り替えだけでは「見つけたのに探し直す」ことになる。
-            // ノートはその 1 件を、タイムラインはその日を URL で指す
-            if (hit.kind !== "timeline" && hit.filename) {
+            // ノートはその 1 件を、Scrawl はその日を URL で指す
+            if (hit.kind !== "scrawl" && hit.filename) {
               navigate(noteRoute(hit.kind, hit.filename));
             } else {
-              navigate(`${ROUTES.TIMELINE}?day=${hit.date}`);
+              navigate(`${ROUTES.SCRAWL}?day=${hit.date}`);
             }
           }}
           onClose={() => shell.closePalette()}

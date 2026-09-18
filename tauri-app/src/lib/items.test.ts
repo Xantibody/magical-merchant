@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
-  toTimelineItems,
+  toScrawlItems,
   toNoteItems,
-  groupTimelineByDay,
+  groupScrawlByDay,
   groupNotes,
   itemTitle,
   noteCreatedLabel,
@@ -29,31 +29,31 @@ function note(overrides: Partial<Note> = {}): Note {
   };
 }
 
-describe("toTimelineItems", () => {
+describe("toScrawlItems", () => {
   it("addresses each entry by date and position", () => {
-    const items = toTimelineItems("2026-08-04", ["- [09:00:00] one", "- [10:00:00] two"]);
+    const items = toScrawlItems("2026-08-04", ["- [09:00:00] one", "- [10:00:00] two"]);
     expect(items.map((i) => i.id)).toStrictEqual(["2026-08-04#1", "2026-08-04#0"]);
   });
 
   it("puts the newest entry of the day first", () => {
-    const items = toTimelineItems("2026-08-04", ["- [09:00:00] one", "- [10:00:00] two"]);
+    const items = toScrawlItems("2026-08-04", ["- [09:00:00] one", "- [10:00:00] two"]);
     expect(items.map((i) => i.text)).toStrictEqual(["two", "one"]);
   });
 
   it("keeps the file position as the index so an edit reaches the right line", () => {
-    const items = toTimelineItems("2026-08-04", ["- [09:00:00] one", "- [10:00:00] two"]);
+    const items = toScrawlItems("2026-08-04", ["- [09:00:00] one", "- [10:00:00] two"]);
     expect(items.map((i) => i.index)).toStrictEqual([1, 0]);
   });
 
   it("splits the recorded context out of the raw line", () => {
-    const items = toTimelineItems("2026-08-04", ['- [09:00:00] hi {"battery":80}']);
+    const items = toScrawlItems("2026-08-04", ['- [09:00:00] hi {"battery":80}']);
     expect(items[0].text).toBe("hi");
     expect(items[0].context?.battery).toBe(80);
   });
 
   it("keeps the raw line so an edit can be written back", () => {
     const raw = "- [09:00:00] hi";
-    expect(toTimelineItems("2026-08-04", [raw])[0].raw).toBe(raw);
+    expect(toScrawlItems("2026-08-04", [raw])[0].raw).toBe(raw);
   });
 });
 
@@ -67,7 +67,7 @@ describe("toNoteItems", () => {
   });
 
   it("labels a note with no body", () => {
-    expect(toNoteItems([note({ preview: "   " })])[0].title).toBe("(空のメモ)");
+    expect(toNoteItems([note({ preview: "   " })])[0].title).toBe("(空の Note)");
   });
 
   it("空行として保存された <br /> 行はタイトルに拾わない", () => {
@@ -76,8 +76,8 @@ describe("toNoteItems", () => {
     expect(toNoteItems([note({ preview: "<br />\n見出し" })])[0].title).toBe("見出し");
   });
 
-  it("空行 (<br />) しかないノートは空のメモ扱い", () => {
-    expect(toNoteItems([note({ preview: "<br />\n<br>" })])[0].title).toBe("(空のメモ)");
+  it("空行 (<br />) しかないノートは空の Note 扱い", () => {
+    expect(toNoteItems([note({ preview: "<br />\n<br>" })])[0].title).toBe("(空の Note)");
   });
 
   it("splits the timestamp into a date and a time", () => {
@@ -129,7 +129,7 @@ describe("noteRowStamp", () => {
 
 describe("originKeyOf", () => {
   it("points at an entry with the same string promote writes into origin", () => {
-    const [item] = toTimelineItems("2026-08-03", ["- [08:30:00] 朝の記録"]);
+    const [item] = toScrawlItems("2026-08-03", ["- [08:30:00] 朝の記録"]);
     expect(originKeyOf(item)).toBe("2026-08-03T08:30:00");
   });
 });
@@ -151,7 +151,7 @@ describe("notesByOrigin", () => {
   });
 
   it("keys notes so an entry of the same day but another time does not match", () => {
-    const [item] = toTimelineItems("2026-08-03", ["- [09:00:00] 別の記録"]);
+    const [item] = toScrawlItems("2026-08-03", ["- [09:00:00] 別の記録"]);
     const map = notesByOrigin(toNoteItems([note({ origin: "2026-08-03T08:30:00" })]));
     expect(map.get(originKeyOf(item))).toBeUndefined();
   });
@@ -162,14 +162,14 @@ describe("orphanNotesByDate", () => {
     expect(orphanNotesByDate(toNoteItems([note()]), []).size).toBe(0);
   });
 
-  it("leaves out notes whose origin entry is still on the timeline", () => {
-    const items = toTimelineItems("2026-08-03", ["- [08:30:00] 朝の記録"]);
+  it("leaves out notes whose origin entry is still on the scrawl", () => {
+    const items = toScrawlItems("2026-08-03", ["- [08:30:00] 朝の記録"]);
     const notes = toNoteItems([note({ origin: "2026-08-03T08:30:00" })]);
     expect(orphanNotesByDate(notes, items).size).toBe(0);
   });
 
   it("groups notes whose origin entry is gone under the day of that origin", () => {
-    const items = toTimelineItems("2026-08-03", ["- [08:30:00] 朝の記録"]);
+    const items = toScrawlItems("2026-08-03", ["- [08:30:00] 朝の記録"]);
     const notes = toNoteItems([
       note({ filename: "a.md", origin: "2026-08-03T21:00:00" }),
       note({ filename: "b.md", origin: "2026-08-01T07:00:00" }),
@@ -180,19 +180,19 @@ describe("orphanNotesByDate", () => {
   });
 });
 
-describe("groupTimelineByDay", () => {
+describe("groupScrawlByDay", () => {
   it("groups consecutive entries from the same day", () => {
     const items = [
-      ...toTimelineItems("2026-08-04", ["- [09:00:00] a", "- [10:00:00] b"]),
-      ...toTimelineItems("2026-08-03", ["- [11:00:00] c"]),
+      ...toScrawlItems("2026-08-04", ["- [09:00:00] a", "- [10:00:00] b"]),
+      ...toScrawlItems("2026-08-03", ["- [11:00:00] c"]),
     ];
-    const days = groupTimelineByDay(items);
+    const days = groupScrawlByDay(items);
     expect(days.map((d) => d.date)).toStrictEqual(["2026-08-04", "2026-08-03"]);
     expect(days[0].items).toHaveLength(2);
   });
 
-  it("returns nothing for an empty timeline", () => {
-    expect(groupTimelineByDay([])).toStrictEqual([]);
+  it("returns nothing for an empty scrawl", () => {
+    expect(groupScrawlByDay([])).toStrictEqual([]);
   });
 });
 
@@ -208,14 +208,14 @@ describe("groupNotes", () => {
 });
 
 describe("itemTitle", () => {
-  it("uses the first line of a timeline entry", () => {
-    const [item] = toTimelineItems("2026-08-04", ["- [09:00:00] one\ntwo"]);
+  it("uses the first line of a scrawl entry", () => {
+    const [item] = toScrawlItems("2026-08-04", ["- [09:00:00] one\ntwo"]);
     expect(itemTitle(item)).toBe("one");
   });
 
   it("labels an entry with no text", () => {
-    const [item] = toTimelineItems("2026-08-04", ["- [09:00:00] "]);
-    expect(itemTitle(item)).toBe("(空のメモ)");
+    const [item] = toScrawlItems("2026-08-04", ["- [09:00:00] "]);
+    expect(itemTitle(item)).toBe("(空の Note)");
   });
 });
 
@@ -231,8 +231,8 @@ describe("noteCreatedLabel", () => {
   });
 });
 
-function day(date: string, texts: string[]): ReturnType<typeof toTimelineItems> {
-  return toTimelineItems(
+function day(date: string, texts: string[]): ReturnType<typeof toScrawlItems> {
+  return toScrawlItems(
     date,
     texts.map((t, i) => `- [${String(i + 9).padStart(2, "0")}:00:00] ${t}`),
   );
