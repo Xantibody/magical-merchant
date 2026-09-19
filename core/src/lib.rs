@@ -31,7 +31,7 @@ pub use scrawl::migrate::{ScrawlDirMigration, migrate_scrawl_dir};
 pub use scrawl::{
     delete_scrawl_entry, list_scrawl_dates, read_scrawl, save_scrawl_entry, update_scrawl_entry,
 };
-pub use search::{HitKind, SearchHit, find_backlinks, search_all};
+pub use search::{HitKind, SearchHit, browse_all, find_backlinks, search_all};
 pub use template::{
     CreatedNote, TemplateDetail, TemplateSummary, VarLocale, create_note_from_template,
     delete_template, list_templates, read_template, save_template,

@@ -207,6 +207,11 @@ interface CommandMap {
    * そのタグの付いた記録を全部返す。
    */
   search_all: { args: { query: string; tags: string[] }; result: SearchHit[] };
+  /**
+   * 全記録。文字列で絞らないので引数は無く、件数も切られない — チップに出す
+   * 件数はここから数える。`match_start` / `match_len` は常に `null`。
+   */
+  browse_all: { args: void; result: SearchHit[] };
   /** このノートを `[[ID]]` で指している記録。開くたびに走査で導出される。 */
   find_backlinks: { args: { filename: string }; result: SearchHit[] };
   /**
