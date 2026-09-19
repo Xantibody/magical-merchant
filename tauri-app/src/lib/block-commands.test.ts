@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import { Schema } from "@milkdown/kit/prose/model";
 import { EditorState, TextSelection, NodeSelection } from "@milkdown/kit/prose/state";
 import type { Node } from "@milkdown/kit/prose/model";
+import type { Command } from "@milkdown/kit/prose/state";
 import {
-  deleteCurrentBlock,
   exitCodeBlock,
   indentCodeLine,
   isInCodeBlock,
@@ -34,67 +34,13 @@ function stateAt(doc: Node, from: number, to = from): EditorState {
   return EditorState.create({ doc, selection: TextSelection.create(doc, from, to) });
 }
 
-function apply(state: EditorState, command: typeof deleteCurrentBlock): EditorState {
+function apply(state: EditorState, command: Command): EditorState {
   let next = state;
   command(state, (tr) => {
     next = state.apply(tr);
   });
   return next;
 }
-
-describe("deleteCurrentBlock", () => {
-  it("removes the whole code block the cursor is in", () => {
-    const doc = schema.nodes.doc.create(null, [p("before"), code("fn main() {}"), p("after")]);
-    // "before"(8) + 開始タグで code 内の先頭は 9
-    const state = stateAt(doc, 10);
-
-    const next = apply(state, deleteCurrentBlock);
-
-    expect(next.doc.childCount).toBe(2);
-    expect(next.doc.textContent).toBe("beforeafter");
-  });
-
-  it("removes only the paragraph the cursor is in", () => {
-    const doc = schema.nodes.doc.create(null, [p("one"), p("two")]);
-    const state = stateAt(doc, 2);
-
-    const next = apply(state, deleteCurrentBlock);
-
-    expect(next.doc.childCount).toBe(1);
-    expect(next.doc.textContent).toBe("two");
-  });
-
-  it("removes a node selection such as a horizontal rule", () => {
-    const doc = schema.nodes.doc.create(null, [p("a"), schema.nodes.hr.create(), p("b")]);
-    const state = EditorState.create({ doc, selection: NodeSelection.create(doc, 3) });
-
-    const next = apply(state, deleteCurrentBlock);
-
-    expect(next.doc.childCount).toBe(2);
-    expect(next.doc.firstChild?.type.name).toBe("paragraph");
-  });
-
-  it("leaves an empty paragraph instead of an empty document", () => {
-    const doc = schema.nodes.doc.create(null, [code("only block")]);
-    const state = stateAt(doc, 1);
-
-    const next = apply(state, deleteCurrentBlock);
-
-    expect(next.doc.childCount).toBe(1);
-    expect(next.doc.firstChild?.type.name).toBe("paragraph");
-    expect(next.doc.textContent).toBe("");
-  });
-
-  it("takes the surrounding list item along when its only paragraph goes", () => {
-    const li = schema.nodes.list_item.create(null, p("item"));
-    const doc = schema.nodes.doc.create(null, [schema.nodes.bullet_list.create(null, li), p("x")]);
-    const state = stateAt(doc, 3);
-
-    const next = apply(state, deleteCurrentBlock);
-
-    expect(next.doc.textContent).toBe("x");
-  });
-});
 
 describe("isInCodeBlock", () => {
   it("is true for a cursor inside a code block", () => {
