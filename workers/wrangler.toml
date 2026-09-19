@@ -13,7 +13,9 @@ bucket_name = "magical-merchant-data"
 # sub は https://<worker>/auth/google でログインしたあとの JWT の payload、
 # または Google Cloud Console のユーザー一覧で確認できる。
 #
-# 行ごと無い (下がコメントのまま) なら誰でも通る。置いて空にすると誰も
-# 通らない — 締めるつもりの設定ミスでバケットが全開になるより、同期が
-# 403 で止まるほうが気づける。
-# ALLOWED_SUBS = "123456789012345678901"
+# AIDEV-NOTE: ALLOWED_SUBS は secret に置く。このリポジトリは public で、
+# ここに書くと Google アカウント ID が公開されたまま消せない
+# (wrangler secret put ALLOWED_SUBS — 同名を両方に置くことはできない)
+#
+# secret も無いなら誰でも通る。置いて空にすると誰も通らない — 締めるつもり
+# の設定ミスでバケットが全開になるより、同期が 403 で止まるほうが気づける。
