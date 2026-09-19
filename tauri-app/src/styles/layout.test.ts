@@ -144,4 +144,15 @@ describe("the hint layer", () => {
     expect(badge(action)).toBe('"⌘N"');
     expect(action.childElementCount).toBe(0);
   });
+
+  // 部品ライブラリの集まり(… メニューの行)も data-key を使うが、入っているのは
+  // 内部の識別子。役割で外さないと、⌘ を押した瞬間に行の肩へ `item-3` が並ぶ
+  it("draws no badge for the identifier a menu collection writes", () => {
+    document.body.innerHTML = `<div role="menuitem" data-key="item-3">削除</div>`;
+    const row = element("[data-key]");
+
+    document.documentElement.dataset.hints = "";
+
+    expect(badge(row)).toBe("none");
+  });
 });

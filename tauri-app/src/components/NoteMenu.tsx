@@ -1,5 +1,6 @@
-import { createSignal, Show } from "solid-js";
+import { createEffect, createSignal, Show } from "solid-js";
 import type { JSX } from "solid-js";
+import { DropdownMenu } from "@kobalte/core/dropdown-menu";
 import Icon from "./Icon";
 import type { NoteKind } from "../lib/commands";
 import { t } from "../lib/i18n";
@@ -34,22 +35,24 @@ function Row(props: {
   shortcut?: ShortcutName;
   danger?: boolean;
   disabled?: boolean;
+  /** 押しても閉じない行。確認を同じ幅に出すときだけ false にする。 */
+  keepOpen?: boolean;
   onClick: () => void;
 }): JSX.Element {
   return (
-    <button
-      type="button"
+    <DropdownMenu.Item
       class="note-menu-row"
       classList={{ "note-menu-row--danger": props.danger }}
       disabled={props.disabled}
-      onClick={() => props.onClick()}
+      closeOnSelect={!props.keepOpen}
+      onSelect={() => props.onClick()}
     >
       {props.icon}
       <span class="note-menu-label">{props.label}</span>
       <Show when={props.shortcut}>
         {(name) => <span class="note-menu-key">{shortcutLabel(name())}</span>}
       </Show>
-    </button>
+    </DropdownMenu.Item>
   );
 }
 
@@ -65,24 +68,36 @@ function Row(props: {
  */
 export default function NoteMenu(props: NoteMenuProps): JSX.Element {
   const [confirming, setConfirming] = createSignal(false);
+
+  // 確認は開いているあいだだけのもの。閉じる道は ⌘. ・外側・行の実行と
+  // いくつもあるので、開閉そのものを見て畳む
+  createEffect(() => {
+    if (!props.open) {
+      setConfirming(false);
+    }
+  });
+
   return (
-    <>
-      {/* 開く口はこの部品が持つ。「…」と中身を別の場所に置くと、外側を
-          押して閉じる判断が両方の DOM を知っている誰かの仕事になる */}
-      <button
-        type="button"
+    <DropdownMenu
+      open={props.open}
+      onOpenChange={(open) => props.onOpenChange(open)}
+      // 書いている手を止める幕は張らない。背後は読めたままで、スクロールも生きる
+      modal={false}
+      placement="bottom-end"
+      gutter={6}
+    >
+      {/* ノート単位の操作はここ 1 つに畳む。どれも滅多に押さない */}
+      <DropdownMenu.Trigger
         class="icon-button note-menu-button"
         title={t().notes.actions}
         aria-label={t().notes.actions}
-        aria-expanded={props.open}
         data-key={shortcutLabel("noteActions")}
-        onClick={() => props.onOpenChange(!props.open)}
       >
         <Icon name="dots-three" size={17} />
-      </button>
+      </DropdownMenu.Trigger>
 
-      <Show when={props.open}>
-        <div class="popover note-menu" role="menu" aria-label={t().notes.actions}>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content class="popover note-menu">
           <Show
             when={!confirming()}
             fallback={
@@ -122,6 +137,7 @@ export default function NoteMenu(props: NoteMenuProps): JSX.Element {
               <Row
                 icon={<Icon name="book" size={15} />}
                 label={t().codex.promote}
+                keepOpen
                 onClick={() => setConfirming(true)}
               />
             </Show>
@@ -152,7 +168,7 @@ export default function NoteMenu(props: NoteMenuProps): JSX.Element {
               shortcut="noteInfo"
               onClick={() => props.onInfo()}
             />
-            <div class="note-menu-divider" />
+            <DropdownMenu.Separator class="note-menu-divider" />
             <Row
               icon={<Icon name="trash" size={15} />}
               label={t().common.delete}
@@ -160,8 +176,8 @@ export default function NoteMenu(props: NoteMenuProps): JSX.Element {
               onClick={() => props.onDelete()}
             />
           </Show>
-        </div>
-      </Show>
-    </>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu>
   );
 }

@@ -95,6 +95,14 @@ body {
   box-shadow: var(--shadow-3);
 }
 
+/* 浮かぶものが入ってくる動き。transform と opacity だけを動かす */
+@keyframes mm-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
 /* 長押しに何かを割り当てた要素(`lib/long-press.ts`)。押しっぱなしは
    WebView から見るとテキスト選択の始まりなので、切らないと選択ハンドルと
    コールアウトが割り込む。ハンドラ束の onContextMenu と対で使う */
@@ -133,7 +141,9 @@ body {
   position: relative;
 }
 
-html[data-hints] [data-key]::after {
+/* 部品ライブラリの集まり(メニューの行など)も data-key を使うが、入っているのは
+   内部の識別子。札を描くのはこちらが書いた data-key だけなので役割で外す */
+html[data-hints] [data-key]:not([role="menuitem"])::after {
   content: attr(data-key);
   position: absolute;
   top: -8px;

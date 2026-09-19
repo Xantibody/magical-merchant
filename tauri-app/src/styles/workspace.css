@@ -383,17 +383,26 @@
   color: var(--app-text);
 }
 
-/* 「…」の真下に右揃えで吊るす */
+/* 「…」の真下に右揃えで吊るす。測るのは部品なので、ここは姿だけ */
 .note-menu {
-  position: absolute;
-  top: 60px;
-  right: 28px;
-  z-index: 30;
   width: 220px;
   padding: 6px;
   display: flex;
   flex-direction: column;
   gap: 2px;
+  box-shadow: 0 12px 24px -8px rgb(20 20 25 / 40%);
+}
+
+/* 入るときだけ動かす。開いている印に掛けておかないと、閉じる側は
+   「まだ動いている」と見なして畳むのを待ち続ける(部品の presence) */
+.note-menu[data-expanded] {
+  animation: mm-rise 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .note-menu[data-expanded] {
+    animation: none;
+  }
 }
 
 .note-menu-row {
@@ -409,13 +418,16 @@
   font-size: 13px;
   text-align: start;
   cursor: pointer;
+  user-select: none;
 }
 
-.note-menu-row:hover:not(:disabled) {
+/* 指が乗っている行とキーで辿っている行は同じもの。部品がどちらも
+   data-highlighted で言うので、:hover と :focus を別に書かない */
+.note-menu-row[data-highlighted] {
   background: var(--app-surface-2);
 }
 
-.note-menu-row:disabled {
+.note-menu-row[data-disabled] {
   color: var(--app-text-hint);
   cursor: default;
 }
@@ -442,6 +454,7 @@
 .note-menu-divider {
   height: 1px;
   margin: 4px 0;
+  border: none;
   background: var(--app-hairline);
 }
 
@@ -709,11 +722,6 @@
     /* 指で押せる高さを確保する。詰めると本文との境目も分かりにくい */
     min-height: 44px;
     font-size: 19px;
-  }
-
-  .note-menu {
-    top: 44px;
-    right: 20px;
   }
 
   /* 指で押せる高さ。字も一覧の行と同じまで上げる */

@@ -288,7 +288,8 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
     });
 
     // ポップオーバーの外側をクリックしたら閉じる。ルート要素の onClick では
-    // ポータルや overlay の外に出たクリックを取りこぼす
+    // ポータルや overlay の外に出たクリックを取りこぼす。
+    // AIDEV-NOTE: 「…」は自分で閉じるが .note-menu-button は要る — ここが先に閉じると開いた直後のメニューが畳まれる
     const onPointerDown = (e: MouseEvent): void => {
       const target = e.target instanceof Element ? e.target : null;
       if (
