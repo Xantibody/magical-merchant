@@ -21,13 +21,10 @@ import NoteMetaPopover from "../components/NoteMetaPopover";
 import TemplatePicker from "../components/TemplatePicker";
 import VersionSlider from "../components/VersionSlider";
 import VersionSpine from "../components/VersionSpine";
-import {
-  isBrokenNoteSave,
-  isMissingNoteSave,
-  isNotTextNoteSave,
-  isStaleSave,
-  typedInvoke,
-} from "../lib/commands";
+import { isStaleSave, typedInvoke } from "../lib/commands";
+import { refusedForGood } from "../lib/save-refusal";
+import { createNoteSession } from "../lib/note-session";
+import type { SaveStatus } from "../lib/note-session";
 import { getDeviceSignals } from "../lib/client-context";
 import { createDebouncedAccessor } from "../lib/debounce";
 import { markedBody } from "../lib/diff-marks";
@@ -53,15 +50,7 @@ import { createLongPress } from "../lib/long-press";
 import { isTypingTarget, matchesShortcut, shortcutLabel } from "../lib/shortcuts";
 import { daysSince, spanSince, withDeltas } from "../lib/versions";
 import type { VersionRow } from "../lib/versions";
-import {
-  beginEditSession,
-  readBackup,
-  recordSaved,
-  shouldSave,
-  tryWriteBackup,
-  writeBackup,
-} from "../lib/edit-backup";
-import type { EditSession } from "../lib/edit-backup";
+import { readBackup, writeBackup } from "../lib/edit-backup";
 import type { NoteLinkTarget } from "../lib/note-link-plugin";
 import type { NoteKind, SearchHit, Template, VersionStatus } from "../lib/commands";
 import { noteRoute } from "../lib/note-route";
@@ -76,7 +65,6 @@ const MarkdownToolbar = lazy(() => import("../components/MarkdownToolbar"));
 const MindmapView = lazy(() => import("../components/MindmapView"));
 
 const UNDO_MS = 5000;
-const SAVE_DEBOUNCE_MS = 1000;
 /** 「保存しました」を出しておく時間。過ぎたら保存時刻の表示に落ちる。 */
 const SAVED_MS = 2000;
 /** 並べたマップが打鍵に追いつくまでの間。保存(1 秒)より先に図が追いつく。 */
@@ -137,78 +125,6 @@ function versionStatusLabel(status: VersionStatus): string {
     : t().codex.versionN(status.count);
 }
 
-/**
- * 読み直しでは直らない拒否か。壊れた記録・消えたノート・文字として読めない
- * ファイルの 3 つ。どれも次の打鍵に望みが無いので、打った字はその場で退避する。
- * 判断を 1 か所に置くのは、印が増えたときに退避の経路から漏れると、打った字が
- * ディスクにも控えにも残らないまま黙って消えるから。
- */
-const refusedForGood = (error: unknown): boolean =>
-  isBrokenNoteSave(error) || isMissingNoteSave(error) || isNotTextNoteSave(error);
-
-/**
- * 断られた保存のあと、画面に何が出ているか。言い分はこれで決まる。
- *
- * - `draft`: 断られたノートが選ばれていて、本文は打ったぶんのまま。
- *   「画面にあるうちに写して」が届く唯一の場合
- * - `reloaded`: そのノートは選ばれているが、本文は読み直しで入れ替わった
- *   (譲ったぶんでも、A → B → A と戻って着いたぶんでも同じ)。打った字は
- *   もう画面に無いので、控えから取り出す話しかできない
- * - `away`: 画面にあるのは別のノート。画面の本文を指す案内は届かない
- */
-type RefusedScreen = "draft" | "reloaded" | "away";
-
-/**
- * 断られた保存の言い分。`screen` は「断られたノートの打鍵がいま画面に出ているか」。
- * 出ていないなら画面の本文を指す案内は届かない — 画面にあるのは別のノートで、
- * 写す相手がそこに無い。名乗ってから、控えの在り処と取り出せるかだけを言う。
- * 消えたノートと、文字として読めないノートの控えは、控えとしては残るが、いま
- * 取り出す道が無い。開き直しても `read_note` が断られるので本文は載らず、
- * 「戻す」もそこで引き返す。
- * Stale だけはノートが書ける状態で残るので、開き直せば「戻す」で取り出せる —
- * ただし読み直しは選んでいるノートにしか走らないので、画面に無いぶんは
- * 「開き直してから」を先に言う。読み直しそのものが失敗した(`draft`)ときは、
- * 打った本文がまだ画面に残っているので、それを指して写してもらう。
- * AIDEV-NOTE: 孤児の控え(消えた・読めないノートのぶん)を開く一覧が無いので、取り出せないことを文言で正直に言うに留める(道は別 PR)
- */
-function refusalToast(
-  error: unknown,
-  kept: boolean,
-  item: NoteItem,
-  screen: RefusedScreen,
-): string {
-  const words = t().notes;
-  // 打鍵が画面に残っているときだけ、画面の本文を指す案内が届く
-  const onScreen = screen === "draft";
-  if (!kept) {
-    if (onScreen) {
-      return words.saveNotKept;
-    }
-    // 読み直しが載ったぶんは、画面の本文もディスクのぶんに入れ替わっている。
-    // 控えも無いので、打った字はもうどこにも無い
-    if (screen === "reloaded" && isStaleSave(error)) {
-      return words.staleNotKept;
-    }
-    return words.saveNotKeptAway(item.title);
-  }
-  if (isStaleSave(error)) {
-    if (screen === "reloaded") {
-      return words.editedElsewhere;
-    }
-    return onScreen ? words.staleNotReloaded : words.editedElsewhereAway(item.title);
-  }
-  if (isMissingNoteSave(error)) {
-    return onScreen ? words.missingNote : words.missingNoteAway(item.title);
-  }
-  // 文字として読めないファイルは、記録が壊れているのとは手当てが違う。
-  // 直すのは frontmatter ではなくファイルそのもので、開き直しても
-  // `read_note` が同じ理由で断られるので「戻す」で取り出す道も無い
-  if (isNotTextNoteSave(error)) {
-    return onScreen ? words.notTextNote : words.notTextNoteAway(item.title);
-  }
-  return onScreen ? words.brokenMeta : words.brokenMetaAway(item.title);
-}
-
 /** このノートを指している記録。畳んだ 1 行以上の場所は取らない。 */
 function Backlinks(props: { hits: SearchHit[]; onOpen: (hit: SearchHit) => void }): JSX.Element {
   return (
@@ -260,7 +176,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
 
   const [selectedId, setSelectedId] = createSignal<string | null>(null);
   const [detailOpen, setDetailOpen] = createSignal(false);
-  const [saveStatus, setSaveStatus] = createSignal<"idle" | "saving" | "saved" | "savedAt">("idle");
+  const [saveStatus, setSaveStatus] = createSignal<SaveStatus>("idle");
   /** 最後に保存できた時刻。「21:40 に保存」の数字。 */
   const [savedAt, setSavedAt] = createSignal("");
   const [hidden, setHidden] = createSignal<string[]>([]);
@@ -306,32 +222,21 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
 
   let detailBodyRef: HTMLDivElement | undefined;
   let listScrollRef: HTMLDivElement | undefined;
-  /** いま開いている編集セッション。保存のスキップ判断とバックアップを持つ。 */
-  let session = beginEditSession("");
-  /** そのセッションがどのノートのものか。null なら開いていない。 */
-  let sessionFile: string | null = null;
-  /**
-   * ノートごとの、最後に読んだ(または書いた)本文の指紋。保存に添えると、
-   * CLI や MCP がそのあいだに書き換えていれば断られる。ノート単位で持つ
-   * のは、保存が遅れて届く頃には別のノートが選ばれていることがあるから。
-   */
-  const revisions = new Map<string, string>();
-  /**
-   * 走っている自動保存のタイマー。「まだディスクに無い本文がある」の合図で、
-   * 読み直しを抑える判断がこれを読む。他の編集セッションの状態と一緒に置く。
-   */
-  let saveTimer: ReturnType<typeof setTimeout> | undefined;
   /** 「保存しました」を保存時刻の表示に落とすタイマー。 */
   let savedTimer: ReturnType<typeof setTimeout> | undefined;
 
   /**
-   * いま人が本文を書いている最中か。エディタは開きっぱなしなので、
-   * 「編集モードに入っているか」では区別が付かない。まだディスクに無い
-   * 打鍵があるか、本文にカーソルが入っているかで見る — どちらの場合も
-   * 本文を差し替えるとカーソル・選択・IME ごと壊す(editor skill)。
+   * 保存できた合図。緑の「保存しました」を出しっぱなしにすると、書いている
+   * あいだじゅう視界の端が光る。2 秒だけ出して、あとは時刻に落ち着かせる。
    */
-  const isTyping = (): boolean =>
-    Boolean(saveTimer) || Boolean(detailBodyRef?.contains(document.activeElement));
+  const markSaved = (): void => {
+    clearTimeout(savedTimer);
+    batch(() => {
+      setSavedAt(formatClock(new Date()));
+      setSaveStatus("saved");
+    });
+    savedTimer = setTimeout(() => setSaveStatus("savedAt"), SAVED_MS);
+  };
 
   /**
    * 一覧と詳細が並んでいる幅か。狭い端末では詳細を開くまで本文は画面に無いので、
@@ -411,19 +316,6 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
    * 保存・バックアップ・マインドマップが扱うのは常に結合した全文。
    */
   const fullBody = (): string => joinTitle(noteTitle(), noteBody());
-
-  /**
-   * 書き換える直前の本文でセッションを開く。開いている間は開き直さない —
-   * タイトルを直してから本文を触っても、戻る先は「触る前」のまま。
-   */
-  const ensureSession = (): void => {
-    const item = selected();
-    if (!item || sessionFile === item.filename) {
-      return;
-    }
-    session = beginEditSession(fullBody());
-    sessionFile = item.filename;
-  };
 
   /**
    * `[[ID]]` → タイトルの解決表。プレビューが毎回これを引いて描く。
@@ -515,43 +407,40 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   };
 
   /**
-   * ディスクから読み直して画面に出す。選択の切り替えと、外からの書き換えの後に。
-   * `force` は「打った字はもう退避してあるので、書いている最中でも譲る」の合図。
-   *
-   * 返るのは「読み直しを実際に画面へ載せたか」。読めなかったぶんと、届く前に
-   * 選択が移って見送ったぶんは `false` — 呼ぶ側が「読み直しました」と言う前に
-   * 確かめられるように、載せたかどうかはここからしか分からない。
+   * ディスクの本文と画面のあいだの調停(`lib/note-session.ts`)。読み・指紋・
+   * 自動保存・断られたときの退避は全部ここが決める。画面は見せ方だけを持つ。
    */
-  const loadNote = async (item: NoteItem, force = false): Promise<boolean> => {
-    try {
-      const content = await readNoteContent(
-        () => typedInvoke("read_note", { filename: item.filename }),
-        () => typedInvoke("read_note_meta", { filename: item.filename }),
-      );
-      // 一覧を素早くたどると、遅い読みが速い読みを追い越して届く。
-      // いま選ばれているノートへの答えだけを画面に出す。読み始める前に
-      // 確かめた「編集中でも保存待ちでもない」も、届いた時点でもう一度見る —
-      // 応答を待つあいだにタップして書き始められる。
-      // revision まで見送るのは、画面に出していない版で保存に行くと、
-      // 読んでいない相手の本文の上に書けてしまうから
-      if (selected()?.id !== item.id || (!force && isTyping())) {
-        return false;
+  const session = createNoteSession({
+    selected: () => selected(),
+    loaded: () => loaded(),
+    body: () => fullBody(),
+    bodyEpoch,
+    bodyHasFocus: () => Boolean(detailBodyRef?.contains(document.activeElement)),
+    store: localStorage,
+    read: (filename) =>
+      readNoteContent(
+        () => typedInvoke("read_note", { filename }),
+        () => typedInvoke("read_note_meta", { filename }),
+      ),
+    write: async (filename, body, revision) =>
+      typedInvoke("update_draft", {
+        filename,
+        body,
+        client: await getDeviceSignals(),
+        revision,
+      }),
+    showBody,
+    refreshList: () => refetchNotes(),
+    setStatus: setSaveStatus,
+    onSaved: () => {
+      markSaved();
+      // 「版 N から +X B」は最新の版と下書きの比較。書くたびに答えが変わる
+      if (kind() === "codex") {
+        void refetchVersionStatus();
       }
-      revisions.set(item.filename, content.revision);
-      // 本文とモードは対で出す。バラすと一瞬だけ違うモードで描かれる
-      const titled = splitTitle(content.body);
-      showBody(item.id, titled.title, titled.body, content.view);
-      return true;
-    } catch {
-      // 読めなかったことを本文の入れ替えにしない。空のエディタを立てると
-      // 「空のノート」に見え、そこへ打った数文字がノート全体になる。
-      // `loadedId` を進めないので、本文も題も書ける状態にならない
-      if (selected()?.id === item.id && (force || !isTyping())) {
-        shell.showToast(t().notes.loadFailed);
-      }
-      return false;
-    }
-  };
+    },
+    showToast: (text) => shell.showToast(text),
+  });
 
   // ---- 選択中ノートの本文と表示モードを読む ----
   // 追うのは「どのノートを見ているか」だけ。item そのものを追うと、一覧を
@@ -561,7 +450,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       const item = selected();
       // 別のノートに移ったら編集セッションは畳む。戻る先が前のノートの
       // 本文のままだと、次の保存が他人のバックアップを潰す
-      sessionFile = null;
+      session.drop();
       // 履歴は開いていたノートの持ち物
       setHistoryOpen(false);
       setSelectedVersionId(null);
@@ -575,7 +464,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       setLoadedId(null);
       // 別のノートを開いたのは人の意思。待っている保存は `settleEdit` が
       // 出しきったあとなので、カーソルが本文に残っていても譲ってよい
-      void loadNote(item, true);
+      void session.reload(item, true);
     }),
   );
 
@@ -606,223 +495,9 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   const toggleMap = (item: NoteItem): Promise<void> =>
     setView(item, mapOpen() ? "editor" : "mindmap");
 
-  // ---- 編集（自動保存: 1秒 debounce + 直列化）----
-  let saveChain: Promise<void> = Promise.resolve();
-
-  /**
-   * 保存 1 回ぶんの単位。「どのノートに・何を・どのセッションで」を
-   * 呼ばれた時点で固める。タイマーが起きる頃には別のノートが選ばれて
-   * いることがあり、そのとき画面の本文を読むと隣のノートへ書いてしまう。
-   */
-  interface PendingSave {
-    item: NoteItem;
-    body: string;
-    session: EditSession;
-    /** 写しを取った時点の世代。読み直しをまたいだ写しは書かない。 */
-    generation: number;
-    /**
-     * 写しを取った時点の `bodyEpoch`。断られたときに「画面の本文はまだこの
-     * 写しの続きか」を見るのに使う。ノートの id では足りない — A → B → A と
-     * 戻れば id は揃うのに、本文は B のものか A を読み直したものになっている。
-     */
-    bodyEpoch: number;
-  }
-
-  /**
-   * 保存の世代。外からの書き換えに譲って読み直すたびに 1 つ進める。
-   * 譲るより前に `saveChain` に並んだ写しは、読み直した版を知らないまま
-   * 順番が来る。そのまま書くと、いま画面に出ている相手の本文を古い draft で
-   * 潰す — 読み直しで `revisions` が新しくなっているので core も止められない。
-   * `session.lastSavedBody` を合わせるだけでは「同じ本文の写し」しか止まらない。
-   */
-  let saveGeneration = 0;
-
-  const snapshotSave = (): PendingSave | undefined => {
-    const item = selected();
-    // 本文が届いていないノートには写しを取らない。画面にあるのは前のノート
-    return item && loaded()
-      ? { item, body: fullBody(), session, generation: saveGeneration, bodyEpoch: bodyEpoch() }
-      : undefined;
-  };
-
-  /**
-   * 一覧の行に出る題がディスクと食い違っているか。保存が着地するたびに立て、
-   * 読み直したら下ろす。「待っている保存があるか」で代用すると、自動保存が
-   * 先に着地していたときに読み直しが飛ばされ、行だけ古い題のまま残る。
-   */
-  let listStale = false;
-
-  const refreshListIfStale = async (): Promise<void> => {
-    if (!listStale) {
-      return;
-    }
-    listStale = false;
-    await refetchNotes();
-  };
-
-  /**
-   * 保存できた合図。緑の「保存しました」を出しっぱなしにすると、書いている
-   * あいだじゅう視界の端が光る。2 秒だけ出して、あとは時刻に落ち着かせる。
-   */
-  const markSaved = (): void => {
-    clearTimeout(savedTimer);
-    batch(() => {
-      setSavedAt(formatClock(new Date()));
-      setSaveStatus("saved");
-    });
-    savedTimer = setTimeout(() => setSaveStatus("savedAt"), SAVED_MS);
-  };
-
-  /**
-   * 断られた保存から退避する本文。飛んでいった写しではなく、いま画面にある
-   * ぶん — 端末の信号待ちと IPC の往復のあいだに打った字は、まだファイルにも
-   * 控えにも無い。写しのほうを退避すると、その打鍵だけが黙って消える。
-   *
-   * ただし画面のぶんを使えるのは、写しを取った読み込みがまだ続いている
-   * あいだだけ。見るのは `bodyEpoch` — ノートの id を見ても、往復のあいだに
-   * A → B → A と移れば id は揃ったまま、画面の本文は B のものか A を
-   * 読み直したものになっている。それを退避すると、断られた打鍵ごと A の
-   * 控えを別のノートの本文で潰す。epoch は本文を外から入れ替えるたびに
-   * 進むので、揃っているなら画面にあるのは「この写し + その後の打鍵」だけ。
-   */
-  const typedBody = (pending: PendingSave): string =>
-    bodyEpoch() === pending.bodyEpoch ? fullBody() : pending.body;
-
-  /**
-   * 断られた保存のあと、画面に何が出ているか。譲る前の姿ではなく、読み直しが
-   * 済んだ「いま」を見る — 読めずに引き返すことも、往復のあいだに隣へ
-   * 移られることもあり、そのどちらでも画面は譲る前と違う。
-   *
-   * 打鍵がまだ画面に在るかは `bodyEpoch` で見る(`typedBody` と同じ理由)。
-   * 読み直しが載れば epoch は進むが、A → B → A と戻って別の読み込みが
-   * 載った場合も進む — どちらも「画面にもう打った字は無い」で同じ扱いでよい。
-   */
-  const refusedScreen = (pending: PendingSave, reloaded: boolean): RefusedScreen => {
-    if (selected()?.id !== pending.item.id) {
-      return "away";
-    }
-    return reloaded || bodyEpoch() !== pending.bodyEpoch ? "reloaded" : "draft";
-  };
-
-  /**
-   * 読んでから書くまでに、CLI や MCP が同じノートを書き換えていた。
-   * 相手の本文の上には書かず、打った字はこの端末のバックアップに退避して
-   * ディスクの本文を読み直す。「戻す」を押せば退避した本文と入れ替わる —
-   * 相手の版がバックアップに回るので、どちらも失わない。
-   *
-   * 読み直すのは、譲ったノートがまだ選ばれているときだけ。往復のあいだに
-   * 隣へ移っていれば画面にあるのは別のノートで、そこへディスクの本文を
-   * 流し込むわけにはいかない。言い分もそれに合わせる — 断られた保存の
-   * 言い分は `refusalToast` が一手に決める。
-   */
-  const yieldToOutsideEdit = async (pending: PendingSave, error: unknown): Promise<void> => {
-    // 「戻す」で呼び出せると言う前に、控えが実際に残ったかを見る。
-    // 満杯・無効の localStorage では残らず、そこで約束すると人は信じて閉じる
-    const kept = tryWriteBackup(localStorage, pending.item.filename, typedBody(pending));
-    saveGeneration += 1;
-    if (saveTimer) {
-      clearTimeout(saveTimer);
-      saveTimer = undefined;
-    }
-    let reloaded = false;
-    if (selected()?.id === pending.item.id) {
-      sessionFile = null;
-      reloaded = await loadNote(pending.item, true);
-    }
-    await refetchNotes();
-    shell.showToast(refusalToast(error, kept, pending.item, refusedScreen(pending, reloaded)));
-  };
-  const flushSave = (pending = snapshotSave()): Promise<void> => {
-    const previous = saveChain;
-    saveChain = (async () => {
-      await previous;
-      // 触っていない誤タップのセッションを書き込みに変えない。書いても
-      // 内容が変わらないなら、ファイルの mtime を動かして同期を起こすだけ。
-      // 読み直しをまたいだ写しも書かない(世代が置いていかれている)
-      if (
-        !pending ||
-        pending.generation !== saveGeneration ||
-        !shouldSave(pending.session, pending.body)
-      ) {
-        return;
-      }
-      // 保存の様子はそのノートの持ち物。書き込みが遅い端末では、隣へ移った
-      // あとに着地することがあり、そのまま出すと開いたばかりのノートが
-      // 「保存しました」と言う。画面に出ているノートの保存のときだけ出す
-      const shown = (): boolean => selected()?.id === pending.item.id;
-      // 指紋を持たないノートには書かない。`revision` 無しの保存は core の
-      // 照合を素通りするので、読めていない本文の上に画面のぶんを丸ごと
-      // 書いてしまう。読み直しが通れば指紋が入り、次の保存から書ける
-      const expected = revisions.get(pending.item.filename);
-      if (expected === undefined) {
-        return;
-      }
-      if (shown()) {
-        setSaveStatus("saving");
-      }
-      try {
-        const revision = await typedInvoke("update_draft", {
-          filename: pending.item.filename,
-          body: pending.body,
-          client: await getDeviceSignals(),
-          revision: expected,
-        });
-        revisions.set(pending.item.filename, revision);
-        recordSaved(localStorage, pending.item.filename, pending.session, pending.body);
-        // 一覧はここでは読み直さない。1 秒おきの保存のたびに全ノートを
-        // 読み直すのは低スペック端末に重く、編集中は一覧が見えてもいない。
-        // 書く手が止まったときに 1 回だけ読み直す。
-        listStale = true;
-        if (shown()) {
-          markSaved();
-          // 「版 N から +X B」は最新の版と下書きの比較。書くたびに答えが変わる
-          if (kind() === "codex") {
-            void refetchVersionStatus();
-          }
-        }
-      } catch (error) {
-        if (shown()) {
-          setSaveStatus("idle");
-        }
-        if (isStaleSave(error)) {
-          await yieldToOutsideEdit(pending, error);
-        } else if (refusedForGood(error)) {
-          // どれも読み直しでは直らない。壊れた記録は書き直しても同じ理由で
-          // 断られ、消えたノートは core が作り直さず、文字として読めない
-          // ファイルは読む段で断られる。次の打鍵にも望みが無いので、打った字は
-          // ここで退避して、黙って消えないようにする。
-          // ディスクへは既に書けていないので、退避が残ったかまで確かめる —
-          // 残らなかったのに「戻す」で呼び出せると言うと、人はそれを信じて
-          // 閉じ、画面にしか無い唯一の写しごと失う
-          const kept = tryWriteBackup(localStorage, pending.item.filename, typedBody(pending));
-          // ここは読み直しを走らせない。画面にあるのは打鍵の続きか、別のノート
-          shell.showToast(refusalToast(error, kept, pending.item, refusedScreen(pending, false)));
-        }
-      }
-    })();
-    return saveChain;
-  };
-
-  const scheduleSave = (): void => {
-    // 打鍵ごとに取り直すので、実際に走るのは最後の打鍵の写し
-    const pending = snapshotSave();
-    if (saveTimer) {
-      clearTimeout(saveTimer);
-    }
-    saveTimer = setTimeout(() => {
-      // 起きたタイマーは終わったタイマー。掃除しないと「保存待ちがある」が
-      // 立ったままになり、フォーカス復帰の読み直しが二度と通らない
-      saveTimer = undefined;
-      void flushSave(pending);
-    }, SAVE_DEBOUNCE_MS);
-  };
-
   onCleanup(() => {
     clearTimeout(savedTimer);
-    if (saveTimer) {
-      clearTimeout(saveTimer);
-      void flushSave();
-    }
+    session.dispose();
   });
 
   // 同期やパレット操作の後にデータを取り直す。初回は createResource が読むので
@@ -841,8 +516,8 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
         // あるときも同じ — 打った字はまだディスクに無いので、読み直せば
         // それを捨てることになる。
         // どちらも次の Step(ファイル監視)でトーストを出して人に決めさせる
-        if (item && !isTyping()) {
-          void loadNote(item);
+        if (item && !session.isTyping()) {
+          void session.reload(item);
         }
         // 版も同期で増える。ファイル名は同じなので resource は自分では
         // 取り直さない
@@ -855,43 +530,13 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   );
 
   /**
-   * 待っている保存を出しきってから離れる。選択を動かす手前で必ず通す道。
-   * 出しきらずに移ると `fullBody()` が「次のノートの題 + 前のノートの本文」に
-   * なり、次の保存がその混ぜ物を隣のノートへ書き込む。読み直しが
-   * `revisions` を更新済みなので Stale でも止まらない。
-   * 何も保存していないなら一覧も読み直さない — 行に出る題は変わっていない。
-   */
-  const settleEdit = async (): Promise<void> => {
-    // 次に書き始めるときは新しいセッション。戻る先が 1 段ずつ進む
-    sessionFile = null;
-    if (saveTimer) {
-      clearTimeout(saveTimer);
-      saveTimer = undefined;
-      await flushSave();
-    }
-    // 行に出る題は本文の先頭行から導かれる。読み直さないと一覧だけ古い題のまま
-    await refreshListIfStale();
-  };
-
-  /**
-   * ファイルを動かす前の `settleEdit`。予約が無くても、発火済みの保存が端末の
-   * 信号や書き込みをまだ待っていることがある。切り替えなら待たなくてよい
-   * (保存は自分の path を持って着地する)が、rename の後に着地する書き込みは
-   * 移動前の path に向かい、移した先には古い本文だけが残る。
-   */
-  const settleWrites = async (): Promise<void> => {
-    await settleEdit();
-    await saveChain;
-  };
-
-  /**
    * 選択を差し替える唯一の入口。一覧のタップ・ウィジェットの `?file=`・
    * 新規作成・テンプレ・バックリンクは全部ここを通る。入口ごとに
    * 「編集中だったらどうするか」を書くと、書き忘れた入口だけが前のノートの
    * 本文を次のノートへ持ち込む — 入口が増えても書く場所は 1 つにしておく。
    */
   async function switchTo(id: string): Promise<void> {
-    await settleEdit();
+    await session.settleEdit();
     setSelectedId(id);
     setDetailOpen(true);
   }
@@ -961,9 +606,9 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     if (!loaded()) {
       return;
     }
-    ensureSession();
+    session.ensure();
     setNoteTitle(value);
-    scheduleSave();
+    session.schedule();
   };
 
   /**
@@ -972,12 +617,9 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
    * 読み直さないと一覧だけ古い題のまま残る。
    */
   const commitTitle = async (): Promise<void> => {
-    if (saveTimer) {
-      clearTimeout(saveTimer);
-      saveTimer = undefined;
-    }
-    await flushSave();
-    await refreshListIfStale();
+    session.cancelPending();
+    await session.flush();
+    await session.refreshListIfStale();
   };
 
   /**
@@ -1010,19 +652,16 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     }
     // 待っている保存は捨てる。いま画面にある本文はこれから控えに回るので、
     // 同じものをもう一度ディスクへ書きに行く意味がない
-    if (saveTimer) {
-      clearTimeout(saveTimer);
-      saveTimer = undefined;
-    }
+    session.cancelPending();
     let written = true;
     try {
       const revision = await typedInvoke("update_draft", {
         filename: item.filename,
         body: backup,
         client: await getDeviceSignals(),
-        revision: revisions.get(item.filename) ?? null,
+        revision: session.revisionOf(item.filename) ?? null,
       });
-      revisions.set(item.filename, revision);
+      session.setRevision(item.filename, revision);
     } catch (error) {
       // 読み直せば書けるノート(Stale・一時的な失敗)では見せずに終わる。
       // ディスクと画面が黙って食い違い、次の保存が相手の本文を控えで潰す
@@ -1038,12 +677,8 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       // 同じものを出せる
       writeBackup(localStorage, item.filename, current);
     }
-    // 控えを取り終えたセッションとして開き直す — 開き直さないと、次に題や
-    // 本文を触ったときに新しいセッションが立ち上がり、その最初の保存が
-    // 復元直前の本文を控えに書いて、もう一度押しても戻れなくなる
-    session = beginEditSession(backup);
-    session.committed = true;
-    sessionFile = item.filename;
+    // 控えを取り終えたセッションとして開き直す
+    session.reopenAt(item.filename, backup);
     const titled = splitTitle(backup);
     // エディタごと作り直す。差し込みでは戻した本文が画面に出ない
     showBody(item.id, titled.title, titled.body, noteView());
@@ -1070,7 +705,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     }
     shell.closePopovers();
     // 刻むのはディスクの本文。飛んでいる保存を待たないと最後の打鍵が版に入らない
-    await settleWrites();
+    await session.settleWrites();
     const before = versions() ?? [];
     let version;
     try {
@@ -1130,7 +765,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     if (historyOpen()) {
       return;
     }
-    await settleWrites();
+    await session.settleWrites();
     // 版は他の端末でも刻まれる。比べる画面を開く瞬間は読み直しに安い。
     // 選ぶ最新の版は読み直した一覧から — 手元の一覧で選ぶと、届いた一覧に
     // その版が残っている限り、より新しい版があっても古いほうを開き続ける
@@ -1176,12 +811,9 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     }
     // 待っている保存は捨てる。戻すのはディスクの本文で、画面の打鍵は
     // 「戻す前」の版には入らないが、履歴を開いた時点で settleEdit 済み
-    if (saveTimer) {
-      clearTimeout(saveTimer);
-      saveTimer = undefined;
-    }
+    session.cancelPending();
     // 画面に出ている本文を読んだときの指紋。読み直しが届かなかったときの戻る先
-    const read = revisions.get(item.filename);
+    const read = session.revisionOf(item.filename);
     try {
       const revision = await typedInvoke("restore_note_version", {
         filename: item.filename,
@@ -1189,28 +821,19 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
         client: await getDeviceSignals(),
         revision: read ?? null,
       });
-      revisions.set(item.filename, revision);
+      session.setRevision(item.filename, revision);
     } catch (error) {
       if (isStaleSave(error)) {
-        await yieldToOutsideEdit(
-          {
-            item,
-            body: fullBody(),
-            session,
-            generation: saveGeneration,
-            bodyEpoch: bodyEpoch(),
-          },
-          error,
-        );
+        await session.yieldToOutsideEdit(session.snapshotFor(item), error);
       } else {
         shell.showToast(t().codex.restoreFailed);
       }
       return;
     }
     // 戻した本文はディスクにある。読み直せば画面もそれになる
-    sessionFile = null;
+    session.drop();
     closeHistory();
-    const shown = await loadNote(item, true);
+    const shown = await session.reload(item, true);
     if (!shown) {
       // 読み直しが画面へ届かなかった。戻した本文はディスクに在るのに、画面には
       // まだ戻す前の本文が出ている。指紋だけ戻した後のものにしておくと、次の
@@ -1220,9 +843,9 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       // 走る(`yieldToOutsideEdit`)。
       // AIDEV-NOTE: 編集を止める案(`loadedId` を落とす)は捨てた。打った字ごと退避する既存の Stale の道に乗せるほうが失わない
       if (read === undefined) {
-        revisions.delete(item.filename);
+        session.forgetRevision(item.filename);
       } else {
-        revisions.set(item.filename, read);
+        session.setRevision(item.filename, read);
       }
     }
     await refetchNotes();
@@ -1411,7 +1034,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
    */
   const promoteToCodex = async (item: NoteItem): Promise<void> => {
     shell.closePopovers();
-    await settleWrites();
+    await session.settleWrites();
     await typedInvoke("promote_note_to_codex", { filename: item.filename });
     await refetchNotes();
     // Scrawl の origin チップも一覧から導出される。面が変わっても
@@ -1425,7 +1048,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   const remove = async (item: NoteItem): Promise<void> => {
     // 隣を選ぶ前に編集を畳む。switchTo と同じ理屈だが、削除は詳細ペインを
     // 開かない(狭い端末では隣を開いたままにする)ので switchTo は通さない
-    await settleEdit();
+    await session.settleEdit();
     // 隠す前に隣を決める。selected は一覧から消えた id を先頭へ倒すので、
     // 何もしないと削除のたびに最上段へ飛ばされる。隣なら目線は動かない。
     // detailOpen は触らない — 今まで通り、端末が狭ければ隣を開いたままにする
@@ -1579,7 +1202,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                     class="icon-button detail-back"
                     aria-label={t().notes.backToList}
                     onClick={() => {
-                      void settleEdit();
+                      void session.settleEdit();
                       setDetailOpen(false);
                     }}
                   >
@@ -1823,9 +1446,9 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                             if (!loaded()) {
                               return;
                             }
-                            ensureSession();
+                            session.ensure();
                             setNoteBody(markdown);
-                            scheduleSave();
+                            session.schedule();
                           }}
                           onEditorReady={setMarkdownEditor}
                         />
