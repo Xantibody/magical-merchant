@@ -23,6 +23,8 @@ const SHORTCUTS = {
   codex: { key: "3" },
   syncNow: { key: "s", shift: true },
   settings: { key: "," },
+  // 一覧フライアウトを常設にする。離れても畳まない
+  listPin: { key: "\\" },
   // 開いているノートに効くもの。受けるのは Workspace で、押せるのは
   // ノートを 1 件開いているあいだだけ
   noteActions: { key: "." },

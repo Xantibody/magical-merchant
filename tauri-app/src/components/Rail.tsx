@@ -56,7 +56,13 @@ export default function Rail(props: { sync: SyncState; onSearch: () => void }): 
   const onMode = (): boolean => MARKER_TOP[location.pathname as RoutePath] !== undefined;
 
   return (
-    <nav class="rail" aria-label={t().rail.label}>
+    <nav
+      class="rail"
+      aria-label={t().rail.label}
+      // 一覧フライアウトはレールの続き。ポインタが柱に乗っているあいだ開く
+      onPointerEnter={() => shell.setListHover(true)}
+      onPointerLeave={() => shell.setListHover(false)}
+    >
       <For each={TABS}>
         {(tab) => (
           <A

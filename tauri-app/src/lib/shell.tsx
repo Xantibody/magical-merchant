@@ -32,6 +32,17 @@ export interface Shell {
   openPalette: (scope?: PaletteScope) => void;
   closePalette: () => void;
   /**
+   * レールか一覧フライアウトにポインタが乗っているか。レールは AppLayout に、
+   * 一覧は Workspace にあるので、開閉の合図はここで落ち合う。
+   */
+  listHover: Accessor<boolean>;
+  setListHover: (on: boolean) => void;
+  /** ピンと ⌘\ で常設にしているか。離れても畳まない。 */
+  listPinned: Accessor<boolean>;
+  toggleListPin: () => void;
+  /** 一覧フライアウトが開いているか。 */
+  listOpen: Accessor<boolean>;
+  /**
    * Scrawl で絞り込んでいるタグ。Scrawl の中だけで持つと ⌘K の
    * 処理(AppLayout)から見えないので、ここに引き上げてある。
    */
@@ -60,6 +71,8 @@ export function ShellProvider(props: { children: JSX.Element }): JSX.Element {
   const [popoverTrigger, setPopoverTrigger] = createSignal<HTMLElement | undefined>();
   const [paletteOpen, setPaletteOpen] = createSignal(false);
   const [paletteScope, setPaletteScope] = createSignal<PaletteScope | null>(null);
+  const [listHover, setListHover] = createSignal(false);
+  const [listPinned, setListPinned] = createSignal(false);
   const [scrawlTag, setScrawlTag] = createSignal<string | null>(null);
   const [toast, setToast] = createSignal<Toast | null>(null);
   const [dataVersion, setDataVersion] = createSignal(0);
@@ -90,6 +103,11 @@ export function ShellProvider(props: { children: JSX.Element }): JSX.Element {
       setPaletteOpen(true);
     },
     closePalette: () => setPaletteOpen(false),
+    listHover,
+    setListHover,
+    listPinned,
+    toggleListPin: () => setListPinned((pinned) => !pinned),
+    listOpen: () => listPinned() || listHover(),
     scrawlTag,
     setScrawlTag,
     toast,

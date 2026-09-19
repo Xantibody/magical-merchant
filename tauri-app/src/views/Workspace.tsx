@@ -48,7 +48,7 @@ import { formatClock, formatMonthDay } from "../lib/day-labels";
 import { locale, t } from "../lib/i18n";
 import { isImeComposing } from "../lib/ime";
 import { createLongPress } from "../lib/long-press";
-import { isTypingTarget, matchesShortcut } from "../lib/shortcuts";
+import { isTypingTarget, matchesShortcut, shortcutLabel } from "../lib/shortcuts";
 import { daysSince, spanSince, withDeltas } from "../lib/versions";
 import type { VersionRow } from "../lib/versions";
 import { readBackup, writeBackup } from "../lib/edit-backup";
@@ -1085,43 +1085,76 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     });
   };
 
+  /**
+   * フライアウトを出すか。ノートを 1 本も開いていないあいだは開けたままに
+   * する — 隠す相手(本文)が無いのに畳むと、レールに乗るまで何も無い画面に
+   * なる。
+   */
+  const flyoutOpen = (): boolean => shell.listOpen() || selected() === undefined;
+
+  const pinLabel = (): string =>
+    shell.listPinned()
+      ? t().notes.unpinList(shortcutLabel("listPin"))
+      : t().notes.pinList(shortcutLabel("listPin"));
+
   return (
     <div class="workspace" classList={{ "workspace--detail": detailOpen() }}>
-      <div class="list-pane">
+      <div
+        class="list-pane"
+        classList={{ "list-pane--open": flyoutOpen() }}
+        // フライアウトはレールの続き。柱か一覧にポインタが居るあいだ開く
+        onPointerEnter={() => shell.setListHover(true)}
+        onPointerLeave={() => shell.setListHover(false)}
+      >
         <div class="list-pane-head">
           <span class="list-pane-title">
             {MODE_LABELS[kind() === "codex" ? ROUTES.CODEX : ROUTES.NOTES]}
           </span>
-          <button
-            type="button"
-            class="new-note long-press"
-            ref={newNoteButton}
-            aria-expanded={shell.popover() === "new-note-menu"}
-            onPointerDown={(e) => {
-              newNotePointer = e.pointerType;
-              newNoteLongPress.onPointerDown(e);
-            }}
-            onPointerUp={newNoteLongPress.onPointerUp}
-            onPointerMove={newNoteLongPress.onPointerMove}
-            onPointerCancel={newNoteLongPress.onPointerCancel}
-            onContextMenu={newNoteLongPress.onContextMenu}
-            onClick={() => {
-              // 長押しでメニューを開いた直後の click は飲み込む
-              if (!newNoteLongPress.shouldClick()) {
-                return;
-              }
-              // テンプレは Note の入口。Codex の面では空の 1 本を作るだけ —
-              // `create_from_template` は置き場を選べない
-              if (newNotePointer === "mouse" && kind() === "note") {
-                shell.togglePopover("new-note-menu", newNoteButton);
-              } else {
-                void createNote();
-              }
-            }}
-          >
-            <Icon name="plus" size={12} />
-            {t().notes.new}
-          </button>
+          <div class="list-pane-actions">
+            <button
+              type="button"
+              class="new-note long-press"
+              ref={newNoteButton}
+              aria-expanded={shell.popover() === "new-note-menu"}
+              onPointerDown={(e) => {
+                newNotePointer = e.pointerType;
+                newNoteLongPress.onPointerDown(e);
+              }}
+              onPointerUp={newNoteLongPress.onPointerUp}
+              onPointerMove={newNoteLongPress.onPointerMove}
+              onPointerCancel={newNoteLongPress.onPointerCancel}
+              onContextMenu={newNoteLongPress.onContextMenu}
+              onClick={() => {
+                // 長押しでメニューを開いた直後の click は飲み込む
+                if (!newNoteLongPress.shouldClick()) {
+                  return;
+                }
+                // テンプレは Note の入口。Codex の面では空の 1 本を作るだけ —
+                // `create_from_template` は置き場を選べない
+                if (newNotePointer === "mouse" && kind() === "note") {
+                  shell.togglePopover("new-note-menu", newNoteButton);
+                } else {
+                  void createNote();
+                }
+              }}
+            >
+              <Icon name="plus" size={12} />
+              {t().notes.new}
+            </button>
+            {/* ピンは一覧の中の物なので、押せるのは開いているあいだだけ。
+              同じことを ⌘\ でもできる */}
+            <button
+              type="button"
+              class="list-pin"
+              aria-pressed={shell.listPinned()}
+              title={pinLabel()}
+              aria-label={pinLabel()}
+              data-key={shortcutLabel("listPin")}
+              onClick={() => shell.toggleListPin()}
+            >
+              <Icon name={shell.listPinned() ? "push-pin-fill" : "push-pin"} size={14} />
+            </button>
+          </div>
         </div>
 
         <Popover
@@ -1188,6 +1221,13 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
               )}
             </For>
           </Show>
+        </div>
+
+        {/* 開け閉ての決まりは、開いているあいだだけ足元に書いてある */}
+        <div class="list-pane-foot">
+          {shell.listPinned()
+            ? t().notes.listPinnedHint(shortcutLabel("listPin"))
+            : t().notes.listHint(shortcutLabel("listPin"))}
         </div>
       </div>
 

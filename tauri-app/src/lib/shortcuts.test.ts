@@ -39,6 +39,15 @@ describe("shortcutLabel", () => {
     expect(shortcutLabel("noteNext")).toBe("⌘↓");
   });
 
+  // 一覧フライアウトを常設にするキー。札も、一覧の足元の言葉も、ここから配る
+  it("prints the key that keeps the list flyout open", () => {
+    setUserAgent(MAC);
+    expect(shortcutLabel("listPin")).toBe("⌘\\");
+
+    setUserAgent(WINDOWS);
+    expect(shortcutLabel("listPin")).toBe("Ctrl+\\");
+  });
+
   it("spells the modifier out everywhere else", () => {
     setUserAgent(WINDOWS);
 

@@ -86,6 +86,8 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
   });
 
   const isActive = (path: RoutePath): boolean => location.pathname === path;
+  /** 一覧フライアウトを持つ面に居るか。 */
+  const hasList = (): boolean => isActive(ROUTES.NOTES) || isActive(ROUTES.CODEX);
 
   /**
    * Scrawl でタグを選んで絞っているなら、その中を探す。全体を探したければ
@@ -250,6 +252,12 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
       if (matchesShortcut(e, "search")) {
         e.preventDefault();
         openSearch();
+        return;
+      }
+      // 一覧フライアウトは Note と Codex にしかない。他の面では素通しする
+      if (matchesShortcut(e, "listPin") && hasList()) {
+        e.preventDefault();
+        shell.toggleListPin();
         return;
       }
       for (const command of commands()) {
