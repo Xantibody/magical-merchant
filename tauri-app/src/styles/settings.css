@@ -39,31 +39,37 @@
   gap: 6px;
 }
 
-/* 3 つしかない選択肢。開いて選ぶメニューにするほどのものではない */
-.settings-choices {
+/* 3 つしかない選択肢。開いて選ぶメニューにするほどのものではない。
+   枠で 3 つ並べるのではなく、地の上に 1 つだけ色が乗る */
+.settings-seg {
   display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
+  gap: 2px;
+  padding: 2px;
+  width: max-content;
+  border-radius: 6px;
+  background: var(--app-sidebar);
 }
 
-.settings-choice {
-  padding: 7px 14px;
-  border: 1px solid var(--app-border);
-  border-radius: var(--radius-2);
-  background: var(--app-input-bg);
+.settings-seg-item {
+  padding: 5px 12px;
+  border: none;
+  border-radius: 4px;
+  background: none;
   color: var(--app-text-muted);
   font-family: inherit;
-  font-size: 13px;
+  font-size: 12.5px;
   cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
 
-.settings-choice:hover {
+.settings-seg-item:hover {
   background: var(--app-surface-2);
 }
 
-.settings-choice--on {
+.settings-seg-item[data-pressed] {
   background: var(--app-accent-soft);
-  border-color: var(--app-accent);
   color: var(--app-text);
   font-weight: 600;
 }
@@ -124,7 +130,7 @@
   color: var(--app-text-faint);
 }
 
-/* 文言と右端のスイッチ。枠は settings-link と揃え、行ごと押せる */
+/* 文言と右端のスイッチ。枠は settings-link と揃える */
 .settings-toggle {
   display: flex;
   align-items: center;
@@ -145,11 +151,43 @@
   background: var(--app-surface-2);
 }
 
-/* チェックボックスは隠し、右のスイッチ(base.css の .switch)が状態を映す */
-.settings-toggle input {
+.settings-toggle label {
+  cursor: pointer;
+}
+
+/* 入 / 切のスイッチ。地は切で枠色、入で accent。動かすのは丸だけ */
+.settings-switch {
+  position: relative;
+  width: 34px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  background: var(--app-border);
+  cursor: pointer;
+  transition: background 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.settings-switch[data-checked] {
+  background: var(--app-accent);
+}
+
+/* 動かすのは transform だけ。left を動かすとレイアウトを引き直す */
+.settings-switch-thumb {
   position: absolute;
-  opacity: 0;
-  pointer-events: none;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: white;
+  transition:
+    transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1),
+    background 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.settings-switch-thumb[data-checked] {
+  transform: translateX(14px);
+  background: var(--app-surface);
 }
 
 /* 設定ファイルで固定されている環境では読むだけ */
@@ -287,9 +325,22 @@
   color: var(--app-text-faint);
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .settings-seg-item,
+  .settings-switch,
+  .settings-switch-thumb {
+    transition: none;
+  }
+}
+
 @media (max-width: 767px) {
   .settings-scroll {
     padding: 20px 20px 40px;
+  }
+
+  /* 指で押せる高さ。段の中で字は 12.5px のまま */
+  .settings-seg-item {
+    min-height: 36px;
   }
 
   .settings-title {

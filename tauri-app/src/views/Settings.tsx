@@ -1,5 +1,9 @@
 import { createResource, createSignal, For, onMount, onCleanup, Show } from "solid-js";
 import { A } from "@solidjs/router";
+// Kobalte は route 単位の lazy チャンクからだけ。ここは設定なので起動バンドルに
+// 乗らない(`.claude/skills/ui-design/SKILL.md`)
+import { Switch } from "@kobalte/core/switch";
+import { ToggleGroup } from "@kobalte/core/toggle-group";
 import Icon from "../components/Icon";
 import { typedInvoke } from "../lib/commands";
 import type { GlyphSummary } from "../lib/commands";
@@ -33,6 +37,42 @@ const UNDO_MS = 5000;
 interface PendingGlyph {
   file: File;
   format: "png" | "svg";
+}
+
+/**
+ * 3 択以下の選択肢。開いて選ぶメニューにするほどのものではない。
+ *
+ * AIDEV-NOTE: ToggleGroup の中に `data-key` を足さないこと — Kobalte が
+ * 巡回フォーカスの当たり先を `[data-key]` で引くので、⌘ 札の印と衝突する
+ */
+function Seg<T extends string>(props: {
+  label: string;
+  value: T;
+  options: readonly (readonly [T, string])[];
+  onPick: (value: T) => void;
+}): JSX.Element {
+  return (
+    <ToggleGroup
+      class="settings-seg"
+      aria-label={props.label}
+      value={props.value}
+      // 選択中をもう一度押すと Kobalte は null を返す。設定に「どれも選んで
+      // いない」状態は無いので、その報せは捨てる
+      onChange={(value) => {
+        if (value !== null) {
+          props.onPick(value as T);
+        }
+      }}
+    >
+      <For each={props.options}>
+        {([value, label]) => (
+          <ToggleGroup.Item class="settings-seg-item" value={value}>
+            {label}
+          </ToggleGroup.Item>
+        )}
+      </For>
+    </ToggleGroup>
+  );
 }
 
 /** 画像ファイルを base64 に。IPC は文字列しか運ばない。 */
@@ -304,67 +344,47 @@ export default function Settings(): JSX.Element {
         <section class="settings-section">
           <h2 class="settings-section-label">LANGUAGE</h2>
           {/* テーマと違い巡回では選べない。押すたびに読めない言語を通る */}
-          <div class="settings-choices" role="radiogroup" aria-label={t().settings.language}>
-            <For
-              each={
-                [
-                  ["system", t().settings.languageSystem],
-                  ["ja", t().settings.languageJa],
-                  ["en", t().settings.languageEn],
-                ] as [LocalePreference, string][]
-              }
-            >
-              {([preference, label]) => (
-                <button
-                  type="button"
-                  role="radio"
-                  class="settings-choice"
-                  classList={{ "settings-choice--on": localePreference() === preference }}
-                  aria-checked={localePreference() === preference}
-                  onClick={() => chooseLocale(preference)}
-                >
-                  {label}
-                </button>
-              )}
-            </For>
-          </div>
+          <Seg
+            label={t().settings.language}
+            value={localePreference()}
+            options={
+              [
+                ["system", t().settings.languageSystem],
+                ["ja", t().settings.languageJa],
+                ["en", t().settings.languageEn],
+              ] as [LocalePreference, string][]
+            }
+            onPick={chooseLocale}
+          />
         </section>
 
         <section class="settings-section">
           <h2 class="settings-section-label">THEME</h2>
           {/* ヘッダーの巡回ボタンから移した。年に数回しか触らないものが、
               毎回見る場所に居座っていた */}
-          <div class="settings-choices" role="radiogroup" aria-label={t().settings.theme}>
-            <For each={THEMES}>
-              {(choice) => (
-                <button
-                  type="button"
-                  role="radio"
-                  class="settings-choice"
-                  classList={{ "settings-choice--on": theme() === choice }}
-                  aria-checked={theme() === choice}
-                  onClick={() => chooseTheme(choice)}
-                >
-                  {t().theme[choice]}
-                </button>
-              )}
-            </For>
-          </div>
+          <Seg
+            label={t().settings.theme}
+            value={theme()}
+            options={THEMES.map((choice) => [choice, t().theme[choice]] as const)}
+            onPick={chooseTheme}
+          />
         </section>
 
         {/* 全画面の窓があるのは macOS だけ。Android に出しても何も起きない */}
         <Show when={isMacDesktop()}>
           <section class="settings-section">
             <h2 class="settings-section-label">WINDOW</h2>
-            <label class="settings-toggle">
-              <span>{t().settings.startFullscreen}</span>
-              <input
-                type="checkbox"
-                checked={startFullscreen()}
-                onChange={(e) => chooseStartFullscreen(e.currentTarget.checked)}
-              />
-              <span class="switch" aria-hidden="true" />
-            </label>
+            <Switch
+              class="settings-toggle"
+              checked={startFullscreen()}
+              onChange={chooseStartFullscreen}
+            >
+              <Switch.Label>{t().settings.startFullscreen}</Switch.Label>
+              <Switch.Input />
+              <Switch.Control class="settings-switch">
+                <Switch.Thumb class="settings-switch-thumb" />
+              </Switch.Control>
+            </Switch>
             <p class="settings-hint">{t().settings.startFullscreenHint}</p>
           </section>
         </Show>

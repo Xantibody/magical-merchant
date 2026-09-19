@@ -108,9 +108,12 @@ function folderInput(): HTMLInputElement {
   return screen.getByLabelText<HTMLInputElement>("フォルダから追加", { selector: "input" });
 }
 
-/** 「システム」は LANGUAGE 側にもある。テーマの組の中だけを見る。 */
+/**
+ * 「システム」は言語の側にもある。テーマの組の中だけを見る。
+ * ToggleGroup の選択は `aria-pressed` で、`radio` ではない。
+ */
 function themeChoice(name: string): HTMLElement {
-  return within(screen.getByRole("radiogroup", { name: "テーマ" })).getByRole("radio", { name });
+  return within(screen.getByRole("group", { name: "テーマ" })).getByRole("button", { name });
 }
 
 describe("Settings › GLYPHS", () => {
@@ -332,7 +335,7 @@ describe("Settings › THEME", () => {
   it("starts on the remembered choice", async () => {
     await renderSettings();
 
-    expect(themeChoice("システム").ariaChecked).toBe("true");
+    expect(themeChoice("システム").ariaPressed).toBe("true");
   });
 
   it("paints the app and remembers the choice", async () => {
@@ -342,8 +345,20 @@ describe("Settings › THEME", () => {
 
     expect(document.documentElement.dataset.theme).toBe("dark");
     expect(localStorage.getItem("theme")).toBe("dark");
-    expect(themeChoice("ダーク").ariaChecked).toBe("true");
-    expect(themeChoice("システム").ariaChecked).toBe("false");
+    expect(themeChoice("ダーク").ariaPressed).toBe("true");
+    expect(themeChoice("システム").ariaPressed).toBe("false");
+  });
+
+  // ToggleGroup は選択中をもう一度押すと「どれも選んでいない」を報せる。
+  // 設定にその状態は無いので、押しても選択は動かない
+  it("keeps the choice when the selected one is pressed again", async () => {
+    await renderSettings();
+    fireEvent.click(themeChoice("ダーク"));
+
+    fireEvent.click(themeChoice("ダーク"));
+
+    expect(document.documentElement.dataset.theme).toBe("dark");
+    expect(themeChoice("ダーク").ariaPressed).toBe("true");
   });
 });
 
