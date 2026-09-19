@@ -158,6 +158,34 @@ const foldTag = (tag) => tag.replaceAll(/[A-Z]/gu, (c) => c.toLowerCase());
 const charCount = (text) => [...text].length;
 
 /**
+ * 日ファイルの 1 行からエントリ本文を取り出す。本流(core)の
+ * `strip_scrawl_prefix` と同じで、時刻の見出しも末尾のコンテキスト JSON も
+ * 本文ではない — 読ませるのも探させるのも書かれた文だけ。
+ * @param {string} raw
+ */
+const entryText = (raw) => raw.replace(/^- \[\d\d:\d\d:\d\d\] /u, "").replace(/ \{.*\}$/u, "");
+
+/** lib/tags.ts の TAG と同じ。 */
+const TAG = /(?<![\p{L}\p{N}_-])#(?<tag>[\p{L}\p{N}_-]+)/gu;
+
+/**
+ * 本文に書かれたタグ。綴りは打たれたまま返す。畳むのは重複を落とすときだけで、
+ * 残るのは先に出たほう。
+ * @param {string} text
+ */
+const parseTags = (text) => {
+  /** @type {Map<string, string>} */
+  const seen = new Map();
+  for (const m of text.matchAll(TAG)) {
+    const tag = m.groups?.tag ?? "";
+    if (!seen.has(foldTag(tag))) {
+      seen.set(foldTag(tag), tag);
+    }
+  }
+  return [...seen.values()];
+};
+
+/**
  * `update_draft` の失敗。本物は Rust 側の JSON がそのまま届くので `kind` を持つ
  * ただのオブジェクトだが、Error に同じキーを生やしても `isStaleSave` の見る形は
  * 変わらない(`typeof` が object で `kind` を持つ)。
@@ -728,21 +756,6 @@ const unifiedDiff = (from, to, fromName, toName) => {
       if (!needle && scope.length === 0) {
         return [];
       }
-      // lib/tags.ts の TAG と同じ。ここは 1 行しか読まないのでコードは切り分けない
-      const TAG = /(?<![\p{L}\p{N}_-])#(?<tag>[\p{L}\p{N}_-]+)/gu;
-      // 綴りは打たれたまま返す。畳むのは重複を落とすときだけで、残るのは先に出たほう
-      /** @param {string} text */
-      const parseTags = (text) => {
-        /** @type {Map<string, string>} */
-        const seen = new Map();
-        for (const m of text.matchAll(TAG)) {
-          const tag = m.groups?.tag ?? "";
-          if (!seen.has(foldTag(tag))) {
-            seen.set(foldTag(tag), tag);
-          }
-        }
-        return [...seen.values()];
-      };
       /** @param {string[]} own */
       const inScope = (own) => scope.every((tag) => own.some((t) => foldTag(t) === tag));
       /**
@@ -768,7 +781,7 @@ const unifiedDiff = (from, to, fromName, toName) => {
       const hits = [];
       for (const [iso, lines] of scrawl) {
         lines.forEach((raw, index) => {
-          const text = raw.replace(/^- \[\d\d:\d\d:\d\d\] /u, "").replace(/ \{.*\}$/u, "");
+          const text = entryText(raw);
           const own = parseTags(text);
           if (!text.toLowerCase().includes(needle) || !inScope(own)) {
             return;
@@ -806,7 +819,7 @@ const unifiedDiff = (from, to, fromName, toName) => {
       const hits = [];
       for (const [iso, lines] of scrawl) {
         lines.forEach((raw, index) => {
-          const text = raw.replace(/^- \[\d\d:\d\d:\d\d\] /u, "").replace(/ \{.*\}$/u, "");
+          const text = entryText(raw);
           if (text.includes(needle)) {
             hits.push({
               kind: "scrawl",
