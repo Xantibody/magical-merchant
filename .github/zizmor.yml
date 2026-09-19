@@ -9,6 +9,13 @@ rules:
         # 追えているし、SHA 固定にすると 1 行ごとに「どの版か」のコメントを
         # 添えないとレビューできなくなる
         "*": ref-pin
+  self-repository:
+    ignore:
+      # `./.github/actions/...` は同じリポジトリの action を呼ぶ documented な
+      # 書き方。zizmor が勧める `$/...` は新しく、動かなかったときに壊れるのが
+      # 全 nix ジョブなので、こちらが当たり前になるまで待つ
+      - ci.yml
+      - release.yml
   cache-poisoning:
     ignore:
       # release.yml は main の CI が保存した nix store キャッシュを restore して
