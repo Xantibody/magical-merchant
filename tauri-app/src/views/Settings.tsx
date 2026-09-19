@@ -5,6 +5,7 @@ import { A } from "@solidjs/router";
 import { Switch } from "@kobalte/core/switch";
 import { ToggleGroup } from "@kobalte/core/toggle-group";
 import Icon from "../components/Icon";
+import type { IconName } from "../components/Icon";
 import { typedInvoke } from "../lib/commands";
 import type { GlyphSummary } from "../lib/commands";
 import { EVENTS } from "../lib/events";
@@ -32,6 +33,20 @@ import "../styles/settings.css";
 import type { JSX } from "solid-js";
 
 const UNDO_MS = 5000;
+
+/** 設定の 3 頁。並びはナビの並び。 */
+type PageId = "general" | "records" | "sync";
+
+const PAGE_IDS: readonly PageId[] = ["general", "records", "sync"] as const;
+
+const PAGE_ICONS: Record<PageId, IconName> = {
+  general: "circle-half",
+  records: "file-text",
+  sync: "cloud-check",
+};
+
+/** Workers URL の欄。行の項目名を `for` で結ぶために ID が要る。 */
+const WORKERS_URL_FIELD = "settings-workers-url";
 
 /** 選んだが、まだ登録していない画像。名前を決めてから保存する。 */
 interface PendingGlyph {
@@ -75,6 +90,63 @@ function Seg<T extends string>(props: {
   );
 }
 
+/**
+ * 設定の 1 行。左に項目名と説明、右に操作。
+ * `labelFor` を渡した行だけ項目名が本物の `<label>` になる — ToggleGroup や
+ * スイッチの群には `for` が効かないので、欄を持つ行にしか付けない。
+ */
+function Row(props: {
+  label: string;
+  desc?: string;
+  labelFor?: string;
+  /** 背の高い操作(特殊文字の管理・Workers URL)は上端で揃える。 */
+  tall?: boolean;
+  children: JSX.Element;
+}): JSX.Element {
+  return (
+    <div class="settings-row" classList={{ "settings-row--tall": props.tall }}>
+      <div class="settings-row-head">
+        <Show when={props.labelFor} fallback={<div class="settings-row-label">{props.label}</div>}>
+          {(field) => (
+            <label class="settings-row-label" for={field()}>
+              {props.label}
+            </label>
+          )}
+        </Show>
+        <Show when={props.desc}>{(desc) => <p class="settings-row-desc">{desc()}</p>}</Show>
+      </div>
+      <div class="settings-row-control">{props.children}</div>
+    </div>
+  );
+}
+
+/** 入 / 切の 1 行。Kobalte の Switch がそのまま行になる。 */
+function SwitchRow(props: {
+  label: string;
+  desc: string;
+  checked: boolean;
+  onChange: (on: boolean) => void;
+}): JSX.Element {
+  return (
+    <Switch
+      class="settings-row"
+      checked={props.checked}
+      onChange={(checked) => props.onChange(checked)}
+    >
+      <div class="settings-row-head">
+        <Switch.Label class="settings-row-label">{props.label}</Switch.Label>
+        <Switch.Description class="settings-row-desc">{props.desc}</Switch.Description>
+      </div>
+      <Switch.Input />
+      <div class="settings-row-control">
+        <Switch.Control class="settings-switch">
+          <Switch.Thumb class="settings-switch-thumb" />
+        </Switch.Control>
+      </div>
+    </Switch>
+  );
+}
+
 /** 画像ファイルを base64 に。IPC は文字列しか運ばない。 */
 async function readAsBase64(file: File): Promise<string> {
   const bytes = new Uint8Array(await file.arrayBuffer());
@@ -88,6 +160,9 @@ async function readAsBase64(file: File): Promise<string> {
 
 export default function Settings(): JSX.Element {
   const shell = useShell();
+  /** 出している頁。モバイルは開くまで一覧だけを見せる(`settings--page`)。 */
+  const [page, setPage] = createSignal<PageId>("general");
+  const [pageOpen, setPageOpen] = createSignal(false);
   const [workersUrl, setWorkersUrl] = createSignal("");
   const [authenticated, setAuthenticated] = createSignal(false);
   const [editable, setEditable] = createSignal(false);
@@ -98,8 +173,8 @@ export default function Settings(): JSX.Element {
   const [templates] = createResource(() => typedInvoke("list_templates"));
   /**
    * tauri.conf.json の version がそのまま返る。リリースタグと一致するので、
-   * 端末に載っているビルドはこれで見分けられる。読めなければ空にして節ごと
-   * 隠す — バージョンが出ないことより、設定が開けないことのほうが困る
+   * 端末に載っているビルドはこれで見分けられる。読めなければ空にしてナビの
+   * 足元ごと隠す — バージョンが出ないことより、設定が開けないことのほうが困る
    */
   const [version] = createResource(async () => {
     try {
@@ -336,305 +411,365 @@ export default function Settings(): JSX.Element {
     }
   };
 
-  return (
-    <div class="settings-scroll">
-      <div class="settings">
-        <h1 class="settings-title">{t().settings.title}</h1>
+  const general = (): JSX.Element => (
+    <>
+      <Row label={t().settings.language} desc={t().settings.languageDesc}>
+        {/* テーマと違い巡回では選べない。押すたびに読めない言語を通る */}
+        <Seg
+          label={t().settings.language}
+          value={localePreference()}
+          options={
+            [
+              ["system", t().settings.languageSystem],
+              ["ja", t().settings.languageJa],
+              ["en", t().settings.languageEn],
+            ] as [LocalePreference, string][]
+          }
+          onPick={chooseLocale}
+        />
+      </Row>
 
-        <section class="settings-section">
-          <h2 class="settings-section-label">LANGUAGE</h2>
-          {/* テーマと違い巡回では選べない。押すたびに読めない言語を通る */}
-          <Seg
-            label={t().settings.language}
-            value={localePreference()}
-            options={
-              [
-                ["system", t().settings.languageSystem],
-                ["ja", t().settings.languageJa],
-                ["en", t().settings.languageEn],
-              ] as [LocalePreference, string][]
-            }
-            onPick={chooseLocale}
-          />
-        </section>
+      {/* ヘッダーの巡回ボタンから移した。年に数回しか触らないものが、
+          毎回見る場所に居座っていた */}
+      <Row label={t().settings.theme} desc={t().settings.themeDesc}>
+        <Seg
+          label={t().settings.theme}
+          value={theme()}
+          options={THEMES.map((choice) => [choice, t().theme[choice]] as const)}
+          onPick={chooseTheme}
+        />
+      </Row>
 
-        <section class="settings-section">
-          <h2 class="settings-section-label">THEME</h2>
-          {/* ヘッダーの巡回ボタンから移した。年に数回しか触らないものが、
-              毎回見る場所に居座っていた */}
-          <Seg
-            label={t().settings.theme}
-            value={theme()}
-            options={THEMES.map((choice) => [choice, t().theme[choice]] as const)}
-            onPick={chooseTheme}
-          />
-        </section>
+      {/* 全画面の窓があるのは macOS だけ。Android に出しても何も起きない */}
+      <Show when={isMacDesktop()}>
+        <SwitchRow
+          label={t().settings.startFullscreen}
+          desc={t().settings.startFullscreenHint}
+          checked={startFullscreen()}
+          onChange={chooseStartFullscreen}
+        />
+      </Show>
+    </>
+  );
 
-        {/* 全画面の窓があるのは macOS だけ。Android に出しても何も起きない */}
-        <Show when={isMacDesktop()}>
-          <section class="settings-section">
-            <h2 class="settings-section-label">WINDOW</h2>
-            <Switch
-              class="settings-toggle"
-              checked={startFullscreen()}
-              onChange={chooseStartFullscreen}
-            >
-              <Switch.Label>{t().settings.startFullscreen}</Switch.Label>
-              <Switch.Input />
-              <Switch.Control class="settings-switch">
-                <Switch.Thumb class="settings-switch-thumb" />
-              </Switch.Control>
-            </Switch>
-            <p class="settings-hint">{t().settings.startFullscreenHint}</p>
-          </section>
-        </Show>
+  const records = (): JSX.Element => (
+    <>
+      {/* テンプレートの管理は別画面(`ROUTES.TEMPLATES`)。ここはその入口で、
+          行ごと押せる */}
+      <A
+        href={ROUTES.TEMPLATES}
+        class="settings-row settings-row--link"
+        aria-label={t().templates.manage}
+      >
+        <div class="settings-row-head">
+          <div class="settings-row-label">{t().templates.title}</div>
+          <p class="settings-row-desc">{t().templates.manageHint}</p>
+        </div>
+        <div class="settings-row-value">
+          <span>{t().templates.count((templates() ?? []).length)}</span>
+          <Icon name="caret-right" size={14} />
+        </div>
+      </A>
 
-        <section class="settings-section">
-          <h2 class="settings-section-label">TEMPLATES</h2>
-          <A href={ROUTES.TEMPLATES} class="settings-link">
-            <Icon name="file-text" size={16} />
-            <span class="settings-link-label">{t().templates.manage}</span>
-            <span class="settings-link-count">
-              {t().templates.count((templates() ?? []).length)}
-            </span>
-            <Icon name="caret-right" size={14} />
-          </A>
-          <p class="settings-hint">{t().templates.manageHint}</p>
-        </section>
-
-        <section class="settings-section">
-          <h2 class="settings-section-label">GLYPHS</h2>
-          <Show
-            when={visibleGlyphs().length > 0}
-            fallback={<p class="settings-hint">{t().settings.glyphsEmpty}</p>}
-          >
-            <ul class="glyph-list" aria-label={t().settings.glyphs}>
-              <For each={visibleGlyphs()}>
-                {(glyph) => (
-                  <li class="glyph-row">
-                    {/* 縮小表示。画像が届いていない(登録表に無い)ときは枠だけ */}
-                    <span class="glyph-thumb">
-                      <Show when={glyphs().get(glyph.name)}>
-                        {(url) => <img class="glyph" src={url()} alt="" draggable={false} />}
-                      </Show>
-                    </span>
-                    <code class="glyph-code">:{glyph.name}:</code>
-                    <span class="glyph-meta">
-                      {glyph.format} · {Math.max(1, Math.round(glyph.bytes / 1024))} KB
-                    </span>
-                    <button
-                      type="button"
-                      class="icon-button glyph-remove"
-                      title={t().settings.deleteGlyph(glyph.name)}
-                      aria-label={t().settings.deleteGlyph(glyph.name)}
-                      onClick={() => removeGlyph(glyph)}
-                    >
-                      <Icon name="trash" size={16} />
-                    </button>
-                  </li>
-                )}
-              </For>
-            </ul>
-          </Show>
-
-          <Show
-            when={pendingGlyph()}
-            fallback={
-              <div class="settings-actions">
-                <button
-                  type="button"
-                  class="button-secondary"
-                  disabled={savingGlyph()}
-                  onClick={() => fileInput?.click()}
-                >
-                  <Icon name="plus" size={14} />
-                  {t().settings.addGlyph}
-                </button>
-                <button
-                  type="button"
-                  class="button-secondary"
-                  disabled={savingGlyph()}
-                  onClick={() => folderInput?.click()}
-                >
-                  <Icon name="folder" size={14} />
-                  {t().settings.addGlyphsFolder}
-                </button>
-                {/* ダイアログのプラグインは入れない。ファイル選択はブラウザで足りる */}
-                <input
-                  ref={fileInput}
-                  type="file"
-                  class="glyph-file"
-                  accept=".png,.svg,image/png,image/svg+xml"
-                  multiple
-                  aria-label={t().settings.addGlyph}
-                  onChange={(e) => {
-                    pickGlyphFiles(e.currentTarget.files);
-                    // 同じファイルを選び直しても change が飛ぶように
-                    e.currentTarget.value = "";
-                  }}
-                />
-                {/* webkitdirectory は標準外だが、どのエンジンもフォルダ選択に
-                    これを見る。Solid の JSX 型に無いので ref で付ける。
-                    Android の WebView は出せないことがあるので、上の複数選択の
-                    input も残している。accept はフォルダ選択では効かない —
-                    中身の選別は planGlyphImport がやる */}
-                <input
-                  ref={(el) => {
-                    folderInput = el;
-                    el.setAttribute("webkitdirectory", "");
-                  }}
-                  type="file"
-                  class="glyph-file"
-                  multiple
-                  aria-label={t().settings.addGlyphsFolder}
-                  onChange={(e) => {
-                    pickGlyphFiles(e.currentTarget.files);
-                    e.currentTarget.value = "";
-                  }}
-                />
-              </div>
-            }
-          >
-            {(pending) => (
-              <div class="glyph-form">
-                <span class="glyph-thumb">
-                  <img
-                    class="glyph"
-                    src={URL.createObjectURL(pending().file)}
-                    alt=""
-                    draggable={false}
-                  />
-                </span>
-                <div class="settings-field glyph-form-name">
-                  <label class="settings-field">
-                    <span class="settings-field-label">{t().settings.glyphName}</span>
-                    <input
-                      type="text"
-                      class="settings-input"
-                      value={glyphName()}
-                      onInput={(e) => setGlyphName(e.currentTarget.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !isImeComposing(e)) {
-                          void saveGlyph();
-                        }
-                      }}
-                      autocapitalize="off"
-                      autocorrect="off"
-                      spellcheck={false}
-                    />
-                  </label>
-                  <span class="settings-hint">{t().settings.glyphNameHint}</span>
-                </div>
-                <div class="settings-actions">
+      <Row label={t().settings.glyphs} desc={t().settings.glyphsHint} tall>
+        <Show
+          when={visibleGlyphs().length > 0}
+          fallback={<p class="settings-hint">{t().settings.glyphsEmpty}</p>}
+        >
+          <ul class="glyph-list" aria-label={t().settings.glyphs}>
+            <For each={visibleGlyphs()}>
+              {(glyph) => (
+                <li class="glyph-row">
+                  {/* 縮小表示。画像が届いていない(登録表に無い)ときは枠だけ */}
+                  <span class="glyph-thumb">
+                    <Show when={glyphs().get(glyph.name)}>
+                      {(url) => <img class="glyph" src={url()} alt="" draggable={false} />}
+                    </Show>
+                  </span>
+                  <code class="glyph-code">:{glyph.name}:</code>
+                  <span class="glyph-meta">
+                    {glyph.format} · {Math.max(1, Math.round(glyph.bytes / 1024))} KB
+                  </span>
                   <button
                     type="button"
-                    class="button-primary"
-                    onClick={() => {
-                      void saveGlyph();
-                    }}
-                    disabled={savingGlyph() || !isGlyphName(glyphName().trim())}
+                    class="icon-button glyph-remove"
+                    title={t().settings.deleteGlyph(glyph.name)}
+                    aria-label={t().settings.deleteGlyph(glyph.name)}
+                    onClick={() => removeGlyph(glyph)}
                   >
-                    {savingGlyph() ? t().common.saving : t().common.save}
+                    <Icon name="trash" size={16} />
                   </button>
-                  <button type="button" class="button-secondary" onClick={cancelGlyph}>
-                    {t().common.cancel}
-                  </button>
-                </div>
-              </div>
-            )}
-          </Show>
-          <p class="settings-hint">{t().settings.glyphsHint}</p>
-          <p class="settings-hint">{t().settings.glyphsFolderHint}</p>
-        </section>
+                </li>
+              )}
+            </For>
+          </ul>
+        </Show>
 
-        <section class="settings-section">
-          <h2 class="settings-section-label">SERVER</h2>
-          <Show
-            when={editable()}
-            fallback={
-              <p class="settings-readonly">
-                Workers URL
-                <span>{workersUrl() || t().settings.notSet}</span>
-              </p>
-            }
-          >
-            <label class="settings-field">
-              <span class="settings-field-label">Workers URL</span>
-              <input
-                type="url"
-                class="settings-input"
-                value={workersUrl()}
-                onInput={(e) => setWorkersUrl(e.currentTarget.value)}
-                placeholder="https://....workers.dev"
-              />
-            </label>
+        <Show
+          when={pendingGlyph()}
+          fallback={
             <div class="settings-actions">
               <button
                 type="button"
-                class="button-primary"
-                onClick={() => {
-                  void save();
-                }}
-                disabled={saving()}
+                class="button-secondary"
+                disabled={savingGlyph()}
+                onClick={() => fileInput?.click()}
               >
-                {saving() ? t().common.saving : t().common.save}
+                <Icon name="plus" size={14} />
+                {t().settings.addGlyph}
               </button>
+              <button
+                type="button"
+                class="button-secondary"
+                disabled={savingGlyph()}
+                onClick={() => folderInput?.click()}
+              >
+                <Icon name="folder" size={14} />
+                {t().settings.addGlyphsFolder}
+              </button>
+              {/* ダイアログのプラグインは入れない。ファイル選択はブラウザで足りる */}
+              <input
+                ref={fileInput}
+                type="file"
+                class="glyph-file"
+                accept=".png,.svg,image/png,image/svg+xml"
+                multiple
+                aria-label={t().settings.addGlyph}
+                onChange={(e) => {
+                  pickGlyphFiles(e.currentTarget.files);
+                  // 同じファイルを選び直しても change が飛ぶように
+                  e.currentTarget.value = "";
+                }}
+              />
+              {/* webkitdirectory は標準外だが、どのエンジンもフォルダ選択に
+                  これを見る。Solid の JSX 型に無いので ref で付ける。
+                  Android の WebView は出せないことがあるので、上の複数選択の
+                  input も残している。accept はフォルダ選択では効かない —
+                  中身の選別は planGlyphImport がやる */}
+              <input
+                ref={(el) => {
+                  folderInput = el;
+                  el.setAttribute("webkitdirectory", "");
+                }}
+                type="file"
+                class="glyph-file"
+                multiple
+                aria-label={t().settings.addGlyphsFolder}
+                onChange={(e) => {
+                  pickGlyphFiles(e.currentTarget.files);
+                  e.currentTarget.value = "";
+                }}
+              />
             </div>
-          </Show>
-        </section>
-
-        <section class="settings-section">
-          <h2 class="settings-section-label">ACCOUNT</h2>
-
-          <p class="settings-status">
-            <span class="settings-dot" classList={{ "settings-dot--on": authenticated() }} />
-            {authenticated() ? t().settings.signedIn : t().settings.notSignedIn}
-          </p>
-
-          <div class="settings-actions">
-            <Show
-              when={authenticated()}
-              fallback={
+          }
+        >
+          {(pending) => (
+            <div class="glyph-form">
+              <span class="glyph-thumb">
+                <img
+                  class="glyph"
+                  src={URL.createObjectURL(pending().file)}
+                  alt=""
+                  draggable={false}
+                />
+              </span>
+              <div class="settings-field glyph-form-name">
+                <label class="settings-field">
+                  <span class="settings-field-label">{t().settings.glyphName}</span>
+                  <input
+                    type="text"
+                    class="settings-input"
+                    value={glyphName()}
+                    onInput={(e) => setGlyphName(e.currentTarget.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !isImeComposing(e)) {
+                        void saveGlyph();
+                      }
+                    }}
+                    autocapitalize="off"
+                    autocorrect="off"
+                    spellcheck={false}
+                  />
+                </label>
+                <span class="settings-hint">{t().settings.glyphNameHint}</span>
+              </div>
+              <div class="settings-actions">
                 <button
                   type="button"
                   class="button-primary"
                   onClick={() => {
-                    void login();
+                    void saveGlyph();
                   }}
-                  disabled={!workersUrl().trim()}
+                  disabled={savingGlyph() || !isGlyphName(glyphName().trim())}
                 >
-                  {t().settings.signInGoogle}
+                  {savingGlyph() ? t().common.saving : t().common.save}
                 </button>
-              }
+                <button type="button" class="button-secondary" onClick={cancelGlyph}>
+                  {t().common.cancel}
+                </button>
+              </div>
+            </div>
+          )}
+        </Show>
+        <p class="settings-hint">{t().settings.glyphsFolderHint}</p>
+      </Row>
+    </>
+  );
+
+  const sync = (): JSX.Element => (
+    <>
+      <Row
+        label={t().settings.workersUrl}
+        desc={t().settings.workersUrlDesc}
+        labelFor={editable() ? WORKERS_URL_FIELD : undefined}
+        tall
+      >
+        <Show
+          when={editable()}
+          fallback={
+            // 設定ファイルで固定されている環境では読むだけ
+            <p class="settings-readonly">{workersUrl() || t().settings.notSet}</p>
+          }
+        >
+          <input
+            id={WORKERS_URL_FIELD}
+            type="url"
+            class="settings-input settings-input--mono"
+            value={workersUrl()}
+            onInput={(e) => setWorkersUrl(e.currentTarget.value)}
+            placeholder="https://....workers.dev"
+          />
+          <div class="settings-actions">
+            <button
+              type="button"
+              class="button-primary"
+              onClick={() => {
+                void save();
+              }}
+              disabled={saving()}
             >
+              {saving() ? t().common.saving : t().common.save}
+            </button>
+          </div>
+        </Show>
+      </Row>
+
+      <Row label={t().settings.account} desc={t().settings.accountDesc} tall>
+        <p class="settings-status">
+          <span class="settings-dot" classList={{ "settings-dot--on": authenticated() }} />
+          {authenticated() ? t().settings.signedIn : t().settings.notSignedIn}
+        </p>
+
+        <div class="settings-actions">
+          <Show
+            when={authenticated()}
+            fallback={
               <button
                 type="button"
-                class="button-secondary"
+                class="button-primary"
                 onClick={() => {
-                  void logout();
+                  void login();
                 }}
+                disabled={!workersUrl().trim()}
               >
-                {t().settings.signOut}
+                {t().settings.signInGoogle}
               </button>
-            </Show>
-          </div>
-
-          <Show when={!authenticated() && !workersUrl().trim()}>
-            <p class="settings-hint">{t().settings.signInHint}</p>
+            }
+          >
+            <button
+              type="button"
+              class="button-secondary"
+              onClick={() => {
+                void logout();
+              }}
+            >
+              {t().settings.signOut}
+            </button>
           </Show>
-        </section>
+        </div>
 
-        <Show when={version()}>
-          <section class="settings-section">
-            <h2 class="settings-section-label">ABOUT</h2>
-            <p class="settings-hint">
-              {t().settings.version}: {version()}
-            </p>
-          </section>
+        <Show when={!authenticated() && !workersUrl().trim()}>
+          <p class="settings-hint">{t().settings.signInHint}</p>
         </Show>
+      </Row>
+    </>
+  );
 
-        <Show when={message()}>
-          <p class="settings-message">{message()}</p>
+  const rowsOf = (id: PageId): JSX.Element => {
+    switch (id) {
+      case "general": {
+        return general();
+      }
+      case "records": {
+        return records();
+      }
+      case "sync": {
+        return sync();
+      }
+    }
+  };
+
+  return (
+    <div class="settings" classList={{ "settings--page": pageOpen() }}>
+      <nav class="settings-nav" aria-label={t().settings.title}>
+        <h1 class="settings-title">{t().settings.title}</h1>
+        <For each={PAGE_IDS}>
+          {(id) => (
+            <button
+              type="button"
+              class="settings-nav-row"
+              classList={{ "settings-nav-row--on": page() === id }}
+              aria-current={page() === id ? "page" : undefined}
+              onClick={() => {
+                setPage(id);
+                setPageOpen(true);
+              }}
+            >
+              <Icon name={PAGE_ICONS[id]} size={15} />
+              <span class="settings-nav-text">
+                <span>{t().settings.pages[id].title}</span>
+                <Show when={t().settings.pages[id].hint}>
+                  {(hint) => <span class="settings-nav-hint">{hint()}</span>}
+                </Show>
+              </span>
+              {/* 1 頁ずつ出すモバイルだけに出る、頁へ進む印 */}
+              <span class="settings-nav-caret">
+                <Icon name="caret-right" size={14} />
+              </span>
+            </button>
+          )}
+        </For>
+        <Show when={version()}>
+          {(built) => <p class="settings-version">{t().settings.versionLine(built())}</p>}
+        </Show>
+      </nav>
+
+      {/* 頁は切り替えるたびに作り直す。8px 上がりながら入る動きがそこで走る */}
+      <div class="settings-page">
+        <Show when={page()} keyed>
+          {(id) => (
+            <div class="settings-page-inner">
+              <div class="settings-page-head">
+                {/* 一覧へ戻る道。1 頁ずつ出すモバイルだけで意味がある */}
+                <button
+                  type="button"
+                  class="icon-button settings-back"
+                  aria-label={t().settings.backToPages}
+                  onClick={() => setPageOpen(false)}
+                >
+                  <Icon name="arrow-left" size={18} />
+                </button>
+                <h2 class="settings-page-title">{t().settings.pages[id].title}</h2>
+              </div>
+              <p class="settings-page-lead">{t().settings.pages[id].lead}</p>
+
+              {rowsOf(id)}
+
+              <Show when={message()}>
+                <p class="settings-message">{message()}</p>
+              </Show>
+            </div>
+          )}
         </Show>
       </div>
     </div>

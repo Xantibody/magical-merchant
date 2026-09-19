@@ -352,6 +352,26 @@ const ja = {
   },
   settings: {
     title: "設定",
+    // 3 頁の題・ナビの補助・頁の説明。ナビの行がそのまま頁の頭になる
+    pages: {
+      general: {
+        title: "一般",
+        hint: "言語 · テーマ",
+        lead: "この端末だけの設定。",
+      },
+      records: {
+        title: "記録",
+        hint: "テンプレート · 特殊文字",
+        lead: "Note の雛形と、本文に出る画像。",
+      },
+      sync: {
+        title: "同期",
+        // 頁が 2 行しかないので、題だけで足りる
+        hint: "",
+        lead: "Cloudflare Workers + R2。端末は自分の状態を送らず、Worker が正を持つ。",
+      },
+    },
+    backToPages: "設定の一覧に戻る",
     notSet: "未設定",
     signedIn: "ログイン済み",
     notSignedIn: "未ログイン",
@@ -365,7 +385,9 @@ const ja = {
     signedOutMessage: "ログアウトしました",
     signOutFailed: (reason: string) => `ログアウトできませんでした: ${reason}`,
     theme: "テーマ",
+    themeDesc: "システムは端末の設定に従う",
     language: "言語",
+    languageDesc: "表示に使う言語",
     languageSystem: "システム",
     languageJa: "日本語",
     languageEn: "English",
@@ -388,7 +410,13 @@ const ja = {
     glyphDeleted: "特殊文字を削除しました",
     glyphSaved: (name: string) => `:${name}: を登録しました`,
     glyphSaveFailed: (reason: string) => `登録できませんでした: ${reason}`,
-    version: "バージョン",
+    workersUrl: "Workers URL",
+    workersUrlDesc: "デプロイした Worker のアドレス",
+    account: "アカウント",
+    accountDesc: "Google でログイン",
+    // 端末に載っているビルドを名乗る唯一の場所。版は `getVersion()` が返す
+    // tauri.conf.json の値で、リリースタグと一致する
+    versionLine: (version: string) => `Magical Merchant ${version}`,
   },
   palette: {
     dialogLabel: "検索・コマンド",
@@ -764,6 +792,24 @@ const en: Messages = {
   },
   settings: {
     title: "Settings",
+    pages: {
+      general: {
+        title: "General",
+        hint: "Language · Theme",
+        lead: "Settings for this device alone.",
+      },
+      records: {
+        title: "Records",
+        hint: "Templates · Glyphs",
+        lead: "Note templates, and the images a body can show.",
+      },
+      sync: {
+        title: "Sync",
+        hint: "",
+        lead: "Cloudflare Workers + R2. A device never uploads its own state; the Worker owns it.",
+      },
+    },
+    backToPages: "Back to the settings list",
     notSet: "Not set",
     signedIn: "Signed in",
     notSignedIn: "Not signed in",
@@ -777,7 +823,9 @@ const en: Messages = {
     signedOutMessage: "Signed out",
     signOutFailed: (reason: string) => `Could not sign out: ${reason}`,
     theme: "Theme",
+    themeDesc: "System follows the device setting",
     language: "Language",
+    languageDesc: "The language the app is shown in",
     languageSystem: "System",
     languageJa: "日本語",
     languageEn: "English",
@@ -800,7 +848,11 @@ const en: Messages = {
     glyphDeleted: "Glyph deleted",
     glyphSaved: (name: string) => `Registered :${name}:`,
     glyphSaveFailed: (reason: string) => `Could not register it: ${reason}`,
-    version: "Version",
+    workersUrl: "Workers URL",
+    workersUrlDesc: "The address of the Worker you deployed",
+    account: "Account",
+    accountDesc: "Sign in with Google",
+    versionLine: (version: string) => `Magical Merchant ${version}`,
   },
   palette: {
     dialogLabel: "Search and commands",
