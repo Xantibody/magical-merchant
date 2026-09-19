@@ -17,7 +17,14 @@ const TOAST_MS = 5000;
 
 export interface Shell {
   popover: Accessor<PopoverName>;
-  togglePopover: (name: Exclude<PopoverName, null>) => void;
+  /**
+   * 開けたボタンを渡すと、そのボタンを押したぶんは「外側」に数えなくなる
+   * (`components/Popover.tsx`)。先に閉じてしまうと、直後の click がもう一度
+   * 開けてしまい、同じボタンでは畳めない。
+   */
+  togglePopover: (name: Exclude<PopoverName, null>, trigger?: HTMLElement) => void;
+  /** いま開いているポップオーバーを開けたボタン。 */
+  popoverTrigger: Accessor<HTMLElement | undefined>;
   closePopovers: () => void;
   paletteOpen: Accessor<boolean>;
   /** 開いたときに引き継いだ範囲。無ければ全体を探す。 */
@@ -50,6 +57,7 @@ export function useShell(): Shell {
 
 export function ShellProvider(props: { children: JSX.Element }): JSX.Element {
   const [popover, setPopover] = createSignal<PopoverName>(null);
+  const [popoverTrigger, setPopoverTrigger] = createSignal<HTMLElement | undefined>();
   const [paletteOpen, setPaletteOpen] = createSignal(false);
   const [paletteScope, setPaletteScope] = createSignal<PaletteScope | null>(null);
   const [scrawlTag, setScrawlTag] = createSignal<string | null>(null);
@@ -68,9 +76,11 @@ export function ShellProvider(props: { children: JSX.Element }): JSX.Element {
 
   const shell: Shell = {
     popover,
-    togglePopover: (name) => {
+    togglePopover: (name, trigger) => {
+      setPopoverTrigger(trigger);
       setPopover((current) => (current === name ? null : name));
     },
+    popoverTrigger,
     closePopovers: () => setPopover(null),
     paletteOpen,
     paletteScope,

@@ -7,6 +7,7 @@ import type { UnlistenFn } from "@tauri-apps/api/event";
 import Icon from "../components/Icon";
 import type { IconName } from "../components/Icon";
 import CommandPalette from "../components/CommandPalette";
+import Popover from "../components/Popover";
 import SyncPopover from "../components/SyncPopover";
 import UndoToast from "../components/UndoToast";
 import FirstRunCard from "../components/FirstRunCard";
@@ -287,20 +288,6 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
       globalThis.removeEventListener("blur", onBlur);
     });
 
-    // ポップオーバーの外側をクリックしたら閉じる。ルート要素の onClick では
-    // ポータルや overlay の外に出たクリックを取りこぼす。
-    // AIDEV-NOTE: 「…」は自分で閉じるが .note-menu-button は要る — ここが先に閉じると開いた直後のメニューが畳まれる
-    const onPointerDown = (e: MouseEvent): void => {
-      const target = e.target instanceof Element ? e.target : null;
-      if (
-        !target?.closest(".popover, .header-action, .calendar-button, .note-menu-button, .new-note")
-      ) {
-        shell.closePopovers();
-      }
-    };
-    document.addEventListener("pointerdown", onPointerDown);
-    onCleanup(() => document.removeEventListener("pointerdown", onPointerDown));
-
     // 目を離しているあいだに CLI・MCP・他の端末が data/ を書き換えている。
     // アプリはファイルを監視しないので、戻ってきた瞬間を合図に読み直す。
     // Android では凍結されたプロセスが起きる唯一の合図でもある
@@ -374,7 +361,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
               title={t().header.jumpToDate}
               aria-label={t().header.jumpToDate}
               aria-expanded={shell.popover() === "calendar"}
-              onClick={() => shell.togglePopover("calendar")}
+              onClick={(e) => shell.togglePopover("calendar", e.currentTarget)}
             >
               <Icon name="calendar-blank" size={18} />
             </button>
@@ -386,7 +373,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
             aria-label={t().header.sync}
             aria-expanded={shell.popover() === "sync"}
             data-key={shortcutLabel("syncNow")}
-            onClick={() => shell.togglePopover("sync")}
+            onClick={(e) => shell.togglePopover("sync", e.currentTarget)}
           >
             <Icon name={syncIconName(sync.status())} size={18} />
           </button>
@@ -400,11 +387,15 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
           </A>
         </div>
 
-        <Show when={shell.popover() === "sync"}>
-          <div class="popover-anchor popover-anchor--sync">
-            <SyncPopover sync={sync} onClose={() => shell.closePopovers()} />
-          </div>
-        </Show>
+        <Popover
+          open={shell.popover() === "sync"}
+          onClose={() => shell.closePopovers()}
+          trigger={shell.popoverTrigger}
+          label={t().header.sync}
+          class="popover-anchor popover-anchor--sync"
+        >
+          <SyncPopover sync={sync} onClose={() => shell.closePopovers()} />
+        </Popover>
       </header>
 
       <main class="app-main">{props.children}</main>

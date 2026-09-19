@@ -26,16 +26,19 @@ Spacing/typography/radius use Open Props (`var(--size-*)`, `var(--radius-*)`,
   (`.popover`, `.icon-button`, `.button-primary/secondary`)
 - Icons: Phosphor SVGs through `<Icon name size />`; register new names in
   `components/Icon.tsx`
-- Popovers hang from `.popover-anchor--*` fixed anchors; outside-click closing
-  is handled centrally in AppLayout (`closest(".popover, .header-action, …")`)
-  — add new trigger classes there or the popover will close on its own button.
-  The `…` menu is the exception: it is a Kobalte `DropdownMenu` that dismisses
-  itself (its trigger still needs the class, see the anchor there)
+- Popovers hang from `.popover-anchor--*` fixed anchors and **close
+  themselves**: wrap the panel in `components/Popover.tsx` (corvu `Dialog`,
+  `modal={false}`) and hand `shell.togglePopover(name, e.currentTarget)` the
+  button. AppLayout has no central outside-click handler any more. Forget the
+  trigger element and the popover folds on its own button — the pointerdown
+  that opened it counts as "outside"
 - **Kobalte (`@kobalte/core`) only from a lazy route chunk** (`Workspace`,
   `Settings`). Its first component costs ~27 KB gzip; importing one from
-  `AppLayout` or any eager module puts that in the startup bundle. An entrance
-  animation on a Kobalte panel goes on `[data-expanded]` — an ungated
-  `animation` makes its presence logic wait forever to unmount
+  `AppLayout` or any eager module puts that in the startup bundle. corvu is the
+  eager-side counterpart: `corvu/dialog` costs ~5 KB. An entrance animation on
+  a Kobalte or corvu panel goes on `[data-expanded]` / the inner `.popover` —
+  an ungated `animation` on the panel makes its presence logic wait forever to
+  unmount
 - Toasts go through `shell.showToast(text, undo?)`; destructive actions get a
   5s undo tombstone (see Workspace.remove) rather than a confirm dialog
 - Comments in code explain _why_ (in Japanese, matching the codebase style)

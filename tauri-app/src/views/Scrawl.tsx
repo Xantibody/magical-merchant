@@ -12,6 +12,7 @@ import type { JSX } from "solid-js";
 import Icon from "../components/Icon";
 import CaptureBar from "../components/CaptureBar";
 import CalendarPopover from "../components/CalendarPopover";
+import Popover from "../components/Popover";
 import TagFilter from "../components/TagFilter";
 import ScrawlEntry, { OriginChip } from "../components/ScrawlEntry";
 import { useNavigate, useSearchParams } from "@solidjs/router";
@@ -534,18 +535,22 @@ export default function Scrawl(): JSX.Element {
         </Show>
       </div>
 
-      <Show when={shell.popover() === "calendar"}>
-        <div class="popover-anchor popover-anchor--calendar">
-          <CalendarPopover
-            recordedDates={recordedDates()}
-            contextsFor={contextsFor}
-            onPick={(iso) => {
-              jumpToDay(iso);
-              shell.closePopovers();
-            }}
-          />
-        </div>
-      </Show>
+      <Popover
+        open={shell.popover() === "calendar"}
+        onClose={() => shell.closePopovers()}
+        trigger={shell.popoverTrigger}
+        label={t().header.jumpToDate}
+        class="popover-anchor popover-anchor--calendar"
+      >
+        <CalendarPopover
+          recordedDates={recordedDates()}
+          contextsFor={contextsFor}
+          onPick={(iso) => {
+            jumpToDay(iso);
+            shell.closePopovers();
+          }}
+        />
+      </Popover>
     </div>
   );
 }

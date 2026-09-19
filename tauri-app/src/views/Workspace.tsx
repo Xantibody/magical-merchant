@@ -18,6 +18,7 @@ import Icon from "../components/Icon";
 import MarkdownPreview from "../components/MarkdownPreview";
 import NoteMenu from "../components/NoteMenu";
 import NoteMetaPopover from "../components/NoteMetaPopover";
+import Popover from "../components/Popover";
 import TemplatePicker from "../components/TemplatePicker";
 import VersionSlider from "../components/VersionSlider";
 import VersionSpine from "../components/VersionSpine";
@@ -222,6 +223,8 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
 
   let detailBodyRef: HTMLDivElement | undefined;
   let listScrollRef: HTMLDivElement | undefined;
+  /** 「+ 新規」。テンプレのシートを開けたボタンなので、押されたぶんは外側に数えない */
+  let newNoteButton: HTMLButtonElement | undefined;
   /** 「保存しました」を保存時刻の表示に落とすタイマー。 */
   let savedTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -1021,7 +1024,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
    */
   const newNoteLongPress = createLongPress(() => {
     if (kind() === "note") {
-      shell.togglePopover("new-note-menu");
+      shell.togglePopover("new-note-menu", newNoteButton);
     }
   });
   let newNotePointer = "mouse";
@@ -1092,6 +1095,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
           <button
             type="button"
             class="new-note long-press"
+            ref={newNoteButton}
             aria-expanded={shell.popover() === "new-note-menu"}
             onPointerDown={(e) => {
               newNotePointer = e.pointerType;
@@ -1109,7 +1113,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
               // テンプレは Note の入口。Codex の面では空の 1 本を作るだけ —
               // `create_from_template` は置き場を選べない
               if (newNotePointer === "mouse" && kind() === "note") {
-                shell.togglePopover("new-note-menu");
+                shell.togglePopover("new-note-menu", newNoteButton);
               } else {
                 void createNote();
               }
@@ -1120,7 +1124,12 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
           </button>
         </div>
 
-        <Show when={shell.popover() === "new-note-menu"}>
+        <Popover
+          open={shell.popover() === "new-note-menu"}
+          onClose={() => shell.closePopovers()}
+          trigger={shell.popoverTrigger}
+          label={t().templates.newNote}
+        >
           {/* 背後を暗くするのは下から出るシートのときだけ(CSS 側で出し分け) */}
           <div class="template-picker-backdrop" />
           <TemplatePicker
@@ -1137,7 +1146,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
               navigate(ROUTES.TEMPLATES);
             }}
           />
-        </Show>
+        </Popover>
 
         {/* キーを受けるのは中の行(button)で、ここはそれを束ねているだけ。
             `.detail-body` と同じく、役割を名乗らない入れ物 */}
@@ -1349,7 +1358,12 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                 </Show>
               </div>
 
-              <Show when={shell.popover() === "note-meta"}>
+              <Popover
+                open={shell.popover() === "note-meta"}
+                onClose={() => shell.closePopovers()}
+                trigger={shell.popoverTrigger}
+                label={t().notes.info}
+              >
                 <NoteMetaPopover
                   filename={item().filename}
                   revertable={revertable()}
@@ -1361,7 +1375,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                   }}
                   onClose={() => shell.closePopovers()}
                 />
-              </Show>
+              </Popover>
 
               <div
                 class="detail-panes"
