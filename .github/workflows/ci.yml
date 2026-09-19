@@ -152,15 +152,23 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
+      # 履歴を全部取る。下の git-restore-mtime が各ファイルの最終更新コミットを
+      # 探すのに要る。pack は 7MB 程度なので、深さ 1 との差は誤差
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+          fetch-depth: 0
       # store 3G + target で 21GB の空きに「収まっていた」が、2026-09-17 から
       # 同じキャッシュ・同じ image で cargo の crate 取得が ENOSPC で落ちる。
       # android と同じく、キャッシュ復元と並行してバックグラウンドで消す
       # (前面で消すと 87 秒かかる)
       - name: Free disk space (background)
         run: nohup sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache >/dev/null 2>&1 &
+      # checkout は全ファイルの mtime を「今」にする。cargo の fingerprint は
+      # mtime を見るので、下で target を復元しても、変えていない crate まで
+      # 作り直しになる。最後にそのファイルを触ったコミットの時刻へ戻せば、
+      # 変えていないものは復元した成果物より古いままになる
+      - uses: chetan/git-restore-mtime-action@v2
       - uses: ./.github/actions/setup-nix
         with:
           name: rust
@@ -266,13 +274,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
+      # fetch-depth: 0 は rust ジョブと同じく git-restore-mtime のため
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+          fetch-depth: 0
       # rm -rf に 72 秒かかるので、キャッシュ復元と並行してバックグラウンドで消す。
       # APK ビルドが始まる頃(2 分後)には終わっている
       - name: Free disk space (background)
         run: nohup sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache >/dev/null 2>&1 &
+      - uses: chetan/git-restore-mtime-action@v2
       # name は release.yml と揃えてある。SDK と NDK は同じものなので、
       # どちらが先に走っても取り直さない
       - uses: ./.github/actions/setup-nix
