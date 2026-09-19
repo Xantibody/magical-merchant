@@ -7,6 +7,9 @@ import { shortcutLabel } from "../lib/shortcuts";
 import type { ShortcutName } from "../lib/shortcuts";
 
 interface NoteMenuProps {
+  /** 開いているか。面の側が持つ(⌘. や他のポップオーバーと排他にする)。 */
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   /** どの面のノートか。Codex にできるのは Note だけ。 */
   kind: NoteKind;
   mapOpen: boolean;
@@ -63,84 +66,102 @@ function Row(props: {
 export default function NoteMenu(props: NoteMenuProps): JSX.Element {
   const [confirming, setConfirming] = createSignal(false);
   return (
-    <div class="popover note-menu" role="menu" aria-label={t().notes.actions}>
-      <Show
-        when={!confirming()}
-        fallback={
-          <div class="note-menu-confirm">
-            {/* 戻れないことより先に、何が増えるかを言う。押すかどうかは
-                それで決まる */}
-            <span class="note-menu-confirm-title">
-              <Icon name="book" size={15} />
-              {t().codex.promote}
-            </span>
-            <p class="note-menu-confirm-label">{t().codex.promoteBody1}</p>
-            <p class="note-menu-confirm-label">
-              {t().codex.promoteBody2}
-              <strong>{t().codex.promoteBody2Strong}</strong>
-            </p>
-            <button type="button" class="button-primary" onClick={() => props.onPromote()}>
-              {t().codex.promoteYes}
-            </button>
-            <button type="button" class="button-secondary" onClick={() => setConfirming(false)}>
-              {t().common.back}
-            </button>
-          </div>
-        }
+    <>
+      {/* 開く口はこの部品が持つ。「…」と中身を別の場所に置くと、外側を
+          押して閉じる判断が両方の DOM を知っている誰かの仕事になる */}
+      <button
+        type="button"
+        class="icon-button note-menu-button"
+        title={t().notes.actions}
+        aria-label={t().notes.actions}
+        aria-expanded={props.open}
+        data-key={shortcutLabel("noteActions")}
+        onClick={() => props.onOpenChange(!props.open)}
       >
-        <Row
-          icon={<Icon name="tree-structure" size={15} />}
-          label={props.mapOpen ? t().notes.hideMap : t().notes.layMap}
-          shortcut="noteMap"
-          onClick={() => props.onToggleMap()}
-        />
-        <Row
-          icon={<Icon name={props.readOnly ? "lock-simple-open" : "lock-simple"} size={15} />}
-          label={props.readOnly ? t().notes.makeEditable : t().notes.makeReadOnly}
-          onClick={() => props.onToggleReadOnly()}
-        />
-        <Show when={props.kind === "note"}>
-          <Row
-            icon={<Icon name="book" size={15} />}
-            label={t().codex.promote}
-            onClick={() => setConfirming(true)}
-          />
-        </Show>
-        <Show when={props.kind === "codex"}>
-          <Row
-            icon={<Icon name="book-bookmark" size={15} />}
-            label={t().codex.commit}
-            shortcut="codexCommit"
-            onClick={() => props.onCommit()}
-          />
-          <Row
-            icon={<Icon name="clock-counter-clockwise" size={15} />}
-            label={t().codex.history}
-            onClick={() => props.onHistory()}
-          />
-        </Show>
-        {/* 時計の矢印は履歴に譲った。こちらは 1 段だけ巻き戻す矢印 */}
-        <Row
-          icon={<Icon name="arrow-counter-clockwise" size={15} />}
-          label={t().notes.revert}
-          shortcut="noteRevert"
-          disabled={!props.revertable}
-          onClick={() => props.onRevert()}
-        />
-        <Row
-          icon={<Icon name="info" size={15} />}
-          label={t().notes.info}
-          shortcut="noteInfo"
-          onClick={() => props.onInfo()}
-        />
-        <div class="note-menu-divider" />
-        <Row
-          icon={<Icon name="trash" size={15} />}
-          label={t().common.delete}
-          danger
-          onClick={() => props.onDelete()}
-        />
+        <Icon name="dots-three" size={17} />
+      </button>
+
+      <Show when={props.open}>
+        <div class="popover note-menu" role="menu" aria-label={t().notes.actions}>
+          <Show
+            when={!confirming()}
+            fallback={
+              <div class="note-menu-confirm">
+                {/* 戻れないことより先に、何が増えるかを言う。押すかどうかは
+                    それで決まる */}
+                <span class="note-menu-confirm-title">
+                  <Icon name="book" size={15} />
+                  {t().codex.promote}
+                </span>
+                <p class="note-menu-confirm-label">{t().codex.promoteBody1}</p>
+                <p class="note-menu-confirm-label">
+                  {t().codex.promoteBody2}
+                  <strong>{t().codex.promoteBody2Strong}</strong>
+                </p>
+                <button type="button" class="button-primary" onClick={() => props.onPromote()}>
+                  {t().codex.promoteYes}
+                </button>
+                <button type="button" class="button-secondary" onClick={() => setConfirming(false)}>
+                  {t().common.back}
+                </button>
+              </div>
+            }
+          >
+            <Row
+              icon={<Icon name="tree-structure" size={15} />}
+              label={props.mapOpen ? t().notes.hideMap : t().notes.layMap}
+              shortcut="noteMap"
+              onClick={() => props.onToggleMap()}
+            />
+            <Row
+              icon={<Icon name={props.readOnly ? "lock-simple-open" : "lock-simple"} size={15} />}
+              label={props.readOnly ? t().notes.makeEditable : t().notes.makeReadOnly}
+              onClick={() => props.onToggleReadOnly()}
+            />
+            <Show when={props.kind === "note"}>
+              <Row
+                icon={<Icon name="book" size={15} />}
+                label={t().codex.promote}
+                onClick={() => setConfirming(true)}
+              />
+            </Show>
+            <Show when={props.kind === "codex"}>
+              <Row
+                icon={<Icon name="book-bookmark" size={15} />}
+                label={t().codex.commit}
+                shortcut="codexCommit"
+                onClick={() => props.onCommit()}
+              />
+              <Row
+                icon={<Icon name="clock-counter-clockwise" size={15} />}
+                label={t().codex.history}
+                onClick={() => props.onHistory()}
+              />
+            </Show>
+            {/* 時計の矢印は履歴に譲った。こちらは 1 段だけ巻き戻す矢印 */}
+            <Row
+              icon={<Icon name="arrow-counter-clockwise" size={15} />}
+              label={t().notes.revert}
+              shortcut="noteRevert"
+              disabled={!props.revertable}
+              onClick={() => props.onRevert()}
+            />
+            <Row
+              icon={<Icon name="info" size={15} />}
+              label={t().notes.info}
+              shortcut="noteInfo"
+              onClick={() => props.onInfo()}
+            />
+            <div class="note-menu-divider" />
+            <Row
+              icon={<Icon name="trash" size={15} />}
+              label={t().common.delete}
+              danger
+              onClick={() => props.onDelete()}
+            />
+          </Show>
+        </div>
       </Show>
-    </div>
+    </>
   );
 }
