@@ -483,6 +483,16 @@ async fn search_all(
     .await
 }
 
+/// 全記録。文字列で絞らないので引数は無く、件数も切られない — 画面はここから
+/// 種類 / タグ / 期間の件数を数える。走査は `search_all` と同じ重さなので、
+/// 呼ぶのは画面を開いたときだけ。
+#[tauri::command]
+async fn browse_all(handle: AppHandle) -> Result<Vec<SearchHit>, String> {
+    let base_dir = app_base_dir(&handle)?;
+    off_main_thread(move || magical_merchant_core::browse_all(&base_dir).map_err(|e| e.to_string()))
+        .await
+}
+
 /// いまの下書きを版として刻む。呼ぶのは人が「版を刻む」と言ったときだけ。
 #[tauri::command]
 fn commit_note_version(
@@ -712,6 +722,7 @@ pub fn run() {
             read_scrawl_by_date,
             delete_scrawl_entry,
             search_all,
+            browse_all,
             resolve_places,
             delete_note,
             export::save_export,

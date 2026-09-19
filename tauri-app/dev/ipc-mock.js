@@ -165,6 +165,17 @@ const charCount = (text) => [...text].length;
  */
 const entryText = (raw) => raw.replace(/^- \[\d\d:\d\d:\d\d\] /u, "").replace(/ \{.*\}$/u, "");
 
+/**
+ * 絞り込みの無い一覧の抜粋。本流(core)の `search::head` と同じで、本文の
+ * 先頭 40 字と、超えた分の省略記号だけ — 一致が無いので光らせる場所も無い。
+ * @param {string} text
+ */
+const headExcerpt = (text) => {
+  const flat = text.replaceAll("\n", " ");
+  const chars = [...flat];
+  return chars.length > 40 ? `${chars.slice(0, 40).join("")}…` : flat;
+};
+
 /** lib/tags.ts の TAG と同じ。 */
 const TAG = /(?<![\p{L}\p{N}_-])#(?<tag>[\p{L}\p{N}_-]+)/gu;
 
@@ -811,6 +822,41 @@ const unifiedDiff = (from, to, fromName, toName) => {
         }
       }
       return hits.toSorted((a, b) => b.date.localeCompare(a.date)).slice(0, 100);
+    },
+    // 文字列で絞らない全件。件数を切らないのは、画面がここから種類 / タグ /
+    // 期間の件数を数えるため — 切ると 101 件目からチップの数字が嘘になる
+    browse_all: () => {
+      const hits = [];
+      for (const [iso, lines] of scrawl) {
+        lines.forEach((raw, index) => {
+          const text = entryText(raw);
+          hits.push({
+            kind: "scrawl",
+            title: text.split("\n")[0],
+            snippet: headExcerpt(text),
+            date: iso,
+            filename: null,
+            index,
+            tags: parseTags(text),
+            match_start: null,
+            match_len: null,
+          });
+        });
+      }
+      for (const [filename, note] of notes) {
+        hits.push({
+          kind: note.kind ?? "note",
+          title: note.body.split("\n")[0].replace(/^#+\s*/u, ""),
+          snippet: headExcerpt(note.body),
+          date: note.time.slice(0, 10),
+          filename,
+          index: null,
+          tags: note.tags,
+          match_start: null,
+          match_len: null,
+        });
+      }
+      return hits.toSorted((a, b) => b.date.localeCompare(a.date));
     },
     list_notes: () => noteList(),
     /** @param {{ filename: string }} args */
