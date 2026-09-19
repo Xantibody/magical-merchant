@@ -193,6 +193,48 @@ pub fn search_all(
     Ok(hits)
 }
 
+/// Scrawl の全エントリと Note / Codex の全ノートを、1 本の並びで新しい順に返す。
+///
+/// 文字列で絞らないぶん [`search_all`] と 3 つ違う。抜粋は一致位置ではなく
+/// 本文の先頭 40 字、`match_start` / `match_len` は常に `None`(一致という概念が
+/// 無い)、そして**件数を切らない** — 「絞る」画面は返ったこの一覧から種類 /
+/// タグ / 期間ごとの件数を数えるので、上限を付けるとチップの数字が嘘になる。
+///
+/// 走査の重さは `search_all` を query 無しで呼ぶのと同じ(Scrawl の全日 +
+/// 全ノートの本文)。呼ぶのは画面を開いたときの 1 回だけにする。
+pub fn browse_all(base_dir: &Path) -> Result<Vec<SearchHit>, CoreError> {
+    // needle も範囲も無い走査は「全部通す」走査。検索と同じ入口を使う
+    let mut hits = scrawl_hits(base_dir, "", &[])?;
+
+    // 読めないノートは空の本文で来る(`scan`)。題も抜粋も空の行になるが、
+    // 1 本のせいで一覧全体を失敗させない — `search_all` と同じ方針
+    Notes::new(base_dir.to_path_buf()).scan(|note, body| {
+        hits.push(SearchHit {
+            kind: note.kind.into(),
+            title: first_line(&note.preview).to_string(),
+            snippet: head(body),
+            date: note
+                .time
+                .map(|t| t.format("%Y-%m-%d").to_string())
+                .unwrap_or_default(),
+            filename: Some(note.filename),
+            index: None,
+            tags: note.tags,
+            match_start: None,
+            match_len: None,
+        });
+    })?;
+
+    hits.sort_by(|a, b| b.date.cmp(&a.date));
+    Ok(hits)
+}
+
+/// 本文の先頭を抜粋として切り出す。空の needle を渡した [`snippet`] そのもので、
+/// 照合しないので小文字版も要らない(`lowered` は一致探しにしか使われない)。
+fn head(text: &str) -> String {
+    snippet(text, text, "").text
+}
+
 /// `target` へ `[[ID]]` で言及している記録(ノート・Scrawl)を集める。
 ///
 /// インデックスは持たず、開かれるたびに走査で導出する。ノートは一覧の
@@ -930,5 +972,130 @@ mod tests {
                 .unwrap()
                 .is_empty()
         );
+    }
+
+    #[test]
+    fn browsing_an_empty_tree_returns_nothing() {
+        let tmp = TempDir::new().unwrap();
+
+        assert!(browse_all(tmp.path()).unwrap().is_empty());
+    }
+
+    /// 「絞る」画面は絞り込みが 1 つも無い状態でも全件を並べる。エントリと
+    /// ノートが 1 本の並びに混ざり、新しいものから来ること。
+    #[test]
+    fn browsing_lists_scrawl_entries_and_notes_newest_first() {
+        let tmp = TempDir::new().unwrap();
+        write_day(
+            &tmp,
+            chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+            "古い記録",
+        );
+        draft(&tmp, "今日のノート", &[]).unwrap();
+
+        let hits = browse_all(tmp.path()).unwrap();
+
+        assert_eq!(hits.len(), 2);
+        assert_eq!(hits[0].kind, HitKind::Note);
+        assert_eq!(hits[0].title, "今日のノート");
+        assert_eq!(hits[1].kind, HitKind::Scrawl);
+        assert_eq!(hits[1].title, "古い記録");
+        assert_eq!(hits[1].index, Some(0));
+    }
+
+    /// 開く先の面が違うので、Codex は Codex と名乗る。
+    #[test]
+    fn a_browsed_codex_says_so() {
+        let tmp = TempDir::new().unwrap();
+        create_draft_codex(
+            tmp.path(),
+            "育てる文書",
+            &[],
+            &context(),
+            Provenance::default(),
+        )
+        .unwrap();
+
+        let hits = browse_all(tmp.path()).unwrap();
+
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].kind, HitKind::Codex);
+    }
+
+    /// チップは件数付きでタグを出す。数える元がタグを落としていては数えられない。
+    #[test]
+    fn browsing_carries_the_tags_of_each_record() {
+        let tmp = TempDir::new().unwrap();
+        save_scrawl_entry(tmp.path(), "走った #run", &context(), Source::App).unwrap();
+        draft(&tmp, "走る計画", &["Plan".to_string()]).unwrap();
+
+        let hits = browse_all(tmp.path()).unwrap();
+
+        let entry = hits.iter().find(|h| h.kind == HitKind::Scrawl).unwrap();
+        assert_eq!(entry.tags, vec!["run"]);
+        let note = hits.iter().find(|h| h.kind == HitKind::Note).unwrap();
+        assert_eq!(note.tags, vec!["Plan"]);
+    }
+
+    /// 抜粋は本文の先頭 40 字。検索の抜粋と同じ数字で、超えた分は同じ作法で
+    /// 省略記号を付ける。
+    #[test]
+    fn a_browsed_snippet_is_the_first_forty_chars_of_the_body() {
+        let snippet_of = |len: usize| {
+            let tmp = TempDir::new().unwrap();
+            draft(&tmp, &"あ".repeat(len), &[]).unwrap();
+            browse_all(tmp.path()).unwrap().remove(0).snippet
+        };
+
+        assert_eq!(snippet_of(40), "あ".repeat(40));
+        assert_eq!(snippet_of(41), format!("{}…", "あ".repeat(40)));
+    }
+
+    /// 一致という概念が無いので、光らせる場所も無い。
+    #[test]
+    fn a_browsed_hit_has_no_match_position() {
+        let tmp = TempDir::new().unwrap();
+        save_scrawl_entry(tmp.path(), "なんでもよい", &context(), Source::App).unwrap();
+        draft(&tmp, "ノートも", &[]).unwrap();
+
+        let hits = browse_all(tmp.path()).unwrap();
+
+        assert_eq!(hits.len(), 2);
+        assert!(hits.iter().all(|h| h.match_start.is_none()));
+        assert!(hits.iter().all(|h| h.match_len.is_none()));
+    }
+
+    /// 1 本読めなくても走査全体は失敗させない(`search_all` と同じ方針)。
+    /// 本文が空で来るので題も抜粋も空だが、件数からは消えない — 数えるのは
+    /// ツリーにあるファイルで、空の本文で絞ることはできないため。
+    #[test]
+    fn an_unreadable_note_does_not_fail_the_browse() {
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = TempDir::new().unwrap();
+        draft(&tmp, "読めるノート", &[]).unwrap();
+        let locked = draft(&tmp, "読めないノート", &[]).unwrap();
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o000)).unwrap();
+
+        let hits = browse_all(tmp.path()).unwrap();
+
+        assert_eq!(hits.len(), 2);
+        assert!(hits.iter().any(|h| h.title == "読めるノート"));
+    }
+
+    /// 「絞る」画面はこの一覧から件数を数える。`search_all` の 100 件を
+    /// 流用すると、101 本目からは件数が嘘になる。
+    #[test]
+    fn browsing_is_not_capped() {
+        let tmp = TempDir::new().unwrap();
+        let oldest = chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
+        for offset in 0..=MAX_HITS {
+            let date = oldest + chrono::Duration::days(i64::try_from(offset).unwrap());
+            write_day(&tmp, date, &format!("記録 {offset}"));
+        }
+
+        let hits = browse_all(tmp.path()).unwrap();
+
+        assert_eq!(hits.len(), MAX_HITS + 1);
+        assert_eq!(hits[MAX_HITS].date, "2025-01-01");
     }
 }
