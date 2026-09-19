@@ -399,6 +399,10 @@ const ja = {
     count: (count: number) => `${count}件`,
     // 入力欄の右。種類の束を合わせて幾つ当たったか
     hitCount: (count: number) => `${count} 件`,
+    // 足元と選択行に出すキーの札。記号はキーそのものなので訳さない
+    hintMove: "選ぶ",
+    hintOpen: "開く",
+    hintClose: "閉じる",
     newNote: "新規 Note",
     openScrawl: "Scrawl を開く",
     openNotes: "Note を開く",
@@ -811,6 +815,9 @@ const en: Messages = {
     empty: "Nothing matches",
     count: (count: number) => `${count}`,
     hitCount: (count: number) => `${count} hits`,
+    hintMove: "Move",
+    hintOpen: "Open",
+    hintClose: "Close",
     newNote: "New Note",
     openScrawl: "Open Scrawl",
     openNotes: "Open Note",

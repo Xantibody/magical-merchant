@@ -291,6 +291,25 @@ describe("CommandPalette results grouped by kind", () => {
     expect(snippets[0]?.querySelector("mark")?.textContent).toBe("ベガ");
   });
 
+  // 足元の札。上下で選んで ↩ で開くことは、押してみるまで分からない
+  it("spells the keys at the foot", () => {
+    const { container } = renderPalette([], MIXED);
+
+    const foot = [...container.querySelectorAll(".palette-footer span")];
+
+    expect(foot.map((hint) => hint.textContent)).toStrictEqual(["↑↓ 選ぶ", "↩ 開く", "Esc 閉じる"]);
+  });
+
+  it("names the open key on the selected row alone", async () => {
+    const { input, container, rows } = renderPalette([], MIXED);
+    await search(input, "ベガ", () => expect(rows()).toHaveLength(3));
+
+    const opens = [...container.querySelectorAll(".palette-row-enter")];
+
+    expect(opens.map((open) => open.textContent)).toStrictEqual(["↩ 開く"]);
+    expect(opens[0]?.closest(".palette-row")?.classList).toContain("palette-row--active");
+  });
+
   it("counts every hit next to the input", async () => {
     const { input, container } = renderPalette([], MIXED);
 

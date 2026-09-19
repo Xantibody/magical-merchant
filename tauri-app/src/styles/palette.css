@@ -140,9 +140,43 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* 選択行だけに出る「↩ 開く」。日付の右、行の端 */
+.palette-row-enter {
+  font-size: 11px;
+  color: var(--app-text-hint);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.palette-footer {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--app-hairline);
+  font-size: 11px;
+  color: var(--app-text-faint);
+}
+
+.palette-footer kbd {
+  font-family: inherit;
+  color: var(--app-text-muted);
+}
+
+.palette-footer-end {
+  margin-left: auto;
+}
+
 .palette-empty {
   margin: 0;
   padding: 12px 14px;
   font-size: 13px;
   color: var(--app-text-muted);
+}
+
+@media (max-width: 767px) {
+  /* キーの案内は押すキーが無い画面では場所の無駄 */
+  .palette-footer {
+    display: none;
+  }
 }

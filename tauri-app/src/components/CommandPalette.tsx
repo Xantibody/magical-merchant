@@ -375,6 +375,10 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
                       <Show when={row.meta}>
                         {(meta) => <span class="palette-row-meta">{meta()}</span>}
                       </Show>
+                      {/* 選んでいる行だけ、押したら何が起きるかを添える */}
+                      <Show when={clampedCursor() === globalIndex(row)}>
+                        <span class="palette-row-enter">↩ {t().palette.hintOpen}</span>
+                      </Show>
                     </button>
                   )}
                 </For>
@@ -389,6 +393,19 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
                 : t().palette.empty}
             </p>
           </Show>
+        </div>
+
+        {/* キーの案内。指で触る画面には要らないので CSS で隠す */}
+        <div class="palette-footer">
+          <span>
+            <kbd>↑↓</kbd> {t().palette.hintMove}
+          </span>
+          <span>
+            <kbd>↩</kbd> {t().palette.hintOpen}
+          </span>
+          <span class="palette-footer-end">
+            <kbd>Esc</kbd> {t().palette.hintClose}
+          </span>
         </div>
       </div>
     </div>
