@@ -180,6 +180,12 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   const [saveStatus, setSaveStatus] = createSignal<SaveStatus>("idle");
   /** 最後に保存できた時刻。「21:40 に保存」の数字。 */
   const [savedAt, setSavedAt] = createSignal("");
+
+  // 保存の様子はボトムバー(AppLayout)にも出る。あちらはこの画面の外なので、
+  // shell を経由して渡す。離れるときは idle に戻す — 持ち越すと、書いて
+  // いない画面が「21:40 に保存」と言い続ける
+  createEffect(() => shell.setSaveState({ status: saveStatus(), at: savedAt() }));
+  onCleanup(() => shell.setSaveState({ status: "idle", at: "" }));
   const [hidden, setHidden] = createSignal<string[]>([]);
   /**
    * 先頭 H1 を切り離した本文。エディタが打鍵のたびに書き戻すので、いつでも

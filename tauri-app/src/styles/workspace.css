@@ -421,10 +421,18 @@
   color: var(--app-text-muted);
 }
 
+/* 保存の様子はメタ行とボトムバーの両方に置き場があるが、出すのはどちらか
+   一方だけ。広い画面ではバーが言うので、メタ行は日付とタグに戻る */
 .detail-save-status {
   display: inline-flex;
   align-items: baseline;
   gap: 4px;
+}
+
+@media (min-width: 768px) {
+  .detail-save-status {
+    display: none;
+  }
 }
 
 /* 緑が点くのは保存できた直後の 2 秒だけ。書いているあいだ光り続けさせない */

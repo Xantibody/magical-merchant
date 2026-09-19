@@ -787,6 +787,21 @@ describe("Workspace › 保存の見え方", () => {
     await waitFor(() => expect(screen.getByText(/に保存$/u)).toBeDefined(), { timeout: 4000 });
   });
 
+  /**
+   * 広い画面で保存の様子を出すのはボトムバーで、それは画面の外(AppLayout)に
+   * ある。受け渡しは shell なので、そこへ着地が届いているかを見る。
+   */
+  it("hands the landing to the shell for the bar outside this view", async () => {
+    await openNoteA();
+    expect(shell?.saveState().status).toBe("idle");
+
+    fireEvent.input(titleInput(), { target: { value: "会議メモ 改" } });
+
+    await waitFor(() => expect(shell?.saveState().status).toBe("saved"), { timeout: 3000 });
+    await waitFor(() => expect(shell?.saveState().status).toBe("savedAt"), { timeout: 4000 });
+    expect(shell?.saveState().at).toMatch(/^\d\d:\d\d$/u);
+  });
+
   // 2 秒の緑はそのノートの持ち物。隣へ移ったあとに落ちてくる「21:40 に保存」は、
   // 保存していないノートに保存したと言うことになる
   it("does not carry the saved time onto the next note", async () => {

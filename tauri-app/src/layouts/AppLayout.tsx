@@ -366,6 +366,24 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
 
         <main class="app-main">{props.children}</main>
 
+        {/* 着地したことだけを言う細い帯。現在地は出さない — レールの線と題で
+            足りる。狭い画面には出さない(CSS)。下タブと二段になるので、
+            そちらでは保存の様子をメタ行が持つ */}
+        <div class="bottom-bar">
+          <Show when={shell.saveState().status !== "idle"}>
+            <span class="bottom-bar-save" data-status={shell.saveState().status}>
+              <Show when={shell.saveState().status !== "saving"}>
+                <Icon name="check" size={13} />
+              </Show>
+              {shell.saveState().status === "saving" ? t().common.saving : null}
+              {shell.saveState().status === "saved" ? t().common.saved : null}
+              {shell.saveState().status === "savedAt"
+                ? t().notes.savedAt(shell.saveState().at)
+                : null}
+            </span>
+          </Show>
+        </div>
+
         <nav class="bottom-tabs">
           <For each={BOTTOM_TABS}>
             {(path) => (
