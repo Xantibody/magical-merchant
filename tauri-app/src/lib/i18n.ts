@@ -62,6 +62,9 @@ const ja = {
     sync: "同期",
     settings: "Settings",
   },
+  rail: {
+    label: "面の切り替えと全体の操作",
+  },
   theme: {
     system: "システム",
     light: "ライト",
@@ -500,6 +503,9 @@ const en: Messages = {
     jumpToDate: "Jump to a date",
     sync: "Sync",
     settings: "Settings",
+  },
+  rail: {
+    label: "Modes and global actions",
   },
   theme: {
     system: "System",

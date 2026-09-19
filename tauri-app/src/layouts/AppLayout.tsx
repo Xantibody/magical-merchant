@@ -8,6 +8,7 @@ import Icon from "../components/Icon";
 import type { IconName } from "../components/Icon";
 import CommandPalette from "../components/CommandPalette";
 import Popover from "../components/Popover";
+import Rail from "../components/Rail";
 import SyncPopover from "../components/SyncPopover";
 import UndoToast from "../components/UndoToast";
 import FirstRunCard from "../components/FirstRunCard";
@@ -35,11 +36,6 @@ import { getDeviceSignals, warmLocation } from "../lib/client-context";
 import { applyStartFullscreen } from "../lib/fullscreen";
 import { loadGlyphs } from "../lib/glyphs";
 
-const TABS: { path: RoutePath; shortcut: ShortcutName }[] = [
-  { path: ROUTES.SCRAWL, shortcut: "scrawl" },
-  { path: ROUTES.NOTES, shortcut: "notes" },
-  { path: ROUTES.CODEX, shortcut: "codex" },
-];
 const BOTTOM_TABS: RoutePath[] = [ROUTES.SCRAWL, ROUTES.NOTES, ROUTES.CODEX, ROUTES.SETTINGS];
 
 /** system を選んでいる人の画面は、端末の設定が変わった瞬間に切り替わる。 */
@@ -315,78 +311,70 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
 
   return (
     <div class="app">
-      <header class="header">
-        <nav class="header-tabs">
-          <For each={TABS}>
-            {(tab) => (
-              <A
-                href={tab.path}
-                class="header-tab"
-                classList={{ "header-tab--active": isActive(tab.path) }}
-                data-key={shortcutLabel(tab.shortcut)}
+      <Rail sync={sync} onSearch={openSearch} />
+
+      <div class="app-column">
+        {/* 狭い画面にはレールを立てる幅が無い。題と数個の入口だけを帯にする */}
+        <header class="mobile-header">
+          <span class="mobile-header-title">
+            {MODE_LABELS[location.pathname as RoutePath] ?? MODE_LABELS[ROUTES.SCRAWL]}
+          </span>
+
+          <div class="mobile-header-actions">
+            {/* ポップオーバー本体は Scrawl が持つ。記録のある日を知っているのは向こう */}
+            <Show when={isActive(ROUTES.SCRAWL)}>
+              <button
+                type="button"
+                class="icon-button"
+                title={t().header.jumpToDate}
+                aria-label={t().header.jumpToDate}
+                aria-expanded={shell.popover() === "calendar"}
+                onClick={(e) => shell.togglePopover("calendar", e.currentTarget)}
               >
-                <Icon name={MODE_ICONS[tab.path]} size={16} />
-                {MODE_LABELS[tab.path]}
+                <Icon name="calendar-blank" size={18} />
+              </button>
+            </Show>
+            <button
+              type="button"
+              class="icon-button"
+              title={t().header.search}
+              aria-label={t().header.search}
+              onClick={openSearch}
+            >
+              <Icon name="magnifying-glass" size={18} />
+            </button>
+            <button
+              type="button"
+              class="icon-button"
+              title={t().header.sync}
+              aria-label={t().header.sync}
+              aria-expanded={shell.popover() === "sync"}
+              onClick={(e) => shell.togglePopover("sync", e.currentTarget)}
+            >
+              <Icon name={syncIconName(sync.status())} size={18} />
+            </button>
+          </div>
+        </header>
+
+        <main class="app-main">{props.children}</main>
+
+        <nav class="bottom-tabs">
+          <For each={BOTTOM_TABS}>
+            {(path) => (
+              <A
+                href={path}
+                class="bottom-tab"
+                classList={{ "bottom-tab--active": isActive(path) }}
+              >
+                <Icon name={MODE_ICONS[path]} size={22} />
+                {MODE_LABELS[path]}
               </A>
             )}
           </For>
         </nav>
 
-        <span class="header-title">
-          {MODE_LABELS[location.pathname as RoutePath] ?? MODE_LABELS[ROUTES.SCRAWL]}
-        </span>
-
-        <button type="button" class="search-field" onClick={openSearch}>
-          <Icon name="magnifying-glass" size={15} />
-          <span class="search-field-label">{t().header.searchPlaceholder}</span>
-          <span class="key-badge">{shortcutLabel("search")}</span>
-        </button>
-
-        <div class="header-actions">
-          {/* 幅が狭いと検索フィールドが隠れるので、代わりの入口を用意する */}
-          <button
-            type="button"
-            class="icon-button header-action header-action--search"
-            title={t().header.search}
-            aria-label={t().header.search}
-            onClick={openSearch}
-          >
-            <Icon name="magnifying-glass" size={18} />
-          </button>
-          {/* ポップオーバー本体は Scrawl が持つ。記録のある日を知っているのは向こう */}
-          <Show when={isActive(ROUTES.SCRAWL)}>
-            <button
-              type="button"
-              class="icon-button header-action"
-              title={t().header.jumpToDate}
-              aria-label={t().header.jumpToDate}
-              aria-expanded={shell.popover() === "calendar"}
-              onClick={(e) => shell.togglePopover("calendar", e.currentTarget)}
-            >
-              <Icon name="calendar-blank" size={18} />
-            </button>
-          </Show>
-          <button
-            type="button"
-            class="icon-button header-action"
-            title={t().header.sync}
-            aria-label={t().header.sync}
-            aria-expanded={shell.popover() === "sync"}
-            data-key={shortcutLabel("syncNow")}
-            onClick={(e) => shell.togglePopover("sync", e.currentTarget)}
-          >
-            <Icon name={syncIconName(sync.status())} size={18} />
-          </button>
-          <A
-            href={ROUTES.SETTINGS}
-            class="icon-button header-action header-action--settings"
-            title={t().header.settings}
-            data-key={shortcutLabel("settings")}
-          >
-            <Icon name="gear" size={18} />
-          </A>
-        </div>
-
+        {/* 同期の入口はレール(広い窓)と帯(狭い窓)の両方にあるが、開く器は
+            1 つ。どちらの足元に吊るすかは CSS が決める */}
         <Popover
           open={shell.popover() === "sync"}
           onClose={() => shell.closePopovers()}
@@ -396,20 +384,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
         >
           <SyncPopover sync={sync} onClose={() => shell.closePopovers()} />
         </Popover>
-      </header>
-
-      <main class="app-main">{props.children}</main>
-
-      <nav class="bottom-tabs">
-        <For each={BOTTOM_TABS}>
-          {(path) => (
-            <A href={path} class="bottom-tab" classList={{ "bottom-tab--active": isActive(path) }}>
-              <Icon name={MODE_ICONS[path]} size={22} />
-              {MODE_LABELS[path]}
-            </A>
-          )}
-        </For>
-      </nav>
+      </div>
 
       {/* 札だけでは「なぜ出たか」「どう消すか」が分からない。説明はここ 1 つ */}
       <Show when={hints.visible()}>

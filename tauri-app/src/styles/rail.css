@@ -1,0 +1,108 @@
+/* 面と全体の操作を縦に並べた 48px の柱。ヘッダの代わりで、デスクトップだけ。
+   字は持たない — 入口はアイコン 1 つで、名前は title と読み上げにだけ出す */
+
+.rail {
+  position: relative;
+  z-index: 30;
+  box-sizing: border-box;
+  width: 48px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 0;
+  background: var(--app-sidebar);
+  border-right: 1px solid var(--app-hairline);
+}
+
+.rail-button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  color: var(--app-text-faint);
+  cursor: pointer;
+  text-decoration: none;
+  transition:
+    background 150ms var(--app-ease),
+    color 150ms var(--app-ease);
+}
+
+.rail-button:hover {
+  background: var(--app-surface-2);
+  color: var(--app-text);
+}
+
+/* 現在地は塗り。ヘッダのタブは字の重さだけで示していたが、ここには
+   重さを載せる字が無い */
+.rail-button--active {
+  background: var(--app-accent-soft);
+  color: var(--app-text);
+}
+
+/* 面ではない入口 (検索・同期)。現在地にはならないので、塗りを待たずに
+   読める濃さにしておく */
+.rail-button--plain {
+  color: var(--app-text-muted);
+}
+
+/* 現在地の線。3 つの面のあいだを滑る。位置はレールの中の実寸で、
+   ボタン (36px) と隙間 (4px) と上の余白 (10px) から出る */
+.rail-marker {
+  position: absolute;
+  left: 0;
+  width: 2px;
+  height: 20px;
+  border-radius: 0 1px 1px 0;
+  background: var(--app-accent);
+  transition:
+    top 220ms var(--app-ease),
+    opacity 160ms var(--app-ease);
+}
+
+/* 設定のように面ではない場所に居るあいだは線を出さない。top はそのままに
+   しておく — 面へ戻ったとき、線が遠くから飛んでこない */
+.rail-marker[data-off] {
+  opacity: 0;
+}
+
+.rail-divider {
+  width: 20px;
+  height: 1px;
+  flex-shrink: 0;
+  margin: 6px 0;
+  background: var(--app-surface-2);
+}
+
+/* 同期から下は足元に寄せる。日に何度も押す物ではない */
+.rail-button--foot {
+  margin-top: auto;
+}
+
+/* 同期のポップオーバーはレールの右に開く。真下では画面の外へ落ちる */
+.rail .popover-anchor--sync {
+  position: absolute;
+  top: auto;
+  bottom: 8px;
+  left: calc(100% + 6px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rail-button,
+  .rail-marker {
+    transition: none;
+  }
+}
+
+@media (max-width: 767px) {
+  .rail {
+    display: none;
+  }
+}
