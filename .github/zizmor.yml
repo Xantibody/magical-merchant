@@ -1,0 +1,19 @@
+# ci.yml の workflows ジョブが読む zizmor の設定。
+# https://docs.zizmor.sh/configuration/
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        # 既定の blanket policy は SHA 固定を要求するが、ここは版タグで止める。
+        # renovate.json5 の github-actions グループが週 1 で上げているので版は
+        # 追えているし、SHA 固定にすると 1 行ごとに「どの版か」のコメントを
+        # 添えないとレビューできなくなる
+        "*": ref-pin
+  cache-poisoning:
+    ignore:
+      # release.yml は main の CI が保存した nix store キャッシュを restore して
+      # 署名 APK を組む。そのキャッシュを書けるのは main に入ったコミットだけで、
+      # main に入れられる人はこのワークフロー自体を書き換えられる。つまり
+      # キャッシュは新しい権限を足していない。外すと配信のたびに 45 分の
+      # コールドビルドに戻る
+      - release.yml

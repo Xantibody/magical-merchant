@@ -23,13 +23,19 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag || github.ref }}
+          persist-credentials: false
 
       # tauri.conf.json の version が Android の versionCode の元になる。
       # タグとずれていると、更新のつもりが上書きインストールできない APK になる
+      #
+      # タグ名は env 越しに渡す。run の中へ式を直に展開すると、タグ名に含まれた
+      # 引用符がそのままシェルの構文になる (zizmor の template-injection)
       - name: Check the tag matches tauri.conf.json
         id: version
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
         run: |
-          tag="${{ inputs.tag || github.ref_name }}"
+          tag="$TAG"
           version=$(jq -r .version tauri-app/src-tauri/tauri.conf.json)
           if [ "$tag" != "v$version" ]; then
             echo "::error::tag $tag does not match tauri.conf.json version $version"
