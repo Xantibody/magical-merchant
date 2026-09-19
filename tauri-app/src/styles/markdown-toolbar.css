@@ -12,10 +12,10 @@
     left: 0;
     right: 0;
     z-index: 150;
-    gap: var(--size-1);
-    padding: var(--size-1) var(--size-2);
     background: var(--app-surface-2);
     border-top: 1px solid var(--app-border);
+    /* コードブロックの中では「抜ける」が増えて 9 個になり、狭い端末では
+       44px × 9 が入らない。詰めるのではなく送れるようにする */
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
   }
@@ -25,8 +25,10 @@
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    /* 9 つを 360px 幅の画面に横スクロールなしで並べる幅 */
-    padding: var(--size-2);
+    /* 指で押す当たり判定。余白ではなく寸法で持つ(モバイルの規則の 44px) */
+    inline-size: 44px;
+    block-size: 44px;
+    padding: 0;
     background: none;
     border: none;
     border-radius: var(--radius-2);
@@ -37,6 +39,19 @@
   .markdown-toolbar button:active {
     color: var(--app-text);
     background: var(--app-surface);
+  }
+
+  /* 書式ではなく「書き終わり」のボタンなので、記法の並びから離して右端へ */
+  .markdown-toolbar-release {
+    margin-inline-start: auto;
+  }
+
+  /* `[[` はアイコンに置き換えず記号のまま見せる。本文に入る文字そのものだから */
+  .markdown-toolbar-glyph {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-1);
+    font-weight: var(--font-weight-6);
+    line-height: 1;
   }
 
   /* 編集中はツールバーが下端を使う。タブを残すと fixed のツールバーが上に
