@@ -21,13 +21,9 @@ import NoteMetaPopover from "../components/NoteMetaPopover";
 import TemplatePicker from "../components/TemplatePicker";
 import VersionSlider from "../components/VersionSlider";
 import VersionSpine from "../components/VersionSpine";
-import {
-  isBrokenNoteSave,
-  isMissingNoteSave,
-  isNotTextNoteSave,
-  isStaleSave,
-  typedInvoke,
-} from "../lib/commands";
+import { isStaleSave, typedInvoke } from "../lib/commands";
+import { refusalToast, refusedForGood } from "../lib/save-refusal";
+import type { RefusedScreen } from "../lib/save-refusal";
 import { getDeviceSignals } from "../lib/client-context";
 import { createDebouncedAccessor } from "../lib/debounce";
 import { markedBody } from "../lib/diff-marks";
@@ -135,78 +131,6 @@ function versionStatusLabel(status: VersionStatus): string {
   return status.dirty
     ? t().codex.deltaFromLatest(status.count, status.bytes_delta)
     : t().codex.versionN(status.count);
-}
-
-/**
- * 読み直しでは直らない拒否か。壊れた記録・消えたノート・文字として読めない
- * ファイルの 3 つ。どれも次の打鍵に望みが無いので、打った字はその場で退避する。
- * 判断を 1 か所に置くのは、印が増えたときに退避の経路から漏れると、打った字が
- * ディスクにも控えにも残らないまま黙って消えるから。
- */
-const refusedForGood = (error: unknown): boolean =>
-  isBrokenNoteSave(error) || isMissingNoteSave(error) || isNotTextNoteSave(error);
-
-/**
- * 断られた保存のあと、画面に何が出ているか。言い分はこれで決まる。
- *
- * - `draft`: 断られたノートが選ばれていて、本文は打ったぶんのまま。
- *   「画面にあるうちに写して」が届く唯一の場合
- * - `reloaded`: そのノートは選ばれているが、本文は読み直しで入れ替わった
- *   (譲ったぶんでも、A → B → A と戻って着いたぶんでも同じ)。打った字は
- *   もう画面に無いので、控えから取り出す話しかできない
- * - `away`: 画面にあるのは別のノート。画面の本文を指す案内は届かない
- */
-type RefusedScreen = "draft" | "reloaded" | "away";
-
-/**
- * 断られた保存の言い分。`screen` は「断られたノートの打鍵がいま画面に出ているか」。
- * 出ていないなら画面の本文を指す案内は届かない — 画面にあるのは別のノートで、
- * 写す相手がそこに無い。名乗ってから、控えの在り処と取り出せるかだけを言う。
- * 消えたノートと、文字として読めないノートの控えは、控えとしては残るが、いま
- * 取り出す道が無い。開き直しても `read_note` が断られるので本文は載らず、
- * 「戻す」もそこで引き返す。
- * Stale だけはノートが書ける状態で残るので、開き直せば「戻す」で取り出せる —
- * ただし読み直しは選んでいるノートにしか走らないので、画面に無いぶんは
- * 「開き直してから」を先に言う。読み直しそのものが失敗した(`draft`)ときは、
- * 打った本文がまだ画面に残っているので、それを指して写してもらう。
- * AIDEV-NOTE: 孤児の控え(消えた・読めないノートのぶん)を開く一覧が無いので、取り出せないことを文言で正直に言うに留める(道は別 PR)
- */
-function refusalToast(
-  error: unknown,
-  kept: boolean,
-  item: NoteItem,
-  screen: RefusedScreen,
-): string {
-  const words = t().notes;
-  // 打鍵が画面に残っているときだけ、画面の本文を指す案内が届く
-  const onScreen = screen === "draft";
-  if (!kept) {
-    if (onScreen) {
-      return words.saveNotKept;
-    }
-    // 読み直しが載ったぶんは、画面の本文もディスクのぶんに入れ替わっている。
-    // 控えも無いので、打った字はもうどこにも無い
-    if (screen === "reloaded" && isStaleSave(error)) {
-      return words.staleNotKept;
-    }
-    return words.saveNotKeptAway(item.title);
-  }
-  if (isStaleSave(error)) {
-    if (screen === "reloaded") {
-      return words.editedElsewhere;
-    }
-    return onScreen ? words.staleNotReloaded : words.editedElsewhereAway(item.title);
-  }
-  if (isMissingNoteSave(error)) {
-    return onScreen ? words.missingNote : words.missingNoteAway(item.title);
-  }
-  // 文字として読めないファイルは、記録が壊れているのとは手当てが違う。
-  // 直すのは frontmatter ではなくファイルそのもので、開き直しても
-  // `read_note` が同じ理由で断られるので「戻す」で取り出す道も無い
-  if (isNotTextNoteSave(error)) {
-    return onScreen ? words.notTextNote : words.notTextNoteAway(item.title);
-  }
-  return onScreen ? words.brokenMeta : words.brokenMetaAway(item.title);
 }
 
 /** このノートを指している記録。畳んだ 1 行以上の場所は取らない。 */
@@ -730,7 +654,9 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       reloaded = await loadNote(pending.item, true);
     }
     await refetchNotes();
-    shell.showToast(refusalToast(error, kept, pending.item, refusedScreen(pending, reloaded)));
+    shell.showToast(
+      refusalToast(error, kept, pending.item.title, refusedScreen(pending, reloaded)),
+    );
   };
   const flushSave = (pending = snapshotSave()): Promise<void> => {
     const previous = saveChain;
@@ -796,7 +722,9 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
           // 閉じ、画面にしか無い唯一の写しごと失う
           const kept = tryWriteBackup(localStorage, pending.item.filename, typedBody(pending));
           // ここは読み直しを走らせない。画面にあるのは打鍵の続きか、別のノート
-          shell.showToast(refusalToast(error, kept, pending.item, refusedScreen(pending, false)));
+          shell.showToast(
+            refusalToast(error, kept, pending.item.title, refusedScreen(pending, false)),
+          );
         }
       }
     })();
