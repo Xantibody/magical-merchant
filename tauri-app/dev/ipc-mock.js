@@ -180,21 +180,112 @@ const headExcerpt = (text) => {
 const TAG = /(?<![\p{L}\p{N}_-])#(?<tag>[\p{L}\p{N}_-]+)/gu;
 
 /**
- * 本文に書かれたタグ。綴りは打たれたまま返す。畳むのは重複を落とすときだけで、
- * 残るのは先に出たほう。
- * @param {string} text
+ * 大小を無視して重複を落とす。残るのは先に出たほうで、綴りは打たれたまま。
+ * 本流(core)の `utils::tags::fold_unique` と同じ。
+ * @param {Iterable<string>} tags
  */
-const parseTags = (text) => {
+const foldUnique = (tags) => {
   /** @type {Map<string, string>} */
   const seen = new Map();
-  for (const m of text.matchAll(TAG)) {
-    const tag = m.groups?.tag ?? "";
+  for (const tag of tags) {
     if (!seen.has(foldTag(tag))) {
       seen.set(foldTag(tag), tag);
     }
   }
   return [...seen.values()];
 };
+
+/**
+ * 本文に書かれたタグ。
+ * @param {string} text
+ */
+const parseTags = (text) => foldUnique([...text.matchAll(TAG)].map((m) => m.groups?.tag ?? ""));
+
+/**
+ * 行がコードフェンスの区切りなら、その記号と本数。core の `tags::fence_marker`
+ * と同じで、3 本以上だけが区切り。
+ * @param {string} line
+ */
+const fenceMarker = (line) => {
+  const trimmed = line.trimStart();
+  const [marker] = trimmed;
+  if (marker !== "`" && marker !== "~") {
+    return null;
+  }
+  let len = 0;
+  while (trimmed[len] === marker) {
+    len += 1;
+  }
+  return len >= 3 ? { marker, len } : null;
+};
+
+/**
+ * 1 行のうち、インラインコードの外側だけ。閉じない `` ` `` はただの記号として
+ * 以降も本文に読む — core の `tags::collect_line` と同じ。
+ * @param {string} line
+ */
+const outsideCode = (line) => {
+  const spans = [];
+  let rest = line;
+  for (let start = rest.indexOf("`"); start !== -1; start = rest.indexOf("`")) {
+    spans.push(rest.slice(0, start));
+    const after = rest.slice(start);
+    let ticks = 0;
+    while (after[ticks] === "`") {
+      ticks += 1;
+    }
+    const delim = after.slice(0, ticks);
+    const body = after.slice(ticks);
+    const end = body.indexOf(delim);
+    rest = end === -1 ? body : body.slice(end + ticks);
+  }
+  spans.push(rest);
+  return spans;
+};
+
+/**
+ * ノート本文に書かれたタグ。core の `tags::parse` と同じで、コードフェンスの
+ * 中とインラインコードは読まない — `#include` や CSS の `#id` は書き手が
+ * タグのつもりで打ったものではない。
+ *
+ * Scrawl の側(`parseTags`)はこれを通さない。あちらは日ファイルの 1 行で
+ * フェンスを持てず、`lib/tags.ts` の綴りに合わせてある。
+ * @param {string} body
+ */
+const bodyTags = (body) => {
+  const tags = [];
+  /** @type {{ marker: string, len: number } | null} */
+  let fence = null;
+  for (const line of body.split("\n")) {
+    const edge = fenceMarker(line);
+    if (fence) {
+      // 開いたときより短い区切りでは閉じない
+      if (edge && edge.marker === fence.marker && edge.len >= fence.len) {
+        fence = null;
+      }
+    } else if (edge) {
+      fence = edge;
+    } else {
+      for (const span of outsideCode(line)) {
+        for (const m of span.matchAll(TAG)) {
+          tags.push(m.groups?.tag ?? "");
+        }
+      }
+    }
+  }
+  return tags;
+};
+
+/**
+ * ノートが名乗るタグ。core の `NoteSummary::from_file` は frontmatter のぶんと
+ * 本文に書かれたぶんを `tags::merge` で畳んでから配るので、`NoteSummary` と
+ * `SearchHit` に乗るのは常に合わせたほう。frontmatter が先。
+ *
+ * `read_note_meta` だけはここを通さない。あれは frontmatter そのものを返す
+ * 経路で、タグ欄が編集するのは書かれた 1 行のほうだから。
+ * @param {{ tags?: string[], body: string }} note
+ */
+const noteTags = (note) => foldUnique([...(note.tags ?? []), ...bodyTags(note.body)]);
 
 /**
  * `update_draft` の失敗。本物は Rust 側の JSON がそのまま届くので `kind` を持つ
@@ -574,7 +665,7 @@ const unifiedDiff = (from, to, fromName, toName) => {
           path: `/mock/data/${filename}`,
           filename,
           time: note.time,
-          tags: note.tags,
+          tags: noteTags(note),
           preview: note.body.slice(0, 120),
         };
         // core が `skip_serializing_if` で落とすのと同じく、無いキーは生やさない
@@ -809,14 +900,15 @@ const unifiedDiff = (from, to, fromName, toName) => {
         });
       }
       for (const [filename, note] of notes) {
-        if (note.body.toLowerCase().includes(needle) && inScope(note.tags)) {
+        const own = noteTags(note);
+        if (note.body.toLowerCase().includes(needle) && inScope(own)) {
           hits.push({
             kind: note.kind ?? "note",
             title: note.body.split("\n")[0].replace(/^#+\s*/u, ""),
             date: note.time.slice(0, 10),
             filename,
             index: null,
-            tags: note.tags,
+            tags: own,
             ...excerpt(note.body),
           });
         }
@@ -851,7 +943,7 @@ const unifiedDiff = (from, to, fromName, toName) => {
           date: note.time.slice(0, 10),
           filename,
           index: null,
-          tags: note.tags,
+          tags: noteTags(note),
           match_start: null,
           match_len: null,
         });
@@ -890,7 +982,7 @@ const unifiedDiff = (from, to, fromName, toName) => {
             date: note.time.slice(0, 10),
             filename: name,
             index: null,
-            tags: note.tags,
+            tags: noteTags(note),
             match_start: null,
             match_len: null,
           });
