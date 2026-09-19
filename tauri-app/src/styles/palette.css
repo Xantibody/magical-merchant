@@ -51,6 +51,14 @@
   min-width: 0;
 }
 
+/* 当たった件数。入力欄の右に添える */
+.palette-count {
+  font-size: 11px;
+  color: var(--app-text-faint);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 .palette-results {
   padding: 6px 0 10px;
   overflow-y: auto;

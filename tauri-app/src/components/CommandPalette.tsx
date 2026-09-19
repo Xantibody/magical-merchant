@@ -3,7 +3,7 @@ import type { JSX } from "solid-js";
 import Icon from "./Icon";
 import type { IconName } from "./Icon";
 import { typedInvoke } from "../lib/commands";
-import type { SearchHit } from "../lib/commands";
+import type { HitKind, SearchHit } from "../lib/commands";
 import { formatMonthDay } from "../lib/day-labels";
 import { createDebouncedAccessor } from "../lib/debounce";
 import { t } from "../lib/i18n";
@@ -11,7 +11,7 @@ import { isImeComposing } from "../lib/ime";
 import { toNoteItems } from "../lib/items";
 import { countNoteTags, dayJumpHits, recentNoteHits } from "../lib/palette-home";
 import { scopeLabel, searchRequest } from "../lib/search-scope";
-import { HIT_ICONS } from "../lib/routes";
+import { HIT_ICONS, MODE_LABELS, ROUTES } from "../lib/routes";
 import { splitSnippet } from "../lib/snippet-highlight";
 import type { SnippetParts } from "../lib/snippet-highlight";
 
@@ -68,6 +68,22 @@ const SEARCH_DEBOUNCE_MS = 200;
 
 /** zero-query に出すタグの数。全部出すと入り口ではなく一覧になってしまう。 */
 const HOME_TAG_LIMIT = 6;
+
+/**
+ * 結果の束の並び。書いた量の多い順 — Codex は探して開くもの、Scrawl は
+ * 数が多く日付で辿れるものなので、下に置く。
+ */
+const HIT_GROUP_ORDER: HitKind[] = ["codex", "note", "scrawl"];
+
+/**
+ * 束の見出しに出す種類の名。面の名をそのまま引く(`routes.ts`)。固有名詞なので
+ * どちらの言語でも同じ綴りで、`t()` は通らない。
+ */
+const HIT_LABELS: Record<HitKind, string> = {
+  scrawl: MODE_LABELS[ROUTES.SCRAWL],
+  note: MODE_LABELS[ROUTES.NOTES],
+  codex: MODE_LABELS[ROUTES.CODEX],
+};
 
 export default function CommandPalette(props: CommandPaletteProps): JSX.Element {
   const [query, setQuery] = createSignal("");
@@ -174,23 +190,26 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
       ].filter((section) => section.rows.length > 0);
     }
 
-    const hitRows: PaletteRow[] = (hits() ?? []).map((hit, i) => ({
-      key: `hit:${i}`,
-      icon: HIT_ICONS[hit.kind],
-      label: hit.title || hit.snippet,
-      meta: formatMonthDay(hit.date),
-      highlight: splitSnippet(hit.snippet, hit.match_start, hit.match_len),
-      run: () => props.onSelectHit(hit),
-    }));
-    // 範囲の中では件数も出す。「この中に何件あるか」が絞り込みの手応えになる
-    const hitsTitle =
-      activeTags().length > 0
-        ? `${t().palette.hits} · ${t().palette.count(hitRows.length)}`
-        : t().palette.hits;
-    return [
-      { title: t().palette.commands, rows: commands },
-      { title: hitsTitle, rows: hitRows },
-    ].filter((section) => section.rows.length > 0);
+    // 1 本の並びではなく種類の束にする。どこに居たものかは、行の印より
+    // 見出しのほうが早い。件数は「この中に何件あるか」の手応え
+    const found = hits() ?? [];
+    const groups: PaletteSection[] = HIT_GROUP_ORDER.map((kind) => {
+      const rows: PaletteRow[] = found
+        .map((hit, i) => ({ hit, i }))
+        .filter(({ hit }) => hit.kind === kind)
+        .map(({ hit, i }) => ({
+          key: `hit:${i}`,
+          icon: HIT_ICONS[hit.kind],
+          label: hit.title || hit.snippet,
+          meta: formatMonthDay(hit.date),
+          highlight: splitSnippet(hit.snippet, hit.match_start, hit.match_len),
+          run: () => props.onSelectHit(hit),
+        }));
+      return { title: `${HIT_LABELS[kind].toUpperCase()} · ${rows.length}`, rows };
+    });
+    return [{ title: t().palette.commands, rows: commands }, ...groups].filter(
+      (section) => section.rows.length > 0,
+    );
   });
 
   const flatRows = createMemo<PaletteRow[]>(() => sections().flatMap((section) => section.rows));
@@ -270,7 +289,9 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
             }}
             onKeyDown={handleKeyDown}
           />
-          <span class="key-badge">esc</span>
+          <Show when={browsing() && !hits.loading}>
+            <span class="palette-count">{t().palette.hitCount((hits() ?? []).length)}</span>
+          </Show>
         </div>
 
         <div class="palette-results">
