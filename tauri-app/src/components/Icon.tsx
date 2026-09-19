@@ -72,6 +72,10 @@ const ICONS = {
   "lock-simple-open": () => import("@phosphor-icons/core/assets/regular/lock-simple-open.svg?raw"),
   "dots-three": () => import("@phosphor-icons/core/assets/regular/dots-three.svg?raw"),
   "circle-notch": () => import("@phosphor-icons/core/assets/regular/circle-notch.svg?raw"),
+  funnel: () => import("@phosphor-icons/core/assets/regular/funnel.svg?raw"),
+  "push-pin": () => import("@phosphor-icons/core/assets/regular/push-pin.svg?raw"),
+  // AIDEV-NOTE: fill ウェイトは名前に -fill を付けた 1 件として登録する。ウェイト引数は取らない
+  "push-pin-fill": () => import("@phosphor-icons/core/assets/fill/push-pin-fill.svg?raw"),
 } as const;
 
 export type IconName = keyof typeof ICONS;
