@@ -42,7 +42,10 @@ jobs:
       nix-mcp: ${{ steps.filter.outputs.nix-mcp || 'true' }}
       android: ${{ steps.filter.outputs.android || 'true' }}
     steps:
+      # AIDEV-NOTE: persist-credentials: false は公開リポジトリだから置ける。paths-filter の git fetch は匿名で通る
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       # AIDEV-NOTE: base は既定 (= 既定ブランチ) のまま。push では action 側が github.event.before に読み替える
       # base を明示しないのは、既定ブランチと push 先が同じとき action が
       # payload.before を使い、初回 push (全 0 の SHA) も自前で捌くため。
@@ -146,6 +149,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       # store 3G + target で 21GB の空きに「収まっていた」が、2026-09-17 から
       # 同じキャッシュ・同じ image で cargo の crate 取得が ENOSPC で落ちる。
       # android と同じく、キャッシュ復元と並行してバックグラウンドで消す
@@ -190,6 +195,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: nixbuild/nix-quick-install-action@v35
       - uses: nix-community/cache-nix-action@v7
         with:
@@ -228,6 +235,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: nixbuild/nix-quick-install-action@v35
       - uses: nix-community/cache-nix-action@v7
         with:
@@ -274,6 +283,8 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       # rm -rf に 72 秒かかるので、キャッシュ復元と並行してバックグラウンドで消す。
       # APK ビルドが始まる頃(2 分後)には終わっている
       - name: Free disk space (background)
@@ -325,6 +336,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: nixbuild/nix-quick-install-action@v35
       # store キャッシュを張らない。FOD の出力パスは入力ではなく宣言した hash から
       # 決まるので、hash が腐ったままでも前回の出力が復元されれば nix はそれを有効と
@@ -346,6 +359,8 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: nixbuild/nix-quick-install-action@v35
       - uses: nix-community/cache-nix-action@v7
         with:
@@ -384,6 +399,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: nixbuild/nix-quick-install-action@v35
       - uses: nix-community/cache-nix-action@v7
         with:
@@ -398,11 +415,35 @@ jobs:
       - name: the CLI (and the MCP entry point) builds and its tests pass
         run: nix build .#cli --no-link
 
+  # ワークフロー自身の検査。ci.yml は 400 行を超えていて、式の書き間違いも
+  # トークンの置き残しも、これまでは誰も見ていなかった。actionlint が構文と式を、
+  # zizmor が持ち出しやすい書き方 (認証情報の置き残し、run への式の直接展開) を見る。
+  #
+  # ここだけは nix devshell を通さない。flake.nix に 2 つ足すと paths-filter が
+  # それを rust/frontend/workers/android すべての入力として拾うので、
+  # ワークフローの lint を足す変更が 45 分の APK ビルドを連れてくる
+  workflows:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: raven-actions/actionlint@v2
+      # 方針は .github/zizmor.yml
+      - uses: zizmorcore/zizmor-action@v0.6.3
+        with:
+          advanced-security: false
+          min-severity: low
+          config: .github/zizmor.yml
+
   format:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: nixbuild/nix-quick-install-action@v35
       - uses: nix-community/cache-nix-action@v7
         with:
