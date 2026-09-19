@@ -35,8 +35,10 @@ interface PaletteRow {
   key: string;
   icon: IconName;
   label: string;
+  /** 題の中の一致語。下線を引く場所で、当たっていなければ無い。 */
+  labelMatch?: SnippetParts | null;
   meta?: string;
-  /** 一致箇所つきの抜粋。タイトルと同文のときは出さない。 */
+  /** 一致箇所つきの抜粋。題で当たっているときは出さない。 */
   highlight?: SnippetParts | null;
   run: () => void;
 }
@@ -85,6 +87,37 @@ const HIT_LABELS: Record<HitKind, string> = {
   codex: MODE_LABELS[ROUTES.CODEX],
 };
 
+/**
+ * 題の中の一致語を「前・一致・後」に分ける。
+ *
+ * core が返す `match_start` は抜粋の中の位置で、題(本文の 1 行目)には使えない。
+ * 題にも下線を引きたいので、ここで探す。突き合わせは core と同じく大小を
+ * 無視するが、返す綴りは書いた形のまま。
+ */
+function matchInLabel(label: string, word: string): SnippetParts | null {
+  if (!word) {
+    return null;
+  }
+  const chars = [...label];
+  const hay = chars.map((char) => char.toLowerCase());
+  const want = [...word].map((char) => char.toLowerCase());
+  // 小文字にすると 1 文字が 2 文字になる綴り(ǅ → dž)があると位置がずれる。
+  // 下線を 1 文字ずらして引くより、引かないほうがいい
+  if ([...hay, ...want].some((char) => [...char].length !== 1)) {
+    return null;
+  }
+  for (let at = 0; at + want.length <= hay.length; at += 1) {
+    if (want.every((char, i) => hay[at + i] === char)) {
+      return {
+        before: chars.slice(0, at).join(""),
+        match: chars.slice(at, at + want.length).join(""),
+        after: chars.slice(at + want.length).join(""),
+      };
+    }
+  }
+  return null;
+}
+
 export default function CommandPalette(props: CommandPaletteProps): JSX.Element {
   const [query, setQuery] = createSignal("");
   // 開いた瞬間の範囲を初期値にするだけ。開いている間に外から変わることはない
@@ -105,6 +138,9 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
    * 打ったままの文字が範囲として効けばよく、消すのも文字を消すだけでいい。
    */
   const activeTags = createMemo(() => searchRequest(debouncedQuery(), scope())?.tags ?? []);
+
+  /** 本文の検索語(打った `#タグ` を除いた残り)。題の下線もこれで引く。 */
+  const searchWord = createMemo(() => searchRequest(debouncedQuery(), scope())?.query ?? "");
 
   /** 範囲は検索の入り口なので、zero-query でもチップがあれば結果を出す。 */
   const browsing = (): boolean => Boolean(query().trim() || scope().length > 0);
@@ -197,14 +233,18 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
       const rows: PaletteRow[] = found
         .map((hit, i) => ({ hit, i }))
         .filter(({ hit }) => hit.kind === kind)
-        .map(({ hit, i }) => ({
-          key: `hit:${i}`,
-          icon: HIT_ICONS[hit.kind],
-          label: hit.title || hit.snippet,
-          meta: formatMonthDay(hit.date),
-          highlight: splitSnippet(hit.snippet, hit.match_start, hit.match_len),
-          run: () => props.onSelectHit(hit),
-        }));
+        .map(({ hit, i }) => {
+          const label = hit.title || hit.snippet;
+          return {
+            key: `hit:${i}`,
+            icon: HIT_ICONS[hit.kind],
+            label,
+            labelMatch: matchInLabel(label, searchWord()),
+            meta: formatMonthDay(hit.date),
+            highlight: splitSnippet(hit.snippet, hit.match_start, hit.match_len),
+            run: () => props.onSelectHit(hit),
+          };
+        });
       return { title: `${HIT_LABELS[kind].toUpperCase()} · ${rows.length}`, rows };
     });
     return [{ title: t().palette.commands, rows: commands }, ...groups].filter(
@@ -309,16 +349,20 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
                     >
                       <Icon name={row.icon} size={16} />
                       <span class="palette-row-text">
-                        <span class="palette-row-label">{row.label}</span>
-                        <Show
-                          when={
-                            row.highlight &&
-                            row.highlight.before + row.highlight.match + row.highlight.after !==
-                              row.label
-                              ? row.highlight
-                              : undefined
-                          }
-                        >
+                        <span class="palette-row-label">
+                          <Show when={row.labelMatch} fallback={row.label}>
+                            {(parts) => (
+                              <>
+                                {parts().before}
+                                <mark>{parts().match}</mark>
+                                {parts().after}
+                              </>
+                            )}
+                          </Show>
+                        </span>
+                        {/* 題で当たっているなら抜粋は同じことの繰り返し。
+                            本文の奥で当たったときだけ、その前後を出す */}
+                        <Show when={row.labelMatch ? undefined : row.highlight}>
                           {(parts) => (
                             <span class="palette-row-snippet">
                               {parts().before}

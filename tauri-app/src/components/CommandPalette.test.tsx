@@ -250,6 +250,47 @@ describe("CommandPalette results grouped by kind", () => {
     expect(selected.map((s) => s.title)).toStrictEqual(["ベガと走った"]);
   });
 
+  // 一致語は下線(CSS)で示す。塗らないので、どこに当たったかは mark の位置だけ
+  it("marks the matched word inside the title", async () => {
+    const { input, container, rows } = renderPalette([], MIXED);
+    await search(input, "ベガ", () => expect(rows()).toHaveLength(3));
+
+    const marks = [...container.querySelectorAll(".palette-row-label mark")];
+
+    expect(marks.map((mark) => mark.textContent)).toStrictEqual(["ベガ", "ベガ", "ベガ"]);
+  });
+
+  // core は大小を無視して当てる。題の側でも同じように当て、綴りは打った形でなく
+  // 書いた形を残す
+  it("marks the title however the word is cased", async () => {
+    const { input, container, rows } = renderPalette([], [searchHit("note", "Vega のノート")]);
+    await search(input, "vega", () => expect(rows()).toHaveLength(1));
+
+    expect(container.querySelector(".palette-row-label mark")?.textContent).toBe("Vega");
+  });
+
+  it("adds the body excerpt only when the title does not carry the match", async () => {
+    const hits = [
+      searchHit("note", "ベガのノート", {
+        snippet: "ベガのノート 続き",
+        match_start: 0,
+        match_len: 2,
+      }),
+      searchHit("note", "昨日の練習", {
+        snippet: "… ベガ の下段が読めない",
+        match_start: 2,
+        match_len: 2,
+      }),
+    ];
+    const { input, container, rows } = renderPalette([], hits);
+    await search(input, "ベガ", () => expect(rows()).toHaveLength(2));
+
+    const snippets = [...container.querySelectorAll(".palette-row-snippet")];
+
+    expect(snippets.map((s) => s.textContent)).toStrictEqual(["… ベガ の下段が読めない"]);
+    expect(snippets[0]?.querySelector("mark")?.textContent).toBe("ベガ");
+  });
+
   it("counts every hit next to the input", async () => {
     const { input, container } = renderPalette([], MIXED);
 

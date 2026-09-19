@@ -115,20 +115,21 @@
   white-space: nowrap;
 }
 
-/* ヒット箇所の前後を含む抜粋。どこに当たったかは <mark> が塗る */
+/* 本文の奥で当たったときだけ出る、一致箇所の前後 */
 .palette-row-snippet {
-  font-size: 11.5px;
-  color: var(--app-text-faint);
+  font-size: 12.5px;
+  color: var(--app-text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.palette-row-snippet mark {
-  background: var(--app-accent-soft);
+/* 一致語は下線で示す。塗ると行の中に色の面が増え、選択中の行と喧嘩する */
+.palette-row mark {
+  background: none;
   color: var(--app-text);
-  border-radius: 2px;
-  padding: 0 1px;
+  font-weight: 600;
+  box-shadow: inset 0 -2px 0 var(--app-accent);
 }
 
 .palette-row-meta {
