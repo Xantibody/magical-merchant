@@ -1,5 +1,14 @@
 import { NodeSelection, TextSelection } from "@milkdown/kit/prose/state";
-import type { Command, EditorState, Transaction } from "@milkdown/kit/prose/state";
+import type { Command, EditorState, Selection, Transaction } from "@milkdown/kit/prose/state";
+
+/**
+ * カーソル(選択の始点)がコードブロックの中にいるか。コードブロックでしか
+ * 意味のないもの — 抜けるコマンド・Tab の字下げ・ツールバーの「ブロックから
+ * 抜ける」を出すかどうか — が、みなこの 1 つの答えを使う。
+ */
+export function isInCodeBlock(selection: Selection): boolean {
+  return selection.$from.parent.type.name === "code_block";
+}
 
 /**
  * カーソルのあるブロックを丸ごと消す。キーボードだけなら範囲選択して消せるが、
@@ -41,10 +50,10 @@ export const deleteCurrentBlock: Command = (state, dispatch) => {
  * ツールバーからも同じコマンドを呼べるようにしておく。
  */
 export const exitCodeBlock: Command = (state, dispatch) => {
-  const { $from } = state.selection;
-  if ($from.parent.type.name !== "code_block") {
+  if (!isInCodeBlock(state.selection)) {
     return false;
   }
+  const { $from } = state.selection;
   if (!dispatch) {
     return true;
   }
@@ -66,7 +75,7 @@ const CODE_INDENT = "  ";
  */
 function codeLineStarts(state: EditorState): number[] | undefined {
   const { $from, $to } = state.selection;
-  if ($from.parent.type.name !== "code_block" || !$from.sameParent($to)) {
+  if (!isInCodeBlock(state.selection) || !$from.sameParent($to)) {
     return undefined;
   }
   const text = $from.parent.textContent;

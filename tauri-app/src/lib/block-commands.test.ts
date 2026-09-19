@@ -6,6 +6,7 @@ import {
   deleteCurrentBlock,
   exitCodeBlock,
   indentCodeLine,
+  isInCodeBlock,
   outdentCodeLine,
   stepPastHr,
 } from "./block-commands";
@@ -92,6 +93,29 @@ describe("deleteCurrentBlock", () => {
     const next = apply(state, deleteCurrentBlock);
 
     expect(next.doc.textContent).toBe("x");
+  });
+});
+
+describe("isInCodeBlock", () => {
+  it("is true for a cursor inside a code block", () => {
+    const doc = schema.nodes.doc.create(null, [p("before"), code("fn main() {}")]);
+
+    expect(isInCodeBlock(stateAt(doc, 10).selection)).toBe(true);
+  });
+
+  it("is false for a cursor in a paragraph", () => {
+    const doc = schema.nodes.doc.create(null, [p("plain")]);
+
+    expect(isInCodeBlock(stateAt(doc, 2).selection)).toBe(false);
+  });
+
+  // 罫線を丸ごと選んだ NodeSelection は親が doc になる。コードブロックの中を
+  // 尋ねているだけなので、そこで例外にならないことを押さえる
+  it("is false for a node selection", () => {
+    const doc = schema.nodes.doc.create(null, [p("a"), schema.nodes.hr.create()]);
+    const selection = NodeSelection.create(doc, 3);
+
+    expect(isInCodeBlock(selection)).toBe(false);
   });
 });
 
