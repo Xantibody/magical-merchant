@@ -349,8 +349,8 @@ export default function Scrawl(): JSX.Element {
               14px で寄せる — 要約はタグの続きであって、独立した層ではない。
               digest を TagFilter より上に挿さないのは、データが遅れて届いたとき
               最初の描画に存在した行が押し下げられてレイアウトシフトになるから */}
-          <Show when={knownTags().length > 0 || digestVisible()}>
-            <div class="scrawl-head">
+          <div class="scrawl-head">
+            <div class="scrawl-head-row">
               {/* 押してもここでは絞らない。絞る画面を Scrawl とそのタグで
                   開く — 絞り込みの答えを 2 か所に持たない */}
               <TagFilter
@@ -360,46 +360,60 @@ export default function Scrawl(): JSX.Element {
                 }
               />
 
-              <Show when={digestVisible()}>
-                <section class="digest-line" aria-label={t().scrawl.digestTitle}>
-                  <span class="digest-label">{t().scrawl.digestTitle}</span>
-                  <Show when={weekSummary().count > 0}>
-                    <span>{t().scrawl.digestSummary(weekSummary().days, weekSummary().count)}</span>
-                  </Show>
-                  <Show when={yearAgo()}>
-                    {(iso) => (
-                      <>
-                        {/* 中黒は要約と行き先を隔てるだけの字。読み上げには要らない */}
-                        <Show when={weekSummary().count > 0}>
-                          <span class="digest-sep" aria-hidden="true">
-                            ·
-                          </span>
-                        </Show>
-                        <button
-                          type="button"
-                          class="digest-year-ago"
-                          aria-label={t().scrawl.lastYearOpen}
-                          onClick={() => jumpToDay(iso())}
-                        >
-                          {t().scrawl.lastYear}
-                          <span aria-hidden="true">→</span>
-                        </button>
-                      </>
-                    )}
-                  </Show>
-                  <button
-                    type="button"
-                    class="icon-button digest-close"
-                    title={t().scrawl.digestClose}
-                    aria-label={t().scrawl.digestClose}
-                    onClick={dismissDigest}
-                  >
-                    <Icon name="x" size={12} />
-                  </button>
-                </section>
-              </Show>
+              {/* 日をまたいで遡る唯一の入口。狭い画面ではヘッダが持っている
+                  ので出さない(CSS)。タグが 1 つも無い日でも消えないよう、
+                  この帯は中身の有無に関わらず描く */}
+              <button
+                type="button"
+                class="icon-button scrawl-calendar"
+                title={t().header.jumpToDate}
+                aria-label={t().header.jumpToDate}
+                aria-expanded={shell.popover() === "calendar"}
+                onClick={(e) => shell.togglePopover("calendar", e.currentTarget)}
+              >
+                <Icon name="calendar-blank" size={16} />
+              </button>
             </div>
-          </Show>
+
+            <Show when={digestVisible()}>
+              <section class="digest-line" aria-label={t().scrawl.digestTitle}>
+                <span class="digest-label">{t().scrawl.digestTitle}</span>
+                <Show when={weekSummary().count > 0}>
+                  <span>{t().scrawl.digestSummary(weekSummary().days, weekSummary().count)}</span>
+                </Show>
+                <Show when={yearAgo()}>
+                  {(iso) => (
+                    <>
+                      {/* 中黒は要約と行き先を隔てるだけの字。読み上げには要らない */}
+                      <Show when={weekSummary().count > 0}>
+                        <span class="digest-sep" aria-hidden="true">
+                          ·
+                        </span>
+                      </Show>
+                      <button
+                        type="button"
+                        class="digest-year-ago"
+                        aria-label={t().scrawl.lastYearOpen}
+                        onClick={() => jumpToDay(iso())}
+                      >
+                        {t().scrawl.lastYear}
+                        <span aria-hidden="true">→</span>
+                      </button>
+                    </>
+                  )}
+                </Show>
+                <button
+                  type="button"
+                  class="icon-button digest-close"
+                  title={t().scrawl.digestClose}
+                  aria-label={t().scrawl.digestClose}
+                  onClick={dismissDigest}
+                >
+                  <Icon name="x" size={12} />
+                </button>
+              </section>
+            </Show>
+          </div>
 
           <Show when={days().length} fallback={<EmptyScrawl />}>
             <For each={days()}>
