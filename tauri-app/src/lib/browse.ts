@@ -13,7 +13,7 @@
 
 import type { HitKind, SearchHit } from "./commands";
 import { toIsoDate } from "./day-labels";
-import { countTagLists, sameTag } from "./tags";
+import { countTagLists, normalizeTag, sameTag } from "./tags";
 import { digestWeekKey } from "./weekly-digest";
 
 /** 期間の軸。3 択で、既定は「すべて」。 */
@@ -22,8 +22,11 @@ export type BrowsePeriod = "all" | "month" | "week";
 /** 期間のチップの並び。広いほうから狭いほうへ。 */
 export const BROWSE_PERIODS: readonly BrowsePeriod[] = ["all", "month", "week"];
 
-/** 種類のチップの並び。プロトタイプと同じ CODEX → NOTE → SCRAWL。 */
-export const BROWSE_KINDS: readonly HitKind[] = ["codex", "note", "scrawl"];
+/**
+ * 種類のチップの並び。CODEX → NOTE → SCRAWL。外へは出さない — 画面が読むのは
+ * `kindFacets` が返す並びで、そこに順序が入っている。
+ */
+const BROWSE_KINDS: readonly HitKind[] = ["codex", "note", "scrawl"];
 
 export interface BrowseFilter {
   /** 選んだ種類。空なら全部。複数選べて、どれかに当たれば残る。 */
@@ -139,6 +142,50 @@ export function tagFacets(
     value: tag,
     count: base.filter((hit) => inTags(hit, [tag])).length,
   }));
+}
+
+/**
+ * 一覧の行の 2 段目。`browse_all` の抜粋は本文の先頭 40 字で、その先頭には
+ * 題がそのまま入っている — ノートは `# 題`、Scrawl の 1 行は題そのもの。
+ * 題は 1 段目に出ているので、重なるぶんを落として、残りが無ければ空にする。
+ * 同じことを 2 行にわたって読ませない。
+ */
+export function rowSnippet(hit: SearchHit): string {
+  const title = hit.title.trim();
+  const rest = hit.snippet.replace(/^#+[ \t]*/u, "").trim();
+  if (!title) {
+    return rest;
+  }
+  if (rest.startsWith(title)) {
+    return rest.slice(title.length).trim();
+  }
+  // 抜粋のほうが短い = 題が 40 字に収まらなかった。全部が題の一部でしかない
+  return title.startsWith(rest.replace(/…$/u, "")) ? "" : rest;
+}
+
+/** 同じ名前が 2 度書かれた道も 1 つとして読む。 */
+function first(value?: string | string[]): string {
+  return (Array.isArray(value) ? value[0] : value) ?? "";
+}
+
+/**
+ * URL の `?kind=` `?tag=` を絞り込みに写す。Scrawl のチップは「Scrawl と
+ * そのタグ」で画面を開くので、着地の絞り込みは道に載せる — 画面の状態を
+ * 外から触れるように引き上げるより、開きたい形を URL に持たせるほうが素直
+ * (`?day=` と同じ作り)。
+ *
+ * 読めるものが 1 つも無ければ `null`。押していない絞り込みを黙って掛けない。
+ */
+export function browseSeed(params: {
+  kind?: string | string[];
+  tag?: string | string[];
+}): BrowseFilter | null {
+  const kind = BROWSE_KINDS.find((known) => known === first(params.kind));
+  const tag = normalizeTag(first(params.tag));
+  if (!kind && !tag) {
+    return null;
+  }
+  return { kinds: kind ? [kind] : [], tags: tag ? [tag] : [], period: "all" };
 }
 
 export function toggleKind(kinds: readonly HitKind[], kind: HitKind): HitKind[] {

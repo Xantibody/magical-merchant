@@ -13,6 +13,8 @@ const Workspace = lazy(() => import("./views/Workspace"));
 // 書く形は同じなので、画面を 2 つ持たない
 const Codex = (): JSX.Element => <Workspace kind="codex" />;
 const Settings = lazy(() => import("./views/Settings"));
+// 絞る画面。レールの入口だが、起動時に見えるものではない
+const Browse = lazy(() => import("./views/Browse"));
 // テンプレート管理は Settings の下の画面。開く人はさらに少ないので
 // 先読みもしない
 const Templates = lazy(() => import("./views/Templates"));
@@ -27,6 +29,7 @@ function prefetchLazyViews(): void {
   idle(() => {
     void import("./views/Workspace");
     void import("./views/Settings");
+    void import("./views/Browse");
   });
 }
 
@@ -37,6 +40,7 @@ export default function App(): JSX.Element {
       <Route path={ROUTES.SCRAWL} component={Scrawl} />
       <Route path={ROUTES.NOTES} component={Workspace} />
       <Route path={ROUTES.CODEX} component={Codex} />
+      <Route path={ROUTES.BROWSE} component={Browse} />
       <Route path={ROUTES.SETTINGS} component={Settings} />
       <Route path={ROUTES.TEMPLATES} component={Templates} />
     </Router>

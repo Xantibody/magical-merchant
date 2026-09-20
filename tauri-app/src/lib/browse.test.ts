@@ -1,12 +1,14 @@
 import { describe, it, expect } from "vitest";
 import {
   NO_FILTER,
+  browseSeed,
   chipTags,
   filterHits,
   hasFilter,
   hitId,
   kindFacets,
   periodStart,
+  rowSnippet,
   tagFacets,
   toggleKind,
   toggleTag,
@@ -218,6 +220,57 @@ describe("hasFilter", () => {
     expect(hasFilter({ ...NO_FILTER, kinds: ["note"] })).toBe(true);
     expect(hasFilter({ ...NO_FILTER, tags: ["run"] })).toBe(true);
     expect(hasFilter({ ...NO_FILTER, period: "week" })).toBe(true);
+  });
+});
+
+describe("rowSnippet", () => {
+  const excerpt = (title: string, snippet: string): SearchHit => ({
+    ...hit("note", TODAY_ISO, [], title),
+    snippet,
+  });
+
+  it("drops the heading the excerpt starts with", () => {
+    expect(rowSnippet(excerpt("レールの設計", "# レールの設計 ヘッダを畳んで柱にする"))).toBe(
+      "ヘッダを畳んで柱にする",
+    );
+  });
+
+  // 1 行の記録は題がそのまま抜粋。2 段目に同じ字を並べない
+  it("is empty when the excerpt says nothing the title did not", () => {
+    expect(rowSnippet(excerpt("朝ラン 5km #run", "朝ラン 5km #run"))).toBe("");
+  });
+
+  // 題が 40 字に収まらなければ、抜粋は題の途中で切れた形になる
+  it("is empty when the excerpt is only part of the title", () => {
+    expect(rowSnippet(excerpt("長い題がずっと続いている記録", "長い題がずっと…"))).toBe("");
+  });
+
+  it("keeps an excerpt that has nothing to do with the title", () => {
+    expect(rowSnippet(excerpt("題", "まったく別の書き出し"))).toBe("まったく別の書き出し");
+  });
+});
+
+describe("browseSeed", () => {
+  it("opens on one kind and one tag", () => {
+    expect(browseSeed({ kind: "scrawl", tag: "run" })).toStrictEqual({
+      kinds: ["scrawl"],
+      tags: ["run"],
+      period: "all",
+    });
+  });
+
+  it("drops the decorating hash the chip carries", () => {
+    expect(browseSeed({ tag: "#run" })?.tags).toStrictEqual(["run"]);
+  });
+
+  // 押していない絞り込みを黙って掛けない。⌘F で開いたときは何も選ばれていない
+  it("is null when the road says nothing", () => {
+    expect(browseSeed({})).toBeNull();
+    expect(browseSeed({ kind: "tasks" })).toBeNull();
+  });
+
+  it("takes the first of a repeated parameter", () => {
+    expect(browseSeed({ tag: ["run", "memo"] })?.tags).toStrictEqual(["run"]);
   });
 });
 

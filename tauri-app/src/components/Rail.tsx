@@ -34,7 +34,7 @@ const MARKER_TOP: Partial<Record<RoutePath, number>> = {
  * から。縦に置けば本文の高さは丸ごと残り、面の切替と検索・同期・設定が
  * 同じ距離に並ぶ。現在地は塗りと、左端を滑る 2px の線が言う。
  *
- * 「絞る ⌘F」はまだ行き先が無いので置かない。押せない入口は出さない。
+ * 「絞る」は面ではなく操作なので、押しても線は動かない(`MARKER_TOP` に無い)。
  */
 export default function Rail(props: { sync: SyncState; onSearch: () => void }): JSX.Element {
   const shell = useShell();
@@ -97,6 +97,17 @@ export default function Rail(props: { sync: SyncState; onSearch: () => void }): 
       >
         <Icon name="magnifying-glass" size={16} />
       </button>
+
+      <A
+        href={ROUTES.BROWSE}
+        class="rail-button rail-button--plain"
+        classList={{ "rail-button--active": isActive(ROUTES.BROWSE) }}
+        title={`${t().browse.title} ${shortcutLabel("browse")}`}
+        aria-label={t().browse.title}
+        data-key={shortcutLabel("browse")}
+      >
+        <Icon name={MODE_ICONS[ROUTES.BROWSE]} size={16} />
+      </A>
 
       <button
         type="button"

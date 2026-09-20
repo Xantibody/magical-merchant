@@ -1,0 +1,370 @@
+/* 「絞る」画面 (⌘F)。左にチップ 240px、中央に一覧 280〜380px、右に選んだ
+   1 件の全文。文字を打って探す欄は持たない — それは ⌘K のもの */
+
+.browse {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* ---------------- 左: 3 軸のチップ ---------------- */
+
+.browse-facets {
+  box-sizing: border-box;
+  width: 240px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 24px 16px;
+  border-right: 1px solid var(--app-surface-2);
+  overflow: auto;
+}
+
+.browse-title {
+  margin: 0;
+  padding: 0 4px 12px;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* チップは縦に積む。240px の列では、折り返すより 1 行 1 つのほうが読める */
+.browse-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* タグだけは幾つまで増えるか分からない。ここで送れるようにしておかないと、
+   タグの多いツリーでは「期間」のチップが列の下へ押し出されて見えなくなる */
+.browse-group--tags {
+  max-height: 42vh;
+  overflow: auto;
+}
+
+.browse-group-label {
+  padding: 8px 4px 2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--app-text-faint);
+}
+
+.browse-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  min-height: 30px;
+  border: 1px solid var(--app-border);
+  border-radius: 16px;
+  /* 塗るのは選んでいるチップだけ。押していないチップは枠だけで立つ */
+  background: none;
+  color: var(--app-text-muted);
+  font-family: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background 150ms var(--app-ease),
+    border-color 150ms var(--app-ease);
+}
+
+.browse-chip:hover {
+  background: var(--app-surface-2);
+}
+
+.browse-chip[aria-pressed="true"] {
+  background: var(--app-accent-soft);
+  border-color: var(--app-accent);
+  color: var(--app-text);
+}
+
+/* 件数は「押したら何件になるか」。選んでいるチップの中では字より薄く、
+   選んでいないチップではさらに薄い — 数字が名前を追い越さないように */
+.browse-chip-count {
+  margin-left: auto;
+  color: var(--app-text-hint);
+  font-variant-numeric: tabular-nums;
+}
+
+.browse-chip[aria-pressed="true"] .browse-chip-count {
+  color: var(--app-text-muted);
+}
+
+.browse-clear {
+  align-self: flex-start;
+  margin-top: 16px;
+  padding: 6px 8px;
+  border: none;
+  background: none;
+  color: var(--app-text-faint);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.browse-clear:hover {
+  color: var(--app-text);
+}
+
+/* ---------------- 中央: 一覧 ---------------- */
+
+.browse-results {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
+  min-height: 0;
+  min-width: 0;
+}
+
+.browse-list {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 6px;
+  border-right: 1px solid var(--app-surface-2);
+  overflow: auto;
+}
+
+.browse-list-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 12px 8px;
+  font-size: 12px;
+  color: var(--app-text-faint);
+}
+
+.browse-list-order {
+  margin-left: auto;
+}
+
+.browse-row {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  gap: 2px 10px;
+  align-items: center;
+  padding: 9px 12px;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  color: var(--app-text);
+  font-family: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition: background 120ms var(--app-ease);
+}
+
+.browse-row:hover {
+  background: var(--app-surface-2);
+}
+
+.browse-row--active {
+  background: var(--app-accent-soft);
+}
+
+.browse-row .icon {
+  display: flex;
+  color: var(--app-text-faint);
+}
+
+.browse-row--active .icon {
+  color: var(--app-text-muted);
+}
+
+.browse-row-title {
+  font-size: 13.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.browse-row--active .browse-row-title {
+  font-weight: 600;
+}
+
+.browse-row-date {
+  font-size: 11px;
+  color: var(--app-text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 2 行目は本文の先頭 40 字。題の真下に揃える */
+.browse-row-snippet {
+  grid-column: 2;
+  font-size: 12px;
+  color: var(--app-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.browse-empty {
+  margin: 0;
+  padding: 32px 12px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--app-text-faint);
+}
+
+/* ---------------- 右: 選んだ 1 件 ---------------- */
+
+.browse-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 24px 28px;
+  overflow: auto;
+  animation: mm-rise 180ms var(--app-ease);
+}
+
+.browse-preview-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--app-text-faint);
+}
+
+.browse-preview-meta .icon {
+  display: flex;
+}
+
+.browse-dot {
+  color: var(--app-border);
+}
+
+.browse-preview-tags {
+  color: var(--app-text-muted);
+}
+
+.browse-preview-device {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.browse-preview-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.browse-preview-body {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.8;
+  color: var(--app-text-muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.browse-preview-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid var(--app-surface-2);
+}
+
+.browse-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: none;
+  border-radius: 7px;
+  background: var(--app-accent);
+  color: var(--app-surface);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 120ms var(--app-ease);
+}
+
+.browse-open:active {
+  transform: scale(0.96);
+}
+
+.browse-open-key {
+  font-family: inherit;
+  opacity: 0.6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .browse-chip,
+  .browse-row,
+  .browse-open {
+    transition: none;
+  }
+
+  .browse-preview {
+    animation: none;
+  }
+}
+
+/* ---------------- モバイル ---------------- */
+
+@media (max-width: 767px) {
+  .browse {
+    flex-direction: column;
+  }
+
+  /* 題も群見出しも出さない。狭い画面の上端はヘッダが題を持っている */
+  .browse-title,
+  .browse-group-label {
+    display: none;
+  }
+
+  .browse-facets {
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 10px 12px 4px;
+    border-right: none;
+    overflow: visible;
+  }
+
+  .browse-group {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  /* 帯ごと縦に送る。群の中だけを送る二重のスクロールを作らない */
+  .browse-group--tags {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .browse-chip {
+    min-height: 34px;
+    padding: 6px 13px;
+  }
+
+  .browse-clear {
+    margin-top: 0;
+    min-height: 34px;
+  }
+
+  /* プレビュー列は無い。行を押したらその場で開く */
+  .browse-results {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .browse-list {
+    padding: 4px 8px;
+    border-right: none;
+  }
+
+  .browse-row {
+    min-height: 44px;
+  }
+}

@@ -105,6 +105,21 @@ const ja = {
   tagFilter: {
     filtering: (tag: string, matched: number) => `#${tag} で絞り込み中 · ${matched}件`,
   },
+  browse: {
+    title: "絞る",
+    kind: "種類",
+    period: "期間",
+    thisMonth: "今月",
+    thisWeek: "今週",
+    clear: "絞り込みを外す",
+    newestFirst: "新しい順",
+    count: (count: number) => `${count}件`,
+    empty: "この組み合わせの記録はありません",
+    open: "開く",
+    toDay: "その日へ",
+    /** 1 行だけの記録。題がそのまま全文なので、下に出す本文が無い */
+    noBody: "(本文なし — 1 行の記録)",
+  },
   notes: {
     empty: "Note がありません",
     emptyHint: "新規から始めると、ここに並びます。",
@@ -409,6 +424,7 @@ const ja = {
     openScrawl: "Scrawl を開く",
     openNotes: "Note を開く",
     openCodex: "Codex を開く",
+    openBrowse: "タグで絞る",
     openSettings: "設定を開く",
     scopeTag: (tag: string) => `#${tag} で絞り込み`,
     removeScope: "絞り込みを外す",
@@ -552,6 +568,20 @@ const en: Messages = {
   },
   tagFilter: {
     filtering: (tag: string, matched: number) => `Filtered by #${tag} · ${matched}`,
+  },
+  browse: {
+    title: "Filter",
+    kind: "Kind",
+    period: "Period",
+    thisMonth: "This month",
+    thisWeek: "This week",
+    clear: "Clear the filters",
+    newestFirst: "Newest first",
+    count: (count: number) => `${count} ${count === 1 ? "record" : "records"}`,
+    empty: "Nothing recorded with this combination",
+    open: "Open",
+    toDay: "Go to that day",
+    noBody: "(no body — a one-line record)",
   },
   notes: {
     empty: "No Notes yet",
@@ -828,6 +858,7 @@ const en: Messages = {
     openScrawl: "Open Scrawl",
     openNotes: "Open Note",
     openCodex: "Open Codex",
+    openBrowse: "Filter by tag",
     openSettings: "Open Settings",
     scopeTag: (tag: string) => `Scoped to #${tag}`,
     removeScope: "Remove the scope",

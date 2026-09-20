@@ -21,6 +21,8 @@ const SHORTCUTS = {
   scrawl: { key: "1" },
   notes: { key: "2" },
   codex: { key: "3" },
+  // 種類 / タグ / 期間で絞る画面。文字を打って探すのは ⌘K のほう
+  browse: { key: "f" },
   syncNow: { key: "s", shift: true },
   settings: { key: "," },
   // 一覧フライアウトを常設にする。離れても畳まない

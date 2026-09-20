@@ -1,5 +1,7 @@
 import { createContext, createSignal, useContext, onCleanup } from "solid-js";
 import type { Accessor, JSX } from "solid-js";
+import { NO_FILTER } from "./browse";
+import type { BrowseFilter } from "./browse";
 import type { PaletteScope } from "./search-scope";
 import type { SaveStatus } from "./note-session";
 
@@ -65,6 +67,12 @@ export interface Shell {
    */
   scrawlTag: Accessor<string | null>;
   setScrawlTag: (tag: string | null) => void;
+  /**
+   * 「絞る」画面の 3 軸。画面の中だけで持つと、離れて戻るたびに絞り直しに
+   * なるうえ、⌘K の処理(AppLayout)からタグが見えない。
+   */
+  browseFilter: Accessor<BrowseFilter>;
+  setBrowseFilter: (filter: BrowseFilter) => void;
   toast: Accessor<Toast | null>;
   showToast: (message: string, undo?: () => void, detail?: string) => void;
   dismissToast: () => void;
@@ -91,6 +99,7 @@ export function ShellProvider(props: { children: JSX.Element }): JSX.Element {
   const [listHover, setListHover] = createSignal(false);
   const [listPinned, setListPinned] = createSignal(false);
   const [scrawlTag, setScrawlTag] = createSignal<string | null>(null);
+  const [browseFilter, setBrowseFilter] = createSignal<BrowseFilter>(NO_FILTER);
   const [saveState, setSaveState] = createSignal<SaveState>(IDLE_SAVE);
   const [toast, setToast] = createSignal<Toast | null>(null);
   const [dataVersion, setDataVersion] = createSignal(0);
@@ -130,6 +139,8 @@ export function ShellProvider(props: { children: JSX.Element }): JSX.Element {
     setSaveState,
     scrawlTag,
     setScrawlTag,
+    browseFilter,
+    setBrowseFilter,
     toast,
     showToast: (message, undo, detail) => {
       clearToastTimer();

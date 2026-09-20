@@ -158,6 +158,13 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
       run: go(ROUTES.CODEX),
     },
     {
+      id: "go-browse",
+      label: t().palette.openBrowse,
+      icon: MODE_ICONS[ROUTES.BROWSE],
+      shortcut: "browse",
+      run: go(ROUTES.BROWSE),
+    },
+    {
       id: "sync-now",
       label: t().sync.now,
       icon: "cloud-arrow-up",
