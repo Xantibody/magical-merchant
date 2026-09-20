@@ -119,8 +119,23 @@
   z-index: 120;
 }
 
+/* 同期の器は面の列に 1 つだけ吊るす。入口はレール(広い窓)と帯(狭い窓)の
+   2 つあるが、開く先は同じ器。ヘッダの下端に吊るす基底(`top: 100%`)は
+   ここでは使えない — この列は窓の高さいっぱいなので真下は画面の外で、
+   `.app` の overflow に刈られて何も見えなくなる */
 .popover-anchor--sync {
+  top: 48px;
   right: var(--size-2);
+}
+
+@media (min-width: 768px) {
+  /* 広い窓に帯は無く、入口はレールの足元。真下ではなく右へ開く */
+  .popover-anchor--sync {
+    top: auto;
+    right: auto;
+    bottom: 8px;
+    left: 6px;
+  }
 }
 
 .popover-anchor .popover {

@@ -1169,8 +1169,16 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
           trigger={shell.popoverTrigger}
           label={t().templates.newNote}
         >
-          {/* 背後を暗くするのは下から出るシートのときだけ(CSS 側で出し分け) */}
-          <div class="template-picker-backdrop" />
+          {/* 背後を暗くするのは下から出るシートのときだけ(CSS 側で出し分け)。
+              閉じるのは自分で受ける — この幕は器の中に居るので、部品から見ると
+              内側の押下になり「外を押した」にならない。シートには取り消しの
+              ボタンが無く、幕が開けたボタンごと覆うので、受けないと指だけで
+              抜け出せなくなる */}
+          <div
+            class="template-picker-backdrop"
+            aria-hidden="true"
+            onClick={() => shell.closePopovers()}
+          />
           <TemplatePicker
             templates={templates() ?? []}
             onPickEmpty={() => {
