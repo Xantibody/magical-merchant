@@ -3,7 +3,7 @@ import type { JSX } from "solid-js";
 import Icon from "./Icon";
 import type { IconName } from "./Icon";
 import { typedInvoke } from "../lib/commands";
-import type { SearchHit } from "../lib/commands";
+import type { HitKind, SearchHit } from "../lib/commands";
 import { formatMonthDay } from "../lib/day-labels";
 import { createDebouncedAccessor } from "../lib/debounce";
 import { t } from "../lib/i18n";
@@ -11,7 +11,7 @@ import { isImeComposing } from "../lib/ime";
 import { toNoteItems } from "../lib/items";
 import { countNoteTags, dayJumpHits, recentNoteHits } from "../lib/palette-home";
 import { scopeLabel, searchRequest } from "../lib/search-scope";
-import { HIT_ICONS } from "../lib/routes";
+import { HIT_ICONS, MODE_LABELS, ROUTES } from "../lib/routes";
 import { splitSnippet } from "../lib/snippet-highlight";
 import type { SnippetParts } from "../lib/snippet-highlight";
 
@@ -35,8 +35,10 @@ interface PaletteRow {
   key: string;
   icon: IconName;
   label: string;
+  /** 題の中の一致語。下線を引く場所で、当たっていなければ無い。 */
+  labelMatch?: SnippetParts | null;
   meta?: string;
-  /** 一致箇所つきの抜粋。タイトルと同文のときは出さない。 */
+  /** 一致箇所つきの抜粋。題で当たっているときは出さない。 */
   highlight?: SnippetParts | null;
   run: () => void;
 }
@@ -69,6 +71,53 @@ const SEARCH_DEBOUNCE_MS = 200;
 /** zero-query に出すタグの数。全部出すと入り口ではなく一覧になってしまう。 */
 const HOME_TAG_LIMIT = 6;
 
+/**
+ * 結果の束の並び。書いた量の多い順 — Codex は探して開くもの、Scrawl は
+ * 数が多く日付で辿れるものなので、下に置く。
+ */
+const HIT_GROUP_ORDER: HitKind[] = ["codex", "note", "scrawl"];
+
+/**
+ * 束の見出しに出す種類の名。面の名をそのまま引く(`routes.ts`)。固有名詞なので
+ * どちらの言語でも同じ綴りで、`t()` は通らない。
+ */
+const HIT_LABELS: Record<HitKind, string> = {
+  scrawl: MODE_LABELS[ROUTES.SCRAWL],
+  note: MODE_LABELS[ROUTES.NOTES],
+  codex: MODE_LABELS[ROUTES.CODEX],
+};
+
+/**
+ * 題の中の一致語を「前・一致・後」に分ける。
+ *
+ * core が返す `match_start` は抜粋の中の位置で、題(本文の 1 行目)には使えない。
+ * 題にも下線を引きたいので、ここで探す。突き合わせは core と同じく大小を
+ * 無視するが、返す綴りは書いた形のまま。
+ */
+function matchInLabel(label: string, word: string): SnippetParts | null {
+  if (!word) {
+    return null;
+  }
+  const chars = [...label];
+  const hay = chars.map((char) => char.toLowerCase());
+  const want = [...word].map((char) => char.toLowerCase());
+  // 小文字にすると 1 文字が 2 文字になる綴り(ǅ → dž)があると位置がずれる。
+  // 下線を 1 文字ずらして引くより、引かないほうがいい
+  if ([...hay, ...want].some((char) => [...char].length !== 1)) {
+    return null;
+  }
+  for (let at = 0; at + want.length <= hay.length; at += 1) {
+    if (want.every((char, i) => hay[at + i] === char)) {
+      return {
+        before: chars.slice(0, at).join(""),
+        match: chars.slice(at, at + want.length).join(""),
+        after: chars.slice(at + want.length).join(""),
+      };
+    }
+  }
+  return null;
+}
+
 export default function CommandPalette(props: CommandPaletteProps): JSX.Element {
   const [query, setQuery] = createSignal("");
   // 開いた瞬間の範囲を初期値にするだけ。開いている間に外から変わることはない
@@ -89,6 +138,9 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
    * 打ったままの文字が範囲として効けばよく、消すのも文字を消すだけでいい。
    */
   const activeTags = createMemo(() => searchRequest(debouncedQuery(), scope())?.tags ?? []);
+
+  /** 本文の検索語(打った `#タグ` を除いた残り)。題の下線もこれで引く。 */
+  const searchWord = createMemo(() => searchRequest(debouncedQuery(), scope())?.query ?? "");
 
   /** 範囲は検索の入り口なので、zero-query でもチップがあれば結果を出す。 */
   const browsing = (): boolean => Boolean(query().trim() || scope().length > 0);
@@ -174,23 +226,30 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
       ].filter((section) => section.rows.length > 0);
     }
 
-    const hitRows: PaletteRow[] = (hits() ?? []).map((hit, i) => ({
-      key: `hit:${i}`,
-      icon: HIT_ICONS[hit.kind],
-      label: hit.title || hit.snippet,
-      meta: formatMonthDay(hit.date),
-      highlight: splitSnippet(hit.snippet, hit.match_start, hit.match_len),
-      run: () => props.onSelectHit(hit),
-    }));
-    // 範囲の中では件数も出す。「この中に何件あるか」が絞り込みの手応えになる
-    const hitsTitle =
-      activeTags().length > 0
-        ? `${t().palette.hits} · ${t().palette.count(hitRows.length)}`
-        : t().palette.hits;
-    return [
-      { title: t().palette.commands, rows: commands },
-      { title: hitsTitle, rows: hitRows },
-    ].filter((section) => section.rows.length > 0);
+    // 1 本の並びではなく種類の束にする。どこに居たものかは、行の印より
+    // 見出しのほうが早い。件数は「この中に何件あるか」の手応え
+    const found = hits() ?? [];
+    const groups: PaletteSection[] = HIT_GROUP_ORDER.map((kind) => {
+      const rows: PaletteRow[] = found
+        .map((hit, i) => ({ hit, i }))
+        .filter(({ hit }) => hit.kind === kind)
+        .map(({ hit, i }) => {
+          const label = hit.title || hit.snippet;
+          return {
+            key: `hit:${i}`,
+            icon: HIT_ICONS[hit.kind],
+            label,
+            labelMatch: matchInLabel(label, searchWord()),
+            meta: formatMonthDay(hit.date),
+            highlight: splitSnippet(hit.snippet, hit.match_start, hit.match_len),
+            run: () => props.onSelectHit(hit),
+          };
+        });
+      return { title: `${HIT_LABELS[kind].toUpperCase()} · ${rows.length}`, rows };
+    });
+    return [{ title: t().palette.commands, rows: commands }, ...groups].filter(
+      (section) => section.rows.length > 0,
+    );
   });
 
   const flatRows = createMemo<PaletteRow[]>(() => sections().flatMap((section) => section.rows));
@@ -270,7 +329,9 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
             }}
             onKeyDown={handleKeyDown}
           />
-          <span class="key-badge">esc</span>
+          <Show when={browsing() && !hits.loading}>
+            <span class="palette-count">{t().palette.hitCount((hits() ?? []).length)}</span>
+          </Show>
         </div>
 
         <div class="palette-results">
@@ -288,16 +349,20 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
                     >
                       <Icon name={row.icon} size={16} />
                       <span class="palette-row-text">
-                        <span class="palette-row-label">{row.label}</span>
-                        <Show
-                          when={
-                            row.highlight &&
-                            row.highlight.before + row.highlight.match + row.highlight.after !==
-                              row.label
-                              ? row.highlight
-                              : undefined
-                          }
-                        >
+                        <span class="palette-row-label">
+                          <Show when={row.labelMatch} fallback={row.label}>
+                            {(parts) => (
+                              <>
+                                {parts().before}
+                                <mark>{parts().match}</mark>
+                                {parts().after}
+                              </>
+                            )}
+                          </Show>
+                        </span>
+                        {/* 題で当たっているなら抜粋は同じことの繰り返し。
+                            本文の奥で当たったときだけ、その前後を出す */}
+                        <Show when={row.labelMatch ? undefined : row.highlight}>
                           {(parts) => (
                             <span class="palette-row-snippet">
                               {parts().before}
@@ -309,6 +374,10 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
                       </span>
                       <Show when={row.meta}>
                         {(meta) => <span class="palette-row-meta">{meta()}</span>}
+                      </Show>
+                      {/* 選んでいる行だけ、押したら何が起きるかを添える */}
+                      <Show when={clampedCursor() === globalIndex(row)}>
+                        <span class="palette-row-enter">↩ {t().palette.hintOpen}</span>
                       </Show>
                     </button>
                   )}
@@ -324,6 +393,19 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
                 : t().palette.empty}
             </p>
           </Show>
+        </div>
+
+        {/* キーの案内。指で触る画面には要らないので CSS で隠す */}
+        <div class="palette-footer">
+          <span>
+            <kbd>↑↓</kbd> {t().palette.hintMove}
+          </span>
+          <span>
+            <kbd>↩</kbd> {t().palette.hintOpen}
+          </span>
+          <span class="palette-footer-end">
+            <kbd>Esc</kbd> {t().palette.hintClose}
+          </span>
         </div>
       </div>
     </div>

@@ -1,39 +1,14 @@
 import { NodeSelection, TextSelection } from "@milkdown/kit/prose/state";
-import type { Command, EditorState, Transaction } from "@milkdown/kit/prose/state";
+import type { Command, EditorState, Selection, Transaction } from "@milkdown/kit/prose/state";
 
 /**
- * カーソルのあるブロックを丸ごと消す。キーボードだけなら範囲選択して消せるが、
- * スマホではコードブロックの全選択も水平線の選択も現実的にできないため、
- * ツールバーの入口として用意する。
- *
- * - 水平線などを選んだ NodeSelection はその選択を消す
- * - コードブロック・段落はブロックごと消す。リスト項目の唯一の段落なら
- *   `deleteRange` が項目ごと畳んでくれる
- * - 最後の 1 ブロックは消すと文書が空になれないので、空の段落に置き換える
+ * カーソル(選択の始点)がコードブロックの中にいるか。コードブロックでしか
+ * 意味のないもの — 抜けるコマンド・Tab の字下げ・ツールバーの「ブロックから
+ * 抜ける」を出すかどうか — が、みなこの 1 つの答えを使う。
  */
-export const deleteCurrentBlock: Command = (state, dispatch) => {
-  const { selection, tr } = state;
-
-  if (selection instanceof NodeSelection) {
-    tr.deleteSelection();
-  } else {
-    const { $from } = selection;
-    if ($from.depth === 0) {
-      return false;
-    }
-    const from = $from.before($from.depth);
-    const to = $from.after($from.depth);
-    if (from === 0 && to === state.doc.content.size) {
-      tr.replaceWith(from, to, state.schema.nodes.paragraph.create());
-      tr.setSelection(TextSelection.create(tr.doc, 1));
-    } else {
-      tr.deleteRange(from, to);
-    }
-  }
-
-  dispatch?.(tr.scrollIntoView());
-  return true;
-};
+export function isInCodeBlock(selection: Selection): boolean {
+  return selection.$from.parent.type.name === "code_block";
+}
 
 /**
  * コードブロックの直後に段落を作ってカーソルを移す。キーボードでは
@@ -41,10 +16,10 @@ export const deleteCurrentBlock: Command = (state, dispatch) => {
  * ツールバーからも同じコマンドを呼べるようにしておく。
  */
 export const exitCodeBlock: Command = (state, dispatch) => {
-  const { $from } = state.selection;
-  if ($from.parent.type.name !== "code_block") {
+  if (!isInCodeBlock(state.selection)) {
     return false;
   }
+  const { $from } = state.selection;
   if (!dispatch) {
     return true;
   }
@@ -66,7 +41,7 @@ const CODE_INDENT = "  ";
  */
 function codeLineStarts(state: EditorState): number[] | undefined {
   const { $from, $to } = state.selection;
-  if ($from.parent.type.name !== "code_block" || !$from.sameParent($to)) {
+  if (!isInCodeBlock(state.selection) || !$from.sameParent($to)) {
     return undefined;
   }
   const text = $from.parent.textContent;
