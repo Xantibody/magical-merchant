@@ -418,9 +418,10 @@
 }
 
 /* ---- 履歴を開いているあいだの欄外の印 ----
-   差分を別枠に描かず、本文のブロックの左に +/− と 2px の線だけを立てる
-   (`lib/line-marks-markdown.ts`)。本文の色も字も変えない。消えた行は
-   選んだ版にしか無い行で、下書きの該当位置に薄く打ち消して差し込む */
+   差分を別枠に描かず、本文のブロックの左に +/− と 2px の線を立て、地色を
+   10% だけ敷く(`lib/line-marks-markdown.ts`)。字そのものの色は変えない —
+   読めるのは下書きの本文で、変わった場所を指しているだけ。消えた行は選んだ
+   版にしか無い行で、下書きの該当位置に薄く打ち消して差し込む */
 .markdown-preview--marked {
   padding-left: 28px;
 }
@@ -428,12 +429,22 @@
 .markdown-preview .diff-mark {
   border-left: 2px solid var(--app-ok);
   margin-left: -2px;
+  border-radius: 0 4px 4px 0;
+  background: color-mix(in oklab, var(--app-ok) 10%, transparent);
+  transition: background 250ms var(--app-ease);
 }
 
 .markdown-preview .diff-mark--del {
   border-left-color: var(--app-danger);
+  background: color-mix(in oklab, var(--app-danger) 10%, transparent);
   color: var(--app-text-faint);
   text-decoration: line-through;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .markdown-preview .diff-mark {
+    transition: none;
+  }
 }
 
 /* 記号はブロックの先頭に置き、本文の左の余白(28px)の 1 つの欄に絶対配置で
