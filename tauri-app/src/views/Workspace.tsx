@@ -14,21 +14,20 @@ import {
 import type { JSX } from "solid-js";
 import { useNavigate, useSearchParams } from "@solidjs/router";
 import type { Editor } from "@milkdown/kit/core";
+import HistoryPanel from "../components/HistoryPanel";
 import Icon from "../components/Icon";
 import MarkdownPreview from "../components/MarkdownPreview";
 import NoteMenu from "../components/NoteMenu";
 import NoteMetaPopover from "../components/NoteMetaPopover";
 import Popover from "../components/Popover";
 import TemplatePicker from "../components/TemplatePicker";
-import VersionSlider from "../components/VersionSlider";
-import VersionSpine from "../components/VersionSpine";
 import { isStaleSave, typedInvoke } from "../lib/commands";
 import { refusedForGood } from "../lib/save-refusal";
 import { createNoteSession } from "../lib/note-session";
 import type { SaveStatus } from "../lib/note-session";
 import { getDeviceSignals } from "../lib/client-context";
 import { createDebouncedAccessor } from "../lib/debounce";
-import { markedBody } from "../lib/diff-marks";
+import { diffLineCounts, markedBody } from "../lib/diff-marks";
 import { glyphs } from "../lib/glyphs";
 import { useShell } from "../lib/shell";
 import {
@@ -70,6 +69,8 @@ const UNDO_MS = 5000;
 const SAVED_MS = 2000;
 /** 並べたマップが打鍵に追いつくまでの間。保存(1 秒)より先に図が追いつく。 */
 const MAP_DEBOUNCE_MS = 300;
+/** 刻んだばかりの版が跳ねている時間(`mm-pop`)。過ぎたら普通の行に戻す。 */
+const POP_MS = 350;
 /** 一覧の中で隣の行へ送るキーと、その向き。 */
 const LIST_STEP_KEYS: Readonly<Record<string, 1 | -1>> = { ArrowUp: -1, ArrowDown: 1 };
 
@@ -197,12 +198,14 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   const [noteTitle, setNoteTitle] = createSignal("");
   const [noteView, setNoteView] = createSignal<NoteView>("editor");
   /**
-   * 履歴を開いているか。Codex だけ。開くと背骨が広がり、本文は読み取り専用に
-   * なって、選んだ版との差が欄外の印になる。本文は消えない。
+   * 履歴を開いているか。Codex だけ。開くとパネルが右から入り、本文は読み取り
+   * 専用になって、選んだ版との差が欄外の印になる。本文は消えない。
    */
   const [historyOpen, setHistoryOpen] = createSignal(false);
   /** 履歴で選んでいる版。開いた瞬間は最新の版。 */
   const [selectedVersionId, setSelectedVersionId] = createSignal<string | null>(null);
+  /** 刻んだばかりの版。履歴のその行だけが跳ねて入る。 */
+  const [freshVersionId, setFreshVersionId] = createSignal<string | null>(null);
   /** 本文の読み込みが済んでいるノートの id。`?edit=1` の自動フォーカスが待つ。 */
   const [loadedId, setLoadedId] = createSignal<string | null>(null);
   /**
@@ -262,18 +265,6 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
 
   /** 本文が実際に画面に出ているか。出ていないうちはエディタも作らない。 */
   const bodyVisible = createMemo<boolean>(() => twoPane() || detailOpen());
-
-  /**
-   * 背骨を 200px に広げて本文の横に並べられる幅か。マップと同じ境で、
-   * 足りなければ背骨は 56px のままにして、履歴は題の下の横向きのカードで送る。
-   */
-  const spineRoom = globalThis.matchMedia("(min-width: 1100px)");
-  const [spineWide, setSpineWide] = createSignal(spineRoom.matches);
-  const onSpineRoomChange = (e: MediaQueryListEvent): void => {
-    setSpineWide(e.matches);
-  };
-  spineRoom.addEventListener("change", onSpineRoomChange);
-  onCleanup(() => spineRoom.removeEventListener("change", onSpineRoomChange));
 
   // 一覧は両方の置き場を 1 度に持ってくる。面ごとに絞るのはここ — IPC を
   // 面の数だけ増やすより、`?file=` の転送先を知るために全部持っているほうがいい
@@ -384,9 +375,6 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     const text = diff();
     return text ? markedBody(fullBody(), text) : undefined;
   });
-  /** 選んだ版が下書きと同じ。背骨の 2 行目が「同じ内容」と言う。 */
-  const sameAsDraft = (): boolean => selectedVersionId() !== null && !diff.loading && diff() === "";
-
   /** 「9 か月で 4 回刻んだ」。最初の版からの経過は版の一覧から。 */
   const cadence = (): string | undefined => {
     const rows = versionRows();
@@ -394,6 +382,42 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     return oldest
       ? t().codex.cadence(rows.length, spanSince(oldest.version.time, new Date()))
       : undefined;
+  };
+
+  /** 履歴の見出しに添える「3 版 · 9 か月」。 */
+  const historySummary = (): string => {
+    const rows = versionRows();
+    const oldest = rows.at(-1);
+    return t().codex.historySummary(
+      rows.length,
+      oldest ? spanSince(oldest.version.time, new Date()) : { months: 0, days: 0 },
+    );
+  };
+
+  /** 履歴で選んでいる行。番号を出すのも戻す先を決めるのもこれ。 */
+  const selectedRow = createMemo<VersionRow | undefined>(() =>
+    versionRows().find((row) => row.version.id === selectedVersionId()),
+  );
+
+  /**
+   * 「3 行追加 · 1 行削除」。比較モードが既に読んでいる差分から数えるので、
+   * これを出すために IPC は 1 本も増えない。同じ内容なら「同じ内容」。
+   */
+  const compareDetail = (): string => {
+    const text = diff();
+    if (text === undefined) {
+      return "";
+    }
+    const { added, removed } = diffLineCounts(text);
+    return added + removed === 0 ? t().codex.sameShort : t().codex.lineDelta(added, removed);
+  };
+
+  /** 比較モードの名乗り。「版 2 と比較中 · 3 行追加 · 1 行削除 · 読み取り専用」 */
+  const compareLine = (): string[] => {
+    const row = selectedRow();
+    return row
+      ? [t().codex.comparing(row.number), compareDetail(), t().notes.readOnly].filter(Boolean)
+      : [];
   };
 
   /**
@@ -741,6 +765,12 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     ]
       .filter(Boolean)
       .join(" · ");
+    // 履歴が開いていれば、増えた 1 行だけが跳ねて入る。既にあった版を
+    // 指し直しただけのときは何も動かさない
+    if (!existed) {
+      setFreshVersionId(version.id);
+      setTimeout(() => setFreshVersionId(null), POP_MS);
+    }
     refreshVersions();
     // 一覧の角折りページも数と枠が変わる
     void refetchNotes();
@@ -791,6 +821,18 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       setHistoryOpen(false);
       setSelectedVersionId(null);
     });
+  };
+
+  /**
+   * 履歴ボタンと … の行が通る唯一の入口。同じボタンで畳めないと、開けた人が
+   * 閉じ方を × か Esc から探すことになる。
+   */
+  const toggleHistory = (): void => {
+    if (historyOpen()) {
+      closeHistory();
+      return;
+    }
+    void openHistory();
   };
 
   // 開いたときにまだ版が届いていなければ、届いた最新の版を選ぶ。取り消しで
@@ -1241,8 +1283,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
         class="detail-pane"
         classList={{
           "detail-pane--map": mapOpen(),
-          "detail-pane--spine": kind() === "codex",
-          "detail-pane--history": kind() === "codex" && historyOpen(),
+          "detail-pane--history": kind() === "codex" && historyOpen() && twoPane(),
         }}
       >
         <Show when={selected()} fallback={<div class="detail-empty">{t().notes.noSelection}</div>}>
@@ -1290,6 +1331,21 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                     }}
                   />
 
+                  {/* 履歴だけは畳まない。Codex を開いている人がいちばん押す
+                      もので、ホバーでは開かないパネルの唯一の入口 */}
+                  <Show when={kind() === "codex"}>
+                    <button
+                      type="button"
+                      class="history-button"
+                      aria-pressed={historyOpen()}
+                      title={t().codex.history}
+                      onClick={toggleHistory}
+                    >
+                      <Icon name="clock-counter-clockwise" size={13} />
+                      {t().codex.history}
+                    </button>
+                  </Show>
+
                   {/* ノート単位の操作はここ 1 つに畳む。どれも滅多に押さない */}
                   <NoteMenu
                     open={shell.popover() === "note-menu"}
@@ -1323,9 +1379,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                     onCommit={() => {
                       void commitVersion(item());
                     }}
-                    onHistory={() => {
-                      void openHistory();
-                    }}
+                    onHistory={toggleHistory}
                     onDelete={() => {
                       void remove(item());
                     }}
@@ -1388,20 +1442,16 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                         .join(" ")}
                     </span>
                   </Show>
+                  {/* 比較しているあいだは、何と比べていて何行動いたかをここが言う。
+                      行数は既に読んでいる差分から数えるので IPC は増えない。
+                      携帯では同じことを本文の下の比較バーが言う */}
+                  <Show when={twoPane() && historyOpen() && compareLine().length > 0}>
+                    <span class="detail-meta-sep" aria-hidden="true">
+                      ·
+                    </span>
+                    <span class="detail-compare-status">{compareLine().join(" · ")}</span>
+                  </Show>
                 </div>
-
-                {/* 並べる幅が無いところでは、背骨を横に倒して題の下に置く */}
-                <Show when={kind() === "codex" && historyOpen() && !spineWide()}>
-                  <VersionSlider
-                    rows={versionRows()}
-                    selectedId={selectedVersionId()}
-                    now={new Date()}
-                    onSelect={setSelectedVersionId}
-                    onCommit={() => {
-                      void commitVersion(item());
-                    }}
-                  />
-                </Show>
               </div>
 
               <Popover
@@ -1427,30 +1477,6 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                 class="detail-panes"
                 classList={{ "detail-panes--map": mapOpen() && !historyOpen() }}
               >
-                {/* 背骨。Codex の本文の左に常にあり、履歴を開くとここが伸びる。
-                    Note には無い(違いの 2 つ目)。携帯の幅では CSS が畳む */}
-                <Show when={kind() === "codex" && twoPane()}>
-                  <VersionSpine
-                    rows={versionRows()}
-                    dirty={versionStatus()?.dirty ?? false}
-                    bytesDelta={versionStatus()?.bytes_delta ?? 0}
-                    open={historyOpen() && spineWide()}
-                    selectedId={selectedVersionId()}
-                    same={sameAsDraft()}
-                    readOnly={readOnly()}
-                    onOpen={() => {
-                      void openHistory();
-                    }}
-                    onClose={closeHistory}
-                    onSelect={setSelectedVersionId}
-                    onRestore={(id) => {
-                      void restoreVersion(item(), id);
-                    }}
-                    onCommit={() => {
-                      void commitVersion(item());
-                    }}
-                  />
-                </Show>
                 {/* biome-ignore/eslint 対応: ここで拾うのは href の無い
                     ノートリンクだけ。書く操作はエディタ自身が受ける */}
                 <div
@@ -1524,28 +1550,27 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                 </Show>
               </div>
 
-              {/* カードで送っているときの「閉じる」「この版に戻す」。背骨が
-                  広がっているときは背骨の足元にある */}
-              <Show when={kind() === "codex" && historyOpen() && !spineWide()}>
-                <div class="history-actions">
-                  <button type="button" class="button-secondary" onClick={closeHistory}>
-                    {t().codex.close}
-                  </button>
-                  <button
-                    type="button"
-                    class="button-secondary"
-                    disabled={readOnly() || selectedVersionId() === null}
-                    onClick={() => {
-                      const id = selectedVersionId();
-                      if (id !== null) {
-                        void restoreVersion(item(), id);
-                      }
-                    }}
-                  >
-                    <Icon name="arrow-counter-clockwise" size={14} />
-                    {t().codex.restore}
-                  </button>
-                </div>
+              {/* 広い窓では本文の右に立つ 320px。畳んでいても在るので、
+                  開け閉めは 220ms のずれとして見える */}
+              <Show when={kind() === "codex" && twoPane()}>
+                <HistoryPanel
+                  open={historyOpen()}
+                  rows={versionRows()}
+                  summary={historySummary()}
+                  dirty={versionStatus()?.dirty ?? false}
+                  bytesDelta={versionStatus()?.bytes_delta ?? 0}
+                  selectedId={selectedVersionId()}
+                  readOnly={readOnly()}
+                  freshId={freshVersionId()}
+                  onClose={closeHistory}
+                  onSelect={setSelectedVersionId}
+                  onRestore={(id) => {
+                    void restoreVersion(item(), id);
+                  }}
+                  onCommit={() => {
+                    void commitVersion(item());
+                  }}
+                />
               </Show>
             </>
           )}

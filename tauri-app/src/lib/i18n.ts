@@ -195,8 +195,6 @@ const ja = {
     commitFailed: "刻めませんでした",
     history: "履歴",
     draft: "下書き",
-    now: "いま",
-    restore: "この版に戻す",
     restored: "この版に戻しました。戻す前の下書きは履歴にあります",
     /**
      * 戻す書き込みは通ったが、そのあとの読み直しが画面に届かなかった。戻ったとは
@@ -205,7 +203,6 @@ const ja = {
     restoredNotShown:
       "この版に戻しましたが、戻した本文を画面に出せませんでした。開き直してください",
     restoreFailed: "戻せませんでした",
-    same: "同じ内容です",
     sameShort: "同じ内容",
     noVersions: "版なし",
     noVersionsHint: "まだ版がありません。いまの本文が最初の版になります。",
@@ -230,8 +227,31 @@ const ja = {
       }
       return dirty ? `版 ${count} · 変更あり` : `版 ${count}`;
     },
-    /** 横向きの背骨の左端。最初の版の月。 */
-    monthOf: (month: number) => `${month}月`,
+    /** 履歴パネルの見出しに添える「3 版 · 9 か月」。 */
+    historySummary: (count: number, span: Span): string => {
+      const versions = `${count} 版`;
+      if (span.months >= 1) {
+        return `${versions} · ${span.months} か月`;
+      }
+      return span.days >= 1 ? `${versions} · ${span.days} 日` : `${versions} · 今日`;
+    },
+    /** 下書きの行の 2 行目。刻んだら何番になるか。 */
+    nextVersion: (n: number) => `刻めば版 ${n}`,
+    /** 下書きが最新の版から動いていないとき。 */
+    sameAsVersion: (n: number) => `版 ${n} と同じ内容`,
+    /** 「最初の版 · 2.1 KB」。いちばん古い行の 2 行目。 */
+    firstVersion: (bytes: number) => `最初の版 · ${sizeOf(bytes)}`,
+    /** 選んだ版の下に出る「版 3 に戻す」。 */
+    restoreN: (n: number) => `版 ${n} に戻す`,
+    /** 履歴パネルの足元。 */
+    historyFoot: "版を押すと本文で比べる · Esc で閉じる",
+    /** 比較モードの名乗り。比較バーとボトムバーが出す。 */
+    comparing: (n: number) => `版 ${n} と比較中`,
+    /** 「3 行追加 · 1 行削除」。選んだ版と下書きのあいだで動いた行の数。 */
+    lineDelta: (added: number, removed: number): string =>
+      [added > 0 ? `${added} 行追加` : undefined, removed > 0 ? `${removed} 行削除` : undefined]
+        .filter(Boolean)
+        .join(" · "),
     sizeDelta,
     sizeOf,
     beforeRestore: "戻す前",
@@ -622,13 +642,10 @@ const en: Messages = {
     commitFailed: "Could not commit it",
     history: "History",
     draft: "Draft",
-    now: "now",
-    restore: "Restore this version",
     restored: "Restored this version. The draft from before is in the history",
     restoredNotShown:
       "Restored this version, but its body could not be put on screen. Please reopen the Codex",
     restoreFailed: "Could not restore it",
-    same: "Same content",
     sameShort: "same",
     noVersions: "No versions",
     noVersionsHint: "No versions yet. The current text becomes the first one.",
@@ -652,7 +669,28 @@ const en: Messages = {
       const versions = `${count} version${count === 1 ? "" : "s"}`;
       return dirty ? `${versions} · changed` : versions;
     },
-    monthOf: (month: number) => SHORT_MONTHS[month - 1] ?? String(month),
+    historySummary: (count: number, span: Span): string => {
+      const versions = `${count} version${count === 1 ? "" : "s"}`;
+      if (span.months >= 1) {
+        return `${versions} · ${span.months} month${span.months === 1 ? "" : "s"}`;
+      }
+      return span.days >= 1
+        ? `${versions} · ${span.days} day${span.days === 1 ? "" : "s"}`
+        : `${versions} · today`;
+    },
+    nextVersion: (n: number) => `commit and it is v${n}`,
+    sameAsVersion: (n: number) => `same as v${n}`,
+    firstVersion: (bytes: number) => `first version · ${sizeOf(bytes)}`,
+    restoreN: (n: number) => `Restore v${n}`,
+    historyFoot: "Press a version to compare it in the body · Esc closes",
+    comparing: (n: number) => `Comparing with v${n}`,
+    lineDelta: (added: number, removed: number): string =>
+      [
+        added > 0 ? `${added} line${added === 1 ? "" : "s"} added` : undefined,
+        removed > 0 ? `${removed} line${removed === 1 ? "" : "s"} removed` : undefined,
+      ]
+        .filter(Boolean)
+        .join(" · "),
     sizeDelta,
     sizeOf,
     beforeRestore: "before restore",
