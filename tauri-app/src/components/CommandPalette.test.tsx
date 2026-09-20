@@ -37,6 +37,7 @@ function renderPalette(
   notes: Note[] = TAGGED_NOTES,
 ) {
   const searches: unknown[] = [];
+  const selected: SearchHit[] = [];
   mockIPC((cmd, args) => {
     if (cmd === "search_all") {
       searches.push(args);
@@ -48,7 +49,12 @@ function renderPalette(
     return [];
   });
   const { container } = render(() => (
-    <CommandPalette commands={[]} scopeTags={scopeTags} onSelectHit={() => {}} onClose={() => {}} />
+    <CommandPalette
+      commands={[]}
+      scopeTags={scopeTags}
+      onSelectHit={(hit) => selected.push(hit)}
+      onClose={() => {}}
+    />
   ));
   const input = container.querySelector<HTMLInputElement>(".palette-input");
   if (!input) {
@@ -58,7 +64,13 @@ function renderPalette(
     [...container.querySelectorAll<HTMLButtonElement>(".palette-scope")].map(
       (chip) => chip.textContent ?? "",
     );
-  return { container, input, searches, chips };
+  const sections = (): string[] =>
+    [...container.querySelectorAll(".palette-section")].map((head) => head.textContent ?? "");
+  const rows = (): string[] =>
+    [...container.querySelectorAll<HTMLButtonElement>(".palette-row")].map(
+      (row) => row.textContent ?? "",
+    );
+  return { container, input, searches, selected, chips, sections, rows };
 }
 
 describe("CommandPalette with a tag scope", () => {
@@ -167,5 +179,142 @@ describe("CommandPalette with a tag scope", () => {
     const { chips } = renderPalette([]);
 
     expect(chips()).toStrictEqual([]);
+  });
+});
+
+function searchHit(
+  kind: SearchHit["kind"],
+  title: string,
+  over: Partial<SearchHit> = {},
+): SearchHit {
+  return {
+    kind,
+    title,
+    snippet: title,
+    date: "2026-09-01",
+    filename: kind === "scrawl" ? null : "20260901_090000.md",
+    index: kind === "scrawl" ? 0 : null,
+    tags: [],
+    match_start: null,
+    match_len: null,
+    ...over,
+  };
+}
+
+/** 3 種類が 1 件ずつ。束ね方と、束をまたぐ上下移動を見るための並び。 */
+const MIXED: SearchHit[] = [
+  searchHit("note", "ベガのノート"),
+  searchHit("scrawl", "ベガと走った"),
+  searchHit("codex", "ベガの覚書"),
+];
+
+async function search(input: HTMLInputElement, text: string, until: () => void): Promise<void> {
+  fireEvent.input(input, { target: { value: text } });
+  await waitFor(until);
+}
+
+describe("CommandPalette results grouped by kind", () => {
+  afterEach(() => {
+    cleanup();
+    clearMocks();
+    document.body.innerHTML = "";
+  });
+
+  // どこに居たものかを見出しで示す。種類の名は固有名詞なので訳さない
+  it("heads each kind with its name and count, Codex first", async () => {
+    const { input, sections } = renderPalette([], MIXED);
+
+    await search(input, "ベガ", () =>
+      expect(sections()).toStrictEqual(["CODEX · 1", "NOTE · 1", "SCRAWL · 1"]),
+    );
+  });
+
+  it("leaves out a kind that has no hit", async () => {
+    const { input, sections } = renderPalette([], [searchHit("note", "ベガのノート")]);
+
+    await search(input, "ベガ", () => expect(sections()).toStrictEqual(["NOTE · 1"]));
+  });
+
+  // 束ねても上下移動は 1 本の並び。見出しは飛ばす
+  it("moves the cursor across the groups as one list", async () => {
+    const { input, container, selected, rows } = renderPalette([], MIXED);
+    await search(input, "ベガ", () => expect(rows()).toHaveLength(3));
+
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+
+    expect(container.querySelector(".palette-row--active")?.textContent).toContain("ベガと走った");
+
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(selected.map((s) => s.title)).toStrictEqual(["ベガと走った"]);
+  });
+
+  // 一致語は下線(CSS)で示す。塗らないので、どこに当たったかは mark の位置だけ
+  it("marks the matched word inside the title", async () => {
+    const { input, container, rows } = renderPalette([], MIXED);
+    await search(input, "ベガ", () => expect(rows()).toHaveLength(3));
+
+    const marks = [...container.querySelectorAll(".palette-row-label mark")];
+
+    expect(marks.map((mark) => mark.textContent)).toStrictEqual(["ベガ", "ベガ", "ベガ"]);
+  });
+
+  // core は大小を無視して当てる。題の側でも同じように当て、綴りは打った形でなく
+  // 書いた形を残す
+  it("marks the title however the word is cased", async () => {
+    const { input, container, rows } = renderPalette([], [searchHit("note", "Vega のノート")]);
+    await search(input, "vega", () => expect(rows()).toHaveLength(1));
+
+    expect(container.querySelector(".palette-row-label mark")?.textContent).toBe("Vega");
+  });
+
+  it("adds the body excerpt only when the title does not carry the match", async () => {
+    const hits = [
+      searchHit("note", "ベガのノート", {
+        snippet: "ベガのノート 続き",
+        match_start: 0,
+        match_len: 2,
+      }),
+      searchHit("note", "昨日の練習", {
+        snippet: "… ベガ の下段が読めない",
+        match_start: 2,
+        match_len: 2,
+      }),
+    ];
+    const { input, container, rows } = renderPalette([], hits);
+    await search(input, "ベガ", () => expect(rows()).toHaveLength(2));
+
+    const snippets = [...container.querySelectorAll(".palette-row-snippet")];
+
+    expect(snippets.map((s) => s.textContent)).toStrictEqual(["… ベガ の下段が読めない"]);
+    expect(snippets[0]?.querySelector("mark")?.textContent).toBe("ベガ");
+  });
+
+  // 足元の札。上下で選んで ↩ で開くことは、押してみるまで分からない
+  it("spells the keys at the foot", () => {
+    const { container } = renderPalette([], MIXED);
+
+    const foot = [...container.querySelectorAll(".palette-footer span")];
+
+    expect(foot.map((hint) => hint.textContent)).toStrictEqual(["↑↓ 選ぶ", "↩ 開く", "Esc 閉じる"]);
+  });
+
+  it("names the open key on the selected row alone", async () => {
+    const { input, container, rows } = renderPalette([], MIXED);
+    await search(input, "ベガ", () => expect(rows()).toHaveLength(3));
+
+    const opens = [...container.querySelectorAll(".palette-row-enter")];
+
+    expect(opens.map((open) => open.textContent)).toStrictEqual(["↩ 開く"]);
+    expect(opens[0]?.closest(".palette-row")?.classList).toContain("palette-row--active");
+  });
+
+  it("counts every hit next to the input", async () => {
+    const { input, container } = renderPalette([], MIXED);
+
+    await search(input, "ベガ", () =>
+      expect(container.querySelector(".palette-count")?.textContent).toBe("3 件"),
+    );
   });
 });
