@@ -1527,6 +1527,20 @@ describe("Workspace › Codex の面", () => {
     kinds.set(FILE_C, "codex");
   };
 
+  /**
+   * ⌘N が作るのは Note で、押せば Notes へ移る。この面の「新規」は今いる面の
+   * ものを作るので、ここに札を出すと、札のとおりに打った人には別の物が別の
+   * 場所にできる。キーが無いのではなく、このボタンのキーではない
+   */
+  it("wears no key on its new button, where ⌘N would make the other thing", async () => {
+    addCodex();
+    renderWorkspace();
+    navigateTo?.("/codex");
+    await rowOf(TITLE_C);
+
+    expect(screen.getByRole("button", { name: /新規/u }).dataset.hintKey).toBeUndefined();
+  });
+
   it("lists only the notes of its own surface", async () => {
     addCodex();
     renderWorkspace();

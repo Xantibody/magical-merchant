@@ -1182,12 +1182,15 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
             {MODE_LABELS[kind() === "codex" ? ROUTES.CODEX : ROUTES.NOTES]}
           </span>
           <div class="list-pane-actions">
+            {/* Codex の面では札を出さない。⌘N が作るのは Note で、押せば Notes
+                へ移る。このボタンは今いる面のものを作るので、札のとおりに打つと
+                別の物が別の場所にできる */}
             <button
               type="button"
               class="new-note long-press"
               ref={newNoteButton}
               aria-expanded={shell.popover() === "new-note-menu"}
-              data-hint-key={shortcutLabel("newNote")}
+              data-hint-key={kind() === "codex" ? undefined : shortcutLabel("newNote")}
               onPointerDown={(e) => {
                 newNotePointer = e.pointerType;
                 newNoteLongPress.onPointerDown(e);
