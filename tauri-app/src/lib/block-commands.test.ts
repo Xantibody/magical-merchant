@@ -2,10 +2,11 @@ import { describe, it, expect } from "vitest";
 import { Schema } from "@milkdown/kit/prose/model";
 import { EditorState, TextSelection, NodeSelection } from "@milkdown/kit/prose/state";
 import type { Node } from "@milkdown/kit/prose/model";
+import type { Command } from "@milkdown/kit/prose/state";
 import {
-  deleteCurrentBlock,
   exitCodeBlock,
   indentCodeLine,
+  isInCodeBlock,
   outdentCodeLine,
   stepPastHr,
 } from "./block-commands";
@@ -33,7 +34,7 @@ function stateAt(doc: Node, from: number, to = from): EditorState {
   return EditorState.create({ doc, selection: TextSelection.create(doc, from, to) });
 }
 
-function apply(state: EditorState, command: typeof deleteCurrentBlock): EditorState {
+function apply(state: EditorState, command: Command): EditorState {
   let next = state;
   command(state, (tr) => {
     next = state.apply(tr);
@@ -41,57 +42,26 @@ function apply(state: EditorState, command: typeof deleteCurrentBlock): EditorSt
   return next;
 }
 
-describe("deleteCurrentBlock", () => {
-  it("removes the whole code block the cursor is in", () => {
-    const doc = schema.nodes.doc.create(null, [p("before"), code("fn main() {}"), p("after")]);
-    // "before"(8) + 開始タグで code 内の先頭は 9
-    const state = stateAt(doc, 10);
+describe("isInCodeBlock", () => {
+  it("is true for a cursor inside a code block", () => {
+    const doc = schema.nodes.doc.create(null, [p("before"), code("fn main() {}")]);
 
-    const next = apply(state, deleteCurrentBlock);
-
-    expect(next.doc.childCount).toBe(2);
-    expect(next.doc.textContent).toBe("beforeafter");
+    expect(isInCodeBlock(stateAt(doc, 10).selection)).toBe(true);
   });
 
-  it("removes only the paragraph the cursor is in", () => {
-    const doc = schema.nodes.doc.create(null, [p("one"), p("two")]);
-    const state = stateAt(doc, 2);
+  it("is false for a cursor in a paragraph", () => {
+    const doc = schema.nodes.doc.create(null, [p("plain")]);
 
-    const next = apply(state, deleteCurrentBlock);
-
-    expect(next.doc.childCount).toBe(1);
-    expect(next.doc.textContent).toBe("two");
+    expect(isInCodeBlock(stateAt(doc, 2).selection)).toBe(false);
   });
 
-  it("removes a node selection such as a horizontal rule", () => {
-    const doc = schema.nodes.doc.create(null, [p("a"), schema.nodes.hr.create(), p("b")]);
-    const state = EditorState.create({ doc, selection: NodeSelection.create(doc, 3) });
+  // 罫線を丸ごと選んだ NodeSelection は親が doc になる。コードブロックの中を
+  // 尋ねているだけなので、そこで例外にならないことを押さえる
+  it("is false for a node selection", () => {
+    const doc = schema.nodes.doc.create(null, [p("a"), schema.nodes.hr.create()]);
+    const selection = NodeSelection.create(doc, 3);
 
-    const next = apply(state, deleteCurrentBlock);
-
-    expect(next.doc.childCount).toBe(2);
-    expect(next.doc.firstChild?.type.name).toBe("paragraph");
-  });
-
-  it("leaves an empty paragraph instead of an empty document", () => {
-    const doc = schema.nodes.doc.create(null, [code("only block")]);
-    const state = stateAt(doc, 1);
-
-    const next = apply(state, deleteCurrentBlock);
-
-    expect(next.doc.childCount).toBe(1);
-    expect(next.doc.firstChild?.type.name).toBe("paragraph");
-    expect(next.doc.textContent).toBe("");
-  });
-
-  it("takes the surrounding list item along when its only paragraph goes", () => {
-    const li = schema.nodes.list_item.create(null, p("item"));
-    const doc = schema.nodes.doc.create(null, [schema.nodes.bullet_list.create(null, li), p("x")]);
-    const state = stateAt(doc, 3);
-
-    const next = apply(state, deleteCurrentBlock);
-
-    expect(next.doc.textContent).toBe("x");
+    expect(isInCodeBlock(selection)).toBe(false);
   });
 });
 
