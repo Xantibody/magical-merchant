@@ -47,7 +47,7 @@ import { formatClock, formatMonthDay } from "../lib/day-labels";
 import { locale, t } from "../lib/i18n";
 import { isImeComposing } from "../lib/ime";
 import { createLongPress } from "../lib/long-press";
-import { isTypingTarget, matchesShortcut, shortcutLabel } from "../lib/shortcuts";
+import { isTypingTarget, matchesShortcut } from "../lib/shortcuts";
 import { daysSince, spanSince, withDeltas } from "../lib/versions";
 import type { VersionRow } from "../lib/versions";
 import { readBackup, writeBackup } from "../lib/edit-backup";
@@ -1236,17 +1236,45 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                   />
 
                   {/* ノート単位の操作はここ 1 つに畳む。どれも滅多に押さない */}
-                  <button
-                    type="button"
-                    class="icon-button note-menu-button"
-                    title={t().notes.actions}
-                    aria-label={t().notes.actions}
-                    aria-expanded={shell.popover() === "note-menu"}
-                    data-key={shortcutLabel("noteActions")}
-                    onClick={() => shell.togglePopover("note-menu")}
-                  >
-                    <Icon name="dots-three" size={17} />
-                  </button>
+                  <NoteMenu
+                    open={shell.popover() === "note-menu"}
+                    onOpenChange={(open) => {
+                      // 開くときは他のポップオーバーを畳む。閉じるときは、同じ
+                      // pointerdown で別のものが開いていることがあるので、自分が
+                      // まだ開いている場合だけ畳む
+                      if (open) {
+                        shell.togglePopover("note-menu");
+                      } else if (shell.popover() === "note-menu") {
+                        shell.closePopovers();
+                      }
+                    }}
+                    kind={kind()}
+                    mapOpen={mapOpen()}
+                    readOnly={readOnly()}
+                    revertable={revertable()}
+                    onToggleMap={() => {
+                      void toggleMap(item());
+                    }}
+                    onToggleReadOnly={() => {
+                      void toggleReadOnly(item());
+                    }}
+                    onRevert={() => {
+                      void revertEdit(item());
+                    }}
+                    onInfo={() => shell.togglePopover("note-meta")}
+                    onPromote={() => {
+                      void promoteToCodex(item());
+                    }}
+                    onCommit={() => {
+                      void commitVersion(item());
+                    }}
+                    onHistory={() => {
+                      void openHistory();
+                    }}
+                    onDelete={() => {
+                      void remove(item());
+                    }}
+                  />
                 </div>
 
                 {/* 作成日時・保存の様子・タグを 1 行で。ファイル名は同期や
@@ -1306,37 +1334,6 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                     </span>
                   </Show>
                 </div>
-
-                <Show when={shell.popover() === "note-menu"}>
-                  <NoteMenu
-                    kind={kind()}
-                    mapOpen={mapOpen()}
-                    readOnly={readOnly()}
-                    revertable={revertable()}
-                    onToggleMap={() => {
-                      void toggleMap(item());
-                    }}
-                    onToggleReadOnly={() => {
-                      void toggleReadOnly(item());
-                    }}
-                    onRevert={() => {
-                      void revertEdit(item());
-                    }}
-                    onInfo={() => shell.togglePopover("note-meta")}
-                    onPromote={() => {
-                      void promoteToCodex(item());
-                    }}
-                    onCommit={() => {
-                      void commitVersion(item());
-                    }}
-                    onHistory={() => {
-                      void openHistory();
-                    }}
-                    onDelete={() => {
-                      void remove(item());
-                    }}
-                  />
-                </Show>
 
                 {/* 並べる幅が無いところでは、背骨を横に倒して題の下に置く */}
                 <Show when={kind() === "codex" && historyOpen() && !spineWide()}>

@@ -367,12 +367,26 @@ async function startEditingBody(): Promise<void> {
   await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("editor-body")));
 }
 
+/**
+ * 押す。メニューの開閉と行の選択は pointerdown / pointerup で決まる
+ * (部品の作法)ので、click だけでは何も起きない。
+ */
+function press(target: HTMLElement): void {
+  fireEvent.pointerDown(target, { button: 0 });
+  fireEvent.pointerUp(target, { button: 0 });
+}
+
+/** 「…」を開く。返すのは開いたメニュー。 */
+function openNoteMenu(): Promise<HTMLElement> {
+  press(screen.getByRole("button", { name: "この Note の操作" }));
+  return screen.findByRole("menu");
+}
+
 /** 「…」を開いてから、その中の 1 行を押す。 */
 async function runNoteAction(name: string): Promise<void> {
-  fireEvent.click(screen.getByRole("button", { name: "この Note の操作" }));
   // 背骨も「履歴」と名乗る。押すのはメニューの行
-  const menu = await screen.findByRole("menu");
-  fireEvent.click(await within(menu).findByRole("button", { name: new RegExp(name, "u") }));
+  const menu = await openNoteMenu();
+  press(await within(menu).findByRole("menuitem", { name: new RegExp(name, "u") }));
 }
 
 /** 「新規」→「空の Note」。テンプレのシートを経由するのは本物と同じ順序。 */
@@ -554,6 +568,42 @@ describe("Workspace › 常時編集", () => {
     fireEvent.keyDown(globalThis, { key: ".", metaKey: true });
 
     await waitFor(() => expect(screen.getByRole("menu")).toBeDefined());
+  });
+
+  // 外側を押して閉じるのはメニュー自身の仕事。画面の外(AppLayout)の
+  // 一括処理に預けていると、この面だけを描いたときに開いたまま残る
+  it("closes the menu when a press lands outside it", async () => {
+    await openNoteA();
+    await openNoteMenu();
+    // 外側の見張りが立つのは開いた次のタスク。人の指はそれより遅い
+    await sleep(0);
+
+    fireEvent.pointerDown(titleInput());
+
+    await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+  });
+
+  it("closes the menu on Escape", async () => {
+    await openNoteA();
+    await openNoteMenu();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+  });
+
+  // ⌘. で開く道があるので、開いた先も指に持ち替えずに辿れる
+  it("walks the rows with the arrow keys", async () => {
+    await openNoteA();
+    const menu = await openNoteMenu();
+    // 開いたメニューがまず手を受け取る。辿り始められるのはそこから
+    await waitFor(() => expect(document.activeElement).toBe(menu));
+
+    fireEvent.keyDown(menu, { key: "ArrowDown" });
+
+    await waitFor(() =>
+      expect(document.activeElement).toBe(within(menu).getAllByRole("menuitem")[0]),
+    );
   });
 
   // 昇格した記録は、開いた瞬間に続きを打てる形で渡す。本文が届いた時点では
@@ -1451,6 +1501,18 @@ describe("Workspace › Codex の面", () => {
     await waitFor(() => expect(titleInput().value).toBe(TITLE_A));
   });
 
+  // 確認が出た瞬間、焦点は消えたメニューの行に取り残される。矢印キーが辿るのは
+  // メニューの行だけで、外へ出ればメニューごと畳まれるので、キーボードだけで
+  // 開いた人は戻れない操作を押すことも取り消すこともできなくなる
+  it("hands the focus to the confirmation the menu just replaced", async () => {
+    await openNoteA();
+
+    await runNoteAction("Codex にする");
+
+    const confirm = await screen.findByRole("button", { name: "Codex にする" });
+    await waitFor(() => expect(document.activeElement).toBe(confirm));
+  });
+
   // 予約が発火済みで書き込みが飛んでいる最中に昇格すると、書き込みは移動前の
   // path に向かい、Codex には古い本文だけが残る。書き終わるまで移さない
   it("waits for an in-flight save before moving the file", async () => {
@@ -1479,10 +1541,10 @@ describe("Workspace › Codex の面", () => {
     fireEvent.click(await rowOf(TITLE_C));
     await waitFor(() => expect(titleInput().value).toBe(TITLE_C));
 
-    fireEvent.click(screen.getByRole("button", { name: "この Note の操作" }));
+    await openNoteMenu();
 
-    await screen.findByRole("button", { name: /読み取り専用にする/u });
-    expect(screen.queryByRole("button", { name: "Codex にする" })).toBeNull();
+    await screen.findByRole("menuitem", { name: /読み取り専用にする/u });
+    expect(screen.queryByRole("menuitem", { name: "Codex にする" })).toBeNull();
   });
 
   // 一覧の行の右端、日付の左に角折りのページ。中の数が版の数で、枠の色が
