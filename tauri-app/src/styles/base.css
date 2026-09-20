@@ -44,6 +44,8 @@
   --app-undo: var(--blue-3);
   --app-toast-bg: var(--gray-9);
   --app-toast-text: var(--gray-0);
+  /* 動きのイージングは 1 つだけ。面の切替・パネル・線の滑りが同じ癖で動く */
+  --app-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 :root[data-theme="dark"] {
@@ -130,6 +132,16 @@ body {
 .icon-button:hover,
 .icon-button[aria-expanded="true"] {
   background: var(--app-surface-2);
+}
+
+/* 行や欄の右端に添えるキーの綴り。⌘ 長押しの札(下)とは別物で、常に見えている */
+.key-badge {
+  margin-left: auto;
+  font-size: 11px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--radius-1);
+  padding: 1px 5px;
+  color: var(--app-text-faint);
 }
 
 /* ---------------- ヒントレイヤー ---------------- */

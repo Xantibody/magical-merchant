@@ -4,6 +4,7 @@
    editor.css / markdown-preview.css / markdown-toolbar.css / templates.css) */
 @import "./styles/base.css";
 @import "./styles/layout.css";
+@import "./styles/rail.css";
 @import "./styles/scrawl.css";
 @import "./styles/popover.css";
 @import "./styles/palette.css";

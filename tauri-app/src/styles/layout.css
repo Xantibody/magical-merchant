@@ -1,6 +1,7 @@
 .app {
   display: flex;
-  flex-direction: column;
+  /* レールと本文は横に並ぶ。モバイルではレールが消えて 1 列になる */
+  flex-direction: row;
   /* html が safe-area ぶんの padding を持つので、100dvh のままだとその合計だけ
      画面下にはみ出し、下タブと入力バーが Android のナビゲーションバーの
      向こう側へ消える。dvh は端末側のバーの出入りにも追従する */
@@ -9,116 +10,14 @@
   overflow: hidden;
 }
 
-/* ---------------- header ---------------- */
-
-.header {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: var(--size-3);
-  padding: var(--size-2) var(--size-3);
-  background: var(--app-surface);
-  border-bottom: 1px solid var(--app-border);
-  min-height: 48px;
-}
-
-.header-tabs {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.header-tab {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 6px 12px;
-  border-radius: var(--radius-2);
-  font-size: 13px;
-  color: var(--app-text-muted);
-  text-decoration: none;
-}
-
-.header-tab:hover {
-  background: var(--app-surface-2);
-}
-
-/* 合図は 1 つ。塗りとホバーの下地が同じ灰で、どちらが「いま居る側」なのか
-   ひと目で決まらなかった。字の重さだけに寄せる */
-.header-tab--active {
-  color: var(--app-text);
-  font-weight: 600;
-}
-
-.search-field {
+/* レールの右、本文・ボトムバー・(モバイルの)ヘッダと下タブが縦に積む列 */
+.app-column {
   flex: 1;
-  max-width: 360px;
-  margin-left: auto;
+  min-width: 0;
+  min-height: 0;
   display: flex;
-  align-items: center;
-  gap: var(--size-1);
-  padding: 5px 10px;
-  border: 1px solid var(--app-border);
-  border-radius: var(--radius-2);
-  background: var(--app-input-bg);
-  color: var(--app-text-muted);
-  cursor: pointer;
-  font-family: inherit;
-}
-
-.search-field-label {
-  font-size: 13px;
-}
-
-/* 幅の広いときはタブが現在地を示すので、タイトルは要らない */
-.header-title {
-  display: none;
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.header-action--search {
-  display: none;
-}
-
-.key-badge {
-  margin-left: auto;
-  font-size: 11px;
-  border: 1px solid var(--app-border);
-  border-radius: var(--radius-1);
-  padding: 1px 5px;
-  color: var(--app-text-faint);
-}
-
-/* 入力欄そのものに枠があるので、その中の枠は二重になる。字だけで足りる */
-.search-field .key-badge {
-  border: none;
-  padding: 0;
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--size-1);
-}
-
-.header-actions .icon-button {
-  text-decoration: none;
-}
-
-/* ポップオーバーはヘッダーの下端に吊るす */
-.popover-anchor {
-  position: absolute;
-  top: 100%;
-  z-index: 120;
-}
-
-.popover-anchor--sync {
-  right: 28px;
-}
-
-.popover-anchor .popover {
-  position: static;
+  flex-direction: column;
+  position: relative;
 }
 
 .app-main {
@@ -132,6 +31,115 @@
   overflow: auto;
   padding: var(--size-3);
   position: relative;
+}
+
+/* ---------------- bottom bar (desktop only) ---------------- */
+
+/* 着地したことだけを言う細い帯。現在地は出さない — レールの線と題で足りる。
+   版の距離と比較中の表示は Codex のもので、履歴のスライスがここへ足す */
+.bottom-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  box-sizing: border-box;
+  height: 30px;
+  flex-shrink: 0;
+  padding: 0 16px;
+  background: var(--app-surface);
+  border-top: 1px solid var(--app-hairline);
+  font-size: 12px;
+  color: var(--app-text-faint);
+  /* フライアウトは bottom:30px までなので重ならないが、影はこの上に落ちる */
+  position: relative;
+  z-index: 25;
+}
+
+.bottom-bar-save {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  transition: color 250ms var(--app-ease);
+}
+
+/* 保存できた直後の 2 秒だけ緑。出しっぱなしにすると視界の端が光り続ける */
+.bottom-bar-save[data-status="saved"] {
+  color: var(--app-ok);
+}
+
+.bottom-bar-save .icon {
+  display: flex;
+  transition: transform 250ms var(--app-ease);
+}
+
+.bottom-bar-save[data-status="saved"] .icon {
+  transform: scale(1.25);
+}
+
+/* ---------------- mobile header ---------------- */
+
+/* デスクトップのヘッダは無くなった。狭い画面だけ、題と数個の入口を持つ帯が残る */
+.mobile-header {
+  display: none;
+  align-items: center;
+  gap: 2px;
+  box-sizing: border-box;
+  min-height: 48px;
+  padding: 0 8px 0 16px;
+  background: var(--app-surface);
+  border-bottom: 1px solid var(--app-border);
+}
+
+.mobile-header-title {
+  flex: 1;
+  font-size: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mobile-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--size-1);
+  margin-left: auto;
+}
+
+/* 指で押せる大きさにする */
+.mobile-header-actions .icon-button {
+  padding: 10px;
+  text-decoration: none;
+}
+
+/* ポップオーバーはヘッダーの下端に吊るす */
+.popover-anchor {
+  position: absolute;
+  top: 100%;
+  z-index: 120;
+}
+
+/* 同期の器は面の列に 1 つだけ吊るす。入口はレール(広い窓)と帯(狭い窓)の
+   2 つあるが、開く先は同じ器。ヘッダの下端に吊るす基底(`top: 100%`)は
+   ここでは使えない — この列は窓の高さいっぱいなので真下は画面の外で、
+   `.app` の overflow に刈られて何も見えなくなる */
+.popover-anchor--sync {
+  top: 48px;
+  right: var(--size-2);
+}
+
+@media (min-width: 768px) {
+  /* 広い窓に帯は無く、入口はレールの足元。真下ではなく右へ開く */
+  .popover-anchor--sync {
+    top: auto;
+    right: auto;
+    bottom: 8px;
+    left: 6px;
+  }
+}
+
+.popover-anchor .popover {
+  position: static;
 }
 
 /* ---------------- bottom tabs (mobile only) ---------------- */
@@ -161,32 +169,16 @@
 }
 
 @media (max-width: 767px) {
-  .header-tabs,
-  .search-field,
-  /* Settings は下タブにあるので、ヘッダーで重複させない */
-  .header-action--settings {
-    display: none;
-  }
-
-  .header-title,
-  .header-action--search {
+  .mobile-header {
     display: flex;
-  }
-
-  .header-actions {
-    margin-left: auto;
-  }
-
-  /* 指で押せる大きさにする */
-  .header-actions .icon-button {
-    padding: 10px;
   }
 
   .bottom-tabs {
     display: flex;
   }
 
-  .popover-anchor--sync {
-    right: var(--size-2);
+  /* 保存の合図はメタ行が持つ。下タブの上に帯を足すと二段になる */
+  .bottom-bar {
+    display: none;
   }
 }

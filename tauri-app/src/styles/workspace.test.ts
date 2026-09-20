@@ -370,3 +370,138 @@ describe("note head: the title column follows the body", () => {
     expect(centerOf(head)).toBe(centerOf(element(".detail-pane")));
   });
 });
+
+/** この `@media` の中で `.list-pane` が本文の上に浮いているか。 */
+function floatsTheList(rule: CSSMediaRule): boolean {
+  return [...rule.cssRules].some(
+    (inner) =>
+      inner instanceof CSSStyleRule &&
+      inner.selectorText === ".list-pane" &&
+      inner.style.position === "absolute",
+  );
+}
+
+/** `.list-pane` を浮かせている `@media` の条件。無ければ空。 */
+function flyoutConditions(): string[] {
+  const media = [...document.styleSheets].flatMap((sheet) =>
+    [...sheet.cssRules].filter((rule): rule is CSSMediaRule => rule instanceof CSSMediaRule),
+  );
+  return media.filter((rule) => floatsTheList(rule)).map((rule) => rule.conditionText);
+}
+
+/**
+ * 一覧は常設のペインをやめ、本文の上に浮くフライアウトになった。閉じている
+ * あいだは場所を取らず、押されもしない — 本文は 48px のレールの右から
+ * まるごと始まる。
+ */
+function mountFlyout(open: boolean): HTMLElement {
+  document.body.innerHTML = `
+    <div class="app">
+      <nav class="rail"></nav>
+      <div class="app-column">
+        <main class="app-main">
+          <div class="workspace">
+            <div class="list-pane ${open ? "list-pane--open" : ""}">
+              <div class="list-pane-head"></div>
+              <div class="list-scroll"></div>
+              <div class="list-pane-foot">⌘\\ で常設</div>
+            </div>
+            <div class="detail-pane"></div>
+          </div>
+        </main>
+        <div class="bottom-bar"></div>
+      </div>
+    </div>`;
+  return element(".list-pane");
+}
+
+describe("the list flyout", () => {
+  beforeAll(async () => {
+    await import("../index.css");
+    await import("./workspace.css");
+  });
+
+  afterEach(async () => {
+    document.body.innerHTML = "";
+    await page.viewport(1280, 800);
+  });
+
+  it("stands 280px wide against the rail, over the body", async () => {
+    await page.viewport(1280, 800);
+    const pane = mountFlyout(true);
+
+    const rect = pane.getBoundingClientRect();
+    const detail = element(".detail-pane").getBoundingClientRect();
+
+    expect(rect.width).toBeCloseTo(280, 0);
+    expect(rect.left).toBeCloseTo(48, 0);
+    // 本文はフライアウトに押しのけられない。開いても下に続いている
+    expect(detail.left).toBeCloseTo(48, 0);
+  });
+
+  it("stops above the bottom bar", async () => {
+    await page.viewport(1280, 800);
+    const pane = mountFlyout(true);
+
+    const bar = element(".bottom-bar").getBoundingClientRect();
+
+    expect(pane.getBoundingClientRect().bottom).toBeCloseTo(bar.top, 0);
+  });
+
+  // 閉じているあいだに当たり判定が残ると、本文の左 280px が押せなくなる
+  it("is out of the way and out of reach while it is closed", async () => {
+    await page.viewport(1280, 800);
+    const pane = mountFlyout(false);
+
+    const style = getComputedStyle(pane);
+
+    expect(style.opacity).toBe("0");
+    expect(style.pointerEvents).toBe("none");
+    expect(style.transform).toBe("matrix(1, 0, 0, 1, -24, 0)");
+  });
+
+  it("slides and fades with nothing else", async () => {
+    await page.viewport(1280, 800);
+    const pane = mountFlyout(true);
+
+    const style = getComputedStyle(pane);
+
+    expect(style.transform).toBe("none");
+    expect(style.transitionProperty).toBe("transform, opacity");
+    expect(style.transitionDuration).toBe("0.22s, 0.18s");
+  });
+
+  /**
+   * 狭い画面では一覧は 1 枚の頁。浮かせる相手(本文)が横に無い。
+   *
+   * 見るのは「流れの中に居ること」で、`static` ではない — 一覧はテンプレの
+   * シートを内側に置くので、基底の規則がもとから `relative` を持っている。
+   * 浮いているかどうかを言うのは `absolute` かどうか。
+   */
+  it("goes back to being a full page on a phone", async () => {
+    await page.viewport(390, 800);
+    const pane = mountFlyout(false);
+
+    const style = getComputedStyle(pane);
+
+    expect(style.position).toBe("relative");
+    expect(style.opacity).toBe("1");
+    expect(style.transform).toBe("none");
+    expect(getComputedStyle(element(".list-pane-foot")).display).toBe("none");
+  });
+
+  /**
+   * 広くてもホバーの無い端末 — タブレット — では、タップで開いた一覧は指が
+   * 離れた時点で畳まれる。開ける手はホバーとピンしか無く、そのピンは一覧の
+   * 中にあるので、ノートを開いている人は別のノートへ行けなくなる。
+   *
+   * headless Chromium は必ず `hover: hover` を名乗るので、その画面を作って
+   * 測ることはできない。浮かせる規則が条件の内側に居ることだけを見る
+   */
+  it("floats the list only where a pointer can hover", () => {
+    const conditions = flyoutConditions();
+
+    expect(conditions).toHaveLength(1);
+    expect(conditions[0]).toContain("hover: hover");
+  });
+});

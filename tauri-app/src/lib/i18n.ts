@@ -62,6 +62,9 @@ const ja = {
     sync: "同期",
     settings: "Settings",
   },
+  rail: {
+    label: "面の切り替えと全体の操作",
+  },
   theme: {
     system: "システム",
     light: "ライト",
@@ -106,6 +109,10 @@ const ja = {
     empty: "Note がありません",
     emptyHint: "新規から始めると、ここに並びます。",
     new: "新規",
+    pinList: (key: string) => `常設 ${key}`,
+    unpinList: (key: string) => `常設をやめる ${key}`,
+    listHint: (key: string) => `${key} で常設 · 離れると畳む`,
+    listPinnedHint: (key: string) => `${key} で畳む`,
     noSelection: "項目がありません",
     backToList: "一覧に戻る",
     info: "Note 情報",
@@ -535,6 +542,9 @@ const en: Messages = {
     sync: "Sync",
     settings: "Settings",
   },
+  rail: {
+    label: "Modes and global actions",
+  },
   theme: {
     system: "System",
     light: "Light",
@@ -581,6 +591,10 @@ const en: Messages = {
     empty: "No Notes yet",
     emptyHint: "Start one with New and it lands here.",
     new: "New",
+    pinList: (key: string) => `Keep it open ${key}`,
+    unpinList: (key: string) => `Let it fold again ${key}`,
+    listHint: (key: string) => `${key} keeps it open · it folds when you leave`,
+    listPinnedHint: (key: string) => `${key} lets it fold again`,
     noSelection: "Nothing to show",
     backToList: "Back to the list",
     info: "Note info",

@@ -18,6 +18,7 @@ import Icon from "../components/Icon";
 import MarkdownPreview from "../components/MarkdownPreview";
 import NoteMenu from "../components/NoteMenu";
 import NoteMetaPopover from "../components/NoteMetaPopover";
+import Popover from "../components/Popover";
 import TemplatePicker from "../components/TemplatePicker";
 import VersionSlider from "../components/VersionSlider";
 import VersionSpine from "../components/VersionSpine";
@@ -47,7 +48,7 @@ import { formatClock, formatMonthDay } from "../lib/day-labels";
 import { locale, t } from "../lib/i18n";
 import { isImeComposing } from "../lib/ime";
 import { createLongPress } from "../lib/long-press";
-import { isTypingTarget, matchesShortcut } from "../lib/shortcuts";
+import { isTypingTarget, matchesShortcut, shortcutLabel } from "../lib/shortcuts";
 import { daysSince, spanSince, withDeltas } from "../lib/versions";
 import type { VersionRow } from "../lib/versions";
 import { readBackup, writeBackup } from "../lib/edit-backup";
@@ -179,6 +180,12 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   const [saveStatus, setSaveStatus] = createSignal<SaveStatus>("idle");
   /** 最後に保存できた時刻。「21:40 に保存」の数字。 */
   const [savedAt, setSavedAt] = createSignal("");
+
+  // 保存の様子はボトムバー(AppLayout)にも出る。あちらはこの画面の外なので、
+  // shell を経由して渡す。離れるときは idle に戻す — 持ち越すと、書いて
+  // いない画面が「21:40 に保存」と言い続ける
+  createEffect(() => shell.setSaveState({ status: saveStatus(), at: savedAt() }));
+  onCleanup(() => shell.setSaveState({ status: "idle", at: "" }));
   const [hidden, setHidden] = createSignal<string[]>([]);
   /**
    * 先頭 H1 を切り離した本文。エディタが打鍵のたびに書き戻すので、いつでも
@@ -222,6 +229,8 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
 
   let detailBodyRef: HTMLDivElement | undefined;
   let listScrollRef: HTMLDivElement | undefined;
+  /** 「+ 新規」。テンプレのシートを開けたボタンなので、押されたぶんは外側に数えない */
+  let newNoteButton: HTMLButtonElement | undefined;
   /** 「保存しました」を保存時刻の表示に落とすタイマー。 */
   let savedTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -1021,7 +1030,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
    */
   const newNoteLongPress = createLongPress(() => {
     if (kind() === "note") {
-      shell.togglePopover("new-note-menu");
+      shell.togglePopover("new-note-menu", newNoteButton);
     }
   });
   let newNotePointer = "mouse";
@@ -1082,47 +1091,94 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     });
   };
 
+  /**
+   * フライアウトを出すか。ノートを 1 本も開いていないあいだは開けたままに
+   * する — 隠す相手(本文)が無いのに畳むと、レールに乗るまで何も無い画面に
+   * なる。
+   */
+  const flyoutOpen = (): boolean => shell.listOpen() || selected() === undefined;
+
+  const pinLabel = (): string =>
+    shell.listPinned()
+      ? t().notes.unpinList(shortcutLabel("listPin"))
+      : t().notes.pinList(shortcutLabel("listPin"));
+
   return (
     <div class="workspace" classList={{ "workspace--detail": detailOpen() }}>
-      <div class="list-pane">
+      <div
+        class="list-pane"
+        classList={{ "list-pane--open": flyoutOpen() }}
+        // フライアウトはレールの続き。柱か一覧にポインタが居るあいだ開く
+        onPointerEnter={() => shell.setListHover(true)}
+        onPointerLeave={() => shell.setListHover(false)}
+      >
         <div class="list-pane-head">
           <span class="list-pane-title">
             {MODE_LABELS[kind() === "codex" ? ROUTES.CODEX : ROUTES.NOTES]}
           </span>
-          <button
-            type="button"
-            class="new-note long-press"
-            aria-expanded={shell.popover() === "new-note-menu"}
-            onPointerDown={(e) => {
-              newNotePointer = e.pointerType;
-              newNoteLongPress.onPointerDown(e);
-            }}
-            onPointerUp={newNoteLongPress.onPointerUp}
-            onPointerMove={newNoteLongPress.onPointerMove}
-            onPointerCancel={newNoteLongPress.onPointerCancel}
-            onContextMenu={newNoteLongPress.onContextMenu}
-            onClick={() => {
-              // 長押しでメニューを開いた直後の click は飲み込む
-              if (!newNoteLongPress.shouldClick()) {
-                return;
-              }
-              // テンプレは Note の入口。Codex の面では空の 1 本を作るだけ —
-              // `create_from_template` は置き場を選べない
-              if (newNotePointer === "mouse" && kind() === "note") {
-                shell.togglePopover("new-note-menu");
-              } else {
-                void createNote();
-              }
-            }}
-          >
-            <Icon name="plus" size={12} />
-            {t().notes.new}
-          </button>
+          <div class="list-pane-actions">
+            <button
+              type="button"
+              class="new-note long-press"
+              ref={newNoteButton}
+              aria-expanded={shell.popover() === "new-note-menu"}
+              onPointerDown={(e) => {
+                newNotePointer = e.pointerType;
+                newNoteLongPress.onPointerDown(e);
+              }}
+              onPointerUp={newNoteLongPress.onPointerUp}
+              onPointerMove={newNoteLongPress.onPointerMove}
+              onPointerCancel={newNoteLongPress.onPointerCancel}
+              onContextMenu={newNoteLongPress.onContextMenu}
+              onClick={() => {
+                // 長押しでメニューを開いた直後の click は飲み込む
+                if (!newNoteLongPress.shouldClick()) {
+                  return;
+                }
+                // テンプレは Note の入口。Codex の面では空の 1 本を作るだけ —
+                // `create_from_template` は置き場を選べない
+                if (newNotePointer === "mouse" && kind() === "note") {
+                  shell.togglePopover("new-note-menu", newNoteButton);
+                } else {
+                  void createNote();
+                }
+              }}
+            >
+              <Icon name="plus" size={12} />
+              {t().notes.new}
+            </button>
+            {/* ピンは一覧の中の物なので、押せるのは開いているあいだだけ。
+              同じことを ⌘\ でもできる */}
+            <button
+              type="button"
+              class="list-pin"
+              aria-pressed={shell.listPinned()}
+              title={pinLabel()}
+              aria-label={pinLabel()}
+              data-key={shortcutLabel("listPin")}
+              onClick={() => shell.toggleListPin()}
+            >
+              <Icon name={shell.listPinned() ? "push-pin-fill" : "push-pin"} size={14} />
+            </button>
+          </div>
         </div>
 
-        <Show when={shell.popover() === "new-note-menu"}>
-          {/* 背後を暗くするのは下から出るシートのときだけ(CSS 側で出し分け) */}
-          <div class="template-picker-backdrop" />
+        <Popover
+          open={shell.popover() === "new-note-menu"}
+          onClose={() => shell.closePopovers()}
+          trigger={shell.popoverTrigger}
+          label={t().templates.newNote}
+        >
+          {/* 背後を暗くするのは下から出るシートのときだけ(CSS 側で出し分け)。
+              閉じるのは自分で受ける — この幕は器の中に居るので、部品から見ると
+              内側の押下になり「外を押した」にならない。シートには取り消しの
+              ボタンが無く、幕が開けたボタンごと覆うので、受けないと指だけで
+              抜け出せなくなる */}
+          <div
+            class="template-picker-backdrop"
+            aria-hidden="true"
+            onClick={() => shell.closePopovers()}
+          />
           <TemplatePicker
             templates={templates() ?? []}
             onPickEmpty={() => {
@@ -1137,7 +1193,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
               navigate(ROUTES.TEMPLATES);
             }}
           />
-        </Show>
+        </Popover>
 
         {/* キーを受けるのは中の行(button)で、ここはそれを束ねているだけ。
             `.detail-body` と同じく、役割を名乗らない入れ物 */}
@@ -1179,6 +1235,13 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
               )}
             </For>
           </Show>
+        </div>
+
+        {/* 開け閉ての決まりは、開いているあいだだけ足元に書いてある */}
+        <div class="list-pane-foot">
+          {shell.listPinned()
+            ? t().notes.listPinnedHint(shortcutLabel("listPin"))
+            : t().notes.listHint(shortcutLabel("listPin"))}
         </div>
       </div>
 
@@ -1349,7 +1412,12 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                 </Show>
               </div>
 
-              <Show when={shell.popover() === "note-meta"}>
+              <Popover
+                open={shell.popover() === "note-meta"}
+                onClose={() => shell.closePopovers()}
+                trigger={shell.popoverTrigger}
+                label={t().notes.info}
+              >
                 <NoteMetaPopover
                   filename={item().filename}
                   revertable={revertable()}
@@ -1361,7 +1429,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                   }}
                   onClose={() => shell.closePopovers()}
                 />
-              </Show>
+              </Popover>
 
               <div
                 class="detail-panes"

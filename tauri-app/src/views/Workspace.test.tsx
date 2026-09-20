@@ -389,6 +389,15 @@ async function runNoteAction(name: string): Promise<void> {
   press(await within(menu).findByRole("menuitem", { name: new RegExp(name, "u") }));
 }
 
+/** シートの背後を暗くしている幕。role も名前も持たないので class で引く。 */
+function templateBackdrop(): Element {
+  const found = document.querySelector(".template-picker-backdrop");
+  if (!found) {
+    throw new Error("expected the sheet to have a backdrop");
+  }
+  return found;
+}
+
 /** 「新規」→「空の Note」。テンプレのシートを経由するのは本物と同じ順序。 */
 async function createEmptyNote(): Promise<void> {
   fireEvent.click(screen.getByRole("button", { name: /新規/u }));
@@ -515,6 +524,24 @@ describe("Workspace › 触る端末からのテンプレート", () => {
     // 空の Note まで増えていたら、長押しは入り口として使えない
     fireEvent.pointerUp(newNote, { pointerType: "touch", clientX: 99, clientY: 104 });
     fireEvent.click(newNote);
+    expect(countOf("create_draft")).toBe(0);
+  });
+
+  // シートには取り消しのボタンが無く、幕は開けたボタンごと覆う。その幕は器の
+  // 中に居るので部品から見ると内側の押下で、自分で受けないかぎり指だけでは
+  // 何かを選ぶまで抜け出せない
+  it("closes the template sheet when the finger taps the backdrop", async () => {
+    renderWorkspace();
+    const newNote = await screen.findByRole("button", { name: /新規/u });
+
+    fireEvent.pointerDown(newNote, { pointerType: "touch", clientX: 100, clientY: 100 });
+    await screen.findByRole("menuitem", { name: /空の Note/u }, { timeout: 2000 });
+    fireEvent.pointerUp(newNote, { pointerType: "touch", clientX: 100, clientY: 100 });
+
+    fireEvent.click(templateBackdrop());
+
+    await waitFor(() => expect(screen.queryByRole("menuitem", { name: /空の Note/u })).toBeNull());
+    // 抜け出しただけ。ノートは増えていない
     expect(countOf("create_draft")).toBe(0);
   });
 });
@@ -785,6 +812,21 @@ describe("Workspace › 保存の見え方", () => {
 
     await screen.findByText("保存しました", {}, { timeout: 3000 });
     await waitFor(() => expect(screen.getByText(/に保存$/u)).toBeDefined(), { timeout: 4000 });
+  });
+
+  /**
+   * 広い画面で保存の様子を出すのはボトムバーで、それは画面の外(AppLayout)に
+   * ある。受け渡しは shell なので、そこへ着地が届いているかを見る。
+   */
+  it("hands the landing to the shell for the bar outside this view", async () => {
+    await openNoteA();
+    expect(shell?.saveState().status).toBe("idle");
+
+    fireEvent.input(titleInput(), { target: { value: "会議メモ 改" } });
+
+    await waitFor(() => expect(shell?.saveState().status).toBe("saved"), { timeout: 3000 });
+    await waitFor(() => expect(shell?.saveState().status).toBe("savedAt"), { timeout: 4000 });
+    expect(shell?.saveState().at).toMatch(/^\d\d:\d\d$/u);
   });
 
   // 2 秒の緑はそのノートの持ち物。隣へ移ったあとに落ちてくる「21:40 に保存」は、

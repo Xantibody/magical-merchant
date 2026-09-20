@@ -3,6 +3,8 @@
   display: flex;
   min-height: 0;
   min-width: 0;
+  /* フライアウトの位置の基準。左端はレールの右、下端はボトムバーの上 */
+  position: relative;
 }
 
 /* ---------------- list pane ---------------- */
@@ -22,7 +24,45 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 14px 8px;
+  padding: 14px 10px 8px 16px;
+}
+
+.list-pane-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* 常設の留め具。留めているあいだも塗らない — 押せる物が 2 つ並ぶ場所で、
+   塗りは「新規」のほうが強いままでいい。合図は字と同じ濃さになること */
+.list-pin {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 5px;
+  background: none;
+  color: var(--app-text-faint);
+  cursor: pointer;
+  transition: color 150ms var(--app-ease);
+}
+
+.list-pin:hover,
+.list-pin[aria-pressed="true"] {
+  color: var(--app-text);
+}
+
+/* 開け閉ての決まり。狭い画面には開け閉てが無いので出さない */
+.list-pane-foot {
+  display: none;
+  margin-top: auto;
+  padding: 10px 16px;
+  border-top: 1px solid var(--app-surface-2);
+  font-size: 11px;
+  color: var(--app-text-hint);
 }
 
 /* ペインの中で唯一の押し物なので、枠で囲わなくても見つかる */
@@ -77,6 +117,52 @@
 .list-scroll {
   flex: 1;
   overflow-y: auto;
+}
+
+/* ---------------- list flyout (desktop) ---------------- */
+
+/* 一覧は常設のペインをやめ、レールの続きとして本文の上に浮く。本文の列は
+   一覧の開け閉てで動かない — 読んでいる行が横に跳ねるほうが、一覧が常に
+   見えていないことより高くつく。
+   `hover: hover` で絞るのは、開ける手がホバーとピン(ピンは一覧の中にある)
+   しか無いから。広くてもホバーの無い端末では、タップで一瞬開いて指が離れた
+   時点で畳まれ、中のピンに届く前に一覧そのものへ行けなくなる。そこでは
+   常設の列のまま置く */
+@media (min-width: 768px) and (hover: hover) {
+  .list-pane {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 20;
+    width: 280px;
+    border-right: 1px solid var(--app-border);
+    box-shadow: 16px 0 40px -20px rgb(20 20 25 / 50%);
+    transform: translateX(-24px);
+    opacity: 0;
+    /* 閉じているあいだに当たり判定が残ると、本文の左 280px が押せない */
+    pointer-events: none;
+    transition:
+      transform 220ms var(--app-ease),
+      opacity 180ms var(--app-ease);
+  }
+
+  .list-pane--open {
+    transform: none;
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .list-pane-foot {
+    display: block;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .list-pane,
+  .list-pin {
+    transition: none;
+  }
 }
 
 /* 群の名前は字だけで示す。罫線を引くと、行 1 つぶんの区切りに層が 1 つ増える。
@@ -339,10 +425,18 @@
   color: var(--app-text-muted);
 }
 
+/* 保存の様子はメタ行とボトムバーの両方に置き場があるが、出すのはどちらか
+   一方だけ。広い画面ではバーが言うので、メタ行は日付とタグに戻る */
 .detail-save-status {
   display: inline-flex;
   align-items: baseline;
   gap: 4px;
+}
+
+@media (min-width: 768px) {
+  .detail-save-status {
+    display: none;
+  }
 }
 
 /* 緑が点くのは保存できた直後の 2 秒だけ。書いているあいだ光り続けさせない */
@@ -640,6 +734,11 @@
     border-right: none;
     /* 残り高さを埋めないとキャプチャバーが宙に浮く */
     flex: 1;
+  }
+
+  /* 浮いていないものは留められない */
+  .list-pin {
+    display: none;
   }
 
   /* 一覧を見ている間も記録はできる。キャプチャバーだけ残して詳細を畳む */
