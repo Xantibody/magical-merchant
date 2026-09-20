@@ -1,71 +1,264 @@
-.settings-scroll {
+/* 設定は 3 頁。左のナビ 220px で選び、右に 1 頁 680px を出す */
+.settings {
   flex: 1;
-  overflow-y: auto;
-  padding: 44px 32px 64px;
+  display: flex;
   min-height: 0;
 }
 
-.settings {
-  max-width: 560px;
-  margin: 0 auto;
+.settings-nav {
+  width: 220px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 24px 12px;
+  border-right: 1px solid var(--app-hairline);
+  overflow-y: auto;
 }
 
 .settings-title {
-  margin: 0 0 28px;
+  margin: 0;
+  padding: 0 12px 16px;
   font-size: 22px;
   font-weight: 700;
   letter-spacing: -0.01em;
 }
 
-.settings-section {
+.settings-nav-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--app-text-muted);
+  font-family: inherit;
+  font-size: 13px;
+  text-align: start;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+
+.settings-nav-row:hover {
+  background: var(--app-surface-2);
+}
+
+/* 現在地は塗りと太さだけで言う。線や印は足さない */
+.settings-nav-row--on {
+  background: var(--app-accent-soft);
+  color: var(--app-text);
+  font-weight: 600;
+}
+
+.settings-nav-text {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 24px 0;
+  gap: 1px;
+}
+
+/* 頁に何があるかの補助。入り切らなければ畳まず省略記号にする */
+.settings-nav-hint {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--app-text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 1 頁ずつ出すモバイルだけに意味がある印 */
+.settings-nav-caret {
+  display: none;
+  color: var(--app-text-faint);
+}
+
+/* 端末に載っているビルド。ナビの足元に置いて、頁を 1 つ使わない */
+.settings-version {
+  margin: auto 0 0;
+  padding: 16px 12px 8px;
+  font-size: 11px;
+  color: var(--app-text-hint);
+}
+
+.settings-page {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 36px 48px;
+  overflow-y: auto;
+}
+
+.settings-page-inner {
+  max-width: 680px;
+  animation: mm-rise 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.settings-page-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+/* 一覧へ戻るボタンはモバイルの 1 頁ずつのときだけ意味がある */
+.settings-back {
+  display: none;
+}
+
+.settings-page-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.settings-page-lead {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: var(--app-text-faint);
+}
+
+/* 1 行。左に項目名と説明、右に操作 */
+.settings-row {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 12px 24px;
+  align-items: center;
+  padding: 16px 0;
   border-top: 1px solid var(--app-hairline);
 }
 
-.settings-section-label {
-  margin: 0;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--app-text-faint);
-  letter-spacing: 0.08em;
+/* 背の高い操作を持つ行。項目名は操作の頭に揃える */
+.settings-row--tall {
+  align-items: start;
 }
 
+.settings-row-label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.settings-row-desc {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--app-text-faint);
+}
+
+.settings-row-control {
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* 別の画面へ渡す行。押せることは右端の caret が示す */
+.settings-row--link {
+  color: inherit;
+  text-decoration: none;
+  border-radius: 6px;
+}
+
+.settings-row--link:hover {
+  background: var(--app-surface-2);
+}
+
+.settings-row-value {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: var(--app-text-muted);
+  font-size: 13px;
+}
+
+.settings-row-value .icon {
+  margin-left: auto;
+  color: var(--app-text-faint);
+}
+
+/* 3 つしかない選択肢。開いて選ぶメニューにするほどのものではない。
+   枠で 3 つ並べるのではなく、地の上に 1 つだけ色が乗る */
+.settings-seg {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  width: max-content;
+  border-radius: 6px;
+  background: var(--app-sidebar);
+}
+
+.settings-seg-item {
+  padding: 5px 12px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--app-text-muted);
+  font-family: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+
+.settings-seg-item:hover {
+  background: var(--app-surface-2);
+}
+
+.settings-seg-item[data-pressed] {
+  background: var(--app-accent-soft);
+  color: var(--app-text);
+  font-weight: 600;
+}
+
+/* 入 / 切のスイッチ。地は切で枠色、入で accent。動かすのは丸だけ */
+.settings-switch {
+  position: relative;
+  width: 34px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  background: var(--app-border);
+  cursor: pointer;
+  transition: background 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.settings-switch[data-checked] {
+  background: var(--app-accent);
+}
+
+/* 動かすのは transform だけ。left を動かすとレイアウトを引き直す */
+.settings-switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: white;
+  transition:
+    transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1),
+    background 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.settings-switch-thumb[data-checked] {
+  transform: translateX(14px);
+  background: var(--app-surface);
+}
+
+/* 名前を訊く欄(特殊文字)。項目名は欄の上 */
 .settings-field {
   display: flex;
   flex-direction: column;
   gap: 6px;
-}
-
-/* 3 つしかない選択肢。開いて選ぶメニューにするほどのものではない */
-.settings-choices {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.settings-choice {
-  padding: 7px 14px;
-  border: 1px solid var(--app-border);
-  border-radius: var(--radius-2);
-  background: var(--app-input-bg);
-  color: var(--app-text-muted);
-  font-family: inherit;
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.settings-choice:hover {
-  background: var(--app-surface-2);
-}
-
-.settings-choice--on {
-  background: var(--app-accent-soft);
-  border-color: var(--app-accent);
-  color: var(--app-text);
-  font-weight: 600;
 }
 
 .settings-field-label {
@@ -74,97 +267,32 @@
 }
 
 .settings-input {
-  padding: 10px 14px;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 9px 12px;
   border: 1px solid var(--app-border);
-  border-radius: 9px;
-  background: var(--app-input-bg);
+  border-radius: 7px;
+  background: var(--app-sidebar);
   color: var(--app-text);
   font-family: inherit;
-  font-size: 14px;
+  font-size: 13px;
   outline: none;
-  box-shadow: 0 1px 2px rgb(20 20 25 / 4%);
+}
+
+/* アドレスは等幅で。打ち間違いは字の形で見つかる */
+.settings-input--mono {
+  font-family: ui-monospace, monospace;
 }
 
 .settings-input:focus {
   box-shadow: 0 0 0 3px var(--app-accent-soft);
 }
 
-/* 別の画面へ渡す行。枠は settings-input と同じで、押せることは
-   右端の caret が示す */
-.settings-link {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 44px;
-  padding: 10px 14px;
-  border: 1px solid var(--app-border);
-  border-radius: 9px;
-  background: var(--app-input-bg);
-  color: var(--app-text);
-  font-size: 14px;
-  text-decoration: none;
-  box-shadow: 0 1px 2px rgb(20 20 25 / 4%);
-}
-
-.settings-link:hover {
-  background: var(--app-surface-2);
-}
-
-.settings-link .icon {
-  color: var(--app-text-faint);
-}
-
-.settings-link-label {
-  flex: 1;
-  min-width: 0;
-}
-
-.settings-link-count {
-  font-size: 12px;
-  color: var(--app-text-faint);
-}
-
-/* 文言と右端のスイッチ。枠は settings-link と揃え、行ごと押せる */
-.settings-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  min-height: 44px;
-  padding: 10px 14px;
-  border: 1px solid var(--app-border);
-  border-radius: 9px;
-  background: var(--app-input-bg);
-  color: var(--app-text);
-  font-size: 14px;
-  cursor: pointer;
-  box-shadow: 0 1px 2px rgb(20 20 25 / 4%);
-}
-
-.settings-toggle:hover {
-  background: var(--app-surface-2);
-}
-
-/* チェックボックスは隠し、右のスイッチ(base.css の .switch)が状態を映す */
-.settings-toggle input {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-}
-
 /* 設定ファイルで固定されている環境では読むだけ */
 .settings-readonly {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
   margin: 0;
-  font-size: 13px;
-  color: var(--app-text-muted);
-}
-
-.settings-readonly span {
   font-family: ui-monospace, monospace;
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--app-text);
   overflow-wrap: anywhere;
 }
@@ -172,6 +300,7 @@
 .settings-actions {
   display: flex;
   gap: var(--size-2);
+  flex-wrap: wrap;
 }
 
 .settings-status {
@@ -179,7 +308,7 @@
   align-items: center;
   gap: 8px;
   margin: 0;
-  font-size: 13.5px;
+  font-size: 13px;
   color: var(--app-text);
 }
 
@@ -204,8 +333,9 @@
   padding: 0;
   list-style: none;
   border: 1px solid var(--app-border);
-  border-radius: 9px;
-  background: var(--app-input-bg);
+  border-radius: 7px;
+  background: var(--app-sidebar);
+  align-self: stretch;
 }
 
 .glyph-row {
@@ -287,12 +417,73 @@
   color: var(--app-text-faint);
 }
 
-@media (max-width: 767px) {
-  .settings-scroll {
-    padding: 20px 20px 40px;
+@media (prefers-reduced-motion: reduce) {
+  .settings-page-inner {
+    animation: none;
   }
 
+  .settings-nav-row,
+  .settings-seg-item,
+  .settings-switch,
+  .settings-switch-thumb {
+    transition: none;
+  }
+}
+
+@media (max-width: 767px) {
+  /* 1 頁ずつ。一覧か頁のどちらかだけを出す */
+  .settings-nav {
+    width: 100%;
+    padding: 12px 8px;
+    border-right: none;
+  }
+
+  /* 題はヘッダが出している */
   .settings-title {
-    margin-bottom: 16px;
+    display: none;
+  }
+
+  .settings-nav-row {
+    min-height: 44px;
+    font-size: 15px;
+  }
+
+  /* 一覧を見ているあいだ現在地は無い。次に開く頁を先に塗らない */
+  .settings-nav-row--on {
+    background: none;
+    color: var(--app-text-muted);
+    font-weight: 400;
+  }
+
+  .settings-nav-caret {
+    display: inline-flex;
+  }
+
+  .settings-page {
+    display: none;
+    padding: 16px 20px 40px;
+  }
+
+  .settings--page .settings-nav {
+    display: none;
+  }
+
+  .settings--page .settings-page {
+    display: block;
+  }
+
+  .settings-back {
+    display: flex;
+    margin-left: -8px;
+  }
+
+  /* 項目名の 220px は取れない。操作を項目名の下に置く */
+  .settings-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* 指で押せる高さ。段の中で字は 12.5px のまま */
+  .settings-seg-item {
+    min-height: 36px;
   }
 }

@@ -1,5 +1,6 @@
 import { $prose } from "@milkdown/kit/utils";
 import { Plugin, TextSelection } from "@milkdown/kit/prose/state";
+import type { Command } from "@milkdown/kit/prose/state";
 import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import type { Node as ProseNode } from "@milkdown/kit/prose/model";
@@ -47,6 +48,16 @@ function linkRanges(doc: ProseNode): LinkRange[] {
 function titleOf(targets: NoteLinkTarget[], id: string): string | undefined {
   return targets.find((target) => target.id === id)?.title;
 }
+
+/**
+ * `[[` を打つ。閉じ括弧は入れない — 続きは下の NoteLinkSuggest が受け、ID を
+ * 選んだ時点で `[[ID]]` に完成する。スマホのキーボードでは括弧が記号面の奥に
+ * あって 2 手かかるので、書式バーからの入口を用意する。
+ */
+export const startNoteLink: Command = (state, dispatch) => {
+  dispatch?.(state.tr.insertText("[[").scrollIntoView());
+  return true;
+};
 
 /** `[[` を打っている途中の補完候補ポップアップ。それ以外のときは何も出さない。 */
 class NoteLinkSuggest {
