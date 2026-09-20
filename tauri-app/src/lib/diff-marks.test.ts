@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { blockMark, markLines, markedBody } from "./diff-marks";
+import { blockMark, diffLineCounts, markLines, markedBody } from "./diff-marks";
 
 describe("markLines", () => {
   it("leaves the draft untouched when the diff is empty", () => {
@@ -84,6 +84,31 @@ describe("markedBody", () => {
 
   it("leaves a body without a title alone", () => {
     expect(markedBody("本文", "")).toStrictEqual({ source: "本文", marks: [undefined] });
+  });
+});
+
+describe("diffLineCounts", () => {
+  it("counts nothing when the version and the draft are the same", () => {
+    expect(diffLineCounts("")).toStrictEqual({ added: 0, removed: 0 });
+  });
+
+  it("counts the lines the draft gained and lost", () => {
+    const diff = "--- v1\n+++ draft\n@@ -1,3 +1,4 @@\n a\n-b\n+B\n c\n+d\n";
+
+    expect(diffLineCounts(diff)).toStrictEqual({ added: 2, removed: 1 });
+  });
+
+  // ヘッダの `---` / `+++` は行ではない。ハンクの中の `+---` は行
+  it("does not count the header, and does count body lines spelled like it", () => {
+    const diff = "--- v\n+++ draft\n@@ -0,0 +1,2 @@\n+---\n+++x\n";
+
+    expect(diffLineCounts(diff)).toStrictEqual({ added: 2, removed: 0 });
+  });
+
+  it("ignores the missing-newline hint", () => {
+    const diff = "--- v\n+++ draft\n@@ -1,2 +1,1 @@\n a\n-b\n\\ No newline at end of file\n";
+
+    expect(diffLineCounts(diff)).toStrictEqual({ added: 0, removed: 1 });
   });
 });
 

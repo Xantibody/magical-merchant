@@ -117,6 +117,35 @@ export function markedBody(draft: string, diff: string): MarkedBody {
   };
 }
 
+/** 選んだ版と下書きのあいだで動いた行の数。 */
+export interface LineCounts {
+  added: number;
+  removed: number;
+}
+
+/**
+ * 「3 行追加 · 1 行削除」の数。比較モードが既に読んでいる diff から数えるので、
+ * これを出すために IPC は 1 本も増えない。
+ *
+ * ヘッダの `---` / `+++` は行ではないが、ハンクの中の `+---`(罫線が増えた)は
+ * 行。見分けるのは位置であって綴りではない — [`markLines`] と同じ規則。
+ */
+export function diffLineCounts(diff: string): LineCounts {
+  let added = 0;
+  let removed = 0;
+  let inHunk = false;
+  for (const line of linesOf(diff)) {
+    if (HUNK.test(line)) {
+      inHunk = true;
+    } else if (inHunk && line.startsWith("+")) {
+      added += 1;
+    } else if (inHunk && line.startsWith("-")) {
+      removed += 1;
+    }
+  }
+  return { added, removed };
+}
+
 /**
  * ブロック 1 つぶんの印。範囲の全行が消えていれば `del`、増えた行か消えた行を
  * 1 つでも含めば `add`(変わった)、どちらも無ければ印なし。
