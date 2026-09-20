@@ -8,6 +8,7 @@ import type { JSX } from "solid-js";
 import type { Editor } from "@milkdown/kit/core";
 import { ShellProvider, useShell } from "../lib/shell";
 import type { Shell } from "../lib/shell";
+import { shortcutLabel } from "../lib/shortcuts";
 import Workspace from "./Workspace";
 
 // 本物の Milkdown は ProseMirror 一式を連れてくる。ここで見たいのは
@@ -516,8 +517,13 @@ describe("Workspace › 一覧の行", () => {
     renderWorkspace();
     await rowOf(TITLE_A);
 
-    expect(screen.getByRole("button", { name: /新規/u }).dataset.hintKey).toBe("⌘N");
-    expect(document.querySelector<HTMLElement>(".list-pin")?.dataset.hintKey).toBe("⌘\\");
+    // 綴りは台に依る(macOS は ⌘、他は Ctrl+)。表から引いて、書き写さない
+    expect(screen.getByRole("button", { name: /新規/u }).dataset.hintKey).toBe(
+      shortcutLabel("newNote"),
+    );
+    expect(document.querySelector<HTMLElement>(".list-pin")?.dataset.hintKey).toBe(
+      shortcutLabel("listPin"),
+    );
   });
 });
 
@@ -1899,7 +1905,9 @@ describe("Workspace › Codex の版", () => {
   it("wears its key on the shoulder of the history button", async () => {
     await openCodexC();
 
-    expect(screen.getByRole("button", { name: "履歴" }).dataset.hintKey).toBe("⌘⇧H");
+    expect(screen.getByRole("button", { name: "履歴" }).dataset.hintKey).toBe(
+      shortcutLabel("noteHistory"),
+    );
   });
 
   // × は Esc と同じところへ着く。開けた人が閉じ方を探さない
