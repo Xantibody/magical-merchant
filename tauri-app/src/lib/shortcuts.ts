@@ -37,6 +37,8 @@ const SHORTCUTS = {
   noteInfo: { key: "i", shift: true },
   // 「刻む」の K。⌘K(検索)とは ⇧ で分かれる。Codex を開いているあいだだけ
   codexCommit: { key: "k", shift: true },
+  // 履歴パネル。ホバーでは開かないので、ボタンとこれだけが入口
+  noteHistory: { key: "h", shift: true },
   notePrev: { key: "arrowup" },
   noteNext: { key: "arrowdown" },
 } as const satisfies Record<string, Shortcut>;

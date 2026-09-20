@@ -161,6 +161,7 @@ export default function NoteMenu(props: NoteMenuProps): JSX.Element {
               <Row
                 icon={<Icon name="clock-counter-clockwise" size={15} />}
                 label={t().codex.history}
+                shortcut="noteHistory"
                 onClick={() => props.onHistory()}
               />
             </Show>

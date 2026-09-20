@@ -1004,6 +1004,9 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       } else if (matchesShortcut(e, "codexCommit")) {
         e.preventDefault();
         void commitVersion(item);
+      } else if (matchesShortcut(e, "noteHistory") && kind() === "codex") {
+        e.preventDefault();
+        toggleHistory();
       } else if (e.key === "Escape" && historyOpen()) {
         e.preventDefault();
         closeHistory();
@@ -1184,6 +1187,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
               class="new-note long-press"
               ref={newNoteButton}
               aria-expanded={shell.popover() === "new-note-menu"}
+              data-hint-key={shortcutLabel("newNote")}
               onPointerDown={(e) => {
                 newNotePointer = e.pointerType;
                 newNoteLongPress.onPointerDown(e);
@@ -1371,7 +1375,8 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                         type="button"
                         class="history-button"
                         aria-pressed={historyOpen()}
-                        title={t().codex.history}
+                        title={`${t().codex.history} ${shortcutLabel("noteHistory")}`}
+                        data-hint-key={shortcutLabel("noteHistory")}
                         onClick={toggleHistory}
                       >
                         <Icon name="clock-counter-clockwise" size={13} />

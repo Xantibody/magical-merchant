@@ -507,6 +507,18 @@ describe("Workspace › 一覧の行", () => {
 
     expect(screen.queryByTitle("読み取り専用")).toBeNull();
   });
+
+  /**
+   * ⌘ を押し続けているあいだ肩に浮かぶ札。一覧の頭の 2 つはどちらもキーを
+   * 持っているので、片方にだけ札が出ていると、もう片方はキーが無いように読める。
+   */
+  it("wears its key on the shoulder of both buttons at the head of the list", async () => {
+    renderWorkspace();
+    await rowOf(TITLE_A);
+
+    expect(screen.getByRole("button", { name: /新規/u }).dataset.hintKey).toBe("⌘N");
+    expect(document.querySelector<HTMLElement>(".list-pin")?.dataset.hintKey).toBe("⌘\\");
+  });
 });
 
 describe("Workspace › 触る端末からのテンプレート", () => {
@@ -1865,6 +1877,29 @@ describe("Workspace › Codex の版", () => {
     await openNoteA();
     expect(document.querySelector(".history-panel")).toBeNull();
     expect(screen.queryByRole("button", { name: "履歴" })).toBeNull();
+  });
+
+  /**
+   * ホバーでは開かないパネルなので、キーの無いあいだ入口はボタン 1 つだけ
+   * だった。⌘ を押したときに肩へ札が出る以上、そのキーは効かなければならない。
+   */
+  it("opens and folds the history from ⌘⇧H", async () => {
+    await openCodexC();
+
+    fireEvent.keyDown(editorBody(), { key: "H", metaKey: true, shiftKey: true });
+
+    await waitFor(() => expect(document.querySelector(".history-panel--open")).not.toBeNull());
+
+    fireEvent.keyDown(globalThis, { key: "H", metaKey: true, shiftKey: true });
+
+    await waitFor(() => expect(document.querySelector(".history-panel--open")).toBeNull());
+  });
+
+  // ⌘ を押し続けているあいだ肩に浮かぶ札。押せるキーのある入口には出す
+  it("wears its key on the shoulder of the history button", async () => {
+    await openCodexC();
+
+    expect(screen.getByRole("button", { name: "履歴" }).dataset.hintKey).toBe("⌘⇧H");
   });
 
   // × は Esc と同じところへ着く。開けた人が閉じ方を探さない

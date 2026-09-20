@@ -39,6 +39,14 @@ describe("shortcutLabel", () => {
     expect(shortcutLabel("noteNext")).toBe("⌘↓");
   });
 
+  // Codex の 2 つの入口。どちらもボタンの肩の札と … の行の綴りに出る
+  it("prints the keys the Codex answers to", () => {
+    setUserAgent(MAC);
+
+    expect(shortcutLabel("codexCommit")).toBe("⌘⇧K");
+    expect(shortcutLabel("noteHistory")).toBe("⌘⇧H");
+  });
+
   // 一覧フライアウトを常設にするキー。札も、一覧の足元の言葉も、ここから配る
   it("prints the key that keeps the list flyout open", () => {
     setUserAgent(MAC);
