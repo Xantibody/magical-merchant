@@ -90,11 +90,11 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
   const hasList = (): boolean => isActive(ROUTES.NOTES) || isActive(ROUTES.CODEX);
 
   /**
-   * Scrawl でタグを選んで絞っているなら、その中を探す。全体を探したければ
+   * 絞る画面でタグを選んでいるなら、その中を探す。全体を探したければ
    * パレットのチップを外せばよく、逆(絞り込みを後から思い出す)は難しい
    */
   const openSearch = (): void => {
-    shell.openPalette(paletteScopeAt(location.pathname, shell.scrawlTag()));
+    shell.openPalette(paletteScopeAt(location.pathname, shell.browseFilter().tags));
   };
 
   // グリフの登録表は起動時に 1 回と、データが入れ替わった合図(同期の
@@ -156,6 +156,13 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
       icon: MODE_ICONS[ROUTES.CODEX],
       shortcut: "codex",
       run: go(ROUTES.CODEX),
+    },
+    {
+      id: "go-browse",
+      label: t().palette.openBrowse,
+      icon: MODE_ICONS[ROUTES.BROWSE],
+      shortcut: "browse",
+      run: go(ROUTES.BROWSE),
     },
     {
       id: "sync-now",

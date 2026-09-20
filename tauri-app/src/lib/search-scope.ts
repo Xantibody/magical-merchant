@@ -56,15 +56,18 @@ export function scopeLabel(tags: string[]): string {
 /**
  * ⌘K を押した場所で、パレットに引き継ぐ範囲を決める。
  *
- * 引き継ぐのは Scrawl にいるときだけ。他の画面ではチップが見えておらず、
+ * 引き継ぐのは絞る画面にいるときだけ。他の画面ではチップが見えておらず、
  * 見えていない絞り込みを黙って掛けると「無いはずがない」検索結果になる。
+ * Scrawl のチップは押すと絞る画面を開くので、タグで絞っている状態は
+ * もうあちらにしか無い。
  */
-export function paletteScopeAt(
-  pathname: string,
-  scrawlTag: string | null,
-): PaletteScope | undefined {
-  if (pathname === ROUTES.SCRAWL && scrawlTag) {
-    return { tags: [scrawlTag] };
+export function paletteScopeAt(pathname: string, tags: string[]): PaletteScope | undefined {
+  // 引き継げるのはタグが 1 つのときだけ。絞る画面のタグは「どれかを持つ」
+  // (OR)だが、`search_all` の tags は「全部を持つ」(AND)。2 つ以上を
+  // そのまま渡すと、画面に出ている記録のうち片方しか持たないものが開いた
+  // 瞬間に消え、「見えているものの中を探す」にならない
+  if (pathname === ROUTES.BROWSE && tags.length === 1) {
+    return { tags };
   }
   return undefined;
 }

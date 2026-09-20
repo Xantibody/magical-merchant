@@ -11,8 +11,15 @@ export interface MetaSegment {
 /** 座標に付ける地名を引くもの。まだ引けていなければ undefined。 */
 export type PlaceLookup = (location: { latitude: number; longitude: number }) => string | undefined;
 
-function deviceSegment(ctx: DeviceContext): MetaSegment | null {
-  if (!ctx.os) {
+/**
+ * 記録した端末。Scrawl の行末 JSON(`DeviceContext`)とノートの frontmatter
+ * (`NoteContext`)は os が必須かどうかだけが違うので、要る 2 つのキーだけで
+ * 受ける — 同じ「どの端末で書いたか」を 2 通りに綴らないため。
+ */
+export function deviceSegment(
+  ctx: { os?: string; os_version?: string } | null | undefined,
+): MetaSegment | null {
+  if (!ctx?.os) {
     return null;
   }
   return {

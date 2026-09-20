@@ -74,16 +74,27 @@ describe("scopeLabel", () => {
 });
 
 describe("paletteScopeAt", () => {
-  it("carries the scrawl's active tag into the palette", () => {
-    expect(paletteScopeAt(ROUTES.SCRAWL, "sync")).toStrictEqual({ tags: ["sync"] });
+  it("carries the tag the browse screen is narrowed by into the palette", () => {
+    expect(paletteScopeAt(ROUTES.BROWSE, ["sync"])).toStrictEqual({ tags: ["sync"] });
   });
 
-  it("opens an unscoped palette when no tag is active", () => {
-    expect(paletteScopeAt(ROUTES.SCRAWL, null)).toBeUndefined();
+  it("opens an unscoped palette when no tag is chosen", () => {
+    expect(paletteScopeAt(ROUTES.BROWSE, [])).toBeUndefined();
   });
 
-  // Notes 画面には絞り込みチップが無い。見えていない範囲を黙って掛けない
-  it("ignores the scrawl tag on other routes", () => {
-    expect(paletteScopeAt(ROUTES.NOTES, "sync")).toBeUndefined();
+  /**
+   * 絞る画面のタグは「どれかを持つ」、`search_all` の tags は「全部を持つ」。
+   * 2 つ以上をそのまま渡すと、画面に出ている記録のうち片方しか持たないものが
+   * 開いた瞬間に消える。引き継がないほうが嘘をつかない
+   */
+  it("inherits nothing when two tags are chosen, since the two sides disagree", () => {
+    expect(paletteScopeAt(ROUTES.BROWSE, ["sync", "perf"])).toBeUndefined();
+  });
+
+  // Scrawl のチップは押すと絞る画面を開くだけで、その場では絞らない。
+  // 見えていない範囲を黙って掛けない
+  it("ignores the tags on every other route", () => {
+    expect(paletteScopeAt(ROUTES.SCRAWL, ["sync"])).toBeUndefined();
+    expect(paletteScopeAt(ROUTES.NOTES, ["sync"])).toBeUndefined();
   });
 });

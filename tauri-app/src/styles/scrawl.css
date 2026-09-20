@@ -548,6 +548,26 @@
   gap: 14px;
 }
 
+/* タグの行と、その右端に寄る「日付へ」。タグが 1 つも無い日でもこの行は
+   残る — 広い画面で日をまたぐ入口はここだけだから */
+.scrawl-head-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.scrawl-head-row .tag-filter {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 狭い画面ではヘッダが同じ入口を持っている。二つ出さない */
+@media (max-width: 767px) {
+  .scrawl-calendar {
+    display: none;
+  }
+}
+
 /* カードではなく 1 行。週に一度の要約のために層を足さない */
 .digest-line {
   display: flex;

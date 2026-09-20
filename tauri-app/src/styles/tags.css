@@ -10,7 +10,8 @@
   font-weight: 500;
 }
 
-/* ---------------- 絞り込みチップ ---------------- */
+/* ---------------- Scrawl のタグ行 ----------------
+   押すと絞る画面がそのタグで開く。ここでは絞らないので、選択中の姿は無い */
 
 .tag-filter {
   display: flex;
@@ -52,23 +53,6 @@
 
 .tag-chip:hover {
   background: var(--app-surface-2);
-}
-
-.tag-chip--active {
-  background: var(--app-accent);
-  border-color: var(--app-accent);
-  color: var(--app-surface);
-  font-weight: 600;
-}
-
-.tag-filter-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
-  font-size: 11.5px;
-  color: var(--app-text-faint);
-  white-space: nowrap;
 }
 
 /* ---------------- 入力補完 ---------------- */
@@ -153,9 +137,5 @@
 
   .tag-chip {
     padding: 6px 13px;
-  }
-
-  .tag-filter-status {
-    display: none;
   }
 }
