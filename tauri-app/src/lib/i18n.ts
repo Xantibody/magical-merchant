@@ -243,6 +243,8 @@ const ja = {
     firstVersion: (bytes: number) => `最初の版 · ${sizeOf(bytes)}`,
     /** 選んだ版の下に出る「版 3 に戻す」。 */
     restoreN: (n: number) => `版 ${n} に戻す`,
+    /** 携帯の履歴の画面から戻る先は一覧ではなく本文。読み上げにはそう言う。 */
+    backToBody: "本文に戻る",
     /** 比較バーの中。狭いので版の番号は上の行が言う。 */
     restoreShort: "戻す",
     /** 履歴パネルの足元。 */
@@ -686,6 +688,7 @@ const en: Messages = {
     sameAsVersion: (n: number) => `same as v${n}`,
     firstVersion: (bytes: number) => `first version · ${sizeOf(bytes)}`,
     restoreN: (n: number) => `Restore v${n}`,
+    backToBody: "Back to the document",
     restoreShort: "Restore",
     historyFoot: "Press a version to compare it in the body · Esc closes",
     historyHint: "Press a version to compare it in the body",

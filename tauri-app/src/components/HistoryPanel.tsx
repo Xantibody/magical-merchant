@@ -133,7 +133,7 @@ export default function HistoryPanel(props: HistoryPanelProps): JSX.Element {
           <button
             type="button"
             class="icon-button history-back"
-            aria-label={t().notes.backToList}
+            aria-label={t().codex.backToBody}
             onClick={() => props.onClose()}
           >
             <Icon name="arrow-left" size={18} />

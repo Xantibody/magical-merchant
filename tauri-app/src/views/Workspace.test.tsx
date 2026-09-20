@@ -1951,8 +1951,9 @@ describe("Workspace › Codex の版", () => {
     fireEvent.click(within(bar).getByRole("button", { name: "履歴" }));
     await waitFor(() => expect(document.querySelector(".history-panel--screen")).not.toBeNull());
 
-    // ← で本文へ。比較モードのままなので帯は残る
-    fireEvent.click(document.querySelector(".history-back") as HTMLElement);
+    // ← で本文へ。比較モードのままなので帯は残る。
+    // 読み上げ名で引くのは、この矢印が戻る先を言い当てているかを一緒に見るため
+    fireEvent.click(screen.getByLabelText("本文に戻る"));
     await waitFor(() => expect(document.querySelector(".compare-bar")).not.toBeNull());
 
     // × で比較をやめる。エディタが戻る
