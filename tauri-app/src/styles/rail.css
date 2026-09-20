@@ -86,14 +86,6 @@
   margin-top: auto;
 }
 
-/* 同期のポップオーバーはレールの右に開く。真下では画面の外へ落ちる */
-.rail .popover-anchor--sync {
-  position: absolute;
-  top: auto;
-  bottom: 8px;
-  left: calc(100% + 6px);
-}
-
 @media (prefers-reduced-motion: reduce) {
   .rail-button,
   .rail-marker {

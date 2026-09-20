@@ -42,7 +42,10 @@ jobs:
       nix-mcp: ${{ steps.filter.outputs.nix-mcp || 'true' }}
       android: ${{ steps.filter.outputs.android || 'true' }}
     steps:
+      # AIDEV-NOTE: persist-credentials: false は公開リポジトリだから置ける。paths-filter の git fetch は匿名で通る
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       # AIDEV-NOTE: base は既定 (= 既定ブランチ) のまま。push では action 側が github.event.before に読み替える
       # base を明示しないのは、既定ブランチと push 先が同じとき action が
       # payload.before を使い、初回 push (全 0 の SHA) も自前で捌くため。
@@ -52,7 +55,11 @@ jobs:
         id: filter
         with:
           filters: |
+            # .github/actions/** はここにだけ入れる。setup-nix は全 nix ジョブが
+            # 使うが、7 つ全部の filter に入れると action の 1 行直しが 45 分の
+            # APK ビルドを連れてくる。rust はそれを使うジョブの中で一番安い
             rust:
+              - '.github/actions/**'
               - 'core/**'
               - 'tauri-app/src-tauri/**'
               - 'cli/**'
@@ -146,23 +153,18 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       # store 3G + target で 21GB の空きに「収まっていた」が、2026-09-17 から
       # 同じキャッシュ・同じ image で cargo の crate 取得が ENOSPC で落ちる。
       # android と同じく、キャッシュ復元と並行してバックグラウンドで消す
       # (前面で消すと 87 秒かかる)
       - name: Free disk space (background)
         run: nohup sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache >/dev/null 2>&1 &
-      - uses: nixbuild/nix-quick-install-action@v35
-      - uses: nix-community/cache-nix-action@v7
+      - uses: ./.github/actions/setup-nix
         with:
-          primary-key: nix-${{ runner.os }}-rust-${{ hashFiles('flake.lock', 'flake.nix') }}
-          restore-prefixes-first-match: nix-${{ runner.os }}-rust-
-          gc-max-store-size-linux: 3G
-          save: ${{ github.ref == 'refs/heads/main' }}
-          purge: ${{ github.ref == 'refs/heads/main' }}
-          purge-prefixes: nix-${{ runner.os }}-rust-
-          purge-created: 0
-          purge-primary-key: never
+          name: rust
+          hash: ${{ hashFiles('flake.lock', 'flake.nix') }}
       - uses: actions/cache/restore@v6
         id: cargo-cache
         with:
@@ -190,17 +192,12 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
-      - uses: nixbuild/nix-quick-install-action@v35
-      - uses: nix-community/cache-nix-action@v7
         with:
-          primary-key: nix-${{ runner.os }}-frontend-${{ hashFiles('flake.lock', 'flake.nix') }}
-          restore-prefixes-first-match: nix-${{ runner.os }}-frontend-
-          gc-max-store-size-linux: 3G
-          save: ${{ github.ref == 'refs/heads/main' }}
-          purge: ${{ github.ref == 'refs/heads/main' }}
-          purge-prefixes: nix-${{ runner.os }}-frontend-
-          purge-created: 0
-          purge-primary-key: never
+          persist-credentials: false
+      - uses: ./.github/actions/setup-nix
+        with:
+          name: frontend
+          hash: ${{ hashFiles('flake.lock', 'flake.nix') }}
       - name: Get pnpm store directory
         id: pnpm-cache
         run: echo "STORE_PATH=$(nix develop .#frontend --command pnpm store path)" >> "$GITHUB_OUTPUT"
@@ -228,17 +225,13 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
-      - uses: nixbuild/nix-quick-install-action@v35
-      - uses: nix-community/cache-nix-action@v7
         with:
-          primary-key: nix-${{ runner.os }}-workers-${{ hashFiles('flake.lock', 'flake.nix') }}
-          restore-prefixes-first-match: nix-${{ runner.os }}-workers-
-          gc-max-store-size-linux: 2G
-          save: ${{ github.ref == 'refs/heads/main' }}
-          purge: ${{ github.ref == 'refs/heads/main' }}
-          purge-prefixes: nix-${{ runner.os }}-workers-
-          purge-created: 0
-          purge-primary-key: never
+          persist-credentials: false
+      - uses: ./.github/actions/setup-nix
+        with:
+          name: workers
+          hash: ${{ hashFiles('flake.lock', 'flake.nix') }}
+          max-store-size: 2G
       - name: Get pnpm store directory
         id: pnpm-cache
         run: echo "STORE_PATH=$(nix develop .#workers --command pnpm store path)" >> "$GITHUB_OUTPUT"
@@ -274,23 +267,19 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       # rm -rf に 72 秒かかるので、キャッシュ復元と並行してバックグラウンドで消す。
       # APK ビルドが始まる頃(2 分後)には終わっている
       - name: Free disk space (background)
         run: nohup sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache >/dev/null 2>&1 &
-      - uses: nixbuild/nix-quick-install-action@v35
-      # キーは release.yml と揃えてある。SDK と NDK は同じものなので、
+      # name は release.yml と揃えてある。SDK と NDK は同じものなので、
       # どちらが先に走っても取り直さない
-      - uses: nix-community/cache-nix-action@v7
+      - uses: ./.github/actions/setup-nix
         with:
-          primary-key: nix-${{ runner.os }}-android-${{ hashFiles('flake.lock', 'flake.nix') }}
-          restore-prefixes-first-match: nix-${{ runner.os }}-android-
-          gc-max-store-size-linux: 6G
-          save: ${{ github.ref == 'refs/heads/main' }}
-          purge: ${{ github.ref == 'refs/heads/main' }}
-          purge-prefixes: nix-${{ runner.os }}-android-
-          purge-created: 0
-          purge-primary-key: never
+          name: android
+          hash: ${{ hashFiles('flake.lock', 'flake.nix') }}
+          max-store-size: 6G
       # rust ジョブとキーを分ける。同じ target/ でもホスト向けと Android 向けで
       # 中身が入れ替わり、共有すると毎回どちらかが作り直しになる
       - uses: actions/cache/restore@v6
@@ -325,6 +314,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: nixbuild/nix-quick-install-action@v35
       # store キャッシュを張らない。FOD の出力パスは入力ではなく宣言した hash から
       # 決まるので、hash が腐ったままでも前回の出力が復元されれば nix はそれを有効と
@@ -346,17 +337,13 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
-      - uses: nixbuild/nix-quick-install-action@v35
-      - uses: nix-community/cache-nix-action@v7
         with:
-          primary-key: nix-${{ runner.os }}-package-${{ hashFiles('flake.lock', 'flake.nix', 'nix/package.nix', 'Cargo.lock', 'tauri-app/pnpm-lock.yaml') }}
-          restore-prefixes-first-match: nix-${{ runner.os }}-package-
-          gc-max-store-size-macos: 4G
-          save: ${{ github.ref == 'refs/heads/main' }}
-          purge: ${{ github.ref == 'refs/heads/main' }}
-          purge-prefixes: nix-${{ runner.os }}-package-
-          purge-created: 0
-          purge-primary-key: never
+          persist-credentials: false
+      - uses: ./.github/actions/setup-nix
+        with:
+          name: package
+          hash: ${{ hashFiles('flake.lock', 'flake.nix', 'nix/package.nix', 'Cargo.lock', 'tauri-app/pnpm-lock.yaml') }}
+          max-store-size: 4G
       - name: the .app bundle builds
         run: nix build .#default --no-link
       # ここで組んだ aarch64-darwin の .app と cli を Cachix に置く。手元の
@@ -384,34 +371,47 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
-      - uses: nixbuild/nix-quick-install-action@v35
-      - uses: nix-community/cache-nix-action@v7
         with:
-          primary-key: nix-${{ runner.os }}-mcp-${{ hashFiles('flake.lock', 'flake.nix', 'nix/cli.nix', 'Cargo.lock') }}
-          restore-prefixes-first-match: nix-${{ runner.os }}-mcp-
-          gc-max-store-size-linux: 3G
-          save: ${{ github.ref == 'refs/heads/main' }}
-          purge: ${{ github.ref == 'refs/heads/main' }}
-          purge-prefixes: nix-${{ runner.os }}-mcp-
-          purge-created: 0
-          purge-primary-key: never
+          persist-credentials: false
+      - uses: ./.github/actions/setup-nix
+        with:
+          name: mcp
+          hash: ${{ hashFiles('flake.lock', 'flake.nix', 'nix/cli.nix', 'Cargo.lock') }}
       - name: the CLI (and the MCP entry point) builds and its tests pass
         run: nix build .#cli --no-link
+
+  # ワークフロー自身の検査。ci.yml は 400 行を超えていて、式の書き間違いも
+  # トークンの置き残しも、これまでは誰も見ていなかった。actionlint が構文と式を、
+  # zizmor が持ち出しやすい書き方 (認証情報の置き残し、run への式の直接展開) を見る。
+  #
+  # ここだけは nix devshell を通さない。flake.nix に 2 つ足すと paths-filter が
+  # それを rust/frontend/workers/android すべての入力として拾うので、
+  # ワークフローの lint を足す変更が 45 分の APK ビルドを連れてくる
+  workflows:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: raven-actions/actionlint@v2
+      # 方針は .github/zizmor.yml
+      - uses: zizmorcore/zizmor-action@v0.6.3
+        with:
+          advanced-security: false
+          min-severity: low
+          config: .github/zizmor.yml
 
   format:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
-      - uses: nixbuild/nix-quick-install-action@v35
-      - uses: nix-community/cache-nix-action@v7
         with:
-          primary-key: nix-${{ runner.os }}-format-${{ hashFiles('flake.lock', 'flake.nix') }}
-          restore-prefixes-first-match: nix-${{ runner.os }}-format-
-          gc-max-store-size-linux: 2G
-          save: ${{ github.ref == 'refs/heads/main' }}
-          purge: ${{ github.ref == 'refs/heads/main' }}
-          purge-prefixes: nix-${{ runner.os }}-format-
-          purge-created: 0
-          purge-primary-key: never
+          persist-credentials: false
+      - uses: ./.github/actions/setup-nix
+        with:
+          name: format
+          hash: ${{ hashFiles('flake.lock', 'flake.nix') }}
+          max-store-size: 2G
       - run: nix fmt -- --fail-on-change

@@ -247,3 +247,58 @@ describe("the hint layer", () => {
     expect(badge(row)).toBe("none");
   });
 });
+
+/**
+ * 同期の器は面の列に 1 つだけ吊るす。入口はレール(広い窓)と帯(狭い窓)の
+ * 2 つあるが、開く先は同じ器。
+ *
+ * ヘッダの下端に吊るす基底(`.popover-anchor { top: 100% }`)はここでは使え
+ * ない。この列は窓の高さいっぱいなので真下は画面の外で、`.app` の
+ * `overflow: hidden` に刈られる。押すと状態だけ変わって何も見えない。
+ */
+function mountSyncPopover(): HTMLElement {
+  document.body.innerHTML = `
+    <div class="app">
+      <nav class="rail"></nav>
+      <div class="app-column">
+        <header class="mobile-header">header</header>
+        <main class="app-main"><div class="view"></div></main>
+        <div class="popover-anchor popover-anchor--sync">
+          <div class="popover" style="width: 260px; height: 180px;">sync</div>
+        </div>
+        <nav class="bottom-tabs"><a class="bottom-tab">Notes</a></nav>
+      </div>
+    </div>`;
+  return element(".popover");
+}
+
+describe("the sync panel", () => {
+  beforeAll(async () => {
+    await import("../index.css");
+  });
+
+  afterEach(async () => {
+    document.body.innerHTML = "";
+    await page.viewport(1280, 800);
+  });
+
+  it("opens beside the rail's foot on a wide window", async () => {
+    await page.viewport(1280, 800);
+    const rect = mountSyncPopover().getBoundingClientRect();
+
+    expect(rect.top).toBeGreaterThanOrEqual(0);
+    expect(rect.bottom).toBeLessThanOrEqual(800);
+    expect(rect.left).toBeGreaterThanOrEqual(0);
+    expect(rect.right).toBeLessThanOrEqual(1280);
+  });
+
+  it("opens under the band on a phone", async () => {
+    await page.viewport(390, 800);
+    const rect = mountSyncPopover().getBoundingClientRect();
+
+    expect(rect.top).toBeGreaterThanOrEqual(0);
+    expect(rect.bottom).toBeLessThanOrEqual(800);
+    expect(rect.left).toBeGreaterThanOrEqual(0);
+    expect(rect.right).toBeLessThanOrEqual(390);
+  });
+});

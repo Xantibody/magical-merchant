@@ -113,7 +113,17 @@ export default function NoteMenu(props: NoteMenuProps): JSX.Element {
                   {t().codex.promoteBody2}
                   <strong>{t().codex.promoteBody2Strong}</strong>
                 </p>
-                <button type="button" class="button-primary" onClick={() => props.onPromote()}>
+                {/* 確認が出た瞬間、焦点は消えたメニューの行に取り残される。
+                    矢印キーが辿るのはメニューの行だけで、外へ出ればメニュー
+                    ごと畳まれるので、キーボードだけで開いた人は押すことも
+                    取り消すこともできない。出したこちらが引き取る。
+                    微小タスクに逃がすのは、部品が焦点を配り終えるのを待つため */}
+                <button
+                  type="button"
+                  class="button-primary"
+                  ref={(el) => queueMicrotask(() => el.focus())}
+                  onClick={() => props.onPromote()}
+                >
                   {t().codex.promoteYes}
                 </button>
                 <button type="button" class="button-secondary" onClick={() => setConfirming(false)}>

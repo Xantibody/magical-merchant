@@ -371,6 +371,24 @@ describe("note head: the title column follows the body", () => {
   });
 });
 
+/** この `@media` の中で `.list-pane` が本文の上に浮いているか。 */
+function floatsTheList(rule: CSSMediaRule): boolean {
+  return [...rule.cssRules].some(
+    (inner) =>
+      inner instanceof CSSStyleRule &&
+      inner.selectorText === ".list-pane" &&
+      inner.style.position === "absolute",
+  );
+}
+
+/** `.list-pane` を浮かせている `@media` の条件。無ければ空。 */
+function flyoutConditions(): string[] {
+  const media = [...document.styleSheets].flatMap((sheet) =>
+    [...sheet.cssRules].filter((rule): rule is CSSMediaRule => rule instanceof CSSMediaRule),
+  );
+  return media.filter((rule) => floatsTheList(rule)).map((rule) => rule.conditionText);
+}
+
 /**
  * 一覧は常設のペインをやめ、本文の上に浮くフライアウトになった。閉じている
  * あいだは場所を取らず、押されもしない — 本文は 48px のレールの右から
@@ -470,5 +488,20 @@ describe("the list flyout", () => {
     expect(style.opacity).toBe("1");
     expect(style.transform).toBe("none");
     expect(getComputedStyle(element(".list-pane-foot")).display).toBe("none");
+  });
+
+  /**
+   * 広くてもホバーの無い端末 — タブレット — では、タップで開いた一覧は指が
+   * 離れた時点で畳まれる。開ける手はホバーとピンしか無く、そのピンは一覧の
+   * 中にあるので、ノートを開いている人は別のノートへ行けなくなる。
+   *
+   * headless Chromium は必ず `hover: hover` を名乗るので、その画面を作って
+   * 測ることはできない。浮かせる規則が条件の内側に居ることだけを見る
+   */
+  it("floats the list only where a pointer can hover", () => {
+    const conditions = flyoutConditions();
+
+    expect(conditions).toHaveLength(1);
+    expect(conditions[0]).toContain("hover: hover");
   });
 });
