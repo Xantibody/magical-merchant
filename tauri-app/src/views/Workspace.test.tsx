@@ -1501,6 +1501,18 @@ describe("Workspace › Codex の面", () => {
     await waitFor(() => expect(titleInput().value).toBe(TITLE_A));
   });
 
+  // 確認が出た瞬間、焦点は消えたメニューの行に取り残される。矢印キーが辿るのは
+  // メニューの行だけで、外へ出ればメニューごと畳まれるので、キーボードだけで
+  // 開いた人は戻れない操作を押すことも取り消すこともできなくなる
+  it("hands the focus to the confirmation the menu just replaced", async () => {
+    await openNoteA();
+
+    await runNoteAction("Codex にする");
+
+    const confirm = await screen.findByRole("button", { name: "Codex にする" });
+    await waitFor(() => expect(document.activeElement).toBe(confirm));
+  });
+
   // 予約が発火済みで書き込みが飛んでいる最中に昇格すると、書き込みは移動前の
   // path に向かい、Codex には古い本文だけが残る。書き終わるまで移さない
   it("waits for an in-flight save before moving the file", async () => {
