@@ -71,7 +71,7 @@ export default function Rail(props: { sync: SyncState; onSearch: () => void }): 
             classList={{ "rail-button--active": isActive(tab.path) }}
             title={`${MODE_LABELS[tab.path]} ${shortcutLabel(tab.shortcut)}`}
             aria-label={MODE_LABELS[tab.path]}
-            data-key={shortcutLabel(tab.shortcut)}
+            data-hint-key={shortcutLabel(tab.shortcut)}
           >
             <Icon name={MODE_ICONS[tab.path]} size={18} />
           </A>
@@ -92,7 +92,7 @@ export default function Rail(props: { sync: SyncState; onSearch: () => void }): 
         class="rail-button rail-button--plain"
         title={`${t().header.search} ${shortcutLabel("search")}`}
         aria-label={t().header.search}
-        data-key={shortcutLabel("search")}
+        data-hint-key={shortcutLabel("search")}
         onClick={() => props.onSearch()}
       >
         <Icon name="magnifying-glass" size={16} />
@@ -104,7 +104,7 @@ export default function Rail(props: { sync: SyncState; onSearch: () => void }): 
         classList={{ "rail-button--active": isActive(ROUTES.BROWSE) }}
         title={`${t().browse.title} ${shortcutLabel("browse")}`}
         aria-label={t().browse.title}
-        data-key={shortcutLabel("browse")}
+        data-hint-key={shortcutLabel("browse")}
       >
         <Icon name={MODE_ICONS[ROUTES.BROWSE]} size={16} />
       </A>
@@ -115,7 +115,7 @@ export default function Rail(props: { sync: SyncState; onSearch: () => void }): 
         title={t().header.sync}
         aria-label={t().header.sync}
         aria-expanded={shell.popover() === "sync"}
-        data-key={shortcutLabel("syncNow")}
+        data-hint-key={shortcutLabel("syncNow")}
         onClick={(e) => shell.togglePopover("sync", e.currentTarget)}
       >
         <Icon name={syncIconName(props.sync.status())} size={17} />
@@ -127,7 +127,7 @@ export default function Rail(props: { sync: SyncState; onSearch: () => void }): 
         classList={{ "rail-button--active": isActive(ROUTES.SETTINGS) }}
         title={`${t().header.settings} ${shortcutLabel("settings")}`}
         aria-label={t().header.settings}
-        data-key={shortcutLabel("settings")}
+        data-hint-key={shortcutLabel("settings")}
       >
         <Icon name="gear" size={17} />
       </A>

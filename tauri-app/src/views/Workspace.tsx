@@ -1217,7 +1217,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
               aria-pressed={shell.listPinned()}
               title={pinLabel()}
               aria-label={pinLabel()}
-              data-key={shortcutLabel("listPin")}
+              data-hint-key={shortcutLabel("listPin")}
               onClick={() => shell.toggleListPin()}
             >
               <Icon name={shell.listPinned() ? "push-pin-fill" : "push-pin"} size={14} />
