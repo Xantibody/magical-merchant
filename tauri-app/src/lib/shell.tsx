@@ -62,12 +62,6 @@ export interface Shell {
   saveState: Accessor<SaveState>;
   setSaveState: (state: SaveState) => void;
   /**
-   * Scrawl で絞り込んでいるタグ。Scrawl の中だけで持つと ⌘K の
-   * 処理(AppLayout)から見えないので、ここに引き上げてある。
-   */
-  scrawlTag: Accessor<string | null>;
-  setScrawlTag: (tag: string | null) => void;
-  /**
    * 「絞る」画面の 3 軸。画面の中だけで持つと、離れて戻るたびに絞り直しに
    * なるうえ、⌘K の処理(AppLayout)からタグが見えない。
    */
@@ -98,7 +92,6 @@ export function ShellProvider(props: { children: JSX.Element }): JSX.Element {
   const [paletteScope, setPaletteScope] = createSignal<PaletteScope | null>(null);
   const [listHover, setListHover] = createSignal(false);
   const [listPinned, setListPinned] = createSignal(false);
-  const [scrawlTag, setScrawlTag] = createSignal<string | null>(null);
   const [browseFilter, setBrowseFilter] = createSignal<BrowseFilter>(NO_FILTER);
   const [saveState, setSaveState] = createSignal<SaveState>(IDLE_SAVE);
   const [toast, setToast] = createSignal<Toast | null>(null);
@@ -137,8 +130,6 @@ export function ShellProvider(props: { children: JSX.Element }): JSX.Element {
     listOpen: () => listPinned() || listHover(),
     saveState,
     setSaveState,
-    scrawlTag,
-    setScrawlTag,
     browseFilter,
     setBrowseFilter,
     toast,

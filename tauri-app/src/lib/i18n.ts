@@ -77,9 +77,7 @@ const ja = {
     promote: "Note にする",
     unlink: (title: string) => `「${title}」との関係を解除`,
     unlinked: "Note との関係を解除しました",
-    emptyFiltered: "このタグの記録はまだありません。",
     emptyToday: "今日はまだ何も記録していません。",
-    emptyFilteredHint: "上のチップで絞り込みを外せます。",
     emptyHint: "下の入力欄に書くと、時刻とともにここに並びます。",
     deleted: (count: number) => `${count}件のエントリを削除しました`,
     digestTitle: "今週",
@@ -101,9 +99,6 @@ const ja = {
     placeholder: "いま何を記録する？",
     suggestLabel: "タグ候補",
     newTag: (draft: string) => `+「#${draft}」を新規タグとして確定`,
-  },
-  tagFilter: {
-    filtering: (tag: string, matched: number) => `#${tag} で絞り込み中 · ${matched}件`,
   },
   browse: {
     title: "絞る",
@@ -539,9 +534,7 @@ const en: Messages = {
     promote: "Make a Note",
     unlink: (title: string) => `Unlink “${title}”`,
     unlinked: "Note unlinked from this day",
-    emptyFiltered: "Nothing recorded with this tag yet.",
     emptyToday: "Nothing recorded today yet.",
-    emptyFilteredHint: "Drop the filter with the chips above.",
     emptyHint: "Write in the field below and it lands here with the time.",
     deleted: (count: number) => `Deleted ${count} ${count === 1 ? "entry" : "entries"}`,
     digestTitle: "This week",
@@ -565,9 +558,6 @@ const en: Messages = {
     placeholder: "What's on your mind?",
     suggestLabel: "Tag suggestions",
     newTag: (draft: string) => `+ Use “#${draft}” as a new tag`,
-  },
-  tagFilter: {
-    filtering: (tag: string, matched: number) => `Filtered by #${tag} · ${matched}`,
   },
   browse: {
     title: "Filter",

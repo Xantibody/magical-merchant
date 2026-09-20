@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup, within, waitFor } from "@solidjs/testing-library";
 import { mockIPC, mockWindows, clearMocks } from "@tauri-apps/api/mocks";
 import { page } from "vitest/browser";
-import { MemoryRouter, Route } from "@solidjs/router";
+import { MemoryRouter, Route, useLocation } from "@solidjs/router";
+import type { JSX } from "solid-js";
 import { ShellProvider, useShell } from "../lib/shell";
 import type { Shell } from "../lib/shell";
 import Scrawl from "./Scrawl";
@@ -71,26 +72,26 @@ function ShellHandle(): null {
   return null;
 }
 
+/** チップを押した行き先を見るための現在地。 */
+let location: ReturnType<typeof useLocation>;
+
+function RouterRoot(props: { children?: JSX.Element }): JSX.Element {
+  location = useLocation();
+  return <>{props.children}</>;
+}
+
 /** 一覧が届くまで待つ。時刻の欄はエントリ 1 件につき 1 つだけ出る。 */
 async function openScrawl(): Promise<void> {
   render(() => (
     <ShellProvider>
       <ShellHandle />
-      <MemoryRouter>
+      <MemoryRouter root={RouterRoot}>
         <Route path="/" component={Scrawl} />
+        <Route path="/browse" component={() => <p>BROWSE</p>} />
       </MemoryRouter>
     </ShellProvider>
   ));
   await screen.findByText("21:34");
-}
-
-/** 浮いている記録欄。Scrawl が描かれた後にだけ在る。 */
-function captureInput(): HTMLTextAreaElement {
-  const input = document.querySelector<HTMLTextAreaElement>(".capture-input");
-  if (!input) {
-    throw new Error("capture-input not found");
-  }
-  return input;
 }
 
 async function setupScrawl(): Promise<void> {
@@ -142,43 +143,43 @@ describe("Scrawl › 週次ダイジェスト", () => {
   });
 });
 
-describe("Scrawl › タグの絞り込み", () => {
+describe("Scrawl › タグのチップ", () => {
   beforeEach(setupScrawl);
   afterEach(teardownScrawl);
 
-  // チップに出る綴りは最初に見たものひとつで、件数はそれに畳んだ数。絞り込みが
-  // 完全一致だと、代表でない綴りの記録が消えて数と一覧が食い違う
-  it("keeps every spelling of the chip's tag, and the count agrees", async () => {
+  // 絞り込みの答えを 2 か所に持たない。Scrawl の一覧は日ごとの記録のままで、
+  // 絞るのは 3 軸を持つあちらの仕事
+  it("opens the browse screen on Scrawl and that tag instead of filtering here", async () => {
     await openScrawl();
 
     fireEvent.click(screen.getByRole("button", { name: "#Memo" }));
 
-    expect(screen.getByText("大文字で書いた")).toBeDefined();
-    expect(screen.getByText("小文字で書いた")).toBeDefined();
-    expect(screen.getByText("#Memo で絞り込み中 · 2件")).toBeDefined();
+    await waitFor(() => {
+      expect(location.pathname).toBe("/browse");
+    });
+    expect(location.search).toBe("?kind=scrawl&tag=Memo");
   });
 
-  // チップの綴りは「いちばん新しい 1 件の綴り」なので、絞り込み中に同じタグを
-  // 大小違いで記録すると入れ替わる。選択の判定が完全一致だと、絞り込みは
-  // 効いたままなのに印が消え、押しても解除できない行が残る
-  it("keeps the chip selected when a newer spelling takes over, and still clears it", async () => {
+  it("leaves the journal unfiltered when a chip is pressed", async () => {
     await openScrawl();
-    fireEvent.click(screen.getByRole("button", { name: "#run" }));
-    expect(screen.getByText("#run で絞り込み中 · 1件")).toBeDefined();
 
-    // 末尾の空白まで打った状態にする。タグを打ちかけたままの Enter は
-    // 候補の確定に取られて、送信にならない
-    fireEvent.input(captureInput(), { target: { value: "きょうも走った #Run " } });
-    fireEvent.keyDown(captureInput(), { key: "Enter" });
+    fireEvent.click(screen.getByRole("button", { name: "#Memo" }));
 
-    const chip = await screen.findByRole("button", { name: "#Run" });
-    expect(chip.classList.contains("tag-chip--active")).toBe(true);
-    expect(screen.getByText("#Run で絞り込み中 · 2件")).toBeDefined();
-
-    fireEvent.click(chip);
-
-    expect(screen.queryByText(/で絞り込み中/u)).toBeNull();
+    // #Memo を持たない記録も、そのまま日の下に並んでいる
     expect(screen.getByText("ベガのラッシュ止まらん")).toBeDefined();
+  });
+
+  // チップに出る綴りは最初に見たもの 1 つ。大小違いは 1 つに畳まれる
+  it("names a tag with the spelling it met first", async () => {
+    await openScrawl();
+
+    const chips = screen
+      .getAllByRole("button")
+      .filter((button) => button.classList.contains("tag-chip"))
+      .map((button) => button.textContent);
+
+    expect(chips).toContain("#Memo");
+    expect(chips).not.toContain("#memo");
   });
 });
 

@@ -162,8 +162,8 @@ describe("scrawl chrome", () => {
     expect(getComputedStyle(second).borderTopWidth).toBe("0px");
   });
 
-  // 塗ってあるのは絞り込み中のチップだけ。押していないチップは枠だけで立つ
-  it("leaves the idle tag chips as outlines", () => {
+  // ここでは絞らないので、塗られたチップは無い。どれも枠だけで立つ
+  it("leaves the tag chips as outlines", () => {
     mountChrome();
 
     expect(getComputedStyle(element(".tag-chip")).backgroundColor).toBe(TRANSPARENT);

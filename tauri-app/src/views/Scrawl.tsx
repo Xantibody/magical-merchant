@@ -34,7 +34,8 @@ import {
 import type { NoteItem, ScrawlItem } from "../lib/items";
 import { places } from "../lib/places";
 import { noteRoute } from "../lib/note-route";
-import { countTags, parseTags, sameTag } from "../lib/tags";
+import { ROUTES } from "../lib/routes";
+import { countTags, parseTags } from "../lib/tags";
 import {
   digestWeekKey,
   isDigestDismissed,
@@ -73,17 +74,13 @@ async function loadScrawl(extraDates: string[]): Promise<ScrawlData> {
   return { items: days.flat(), dates };
 }
 
-function EmptyScrawl(props: { filtered: boolean }): JSX.Element {
+function EmptyScrawl(): JSX.Element {
   return (
     <div class="scrawl-empty">
       <span class="scrawl-empty-rail" aria-hidden="true" />
       <div>
-        <p class="scrawl-empty-title">
-          {props.filtered ? t().scrawl.emptyFiltered : t().scrawl.emptyToday}
-        </p>
-        <p class="scrawl-empty-hint">
-          {props.filtered ? t().scrawl.emptyFilteredHint : t().scrawl.emptyHint}
-        </p>
+        <p class="scrawl-empty-title">{t().scrawl.emptyToday}</p>
+        <p class="scrawl-empty-hint">{t().scrawl.emptyHint}</p>
       </div>
     </div>
   );
@@ -98,9 +95,6 @@ export default function Scrawl(): JSX.Element {
   const [extraDates, setExtraDates] = createSignal<string[]>([]);
   /** カレンダーで選ばれた、これから見せたい日。表示できたら消す。 */
   const [jumpTo, setJumpTo] = createSignal<string | null>(null);
-  /** 絞り込み中のタグ。1 つだけ選べる。⌘K に引き継ぐので shell が持つ。 */
-  const tagFilter = shell.scrawlTag;
-  const setTagFilter = shell.setScrawlTag;
   /** 選択モード。入っている間だけ本文がクリックで選択できる。 */
   const [selecting, setSelecting] = createSignal(false);
   const [selected, setSelected] = createSignal<ReadonlySet<string>>(new Set());
@@ -162,17 +156,7 @@ export default function Scrawl(): JSX.Element {
   });
   const knownTags = createMemo(() => countTags(entries().map((item) => item.text)));
 
-  const visible = createMemo(() => {
-    const tag = tagFilter();
-    if (!tag) {
-      return entries();
-    }
-    // 突き合わせは sameTag。チップは大小違いの綴りを 1 つに畳んで数えるので、
-    // ここが完全一致だと代表でない綴りの記録が落ちて、件数とも食い違う
-    return entries().filter((item) => parseTags(item.text).some((own) => sameTag(own, tag)));
-  });
-
-  const days = createMemo(() => groupScrawlByDay(visible()));
+  const days = createMemo(() => groupScrawlByDay(entries()));
 
   // エントリの日時 → ノート。チップは元のエントリの真下に付く
   const originNotes = createMemo(() => notesByOrigin(notes() ?? []));
@@ -367,11 +351,13 @@ export default function Scrawl(): JSX.Element {
               最初の描画に存在した行が押し下げられてレイアウトシフトになるから */}
           <Show when={knownTags().length > 0 || digestVisible()}>
             <div class="scrawl-head">
+              {/* 押してもここでは絞らない。絞る画面を Scrawl とそのタグで
+                  開く — 絞り込みの答えを 2 か所に持たない */}
               <TagFilter
                 tags={knownTags()}
-                active={tagFilter()}
-                matched={visible().length}
-                onToggle={setTagFilter}
+                onPick={(tag) =>
+                  navigate(`${ROUTES.BROWSE}?kind=scrawl&tag=${encodeURIComponent(tag)}`)
+                }
               />
 
               <Show when={digestVisible()}>
@@ -415,7 +401,7 @@ export default function Scrawl(): JSX.Element {
             </div>
           </Show>
 
-          <Show when={days().length} fallback={<EmptyScrawl filtered={Boolean(tagFilter())} />}>
+          <Show when={days().length} fallback={<EmptyScrawl />}>
             <For each={days()}>
               {(day, index) => {
                 const heading = createMemo(() => formatDayHeading(day.date, today));

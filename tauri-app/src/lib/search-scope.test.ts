@@ -74,16 +74,20 @@ describe("scopeLabel", () => {
 });
 
 describe("paletteScopeAt", () => {
-  it("carries the scrawl's active tag into the palette", () => {
-    expect(paletteScopeAt(ROUTES.SCRAWL, "sync")).toStrictEqual({ tags: ["sync"] });
+  it("carries the tags the browse screen is narrowed by into the palette", () => {
+    expect(paletteScopeAt(ROUTES.BROWSE, ["sync", "perf"])).toStrictEqual({
+      tags: ["sync", "perf"],
+    });
   });
 
-  it("opens an unscoped palette when no tag is active", () => {
-    expect(paletteScopeAt(ROUTES.SCRAWL, null)).toBeUndefined();
+  it("opens an unscoped palette when no tag is chosen", () => {
+    expect(paletteScopeAt(ROUTES.BROWSE, [])).toBeUndefined();
   });
 
-  // Notes 画面には絞り込みチップが無い。見えていない範囲を黙って掛けない
-  it("ignores the scrawl tag on other routes", () => {
-    expect(paletteScopeAt(ROUTES.NOTES, "sync")).toBeUndefined();
+  // Scrawl のチップは押すと絞る画面を開くだけで、その場では絞らない。
+  // 見えていない範囲を黙って掛けない
+  it("ignores the tags on every other route", () => {
+    expect(paletteScopeAt(ROUTES.SCRAWL, ["sync"])).toBeUndefined();
+    expect(paletteScopeAt(ROUTES.NOTES, ["sync"])).toBeUndefined();
   });
 });
