@@ -36,13 +36,6 @@
     visibility 0s;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .history-panel,
-  .history-panel--open {
-    transition: none;
-  }
-}
-
 .history-head {
   flex: 0 0 auto;
   display: flex;
@@ -118,14 +111,6 @@
 /* 刻んだばかりの版だけが跳ねて入る。他の行は動かない */
 .history-row--fresh {
   animation: mm-pop 350ms var(--app-ease);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .history-row,
-  .history-row--fresh {
-    transition: none;
-    animation: none;
-  }
 }
 
 .history-row-rail {
@@ -232,12 +217,6 @@
   font-weight: 600;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .history-restore {
-    animation: none;
-  }
-}
-
 .history-foot {
   margin-top: auto;
   padding: 10px 16px;
@@ -276,12 +255,6 @@
   border-top: 1px solid var(--app-border);
   background: var(--app-sidebar);
   animation: mm-rise 180ms var(--app-ease);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .compare-bar {
-    animation: none;
-  }
 }
 
 .compare-bar-text {
@@ -379,11 +352,5 @@
 
   .history-panel--screen .history-row-line2 {
     font-size: 12.5px;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .history-panel--screen {
-      animation: none;
-    }
   }
 }

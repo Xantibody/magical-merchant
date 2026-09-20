@@ -158,13 +158,6 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .list-pane,
-  .list-pin {
-    transition: none;
-  }
-}
-
 /* 群の名前は字だけで示す。罫線を引くと、行 1 つぶんの区切りに層が 1 つ増える。
    長い群を送っているあいだも、いまどこを見ているかは上に残す */
 .list-group-label {
@@ -382,12 +375,6 @@
     padding 0.22s var(--app-ease);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .detail-head {
-    transition: none;
-  }
-}
-
 .detail-title-row {
   display: flex;
   align-items: flex-start;
@@ -452,12 +439,6 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .detail-save-status[data-status="saving"] .icon {
-    animation: none;
-  }
-}
-
 /* 比較しているあいだだけ出る。携帯では本文の下の比較バーが同じことを言う */
 .detail-compare-status {
   color: var(--app-text-muted);
@@ -495,12 +476,6 @@
   color: var(--app-text);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .history-button {
-    transition: none;
-  }
-}
-
 /* 指で押せる高さ。狭い窓でも履歴の入口はここにある */
 @media (max-width: 767px) {
   .history-button {
@@ -536,12 +511,6 @@
    「まだ動いている」と見なして畳むのを待ち続ける(部品の presence) */
 .note-menu[data-expanded] {
   animation: mm-rise 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .note-menu[data-expanded] {
-    animation: none;
-  }
 }
 
 .note-menu-row {
@@ -631,12 +600,6 @@
   min-width: 0;
   width: calc(100% - var(--hist-w));
   transition: width 0.22s var(--app-ease);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .detail-panes {
-    transition: none;
-  }
 }
 
 .detail-body {

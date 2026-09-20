@@ -86,13 +86,6 @@
   margin-top: auto;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .rail-button,
-  .rail-marker {
-    transition: none;
-  }
-}
-
 @media (max-width: 767px) {
   .rail {
     display: none;

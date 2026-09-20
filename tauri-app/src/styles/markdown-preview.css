@@ -441,12 +441,6 @@
   text-decoration: line-through;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .markdown-preview .diff-mark {
-    transition: none;
-  }
-}
-
 /* 記号はブロックの先頭に置き、本文の左の余白(28px)の 1 つの欄に絶対配置で
    揃える。基準は .markdown-preview--marked なので、箇条書きや引用の入れ子の
    深さに関わらず同じ欄に並ぶ。上下の位置は指定しない — 置かれた場所

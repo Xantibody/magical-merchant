@@ -120,6 +120,23 @@ body {
   }
 }
 
+/* 動きを望まない人の手元では、全部 0。
+   面ごとの CSS に書いていたころは、新しい面を足した日に 1 つだけ忘れられて
+   いても誰も気づけなかった — 忘れた側では動きが止まらないので、壊れているの
+   は動きを切っている人の画面だけになる。ここで一度に落とす */
+/* AIDEV-NOTE: animation は none にしない — 部品(corvu / Kobalte)が animationName で終わりを待つので、0s で即座に終わらせる */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0s !important;
+    transition-delay: 0s !important;
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
 /* 長押しに何かを割り当てた要素(`lib/long-press.ts`)。押しっぱなしは
    WebView から見るとテキスト選択の始まりなので、切らないと選択ハンドルと
    コールアウトが割り込む。ハンドラ束の onContextMenu と対で使う */
