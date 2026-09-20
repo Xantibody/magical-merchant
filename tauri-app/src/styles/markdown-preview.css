@@ -332,7 +332,7 @@
   opacity: 0;
   /* 透明なままだと見えない道具が図やコードへのクリックを吸う */
   pointer-events: none;
-  transition: opacity 0.15s;
+  transition: opacity 150ms var(--app-ease);
 }
 
 .markdown-preview pre:hover .preview-tools,
@@ -431,6 +431,8 @@
   margin-left: -2px;
   border-radius: 0 4px 4px 0;
   background: color-mix(in oklab, var(--app-ok) 10%, transparent);
+  /* 地色は transform でも opacity でも置けない。本文の字を透かすわけには
+     いかないので、比べる版を選ぶたびに背景そのものを 250ms で入れる */
   transition: background 250ms var(--app-ease);
 }
 

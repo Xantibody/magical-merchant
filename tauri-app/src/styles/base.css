@@ -271,7 +271,7 @@ html[data-hints] [data-key]:not([role="menuitem"])::after {
   position: relative;
   display: inline-block;
   flex-shrink: 0;
-  transition: background 0.15s;
+  transition: background 150ms var(--app-ease);
 }
 
 .switch::after {
@@ -283,15 +283,18 @@ html[data-hints] [data-key]:not([role="menuitem"])::after {
   height: 16px;
   border-radius: 50%;
   background: white;
-  transition: left 0.15s;
+  transition: transform 150ms var(--app-ease);
 }
 
 input:checked ~ .switch {
   background: var(--app-accent);
 }
 
+/* 動かすのは transform。`left` を動かすと、丸が移るあいだ毎フレーム
+   レイアウトが出し直される — 34px の中の 14px でも、同じ画面に
+   スイッチが何個も並ぶ設定では違いが出る */
 input:checked ~ .switch::after {
-  left: 16px;
+  transform: translateX(14px);
 }
 
 /* ---------------- 初回起動 ---------------- */

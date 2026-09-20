@@ -21,9 +21,9 @@
      見えない 3 つの版の行に Tab が着く。落とすのは畳み終わってから */
   visibility: hidden;
   transition:
-    transform 0.22s var(--app-ease),
-    opacity 0.22s var(--app-ease),
-    visibility 0s linear 0.22s;
+    transform 220ms var(--app-ease),
+    opacity 220ms var(--app-ease),
+    visibility 0s 220ms;
 }
 
 .history-panel--open {
@@ -31,8 +31,8 @@
   opacity: 1;
   visibility: visible;
   transition:
-    transform 0.22s var(--app-ease),
-    opacity 0.22s var(--app-ease),
+    transform 220ms var(--app-ease),
+    opacity 220ms var(--app-ease),
     visibility 0s;
 }
 
@@ -84,7 +84,7 @@
   font: inherit;
   text-align: start;
   cursor: pointer;
-  transition: background 0.15s var(--app-ease);
+  transition: background 150ms var(--app-ease);
 }
 
 .history-row--draft {
