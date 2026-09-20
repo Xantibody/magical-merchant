@@ -1302,7 +1302,9 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       <div
         class="detail-pane"
         classList={{
-          "detail-pane--map": mapOpen(),
+          // 履歴を開いているあいだマップは描かれない。幅だけ空けておくと、
+          // 題の段が居ないマップのぶん狭まって本文の列と揃わなくなる
+          "detail-pane--map": mapOpen() && !historyOpen(),
           "detail-pane--history": kind() === "codex" && historyOpen() && twoPane(),
         }}
       >
