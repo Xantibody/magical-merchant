@@ -394,13 +394,13 @@ function flyoutConditions(): string[] {
  * あいだは場所を取らず、押されもしない — 本文は 48px のレールの右から
  * まるごと始まる。
  */
-function mountFlyout(open: boolean): HTMLElement {
+function mountFlyout(open: boolean, detail = false): HTMLElement {
   document.body.innerHTML = `
     <div class="app">
       <nav class="rail"></nav>
       <div class="app-column">
         <main class="app-main">
-          <div class="workspace">
+          <div class="workspace ${detail ? "workspace--detail" : ""}">
             <div class="list-pane ${open ? "list-pane--open" : ""}">
               <div class="list-pane-head"></div>
               <div class="list-scroll"></div>
@@ -503,5 +503,28 @@ describe("the list flyout", () => {
 
     expect(conditions).toHaveLength(1);
     expect(conditions[0]).toContain("hover: hover");
+  });
+
+  /**
+   * 携帯では一覧と本文が 1 枚ずつの頁で、同じ場所に入れ替わる。入れ替わりに
+   * 動きが無いと、押した行が開いたのか別の画面へ飛んだのかが読めない。履歴の
+   * 頁(`history.css`)と同じ 180ms で上がってくる。
+   */
+  it("rises when the note takes the page on a phone", async () => {
+    await page.viewport(390, 800);
+    mountFlyout(false, true);
+
+    const style = getComputedStyle(element(".detail-pane"));
+
+    expect(style.animationName).toBe("mm-rise");
+    expect(style.animationDuration).toBe("0.18s");
+  });
+
+  // 広い窓では一覧と本文が並んでいて、頁は入れ替わらない
+  it("does not rise where the list and the body stand side by side", async () => {
+    await page.viewport(1280, 800);
+    mountFlyout(false, true);
+
+    expect(getComputedStyle(element(".detail-pane")).animationName).toBe("none");
   });
 });

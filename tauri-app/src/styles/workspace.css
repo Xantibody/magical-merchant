@@ -766,8 +766,12 @@
     display: none;
   }
 
+  /* 一覧と本文は同じ場所に入れ替わる 1 枚ずつの頁。履歴の頁と同じ 180ms で
+     上がってくる — 入れ替わりに動きが無いと、押した行が開いたのか別の場所へ
+     飛んだのかが読めない。畳むほうは動かさない(一覧がすぐ戻ってくる) */
   .workspace--detail .detail-pane {
     flex: 1;
+    animation: mm-rise 180ms var(--app-ease);
   }
 
   .workspace--detail .detail-head {

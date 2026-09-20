@@ -210,6 +210,27 @@ describe("the shell on a phone", () => {
   // headless Chromium は hover を持つのでここからは試せない — 実機で見る
 });
 
+describe("what floats over the app", () => {
+  beforeAll(async () => {
+    await import("../index.css");
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  // メニュー・パレット・頁・戻すボタンは 1 つの動きで入ってくる。パレットが
+  // 出しっぱなしの物のように現れると、⌘K を押したことと出てきた物が繋がらない
+  it("rises the palette like every other thing that floats", () => {
+    document.body.innerHTML = `<div class="palette-overlay"><div class="palette"></div></div>`;
+
+    const style = getComputedStyle(element(".palette"));
+
+    expect(style.animationName).toBe("mm-rise");
+    expect(style.animationDuration).toBe("0.18s");
+  });
+});
+
 describe("the hint layer", () => {
   beforeAll(async () => {
     await import("../index.css");
