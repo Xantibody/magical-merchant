@@ -342,6 +342,13 @@ function titleInput(): HTMLInputElement {
 const metaLine = (): HTMLElement | null => document.querySelector(".detail-version-status");
 
 /**
+ * 履歴の版の行。1 行目は「版 N」+ 日時なので、番号のあとに日付の数字が来る —
+ * 選んだ行の下に出る「版 N に戻す」ボタンと取り違えないための目印。
+ */
+const versionRow = (n: number): Promise<HTMLElement> =>
+  screen.findByRole("button", { name: new RegExp(`^版 ${n} \\d`, "u") });
+
+/**
  * 一覧の行の角折りページ。読み直した一覧は行を作り直すので、掴んでいた行では
  * なく、いまその題を名乗る行の印を見る。
  */
@@ -1674,8 +1681,8 @@ describe("Workspace › Codex の版", () => {
     typeInEditor?.(`# ${TITLE_C}\n\n${TEXT_C}\n\n足した行`);
     await runNoteAction("履歴");
 
-    // 背骨が広がった時点で、打った字はもうディスクにある
-    await waitFor(() => expect(document.querySelector(".version-spine--open")).not.toBeNull());
+    // パネルが開いた時点で、打った字はもうディスクにある
+    await waitFor(() => expect(document.querySelector(".history-panel--open")).not.toBeNull());
     expect(writesTo(FILE_C)).toHaveLength(1);
     expect(disk.get(FILE_C)).toContain("足した行");
   });
@@ -1736,9 +1743,11 @@ describe("Workspace › Codex の版", () => {
       filename: FILE_C,
       message: null,
     });
+    // 履歴にも点が 1 つ増える(下書きの中空 + 版の塗り)。刻んだばかりの
+    // 行は跳ねて入るので、その 1 行だけが印を持つ
+    await waitFor(() => expect(document.querySelector(".history-row--fresh")).not.toBeNull());
     await waitFor(() => expect(metaLine()?.textContent).toBe("版 1"));
-    // 背骨にも点が 1 つ増える(下書きの中空 + 版の塗り)
-    expect(document.querySelectorAll(".version-spine .version-dot")).toHaveLength(2);
+    expect(document.querySelectorAll(".history-panel .history-dot")).toHaveLength(2);
     expect(shell?.toast()?.message).toBe("版 1 を刻みました");
     expect(shell?.toast()?.detail).toBe(`${BODY_C.length} B`);
 
@@ -1761,8 +1770,8 @@ describe("Workspace › Codex の版", () => {
     await waitFor(() => expect(countOf("commit_note_version")).toBe(1));
   });
 
-  // 履歴を開いても本文は消えない。背骨が広がって最新の版が選ばれ、版との差は
-  // 本文の欄外の印になる。エディタは畳み、読むだけの本文になる
+  // 履歴を開いても本文は消えない。右にパネルが立って最新の版が選ばれ、版との
+  // 差は本文の欄外の印になる。エディタは畳み、読むだけの本文になる
   it("opens the history beside the body with the latest version selected", async () => {
     await openCodexC();
     versions.set(FILE_C, [
@@ -1772,15 +1781,18 @@ describe("Workspace › Codex の版", () => {
 
     await runNoteAction("履歴");
 
-    const newest = await screen.findByRole("button", { name: /^版 2/u });
+    const newest = await versionRow(2);
     await waitFor(() => expect(newest.getAttribute("aria-current")).toBe("true"));
     expect(screen.queryByTestId("editor-body")).toBeNull();
-    // 最新の版は下書きと同じ。印は 1 つも立たず、行がそう言う
-    await waitFor(() => expect(newest.textContent).toContain("同じ内容"));
+    // 最新の版は下書きと同じ。印は 1 つも立たず、下書きの行がそう言う
+    expect(document.querySelector(".history-row--draft")?.textContent).toContain("同じ内容");
     expect(screen.getByText(TEXT_C)).toBeDefined();
     expect(document.querySelector(".diff-mark")).toBeNull();
+    // 選んだ版に戻すボタンは、その行の下にだけ在る
+    expect(screen.getByRole("button", { name: "版 2 に戻す" })).toBeDefined();
+    expect(screen.queryByRole("button", { name: "版 1 に戻す" })).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: /^版 1/u }));
+    fireEvent.click(await versionRow(1));
 
     await waitFor(() => {
       expect(document.querySelectorAll(".diff-mark--del").length).toBeGreaterThan(0);
@@ -1794,10 +1806,17 @@ describe("Workspace › Codex の版", () => {
     // 消えた行は選んだ版にしか無い行。下書きの本文に差し込まれて読める
     expect(screen.getByText("最初の一行")).toBeDefined();
     expect(screen.getByText(TEXT_C)).toBeDefined();
+    // 何と比べていて何行動いたかはメタ行が言う。行数は既に読んでいる差分から
+    // 数えるので、IPC は 1 本も増えない
+    await waitFor(() =>
+      expect(document.querySelector(".detail-compare-status")?.textContent).toBe(
+        "版 1 と比較中 · 3 行追加 · 3 行削除 · 読み取り専用",
+      ),
+    );
 
-    // Esc で閉じる。背骨は畳まれ、エディタが戻る
+    // Esc で閉じる。パネルは畳まれ、エディタが戻る
     fireEvent.keyDown(globalThis, { key: "Escape" });
-    await waitFor(() => expect(document.querySelector(".version-spine--open")).toBeNull());
+    await waitFor(() => expect(document.querySelector(".history-panel--open")).toBeNull());
     await waitFor(() => expect(screen.getByTestId("editor-body")).toBeDefined());
   });
 
@@ -1814,26 +1833,52 @@ describe("Workspace › Codex の版", () => {
     ]);
     await runNoteAction("履歴");
 
-    const newest = await screen.findByRole("button", { name: /^版 2/u });
+    const newest = await versionRow(2);
     await waitFor(() => expect(newest.getAttribute("aria-current")).toBe("true"));
   });
 
-  // 背骨は畳んでいても Codex の本文の左に常にある。Note には無い
-  it("keeps a collapsed spine beside a codex and none beside a note", async () => {
+  // 履歴のボタンは Codex にだけ在り、同じボタンで開いて畳める。ホバーでは
+  // 開かない — 書いている手の横で、通りすがりに 320px が現れてはいけない
+  it("opens and folds the panel from the one history button, never on hover", async () => {
     await openCodexC();
 
-    await waitFor(() => expect(document.querySelector(".version-spine-rail")).not.toBeNull());
-    expect(document.querySelector(".version-spine--open")).toBeNull();
+    const button = screen.getByRole("button", { name: "履歴" });
+    expect(document.querySelector(".history-panel--open")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "履歴" }));
-    await waitFor(() => expect(document.querySelector(".version-spine--open")).not.toBeNull());
+    // 乗っただけでは開かない
+    fireEvent.pointerEnter(document.querySelector(".history-panel") as HTMLElement);
+    await sleep(50);
+    expect(document.querySelector(".history-panel--open")).toBeNull();
+
+    fireEvent.click(button);
+    await waitFor(() => expect(document.querySelector(".history-panel--open")).not.toBeNull());
+    expect(button.getAttribute("aria-pressed")).toBe("true");
     // 版が無ければ、次の一手(刻む)がそこにある
     expect(screen.getByText("まだ版がありません。いまの本文が最初の版になります。")).toBeDefined();
+
+    // 同じボタンで畳む。× と Esc も同じところへ着く
+    fireEvent.click(button);
+    await waitFor(() => expect(document.querySelector(".history-panel--open")).toBeNull());
 
     teardownWorkspace();
     await setupWorkspace();
     await openNoteA();
-    expect(document.querySelector(".version-spine")).toBeNull();
+    expect(document.querySelector(".history-panel")).toBeNull();
+    expect(screen.queryByRole("button", { name: "履歴" })).toBeNull();
+  });
+
+  // × は Esc と同じところへ着く。開けた人が閉じ方を探さない
+  it("folds the panel from its own close button", async () => {
+    await openCodexC();
+    versions.set(FILE_C, [{ id: "v1", message: null, body: BODY_C }]);
+
+    await runNoteAction("履歴");
+    await waitFor(() => expect(document.querySelector(".history-panel--open")).not.toBeNull());
+
+    fireEvent.click(document.querySelector(".history-close") as HTMLElement);
+
+    await waitFor(() => expect(document.querySelector(".history-panel--open")).toBeNull());
+    await waitFor(() => expect(screen.getByTestId("editor-body")).toBeDefined());
   });
 
   it("restores a version with the revision it read and swaps the body in", async () => {
@@ -1842,8 +1887,8 @@ describe("Workspace › Codex の版", () => {
     versions.set(FILE_C, [{ id: "v1", message: "最初の骨組み", body: OLD_BODY }]);
 
     await runNoteAction("履歴");
-    fireEvent.click(await screen.findByRole("button", { name: /^版 1/u }));
-    fireEvent.click(await screen.findByRole("button", { name: "この版に戻す" }));
+    fireEvent.click(await versionRow(1));
+    fireEvent.click(await screen.findByRole("button", { name: "版 1 に戻す" }));
 
     await waitFor(() => expect(countOf("restore_note_version")).toBe(1));
     const args = calls.find((c) => c.cmd === "restore_note_version")?.args;
@@ -1853,7 +1898,7 @@ describe("Workspace › Codex の版", () => {
     expect(args?.revision).toBe(revisionOf(BODY_C));
     // 戻した本文が画面に出て、履歴は畳まれる
     await waitFor(() => expect(screen.getByText("最初の一行")).toBeDefined());
-    expect(document.querySelector(".version-spine--open")).toBeNull();
+    expect(document.querySelector(".history-panel--open")).toBeNull();
     // 戻す前の下書きが最新の版になり、戻した本文はそれと違うので距離が出る
     await waitFor(() => expect(metaLine()?.textContent).toMatch(/^版 2 から /u));
   });
@@ -1867,10 +1912,10 @@ describe("Workspace › Codex の版", () => {
     versions.set(FILE_C, [{ id: "v1", message: "最初の骨組み", body: OLD_BODY }]);
 
     await runNoteAction("履歴");
-    fireEvent.click(await screen.findByRole("button", { name: /^版 1/u }));
+    fireEvent.click(await versionRow(1));
     // 戻す書き込みは通るが、そのあとの読み直しでディスクが読めない
     readFails = true;
-    fireEvent.click(await screen.findByRole("button", { name: "この版に戻す" }));
+    fireEvent.click(await screen.findByRole("button", { name: "版 1 に戻す" }));
 
     await waitFor(() => expect(countOf("restore_note_version")).toBe(1));
     expect(disk.get(FILE_C)).toBe(OLD_BODY);
@@ -1896,9 +1941,63 @@ describe("Workspace › Codex の版", () => {
     await waitFor(() => expect(screen.queryByTestId("editor-body")).toBeNull());
 
     await runNoteAction("履歴");
-    fireEvent.click(await screen.findByRole("button", { name: /^版 1/u }));
+    fireEvent.click(await versionRow(1));
 
-    const restore = await screen.findByRole<HTMLButtonElement>("button", { name: "この版に戻す" });
+    const restore = await screen.findByRole<HTMLButtonElement>("button", { name: "版 1 に戻す" });
     expect(restore.disabled).toBe(true);
+  });
+
+  // 携帯にはパネルを立てる幅が無い。履歴はシートではなく本文と入れ替わる
+  // 専用の面で、版を押すと本文へ戻って比較モードになる
+  it("gives a phone a history screen instead of a panel", async () => {
+    await page.viewport(390, 844);
+    versions.set(FILE_C, [
+      { id: "v2", message: null, body: BODY_C },
+      { id: "v1", message: null, body: `# ${TITLE_C}\n\n最初の一行` },
+    ]);
+    await openCodexC();
+
+    await runNoteAction("履歴");
+
+    await waitFor(() => expect(document.querySelector(".history-panel--screen")).not.toBeNull());
+    // 面ごと入れ替わるので本文は残らない。戻すも行の下には出ない — 比較バーが持つ
+    expect(screen.queryByTestId("editor-body")).toBeNull();
+    expect(document.querySelector(".detail-body")).toBeNull();
+    expect(screen.queryByRole("button", { name: "版 2 に戻す" })).toBeNull();
+
+    fireEvent.click(await versionRow(1));
+
+    // 本文へ戻って比較モード。欄外の印が立ち、何と比べているかは下の帯が言う
+    const bar = await waitFor(() => {
+      const found = document.querySelector<HTMLElement>(".compare-bar");
+      expect(found).not.toBeNull();
+      return found as HTMLElement;
+    });
+    expect(document.querySelector(".history-panel--screen")).toBeNull();
+    expect(bar.querySelector(".compare-bar-title")?.textContent).toBe("版 1 と比較中");
+    await waitFor(() =>
+      expect(bar.querySelector(".compare-bar-detail")?.textContent).toBe(
+        "3 行追加 · 3 行削除 · 読み取り専用",
+      ),
+    );
+    await waitFor(() =>
+      expect(document.querySelectorAll(".diff-mark--add").length).toBeGreaterThan(0),
+    );
+    // 比較中は読み取り専用。メタ行の側には出さない — 帯と二重に言わない
+    expect(document.querySelector(".detail-compare-status")).toBeNull();
+
+    // 帯の「履歴」で面へ戻れる
+    fireEvent.click(within(bar).getByRole("button", { name: "履歴" }));
+    await waitFor(() => expect(document.querySelector(".history-panel--screen")).not.toBeNull());
+
+    // ← で本文へ。比較モードのままなので帯は残る。
+    // 読み上げ名で引くのは、この矢印が戻る先を言い当てているかを一緒に見るため
+    fireEvent.click(screen.getByLabelText("本文に戻る"));
+    await waitFor(() => expect(document.querySelector(".compare-bar")).not.toBeNull());
+
+    // × で比較をやめる。エディタが戻る
+    fireEvent.click(document.querySelector(".compare-bar-close") as HTMLElement);
+    await waitFor(() => expect(document.querySelector(".compare-bar")).toBeNull());
+    await waitFor(() => expect(screen.getByTestId("editor-body")).toBeDefined());
   });
 });

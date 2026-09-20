@@ -1,0 +1,389 @@
+/* ---- 履歴パネル: 本文の右に立つ 320px ----
+   ペインの上端から下端まで(下端はボトムバーの上)。ホバーでは開かない —
+   履歴ボタン・⌘⇧H・Esc・× だけが開け閉めする。畳んでいるあいだも DOM に
+   残り、右へ 24px ずれて透ける。本文は押しのけられるだけで消えない。 */
+.history-panel {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  z-index: 20;
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  background: var(--app-sidebar);
+  border-left: 1px solid var(--app-border);
+  box-shadow: -16px 0 40px -20px rgb(0 0 0 / 50%);
+  overflow-y: auto;
+  transform: translateX(24px);
+  opacity: 0;
+  /* 畳んだパネルは透けているだけでなく居ない。visibility を落とさないと、
+     見えない 3 つの版の行に Tab が着く。落とすのは畳み終わってから */
+  visibility: hidden;
+  transition:
+    transform 0.22s var(--app-ease),
+    opacity 0.22s var(--app-ease),
+    visibility 0s linear 0.22s;
+}
+
+.history-panel--open {
+  transform: translateX(0);
+  opacity: 1;
+  visibility: visible;
+  transition:
+    transform 0.22s var(--app-ease),
+    opacity 0.22s var(--app-ease),
+    visibility 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .history-panel,
+  .history-panel--open {
+    transition: none;
+  }
+}
+
+.history-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--app-hairline);
+}
+
+.history-title {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.history-summary {
+  font-size: 11px;
+  color: var(--app-text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.history-close {
+  margin-left: auto;
+  width: 26px;
+  height: 26px;
+  color: var(--app-text-muted);
+}
+
+.history-list {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 10px 0;
+}
+
+/* 行は 2 列: 点の列 14px と字。点の下の線が行の高さぶん伸びて次へ繋がる */
+.history-row {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  column-gap: 12px;
+  align-items: start;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  color: var(--app-text);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition: background 0.15s var(--app-ease);
+}
+
+.history-row--draft {
+  cursor: default;
+}
+
+.history-row:hover:not(.history-row--draft) {
+  background: var(--app-surface-2);
+}
+
+.history-row[aria-current="true"] {
+  background: var(--app-accent-soft);
+}
+
+.history-row[aria-current="true"] .history-row-line1 {
+  font-weight: 600;
+}
+
+.history-row:focus-visible {
+  outline: 2px solid var(--app-accent);
+  outline-offset: -2px;
+}
+
+/* 刻んだばかりの版だけが跳ねて入る。他の行は動かない */
+.history-row--fresh {
+  animation: mm-pop 350ms var(--app-ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .history-row,
+  .history-row--fresh {
+    transition: none;
+    animation: none;
+  }
+}
+
+.history-row-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  align-self: stretch;
+  padding-top: 4px;
+}
+
+.history-rail-line {
+  flex: 1;
+  width: 1px;
+  margin-top: 4px;
+  background: var(--app-border);
+}
+
+/* 下書きから最新の版までは、まだ刻まれていない道。点線で繋ぐ */
+.history-rail-line[data-dashed] {
+  background: repeating-linear-gradient(var(--app-border) 0 3px, transparent 3px 6px);
+}
+
+/* 点。中空が下書き、大きい塗りが選択中(または開いた瞬間の最新)、
+   小さい薄い点がそれ以外 */
+.history-dot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--app-text-faint);
+}
+
+.history-dot[data-kind="strong"] {
+  width: 9px;
+  height: 9px;
+  background: var(--app-accent);
+}
+
+.history-dot[data-kind="draft"] {
+  width: 9px;
+  height: 9px;
+  box-sizing: border-box;
+  border: 1.5px solid var(--app-accent);
+  background: none;
+}
+
+.history-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.history-row-line1 {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.history-row--draft .history-row-line1 {
+  color: var(--app-text-muted);
+}
+
+/* 下書きの右端。動いていれば増えた量を ok の色で、同じなら薄く「同じ内容」 */
+.history-row-delta {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--app-text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.history-row-delta[data-moved] {
+  color: var(--app-ok);
+  font-weight: 600;
+}
+
+.history-row-stamp {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--app-text-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.history-row-line2 {
+  font-size: 11.5px;
+  color: var(--app-text-muted);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* 選んだ版に戻すボタンは、その行の下。どの版に戻るのかを取り違えない */
+.history-restore {
+  display: flex;
+  padding: 2px 10px 10px 36px;
+  animation: mm-rise 180ms var(--app-ease);
+}
+
+.history-restore .button-secondary {
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .history-restore {
+    animation: none;
+  }
+}
+
+.history-foot {
+  margin-top: auto;
+  padding: 10px 16px;
+  border-top: 1px solid var(--app-hairline);
+  font-size: 11px;
+  color: var(--app-text-hint);
+}
+
+/* 版ゼロ。空の一覧の代わりに次の一手 */
+.history-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+}
+
+.history-empty-hint {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--app-text-muted);
+}
+
+.history-empty .button-secondary {
+  gap: 6px;
+}
+
+/* ---- 比較バー(携帯): 本文の下。何と比べているかと、そこから出る道 ---- */
+.compare-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px 8px 16px;
+  border-top: 1px solid var(--app-border);
+  background: var(--app-sidebar);
+  animation: mm-rise 180ms var(--app-ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .compare-bar {
+    animation: none;
+  }
+}
+
+.compare-bar-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.compare-bar-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.compare-bar-detail {
+  font-size: 11.5px;
+  color: var(--app-text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.compare-bar .button-secondary {
+  min-height: 40px;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.compare-bar-close {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  color: var(--app-text-muted);
+}
+
+/* ---- 携帯: 履歴は専用の画面。パネルではなく面になる ---- */
+@media (max-width: 767px) {
+  .history-panel--screen {
+    position: static;
+    width: auto;
+    flex: 1;
+    min-height: 0;
+    border-left: none;
+    box-shadow: none;
+    background: none;
+    transform: none;
+    opacity: 1;
+    pointer-events: auto;
+    animation: mm-rise 180ms var(--app-ease);
+  }
+
+  .history-panel--screen .history-head {
+    padding: 4px 12px 12px;
+    border-bottom: none;
+  }
+
+  .history-panel--screen .history-title {
+    font-size: 16px;
+  }
+
+  .history-panel--screen .history-summary {
+    font-size: 13px;
+  }
+
+  .history-panel--screen .history-hint {
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--app-text-faint);
+  }
+
+  .history-panel--screen .history-back {
+    width: 44px;
+    height: 44px;
+  }
+
+  .history-panel--screen .history-list {
+    padding: 0 8px;
+  }
+
+  /* 指で押せる高さ。字も一覧の行と同じまで上げる */
+  .history-panel--screen .history-row {
+    min-height: 56px;
+    border-radius: 9px;
+    padding: 10px 12px;
+  }
+
+  .history-panel--screen .history-row-line1 {
+    font-size: 15px;
+  }
+
+  .history-panel--screen .history-row-stamp,
+  .history-panel--screen .history-row-delta {
+    font-size: 12px;
+  }
+
+  .history-panel--screen .history-row-line2 {
+    font-size: 12.5px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .history-panel--screen {
+      animation: none;
+    }
+  }
+}

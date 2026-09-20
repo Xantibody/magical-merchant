@@ -354,18 +354,14 @@
   min-width: 0;
   min-height: 0;
   position: relative;
-  /* 本文の列の左右に並ぶもの: 背骨(Codex)とマップ。題の段はこの幅を
+  /* 本文の列の右に並ぶもの: 履歴パネル(Codex)とマップ。題の段はこの幅を
      除いた残りの中央に本文の列を置く */
-  --spine-w: 0px;
+  --hist-w: 0px;
   --map-w: 0px;
 }
 
-.detail-pane--spine {
-  --spine-w: 56px;
-}
-
 .detail-pane--history {
-  --spine-w: 200px;
+  --hist-w: 320px;
 }
 
 .detail-pane--map {
@@ -373,19 +369,17 @@
 }
 
 /* 題・記録・操作をまとめた段。本文と同じ 640px + 左右 28px の幅に収めるので、
-   ノートについて知りたいことが本文と同じ列に並ぶ。背骨とマップのぶんを
+   ノートについて知りたいことが本文と同じ列に並ぶ。履歴パネルとマップのぶんを
    除いた残りの中央に置くのは padding で — 幅を max-width で切って margin auto
    にすると、残りが 696px より広いとき本文の列の中央から外れる */
 .detail-head {
   position: relative;
   flex: 0 0 auto;
-  width: calc(100% - var(--spine-w) - var(--map-w));
-  margin-left: var(--spine-w);
-  padding: 28px max(28px, calc((100% - var(--spine-w) - var(--map-w) - 640px) / 2)) 0;
+  width: calc(100% - var(--hist-w) - var(--map-w));
+  padding: 28px max(28px, calc((100% - var(--hist-w) - var(--map-w) - 640px) / 2)) 0;
   transition:
-    width 0.18s var(--ease-3),
-    margin-left 0.18s var(--ease-3),
-    padding 0.18s var(--ease-3);
+    width 0.22s var(--app-ease),
+    padding 0.22s var(--app-ease);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -461,6 +455,57 @@
 @media (prefers-reduced-motion: reduce) {
   .detail-save-status[data-status="saving"] .icon {
     animation: none;
+  }
+}
+
+/* 比較しているあいだだけ出る。携帯では本文の下の比較バーが同じことを言う */
+.detail-compare-status {
+  color: var(--app-text-muted);
+}
+
+/* 履歴の入口。滅多に押さない操作は … に畳んであるが、これは Codex を開いて
+   いる人がいちばん押すもので、ホバーでは開かないパネルの唯一のボタン */
+.history-button {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: -2px;
+  padding: 5px 11px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--app-text-muted);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition:
+    background 0.15s var(--app-ease),
+    color 0.15s var(--app-ease);
+}
+
+.history-button:hover {
+  background: var(--app-surface-2);
+  color: var(--app-text);
+}
+
+/* 開いているあいだは押し込まれたまま。同じボタンで畳める */
+.history-button[aria-pressed="true"] {
+  background: var(--app-accent-soft);
+  color: var(--app-text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .history-button {
+    transition: none;
+  }
+}
+
+/* 指で押せる高さ。狭い窓でも履歴の入口はここにある */
+@media (max-width: 767px) {
+  .history-button {
+    min-height: 44px;
+    font-size: 14px;
   }
 }
 
@@ -578,14 +623,14 @@
 }
 
 /* 本文とマップは横に並ぶ。マップを開いていなければ本文だけが伸びる。
-   背骨(Codex)のぶんだけ左を空ける — 背骨はペインの高さいっぱいに立つ */
+   履歴パネルのぶんは幅で空ける — パネルはペインの高さいっぱいに立つ */
 .detail-panes {
   flex: 1;
   display: flex;
   min-height: 0;
   min-width: 0;
-  margin-left: var(--spine-w);
-  transition: margin-left 0.18s var(--ease-3);
+  width: calc(100% - var(--hist-w));
+  transition: width 0.22s var(--app-ease);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -611,8 +656,8 @@
   overflow: hidden;
 }
 
-/* 並べる幅が無いところでは、本文と入れ替わる形に落とす。背骨も 56px の
-   まま広がらず、履歴は題の下の横向きのカードになる */
+/* 並べる幅が無いところでは、マップは本文と入れ替わる形に落とす。履歴パネルは
+   320px のまま — 本文が残っていることが履歴の要点なので、そこは詰めない */
 @media (max-width: 1099px) {
   .detail-panes--map .detail-body {
     display: none;
@@ -625,10 +670,6 @@
 
   .detail-pane--map {
     --map-w: 0px;
-  }
-
-  .detail-pane--history {
-    --spine-w: 56px;
   }
 }
 
@@ -803,14 +844,9 @@
     padding: 4px 20px 0;
   }
 
-  /* 背骨は並べる幅が無い。履歴は … から開き、題の下のカードで送る */
-  .detail-pane--spine,
+  /* パネルを立てる幅が無い。履歴は本文と入れ替わる専用の面になる */
   .detail-pane--history {
-    --spine-w: 0px;
-  }
-
-  .version-spine {
-    display: none;
+    --hist-w: 0px;
   }
 
   .detail-body {
