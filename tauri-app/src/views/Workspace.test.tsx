@@ -1422,25 +1422,30 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     expect(localStorage.getItem(`note-backup:${FILE_A}`)).toBeNull();
   });
 
-  // Stale の退避も同じ端末では残らない。そこで「『戻す』で呼び出せます」と
-  // 言うと、人はそれを信じて閉じる。読み直しで画面の本文もディスクのぶんに
-  // 入れ替わっているので、写す相手ももう無い — 失われたことだけを言う
-  it("promises no Revert when a stale save's backup cannot be written", async () => {
+  // Without a backup, the editor must keep the only copy available to copy out.
+  it("keeps the stale draft on screen when its backup cannot be written", async () => {
     const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
       throw new Error("QuotaExceededError");
     });
     onTestFinished(() => setItem.mockRestore());
     await openNoteA();
     await startEditingBody();
-    typeInEditor?.(`${TEXT_A}\n\n控えられなかった行`);
+    const editor = screen.getByTestId("editor-body");
+    const draft = `${TEXT_A}\n\n控えられなかった行`;
+    // The lightweight editor mock forwards changes without editing its DOM.
+    editor.textContent = draft;
+    typeInEditor?.(draft);
     disk.set(FILE_A, BODY_A_SYNCED);
 
-    await waitFor(() => expect(shell?.toast()?.message).toMatch(/失われました/u), {
+    await waitFor(() => expect(shell?.toast()?.message).toMatch(/失われます/u), {
       timeout: 3000,
     });
-    // 読み直しは着いている。画面の本文はディスクのぶんで、打った字はもう無い
-    expect(screen.getByText("他の端末で足された行")).toBeDefined();
-    expect(shell?.toast()?.message).not.toMatch(/戻す|写して/u);
+    expect(screen.getByTestId("editor-body")).toBe(editor);
+    expect(editor.textContent).toBe(draft);
+    expect(screen.queryByText("他の端末で足された行")).toBeNull();
+    expect(disk.get(FILE_A)).toBe(BODY_A_SYNCED);
+    expect(shell?.toast()?.message).not.toMatch(/戻す/u);
+    expect(shell?.toast()?.message).toMatch(/写してください/u);
     expect(localStorage.getItem(`note-backup:${FILE_A}`)).toBeNull();
   });
 

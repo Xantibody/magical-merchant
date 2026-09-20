@@ -365,7 +365,9 @@ describe("外からの書き換えに譲る", () => {
     h.refuse.error = stale;
     await vi.advanceTimersByTimeAsync(1000);
 
-    expect(h.toasts).toStrictEqual([t().notes.staleNotKept]);
+    expect(h.toasts).toStrictEqual([t().notes.saveNotKept]);
+    expect(h.view.body).toBe("打った");
+    expect(h.shown).toStrictEqual([]);
   });
 
   /**
@@ -400,15 +402,14 @@ describe("読み直しでは直らない拒否", () => {
     expect(h.statuses).toStrictEqual(["saving", "idle"]);
   });
 
-  // 名前の付かない失敗は退避もしない。次の打鍵の保存にまだ望みがある
-  it("leaves an unnamed failure to the next keystroke", async () => {
+  it("backs up and reports an unnamed failure without waiting for another keystroke", async () => {
     const h = harness();
     typed(h, "打った");
     h.refuse.error = new Error("network");
     await vi.advanceTimersByTimeAsync(1000);
 
-    expect(h.store.items.size).toBe(0);
-    expect(h.toasts).toStrictEqual([]);
+    expect(h.store.items.get(`note-backup:${NOTE.filename}`)).toBe("打った");
+    expect(h.toasts).toStrictEqual([t().notes.saveFailedKept(NOTE.title)]);
   });
 });
 

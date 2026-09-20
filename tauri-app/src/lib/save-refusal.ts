@@ -79,5 +79,8 @@ export function refusalToast(
   if (isNotTextNoteSave(error)) {
     return onScreen ? words.notTextNote : words.notTextNoteAway(title);
   }
-  return onScreen ? words.brokenMeta : words.brokenMetaAway(title);
+  if (isBrokenNoteSave(error)) {
+    return onScreen ? words.brokenMeta : words.brokenMetaAway(title);
+  }
+  return words.saveFailedKept(title);
 }

@@ -87,9 +87,12 @@ describe("refusalToast", () => {
       expect(refusalToast(broken, true, TITLE, "reloaded")).toBe(words().brokenMetaAway(TITLE));
     });
 
-    // 名前の付かない失敗は「記録が読めない」に倒す。黙って消すより名乗る
-    it("falls back to the broken record wording for an unnamed refusal", () => {
-      expect(refusalToast(new Error("boom"), true, TITLE, "draft")).toBe(words().brokenMeta);
+    it("reports an unnamed failure without claiming the frontmatter is broken", () => {
+      for (const screen of ["draft", "away", "reloaded"] as const) {
+        expect(refusalToast(new Error("boom"), true, TITLE, screen)).toBe(
+          words().saveFailedKept(TITLE),
+        );
+      }
     });
   });
 });
