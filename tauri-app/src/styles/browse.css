@@ -323,14 +323,19 @@
     display: none;
   }
 
+  /* タグの数だけ縦に伸びる帯。伸びきると結果の列が 0 になって届かなくなる。
+     `.app` は overflow: hidden で外に送れる場所が無いので、高さを切って
+     この帯自身が送れるようにする */
   .browse-facets {
     width: 100%;
+    flex: 0 0 auto;
     flex-direction: row;
     flex-wrap: wrap;
     gap: 10px;
     padding: 10px 12px 4px;
     border-right: none;
-    overflow: visible;
+    max-height: 38vh;
+    overflow-y: auto;
   }
 
   .browse-group {

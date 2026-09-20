@@ -74,14 +74,21 @@ describe("scopeLabel", () => {
 });
 
 describe("paletteScopeAt", () => {
-  it("carries the tags the browse screen is narrowed by into the palette", () => {
-    expect(paletteScopeAt(ROUTES.BROWSE, ["sync", "perf"])).toStrictEqual({
-      tags: ["sync", "perf"],
-    });
+  it("carries the tag the browse screen is narrowed by into the palette", () => {
+    expect(paletteScopeAt(ROUTES.BROWSE, ["sync"])).toStrictEqual({ tags: ["sync"] });
   });
 
   it("opens an unscoped palette when no tag is chosen", () => {
     expect(paletteScopeAt(ROUTES.BROWSE, [])).toBeUndefined();
+  });
+
+  /**
+   * 絞る画面のタグは「どれかを持つ」、`search_all` の tags は「全部を持つ」。
+   * 2 つ以上をそのまま渡すと、画面に出ている記録のうち片方しか持たないものが
+   * 開いた瞬間に消える。引き継がないほうが嘘をつかない
+   */
+  it("inherits nothing when two tags are chosen, since the two sides disagree", () => {
+    expect(paletteScopeAt(ROUTES.BROWSE, ["sync", "perf"])).toBeUndefined();
   });
 
   // Scrawl のチップは押すと絞る画面を開くだけで、その場では絞らない。

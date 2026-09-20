@@ -62,7 +62,11 @@ export function scopeLabel(tags: string[]): string {
  * もうあちらにしか無い。
  */
 export function paletteScopeAt(pathname: string, tags: string[]): PaletteScope | undefined {
-  if (pathname === ROUTES.BROWSE && tags.length > 0) {
+  // 引き継げるのはタグが 1 つのときだけ。絞る画面のタグは「どれかを持つ」
+  // (OR)だが、`search_all` の tags は「全部を持つ」(AND)。2 つ以上を
+  // そのまま渡すと、画面に出ている記録のうち片方しか持たないものが開いた
+  // 瞬間に消え、「見えているものの中を探す」にならない
+  if (pathname === ROUTES.BROWSE && tags.length === 1) {
     return { tags };
   }
   return undefined;
