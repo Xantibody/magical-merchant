@@ -8,6 +8,7 @@ import type { JSX } from "solid-js";
 import type { Editor } from "@milkdown/kit/core";
 import { ShellProvider, useShell } from "../lib/shell";
 import type { Shell } from "../lib/shell";
+import { shortcutLabel } from "../lib/shortcuts";
 import Workspace from "./Workspace";
 
 // 本物の Milkdown は ProseMirror 一式を連れてくる。ここで見たいのは
@@ -506,6 +507,23 @@ describe("Workspace › 一覧の行", () => {
     await rowOf(TITLE_A);
 
     expect(screen.queryByTitle("読み取り専用")).toBeNull();
+  });
+
+  /**
+   * ⌘ を押し続けているあいだ肩に浮かぶ札。一覧の頭の 2 つはどちらもキーを
+   * 持っているので、片方にだけ札が出ていると、もう片方はキーが無いように読める。
+   */
+  it("wears its key on the shoulder of both buttons at the head of the list", async () => {
+    renderWorkspace();
+    await rowOf(TITLE_A);
+
+    // 綴りは台に依る(macOS は ⌘、他は Ctrl+)。表から引いて、書き写さない
+    expect(screen.getByRole("button", { name: /新規/u }).dataset.hintKey).toBe(
+      shortcutLabel("newNote"),
+    );
+    expect(document.querySelector<HTMLElement>(".list-pin")?.dataset.hintKey).toBe(
+      shortcutLabel("listPin"),
+    );
   });
 });
 
@@ -1509,6 +1527,20 @@ describe("Workspace › Codex の面", () => {
     kinds.set(FILE_C, "codex");
   };
 
+  /**
+   * ⌘N が作るのは Note で、押せば Notes へ移る。この面の「新規」は今いる面の
+   * ものを作るので、ここに札を出すと、札のとおりに打った人には別の物が別の
+   * 場所にできる。キーが無いのではなく、このボタンのキーではない
+   */
+  it("wears no key on its new button, where ⌘N would make the other thing", async () => {
+    addCodex();
+    renderWorkspace();
+    navigateTo?.("/codex");
+    await rowOf(TITLE_C);
+
+    expect(screen.getByRole("button", { name: /新規/u }).dataset.hintKey).toBeUndefined();
+  });
+
   it("lists only the notes of its own surface", async () => {
     addCodex();
     renderWorkspace();
@@ -1865,6 +1897,31 @@ describe("Workspace › Codex の版", () => {
     await openNoteA();
     expect(document.querySelector(".history-panel")).toBeNull();
     expect(screen.queryByRole("button", { name: "履歴" })).toBeNull();
+  });
+
+  /**
+   * ホバーでは開かないパネルなので、キーの無いあいだ入口はボタン 1 つだけ
+   * だった。⌘ を押したときに肩へ札が出る以上、そのキーは効かなければならない。
+   */
+  it("opens and folds the history from ⌘⇧H", async () => {
+    await openCodexC();
+
+    fireEvent.keyDown(editorBody(), { key: "H", metaKey: true, shiftKey: true });
+
+    await waitFor(() => expect(document.querySelector(".history-panel--open")).not.toBeNull());
+
+    fireEvent.keyDown(globalThis, { key: "H", metaKey: true, shiftKey: true });
+
+    await waitFor(() => expect(document.querySelector(".history-panel--open")).toBeNull());
+  });
+
+  // ⌘ を押し続けているあいだ肩に浮かぶ札。押せるキーのある入口には出す
+  it("wears its key on the shoulder of the history button", async () => {
+    await openCodexC();
+
+    expect(screen.getByRole("button", { name: "履歴" }).dataset.hintKey).toBe(
+      shortcutLabel("noteHistory"),
+    );
   });
 
   // × は Esc と同じところへ着く。開けた人が閉じ方を探さない

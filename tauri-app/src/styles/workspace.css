@@ -142,6 +142,8 @@
     opacity: 0;
     /* 閉じているあいだに当たり判定が残ると、本文の左 280px が押せない */
     pointer-events: none;
+    /* 透きが滑りより先に終わる(180 < 220)のはプロトタイプの値。畳むとき、
+       消えてから動き終わるので影が本文の上に残らない */
     transition:
       transform 220ms var(--app-ease),
       opacity 180ms var(--app-ease);
@@ -155,13 +157,6 @@
 
   .list-pane-foot {
     display: block;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .list-pane,
-  .list-pin {
-    transition: none;
   }
 }
 
@@ -377,15 +372,11 @@
   flex: 0 0 auto;
   width: calc(100% - var(--hist-w) - var(--map-w));
   padding: 28px max(28px, calc((100% - var(--hist-w) - var(--map-w) - 640px) / 2)) 0;
+  /* パネルと同じ 220ms で、パネルが空ける幅に合わせて詰める。動かすのが幅と
+     余白なのは、transform では中の題と記録が折り返し直せないから */
   transition:
-    width 0.22s var(--app-ease),
-    padding 0.22s var(--app-ease);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .detail-head {
-    transition: none;
-  }
+    width 220ms var(--app-ease),
+    padding 220ms var(--app-ease);
 }
 
 .detail-title-row {
@@ -442,6 +433,8 @@
   align-self: center;
 }
 
+/* AIDEV-NOTE: 動きの規則の外。「まだ書き込んでいる」という続きの合図で、1 度で終わる mm-rise では代わりにならない */
+/* 回るものは linear でないと脈打つので、イージングも --app-ease ではない */
 .detail-save-status[data-status="saving"] .icon {
   animation: spin 1s linear infinite;
 }
@@ -449,12 +442,6 @@
 @keyframes spin {
   to {
     transform: rotate(1turn);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .detail-save-status[data-status="saving"] .icon {
-    animation: none;
   }
 }
 
@@ -480,8 +467,8 @@
   font-size: 12.5px;
   cursor: pointer;
   transition:
-    background 0.15s var(--app-ease),
-    color 0.15s var(--app-ease);
+    background 150ms var(--app-ease),
+    color 150ms var(--app-ease);
 }
 
 .history-button:hover {
@@ -493,12 +480,6 @@
 .history-button[aria-pressed="true"] {
   background: var(--app-accent-soft);
   color: var(--app-text);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .history-button {
-    transition: none;
-  }
 }
 
 /* 指で押せる高さ。狭い窓でも履歴の入口はここにある */
@@ -535,13 +516,7 @@
 /* 入るときだけ動かす。開いている印に掛けておかないと、閉じる側は
    「まだ動いている」と見なして畳むのを待ち続ける(部品の presence) */
 .note-menu[data-expanded] {
-  animation: mm-rise 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .note-menu[data-expanded] {
-    animation: none;
-  }
+  animation: mm-rise 160ms var(--app-ease);
 }
 
 .note-menu-row {
@@ -630,13 +605,7 @@
   min-height: 0;
   min-width: 0;
   width: calc(100% - var(--hist-w));
-  transition: width 0.22s var(--app-ease);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .detail-panes {
-    transition: none;
-  }
+  transition: width 220ms var(--app-ease);
 }
 
 .detail-body {
@@ -797,8 +766,12 @@
     display: none;
   }
 
+  /* 一覧と本文は同じ場所に入れ替わる 1 枚ずつの頁。履歴の頁と同じ 180ms で
+     上がってくる — 入れ替わりに動きが無いと、押した行が開いたのか別の場所へ
+     飛んだのかが読めない。畳むほうは動かさない(一覧がすぐ戻ってくる) */
   .workspace--detail .detail-pane {
     flex: 1;
+    animation: mm-rise 180ms var(--app-ease);
   }
 
   .workspace--detail .detail-head {

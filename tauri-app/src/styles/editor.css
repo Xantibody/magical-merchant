@@ -146,7 +146,7 @@
   cursor: pointer;
   visibility: hidden;
   opacity: 0;
-  transition: opacity 0.15s;
+  transition: opacity 150ms var(--app-ease);
 }
 
 .milkdown-editor pre:hover .code-copy-button {
@@ -348,6 +348,7 @@
   position: relative;
 }
 
+/* AIDEV-NOTE: 動きの規則の外。キャレットの点滅は OS の作法で、値も上流の ProseMirror のもの — 入ってくる動きではない */
 .milkdown-editor .ProseMirror-gapcursor::after {
   content: "";
   display: block;

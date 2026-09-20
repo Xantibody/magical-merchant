@@ -120,6 +120,23 @@ body {
   }
 }
 
+/* 動きを望まない人の手元では、全部 0。
+   面ごとの CSS に書いていたころは、新しい面を足した日に 1 つだけ忘れられて
+   いても誰も気づけなかった — 忘れた側では動きが止まらないので、壊れているの
+   は動きを切っている人の画面だけになる。ここで一度に落とす */
+/* AIDEV-NOTE: animation は none にしない — 部品(corvu / Kobalte)が animationName で終わりを待つので、0s で即座に終わらせる */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0s !important;
+    transition-delay: 0s !important;
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
 /* 長押しに何かを割り当てた要素(`lib/long-press.ts`)。押しっぱなしは
    WebView から見るとテキスト選択の始まりなので、切らないと選択ハンドルと
    コールアウトが割り込む。ハンドラ束の onContextMenu と対で使う */
@@ -163,15 +180,16 @@ body {
 
 /* ⌘ を押し続けているあいだだけ、押せるキーをボタンの肩に浮かせる
    (`lib/hints.ts`)。札は擬似要素なので、出ていないときの DOM は 1 ノードも
-   増えない — data-key は常に付いていて、描くかどうかを html 側が決める */
-[data-key] {
+   増えない — 綴りは常に付いていて、描くかどうかを html 側が決める */
+[data-hint-key] {
   position: relative;
 }
 
-/* 部品ライブラリの集まり(メニューの行など)も data-key を使うが、入っているのは
-   内部の識別子。札を描くのはこちらが書いた data-key だけなので役割で外す */
-html[data-hints] [data-key]:not([role="menuitem"])::after {
-  content: attr(data-key);
+/* AIDEV-NOTE: `data-key` ではなく `data-hint-key` — Kobalte がメニュー・一覧・タブ・アコーディオンの行に内部 ID を `data-key` で書く */
+/* 役割で除く形(`:not([role="menuitem"])`)にすると、部品を増やすたびに
+   除外が 1 つ増え、増やし忘れた日に内部 ID が肩に並ぶ */
+html[data-hints] [data-hint-key]::after {
+  content: attr(data-hint-key);
   position: absolute;
   top: -8px;
   right: -6px;
@@ -254,7 +272,7 @@ html[data-hints] [data-key]:not([role="menuitem"])::after {
   position: relative;
   display: inline-block;
   flex-shrink: 0;
-  transition: background 0.15s;
+  transition: background 150ms var(--app-ease);
 }
 
 .switch::after {
@@ -266,15 +284,18 @@ html[data-hints] [data-key]:not([role="menuitem"])::after {
   height: 16px;
   border-radius: 50%;
   background: white;
-  transition: left 0.15s;
+  transition: transform 150ms var(--app-ease);
 }
 
 input:checked ~ .switch {
   background: var(--app-accent);
 }
 
+/* 動かすのは transform。`left` を動かすと、丸が移るあいだ毎フレーム
+   レイアウトが出し直される — 34px の中の 14px でも、同じ画面に
+   スイッチが何個も並ぶ設定では違いが出る */
 input:checked ~ .switch::after {
-  left: 16px;
+  transform: translateX(14px);
 }
 
 /* ---------------- 初回起動 ---------------- */

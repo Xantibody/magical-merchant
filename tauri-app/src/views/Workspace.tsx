@@ -1004,6 +1004,9 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       } else if (matchesShortcut(e, "codexCommit")) {
         e.preventDefault();
         void commitVersion(item);
+      } else if (matchesShortcut(e, "noteHistory") && kind() === "codex") {
+        e.preventDefault();
+        toggleHistory();
       } else if (e.key === "Escape" && historyOpen()) {
         e.preventDefault();
         closeHistory();
@@ -1179,11 +1182,15 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
             {MODE_LABELS[kind() === "codex" ? ROUTES.CODEX : ROUTES.NOTES]}
           </span>
           <div class="list-pane-actions">
+            {/* Codex の面では札を出さない。⌘N が作るのは Note で、押せば Notes
+                へ移る。このボタンは今いる面のものを作るので、札のとおりに打つと
+                別の物が別の場所にできる */}
             <button
               type="button"
               class="new-note long-press"
               ref={newNoteButton}
               aria-expanded={shell.popover() === "new-note-menu"}
+              data-hint-key={kind() === "codex" ? undefined : shortcutLabel("newNote")}
               onPointerDown={(e) => {
                 newNotePointer = e.pointerType;
                 newNoteLongPress.onPointerDown(e);
@@ -1217,7 +1224,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
               aria-pressed={shell.listPinned()}
               title={pinLabel()}
               aria-label={pinLabel()}
-              data-key={shortcutLabel("listPin")}
+              data-hint-key={shortcutLabel("listPin")}
               onClick={() => shell.toggleListPin()}
             >
               <Icon name={shell.listPinned() ? "push-pin-fill" : "push-pin"} size={14} />
@@ -1371,7 +1378,8 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                         type="button"
                         class="history-button"
                         aria-pressed={historyOpen()}
-                        title={t().codex.history}
+                        title={`${t().codex.history} ${shortcutLabel("noteHistory")}`}
+                        data-hint-key={shortcutLabel("noteHistory")}
                         onClick={toggleHistory}
                       >
                         <Icon name="clock-counter-clockwise" size={13} />

@@ -21,9 +21,9 @@
      見えない 3 つの版の行に Tab が着く。落とすのは畳み終わってから */
   visibility: hidden;
   transition:
-    transform 0.22s var(--app-ease),
-    opacity 0.22s var(--app-ease),
-    visibility 0s linear 0.22s;
+    transform 220ms var(--app-ease),
+    opacity 220ms var(--app-ease),
+    visibility 0s 220ms;
 }
 
 .history-panel--open {
@@ -31,16 +31,9 @@
   opacity: 1;
   visibility: visible;
   transition:
-    transform 0.22s var(--app-ease),
-    opacity 0.22s var(--app-ease),
+    transform 220ms var(--app-ease),
+    opacity 220ms var(--app-ease),
     visibility 0s;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .history-panel,
-  .history-panel--open {
-    transition: none;
-  }
 }
 
 .history-head {
@@ -91,7 +84,7 @@
   font: inherit;
   text-align: start;
   cursor: pointer;
-  transition: background 0.15s var(--app-ease);
+  transition: background 150ms var(--app-ease);
 }
 
 .history-row--draft {
@@ -118,14 +111,6 @@
 /* 刻んだばかりの版だけが跳ねて入る。他の行は動かない */
 .history-row--fresh {
   animation: mm-pop 350ms var(--app-ease);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .history-row,
-  .history-row--fresh {
-    transition: none;
-    animation: none;
-  }
 }
 
 .history-row-rail {
@@ -232,12 +217,6 @@
   font-weight: 600;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .history-restore {
-    animation: none;
-  }
-}
-
 .history-foot {
   margin-top: auto;
   padding: 10px 16px;
@@ -276,12 +255,6 @@
   border-top: 1px solid var(--app-border);
   background: var(--app-sidebar);
   animation: mm-rise 180ms var(--app-ease);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .compare-bar {
-    animation: none;
-  }
 }
 
 .compare-bar-text {
@@ -379,11 +352,5 @@
 
   .history-panel--screen .history-row-line2 {
     font-size: 12.5px;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .history-panel--screen {
-      animation: none;
-    }
   }
 }

@@ -91,7 +91,7 @@ export default function NoteMenu(props: NoteMenuProps): JSX.Element {
         class="icon-button note-menu-button"
         title={t().notes.actions}
         aria-label={t().notes.actions}
-        data-key={shortcutLabel("noteActions")}
+        data-hint-key={shortcutLabel("noteActions")}
       >
         <Icon name="dots-three" size={17} />
       </DropdownMenu.Trigger>
@@ -161,6 +161,7 @@ export default function NoteMenu(props: NoteMenuProps): JSX.Element {
               <Row
                 icon={<Icon name="clock-counter-clockwise" size={15} />}
                 label={t().codex.history}
+                shortcut="noteHistory"
                 onClick={() => props.onHistory()}
               />
             </Show>

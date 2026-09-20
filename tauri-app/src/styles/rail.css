@@ -54,7 +54,10 @@
 }
 
 /* 現在地の線。3 つの面のあいだを滑る。位置はレールの中の実寸で、
-   ボタン (36px) と隙間 (4px) と上の余白 (10px) から出る */
+   ボタン (36px) と隙間 (4px) と上の余白 (10px) から出る。
+   動かすのが transform ではなく top なのは、位置そのものが面から決まる
+   1 つの数で、translateY にすると同じ数を 2 通りに書くことになるから。
+   レールの中で絶対配置なので、動いても隣は流れない */
 .rail-marker {
   position: absolute;
   left: 0;
@@ -84,13 +87,6 @@
 /* 同期から下は足元に寄せる。日に何度も押す物ではない */
 .rail-button--foot {
   margin-top: auto;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .rail-button,
-  .rail-marker {
-    transition: none;
-  }
 }
 
 @media (max-width: 767px) {

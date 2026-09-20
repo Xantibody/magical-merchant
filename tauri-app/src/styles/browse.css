@@ -298,18 +298,6 @@
   opacity: 0.6;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .browse-chip,
-  .browse-row,
-  .browse-open {
-    transition: none;
-  }
-
-  .browse-preview {
-    animation: none;
-  }
-}
-
 /* ---------------- モバイル ---------------- */
 
 @media (max-width: 767px) {

@@ -20,22 +20,10 @@
   background: var(--app-surface);
   box-shadow: 0 30px 60px -20px rgb(0 0 0 / 60%);
   overflow: hidden;
-  animation: palette-rise 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-/* 上から降りてくるのではなく、少し上がりながら現れる。動かすのは
-   transform と opacity だけ */
-@keyframes palette-rise {
-  from {
-    transform: translateY(8px);
-    opacity: 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .palette {
-    animation: none;
-  }
+  /* 浮かぶものは同じ動きで入ってくる(メニュー・頁・戻すボタンと同じ)。
+     幕は動かさない — 背後が上下すると、パレットが乗っているのか画面が
+     動いたのかが分からない */
+  animation: mm-rise 180ms var(--app-ease);
 }
 
 .palette-input-row {

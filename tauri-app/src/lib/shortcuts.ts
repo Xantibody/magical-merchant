@@ -1,6 +1,6 @@
 /**
  * キーボードから呼べる操作の表。押されたキーの判定・ボタンの肩に浮かせる札
- * (`data-key`)・パレット右端の表示を、すべてここから配る。三箇所に同じ
+ * (`data-hint-key`)・パレット右端の表示を、すべてここから配る。三箇所に同じ
  * 「⌘N」を書くと、片方だけ直したときに嘘の札が残る。
  *
  * 修飾キーは macOS で ⌘、それ以外で Ctrl と綴るが、判定はどちらも受ける —
@@ -37,6 +37,8 @@ const SHORTCUTS = {
   noteInfo: { key: "i", shift: true },
   // 「刻む」の K。⌘K(検索)とは ⇧ で分かれる。Codex を開いているあいだだけ
   codexCommit: { key: "k", shift: true },
+  // 履歴パネル。ホバーでは開かないので、ボタンとこれだけが入口
+  noteHistory: { key: "h", shift: true },
   notePrev: { key: "arrowup" },
   noteNext: { key: "arrowdown" },
 } as const satisfies Record<string, Shortcut>;

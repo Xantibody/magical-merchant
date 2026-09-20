@@ -99,8 +99,8 @@ function mountRail(markerTop: number, off = false): void {
 }
 
 function mountAction(): HTMLElement {
-  document.body.innerHTML = `<button class="icon-button" data-key="⌘N"></button>`;
-  return element("[data-key]");
+  document.body.innerHTML = `<button class="icon-button" data-hint-key="⌘N"></button>`;
+  return element("[data-hint-key]");
 }
 
 /** 札は擬似要素なので、出ているかどうかは content でしか見られない。 */
@@ -210,6 +210,27 @@ describe("the shell on a phone", () => {
   // headless Chromium は hover を持つのでここからは試せない — 実機で見る
 });
 
+describe("what floats over the app", () => {
+  beforeAll(async () => {
+    await import("../index.css");
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  // メニュー・パレット・頁・戻すボタンは 1 つの動きで入ってくる。パレットが
+  // 出しっぱなしの物のように現れると、⌘K を押したことと出てきた物が繋がらない
+  it("rises the palette like every other thing that floats", () => {
+    document.body.innerHTML = `<div class="palette-overlay"><div class="palette"></div></div>`;
+
+    const style = getComputedStyle(element(".palette"));
+
+    expect(style.animationName).toBe("mm-rise");
+    expect(style.animationDuration).toBe("0.18s");
+  });
+});
+
 describe("the hint layer", () => {
   beforeAll(async () => {
     await import("../index.css");
@@ -236,15 +257,19 @@ describe("the hint layer", () => {
     expect(action.childElementCount).toBe(0);
   });
 
-  // 部品ライブラリの集まり(… メニューの行)も data-key を使うが、入っているのは
-  // 内部の識別子。役割で外さないと、⌘ を押した瞬間に行の肩へ `item-3` が並ぶ
-  it("draws no badge for the identifier a menu collection writes", () => {
-    document.body.innerHTML = `<div role="menuitem" data-key="item-3">削除</div>`;
-    const row = element("[data-key]");
+  /**
+   * 部品ライブラリ(Kobalte)の集まりは、行の内部の識別子を `data-key` に書く。
+   * メニュー・一覧・タブ・アコーディオンの 4 家系が同じことをするので、役割で
+   * 除くやり方では足りない — 札はこちらの名前だけを読む。
+   */
+  it("draws no badge for the identifier a component library writes", () => {
+    document.body.innerHTML = `<div role="menuitem" data-key="item-3">削除</div>
+      <div role="option" data-key="hit-7">ノート</div>`;
 
     document.documentElement.dataset.hints = "";
 
-    expect(badge(row)).toBe("none");
+    expect(badge(element('[role="menuitem"]'))).toBe("none");
+    expect(badge(element('[role="option"]'))).toBe("none");
   });
 });
 
