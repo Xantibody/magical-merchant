@@ -51,7 +51,9 @@ interface MockEditor {
  * 作りものの Editor。本物を立てるとエディタのバンドルまで要るので、書式バーが
  * 触る slice — root / view / commands / listener — だけを答える。
  */
-function createMockEditor(options: { cursorIn?: Block } = {}): MockEditor {
+function createMockEditor(
+  options: { cursorIn?: Block; commandRetypesTo?: Block } = {},
+): MockEditor {
   const root = document.createElement("div");
   const body = document.createElement("div");
   body.className = "ProseMirror";
@@ -76,7 +78,16 @@ function createMockEditor(options: { cursorIn?: Block } = {}): MockEditor {
         return view;
       }
       if (slice === commandsCtx) {
-        return { call: (key: unknown) => fired.push(key) };
+        return {
+          call: (key: unknown) => {
+            fired.push(key);
+            // 本物の createCodeBlockCommand は節の種類だけを変えて選択を動かさ
+            // ないので、listener には何も伝わらない。その黙り方をここで再現する
+            if (options.commandRetypesTo) {
+              view.state = stateWithCursorIn(options.commandRetypesTo);
+            }
+          },
+        };
       }
       if (slice === listenerCtx) {
         return {
@@ -169,6 +180,30 @@ describe("MarkdownToolbar", () => {
     expect(labels()).toHaveLength(9);
 
     mock.moveCursorTo("paragraph");
+    expect(screen.queryByLabelText("ブロックから抜ける")).toBeNull();
+  });
+
+  // 押した瞬間は、選択が動かないまま居場所が変わる唯一のとき。listener を
+  // 待っていると「抜ける」がカーソルを動かすまで出ない・消えない
+  it("offers the way out as soon as a press makes the block a code block", () => {
+    const mock = createMockEditor({ cursorIn: "paragraph", commandRetypesTo: "code_block" });
+    render(() => <MarkdownToolbar editor={mock.editor} />);
+
+    expect(screen.queryByLabelText("ブロックから抜ける")).toBeNull();
+
+    fireEvent.click(screen.getByLabelText("コードブロック"));
+
+    expect(screen.getByLabelText("ブロックから抜ける")).toBeDefined();
+  });
+
+  it("takes it away again when a press turns the code block back into a paragraph", () => {
+    const mock = createMockEditor({ cursorIn: "code_block", commandRetypesTo: "paragraph" });
+    render(() => <MarkdownToolbar editor={mock.editor} />);
+
+    expect(screen.getByLabelText("ブロックから抜ける")).toBeDefined();
+
+    fireEvent.click(screen.getByLabelText("コードブロック"));
+
     expect(screen.queryByLabelText("ブロックから抜ける")).toBeNull();
   });
 

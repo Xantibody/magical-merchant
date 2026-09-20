@@ -121,6 +121,12 @@ export default function MarkdownToolbar(props: MarkdownToolbarProps): JSX.Elemen
       return;
     }
     button.run(editor);
+    // 押したことで居場所が変わっていないか、その場で見直す。コードブロックに
+    // する / 解くは節の種類だけを変えて選択を動かさないので `selectionUpdated`
+    // が鳴らず、待っていると「抜ける」がカーソルを動かすまで出ない・消えない
+    editor.action((ctx) => {
+      setInCodeBlock(isInCodeBlock(ctx.get(editorViewCtx).state.selection));
+    });
     if (!button.releases) {
       bodyElement(editor)?.focus();
     }
