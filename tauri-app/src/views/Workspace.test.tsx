@@ -1907,4 +1907,57 @@ describe("Workspace › Codex の版", () => {
     const restore = await screen.findByRole<HTMLButtonElement>("button", { name: "版 1 に戻す" });
     expect(restore.disabled).toBe(true);
   });
+
+  // 携帯にはパネルを立てる幅が無い。履歴はシートではなく本文と入れ替わる
+  // 専用の面で、版を押すと本文へ戻って比較モードになる
+  it("gives a phone a history screen instead of a panel", async () => {
+    await page.viewport(390, 844);
+    versions.set(FILE_C, [
+      { id: "v2", message: null, body: BODY_C },
+      { id: "v1", message: null, body: `# ${TITLE_C}\n\n最初の一行` },
+    ]);
+    await openCodexC();
+
+    await runNoteAction("履歴");
+
+    await waitFor(() => expect(document.querySelector(".history-panel--screen")).not.toBeNull());
+    // 面ごと入れ替わるので本文は残らない。戻すも行の下には出ない — 比較バーが持つ
+    expect(screen.queryByTestId("editor-body")).toBeNull();
+    expect(document.querySelector(".detail-body")).toBeNull();
+    expect(screen.queryByRole("button", { name: "版 2 に戻す" })).toBeNull();
+
+    fireEvent.click(await versionRow(1));
+
+    // 本文へ戻って比較モード。欄外の印が立ち、何と比べているかは下の帯が言う
+    const bar = await waitFor(() => {
+      const found = document.querySelector<HTMLElement>(".compare-bar");
+      expect(found).not.toBeNull();
+      return found as HTMLElement;
+    });
+    expect(document.querySelector(".history-panel--screen")).toBeNull();
+    expect(bar.querySelector(".compare-bar-title")?.textContent).toBe("版 1 と比較中");
+    await waitFor(() =>
+      expect(bar.querySelector(".compare-bar-detail")?.textContent).toBe(
+        "3 行追加 · 3 行削除 · 読み取り専用",
+      ),
+    );
+    await waitFor(() =>
+      expect(document.querySelectorAll(".diff-mark--add").length).toBeGreaterThan(0),
+    );
+    // 比較中は読み取り専用。メタ行の側には出さない — 帯と二重に言わない
+    expect(document.querySelector(".detail-compare-status")).toBeNull();
+
+    // 帯の「履歴」で面へ戻れる
+    fireEvent.click(within(bar).getByRole("button", { name: "履歴" }));
+    await waitFor(() => expect(document.querySelector(".history-panel--screen")).not.toBeNull());
+
+    // ← で本文へ。比較モードのままなので帯は残る
+    fireEvent.click(document.querySelector(".history-back") as HTMLElement);
+    await waitFor(() => expect(document.querySelector(".compare-bar")).not.toBeNull());
+
+    // × で比較をやめる。エディタが戻る
+    fireEvent.click(document.querySelector(".compare-bar-close") as HTMLElement);
+    await waitFor(() => expect(document.querySelector(".compare-bar")).toBeNull());
+    await waitFor(() => expect(screen.getByTestId("editor-body")).toBeDefined());
+  });
 });

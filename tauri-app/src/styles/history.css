@@ -257,3 +257,125 @@
 .history-empty .button-secondary {
   gap: 6px;
 }
+
+/* ---- 比較バー(携帯): 本文の下。何と比べているかと、そこから出る道 ---- */
+.compare-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px 8px 16px;
+  border-top: 1px solid var(--app-border);
+  background: var(--app-sidebar);
+  animation: mm-rise 180ms var(--app-ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .compare-bar {
+    animation: none;
+  }
+}
+
+.compare-bar-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.compare-bar-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.compare-bar-detail {
+  font-size: 11.5px;
+  color: var(--app-text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.compare-bar .button-secondary {
+  min-height: 40px;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.compare-bar-close {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  color: var(--app-text-muted);
+}
+
+/* ---- 携帯: 履歴は専用の画面。パネルではなく面になる ---- */
+@media (max-width: 767px) {
+  .history-panel--screen {
+    position: static;
+    width: auto;
+    flex: 1;
+    min-height: 0;
+    border-left: none;
+    box-shadow: none;
+    background: none;
+    transform: none;
+    opacity: 1;
+    pointer-events: auto;
+    animation: mm-rise 180ms var(--app-ease);
+  }
+
+  .history-panel--screen .history-head {
+    padding: 4px 12px 12px;
+    border-bottom: none;
+  }
+
+  .history-panel--screen .history-title {
+    font-size: 16px;
+  }
+
+  .history-panel--screen .history-summary {
+    font-size: 13px;
+  }
+
+  .history-panel--screen .history-hint {
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--app-text-faint);
+  }
+
+  .history-panel--screen .history-back {
+    width: 44px;
+    height: 44px;
+  }
+
+  .history-panel--screen .history-list {
+    padding: 0 8px;
+  }
+
+  /* 指で押せる高さ。字も一覧の行と同じまで上げる */
+  .history-panel--screen .history-row {
+    min-height: 56px;
+    border-radius: 9px;
+    padding: 10px 12px;
+  }
+
+  .history-panel--screen .history-row-line1 {
+    font-size: 15px;
+  }
+
+  .history-panel--screen .history-row-stamp,
+  .history-panel--screen .history-row-delta {
+    font-size: 12px;
+  }
+
+  .history-panel--screen .history-row-line2 {
+    font-size: 12.5px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .history-panel--screen {
+      animation: none;
+    }
+  }
+}

@@ -204,6 +204,11 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   const [historyOpen, setHistoryOpen] = createSignal(false);
   /** 履歴で選んでいる版。開いた瞬間は最新の版。 */
   const [selectedVersionId, setSelectedVersionId] = createSignal<string | null>(null);
+  /**
+   * 携帯で履歴の画面を出しているか。並べる幅が無いので、パネルではなく本文と
+   * 入れ替わる 1 枚の面になる。版を押すと本文へ戻り、比較バーが下に付く。
+   */
+  const [historyScreenOpen, setHistoryScreenOpen] = createSignal(false);
   /** 刻んだばかりの版。履歴のその行だけが跳ねて入る。 */
   const [freshVersionId, setFreshVersionId] = createSignal<string | null>(null);
   /** 本文の読み込みが済んでいるノートの id。`?edit=1` の自動フォーカスが待つ。 */
@@ -420,6 +425,17 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       : [];
   };
 
+  /** 携帯で履歴の画面を出しているか。本文と入れ替わる。 */
+  const historyScreen = (): boolean =>
+    kind() === "codex" && historyOpen() && historyScreenOpen() && !twoPane();
+
+  /**
+   * 比較バーを出すか。携帯で比較モードに居るあいだ。同じ内容の版を選んで
+   * いても出す — 出さないと、履歴へ戻る道も比較をやめる道も無くなる。
+   */
+  const compareBarOpen = (): boolean =>
+    kind() === "codex" && historyOpen() && !historyScreen() && !twoPane();
+
   /**
    * 画面に出ている本文をまるごと入れ替える。エディタは自分の文書を正とするので、
    * ここを通ったら作り直す(`bodyEpoch`)。バラして流すと一瞬だけ違うモードで
@@ -486,6 +502,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       session.drop();
       // 履歴は開いていたノートの持ち物
       setHistoryOpen(false);
+      setHistoryScreenOpen(false);
       setSelectedVersionId(null);
       if (!item) {
         showBody("", "", "", "editor");
@@ -804,6 +821,8 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     if (historyOpen()) {
       return;
     }
+    // 並べる幅が無い端末では、履歴は本文と入れ替わる 1 枚の面になる
+    setHistoryScreenOpen(!twoPane());
     await session.settleWrites();
     // 版は他の端末でも刻まれる。比べる画面を開く瞬間は読み直しに安い。
     // 選ぶ最新の版は読み直した一覧から — 手元の一覧で選ぶと、届いた一覧に
@@ -819,6 +838,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   const closeHistory = (): void => {
     batch(() => {
       setHistoryOpen(false);
+      setHistoryScreenOpen(false);
       setSelectedVersionId(null);
     });
   };
@@ -1289,266 +1309,342 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
         <Show when={selected()} fallback={<div class="detail-empty">{t().notes.noSelection}</div>}>
           {(item) => (
             <>
-              {/* 題・記録・操作をひとまとまりに。本文と同じ段に置くので、
+              {/* 携帯では履歴が本文と入れ替わる。広い窓では本文の右にパネルが
+                  立つだけなので、本文はそのまま残る(下の HistoryPanel) */}
+              <Show when={!historyScreen()}>
+                {/* 題・記録・操作をひとまとまりに。本文と同じ段に置くので、
                   ノートについて知りたいことを離れた場所で探さなくていい */}
-              <div class="detail-head">
-                <div class="detail-title-row">
-                  <button
-                    type="button"
-                    class="icon-button detail-back"
-                    aria-label={t().notes.backToList}
-                    onClick={() => {
-                      void session.settleEdit();
-                      setDetailOpen(false);
-                    }}
-                  >
-                    <Icon name="arrow-left" size={18} />
-                  </button>
-
-                  {/* タイトルは本文先頭の H1 そのもの。ここで打ったものが
-                      `# 見出し` として本文に書き戻る(`note-title.ts`)ので、
-                      エディタとプレビューはタイトル行を持たない */}
-                  <input
-                    type="text"
-                    class="note-title-input"
-                    placeholder={t().notes.titlePlaceholder}
-                    aria-label={t().notes.titlePlaceholder}
-                    value={noteTitle()}
-                    // 読み取り専用のノートは題も動かない。disabled にしないのは
-                    // 読めなくなるから — 選んでコピーはできたままにする。
-                    // 本文が届くまでも動かない(まだ前のノートの題が出ている)
-                    readOnly={readOnly() || !loaded()}
-                    onInput={(e) => editTitle(e.currentTarget.value)}
-                    onChange={() => {
-                      void commitTitle();
-                    }}
-                    onKeyDown={(e) => {
-                      // 変換確定の Enter は IME のもの (#102)
-                      if (e.key === "Enter" && !isImeComposing(e)) {
-                        e.preventDefault();
-                        focusBody();
-                      }
-                    }}
-                  />
-
-                  {/* 履歴だけは畳まない。Codex を開いている人がいちばん押す
-                      もので、ホバーでは開かないパネルの唯一の入口 */}
-                  <Show when={kind() === "codex"}>
+                <div class="detail-head">
+                  <div class="detail-title-row">
                     <button
                       type="button"
-                      class="history-button"
-                      aria-pressed={historyOpen()}
-                      title={t().codex.history}
-                      onClick={toggleHistory}
+                      class="icon-button detail-back"
+                      aria-label={t().notes.backToList}
+                      onClick={() => {
+                        void session.settleEdit();
+                        setDetailOpen(false);
+                      }}
                     >
-                      <Icon name="clock-counter-clockwise" size={13} />
-                      {t().codex.history}
+                      <Icon name="arrow-left" size={18} />
                     </button>
-                  </Show>
 
-                  {/* ノート単位の操作はここ 1 つに畳む。どれも滅多に押さない */}
-                  <NoteMenu
-                    open={shell.popover() === "note-menu"}
-                    onOpenChange={(open) => {
-                      // 開くときは他のポップオーバーを畳む。閉じるときは、同じ
-                      // pointerdown で別のものが開いていることがあるので、自分が
-                      // まだ開いている場合だけ畳む
-                      if (open) {
-                        shell.togglePopover("note-menu");
-                      } else if (shell.popover() === "note-menu") {
-                        shell.closePopovers();
-                      }
-                    }}
-                    kind={kind()}
-                    mapOpen={mapOpen()}
-                    readOnly={readOnly()}
+                    {/* タイトルは本文先頭の H1 そのもの。ここで打ったものが
+                      `# 見出し` として本文に書き戻る(`note-title.ts`)ので、
+                      エディタとプレビューはタイトル行を持たない */}
+                    <input
+                      type="text"
+                      class="note-title-input"
+                      placeholder={t().notes.titlePlaceholder}
+                      aria-label={t().notes.titlePlaceholder}
+                      value={noteTitle()}
+                      // 読み取り専用のノートは題も動かない。disabled にしないのは
+                      // 読めなくなるから — 選んでコピーはできたままにする。
+                      // 本文が届くまでも動かない(まだ前のノートの題が出ている)
+                      readOnly={readOnly() || !loaded()}
+                      onInput={(e) => editTitle(e.currentTarget.value)}
+                      onChange={() => {
+                        void commitTitle();
+                      }}
+                      onKeyDown={(e) => {
+                        // 変換確定の Enter は IME のもの (#102)
+                        if (e.key === "Enter" && !isImeComposing(e)) {
+                          e.preventDefault();
+                          focusBody();
+                        }
+                      }}
+                    />
+
+                    {/* 履歴だけは畳まない。Codex を開いている人がいちばん押す
+                      もので、ホバーでは開かないパネルの唯一の入口 */}
+                    <Show when={kind() === "codex"}>
+                      <button
+                        type="button"
+                        class="history-button"
+                        aria-pressed={historyOpen()}
+                        title={t().codex.history}
+                        onClick={toggleHistory}
+                      >
+                        <Icon name="clock-counter-clockwise" size={13} />
+                        {t().codex.history}
+                      </button>
+                    </Show>
+
+                    {/* ノート単位の操作はここ 1 つに畳む。どれも滅多に押さない */}
+                    <NoteMenu
+                      open={shell.popover() === "note-menu"}
+                      onOpenChange={(open) => {
+                        // 開くときは他のポップオーバーを畳む。閉じるときは、同じ
+                        // pointerdown で別のものが開いていることがあるので、自分が
+                        // まだ開いている場合だけ畳む
+                        if (open) {
+                          shell.togglePopover("note-menu");
+                        } else if (shell.popover() === "note-menu") {
+                          shell.closePopovers();
+                        }
+                      }}
+                      kind={kind()}
+                      mapOpen={mapOpen()}
+                      readOnly={readOnly()}
+                      revertable={revertable()}
+                      onToggleMap={() => {
+                        void toggleMap(item());
+                      }}
+                      onToggleReadOnly={() => {
+                        void toggleReadOnly(item());
+                      }}
+                      onRevert={() => {
+                        void revertEdit(item());
+                      }}
+                      onInfo={() => shell.togglePopover("note-meta")}
+                      onPromote={() => {
+                        void promoteToCodex(item());
+                      }}
+                      onCommit={() => {
+                        void commitVersion(item());
+                      }}
+                      onHistory={toggleHistory}
+                      onDelete={() => {
+                        void remove(item());
+                      }}
+                    />
+                  </div>
+
+                  {/* 作成日時・保存の様子・タグを 1 行で。ファイル名は同期や
+                    ウィジェットが指す ID であって、人に見せるものではない */}
+                  <div class="detail-meta-line">
+                    <span>{noteCreatedLabel(item())}</span>
+                    {/* Codex は育ち具合を常に出す: 最新の版からの距離と、いつから何回刻んだか */}
+                    <Show when={kind() === "codex" && versionStatus()}>
+                      {(status) => (
+                        <>
+                          <span class="detail-meta-sep" aria-hidden="true">
+                            ·
+                          </span>
+                          <span
+                            class="detail-version-status"
+                            classList={{ "detail-meta-tags": status().dirty }}
+                          >
+                            {versionStatusLabel(status())}
+                          </span>
+                          <Show when={cadence()}>
+                            {(text) => (
+                              <>
+                                <span class="detail-meta-sep" aria-hidden="true">
+                                  ·
+                                </span>
+                                <span class="detail-version-cadence">{text()}</span>
+                              </>
+                            )}
+                          </Show>
+                        </>
+                      )}
+                    </Show>
+                    <Show when={saveStatus() !== "idle"}>
+                      <span class="detail-meta-sep" aria-hidden="true">
+                        ·
+                      </span>
+                      <span class="detail-save-status" data-status={saveStatus()}>
+                        <Show when={saveStatus() === "saving"}>
+                          <Icon name="circle-notch" size={11} />
+                        </Show>
+                        <Show when={saveStatus() === "saved"}>
+                          <Icon name="check" size={11} />
+                        </Show>
+                        {saveStatus() === "saving" ? t().common.saving : null}
+                        {saveStatus() === "saved" ? t().common.saved : null}
+                        {saveStatus() === "savedAt" ? t().notes.savedAt(savedAt()) : null}
+                      </span>
+                    </Show>
+                    <Show when={item().tags.length > 0}>
+                      <span class="detail-meta-sep" aria-hidden="true">
+                        ·
+                      </span>
+                      <span class="detail-meta-tags">
+                        {item()
+                          .tags.map((tag) => `#${tag}`)
+                          .join(" ")}
+                      </span>
+                    </Show>
+                    {/* 比較しているあいだは、何と比べていて何行動いたかをここが言う。
+                      行数は既に読んでいる差分から数えるので IPC は増えない。
+                      携帯では同じことを本文の下の比較バーが言う */}
+                    <Show when={twoPane() && historyOpen() && compareLine().length > 0}>
+                      <span class="detail-meta-sep" aria-hidden="true">
+                        ·
+                      </span>
+                      <span class="detail-compare-status">{compareLine().join(" · ")}</span>
+                    </Show>
+                  </div>
+                </div>
+
+                <Popover
+                  open={shell.popover() === "note-meta"}
+                  onClose={() => shell.closePopovers()}
+                  trigger={shell.popoverTrigger}
+                  label={t().notes.info}
+                >
+                  <NoteMetaPopover
+                    filename={item().filename}
                     revertable={revertable()}
-                    onToggleMap={() => {
-                      void toggleMap(item());
-                    }}
-                    onToggleReadOnly={() => {
-                      void toggleReadOnly(item());
-                    }}
                     onRevert={() => {
                       void revertEdit(item());
                     }}
-                    onInfo={() => shell.togglePopover("note-meta")}
-                    onPromote={() => {
-                      void promoteToCodex(item());
+                    onSaved={async () => {
+                      await refetchNotes();
                     }}
-                    onCommit={() => {
-                      void commitVersion(item());
-                    }}
-                    onHistory={toggleHistory}
-                    onDelete={() => {
-                      void remove(item());
-                    }}
+                    onClose={() => shell.closePopovers()}
                   />
-                </div>
+                </Popover>
 
-                {/* 作成日時・保存の様子・タグを 1 行で。ファイル名は同期や
-                    ウィジェットが指す ID であって、人に見せるものではない */}
-                <div class="detail-meta-line">
-                  <span>{noteCreatedLabel(item())}</span>
-                  {/* Codex は育ち具合を常に出す: 最新の版からの距離と、いつから何回刻んだか */}
-                  <Show when={kind() === "codex" && versionStatus()}>
-                    {(status) => (
-                      <>
-                        <span class="detail-meta-sep" aria-hidden="true">
-                          ·
-                        </span>
-                        <span
-                          class="detail-version-status"
-                          classList={{ "detail-meta-tags": status().dirty }}
-                        >
-                          {versionStatusLabel(status())}
-                        </span>
-                        <Show when={cadence()}>
-                          {(text) => (
-                            <>
-                              <span class="detail-meta-sep" aria-hidden="true">
-                                ·
-                              </span>
-                              <span class="detail-version-cadence">{text()}</span>
-                            </>
-                          )}
-                        </Show>
-                      </>
-                    )}
-                  </Show>
-                  <Show when={saveStatus() !== "idle"}>
-                    <span class="detail-meta-sep" aria-hidden="true">
-                      ·
-                    </span>
-                    <span class="detail-save-status" data-status={saveStatus()}>
-                      <Show when={saveStatus() === "saving"}>
-                        <Icon name="circle-notch" size={11} />
-                      </Show>
-                      <Show when={saveStatus() === "saved"}>
-                        <Icon name="check" size={11} />
-                      </Show>
-                      {saveStatus() === "saving" ? t().common.saving : null}
-                      {saveStatus() === "saved" ? t().common.saved : null}
-                      {saveStatus() === "savedAt" ? t().notes.savedAt(savedAt()) : null}
-                    </span>
-                  </Show>
-                  <Show when={item().tags.length > 0}>
-                    <span class="detail-meta-sep" aria-hidden="true">
-                      ·
-                    </span>
-                    <span class="detail-meta-tags">
-                      {item()
-                        .tags.map((tag) => `#${tag}`)
-                        .join(" ")}
-                    </span>
-                  </Show>
-                  {/* 比較しているあいだは、何と比べていて何行動いたかをここが言う。
-                      行数は既に読んでいる差分から数えるので IPC は増えない。
-                      携帯では同じことを本文の下の比較バーが言う */}
-                  <Show when={twoPane() && historyOpen() && compareLine().length > 0}>
-                    <span class="detail-meta-sep" aria-hidden="true">
-                      ·
-                    </span>
-                    <span class="detail-compare-status">{compareLine().join(" · ")}</span>
-                  </Show>
-                </div>
-              </div>
-
-              <Popover
-                open={shell.popover() === "note-meta"}
-                onClose={() => shell.closePopovers()}
-                trigger={shell.popoverTrigger}
-                label={t().notes.info}
-              >
-                <NoteMetaPopover
-                  filename={item().filename}
-                  revertable={revertable()}
-                  onRevert={() => {
-                    void revertEdit(item());
-                  }}
-                  onSaved={async () => {
-                    await refetchNotes();
-                  }}
-                  onClose={() => shell.closePopovers()}
-                />
-              </Popover>
-
-              <div
-                class="detail-panes"
-                classList={{ "detail-panes--map": mapOpen() && !historyOpen() }}
-              >
-                {/* biome-ignore/eslint 対応: ここで拾うのは href の無い
-                    ノートリンクだけ。書く操作はエディタ自身が受ける */}
                 <div
-                  class="detail-body"
-                  data-view={historyOpen() ? "history" : noteView()}
-                  ref={detailBodyRef}
-                  role="presentation"
-                  onClick={onBodyClick}
+                  class="detail-panes"
+                  classList={{ "detail-panes--map": mapOpen() && !historyOpen() }}
                 >
-                  {/* 履歴を開いているあいだ、本文は読み取り専用になり、選んだ版との
+                  {/* biome-ignore/eslint 対応: ここで拾うのは href の無い
+                    ノートリンクだけ。書く操作はエディタ自身が受ける */}
+                  <div
+                    class="detail-body"
+                    data-view={historyOpen() ? "history" : noteView()}
+                    ref={detailBodyRef}
+                    role="presentation"
+                    onClick={onBodyClick}
+                  >
+                    {/* 履歴を開いているあいだ、本文は読み取り専用になり、選んだ版との
                       差が欄外の印になる。エディタは畳む — 開いたまま下に残すと、
                       戻した本文と古い文書が同時に在ることになる */}
-                  <Show when={historyOpen()}>
-                    <MarkdownPreview
-                      source={marked()?.source ?? noteBody()}
-                      marks={marked()?.marks ?? []}
-                      noteTitles={noteTitles()}
-                      glyphs={glyphs()}
-                      exportStem={item().filename.replace(/\.md$/u, "")}
-                      onError={(message) => shell.showToast(message)}
-                    />
-                  </Show>
-                  <Show when={!historyOpen()}>
-                    <Show
-                      when={!readOnly()}
-                      fallback={
-                        <>
-                          <MarkdownPreview
-                            source={noteBody()}
-                            noteTitles={noteTitles()}
-                            glyphs={glyphs()}
-                            exportStem={item().filename.replace(/\.md$/u, "")}
-                            onError={(message) => shell.showToast(message)}
-                          />
-                          <Backlinks hits={backlinks() ?? []} onOpen={openBacklink} />
-                        </>
-                      }
-                    >
-                      {/* エディタは自分の文書を正とするので、本文が入れ替わったら
+                    <Show when={historyOpen()}>
+                      <MarkdownPreview
+                        source={marked()?.source ?? noteBody()}
+                        marks={marked()?.marks ?? []}
+                        noteTitles={noteTitles()}
+                        glyphs={glyphs()}
+                        exportStem={item().filename.replace(/\.md$/u, "")}
+                        onError={(message) => shell.showToast(message)}
+                      />
+                    </Show>
+                    <Show when={!historyOpen()}>
+                      <Show
+                        when={!readOnly()}
+                        fallback={
+                          <>
+                            <MarkdownPreview
+                              source={noteBody()}
+                              noteTitles={noteTitles()}
+                              glyphs={glyphs()}
+                              exportStem={item().filename.replace(/\.md$/u, "")}
+                              onError={(message) => shell.showToast(message)}
+                            />
+                            <Backlinks hits={backlinks() ?? []} onOpen={openBacklink} />
+                          </>
+                        }
+                      >
+                        {/* エディタは自分の文書を正とするので、本文が入れ替わったら
                         作り直す。差し込みはカーソルと IME ごと壊す。
                         本文が届くまでは立てない — 前のノートの本文で立てた
                         エディタに打った字は、隣のノートへ書かれる */}
-                      <Show when={bodyVisible() && loaded() && bodyEpoch()} keyed>
-                        <MilkdownEditor
-                          placeholder={t().notes.bodyPlaceholder}
-                          noteLinks={linkTargets}
-                          glyphs={glyphs}
-                          defaultValue={noteBody()}
-                          onChange={(markdown) => {
-                            if (!loaded()) {
-                              return;
-                            }
-                            session.ensure();
-                            setNoteBody(markdown);
-                            session.schedule();
-                          }}
-                          onEditorReady={setMarkdownEditor}
-                        />
+                        <Show when={bodyVisible() && loaded() && bodyEpoch()} keyed>
+                          <MilkdownEditor
+                            placeholder={t().notes.bodyPlaceholder}
+                            noteLinks={linkTargets}
+                            glyphs={glyphs}
+                            defaultValue={noteBody()}
+                            onChange={(markdown) => {
+                              if (!loaded()) {
+                                return;
+                              }
+                              session.ensure();
+                              setNoteBody(markdown);
+                              session.schedule();
+                            }}
+                            onEditorReady={setMarkdownEditor}
+                          />
+                        </Show>
+                        <Backlinks hits={backlinks() ?? []} onOpen={openBacklink} />
                       </Show>
-                      <Backlinks hits={backlinks() ?? []} onOpen={openBacklink} />
                     </Show>
+                  </div>
+
+                  {/* マップは本文を置き換えず、隣に並べる。1100px を切ると
+                    並べる幅が無いので、そこだけ本文と入れ替わる(CSS 側) */}
+                  {/* 本文が丸ごと入れ替わったとき(`bodyEpoch`)は待たずに描き直す。
+                    待たせると前のノートの図が 1 拍残る */}
+                  <Show when={mapOpen() && !historyOpen() && bodyEpoch()} keyed>
+                    <NoteMap source={fullBody} />
                   </Show>
                 </div>
 
-                {/* マップは本文を置き換えず、隣に並べる。1100px を切ると
-                    並べる幅が無いので、そこだけ本文と入れ替わる(CSS 側) */}
-                {/* 本文が丸ごと入れ替わったとき(`bodyEpoch`)は待たずに描き直す。
-                    待たせると前のノートの図が 1 拍残る */}
-                <Show when={mapOpen() && !historyOpen() && bodyEpoch()} keyed>
-                  <NoteMap source={fullBody} />
+                {/* 比較モードの帯。何と比べているかと、そこから出る 3 つの道
+                  (履歴へ戻る・その版に戻す・比較をやめる)。携帯だけ */}
+                <Show when={compareBarOpen()}>
+                  <div class="compare-bar">
+                    <span class="compare-bar-text">
+                      <span class="compare-bar-title">
+                        {selectedRow() ? t().codex.comparing(selectedRow()?.number ?? 0) : ""}
+                      </span>
+                      <span class="compare-bar-detail">
+                        {[compareDetail(), t().notes.readOnly].filter(Boolean).join(" · ")}
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      class="button-secondary"
+                      onClick={() => setHistoryScreenOpen(true)}
+                    >
+                      {t().codex.history}
+                    </button>
+                    <button
+                      type="button"
+                      class="button-secondary"
+                      disabled={readOnly() || selectedVersionId() === null}
+                      onClick={() => {
+                        const id = selectedVersionId();
+                        if (id !== null) {
+                          void restoreVersion(item(), id);
+                        }
+                      }}
+                    >
+                      <Icon name="arrow-counter-clockwise" size={13} />
+                      {t().codex.restoreShort}
+                    </button>
+                    <button
+                      type="button"
+                      class="icon-button compare-bar-close"
+                      aria-label={t().codex.close}
+                      onClick={closeHistory}
+                    >
+                      <Icon name="x" size={16} />
+                    </button>
+                  </div>
                 </Show>
-              </div>
+              </Show>
+
+              {/* 携帯の履歴は専用の面。版を押すと本文へ戻り、比較バーが付く */}
+              <Show when={historyScreen()}>
+                <HistoryPanel
+                  screen
+                  open
+                  rows={versionRows()}
+                  summary={historySummary()}
+                  dirty={versionStatus()?.dirty ?? false}
+                  bytesDelta={versionStatus()?.bytes_delta ?? 0}
+                  selectedId={selectedVersionId()}
+                  readOnly={readOnly()}
+                  freshId={freshVersionId()}
+                  onClose={() => setHistoryScreenOpen(false)}
+                  onSelect={(id) => {
+                    batch(() => {
+                      setSelectedVersionId(id);
+                      setHistoryScreenOpen(false);
+                    });
+                  }}
+                  onRestore={(id) => {
+                    void restoreVersion(item(), id);
+                  }}
+                  onCommit={() => {
+                    void commitVersion(item());
+                  }}
+                />
+              </Show>
 
               {/* 広い窓では本文の右に立つ 320px。畳んでいても在るので、
                   開け閉めは 220ms のずれとして見える */}

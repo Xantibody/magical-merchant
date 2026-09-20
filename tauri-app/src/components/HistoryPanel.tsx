@@ -20,6 +20,11 @@ interface HistoryPanelProps {
    * 畳むところまで見えるのは、開いた場所に戻ることが分かるため。
    */
   open: boolean;
+  /**
+   * 携帯の専用画面として出しているか。パネルではなく面になり、戻すは
+   * 本文の下の比較バーが持つ。
+   */
+  screen?: boolean;
   /** 履歴で選んでいる版。 */
   selectedId: string | null;
   /** 読み取り専用のノートには戻せない。 */
@@ -48,7 +53,7 @@ function stamp(row: VersionRow): string {
 /**
  * 行の 2 行目。いちばん古い版は「最初の版 · 2.1 KB」、他は 1 つ古い版との
  * バイト差。行数は出さない — 版ごとに本文 2 本を読む値段に対して、開くたびに
- * 払うだけの中身が無い(比較中の行数はメタ行が言う)。
+ * 払うだけの中身が無い(比較中の行数は比較バーとメタ行が言う)。
  */
 function delta(row: VersionRow): string {
   return [
@@ -78,7 +83,8 @@ function NoVersions(props: { onCommit: () => void }): JSX.Element {
 }
 
 /**
- * 版の一覧。本文の右に立つ 320px の 3 段 — 見出し・下書きと版の行・
+ * 版の一覧。広い窓では本文の右に立つ 320px のパネル、携帯では本文と
+ * 入れ替わる専用の画面。どちらも中身は同じ 3 段 — 見出し・下書きと版の行・
  * 足元の案内。
  *
  * ホバーでは開かない。履歴ボタン・Esc・× だけが開け閉めする — 本文を書いて
@@ -114,22 +120,45 @@ export default function HistoryPanel(props: HistoryPanelProps): JSX.Element {
   return (
     <aside
       class="history-panel"
-      classList={{ "history-panel--open": props.open }}
+      classList={{
+        "history-panel--open": props.open,
+        "history-panel--screen": props.screen,
+      }}
       aria-label={t().codex.history}
       aria-hidden={!props.open}
     >
       <div class="history-head">
-        <span class="history-title">{t().codex.history}</span>
+        {/* 携帯では面ごと入れ替わるので、戻る先は本文。広い窓では × で畳む */}
+        <Show when={props.screen} fallback={<span class="history-title">{t().codex.history}</span>}>
+          <button
+            type="button"
+            class="icon-button history-back"
+            aria-label={t().notes.backToList}
+            onClick={() => props.onClose()}
+          >
+            <Icon name="arrow-left" size={18} />
+          </button>
+          <span class="history-title">{t().codex.history}</span>
+        </Show>
         <span class="history-summary">{props.summary}</span>
-        <button
-          type="button"
-          class="icon-button history-close"
-          aria-label={t().codex.close}
-          title={t().codex.close}
-          onClick={() => props.onClose()}
+        {/* 開け閉ての決まりは、開いているものの中に書く。携帯は面ごと
+            入れ替わるので、閉じ方ではなく押し方だけを言う */}
+        <Show
+          when={props.screen}
+          fallback={
+            <button
+              type="button"
+              class="icon-button history-close"
+              aria-label={t().codex.close}
+              title={t().codex.close}
+              onClick={() => props.onClose()}
+            >
+              <Icon name="x" size={14} />
+            </button>
+          }
         >
-          <Icon name="x" size={14} />
-        </button>
+          <span class="history-hint">{t().codex.historyHint}</span>
+        </Show>
       </div>
 
       <Show when={props.rows.length > 0} fallback={<NoVersions onCommit={props.onCommit} />}>
@@ -184,8 +213,8 @@ export default function HistoryPanel(props: HistoryPanelProps): JSX.Element {
                   </span>
                 </button>
                 {/* 戻すのは選んだ 1 つに対する操作。行の下に置いて、どの版に
-                    戻るのかを取り違えられないようにする */}
-                <Show when={row.version.id === props.selectedId}>
+                    戻るのかを取り違えられないようにする。携帯では比較バーが持つ */}
+                <Show when={!props.screen && row.version.id === props.selectedId}>
                   <div class="history-restore">
                     <button
                       type="button"
@@ -204,7 +233,9 @@ export default function HistoryPanel(props: HistoryPanelProps): JSX.Element {
         </div>
       </Show>
 
-      <div class="history-foot">{t().codex.historyFoot}</div>
+      <Show when={!props.screen}>
+        <div class="history-foot">{t().codex.historyFoot}</div>
+      </Show>
     </aside>
   );
 }

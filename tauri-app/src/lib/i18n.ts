@@ -243,8 +243,12 @@ const ja = {
     firstVersion: (bytes: number) => `最初の版 · ${sizeOf(bytes)}`,
     /** 選んだ版の下に出る「版 3 に戻す」。 */
     restoreN: (n: number) => `版 ${n} に戻す`,
+    /** 比較バーの中。狭いので版の番号は上の行が言う。 */
+    restoreShort: "戻す",
     /** 履歴パネルの足元。 */
     historyFoot: "版を押すと本文で比べる · Esc で閉じる",
+    /** 履歴の画面(携帯)の案内。閉じ方はヘッダの ← が言う。 */
+    historyHint: "版を押すと本文で比べる",
     /** 比較モードの名乗り。比較バーとボトムバーが出す。 */
     comparing: (n: number) => `版 ${n} と比較中`,
     /** 「3 行追加 · 1 行削除」。選んだ版と下書きのあいだで動いた行の数。 */
@@ -682,7 +686,9 @@ const en: Messages = {
     sameAsVersion: (n: number) => `same as v${n}`,
     firstVersion: (bytes: number) => `first version · ${sizeOf(bytes)}`,
     restoreN: (n: number) => `Restore v${n}`,
+    restoreShort: "Restore",
     historyFoot: "Press a version to compare it in the body · Esc closes",
+    historyHint: "Press a version to compare it in the body",
     comparing: (n: number) => `Comparing with v${n}`,
     lineDelta: (added: number, removed: number): string =>
       [
