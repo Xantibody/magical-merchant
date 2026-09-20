@@ -40,8 +40,8 @@
   text-align: start;
   cursor: pointer;
   transition:
-    background 0.15s,
-    color 0.15s;
+    background 150ms var(--app-ease),
+    color 150ms var(--app-ease);
 }
 
 .settings-nav-row:hover {
@@ -97,7 +97,7 @@
 
 .settings-page-inner {
   max-width: 680px;
-  animation: mm-rise 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: mm-rise 180ms var(--app-ease);
 }
 
 .settings-page-head {
@@ -205,8 +205,8 @@
   font-size: 12.5px;
   cursor: pointer;
   transition:
-    background 0.15s,
-    color 0.15s;
+    background 150ms var(--app-ease),
+    color 150ms var(--app-ease);
 }
 
 .settings-seg-item:hover {
@@ -228,7 +228,7 @@
   border-radius: 10px;
   background: var(--app-border);
   cursor: pointer;
-  transition: background 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: background 180ms var(--app-ease);
 }
 
 .settings-switch[data-checked] {
@@ -245,8 +245,8 @@
   border-radius: 50%;
   background: white;
   transition:
-    transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1),
-    background 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+    transform 180ms var(--app-ease),
+    background 180ms var(--app-ease);
 }
 
 .settings-switch-thumb[data-checked] {
@@ -415,19 +415,6 @@
   margin: 0;
   font-size: 12px;
   color: var(--app-text-faint);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .settings-page-inner {
-    animation: none;
-  }
-
-  .settings-nav-row,
-  .settings-seg-item,
-  .settings-switch,
-  .settings-switch-thumb {
-    transition: none;
-  }
 }
 
 @media (max-width: 767px) {
