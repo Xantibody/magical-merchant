@@ -106,6 +106,14 @@
           typescript
           just
         ];
+        # Source comments: Vale (English style + no Japanese) and typos (spelling)
+        # read .vale.ini / typos.toml at the repo root; go runs the script that
+        # narrows Vale to the lines a change added. See `just comments`
+        commentLint = with pkgs; [
+          vale
+          typos
+          go
+        ];
 
         # `tauri android init` は rustup 前提。Nix がターゲットを持っているので no-op にする
         rustupShimHook = ''
@@ -173,6 +181,7 @@
                 pkgs.agent-browser
               ]
               ++ jsToolchain
+              ++ commentLint
               ++ linuxTauriDeps;
             shellHook = rustupShimHook;
           }
@@ -203,6 +212,11 @@
         # wrangler は workers/package.json の devDependency なので nix 版は不要
         devShells.workers = pkgs.mkShell {
           buildInputs = jsToolchain;
+        };
+
+        # CI's comment lint: two static binaries, no toolchain
+        devShells.comments = pkgs.mkShell {
+          buildInputs = commentLint ++ [ pkgs.just ];
         };
       }
     )

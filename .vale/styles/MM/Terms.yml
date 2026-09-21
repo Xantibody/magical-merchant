@@ -1,0 +1,12 @@
+# Scrawl / Note / Codex are proper nouns (CLAUDE.md). Backticked code such as
+# `data/scrawl/` or the `scrawl` subcommand is exempt through the md format.
+extends: substitution
+message: "Use '%s' instead of '%s'"
+level: error
+ignorecase: false
+swap:
+  scrawl: Scrawl
+  codex: Codex
+  "(?i)timeline": Scrawl
+  "(?i)front matter": frontmatter
+  "(?i)mind map": mindmap
