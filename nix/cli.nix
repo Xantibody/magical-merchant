@@ -31,6 +31,7 @@ rustPlatform.buildRustPackage {
       ../tauri-app/src-tauri/Cargo.toml
       ../tauri-app/src-tauri/src
       ../tauri-app/src-tauri/build.rs
+      ../xtask
     ];
   };
 

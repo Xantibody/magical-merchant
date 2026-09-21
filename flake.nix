@@ -139,6 +139,11 @@
 
         treefmtEval = treefmt-nix.lib.evalModule pkgs {
           projectRootFile = "flake.nix";
+          # fixtures/ はアプリが書いたままの姿でなければ意味がない見本データで、
+          # ソースではない。整形器に通すと frontmatter の直後に空行が入り、
+          # 「本文の 1 行目がタイトル」という約束が崩れる
+          # (core/tests/fixtures.rs の every_note_body_opens_with_its_title)。
+          settings.global.excludes = [ "fixtures/**" ];
           programs.nixfmt.enable = true;
           programs.rustfmt.enable = true;
           programs.taplo.enable = true;

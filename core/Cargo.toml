@@ -64,6 +64,9 @@ url = { version = "2", optional = true }
 battery = { version = "0.7", optional = true }
 
 [dev-dependencies]
+# fixtures/ の木を temp へ丸ごと写すため(`copy_from`)。tempfile だけでは
+# 再帰コピーを自分で書くことになる
+assert_fs = "1"
 criterion = { version = "0.8.2", default-features = false, features = [
   "cargo_bench_support",
 ] }

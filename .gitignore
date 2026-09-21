@@ -68,3 +68,7 @@ __screenshots__/
 
 # Wrangler / miniflare local state. It mirrors the R2 bucket, i.e. real notes
 .wrangler/
+
+# `just sandbox` writes here: a copy of fixtures/, whatever you then type into
+# it, and your own templates if you asked for them. Never the other way round
+/.sandbox/
