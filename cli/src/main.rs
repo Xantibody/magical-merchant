@@ -94,8 +94,8 @@ enum Command {
         #[arg(long, env = "MAGICAL_MERCHANT_LOCALE", default_value = "en")]
         locale: String,
 
-        /// Also offer the write tools (`create_note`, `update_note`, `restore_note`,
-        /// ...). Every overwrite saves a copy first under `<data-dir>/history`.
+        /// Also offer the write tools (`create_note`, `update_note`, `restore_note`
+        /// and the rest). Every overwrite saves a copy first under `<data-dir>/history`.
         #[arg(long, env = "MAGICAL_MERCHANT_ALLOW_WRITE")]
         allow_write: bool,
     },
@@ -320,7 +320,7 @@ mod tests {
                 "--tag",
                 "work",
                 "--template",
-                "jounal",
+                "journal",
             ])
             .is_ok()
         );

@@ -5,7 +5,7 @@
 //! list reads every note. Folding them into one call would make opening the
 //! sheet — the thing that has to feel instant — wait on the whole notes tree.
 //!
-//! Kotlin never parses a scrawl line. The `- [HH:MM:SS] text {json}` shape is
+//! Kotlin never parses a Scrawl line. The `- [HH:MM:SS] text {json}` shape is
 //! taken apart here with the same core helpers the app uses, so a change to the
 //! format cannot leave the widget rendering a stray JSON tail.
 
