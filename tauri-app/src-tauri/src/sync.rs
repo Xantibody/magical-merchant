@@ -10,7 +10,7 @@ use magical_merchant_core::sync::client::HttpClient;
 use magical_merchant_core::sync::config::SyncConfig;
 use magical_merchant_core::sync::{SyncError, SyncResult, engine, token};
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, State};
 
 const EVENT_SYNC_COMPLETE: &str = "sync-complete";
 const EVENT_SYNC_ERROR: &str = "sync-error";
@@ -130,10 +130,7 @@ pub(crate) fn sync_status(state: State<'_, AppSyncState>) -> SyncStatusInfo {
 /// 設定とトークンを解いてクライアントを組み、core のエンジンに渡す。
 /// `AppHandle` を使うのは base dir の解決と TLS の分岐だけ。
 async fn do_sync(handle: &AppHandle) -> Result<SyncResult, SyncError> {
-    let base_dir = handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| SyncError::other(e.to_string()))?;
+    let base_dir = crate::app_base_dir(handle).map_err(SyncError::other)?;
     // 走査より前の修復はエンジンがロックの内側でやる。タイムラインだけ見て
     // 同期を押した(=一覧の `repair_once` を通っていない)場合もそこで直る
     let config = SyncConfig::load(&base_dir)?.unwrap_or_default();
