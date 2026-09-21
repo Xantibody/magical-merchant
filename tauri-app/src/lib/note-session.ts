@@ -21,7 +21,7 @@ import { beginEditSession, recordSaved, shouldSave, tryWriteBackup } from "./edi
 import type { BackupStore, EditSession } from "./edit-backup";
 import { isStaleSave } from "./commands";
 import { t } from "./i18n";
-import { refusalToast, refusedForGood } from "./save-refusal";
+import { refusalToast } from "./save-refusal";
 import type { RefusedScreen } from "./save-refusal";
 import { splitTitle } from "./note-title";
 import type { NoteContent, NoteView } from "./note-view";
@@ -146,20 +146,24 @@ export function createNoteSession(deps: NoteSessionDeps): NoteSession {
    */
   const revisions = new Map<string, string>();
   /**
-   * 走っている自動保存のタイマー。「まだディスクに無い本文がある」の合図で、
-   * 読み直しを抑える判断がこれを読む。
+   * Debounce only. An expired timer does not mean the write succeeded.
    */
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
+  let timerFile: string | undefined;
+  let draft: PendingSave | undefined;
   /** 保存は直列に流す。同じノートへの 2 本が同時に飛ぶと後の勝ちが決まらない。 */
   let saveChain: Promise<void> = Promise.resolve();
   /**
-   * 保存の世代。外からの書き換えに譲って読み直すたびに 1 つ進める。
+   * 保存の世代。外からの書き換えに譲って読み直すたびに、その Note だけ進める。
    * 譲るより前に `saveChain` に並んだ写しは、読み直した版を知らないまま
    * 順番が来る。そのまま書くと、いま画面に出ている相手の本文を古い draft で
    * 潰す — 読み直しで `revisions` が新しくなっているので core も止められない。
    * `session.lastSavedBody` を合わせるだけでは「同じ本文の写し」しか止まらない。
    */
-  let saveGeneration = 0;
+  const saveGenerations = new Map<string, number>();
+  const generationOf = (filename: string): number => saveGenerations.get(filename) ?? 0;
+  let readGeneration = 0;
+  let editGeneration = 0;
   /**
    * 一覧の行に出る題がディスクと食い違っているか。保存が着地するたびに立て、
    * 読み直したら下ろす。「待っている保存があるか」で代用すると、自動保存が
@@ -167,13 +171,20 @@ export function createNoteSession(deps: NoteSessionDeps): NoteSession {
    */
   let listStale = false;
 
-  const isTyping = (): boolean => Boolean(saveTimer) || deps.bodyHasFocus();
+  const isTyping = (): boolean =>
+    Boolean(saveTimer) ||
+    deps.bodyHasFocus() ||
+    (draft !== undefined &&
+      draft.item.filename === deps.selected()?.filename &&
+      draft.bodyEpoch === deps.bodyEpoch() &&
+      shouldSave(draft.session, deps.body()));
 
   const cancelPending = (): void => {
     if (saveTimer) {
       clearTimeout(saveTimer);
       saveTimer = undefined;
     }
+    timerFile = undefined;
   };
 
   const drop = (): void => {
@@ -181,6 +192,8 @@ export function createNoteSession(deps: NoteSessionDeps): NoteSession {
   };
 
   const reload = async (item: SaveTarget, force = false): Promise<boolean> => {
+    const reading = ++readGeneration;
+    const editing = editGeneration;
     try {
       const content = await deps.read(item.filename);
       // 一覧を素早くたどると、遅い読みが速い読みを追い越して届く。
@@ -189,19 +202,26 @@ export function createNoteSession(deps: NoteSessionDeps): NoteSession {
       // 応答を待つあいだにタップして書き始められる。
       // revision まで見送るのは、画面に出していない版で保存に行くと、
       // 読んでいない相手の本文の上に書けてしまうから
-      if (deps.selected()?.id !== item.id || (!force && isTyping())) {
+      if (
+        reading !== readGeneration ||
+        editing !== editGeneration ||
+        deps.selected()?.id !== item.id ||
+        (!force && isTyping())
+      ) {
         return false;
       }
       revisions.set(item.filename, content.revision);
       // 本文とモードは対で出す。バラすと一瞬だけ違うモードで描かれる
       const titled = splitTitle(content.body);
       deps.showBody(item.id, titled.title, titled.body, content.view);
+      drop();
+      draft = undefined;
       return true;
     } catch {
       // 読めなかったことを本文の入れ替えにしない。空のエディタを立てると
       // 「空のノート」に見え、そこへ打った数文字がノート全体になる。
       // `loadedId` を進めないので、本文も題も書ける状態にならない
-      if (deps.selected()?.id === item.id && (force || !isTyping())) {
+      if (reading === readGeneration && deps.selected()?.id === item.id && (force || !isTyping())) {
         deps.showToast(t().notes.loadFailed);
       }
       return false;
@@ -229,7 +249,7 @@ export function createNoteSession(deps: NoteSessionDeps): NoteSession {
     item,
     body: deps.body(),
     session,
-    generation: saveGeneration,
+    generation: generationOf(item.filename),
     bodyEpoch: deps.bodyEpoch(),
   });
 
@@ -293,11 +313,13 @@ export function createNoteSession(deps: NoteSessionDeps): NoteSession {
     // 「戻す」で呼び出せると言う前に、控えが実際に残ったかを見る。
     // 満杯・無効の localStorage では残らず、そこで約束すると人は信じて閉じる
     const kept = tryWriteBackup(deps.store, pending.item.filename, typedBody(pending));
-    saveGeneration += 1;
-    cancelPending();
+    saveGenerations.set(pending.item.filename, generationOf(pending.item.filename) + 1);
+    if (timerFile === pending.item.filename) {
+      cancelPending();
+    }
     let reloaded = false;
-    if (deps.selected()?.id === pending.item.id) {
-      drop();
+    // A failed backup leaves the editor as the only copy of these keystrokes.
+    if (kept && deps.selected()?.id === pending.item.id && deps.bodyEpoch() === pending.bodyEpoch) {
       reloaded = await reload(pending.item, true);
     }
     await deps.refreshList();
@@ -313,7 +335,7 @@ export function createNoteSession(deps: NoteSessionDeps): NoteSession {
       // 読み直しをまたいだ写しも書かない(世代が置いていかれている)
       if (
         !pending ||
-        pending.generation !== saveGeneration ||
+        pending.generation !== generationOf(pending.item.filename) ||
         !shouldSave(pending.session, pending.body)
       ) {
         return;
@@ -349,14 +371,9 @@ export function createNoteSession(deps: NoteSessionDeps): NoteSession {
         }
         if (isStaleSave(error)) {
           await yieldToOutsideEdit(pending, error);
-        } else if (refusedForGood(error)) {
-          // どれも読み直しでは直らない。壊れた記録は書き直しても同じ理由で
-          // 断られ、消えたノートは core が作り直さず、文字として読めない
-          // ファイルは読む段で断られる。次の打鍵にも望みが無いので、打った字は
-          // ここで退避して、黙って消えないようにする。
-          // ディスクへは既に書けていないので、退避が残ったかまで確かめる —
-          // 残らなかったのに「戻す」で呼び出せると言うと、人はそれを信じて
-          // 閉じ、画面にしか無い唯一の写しごと失う
+        } else {
+          // Even a transient I/O failure may be followed by navigation instead
+          // of another keystroke. Keep the draft before the screen can leave.
           const kept = tryWriteBackup(deps.store, pending.item.filename, typedBody(pending));
           // ここは読み直しを走らせない。画面にあるのは打鍵の続きか、別のノート
           deps.showToast(
@@ -369,13 +386,17 @@ export function createNoteSession(deps: NoteSessionDeps): NoteSession {
   };
 
   const schedule = (): void => {
+    editGeneration += 1;
     // 打鍵ごとに取り直すので、実際に走るのは最後の打鍵の写し
     const pending = snapshot();
+    draft = pending;
     cancelPending();
+    timerFile = pending?.item.filename;
     saveTimer = setTimeout(() => {
       // 起きたタイマーは終わったタイマー。掃除しないと「保存待ちがある」が
       // 立ったままになり、フォーカス復帰の読み直しが二度と通らない
       saveTimer = undefined;
+      timerFile = undefined;
       void flush(pending);
     }, SAVE_DEBOUNCE_MS);
   };

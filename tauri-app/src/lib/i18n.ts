@@ -166,6 +166,8 @@ const ja = {
       "この端末に控えた本文を画面に出しました。この Note のディスクには書けないので、別の場所へ写してください",
     saveNotKept:
       "保存できず、この端末にも控えを残せませんでした。閉じると入力した本文は失われます。別の場所へ写してください",
+    saveFailedKept: (title: string) =>
+      `「${title}」を保存できませんでした。入力した本文はこの端末に控えました。保存が復旧してから、開き直して「戻す」で取り出してください`,
     /**
      * Stale で控えも残せなかったとき。画面の本文はディスクのぶんに入れ替わって
      * いるので、「画面にあるうちに写して」と言っても写す相手がもう無い。
@@ -673,6 +675,8 @@ const en: Messages = {
       "The copy kept on this device is back on screen. It cannot be written to this Note, so copy it somewhere else",
     saveNotKept:
       "It could not be saved, and no copy could be kept on this device either. Closing this loses your text — copy it somewhere else",
+    saveFailedKept: (title: string) =>
+      `"${title}" could not be saved. Your text is kept on this device. Once saving works again, reopen the Note and use Revert to retrieve it`,
     staleNotKept:
       "It was changed elsewhere, so it was not saved, and no copy could be kept on this device either. Your text is gone",
     editedElsewhereAway: (title: string) =>
