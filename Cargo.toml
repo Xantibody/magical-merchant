@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
-members = ["core", "cli", "tauri-app/src-tauri"]
+# xtask は配るものではない。誰の依存でもなく、nix は `-p` で名指しして建てる
+members = ["core", "cli", "tauri-app/src-tauri", "xtask"]
 
 [workspace.package]
 license = "MIT"

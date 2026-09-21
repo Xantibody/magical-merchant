@@ -1,0 +1,19 @@
+[package]
+name = "xtask"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Repository chores that need more than a shell line"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+# 端末ごとのデータの置き場。CLI が同じクレートで同じ答えを出している
+dirs = "6"
+# ディレクトリの再帰コピー。自分で書くと、隠しファイルと入れ子の扱いを
+# 間違えたときに気づけるのが「見本が足りない」という形になる
+fs_extra = "1"
+serde_json = "1"
+
+[lints]
+workspace = true

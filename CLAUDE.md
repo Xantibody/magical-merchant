@@ -144,6 +144,17 @@ ready to record the moment it opens (widgets exist for exactly this).
   (`BROWSER_MOCK=1`); use it for layout/CLS/e2e-style verification. It passes
   no arguments through, so a fixed port means calling
   `pnpm run dev:browser --port N --strictPort` from `tauri-app/` instead
+- `just sandbox` — the real app over `.sandbox/`, a copy of `fixtures/`. Use it
+  for anything that has to be tried on real data without touching your own
+  notes; `sandbox-seed` re-copies, `sandbox-seed-mine` adds your own templates,
+  `sandbox-reset` throws the box away. The recipes are one line each because
+  the work is in `cargo xtask sandbox …` — where this machine's data directory
+  and the app identifier already have answers, in Rust. The app honours
+  `MAGICAL_MERCHANT_DATA_DIR` in debug builds only (`app_base_dir`), and the box
+  carries no sync config, so nothing written there can reach R2
+- `fixtures/` is committed, English and immutable — one of every surface, read
+  through the core by `core/tests/fixtures.rs` on every run, so a format change
+  cannot quietly leave it behind. Never copy personal notes into it
 - Formatting is `nix fmt` (treefmt); CI fails on unformatted files
 
 ## Skills (read before touching the area)

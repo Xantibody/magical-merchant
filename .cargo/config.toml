@@ -1,0 +1,4 @@
+# cargo-xtask の作法。`cargo xtask <雑用>` で、シェルに書けない雑用を
+# ワークスペースの中の Rust として呼ぶ
+[alias]
+xtask = "run --quiet --package xtask --"

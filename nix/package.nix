@@ -26,9 +26,10 @@ stdenv.mkDerivation (finalAttrs: {
       ../Cargo.toml
       ../Cargo.lock
       ../core
-      # cli included for workspace resolution only
+      # cli and xtask included for workspace resolution only
       ../cli/Cargo.toml
       ../cli/src
+      ../xtask
       ../tauri-app/src-tauri
       ../tauri-app/src
       ../tauri-app/package.json
