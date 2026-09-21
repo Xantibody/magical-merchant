@@ -1,5 +1,6 @@
 import { createSignal, Show, onCleanup, onMount } from "solid-js";
 import TableMenu from "./TableMenu";
+import { tableMenuPlugin } from "../lib/table-menu-plugin";
 import { Editor, rootCtx, defaultValueCtx, editorViewCtx } from "@milkdown/kit/core";
 import { Selection, TextSelection } from "@milkdown/kit/prose/state";
 import { commonmark } from "@milkdown/kit/preset/commonmark";
@@ -189,6 +190,7 @@ export default function MilkdownEditor(props: MilkdownEditorProps): JSX.Element 
       // 出る今、ここに無いと開いた瞬間からパイプの段落に崩れる。列幅リサイズ
       // (columnResizingPlugin)は gfm に含まれず、Markdown にも無いので入れない
       .use(gfm)
+      .use(tableMenuPlugin)
       .use(listener)
       .use(highlight)
       .use(cursor)

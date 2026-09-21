@@ -2,7 +2,6 @@ import { createEffect, createSignal, onCleanup, onMount, Show } from "solid-js";
 import type { JSX } from "solid-js";
 import { commandsCtx, editorViewCtx } from "@milkdown/kit/core";
 import type { Editor, CmdKey } from "@milkdown/kit/core";
-import { listenerCtx } from "@milkdown/kit/plugin/listener";
 import {
   insertTableCommand,
   addRowBeforeCommand,
@@ -16,6 +15,7 @@ import { deleteColumn, deleteTable, isInTable, selectedRect } from "@milkdown/ki
 import { closeHistory, undo, undoDepth } from "@milkdown/kit/prose/history";
 import type { Command } from "@milkdown/kit/prose/state";
 import { removeTableRow } from "../lib/table-commands";
+import { tableMenuKey, TABLE_SELECTION_UPDATED } from "../lib/table-menu-plugin";
 import { t } from "../lib/i18n";
 import Icon from "./Icon";
 import Popover from "./Popover";
@@ -28,8 +28,72 @@ export default function TableMenu(props: { editor: Editor }): JSX.Element {
   const [canRemoveRow, setCanRemoveRow] = createSignal(false);
   const [canAddBefore, setCanAddBefore] = createSignal(false);
   const [canUndo, setCanUndo] = createSignal(false);
+  const [position, setPosition] = createSignal<JSX.CSSProperties>({});
   let trigger: HTMLButtonElement | undefined;
+  let menu: HTMLDivElement | undefined;
   let live = true;
+  let frame = 0;
+  const place = () => {
+    if (!live || !trigger) {
+      return;
+    }
+    const view = props.editor.action((ctx) => ctx.get(editorViewCtx));
+    const viewport = window.visualViewport;
+    const left = viewport?.offsetLeft ?? 0;
+    const top = viewport?.offsetTop ?? 0;
+    const right = left + (viewport?.width ?? window.innerWidth);
+    const bottom = top + (viewport?.height ?? window.innerHeight);
+    const size = trigger.offsetWidth;
+    let anchor = trigger.getBoundingClientRect();
+    let x = anchor.left;
+    let y = anchor.top;
+    let visible = true;
+    if (isInTable(view.state)) {
+      const rect = selectedRect(view.state);
+      const cell = view.nodeDOM(
+        rect.tableStart + rect.map.map[rect.top * rect.map.width + rect.left],
+      );
+      if (!(cell instanceof HTMLElement)) {
+        return;
+      }
+      const row = cell.getBoundingClientRect();
+      const table = cell.closest("table")?.getBoundingClientRect();
+      if (!table) {
+        return;
+      }
+      x = Math.max(left, table.left - size);
+      y = row.top + (row.height - size) / 2;
+      let clipTop = top;
+      let clipBottom = bottom;
+      for (let parent = view.dom.parentElement; parent; parent = parent.parentElement) {
+        if (["auto", "scroll", "hidden", "clip"].includes(getComputedStyle(parent).overflowY)) {
+          const bounds = parent.getBoundingClientRect();
+          clipTop = Math.max(clipTop, bounds.top);
+          clipBottom = Math.min(clipBottom, bounds.bottom);
+        }
+      }
+      visible = y >= clipTop && y + size <= clipBottom;
+      anchor = new DOMRect(x, y, size, size);
+    }
+    const available = Math.max(0, bottom - top - 16);
+    const height = Math.min(menu?.scrollHeight ?? 320, available, (bottom - top) / 2);
+    const width = menu?.offsetWidth ?? Math.min(288, right - left - 32);
+    const menuX = Math.max(left + 8, Math.min(anchor.left, right - width - 8));
+    const below = anchor.bottom + 4;
+    const menuY = below + height <= bottom - 8 ? below : Math.max(top + 8, anchor.top - height - 4);
+    setPosition({
+      "--table-x": `${x}px`,
+      "--table-y": `${y}px`,
+      "--table-menu-x": `${menuX}px`,
+      "--table-menu-y": `${menuY}px`,
+      "--table-menu-height": `${height}px`,
+      visibility: visible ? "visible" : "hidden",
+    });
+  };
+  const schedulePlace = () => {
+    cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(place);
+  };
   const refresh = () =>
     props.editor.action((ctx) => {
       if (!live) {
@@ -49,15 +113,38 @@ export default function TableMenu(props: { editor: Editor }): JSX.Element {
           $from.parent.type.name === "paragraph" &&
           !inside,
       );
+      schedulePlace();
     });
   onMount(() => {
     refresh();
     props.editor.action((ctx) => {
-      ctx.get(listenerCtx).selectionUpdated(refresh).updated(refresh);
+      const view = ctx.get(editorViewCtx);
+      view.dom.addEventListener(TABLE_SELECTION_UPDATED, refresh);
+      const observer = new ResizeObserver(schedulePlace);
+      observer.observe(view.dom);
+      onCleanup(() => {
+        observer.disconnect();
+        view.dom.removeEventListener(TABLE_SELECTION_UPDATED, refresh);
+      });
     });
+    document.addEventListener("scroll", schedulePlace, true);
+    window.addEventListener("resize", schedulePlace);
+    window.visualViewport?.addEventListener("resize", schedulePlace);
+    window.visualViewport?.addEventListener("scroll", schedulePlace);
   });
   onCleanup(() => {
     live = false;
+    cancelAnimationFrame(frame);
+    document.removeEventListener("scroll", schedulePlace, true);
+    window.removeEventListener("resize", schedulePlace);
+    window.visualViewport?.removeEventListener("resize", schedulePlace);
+    window.visualViewport?.removeEventListener("scroll", schedulePlace);
+  });
+  createEffect(() => {
+    const active = open();
+    const view = props.editor.action((ctx) => ctx.get(editorViewCtx));
+    view.dispatch(view.state.tr.setMeta(tableMenuKey, active).setMeta("addToHistory", false));
+    schedulePlace();
   });
   createEffect(() => {
     if (!open()) {
@@ -96,7 +183,7 @@ export default function TableMenu(props: { editor: Editor }): JSX.Element {
       }),
     );
   return (
-    <div class="editor-table-tools">
+    <div class="editor-table-tools" classList={{ "is-contextual": inTable() }} style={position()}>
       <button
         ref={trigger}
         type="button"
@@ -119,7 +206,11 @@ export default function TableMenu(props: { editor: Editor }): JSX.Element {
         label={t().editor.table}
         class="editor-table-anchor"
       >
-        <div class="popover editor-table-menu" onPointerDown={(event) => event.preventDefault()}>
+        <div
+          ref={menu}
+          class="popover editor-table-menu"
+          onPointerDown={(event) => event.preventDefault()}
+        >
           <Show
             when={inTable()}
             fallback={

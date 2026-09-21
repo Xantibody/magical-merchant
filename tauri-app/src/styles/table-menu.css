@@ -2,7 +2,7 @@
   position: sticky;
   top: 0;
   z-index: 2;
-  min-block-size: 32px;
+  min-block-size: 44px;
 }
 
 .editor-content {
@@ -17,23 +17,47 @@
   pointer-events: none;
 }
 
+.editor-table-tools.is-contextual {
+  position: fixed;
+  inset-inline-start: var(--table-x);
+  inset-block-start: var(--table-y);
+}
+
+/* Reserve one touch target so controls never cover a cell's text. */
+.milkdown-editor .editor-content table {
+  margin-inline-start: 44px;
+  width: calc(100% - 44px);
+}
+
+.milkdown-editor .table-menu-target,
+.milkdown-editor tr:hover .table-menu-target {
+  background: var(--app-accent-soft);
+}
+
+.milkdown-editor .table-menu-cell {
+  outline: 1px solid var(--app-accent);
+  outline-offset: -1px;
+}
+
 .editor-table-trigger {
+  min-inline-size: 44px;
+  min-block-size: 44px;
   pointer-events: auto;
   background: var(--app-surface);
   color: var(--app-text-muted);
 }
 
 .editor-table-anchor {
-  position: absolute;
-  inset-block-start: 100%;
-  inset-inline-end: 0;
+  position: fixed;
+  inset-block-start: var(--table-menu-y);
+  inset-inline-start: var(--table-menu-x);
   pointer-events: auto;
 }
 
-.editor-table-menu {
+.popover.editor-table-menu {
   position: static;
   inline-size: min(18rem, calc(100vw - var(--size-6)));
-  max-block-size: 50dvh;
+  max-block-size: var(--table-menu-height, 50dvh);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -67,14 +91,4 @@
 
 .editor-table-align button {
   flex: 1;
-}
-
-@media (hover: none) {
-  .editor-table-slot {
-    min-block-size: 44px;
-  }
-  .editor-table-trigger {
-    min-inline-size: 44px;
-    min-block-size: 44px;
-  }
 }

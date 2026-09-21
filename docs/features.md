@@ -72,7 +72,9 @@ lives in the file, so it follows the note to every device.
 
 ![Editor with Note links](images/editor-links.png)
 
-The table button above the body inserts a table at the cursor. Inside a
+The table button above the body inserts a table at the cursor. Selecting a
+cell moves the button beside its row; opening the menu highlights the target
+row and column, including when inserting in the middle of a table. Inside a
 cell, the same menu adds or deletes rows and columns, aligns a column,
 exits the table, or deletes it. Undo is available in the menu on phones as
 well as through the usual keyboard shortcut. The header and the last body

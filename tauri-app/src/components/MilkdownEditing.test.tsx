@@ -1,3 +1,4 @@
+import "../index.css";
 import { render, cleanup, fireEvent, screen } from "@solidjs/testing-library";
 import { afterEach, describe, expect, it } from "vitest";
 import { page, userEvent } from "vitest/browser";
@@ -5,7 +6,6 @@ import { editorViewCtx, parserCtx, serializerCtx } from "@milkdown/kit/core";
 import type { Editor } from "@milkdown/kit/core";
 import { TextSelection } from "@milkdown/kit/prose/state";
 import MilkdownEditor from "./MilkdownEditor";
-import "../styles/base.css";
 
 const TABLE = "| H1 | H2 |\n| --- | --- |\n| a | b |";
 async function mount(source: string) {
@@ -59,6 +59,92 @@ async function tableAction(label: string) {
 
 describe("Note table editing and inline decorations", () => {
   afterEach(cleanup);
+
+  it("keeps table controls beside the selected row and marks its row and column only while open", async () => {
+    const h = await mount(`${TABLE}\n| c | d |\n| e | f |\n\nAfter the table`);
+    h.select("d");
+    const button = screen.getByRole("button", { name: "表", exact: true });
+    const cell = screen.getByRole("cell", { name: "d", exact: true });
+    await expect
+      .poll(() => {
+        const a = button.getBoundingClientRect();
+        const b = cell.getBoundingClientRect();
+        return Math.abs(a.top + a.height / 2 - (b.top + b.height / 2));
+      })
+      .toBeLessThan(2);
+    const before = h.view.state.doc;
+    const { selection } = h.view.state;
+    await userEvent.click(button);
+    await expect.poll(() => h.container.querySelectorAll(".table-menu-target").length).toBe(5);
+    expect(h.view.state.selection.eq(selection)).toBe(true);
+    expect(h.view.state.doc.eq(before)).toBe(true);
+    await userEvent.keyboard("{Escape}");
+    expect(h.container.querySelectorAll(".table-menu-target")).toHaveLength(0);
+    h.select("After the table");
+    await expect
+      .poll(() => button.closest(".editor-table-tools")?.classList.contains("is-contextual"))
+      .toBe(false);
+  });
+
+  it.each([
+    ["上に行を追加", ["H1", "a", "", "c", "e"]],
+    ["下に行を追加", ["H1", "a", "c", "", "e"]],
+  ])("%s preserves the surrounding rows when inserting in the middle", async (label, expected) => {
+    const h = await mount(`${TABLE}\n| c | d |\n| e | f |`);
+    h.select("c");
+    await tableAction(label);
+    const table = h.roundtrip().child(0);
+    expect(
+      Array.from({ length: table.childCount }, (_, row) => table.child(row).child(0).textContent),
+    ).toStrictEqual(expected);
+  });
+
+  it("tracks a scrolling row and fits the menu in a phone viewport with the keyboard open", async () => {
+    await page.viewport(390, 320);
+    try {
+      const h = await mount(`${TABLE}\n| c | d |\n| e | f |\n\nAfter the table`);
+      h.container.style.cssText = "height: 240px; overflow: auto; margin-top: 40px";
+      const cell = screen.getByRole("cell", { name: "d", exact: true });
+      await userEvent.click(cell);
+      const button = screen.getByRole("button", { name: "表", exact: true });
+      await expect
+        .poll(() => button.closest(".editor-table-tools")?.classList.contains("is-contextual"))
+        .toBe(true);
+      await expect
+        .poll(() =>
+          Math.abs(
+            button.getBoundingClientRect().top +
+              22 -
+              (cell.getBoundingClientRect().top + cell.getBoundingClientRect().height / 2),
+          ),
+        )
+        .toBeLessThan(2);
+      h.container.scrollTop = 30;
+      await expect
+        .poll(() =>
+          Math.abs(
+            button.getBoundingClientRect().top +
+              22 -
+              (cell.getBoundingClientRect().top + cell.getBoundingClientRect().height / 2),
+          ),
+        )
+        .toBeLessThan(2);
+      expect(button.getBoundingClientRect().width).toBeGreaterThanOrEqual(44);
+      expect(button.getBoundingClientRect().right).toBeLessThanOrEqual(
+        screen.getByRole("table").getBoundingClientRect().left + 1,
+      );
+      await userEvent.click(button);
+      const menu = screen.getByRole("dialog", { name: "表" });
+      await expect.poll(() => menu.getBoundingClientRect().bottom).toBeLessThanOrEqual(320);
+      expect(menu.getBoundingClientRect().top).toBeGreaterThanOrEqual(0);
+      expect(menu.getBoundingClientRect().left).toBeGreaterThanOrEqual(0);
+      expect(menu.getBoundingClientRect().right).toBeLessThanOrEqual(390);
+      await userEvent.click(screen.getByRole("button", { name: "下に行を追加", exact: true }));
+      expect(h.roundtrip().child(0).childCount).toBe(5);
+    } finally {
+      await page.viewport(1280, 720);
+    }
+  });
 
   it("keeps the menu within a phone viewport and makes its last action reachable", async () => {
     await page.viewport(390, 720);
