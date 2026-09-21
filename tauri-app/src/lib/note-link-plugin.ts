@@ -26,7 +26,14 @@ interface LinkRange {
 function linkRanges(doc: ProseNode): LinkRange[] {
   const ranges: LinkRange[] = [];
   doc.descendants((node, pos) => {
-    if (!node.isText || !node.text?.includes("[[")) {
+    if (node.type.spec.code) {
+      return false;
+    }
+    if (
+      !node.isText ||
+      !node.text?.includes("[[") ||
+      node.marks.some((mark) => mark.type.spec.code)
+    ) {
       return;
     }
     let offset = 0;
@@ -80,7 +87,12 @@ class NoteLinkSuggest {
   update(view: EditorView): void {
     const { state } = view;
     const { $from, empty } = state.selection;
-    if (!empty || !$from.parent.isTextblock) {
+    if (
+      !empty ||
+      !$from.parent.isTextblock ||
+      $from.parent.type.spec.code ||
+      (state.storedMarks ?? $from.marks()).some((mark) => mark.type.spec.code)
+    ) {
       this.hide();
       return;
     }

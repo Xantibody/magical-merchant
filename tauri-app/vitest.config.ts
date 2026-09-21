@@ -15,6 +15,8 @@ export default defineConfig({
       "@solidjs/testing-library",
       "@tauri-apps/api/mocks",
       "@tauri-apps/api/window",
+      "@milkdown/kit/prose/history",
+      "@milkdown/kit/prose/tables",
     ],
   },
   test: {

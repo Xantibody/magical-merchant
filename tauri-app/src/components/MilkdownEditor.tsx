@@ -1,4 +1,5 @@
-import { onCleanup, onMount } from "solid-js";
+import { createSignal, Show, onCleanup, onMount } from "solid-js";
+import TableMenu from "./TableMenu";
 import { Editor, rootCtx, defaultValueCtx, editorViewCtx } from "@milkdown/kit/core";
 import { Selection, TextSelection } from "@milkdown/kit/prose/state";
 import { commonmark } from "@milkdown/kit/preset/commonmark";
@@ -69,6 +70,7 @@ function closestScroller(el: HTMLElement): HTMLElement | undefined {
 export default function MilkdownEditor(props: MilkdownEditorProps): JSX.Element {
   let ref: HTMLDivElement | undefined;
   let editor: Editor | undefined;
+  const [ready, setReady] = createSignal<Editor>();
   /** アンマウント後にカーソル配置の遅延処理が走らないように。 */
   let disposed = false;
   let cancelCaret: (() => void) | undefined;
@@ -217,6 +219,7 @@ export default function MilkdownEditor(props: MilkdownEditorProps): JSX.Element 
     }
 
     placeCaret(editor);
+    setReady(editor);
     props.onEditorReady?.(editor);
   });
 
@@ -237,7 +240,14 @@ export default function MilkdownEditor(props: MilkdownEditorProps): JSX.Element 
     }
   };
 
-  return <div ref={ref} class="milkdown-editor" role="presentation" onClick={handleClick} />;
+  return (
+    <div class="milkdown-editor" role="presentation" onClick={handleClick}>
+      <div class="editor-table-slot">
+        <Show when={ready()}>{(created) => <TableMenu editor={created()} />}</Show>
+      </div>
+      <div ref={ref} class="editor-content" />
+    </div>
+  );
 }
 
 export { type CaretPoint, type MilkdownEditorProps };

@@ -1,0 +1,80 @@
+.editor-table-slot {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  min-block-size: 32px;
+}
+
+.editor-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.editor-table-tools {
+  display: flex;
+  justify-content: flex-end;
+  pointer-events: none;
+}
+
+.editor-table-trigger {
+  pointer-events: auto;
+  background: var(--app-surface);
+  color: var(--app-text-muted);
+}
+
+.editor-table-anchor {
+  position: absolute;
+  inset-block-start: 100%;
+  inset-inline-end: 0;
+  pointer-events: auto;
+}
+
+.editor-table-menu {
+  position: static;
+  inline-size: min(18rem, calc(100vw - var(--size-6)));
+  max-block-size: 50dvh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.editor-table-menu button {
+  min-block-size: 44px;
+  padding: var(--size-2) var(--size-3);
+  text-align: start;
+  background: none;
+  border: none;
+  color: var(--app-text);
+  cursor: pointer;
+  border-radius: var(--radius-2);
+}
+
+.editor-table-menu button:hover,
+.editor-table-menu button:focus-visible {
+  background: var(--app-surface-2);
+}
+
+.editor-table-menu button:disabled {
+  color: var(--app-text-faint);
+  cursor: default;
+}
+
+.editor-table-align {
+  display: flex;
+  border-block: 1px solid var(--app-hairline);
+}
+
+.editor-table-align button {
+  flex: 1;
+}
+
+@media (hover: none) {
+  .editor-table-slot {
+    min-block-size: 44px;
+  }
+  .editor-table-trigger {
+    min-inline-size: 44px;
+    min-block-size: 44px;
+  }
+}

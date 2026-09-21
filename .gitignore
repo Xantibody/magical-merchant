@@ -46,6 +46,7 @@ keystore.properties
 
 # Plans
 plans/
+/sample/
 
 # Wrangler local secrets
 .dev.vars

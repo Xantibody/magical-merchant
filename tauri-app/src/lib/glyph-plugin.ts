@@ -21,6 +21,9 @@ function isInlineCode(node: ProseNode): boolean {
 function glyphRanges(doc: ProseNode, glyphs: ReadonlyMap<string, string>): GlyphRange[] {
   const ranges: GlyphRange[] = [];
   doc.descendants((node, pos) => {
+    if (node.type.spec.code) {
+      return false;
+    }
     if (!node.isText || !node.text?.includes(":") || isInlineCode(node)) {
       return;
     }
@@ -70,7 +73,7 @@ export function createGlyphPlugin(glyphs: () => ReadonlyMap<string, string>): Mi
                   Decoration.inline(range.from, range.to, { class: "glyph-hidden" }),
                   Decoration.widget(
                     range.from,
-                    (view) => {
+                    (view, getPos) => {
                       const img = document.createElement("img");
                       img.className = "glyph";
                       img.src = registry.get(range.name) ?? "";
@@ -79,10 +82,12 @@ export function createGlyphPlugin(glyphs: () => ReadonlyMap<string, string>): Mi
                       // 押すとカーソルが中に入り、保存形が現れて編集できる
                       img.addEventListener("mousedown", (e) => {
                         e.preventDefault();
+                        const pos = getPos();
+                        if (pos === undefined) {
+                          return;
+                        }
                         view.dispatch(
-                          view.state.tr.setSelection(
-                            TextSelection.create(view.state.doc, range.from + 1),
-                          ),
+                          view.state.tr.setSelection(TextSelection.create(view.state.doc, pos + 1)),
                         );
                         view.focus();
                       });
