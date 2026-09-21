@@ -179,6 +179,33 @@ describe("Templates", () => {
     await waitFor(() => expect(body?.textContent).toContain(`## ${today} のメモ`));
   });
 
+  // 記入例はノートに書かれない。「今日作ると」は書かれる姿を見せる場所なので、
+  // ここに残っていると、消えないものとして読める
+  it("keeps the example block out of the preview", async () => {
+    const { container } = await openDaily();
+
+    fireEvent.input(bodyInput(container), {
+      target: { value: "## 状況\n{{eg}}\n- 何があったか?\n\n## 次" },
+    });
+    fireEvent.click(container.querySelector(".templates-preview-summary") as HTMLElement);
+
+    const body = container.querySelector(".templates-preview-body");
+    await waitFor(() => expect(body?.textContent).toContain("## 状況"));
+    expect(body?.textContent).not.toContain("何があったか?");
+    expect(body?.textContent).not.toContain("{{eg}}");
+  });
+
+  // 手で打てる記法だが、打てるだけでは「書ける」と気づけない
+  it("offers the example marker as a chip", async () => {
+    const { container } = await openDaily();
+
+    const chips = [...container.querySelectorAll(".templates-var-chip")].map(
+      (chip) => chip.textContent,
+    );
+
+    expect(chips).toContain("{{eg}}記入例");
+  });
+
   it("marks a tag that holds a variable apart from a fixed one", async () => {
     const { container } = await openDaily();
     const tagInput = screen.getByLabelText("タグを追加");
