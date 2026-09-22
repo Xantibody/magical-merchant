@@ -1,8 +1,8 @@
-//! `scrawl add` / `scrawl show` / `scrawl dates`。
+//! `scrawl add` / `scrawl show` / `scrawl dates`.
 //!
-//! 追記だけで上書きはしない。ノートと違ってアプリが同じ日を開いていても
-//! 行が増えるだけなので、revision の照合は要らない。Android のウィジェットが
-//! JNI から同じ core 関数で書いているのと同じ経路。
+//! It only appends; it never overwrites. Unlike a Note, a day the app has open only
+//! gains lines, so no revision check is needed. It is the same path the Android widget
+//! writes through, calling the same core function from JNI.
 
 use std::path::Path;
 
@@ -11,14 +11,14 @@ use magical_merchant_core::{CoreError, Source, parse_scrawl_entry};
 
 use crate::notes;
 
-/// 本文が空でなければ今日に追記する。追記したら `true`。
+/// Appends to today if the body is not empty. Returns `true` when it appended.
 pub(crate) fn add(data_dir: &Path, text: &str) -> Result<bool, CoreError> {
     let text = text.trim();
     if text.is_empty() {
         return Ok(false);
     }
-    // 入り口は `notes::context()` に混ぜない。あれは MCP とも共有していて、
-    // 端末しか見ていないので CLI と MCP を同じものとして書いてしまう
+    // Do not fold the entry point into `notes::context()`. That is shared with MCP and
+    // looks only at the device, so it would record the CLI and MCP as the same thing
     magical_merchant_core::save_scrawl_entry(data_dir, text, &notes::context(), Source::Cli)?;
     Ok(true)
 }
@@ -29,7 +29,7 @@ pub(crate) struct Entry {
     pub(crate) text: String,
 }
 
-/// `YYYY-MM-DD`。省略なら今日。
+/// `YYYY-MM-DD`. Today when omitted.
 pub(crate) fn resolve_date(arg: Option<&str>) -> Result<NaiveDate, CoreError> {
     arg.map_or_else(
         || Ok(Local::now().date_naive()),
@@ -82,8 +82,8 @@ mod tests {
         assert_eq!(dates(tmp.path()).unwrap(), vec![today]);
     }
 
-    /// 空の追記は日付ファイルすら作らない。閉じただけのエディタで
-    /// 今日のファイルが生まれると、記録の無い日が一覧に出る。
+    /// A blank entry does not even create the day file. If an editor that was merely
+    /// closed made today's file, days with no record would show up in the list.
     #[test]
     fn a_blank_entry_writes_nothing() {
         let tmp = TempDir::new().unwrap();

@@ -2,8 +2,8 @@ import { base64Decode, base64Encode } from "./base64";
 
 interface FileSyncRecord {
   hash: string;
-  /// 同期状態のバージョン印。サーバーだけが発行するので、
-  /// 端末ごとの時計ずれやファイルシステムの mtime 精度に左右されない。
+  /// Version stamp of the sync state. Only the server issues it, so it does not
+  /// depend on per-device clock skew or on filesystem mtime resolution.
   last_modified: string;
 }
 
@@ -40,7 +40,8 @@ export interface BulkRequest {
 
 export interface BulkOutcome {
   downloads: FileContent[];
-  /// 競合で退避したリモート側の中身。クライアントが競合コピーとして保存する。
+  /// The remote content set aside on a conflict. The client saves it as a
+  /// conflict copy.
   conflict_downloads: FileContent[];
 }
 
@@ -83,10 +84,11 @@ export async function saveSyncState(
   return true;
 }
 
-/// 抜け出せるのは `..` という**パス要素**であって、名前の中に並んだ点ではない。
-/// 部分一致で弾くと `….sync-conflict-20260511-031336..md`(サーバー駆動同期
-/// 以前の控えにある、点が 1 つ多い名前)まで巻き込み、その控えを抱えた端末は
-/// 毎回の同期が失敗し続ける。判定は core の `is_safe_key` と揃える。
+/// What escapes the tree is the `..` **path segment**, not dots that happen to sit
+/// inside a name. Rejecting on a substring match would also catch a name ending in
+/// `.sync-conflict-20260511-031336..md` (one dot too many, found in backups made
+/// before server-driven sync), and a device holding such a backup would then fail
+/// every sync. Keep this check in step with core's `is_safe_key`.
 export function isUnsafeKey(key: string): boolean {
   return (
     key === "" ||
@@ -99,23 +101,25 @@ export function isUnsafeKey(key: string): boolean {
 
 const HASH_PATTERN = /^[0-9a-f]{64}$/u;
 
-/// 壊れたハッシュを state に入れると、全クライアントで「常に変更あり」と
-/// 判定され続けるか、逆に変更が永久に検出されなくなる。
+/// A corrupt hash written into the state makes every client either read "changed"
+/// forever, or never detect a change again.
 export function isValidHash(hash: unknown): boolean {
   return typeof hash === "string" && HASH_PATTERN.test(hash);
 }
 
-/// 同じキーの版が前回と同じ文字列になると、他端末が変更を取りこぼす。
-/// Workers の時計は I/O 単位でしか進まないので、明示的に単調化する。
+/// If the stamp for a key comes out as the same string as last time, other devices
+/// miss the change. The Workers clock advances only per I/O, so make it monotonic
+/// explicitly.
 function nextStamp(previous: string | undefined, now: number): string {
   const nowMs = previous === undefined ? now : Math.max(now, Date.parse(previous) + 1);
   return new Date(nowMs).toISOString();
 }
 
-/// 新しい同期状態はサーバーだけが決める。
-/// クライアントが送ってきた一覧をそのまま採用すると、まだ手元に無いファイル
-/// （これからダウンロードするもの）が状態から消え、次の同期で全端末が
-/// 「リモートで削除された」と解釈してローカルのノートを消してしまう。
+/// Only the server decides the new sync state.
+/// Taking the list the client sent as it is would drop files the client does not
+/// hold yet (the ones it is about to download) from the state, and on the next sync
+/// every device would read that as "deleted on the remote" and delete the local
+/// note.
 export function deriveState(old: SyncState, req: BulkRequest, now: number): SyncState {
   const files: Record<string, FileSyncRecord> = { ...old.files };
 
@@ -153,8 +157,9 @@ async function executeDownload(bucket: R2Bucket, key: string): Promise<FileConte
   };
 }
 
-/// 競合は常にローカル優先で上書きする。ただし上書きされるリモート側の中身は
-/// R2 に退避したうえでクライアントにも返し、どちらの編集も失わせない。
+/// A conflict always overwrites with the local side. The remote content that gets
+/// overwritten is set aside in R2 and returned to the client as well, so neither
+/// edit is lost.
 async function executeConflict(bucket: R2Bucket, c: ConflictOp): Promise<FileContent | null> {
   const remote = await bucket.get(c.key);
   let preserved: FileContent | null = null;

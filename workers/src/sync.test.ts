@@ -44,9 +44,10 @@ describe("isUnsafeKey", () => {
     expect(isUnsafeKey("notes/file.sync-conflict-20260512-120000.md")).toBe(false);
   });
 
-  /// 抜け出せるのは `..` というパス要素であって、名前の中に並んだ点ではない。
-  /// サーバー駆動同期以前の控えには点が 1 つ多い名前があり、部分一致で弾くと
-  /// その控えだけ永久に同期できない。
+  /// What escapes the tree is the `..` path segment, not dots that happen to sit
+  /// inside a name. Backups made before server-driven sync hold names with one dot
+  /// too many, and a substring match would leave exactly those backups unable to
+  /// sync, forever.
   it("accepts a doubled dot inside a filename", () => {
     expect(isUnsafeKey("projects/a/done/20260417_023550.sync-conflict-20260511-031336..md")).toBe(
       false,
@@ -103,7 +104,7 @@ describe("deriveState", () => {
     expect(state.files).toStrictEqual({});
   });
 
-  // 版が据え置かれると、他端末が「変更なし」と判断して更新を取りこぼす
+  // A stamp left unchanged makes other devices read "no change" and miss the update
   it("keeps the version stamp strictly increasing even when the clock does not move", () => {
     const old = stateWith("notes/a.md", "2026-08-05T00:00:00.000Z");
     const state = deriveState(

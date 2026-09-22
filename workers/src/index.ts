@@ -41,15 +41,15 @@ async function handleSyncState(bucket: R2Bucket, userId: string): Promise<Respon
   return jsonResponse({ ...state, etag });
 }
 
-// 不正なタイムスタンプを保存すると、それを読んだ全クライアントで
-// そのファイルが sync 対象から静かに消える
+// Storing an invalid timestamp makes that file drop out of sync silently on every
+// client that reads it
 function isInvalidTimestamp(value: unknown): boolean {
   return typeof value !== "string" || Number.isNaN(Date.parse(value));
 }
 
 /**
- * リクエストの形をここで弾いておかないと、壊れた値が新しい同期状態に
- * そのまま焼き込まれ、全端末に伝播する。
+ * Reject the shape of the request here, or broken values get burned into the new sync
+ * state as they are and spread to every device.
  */
 function validateBulkRequest(body: BulkRequest): string | null {
   if (
@@ -96,16 +96,16 @@ function validateBulkRequest(body: BulkRequest): string | null {
 }
 
 /**
- * 1 リクエストで引き受ける R2 操作の上限。
+ * The cap on R2 operations taken on in one request.
  *
- * Workers の Free プランは 1 呼び出しにつきサブリクエスト 50 回までで、
- * R2 バインディングの get / put / delete もそこに数えられる。bulk は
- * 1 ファイル 1 回(競合だけは退避の get + put と上書きの put で 3 回)、
- * 加えて同期状態の読み書きで必ず 2 回使う。
+ * The Workers Free plan allows 50 subrequests per invocation, and the R2 binding's
+ * get / put / delete count towards that. A bulk takes one per file (a conflict alone
+ * takes three: the get and put that stash the copy, plus the put that overwrites), and
+ * always two more to read and write the sync state.
  *
- * クライアントは 40 で切っている(core の `BULK_OPERATION_BUDGET`)。
- * ここで断るのは分割を知らない古いクライアントで、そのとき返るのが
- * Cloudflare の `Too many subrequests` ではなく読める理由になる。
+ * The client cuts at 40 (core's `BULK_OPERATION_BUDGET`). What is refused here is an
+ * older client that does not know about splitting, and what comes back then is a
+ * readable reason rather than Cloudflare's `Too many subrequests`.
  */
 const MAX_BULK_OPERATIONS = 45;
 
@@ -129,8 +129,8 @@ async function handleSyncBulk(
   } catch {
     return errorResponse("Invalid JSON", 400);
   }
-  // `null` も `1` も JSON としては正しい。そのまま先のフィールドを読むと
-  // 例外になり、読めない HTML の 500 が返る
+  // `null` and `1` are both valid JSON. Reading the fields off them as they are throws,
+  // and an unreadable HTML 500 comes back
   if (typeof parsed !== "object" || parsed === null) {
     return errorResponse("Invalid request: expected a JSON object", 400);
   }
@@ -172,9 +172,9 @@ async function handleSyncBulk(
 }
 
 /**
- * 発行者と宛先。`jwtVerify` は既定では iss も aud も見ないので、名前を
- * 決めて両端で突き合わせる。同じ秘密鍵を別の用途にも使ってしまったとき、
- * そちらのトークンがこの Worker を素通りするのを防ぐ。
+ * Issuer and audience. `jwtVerify` looks at neither `iss` nor `aud` by default, so the
+ * names are fixed and checked at both ends. If the same secret ever gets used for
+ * another purpose, this keeps those tokens from walking straight through this Worker.
  */
 const JWT_ISSUER = "magical-merchant-sync";
 const JWT_AUDIENCE = "magical-merchant-app";
@@ -193,7 +193,7 @@ function signJwt(payload: JwtPayload, secret: string): Promise<string> {
 async function verifyJwt(token: string, secret: string): Promise<JwtPayload | null> {
   try {
     const key = new TextEncoder().encode(secret);
-    // AIDEV-NOTE: algorithms は必ず絞る。ヘッダの alg を信じると、署名方式の選択が相手の手に残る
+    // AIDEV-NOTE: always pin `algorithms`. Trusting the header's `alg` leaves the choice of signature scheme in the caller's hands
     const { payload } = await jwtVerify(token, key, {
       algorithms: ["HS256"],
       issuer: JWT_ISSUER,
@@ -213,22 +213,22 @@ async function verifyJwt(token: string, secret: string): Promise<JwtPayload | nu
 }
 
 /**
- * 1 バケット = 1 人。ノートは `notes/<id>.md` のまま置かれ、ユーザーごとに
- * 分かれているのは同期状態 (`_sync-state/<sub>.json`) だけなので、別の人が
- * 同じ Worker にログインすると同じキーを取り合って永久に往復する。
+ * One bucket = one person. Notes stay at `notes/<id>.md`, and the only thing split per
+ * user is the sync state (`_sync-state/<sub>.json`), so if somebody else signs in to
+ * the same Worker the two fight over the same keys forever.
  *
- * `ALLOWED_SUBS` に Google の `sub` をカンマ区切りで並べると、その人だけが
- * 通る。変数そのものが無いときだけ従来どおり誰でも通す — 既存の配備を
- * 黙って締め出さない。
+ * Listing Google `sub` values in `ALLOWED_SUBS`, comma separated, lets only those
+ * people through. Only when the variable itself is absent does everyone get in as
+ * before: an existing deployment is not shut out silently.
  *
- * AIDEV-NOTE: キーを `${sub}/` で名前空間に分ける案は既存オブジェクトの移行が要るため却下。1 バケット 1 人を守る
- * AIDEV-NOTE: 「置いたが空」は未設定と別物として閉じる。同一視すると、締めたつもりの設定ミスがバケットを全開にする
+ * AIDEV-NOTE: namespacing the keys under `${sub}/` was rejected because existing objects would have to be migrated. One bucket per person stands
+ * AIDEV-NOTE: "set but empty" is closed off as a different thing from unset. Treating them alike would leave the bucket wide open on the misconfiguration meant to close it
  */
 function isAllowedSub(allowedSubs: string | undefined, sub: string): boolean {
   if (allowedSubs === undefined) {
     return true;
   }
-  // 空要素は落とす。残すと `sub` が空文字のトークンが `ALLOWED_SUBS=""` に一致する
+  // Drop empty entries. Kept, a token whose `sub` is the empty string matches `ALLOWED_SUBS=""`
   return allowedSubs
     .split(",")
     .map((entry) => entry.trim())
@@ -250,24 +250,24 @@ function getCookie(request: Request, name: string): string | null {
 }
 
 /**
- * deep link で認証の戻り先になれる唯一の形。`tauri.conf.json` の
- * intent-filter は `auth` と `widget` の 2 ホストしか本物のアプリに
- * 割り当てておらず、認証が使うのはそのうち `auth/callback` だけ。
+ * The only form a deep link may take as the return target of authentication. The
+ * intent-filter in `tauri.conf.json` assigns only the two hosts `auth` and `widget` to
+ * the real app, and authentication uses just `auth/callback` of those.
  */
 const DEEP_LINK_PROTOCOL = "magical-merchant:";
 const DEEP_LINK_REDIRECT = "magical-merchant://auth/callback";
 
 /**
- * `app_redirect` は認証のあと JWT を載せて送り返す先。ここを緩めると、
- * リンクを踏ませるだけで 3 日有効のトークンが第三者の URL に渡る。
+ * `app_redirect` is where the JWT is sent back after authentication. Loosen this and
+ * one link is enough to hand a token valid for 3 days to a third party's URL.
  *
- * 通すのはアプリが実際に送る 2 つの形だけ — deep link の
- * `magical-merchant://auth/callback` そのものと、ループバックの
- * `http://127.0.0.1:<port>/…`。
+ * Only the two forms the app actually sends get through: the deep link
+ * `magical-merchant://auth/callback` itself, and the loopback
+ * `http://127.0.0.1:<port>/...`.
  *
- * AIDEV-NOTE: 文字列の前方一致では不十分。`http://127.0.0.1:1@evil.example/` は host が evil.example で userinfo が 127.0.0.1
- * AIDEV-NOTE: deep link はスキームだけでは絞れない。別アプリが magical-merchant://steal/… を登録すれば JWT がそのアプリに届く
- * AIDEV-NOTE: 条件の並置ではなく正規化した href と丸ごと比べる。`…/callback#` は hash を "" と報告するので条件では抜ける
+ * AIDEV-NOTE: a string prefix match is not enough. `http://127.0.0.1:1@evil.example/` has host evil.example and userinfo 127.0.0.1
+ * AIDEV-NOTE: a deep link cannot be narrowed by the scheme alone. If another app registers `magical-merchant://steal/callback` the JWT reaches that app
+ * AIDEV-NOTE: compare the whole normalized href instead of listing conditions. `.../callback#` reports its hash as "" and slips past a condition
  */
 function parseAppRedirect(redirect: string): URL | null {
   let url: URL;
@@ -276,20 +276,21 @@ function parseAppRedirect(redirect: string): URL | null {
   } catch {
     return null;
   }
-  // 本物らしい文字列を userinfo に置いて host を隠す形は、どちらの入口でも捨てる
+  // A form that hides the host by putting something plausible in the userinfo is
+  // dropped at either entrance
   if (url.username !== "" || url.password !== "") {
     return null;
   }
   if (url.protocol === DEEP_LINK_PROTOCOL) {
-    // 通る形は 1 つしかない。ならば条件を数えるより、正規化した URL を
-    // その 1 つと丸ごと比べる方が確実
+    // There is only one form that gets through, so comparing the normalized URL with
+    // that one form whole is surer than counting conditions
     return url.href === DEEP_LINK_REDIRECT ? url : null;
   }
   if (url.protocol !== "http:" || url.hostname !== "127.0.0.1") {
     return null;
   }
-  // ループバックも同じ理由でクエリと断片を許さない。`?token=` は末尾に
-  // 足されるので、先に `?` や `#` があるとトークンが listener に届かない
+  // The loopback refuses a query and a fragment for the same reason. `?token=` is
+  // appended at the end, so a `?` or `#` already there keeps the token from the listener
   return url.href === `${url.origin}${url.pathname}` ? url : null;
 }
 
@@ -302,8 +303,9 @@ function escapeHtml(value: string): string {
 }
 
 /**
- * Android Chrome はユーザー操作を伴わないカスタムスキームへの遷移を捨てる。
- * 自動遷移だけだとアプリに戻れないので、必ずタップできるリンクを残す。
+ * Android Chrome discards a navigation to a custom scheme that no user action drove.
+ * An automatic navigation alone cannot get back to the app, so a tappable link is
+ * always left in place.
  */
 export function deepLinkPage(redirectUrl: string): string {
   const href = escapeHtml(redirectUrl);
@@ -344,7 +346,7 @@ function getJwtExpiry(env: Env): number {
   return DEFAULT_JWT_EXPIRY_SECONDS;
 }
 
-/** OAuth の入口: Google の同意画面へ 302 で送り出す。 */
+/** The OAuth entrance: sends the user on to Google's consent screen with a 302. */
 function handleAuthGoogle(url: URL, env: Env): Response {
   const state = generateState();
   const appRedirect = url.searchParams.get("app_redirect") ?? DEEP_LINK_REDIRECT;
@@ -376,7 +378,7 @@ function handleAuthGoogle(url: URL, env: Env): Response {
   });
 }
 
-/** OAuth の出口: code をトークンに換え、JWT を発行してアプリへ戻す。 */
+/** The OAuth exit: trades the code for a token, issues a JWT and returns to the app. */
 async function handleAuthCallback(request: Request, url: URL, env: Env): Promise<Response> {
   const code = url.searchParams.get("code");
   if (!code) {
@@ -438,17 +440,18 @@ async function handleAuthCallback(request: Request, url: URL, env: Env): Promise
   try {
     appRedirect = appRedirectCookie ? decodeURIComponent(appRedirectCookie) : DEEP_LINK_REDIRECT;
   } catch {
-    // 不正な %-エンコーディングで例外 → 500 になるのを防ぐ
+    // Keeps a malformed %-encoding from throwing and turning into a 500
     return errorResponse("Invalid redirect", 400);
   }
-  // 入口で通した値が cookie 経由で戻るだけだが、ここでも見る。cookie を
-  // 直に差し替えられたら、その一手でトークンの宛先が変わってしまう
+  // This is only the value passed at the entrance coming back through a cookie, but it
+  // is looked at here too. Swap the cookie directly and that one move changes where the
+  // token goes
   const parsedRedirect = parseAppRedirect(appRedirect);
   if (!parsedRedirect) {
     return errorResponse("Invalid redirect", 400);
   }
-  // 送り先は正規化した URL から組む。検証を通った文字列でも、生のままだと
-  // `?token=` の前に何が付いているかは検証の形に依存してしまう
+  // The destination is built from the normalized URL. Even a string that passed
+  // validation leaves what precedes `?token=` up to the shape of that validation
   const redirectUrl = `${parsedRedirect.href}?token=${encodeURIComponent(jwt)}`;
 
   const clearCookies = new Headers([

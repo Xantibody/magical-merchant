@@ -1,13 +1,15 @@
-//! `$VISUAL` / `$EDITOR` でファイルを開く。
+//! Opens a file with `$VISUAL` / `$EDITOR`.
 //!
-//! vim モードをアプリに載せる代わりに、本人のエディタをそのまま使わせる。
-//! どのエディタかはこちらの関心ではなく、終わるまで待てればいい。
+//! Instead of putting a vim mode in the app, let people use their own editor as
+//! it is. Which editor it is does not concern us; waiting for it to exit does.
 
 use std::path::Path;
 use std::process::Command;
 
-/// 環境変数からエディタのコマンドを組む。`code --wait` のように引数付きで
-/// 設定されていることがあるので、空白で分ける。
+/// Builds the editor command from the environment variables.
+///
+/// It splits on whitespace, because the variable can carry arguments, as in
+/// `code --wait`.
 pub(crate) fn command_from_env() -> Vec<String> {
     let value = std::env::var("VISUAL")
         .ok()
@@ -30,8 +32,10 @@ fn parse(value: Option<&str>) -> Vec<String> {
     }
 }
 
-/// エディタが終わるまで待つ。終了コードが 0 以外なら、その編集は
-/// 信用しない — 保存せず閉じたのか落ちたのか区別がつかない。
+/// Waits for the editor to exit.
+///
+/// A non-zero exit code means the edit is not trusted: there is no way to tell a
+/// close without saving from a crash.
 pub(crate) fn open(command: &[String], path: &Path) -> Result<(), String> {
     let (program, args) = command
         .split_first()

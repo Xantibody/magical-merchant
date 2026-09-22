@@ -1,9 +1,10 @@
-//! MCP と CLI が共有するノートの書き込み経路。
+//! The note write path shared by the MCP and the CLI.
 //!
-//! 外からの書き換えは本人が見ていないところで起きる。だから書く前に
-//! 控えを取り(戻れる)、読んだときの revision を添えて(相手の編集を
-//! 消さない)、frontmatter は core に任せる(規則を破らない)。どの入口から
-//! 書いても同じ守りが効くよう、手順はここ 1 か所に置く。
+//! A rewrite from outside happens where the user is not looking. So before writing, a copy
+//! is taken (there is a way back), the revision from the read is passed along (another
+//! writer's edit is not erased), and the frontmatter is left to core (the rules are not
+//! broken). The procedure lives in this one place so that the same guards hold from every
+//! entry point.
 
 use std::path::Path;
 
@@ -12,19 +13,22 @@ use chrono::{DateTime, FixedOffset};
 use magical_merchant_core::utils::device::Context;
 use magical_merchant_core::{CoreError, NoteFilename, Provenance, Revision, Snapshot};
 
-/// 書き込み時に記録する端末。測り方はアプリと同じ core の probe で、
-/// 電池もネットワークも OS の版もここで揃う。
+/// The device recorded at write time.
 ///
-/// 座標だけは載らない。測位は許可を取って数秒待つ仕事で、一行書いて
-/// 終わる CLI にそれを待たせるのは高すぎる。アプリが最後に測った座標を
-/// 使い回す手もあるが、アプリを開いていない日の記録に前の場所が付く。
-/// 分からないことは分からないまま残す。
-// AIDEV-NOTE: Wi-Fi から割り出す道も塞がり済み。SSID/BSSID は測位と同じ許可が要り、伏せられて返る
+/// It is measured by the same core probe as the app, so battery, network and OS version all
+/// line up here.
+///
+/// Only the coordinates are left out. Locating takes a permission and a wait of several
+/// seconds, which is too expensive for a CLI that writes one line and exits. Reusing the
+/// coordinates the app measured last is an option, but then a record written on a day the
+/// app was never opened carries the previous place. What is unknown is left unknown.
+// AIDEV-NOTE: working it out from Wi-Fi is closed off too. SSID/BSSID need the same
+// permission as locating, and come back redacted
 pub(crate) fn context() -> Context {
     magical_merchant_core::utils::device::probe()
 }
 
-/// 読んだ本文と、書き戻すときに添える revision。
+/// The body that was read, and the revision to pass along when writing it back.
 #[derive(Debug)]
 pub(crate) struct Read {
     pub(crate) body: String,
@@ -33,9 +37,9 @@ pub(crate) struct Read {
 
 #[derive(Debug)]
 pub(crate) struct Written {
-    /// 書き換える直前の全文の控え。
+    /// A copy of the whole file as it stood just before the rewrite.
     pub(crate) snapshot: Snapshot,
-    /// 書いた本文の revision。続けて書くときの `expected`。
+    /// The revision of the body that was written. The `expected` for a following write.
     pub(crate) revision: Revision,
 }
 
@@ -45,18 +49,19 @@ pub(crate) enum WriteError {
     Empty,
     #[error("note not found: {0}")]
     NotFound(NoteFilename),
-    /// 読んでから書くまでに、別の書き手(アプリ・MCP・CLI)が本文を変えた。
+    /// Between the read and the write, another writer (app, MCP or CLI) changed the body.
     #[error("{0} changed since it was read; re-read it and edit again")]
     Stale(NoteFilename),
     #[error("{0}")]
     Other(#[from] CoreError),
 }
 
-/// ノートを 1 本作る。返るのは付いたファイル名 — ノートの ID そのもの。
+/// Creates one note. What comes back is the filename given to it, the note's ID itself.
 ///
-/// 空の本文では作らない(`None`)。打ち損ねやエディタを閉じただけの空が、
-/// 消す手段の無い記録として残るのを避ける。出自は呼び出し側が名乗る:
-/// 同じ経路を通る CLI と MCP を、共有のヘルパに一括で名乗らせない。
+/// An empty body creates nothing (`None`). This keeps an empty from a mistyped key or a
+/// closed editor from staying as a record with no way to delete it. The caller names the
+/// origin: the CLI and the MCP go through the same path, and the shared helper does not
+/// name them both at once.
 pub(crate) fn create(
     data_dir: &Path,
     body: &str,
@@ -75,8 +80,9 @@ pub(crate) fn create(
     )?)
 }
 
-/// 書かれた時刻を渡す版。外にあった記録は、その時刻がそのまま ID になる。
-/// 空の本文を作らないのも、`context` を今この端末で書くのも `create` と同じ。
+/// The variant that takes the time it was written. For a record that came from outside,
+/// that time becomes the ID. Like `create`, it creates nothing from an empty body and
+/// writes `context` from this device as it is now.
 pub(crate) fn create_at(
     data_dir: &Path,
     time: DateTime<FixedOffset>,
@@ -97,7 +103,7 @@ pub(crate) fn create_at(
     )?)
 }
 
-/// 書いたファイルのパスを ID に読み替える。呼ぶ側が欲しいのは名前だけ。
+/// Reads the written file's path back as an ID. The caller only wants the name.
 fn named(path: &Path) -> Result<Option<NoteFilename>, CoreError> {
     let name = path
         .file_name()
@@ -112,10 +118,10 @@ pub(crate) fn read(data_dir: &Path, filename: &NoteFilename) -> Result<Read, Cor
     Ok(Read { body, revision })
 }
 
-/// 本文を差し替える。控え → revision 照合 → 書き込み、の順は固定。
+/// Replaces the body. The order is fixed: copy, then revision check, then write.
 ///
-/// `expected` が `None` なら照合はしない。読まずに書く MCP クライアントの
-/// ために残してあるが、読んだなら渡すのが筋。
+/// A `None` `expected` means no check. It is kept for an MCP client that writes without
+/// reading, but a client that read should pass it.
 pub(crate) fn overwrite(
     data_dir: &Path,
     filename: &NoteFilename,
@@ -125,19 +131,19 @@ pub(crate) fn overwrite(
     if body.trim().is_empty() {
         return Err(WriteError::Empty);
     }
-    // 控えを取る前にも照合する。core の照合だけだと、断られる書き込みの
-    // ために相手の版の控えが 1 つ増える。core 側は最後の砦として残す
+    // Check before taking the copy too. With only core's check, a write that will be
+    // refused adds one more copy of the other writer's version. core stays the last line
     if let Some(expected) = expected {
         let current = read(data_dir, filename)?;
         if current.revision != *expected {
             return Err(WriteError::Stale(filename.clone()));
         }
     }
-    // 控えが取れなかった(存在しない)ノートには書かない。core も無い
-    // ファイルは断るが、ここで先に見ると「見つからない」と名指しで言える
+    // Do not write to a note no copy could be taken of, that is, one that does not exist.
+    // core refuses a missing file too, but looking here first lets us say "not found" by name
     let snapshot = magical_merchant_core::snapshot_note(data_dir, filename)?
         .ok_or_else(|| WriteError::NotFound(filename.clone()))?;
-    // 置き場は core に聞く。Codex にしたノートは `notes/` には居ない
+    // Ask core where it lives. A note turned into a Codex is not in `notes/`
     let (_, path) = magical_merchant_core::locate_note(data_dir, filename)?;
     let revision = match magical_merchant_core::update_note(&path, body, &context(), expected) {
         Ok(revision) => revision,
@@ -153,8 +159,9 @@ mod tests {
     use magical_merchant_core::Provenance;
     use tempfile::TempDir;
 
-    /// 端末について言えることは、アプリから書いても CLI から書いても同じ。
-    /// 入り口の違いは `source` が語る担当で、`context` が痩せる理由にはならない。
+    /// What can be said about the device is the same whether the app or the CLI wrote it.
+    /// The difference in entry point is `source`'s job to tell, not a reason for `context`
+    /// to thin out.
     #[test]
     fn the_recorded_context_says_as_much_about_the_machine_as_the_app_does() {
         let context = context();
@@ -167,9 +174,9 @@ mod tests {
         assert_eq!(context.locale, probed.locale);
     }
 
-    /// 座標だけは載せない。1 回で終わる CLI が測位を待つと、`-m` の一行を
-    /// 書くたびに数秒止まる。古い座標で埋めるほうはもっと悪い
-    /// (前に開いた場所が、いま書いた場所として残る)。
+    /// Only the coordinates are left out. A CLI that runs once and waits for a fix stalls
+    /// for seconds every time a `-m` line is written. Filling in old coordinates is worse:
+    /// the place it was last opened at stays as the place it was written at.
     #[test]
     fn the_recorded_context_carries_no_location() {
         assert!(context().location.is_none());
@@ -191,8 +198,8 @@ mod tests {
         magical_merchant_core::read_note_by_filename(base, filename).unwrap()
     }
 
-    /// Codex にしたノートも同じ ID で書ける。書く先は Codex の置き場で、
-    /// `notes/` に同じ ID の普通のノートを作り直さない。
+    /// A note turned into a Codex is still written by the same ID. The write goes where the
+    /// Codex lives; it does not recreate an ordinary note of the same ID under `notes/`.
     #[test]
     fn overwriting_a_codex_writes_where_it_lives() {
         let tmp = TempDir::new().unwrap();

@@ -1,8 +1,8 @@
-//! 図の SVG / PNG を、利用者が選んだ場所に書き出す。
+//! Writes a diagram's SVG / PNG out to the place the user picked.
 //!
-//! `WebView` の `<a download>` に任せないのは、macOS の `WKWebView` と Android の
-//! `WebView` がそれを処理しないため。保存ダイアログを出して選ばれた先に
-//! ネイティブ側で書く。
+//! The `WebView`'s `<a download>` is not left to do it because macOS's `WKWebView` and
+//! Android's `WebView` do not handle it. A save dialog is shown and the native side writes
+//! to what was picked.
 
 use std::io::Write as _;
 
@@ -14,22 +14,22 @@ use tauri_plugin_fs::{FsExt as _, OpenOptions};
 
 #[derive(serde::Serialize)]
 pub(crate) struct ExportOutcome {
-    /// false はダイアログをキャンセルした。失敗ではない。
+    /// false means the dialog was cancelled. It is not a failure.
     saved: bool,
 }
 
-/// ファイル名の拡張子。ダイアログのフィルタと、保存先の種類を決める。
+/// The filename's extension. It decides the dialog's filter and the kind of target.
 fn extension_of(name: &str) -> Option<&str> {
     let (_, extension) = name.rsplit_once('.')?;
     (!extension.is_empty() && !extension.contains('/')).then_some(extension)
 }
 
-/// 保存ダイアログを出し、選ばれた場所に `data_base64` を書く。
+/// Shows a save dialog and writes `data_base64` to the place that was picked.
 ///
-/// ダイアログは非同期版を使い、結果を oneshot で待つ。`blocking_save_file` は
-/// メインスレッドで呼ぶと固まり、同期の Tauri コマンドはメインスレッドで動く。
-/// 書き込みは fs プラグイン越し — Android の保存先は `content://` で、
-/// `std::fs` では開けない。
+/// The dialog is the async one and the result is awaited on a oneshot.
+/// `blocking_save_file` hangs when called on the main thread, and a synchronous Tauri
+/// command runs on the main thread. The write goes through the fs plugin: on Android the
+/// target is a `content://` URI, which `std::fs` cannot open.
 #[tauri::command]
 pub(crate) async fn save_export(
     handle: AppHandle,
@@ -48,7 +48,7 @@ pub(crate) async fn save_export(
         .add_filter(extension.to_uppercase(), &[&extension])
         .set_file_name(&suggested_name)
         .save_file(move |path| {
-            // 受け手が居なくなっていても、ダイアログ側にできることは無い
+            // Even when the receiver is gone, there is nothing the dialog side can do
             let _ = tx.send(path);
         });
     let Some(path) = rx
@@ -79,7 +79,7 @@ mod tests {
     fn a_name_without_an_extension_has_none() {
         assert_eq!(extension_of("diagram"), None);
         assert_eq!(extension_of("diagram."), None);
-        // ディレクトリ名のドットは拡張子ではない
+        // A dot in a directory name is not an extension
         assert_eq!(extension_of("v1.0/diagram"), None);
     }
 }

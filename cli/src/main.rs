@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 use clap::{Parser, Subcommand};
 use rmcp::ServiceExt;
 
-/// Tauri の `app_data_dir` と同じ場所。アプリの識別子を変えたらここも変わる。
+/// The same place as Tauri's `app_data_dir`. Change the app identifier and this changes too.
 const APP_IDENTIFIER: &str = "com.magical-merchant.app";
 
 #[derive(Parser)]
@@ -45,8 +45,10 @@ enum Command {
         note: Option<String>,
     },
     /// Open a note's body in $VISUAL / $EDITOR and write it back
-    /// `show` は省略で最新に倒すが、`edit` は倒さない。引数を打ち損ねた
-    /// だけで直近のノートがエディタで開き、閉じ方次第で書き戻される
+    ///
+    /// `show` falls back to the newest when omitted, but `edit` does not. A mistyped
+    /// argument alone would open the latest note in the editor, and how it is closed
+    /// decides whether it is written back
     #[command(group = clap::ArgGroup::new("target").required(true).args(["note", "last"]))]
     Edit {
         /// Note filename or stem (`20260320_143045`)
@@ -119,14 +121,14 @@ enum ScrawlCommand {
     Dates,
 }
 
-/// アプリが書いている場所を、引数なしでも見つける。公開アプリの MCP に
-/// パスを手で書かせると、最初の設定でつまずく。
+/// Finds where the app writes even with no argument. Making a user type the path by hand
+/// into the public app's MCP trips them up at the first setup.
 fn default_data_dir() -> Option<PathBuf> {
     dirs::data_dir().map(|d| d.join(APP_IDENTIFIER))
 }
 
-/// `list | head` のように読み手が先に閉じるのは正常な終わり方。
-/// `println!` は panic するので、書き込みの失敗をここで受ける。
+/// A reader closing first, as in `list | head`, is a normal way to end.
+/// `println!` panics, so the write failure is caught here.
 fn quiet_on_closed_pipe(result: std::io::Result<()>) -> std::io::Result<()> {
     match result {
         Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => Ok(()),
@@ -142,8 +144,8 @@ async fn main() -> anyhow::Result<()> {
         .or_else(default_data_dir)
         .ok_or_else(|| anyhow::anyhow!("no data directory: pass --data-dir"))?;
     server::exists_or_hint(&data_dir).map_err(|e| anyhow::anyhow!(e))?;
-    // 改名前の `data/timeline/`。読む前に済ませないと、一覧も同期も
-    // 旧い置き場を素通りする
+    // `data/timeline/` from before the rename. Unless this runs before any read, both the
+    // listing and the sync walk straight past the old directory
     let _ = magical_merchant_core::migrate_scrawl_dir(&data_dir);
 
     match cli.command {
@@ -167,7 +169,7 @@ async fn main() -> anyhow::Result<()> {
             quiet_on_closed_pipe(write!(std::io::stdout().lock(), "{body}"))?;
         }
         Command::Edit { note, last: _ } => {
-            // グループが「どちらか必須」なので、note が無ければ --last
+            // The group requires one of the two, so no note means --last
             let filename = commands::resolve(&data_dir, note.as_deref())?;
             let editor = editor::command_from_env();
             let outcome = commands::edit(&data_dir, &filename, &commands::scratch_dir(), |path| {
@@ -202,16 +204,16 @@ async fn main() -> anyhow::Result<()> {
             tags,
             template,
         } => {
-            // `new` と違ってエディタには倒さない。取り込みは何百本を続けて
-            // 流す経路で、そこでエディタが開くのは事故でしかない
+            // Unlike `new`, this never falls back to the editor. An import is a path that
+            // pipes hundreds of notes in a row, where an editor opening is only an accident
             if std::io::stdin().is_terminal() {
                 anyhow::bail!("import reads the note body from stdin; pipe it in");
             }
             let mut body = String::new();
             std::io::stdin().read_to_string(&mut body)?;
             let created = commands::import(&data_dir, time, &body, &tags, template.as_deref())?;
-            // 空をただの「作らなかった」で流すと、流し込む側は 1 本
-            // 落ちたことに気付けない。名前を出せないなら失敗として返す
+            // Letting an empty pass as "created nothing" keeps the side piping notes in
+            // from noticing that one was dropped. With no name to print, return a failure
             let filename =
                 created.ok_or_else(|| anyhow::anyhow!("nothing on stdin, no note created"))?;
             println!("{filename}");
@@ -262,8 +264,8 @@ fn run_scrawl(data_dir: &Path, command: ScrawlCommand) -> anyhow::Result<()> {
                 let time = entry
                     .time
                     .map_or_else(|| "--:--".to_string(), |t| t.format("%H:%M").to_string());
-                // 複数行のエントリは 2 行目以降を時刻の幅ぶん下げて、どの
-                // エントリの続きかが見えるようにする
+                // For a multi-line entry, indent the lines after the first by the width of
+                // the time so it is clear which entry they continue
                 let text = entry.text.replace('\n', "\n       ");
                 quiet_on_closed_pipe(writeln!(out, "{time}  {text}"))?;
             }
@@ -289,7 +291,7 @@ mod tests {
         assert!(dir.ends_with(APP_IDENTIFIER));
     }
 
-    /// 素で起動して stdin を待つ MCP サーバーにならない。`mcp` と書いたときだけ。
+    /// A bare launch does not become an MCP server waiting on stdin. Only `mcp` does that.
     #[test]
     fn running_without_a_subcommand_is_an_error_not_a_server() {
         use clap::CommandFactory as _;
@@ -299,9 +301,10 @@ mod tests {
         Cli::command().debug_assert();
     }
 
-    /// 取り込みは時刻が要る。ファイル名 = 作成時刻 = ID なので、時刻を
-    /// 省略できると「今」の名前が付き、元の日付は二度と戻らない。
-    /// 読めない時刻もその場で断る — 529 本流し終えてから気付いては遅い。
+    /// An import needs a time. Filename = creation time = ID, so if the time could be
+    /// omitted the note would be named "now" and the original date would never come back.
+    /// A time that cannot be read is refused right there: noticing after 529 notes have
+    /// been piped through is too late.
     #[test]
     fn import_needs_a_time_it_can_read() {
         let parse = |args: &[&str]| Cli::try_parse_from(args);
@@ -326,15 +329,15 @@ mod tests {
         );
     }
 
-    /// `edit` だけは省略で最新に倒さない。書き戻しが起きる側なので、
-    /// どのノートかは毎回言わせる。
+    /// `edit` alone does not fall back to the newest when omitted. It is the side that
+    /// writes back, so which note it is has to be named every time.
     #[test]
     fn edit_needs_a_note_or_an_explicit_last() {
         assert!(Cli::try_parse_from(["magical-merchant", "edit"]).is_err());
         assert!(Cli::try_parse_from(["magical-merchant", "edit", "--last"]).is_ok());
         assert!(Cli::try_parse_from(["magical-merchant", "edit", "20260320_143045"]).is_ok());
         assert!(Cli::try_parse_from(["magical-merchant", "edit", "x", "--last"]).is_err());
-        // show は読むだけなので省略でよい
+        // show only reads, so it may be omitted
         assert!(Cli::try_parse_from(["magical-merchant", "show"]).is_ok());
     }
 }

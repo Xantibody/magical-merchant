@@ -2,9 +2,12 @@ use magical_merchant_core::DeviceContext;
 use magical_merchant_core::utils::device::{self, Location, NetworkType};
 use serde::Deserialize;
 
-/// `WebView` 側で集めた実行環境。Android には `battery` クレートの実装も
-/// `SystemConfiguration` も無く、ネイティブからは電源もネットワークも一切見えない。
-/// 取れる側から埋めるための入力で、`None` は「そちらでは分からなかった」を意味する。
+/// The runtime environment collected on the `WebView` side.
+///
+/// Android has neither an implementation in the `battery` crate nor
+/// `SystemConfiguration`, so native code there sees nothing of power or network. This
+/// is the input that fills in from whichever side can read it, and `None` means "that
+/// side could not tell".
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub(crate) struct ClientContext {
@@ -17,11 +20,14 @@ pub(crate) struct ClientContext {
     pub locale: Option<String>,
 }
 
-/// ネイティブで取れた値を優先し、空いたところだけ `WebView` 側の値で埋める。
-/// ネイティブは OS に直接聞ける（macOS の battery クレートなど）ぶん確度が高い。
+/// Prefers what native could read and fills only the gaps with the `WebView` values.
 ///
-/// 測り方そのものは core (`utils::device::probe`) にある。CLI と MCP から
-/// 書いても同じ内容が残るように、アプリだけが持つ実装にはしない。
+/// Native can ask the OS directly (the battery crate on macOS, for one), so it is the
+/// more reliable of the two.
+///
+/// How the values are measured lives in core (`utils::device::probe`). It is not made
+/// an app-only implementation, so that writes from the CLI and MCP leave the same
+/// content.
 pub(crate) fn get_context(client: ClientContext) -> DeviceContext {
     let native = device::probe();
 
@@ -38,8 +44,8 @@ pub(crate) fn get_context(client: ClientContext) -> DeviceContext {
     }
 }
 
-/// `WebView` が座標を持たないときの取り直し。Android の geolocation プラグインは
-/// フロント側で答えを出しているので、こちらが要るのは macOS だけ。
+/// A second attempt when the `WebView` has no coordinates. The Android geolocation
+/// plugin answers on the front-end side, so this is only needed on macOS.
 #[cfg(target_os = "macos")]
 fn get_location() -> Option<Location> {
     crate::location::latest()
@@ -50,16 +56,15 @@ const fn get_location() -> Option<Location> {
     None
 }
 
-/// ウィジェットが JSON 1 本で渡してくる実行環境。
+/// The runtime environment the widget hands over as a single JSON string.
 ///
-/// `WebView` の無い経路なので構造体をそのまま渡せず、JNI の文字列に詰めて
-/// もらう。読めなければ既定値、つまり「何も分からなかった」に倒す。ここで
-/// 失敗させても打った文が消えるだけで、メタデータが無くてもキャプチャの
-/// 保存そのものは成立する。
+/// The path has no `WebView`, so the struct cannot be passed as it is and the JNI side
+/// packs it into a string. If it cannot be read, fall back to the default, that is, to
+/// "nothing was known". Making it fail here would only throw away the text that was
+/// typed, and saving the capture itself holds even without the metadata.
 ///
-/// 呼ぶのは Android の JNI ブリッジだけだが、ここに置いて全プラットフォームで
-/// ビルドする。CI に Android ターゲットは無く、テストする値打ちがあるのは
-/// パースの部分だから。
+/// Only the Android JNI bridge calls this, but it lives here and builds on every
+/// platform. CI has no Android target, and the parsing is the part worth testing.
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub(crate) fn parse_client_context(json: &str) -> ClientContext {
     serde_json::from_str(json).unwrap_or_default()
@@ -85,8 +90,8 @@ mod client_context_tests {
         assert_eq!(client.locale.as_deref(), Some("ja_JP"));
     }
 
-    /// 位置情報だけは許可が下りていないことがある。欠けたキーは
-    /// 「分からなかった」であって、保存の失敗ではない。
+    /// Location alone may not have permission. An absent key means "not known", not a
+    /// failure to save.
     #[test]
     fn leaves_absent_keys_unknown() {
         let client = parse_client_context(r#"{"battery":7,"networkType":"Offline"}"#);
@@ -109,8 +114,8 @@ mod client_context_tests {
         }
     }
 
-    /// ネイティブが何も言えない項目を、クライアント側の値で埋める。
-    /// Android はこれが無いと電池もネットワークも空のまま残る。
+    /// Fills what the native side can say nothing about with the client-side values.
+    /// Without this, Android leaves battery and network empty.
     #[test]
     fn fills_what_the_native_side_cannot_see_from_the_client() {
         let client = parse_client_context(

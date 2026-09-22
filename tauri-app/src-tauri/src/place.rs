@@ -1,21 +1,23 @@
-//! 座標から地名を引く。
+//! Looks a place name up from coordinates.
 //!
-//! 記録に残るのは座標のままで、これは読むときだけの言い換え。市区町村が
-//! 分かれば十分なので、番地や建物名は捨てて上の行政区画へ落とす。
+//! What the record keeps is the coordinates; this is a rewording used only for reading.
+//! The municipality is enough, so the street number and the building name are dropped and
+//! the answer falls back to the wider administrative area.
 //!
-//! 自前の地名データは持たない。数 MB の辞書を同梱しても OS が既に持っている
-//! ものの劣化版にしかならず、住所の言い方は国ごとに違う。
+//! No place-name data of our own ships with the app. A dictionary of a few MB would only be
+//! a worse copy of what the OS already has, and an address is worded differently by country.
 
 use magical_merchant_core::utils::paths::place_cache_path;
 use magical_merchant_core::utils::place::{PlaceCache, cache_key, place_key};
 use std::path::Path;
 
-/// 地名の分かった座標だけを、[`place_key`] 付きで返す。
+/// Returns only the coordinates whose place name is known, each with its [`place_key`].
 ///
-/// 引けなかった座標は結果に現れない。呼び出し側は座標のまま見せる。
+/// A coordinate that could not be resolved does not appear in the result. The caller shows
+/// it as coordinates.
 ///
-/// `locale` は画面がいま使っている言語(`ja` / `en`)。OS は言語ごとに違う
-/// 名前を返すので、控えも言語ごとに分けて持つ。
+/// `locale` is the language the UI uses right now (`ja` / `en`). The OS returns a different
+/// name per language, so the cache is kept per language as well.
 pub(crate) fn resolve(
     base_dir: &Path,
     coordinates: &[(f64, f64)],
@@ -31,14 +33,15 @@ pub(crate) fn resolve(
         if resolved.iter().any(|(k, _): &(String, String)| *k == key) {
             continue;
         }
-        // 返すのは座標だけのキー。画面が引き当てるのはそちらで、
-        // 言語を混ぜるのは控えの中だけに閉じる
+        // What is returned is the coordinates-only key. That is what the UI looks up, and
+        // mixing the language in is kept inside the cache
         let cached = cache_key(locale, &key);
         if let Some(place) = cache.get(&cached) {
             resolved.push((key, place.to_string()));
             continue;
         }
-        // 圏外なら全件そろって失敗する。1 件目で分かったことに 30 件つき合わせない。
+        // Off the network they all fail. Do not put 30 coordinates through what the first
+        // one already showed.
         let Some(place) = geocode(latitude, longitude, locale) else {
             break;
         };
@@ -48,19 +51,20 @@ pub(crate) fn resolve(
     }
 
     if asked {
-        // 書けなくても引けた地名は返す。次に開いたとき聞き直すだけで済む。
+        // The names that were resolved are returned even if the write fails. The cost is
+        // only asking again the next time it is opened.
         let _ = cache.save(&path);
     }
     resolved
 }
 
-/// 住所の各段から、地図で指させるいちばん細かいものを選ぶ。
+/// Picks the finest address level that can still be pointed at on a map.
 ///
-/// 市区町村 → 郡 → 都道府県/州 → 国。市の付かない土地でも空にならないよう
-/// 上へ落としていく。
+/// Municipality, then county, then prefecture or state, then country. It falls back upward
+/// so that land with no municipality does not come out empty.
 ///
-/// ジオコーダを持たない Linux では呼ぶ側が居なくなるが、ビルドは全 OS でする:
-/// CI は Linux で走り、どの段を選ぶかはここのテストが確かめている部分。
+/// On Linux, which has no geocoder, nothing calls this, but the build runs on every OS:
+/// CI runs on Linux, and which level is picked is the part the tests here check.
 #[cfg_attr(not(any(target_os = "macos", target_os = "android")), allow(dead_code))]
 fn coarsest_name(
     locality: Option<String>,
@@ -81,10 +85,12 @@ fn coarsest_name(
 
 #[cfg(target_os = "macos")]
 mod platform {
-    //! macOS 26 SDK は `CLGeocoder` を非推奨にし、MapKit を指している。乗り換えない
-    //! のは、MapKit が地図描画のフレームワーク一式を道連れにするため。番地も要らず
-    //! 地名 1 つ引くだけの用途に、UI フレームワークを積む釣り合いがない。
-    //! 消えたら地名が引けなくなるだけで、座標表示に落ちて記録は失われない。
+    //! The macOS 26 SDK deprecates `CLGeocoder` and points at `MapKit`.
+    //!
+    //! We do not move over because `MapKit` drags in the whole map-drawing framework.
+    //! Stacking a UI framework does not balance against one place-name lookup that does not
+    //! even want the street number. If it goes away only the lookup goes: the display falls
+    //! back to coordinates and no record is lost.
     #![allow(deprecated)]
 
     use super::coarsest_name;
@@ -95,39 +101,41 @@ mod platform {
     use std::sync::mpsc;
     use std::time::Duration;
 
-    /// ジオコーダの返事を待つ上限。
+    /// Cap on waiting for the geocoder to answer.
     ///
-    /// `CLGeocoder` は圏外でもすぐには諦めず、待たせたぶんだけ IPC が返らない。
-    /// 実測では 1 件 100ms を切るので、これを使い切るのは引けないときだけ。
-    /// 座標のまま出す用意はあるので、待つより先に諦める。
+    /// `CLGeocoder` does not give up at once when off the network, and the IPC does not
+    /// return for as long as it waits. Measured, one lookup is under 100ms, so this is used
+    /// up only when the name cannot be resolved. Showing the coordinates as they are is
+    /// ready, so give up before waiting.
     const TIMEOUT: Duration = Duration::from_secs(8);
 
     /// # Panics
     ///
-    /// しない。返事が来なければ時間切れで `None` を返す。
+    /// It does not. If no answer arrives it times out and returns `None`.
     ///
-    /// メインスレッドから呼んではいけない。`CLGeocoder` は完了ブロックを
-    /// メインキューに載せるので、そこで待つと自分の返事を自分で塞ぎ、必ず
-    /// 時間切れになる。呼び出し元の `resolve_places` はそのために `async`。
+    /// Do not call this from the main thread. `CLGeocoder` puts the completion block on the
+    /// main queue, so waiting there blocks its own answer and the timeout always fires.
+    /// That is why the caller `resolve_places` is `async`.
     pub(super) fn geocode(latitude: f64, longitude: f64, locale: &str) -> Option<String> {
-        // SAFETY: どちらもただのオブジェクト生成で、スレッドの制約を持たない。
+        // SAFETY: both are plain object creations and carry no thread constraint.
         let (location, geocoder) = unsafe {
             (
                 CLLocation::initWithLatitude_longitude(CLLocation::alloc(), latitude, longitude),
                 CLGeocoder::new(),
             )
         };
-        // 言語を渡さないと OS の設定で返る。画面が英語でも地名だけ日本語になる
+        // Without a language it comes back in the OS setting. With an English UI only the
+        // place name would be Japanese
         let preferred = NSLocale::localeWithLocaleIdentifier(&NSString::from_str(locale));
         let (tx, rx) = mpsc::channel();
 
-        // ジオコーダ自身をブロックに持たせて、返事が来るまで生かしておく。
+        // The block holds the geocoder itself, keeping it alive until the answer arrives.
         let held = geocoder.clone();
         let handler = RcBlock::new(
             move |placemarks: *mut NSArray<CLPlacemark>, _: *mut NSError| {
                 let _ = &held;
-                // SAFETY: CoreLocation が渡してくるのは自分の持ち物で、ブロックが
-                // 戻るまでは生きている。住所の各段を読むのもその間だけ。
+                // SAFETY: what CoreLocation hands over is its own and stays alive until
+                // the block returns. The address levels are read only within that window.
                 let name = unsafe {
                     placemarks
                         .as_ref()
@@ -145,8 +153,8 @@ mod platform {
             },
         );
 
-        // SAFETY: 完了ブロックを渡すだけ。CLGeocoder は受け取ったブロックを自分で
-        // 複製して持つので、時間切れでこちらが手放しても呼び出し先は生きている。
+        // SAFETY: this only hands over the completion block. CLGeocoder copies the block it
+        // receives and holds it, so the callee lives on even when a timeout drops ours.
         unsafe {
             geocoder.reverseGeocodeLocation_preferredLocale_completionHandler(
                 &location,
@@ -166,16 +174,16 @@ mod platform {
     use jni::strings::JNIStr;
     use jni::{Env, jni_sig, jni_str};
 
-    /// `Geocoder` は端末の Context と結び付いているので、Rust から素で作れない。
-    /// 起動時に取った VM と Application Context を借りて Java 側を呼ぶ。
+    /// `Geocoder` is tied to the device Context, so it cannot be built bare from Rust.
+    /// It borrows the VM and Application Context taken at startup and calls into Java.
     pub(super) fn geocode(latitude: f64, longitude: f64, locale: &str) -> Option<String> {
-        // jni 0.22 の attach は `Env` を閉包の中にしか出さない。借りた寿命が
-        // スタックの一区間に固定され、アタッチ解除後に持ち出せなくなる
+        // The attach in jni 0.22 exposes `Env` only inside the closure. The borrowed
+        // lifetime is pinned to one stretch of the stack and cannot escape after detach
         crate::android_context::with_context(|env, context| {
             let name = lookup(env, &context, latitude, longitude, locale);
             if name.is_none() {
-                // 圏外の `getFromLocation` は IOException を投げる。積んだままにすると
-                // 次に JNI を跨いだところで無関係な呼び出しが落ちる。
+                // Off the network `getFromLocation` throws IOException. Left pending, an
+                // unrelated call fails at the next crossing of JNI.
                 let _ = env.exception_clear();
             }
             Ok(name)
@@ -191,8 +199,8 @@ mod platform {
         longitude: f64,
         language: &str,
     ) -> Option<String> {
-        // 端末の既定ではなく画面の言語で聞く。`Locale.getDefault()` だと、
-        // 英語にしたアプリの中で地名だけ端末の言語で返る
+        // Ask in the UI language, not the device default. With `Locale.getDefault()`, only
+        // the place name comes back in the device language inside an app set to English
         let tag = env.new_string(language).ok()?;
         let locale = env
             .new_object(
@@ -209,7 +217,7 @@ mod platform {
             )
             .ok()?;
 
-        // 1 件だけ求める。2 件目以降は同じ場所の別の言い方でしかない。
+        // Ask for one only. Anything after it is just another wording of the same place.
         let addresses = env
             .call_method(
                 &geocoder,
@@ -253,7 +261,7 @@ mod platform {
         )
     }
 
-    /// `Address` の getter は、その段が無ければ null を返す。
+    /// An `Address` getter returns null when that level is absent.
     fn string_getter(env: &mut Env<'_>, address: &JObject<'_>, name: &JNIStr) -> Option<String> {
         let value = env
             .call_method(address, name, jni_sig!(() -> java.lang.String), &[])
@@ -268,8 +276,8 @@ mod platform {
     }
 }
 
-/// Windows と Linux には、追加の依存なしに叩ける逆ジオコーダが無い。
-/// 座標のまま見せる道が残っているので、ここでは黙って諦める。
+/// Windows and Linux have no reverse geocoder that can be called without an extra
+/// dependency. Showing the coordinates as they are is still open, so this gives up quietly.
 #[cfg(not(any(target_os = "macos", target_os = "android")))]
 mod platform {
     pub(super) const fn geocode(_latitude: f64, _longitude: f64, _locale: &str) -> Option<String> {
@@ -283,8 +291,8 @@ use platform::geocode;
 mod tests {
     use super::*;
 
-    /// 住所の 4 段を、無い段は `""` で。ジオコーダが空文字で返す段と
-    /// そもそも返さない段は、どちらも「名乗れなかった」で区別しない。
+    /// The four address levels, with an absent level given as `""`. A level the geocoder
+    /// returns empty and one it does not return at all both count as "unnamed".
     fn named(areas: [&str; 4]) -> Option<String> {
         let [locality, sub, admin, country] =
             areas.map(|area| (!area.is_empty()).then(|| area.to_string()));
@@ -299,8 +307,8 @@ mod tests {
         );
     }
 
-    /// 市の付かない土地では郡や州しか返らない。そこで諦めると、記録が
-    /// 「どこか」を名乗れなくなる。
+    /// Land with no municipality returns only a county or a state. Giving up there leaves
+    /// the record with no way to say where it was.
     #[test]
     fn it_falls_back_through_the_wider_areas() {
         assert_eq!(
@@ -311,8 +319,8 @@ mod tests {
         assert_eq!(named(["", "", "", "日本"]).as_deref(), Some("日本"));
     }
 
-    /// ジオコーダは分からない段を空白だけの文字列で返すことがある。
-    /// 空の名札は座標より役に立たない。
+    /// The geocoder sometimes returns a level it does not know as a whitespace-only string.
+    /// A blank label is less useful than the coordinates.
     #[test]
     fn a_blank_name_counts_as_missing() {
         assert_eq!(named(["  ", "", "北海道", ""]).as_deref(), Some("北海道"));

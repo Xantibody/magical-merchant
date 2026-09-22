@@ -1,6 +1,6 @@
-//! ログインの入口。設定ファイルとトークン保管は core
-//! (`magical_merchant_core::sync::{config, token}`) にあり、ここに残るのは
-//! アプリ内のログイン窓と、そこから呼ばれる Tauri command だけ。
+//! Entry point for signing in. The config file and token storage live in core
+//! (`magical_merchant_core::sync::{config, token}`); what stays here is the in-app
+//! sign-in window and the Tauri commands called from it.
 
 #[cfg(not(target_os = "android"))]
 use std::path::Path;
@@ -11,8 +11,8 @@ use magical_merchant_core::sync::config::{SyncConfig, normalize_workers_url};
 use magical_merchant_core::sync::token::store_token;
 use magical_merchant_core::sync::token::{clear_token, get_token, is_token_valid};
 use tauri::AppHandle;
-// ログイン窓を探して作るのはデスクトップだけ。Android は既定のブラウザへ
-// 投げるので、この trait を使う先がない
+// Only the desktop build looks up or creates a sign-in window. Android hands the URL
+// to the default browser, so nothing there uses this trait
 #[cfg(not(target_os = "android"))]
 use tauri::Manager;
 #[cfg(target_os = "android")]
@@ -28,14 +28,18 @@ fn build_auth_url(workers_url: &str, app_redirect: &str) -> String {
     )
 }
 
-/// ログイン画面を出すアプリ内の窓。ラベルは 1 つだけ持ち、二度目からは
-/// 同じ窓を次の URL へ送る — `close()` はイベントループ越しなので、閉じた
-/// 直後に同じラベルで建て直すと衝突することがある。
+/// The in-app window that shows the sign-in page.
+///
+/// It keeps a single label, and from the second time on the same window is sent to the
+/// next URL: `close()` goes through the event loop, so rebuilding with the same label
+/// right after closing can collide.
 #[cfg(not(target_os = "android"))]
 const AUTH_WINDOW_LABEL: &str = "auth";
 
-/// ログインをアプリの中で完結させる。外部ブラウザに投げるとアプリが背面へ
-/// 回り、承認のあと自分で戻ってこないといけない。認証は始めた場所で終わる。
+/// Keeps sign-in inside the app.
+///
+/// Handing it to an external browser puts the app behind, and after approval the user
+/// has to come back on their own. Authentication ends where it started.
 #[cfg(not(target_os = "android"))]
 fn open_auth_window(handle: &AppHandle, auth_url: &str) -> Result<tauri::WebviewWindow, String> {
     let url = Url::parse(auth_url).map_err(|e| format!("Invalid auth URL: {e}"))?;
@@ -56,12 +60,14 @@ fn open_auth_window(handle: &AppHandle, auth_url: &str) -> Result<tauri::Webview
         .map_err(|e| format!("Failed to open the sign-in window: {e}"))
 }
 
-/// 窓が閉じられたことを一度だけ知らせる受け口。閉じたのに待ち続けると、
-/// やめたつもりの利用者を 5 分間のタイムアウトまで待たせることになる。
+/// A one-shot receiver that reports the window being closed.
+///
+/// Waiting on after it is closed would hold a user who meant to stop until the
+/// 5-minute timeout.
 #[cfg(not(target_os = "android"))]
 fn closed_signal(window: &tauri::WebviewWindow) -> tokio::sync::oneshot::Receiver<()> {
     let (tx, rx) = tokio::sync::oneshot::channel();
-    // on_window_event は Fn を求めるので、一度きりの送信側を包んで取り出す
+    // `on_window_event` wants an `Fn`, so the one-shot sender is wrapped and taken out
     let tx = std::sync::Mutex::new(Some(tx));
     window.on_window_event(move |event| {
         if !matches!(event, tauri::WindowEvent::Destroyed) {
@@ -74,7 +80,8 @@ fn closed_signal(window: &tauri::WebviewWindow) -> tokio::sync::oneshot::Receive
     rx
 }
 
-/// ブラウザに返す唯一のページ。窓はこのあとアプリが畳むので、案内だけ置く。
+/// The only page returned to the browser. The app closes the window right after, so it
+/// carries nothing but a note.
 #[cfg(not(target_os = "android"))]
 const CALLBACK_RESPONSE: &str = concat!(
     "HTTP/1.1 200 OK\r\n",
@@ -83,19 +90,20 @@ const CALLBACK_RESPONSE: &str = concat!(
     "<html><body><p>You can close this window.</p></body></html>"
 );
 
-/// 待っている間に来る、コールバックではないリクエストへの返事。
+/// The reply to a request that arrives while waiting and is not the callback.
 #[cfg(not(target_os = "android"))]
 const NOT_FOUND_RESPONSE: &str = "HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n";
 
-/// 生の HTTP リクエストから、保存してよいトークンだけを読む。
+/// Reads out of a raw HTTP request only a token that may be stored.
 ///
-/// ループバックの口はサインインの間ずっと開いていて、ローカルの誰でも
-/// 叩ける。パスの nonce は「この窓から始めたログインの戻りである」ことの
-/// 唯一の証で、JWT の期限はその中身が使えることの最低限の確認。
+/// The loopback socket is open for the whole of sign-in, and any local process can hit
+/// it. The nonce in the path is the only proof that this is the return of the sign-in
+/// started from this window, and the JWT expiry is the minimum check that its contents
+/// are usable.
 #[cfg(not(target_os = "android"))]
 fn callback_token(request_text: &str, callback_path: &str) -> Option<String> {
     let target = request_text.lines().next()?.split_whitespace().nth(1)?;
-    // AIDEV-NOTE: 絶対 URL 形式の要求先は捨てる。join がホストごと差し替え、パスだけ一致させられる
+    // AIDEV-NOTE: drop request targets in absolute URL form. `join` replaces the host too, so the path alone could be made to match
     if !target.starts_with('/') {
         return None;
     }
@@ -109,14 +117,16 @@ fn callback_token(request_text: &str, callback_path: &str) -> Option<String> {
         .filter(|token| is_token_valid(token))
 }
 
-/// 1 本の接続を抱えていられる時間。ブラウザは繋いだ直後にリクエストを送る
-/// ので、これだけあれば本物には足りる。並行に読むぶん、この上限が延びても
-/// コールバックの受け付けは遅れない — 遅れるのは黙った接続を畳む時刻だけ。
+/// How long one connection may be held.
+///
+/// A browser sends its request right after it connects, so this is enough for the real
+/// one. Reads run in parallel, so raising this limit does not delay accepting the
+/// callback; it only moves when a silent connection is dropped.
 #[cfg(not(target_os = "android"))]
 const CONNECTION_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 
-/// 繋いできた 1 本を読んで、保存してよいトークンだけを返す。返事は結果に
-/// 関わらず書く — 本物には案内を、それ以外には 404 を。
+/// Reads one accepted connection and returns only a token that may be stored. A reply
+/// is written either way: the note for the real one, 404 for everything else.
 #[cfg(not(target_os = "android"))]
 async fn read_callback_token(
     mut stream: tokio::net::TcpStream,
@@ -126,8 +136,8 @@ async fn read_callback_token(
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     let mut buf = vec![0u8; 4096];
-    // 繋いだまま何も送ってこない接続をいつまでも抱えない。時間切れも
-    // 読み取り失敗も、この 1 本を捨てる理由
+    // Do not hold on to a connection that stays open and sends nothing. A timeout and
+    // a failed read are both reasons to drop this one
     let Ok(Ok(n)) = tokio::time::timeout(read_timeout, stream.read(&mut buf)).await else {
         return None;
     };
@@ -143,13 +153,15 @@ async fn read_callback_token(
     token
 }
 
-/// nonce の一致したコールバックが来るまで待つ。一致しないものは 404 で
-/// 捨てて待ち続ける — 先に繋いだだけの相手にログインを横取りさせない。
+/// Waits until a callback with a matching nonce arrives.
 ///
-/// 読むのは並行、受け付けは止めない。ポートは総当たりで見つかるので、
-/// ローカルのプロセスは好きな本数だけ繋いでこられる。
+/// Anything that does not match is dropped with a 404 and the wait goes on, so merely
+/// connecting first does not let someone take over the sign-in.
 ///
-/// AIDEV-NOTE: 接続は並行に読む。順に読む案は却下 — 黙った接続を 60 本並べるだけで 300 秒の窓を食い潰せた
+/// Reads run in parallel and accepting never stops. The port can be found by brute
+/// force, so a local process can open as many connections as it likes.
+///
+/// AIDEV-NOTE: connections are read in parallel. Reading them in order was rejected: 60 silent connections alone could eat the whole 300-second window
 #[cfg(not(target_os = "android"))]
 async fn accept_callback_token(
     listener: &tokio::net::TcpListener,
@@ -168,8 +180,9 @@ async fn accept_callback_token(
                     read_callback_token(stream, &callback_path, read_timeout).await
                 });
             }
-            // 無効だった 1 本は、次を待つ理由にしかならない。空の JoinSet は
-            // 即 None を返し、その回はこの枝が外れて accept だけを待つ
+            // A connection that turned out invalid is only a reason to wait for the
+            // next. An empty `JoinSet` returns `None` at once, so that round drops this
+            // arm and waits on `accept` alone
             Some(read) = reading.join_next() => {
                 if let Ok(Some(token)) = read {
                     return Ok(token);
@@ -190,8 +203,9 @@ async fn login_with_loopback(
         .map_err(|e| format!("Failed to bind loopback: {e}"))?;
     let port = listener.local_addr().map_err(|e| e.to_string())?.port();
 
-    // 戻り先はこのログイン 1 回きりのもの。ポートは総当たりで見つかるが、
-    // nonce は推測できないので、ここに届いた token だけが自分のものだと言える
+    // The return target belongs to this one sign-in. The port can be found by brute
+    // force, but the nonce cannot be guessed, so only a token that arrives here can be
+    // called ours
     let callback_path = format!("/callback/{}", uuid::Uuid::new_v4());
     let app_redirect = format!("http://127.0.0.1:{port}{callback_path}");
     let auth_url = build_auth_url(&config.workers_url, &app_redirect);
@@ -208,13 +222,13 @@ async fn login_with_loopback(
         .map_err(|_| "Login timed out. Please try again.".to_string())
         .and_then(|token| token)
         .and_then(|token| store_token(base_dir, &token))
-        // SyncButton などが認証状態を即時反映できるよう通知する
+        // Notify so `SyncButton` and the like can reflect the auth state at once
         .inspect(|()| {
             let _ = tauri::Emitter::emit(handle, "auth-success", ());
         });
 
-    // 窓は結果に関わらず畳む。成否は設定画面が伝えるので、たどり着いた
-    // コールバックの画面をアプリの手前に残しておく理由がない
+    // The window is closed whatever the result. The settings screen reports success or
+    // failure, so there is no reason to leave the callback page in front of the app
     let _ = window.close();
 
     outcome
@@ -228,7 +242,8 @@ mod tests {
 
     const CALLBACK_PATH: &str = "/callback/11111111-2222-3333-4444-555555555555";
 
-    /// 署名は誰も見ない (`sync::token::is_token_valid` と同じ理由) ので 3 つのパートを直に組む
+    /// Nobody looks at the signature (same reason as `sync::token::is_token_valid`), so
+    /// the three parts are built directly
     fn jwt(expires_in: i64) -> String {
         let header = URL_SAFE_NO_PAD.encode(r#"{"alg":"HS256","typ":"JWT"}"#);
         let exp = chrono::Utc::now().timestamp() + expires_in;
@@ -248,8 +263,8 @@ mod tests {
         assert_eq!(callback_token(&request, CALLBACK_PATH), Some(token));
     }
 
-    /// nonce を知らない相手が先に繋いでも、待っている側は何も受け取らない。
-    /// これを取り違えると、以後の同期が相手のアカウントへ向く
+    /// A caller that does not know the nonce gets nothing even if it connects first.
+    /// Getting this wrong points every later sync at their account
     #[test]
     fn a_token_on_another_path_is_ignored() {
         let request = get(&format!("/callback?token={}", jwt(3600)));
@@ -257,8 +272,8 @@ mod tests {
         assert_eq!(callback_token(&request, CALLBACK_PATH), None);
     }
 
-    /// 期限切れを保存すると、生きているトークンを潰したうえで
-    /// 次の同期が「ログインし直してください」で止まる
+    /// Storing an expired token destroys a live one and then stops the next sync with
+    /// "please sign in again"
     #[test]
     fn an_expired_token_is_ignored() {
         let request = get(&format!("{CALLBACK_PATH}?token={}", jwt(-100)));
@@ -278,7 +293,7 @@ mod tests {
         assert_eq!(callback_token(&get(CALLBACK_PATH), CALLBACK_PATH), None);
     }
 
-    /// 絶対 URL 形式のリクエスト行はパスだけ一致させられる
+    /// A request line in absolute URL form could be made to match on the path alone
     #[test]
     fn an_absolute_request_target_is_ignored() {
         let request = get(&format!(
@@ -295,9 +310,11 @@ mod tests {
         assert_eq!(callback_token("garbage", CALLBACK_PATH), None);
     }
 
-    /// ポートは総当たりで見つかる。繋いだきり何も送らないローカルプロセスが
-    /// 1 つあるだけでログインが通らなくなると、nonce は守れていても利用者は
-    /// 外側の 5 分を待たされる
+    /// The port can be found by brute force.
+    ///
+    /// If one local process that connects and sends nothing were enough to block
+    /// sign-in, the nonce would still hold but the user would wait out the outer
+    /// 5 minutes
     #[tokio::test]
     async fn a_silent_connection_does_not_hold_up_the_callback() {
         use tokio::io::AsyncWriteExt as _;
@@ -305,7 +322,7 @@ mod tests {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
 
-        // accept の順は繋いだ順。黙っている側が先に取り出される
+        // accept order is connection order, so the silent one comes out first
         let _silent = tokio::net::TcpStream::connect(addr).await.unwrap();
 
         let token = jwt(3600);
@@ -329,9 +346,10 @@ mod tests {
         assert_eq!(accepted, Ok(token));
     }
 
-    /// 黙った接続を並べるのは、1 本を無限に居座らせるのと同じ効き目を持つ。
-    /// 1 本ずつ順に読むと、読み取りの上限 × 並べた本数だけコールバックの
-    /// 受け付けが遅れ、外側の 5 分をまるごと食い潰せる
+    /// Lining up silent connections has the same effect as letting one sit forever.
+    ///
+    /// Read one at a time, they delay accepting the callback by the read timeout times
+    /// the number lined up, which can eat the whole outer 5 minutes
     #[tokio::test]
     async fn many_silent_connections_do_not_hold_up_the_callback() {
         use tokio::io::AsyncWriteExt as _;
@@ -339,7 +357,8 @@ mod tests {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
 
-        // 60 本 × 5 秒 = 300 秒。本物の読み取り上限のまま、外側の窓と同じ長さ
+        // 60 connections at 5 seconds each is 300 seconds: the real read timeout, as
+        // long as the outer window
         let mut silent = Vec::new();
         for _ in 0..60 {
             silent.push(tokio::net::TcpStream::connect(addr).await.unwrap());
@@ -360,13 +379,15 @@ mod tests {
         .expect("queued silent connections must not delay the callback");
 
         assert_eq!(accepted, Ok(token));
-        // 待っている間ずっと繋がっていないと、並べた意味がない
+        // Lining them up means nothing unless they stay connected for the whole wait
         drop(silent);
     }
 
-    /// nonce の違うものを先に何本も読んでも、待っている側が拾うのは
-    /// 一致した 1 本だけ。並行に読むと「無効だった」が複数返ってくるので、
-    /// そのどれかで待つのをやめないことを固定する
+    /// Even when several with the wrong nonce are read first, the waiting side takes
+    /// only the one that matches.
+    ///
+    /// Reading in parallel returns "invalid" more than once, so this pins down that
+    /// none of those ends the wait
     #[tokio::test]
     async fn the_valid_token_wins_over_connections_read_alongside_it() {
         use tokio::io::AsyncWriteExt as _;
@@ -445,8 +466,10 @@ pub(crate) fn auth_logout(handle: AppHandle) -> Result<(), String> {
     clear_token(&base_dir)
 }
 
-/// 読めなかった設定は `kind: "configCorrupt"` で返す。既定値にすり替えると
-/// 設定画面が空欄で開き、入力し直した URL が壊れたファイルを上書きする
+/// A config that could not be read comes back as `kind: "configCorrupt"`.
+///
+/// Substituting the default would open the settings screen blank, and the re-entered
+/// URL would then overwrite the broken file
 #[tauri::command]
 pub(crate) fn get_sync_config(handle: AppHandle) -> Result<SyncConfig, SyncError> {
     let base_dir = crate::app_base_dir(&handle).map_err(SyncError::other)?;
