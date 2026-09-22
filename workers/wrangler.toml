@@ -1,6 +1,8 @@
 name = "magical-merchant-sync"
 main = "src/index.ts"
 compatibility_date = "2025-04-01"
+# AIDEV-NOTE: opt into the Promise fix without changing unrelated compatibility defaults.
+compatibility_flags = ["unhandled_rejection_after_microtask_checkpoint"]
 
 [[r2_buckets]]
 binding = "BUCKET"
