@@ -63,7 +63,7 @@ function b64Decode(s: string): string {
   return atob(s);
 }
 
-/// テスト用のダミーハッシュ。Worker は 64 桁小文字 hex しか受け付けない
+/// A dummy hash for the tests. The Worker accepts only 64 lowercase hex digits
 function hash(seed: string): string {
   return seed
     .repeat(64)
@@ -134,7 +134,7 @@ async function clearBucket(): Promise<void> {
   }
 }
 
-/** Google の 2 往復 (code → access token → userinfo) を差し替える。 */
+/** Replaces Google's two round trips: the code for an access token, then userinfo. */
 function stubGoogle(): void {
   vi.stubGlobal("fetch", (input: RequestInfo | URL): Promise<Response> => {
     const target = input instanceof Request ? input.url : String(input);
@@ -153,7 +153,7 @@ function authGoogle(appRedirect: string): Promise<Response> {
   return send(new Request(`http://localhost/auth/google${query}`));
 }
 
-/** 入口を通った直後の状態、つまり state と app_redirect の cookie を持った戻り。 */
+/** The return right after the entrance, carrying the state and app_redirect cookies. */
 function authCallback(appRedirect: string): Promise<Response> {
   const cookie = [
     "__oauth_state=state-abc",
@@ -168,8 +168,8 @@ function authCallback(appRedirect: string): Promise<Response> {
 
 const LOOPBACK_REDIRECT = "http://127.0.0.1:1421/callback/1f0c1b5e";
 
-// リダイレクト先を検証し損ねると、リンクを踏ませるだけで 3 日有効の JWT が
-// 第三者の URL へ 302 で渡る。/auth/* はここまでテストが 1 本も無かった
+// Fail to validate the redirect target and one link is enough to hand a JWT valid for
+// 3 days to a third party's URL with a 302. `/auth/*` had no test at all until now
 describe("OAuth entry and exit", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -189,8 +189,8 @@ describe("OAuth entry and exit", () => {
       expect(res.status).toBe(302);
     });
 
-    // `http://127.0.0.1:1@evil.example/` の host は evil.example、127.0.0.1 は
-    // userinfo。前方一致で見ていたころはこれが素通りしていた
+    // The host of `http://127.0.0.1:1@evil.example/` is evil.example and 127.0.0.1 is
+    // the userinfo. Back when this was a prefix match it went straight through
     it.each([
       "http://127.0.0.1:1@evil.example/",
       "http://127.0.0.1.evil.example/callback",
@@ -200,8 +200,8 @@ describe("OAuth entry and exit", () => {
       "magical-merchant-evil://auth/callback",
       "not a url",
       "",
-      // ループバックでも `?token=` は末尾に足される。クエリや断片が先に
-      // 付いていると、listener はトークンを 1 文字も受け取れない
+      // `?token=` is appended at the end for the loopback too. With a query or a
+      // fragment already there, the listener gets not one character of the token
       `${LOOPBACK_REDIRECT}?next=evil`,
       `${LOOPBACK_REDIRECT}#`,
     ])("refuses app_redirect %o", async (appRedirect) => {
@@ -210,9 +210,9 @@ describe("OAuth entry and exit", () => {
       expect(res.status).toBe(400);
     });
 
-    // Android の intent-filter が本物のアプリに割り当てているホストは
-    // `auth` と `widget` だけ。スキームだけを見ていたころは、別のホストを
-    // 登録した悪意あるアプリに `?token=` ごと配送されていた
+    // The hosts the Android intent-filter assigns to the real app are `auth` and
+    // `widget` only. Back when only the scheme was looked at, a malicious app that
+    // registered another host was delivered the whole `?token=`
     it.each([
       "magical-merchant://steal/callback",
       "magical-merchant://widget/new-note",
@@ -223,11 +223,11 @@ describe("OAuth entry and exit", () => {
       "magical-merchant://auth",
       "magical-merchant:auth/callback",
       "magical-merchant://AUTH/callback",
-      // クエリを足せると、戻り先の URL が `?token=` より前で終わらない
+      // If a query could be added, the return URL would not end before `?token=`
       "magical-merchant://auth/callback?next=evil",
-      // 断片が付くと `?token=` はその後ろに回り、アプリには届かない。
-      // 空の断片・空のクエリは URL 解析が hash / search を "" と報告するので、
-      // 条件を並べて見ていたころは素通りしていた
+      // With a fragment, `?token=` goes behind it and never reaches the app. An empty
+      // fragment and an empty query slipped past a list of conditions, because URL
+      // parsing reports hash / search as ""
       "magical-merchant://auth/callback#frag",
       "magical-merchant://auth/callback#",
       "magical-merchant://auth/callback?",
@@ -248,8 +248,8 @@ describe("OAuth entry and exit", () => {
       expect(res.headers.get("Location")).toContain(`${LOOPBACK_REDIRECT}?token=`);
     });
 
-    // 発行側と検証側で iss / aud がずれると、ログインは通るのに最初の
-    // 同期が 401 で返る。往復させて 1 本で押さえる
+    // If `iss` / `aud` drift apart between the issuing side and the verifying side,
+    // sign-in works but the first sync comes back 401. One round trip pins it down
     it("issues a token the sync routes accept", async () => {
       stubGoogle();
       const callback = await authCallback(LOOPBACK_REDIRECT);
@@ -275,13 +275,13 @@ describe("OAuth entry and exit", () => {
       await expect(res.text()).resolves.toContain("magical-merchant://auth/callback?token=");
     });
 
-    // cookie を差し替えられても宛先は変えさせない。入口で通した値でも、
-    // 出口でもう一度見るのはそのため
+    // The destination must not change even if the cookie is swapped. That is why a
+    // value passed at the entrance is looked at again at the exit
     it.each([
       "http://127.0.0.1:1@evil.example/",
       "http://evil.example/callback",
       "magical-merchant://steal/callback",
-      // ここを通すと、返す HTML のリンクが `…/callback#?token=` になる
+      // Let this through and the link in the returned HTML becomes `.../callback#?token=`
       "magical-merchant://auth/callback#",
     ])("refuses to send the token to %o", async (appRedirect) => {
       stubGoogle();
@@ -348,8 +348,9 @@ describe("Workers Sync API", () => {
       expect(res.status).toBe(401);
     });
 
-    // 署名方式・発行者・宛先は発行側が決めるもの。検証側が「トークンに
-    // 書いてある通り」で受けると、その選択が持ち込む側の手に残る
+    // The signature scheme, the issuer and the audience are the issuing side's to
+    // decide. If the verifying side takes them "as written in the token", that choice
+    // stays in the hands of whoever brings the token
     it.each([
       { name: "another algorithm", claims: { alg: "HS512" } },
       { name: "another issuer", claims: { issuer: "https://evil.example" } },
@@ -422,8 +423,8 @@ describe("Workers Sync API", () => {
       expect(b64Decode(body.downloads[0].content_base64)).toBe("remote content");
     });
 
-    // 2台目がダウンロードしただけで state からファイルが消えると、
-    // 次の同期で全端末が「リモートで削除された」と解釈してノートを消してしまう
+    // If a file dropped out of the state just because a second device downloaded it,
+    // every device would read "deleted remotely" on the next sync and erase the note
     it("keeps downloaded files in the state so a second device cannot wipe it", async () => {
       await bulk({ uploads: [upload("notes/a.md", "from device A", "d")] });
       const afterUpload = await currentState();
@@ -437,7 +438,8 @@ describe("Workers Sync API", () => {
       const body = await jsonBody<BulkBody>(res);
       expect(Object.keys(body.new_state.files)).toStrictEqual(["notes/a.md"]);
       expect(body.new_state.files["notes/a.md"].hash).toBe(hash("d"));
-      // ダウンロードは版を進めない。進めると同期済みの端末が再取得し続ける
+      // A download does not advance the version. If it did, devices already in sync
+      // would keep fetching it again
       expect(body.new_state.files["notes/a.md"].last_modified).toBe(
         afterUpload.files["notes/a.md"].last_modified,
       );
@@ -493,15 +495,16 @@ describe("Workers Sync API", () => {
       expect(res.status).toBe(200);
       const body = await jsonBody<BulkBody>(res);
 
-      // ローカルが勝つ
+      // The local copy wins
       await expect(objectText(await env.BUCKET.get("notes/c.md"))).resolves.toBe("local version");
-      // 上書きされたリモート側は R2 に退避され、クライアントにも返る
+      // The overwritten remote side is stashed in R2 and returned to the client too
       await expect(
         objectText(await env.BUCKET.get("notes/c.sync-conflict-20260512-120000.md")),
       ).resolves.toBe("remote version");
       expect(body.conflict_downloads).toHaveLength(1);
       expect(b64Decode(body.conflict_downloads[0].content_base64)).toBe("remote version");
-      // 競合コピーは同期対象外。state に載せると全端末が延々と取得し続ける
+      // A conflict copy is not synced. Put it in the state and every device keeps
+      // fetching it forever
       expect(Object.keys(body.new_state.files)).toStrictEqual(["notes/c.md"]);
     });
 
@@ -518,7 +521,7 @@ describe("Workers Sync API", () => {
     it("returns 409 on etag mismatch", async () => {
       await bulk({ uploads: [upload("notes/a.md", "first")] });
 
-      // 2 回目が stale な etag (state があるのに null) を送る
+      // The second call sends a stale etag (null although there is a state)
       const res = await bulk({ uploads: [upload("notes/b.md", "second")] });
 
       expect(res.status).toBe(409);
@@ -535,8 +538,8 @@ describe("Workers Sync API", () => {
       expect(res.status).toBe(400);
     });
 
-    // `null` も `1` も JSON としては正しい。オブジェクトでない body を
-    // そのまま読みに行くと例外になり、Cloudflare の HTML 500 が返る
+    // `null` and `1` are both valid JSON. Going on to read a body that is not an object
+    // throws, and Cloudflare's HTML 500 comes back
     it.each(["null", "1", '"a string"'])(
       "rejects a body that is not an object: %s",
       async (body) => {
@@ -571,7 +574,7 @@ describe("Workers Sync API", () => {
       expect(res.status).toBe(400);
     });
 
-    // 壊れたハッシュを state に入れると、全端末で変更検出が壊れる
+    // A broken hash in the state breaks change detection on every device
     it("rejects an upload whose hash is not a sha256 hex digest", async () => {
       const res = await bulk({
         uploads: [{ ...upload("notes/bad.md", "content"), hash: "abc" }],
@@ -588,8 +591,8 @@ describe("Workers Sync API", () => {
       expect(res.status).toBe(200);
     });
 
-    // Free プランは 1 呼び出し 50 サブリクエストで、bulk は R2 を 1 ファイル
-    // 1 回叩く。超えると Cloudflare が落とすので、その手前で理由を返す
+    // The Free plan gives 50 subrequests per invocation, and a bulk hits R2 once per
+    // file. Over that Cloudflare drops it, so the reason is returned just short of it
     it("refuses a bulk over the operation limit", async () => {
       const res = await bulk({ uploads: uploads(46) });
 
@@ -598,8 +601,8 @@ describe("Workers Sync API", () => {
       expect(body.error).toContain("split the sync");
     });
 
-    // 競合は退避の get + put と上書きの put で 3 回。1 と数えると、
-    // 通した bulk が上限の 3 倍を使う
+    // A conflict is three: the get and put that stash the copy, plus the put that
+    // overwrites. Count it as one and a bulk that gets through uses three times the cap
     it("counts a conflict as three operations", async () => {
       const conflicts = Array.from({ length: 16 }, (_, i) => ({
         key: `notes/${i}.md`,
@@ -615,8 +618,8 @@ describe("Workers Sync API", () => {
     });
   });
 
-  // R2 のキーはユーザー別に分かれていない。2 人目が入ると同じ
-  // `notes/<id>.md` を取り合い、両者の state が延々と押し合う
+  // R2 keys are not split per user. Let a second person in and they fight over the same
+  // `notes/<id>.md`, with the two states shoving each other forever
   describe("the ALLOWED_SUBS allowlist", () => {
     it("lets anyone in while it is unset", async () => {
       const res = await send(request("/sync-state"), { ALLOWED_SUBS: undefined });
@@ -624,8 +627,8 @@ describe("Workers Sync API", () => {
       expect(res.status).toBe(200);
     });
 
-    // 置いたのに空、は設定の失敗。「未設定」と同じに読むと、締めたつもりの
-    // その瞬間にバケットが誰にでも開く
+    // Set but empty is a configuration failure. Read it as "unset" and the bucket opens
+    // to anyone at the moment it was meant to be closed
     it.each(["", " ", ",", " , ", ",,"])(
       "refuses everyone when it is set to %o",
       async (allowedSubs) => {
@@ -676,8 +679,8 @@ describe("Workers Sync API", () => {
   });
 });
 
-// Android Chrome はユーザー操作なしのカスタムスキーム遷移を捨てるため、
-// 自動遷移だけだとアプリに戻れない (#59)
+// Android Chrome discards a navigation to a custom scheme with no user action behind
+// it, so an automatic navigation alone cannot get back to the app (#59)
 describe("deepLinkPage", () => {
   it("offers a tappable link to the app, not only an automatic redirect", () => {
     const html = deepLinkPage("magical-merchant://auth/callback?token=abc");

@@ -28,14 +28,17 @@ use crate::output::{
     TemplateOutput, UpdatedNoteOutput,
 };
 
-/// 範囲読みの 1 回あたりの上限。日記は年単位で溜まるので、青天井にすると
-/// 1 回の呼び出しがモデルの文脈を使い切る。
+/// Cap on how many entries one range read returns.
+///
+/// A journal piles up over years, so an unbounded read lets a single call use up the
+/// model's context.
 const DEFAULT_LIMIT: usize = 500;
 
-/// 案内の冒頭。ここだけが起動の別で変わる。
+/// The opening of the instructions. Only this part differs between the two launches.
 ///
-/// 書ける起動で "Read-only" と名乗ると、道具が並んでいてもクライアントは
-/// 書かない — 案内は一覧より先に読まれ、そこで決まる。
+/// A writable launch that calls itself "Read-only" makes the client not write even though
+/// the tools are listed: the instructions are read before the tool list, and that is where
+/// it is decided.
 const READ_ONLY_OPENING: &str = "Read-only access to";
 const WRITABLE_OPENING: &str = "Read and write access to";
 
@@ -53,8 +56,10 @@ literal text. When write tools are present, every overwrite first saves a \
 copy that `restore_note` can bring back; the newest 20 copies of each note \
 are kept.";
 
-/// 書き込みは頼まれたときだけ出す。公開アプリの MCP が既定で書けると、
-/// 「読ませたつもり」の設定で日記が書き換わる。
+/// Write tools are listed only when they are asked for.
+///
+/// If the public app's MCP could write by default, a setup meant to be read-only would
+/// rewrite the journal.
 const WRITE_TOOLS: [&str; 6] = [
     "create_note",
     "update_note",
@@ -67,7 +72,8 @@ const WRITE_TOOLS: [&str; 6] = [
 pub(crate) struct McpServer {
     data_dir: PathBuf,
     locale: String,
-    /// クライアントへの案内。並べた道具と食い違わないよう、起動のときに選ぶ。
+    /// The instructions sent to the client. Chosen at startup so they cannot disagree
+    /// with the tools that are listed.
     instructions: String,
     tool_router: ToolRouter<Self>,
 }
@@ -76,8 +82,8 @@ impl McpServer {
     pub(crate) fn new(data_dir: PathBuf, locale: String, allow_write: bool) -> Self {
         let mut tool_router = Self::tool_router();
         if !allow_write {
-            // 断るのではなく見せない。並んでいるのに毎回断られる道具は、
-            // モデルに「もう一度試す」以外の使い道がない
+            // Hide them rather than refuse. A tool that is listed but refused every time
+            // gives the model no use other than trying again
             for name in WRITE_TOOLS {
                 tool_router.remove_route(name);
             }
@@ -261,8 +267,8 @@ impl McpServer {
     ) -> Result<Json<NoteOutput>, String> {
         let filename = parse_filename(&param.filename)?;
         let notes::Read { body, revision } = notes::read(&self.data_dir, &filename).map_err(err)?;
-        // 壊れた frontmatter は本文だけ返す。一覧がそうしているのと同じで、
-        // メタデータが読めないことを理由に本文まで隠す理由がない。
+        // Broken frontmatter still returns the body. The list does the same: metadata that
+        // cannot be read is no reason to hide the body as well.
         let meta = magical_merchant_core::read_note_meta(&self.data_dir, &filename).ok();
         let cache = self.places();
         let context = meta.as_ref().and_then(|m| m.context.as_ref()).map(|ctx| {
@@ -290,8 +296,8 @@ impl McpServer {
             filename: filename.as_str().to_string(),
             time,
             updated,
-            // 一覧と同じ規則で合流させる。frontmatter だけ・本文だけの片方を
-            // 見せると、同じノートが一覧と単票で違うタグを名乗る。
+            // Merge by the same rule as the list. Showing only the frontmatter tags or only
+            // the body tags makes one note claim different tags in the list and on its own.
             tags: magical_merchant_core::utils::tags::merge(tags, &body),
             origin,
             template,
@@ -377,7 +383,8 @@ impl McpServer {
             return Err(format!("'from' ({from}) is after 'to' ({to})"));
         }
         let limit = param.limit.unwrap_or(DEFAULT_LIMIT);
-        // 呼ぶ側は一覧で見た綴りを正確には打たない。`#` の有無と大小は見ない
+        // Callers do not type the exact spelling they saw in the list. The `#` and the case
+        // are ignored
         let tag = param
             .tag
             .map(|t| magical_merchant_core::utils::tags::normalize(&t));
@@ -385,8 +392,8 @@ impl McpServer {
 
         let mut entries = Vec::new();
         let mut truncated = false;
-        // 日付一覧から絞る。範囲の全日を開きに行くと、書いていない日の
-        // ぶんだけ無駄に stat が積み上がる。
+        // Narrow down from the list of dates. Opening every day in the range piles up a
+        // wasted stat for each day that was never written.
         let mut dates: Vec<NaiveDate> = magical_merchant_core::list_scrawl_dates(&self.data_dir)
             .map_err(err)?
             .into_iter()
@@ -454,7 +461,8 @@ impl McpServer {
             }
         }
         for note in magical_merchant_core::list_notes(&self.data_dir).map_err(err)? {
-            // 読めないノートは地図に載らないだけ。一覧を止める理由にはならない
+            // A note that cannot be read only misses the map. That is no reason to stop the
+            // listing
             let Ok(filename) = NoteFilename::parse(&note.filename) else {
                 continue;
             };
@@ -479,11 +487,11 @@ impl McpServer {
     fn list_tags(&self) -> Result<Json<TagsOutput>, String> {
         use magical_merchant_core::utils::tags;
 
-        // 鍵は畳んだ形、名乗るのは最初に見た綴り。`#CognitiveBias` と
-        // `#cognitivebias` が 2 行に割れると、どちらを打てばいいか分からない。
-        // `notes`/`entries` は「何枚・何件に付いているか」。1 つの記録が同じ
-        // 分類を二度名乗らないのは `tags::merge` と `tags::parse` が畳んで
-        // 返すからで、ここでは記録ごとに畳み直していない
+        // The key is the folded form; the name shown is the first spelling seen. If
+        // `#CognitiveBias` and `#cognitivebias` split into two rows, there is no telling
+        // which one to type. `notes`/`entries` are how many notes and how many entries
+        // carry the tag. One record never claims the same tag twice because `tags::merge`
+        // and `tags::parse` fold before returning; nothing is folded again per record here
         let mut counts: BTreeMap<String, (String, usize, usize)> = BTreeMap::new();
         for note in magical_merchant_core::list_notes(&self.data_dir).map_err(err)? {
             for tag in note.tags {
@@ -523,8 +531,8 @@ impl McpServer {
             &self.data_dir,
             &param.body,
             &tags,
-            // CLI と同じ `notes::create` を通るので、名乗らないと
-            // エージェントが書いたノートが手で書いたものと区別できない
+            // This goes through the same `notes::create` as the CLI, so without naming the
+            // source a note written by an agent cannot be told from one written by hand
             Provenance {
                 source: Some(Source::Mcp),
                 ..Provenance::default()
@@ -587,7 +595,8 @@ impl McpServer {
         Ok(Json(HistoryVersionOutput {
             id: param.id,
             body: frontmatter::strip(&content).to_string(),
-            // 戻すときに添える指紋。控えの本文ではなく、いまのノートの本文のもの
+            // The revision to pass back when restoring. It is of the note's body as it
+            // stands now, not of the saved copy's body
             revision: notes::read(&self.data_dir, &filename)
                 .ok()
                 .map(|r| r.revision.to_string()),
@@ -678,7 +687,7 @@ impl McpServer {
     }
 }
 
-/// `place_key` と同じ丸め。キーは文字列なので、数値で返すにはもう一度丸める。
+/// The same rounding as `place_key`. The key is a string, so returning a number rounds again.
 fn round_to_key(value: f64) -> f64 {
     (value * 100.0).round() / 100.0
 }
@@ -711,7 +720,7 @@ impl ServerHandler for McpServer {
     }
 }
 
-/// テストと `main` が同じ既定を見るよう、ここに置く。
+/// Lives here so that the tests and `main` see the same default.
 pub(crate) fn exists_or_hint(data_dir: &Path) -> Result<(), String> {
     if data_dir.is_dir() {
         return Ok(());
@@ -750,7 +759,7 @@ mod tests {
         }
     }
 
-    /// 日付を固定して書く。`save_scrawl_entry` は今日にしか書けない。
+    /// Writes at a fixed date. `save_scrawl_entry` can only write today.
     fn write_day(base: &Path, date: &str, entries: &[(u32, &str, &Context)]) {
         let dir = base.join("data/scrawl");
         fs::create_dir_all(&dir).unwrap();
@@ -836,7 +845,8 @@ mod tests {
         );
     }
 
-    /// 旧い行は端末も座標も持たない。無いものを空の箱で見せない。
+    /// An old line carries neither device nor coordinates. What is absent is not shown as
+    /// an empty box.
     #[test]
     fn a_bare_entry_has_no_device_or_location() {
         let tmp = TempDir::new().unwrap();
@@ -897,8 +907,8 @@ mod tests {
         );
     }
 
-    /// エージェントは一覧で見た綴りをそのまま渡すとは限らない。
-    /// 記録側・引数側のどちらが大文字でも同じエントリに当たること。
+    /// An agent does not always pass the spelling it saw in the list.
+    /// Either side, the record or the argument, may be uppercase and still hit the entry.
     #[test]
     fn a_range_filters_by_tag_ignoring_case() {
         let tmp = TempDir::new().unwrap();
@@ -912,7 +922,7 @@ mod tests {
         let server = server(tmp.path());
         let hit = range(&server, "2026-01-01", "2026-12-31", Some("cognitivebias"));
         assert_eq!(hit.entries.len(), 1);
-        // 打った綴りのまま返る
+        // The recorded spelling comes back unchanged
         assert_eq!(hit.entries[0].tags, vec!["CognitiveBias"]);
         assert_eq!(
             range(&server, "2026-01-01", "2026-12-31", Some("#COGNITIVEBIAS"))
@@ -963,7 +973,7 @@ mod tests {
         );
     }
 
-    /// 両端は含む。`from == to` は 1 日だけの範囲であって、逆向きではない。
+    /// Both ends are inclusive. `from == to` is a range of one day, not a backwards range.
     #[test]
     fn a_range_of_a_single_day_is_inclusive_on_both_ends() {
         let tmp = TempDir::new().unwrap();
@@ -1020,7 +1030,7 @@ mod tests {
         assert_eq!(shibuya.entries, 2);
         assert_eq!(shibuya.notes, 1);
         assert_eq!(shibuya.first, "2026-01-15");
-        // 控えは en で書かれているが、ja で聞いても名前は出る
+        // The cache entry was written under en, but asking in ja still gives the name
         assert_eq!(shibuya.place.as_deref(), Some("渋谷区"));
         assert_eq!(out.places[1].place, None);
         assert_eq!(out.places[1].entries, 1);
@@ -1053,8 +1063,8 @@ mod tests {
         assert_eq!(out.tags[0].tag, "run");
     }
 
-    /// 綴りだけ違う `#CognitiveBias` と `#cognitivebias` は 1 つの分類。
-    /// 二重に並ぶと、どちらを打てばいいのか分からなくなる。
+    /// `#CognitiveBias` and `#cognitivebias` differ only in spelling and are one tag.
+    /// Listed twice, there is no telling which one to type.
     #[test]
     fn tags_that_differ_only_in_case_are_counted_as_one() {
         let tmp = TempDir::new().unwrap();
@@ -1076,14 +1086,15 @@ mod tests {
         let out = server(tmp.path()).list_tags().unwrap().0;
 
         assert_eq!(out.tags.len(), 1);
-        // 最初に見た綴りで名乗る
+        // Named by the first spelling seen
         assert_eq!(out.tags[0].tag, "CognitiveBias");
         assert_eq!((out.tags[0].notes, out.tags[0].entries), (1, 1));
     }
 
-    /// `notes` は「何枚に付いているか」。frontmatter は書かれたまま届くので、
-    /// 1 枚が `Memo` と `memo` の両方を名乗ることがある。畳んだ数え方を
-    /// しないと、その 1 枚が 2 枚に見えて並び順まで動く。
+    /// `notes` is how many notes carry the tag.
+    ///
+    /// frontmatter arrives as written, so one note can claim both `Memo` and `memo`.
+    /// Without folded counting that one note looks like two, which moves the order too.
     #[test]
     fn one_note_naming_a_tag_in_two_cases_counts_once() {
         let tmp = TempDir::new().unwrap();
@@ -1123,7 +1134,7 @@ mod tests {
 
         assert_eq!(out.body, "# 題\n本文 #rust");
         assert!(!out.body.contains("---"));
-        // frontmatter に書かれた綴りのまま出る
+        // Comes out with the spelling as written in the frontmatter
         assert_eq!(out.tags, vec!["Memo", "rust"]);
         assert!(out.time.is_some());
         assert_eq!(out.updated, None);
@@ -1140,7 +1151,7 @@ mod tests {
         assert!(message.contains("--data-dir"));
     }
 
-    /// 読み取り専用の起動では書く道具が並ばない。断る道具は並べない。
+    /// A read-only launch lists no write tools. A tool that refuses is not listed.
     #[test]
     fn write_tools_are_absent_unless_asked_for() {
         let tmp = TempDir::new().unwrap();
@@ -1154,8 +1165,8 @@ mod tests {
         }
     }
 
-    /// 案内は並べた道具と揃う。書ける起動が read-only と名乗っては、
-    /// 道具を消したときと同じ結果になる。
+    /// The instructions match the tools listed. A writable launch that calls itself
+    /// read-only ends up with the same result as removing the tools.
     #[test]
     fn the_instructions_say_which_of_the_two_servers_this_is() {
         let tmp = TempDir::new().unwrap();
@@ -1166,7 +1177,7 @@ mod tests {
         assert!(read_only.starts_with("Read-only access to"));
         assert!(!with_writes.contains("Read-only"));
         assert!(with_writes.starts_with("Read and write access to"));
-        // 冒頭より後ろは同じ案内
+        // Past the opening, the instructions are the same
         assert!(with_writes.ends_with("the newest 20 copies of each note are kept."));
         assert!(read_only.ends_with("the newest 20 copies of each note are kept."));
     }
@@ -1201,7 +1212,8 @@ mod tests {
         }));
 
         assert_eq!(result.err(), Some("body is empty".to_string()));
-        // 断ったなら何も書かない。空のファイルが残ると一覧に「(空のメモ)」が並ぶ
+        // A refusal writes nothing. An empty file left behind puts an "(empty note)" row
+        // in the list
         assert!(
             magical_merchant_core::list_notes(tmp.path())
                 .unwrap()
@@ -1274,8 +1286,8 @@ mod tests {
         assert_eq!(history.snapshots.len(), 2, "the restore also left a copy");
     }
 
-    /// 復元も本文を丸ごと差し替える書き込み。履歴を読んでから戻すまでに
-    /// アプリで打った字は、`update_note` と同じように守られる。
+    /// A restore is also a write that replaces the whole body. Text typed in the app
+    /// between reading the history and restoring is protected as `update_note` protects it.
     #[test]
     fn restoring_with_a_stale_revision_is_refused() {
         let tmp = TempDir::new().unwrap();
@@ -1297,7 +1309,7 @@ mod tests {
             .unwrap()
             .0;
         let snapshot = updated.snapshot.unwrap();
-        // 控えを読んだ時点の指紋。ここから戻すつもりでいる
+        // The revision as of reading the saved copy. The intent is to restore from here
         let old = server
             .read_note_history(Parameters(HistoryParam {
                 filename: created.filename.clone(),
@@ -1305,7 +1317,7 @@ mod tests {
             }))
             .unwrap()
             .0;
-        // 読んだあとにアプリが打った
+        // The app typed after the read
         magical_merchant_core::update_note(
             &tmp.path().join("data/notes").join(&created.filename),
             "from the app",
@@ -1329,7 +1341,7 @@ mod tests {
             "from the app"
         );
 
-        // 読み直した指紋なら通る
+        // A revision read again goes through
         let fresh = server
             .read_note_history(Parameters(HistoryParam {
                 filename: created.filename.clone(),
@@ -1376,7 +1388,7 @@ mod tests {
         assert!(tmp.path().join("data/glyphs/236p.svg").exists());
     }
 
-    /// 名前・形式・中身のどれが崩れても、ファイルは生まれない。
+    /// No file is born when the name, the format, or the content is broken.
     #[test]
     fn a_bad_glyph_is_refused_before_anything_is_written() {
         let tmp = TempDir::new().unwrap();
@@ -1396,8 +1408,8 @@ mod tests {
         assert!(server.list_glyphs().unwrap().0.glyphs.is_empty());
     }
 
-    /// 無いノートを update で作らせない。frontmatter を今の時刻ででっち上げた
-    /// ファイルが、要求したのと違う名前で生まれる。
+    /// `update` must not create a missing note. It would invent frontmatter from the
+    /// current time and the file would be born under a name other than the one requested.
     #[test]
     fn updating_a_missing_note_is_refused() {
         let tmp = TempDir::new().unwrap();
@@ -1412,8 +1424,8 @@ mod tests {
         assert!(!tmp.path().join("data/notes/20260101_000000.md").exists());
     }
 
-    /// `read_note` が返した revision を添えて書くと、そのあいだにアプリや CLI が
-    /// 本文を変えていれば断られる。相手の編集の上に黙って書かない。
+    /// Writing with the revision `read_note` returned is refused if the app or the CLI
+    /// changed the body in the meantime. Another writer's edit is never silently overwritten.
     #[test]
     fn updating_with_a_stale_revision_is_refused() {
         let tmp = TempDir::new().unwrap();
@@ -1455,7 +1467,7 @@ mod tests {
             "from the app"
         );
 
-        // 読み直した revision なら通る
+        // A revision read again goes through
         let fresh = server
             .read_note(Parameters(FilenameParam {
                 filename: created.filename.clone(),

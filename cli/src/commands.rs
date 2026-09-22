@@ -1,5 +1,5 @@
-//! `list` / `show` / `edit` / `new` の中身。エディタの起動は引数で受け取り、
-//! テストでは「ファイルを書き換える閉包」を差し込む。
+//! The bodies of `list` / `show` / `edit` / `new` / `import`. Launching the editor comes in
+//! as an argument, and the tests pass in a closure that rewrites the file.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -9,8 +9,9 @@ use magical_merchant_core::{CoreError, NoteFilename, NoteSummary, Provenance, Re
 
 use crate::notes::{self, WriteError};
 
-/// エディタに渡す一時ファイル。編集が受け付けられなかったときは消さずに
-/// 残す — 書いた字を失うより、置き場を伝えて拾ってもらうほうがいい。
+/// The scratch file handed to the editor. When the edit is not accepted it is left in
+/// place: better to name where it is and let the user pick it up than to lose what was
+/// typed.
 pub(crate) fn scratch_dir() -> PathBuf {
     std::env::temp_dir().join("magical-merchant")
 }
@@ -25,7 +26,7 @@ pub(crate) struct Row {
     pub(crate) tags: Vec<String>,
 }
 
-/// 一覧は本文の 1 行目をタイトルにする。アプリの一覧と同じ規則。
+/// The list takes the body's first line as the title. The same rule as the app's list.
 fn title_of(summary: &NoteSummary) -> String {
     summary
         .preview
@@ -57,7 +58,7 @@ pub(crate) fn show(data_dir: &Path, filename: &NoteFilename) -> Result<String, C
     Ok(notes::read(data_dir, filename)?.body)
 }
 
-/// `20260320_143045` でも `20260320_143045.md` でも通す。省略なら最新。
+/// Accepts either `20260320_143045` or `20260320_143045.md`. The newest when omitted.
 pub(crate) fn resolve(data_dir: &Path, arg: Option<&str>) -> Result<NoteFilename, CoreError> {
     let Some(text) = arg else {
         let notes = magical_merchant_core::list_notes(data_dir)?;
@@ -66,7 +67,8 @@ pub(crate) fn resolve(data_dir: &Path, arg: Option<&str>) -> Result<NoteFilename
             .ok_or_else(|| CoreError::NotFound("no notes yet".to_string()))?;
         return NoteFilename::parse(&newest.filename);
     };
-    // 拡張子は小文字の `.md` だけが ID。`.MD` は別のファイル名なので補わない
+    // Only the lowercase `.md` extension is an ID. `.MD` is a different filename, so it is
+    // not completed
     let with_ext = text
         .strip_suffix(".md")
         .map_or_else(|| format!("{text}.md"), |_| text.to_string());
@@ -77,8 +79,8 @@ pub(crate) fn resolve(data_dir: &Path, arg: Option<&str>) -> Result<NoteFilename
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum EditOutcome {
-    /// エディタを閉じたが本文は同じ。何も書かない — 書いても内容が
-    /// 変わらないなら、mtime を動かして同期を起こすだけ。
+    /// The editor closed but the body is the same. Nothing is written: a write that does
+    /// not change the content only moves the mtime and sets off a sync.
     Unchanged,
     Saved {
         snapshot_id: String,
@@ -95,10 +97,11 @@ pub(crate) enum EditError {
     Core(#[from] CoreError),
 }
 
-/// 本文だけを一時ファイルに出してエディタで開き、変わっていれば書き戻す。
+/// Writes the body alone to a scratch file, opens it in the editor, and writes it back if
+/// it changed.
 ///
-/// frontmatter は見せない。見せると手で崩せてしまい、未知のキーは次の
-/// 保存で落ちる。タイトルは本文の 1 行目なので、本文だけで足りる。
+/// The frontmatter is not shown. Showing it lets it be broken by hand, and an unknown key
+/// is dropped on the next save. The title is the body's first line, so the body is enough.
 pub(crate) fn edit(
     data_dir: &Path,
     filename: &NoteFilename,
@@ -138,7 +141,7 @@ pub(crate) fn edit(
 
 // --- new ---
 
-/// 本文をそのままノートにする。空なら作らない。
+/// Turns the body straight into a note. Creates nothing when it is empty.
 pub(crate) fn create(data_dir: &Path, body: &str) -> Result<Option<NoteFilename>, CoreError> {
     notes::create(
         data_dir,
@@ -153,11 +156,12 @@ pub(crate) fn create(data_dir: &Path, body: &str) -> Result<Option<NoteFilename>
 
 // --- import ---
 
-/// 外で書かれたノートを、書かれた時刻のまま取り込む。空なら作らない。
+/// Takes in a note written elsewhere, keeping the time it was written. Creates nothing
+/// when it is empty.
 ///
-/// `new` と分けてあるのは時刻と出自だけ — 本文の扱いも frontmatter の
-/// 書き方も同じ経路(`notes::create_at`)を通る。Obsidian なり何なりの
-/// 事情は呼ぶ側(使い捨てのスクリプト)に置き、ここには入れない。
+/// Only the time and the origin set it apart from `new`: the body and the frontmatter go
+/// through the same path (`notes::create_at`). Whatever Obsidian or anything else needs
+/// belongs to the caller, a throwaway script, and does not come in here.
 pub(crate) fn import(
     data_dir: &Path,
     time: DateTime<FixedOffset>,
@@ -178,9 +182,10 @@ pub(crate) fn import(
     )
 }
 
-/// `seed` だけの一時ファイルをエディタで開き、何か書かれていればその全文を
-/// 返す。空のまま・seed のままなら `None`。先に記録を作ってから開くと、
-/// 閉じただけで空の記録が残るので、書かれた後にだけ作る。
+/// Opens a scratch file holding only `seed` in the editor and returns the whole text if
+/// anything was written. `None` when it is still empty or still the seed. Creating the
+/// record before opening would leave an empty record behind when the editor is merely
+/// closed, so the record is created only after something is written.
 pub(crate) fn write_in_editor(
     scratch: &Path,
     name: &str,
@@ -208,8 +213,8 @@ pub(crate) fn write_in_editor(
     Ok(Some(text))
 }
 
-/// 空(または `# 題` だけ)の一時ファイルをエディタで開き、書かれていれば
-/// ノートにする。
+/// Opens an empty scratch file (or one holding only a `# Title`) in the editor and turns
+/// it into a note if anything was written.
 pub(crate) fn compose(
     data_dir: &Path,
     scratch: &Path,
@@ -316,8 +321,8 @@ mod tests {
         assert_eq!(after, before, "not even `updated` moves");
     }
 
-    /// エディタを開いているあいだにアプリが同じノートを保存した。
-    /// その上には書かず、打った字は一時ファイルに残す。
+    /// The app saved the same note while the editor was open. Nothing is written over it,
+    /// and what was typed stays in the scratch file.
     #[test]
     fn an_edit_that_raced_another_writer_is_refused_and_kept() {
         let tmp = TempDir::new().unwrap();
@@ -412,8 +417,8 @@ mod tests {
         DateTime::parse_from_rfc3339(text).unwrap()
     }
 
-    /// 移してきたノートは書かれた時刻のまま並ぶ。ファイル名 = 作成時刻 = ID
-    /// なので、ここで「今」の名前を付けたら元の日付は戻せない。
+    /// A note moved in keeps the time it was written. Filename = creation time = ID, so
+    /// naming it "now" here would make the original date unrecoverable.
     #[test]
     fn an_imported_note_keeps_the_time_it_was_written_at() {
         let tmp = TempDir::new().unwrap();
@@ -435,8 +440,8 @@ mod tests {
         assert_eq!(body_of(tmp.path(), &filename), "# 昔のメモ\n\n本文");
     }
 
-    /// 出自は `cli` ではなく `import`。あとから「移してきたぶん」だけを
-    /// 選び直せるのはこの記録だけで、テンプレ名も作成時にしか書けない。
+    /// The origin is `import`, not `cli`. This record is the only thing that can pick out
+    /// what was moved in later, and the template name can only be written at creation.
     #[test]
     fn an_imported_note_names_import_and_its_template() {
         let tmp = TempDir::new().unwrap();
@@ -456,7 +461,7 @@ mod tests {
         assert_eq!(meta.template, Some("journal".to_string()));
     }
 
-    /// 同じ時刻の記録が 2 本あっても、片方が消えることはない。
+    /// Two records written at the same time never cost one of them.
     #[test]
     fn two_imports_of_the_same_time_both_land() {
         let tmp = TempDir::new().unwrap();
@@ -480,7 +485,7 @@ mod tests {
         assert_eq!(list(tmp.path()).unwrap().len(), 2);
     }
 
-    /// 空のファイルはノートにしない。`new` と同じで、空の記録は残さない。
+    /// An empty file does not become a note. As with `new`, no empty record is left.
     #[test]
     fn importing_an_empty_body_creates_nothing() {
         let tmp = TempDir::new().unwrap();

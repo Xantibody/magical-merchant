@@ -4,8 +4,11 @@
 //! rather than a CA bundle compiled into the binary. On every other platform the
 //! verifier reads the OS trust store on its own; on Android the trust store is
 //! only reachable through Java, so the crate needs the process' `JavaVM` and an
-//! app `Context` handed to it before the first request. Without this the first
-//! sync fails with a certificate error and nothing says why.
+//! app `Context` handed to it before the first request.
+//!
+//! Sync itself goes around this verifier today (`sync_tls_config` below), so the
+//! initialisation is not what makes the first sync work. It stays because the
+//! bypass is temporary, and anything else that speaks HTTPS from Rust needs it.
 //!
 //! This has to happen before any HTTPS request, but a `Context` only exists once
 //! the activity is up — hence `setup`, not a `ctor`.
@@ -19,36 +22,40 @@ static DONE: OnceLock<()> = OnceLock::new();
 pub(crate) fn init() {
     DONE.get_or_init(|| {
         if let Err(e) = install() {
-            // 落とさない。同期は使えなくなるが、書き留めるだけなら動く。
-            // Android では tao が stderr を logcat へ流している
+            // Do not abort. Sync stops working, but capture alone still runs.
+            // On Android, tao pipes stderr into logcat.
             eprintln!("rustls platform verifier init failed: {e}");
         }
     });
 }
 
-/// 同期クライアント用の TLS 設定。端末の検証器を迂回し、Mozilla のルート束で
-/// 検証する。
+/// TLS configuration for the sync client.
 ///
-/// 端末の検証器 (rustls-platform-verifier の Kotlin 側) は失効チェック付きで
-/// PKIX 検証を走らせ、`CertPathValidatorException` を理由を見ずに Revoked に
-/// 写す。Android の RevocationChecker は OCSP 応答者の無い証明書で
-/// 「Certificate does not specify OCSP responder」を投げ、CRL への切り替えは
-/// 平文 HTTP が既定で禁止されているので届かない。Let's Encrypt・Google Trust
-/// Services・SSL.com は 2025 年に OCSP をやめたので、Cloudflare で選べる CA は
-/// 全部この経路で落ちる。同期先の証明書は失効していない (CRL で確認済み)。
-/// 上流: rustls/rustls-platform-verifier#221 (症状)、#179 (対処の議論)。
+/// It bypasses the device verifier and validates against Mozilla's root bundle.
 ///
-/// 上流の恒久策は CRL 配布ホストの許可リストを .aar の manifest に同梱する
-/// こと。それが出たらこの関数と Cargo.toml の rustls / webpki-roots を消して
-/// `reqwest::Client::new()` に戻す。`init` と Gradle 側の配線はそのために残す。
+/// The device verifier (the Kotlin side of `rustls-platform-verifier`) runs PKIX
+/// validation with revocation checking and maps `CertPathValidatorException` to
+/// Revoked without reading the reason. Android's RevocationChecker throws
+/// "Certificate does not specify OCSP responder" for a certificate with no OCSP
+/// responder, and the fallback to CRL never arrives because cleartext HTTP is
+/// forbidden by default. Let's Encrypt, Google Trust Services and SSL.com stopped
+/// serving OCSP in 2025, so every CA selectable on Cloudflare fails on this path.
+/// The sync endpoint's certificate is not revoked (confirmed against the CRL).
+/// Upstream: rustls/rustls-platform-verifier#221 (symptom), #179 (fix discussion).
 ///
-/// 失うもの: 端末に入れた独自 CA と失効チェック。同期先は自分の Worker 1 台で、
-/// 失効チェックは端末の検証器でも実質 OCSP 頼みだったので、どちらも要らない。
+/// The permanent upstream fix is to ship an allowlist of CRL distribution hosts in
+/// the .aar manifest. Once that lands, delete this function and rustls /
+/// webpki-roots from Cargo.toml and go back to `reqwest::Client::new()`. `init` and
+/// the Gradle wiring stay for that.
+///
+/// What this gives up: custom CAs installed on the device, and revocation checking.
+/// The sync endpoint is one Worker of our own, and revocation checking effectively
+/// depended on OCSP inside the device verifier too, so neither is needed.
 pub(crate) fn sync_tls_config() -> Result<rustls::ClientConfig, rustls::Error> {
     let mut roots = rustls::RootCertStore::empty();
     roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-    // reqwest 0.13 の rustls feature が選ぶ provider と同じものを明示する。
-    // `ClientConfig::builder()` は provider が 2 つ入っていると panic する
+    // Name the same provider that reqwest 0.13's rustls feature selects.
+    // `ClientConfig::builder()` panics when two providers are present.
     let provider = std::sync::Arc::new(rustls::crypto::aws_lc_rs::default_provider());
     Ok(rustls::ClientConfig::builder_with_provider(provider)
         .with_safe_default_protocol_versions()?

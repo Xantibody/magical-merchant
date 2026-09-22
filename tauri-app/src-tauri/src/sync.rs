@@ -1,6 +1,7 @@
-//! 同期の Tauri 側。エンジンそのものは core (`magical_merchant_core::sync::engine`)
-//! にあり、ここに残るのは command・進行状態・イベント、そして HTTP クライアントの
-//! 組み立てだけ。
+//! The Tauri side of sync.
+//!
+//! The engine itself is in core (`magical_merchant_core::sync::engine`); what stays here is
+//! only the commands, the in-progress state, the events, and building the HTTP client.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, PoisonError};
@@ -40,12 +41,12 @@ impl Default for AppSyncState {
 
 // ──────────── HTTP client ────────────
 
-/// デスクトップ版は core のものをそのまま使う。CLI の `sync` も同じ口から
-/// 組むので、TLS の既定がアプリと CLI でずれない
+/// The desktop build uses core's as it is. The CLI's `sync` builds from the same entry, so
+/// the TLS defaults do not drift apart between the app and the CLI
 #[cfg(not(target_os = "android"))]
 use magical_merchant_core::sync::client::desktop_http_client as http_client;
 
-/// Android だけ端末の検証器を迂回する。理由は `android_tls::sync_tls_config`
+/// Only Android bypasses the device's verifier. The reason is in `android_tls::sync_tls_config`
 #[cfg(target_os = "android")]
 fn http_client() -> Result<reqwest::Client, SyncError> {
     use magical_merchant_core::sync::client::describe;
@@ -60,7 +61,7 @@ fn http_client() -> Result<reqwest::Client, SyncError> {
 
 // ──────────── Tauri commands ────────────
 
-/// panic やキャンセルでも `is_syncing` を確実に false へ戻すガード
+/// A guard that returns `is_syncing` to false even on a panic or a cancellation
 struct SyncingGuard<'a>(&'a AtomicBool);
 
 impl Drop for SyncingGuard<'_> {
@@ -87,8 +88,9 @@ pub(crate) async fn sync_start(
 
     match &result {
         Ok(sync_result) => {
-            // 降りてきた重複 ID の片付けはエンジンの中。ロックを手放したあとに
-            // やると、待っていた CLI が走査を始めた最中にノートを動かすことになる
+            // Cleaning up duplicate IDs that came down happens inside the engine. Doing it
+            // after the lock is released would move notes in the middle of the scan a
+            // waiting CLI has started
             *state
                 .last_synced_at
                 .lock()
@@ -127,12 +129,13 @@ pub(crate) fn sync_status(state: State<'_, AppSyncState>) -> SyncStatusInfo {
     }
 }
 
-/// 設定とトークンを解いてクライアントを組み、core のエンジンに渡す。
-/// `AppHandle` を使うのは base dir の解決と TLS の分岐だけ。
+/// Resolves the config and the token, builds the client, and hands it to core's engine.
+/// `AppHandle` is used only to resolve the base dir and to branch on TLS.
 async fn do_sync(handle: &AppHandle) -> Result<SyncResult, SyncError> {
     let base_dir = crate::app_base_dir(handle).map_err(SyncError::other)?;
-    // 走査より前の修復はエンジンがロックの内側でやる。タイムラインだけ見て
-    // 同期を押した(=一覧の `repair_once` を通っていない)場合もそこで直る
+    // The repair before the scan is done by the engine inside the lock. That also covers
+    // pressing sync after looking only at Scrawl, which never went through the listing's
+    // `repair_once`
     let config = SyncConfig::load(&base_dir)?.unwrap_or_default();
     if !config.is_configured() {
         return Err(SyncError::new(

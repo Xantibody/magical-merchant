@@ -16,37 +16,38 @@ use magical_merchant_core::utils::markdown::{scrawl_entry_time, strip_scrawl_pre
 use magical_merchant_core::utils::tags;
 use serde::Serialize;
 
-/// 4x2 の Note ウィジェットに収まる行数。
+/// How many rows fit in the `4x2` Note widget.
 const NOTE_LIMIT: usize = 4;
-/// テンプレウィジェットのボタン数。押せる高さ(46dp)で並べるとこれが上限。
+/// How many buttons the template widget has. Laid out at a tappable height (46dp),
+/// this is the limit.
 const TEMPLATE_LIMIT: usize = 3;
-/// シートに出すタグチップ。3 つを超えると 1 行に収まらない。
+/// Tag chips shown on the sheet. More than three do not fit on one line.
 const TAG_LIMIT: usize = 3;
-/// バーは 1 行しか出せない。長い記録は先頭だけ見せる。
+/// The bar can show one line only. A long record shows its beginning.
 const PREVIEW_CHARS: usize = 60;
 const UNTITLED: &str = "(空の Note)";
 
-/// キャプチャバーとシートが要るぶん。今日の日ファイル 1 枚で足りる。
+/// What the capture bar and the sheet need. Today's day file alone is enough.
 #[derive(Debug, Default, Serialize)]
 pub(crate) struct CaptureData {
-    /// 今日の最後の記録。まだ何も書いていなければ `None`。
+    /// Today's last record, or `None` when nothing is written yet.
     last: Option<LastEntry>,
-    /// 今日よく使ったタグ。多い順、同数なら先に出たほう。
+    /// Today's most used tags. Most used first; on a tie, the one seen first.
     tags: Vec<String>,
 }
 
-/// ノート一覧ウィジェットが要るぶん。全ノートを読む。
+/// What the notes list widget needs. It reads every note.
 #[derive(Debug, Default, Serialize)]
 pub(crate) struct NotesData {
-    /// 新しい順のノート。
+    /// Notes, newest first.
     notes: Vec<NoteRow>,
 }
 
-/// テンプレウィジェットが要るぶん。テンプレ置き場だけを読む。
+/// What the template widget needs. It reads the template directory only.
 #[derive(Debug, Default, Serialize)]
 pub(crate) struct TemplatesData {
-    /// 名前順のテンプレ。並びが実行ごとに変わると、同じ位置を押しても
-    /// 違うノートが生まれる。
+    /// Templates in name order. If the order changed from run to run, pressing the
+    /// same position would create a different note.
     templates: Vec<TemplateRow>,
 }
 
@@ -65,7 +66,7 @@ struct NoteRow {
 
 #[derive(Debug, Serialize)]
 struct TemplateRow {
-    /// ボタンに出す名前であり、ディープリンクに載せる値でもある。
+    /// The name shown on the button, and also the value put on the deep link.
     name: String,
 }
 
@@ -87,8 +88,9 @@ pub(crate) fn collect_notes(base_dir: &Path) -> NotesData {
     }
 }
 
-/// ノート一覧と分けてあるのは、テンプレ置き場だけ読めば足りるため。
-/// ここで全ノートを読むと、ボタンを 3 つ描くために全ファイルを開くことになる。
+/// This is kept apart from the notes list because reading the template directory is
+/// enough. Reading every note here would mean opening every file to draw three
+/// buttons.
 pub(crate) fn collect_templates(base_dir: &Path) -> TemplatesData {
     TemplatesData {
         templates: magical_merchant_core::list_templates(base_dir)
@@ -102,12 +104,12 @@ pub(crate) fn collect_templates(base_dir: &Path) -> TemplatesData {
     }
 }
 
-/// 行は追記順なので、最後の 1 行がいちばん新しい。
+/// Lines are appended in order, so the last line is the newest.
 fn last_entry(entries: &[String]) -> Option<LastEntry> {
     let raw = entries.last()?;
     let text = strip_scrawl_prefix(raw);
     Some(LastEntry {
-        // 秒はバーの幅を食うだけで、いつ書いたかは分かる。
+        // Seconds only eat the bar's width; when it was written is still clear.
         time: scrawl_entry_time(raw)
             .map(|t| t[..5].to_string())
             .unwrap_or_default(),
@@ -116,9 +118,10 @@ fn last_entry(entries: &[String]) -> Option<LastEntry> {
 }
 
 fn top_tags(entries: &[String]) -> Vec<String> {
-    // 出現順を保ったまま数える。同数のタグが実行ごとに入れ替わると、
-    // 同じ画面を開いただけでチップの並びが変わって見える。
-    // 大小だけ違うものは同じタグ。綴りは最初に見たほうを出す。
+    // Count while keeping the order of appearance. If tags with the same count
+    // swapped places from run to run, the chips would look reordered just from
+    // opening the same screen.
+    // Tags that differ only in case are one tag. The spelling shown is the first seen.
     let mut counts: Vec<(String, usize)> = Vec::new();
     for tag in entries
         .iter()
@@ -137,15 +140,16 @@ fn top_tags(entries: &[String]) -> Vec<String> {
     counts
         .into_iter()
         .take(TAG_LIMIT)
-        // `#` 込みで返す: チップは押すと本文にそのまま挿す文字列でもあるので、
-        // 表示側で足すと挿入側と二重管理になる。
+        // Return them with the `#`: a chip is also the string inserted into the body
+        // when pressed, so adding it on the display side would duplicate the
+        // knowledge the insertion side already has.
         .map(|(tag, _)| format!("#{tag}"))
         .collect()
 }
 
 fn recent_notes(mut notes: Vec<magical_merchant_core::NoteSummary>) -> Vec<NoteRow> {
-    // 時刻を持たないノートは frontmatter が壊れているぶんで、順番の手がかりが
-    // 無い。落とさず末尾に送る。
+    // A note with no time is one whose frontmatter is broken, and it gives no clue
+    // about ordering. Send it to the end rather than dropping it.
     notes.sort_by_key(|note| std::cmp::Reverse(note.time));
     notes
         .into_iter()
@@ -161,7 +165,7 @@ fn recent_notes(mut notes: Vec<magical_merchant_core::NoteSummary>) -> Vec<NoteR
         .collect()
 }
 
-/// 本文の最初の中身がある行。アプリの Note 一覧と同じ見出しにする。
+/// The first non-empty line of the body. Same heading as the app's Note list.
 fn title_of(preview: &str) -> String {
     let line = preview
         .lines()
@@ -177,7 +181,8 @@ fn title_of(preview: &str) -> String {
     }
 }
 
-/// 改行はバーでもリストでも 1 行に潰れるので、空白に均してから切る。
+/// Newlines collapse to one line in both the bar and the list, so flatten to spaces
+/// before cutting.
 fn truncate(text: &str, limit: usize) -> String {
     let flat = text.split_whitespace().collect::<Vec<_>>().join(" ");
     if flat.chars().count() <= limit {
@@ -206,7 +211,7 @@ mod tests {
         assert!(last_entry(&[]).is_none());
     }
 
-    /// 時刻の無い旧い行でも本文だけは出す。
+    /// An old line without a time still shows its text.
     #[test]
     fn an_entry_without_a_time_still_shows_its_text() {
         let last = last_entry(&["- plain".to_string()]).unwrap();
@@ -214,8 +219,9 @@ mod tests {
         assert_eq!(last.text, "- plain");
     }
 
-    /// 先に出たタグが少ないほうでも、数の多いほうが前に来る。出現順で
-    /// 並べても通る並びでは、数えているかどうかが分からない。
+    /// The more used tag comes first even when the less used one appeared earlier.
+    /// An order that also holds under first-seen sorting would not show whether
+    /// anything is counted.
     #[test]
     fn tags_come_back_most_used_first() {
         let entries = vec![
@@ -227,8 +233,8 @@ mod tests {
         assert_eq!(top_tags(&entries), vec!["#work", "#rust"]);
     }
 
-    /// 同数なら先に出たほう。並びが実行ごとに変わると、同じ画面を開いた
-    /// だけでチップが入れ替わって見える。
+    /// On a tie, the one seen first. If the order changed from run to run, the chips
+    /// would look swapped just from opening the same screen.
     #[test]
     fn tags_used_equally_keep_their_first_seen_order() {
         let entries = vec![
@@ -238,8 +244,8 @@ mod tests {
         assert_eq!(top_tags(&entries), vec!["#b", "#a"]);
     }
 
-    /// 大小だけ違う綴りは同じタグ。別々に数えると、同じ分類の
-    /// チップがウィジェットに二重に並ぶ。
+    /// Spellings that differ only in case are one tag. Counted separately, the
+    /// widget would show two chips for the same category.
     #[test]
     fn tags_that_differ_only_in_case_are_one_chip() {
         let entries = vec![
@@ -249,8 +255,8 @@ mod tests {
         assert_eq!(top_tags(&entries), vec!["#CognitiveBias"]);
     }
 
-    /// 4 つ目からはチップが 1 行に収まらないので落とす。落ちるのは
-    /// いちばん使われていないタグ。
+    /// From the fourth on, the chips do not fit on one line, so they are dropped.
+    /// The ones dropped are the least used tags.
     #[test]
     fn only_the_most_used_tags_fit_on_the_sheet() {
         let entries = vec![
@@ -288,7 +294,7 @@ mod tests {
         assert_eq!(title_of("\n  \n"), UNTITLED);
     }
 
-    /// 置いた数だけ並べると、ボタンがウィジェットの外まで伸びる。
+    /// Laying out as many buttons as there are templates runs them off the widget.
     #[test]
     fn only_the_first_few_templates_fit_on_the_widget() {
         let tmp = tempfile::TempDir::new().unwrap();
@@ -301,12 +307,13 @@ mod tests {
         let data = collect_templates(tmp.path());
 
         assert_eq!(data.templates.len(), TEMPLATE_LIMIT);
-        // 名前順。並びが変わると、同じ位置を押しても違うノートが生まれる
+        // Name order. If the order changed, pressing the same position would create
+        // a different note
         let names: Vec<&str> = data.templates.iter().map(|t| t.name.as_str()).collect();
         assert_eq!(names, ["a", "b", "c"]);
     }
 
-    /// テンプレを 1 つも置いていない端末が普通の状態。空で描かせる。
+    /// A device with no templates at all is the normal state. Let it draw empty.
     #[test]
     fn a_tree_without_templates_comes_back_empty() {
         let tmp = tempfile::TempDir::new().unwrap();

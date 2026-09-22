@@ -1,5 +1,8 @@
-//! MCP に返す形。core の型をそのまま出さないのは、core が schemars を
-//! 知らないのと、外に見せる名前と中の名前を別々に変えられるようにするため。
+//! The shapes returned to MCP.
+//!
+//! The core types are not exposed as they are, because core does not know about
+//! schemars, and because the outward names and the internal names have to be free
+//! to change separately.
 
 use magical_merchant_core::utils::device::{Context, NetworkType};
 use magical_merchant_core::{
@@ -184,7 +187,7 @@ pub(crate) struct DeviceInfo {
 }
 
 impl ContextInfo {
-    /// `place` は呼ぶ側が控えから引く。ここは値の並べ替えだけ。
+    /// The caller looks `place` up in its cache. This only rearranges values.
     pub(crate) fn from_context(ctx: &Context, place: Option<String>) -> Self {
         let network_type = ctx.network_type.as_ref().map(|n| {
             match n {
@@ -201,8 +204,9 @@ impl ContextInfo {
             place_key: magical_merchant_core::utils::place::place_key(l.latitude, l.longitude),
             place,
         });
-        // 端末情報が 1 つも無いエントリで `device: {}` を出さない。旧い行は
-        // そもそも端末を記録していないので、空の箱は「不明」を偽って見せる。
+        // Do not emit `device: {}` for an entry that carries no device fields at
+        // all. Old lines never recorded a device, so an empty object would
+        // misrepresent that as "unknown".
         let has_device = !ctx.os.is_empty()
             || !ctx.arch.is_empty()
             || ctx.os_version.is_some()

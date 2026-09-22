@@ -1,9 +1,9 @@
-//! `magical-merchant sync` — アプリを開かずに Workers/R2 と同期する。
+//! `magical-merchant sync`: syncs with Workers/R2 without opening the app.
 //!
-//! 同期そのものは core のエンジン 1 本(`engine::run_with_progress`)で、
-//! ここがやるのは設定とトークンを解くことと、進み具合を行にすること。
-//! ログインは今もアプリの仕事: CLI は保管された JWT を読むだけで、
-//! 期限が切れていたらアプリに戻すよう言う。
+//! The syncing itself is one engine in core (`engine::run_with_progress`); what this
+//! does is resolve the config and the token, and turn progress into lines. Signing in
+//! is still the app's job: the CLI only reads the stored JWT, and if it has expired it
+//! says to go back to the app.
 
 use std::path::Path;
 
@@ -19,10 +19,13 @@ pub(crate) struct Credentials {
     pub(crate) token: String,
 }
 
-/// 設定とトークンを解く。順番と `kind` はアプリの `do_sync` に合わせる —
-/// 同じ状態に別の名前が付くと、片方だけ直したときに気づけない。
+/// Resolves the config and the token.
 ///
-/// トークンの読み手を引数に取るのは、Keychain を開かずに試すため。
+/// The order and the `kind` values match the app's `do_sync`: if the same state got a
+/// different name, fixing only one side would go unnoticed.
+///
+/// The token reader is a parameter so that this can be tried without opening the
+/// Keychain.
 pub(crate) fn credentials<F>(base_dir: &Path, read_token: F) -> Result<Credentials, SyncError>
 where
     F: Fn(&Path) -> Result<Option<String>, String>,
@@ -54,8 +57,8 @@ where
     })
 }
 
-/// round が 1 つ終わるたびの 1 行。529 本の取り込みは 14 往復するので、
-/// 何も出ないと固まったようにしか見えない。
+/// One line each time a round finishes. Importing 529 files takes 14 round trips, and
+/// with nothing printed it only looks stuck.
 fn round_line(progress: &RoundProgress) -> String {
     format!(
         "round {}  {} done, {} left",
@@ -63,10 +66,11 @@ fn round_line(progress: &RoundProgress) -> String {
     )
 }
 
-/// 終わったあとの 1 行。記号はアプリの表示と同じものを使う。
+/// One line once it is over. The symbols are the ones the app displays.
 ///
-/// 0 の項も省かずに出す。取り込みの直後に「送ったはずの本数」を突き合わせる
-/// のが最初の使い道で、そこで省かれると数えられない。
+/// The zero entries are printed too, not left out. The first use is to check the
+/// number of files sent right after an import, and leaving them out makes that
+/// impossible to count.
 fn summary(result: &SyncResult) -> String {
     let deleted = result.deleted_remote + result.deleted_local;
     if result.uploaded + result.downloaded + deleted + result.conflicts == 0 {
@@ -84,8 +88,8 @@ fn summary(result: &SyncResult) -> String {
 }
 
 pub(crate) async fn run(data_dir: &Path) -> anyhow::Result<()> {
-    // 走査より前の修復はエンジンの中、同期ロックの内側にある。ここで先に
-    // かけると、アプリが同期しているさなかにツリーを書き換えてしまう
+    // The repair that runs before the scan is inside the engine, inside the sync lock.
+    // Doing it here first would rewrite the tree while the app is syncing
     let credentials = credentials(data_dir, token::get_token)?;
     let client = HttpClient::new(
         desktop_http_client()?,
@@ -100,8 +104,8 @@ pub(crate) async fn run(data_dir: &Path) -> anyhow::Result<()> {
     .map_err(|e| describe_failure(&e))?;
 
     println!("{}", summary(&result));
-    // 1 本でも取りこぼしたなら成功では終わらせない。取り込みの検算は
-    // 終了コードで見るので、本数が合わないまま 0 を返しては困る
+    // Do not end in success if even one file was missed. The import is checked by the
+    // exit code, so returning 0 with the counts off is no good
     if !result.errors.is_empty() {
         for issue in &result.errors {
             eprintln!("{issue}");
@@ -111,8 +115,10 @@ pub(crate) async fn run(data_dir: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// エンジンの失敗を、CLI から見た言葉にする。`busy` だけはアプリの UI と
-/// 逆で、黙って成功に倒さない — 待てば済むことを伝えて終わる。
+/// Turns an engine failure into words the CLI can use.
+///
+/// `busy` is the one case that goes the other way from the app UI. It is not quietly
+/// turned into a success: it says that waiting is all it takes, and ends.
 fn describe_failure(err: &SyncError) -> anyhow::Error {
     if err.kind == "busy" {
         return anyhow::anyhow!("the app is syncing right now; wait for it to finish");
@@ -138,8 +144,9 @@ mod tests {
         dir
     }
 
-    /// 署名は誰も見ない。`is_token_valid` が読むのは `exp` だけなので、
-    /// 3 つのパートを直に組む(`core/src/sync/token.rs` のテストと同じ手)。
+    /// Nobody looks at the signature. `is_token_valid` reads only `exp`, so the three
+    /// parts are built directly (the same trick as the tests in
+    /// `core/src/sync/token.rs`).
     fn jwt(exp: i64) -> String {
         let header = URL_SAFE_NO_PAD.encode(r#"{"alg":"HS256","typ":"JWT"}"#);
         let claims = URL_SAFE_NO_PAD.encode(format!(r#"{{"exp":{exp}}}"#));
@@ -151,8 +158,8 @@ mod tests {
         Ok(None)
     }
 
-    /// 同期の設定はアプリの画面にしかない。CLI に URL を打たせると、
-    /// アプリ側の設定と食い違った同期先ができる
+    /// Sync is only configured on the app's screen. Letting the CLI type a URL would
+    /// create a sync target that disagrees with the app's setting
     #[test]
     fn without_a_workers_url_it_points_at_the_app() {
         let dir = TempDir::new().unwrap();
@@ -172,8 +179,8 @@ mod tests {
         assert_eq!(err.kind, "notAuthenticated");
     }
 
-    /// 期限切れを持ったまま同期に入ると、サーバーに断られてから
-    /// 「ログインし直せ」に辿り着く。先に見て、同じ言葉で止める
+    /// Going into a sync with an expired token reaches "log in again" only after the
+    /// server refuses it. Look first, and stop with the same words
     #[test]
     fn an_expired_token_is_refused_before_the_network() {
         let dir = configured();
@@ -196,7 +203,8 @@ mod tests {
         assert_eq!(ready.token, live);
     }
 
-    /// 取り込みの検算はこの行を数える。0 の項が消えると突き合わせられない
+    /// The import is verified by counting this line. If the zero entries vanish there
+    /// is nothing to match it against
     #[test]
     fn the_summary_keeps_every_count_even_at_zero() {
         let result = SyncResult {
@@ -212,7 +220,8 @@ mod tests {
         assert_eq!(summary(&SyncResult::default()), "already up to date");
     }
 
-    /// 競合は転送の数字に混ぜない。控えが残ったことは別に言う
+    /// Conflicts are not mixed into the transfer counts. That a copy was kept is said
+    /// separately
     #[test]
     fn conflicts_are_reported_next_to_the_counts() {
         let result = SyncResult {
@@ -235,8 +244,8 @@ mod tests {
         assert_eq!(line, "round 3  40 done, 449 left");
     }
 
-    /// アプリは `busy` を黙って無視するが、CLI は待てば済むと言って終わる。
-    /// 何も出さずに 0 を返すと、同期したつもりのまま次へ進んでしまう
+    /// The app ignores `busy` silently, but the CLI ends by saying that waiting is
+    /// enough. Printing nothing and returning 0 would move on as if it had synced
     #[test]
     fn a_busy_app_is_explained_rather_than_ignored() {
         let err = describe_failure(&SyncError::new("busy", "Sync already in progress"));

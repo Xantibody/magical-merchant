@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { base64Decode, base64Encode } from "./base64";
 
-/// 1 バイトずつ組み立てる素朴な版。読みやすさだけが取り柄で、実装が
-/// どれだけ形を変えても答えは変わらない — 比較の物差しとして置いている。
+/// The plain version that builds up one byte at a time. Readability is all it has going
+/// for it, and the answer does not change however far the implementation is reshaped:
+/// it is here as the yardstick.
 function referenceEncode(bytes: Uint8Array): string {
   let binary = "";
   for (const byte of bytes) {
@@ -20,7 +21,8 @@ function referenceDecode(s: string): Uint8Array {
   return bytes;
 }
 
-/// 線形合同法。256 KiB を毎回同じ並びで作るので、落ちたテストは必ず再現する。
+/// A linear congruential generator. It builds the same 256 KiB every run, so a failing
+/// test always reproduces.
 function pseudoRandomBytes(length: number): Uint8Array {
   const bytes = new Uint8Array(length);
   let seed = 123_456_789;
@@ -41,8 +43,8 @@ function everyByteValue(): Uint8Array {
 
 const KIB = 1024;
 
-/// 境界は chunk の 8 KiB(前後 1 バイト)と、glyph の上限 256 KiB
-/// (`GLYPH_MAX_BYTES`)。base64 自体の境界として 0 / 1 / 3 バイトも見る。
+/// The boundaries are the 8 KiB chunk (one byte either side) and the 256 KiB glyph cap
+/// (`GLYPH_MAX_BYTES`). 0 / 1 / 3 bytes are there as base64's own boundaries.
 const CASES = [
   { name: "0 bytes", bytes: new Uint8Array(0) },
   { name: "1 byte", bytes: Uint8Array.of(255) },

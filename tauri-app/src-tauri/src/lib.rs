@@ -39,12 +39,13 @@ use magical_merchant_core::{
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_deep_link::DeepLinkExt as _;
 
-/// 全ファイルを舐める読み取りをメインスレッドから外す。
+/// Moves reads that sweep every file off the main thread.
 ///
-/// 同期コマンドはメインスレッドで実行される。一覧・検索・バックリンクは
-/// ノート数と日数に比例して伸び(1 年分で 10〜30ms、実機ではその数倍)、
-/// その間ウィンドウの操作もイベントも止まる。`resolve_places` と同じく
-/// blocking プールで走らせ、メインスレッドには結果だけ返す。
+/// Synchronous commands run on the main thread. Listing, searching and backlinks
+/// grow with the number of notes and of days (10 to 30ms for a year's worth,
+/// several times that on a real device), and window input and events stop for that
+/// long. Run them on the blocking pool, as `resolve_places` does, and return only
+/// the result to the main thread.
 async fn off_main_thread<T, F>(work: F) -> Result<T, String>
 where
     T: Send + 'static,
@@ -55,14 +56,15 @@ where
         .map_err(|e| e.to_string())?
 }
 
-/// このアプリのデータの在処。ノートも同期の設定もトークンも、ここから下に
-/// しか無い。
+/// Where this app's data lives.
 ///
-/// debug ビルドに限り `MAGICAL_MERCHANT_DATA_DIR` で差し替えられる。CLI が
-/// 前から持っている同じ変数(`cli/src/main.rs`)に揃えたもので、本番の記録を
-/// 触らずに新機能を試すための入口 — `just sandbox` がこれを使う。配ったアプリ
-/// が環境変数でデータの置き場を変えられる必要はないので、release では枝ごと
-/// 消える。
+/// Notes, the sync settings and the token are all under here and nowhere else.
+///
+/// Debug builds alone can point it elsewhere with `MAGICAL_MERCHANT_DATA_DIR`. It
+/// matches the variable the CLI has had for a while (`cli/src/main.rs`), and it is
+/// the way in for trying a new feature without touching real records:
+/// `just sandbox` uses it. A shipped app has no need to move its data directory
+/// from an environment variable, so the whole branch is gone in release.
 pub(crate) fn app_base_dir(handle: &AppHandle) -> Result<std::path::PathBuf, String> {
     #[cfg(debug_assertions)]
     if let Some(dir) = std::env::var_os("MAGICAL_MERCHANT_DATA_DIR") {
@@ -87,7 +89,8 @@ fn save_quick_capture(
         .map_err(|e| e.to_string())
 }
 
-/// `kind` は置き場の指定で、`codex` なら版を刻む文書として作る。省略は普通のノート。
+/// `kind` names the directory: `codex` creates a document that keeps committed
+/// versions. Left out, it is an ordinary note.
 #[tauri::command]
 fn create_draft(
     handle: AppHandle,
@@ -99,7 +102,8 @@ fn create_draft(
 ) -> Result<String, String> {
     let base_dir = app_base_dir(&handle)?;
     let context = device::get_context(client);
-    // origin 付きは Scrawl エントリからの昇格。出自を frontmatter に刻む
+    // With an origin it is a promotion from a Scrawl entry. Record where it came
+    // from in the frontmatter
     let provenance = Provenance {
         origin: origin.as_deref(),
         source: Some(Source::App),
@@ -113,7 +117,7 @@ fn create_draft(
     Ok(path.to_string_lossy().to_string())
 }
 
-/// ノートを Codex にする。ID は変わらない。戻す入口は無い。
+/// Turns a Note into a Codex. The ID does not change. There is no way back.
 #[tauri::command]
 fn promote_note_to_codex(handle: AppHandle, filename: String) -> Result<(), String> {
     let base_dir = app_base_dir(&handle)?;
@@ -121,16 +125,18 @@ fn promote_note_to_codex(handle: AppHandle, filename: String) -> Result<(), Stri
     magical_merchant_core::promote_note_to_codex(&base_dir, &filename).map_err(|e| e.to_string())
 }
 
-/// 保存の失敗。フロントが分岐するための印を持つ。
+/// A failed save. It carries a mark the frontend branches on.
 ///
-/// - `stale`: 読んでから誰かが書き換えた。読み直して知らせる
-/// - `broken`: ノート先頭の記録が読めず、core が書き込みを断った。
-///   打った字は退避して知らせる — 何度書き直しても通らない
-/// - `missing`: ノートがもう無い(消された・Codex へ移った)。core は
-///   作り直さないので、これも打った字を退避して知らせる
-/// - `notText`: ファイルの中身が文字として読めない(不正な UTF-8)。
-///   `broken` と分けるのは、伝わる意味と手当てが違うから — 記録の書き直しでは
-///   直らず、開き直しても本文が読めないので「戻す」で取り出す道も無い
+/// - `stale`: someone wrote after this read. Read again and tell the user
+/// - `broken`: the record at the head of the note cannot be read and core refused
+///   the write. Set the typed text aside and tell the user: no amount of rewriting
+///   will get through
+/// - `missing`: the note is gone (deleted, or moved to Codex). Core does not
+///   recreate it, so set the typed text aside here as well and tell the user
+/// - `notText`: the file content does not read as text (invalid UTF-8). It is kept
+///   apart from `broken` because it means something else and calls for something
+///   else: rewriting the record does not fix it, and reopening cannot read the body
+///   either, so there is no way out through "restore"
 #[derive(Debug, Clone, serde::Serialize)]
 struct SaveError {
     kind: &'static str,
@@ -138,8 +144,9 @@ struct SaveError {
 }
 
 impl SaveError {
-    /// core を通らずに落ちたぶん(データディレクトリが引けない、ファイル名が
-    /// ノートの名前になっていない)。分ける印が無いので `other` に落とす。
+    /// Failures that never reached core (the data directory cannot be resolved, the
+    /// filename is not a note name). There is no mark that tells them apart, so they
+    /// fall to `other`.
     const fn other(message: String) -> Self {
         Self {
             kind: "other",
@@ -163,14 +170,17 @@ impl From<magical_merchant_core::CoreError> for SaveError {
     }
 }
 
-/// `revision` は `read_note` が返した本文の指紋。添えると、そのあいだに
-/// CLI や MCP が同じノートを書き換えていれば `stale` で断られる。
-/// 返るのは書いた本文の revision — 次の保存に添える。
+/// `revision` is the fingerprint of the body `read_note` returned.
 ///
-/// 受け取るのは ID(ファイル名)だけで、置き場は core に聞く。WebView から
-/// 渡された絶対パスをそのまま書くと、`data/` の外にも、消したノートや
-/// Codex にしたノートの跡にも書けてしまう。
-// AIDEV-NOTE: 他のノートコマンドと同じ parse_filename → locate の道。path 受けには戻さない
+/// Supply it and the write is refused as `stale` if the CLI or MCP rewrote the same
+/// note in between. What comes back is the revision of the body just written:
+/// supply that on the next save.
+///
+/// It takes the ID (the filename) only and asks core for the directory. Writing an
+/// absolute path handed over from the `WebView` as it is would also allow writes
+/// outside `data/`, and onto the traces of deleted notes and of notes turned into a
+/// Codex.
+// AIDEV-NOTE: same parse_filename to locate route as the other note commands. Do not go back to taking a path
 #[tauri::command]
 fn update_draft(
     handle: AppHandle,
@@ -181,8 +191,9 @@ fn update_draft(
 ) -> Result<String, SaveError> {
     let base_dir = app_base_dir(&handle).map_err(SaveError::other)?;
     let filename = parse_filename(&filename).map_err(SaveError::other)?;
-    // core の拒否は 1 か所で印に変える。ここで文字列に潰すと、探せなかった
-    // 理由が `update_note` の同じ理由と別の印で届く
+    // Core's refusal turns into a mark in one place. Flattening it to a string here
+    // would deliver the reason the note was not found under a different mark from
+    // the same reason raised by `update_note`
     let (_, path) =
         magical_merchant_core::locate_note(&base_dir, &filename).map_err(SaveError::from)?;
     let context = device::get_context(client);
@@ -195,33 +206,34 @@ fn update_draft(
 #[derive(Debug, Clone, serde::Serialize)]
 struct NoteRead {
     body: String,
-    /// 本文の指紋。`update_draft` に添えて、外からの書き換えの上に書かない。
+    /// Fingerprint of the body. Supply it to `update_draft` so a write from
+    /// outside is not written over.
     revision: String,
 }
 
-/// 起動してから一度だけの後始末。最初の一覧より前に。
+/// Clean-up that runs once per launch, before the first listing.
 ///
-/// setup でやらないのは、Android の `app_data_dir` がメインスレッドから
-/// 呼べないのと、修復前の一覧が一瞬でも画面に出るのを避けるため。
-/// どちらも失敗しても黙って進む — ノートが読めなくなるよりはましで、
-/// 次の起動でまた試す。
+/// It is not done in `setup` because Android's `app_data_dir` cannot be called from
+/// the main thread, and to keep a listing from before the repair off the screen even
+/// for a moment. Either one failing is passed over silently: that beats leaving
+/// notes unreadable, and the next launch tries again.
 ///
-/// 同期のための修復ではない。それはエンジンが `.sync.lock` の内側でやる
-/// (`core/src/sync/engine.rs`)。ここに残っているのは、同期を一度もしない
-/// 使い方でも一覧が壊れたノートを並べないようにするため。
+/// This is not repair for the sake of sync. The engine does that inside
+/// `.sync.lock` (`core/src/sync/engine.rs`). What stays here is so that the listing
+/// does not show broken notes even for someone who never syncs.
 ///
-/// AIDEV-NOTE: 起動時のこれはロックの外。CLI の同期と重なる窓は残る — 閉じるなら `try_lock` して取れなければ飛ばす
+/// AIDEV-NOTE: this one at startup is outside the lock. The window where it overlaps the CLI's sync remains. To close it, `try_lock` and skip when it cannot be taken
 pub(crate) fn repair_once(base_dir: &std::path::Path) {
     static REPAIR: std::sync::Once = std::sync::Once::new();
     REPAIR.call_once(|| {
-        // 改名前の `data/timeline/`
+        // `data/timeline/`, from before the rename
         let _ = magical_merchant_core::migrate_scrawl_dir(base_dir);
-        // 過去の編集で本文に混入した化けメタデータ
+        // Garbled metadata that past edits mixed into the body
         let _ = magical_merchant_core::repair_notes(base_dir);
-        // 古い版が `data/` に置いた競合コピー
+        // Conflict copies an older version of the app put in `data/`
         let _ = magical_merchant_core::relocate_conflict_copies(base_dir);
-        // 昇格と他端末のオフライン編集が重なって notes/ と codex/ の両方に
-        // 降りてきた同じ ID
+        // The same ID that came down into both `notes/` and `codex/` because a
+        // promotion overlapped with an offline edit on another device
         let _ = magical_merchant_core::relocate_duplicate_ids(base_dir);
     });
 }
@@ -273,14 +285,14 @@ fn update_note_meta(
 ) -> Result<(), String> {
     let base_dir = app_base_dir(&handle)?;
     let filename = parse_filename(&filename)?;
-    // オフセット付きの RFC 3339 で受ける。素の日時にすると、端末のタイム
-    // ゾーンが変わっただけで同じ入力が別の時刻を指してしまう
+    // Take RFC 3339 with an offset. With a bare date and time, the same input would
+    // point at a different instant as soon as the device time zone changed
     let time = chrono::DateTime::parse_from_rfc3339(&time).map_err(|e| e.to_string())?;
     magical_merchant_core::update_note_meta(&base_dir, &filename, time, &tags)
         .map_err(|e| e.to_string())
 }
 
-/// 表示モードだけを書き換える。`None` で既定(エディタ)に戻す。
+/// Rewrites the view mode only. `None` goes back to the default (the editor).
 #[tauri::command]
 fn set_note_view(handle: AppHandle, filename: String, view: Option<String>) -> Result<(), String> {
     let base_dir = app_base_dir(&handle)?;
@@ -289,7 +301,7 @@ fn set_note_view(handle: AppHandle, filename: String, view: Option<String>) -> R
         .map_err(|e| e.to_string())
 }
 
-/// 昇格元エントリとの繋がりだけを書き換える。`None` で関係を解く。
+/// Rewrites only the link to the entry it was promoted from. `None` unties it.
 #[tauri::command]
 fn set_note_origin(
     handle: AppHandle,
@@ -335,11 +347,13 @@ fn delete_template(handle: AppHandle, filename: String) -> Result<(), String> {
     magical_merchant_core::delete_template(&base_dir, &filename).map_err(|e| e.to_string())
 }
 
-/// テンプレからノートを作る。同じテンプレの今日のぶんが既にあれば、
-/// 作らずにそれを返す(`reused`)。
+/// Creates a note from a template.
 ///
-/// `locale` を受けるのは `{{weekday}}` のため。曜日の呼び名だけは端末の
-/// 言語に従うべきで、その言語を知っているのは画面側だけ。
+/// If today's note from the same template already exists, it is returned instead of
+/// creating one (`reused`).
+///
+/// It takes `locale` for `{{weekday}}`. Only the names of the days should follow
+/// the device language, and the screen is the only side that knows that language.
 #[tauri::command]
 fn create_from_template(
     handle: AppHandle,
@@ -373,25 +387,26 @@ fn list_glyphs(handle: AppHandle) -> Result<Vec<GlyphSummary>, String> {
     magical_merchant_core::list_glyphs(&base_dir).map_err(|e| e.to_string())
 }
 
-/// 画面が `:name:` を描くときに引く 1 件。
+/// One entry, looked up when the screen draws `:name:`.
 #[derive(serde::Serialize)]
 struct GlyphAsset {
     name: String,
-    /// `data:image/...;base64,...`。
+    /// `data:image/...;base64,...`.
     url: String,
 }
 
-/// 登録済みのグリフを全部、データ URL で返す。
+/// Returns every registered glyph as a data URL.
 ///
-/// 1 回で全部返すのは、画面側が本文を描く途中で同期的に名前を引けるように
-/// するため。asset プロトコルやカスタムスキームで配らないのは、新しい
-/// capability を開けずに済み、ブラウザのハーネスでもそのまま真似できるから。
+/// They come back in one call so the screen can look a name up synchronously while
+/// it draws the body. They are not served over the asset protocol or a custom
+/// scheme because that way no new capability has to be opened, and the browser
+/// harness can imitate it as it is.
 #[tauri::command]
 fn read_glyphs(handle: AppHandle) -> Result<Vec<GlyphAsset>, String> {
     let base_dir = app_base_dir(&handle)?;
     let mut assets = Vec::new();
     for summary in magical_merchant_core::list_glyphs(&base_dir).map_err(|e| e.to_string())? {
-        // 一覧に出た直後に消えた 1 枚のために全部を失敗させない
+        // Do not fail all of them over one glyph deleted right after it was listed
         let Ok(name) = GlyphName::parse(&summary.name) else {
             continue;
         };
@@ -448,7 +463,7 @@ fn read_scrawl_by_date(handle: AppHandle, date: String) -> Result<Vec<String>, S
     magical_merchant_core::read_scrawl(&base_dir, naive).map_err(|e| e.to_string())
 }
 
-/// `raw` は画面が読んだときの行。index と合わせて「どの記録か」を指す。
+/// `raw` is the line as the screen read it. With the index it names which record.
 #[tauri::command]
 fn delete_scrawl_entry(
     handle: AppHandle,
@@ -462,14 +477,17 @@ fn delete_scrawl_entry(
         .map_err(|e| e.to_string())
 }
 
-/// 座標を地名に直す。引けたものだけを `"緯度,経度"` のキー付きで返す。
+/// Turns coordinates into place names.
 ///
-/// 記録は座標のまま。返すのは読むときの言い換えで、引けなかった座標が
-/// 抜けていても呼び出し側は座標を出せばよい。
+/// Only the ones that resolved come back, keyed by `"latitude,longitude"`.
 ///
-/// `async` なのはこれがメインスレッドで走ってはいけないため。同期コマンドは
-/// メインスレッドで実行され、ジオコーダの答えもメインキューに載る。そこで
-/// 待つと自分の返事を自分で塞ぎ、必ず時間切れになる。
+/// The record keeps the coordinates. What comes back is a rewording for reading, so
+/// when a coordinate that did not resolve is missing, the caller can just print the
+/// coordinates.
+///
+/// It is `async` because it must not run on the main thread. Synchronous commands
+/// run on the main thread, and the geocoder's answer is queued on the main queue as
+/// well. Waiting there blocks its own reply and always times out.
 #[tauri::command]
 async fn resolve_places(
     handle: AppHandle,
@@ -495,9 +513,11 @@ async fn search_all(
     .await
 }
 
-/// 全記録。文字列で絞らないので引数は無く、件数も切られない — 画面はここから
-/// 種類 / タグ / 期間の件数を数える。走査は `search_all` と同じ重さなので、
-/// 呼ぶのは画面を開いたときだけ。
+/// Every record.
+///
+/// It does not filter by text, so it takes no arguments and the count is not
+/// capped: the screen counts kind / tag / period from here. The scan costs the same
+/// as `search_all`, so it is called only when the screen opens.
 #[tauri::command]
 async fn browse_all(handle: AppHandle) -> Result<Vec<SearchHit>, String> {
     let base_dir = app_base_dir(&handle)?;
@@ -505,7 +525,8 @@ async fn browse_all(handle: AppHandle) -> Result<Vec<SearchHit>, String> {
         .await
 }
 
-/// いまの下書きを版として刻む。呼ぶのは人が「版を刻む」と言ったときだけ。
+/// Commits the current draft as a version. Called only when a person asks to
+/// commit a version.
 #[tauri::command]
 fn commit_note_version(
     handle: AppHandle,
@@ -532,8 +553,8 @@ fn read_note_version(handle: AppHandle, filename: String, id: String) -> Result<
     magical_merchant_core::read_note_version(&base_dir, &filename, &id).map_err(|e| e.to_string())
 }
 
-/// 版 `from` からいまの下書きへの unified diff。版どうしは比べない —
-/// 画面が出すのは「この版から何が変わったか」だけ。
+/// Unified diff from version `from` to the current draft. Two versions are never
+/// compared: the screen only shows what changed since this version.
 #[tauri::command]
 fn diff_note_versions(handle: AppHandle, filename: String, from: String) -> Result<String, String> {
     let base_dir = app_base_dir(&handle)?;
@@ -542,8 +563,9 @@ fn diff_note_versions(handle: AppHandle, filename: String, from: String) -> Resu
         .map_err(|e| e.to_string())
 }
 
-/// 版の本文を下書きにする。`revision` は `update_draft` と同じ意味で、
-/// 食い違えば `stale`。戻す前の下書きは core が版として刻んでから書く。
+/// Makes a version's body the draft. `revision` means what it means in
+/// `update_draft`; a mismatch is `stale`. Core commits the draft as a version
+/// before writing over it.
 #[tauri::command]
 fn restore_note_version(
     handle: AppHandle,
@@ -567,7 +589,8 @@ fn restore_note_version(
     .map_err(SaveError::from)
 }
 
-/// 刻んだ直後の「取り消す」。版のファイルを消すだけで、本文には触れない。
+/// The "undo" right after a commit. It only deletes the version file and does not
+/// touch the body.
 #[tauri::command]
 fn delete_note_version(handle: AppHandle, filename: String, id: String) -> Result<(), String> {
     let base_dir = app_base_dir(&handle)?;
@@ -589,12 +612,12 @@ fn delete_note(handle: AppHandle, filename: String) -> Result<(), String> {
     magical_merchant_core::delete_note(&base_dir, &filename).map_err(|e| e.to_string())
 }
 
-/// deep link から保存してよい JWT だけを取り出す。
+/// Takes from a deep link only the JWT that may be stored.
 ///
-/// ウィジェットの `magical-merchant://widget/…` も同じスキームで届くので、
-/// `?token=` があるだけでは足りない。ホストが `auth` のものに限り、中身が
-/// 生きた JWT であることも見る — 期限切れを保存すると、有効なトークンを
-/// 上書きしたうえで次の同期が「ログインし直してください」で止まる
+/// The widget's own `magical-merchant://widget/` links arrive on the same scheme,
+/// so a `?token=` alone is not enough. Only links whose host is `auth` count, and
+/// the value has to be a live JWT as well: storing an expired one overwrites a
+/// valid token and leaves the next sync stopped at "please log in again"
 fn token_from_urls(urls: &[url::Url]) -> Option<String> {
     urls.iter()
         .filter(|url| url.host_str() == Some("auth"))
@@ -604,13 +627,15 @@ fn token_from_urls(urls: &[url::Url]) -> Option<String> {
         .find(|token| magical_merchant_core::sync::token::is_token_valid(token))
 }
 
-/// OAuth のコールバックで返ってきた JWT を保存する。
-/// 保存結果をフロントに通知しないと、ログイン完了が UI に反映されず
-/// 失敗も握りつぶされてしまう。
+/// Stores the JWT that came back from the OAuth callback.
 ///
-/// Android では `app_data_dir` がプラグインへの同期呼び出しで、その応答を運ぶ
-/// のはメインスレッド。deep link のイベントはそのメインスレッドで配送されるため、
-/// ここで直に呼ぶと自分の応答を待って Activity ごと固まる。必ず別スレッドに移す。
+/// Without telling the frontend the result, a completed login never reaches the UI
+/// and a failure is swallowed.
+///
+/// On Android `app_data_dir` is a synchronous call into a plugin, and the main
+/// thread is what carries its reply. Deep link events are delivered on that same
+/// main thread, so calling it directly here waits on its own reply and freezes the
+/// whole Activity. Always move it to another thread.
 fn store_token_from_urls(handle: &AppHandle, urls: &[url::Url]) {
     let Some(token) = token_from_urls(urls) else {
         return;
@@ -644,16 +669,17 @@ pub fn run() {
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_geolocation::init())
         .plugin(tauri_plugin_opener::init())
-        // 図の書き出し: 保存ダイアログと、Android の content:// への書き込み
+        // Diagram export: the save dialog, and writing to content:// on Android
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .manage(sync::AppSyncState::default())
         .setup(|app| {
-            // Android には `log` の受け手が居らず、依存クレートの警告は捨てられる。
-            // 下の android_tls が使う rustls-platform-verifier は証明書を拒んだ
-            // 理由をここにしか書かないので、初期化はその前に済ませる。
-            // リリースで Warn 止まりなのは、Debug まで出すと依存クレートの
-            // 通常時のログが logcat を埋めて肝心の 1 行が流れるため。
+            // Android has nothing listening for `log`, and warnings from dependency
+            // crates are thrown away. The rustls-platform-verifier that android_tls
+            // below uses writes the reason it rejected a certificate here and
+            // nowhere else, so initialise this before that. Release stops at Warn
+            // because going down to Debug fills logcat with dependency crates'
+            // routine logs and the one line that matters scrolls away.
             #[cfg(target_os = "android")]
             android_logger::init_once(
                 android_logger::Config::default()
@@ -665,11 +691,12 @@ pub fn run() {
                     .with_tag("magical-merchant"),
             );
 
-            // ブラウザで認証している間に OS がアプリを回収すると、トークンは
-            // 起動 URL として届く。`new-url` イベントはアプリが生きていた場合に
-            // しか飛ばないので、両方を見ないとログインが黙って失敗する。
+            // If the OS reclaims the app while the browser is authenticating, the
+            // token arrives as the launch URL. The `new-url` event only fires when
+            // the app stayed alive, so a login fails silently unless both are read.
             //
-            // get_current も同期プラグイン呼び出しなので setup の中で待たない。
+            // get_current is a synchronous plugin call too, so do not wait on it
+            // inside setup.
             let launch_handle = app.handle().clone();
             std::thread::spawn(move || {
                 if let Ok(Some(urls)) = launch_handle.deep_link().get_current() {
@@ -683,20 +710,23 @@ pub fn run() {
                 store_token_from_urls(&handle, &urls);
             });
 
-            // 測位は始めてから最初の 1 件が返るまでに間がある。保存のたびに
-            // 頼むのでは間に合わないので、起動と同時に受け取り始める。
+            // There is a gap between starting to locate and the first fix coming
+            // back. Asking on every save is too late, so start receiving at launch.
             #[cfg(target_os = "macos")]
             location::start(app.handle());
 
-            // Geocoder と証明書検証器は Context を要る。Activity は破棄され得る
-            // ので、生きている今のうちに Application Context を自前で持つ。
+            // The geocoder and the certificate verifier need a Context. The Activity
+            // can be destroyed, so hold an Application Context of our own while one
+            // is alive.
             #[cfg(target_os = "android")]
             if let Err(e) = android_context::init() {
                 log::error!("android context init failed: {e}");
             }
 
-            // 同期の HTTPS は端末の信頼ストアで検証する。Android のそれは
-            // Java 側にしか無く、初期化を通さないと最初の同期で必ず落ちる。
+            // Android's trust store is reachable only from Java, so the platform
+            // verifier has to be initialised before any HTTPS request. Sync itself
+            // goes around it today (`android_tls::sync_tls_config`); the wiring
+            // stays so it works again once upstream #221 is fixed.
             #[cfg(target_os = "android")]
             android_tls::init();
 
@@ -756,16 +786,18 @@ mod tests {
     use super::*;
     use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 
-    /// 文字として読めないノートへの保存は、読み直しても直らない拒否。
-    /// `other` に落とすと画面はこれを一時的な失敗として黙って捨て、打った字は
-    /// ディスクにも控えにも残らないまま、警告も出ないで閉じられる。
+    /// A save to a note that is not text is a refusal reading again will not fix.
+    ///
+    /// Dropping it into `other` makes the screen treat it as a temporary failure and
+    /// discard it silently, and the typed text is closed away with no warning, left
+    /// neither on disk nor in a backup.
     #[test]
     fn a_note_that_is_not_text_is_refused_under_its_own_mark() {
         let not_text = SaveError::from(magical_merchant_core::CoreError::NotText(
             "a.md".to_string(),
         ));
-        // 一時的な失敗は印を持たないまま。次の打鍵で通る望みがあるので、
-        // 退避して「もう書けません」と言う相手ではない
+        // A temporary failure stays without a mark. The next keystroke may still get
+        // through, so it is not one to set aside and call unwritable
         let io = SaveError::from(magical_merchant_core::CoreError::Io(std::io::Error::other(
             "disk full",
         )));
@@ -774,7 +806,8 @@ mod tests {
         assert_eq!(io.kind, "other");
     }
 
-    /// 署名は誰も見ない (`sync::token::is_token_valid` と同じ理由) ので 3 つのパートを直に組む
+    /// Nobody checks the signature (same reason as `sync::token::is_token_valid`),
+    /// so the three parts are assembled directly
     fn jwt(expires_in: i64) -> String {
         let header = URL_SAFE_NO_PAD.encode(r#"{"alg":"HS256","typ":"JWT"}"#);
         let exp = chrono::Utc::now().timestamp() + expires_in;
@@ -794,8 +827,8 @@ mod tests {
         assert_eq!(token_from_urls(&links), Some(token));
     }
 
-    /// ウィジェットの deep link は同じスキームで届く。`?token=` を足すだけで
-    /// 保存先のアカウントを差し替えられてはいけない
+    /// A widget deep link arrives on the same scheme. Adding a `?token=` must not
+    /// be enough to swap the account things are saved to
     #[test]
     fn a_token_on_a_widget_link_is_ignored() {
         let links = urls(&[format!(
@@ -806,8 +839,8 @@ mod tests {
         assert_eq!(token_from_urls(&links), None);
     }
 
-    /// 期限切れを保存すると、次の同期が「ログインし直してください」で
-    /// 止まるだけの状態になり、有効なトークンも上書きされている
+    /// Storing an expired token leaves nothing but a state where the next sync
+    /// stops at "please log in again", with the valid token overwritten as well
     #[test]
     fn an_expired_or_malformed_token_is_ignored() {
         let expired = urls(&[format!(
