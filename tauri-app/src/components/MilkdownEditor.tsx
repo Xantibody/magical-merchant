@@ -1,4 +1,6 @@
-import { createEffect, onCleanup, onMount } from "solid-js";
+import { createEffect, createSignal, Show, onCleanup, onMount } from "solid-js";
+import TableMenu from "./TableMenu";
+import { tableMenuPlugin } from "../lib/table-menu-plugin";
 import { Editor, rootCtx, defaultValueCtx, editorViewCtx } from "@milkdown/kit/core";
 import { Selection, TextSelection } from "@milkdown/kit/prose/state";
 import { commonmark } from "@milkdown/kit/preset/commonmark";
@@ -72,6 +74,7 @@ function closestScroller(el: HTMLElement): HTMLElement | undefined {
 export default function MilkdownEditor(props: MilkdownEditorProps): JSX.Element {
   let ref: HTMLDivElement | undefined;
   let editor: Editor | undefined;
+  const [ready, setReady] = createSignal<Editor>();
   /** アンマウント後にカーソル配置の遅延処理が走らないように。 */
   let disposed = false;
   let cancelCaret: (() => void) | undefined;
@@ -201,6 +204,7 @@ export default function MilkdownEditor(props: MilkdownEditorProps): JSX.Element 
       // 出る今、ここに無いと開いた瞬間からパイプの段落に崩れる。列幅リサイズ
       // (columnResizingPlugin)は gfm に含まれず、Markdown にも無いので入れない
       .use(gfm)
+      .use(tableMenuPlugin)
       .use(listener)
       .use(highlight)
       .use(cursor)
@@ -232,6 +236,7 @@ export default function MilkdownEditor(props: MilkdownEditorProps): JSX.Element 
     }
 
     placeCaret(editor);
+    setReady(editor);
     props.onEditorReady?.(editor);
   });
 
@@ -252,7 +257,14 @@ export default function MilkdownEditor(props: MilkdownEditorProps): JSX.Element 
     }
   };
 
-  return <div ref={ref} class="milkdown-editor" role="presentation" onClick={handleClick} />;
+  return (
+    <div class="milkdown-editor" role="presentation" onClick={handleClick}>
+      <div class="editor-table-slot">
+        <Show when={ready()}>{(created) => <TableMenu editor={created()} />}</Show>
+      </div>
+      <div ref={ref} class="editor-content" />
+    </div>
+  );
 }
 
 export { type CaretPoint, type MilkdownEditorProps };

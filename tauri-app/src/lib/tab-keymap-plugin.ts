@@ -1,5 +1,6 @@
 import { $shortcut } from "@milkdown/kit/utils";
 import { indentCodeLine, outdentCodeLine } from "./block-commands";
+import { nextTableCell } from "./table-commands";
 
 /**
  * Tab / Shift-Tab がリストや表に受けられなかったときの受け皿。
@@ -16,7 +17,8 @@ export const tabKeymapPlugin = $shortcut(() => ({
   Tab: {
     key: "Tab",
     priority: 0,
-    onRun: () => (state, dispatch) => indentCodeLine(state, dispatch) || true,
+    onRun: () => (state, dispatch) =>
+      nextTableCell(state, dispatch) || indentCodeLine(state, dispatch) || true,
   },
   "Shift-Tab": {
     key: "Shift-Tab",

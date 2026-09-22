@@ -52,7 +52,7 @@ to find and no state to be in the wrong one of. Saving is automatic
 pre-edit body on the device, so the `…` menu's 編集前に戻す (`⌘⇧R`) can undo
 an accidental edit — press it again to swap back.
 
-Everything else a single note needs is behind that one `…` button (`⌘.`),
+Note-level actions live behind the `…` button (`⌘.`),
 because none of it is used often enough to sit in the way of writing: lay the
 map alongside, make the note read-only, revert, Note 情報, delete, and — for
 a Note — Codex にする.
@@ -71,6 +71,16 @@ list row wears a small padlock so you know before you open it. The choice
 lives in the file, so it follows the note to every device.
 
 ![Editor with Note links](images/editor-links.png)
+
+The table button above the body inserts a table at the cursor. Selecting a
+cell moves the button beside its row; opening the menu highlights the target
+row and column, including when inserting in the middle of a table. Inside a
+cell, the same menu adds or deletes rows and columns, aligns a column,
+exits the table, or deletes it. Undo is available in the menu on phones as
+well as through the usual keyboard shortcut. The header and the last body
+row are protected; delete the whole table when it is no longer needed.
+Tab and Shift-Tab move between cells, and Tab in the last cell adds a row.
+Enter moves below the table; Shift-Enter adds a line break within a cell.
 
 Code blocks are highlighted with Shiki; a ` ```diff ` fence colours its `+`
 and `-` lines instead. ` ```mermaid ` fences render as diagrams, and a leading

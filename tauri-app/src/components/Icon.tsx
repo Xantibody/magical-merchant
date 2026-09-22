@@ -2,6 +2,7 @@ import { splitProps, createEffect } from "solid-js";
 import type { JSX } from "solid-js";
 
 const ICONS = {
+  table: () => import("@phosphor-icons/core/assets/regular/table.svg?raw"),
   lightning: () => import("@phosphor-icons/core/assets/regular/lightning.svg?raw"),
   "scribble-loop": () => import("@phosphor-icons/core/assets/regular/scribble-loop.svg?raw"),
   "note-pencil": () => import("@phosphor-icons/core/assets/regular/note-pencil.svg?raw"),
