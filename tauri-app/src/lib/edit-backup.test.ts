@@ -64,8 +64,8 @@ describe("recordSaved", () => {
     expect(readBackup(store, FILE)).toBe("v1");
   });
 
-  // 変更のなかったセッションが 1 枠しかないバックアップを「現在と同じ
-  // 本文」で潰すと、戻る先が消える
+  // If a session with no change crushed the single backup slot with "the same
+  // body as now", the restore point would be gone
   it("does not touch the backup when the saved body equals the pre-edit body", () => {
     const store = memoryStore();
     writeBackup(store, FILE, "昔の本文");
@@ -104,8 +104,8 @@ describe("readBackup / writeBackup", () => {
     expect(readBackup(store, FILE)).toBe("編集後");
   });
 
-  // バックアップは善意の保険。容量超過などで書けなくても保存や復元の
-  // 本流を落とさない
+  // The backup is best-effort insurance. Failing to write it (quota etc.) must
+  // not break the main flow of saving and restoring
   it("swallows storage failures", () => {
     const broken: BackupStore = {
       getItem: () => {
@@ -120,8 +120,8 @@ describe("readBackup / writeBackup", () => {
     expect(readBackup(broken, FILE)).toBeNull();
   });
 
-  // ディスクへの保存が既に断られている場面では、退避も失敗したのかを
-  // 知る必要がある。書けたことにすると「戻す」で呼び出せると案内してしまう
+  // Where the save to disk has already been refused, we must know whether the
+  // backup failed too. Claiming it was written would announce it can be recalled with "restore"
   it("reports whether the copy actually landed", () => {
     const broken: BackupStore = {
       getItem: () => null,

@@ -1,13 +1,14 @@
 /**
- * テンプレ変数のプレビュー解決。
+ * Preview resolution of template variables.
  *
- * 本当の解決は core (`template/vars.rs`) がやる。ここにあるのは編集中の
- * タイトルとタグを「今日作るとこうなる」で見せるための写しで、打つたびに
- * IPC を往復させないために置いている。保存されるファイルはこの関数を
- * 一度も通らない。
+ * The real resolution is done by core (`template/vars.rs`). What lives here is a
+ * copy that shows the title and tags being edited as "this is what today would
+ * produce", placed so that each keystroke does not round-trip the IPC. The file that
+ * gets saved never passes through these functions.
  *
- * `{{prev}}` を含む行を丸ごと落とす規則はここには無い。プレビューが見せる
- * のは 1 行ぶんの値だけで、行の取捨は本文を書き出す core の仕事。
+ * The rule that drops a whole line containing `{{prev}}` is not here. The preview
+ * shows only one line's value; keeping or dropping lines is the job of the core that
+ * writes the body.
  */
 
 import { t } from "./i18n";
@@ -22,7 +23,7 @@ const WEEKDAYS: Record<Locale, string[]> = {
 
 const pad = (n: number): string => String(n).padStart(2, "0");
 
-/** core の `format_stamp` と同じトークン。 */
+/** The same tokens as core's `format_stamp`. */
 export function formatStamp(date: Date, pattern: string): string {
   return pattern
     .replaceAll("YYYY", String(date.getFullYear()))
@@ -39,8 +40,9 @@ const DEFAULT_TIME = "HH:mm";
 const PLACEHOLDER = /\{\{(?<inner>[^}]*)\}\}/gu;
 
 /**
- * 1 行ぶんの変数を解く。知らない変数は書かれたまま残す — 綴りを間違えた
- * 人が「消えた」ことにしか気づけないのは core と同じ理由で避ける。
+ * Resolves the variables of one line. An unknown variable is left as written: a
+ * person who misspelled it would only notice that it "vanished", which core avoids
+ * for the same reason.
  */
 export function resolveLine(line: string, now: Date, locale: Locale, prev = ""): string {
   return line.replaceAll(PLACEHOLDER, (raw, inner: string) => {
@@ -65,14 +67,14 @@ export function resolveLine(line: string, now: Date, locale: Locale, prev = ""):
 }
 
 /**
- * 本文まるごとのプレビュー。行ごとに解くところは core と同じで、違うのは
- * `{{prev}}` だけ — 前回のノートはここからは読めないので、書かれたまま
- * 残して「ここにリンクが入る」と見せる。空に潰すと「前回: 」だけの行が
- * 残り、何を待っている行なのか読めなくなる。
+ * Preview of the whole body. Resolving line by line is the same as core; the only
+ * difference is `{{prev}}`. The previous note cannot be read from here, so it is
+ * left as written to show "a link goes here". Collapsed to empty, a line of just
+ * "prev: " would remain and nobody could read what it waits for.
  *
- * 実際に作るときは、前回があればリンクに変わり、無ければその行ごと落ちる
- * (`template/vars.rs`)。どちらになるかは、まだノートが 1 本も無い今は
- * 決まらない。
+ * On actual creation it becomes a link if there is a previous note, and the whole
+ * line is dropped if there is none (`template/vars.rs`). Which one happens is not
+ * decided now, while no note exists yet.
  */
 export function resolveBody(body: string, now: Date, locale: Locale): string {
   return dropExamples(body)
@@ -81,17 +83,18 @@ export function resolveBody(body: string, now: Date, locale: Locale): string {
     .join("\n");
 }
 
-/** 文字列に変数が含まれるか。タグを実線/破線で描き分けるのに使う。 */
+/** Whether the string contains a variable. Used to draw a tag solid or dashed. */
 export function hasVariable(text: string): boolean {
   return /\{\{[^}]*\}\}/u.test(text);
 }
 
 /**
- * 自動タグを 1 つ足す。綴りは打たれた形のまま残す。
+ * Adds one automatic tag. The spelling is kept as typed.
  *
- * 重複の判定だけノートのタグ(`note-meta.ts` の addTag)と違う: 変数を含む
- * ものは 1 文字も畳まずに比べる — `{{date:YYYY-MM}}` と `{{date:yyyy-mm}}`
- * は別のトークンで、畳んで同じ扱いにすると後から書いたほうが黙って消える。
+ * Only the duplicate check differs from note tags (addTag in `note-meta.ts`): one
+ * that contains a variable is compared without folding a single character.
+ * `{{date:YYYY-MM}}` and `{{date:yyyy-mm}}` are different tokens; folded into one,
+ * the one written later silently disappears.
  */
 export function addTemplateTag(tags: string[], raw: string): string[] {
   const tag = raw.trim().replace(/^#+/u, "");
@@ -104,7 +107,7 @@ export function addTemplateTag(tags: string[], raw: string): string[] {
   return duplicate ? tags : [...tags, tag];
 }
 
-/** ハイライト用に、変数とそれ以外へ切り分ける。 */
+/** Splits text into variable and non-variable runs, for highlighting. */
 export interface TextRun {
   text: string;
   variable: boolean;
@@ -128,19 +131,20 @@ export function splitVariables(text: string): TextRun[] {
 }
 
 export interface TemplateVar {
-  /** カーソル位置に挿し込む文字列。 */
+  /** The string inserted at the cursor. */
   token: string;
-  /** チップに添える短い説明。言語を切り替えたら描き直したいので関数。 */
+  /** Short description attached to the chip. A function so it redraws after a language switch. */
   label: () => string;
 }
 
-/** ツールバーと「変数を挿入」列に出す変数。PoC で解決できるのはこれだけ。 */
+/** Variables shown in the toolbar and the "insert variable" row. The only ones the PoC resolves. */
 export const TEMPLATE_VARS: readonly TemplateVar[] = [
   { token: "{{date}}", label: () => t().templates.varDate },
   { token: "{{time}}", label: () => t().templates.varTime },
   { token: "{{weekday}}", label: () => t().templates.varWeekday },
   { token: "{{prev}}", label: () => t().templates.varPrev },
-  // 値にならない唯一の変数。下に書いた行を「ノートには書かれない記入例」に
-  // する印で、解決ではなく行落としが仕事(`core/src/template/vars.rs`)
+  // The only variable that never becomes a value. It marks the line below it as
+  // "an example that is not written into the note"; its job is dropping the line,
+  // not resolving (`core/src/template/vars.rs`)
   { token: "{{eg}}", label: () => t().templates.varExample },
 ];

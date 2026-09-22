@@ -7,29 +7,29 @@ import type { VersionRow } from "../lib/versions";
 import "../styles/history.css";
 
 interface HistoryPanelProps {
-  /** 版。新しい順。 */
+  /** Versions, newest first. */
   rows: VersionRow[];
-  /** 「3 版 · 9 か月」。数えるのは面の側。 */
+  /** "3 versions, 9 months". The surface does the counting. */
   summary: string;
-  /** 最新の版から下書きが動いているか。 */
+  /** Whether the draft has moved on from the latest version. */
   dirty: boolean;
-  /** 下書きと最新の版のバイト差。 */
+  /** Byte difference between the draft and the latest version. */
   bytesDelta: number;
   /**
-   * 開いているか。閉じているあいだも DOM に残り、右へ 24px ずれて透ける —
-   * 畳むところまで見えるのは、開いた場所に戻ることが分かるため。
+   * Whether it is open. While closed it stays in the DOM, shifted 24px to the
+   * right and faded. Watching it fold away shows that it returns to where it opened.
    */
   open: boolean;
   /**
-   * 携帯の専用画面として出しているか。パネルではなく面になり、戻すは
-   * 本文の下の比較バーが持つ。
+   * Whether it is shown as the phone's own screen. It becomes a surface rather
+   * than a panel, and restoring belongs to the compare bar under the body.
    */
   screen?: boolean;
-  /** 履歴で選んでいる版。 */
+  /** The version selected in the history. */
   selectedId: string | null;
-  /** 読み取り専用のノートには戻せない。 */
+  /** A read-only note cannot be restored. */
   readOnly: boolean;
-  /** 刻んだばかりの版。その行だけが跳ねて入る。 */
+  /** The version just committed. Only its row pops in. */
   freshId?: string | null;
   onClose: () => void;
   onSelect: (id: string) => void;
@@ -37,23 +37,25 @@ interface HistoryPanelProps {
   onCommit: () => void;
 }
 
-/** ↑↓ で版の行を送る向き。 */
+/** Direction the up/down keys step through the version rows. */
 const ROW_STEP_KEYS: Readonly<Record<string, 1 | -1>> = { ArrowUp: -1, ArrowDown: 1 };
 
-/** 点の種類。下書きは中空、強調(選択中か最新)は大きい塗り、他は小さい薄い点。 */
+/** Dot kinds. The draft is hollow, the emphasised one (selected or latest) a large fill, the rest small and faint. */
 function Dot(props: { kind: "draft" | "strong" | "faint" }): JSX.Element {
   return <span class="history-dot" data-kind={props.kind} />;
 }
 
-/** 行の右端の日時。「08/12 22:18」 */
+/** The date and time at the right edge of a row. "08/12 22:18" */
 function stamp(row: VersionRow): string {
   return `${versionDay(row.version)} ${versionClock(row.version)}`;
 }
 
 /**
- * 行の 2 行目。いちばん古い版は「最初の版 · 2.1 KB」、他は 1 つ古い版との
- * バイト差。行数は出さない — 版ごとに本文 2 本を読む値段に対して、開くたびに
- * 払うだけの中身が無い(比較中の行数は比較バーとメタ行が言う)。
+ * The second line of a row. The oldest version reads "first version, 2.1 KB";
+ * the others show the byte difference from the version one older. Line counts
+ * are not shown: reading two bodies per version costs more than what it would be
+ * worth paying on every open (the compare bar and the meta line give the line
+ * count of the version being compared).
  */
 function delta(row: VersionRow): string {
   return [
@@ -67,8 +69,8 @@ function delta(row: VersionRow): string {
 }
 
 /**
- * 版ゼロの Codex で履歴を開いたとき。空の一覧を見せる代わりに、次の一手
- * (刻む)をここに置く。
+ * The history opened on a Codex with zero versions. Instead of showing an empty
+ * list, the next move (commit a version) is placed here.
  */
 function NoVersions(props: { onCommit: () => void }): JSX.Element {
   return (
@@ -83,15 +85,17 @@ function NoVersions(props: { onCommit: () => void }): JSX.Element {
 }
 
 /**
- * 版の一覧。広い窓では本文の右に立つ 320px のパネル、携帯では本文と
- * 入れ替わる専用の画面。どちらも中身は同じ 3 段 — 見出し・下書きと版の行・
- * 足元の案内。
+ * The list of versions. In a wide window it is a 320px panel standing to the
+ * right of the body; on a phone it is its own screen that replaces the body.
+ * Both hold the same three parts: a heading, the draft and version rows, and the
+ * hint at the foot.
  *
- * ホバーでは開かない。履歴ボタン・Esc・× だけが開け閉めする — 本文を書いて
- * いる手の横で、通りすがりに 320px が現れてはいけない。
+ * It does not open on hover. Only the history button, Esc and the close button
+ * open and close it: 320px must not appear in passing beside a hand that is
+ * writing the body.
  *
- * 行は上から下書き → 最新 → … → 最古。点の下の線がその行の高さぶん伸びて
- * 次の点へ繋がる。
+ * Rows run from the draft at the top, then the latest, down to the oldest. The
+ * line under each dot stretches the height of its row to join the next dot.
  */
 export default function HistoryPanel(props: HistoryPanelProps): JSX.Element {
   const emphasis = (row: VersionRow, index: number): "strong" | "faint" => {
@@ -99,7 +103,7 @@ export default function HistoryPanel(props: HistoryPanelProps): JSX.Element {
     return chosen ? "strong" : "faint";
   };
 
-  /** ↑↓ で隣の版へ。一覧の行と同じ考え方で、この中でだけ受ける。 */
+  /** Up/down moves to the neighbouring version. Same idea as the list rows; handled only in here. */
   const onKeyDown = (e: KeyboardEvent): void => {
     const step = ROW_STEP_KEYS[e.key];
     if (step === undefined || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) {
@@ -128,7 +132,8 @@ export default function HistoryPanel(props: HistoryPanelProps): JSX.Element {
       aria-hidden={!props.open}
     >
       <div class="history-head">
-        {/* 携帯では面ごと入れ替わるので、戻る先は本文。広い窓では × で畳む */}
+        {/* On a phone the whole surface is swapped, so back leads to the body. A wide
+            window folds it with the close button */}
         <Show when={props.screen} fallback={<span class="history-title">{t().codex.history}</span>}>
           <button
             type="button"
@@ -141,8 +146,9 @@ export default function HistoryPanel(props: HistoryPanelProps): JSX.Element {
           <span class="history-title">{t().codex.history}</span>
         </Show>
         <span class="history-summary">{props.summary}</span>
-        {/* 開け閉ての決まりは、開いているものの中に書く。携帯は面ごと
-            入れ替わるので、閉じ方ではなく押し方だけを言う */}
+        {/* The rule for opening and closing is written inside the thing that is
+            open. A phone swaps the whole surface, so it only says how to press,
+            not how to close */}
         <Show
           when={props.screen}
           fallback={
@@ -162,9 +168,10 @@ export default function HistoryPanel(props: HistoryPanelProps): JSX.Element {
       </div>
 
       <Show when={props.rows.length > 0} fallback={<NoVersions onCommit={props.onCommit} />}>
-        {/* キーを受けるのは中の行。ここは束ねているだけ */}
+        {/* The rows inside receive the keys. This only bundles them */}
         <div class="history-list" role="presentation" onKeyDown={onKeyDown}>
-          {/* 下書きは比べる相手ではなく比べる先。行は出すが選べない */}
+          {/* The draft is what a version is compared against, not a candidate. Its row
+              shows but cannot be selected */}
           <div class="history-row history-row--draft">
             <span class="history-row-rail">
               <Dot kind="draft" />
@@ -212,8 +219,9 @@ export default function HistoryPanel(props: HistoryPanelProps): JSX.Element {
                     <span class="history-row-line2">{delta(row)}</span>
                   </span>
                 </button>
-                {/* 戻すのは選んだ 1 つに対する操作。行の下に置いて、どの版に
-                    戻るのかを取り違えられないようにする。携帯では比較バーが持つ */}
+                {/* Restoring acts on the one selected version. It sits under the
+                    row so that which version it restores cannot be mistaken. On a
+                    phone the compare bar holds it */}
                 <Show when={!props.screen && row.version.id === props.selectedId}>
                   <div class="history-restore">
                     <button

@@ -11,8 +11,8 @@ import {
   stepPastHr,
 } from "./block-commands";
 
-// 本物の commonmark スキーマは Milkdown の初期化ごと必要になる。コマンドが
-// 見るのはノード名と入れ子だけなので、その形だけを再現した最小スキーマで足りる。
+// The real commonmark schema would pull in all of Milkdown's initialisation. The commands
+// look only at node names and nesting, so a minimal schema reproducing that shape is enough.
 const schema = new Schema({
   nodes: {
     doc: { content: "block+" },
@@ -29,7 +29,7 @@ const p = (text?: string): Node =>
   schema.nodes.paragraph.create(null, text ? schema.text(text) : undefined);
 const code = (text: string): Node => schema.nodes.code_block.create(null, schema.text(text));
 
-/** pos にカーソルを置いた state。 */
+/** A state with the cursor placed at a position. */
 function stateAt(doc: Node, from: number, to = from): EditorState {
   return EditorState.create({ doc, selection: TextSelection.create(doc, from, to) });
 }
@@ -55,8 +55,8 @@ describe("isInCodeBlock", () => {
     expect(isInCodeBlock(stateAt(doc, 2).selection)).toBe(false);
   });
 
-  // 罫線を丸ごと選んだ NodeSelection は親が doc になる。コードブロックの中を
-  // 尋ねているだけなので、そこで例外にならないことを押さえる
+  // A NodeSelection over a whole rule has doc as its parent. The call only asks whether it
+  // is inside a code block, so this pins down that it does not throw there
   it("is false for a node selection", () => {
     const doc = schema.nodes.doc.create(null, [p("a"), schema.nodes.hr.create()]);
     const selection = NodeSelection.create(doc, 3);
@@ -88,7 +88,7 @@ describe("exitCodeBlock", () => {
 describe("indentCodeLine", () => {
   it("inserts two spaces where the cursor is in a code block", () => {
     const doc = schema.nodes.doc.create(null, [code("a\nb")]);
-    // code の中は 1 始まり。"a\n" の後ろ = 3
+    // Inside code the positions are 1-based. After "a\n" is 3
     const state = stateAt(doc, 3);
 
     const next = apply(state, indentCodeLine);
@@ -99,13 +99,13 @@ describe("indentCodeLine", () => {
 
   it("indents every selected line and keeps the selection's text", () => {
     const doc = schema.nodes.doc.create(null, [code("a\nb\nc")]);
-    // "a\nb" を選ぶ: 1..4
+    // Select "a\nb": 1..4
     const state = stateAt(doc, 1, 4);
 
     const next = apply(state, indentCodeLine);
 
     expect(next.doc.textContent).toBe("  a\n  b\nc");
-    // 選択は同じ文字を指したまま(字下げの分だけずれる)
+    // The selection still points at the same characters, shifted by the indentation
     expect(next.doc.textBetween(next.selection.from, next.selection.to)).toBe("a\n  b");
   });
 
@@ -119,7 +119,7 @@ describe("indentCodeLine", () => {
 describe("outdentCodeLine", () => {
   it("removes one level of indentation at the start of the cursor's line", () => {
     const doc = schema.nodes.doc.create(null, [code("a\n    b")]);
-    // 4 スペースの後ろ = 7
+    // After the 4 spaces is 7
     const state = stateAt(doc, 7);
 
     const next = apply(state, outdentCodeLine);
@@ -130,7 +130,7 @@ describe("outdentCodeLine", () => {
 
   it("outdents every selected line", () => {
     const doc = schema.nodes.doc.create(null, [code("  a\n  b\nc")]);
-    // "a\n  b" を選ぶ: 3..8
+    // Select "a\n  b": 3..8
     const state = stateAt(doc, 3, 8);
 
     const next = apply(state, outdentCodeLine);
@@ -161,7 +161,7 @@ describe("outdentCodeLine", () => {
   });
 });
 
-/** stepPastHr が直すべきものを見つけた前提で、その結果の state。 */
+/** The resulting state, assuming stepPastHr found something to fix. */
 function applyStep(state: EditorState): EditorState {
   const tr = stepPastHr(state);
   if (!tr) {
@@ -184,7 +184,7 @@ describe("stepPastHr", () => {
   });
 
   it("reuses an empty paragraph that already follows the rule", () => {
-    // 文書末尾では trailing プラグインが先に空段落を足している
+    // At the end of the document the trailing plugin has already added an empty paragraph
     const doc = schema.nodes.doc.create(null, [p("a"), schema.nodes.hr.create(), p()]);
     const state = EditorState.create({ doc, selection: NodeSelection.create(doc, 3) });
 

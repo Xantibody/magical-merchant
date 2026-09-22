@@ -9,8 +9,8 @@ import type { Shell } from "../lib/shell";
 import Scrawl from "./Scrawl";
 
 /**
- * 日付は動く。「今週」と「1年前の今日」はどちらも今日から数えた場所なので、
- * 固定の日付を書くとカレンダー次第で落ちるテストになる。
+ * The dates move. "This week" and "a year ago today" are both places counted from today,
+ * so a fixed date would make a test that fails depending on the calendar.
  */
 const pad = (value: number): string => String(value).padStart(2, "0");
 const isoOf = (date: Date): string =>
@@ -21,49 +21,49 @@ const TODAY = isoOf(NOW);
 const YEAR_AGO = isoOf(new Date(NOW.getFullYear() - 1, NOW.getMonth(), NOW.getDate()));
 
 /**
- * 一覧が最初に載せるのは直近 14 日ぶんだけ。記録のある日をその数だけ並べると
- * 1 年前は載らない日になり、そこへ飛ぶと一覧ごと読み直される。
+ * The list loads only the most recent 14 days at first. Lining up that many days that hold
+ * records makes a year ago a day that is not loaded, and jumping there reloads the list.
  */
 const RECENT_DATES = Array.from({ length: 14 }, (_, back) =>
   isoOf(new Date(NOW.getFullYear(), NOW.getMonth(), NOW.getDate() - back)),
 );
 
 /**
- * タグの綴りを見るための日。最初から載っていて、かつ「今週」(月曜起点)には
- * 決して入らない 10 日前に置く — 今日へ足すと週の要約の件数が動き、1 年前へ
- * 置くと最初は載らない日になってしまう。
+ * The day used to look at tag spellings. It is put 10 days back, which is loaded from the
+ * start and can never fall inside "this week" (Monday based): added to today it would move
+ * the week summary's count, and put a year ago it would be a day not loaded at first.
  */
 const TAG_DAY = isoOf(new Date(NOW.getFullYear(), NOW.getMonth(), NOW.getDate() - 10));
 
 const DAYS: Record<string, string[]> = {
   [TODAY]: ["- [08:15:00] 朝ラン 5km #運動", "- [21:34:00] ベガのラッシュ止まらん #SF6"],
   [TAG_DAY]: [
-    // 綴りが 1 つしかないタグ。後から大文字で記録すると代表表記が入れ替わる
+    // A tag with only one spelling. Recording it in capitals later swaps the representative spelling
     "- [11:00:00] 小文字だけで書いた #run",
-    // 同じタグを大小違いで書いた 2 件。チップは 1 つに畳まれるので、絞り込みも
-    // 同じ畳み方でなければ片方が一覧から消える
+    // Two records writing the same tag in different case. The chips fold into one, so
+    // unless the filter folds the same way one of them drops out of the list
     "- [12:30:00] 小文字で書いた #memo",
     "- [12:40:00] 大文字で書いた #Memo",
   ],
   [YEAR_AGO]: ["- [12:00:00] 去年のきょう"],
 };
 
-/** 記録すると書き換わるので、テストごとに作り直す。 */
+/** Recording rewrites it, so it is rebuilt for each test. */
 let days: Record<string, string[]>;
 
 const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
   list_scrawl_dates: () => [...RECENT_DATES, YEAR_AGO],
   read_scrawl_by_date: ({ date }) => days[String(date)] ?? [],
   list_notes: () => [],
-  // 追記なので、その日のいちばん新しい 1 件になる
+  // It appends, so it becomes the newest record of that day
   save_quick_capture: ({ text }) => {
     days[TODAY]?.push(`- [22:00:00] ${String(text)}`);
   },
 };
 
 /**
- * 画面の外から再読込を頼む口。同期やフォーカス復帰が押すのと同じ
- * `refreshData` で、トーストもここから読む。
+ * The mouth that asks for a reload from outside the screen. It is the same `refreshData`
+ * that sync and a focus return press, and the toast is read from here too.
  */
 let shell: Shell;
 
@@ -72,7 +72,7 @@ function ShellHandle(): null {
   return null;
 }
 
-/** チップを押した行き先を見るための現在地。 */
+/** The current location, used to see where pressing a chip leads. */
 let location: ReturnType<typeof useLocation>;
 
 function RouterRoot(props: { children?: JSX.Element }): JSX.Element {
@@ -80,7 +80,7 @@ function RouterRoot(props: { children?: JSX.Element }): JSX.Element {
   return <>{props.children}</>;
 }
 
-/** 一覧が届くまで待つ。時刻の欄はエントリ 1 件につき 1 つだけ出る。 */
+/** Wait until the list arrives. The time column shows exactly one per entry. */
 async function openScrawl(): Promise<void> {
   render(() => (
     <ShellProvider>
@@ -118,8 +118,8 @@ describe("Scrawl › 週次ダイジェスト", () => {
   beforeEach(setupScrawl);
   afterEach(teardownScrawl);
 
-  // カードだった頃は上位タグを並べていたが、同じタグはすぐ上のチップ行に
-  // もう出ている。二度読ませるぶん、週の要約は 1 行に畳める
+  // When it was a card it listed the top tags, but the same tags already appear in the chip
+  // row just above. Since that makes them read twice, the week summary folds into one line
   it("says the week in one line, with the year-ago jump as its only link", async () => {
     await openScrawl();
 
@@ -147,8 +147,8 @@ describe("Scrawl › タグのチップ", () => {
   beforeEach(setupScrawl);
   afterEach(teardownScrawl);
 
-  // 絞り込みの答えを 2 か所に持たない。Scrawl の一覧は日ごとの記録のままで、
-  // 絞るのは 3 軸を持つあちらの仕事
+  // The answer to a filter is not held in two places. Scrawl's list stays the records by
+  // day, and narrowing is the job of Browse, which holds the three axes
   it("opens the browse screen on Scrawl and that tag instead of filtering here", async () => {
     await openScrawl();
 
@@ -165,11 +165,11 @@ describe("Scrawl › タグのチップ", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "#Memo" }));
 
-    // #Memo を持たない記録も、そのまま日の下に並んでいる
+    // A record without #Memo still stands under its day as before
     expect(screen.getByText("ベガのラッシュ止まらん")).toBeDefined();
   });
 
-  // チップに出る綴りは最初に見たもの 1 つ。大小違いは 1 つに畳まれる
+  // A chip shows one spelling, the one met first. Case differences fold into one
   it("names a tag with the spelling it met first", async () => {
     await openScrawl();
 
@@ -187,7 +187,7 @@ describe("Scrawl › 選択の入り口", () => {
   beforeEach(setupScrawl);
   afterEach(teardownScrawl);
 
-  // 浮かせた専用のバーを 1 段作らず、いま書いている日の件数の隣に字で置く
+  // No floating bar of its own is added; it sits as a word beside the count of the day being written
   it("sits beside the first day's count and nowhere else", async () => {
     await openScrawl();
 
@@ -199,7 +199,7 @@ describe("Scrawl › 選択の入り口", () => {
     expect(heading?.textContent).toContain("2件");
   });
 
-  // 入ったあとの操作は下のバーが引き受ける。同じ役目を 2 か所に出さない
+  // Once in, the bottom bar takes over. The same role is not shown in two places
   it("hands over to the bottom bar once selecting", async () => {
     await openScrawl();
 
@@ -217,9 +217,10 @@ describe("Scrawl › 選択中の読み直し", () => {
   afterEach(teardownScrawl);
 
   /**
-   * 選択は `date#index` で行を指す。確認バーを出したまま別アプリへ移り、
-   * 戻ったときの自動再読込が同じ日の前へ 1 行足していると、同じ index は
-   * 隣の記録を指す。読み直したら選択は畳む — 隣を消してからでは遅い。
+   * A selection points at a row by `date#index`. Leave for another app with the confirm bar
+   * up, and if the automatic reload on return has added a row ahead of it on the same day,
+   * the same index points at the neighbouring record. On a reload the selection is dropped:
+   * after the neighbour is deleted it is too late.
    */
   it("drops the selection when the list is reloaded under it", async () => {
     await openScrawl();
@@ -239,9 +240,10 @@ describe("Scrawl › 選択中の読み直し", () => {
   });
 
   /**
-   * 読み直しを起こすのは `refreshData` だけではない。まだ載っていない日へ
-   * 飛ぶと、リソースは一覧ごと取り直す — そのあいだに外から書かれていれば
-   * 同じ index は隣の記録を指す。日を足す経路でも選択は畳む。
+   * `refreshData` is not the only thing that causes a reload. Jumping to a day not loaded
+   * yet makes the resource fetch the whole list again, and if something was written from
+   * outside meanwhile, the same index points at the neighbouring record. The selection is
+   * dropped on the path that adds a day too.
    */
   it("drops the selection when a jump to an unloaded day reloads the list", async () => {
     await openScrawl();
@@ -257,11 +259,11 @@ describe("Scrawl › 選択中の読み直し", () => {
     });
     expect(screen.getByRole("button", { name: "選択" })).toBeDefined();
     expect(shell.toast()?.message).toBe("一覧を読み直したので選択を解除しました");
-    // 飛んだ先はちゃんと足されている（選択を畳むだけで終わっていない）
+    // The day jumped to really was added (it did not stop at dropping the selection)
     await expect(screen.findByText("去年のきょう")).resolves.toBeDefined();
   });
 
-  // 黙って消えると、押したはずの削除が効かなかったようにしか見えない
+  // Vanishing silently can only look like the delete that was pressed did not take
   it("says why the selection went away", async () => {
     await openScrawl();
     fireEvent.click(screen.getByRole("button", { name: "選択" }));
@@ -274,7 +276,7 @@ describe("Scrawl › 選択中の読み直し", () => {
     });
   });
 
-  // 選んでいないときの読み直しは、ただの再取得。言うことは何も無い
+  // A reload with nothing selected is just a refetch. There is nothing to say
   it("stays quiet when nothing was selected", async () => {
     await openScrawl();
 

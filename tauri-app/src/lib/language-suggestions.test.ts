@@ -15,7 +15,7 @@ describe("buildLanguageSuggestions", () => {
     ]);
   });
 
-  // mermaid はハイライト対象外でも図が描ける言語なので、候補から漏らさない
+  // mermaid draws a diagram even though it is not highlighted, so it never drops out
   it("always offers mermaid even though the highlighter does not load it", () => {
     expect(buildLanguageSuggestions([])).toStrictEqual(["mermaid"]);
     expect(buildLanguageSuggestions(["mermaid", "ts"])).toStrictEqual(["mermaid", "ts"]);
@@ -35,7 +35,7 @@ describe("ensureLanguageDatalist", () => {
     expect([...options].map((o) => (o as HTMLOptionElement).value)).toStrictEqual(["js", "rust"]);
   });
 
-  // エディタは開き直されるし、ブロックごとに nodeView が立つ。何度呼んでも 1 つ
+  // The editor is reopened, and a nodeView stands up per block. However many calls, one
   it("reuses the existing datalist instead of adding a second one", () => {
     ensureLanguageDatalist(document, ["js"]);
     ensureLanguageDatalist(document, ["js", "rust"]);

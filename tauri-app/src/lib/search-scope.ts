@@ -1,29 +1,31 @@
 /**
- * パレット検索の範囲。
+ * The scope of the palette search.
  *
- * Scrawl でタグを選んで絞った状態と ⌘K の検索は、もともと別々だった。
- * 絞ったまま探せるように、選んでいるタグをパレットに引き継いで
- * `search_all` の範囲として渡す。
+ * Narrowing by a chosen tag in Browse and the ⌘K search were originally separate. So that
+ * you can search while still narrowed, the chosen tags are carried into the palette and
+ * passed as the scope of `search_all`.
  *
- * 範囲はタグの並びで、全部の付いた記録だけが残る(AND)。「#SF6 #ベガ #置き攻め」
- * のように、ノートを何枚も横断して一つの話題を集めたいときの形。
+ * The scope is a list of tags, and only records carrying all of them remain (AND). It is
+ * the shape for gathering one topic across many notes, such as `#SF6 #ベガ #置き攻め`.
  */
 
 import { ROUTES } from "./routes";
 import { normalizeTag, parseTags, sameTag, splitTagged } from "./tags";
 
 export interface PaletteScope {
-  /** 絞り込んでいるタグ(`#` なし)。全部の付いた記録だけが残る。 */
+  /** The tags being narrowed by (no `#`). Only records carrying all of them remain. */
   tags: string[];
 }
 
 /**
- * `search_all` に渡す引数。何も打たず範囲も無ければ `null` — 発行しない。
- * タグだけあるときは空のクエリで呼び、そのタグの付いた記録を全部もらう。
+ * The arguments passed to `search_all`. `null` if nothing was typed and there is no scope:
+ * it is not issued. With tags only it is called with an empty query, and gets back every
+ * record carrying those tags.
  *
- * 打った文字の中の `#タグ` も範囲に数える。チップにするには行を選ぶ手間が
- * 要るが、打つだけなら手が止まらない。本文の `#タグ` と同じ規則(tags.ts)で
- * 拾うので、Scrawl のチップと同じ字に寄る。残った文字だけが本文の検索語。
+ * A `#tag` inside what was typed counts towards the scope too. Making a chip costs the
+ * trouble of picking a row; typing alone does not stop the hand. It is picked up by the
+ * same rules as a `#tag` in a body (tags.ts), so it lands on the same letters as a Scrawl
+ * chip. Only the text that is left is the search term for the body.
  */
 export function searchRequest(
   query: string,
@@ -35,7 +37,7 @@ export function searchRequest(
     .join("")
     .replaceAll(/\s+/gu, " ")
     .trim();
-  // 綴りは打った形のまま渡す(core が畳んで突き合わせる)。重複だけ大小を無視して落とす
+  // Pass the spelling as typed (core folds it and matches). Only duplicates are dropped, ignoring case
   const tags: string[] = [];
   for (const tag of [...scope.map((t) => normalizeTag(t)), ...parseTags(query)]) {
     if (tag && !tags.some((own) => sameTag(own, tag))) {
@@ -48,24 +50,24 @@ export function searchRequest(
   return { query: text, tags };
 }
 
-/** 範囲を一目で示す文字。「#sf6 #ベガ」の形で、見出しや空の案内に出す。 */
+/** The text that shows the scope at a glance. In the form `#sf6 #ベガ`, shown in a heading or an empty-state message. */
 export function scopeLabel(tags: string[]): string {
   return tags.map((tag) => `#${tag}`).join(" ");
 }
 
 /**
- * ⌘K を押した場所で、パレットに引き継ぐ範囲を決める。
+ * Decide, from where ⌘K was pressed, the scope carried into the palette.
  *
- * 引き継ぐのは絞る画面にいるときだけ。他の画面ではチップが見えておらず、
- * 見えていない絞り込みを黙って掛けると「無いはずがない」検索結果になる。
- * Scrawl のチップは押すと絞る画面を開くので、タグで絞っている状態は
- * もうあちらにしか無い。
+ * It is carried only from Browse. On another screen the chips are not visible, and
+ * applying a filter no one can see silently produces search results that "cannot possibly
+ * be missing that". A Scrawl chip opens Browse when pressed, so the state of being
+ * narrowed by a tag now exists only there.
  */
 export function paletteScopeAt(pathname: string, tags: string[]): PaletteScope | undefined {
-  // 引き継げるのはタグが 1 つのときだけ。絞る画面のタグは「どれかを持つ」
-  // (OR)だが、`search_all` の tags は「全部を持つ」(AND)。2 つ以上を
-  // そのまま渡すと、画面に出ている記録のうち片方しか持たないものが開いた
-  // 瞬間に消え、「見えているものの中を探す」にならない
+  // Only one tag can be carried over. Browse's tags mean "has any of them" (OR), but the
+  // tags of `search_all` mean "has all of them" (AND). Passing two or more straight
+  // through would make the records on screen that carry only one of them vanish the
+  // moment the palette opens, which is not "search inside what you can see"
   if (pathname === ROUTES.BROWSE && tags.length === 1) {
     return { tags };
   }

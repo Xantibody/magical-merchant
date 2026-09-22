@@ -2,9 +2,9 @@ import { createSignal, createEffect, onCleanup } from "solid-js";
 import type { Accessor } from "solid-js";
 
 /**
- * source の変化が止まってから delayMs 後に追いつく Accessor を返す。
- * 検索のように「1 打鍵ごとに発行してはコストが払えない」読み取りを、
- * これを createResource の source にすることでまとめる。
+ * Return an Accessor that catches up delayMs after source stops changing.
+ * Used as the source of a createResource, it gathers up reads that cannot afford to be
+ * issued on every keystroke, such as a search.
  */
 export function createDebouncedAccessor<T>(source: Accessor<T>, delayMs: number): Accessor<T> {
   const [value, setValue] = createSignal(source());

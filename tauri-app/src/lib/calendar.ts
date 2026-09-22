@@ -8,7 +8,7 @@ export interface MonthCell {
   inMonth: boolean;
 }
 
-/** 曜日の見出し。週の始まりは月曜で固定する。 */
+/** The weekday headings. The week is fixed to start on Monday. */
 export function weekdayLabels(): readonly string[] {
   return t().calendar.weekdays;
 }
@@ -22,12 +22,12 @@ function isoOf(date: Date): string {
 }
 
 /**
- * 月曜始まりの 6 週グリッド。行数を固定しないとポップオーバーの高さが月ごとに
- * 跳ねる。
+ * A 6-week grid starting on Monday. Without a fixed row count the popover height jumps
+ * from month to month.
  */
 export function buildMonthGrid(year: number, month: number): MonthCell[] {
   const first = new Date(year, month, 1);
-  // getDay() は日曜が 0。月曜始まりに直す
+  // getDay() has Sunday as 0. Shift it to start on Monday
   const leading = (first.getDay() + 6) % 7;
 
   return Array.from({ length: DAYS_IN_GRID }, (_, i) => {
@@ -57,9 +57,9 @@ interface Tally {
 
 export interface DaySummary {
   count: number;
-  /** 座標が残っているエントリの数。 */
+  /** The number of entries that still carry coordinates. */
   located: number;
-  /** ラベルは `NetworkType` そのもの。アイコンに直すのは表示側の仕事。 */
+  /** The label is the `NetworkType` itself. Turning it into an icon is the view's job. */
   networks: Tally[];
   devices: Tally[];
 }
@@ -77,10 +77,11 @@ function tally(values: (string | null)[]): Tally[] {
 }
 
 /**
- * その日のエントリを回線と端末で数える。
+ * Count the day's entries by network and device.
  *
- * 場所は座標があるかどうかだけを数える。緯度経度をそのまま並べても地名には
- * ならず、数えて意味が出るのは「その日どれだけ外で書いたか」のほう。
+ * For location, only whether coordinates exist is counted. Listing raw latitude and
+ * longitude does not make a place name, and what is worth counting is "how much was
+ * written outside that day".
  */
 export function summarizeDay(contexts: (DeviceContext | null)[]): DaySummary {
   return {

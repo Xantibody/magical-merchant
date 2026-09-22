@@ -38,14 +38,14 @@ import { loadGlyphs } from "../lib/glyphs";
 
 const BOTTOM_TABS: RoutePath[] = [ROUTES.SCRAWL, ROUTES.NOTES, ROUTES.CODEX, ROUTES.SETTINGS];
 
-/** system を選んでいる人の画面は、端末の設定が変わった瞬間に切り替わる。 */
+/** A screen set to system switches the moment the device setting changes. */
 function onSchemeChange(): void {
   if (theme() === "system") {
     applyTheme("system");
   }
 }
 
-/** キーとパレットの両方から呼べる操作。 */
+/** An action callable from both a key and the palette. */
 interface ShellCommand {
   id: string;
   label: string;
@@ -62,10 +62,10 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
   const sync = createSyncState(() => shell.refreshData());
   const hints = createHints();
 
-  // 選ぶのは Settings。ここは覚えている選択を起動時に当て直すだけ
+  // Settings is where it is chosen. This only reapplies the remembered choice at startup
   applyTheme(theme());
 
-  // 札は DOM を増やさず、擬似要素として描く。html に印を付ければ全画面に効く
+  // Badges add no DOM; they are drawn as pseudo-elements. A mark on html reaches the whole screen
   createEffect(() => {
     if (hints.visible()) {
       document.documentElement.dataset.hints = "";
@@ -78,7 +78,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
   media.addEventListener("change", onSchemeChange);
   onCleanup(() => media.removeEventListener("change", onSchemeChange));
 
-  // エラーは黙って消さず、同期ポップオーバーを開いて知らせる
+  // An error is not swallowed silently; the sync popover opens to report it
   createEffect(() => {
     if (sync.alertVersion() > 0) {
       shell.togglePopover("sync");
@@ -86,20 +86,20 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
   });
 
   const isActive = (path: RoutePath): boolean => location.pathname === path;
-  /** 一覧フライアウトを持つ面に居るか。 */
+  /** Whether the current surface has a list flyout. */
   const hasList = (): boolean => isActive(ROUTES.NOTES) || isActive(ROUTES.CODEX);
 
   /**
-   * 絞る画面でタグを選んでいるなら、その中を探す。全体を探したければ
-   * パレットのチップを外せばよく、逆(絞り込みを後から思い出す)は難しい
+   * If tags are chosen on the Browse screen, search within them. To search everything,
+   * removing the chip in the palette is enough; the reverse (recalling the filter later) is hard
    */
   const openSearch = (): void => {
     shell.openPalette(paletteScopeAt(location.pathname, shell.browseFilter().tags));
   };
 
-  // グリフの登録表は起動時に 1 回と、データが入れ替わった合図(同期の
-  // 完了など)のたびに読み直す。本文のどこにも画像は書かれていないので、
-  // 表が無いと `:236p:` は文字のまま出る
+  // The glyph registry is read once at startup and again on every signal that
+  // the data changed (a sync finishing, and so on). No body has an image written
+  // in it anywhere, so without the table `:236p:` shows as plain text
   createEffect(() => {
     shell.dataVersion();
     void loadGlyphs();
@@ -124,9 +124,9 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
   };
 
   /**
-   * キーからも、パレットからも呼べる操作。表を 1 つにしておかないと、
-   * ヘッダーの札に「⌘N」と出ているのにキーが効かない、という食い違いが出る。
-   * ここが `?` で開くショートカット一覧そのものでもある
+   * Actions callable from a key and from the palette. Without a single table, the
+   * rail's badge would say "Cmd+N" while the key does nothing.
+   * This is also the shortcut list itself that `?` opens
    */
   const commands = createMemo<ShellCommand[]>(() => [
     {
@@ -184,8 +184,8 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
   ]);
 
   /**
-   * ウィジェットのテンプレボタン。同じテンプレの今日のぶんが既にあれば
-   * core が作らずにそれを返すので、ここは開くだけでいい。
+   * A widget's template button. If today's note from the same template already
+   * exists, core returns it instead of creating one, so this only has to open it.
    */
   const openFromTemplate = (name: string): void => {
     shell.closePalette();
@@ -200,8 +200,8 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
         const filename = created.path.split("/").at(-1);
         navigate(noteRoute("note", filename));
       } catch {
-        // 消したテンプレを指したままのウィジェットが残っていることがある。
-        // 押しても何も起きないより、一覧を開いて理由を出す
+        // A widget may still point at a template that was deleted. Rather than
+        // nothing happening on tap, open the list and show the reason
         navigate(ROUTES.NOTES);
         shell.showToast(t().templates.createFailed);
       }
@@ -217,27 +217,27 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
       openFromTemplate(action.template);
       return;
     }
-    // ボタンが 1 つも無いウィジェットと、そのヘッダの行き先
+    // Where a widget with no buttons at all, and its header, lead
     if (action.name === "templates") {
       navigate(ROUTES.TEMPLATES);
       return;
     }
-    // ?file= はルーターに預ける。Workspace の選択状態を外から触れるように
-    // 引き上げるより、開きたいノートを URL に持たせるほうが素直
+    // ?file= is left to the router. Carrying the wanted note in the URL is more
+    // natural than lifting the Workspace selection state out to be touched from outside
     if (action.name === "note" && action.file) {
       navigate(noteRoute("note", action.file));
     }
   };
 
   onMount(() => {
-    // 最初の記録が測位を待たされないよう、許可済みなら今のうちに測り始める
+    // So the first record does not wait for a position fix, start measuring now if already permitted
     warmLocation();
 
-    // 設定画面は遅延読み込みなので、起動時の窓の姿はここで決める
+    // The Settings screen is lazy-loaded, so the window's shape at startup is decided here
     void applyStartFullscreen();
 
-    // ウィジェットのタップはたいていアプリを冷えた状態から起こす。onOpenUrl は
-    // 購読してからのぶんしか来ないので、起動時の URL は getCurrent で拾う。
+    // A widget tap usually wakes the app from cold. onOpenUrl only delivers what
+    // arrives after subscribing, so the launch URL is picked up with getCurrent.
     let unlistenWidget: UnlistenFn | undefined;
     void (async () => {
       unlistenWidget = await onOpenUrl((urls) => {
@@ -261,7 +261,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
         openSearch();
         return;
       }
-      // 一覧フライアウトは Note と Codex にしかない。他の面では素通しする
+      // Only Note and Codex have the list flyout. On other surfaces the key passes through
       if (matchesShortcut(e, "listPin") && hasList()) {
         e.preventDefault();
         shell.toggleListPin();
@@ -274,8 +274,8 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
           return;
         }
       }
-      // 一覧はパレットのコマンド節そのもの。別の画面を作るほどの中身がない。
-      // 修飾キーを伴わないキーなので、書いている最中は文字として通す
+      // The list is the palette's command section itself; not enough content for its own screen.
+      // The key has no modifier, so while typing it passes through as a character
       if (e.key === SHORTCUT_LIST_KEY && !shell.paletteOpen() && !isTypingTarget(e.target)) {
         e.preventDefault();
         openSearch();
@@ -289,7 +289,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
     globalThis.addEventListener("keydown", onKeyDown);
     onCleanup(() => globalThis.removeEventListener("keydown", onKeyDown));
 
-    // 離した瞬間に消す。窓から出た(⌘Tab)ときは keyup が来ないので blur も見る
+    // Hide the moment the key is released. Leaving the window (Cmd+Tab) sends no keyup, so blur is watched too
     const onKeyUp = (e: KeyboardEvent): void => hints.keyUp(e);
     const onBlur = (): void => hints.hide();
     globalThis.addEventListener("keyup", onKeyUp);
@@ -299,9 +299,9 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
       globalThis.removeEventListener("blur", onBlur);
     });
 
-    // 目を離しているあいだに CLI・MCP・他の端末が data/ を書き換えている。
-    // アプリはファイルを監視しないので、戻ってきた瞬間を合図に読み直す。
-    // Android では凍結されたプロセスが起きる唯一の合図でもある
+    // While nobody is looking, the CLI, MCP or another device rewrites data/.
+    // The app does not watch files, so the moment of coming back is the signal to reread.
+    // On Android it is also the only signal that a frozen process has woken
     const onVisible = (): void => {
       if (document.visibilityState === "visible") {
         shell.refreshData();
@@ -310,15 +310,15 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
     document.addEventListener("visibilitychange", onVisible);
     onCleanup(() => document.removeEventListener("visibilitychange", onVisible));
 
-    // デスクトップでは窓を隠さずに他のアプリへ移るので visibilitychange が
-    // 来ない。窓のフォーカスが戻ったことは Tauri 側からしか分からない。
-    // AIDEV-NOTE: getCurrentWindow().onFocusChanged は使わない。window モジュールが dpi/image を連れて起動バンドルの 13% になる
+    // On desktop, switching to another app does not hide the window, so no
+    // visibilitychange arrives. Only the Tauri side knows that focus returned.
+    // AIDEV-NOTE: getCurrentWindow().onFocusChanged is not used. The window module drags in dpi/image and becomes 13% of the startup bundle
     let unlistenFocus: UnlistenFn | undefined;
     void (async () => {
       try {
         unlistenFocus = await listen(TauriEvent.WINDOW_FOCUS, () => shell.refreshData());
       } catch {
-        // 窓が無い(ブラウザハーネス・テスト)。visibilitychange だけで動く
+        // No window (browser harness, tests). visibilitychange alone does the job
       }
     })();
     onCleanup(() => unlistenFocus?.());
@@ -329,14 +329,14 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
       <Rail sync={sync} onSearch={openSearch} />
 
       <div class="app-column">
-        {/* 狭い画面にはレールを立てる幅が無い。題と数個の入口だけを帯にする */}
+        {/* A narrow screen has no width for the rail. The title and a few entries make a strip */}
         <header class="mobile-header">
           <span class="mobile-header-title">
             {MODE_LABELS[location.pathname as RoutePath] ?? MODE_LABELS[ROUTES.SCRAWL]}
           </span>
 
           <div class="mobile-header-actions">
-            {/* ポップオーバー本体は Scrawl が持つ。記録のある日を知っているのは向こう */}
+            {/* The popover itself belongs to Scrawl. That side is what knows the recorded days */}
             <Show when={isActive(ROUTES.SCRAWL)}>
               <button
                 type="button"
@@ -373,9 +373,10 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
 
         <main class="app-main">{props.children}</main>
 
-        {/* 着地したことだけを言う細い帯。現在地は出さない — レールの線と題で
-            足りる。狭い画面には出さない(CSS)。下タブと二段になるので、
-            そちらでは保存の様子をメタ行が持つ */}
+        {/* A thin bar that only says where the save landed. No current location:
+            the rail's line and the title are enough. Not shown on a narrow screen
+            (CSS), where it would stack with the bottom tabs; there the meta line
+            carries the save state */}
         <div class="bottom-bar">
           <Show when={shell.saveState().status !== "idle"}>
             <span class="bottom-bar-save" data-status={shell.saveState().status}>
@@ -406,8 +407,8 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
           </For>
         </nav>
 
-        {/* 同期の入口はレール(広い窓)と帯(狭い窓)の両方にあるが、開く器は
-            1 つ。どちらの足元に吊るすかは CSS が決める */}
+        {/* The sync entry is on both the rail (wide window) and the strip (narrow
+            window), but one container opens. CSS decides which one it hangs under */}
         <Popover
           open={shell.popover() === "sync"}
           onClose={() => shell.closePopovers()}
@@ -419,7 +420,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
         </Popover>
       </div>
 
-      {/* 札だけでは「なぜ出たか」「どう消すか」が分からない。説明はここ 1 つ */}
+      {/* The badges alone do not say why they appeared or how to dismiss them. This is the one explanation */}
       <Show when={hints.visible()}>
         <div class="hint-pill" aria-hidden="true">
           {t().hints.pill(modifierLabel())}
@@ -445,8 +446,8 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
           }))}
           onSelectHit={(hit) => {
             shell.closePalette();
-            // モードの切り替えだけでは「見つけたのに探し直す」ことになる。
-            // ノートはその 1 件を、Scrawl はその日を URL で指す
+            // Switching the mode alone would mean "found it, now find it again".
+            // The URL points at that one note, or at that day for Scrawl
             if (hit.kind !== "scrawl" && hit.filename) {
               navigate(noteRoute(hit.kind, hit.filename));
             } else {

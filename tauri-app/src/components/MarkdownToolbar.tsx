@@ -23,28 +23,28 @@ interface MarkdownToolbarProps {
   editor: Editor | undefined;
 }
 
-/** ボタン 1 つ。label は aria-label と title の両方に使う。 */
+/** One button. label is used for both aria-label and title. */
 interface ToolbarButton {
-  /** アイコンで見せるボタン。`glyph` とはどちらか片方だけを持つ */
+  /** A button shown as an icon. Has either this or `glyph`, never both */
   icon?: IconName;
-  /** 記号そのものが意味を持つボタン(`[[`)は、アイコンにせず文字で見せる */
+  /** A button whose symbol carries the meaning (`[[`) is shown as text, not an icon */
   glyph?: string;
   label: () => string;
   run: (editor: Editor) => void;
-  /** 真のあいだだけ出すボタン。持たないものは常に出る */
+  /** A button shown only while this is true. Buttons without it always show */
   when?: () => boolean;
-  /** 本文のフォーカスを放すのが目的のボタン。走らせたあと戻さない */
+  /** A button whose purpose is to let go of the body's focus. Not restored after it runs */
   releases?: true;
 }
 
-/** Milkdown に登録されたコマンドを撃つ。 */
+/** Fire a command registered with Milkdown. */
 const milkdown =
   (key: typeof sinkListItemCommand.key) =>
   (editor: Editor): void => {
     editor.action((ctx) => ctx.get(commandsCtx).call(key));
   };
 
-/** Milkdown のコマンド登録を介さない、素の ProseMirror コマンドを撃つ。 */
+/** Fire a plain ProseMirror command that bypasses Milkdown's command registry. */
 const prose =
   (command: Command) =>
   (editor: Editor): void =>
@@ -53,7 +53,7 @@ const prose =
       command(view.state, view.dispatch);
     });
 
-/** 本文の contenteditable。書式バーがフォーカスを預け入れ・引き取りする相手。 */
+/** The body's contenteditable. The element the toolbar hands focus to and takes it back from. */
 function bodyElement(editor: Editor): HTMLElement | null {
   return (
     editor.action((ctx) => {
@@ -64,37 +64,40 @@ function bodyElement(editor: Editor): HTMLElement | null {
 }
 
 /**
- * キーボードを畳む。閉じるよう頼む API は無く、本文のフォーカスを放すのが
- * 唯一の手立て。書き終わって下まで読みたいときの出口。
+ * Fold the keyboard. There is no API to ask it to close; letting go of the
+ * body's focus is the only way. The exit for reading down to the end after writing.
  */
 function closeKeyboard(editor: Editor): void {
   bodyElement(editor)?.blur();
 }
 
 /**
- * スマホのキーボードの上に出る書式バー。Slack や Notion、Obsidian のモバイル
- * 版と同じ並びで、打ちにくい記法から順に: リストの種類(`- ` `1. ` `- [ ]`
- * は IME 経由だと入力ルールが効きにくい)、字下げ、ノートへのリンク、コード。
+ * The formatting bar above the phone keyboard. Same order as the mobile versions
+ * of Slack, Notion and Obsidian, hardest syntax to type first: list kinds (`- `,
+ * `1. ` and `- [ ]` input rules rarely fire through an IME), indentation, a link
+ * to a note, code.
  *
- * 数は 7 個 + 閉じるに絞ってある。キーボードの上の一行は 44px の当たり判定を
- * 並べるだけで幅が尽きるので、他の入口があるもの(区切り線は `---` の入力
- * ルール、ブロック削除は選択して消す)はここに置かない。
+ * Kept to 7 buttons plus close (the exit-block button shows only inside a code
+ * block). One row above the keyboard runs out of width just lining up 44px hit
+ * targets, so anything with another way in (a rule via the `---` input rule,
+ * block deletion via select and delete) is not placed here.
  */
 export default function MarkdownToolbar(props: MarkdownToolbarProps): JSX.Element {
   const toolbarTop = createKeyboardTop();
-  // 「ブロックから抜ける」を出すかどうか。コードブロックの中でしか意味がない
+  // Whether to show "exit block". It only means something inside a code block
   const [inCodeBlock, setInCodeBlock] = createSignal(false);
 
-  // ツールバーが出ている間(=編集中)は下部タブを隠す。fixed のツールバーが
-  // タブに重なって Scrawl / Notes が押せない・誤タップでモードが変わる、の
-  // 両方をここで断つ
+  // Hide the bottom tabs while the toolbar is up (that is, while editing). The
+  // fixed toolbar overlapping the tabs makes Scrawl / Note unpressable and lets a
+  // stray tap switch modes; both are cut off here
   onMount(() => {
     document.body.classList.add("md-toolbar-open");
     onCleanup(() => document.body.classList.remove("md-toolbar-open"));
   });
 
-  // カーソルの居場所を追う。listener の購読は外せないが、エディタと一緒に
-  // 捨てられる instance に付くので溜まらない。畳んだ後に書かないよう live で閉じる
+  // Track where the caret is. A listener subscription cannot be removed, but it
+  // attaches to an instance discarded with the editor, so it does not pile up.
+  // live shuts it so nothing is written after teardown
   createEffect(() => {
     const { editor } = props;
     if (!editor) {
@@ -121,9 +124,10 @@ export default function MarkdownToolbar(props: MarkdownToolbarProps): JSX.Elemen
       return;
     }
     button.run(editor);
-    // 押したことで居場所が変わっていないか、その場で見直す。コードブロックに
-    // する / 解くは節の種類だけを変えて選択を動かさないので `selectionUpdated`
-    // が鳴らず、待っていると「抜ける」がカーソルを動かすまで出ない・消えない
+    // Re-check right away whether the press moved the caret's location. Making
+    // or unmaking a code block changes only the node type and leaves the
+    // selection alone, so `selectionUpdated` never fires; waiting on it, "exit"
+    // would not appear or disappear until the caret moves
     editor.action((ctx) => {
       setInCodeBlock(isInCodeBlock(ctx.get(editorViewCtx).state.selection));
     });
@@ -148,7 +152,7 @@ export default function MarkdownToolbar(props: MarkdownToolbarProps): JSX.Elemen
       label: () => t().editor.codeBlock,
       run: milkdown(createCodeBlockCommand.key),
     },
-    // スマホに Mod-Enter は無いので、コードブロックの中ではここが唯一の出口
+    // A phone has no Mod-Enter, so inside a code block this is the only way out
     {
       icon: "arrow-line-down",
       label: () => t().editor.exitBlock,
@@ -177,8 +181,8 @@ export default function MarkdownToolbar(props: MarkdownToolbarProps): JSX.Elemen
               <button
                 type="button"
                 class={button.releases ? "markdown-toolbar-release" : undefined}
-                // 押し下げの既定動作は本文からフォーカスを奪う。IME の変換中に
-                // それが起きると書きかけの文字が確定されずに落ちる (#102)
+                // The default pointerdown action takes focus off the body. During an
+                // IME conversion that drops the half-typed characters unconfirmed (#102)
                 onPointerDown={(e) => e.preventDefault()}
                 onClick={() => exec(button)}
                 aria-label={button.label()}

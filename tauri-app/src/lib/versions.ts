@@ -1,20 +1,20 @@
 import type { Version } from "./commands";
 
 /**
- * 戻す直前に core が刻む版の message。ファイルに書かれる固定の綴りなので、
- * 表示するときだけ訳す。
+ * The message of the version core commits just before a restore. It is a fixed spelling
+ * written into the file, so it is translated only when it is displayed.
  */
 const BEFORE_RESTORE = "before restore";
 
 export interface VersionRow {
   version: Version;
-  /** 版の番号。いちばん古い版が 1。 */
+  /** The version number. The oldest version is 1. */
   number: number;
-  /** 1 つ古い版とのバイト差。いちばん古い版は 0 からの差、つまり大きさそのもの。 */
+  /** The byte difference from the version one older. For the oldest it is the difference from 0, that is, its size. */
   delta: number;
 }
 
-/** 新しい順の版に、番号と、隣(1 つ古い版)との大きさの差を添える。 */
+/** Attach a number, and the size difference from the neighbour (the version one older), to versions in newest-first order. */
 export function withDeltas(versions: readonly Version[]): VersionRow[] {
   return versions.map((version, index) => ({
     version,
@@ -23,22 +23,22 @@ export function withDeltas(versions: readonly Version[]): VersionRow[] {
   }));
 }
 
-/** 「戻す前」の版か。背骨の行はこれだけ日付の代わりにそう名乗る。 */
+/** Whether it is the "before restore" version. Of the rows on the spine, only this one names itself that instead of carrying a date. */
 export function isBeforeRestore(version: Version): boolean {
   return version.message === BEFORE_RESTORE;
 }
 
-/** 版の日付「09/10」。time は書いた土地の時刻のまま切り出す(`note-meta.ts` と同じ)。 */
+/** The version's date, "09/10". time is sliced as the local time where it was written (the same as `note-meta.ts`). */
 export function versionDay(version: Version): string {
   return version.time.slice(5, 10).replace("-", "/");
 }
 
-/** 版の時刻「09:12」。 */
+/** The version's time, "09:12". */
 export function versionClock(version: Version): string {
   return version.time.slice(11, 16);
 }
 
-/** `time` から `now` までの丸 1 日の数。0 なら今日。 */
+/** The number of whole days from `time` to `now`. 0 means today. */
 export function daysSince(time: string, now: Date): number {
   const then = new Date(time).getTime();
   if (Number.isNaN(then)) {
@@ -48,8 +48,8 @@ export function daysSince(time: string, now: Date): number {
 }
 
 /**
- * 「9 か月で 4 回刻んだ」の期間。月が 1 つも満ちていなければ日で数える。
- * 月は暦で数える — 1 月 31 日から 2 月 28 日は 0 か月。
+ * The span in "committed 4 times over 9 months". If not one month is full, it counts in
+ * days. Months are counted by the calendar: 31 January to 28 February is 0 months.
  */
 export interface Span {
   months: number;
@@ -68,7 +68,7 @@ export function spanSince(time: string, now: Date): Span {
   return { months: Math.max(0, months), days: daysSince(time, now) };
 }
 
-/** 行に出す一言。無ければ空。「戻す前」だけは core の固定綴りなので訳す。 */
+/** The one line shown on the row. Empty if there is none. Only "before restore" is core's fixed spelling, so it is translated. */
 export function versionMessage(version: Version, beforeRestore: string): string {
   if (version.message === BEFORE_RESTORE) {
     return beforeRestore;

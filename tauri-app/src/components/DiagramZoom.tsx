@@ -7,15 +7,15 @@ import type { JSX } from "solid-js";
 
 export interface ZoomedDiagram {
   svg: string;
-  /** 図の原寸(px)。viewBox の幅と高さで、mermaid が SVG の max-width に書く値と同じ */
+  /** The diagram's natural size in px. It is the viewBox width and height, the same value mermaid writes as the SVG's max-width */
   width: number;
   height: number;
 }
 
-/** 右下のボタン 1 回ぶんの倍率。±25% の感覚 */
+/** The factor for one press of the bottom-right buttons. It feels like plus or minus 25% */
 const STEP = 1.25;
 
-/** ダブルクリック 1 回ぶんの倍率。ボタンより大きく、一度で「そこを読む」大きさに */
+/** The factor for one double click. Larger than the buttons, so one action reaches a size you can read at */
 const DOUBLE_CLICK = 1.6;
 
 function distance(a: Point, b: Point): number {
@@ -26,17 +26,18 @@ function midpoint(a: Point, b: Point): Point {
   return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
 }
 
-/** ボタンの上ではドラッグもダブルクリック拡大も始めない */
+/** Over a button, neither a drag nor a double-click zoom starts */
 function isControl(target: EventTarget | null): boolean {
   return target instanceof Element && target.closest("button") !== null;
 }
 
 /**
- * 図を全画面で読む。ホイール(トラックパッドのピンチは ctrl+wheel)と 2 本指で
- * 倍率、ドラッグで位置。開いたときは画面に収まる大きさで真ん中に置く。
+ * Reads a diagram full screen. The wheel (a trackpad pinch arrives as ctrl+wheel) and two
+ * fingers set the scale, a drag sets the position. On opening it is placed in the middle at
+ * a size that fits the screen.
  *
- * 背景を押しても閉じない — ドラッグの始点と区別が付かない。閉じるのは
- * Escape か右上の ✕。
+ * Pressing the background does not close it: that cannot be told apart from the start of a
+ * drag. It closes with Escape or the close button at the top right.
  */
 export default function DiagramZoom(props: {
   diagram: ZoomedDiagram;
@@ -45,8 +46,9 @@ export default function DiagramZoom(props: {
   let root: HTMLDivElement | undefined;
   let canvas: HTMLDivElement | undefined;
 
-  // 倍率と位置は signal にしない。ホイールやドラッグの 1 動作ごとに再描画を
-  // 起こさず、DOM の transform を直接書く。画面に出すのは倍率の数字だけ
+  // The scale and the position are not signals. Rather than causing a re-render on every
+  // wheel or drag step, the DOM transform is written directly. Only the scale number is
+  // shown on screen
   let current: Transform = { scale: 1, tx: 0, ty: 0 };
   const [percent, setPercent] = createSignal(100);
 
@@ -67,7 +69,7 @@ export default function DiagramZoom(props: {
     apply(fitToViewport(viewport(), props.diagram));
   };
 
-  /** 画面座標 → この画面の左上からの座標 */
+  /** Client coordinates to coordinates from the top left of this screen */
   const local = (clientX: number, clientY: number): Point => {
     const rect = root?.getBoundingClientRect();
     return { x: clientX - (rect?.left ?? 0), y: clientY - (rect?.top ?? 0) };
@@ -82,7 +84,7 @@ export default function DiagramZoom(props: {
     zoomAt({ x: width / 2, y: height / 2 }, factor);
   };
 
-  // 押されている指(ポインタ)。1 本ならドラッグ、2 本ならピンチ
+  // The fingers (pointers) held down. One is a drag, two is a pinch
   const pointers = new Map<number, Point>();
 
   const onPointerDown = (e: PointerEvent): void => {
@@ -110,7 +112,8 @@ export default function DiagramZoom(props: {
       });
       return;
     }
-    // ピンチ: 2 本の間隔の変化が倍率、中点の移動が平行移動
+    // Pinch: the change in the gap between the two is the scale, the midpoint's movement is
+    // the translation
     const other = [...pointers.entries()].find(([id]) => id !== e.pointerId)?.[1];
     if (!other) {
       return;
@@ -147,8 +150,8 @@ export default function DiagramZoom(props: {
     globalThis.addEventListener("keydown", onKeyDown);
     onCleanup(() => globalThis.removeEventListener("keydown", onKeyDown));
 
-    // passive にしない。preventDefault できないと、ピンチ(ctrl+wheel)が
-    // ページ全体のズームとして OS に取られる
+    // Not passive. Without preventDefault, a pinch (ctrl+wheel) is taken by the OS as a
+    // zoom of the whole page
     const onWheel = (e: WheelEvent): void => {
       e.preventDefault();
       zoomAt(local(e.clientX, e.clientY), wheelFactor(e.deltaY, e.ctrlKey));

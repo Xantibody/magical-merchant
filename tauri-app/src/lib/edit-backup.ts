@@ -1,24 +1,25 @@
 /**
- * 編集セッションの保存判断と、端末ローカルの 1 段階バックアップ。
+ * The save decision of an edit session, and a one-slot backup local to the device.
  *
- * 自動保存の世界での「誤タップ・誤編集」への保険。編集を始める前の本文を
- * この端末(localStorage)にだけ 1 枠残し、いつでも入れ替えで戻せるように
- * する。ファイルや frontmatter には書かない — 書けば同期に乗ってしまい、
- * どの端末の「戻る先」なのかが壊れる。
+ * Insurance against a stray tap or a stray edit in a world of autosave. The body from
+ * before the edit began is kept in one slot on this device only (localStorage), so
+ * it can be swapped back at any time. Nothing is written to the file or the
+ * frontmatter: written there it would ride the sync, and "whose restore point this
+ * is" would break across devices.
  */
 
-/** localStorage の使う範囲だけ。テストではメモリ実装を差し込む。 */
+/** Only the part of localStorage that is used. Tests inject a memory implementation. */
 export interface BackupStore {
   getItem: (key: string) => string | null;
   setItem: (key: string, value: string) => void;
 }
 
 export interface EditSession {
-  /** セッション開始時点の本文。復元の「戻る先」になる。 */
+  /** The body at session start. Becomes the restore point. */
   readonly preEditBody: string;
-  /** 最後にファイルへ書いた本文。一致する限り保存はスキップする。 */
+  /** The body last written to the file. Saves are skipped as long as it matches. */
   lastSavedBody: string;
-  /** バックアップはセッションにつき 1 回だけ書く。 */
+  /** The backup is written only once per session. */
   committed: boolean;
 }
 
@@ -33,23 +34,23 @@ export function readBackup(store: BackupStore, filename: string): string | null 
 }
 
 /**
- * 退避が実際に残ったかを返す。ディスクへの保存が既に断られている場面で
- * 使う — そこで書けたことにして「戻す」で呼び出せると言うと、人はそれを
- * 信じて閉じ、唯一の写しごと失う。
+ * Returns whether the copy actually landed. Used where the save to disk has already
+ * been refused: claiming it was written and can be recalled with "restore" is
+ * believed, the person closes the app, and the only copy is lost with it.
  */
 export function tryWriteBackup(store: BackupStore, filename: string, body: string): boolean {
   try {
     store.setItem(KEY_PREFIX + filename, body);
     return true;
   } catch {
-    // 容量超過・localStorage が使えない端末
+    // Quota exceeded, or a device where localStorage is unavailable
     return false;
   }
 }
 
-/** バックアップは善意の保険。容量超過などで書けなくても本流を落とさない。 */
+/** The backup is best-effort insurance. Failing to write it (quota etc.) must not break the main flow. */
 export function writeBackup(store: BackupStore, filename: string, body: string): void {
-  // 書けなかったら戻る先が増えないだけ。保存自体は成功している
+  // If it could not be written, there is just no new restore point. The save itself succeeded
   tryWriteBackup(store, filename, body);
 }
 
@@ -57,15 +58,15 @@ export function beginEditSession(body: string): EditSession {
   return { preEditBody: body, lastSavedBody: body, committed: false };
 }
 
-/** 書いても内容が変わらない保存はしない。誤タップを書き込みに変えない。 */
+/** No save that would not change the content. A stray tap does not become a write. */
 export function shouldSave(session: EditSession, body: string): boolean {
   return body !== session.lastSavedBody;
 }
 
 /**
- * 保存が成功したら呼ぶ。内容が実際に変わった最初の保存でだけ、編集前の
- * 本文をバックアップに残す。変更のなかったセッションは何も書かない —
- * 1 枠しかない戻る先を「現在と同じ本文」で潰さないため。
+ * Called when a save succeeded. Only on the first save that actually changed the
+ * content is the pre-edit body kept in the backup. A session with no change writes
+ * nothing, so that the single restore slot is not crushed with "the same body as now".
  */
 export function recordSaved(
   store: BackupStore,

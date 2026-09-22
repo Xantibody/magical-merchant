@@ -1,9 +1,9 @@
 /**
- * タッチ端末の長押し検出。ポインタイベントのハンドラ束として返し、
- * 要素側にそのまま繋ぐ。
+ * Long-press detection for touch devices. Returned as a bundle of pointer event
+ * handlers that the element wires up directly.
  *
- * マウスは対象にしない — PC にはホバーで出るボタンがあり、マウスの
- * 長押しはドラッグやテキスト選択と衝突するだけで得るものがない。
+ * The mouse is not covered. A PC has buttons that appear on hover, and a mouse
+ * long press only collides with dragging and text selection, gaining nothing.
  */
 
 interface PointerLike {
@@ -22,9 +22,9 @@ interface Cancelable {
 }
 
 /**
- * 指の揺れとして見逃す移動量(px)。これを超えたらスクロールの始まり。
+ * Movement (px) forgiven as finger wobble. Beyond this it is the start of a scroll.
  */
-// AIDEV-NOTE: 10px は Chrome のタッチスロップ(8px)より少し広く取った値。0 だと置いた指の jitter で 500ms を完走できない(#253)
+// AIDEV-NOTE: 10px is a little wider than Chrome's touch slop (8px). At 0 the jitter of a resting finger cannot complete the 500ms (#253)
 const SLIP_PX = 10;
 
 export interface LongPress {
@@ -33,15 +33,15 @@ export interface LongPress {
   onPointerMove: (e: PointLike) => void;
   onPointerCancel: () => void;
   /**
-   * 長押しを割り当てた要素の上では OS のメニューを出さない。押しっぱなしは
-   * WebView から見るとテキスト選択の始まりで、放っておくと「コピー」の
-   * メニューが長押しの手応えに割り込む。選択そのものを止めるのは要素側の
-   * `.long-press`(base.css) — こちらは Android の contextmenu を受ける
+   * No OS menu over an element that has a long press. To the WebView a held finger
+   * is the start of a text selection, and left alone the "Copy" menu cuts into the
+   * long press's feedback. Stopping the selection itself is the element's
+   * `.long-press` (base.css); this side catches Android's contextmenu
    */
   onContextMenu: (e: Cancelable) => void;
   /**
-   * 直後の click をそのまま処理してよいか。長押しが発火したあとに指を
-   * 離すとブラウザは click も飛ばすので、その 1 回だけを飲み込む。
+   * Whether the click that follows may be handled as is. Lifting the finger after a
+   * long press fired makes the browser send a click too; swallow just that one.
    */
   shouldClick: () => boolean;
 }
@@ -49,7 +49,7 @@ export interface LongPress {
 export function createLongPress(onLongPress: () => void, holdMs = 500): LongPress {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let fired = false;
-  /** 指が降りた場所。ここからの距離だけが「動いた」の判断材料。 */
+  /** Where the finger landed. Distance from here is the only measure of "moved". */
   let origin: PointLike | undefined;
 
   const cancel = (): void => {
@@ -65,12 +65,12 @@ export function createLongPress(onLongPress: () => void, holdMs = 500): LongPres
         return;
       }
       cancel();
-      // 前の長押しに続く click は、来るならこの pointerdown より前に来る。
-      // まだ札が立っているなら click を出さない機種で、この tap に罪はない
-      // AIDEV-NOTE: 札を落とすのは次の pointerdown。猶予タイマーにすると「どれだけ待つか」が機種依存になる
+      // The click that follows the previous long press, if it comes, comes before
+      // this pointerdown. If the flag is still up, this device sends no click, and this tap is innocent
+      // AIDEV-NOTE: The flag is dropped by the next pointerdown. A grace timer would make "how long to wait" device dependent
       fired = false;
-      // 揺れの許容は押すたびに測り直す。少しずつ流れた指でも 2 回目が
-      // 始めから許容いっぱいということにはならない
+      // The wobble allowance is measured afresh on each press. A finger that drifted
+      // a little does not start the second press already at the full allowance
       origin = { clientX: e.clientX, clientY: e.clientY };
       timer = setTimeout(() => {
         timer = undefined;
@@ -80,8 +80,9 @@ export function createLongPress(onLongPress: () => void, holdMs = 500): LongPres
     },
     onPointerUp: cancel,
     /**
-     * 指を置いているだけでも pointermove は絶え間なく来る。1 回で捨てると
-     * 長押しは実機で完走しないので、降りた場所から離れたときだけ諦める。
+     * pointermove keeps coming even from a finger that only rests. Giving up on the
+     * first one means a long press never completes on a real device, so give up only
+     * when the finger has left the landing spot.
      */
     onPointerMove: (e) => {
       if (!timer || !origin) {
@@ -95,7 +96,7 @@ export function createLongPress(onLongPress: () => void, holdMs = 500): LongPres
     },
     onPointerCancel: () => {
       cancel();
-      // 押している間に OS がジェスチャを横取りした場合。click は来ない
+      // The OS took over the gesture during the press. No click will come
       fired = false;
     },
     onContextMenu: (e) => e.preventDefault(),

@@ -18,8 +18,8 @@ function chips(count: number): string {
 }
 
 /**
- * 絞る画面を殻ごと立てる。`.app` は窓の高さに縛られていて `overflow: hidden`
- * なので、中で伸びたものの行き先はどこにも無い — そこが要点。
+ * Stands the Browse screen up with its shell. `.app` is bound to the window height and is
+ * `overflow: hidden`, so whatever grows inside it has nowhere to go. That is the point.
  */
 function mountBrowse(tagCount: number): void {
   document.body.innerHTML = `
@@ -60,9 +60,9 @@ describe("the browse screen on a phone", () => {
   });
 
   /**
-   * チップの帯はタグの数だけ縦に伸びる。伸びきると結果の列の高さが 0 になり、
-   * `.app` が刈るので送って辿りつくこともできない。帯自身の高さを切って、
-   * 溢れるぶんは帯の中で送る
+   * The chip strip grows taller with the number of tags. Grown out, it leaves the results column
+   * a height of 0, and `.app` clips it, so scrolling cannot reach it either. Cap the strip's own
+   * height and scroll the overflow inside the strip
    */
   it("keeps the results reachable however many tags the corpus has", async () => {
     await page.viewport(390, 800);
@@ -71,7 +71,7 @@ describe("the browse screen on a phone", () => {
     const facets = element(".browse-facets").getBoundingClientRect();
     const results = element(".browse-results").getBoundingClientRect();
 
-    // 帯は画面の 38% まで。残りは結果のもの
+    // The strip takes at most 38% of the screen. The rest belongs to the results
     expect(facets.height).toBeLessThanOrEqual(0.38 * 800 + 1);
     expect(results.height).toBeGreaterThan(200);
     expect(results.bottom).toBeLessThanOrEqual(801);
@@ -84,11 +84,11 @@ describe("the browse screen on a phone", () => {
     const facets = element(".browse-facets");
 
     expect(getComputedStyle(facets).overflowY).toBe("auto");
-    // 送れるものが実際にある。切った高さより中身のほうが高い
+    // There really is something to scroll: the content is taller than the capped height
     expect(facets.scrollHeight).toBeGreaterThan(facets.clientHeight);
   });
 
-  // タグが少ないうちは切る必要が無い。帯は中身ぶんの高さで止まる
+  // While there are few tags there is nothing to cap. The strip stops at the height of its content
   it("takes only the height it needs when there are few tags", async () => {
     await page.viewport(390, 800);
     mountBrowse(3);

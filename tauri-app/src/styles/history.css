@@ -1,7 +1,8 @@
-/* ---- 履歴パネル: 本文の右に立つ 320px ----
-   ペインの上端から下端まで(下端はボトムバーの上)。ホバーでは開かない —
-   履歴ボタン・⌘⇧H・Esc・× だけが開け閉めする。畳んでいるあいだも DOM に
-   残り、右へ 24px ずれて透ける。本文は押しのけられるだけで消えない。 */
+/* ---- History panel: 320px standing to the right of the body ----
+   From the top edge of the pane to its bottom edge (the bottom being above the bottom
+   bar). It never opens on hover: only the history button, ⌘⇧H, Esc and the close button
+   open and fold it. While folded it stays in the DOM, shifted 24px to the right and
+   transparent. The body is only pushed aside; it does not disappear. */
 .history-panel {
   position: absolute;
   top: 0;
@@ -17,8 +18,8 @@
   overflow-y: auto;
   transform: translateX(24px);
   opacity: 0;
-  /* 畳んだパネルは透けているだけでなく居ない。visibility を落とさないと、
-     見えない 3 つの版の行に Tab が着く。落とすのは畳み終わってから */
+  /* A folded panel is not merely transparent, it is not there. Without dropping visibility,
+     Tab lands on the three invisible version rows. It is dropped only after the fold ends */
   visibility: hidden;
   transition:
     transform 220ms var(--app-ease),
@@ -70,7 +71,8 @@
   padding: 12px 10px 0;
 }
 
-/* 行は 2 列: 点の列 14px と字。点の下の線が行の高さぶん伸びて次へ繋がる */
+/* A row is two columns: a 14px dot column and the text. The line below the dot stretches
+   the height of the row and joins the next one */
 .history-row {
   display: grid;
   grid-template-columns: 14px minmax(0, 1fr);
@@ -108,7 +110,7 @@
   outline-offset: -2px;
 }
 
-/* 刻んだばかりの版だけが跳ねて入る。他の行は動かない */
+/* Only the version just committed pops in. The other rows do not move */
 .history-row--fresh {
   animation: mm-pop 350ms var(--app-ease);
 }
@@ -128,13 +130,13 @@
   background: var(--app-border);
 }
 
-/* 下書きから最新の版までは、まだ刻まれていない道。点線で繋ぐ */
+/* From the draft to the latest version is a stretch not yet committed. Join it with a dashed line */
 .history-rail-line[data-dashed] {
   background: repeating-linear-gradient(var(--app-border) 0 3px, transparent 3px 6px);
 }
 
-/* 点。中空が下書き、大きい塗りが選択中(または開いた瞬間の最新)、
-   小さい薄い点がそれ以外 */
+/* The dots. Hollow is the draft, a large filled one is the selection (or the latest at the
+   moment it opens), and a small faint dot is everything else */
 .history-dot {
   flex-shrink: 0;
   width: 7px;
@@ -175,7 +177,8 @@
   color: var(--app-text-muted);
 }
 
-/* 下書きの右端。動いていれば増えた量を ok の色で、同じなら薄く「同じ内容」 */
+/* The right edge of the draft row. If it moved, the amount added is in the ok color; if it
+   is unchanged, a faint "same content" */
 .history-row-delta {
   margin-left: auto;
   font-size: 11px;
@@ -204,7 +207,8 @@
   overflow-wrap: anywhere;
 }
 
-/* 選んだ版に戻すボタンは、その行の下。どの版に戻るのかを取り違えない */
+/* The button that restores the chosen version sits under that row, so which version it
+   goes back to cannot be mistaken */
 .history-restore {
   display: flex;
   padding: 2px 10px 10px 36px;
@@ -225,7 +229,7 @@
   color: var(--app-text-hint);
 }
 
-/* 版ゼロ。空の一覧の代わりに次の一手 */
+/* Version zero. The next move instead of an empty list */
 .history-empty {
   display: flex;
   flex-direction: column;
@@ -245,7 +249,7 @@
   gap: 6px;
 }
 
-/* ---- 比較バー(携帯): 本文の下。何と比べているかと、そこから出る道 ---- */
+/* ---- Compare bar (phone): under the body. What is being compared, and the way out ---- */
 .compare-bar {
   flex: 0 0 auto;
   display: flex;
@@ -290,7 +294,7 @@
   color: var(--app-text-muted);
 }
 
-/* ---- 携帯: 履歴は専用の画面。パネルではなく面になる ---- */
+/* ---- Phone: the history is its own screen. It becomes a surface, not a panel ---- */
 @media (max-width: 767px) {
   .history-panel--screen {
     position: static;
@@ -334,7 +338,7 @@
     padding: 0 8px;
   }
 
-  /* 指で押せる高さ。字も一覧の行と同じまで上げる */
+  /* Tall enough to press with a finger. The text is raised to match a list row too */
   .history-panel--screen .history-row {
     min-height: 56px;
     border-radius: 9px;

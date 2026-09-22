@@ -20,9 +20,9 @@
   background: var(--app-surface);
   box-shadow: 0 30px 60px -20px rgb(0 0 0 / 60%);
   overflow: hidden;
-  /* 浮かぶものは同じ動きで入ってくる(メニュー・頁・戻すボタンと同じ)。
-     幕は動かさない — 背後が上下すると、パレットが乗っているのか画面が
-     動いたのかが分からない */
+  /* Everything that floats enters with the same motion (menus, pages and the restore
+     button). The backdrop does not move: if what is behind rose and fell, it would be
+     unclear whether the palette came on top or the screen itself moved */
   animation: mm-rise 180ms var(--app-ease);
 }
 
@@ -35,8 +35,9 @@
   color: var(--app-text-faint);
 }
 
-/* 引き継いだタグの範囲。入力欄の前に付き、外すまで検索はこの中だけ。
-   見た目は Scrawl の選択中チップと同じ(tags.css)で、入力欄の高さに収める */
+/* The tag scope carried over. It sits before the input, and until it is removed the search
+   stays inside it. It looks like Scrawl's selected chip (tags.css) and fits the input's
+   height */
 .palette-input-row .palette-scope {
   padding: 3px 9px;
   gap: 4px;
@@ -56,7 +57,7 @@
   padding: 4px 0;
 }
 
-/* 当たった件数。入力欄の右に添える */
+/* The number of hits, set at the right of the input */
 .palette-count {
   font-size: 11px;
   color: var(--app-text-faint);
@@ -69,7 +70,8 @@
   overflow-y: auto;
 }
 
-/* 種類の束の見出し。CODEX · 3 の形で、種類の名は訳さない */
+/* The heading of a group of one kind. It reads as `CODEX · 3`, and the kind name is never
+   translated */
 .palette-section {
   padding: 10px 12px 4px;
   font-size: 11px;
@@ -128,7 +130,7 @@
   white-space: nowrap;
 }
 
-/* 本文の奥で当たったときだけ出る、一致箇所の前後 */
+/* The text around the match, shown only when the hit was deeper in the body */
 .palette-row-snippet {
   font-size: 12.5px;
   color: var(--app-text-muted);
@@ -137,7 +139,8 @@
   white-space: nowrap;
 }
 
-/* 一致語は下線で示す。塗ると行の中に色の面が増え、選択中の行と喧嘩する */
+/* The matched word is marked with an underline. Filling it would add another patch of
+   colour inside the row and fight with the selected row */
 .palette-row mark {
   background: none;
   color: var(--app-text);
@@ -153,7 +156,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* 選択行だけに出る「↩ 開く」。日付の右、行の端 */
+/* The `↩` open hint, shown on the selected row only. Right of the date, at the row's edge */
 .palette-row-enter {
   font-size: 11px;
   color: var(--app-text-hint);
@@ -188,12 +191,13 @@
 }
 
 @media (max-width: 767px) {
-  /* キーボードが出ると高さが残らないので、器は上端近くまで上げる */
+  /* With the keyboard up there is no height left, so the container is raised close to the
+     top edge */
   .palette-overlay {
     padding-top: 12px;
   }
 
-  /* キーの案内は押すキーが無い画面では場所の無駄 */
+  /* A key hint wastes space on a screen with no keys to press */
   .palette-footer,
   .palette-row-enter {
     display: none;

@@ -34,11 +34,12 @@
 }
 
 .markdown-preview pre {
-  /* ホバーツールの位置決めの基準(editor.css の pre と同じ) */
+  /* Positioning origin for the hover tools (same as the pre in editor.css) */
   position: relative;
-  /* normalize の max-content フィットを解除して本文幅に(editor.css と同じ理由)。
-     余白の合計も editor.css の pre と同じ。違うと編集に入るときにコードブロックの
-     高さが変わり、その下の本文がずれる。横のぶんは code に置いてある */
+  /* Drop normalize's max-content fit so this takes the body width (same reason as
+     editor.css). The total padding also matches the pre in editor.css: if it differs, the
+     code block changes height when editing starts and the body below it shifts. The
+     horizontal padding lives on code */
   max-inline-size: none;
   width: 100%;
   background: var(--app-surface-2);
@@ -46,33 +47,33 @@
   border-radius: var(--radius-2);
 }
 
-/* 横に長い行はスクロールで見せる。スクロール箱を pre ではなく code にするのは、
-   pre がスクロールすると右上のホバーツール(絶対配置)が中身と一緒に流れて
-   いくため。sticky では直せない — 貼り付け先の包含ブロックはスクロールしない
-   側の content box なので、貼るために動ける余地がそもそも無い。
-   横の padding をここへ移すのは、diff の行が負のマージンで背景を余白まで
-   届かせており、スクロール箱の外に出ると切られてしまうから */
+/* A long line is shown by scrolling. The scroll box is code, not pre, because when pre
+   scrolls the hover tools at its top right (absolutely positioned) slide away with the
+   content. sticky cannot fix it: the containing block it would stick to is the content box
+   of the side that does not scroll, so there is no room for it to move at all.
+   The horizontal padding moves here because a diff line reaches its background into the
+   padding with a negative margin, and it would be clipped outside the scroll box */
 .markdown-preview pre code {
   background: none;
-  /* 上下は 0 に戻す(インラインの code の 0.1em を引き継がせない) */
+  /* Reset the block padding to 0 (do not inherit the 0.1em of inline code) */
   padding: 0 var(--size-5);
-  /* editor.css と同じくブロックにする。インラインのままだと pre 自身の
-     行の高さ(strut)が乗り、コードブロックがエディタより数 px 高くなる */
+  /* Make it a block, as in editor.css. Left inline, the line height of pre itself (the
+     strut) is added and the code block ends up a few px taller than the editor */
   display: block;
   min-height: 1em;
   overflow-x: auto;
 }
 
-/* diff: 行そのものに色を敷く。背景は pre の padding まで届かせないと
-   行の色が段の途中で切れ、コードブロックの中に細い帯が浮いて見える */
+/* diff: color the line itself. Unless the background reaches into the pre padding, the
+   line color is cut off partway across and a thin band appears to float in the code block */
 .markdown-preview .diff-line {
   margin: 0 calc(-1 * var(--size-5));
   padding: 0 var(--size-5);
   white-space: pre;
 }
 
-/* color-mix なので、--app-ok / --app-danger が入れ替わるダークテーマでは
-   下地の明るさに合った色が自動で出る */
+/* Because this is color-mix, the dark theme, where --app-ok / --app-danger swap, gets a
+   color matched to the lightness of the background automatically */
 .markdown-preview .diff-add {
   background: color-mix(in oklab, var(--app-ok) 13%, transparent);
 }
@@ -89,7 +90,7 @@
   color: var(--app-danger);
 }
 
-/* @@ の行は差分ではなく位置の見出し。読み飛ばせる濃さに落とす */
+/* An @@ line is not a difference but a position header. Drop it to a weight you can skip */
 .markdown-preview .diff-hunk {
   color: var(--app-text-muted);
 }
@@ -105,8 +106,8 @@
   padding-left: var(--size-5);
 }
 
-/* GFM task list。editor.css と同じ値(理由もそちら)。プレビューでは
-   task-list-markdown が同じ li を出す。読むだけの面なので押しても変わらない */
+/* GFM task list. Same values as editor.css (the reason is there too). In the preview
+   task-list-markdown emits the same li. It is read-only, so clicking changes nothing */
 .markdown-preview li[data-item-type="task"] {
   list-style: none;
   position: relative;
@@ -153,9 +154,9 @@
   margin: var(--size-4) 0;
 }
 
-/* ---- GFM: 表と取り消し線。editor.css と同じ値(理由もそちら)。
-   違うと `view: preview` のノートとエディタで表の高さが変わり、
-   その下の本文がずれる(workspace.test.ts) ---- */
+/* ---- GFM: tables and strikethrough. Same values as editor.css (the reason is there
+   too). If they differ, a table has a different height in a `view: preview` note and in
+   the editor, and the body below it shifts (workspace.test.ts) ---- */
 .markdown-preview table {
   border-collapse: collapse;
   table-layout: fixed;
@@ -195,17 +196,18 @@
   max-inline-size: none;
 }
 
-/* markdown-it は ~~x~~ を s で出す */
+/* markdown-it emits ~~x~~ as s */
 .markdown-preview s,
 .markdown-preview del {
   text-decoration: line-through;
 }
 
-/* Mermaid: 図は本文のように折り返せないので、幅に合わせて縮めて置く。
-   mermaid が SVG に付ける max-width が原寸なので、拡大はされない。
-   上下の間隔は他のブロックと同じ(エディタで図だけを見せる状態と揃える)。
-   figure の既定はグリッドだが、間隔をエディタ側と同じ margin で決めるため
-   ブロックに戻す(normalize の gap はエディタ側の div には効かない) */
+/* Mermaid: a diagram cannot wrap the way body text does, so it is shrunk to fit the width.
+   The max-width mermaid puts on the SVG is its natural size, so it is never scaled up.
+   The vertical spacing is the same as other blocks (it matches the editor state that shows
+   the diagram alone). A figure defaults to grid, but it goes back to block so the spacing
+   comes from the same margin as the editor side (normalize's gap does not apply to the div
+   on the editor side) */
 .markdown-preview .mermaid-block {
   display: block;
   position: relative;
@@ -221,8 +223,8 @@
   height: auto;
 }
 
-/* ---- 図のズーム画面: transform で倍率と位置を持つ。はみ出しは隠し、
-   ホイール・ピンチ・ドラッグで動かす (DiagramZoom.tsx) ---- */
+/* ---- Diagram zoom screen: the scale and the position live in transform. Overflow is
+   hidden, and the wheel, pinch and drag move it (DiagramZoom.tsx) ---- */
 .mermaid-zoom {
   position: fixed;
   inset: 0;
@@ -230,7 +232,7 @@
   overflow: hidden;
   background: var(--app-surface);
   cursor: grab;
-  /* ブラウザのスクロールやピンチに取られず、pointer events で全部受ける */
+  /* Take everything through pointer events, without losing it to browser scroll or pinch */
   touch-action: none;
   overscroll-behavior: contain;
   user-select: none;
@@ -240,7 +242,8 @@
   cursor: grabbing;
 }
 
-/* 幅は原寸を JS から受け取り、倍率と位置は JS が transform に直接書く */
+/* The width comes from JS as the natural size; JS writes the scale and position straight
+   into transform */
 .mermaid-zoom-canvas {
   position: absolute;
   top: 0;
@@ -254,7 +257,7 @@
   width: 100%;
   max-width: none;
   height: auto;
-  /* ドラッグは画面全体で受ける。図形やラベルにヒットテストを食わせない */
+  /* The whole screen takes the drag. Do not let shapes or labels eat the hit test */
   pointer-events: none;
 }
 
@@ -267,7 +270,7 @@
   color: var(--app-text-muted);
 }
 
-/* 右下: 倍率のボタンと数字。ホイールの無い端末でもここから動かせる */
+/* Bottom right: the zoom buttons and the number. A device without a wheel can work it here */
 .mermaid-zoom-controls {
   position: absolute;
   right: var(--size-3);
@@ -291,7 +294,8 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* 左下: 操作の手引き。触れば分かる操作なので薄く。タッチ端末には当てはまらない */
+/* Bottom left: a guide to the controls. Faint, because touching them makes them obvious.
+   It does not apply to a touch device */
 .mermaid-zoom-hint {
   position: absolute;
   left: var(--size-3);
@@ -308,9 +312,10 @@
   }
 }
 
-/* ---- ホバーツール: 図とコードブロックの右上に、触れている間だけ出る操作。
-   絶対配置なので紙面の高さは変えない — 閲覧とエディタで図やコードの高さが
-   食い違うと、その下の本文がずれる (#168)。 ---- */
+/* ---- Hover tools: controls that appear at the top right of a diagram or a code block
+   only while the pointer is on it. They are absolutely positioned, so they do not change
+   the page height: if a diagram or code differs in height between reading and the editor,
+   the body below it shifts (#168). ---- */
 
 .markdown-preview .preview-tools {
   position: absolute;
@@ -324,13 +329,13 @@
   border: 1px solid var(--app-border);
   border-radius: var(--radius-2);
   box-shadow: 0 4px 12px -6px rgb(20 20 25 / 20%);
-  /* pre の中に置くので mono と white-space: pre を継承する。道具は本文ではない */
+  /* It sits inside pre, so it inherits mono and white-space: pre. A tool is not body text */
   font-family: var(--font-sans);
   line-height: 1;
   white-space: nowrap;
   cursor: default;
   opacity: 0;
-  /* 透明なままだと見えない道具が図やコードへのクリックを吸う */
+  /* Left transparent, the invisible tools swallow clicks meant for the diagram or the code */
   pointer-events: none;
   transition: opacity 150ms var(--app-ease);
 }
@@ -342,7 +347,8 @@
   pointer-events: auto;
 }
 
-/* タッチ端末に hover は無い(あっても押した後に残る)。薄く出しっぱなしにする */
+/* A touch device has no hover (and where it does, it sticks after the tap). Leave the tools
+   showing, faint */
 @media (hover: none) {
   .markdown-preview .preview-tools {
     opacity: 0.75;
@@ -382,16 +388,17 @@
   fill: currentColor;
 }
 
-/* コピー直後のチェック表示。押した実感のための最小の変化 */
+/* The check shown right after a copy. The smallest change that confirms the press */
 .markdown-preview .preview-tool.is-copied {
   color: var(--app-ok);
 }
 
-/* Shiki dual theme: data-theme に応じて CSS 変数で配色を切り替える。
-   下地は Shiki のテーマ色ではなく .markdown-preview pre の --app-surface-2 に
-   任せる。インラインコードや mermaid の図と同じ下地に揃える (#75)。
-   transparent は span にだけ当てる — pre.shiki 自身にも当てると詳細度で
-   .markdown-preview pre に勝ち、下地が消えて編集に入った瞬間に箱が現れる */
+/* Shiki dual theme: the colors switch through CSS variables according to data-theme.
+   The background is left to --app-surface-2 on .markdown-preview pre, not to Shiki's own
+   theme color, so it matches the background of inline code and mermaid diagrams (#75).
+   transparent is applied to span only: applied to pre.shiki itself it beats
+   .markdown-preview pre on specificity, the background goes, and a box appears the moment
+   editing starts */
 .markdown-preview .shiki,
 .markdown-preview .shiki span {
   color: var(--shiki-light);
@@ -406,7 +413,7 @@
   color: var(--shiki-dark);
 }
 
-/* ---- ノート間リンク。タイトルで描かれ、押すとそのノートが開く ---- */
+/* ---- Links between notes. Drawn with the title; clicking one opens that note ---- */
 
 .markdown-preview .note-link {
   color: var(--app-accent);
@@ -417,11 +424,13 @@
   text-decoration: none;
 }
 
-/* ---- 履歴を開いているあいだの欄外の印 ----
-   差分を別枠に描かず、本文のブロックの左に +/− と 2px の線を立て、地色を
-   10% だけ敷く(`lib/line-marks-markdown.ts`)。字そのものの色は変えない —
-   読めるのは下書きの本文で、変わった場所を指しているだけ。消えた行は選んだ
-   版にしか無い行で、下書きの該当位置に薄く打ち消して差し込む */
+/* ---- Gutter marks shown while the history is open ----
+   The difference is not drawn in a separate pane. A "+"/"-" and a 2px line stand to the
+   left of each body block, with 10% of the color laid under it
+   (`lib/line-marks-markdown.ts`). The color of the text itself does not change: what is
+   read is the draft body, and the marks only point at what changed. A deleted line is a
+   line that exists only in the selected version, inserted faintly struck through at its
+   place in the draft */
 .markdown-preview--marked {
   padding-left: 28px;
 }
@@ -431,8 +440,9 @@
   margin-left: -2px;
   border-radius: 0 4px 4px 0;
   background: color-mix(in oklab, var(--app-ok) 10%, transparent);
-  /* 地色は transform でも opacity でも置けない。本文の字を透かすわけには
-     いかないので、比べる版を選ぶたびに背景そのものを 250ms で入れる */
+  /* The background color can be done with neither transform nor opacity. The body text
+     must not go see-through, so the background itself fades in over 250ms each time a
+     version to compare against is chosen */
   transition: background 250ms var(--app-ease);
 }
 
@@ -443,10 +453,11 @@
   text-decoration: line-through;
 }
 
-/* 記号はブロックの先頭に置き、本文の左の余白(28px)の 1 つの欄に絶対配置で
-   揃える。基準は .markdown-preview--marked なので、箇条書きや引用の入れ子の
-   深さに関わらず同じ欄に並ぶ。上下の位置は指定しない — 置かれた場所
-   (ブロックの 1 行目)がそのまま静的位置になる */
+/* The sign goes at the head of the block, absolutely positioned into the one column made
+   by the 28px left padding of the body. Its containing block is .markdown-preview--marked,
+   so the signs line up in the same column whatever the nesting depth of a list or a quote.
+   The vertical position is not set: where it was placed (the first line of the block)
+   becomes its static position */
 .markdown-preview--marked {
   position: relative;
 }
@@ -466,19 +477,21 @@
   color: var(--app-danger);
 }
 
-/* 箇条書きの項目は点を外し、線を項目の左端(点のあった場所)に引く */
+/* A list item drops its bullet, and the line is drawn at the item's left edge, where the
+   bullet was */
 .markdown-preview ul > li.diff-mark {
   list-style: none;
   margin-left: calc(-1 * var(--size-5));
   padding-left: calc(var(--size-5) + var(--size-2) - 2px);
 }
 
-/* タスク項目は印のために自分が基準になっている。1 段目の深さで欄に合わせる */
+/* A task item is its own containing block, because of its checkbox mark. Align it to the
+   column using the depth of one level */
 .markdown-preview li[data-item-type="task"] > .diff-sign {
   left: calc(-28px - var(--size-5) - var(--size-2) + 2px);
 }
 
-/* コードブロックと図は自分の中に記号を置く。外に出すと overflow で切れる */
+/* A code block and a diagram put the sign inside themselves. Outside, overflow clips it */
 .markdown-preview pre.diff-mark .diff-sign,
 .markdown-preview figure.diff-mark .diff-sign {
   float: none;
@@ -490,7 +503,7 @@
   line-height: 1;
 }
 
-/* 表の行は線を引けないので、行ごとの下地で言う */
+/* A table row cannot take a line, so the row background says it instead */
 .markdown-preview tr.diff-mark {
   border-left: none;
   margin-left: 0;

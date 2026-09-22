@@ -1,17 +1,17 @@
 import type { Parser } from "@milkdown/plugin-highlight/shiki";
 
 /**
- * ハイライトを highlighter が読み込み済みの言語だけに絞るデコレータ。
+ * Decorator that narrows highlighting to the languages the highlighter has already loaded.
  *
- * 未読込の言語(mermaid など)を Shiki に渡すと ShikiError が投げられ、
- * prosemirror-highlight は console error を出した上で同じ走査内の後続
- * コードブロックのハイライトまで打ち切ってしまう(issue #101)。
- * 文法を足すのではなく手前で素通しにするのは、mermaid はブロック直下に
- * 描画済みの図が出るためテキスト側の色付けの価値が薄く、文法ファイル
- * (約 36KB)のバンドル増が Lightweight に見合わないから。
+ * Passing an unloaded language (mermaid and the like) to Shiki throws a ShikiError, and
+ * prosemirror-highlight logs a console error and then gives up highlighting the rest of the
+ * code blocks in the same pass (issue #101). It lets them through here instead of adding the
+ * grammar because mermaid renders the diagram right below the block, so coloring the text is
+ * worth little, and the grammar file (about 36KB) costs bundle size that Lightweight does not
+ * justify.
  *
- * fence の info 文字列は手打ちなので、照合の前に小文字化と trim で
- * 正規化し、Shiki には正規化済みの言語 ID を渡す。
+ * A fence's info string is typed by hand, so it is normalized by lowercasing and trim before the
+ * match, and Shiki is given the normalized language ID.
  */
 export function withKnownLanguages(parser: Parser, loadedLanguages: readonly string[]): Parser {
   const known = new Set(loadedLanguages);

@@ -1,9 +1,10 @@
 @import "./diagram-caption.css";
 
-/* エディタ自身はスクロールしない。プレビューと同じく .detail-body に
-   任せる — 自分でスクロールすると .detail-body の余白が固定の額縁になり、
-   押した瞬間のスクロール量を別の要素へ写し替えることになる。
-   短い本文でも余白を押して書き始められるよう、欄いっぱいには伸ばす */
+/* The editor itself does not scroll. It leaves that to .detail-body, like the
+   preview does. Scrolling on its own would turn .detail-body's padding into a
+   fixed frame and move the scroll offset at the moment of a click onto another
+   element. It still stretches to fill the column so a short body can be started
+   by clicking the empty space below it */
 .milkdown-editor {
   display: flex;
   flex-direction: column;
@@ -14,9 +15,10 @@
   outline: none;
 }
 
-/* 余白と文字サイズはプレビュー(.markdown-preview)と同じく .detail-body から
-   受け取る。ここで独自に持つと、プレビューを押して編集に入った瞬間に
-   本文がずれて見える(workspace.test.ts が両者の幾何を突き合わせている) */
+/* Padding and font size come from .detail-body, as they do for the preview
+   (.markdown-preview). Holding its own values here would make the body shift
+   the moment a click on the preview enters editing (workspace.test.ts compares
+   the geometry of the two) */
 .milkdown-editor .milkdown,
 .milkdown-editor .ProseMirror {
   outline: none !important;
@@ -34,13 +36,13 @@
   flex-direction: column;
 }
 
-/* ブロックは .milkdown ではなく .ProseMirror の直下に並ぶ。間隔は
-   markdown-preview.css の `.markdown-preview > * + *` と同じ値 */
+/* Blocks sit directly under .ProseMirror, not under .milkdown. The gap is the
+   same value as `.markdown-preview > * + *` in markdown-preview.css */
 .milkdown-editor .ProseMirror > * + * {
   margin-top: var(--size-3);
 }
 
-/* 見出しの行の高さは normalize のまま(プレビューも同じ) */
+/* Heading line height stays as normalize sets it (the preview matches) */
 .milkdown-editor h1 {
   font-size: var(--font-size-5);
   font-weight: var(--font-weight-7);
@@ -72,9 +74,10 @@
   font-size: 0.9em;
 }
 
-/* コードブロックは内容量と無関係な一定サイズから始める(参考の Notion は
-   width: 100% の箱に padding 24px 22px)。Open Props の normalize が
-   pre を max-inline-size: max-content で内容にフィットさせるので解除する */
+/* A code block starts at a fixed size unrelated to how much it holds (the
+   reference, Notion, uses a width: 100% box with padding 24px 22px). Open
+   Props' normalize fits pre to its content with max-inline-size: max-content,
+   so that is undone here */
 .milkdown-editor pre {
   position: relative;
   max-inline-size: none;
@@ -88,14 +91,16 @@
 .milkdown-editor pre code {
   background: none;
   padding: 0;
-  /* 空のブロックでも 1 行分の高さを保つ(Notion の leaf と同じ min-height) */
+  /* Keep one line of height even for an empty block (the same min-height as
+     Notion's leaf) */
   display: block;
   min-height: 1em;
 }
 
-/* 言語入力: ラベルの見た目のまま、クリックすると datalist 補完つきで
-   編集できる(Notion の言語ドロップダウン相当。位置も Notion に合わせ左上)。
-   言語が空のときは placeholder しかないので、ホバー中と編集中だけ見せる */
+/* Language input: it looks like a label, and a click makes it editable with
+   datalist completion (the equivalent of Notion's language dropdown; the
+   position, top left, follows Notion too). When the language is empty there is
+   only the placeholder, so it shows only on hover and while editing */
 .milkdown-editor .code-language-input {
   position: absolute;
   top: var(--size-1);
@@ -108,10 +113,11 @@
   font-size: var(--font-size-0);
   line-height: 1;
   color: var(--app-text-muted);
-  /* 背景も枠も無い透明なラベルなので、幅は文字にフィットさせず余裕を持たせる。
-     実測フィット(size 属性 / ch / scrollWidth / canvas)はどれもフォント
-     フォールバックや非表示中のレイアウトとずれて末尾が欠けた。上限は
-     右上のコピー ボタンに届かない幅 */
+  /* It is a transparent label with no background and no border, so the width is
+     given slack instead of being fitted to the text. Every measured fit (the
+     size attribute, ch, scrollWidth, canvas) drifted against font fallback or
+     against layout taken while hidden, and cut off the end. The cap is a width
+     that does not reach the copy button at the top right */
   width: 10em;
   max-width: calc(100% - var(--size-8));
 }
@@ -129,9 +135,10 @@
   opacity: 1;
 }
 
-/* コピー ボタン: 既定は非表示で、ブロックにホバーしている間だけ角に現れる
-   (アクションはホバーで出す家風)。visibility も切るのは、透明なままだと
-   見えないボタンがクリックを吸ってしまうから */
+/* Copy button: hidden by default, appearing in the corner only while the block
+   is hovered (the house style is that actions come out on hover). visibility is
+   switched too, because a button left merely transparent would still swallow
+   clicks while invisible */
 .milkdown-editor .code-copy-button {
   position: absolute;
   top: 2px;
@@ -159,7 +166,8 @@
   background: var(--app-surface-3);
 }
 
-/* コピー直後のチェック表示。押した実感のための最小の変化 */
+/* The check shown right after a copy. The smallest change that confirms the
+   press */
 .milkdown-editor .code-copy-button.is-copied {
   color: var(--app-accent);
 }
@@ -170,8 +178,9 @@
   fill: currentColor;
 }
 
-/* mermaid のエディタ内プレビュー: コードブロックの直下に描いた図をぶら下げる。
-   幅に合わせて縮め、mermaid が SVG に付ける max-width(原寸)以上には広げない */
+/* Mermaid preview inside the editor: the rendered diagram hangs directly under
+   the code block. It shrinks to the available width and never grows past the
+   max-width mermaid puts on the SVG (its natural size) */
 .milkdown-editor .mermaid-editor-preview {
   display: flex;
   justify-content: center;
@@ -182,22 +191,23 @@
 .milkdown-editor .mermaid-editor-preview svg {
   max-width: 100%;
   height: auto;
-  /* ソースを開くクリックはコンテナで受ける。SVG の内部要素(図形や
-     foreignObject のラベル)にヒットテストを食わせない */
+  /* The container takes the click that opens the source. Inner SVG elements
+     (shapes, foreignObject labels) must not eat the hit test */
   pointer-events: none;
 }
 
-/* まだ一度も描けていないときだけ出す控えめな知らせ */
+/* A quiet notice shown only while nothing has ever rendered */
 .milkdown-editor .mermaid-editor-preview.is-error {
   justify-content: flex-start;
   font-size: var(--font-size-0);
   color: var(--app-text-muted);
 }
 
-/* mermaid は図がメイン(Slite 流)。カーソルがブロック外にある間はソースを
-   隠して図だけを見せる。is-active はカーソルが触れているブロックに
-   code-block-active-plugin が付け、has-diagram は最新ソースを描けている間
-   だけ nodeView が立てる — 描画に失敗した壊れたソースは隠れない */
+/* For mermaid the diagram is the main thing (the Slite way). While the cursor
+   is outside the block the source is hidden and only the diagram shows.
+   code-block-active-plugin puts is-active on the block the cursor touches, and
+   the nodeView sets has-diagram only while the latest source renders: broken
+   source that failed to render does not get hidden */
 .milkdown-editor .code-block-view.has-diagram:not(.is-active) pre {
   display: none;
 }
@@ -218,11 +228,12 @@
   padding-left: var(--size-5);
 }
 
-/* GFM task list。markdown-preview.css と同じ値。
-   `- [ ]` は gfm(remark)が li の checked 属性に畳み、文字には残らない。印は
-   ここで描き、押した切り替えは task-item-plugin が受ける — 印を ul の padding
-   (li の内容箱の左)に置くのは、その plugin が「内容箱より左の押下」で
-   印を見分けるから */
+/* GFM task list. The same values as markdown-preview.css.
+   gfm (remark) folds `- [ ]` into the li's checked attribute, so it does not
+   remain as text. The marker is drawn here and task-item-plugin handles the
+   toggle on press. The marker sits in the ul's padding, left of the li's
+   content box, because that plugin identifies it as "a press left of the
+   content box" */
 .milkdown-editor li[data-item-type="task"] {
   list-style: none;
   position: relative;
@@ -246,7 +257,8 @@
   border-color: var(--app-accent);
 }
 
-/* チェックの線。面の色で抜くので、どちらのテーマでも印の中に収まる */
+/* The check stroke. It is knocked out in the surface colour, so it reads inside
+   the marker in either theme */
 .milkdown-editor li[data-item-type="task"][data-checked="true"]::after {
   content: "";
   position: absolute;
@@ -271,13 +283,15 @@
   margin: var(--size-4) 0;
 }
 
-/* ---- GFM: 表と取り消し線。markdown-preview.css と同じ値 ---- */
+/* ---- GFM: tables and strikethrough. The same values as markdown-preview.css ---- */
 
-/* 表の DOM は面ごとに違う — プレビュー(markdown-it)は見出し行を thead に出して
-   セルに文字を直に置き、エディタ(prosemirror-tables)は tbody だけで見出し行は
-   tr[data-is-header]、セルの中身は段落。thead/tbody ではなく th / td / tr に書く。
-   normalize は表を fit-content の角丸カードにするが、本文の幅いっぱいの固定列に
-   する(列幅は Markdown に無い。列幅リサイズも入れない) */
+/* The table DOM differs per surface: the preview (markdown-it) emits the header
+   row in a thead and puts the text straight in the cells, while the editor
+   (prosemirror-tables) has only a tbody, marks the header row with
+   tr[data-is-header], and wraps cell contents in paragraphs. So the rules are
+   written against th / td / tr, not thead/tbody. normalize turns a table into a
+   fit-content rounded card; here it becomes fixed columns filling the body
+   width (column widths are not in Markdown, and column resizing is not added) */
 .milkdown-editor table {
   border-collapse: collapse;
   table-layout: fixed;
@@ -297,7 +311,8 @@
   border-radius: 0;
   background: none;
   text-align: start;
-  /* セルは段落と同じ大きさで読む(normalize は p にだけ --font-size-2 を当てる) */
+  /* Cells read at the same size as a paragraph (normalize applies
+     --font-size-2 to p only) */
   font-size: var(--font-size-2);
   max-inline-size: none;
 }
@@ -307,12 +322,12 @@
   font-weight: var(--font-weight-6);
 }
 
-/* normalize の行ホバー色は、本文の中の表には余計 */
+/* normalize's row hover colour is too much for a table inside the body */
 .milkdown-editor tr:hover td {
   background: none;
 }
 
-/* エディタのセルは段落を包む。表の中では文字そのものとして扱う */
+/* Editor cells wrap a paragraph. Inside a table it is treated as plain text */
 .milkdown-editor th > p,
 .milkdown-editor td > p {
   margin: 0;
@@ -320,7 +335,8 @@
   max-inline-size: none;
 }
 
-/* prosemirror-tables のセル選択の覆い。既定の rgba(200,200,255,.4) はトークンでない */
+/* prosemirror-tables' cell-selection overlay. Its default rgba(200,200,255,.4)
+   is not a token */
 .milkdown-editor .selectedCell::after {
   content: "";
   position: absolute;
@@ -341,8 +357,9 @@
   position: absolute;
 }
 
-/* テンプレの記入例。文書には無いもの(widget decoration)なので、押せず、
-   選べず、コピーにも入らない。触れないことが「これは本文ではない」の説明 */
+/* A template's sample entry. It is not in the document (it is a widget
+   decoration), so it cannot be pressed, selected, or copied. Being untouchable
+   is what says "this is not the body" */
 .milkdown-editor .note-example {
   color: var(--app-text-muted);
   font-size: 0.92em;
@@ -364,7 +381,7 @@
   position: relative;
 }
 
-/* AIDEV-NOTE: 動きの規則の外。キャレットの点滅は OS の作法で、値も上流の ProseMirror のもの — 入ってくる動きではない */
+/* AIDEV-NOTE: Outside the motion rules. Caret blinking is an OS convention and the values come from upstream ProseMirror; it is not motion we introduce */
 .milkdown-editor .ProseMirror-gapcursor::after {
   content: "";
   display: block;
@@ -470,15 +487,15 @@
   opacity: 0.9;
 }
 
-/* ---- ノート間リンク [[ID]] ---- */
+/* ---- Note-to-note links [[ID]] ---- */
 
-/* カーソルが離れている間、保存形のテキストはチップの裏に隠れる。
-   display: none にしないのはカーソル移動の位置を壊さないため */
+/* While the cursor is away, the stored text hides behind the chip. It is not
+   display: none so that cursor movement positions stay intact */
 .note-link-hidden {
   font-size: 0;
 }
 
-/* カーソルが触れている間は保存形をそのまま見せる */
+/* While the cursor touches it, the stored form is shown as it is */
 .note-link-source {
   background: var(--app-accent-soft);
   border-radius: 3px;
@@ -493,7 +510,7 @@
   cursor: pointer;
 }
 
-/* [[ を打っている間だけ出る補完候補 */
+/* Completion candidates, shown only while `[[` is being typed */
 .note-link-suggest {
   position: fixed;
   z-index: 30;

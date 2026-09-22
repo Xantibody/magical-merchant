@@ -1,16 +1,17 @@
 /**
- * キーボードから呼べる操作の表。押されたキーの判定・ボタンの肩に浮かせる札
- * (`data-hint-key`)・パレット右端の表示を、すべてここから配る。三箇所に同じ
- * 「⌘N」を書くと、片方だけ直したときに嘘の札が残る。
+ * The table of actions that can be called from the keyboard. The key matching, the badge
+ * floated at a button's shoulder (`data-hint-key`) and what the palette prints at its
+ * right edge are all handed out from here. Writing the same "⌘N" in three places leaves a
+ * lying badge behind when only one of them is fixed.
  *
- * 修飾キーは macOS で ⌘、それ以外で Ctrl と綴るが、判定はどちらも受ける —
- * 外付けキーボードや Android のブラウザで、どちらが来るかは分からない。
+ * The modifier is spelled ⌘ on macOS and Ctrl elsewhere, but matching accepts both: with
+ * an external keyboard or a browser on Android there is no telling which one arrives.
  */
 
 import { isMacDesktop } from "./platform";
 
 interface Shortcut {
-  /** `e.key` を小文字にした形。 */
+  /** `e.key` lowercased. */
   key: string;
   shift?: boolean;
 }
@@ -21,29 +22,29 @@ const SHORTCUTS = {
   scrawl: { key: "1" },
   notes: { key: "2" },
   codex: { key: "3" },
-  // 種類 / タグ / 期間で絞る画面。文字を打って探すのは ⌘K のほう
+  // The screen that narrows by kind / tag / period. Typing to find something is ⌘K's job
   browse: { key: "f" },
   syncNow: { key: "s", shift: true },
   settings: { key: "," },
-  // 一覧フライアウトを常設にする。離れても畳まない
+  // Make the list flyout permanent. It does not fold away when the pointer leaves
   listPin: { key: "\\" },
-  // 開いているノートに効くもの。受けるのは Workspace で、押せるのは
-  // ノートを 1 件開いているあいだだけ
+  // These work on the open note. Workspace takes them, and they can be pressed only
+  // while one note is open
   noteActions: { key: "." },
   noteMap: { key: "m", shift: true },
-  // ⌘⇧ + 頭文字。⌘Z / ⌘⇧Z (やり直し) と ⌘I (斜体) は Milkdown のもので、
-  // 常時編集の本文にカーソルがあるあいだ奪えない (#211)
+  // ⌘⇧ plus the initial. ⌘Z / ⌘⇧Z (redo) and ⌘I (italic) belong to Milkdown and cannot be
+  // taken while the caret is in the always-editable body (#211)
   noteRevert: { key: "r", shift: true },
   noteInfo: { key: "i", shift: true },
-  // 「刻む」の K。⌘K(検索)とは ⇧ で分かれる。Codex を開いているあいだだけ
+  // The K of "commit a version". ⇧ separates it from ⌘K (search). Only while a Codex is open
   codexCommit: { key: "k", shift: true },
-  // 履歴パネル。ホバーでは開かないので、ボタンとこれだけが入口
+  // The history panel. It never opens on hover, so the button and this are the only ways in
   noteHistory: { key: "h", shift: true },
   notePrev: { key: "arrowup" },
   noteNext: { key: "arrowdown" },
 } as const satisfies Record<string, Shortcut>;
 
-/** 矢印キーは名前をそのまま出しても読めない。札に出すのはこの綴り。 */
+/** An arrow key's own name does not read. These are the spellings the badge prints. */
 const PRINTED: Partial<Record<string, string>> = {
   arrowup: "↑",
   arrowdown: "↓",
@@ -52,17 +53,17 @@ const PRINTED: Partial<Record<string, string>> = {
 export type ShortcutName = keyof typeof SHORTCUTS;
 
 /**
- * ショートカット一覧を出すキー。修飾キーを伴わないので、入力中かどうかを
- * `isTypingTarget` で見てから拾う。
+ * The key that opens the list of shortcuts. It carries no modifier, so it is taken only
+ * after `isTypingTarget` has said whether something is being typed into.
  */
 export const SHORTCUT_LIST_KEY = "?";
 
-/** ヒントの説明文に入れる修飾キーの名前。 */
+/** The name of the modifier key put into the hint text. */
 export function modifierLabel(): string {
   return isMacDesktop() ? "⌘" : "Ctrl";
 }
 
-/** `⌘⇧S` / `Ctrl+Shift+S`。 */
+/** `⌘⇧S` / `Ctrl+Shift+S`. */
 export function shortcutLabel(name: ShortcutName): string {
   const { key, shift = false } = SHORTCUTS[name] as Shortcut;
   const printed = PRINTED[key] ?? key.toUpperCase();
@@ -75,14 +76,14 @@ export function matchesShortcut(e: KeyboardEvent, name: ShortcutName): boolean {
   const { key, shift = false } = SHORTCUTS[name] as Shortcut;
   return (
     (e.metaKey || e.ctrlKey) &&
-    // ⌥ が乗った組み合わせは OS と IME のもの。横取りすると入力が壊れる
+    // A combination with ⌥ on it belongs to the OS and the IME. Stealing it breaks input
     !e.altKey &&
     e.shiftKey === shift &&
     e.key.toLowerCase() === key
   );
 }
 
-/** そこで押された `?` が文字になる場所か。 */
+/** Whether a `?` pressed there becomes a character. */
 export function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) {
     return false;

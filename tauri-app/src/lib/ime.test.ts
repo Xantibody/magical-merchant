@@ -12,7 +12,7 @@ describe("isImeComposing", () => {
     );
   });
 
-  // isComposing が立たない古い WebKit は keyCode 229 だけで合成中を伝える
+  // Old WebKit, where isComposing is never set, reports composition through keyCode 229 alone
   it("returns true for the legacy keyCode 229", () => {
     const e = new KeyboardEvent("keydown", { key: "Enter" });
     Object.defineProperty(e, "keyCode", { value: 229 });

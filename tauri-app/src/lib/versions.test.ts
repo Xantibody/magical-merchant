@@ -18,7 +18,8 @@ const version = (id: string, bytes: number, message: string | null = null): Vers
 });
 
 describe("withDeltas", () => {
-  // 一覧は新しい順。差は「その版で何バイト増えたか」なので、隣は 1 つ下の行
+  // The list is newest first. The difference is "how many bytes that version added", so
+  // the neighbour is the row one below
   it("measures each version against the one before it", () => {
     const rows = withDeltas([version("c", 1500), version("b", 1200), version("a", 1300)]);
 
@@ -31,7 +32,8 @@ describe("withDeltas", () => {
 });
 
 describe("versionMessage", () => {
-  // 「戻す前」は core がファイルに書く固定の綴り。画面ではその言語で出す
+  // "before restore" is the fixed spelling core writes into the file. The screen shows it
+  // in the current language
   it("translates the fixed message core writes before a restore", () => {
     expect(versionMessage(version("a", 1, "before restore"), "戻す前")).toBe("戻す前");
   });
@@ -53,7 +55,7 @@ describe("withDeltas numbering", () => {
 describe("version dates", () => {
   const v = version("a", 1);
 
-  // time は書いた土地の時刻。端末のタイムゾーンに換算しない
+  // time is the local time where it was written. It is not converted to the device's time zone
   it("reads the day and the clock off the recorded time", () => {
     expect(versionDay(v)).toBe("09/17");
     expect(versionClock(v)).toBe("14:03");
@@ -67,7 +69,7 @@ describe("version dates", () => {
     expect(daysSince("garbage", now)).toBe(0);
   });
 
-  // 月は暦で。同じ日付に届いて初めて 1 か月
+  // Months go by the calendar. It is one month only once the same day of the month is reached
   it("counts calendar months and falls back to days inside the first month", () => {
     expect(
       spanSince("2026-01-01T10:00:00+09:00", new Date("2026-09-17T00:00:00+09:00")),

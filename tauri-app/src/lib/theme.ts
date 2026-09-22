@@ -4,7 +4,7 @@ export type ShikiTheme = "github-dark-default" | "github-light-default";
 
 export type Theme = "system" | "light" | "dark";
 
-/** 選べるテーマ。Settings がこの順に並べる。 */
+/** The themes that can be chosen. Settings lays them out in this order. */
 export const THEMES: readonly Theme[] = ["system", "light", "dark"] as const;
 
 const STORAGE_KEY = "theme";
@@ -19,8 +19,8 @@ function readStoredTheme(): Theme {
 }
 
 /**
- * 選ばれているテーマ。選ぶのは Settings、system の追従を見張るのは AppLayout
- * と、読み手が二つに分かれたのでモジュールに持たせてある。
+ * The theme that is chosen. Settings does the choosing and AppLayout watches the system
+ * setting it follows, so with two readers it is held in the module.
  */
 const [theme, setTheme] = createSignal<Theme>(readStoredTheme());
 
@@ -34,8 +34,8 @@ function resolveTheme(choice: Theme): "light" | "dark" {
 }
 
 /**
- * 実際に当たっているテーマ。CSS 変数で追従できない描画（mermaid は配色を SVG に
- * 焼き込む）は、これを読んで描き直す。
+ * The theme actually in effect. Drawing that cannot follow through CSS variables (mermaid
+ * bakes the palette into the SVG) reads this and redraws.
  */
 const [resolvedTheme, setResolvedTheme] = createSignal<"light" | "dark">(
   document.documentElement.dataset.theme === "dark" ? "dark" : "light",
@@ -50,7 +50,7 @@ export function applyTheme(choice: Theme): void {
   localStorage.setItem(STORAGE_KEY, choice);
 }
 
-/** 選び直す。Settings 以外から呼ばれることはない。 */
+/** Choose again. Nothing but Settings calls this. */
 export function chooseTheme(choice: Theme): void {
   setTheme(choice);
   applyTheme(choice);

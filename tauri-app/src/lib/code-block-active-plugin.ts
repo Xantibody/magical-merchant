@@ -4,10 +4,10 @@ import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
 import { activeCodeBlockRanges } from "./active-code-block";
 
 /**
- * 選択が触れている code_block に is-active クラスを付ける。node decoration の
- * 属性は ProseMirror が nodeView の dom に反映するので、nodeView 側に選択の
- * 配線は要らない。mermaid ブロックの「図がメイン、ソースはカーソルが中に
- * ある間だけ」表示(CSS)がこのクラスを読む。
+ * Add the is-active class to the code_block the selection touches. ProseMirror reflects
+ * the attributes of a node decoration onto the nodeView's dom, so the nodeView side needs
+ * no wiring for the selection. The mermaid block's "the diagram is the main thing, the
+ * source only while the caret is inside it" display (CSS) reads this class.
  */
 export const codeBlockActivePlugin = $prose(
   () =>

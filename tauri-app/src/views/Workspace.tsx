@@ -58,23 +58,23 @@ import { noteRoute } from "../lib/note-route";
 import { HIT_ICONS, MODE_LABELS, ROUTES } from "../lib/routes";
 import "../styles/workspace.css";
 
-// Milkdown + ProseMirror は詳細を開くまで要らない。一覧だけを見ている画面を
-// この重さから切り離す(狭い端末では一覧と詳細が入れ替わるので、開くまで来ない)
+// Milkdown + ProseMirror is not needed until the detail opens. A screen that only shows the list
+// stays clear of that weight (on a narrow device list and detail swap, so it waits for an open)
 const MilkdownEditor = lazy(() => import("../components/MilkdownEditor"));
 const MarkdownToolbar = lazy(() => import("../components/MarkdownToolbar"));
-// markmap-view は d3 を連れてくる。マインドマップにしたノートを開くまで読まない
+// markmap-view drags d3 along. It is not loaded until a note turned into a mindmap is opened
 const MindmapView = lazy(() => import("../components/MindmapView"));
 
 const UNDO_MS = 5000;
-/** 「保存しました」を出しておく時間。過ぎたら保存時刻の表示に落ちる。 */
+/** How long "saved" stays up. Past that it falls back to showing the save time. */
 const SAVED_MS = 2000;
-/** 並べたマップが打鍵に追いつくまでの間。保存(1 秒)より先に図が追いつく。 */
+/** How long the map alongside takes to catch up with typing. It catches up before the save (1 s). */
 const MAP_DEBOUNCE_MS = 300;
-/** 刻んだばかりの版が跳ねている時間(`mm-pop`)。過ぎたら普通の行に戻す。 */
+/** How long a just-committed version pops (`mm-pop`). Past that the row goes back to normal. */
 const POP_MS = 350;
-/** 記入例を持たないノートが渡す空表。作り直すとプラグインが毎回描き直す。 */
+/** The empty table a note with no examples passes. Recreating it redraws the plugin every time. */
 const NO_EXAMPLES: ReadonlyMap<string, string[]> = new Map();
-/** 一覧の中で隣の行へ送るキーと、その向き。 */
+/** The keys that move to the neighboring row in the list, and their direction. */
 const LIST_STEP_KEYS: Readonly<Record<string, 1 | -1>> = { ArrowUp: -1, ArrowDown: 1 };
 
 async function loadNotes(): Promise<NoteItem[]> {
@@ -94,8 +94,9 @@ function EmptyNotes(props: { kind: NoteKind }): JSX.Element {
 }
 
 /**
- * 一覧の行の右端、日付の左に置く角折りのページ。中に版の数。枠の色が
- * 「版なし / 版あり / 下書きが動いている」を言う。字は足さない — 行は 1 行のまま。
+ * The folded-corner page at the right end of a list row, left of the date. The version count sits
+ * inside. The frame's color says "no versions / has versions / the draft has moved on". No words
+ * are added: the row stays one line.
  */
 function PageMark(props: { count: number; dirty: boolean }): JSX.Element {
   const state = (): "none" | "clean" | "dirty" => {
@@ -120,7 +121,7 @@ function PageMark(props: { count: number; dirty: boolean }): JSX.Element {
   );
 }
 
-/** メタ行の「版 4 から +312 B」。動いていなければ「版 4」、無ければ「版なし」。 */
+/** The meta line's "+312 B from version 4". If unmoved, "version 4"; if none, "no versions". */
 function versionStatusLabel(status: VersionStatus): string {
   if (status.count === 0) {
     return t().codex.noVersions;
@@ -130,7 +131,7 @@ function versionStatusLabel(status: VersionStatus): string {
     : t().codex.versionN(status.count);
 }
 
-/** このノートを指している記録。畳んだ 1 行以上の場所は取らない。 */
+/** The records that point at this note. Folded, it takes no more than one line. */
 function Backlinks(props: { hits: SearchHit[]; onOpen: (hit: SearchHit) => void }): JSX.Element {
   return (
     <Show when={props.hits.length > 0}>
@@ -153,22 +154,22 @@ function Backlinks(props: { hits: SearchHit[]; onOpen: (hit: SearchHit) => void 
 }
 
 /**
- * 本文の右に並べるマップ。打鍵のたびに図を組み替えると、書いている横で
- * 枝が跳ね続けるので、手が止まってから追いつかせる。
+ * The map laid to the right of the body. Rebuilding the diagram on every keystroke would keep the
+ * branches jumping beside the writing, so it catches up once the hand stops.
  */
 function NoteMap(props: { source: () => string }): JSX.Element {
   const source = createDebouncedAccessor(props.source, MAP_DEBOUNCE_MS);
   return (
     <aside class="detail-map" aria-label={t().notes.layMap}>
-      {/* マインドマップの根は H1。タイトルを外した本文を渡すと、
-          根の無い枝だけの図になる */}
+      {/* A mindmap's root is the H1. Passing the body with the title taken off
+          gives a diagram of branches with no root */}
       <MindmapView source={source()} />
     </aside>
   );
 }
 
 interface WorkspaceProps {
-  /** どの面か。同じ画面が `/notes` と `/codex` の両方に載る。 */
+  /** Which surface. The same screen serves both `/notes` and `/codex`. */
   kind?: NoteKind;
 }
 
@@ -182,72 +183,73 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   const [selectedId, setSelectedId] = createSignal<string | null>(null);
   const [detailOpen, setDetailOpen] = createSignal(false);
   const [saveStatus, setSaveStatus] = createSignal<SaveStatus>("idle");
-  /** 最後に保存できた時刻。「21:40 に保存」の数字。 */
+  /** The time of the last save that succeeded. The number in "saved at 21:40". */
   const [savedAt, setSavedAt] = createSignal("");
 
-  // 保存の様子はボトムバー(AppLayout)にも出る。あちらはこの画面の外なので、
-  // shell を経由して渡す。離れるときは idle に戻す — 持ち越すと、書いて
-  // いない画面が「21:40 に保存」と言い続ける
+  // The save state also shows in the bottom bar (AppLayout). That sits outside this screen, so it
+  // is passed through the shell. Leaving resets it to idle: carried over, a screen nobody is
+  // writing on would keep saying "saved at 21:40"
   createEffect(() => shell.setSaveState({ status: saveStatus(), at: savedAt() }));
   onCleanup(() => shell.setSaveState({ status: "idle", at: "" }));
   const [hidden, setHidden] = createSignal<string[]>([]);
   /**
-   * 先頭 H1 を切り離した本文。エディタが打鍵のたびに書き戻すので、いつでも
-   * 画面に出ている本文と同じ — 読み取り専用に切り替えた瞬間のプレビューも、
-   * マップも、これを読めば直前まで打っていた本文になる。
+   * The body with the leading H1 split off. The editor writes it back on every keystroke, so it is
+   * always the body on screen: the preview at the moment it switches to read-only, and the map,
+   * both get the body as it was typed a moment earlier by reading this.
    */
   const [noteBody, setNoteBody] = createSignal("");
-  /** 本文先頭の H1。タイトル欄が編集し、保存のたびに本文へ書き戻す。 */
+  /** The H1 at the top of the body. The title field edits it, and every save writes it back. */
   const [noteTitle, setNoteTitle] = createSignal("");
   const [noteView, setNoteView] = createSignal<NoteView>("editor");
   /**
-   * 履歴を開いているか。Codex だけ。開くとパネルが右から入り、本文は読み取り
-   * 専用になって、選んだ版との差が欄外の印になる。本文は消えない。
+   * Whether the history is open. Codex only. It brings the panel in from the right, the body turns
+   * read-only, and the difference from the chosen version becomes gutter marks. The body
+   * never disappears.
    */
   const [historyOpen, setHistoryOpen] = createSignal(false);
-  /** 履歴で選んでいる版。開いた瞬間は最新の版。 */
+  /** The version chosen in the history. The newest one the moment it opens. */
   const [selectedVersionId, setSelectedVersionId] = createSignal<string | null>(null);
   /**
-   * 携帯で履歴の画面を出しているか。並べる幅が無いので、パネルではなく本文と
-   * 入れ替わる 1 枚の面になる。版を押すと本文へ戻り、比較バーが下に付く。
+   * Whether the history screen is up on a phone. There is no width to lay it alongside, so it is
+   * one surface that swaps with the body rather than a panel. Pressing a version returns to the
+   * body, with the compare bar attached below.
    */
   const [historyScreenOpen, setHistoryScreenOpen] = createSignal(false);
-  /** 刻んだばかりの版。履歴のその行だけが跳ねて入る。 */
+  /** The version just committed. Only that row in the history pops as it enters. */
   const [freshVersionId, setFreshVersionId] = createSignal<string | null>(null);
-  /** 本文の読み込みが済んでいるノートの id。`?edit=1` の自動フォーカスが待つ。 */
+  /** The id of the note whose body has finished loading. `?edit=1` autofocus waits on it. */
   const [loadedId, setLoadedId] = createSignal<string | null>(null);
   /**
-   * 本文を外から入れ替えた回数。エディタは自分が持っている文書を正とするので、
-   * 別のノートを開いた・同期で降ってきた・編集前に戻した、のどれかで
-   * 画面の本文が変わったときは作り直すしかない(本文の差し込みは
-   * カーソル・選択・IME を壊す)。この値をキーにして作り直す。
+   * How many times the body was replaced from outside. The editor holds its own document as the
+   * truth, so when the body on screen changes because another note was opened, sync brought one
+   * down, or an edit was reverted, the only option is to rebuild it (inserting the body breaks the
+   * cursor, the selection and the IME). This value is the key it is rebuilt on.
    *
-   * 同時に「いまの読み込みセッション」の名前でもある。1 つの値は 1 回の
-   * `showBody` — つまり 1 つのノートの 1 回の読み込み — にしか対応しないので、
-   * 揃っていれば画面にあるのはそのとき出した本文とその後の打鍵だけ。
-   * 断られた保存の退避(`typedBody`)がこれを見る。
+   * It is at the same time the name of "the current load session". One value maps to exactly one
+   * `showBody`, that is one load of one note, so while they match, what is on screen is the body
+   * shown then and the keystrokes after it. The backup of a refused save (`typedBody`) reads it.
    */
   const [bodyEpoch, setBodyEpoch] = createSignal(1);
-  /** タッチ端末のツールバーが叩く先。ノートを開いていない間は undefined。 */
+  /** What a touch device's toolbar acts on. undefined while no note is open. */
   const [markdownEditor, setMarkdownEditor] = createSignal<Editor | undefined>();
 
   const [notes, { refetch: refetchNotes }] = createResource(loadNotes);
-  // 「新規」を押すまで開かないが、押した瞬間に読み始めると空のメニューが
-  // 一度描かれる。件数は数件で、一覧と一緒に取っても目に見える差は出ない
+  // It does not open until "new" is pressed, but starting the read at that moment draws an empty
+  // menu once. There are only a few of them, so fetching them with the list costs nothing visible
   const [templates, { refetch: refetchTemplates }] = createResource(() =>
     typedInvoke("list_templates"),
   );
 
   let detailBodyRef: HTMLDivElement | undefined;
   let listScrollRef: HTMLDivElement | undefined;
-  /** 「+ 新規」。テンプレのシートを開けたボタンなので、押されたぶんは外側に数えない */
+  /** The "+ new" button. It opened the template sheet, so a press on it does not count as outside */
   let newNoteButton: HTMLButtonElement | undefined;
-  /** 「保存しました」を保存時刻の表示に落とすタイマー。 */
+  /** The timer that drops "saved" down to showing the save time. */
   let savedTimer: ReturnType<typeof setTimeout> | undefined;
 
   /**
-   * 保存できた合図。緑の「保存しました」を出しっぱなしにすると、書いている
-   * あいだじゅう視界の端が光る。2 秒だけ出して、あとは時刻に落ち着かせる。
+   * The sign that a save landed. Leaving the green "saved" up would light the edge of vision the
+   * whole time someone is writing. Show it for 2 seconds, then let it settle into the time.
    */
   const markSaved = (): void => {
     clearTimeout(savedTimer);
@@ -259,9 +261,9 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   };
 
   /**
-   * 一覧と詳細が並んでいる幅か。狭い端末では詳細を開くまで本文は画面に無いので、
-   * そこで Milkdown を立ち上げると、一覧を見ているだけの人に ProseMirror 一式を
-   * 読ませることになる。
+   * Whether the width has list and detail side by side. On a narrow device the body is not on
+   * screen until the detail opens, so starting Milkdown there would make someone who is only
+   * looking at the list load the whole of ProseMirror.
    */
   const wideEnough = globalThis.matchMedia("(min-width: 768px)");
   const [twoPane, setTwoPane] = createSignal(wideEnough.matches);
@@ -271,11 +273,11 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   wideEnough.addEventListener("change", onWidthChange);
   onCleanup(() => wideEnough.removeEventListener("change", onWidthChange));
 
-  /** 本文が実際に画面に出ているか。出ていないうちはエディタも作らない。 */
+  /** Whether the body is actually on screen. While it is not, no editor is built either. */
   const bodyVisible = createMemo<boolean>(() => twoPane() || detailOpen());
 
-  // 一覧は両方の置き場を 1 度に持ってくる。面ごとに絞るのはここ — IPC を
-  // 面の数だけ増やすより、`?file=` の転送先を知るために全部持っているほうがいい
+  // The list brings both stores in at once. Narrowing by surface happens here: rather than one IPC
+  // call per surface, it is better to hold all of them so `?file=` knows where to send you
   const allItems = createMemo<NoteItem[]>(() => {
     const dropped = new Set(hidden());
     return (notes() ?? []).filter((item) => !dropped.has(item.id));
@@ -285,8 +287,8 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   );
 
   /**
-   * ID しか知らない入口(`?file=`・`[[リンク]]`・バックリンク)の相手が
-   * どの面に居るか。一覧が届く前は分からないので undefined。
+   * Which surface the target of an entry that knows only an ID (`?file=`, `[[link]]`, a backlink)
+   * lives on. It cannot be known before the list arrives, hence undefined.
    */
   const kindOf = (filename: string): NoteKind | undefined =>
     notes()?.find((item) => item.filename === filename)?.kind;
@@ -299,53 +301,53 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   });
 
   /**
-   * いま見ているノートの id。一覧を取り直すと NoteItem は作り直されるので、
-   * 「見ているノートが変わった」を item の同一性で判断すると、保存や同期の
-   * たびに変わったことになる。id なら同じノートのあいだ動かない。
+   * The id of the note being looked at. Refetching the list rebuilds the NoteItem, so judging
+   * "the note being looked at changed" by item identity would call it changed on every save and
+   * every sync. An id does not move while the note is the same.
    */
   const selectedKey = createMemo<string | undefined>(() => selected()?.id);
 
   /**
-   * 画面の本文が、いま選んでいるノートのものか。選択を移してから本文が
-   * 届くまでは前のノートの題と本文が残っていて、そこへ打った字は
-   * 「前のノートの本文 + 打った字」として隣のノートへ向かう。初めて開く
-   * 相手には revision も無いので core も止められない。書く・保存する入口は
-   * 全部これを見る。
+   * Whether the body on screen belongs to the note now selected. Between moving the selection and
+   * the body arriving, the previous note's title and body are still there, and characters typed
+   * into them head for the next note as "the previous note's body plus what was typed". A note
+   * opened for the first time has no revision either, so core cannot stop it. Every entry that
+   * writes or saves checks this.
    */
   const loaded = (): boolean => loadedId() === selected()?.id;
 
-  /** 読むだけのノート。frontmatter の `view: preview` がそう言っている。 */
+  /** A note only to be read. The frontmatter's `view: preview` says so. */
   const readOnly = createMemo<boolean>(() => noteView() === "preview");
-  /** マップを並べているか。同じ `view` キーに `mindmap` として憶えてある。 */
+  /** Whether the map is laid alongside. The same `view` key remembers it as `mindmap`. */
   const mapOpen = createMemo<boolean>(() => noteView() === "mindmap");
 
   /**
-   * ファイルに書く本文。タイトル欄とエディタは別々に見せているが、
-   * 保存・バックアップ・マインドマップが扱うのは常に結合した全文。
+   * The body written to the file. The title field and the editor are shown separately, but saving,
+   * the backup and the mindmap always handle the joined whole.
    */
   const fullBody = (): string => joinTitle(noteTitle(), noteBody());
 
   /**
-   * `[[ID]]` → タイトルの解決表。プレビューが毎回これを引いて描く。
-   * 面で絞らない — Note から Codex へ移した相手も、リンクは同じ ID のまま
-   * 指し続けるし、開けば向こうの面へ送られる。
+   * The table that resolves `[[ID]]` to a title. The preview looks it up every time it draws.
+   * It is not narrowed by surface: a note moved from Note to Codex is still pointed at by the same
+   * ID, and opening it sends you to the other surface.
    */
   const noteTitles = createMemo<ReadonlyMap<string, string>>(
     () => new Map(allItems().map((item) => [item.filename.replace(/\.md$/u, ""), item.title])),
   );
 
-  /** `[[` 補完の候補。両方の面から。自分自身へのリンクは出さない。 */
+  /** The candidates for `[[` completion. From both surfaces. A link to itself is not offered. */
   const linkTargets = (): NoteLinkTarget[] =>
     allItems()
       .filter((item) => item.id !== selected()?.id)
       .map((item) => ({ id: item.filename.replace(/\.md$/u, ""), title: item.title }));
 
   /**
-   * テンプレの記入例。テンプレから生まれたノートだけが引く。
+   * A template's examples. Only a note born from a template looks them up.
    *
-   * ノートのファイルには一度も書かれないので、本文から読むことはできない —
-   * 出自(`template:`)の言うテンプレを読み直すしかない。読めなければ何も
-   * 出さない: テンプレを消した人に、消したものを出し続けない。
+   * They are never written into the note's file, so they cannot be read from the body: the only
+   * way is to read the template its origin (`template:`) names again. If that cannot be read,
+   * nothing is shown: someone who deleted a template is not shown what they deleted.
    */
   const [templateExamples] = createResource(
     () => (examplesShown() ? selected()?.template : undefined),
@@ -358,37 +360,38 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       }
     },
   );
-  // createResource は源が undefined になっても最後の値を抱えたままなので、
-  // 畳んだかどうかはここでもう一度見る
+  // createResource keeps holding its last value even after the source goes undefined, so whether
+  // they are folded away is checked once more here
   const examples = (): ReadonlyMap<string, string[]> =>
     examplesShown() ? (templateExamples() ?? NO_EXAMPLES) : NO_EXAMPLES;
 
-  // このノートを [[ID]] で指している記録。開くたびに走査で導出される
+  // The records that point at this note with [[ID]]. Derived by a scan each time it is opened
   const [backlinks] = createResource(
     () => selected()?.filename,
     (filename) => typedInvoke("find_backlinks", { filename }),
   );
 
-  // 版の数と「最新の版からどれだけ動いたか」。本文を版と比べるので、開いて
-  // いる 1 本ぶんだけ読む(一覧の行の印は core が名前の指紋だけで出している)
+  // The version count and "how far it has moved from the newest version". It compares the body
+  // against a version, so it reads only the one note that is open (the mark on a list row comes
+  // from core using the name fingerprint alone)
   const [versionStatus, { refetch: refetchVersionStatus }] = createResource(
     () => (kind() === "codex" ? selected()?.filename : undefined),
     (filename) => typedInvoke("note_version_status", { filename }),
   );
-  // 版そのもの。背骨は畳んでいても版の数だけ点を打つので、Codex を開いたら読む
+  // The versions themselves. Even folded, the spine dots once per version, so a Codex reads them
   const [versions, { refetch: refetchVersions }] = createResource(
     () => (kind() === "codex" ? selected()?.filename : undefined),
     (filename) => typedInvoke("list_note_versions", { filename }),
   );
   const versionRows = createMemo<VersionRow[]>(() => withDeltas(versions() ?? []));
 
-  /** 版が増減したら、数と背骨と一覧の印を一緒に読み直す。 */
+  /** When versions are added or removed, reread the count, the spine and the list mark together. */
   const refreshVersions = (): void => {
     void refetchVersionStatus();
     void refetchVersions();
   };
 
-  // 選んだ版から下書きへの差分。履歴を開いているあいだだけ
+  // The diff from the chosen version to the draft. Only while the history is open
   const [diff] = createResource(
     () => {
       const id = selectedVersionId();
@@ -399,14 +402,14 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   );
 
   /**
-   * 欄外の印を打った本文。差分が空(同じ内容)なら印は無く、本文はそのまま。
-   * 履歴を開くときに保存を出しきってあるので、画面の本文はディスクと同じ。
+   * The body with the gutter marks applied. An empty diff (same content) means no marks and the
+   * body as it is. Saves are flushed when the history opens, so the body on screen equals disk.
    */
   const marked = createMemo(() => {
     const text = diff();
     return text ? markedBody(fullBody(), text) : undefined;
   });
-  /** 「9 か月で 4 回刻んだ」。最初の版からの経過は版の一覧から。 */
+  /** "committed 4 times in 9 months". The span since the first version comes from the list. */
   const cadence = (): string | undefined => {
     const rows = versionRows();
     const oldest = rows.at(-1);
@@ -415,7 +418,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       : undefined;
   };
 
-  /** 履歴の見出しに添える「3 版 · 9 か月」。 */
+  /** The "3 versions, 9 months" set beside the history heading. */
   const historySummary = (): string => {
     const rows = versionRows();
     const oldest = rows.at(-1);
@@ -425,14 +428,14 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     );
   };
 
-  /** 履歴で選んでいる行。番号を出すのも戻す先を決めるのもこれ。 */
+  /** The row chosen in the history. It gives the number and decides what to restore to. */
   const selectedRow = createMemo<VersionRow | undefined>(() =>
     versionRows().find((row) => row.version.id === selectedVersionId()),
   );
 
   /**
-   * 「3 行追加 · 1 行削除」。比較モードが既に読んでいる差分から数えるので、
-   * これを出すために IPC は 1 本も増えない。同じ内容なら「同じ内容」。
+   * "3 lines added, 1 line removed". It counts from the diff compare mode has already read, so
+   * showing it adds not one IPC call. Identical content reads as "same content".
    */
   const compareDetail = (): string => {
     const text = diff();
@@ -443,7 +446,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     return added + removed === 0 ? t().codex.sameShort : t().codex.lineDelta(added, removed);
   };
 
-  /** 比較モードの名乗り。「版 2 と比較中 · 3 行追加 · 1 行削除 · 読み取り専用」 */
+  /** What compare mode calls itself: "comparing version 2, 3 added, 1 removed, read-only" */
   const compareLine = (): string[] => {
     const row = selectedRow();
     return row
@@ -451,25 +454,26 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       : [];
   };
 
-  /** 携帯で履歴の画面を出しているか。本文と入れ替わる。 */
+  /** Whether the history screen is up on a phone. It swaps with the body. */
   const historyScreen = (): boolean =>
     kind() === "codex" && historyOpen() && historyScreenOpen() && !twoPane();
 
   /**
-   * 比較バーを出すか。携帯で比較モードに居るあいだ。同じ内容の版を選んで
-   * いても出す — 出さないと、履歴へ戻る道も比較をやめる道も無くなる。
+   * Whether to show the compare bar. While compare mode is on, on a phone. It shows even when the
+   * chosen version has the same content: without it there is no way back to the history and no way
+   * to leave compare mode.
    */
   const compareBarOpen = (): boolean =>
     kind() === "codex" && historyOpen() && !historyScreen() && !twoPane();
 
   /**
-   * 画面に出ている本文をまるごと入れ替える。エディタは自分の文書を正とするので、
-   * ここを通ったら作り直す(`bodyEpoch`)。バラして流すと一瞬だけ違うモードで
-   * 描かれるので、題・本文・モードは 1 度に置く。
+   * Replaces the whole body on screen. The editor holds its own document as the truth, so anything
+   * that comes through here rebuilds it (`bodyEpoch`). Sending the pieces separately would draw a
+   * moment in the wrong mode, so title, body and mode are set at once.
    */
   const showBody = (id: string, title: string, body: string, view: NoteView): void => {
-    // 「保存しました」の 2 秒は前のノートの持ち物。持ち越すと、保存していない
-    // ノートに「21:40 に保存」が出る
+    // The 2 seconds of "saved" belong to the previous note. Carried over, a note that was not
+    // saved would show "saved at 21:40"
     clearTimeout(savedTimer);
     batch(() => {
       setNoteTitle(title);
@@ -482,8 +486,9 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   };
 
   /**
-   * ディスクの本文と画面のあいだの調停(`lib/note-session.ts`)。読み・指紋・
-   * 自動保存・断られたときの退避は全部ここが決める。画面は見せ方だけを持つ。
+   * The mediation between the body on disk and the screen (`lib/note-session.ts`). Reading, the
+   * revision, autosave and the backup taken on a refusal are all decided there. The screen holds
+   * only how things are shown.
    */
   const session = createNoteSession({
     selected: () => selected(),
@@ -509,7 +514,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     setStatus: setSaveStatus,
     onSaved: () => {
       markSaved();
-      // 「版 N から +X B」は最新の版と下書きの比較。書くたびに答えが変わる
+      // "+X B from version N" compares the newest version with the draft. Every write changes it
       if (kind() === "codex") {
         void refetchVersionStatus();
       }
@@ -517,16 +522,16 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     showToast: (text) => shell.showToast(text),
   });
 
-  // ---- 選択中ノートの本文と表示モードを読む ----
-  // 追うのは「どのノートを見ているか」だけ。item そのものを追うと、一覧を
-  // 取り直すたびに本文を読み直し、開いているエディタの下で本文が入れ替わる
+  // ---- read the selected note's body and view mode ----
+  // What is followed is only "which note is being looked at". Following the item itself would
+  // reread the body on every refetch of the list, swapping the body under an open editor
   createEffect(
     on(selectedKey, () => {
       const item = selected();
-      // 別のノートに移ったら編集セッションは畳む。戻る先が前のノートの
-      // 本文のままだと、次の保存が他人のバックアップを潰す
+      // Moving to another note folds the edit session. If the place to return to stayed the
+      // previous note's body, the next save would crush another note's backup
       session.drop();
-      // 履歴は開いていたノートの持ち物
+      // The history belongs to the note that was open
       setHistoryOpen(false);
       setHistoryScreenOpen(false);
       setSelectedVersionId(null);
@@ -534,24 +539,24 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
         showBody("", "", "", "editor");
         return;
       }
-      // 届くまでは「まだ誰の本文でもない」。前のノートのエディタは畳み、
-      // 題も書けなくする。先に空のエディタを立てて本文と一緒に作り直す
-      // より、届いてから 1 度だけ立てるほうが軽い
+      // Until it arrives it is "nobody's body yet". Fold the previous note's editor and make the
+      // title unwritable too. Standing it up once after the body arrives is lighter than standing
+      // an empty editor first and rebuilding it with the body
       setLoadedId(null);
-      // 別のノートを開いたのは人の意思。待っている保存は `settleEdit` が
-      // 出しきったあとなので、カーソルが本文に残っていても譲ってよい
+      // Opening another note is the person's intent. The pending save has already been flushed by
+      // `settleEdit`, so it is fine to give way even with the cursor still in the body
       void session.reload(item, true);
     }),
   );
 
   /**
-   * 表示モードを憶えさせる。`view` は 1 つのキーなので、読み取り専用と
-   * マップは同時には立たない — 後から押したほうが残る。
+   * Remembers the view mode. `view` is a single key, so read-only and the map are never both
+   * up: whichever was pressed later stays.
    */
   const setView = async (item: NoteItem, next: NoteView): Promise<void> => {
     const previous = noteView();
-    // 保存を待たずに切り替える。書き込みは frontmatter が壊れたノートで
-    // 失敗し得るので、そのときは表示だけ戻す
+    // Switch without waiting for the write. The write can fail on a note with broken frontmatter,
+    // and in that case only the display is put back
     setNoteView(next);
     shell.closePopovers();
     try {
@@ -576,27 +581,26 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     session.dispose();
   });
 
-  // 同期やパレット操作の後にデータを取り直す。初回は createResource が読むので
-  // defer しないと全ノートの読み直しがマウント直後に二重で走る
+  // Refetch the data after a sync or a palette action. createResource does the first read, so
+  // without defer every note would be reread twice right after mount
   createEffect(
     on(
       shell.dataVersion,
       () => {
         void refetchNotes();
         void refetchTemplates();
-        // 一覧を取り直しただけでは、開いたままのノートは古い本文を出し続ける。
-        // 同期で降ってきた版をここで読み直す。読むだけで、書き戻しはしない
+        // Refetching the list alone leaves a note that stays open showing its old body. What came
+        // down through sync is reread here. It only reads; it never writes back
         const item = selected();
-        // 書いている最中は絶対に触らない。本文の差し替えはカーソル・選択・
-        // スクロール・IME の状態ごと壊す(editor skill)。待っている保存が
-        // あるときも同じ — 打った字はまだディスクに無いので、読み直せば
-        // それを捨てることになる。
-        // どちらも次の Step(ファイル監視)でトーストを出して人に決めさせる
+        // Never touch it while someone is writing. Replacing the body destroys the cursor, the
+        // selection, the scroll and the IME state (editor skill). The same holds while a save is
+        // pending: what was typed is not on disk yet, so rereading would throw it away.
+        // For both, the next Step (file watching) raises a toast and lets the person decide
         if (item && !session.isTyping()) {
           void session.reload(item);
         }
-        // 版も同期で増える。ファイル名は同じなので resource は自分では
-        // 取り直さない
+        // Versions grow through sync too. The filename is the same, so the resource does not
+        // refetch by itself
         if (kind() === "codex") {
           refreshVersions();
         }
@@ -606,10 +610,10 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   );
 
   /**
-   * 選択を差し替える唯一の入口。一覧のタップ・ウィジェットの `?file=`・
-   * 新規作成・テンプレ・バックリンクは全部ここを通る。入口ごとに
-   * 「編集中だったらどうするか」を書くと、書き忘れた入口だけが前のノートの
-   * 本文を次のノートへ持ち込む — 入口が増えても書く場所は 1 つにしておく。
+   * The one entry that replaces the selection. A tap in the list, a widget's `?file=`, creating a
+   * new note, a template and a backlink all come through here. Writing "what to do if an edit is
+   * under way" at each entry would let the one entry it was forgotten at carry the previous note's
+   * body into the next note. However many entries appear, it stays written in one place.
    */
   async function switchTo(id: string): Promise<void> {
     await session.settleEdit();
@@ -623,8 +627,8 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   };
 
   /**
-   * ID で指されたノートを開く。相手が別の面に居れば、その面へ送る —
-   * この面の一覧に無い id を選んでも、先頭のノートに倒れるだけ。
+   * Opens the note an ID points at. If it lives on another surface, send there: selecting an id
+   * that is not in this surface's list would only fall back to the first note.
    */
   const openFile = async (filename: string): Promise<void> => {
     const other = kindOf(filename);
@@ -643,8 +647,8 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     }
   };
 
-  // ウィジェットの行から `?file=` 付きで来たときだけ、その 1 件を開く。
-  // 一覧が届く前に来ることがあるが、id はファイル名そのものなので先に置ける
+  // Only when arriving from a widget row with `?file=`, open that one note. It can arrive before
+  // the list does, but the id is the filename itself, so it can be set in advance
   createEffect(
     on(
       () => searchParams.file,
@@ -656,9 +660,9 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     ),
   );
 
-  // ウィジェットや `[[リンク]]` は ID しか知らず `/notes?file=` に着く。相手が
-  // Codex なら、一覧が届いた時点で `/codex?file=` へ置き換える。この面には
-  // 居ないノートなので、履歴に残しても戻る先にならない
+  // A widget or a `[[link]]` knows only the ID and lands on `/notes?file=`. If the target is a
+  // Codex, replace it with `/codex?file=` once the list arrives. The note does not live on this
+  // surface, so leaving it in the history would not make it a place to go back to
   createEffect(() => {
     const { file } = searchParams;
     if (typeof file !== "string" || !file) {
@@ -670,13 +674,14 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     }
   });
 
-  /** 本文にカーソルを置く。昇格直後のノートを、そのまま書ける形で渡す。 */
+  /** Puts the cursor in the body. A note just promoted is handed over ready to write in. */
   const focusBody = (): void => {
     detailBodyRef?.querySelector<HTMLElement>(".ProseMirror")?.focus();
   };
 
   /**
-   * タイトルは本文先頭の H1 そのもの。打つたびに本文と同じ自動保存に乗せる。
+   * The title is the H1 at the top of the body itself. Every keystroke rides the same autosave as
+   * the body.
    */
   const editTitle = (value: string): void => {
     if (!loaded()) {
@@ -688,9 +693,9 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   };
 
   /**
-   * タイトル欄を離れたら、待っている保存を出しきって一覧を 1 度だけ
-   * 読み直す。行に出ている題は本文の先頭行から導かれるので、
-   * 読み直さないと一覧だけ古い題のまま残る。
+   * Leaving the title field flushes the pending save and rereads the list once. The title shown
+   * in a row is derived from the first line of the body, so without the reread only the list
+   * would be left with the old title.
    */
   const commitTitle = async (): Promise<void> => {
     session.cancelPending();
@@ -699,8 +704,8 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   };
 
   /**
-   * ノートリンクはこのアプリの中で解決する。href を持たない `a` なので、
-   * 読むだけのノートでもマップでも、押されたことをここで拾って開く。
+   * A note link is resolved inside this app. It is an `a` with no href, so a press is caught here
+   * and opened, on a read-only note and on the map alike.
    */
   const onBodyClick = (e: MouseEvent): void => {
     const target = e.target instanceof Element ? e.target : null;
@@ -711,23 +716,24 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   };
 
   /**
-   * この端末に残した「編集前の本文」と今の本文を入れ替える。入れ替えなので
-   * もう一度押せば戻せる — 戻る先は常にちょうど 1 段。
+   * Swaps the "body before the edit" left on this device with the current body. Being a swap,
+   * pressing again puts it back: what it returns to is always exactly one step.
    *
-   * ディスクへ書けないノートでは入れ替えをやめ、控えを画面に出すだけにする。
-   * 控えを作る理由(壊れた記録・消えたノート・文字として読めないファイル)は
-   * そのまま書き込みを断る理由でもあるので、書けたときしか見せないと、退避は
-   * 残っているのに取り出す道がどこにも無くなる。画面に出れば人は選んで写せる。
+   * On a note that cannot be written to disk, the swap is dropped and the backup is only shown on
+   * screen. The reasons a backup exists (a corrupt record, a deleted note, a file that cannot be
+   * read as text) are the same reasons a write is refused, so showing it only when the write
+   * succeeded would leave the backup sitting there with no way anywhere to get it out. On screen,
+   * a person can select it and copy it.
    */
   const revertEdit = async (item: NoteItem): Promise<void> => {
     const backup = readBackup(localStorage, item.filename);
     const current = fullBody();
-    // 届く前の画面の本文は前のノートのもの。それを控えに回してはいけない
+    // Before it arrives, the body on screen is the previous note's. It must not become the backup
     if (!loaded() || backup === null || backup === current) {
       return;
     }
-    // 待っている保存は捨てる。いま画面にある本文はこれから控えに回るので、
-    // 同じものをもう一度ディスクへ書きに行く意味がない
+    // Drop the pending save. The body now on screen is about to become the backup, so there is no
+    // point going to disk to write the same thing again
     session.cancelPending();
     let written = true;
     try {
@@ -739,8 +745,8 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       });
       session.setRevision(item.filename, revision);
     } catch (error) {
-      // 読み直せば書けるノート(Stale・一時的な失敗)では見せずに終わる。
-      // ディスクと画面が黙って食い違い、次の保存が相手の本文を控えで潰す
+      // On a note writable after a reread (Stale, a temporary failure), end without showing it.
+      // Disk and screen would silently diverge, and the next save crushes the body with the backup
       if (!refusedForGood(error)) {
         shell.showToast(t().notes.revertFailed);
         return;
@@ -748,39 +754,41 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       written = false;
     }
     if (written) {
-      // 入れ替えたので、いまの「戻る先」は入れ替える前の本文。書けなかった
-      // ときは入れ替えない — 控えはまだこの字の唯一の写しで、押すたびに
-      // 同じものを出せる
+      // After the swap, the current "place to return to" is the body from before it. When the
+      // write failed there is no swap: the backup is still the only copy of those characters,
+      // and every press can bring out the same thing
       writeBackup(localStorage, item.filename, current);
     }
-    // 控えを取り終えたセッションとして開き直す
+    // Reopen as a session that has finished taking the backup
     session.reopenAt(item.filename, backup);
     const titled = splitTitle(backup);
-    // エディタごと作り直す。差し込みでは戻した本文が画面に出ない
+    // Rebuild the editor itself. Inserting would not put the reverted body on screen
     showBody(item.id, titled.title, titled.body, noteView());
     shell.closePopovers();
     if (written) {
-      // 行に出る題は本文の先頭行から導かれる。書いていないなら変わっていない。
-      // 消えたノートではここで行ごと消え、出したばかりの控えが画面から落ちる
+      // A row's title is derived from the body's first line; with no write it has not changed.
+      // On a deleted note the whole row goes here, and the backup just shown drops off the screen
       await refetchNotes();
     }
     shell.showToast(written ? t().notes.reverted : t().notes.shownFromBackup);
   };
 
   /**
-   * いまの下書きを版として刻む。ここが唯一の入口で、自動では刻まない。
-   * 保存・離脱・昇格のどれにも掛けない — 版は人が「ここまで」と言った印。
+   * Commits the current draft as a version. This is the only entry, and nothing commits
+   * automatically. It hangs on neither save, leave nor promotion: a version is the mark a person
+   * puts at "this far".
    *
-   * 押した瞬間に刻む。一言は聞かない — 版の名前は「版 N · 日付」で足り、
-   * 聞くと刻むこと自体が億劫になる。代わりにトーストで要約を言い、
-   * 猶予のあいだは取り消せる(版のファイルを消すだけ)。
+   * It commits the moment it is pressed. No message is asked for: "version N, date" is enough for
+   * a version's name, and asking makes committing itself feel like a chore. Instead a toast says
+   * the summary, and during the grace period it can be undone (which only deletes the version's
+   * file).
    */
   const commitVersion = async (item: NoteItem): Promise<void> => {
     if (kind() !== "codex" || !loaded()) {
       return;
     }
     shell.closePopovers();
-    // 刻むのはディスクの本文。飛んでいる保存を待たないと最後の打鍵が版に入らない
+    // The body on disk is committed. Unless the in-flight save lands, the last typing misses it
     await session.settleWrites();
     const before = versions() ?? [];
     let version;
@@ -793,8 +801,8 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       shell.showToast(t().codex.commitFailed);
       return;
     }
-    // 同じ秒に同じ本文を刻むと core は前の版をそのまま返す。増えていない
-    // ものは取り消せない — 消すと前からあった版が消える
+    // Committing the same body in the same second makes core return the previous version as it is.
+    // What did not grow cannot be undone: deleting it would delete a version that already existed
     const existed = before.some((v) => v.id === version.id);
     const [latest] = before;
     const count = existed ? before.length : before.length + 1;
@@ -808,14 +816,14 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     ]
       .filter(Boolean)
       .join(" · ");
-    // 履歴が開いていれば、増えた 1 行だけが跳ねて入る。既にあった版を
-    // 指し直しただけのときは何も動かさない
+    // If the history is open, only the one added row pops in. When it merely pointed again at a
+    // version that already existed, nothing moves
     if (!existed) {
       setFreshVersionId(version.id);
       setTimeout(() => setFreshVersionId(null), POP_MS);
     }
     refreshVersions();
-    // 一覧の角折りページも数と枠が変わる
+    // The folded-corner page in the list changes its count and frame too
     void refetchNotes();
     const undo = existed
       ? undefined
@@ -837,22 +845,22 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   };
 
   /**
-   * 履歴を開く前に、待っている保存を出しきる。履歴はディスクの本文と版を
-   * 比べる画面で、「戻す」もディスクの本文を「戻す前」として刻む — 画面に
-   * しか無い打鍵を残したまま開くと、その打鍵はどちらにも入らずに消える。
-   * 開いた瞬間に選ぶのは最新の版。
+   * Flush the pending save before the history opens. The history is the screen that compares the
+   * body on disk with a version, and "restore" also commits the body on disk as "before the
+   * restore": opening while keystrokes exist only on screen loses them into neither. The version
+   * chosen the moment it opens is the newest one.
    */
   const openHistory = async (): Promise<void> => {
     shell.closePopovers();
     if (historyOpen()) {
       return;
     }
-    // 並べる幅が無い端末では、履歴は本文と入れ替わる 1 枚の面になる
+    // On a device too narrow for side by side, the history becomes one surface swapping with the body
     setHistoryScreenOpen(!twoPane());
     await session.settleWrites();
-    // 版は他の端末でも刻まれる。比べる画面を開く瞬間は読み直しに安い。
-    // 選ぶ最新の版は読み直した一覧から — 手元の一覧で選ぶと、届いた一覧に
-    // その版が残っている限り、より新しい版があっても古いほうを開き続ける
+    // Versions are committed on other devices too. Opening the compare screen is a cheap moment to
+    // reread. The newest version is chosen from the reread list: from the local list, an older one
+    // would keep opening as long as it is still in the arriving list, even when a newer one exists
     void refetchVersionStatus();
     const rows = (await refetchVersions()) ?? versions();
     batch(() => {
@@ -870,8 +878,8 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   };
 
   /**
-   * 履歴ボタンと … の行が通る唯一の入口。同じボタンで畳めないと、開けた人が
-   * 閉じ方を × か Esc から探すことになる。
+   * The one entry the history button and the row in the note menu both go through. Without the
+   * same button folding it, whoever opened it has to find the close in the x or in Esc.
    */
   const toggleHistory = (): void => {
     if (historyOpen()) {
@@ -881,8 +889,8 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     void openHistory();
   };
 
-  // 開いたときにまだ版が届いていなければ、届いた最新の版を選ぶ。取り消しで
-  // 選んでいた版が消えたときも最新へ寄せる
+  // If the versions have not arrived when it opens, choose the newest one that arrives. It also
+  // moves to the newest when an undo removed the version that was chosen
   createEffect(() => {
     if (!historyOpen()) {
       return;
@@ -898,18 +906,18 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   });
 
   /**
-   * 版の本文を下書きにする。core が先に「戻す前」を刻むので、戻したことも
-   * 履歴から戻せる。書き込みは `update_draft` と同じ照合を通るので、
-   * 読んでから外で書き換えられていれば同じ経路で譲る。
+   * Makes a version's body the draft. core commits "before the restore" first, so the restore
+   * itself can be undone from the history too. The write goes through the same check as
+   * `update_draft`, so if it was rewritten outside after the read, it gives way by the same path.
    */
   const restoreVersion = async (item: NoteItem, id: string): Promise<void> => {
     if (!loaded() || readOnly()) {
       return;
     }
-    // 待っている保存は捨てる。戻すのはディスクの本文で、画面の打鍵は
-    // 「戻す前」の版には入らないが、履歴を開いた時点で settleEdit 済み
+    // Drop the pending save. What is restored is the body on disk; keystrokes on screen do not go
+    // into the "before the restore" version, but settleEdit already ran when the history opened
     session.cancelPending();
-    // 画面に出ている本文を読んだときの指紋。読み直しが届かなかったときの戻る先
+    // The revision from when the body on screen was read. Where to fall back if the reread misses
     const read = session.revisionOf(item.filename);
     try {
       const revision = await typedInvoke("restore_note_version", {
@@ -927,18 +935,19 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       }
       return;
     }
-    // 戻した本文はディスクにある。読み直せば画面もそれになる
+    // The restored body is on disk. Rereading makes the screen show it too
     session.drop();
     closeHistory();
     const shown = await session.reload(item, true);
     if (!shown) {
-      // 読み直しが画面へ届かなかった。戻した本文はディスクに在るのに、画面には
-      // まだ戻す前の本文が出ている。指紋だけ戻した後のものにしておくと、次の
-      // 打鍵の保存が core の照合を素通りし、いま戻した版を黙って潰す。
-      // 指紋を「画面に出ている本文を読んだときのもの」へ戻し、対を崩さない。
-      // 次の保存は Stale で断られ、打った字は控えに退避されて読み直しがもう一度
-      // 走る(`yieldToOutsideEdit`)。
-      // AIDEV-NOTE: 編集を止める案(`loadedId` を落とす)は捨てた。打った字ごと退避する既存の Stale の道に乗せるほうが失わない
+      // The reread did not reach the screen. The restored body is on disk, but the screen still
+      // shows the body from before the restore. Leaving the revision alone at the post-restore one
+      // would let the next keystroke's save slip past core's check and silently crush the version
+      // just restored.
+      // Put the revision back to "the one from when the body on screen was read" and keep the pair
+      // intact. The next save is refused as Stale, what was typed is set aside as a backup, and the
+      // reread runs once more (`yieldToOutsideEdit`).
+      // AIDEV-NOTE: stopping the edit (dropping `loadedId`) was rejected. Riding the existing Stale path, which sets aside what was typed, loses less
       if (read === undefined) {
         session.forgetRevision(item.filename);
       } else {
@@ -950,8 +959,8 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     shell.showToast(shown ? t().codex.restored : t().codex.restoredNotShown);
   };
 
-  // Scrawl からの昇格 (?edit=1) は、本文が届き次第そのまま書ける形で渡す。
-  // パラメータは消費したら消す — 再読み込みのたびにカーソルを奪わない
+  // Promotion from Scrawl (?edit=1) hands the note over ready to write in as soon as the body
+  // arrives. The parameter is cleared once consumed: it must not steal the cursor on every reload
   createEffect(() => {
     if (searchParams.edit !== "1") {
       return;
@@ -960,15 +969,15 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     if (!item || item.filename !== searchParams.file || loadedId() !== item.id) {
       return;
     }
-    // 読み取り専用にしたノートには本文欄そのものが無い。昇格直後の
-    // ノートは view を持たないので実害は無いが、経路として塞いでおく
+    // A note made read-only has no body field at all. A note just promoted has no view, so there
+    // is no real harm, but the path is closed off anyway
     if (readOnly()) {
       setSearchParams({ edit: undefined }, { replace: true });
       return;
     }
-    // 本文が届いた時点では、まだ置く先が無い。エディタは lazy に読まれ、
-    // ProseMirror の DOM は create の後にしか現れない。本文と一緒に作り
-    // 直されるので(`bodyEpoch`)、ここで見えるのは今の本文のエディタだけ
+    // When the body arrives there is still nowhere to put it. The editor is loaded lazily and
+    // ProseMirror's DOM appears only after create. It is rebuilt together with the body
+    // (`bodyEpoch`), so what is visible here is only the editor of the current body
     if (!markdownEditor()) {
       return;
     }
@@ -986,15 +995,15 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   });
 
   /**
-   * 開いているノートに効くキー。受けるのがここなのは、対象が「いま選んで
-   * いる 1 件」だから — AppLayout の表はどの画面でも同じ意味を持つものだけ。
+   * The keys that act on the open note. They are taken here because the target is "the one note
+   * now selected": AppLayout's table holds only what means the same on every screen.
    *
-   * ここの札は Milkdown と当たらないキーだけを選んである(#211)。それでも
-   * エディタに先を譲る(`defaultPrevented`)のは、あとからエディタが取るキーが
-   * 増えたときに、書いている最中の打鍵をこちらが横取りしないため。
+   * The keys badged here are chosen not to collide with Milkdown (#211). Even so, the editor is
+   * given precedence (`defaultPrevented`) so that when the editor takes more keys later, this
+   * does not snatch keystrokes away in the middle of writing.
    *
-   * ⌘↑ / ⌘↓(文頭・文末へ)はブラウザ既定の動きで、誰も preventDefault
-   * しない。こちらはカーソルが文字の中にあるかで見分ける。
+   * Cmd-Up and Cmd-Down (to the start and end of the document) are the browser's default behavior,
+   * and nobody calls preventDefault. Here they are told apart by whether the cursor is inside text.
    */
   onMount(() => {
     const onKeyDown = (e: KeyboardEvent): void => {
@@ -1043,13 +1052,13 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   });
 
   /**
-   * 一覧の中の ↑ / ↓。一覧というウィジェットの中の操作なので、⌘ の表
-   * (`SHORTCUTS`)には載せず、`.list-scroll` の中でだけ受ける — 本文の
-   * 外で何も選ばずに押した ↑↓ はページのスクロールで、それは奪わない。
-   * 一覧に入力欄は無いので、`isTypingTarget` の判定も要らない。
+   * Up and Down inside the list. It is an action inside the list widget, so it is not on the Cmd
+   * table (`SHORTCUTS`) and is taken only inside `.list-scroll`: Up and Down pressed outside the
+   * body with nothing selected scroll the page, and that is not taken away.
+   * The list has no input field, so no `isTypingTarget` check is needed either.
    *
-   * フォーカスは `switchTo` の await を待たずに先に動かす。押した手応えを
-   * 保存の完了まで遅らせない。行の背景は `selectedId` が変わると追いつく。
+   * The focus moves first, without awaiting `switchTo`. The feel of the press is not delayed until
+   * the save finishes. The row's background catches up when `selectedId` changes.
    */
   const onListKeyDown = (e: KeyboardEvent): void => {
     if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) {
@@ -1059,7 +1068,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     if (step === undefined) {
       return;
     }
-    // 端では何もしない。preventDefault もしないので、一覧のスクロールに落ちる
+    // At an end, do nothing. preventDefault is not called either, so it falls to the list scroll
     const next = stepNote(visibleItems(), selected()?.id, step);
     if (!next) {
       return;
@@ -1079,8 +1088,8 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       client: await getDeviceSignals(),
     });
     await refetchNotes();
-    // 作ったノートを開く。選んだままにすると、そのまま題を打った人が
-    // 前に開いていたノートの題を書き換えることになる
+    // Open the note just created. Leaving the selection where it was would make whoever types a
+    // title rewrite the title of the note they had open before
     const filename = path.split("/").at(-1);
     if (filename) {
       await switchTo(filename);
@@ -1088,22 +1097,22 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   };
 
   /**
-   * テンプレから 1 本作って開く。同じテンプレの今日のぶんが既にあれば
-   * core は作らずにそれを返す — そのときだけ、増えなかった理由を伝える。
+   * Creates one note from a template and opens it. If today's note from the same template already
+   * exists, core returns it instead of creating one: only then is the reason nothing was added said.
    */
   const createFromTemplate = async (template: Template): Promise<void> => {
     shell.closePopovers();
     try {
       const created = await typedInvoke("create_from_template", {
         filename: template.filename,
-        // 曜日の呼び名だけは端末の言語に従う。それを知っているのはここだけ
+        // Only the names of the weekdays follow the device's language. Only this side knows it
         locale: locale(),
         client: await getDeviceSignals(),
       });
       await refetchNotes();
       const filename = created.path.split("/").at(-1);
-      // 「同じテンプレの今日の 1 本」が Codex になっていることもある。
-      // この面の一覧に無い id を選ぶと先頭のノートに倒れるので、面ごと送る
+      // "Today's one note from the same template" can turn out to be a Codex. Selecting an id that
+      // is not in this surface's list falls back to the first note, so send it by surface
       if (filename) {
         await openFile(filename);
       }
@@ -1116,8 +1125,8 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   };
 
   /**
-   * 触る端末では長押しがテンプレの入口。タップは今までどおり空のノートで、
-   * 「開いてすぐ書ける」を 1 手増やさない。
+   * On a touch device a long press is the entry to templates. A tap still makes an empty note, so
+   * "open and write at once" does not cost one more step.
    */
   const newNoteLongPress = createLongPress(() => {
     if (kind() === "note") {
@@ -1127,31 +1136,31 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   let newNotePointer = "mouse";
 
   /**
-   * Note を Codex の置き場へ移す。ID も本文も変わらず、面だけが変わる。
-   * 戻す経路は無いので Undo ではなく、メニュー側の確認で受けている。
-   * 移した先の面へ着地させる — この面の一覧からは消えるので、残ると
-   * 先頭のノートに倒れて「消えた」ように見える。
+   * Moves a Note into Codex's store. Neither the ID nor the body changes, only the surface.
+   * There is no way back, so it is not an Undo; the menu's confirmation takes that role.
+   * It lands on the surface it moved to: it leaves this surface's list, so staying would fall
+   * back to the first note and look like it vanished.
    */
   const promoteToCodex = async (item: NoteItem): Promise<void> => {
     shell.closePopovers();
     await session.settleWrites();
     await typedInvoke("promote_note_to_codex", { filename: item.filename });
     await refetchNotes();
-    // Scrawl の origin チップも一覧から導出される。面が変わっても
-    // 繋がりは残るので、向こうにも読み直させる
+    // Scrawl's origin chips are derived from the list too. The link survives the change of
+    // surface, so make that side reread as well
     shell.refreshData();
     navigate(noteRoute("codex", item.filename));
     shell.showToast(t().codex.promoted);
   };
 
-  // ---- 削除 + Undo（5秒は tombstone、経過後に本削除）----
+  // ---- delete + Undo (a tombstone for 5 s, the real delete after that) ----
   const remove = async (item: NoteItem): Promise<void> => {
-    // 隣を選ぶ前に編集を畳む。switchTo と同じ理屈だが、削除は詳細ペインを
-    // 開かない(狭い端末では隣を開いたままにする)ので switchTo は通さない
+    // Fold the edit before choosing the neighbor. Same reasoning as switchTo, but a delete does
+    // not open the detail pane (on a narrow device the neighbor stays open), so it skips switchTo
     await session.settleEdit();
-    // 隠す前に隣を決める。selected は一覧から消えた id を先頭へ倒すので、
-    // 何もしないと削除のたびに最上段へ飛ばされる。隣なら目線は動かない。
-    // detailOpen は触らない — 今まで通り、端末が狭ければ隣を開いたままにする
+    // Decide the neighbor before hiding. selected falls back to the first for an id gone from the
+    // list, so doing nothing would throw you to the top row on every delete. A neighbor keeps the
+    // eye still. detailOpen is left alone: as before, a narrow device keeps the neighbor open
     const neighbor = neighborOf(visibleItems(), item.id);
     shell.closePopovers();
     batch(() => {
@@ -1164,9 +1173,9 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
         await typedInvoke("delete_note", { filename: item.filename });
         await refetchNotes();
         setHidden((ids) => ids.filter((id) => id !== item.id));
-        // Scrawl の origin チップはノート一覧から導出される。Undo の
-        // 猶予中に他のビューへ移られるとこの refetch は届かないので、版を
-        // 上げて向こうの一覧も読み直させる
+        // Scrawl's origin chips are derived from the note list. This refetch does not reach
+        // another view if the person moves there during the Undo grace, so bump the version to
+        // make that list reread too
         shell.refreshData();
       })();
     }, UNDO_MS);
@@ -1175,17 +1184,16 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       clearTimeout(commit);
       batch(() => {
         setHidden((ids) => ids.filter((id) => id !== item.id));
-        // 取り消しは「消す前」へ戻す操作。隣に残したままだと、戻ったのに
-        // 別のノートを見せられる
+        // An undo is the move back to "before the delete". Left on the neighbor, it would show a
+        // different note even though it came back
         setSelectedId(item.id);
       });
     });
   };
 
   /**
-   * フライアウトを出すか。ノートを 1 本も開いていないあいだは開けたままに
-   * する — 隠す相手(本文)が無いのに畳むと、レールに乗るまで何も無い画面に
-   * なる。
+   * Whether to show the flyout. While not one note is open it stays out: folding with nothing to
+   * hide (the body) would leave a screen with nothing on it until the pointer is on the rail.
    */
   const flyoutOpen = (): boolean => shell.listOpen() || selected() === undefined;
 
@@ -1199,7 +1207,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       <div
         class="list-pane"
         classList={{ "list-pane--open": flyoutOpen() }}
-        // フライアウトはレールの続き。柱か一覧にポインタが居るあいだ開く
+        // The flyout continues the rail. It opens while the pointer is on the rail or the list
         onPointerEnter={() => shell.setListHover(true)}
         onPointerLeave={() => shell.setListHover(false)}
       >
@@ -1208,9 +1216,9 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
             {MODE_LABELS[kind() === "codex" ? ROUTES.CODEX : ROUTES.NOTES]}
           </span>
           <div class="list-pane-actions">
-            {/* Codex の面では札を出さない。⌘N が作るのは Note で、押せば Notes
-                へ移る。このボタンは今いる面のものを作るので、札のとおりに打つと
-                別の物が別の場所にできる */}
+            {/* No badge on the Codex surface. What Cmd-N makes is a Note, and pressing it moves
+                to Notes. This button makes one on the surface you are on, so typing what the
+                badge says would create a different thing in a different place */}
             <button
               type="button"
               class="new-note long-press"
@@ -1226,12 +1234,12 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
               onPointerCancel={newNoteLongPress.onPointerCancel}
               onContextMenu={newNoteLongPress.onContextMenu}
               onClick={() => {
-                // 長押しでメニューを開いた直後の click は飲み込む
+                // Swallow the click right after a long press opened the menu
                 if (!newNoteLongPress.shouldClick()) {
                   return;
                 }
-                // テンプレは Note の入口。Codex の面では空の 1 本を作るだけ —
-                // `create_from_template` は置き場を選べない
+                // Templates are a Note entry. On the Codex surface it only makes one empty note:
+                // `create_from_template` cannot choose the store
                 if (newNotePointer === "mouse" && kind() === "note") {
                   shell.togglePopover("new-note-menu", newNoteButton);
                 } else {
@@ -1242,8 +1250,8 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
               <Icon name="plus" size={12} />
               {t().notes.new}
             </button>
-            {/* ピンは一覧の中の物なので、押せるのは開いているあいだだけ。
-              同じことを ⌘\ でもできる */}
+            {/* The pin belongs inside the list, so it can be pressed only while the list is open.
+              The same thing can be done with Cmd-\ */}
             <button
               type="button"
               class="list-pin"
@@ -1264,11 +1272,11 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
           trigger={shell.popoverTrigger}
           label={t().templates.newNote}
         >
-          {/* 背後を暗くするのは下から出るシートのときだけ(CSS 側で出し分け)。
-              閉じるのは自分で受ける — この幕は器の中に居るので、部品から見ると
-              内側の押下になり「外を押した」にならない。シートには取り消しの
-              ボタンが無く、幕が開けたボタンごと覆うので、受けないと指だけで
-              抜け出せなくなる */}
+          {/* The back is darkened only for the sheet that comes up from the bottom (CSS decides
+              which). Closing is taken here: this curtain sits inside the container, so to the
+              component a press on it is an inside press and never "pressed outside". The sheet
+              has no cancel button and the curtain covers the button that opened it as well, so
+              without taking it there is no way out with a finger alone */}
           <div
             class="template-picker-backdrop"
             aria-hidden="true"
@@ -1290,8 +1298,8 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
           />
         </Popover>
 
-        {/* キーを受けるのは中の行(button)で、ここはそれを束ねているだけ。
-            `.detail-body` と同じく、役割を名乗らない入れ物 */}
+        {/* The keys are taken by the rows inside (button); this only bundles them.
+            Like `.detail-body`, a container that claims no role */}
         <div class="list-scroll" ref={listScrollRef} role="presentation" onKeyDown={onListKeyDown}>
           <Show when={groups().length} fallback={<EmptyNotes kind={kind()} />}>
             <For each={groups()}>
@@ -1311,11 +1319,12 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                         onClick={() => select(item as NoteItem)}
                       >
                         <span class="list-row-title">{itemTitle(item)}</span>
-                        {/* 書けないノートはここで分かる。開いてから気づくのでは遅い */}
+                        {/* A note that cannot be written shows here. Noticing after opening is late */}
                         <Show when={(item as NoteItem).readOnly}>
                           <Icon name="lock-simple" size={12} title={t().notes.readOnly} />
                         </Show>
-                        {/* Codex の行だけ、角折りのページに版の数。Note との違いの 1 つ目 */}
+                        {/* Only a Codex row puts the version count on a folded-corner page. The
+                            first of the differences from Note */}
                         <Show when={kind() === "codex"}>
                           <PageMark
                             count={(item as NoteItem).versionCount ?? 0}
@@ -1332,7 +1341,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
           </Show>
         </div>
 
-        {/* 開け閉ての決まりは、開いているあいだだけ足元に書いてある */}
+        {/* The rule for opening and closing is written at the foot, only while it is open */}
         <div class="list-pane-foot">
           {shell.listPinned()
             ? t().notes.listPinnedHint(shortcutLabel("listPin"))
@@ -1343,8 +1352,8 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       <div
         class="detail-pane"
         classList={{
-          // 履歴を開いているあいだマップは描かれない。幅だけ空けておくと、
-          // 題の段が居ないマップのぶん狭まって本文の列と揃わなくなる
+          // While the history is open the map is not drawn. Keeping only the width would narrow it
+          // by a map that has no title row, so it would stop lining up with the body column
           "detail-pane--map": mapOpen() && !historyOpen(),
           "detail-pane--history": kind() === "codex" && historyOpen() && twoPane(),
         }}
@@ -1352,11 +1361,11 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
         <Show when={selected()} fallback={<div class="detail-empty">{t().notes.noSelection}</div>}>
           {(item) => (
             <>
-              {/* 携帯では履歴が本文と入れ替わる。広い窓では本文の右にパネルが
-                  立つだけなので、本文はそのまま残る(下の HistoryPanel) */}
+              {/* On a phone the history swaps with the body. In a wide window the panel only
+                  stands to the right of the body, so the body stays (HistoryPanel below) */}
               <Show when={!historyScreen()}>
-                {/* 題・記録・操作をひとまとまりに。本文と同じ段に置くので、
-                  ノートについて知りたいことを離れた場所で探さなくていい */}
+                {/* Title, record and actions in one group. They sit on the same level as the body,
+                  so what you want to know about a note is not searched for somewhere far away */}
                 <div class="detail-head">
                   <div class="detail-title-row">
                     <button
@@ -1371,25 +1380,25 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                       <Icon name="arrow-left" size={18} />
                     </button>
 
-                    {/* タイトルは本文先頭の H1 そのもの。ここで打ったものが
-                      `# 見出し` として本文に書き戻る(`note-title.ts`)ので、
-                      エディタとプレビューはタイトル行を持たない */}
+                    {/* The title is the H1 at the top of the body itself. What is typed here is
+                      written back into the body as a `# heading` (`note-title.ts`), so the editor
+                      and the preview do not hold the title line */}
                     <input
                       type="text"
                       class="note-title-input"
                       placeholder={t().notes.titlePlaceholder}
                       aria-label={t().notes.titlePlaceholder}
                       value={noteTitle()}
-                      // 読み取り専用のノートは題も動かない。disabled にしないのは
-                      // 読めなくなるから — 選んでコピーはできたままにする。
-                      // 本文が届くまでも動かない(まだ前のノートの題が出ている)
+                      // A read-only note's title does not move either. It is not disabled because
+                      // that makes it unreadable: selecting and copying stay possible. It also
+                      // does not move until the body arrives (the previous note's title is up)
                       readOnly={readOnly() || !loaded()}
                       onInput={(e) => editTitle(e.currentTarget.value)}
                       onChange={() => {
                         void commitTitle();
                       }}
                       onKeyDown={(e) => {
-                        // 変換確定の Enter は IME のもの (#102)
+                        // The Enter that ends IME conversion is the IME's (#102)
                         if (e.key === "Enter" && !isImeComposing(e)) {
                           e.preventDefault();
                           focusBody();
@@ -1397,8 +1406,8 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                       }}
                     />
 
-                    {/* 履歴だけは畳まない。Codex を開いている人がいちばん押す
-                      もので、ホバーでは開かないパネルの唯一の入口 */}
+                    {/* The history alone is not folded away. It is what someone in a Codex presses
+                      most, and the only entry to a panel that never opens on hover */}
                     <Show when={kind() === "codex"}>
                       <button
                         type="button"
@@ -1413,13 +1422,13 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                       </button>
                     </Show>
 
-                    {/* ノート単位の操作はここ 1 つに畳む。どれも滅多に押さない */}
+                    {/* Per-note actions fold into this one place. None of them is pressed often */}
                     <NoteMenu
                       open={shell.popover() === "note-menu"}
                       onOpenChange={(open) => {
-                        // 開くときは他のポップオーバーを畳む。閉じるときは、同じ
-                        // pointerdown で別のものが開いていることがあるので、自分が
-                        // まだ開いている場合だけ畳む
+                        // Opening folds the other popovers. On closing, the same pointerdown may
+                        // already have opened something else, so it folds only while this one is
+                        // still open
                         if (open) {
                           shell.togglePopover("note-menu");
                         } else if (shell.popover() === "note-menu") {
@@ -1430,7 +1439,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                       mapOpen={mapOpen()}
                       readOnly={readOnly()}
                       revertable={revertable()}
-                      // 畳んでいるあいだは表が空なので、出自のテンプレで測る
+                      // While folded the table is empty, so judge by the template it came from
                       hasExamples={item().template !== undefined}
                       examplesShown={examplesShown()}
                       onToggleMap={() => {
@@ -1457,11 +1466,12 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                     />
                   </div>
 
-                  {/* 作成日時・保存の様子・タグを 1 行で。ファイル名は同期や
-                    ウィジェットが指す ID であって、人に見せるものではない */}
+                  {/* Created time, save state and tags on one line. The filename is the ID that
+                    sync and widgets point at, not something to show a person */}
                   <div class="detail-meta-line">
                     <span>{noteCreatedLabel(item())}</span>
-                    {/* Codex は育ち具合を常に出す: 最新の版からの距離と、いつから何回刻んだか */}
+                    {/* A Codex always shows how it has grown: the distance from the newest
+                      version, and since when and how many times it was committed */}
                     <Show when={kind() === "codex" && versionStatus()}>
                       {(status) => (
                         <>
@@ -1513,9 +1523,9 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                           .join(" ")}
                       </span>
                     </Show>
-                    {/* 比較しているあいだは、何と比べていて何行動いたかをここが言う。
-                      行数は既に読んでいる差分から数えるので IPC は増えない。
-                      携帯では同じことを本文の下の比較バーが言う */}
+                    {/* While comparing, this says what is being compared and how many lines moved.
+                      The line counts come from the diff already read, so no IPC is added.
+                      On a phone the compare bar below the body says the same thing */}
                     <Show when={twoPane() && historyOpen() && compareLine().length > 0}>
                       <span class="detail-meta-sep" aria-hidden="true">
                         ·
@@ -1548,8 +1558,8 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                   class="detail-panes"
                   classList={{ "detail-panes--map": mapOpen() && !historyOpen() }}
                 >
-                  {/* biome-ignore/eslint 対応: ここで拾うのは href の無い
-                    ノートリンクだけ。書く操作はエディタ自身が受ける */}
+                  {/* For biome-ignore/eslint: what is caught here is only a note link with no
+                    href. Writing actions are taken by the editor itself */}
                   <div
                     class="detail-body"
                     data-view={historyOpen() ? "history" : noteView()}
@@ -1557,9 +1567,9 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                     role="presentation"
                     onClick={onBodyClick}
                   >
-                    {/* 履歴を開いているあいだ、本文は読み取り専用になり、選んだ版との
-                      差が欄外の印になる。エディタは畳む — 開いたまま下に残すと、
-                      戻した本文と古い文書が同時に在ることになる */}
+                    {/* While the history is open the body turns read-only and the difference from
+                      the chosen version becomes gutter marks. The editor is folded away:
+                      left open below, the restored body and the old document would both exist */}
                     <Show when={historyOpen()}>
                       <MarkdownPreview
                         source={marked()?.source ?? noteBody()}
@@ -1586,10 +1596,10 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                           </>
                         }
                       >
-                        {/* エディタは自分の文書を正とするので、本文が入れ替わったら
-                        作り直す。差し込みはカーソルと IME ごと壊す。
-                        本文が届くまでは立てない — 前のノートの本文で立てた
-                        エディタに打った字は、隣のノートへ書かれる */}
+                        {/* The editor holds its own document as the truth, so it is rebuilt when
+                        the body is replaced. Inserting destroys the cursor and the IME.
+                        It is not stood up until the body arrives: characters typed into an
+                        editor stood up with the previous note's body go to the next note */}
                         <Show when={bodyVisible() && loaded() && bodyEpoch()} keyed>
                           <MilkdownEditor
                             placeholder={t().notes.bodyPlaceholder}
@@ -1613,17 +1623,17 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                     </Show>
                   </div>
 
-                  {/* マップは本文を置き換えず、隣に並べる。1100px を切ると
-                    並べる幅が無いので、そこだけ本文と入れ替わる(CSS 側) */}
-                  {/* 本文が丸ごと入れ替わったとき(`bodyEpoch`)は待たずに描き直す。
-                    待たせると前のノートの図が 1 拍残る */}
+                  {/* The map does not replace the body; it is laid beside it. Below 1100px there
+                    is no width to lay it out, so only there it swaps with the body (in CSS) */}
+                  {/* When the body was replaced whole (`bodyEpoch`), redraw without waiting.
+                    Made to wait, the previous note's diagram stays for a beat */}
                   <Show when={mapOpen() && !historyOpen() && bodyEpoch()} keyed>
                     <NoteMap source={fullBody} />
                   </Show>
                 </div>
 
-                {/* 比較モードの帯。何と比べているかと、そこから出る 3 つの道
-                  (履歴へ戻る・その版に戻す・比較をやめる)。携帯だけ */}
+                {/* The compare mode strip. What is being compared, and the three ways out of it
+                  (back to the history, restore that version, leave compare). Phones only */}
                 <Show when={compareBarOpen()}>
                   <div class="compare-bar">
                     <span class="compare-bar-text">
@@ -1667,7 +1677,8 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                 </Show>
               </Show>
 
-              {/* 携帯の履歴は専用の面。版を押すと本文へ戻り、比較バーが付く */}
+              {/* A phone's history is its own surface. Pressing a version returns to the body,
+                  with the compare bar attached */}
               <Show when={historyScreen()}>
                 <HistoryPanel
                   screen
@@ -1695,8 +1706,8 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                 />
               </Show>
 
-              {/* 広い窓では本文の右に立つ 320px。畳んでいても在るので、
-                  開け閉めは 220ms のずれとして見える */}
+              {/* In a wide window, 320px standing to the right of the body. It exists even when
+                  folded, so opening and closing read as a 220ms slide */}
               <Show when={kind() === "codex" && twoPane()}>
                 <HistoryPanel
                   open={historyOpen()}
@@ -1722,9 +1733,9 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
         </Show>
       </div>
 
-      {/* キーボードでは打ちにくい記法のための入り口。タッチ端末にだけ出る。
-          lazy なので、無条件に描くと一覧を見ただけでエディタ一式を読み込んで
-          しまう。エディタが立ち上がってから初めて描く */}
+      {/* The entry for notation that is hard to type on a keyboard. It appears on touch devices
+          only. It is lazy, so drawing it unconditionally would load the whole editor just from
+          looking at the list. It is drawn only once the editor is up */}
       <Show when={markdownEditor()}>{(editor) => <MarkdownToolbar editor={editor()} />}</Show>
     </div>
   );

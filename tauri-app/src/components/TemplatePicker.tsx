@@ -14,9 +14,10 @@ interface TemplatePickerProps {
 }
 
 /**
- * 一覧に添える代表タグ。ここでは変数を解いて見せる — 押せば今すぐ
- * ノートになる場所なので、知りたいのは「今日作ると何が付くか」。
- * テンプレの定義そのものを見る管理画面では逆に解かない。
+ * The representative tag set beside a row. Here the variables are resolved before being
+ * shown: this is the place where a press becomes a note right away, so what matters is what
+ * would be attached if it were created today. The management screen, which looks at the
+ * template's definition itself, does not resolve them.
  */
 function badge(template: Template): string | undefined {
   const [first] = template.tags;
@@ -24,14 +25,14 @@ function badge(template: Template): string | undefined {
 }
 
 /**
- * 「新規」から開くテンプレ選択。PC ではボタンの下のドロップダウン、
- * 携帯では下から出るシートになる — 出方が違うだけで中身は同じなので、
- * 描くものは 1 つにして見せ方を CSS に預ける。
+ * The template picker opened from "new". On desktop it is a dropdown under the button; on a
+ * phone it is a sheet rising from the bottom. Only the way it appears differs, the contents
+ * are the same, so one thing is rendered and the presentation is left to CSS.
  */
 export default function TemplatePicker(props: TemplatePickerProps): JSX.Element {
   return (
     <div class="popover template-picker" role="menu">
-      {/* 携帯のシートだけが持つ掴み手と見出し。PC では隠れる */}
+      {/* The grab handle and heading that only the phone sheet has. Hidden on desktop */}
       <div class="template-picker-handle" aria-hidden="true" />
       <div class="template-picker-title">{t().templates.newNote}</div>
 

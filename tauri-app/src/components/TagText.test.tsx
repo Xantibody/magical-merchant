@@ -36,7 +36,7 @@ describe("TagText", () => {
     expect(container.querySelector(".tag-inline")?.textContent).toBe("#fgc");
   });
 
-  // `:` はタグの文字ではないので、`#fgc` は画像の直後でもタグになる
+  // `:` is not a tag character, so `#fgc` is a tag even right after the image
   it("reads a tag glued to the shortcode", () => {
     const { container } = render(() => <TagText text=":236p:#fgc" />);
 

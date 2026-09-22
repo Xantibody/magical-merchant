@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { noteRoute } from "./note-route";
 
-// ノートを開く経路は全部ここを通る。Codex は別の面に住むので、ID だけで
-// なく「どの面か」も URL に写さないと、開いた先に相手が居ない(#255)
+// Every route that opens a note goes through here. A Codex lives on another surface, so
+// the URL must carry "which surface" as well as the ID, or nothing is there on arrival (#255)
 describe("noteRoute", () => {
   it("points a note at the Note surface", () => {
     expect(noteRoute("note", "20260903_120000.md")).toBe("/notes?file=20260903_120000.md");

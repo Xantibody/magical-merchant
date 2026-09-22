@@ -5,7 +5,7 @@ import type { Coordinates } from "./location-tracker";
 const SHIBUYA: Coordinates = { latitude: 35.658, longitude: 139.7 };
 const NONE: Coordinates = { latitude: null, longitude: null };
 
-/** 解決タイミングを手で握る測位。GPS のフィックス遅延を再現する。 */
+/** A position source resolved by hand. Reproduces the delay of a GPS fix. */
 function manualPosition(): {
   position: () => Promise<Coordinates>;
   resolve: (c: Coordinates) => void;
@@ -16,7 +16,7 @@ function manualPosition(): {
   return {
     position: () => {
       calls += 1;
-      // 解決を外から握るには executor を書くしかない
+      // Writing an executor is the only way to hold the resolution from outside
       // oxlint-disable-next-line promise/avoid-new
       return new Promise((resolve) => {
         resolvers.push(resolve);
@@ -55,7 +55,7 @@ describe("createLocationTracker", () => {
     await expect(reading).resolves.toStrictEqual(SHIBUYA);
   });
 
-  // 保存が測位を待ち続けると「即座に保存される」が壊れる。位置は諦めてよい。
+  // A save that keeps waiting for a fix breaks "saved at once". The location may be given up.
   it("saves without a location once the budget runs out", async () => {
     const gps = manualPosition();
     const tracker = createLocationTracker({
@@ -82,7 +82,7 @@ describe("createLocationTracker", () => {
     gps.resolve(SHIBUYA);
     await vi.advanceTimersByTimeAsync(0);
 
-    // 2 回目は新しいフィックスを待たされず、手元にある前回の座標で即返る
+    // The second read does not wait for a new fix; it returns at once with the previous coordinates at hand
     await expect(tracker.read()).resolves.toStrictEqual(SHIBUYA);
   });
 

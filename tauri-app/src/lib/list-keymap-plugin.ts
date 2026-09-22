@@ -5,13 +5,13 @@ import { undoInputRule } from "@milkdown/kit/prose/inputrules";
 import { liftItemAtStart, splitTaskItem } from "./list-commands";
 
 /**
- * リスト項目の Enter と Backspace を Milkdown の既定より先に受ける。
+ * Receives Enter and Backspace in a list item ahead of Milkdown's defaults.
  *
- * Milkdown は `$prose` のプラグインを全部並べた後ろに keymap を置くので、
- * ここに書いたキーが先に試され、断れば(false)いつもの動きに落ちる。
- * Backspace が undoInputRule から始まるのは、`- ` と打った直後の
- * Backspace が「箇条書きをやめて `- ` に戻す」であるべきだから — 既定の
- * 鎖でも先頭にあるものを、前に出た分だけ引き継ぐ。
+ * Milkdown places its keymap after all the `$prose` plugins, so the keys written
+ * here are tried first, and if they decline (false) the usual behaviour takes over.
+ * Backspace starts with undoInputRule because a Backspace right after typing `- `
+ * should mean "stop the bullet and go back to `- `": what sits at the head of the
+ * default chain is carried over, just because we moved in front of it.
  */
 export const listKeymapPlugin = $prose(() =>
   keymap({

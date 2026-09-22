@@ -1,6 +1,6 @@
-/* 書くときは本文中の #記法、探すときは選択式のチップ */
+/* Writing uses the #syntax inside the body; finding uses chips you pick from */
 
-/* ---------------- 本文の中のタグ ---------------- */
+/* ---------------- tags inside the body ---------------- */
 
 .tag-inline {
   color: var(--app-text-muted);
@@ -10,8 +10,9 @@
   font-weight: 500;
 }
 
-/* ---------------- Scrawl のタグ行 ----------------
-   押すと絞る画面がそのタグで開く。ここでは絞らないので、選択中の姿は無い */
+/* ---------------- Scrawl's tag row ----------------
+   Pressing one opens Browse with that tag. Nothing is filtered here, so there is no
+   selected state */
 
 .tag-filter {
   display: flex;
@@ -42,7 +43,7 @@
   padding: 5px 12px;
   border-radius: 999px;
   border: 1px solid var(--app-border);
-  /* 塗るのは絞り込み中のチップだけ。押していないチップは枠だけで立つ */
+  /* Nothing is filled here. A chip stands on its border alone */
   background: none;
   color: var(--app-text-muted);
   font-size: 12.5px;
@@ -55,7 +56,7 @@
   background: var(--app-surface-2);
 }
 
-/* ---------------- 入力補完 ---------------- */
+/* ---------------- autocomplete ---------------- */
 
 .tag-suggest {
   position: absolute;
@@ -108,13 +109,13 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* 新しい語をそのまま確定する行。既存のタグとは別の重みで見せる */
+/* The row that commits a new word as typed. Shown at a different weight from existing tags */
 .tag-suggest-row--new {
   color: var(--app-text-faint);
   font-size: 12px;
 }
 
-/* ---------------- ノート一覧のタグ ---------------- */
+/* ---------------- tags in the note list ---------------- */
 
 .tag-badge {
   display: inline-flex;
@@ -128,7 +129,7 @@
 }
 
 @media (max-width: 767px) {
-  /* 横に流して、折り返しで一覧を押し下げない */
+  /* Scroll sideways so wrapping does not push the list down */
   .tag-filter-chips {
     flex-wrap: nowrap;
     overflow-x: auto;

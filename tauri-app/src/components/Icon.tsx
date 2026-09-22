@@ -75,7 +75,7 @@ const ICONS = {
   "circle-notch": () => import("@phosphor-icons/core/assets/regular/circle-notch.svg?raw"),
   funnel: () => import("@phosphor-icons/core/assets/regular/funnel.svg?raw"),
   "push-pin": () => import("@phosphor-icons/core/assets/regular/push-pin.svg?raw"),
-  // AIDEV-NOTE: fill ウェイトは名前に -fill を付けた 1 件として登録する。ウェイト引数は取らない
+  // AIDEV-NOTE: a fill weight is registered as one entry with -fill on the name. There is no weight argument
   "push-pin-fill": () => import("@phosphor-icons/core/assets/fill/push-pin-fill.svg?raw"),
 } as const;
 
@@ -130,8 +130,8 @@ export default function Icon(props: IconProps): JSX.Element {
     <span
       ref={ref}
       class="icon"
-      // SVG が動的 import で届く前から枠を予約しておく。空の span を 0px の
-      // ままにすると、届いた瞬間にヘッダやタブバーが育って画面全体が揺れる
+      // Reserve the box before the SVG arrives by dynamic import. Left as a 0px empty span,
+      // the header and the tab bar would grow the moment it lands and shake the whole screen
       style={{
         display: "inline-flex",
         "line-height": 0,

@@ -1,12 +1,14 @@
-/* 図のキャプション (`%% caption: …`)。
-   プレビュー (markdown-preview.css) とエディタの node view (editor.css) の
-   両方が読む 1 か所。閲覧と編集で図の下に足す高さが 1px でも違うと、押した
-   座標の文字にカーソルを置く前提が崩れて図の下の本文が 1 ブロックずれる
-   (#168)。片側にだけ書けるようにしない、というのがこのファイルの理由。
+/* Diagram caption (`%% caption: …`).
+   The one place read by both the preview (markdown-preview.css) and the editor's
+   node view (editor.css). If viewing and editing add even 1px of different height
+   below the diagram, the assumption that the cursor lands on the character at the
+   pressed coordinates breaks and the body below the diagram shifts by one block
+   (#168). Making it impossible to write this for one side only is why this file
+   exists.
 
-   normalize は :where(figure) にグリッドと gap を、figure > figcaption に
-   font-size を敷くが、エディタ側の親は figure ではないので効かない。
-   間隔と字の大きさはここで両側に同じ値を与える。 */
+   normalize lays grid and gap on :where(figure) and font-size on figure >
+   figcaption, but the editor side's parent is not a figure, so none of it applies.
+   Spacing and font size are given the same value for both sides here. */
 .mermaid-caption {
   margin-top: var(--size-2);
   text-align: center;

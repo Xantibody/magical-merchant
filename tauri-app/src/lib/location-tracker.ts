@@ -6,21 +6,22 @@ export interface Coordinates {
 const NO_LOCATION: Coordinates = { latitude: null, longitude: null };
 
 /**
- * 保存が測位を待つ時間の上限。Android の GPS はコールドスタートで数秒かかる
- * ことがあり、そのあいだ送信を止めると「即座に保存される」が壊れる。
- * ここを過ぎたら位置なしで保存を進め、遅れて届いたフィックスは次の保存が使う。
+ * Upper bound on the time a save waits for a fix. Android GPS can take several
+ * seconds on a cold start, and holding the write back for that long breaks "it
+ * saves immediately". Past this point the save proceeds without a location, and a
+ * fix that arrives late is used by the next save.
  */
 export const LOCATION_BUDGET_MS = 1500;
 
 interface TrackerDeps {
-  /** 位置情報の許可を確かめる。request が true のときだけダイアログを出してよい。 */
+  /** Checks the location permission. Only a `request` of true may show the dialog. */
   permitted: (request: boolean) => Promise<boolean>;
   position: () => Promise<Coordinates>;
   budgetMs?: number;
 }
 
 export interface LocationTracker {
-  /** ダイアログを出さずにキャッシュを温める。起動時に呼ぶ。 */
+  /** Warms the cache without showing a dialog. Call it at startup. */
   warmUp: () => void;
   read: () => Promise<Coordinates>;
 }
@@ -51,7 +52,7 @@ export function createLocationTracker(deps: TrackerDeps): LocationTracker {
 
   const launch = async (id: number, request: boolean): Promise<Coordinates> => {
     const result = await locate(request);
-    // 追い越されていたら後発の飛行が inflight を持っている。触らない。
+    // If this flight was overtaken, a later one owns `inflight`. Leave it alone.
     if (inflight?.id === id) {
       inflight = null;
     }
@@ -59,9 +60,10 @@ export function createLocationTracker(deps: TrackerDeps): LocationTracker {
   };
 
   const refresh = (request: boolean): Promise<Coordinates> => {
-    // 進行中の測位に相乗りする。ただし許可を求めない飛行中に「求めてよい」
-    // 呼び出しが来たら、乗らずに新しく飛ばす。乗ると初回の許可ダイアログが
-    // いつまでも出ない。
+    // Ride along with a fix already in flight. But when a call that may ask for
+    // permission arrives while a flight that does not ask is running, start a new
+    // flight instead of joining. Joining would never show the first permission
+    // dialog.
     if (inflight && (inflight.request || !request)) {
       return inflight.promise;
     }
@@ -73,12 +75,13 @@ export function createLocationTracker(deps: TrackerDeps): LocationTracker {
 
   const read = (): Promise<Coordinates> => {
     const fix = refresh(true);
-    // 手元に座標があるなら待たずに使う。記録したいのは「どのあたりで書いたか」
-    // であって、いま始めた測位の結果は次の保存に間に合えばよい。
+    // Use coordinates already at hand instead of waiting. What we record is
+    // "roughly where this was written", so the fix just started only has to be
+    // ready in time for the next save.
     if (lastKnown) {
       return Promise.resolve(lastKnown);
     }
-    // タイムアウトを Promise にする手段は executor を書く以外に無い
+    // Writing an executor is the only way to turn a timeout into a Promise
     // oxlint-disable-next-line promise/avoid-new
     const giveUp = new Promise<Coordinates>((resolve) => {
       setTimeout(() => resolve(lastKnown ?? NO_LOCATION), budget);

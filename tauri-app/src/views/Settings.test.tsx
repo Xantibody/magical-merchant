@@ -9,7 +9,7 @@ import { chooseTheme } from "../lib/theme";
 import UndoToast from "../components/UndoToast";
 import Settings from "./Settings";
 
-// vi.mock ではなく mockIPC を使う理由は commands.test.ts に書いたとおり
+// The reason for mockIPC rather than vi.mock is written in commands.test.ts
 const URL_236P = "data:image/svg+xml;base64,PHN2Zy8+";
 
 const MAC = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15";
@@ -25,10 +25,10 @@ const saved: SavedGlyph[] = [];
 const deleted: string[] = [];
 const fullscreenCalls: unknown[] = [];
 let listens: number;
-/** `plugin:app|version` の答え。取れない端末を作るテストが null に差し替える */
+/** The answer to `plugin:app|version`. A test making a device that cannot read it sets null */
 let appVersion: string | null;
 
-/** Tauri の内部 API に公開の型は無い。テストが触るぶんだけ形を書く */
+/** Tauri's internal API has no public type. Only the shape the tests touch is written */
 interface TauriInternals {
   __TAURI_INTERNALS__: { transformCallback: () => number };
   __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener: () => void };
@@ -75,27 +75,27 @@ function mockCommands(): void {
     }
     return handler(args);
   });
-  // 認証イベントの listen / unlisten が要る。mockIPC は invoke しか差し替えない
+  // The auth events need listen / unlisten. mockIPC only replaces invoke
   tauri.__TAURI_INTERNALS__.transformCallback = () => 1;
   tauri.__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener: () => {} };
 }
 
-/** テストは Chromium で走るので、実行した Mac の UA が漏れないよう固定する。 */
+/** The tests run in Chromium, so the UA is pinned to keep the host Mac's out of them. */
 function pretendUserAgent(userAgent: string): void {
   Object.defineProperty(navigator, "userAgent", { value: userAgent, configurable: true });
 }
 
-/** ナビの行。行の名は「題 + 補助」なので、頭で当てる。 */
+/** A nav row. A row's name is "title + subtitle", so it is matched at the head. */
 function navRow(title: string): HTMLElement {
   return screen.getByRole("button", { name: new RegExp(`^${title}`, "u") });
 }
 
 /**
- * onMount が認証イベントを 2 つ listen し終えるまで待つ。途中でテストが
- * 終わると clearMocks に transformCallback を消され、後続の listen が落ちる。
+ * Wait until onMount has finished listening to the two auth events. If a test ends part
+ * way, clearMocks removes transformCallback and the later listen fails.
  *
- * 幅は明示する。設定は 767px 以下で 1 頁ずつになり、既定の幅のままだと
- * 見たい頁が畳まれている
+ * The width is set explicitly. Settings shows one page at a time at 767px and below, and
+ * at the default width the page under test is folded away
  */
 async function renderSettings(open?: string): Promise<void> {
   await page.viewport(1280, 800);
@@ -122,8 +122,8 @@ function folderInput(): HTMLInputElement {
 }
 
 /**
- * 「システム」は言語の側にもある。テーマの組の中だけを見る。
- * ToggleGroup の選択は `aria-pressed` で、`radio` ではない。
+ * "System" exists on the language side too. Only the theme group is looked at.
+ * A ToggleGroup's selection is `aria-pressed`, not `radio`.
  */
 function themeChoice(name: string): HTMLElement {
   return within(screen.getByRole("group", { name: "テーマ" })).getByRole("button", { name });
@@ -150,7 +150,7 @@ describe("Settings › GLYPHS", () => {
     await waitFor(() => expect(screen.getByText(":236p:")).toBeDefined());
   });
 
-  // 名前はファイル名から作る。打ち直せるが、大抵はそのままでいい
+  // The name is made from the file name. It can be retyped, but usually it is fine as is
   it("prefills the name from the chosen file and registers it", async () => {
     await renderSettings("記録");
     await waitFor(() => expect(screen.getByText(":236p:")).toBeDefined());
@@ -179,8 +179,8 @@ describe("Settings › GLYPHS", () => {
     expect(screen.queryByLabelText("名前")).toBeNull();
   });
 
-  // フォルダごと選ぶと、名前を訊かずにファイル名で一気に登録する。
-  // 混ざった README は落として、数だけ知らせる
+  // Choosing a whole folder registers everything at once under the file names, without
+  // asking for a name. A README mixed in is dropped, and only the count is reported
   it("registers every png and svg in a chosen folder under its file name", async () => {
     await renderSettings("記録");
     await waitFor(() => expect(screen.getByText(":236p:")).toBeDefined());
@@ -200,7 +200,7 @@ describe("Settings › GLYPHS", () => {
     expect(screen.queryByLabelText("名前")).toBeNull();
   });
 
-  // フォルダ選択が出せない WebView のために、複数選択でも同じ道を通る
+  // For a WebView that cannot offer folder picking, a multi-selection takes the same path
   it("registers several files picked at once the same way", async () => {
     await renderSettings("記録");
     await waitFor(() => expect(screen.getByText(":236p:")).toBeDefined());
@@ -215,7 +215,7 @@ describe("Settings › GLYPHS", () => {
     expect(saved).toHaveLength(2);
   });
 
-  // 一枚だけなら、フォルダから選んでも名前を確かめる形のまま
+  // With only one image, picking from a folder still confirms the name
   it("still asks for the name when the folder holds one image", async () => {
     await renderSettings("記録");
     await waitFor(() => expect(screen.getByText(":236p:")).toBeDefined());
@@ -240,7 +240,7 @@ describe("Settings › GLYPHS", () => {
     expect(screen.getByRole<HTMLButtonElement>("button", { name: "保存" }).disabled).toBe(true);
   });
 
-  // 消してすぐ戻せる。5 秒は tombstone で、本当に消えるのはそのあと
+  // A deletion can be undone at once. Five seconds is a tombstone; it really goes after that
   it("deletes after the undo window", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     await renderSettings("記録");
@@ -279,7 +279,7 @@ describe("Settings › start in fullscreen", () => {
 
   afterEach(() => {
     Reflect.deleteProperty(navigator, "userAgent");
-    // 破棄時の unlisten がモックを使うので、消すのはその後
+    // The unlisten on teardown uses the mocks, so they are cleared after it
     cleanup();
     clearMocks();
     localStorage.clear();
@@ -293,7 +293,7 @@ describe("Settings › start in fullscreen", () => {
     expect(screen.getByLabelText<HTMLInputElement>("起動時に全画面").checked).toBe(false);
   });
 
-  // 全画面にできる窓は Mac にしかない。Android に出すと押しても何も起きない
+  // Only a Mac has a window that can go fullscreen. On Android pressing it would do nothing
   it("hides the switch off a Mac", async () => {
     pretendUserAgent(ANDROID);
 
@@ -312,7 +312,7 @@ describe("Settings › start in fullscreen", () => {
     await waitFor(() => expect(fullscreenCalls).toHaveLength(1));
   });
 
-  // 切るときは窓に触らない。いま全画面で使っているのを設定の操作で解かない
+  // Switching it off leaves the window alone. A setting must not undo a fullscreen in use
   it("leaves the window alone when switched off", async () => {
     pretendUserAgent(MAC);
     await renderSettings();
@@ -327,8 +327,8 @@ describe("Settings › start in fullscreen", () => {
   });
 });
 
-// ヘッダーの巡回ボタンから移してきた。年に数回しか触らないものを、毎回見る
-// 場所に置いておく理由がない
+// Moved here from the header's cycle button. There is no reason to keep something touched
+// a few times a year in a place seen every time
 describe("Settings › THEME", () => {
   beforeEach(() => {
     localStorage.clear();
@@ -339,7 +339,7 @@ describe("Settings › THEME", () => {
   afterEach(() => {
     cleanup();
     clearMocks();
-    // 選択はモジュールに残る。次のテストへ持ち越さないよう戻す
+    // The choice stays in the module. It is reset so it does not carry into the next test
     chooseTheme("system");
     localStorage.clear();
     delete document.documentElement.dataset.theme;
@@ -362,8 +362,8 @@ describe("Settings › THEME", () => {
     expect(themeChoice("システム").ariaPressed).toBe("false");
   });
 
-  // ToggleGroup は選択中をもう一度押すと「どれも選んでいない」を報せる。
-  // 設定にその状態は無いので、押しても選択は動かない
+  // Pressing the selected item again makes a ToggleGroup report "nothing is selected".
+  // Settings has no such state, so pressing does not move the choice
   it("keeps the choice when the selected one is pressed again", async () => {
     await renderSettings();
     fireEvent.click(themeChoice("ダーク"));
@@ -375,8 +375,8 @@ describe("Settings › THEME", () => {
   });
 });
 
-// 端末に載っているビルドを名乗らせる唯一の場所。Android はここが無いと、
-// 古いビルドが残っていることを確かめる手掛かりがまったく無い
+// The only place that names the build on the device. Without it, Android gives no clue at
+// all that an old build is still installed
 describe("Settings › the build", () => {
   beforeEach(() => {
     listens = 0;
@@ -394,8 +394,8 @@ describe("Settings › the build", () => {
     await expect(screen.findByText("Magical Merchant 1.2.3")).resolves.toBeDefined();
   });
 
-  // 権限が無い端末でもここで落とさない。設定は同期の設定を直しに来る画面で、
-  // バージョンが読めないことより開けないことのほうが困る
+  // A device without the permission must not fail here. Settings is the screen one comes to
+  // in order to fix sync, and failing to open is worse trouble than an unreadable version
   it("says nothing when the version cannot be read", async () => {
     appVersion = null;
 
@@ -406,7 +406,7 @@ describe("Settings › the build", () => {
   });
 });
 
-// 1 枚の長い画面を 3 頁に割った。どの設定がどの頁に居るかは、この 3 本が決める
+// One long screen was split into three pages. These three tests decide which setting is on which page
 describe("Settings › the three pages", () => {
   beforeEach(() => {
     localStorage.clear();
@@ -422,7 +422,7 @@ describe("Settings › the three pages", () => {
   });
 
   it("opens on 一般 and holds the language, the theme and the window", async () => {
-    // 全画面の行は Mac だけ。実行した端末の UA で結果を変えさせない
+    // The fullscreen row is Mac only. The host device's UA must not change the result
     pretendUserAgent(MAC);
 
     await renderSettings();
@@ -438,7 +438,7 @@ describe("Settings › the three pages", () => {
 
     expect(screen.getByRole("link", { name: "テンプレートを管理" })).toBeDefined();
     await waitFor(() => expect(screen.getByLabelText("特殊文字")).toBeDefined());
-    // 頁を替えたら前の頁の操作は残らない
+    // Changing the page leaves none of the previous page's controls behind
     expect(screen.queryByRole("group", { name: "言語" })).toBeNull();
   });
 
@@ -451,7 +451,7 @@ describe("Settings › the three pages", () => {
   });
 });
 
-// モバイルは一覧と頁を同時に出せない幅なので、1 枚ずつ送る
+// Mobile is too narrow to show the list and a page at once, so they are sent one at a time
 describe("Settings › on a phone", () => {
   beforeEach(() => {
     localStorage.clear();

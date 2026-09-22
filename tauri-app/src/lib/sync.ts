@@ -11,7 +11,7 @@ import type { IconName } from "../components/Icon";
 
 export type SyncStatus = "idle" | "syncing" | "success" | "error" | "needs-setup";
 
-/** 自動保存 (1秒 debounce) の連打をまとめてから同期する。 */
+/** Gather up a burst of autosaves (1s debounce) before syncing. */
 export const AUTO_SYNC_DEBOUNCE_MS = 5000;
 
 export interface SyncState {
@@ -21,7 +21,7 @@ export interface SyncState {
   autoSync: Accessor<boolean>;
   setAutoSync: (on: boolean) => Promise<void>;
   syncNow: () => Promise<void>;
-  /** エラー時に自動で開くための合図。増えたら開く。 */
+  /** The signal to open automatically on an error. It opens when this goes up. */
   alertVersion: Accessor<number>;
 }
 
@@ -42,7 +42,7 @@ export function syncIconName(status: SyncStatus): IconName {
   }
 }
 
-/** 「2分前」。秒単位は同期直後にちらつくだけなので出さない。 */
+/** "2 minutes ago". Seconds only flicker right after a sync, so they are not shown. */
 export function formatRelativeTime(from: Date, now: Date): string {
   const minutes = Math.floor((now.getTime() - from.getTime()) / 60_000);
   if (minutes < 1) {
@@ -84,8 +84,8 @@ export function createSyncState(onSynced: () => void): SyncState {
       setStatus("idle");
       setMessage("");
     } catch (error) {
-      // 壊れた設定を「未設定」と見せると、設定画面で入力し直させることになり、
-      // その保存が読めなかったファイルを上書きする
+      // Showing a corrupt config as "not configured" would make the settings screen ask for
+      // it again, and that save would overwrite the file that could not be read
       if (syncErrorKind(error) === "configCorrupt") {
         setStatus("error");
         setMessage(t().sync.configCorrupt);
@@ -96,8 +96,8 @@ export function createSyncState(onSynced: () => void): SyncState {
     }
   };
 
-  // busy で取り直すのは 1 巡につき 1 回だけ。相手がロックを握ったまま
-  // 止まっていることもあり、無条件に取り直すと延々と叩き続ける
+  // A busy retry happens only once per round. The other side can be stuck holding the lock,
+  // and retrying unconditionally would keep hammering it forever
   let busyRetried = false;
 
   const applyError = (err: unknown): void => {
@@ -105,20 +105,20 @@ export function createSyncState(onSynced: () => void): SyncState {
     setStatus(ui.status);
     setMessage(ui.message);
 
-    // 別プロセスが同期中だっただけ。ここで捨てると、保存したぶんが
-    // 次に手で同期するまで送られない
+    // Another process was simply mid-sync. Dropping it here would leave what was saved
+    // unsent until the next manual sync
     if (syncErrorKind(err) === "busy") {
       if (!busyRetried) {
         busyRetried = true;
-        // applyError → scheduleAutoSync → syncNow → applyError と輪になって
-        // いるので、どこか 1 つは定義より前から呼ぶしかない
+        // applyError, scheduleAutoSync, syncNow and applyError form a ring, so one of them
+        // has to be called from before its definition
         // oxlint-disable-next-line no-use-before-define
         scheduleAutoSync();
       }
       return;
     }
 
-    // 待機に戻るだけの結果でポップオーバーを開かない
+    // Do not open the popover for a result that only returns to idle
     if (ui.status === "error" || ui.status === "needs-setup") {
       setAlertVersion((v) => v + 1);
     }
@@ -132,7 +132,7 @@ export function createSyncState(onSynced: () => void): SyncState {
     setMessage(t().sync.syncing);
     try {
       await typedInvoke("sync_start");
-      // 結果は sync-complete / sync-error イベントで反映する
+      // The result is applied through the sync-complete / sync-error events
     } catch (error) {
       applyError(error);
     }
@@ -161,7 +161,7 @@ export function createSyncState(onSynced: () => void): SyncState {
         setStatus(ui.status);
         setMessage(ui.message);
         if (ui.status === "success") {
-          // 1 巡終わったので、次に busy を踏んだらまた取り直してよい
+          // A round finished, so hitting busy again may retry once more
           busyRetried = false;
           setLastSyncedAt(new Date());
           onSynced();
@@ -191,7 +191,7 @@ export function createSyncState(onSynced: () => void): SyncState {
       const config = await typedInvoke("get_sync_config");
       await typedInvoke("save_sync_config", { config: { ...config, auto_sync: on } });
     } catch {
-      // 保存できなければ画面上の状態も戻す
+      // If it cannot be saved, put the on-screen state back too
       setAutoSyncSignal(!on);
     }
   };

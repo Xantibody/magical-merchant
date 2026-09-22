@@ -19,7 +19,7 @@ describe("isMacDesktop", () => {
     expect(isMacDesktop(ANDROID_WEBVIEW)).toBe(false);
   });
 
-  // iPad の UA にも "Mac OS X" が出る。ネイティブの全画面は Mac だけの話
+  // An iPad user agent also says "Mac OS X". Native full screen is a Mac-only matter
   it("is false on an iPad even though its user agent mentions Mac OS X", () => {
     expect(isMacDesktop(IPAD_SAFARI)).toBe(false);
   });

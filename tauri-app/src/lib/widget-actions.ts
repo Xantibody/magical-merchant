@@ -1,15 +1,15 @@
-/** ホーム画面ウィジェットのタップ。 */
+/** A tap on a home-screen widget. */
 export interface WidgetAction {
   name: string;
   file: string | null;
-  /** テンプレ起動(`template`)のときだけ、どのテンプレかが入る。 */
+  /** Which template, set only for a template launch (`template`). */
   template: string | null;
 }
 
 /**
- * `magical-merchant://widget/<name>?file=<filename>` を読む。
- * テンプレ起動だけは `?name=<テンプレ名>` を伴う。
- * ウィジェット以外の deep link（認証のコールバック）は `null`。
+ * Reads `magical-merchant://widget/<name>?file=<filename>`.
+ * Only a template launch carries `?name=<template name>`.
+ * A deep link that is not a widget (the auth callback) gives `null`.
  */
 export function parseWidgetAction(raw: string): WidgetAction | null {
   let url: URL;
@@ -35,7 +35,7 @@ export function parseWidgetAction(raw: string): WidgetAction | null {
   };
 }
 
-/** 起動 URL には認証のコールバックも混じる。最初のウィジェットリンクを取る。 */
+/** Launch URLs also include the auth callback. Takes the first widget link. */
 export function firstWidgetAction(urls: readonly string[]): WidgetAction | null {
   for (const url of urls) {
     const action = parseWidgetAction(url);

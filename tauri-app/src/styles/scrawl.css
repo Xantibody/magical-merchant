@@ -1,4 +1,4 @@
-/* 単欄のジャーナル。時刻レールに沿って一日を読み物として流す */
+/* A single-column journal. It runs a day past the time rail as something to read */
 
 .scrawl {
   flex: 1;
@@ -12,7 +12,7 @@
 .scrawl-scroll {
   flex: 1;
   overflow-y: auto;
-  /* 下端はフローティングの入力バーが覆う。その下に本文を残さない */
+  /* The floating capture bar covers the bottom edge. No body text is left under it */
   padding: 44px 32px 140px;
 }
 
@@ -33,7 +33,7 @@
   margin-bottom: 14px;
 }
 
-/* 日の切れ目は見出しの大小と余白が示す。罫線を足すと合図が二重になる */
+/* Heading size and spacing show the break between days. A rule would say it twice */
 .day-group + .day-group .day-heading {
   padding-top: 20px;
 }
@@ -46,7 +46,7 @@
   letter-spacing: -0.01em;
 }
 
-/* 一番上の日はいま書いている日。ここだけ見出しを大きく取る */
+/* The topmost day is the one being written. Only its heading is taken larger */
 .day-group:first-child .day-heading-label {
   font-size: 22px;
   color: var(--app-text);
@@ -67,7 +67,8 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* 選択モードの入り口。件数の続きの字で、押せることはホバーで返す */
+/* The way into select mode. It is set as a continuation of the count, and hover is what
+   answers that it can be pressed */
 .day-heading-select {
   padding: 0;
   border: none;
@@ -128,7 +129,7 @@
   border-color: var(--app-accent);
 }
 
-/* 昇格済みのエントリはレールのドットを塗って、育った印にする */
+/* A promoted entry fills its rail dot, marking that it grew */
 .entry--promoted .entry-rail-dot {
   background: var(--app-accent);
   border-color: var(--app-accent);
@@ -143,8 +144,8 @@
 .entry-text {
   display: block;
   width: 100%;
-  /* ホバーで出るツールバーの下に本文が回り込まない幅。
-     1 行が長くなりすぎないという意味でも、この列はここで止めたい */
+  /* A width at which the body does not wrap under the toolbar that appears on hover.
+     The column is also stopped here so that a single line does not get too long */
   max-width: 552px;
   margin: 0;
   font-size: 15px;
@@ -170,7 +171,7 @@
   gap: 4px;
 }
 
-/* エントリ単位の隠しアクション。ホバーでだけ現れる(タッチは長押し) */
+/* Hidden actions for one entry. They appear on hover only (a long press on touch) */
 .entry-actions {
   position: absolute;
   top: -2px;
@@ -194,18 +195,21 @@
   color: var(--app-text);
 }
 
-/* このエントリから育ったノート。本文の続きとして 1 行ずつ下に積む */
+/* Notes grown from this entry. They stack one line at a time below, as a continuation of
+   the body */
 .entry-notes {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 2px;
   margin-top: 6px;
-  /* 本文と同じ幅で止める。ホバーで出るツールバーの下へ回り込ませない */
+  /* Stopped at the same width as the body. It must not wrap under the toolbar that
+     appears on hover */
   max-width: 552px;
 }
 
-/* 元のエントリが消えたノートの避難先。日の見出し直下に残る */
+/* Where a note goes when its originating entry is gone. It stays directly under the day
+   heading */
 .origin-chips {
   display: flex;
   flex-direction: column;
@@ -214,7 +218,8 @@
   margin: 2px 0 10px;
 }
 
-/* 本文の続きの 1 行リンク。枠と下地を持つと、読み物の中に押し物の島ができる */
+/* A one-line link continuing the body. A border and a background would make an island of
+   controls in the middle of something being read */
 .origin-chip {
   position: relative;
   display: inline-flex;
@@ -256,7 +261,8 @@
   white-space: nowrap;
 }
 
-/* 関係の解除。矢印の場所にホバーでだけ現れる、隠しアクションの流儀 */
+/* Unlinking the relation. It appears in the arrow's place on hover only, in the manner of
+   a hidden action */
 .origin-chip-unlink {
   position: absolute;
   top: 50%;
@@ -277,8 +283,8 @@
   color: var(--app-danger);
 }
 
-/* タッチ環境に × は出さない — チップの長押しが解除の入り口。
-   visibility で矢印の幅を残し、置き換えでチップ幅が動かないようにする */
+/* The close control is not shown on touch: a long press on the chip is the way to unlink.
+   visibility keeps the arrow's width, so swapping the two does not move the chip width */
 @media (hover: hover) {
   .origin-chip:hover .origin-chip-arrow,
   .origin-chip:focus-within .origin-chip-arrow {
@@ -318,7 +324,7 @@
 }
 
 .entry-select .icon {
-  /* 1 行目の文字の中心に合わせる */
+  /* Aligned to the centre of the text on the first line */
   margin-top: 5px;
   flex-shrink: 0;
   color: var(--app-text-hint);
@@ -334,7 +340,8 @@
   min-width: 0;
 }
 
-/* 削除バーは入力バーと同じ場所に出す。画面に浮く箱を増やさない */
+/* The delete bar appears in the same place as the capture bar. It adds no further box
+   floating on screen */
 .capture-dock .select-bar {
   display: flex;
   align-items: center;
@@ -424,7 +431,7 @@
   bottom: 24px;
   display: flex;
   justify-content: center;
-  /* バーの外側はスクロールに触らせる */
+  /* Outside the bar, the touch reaches the scroll */
   pointer-events: none;
 }
 
@@ -458,7 +465,7 @@
   display: none;
 }
 
-/* ヘッダーのカレンダーボタンの真下に吊るす */
+/* Hung directly below the header's calendar button */
 .popover-anchor--calendar {
   position: fixed;
   top: calc(var(--safe-top) + 49px);
@@ -539,17 +546,19 @@
   }
 }
 
-/* ---------------- 週次ダイジェスト ---------------- */
+/* ---------------- Weekly digest ---------------- */
 
-/* タグ行と週の要約はひと続きの帯。列の gap より近い 14px で寄せる */
+/* The tag row and the weekly summary are one continuous band. They are drawn together at
+   14px, closer than the column's gap */
 .scrawl-head {
   display: flex;
   flex-direction: column;
   gap: 14px;
 }
 
-/* タグの行と、その右端に寄る「日付へ」。タグが 1 つも無い日でもこの行は
-   残る — 広い画面で日をまたぐ入口はここだけだから */
+/* The tag row, with the jump-to-date button pushed to its right edge. The row stays even
+   on a day with no tags at all, because on a wide screen this is the only way across
+   days */
 .scrawl-head-row {
   display: flex;
   align-items: flex-start;
@@ -561,18 +570,18 @@
   min-width: 0;
 }
 
-/* 狭い画面ではヘッダが同じ入口を持っている。二つ出さない */
+/* On a narrow screen the header already has the same entry point. It is not shown twice */
 @media (max-width: 767px) {
   .scrawl-calendar {
     display: none;
   }
 }
 
-/* カードではなく 1 行。週に一度の要約のために層を足さない */
+/* One line, not a card. A once-a-week summary does not justify another layer */
 .digest-line {
   display: flex;
   align-items: baseline;
-  /* 狭い画面では折り返す。1 行に収めるために字を削るほどの中身ではない */
+  /* It wraps on a narrow screen. The content is not worth trimming to fit one line */
   flex-wrap: wrap;
   gap: 8px;
   font-size: 12.5px;

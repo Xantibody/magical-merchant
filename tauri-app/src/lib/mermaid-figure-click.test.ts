@@ -10,10 +10,10 @@ function element(selector: string): Element {
 }
 
 /**
- * 図だけ表示のとき、ユーザーが最も押すのは描画された図そのもの。
- * ソースを開くクリック ハンドラは preview コンテナに付いているので、
- * SVG の内部要素(図形や foreignObject のラベル)がヒットテストで
- * クリックを食うと、コンテナ余白しか反応しなくなる。
+ * When only the diagram is shown, what a user presses most is the rendered diagram itself.
+ * The click handler that opens the source is on the preview container, so if inner SVG
+ * elements (shapes, foreignObject labels) eat the click in the hit test, only the
+ * container's padding responds.
  */
 describe("mermaid figure click-through", () => {
   afterEach(() => {

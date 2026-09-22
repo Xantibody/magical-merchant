@@ -38,16 +38,16 @@ describe("formatRecordedAt", () => {
 
 describe("toDatetimeLocal", () => {
   it("keeps the wall-clock time as recorded", () => {
-    // 一覧と同じく「書かれた土地の時刻」をそのまま見せる。現在の端末の
-    // タイムゾーンに換算すると、一覧の時刻表示と食い違う
+    // Like the list, show "the local time where it was written" as is. Converted
+    // to the current device's time zone it would disagree with the list's time
     expect(toDatetimeLocal("2026-05-03T15:39:45+09:00")).toBe("2026-05-03T15:39");
   });
 });
 
 describe("resolveEditedTime", () => {
   it("returns the original untouched when the input did not change", () => {
-    // datetime-local は秒を持たない。素通しの値から組み立て直すと、
-    // 開いて閉じただけで秒が切り捨てられてしまう
+    // datetime-local has no seconds. Rebuilding from the untouched value would
+    // truncate the seconds just by opening and closing
     const original = "2026-05-03T15:39:45+09:00";
     expect(resolveEditedTime(original, "2026-05-03T15:39")).toBe(original);
   });
@@ -97,7 +97,7 @@ describe("contextRows", () => {
     expect(contextRows({})).toStrictEqual([]);
   });
 
-  /** 書いたツールは context の中ではないが、読む人には同じ一続きの記録。 */
+  /** The writing tool is not inside the context, but to the reader it is part of the same record. */
   it("names the tool the note was written with, after the context", () => {
     expect(contextRows({ os: "macos" }, "widget")).toStrictEqual([
       { label: "OS", value: "macos" },
@@ -105,19 +105,19 @@ describe("contextRows", () => {
     ]);
   });
 
-  /** 名乗る前に作られたノートに行は生えない。 */
+  /** A note created before tools named themselves grows no row. */
   it("leaves the row out when the note names no tool", () => {
     expect(contextRows({ os: "macos" })).toStrictEqual([{ label: "OS", value: "macos" }]);
   });
 
-  /** 外から移してきたノートも同じ行で名乗る。 */
+  /** A note brought in from outside names itself on the same row. */
   it("names an imported note as imported", () => {
     expect(contextRows(undefined, "import")).toStrictEqual([
       { label: "書いたツール", value: "取り込み" },
     ]);
   });
 
-  /** context が読めなくても、作ったツールだけは分かっていることがある。 */
+  /** Even when the context cannot be read, the creating tool alone may be known. */
   it("shows the tool even when there is no context at all", () => {
     expect(contextRows(undefined, "cli")).toStrictEqual([{ label: "書いたツール", value: "CLI" }]);
   });

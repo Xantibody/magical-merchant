@@ -53,7 +53,7 @@ describe("countNoteTags", () => {
     ]);
   });
 
-  // チップが 2 つに割れると、同じ分類を 2 回押し分けることになる
+  // If the chip split in two, the same category would have to be pressed twice, separately
   it("counts notes that spell a tag differently as one chip", () => {
     const tags = countNoteTags([
       item({ filename: "a.md", tags: ["Memo"] }),
@@ -64,7 +64,7 @@ describe("countNoteTags", () => {
     expect(tags).toStrictEqual([{ tag: "Memo", count: 3 }]);
   });
 
-  // frontmatter は書かれたまま残るので、1 枚が両方の綴りを名乗ることがある
+  // frontmatter is kept exactly as written, so one note can carry both spellings
   it("counts a note once even when it carries both spellings", () => {
     expect(countNoteTags([item({ tags: ["Memo", "memo"] })])).toStrictEqual([
       { tag: "Memo", count: 1 },
@@ -84,7 +84,7 @@ describe("dayJumpHits", () => {
     expect(hits[0]?.hit).toMatchObject({ kind: "scrawl", date: "2026-08-16" });
   });
 
-  // 記録のない日をパレットに出すと、選んでも何も表示されない着地になる
+  // Offering a day with no records in the palette would land on a screen showing nothing
   it("omits a day that has no entries", () => {
     const hits = dayJumpHits(["2026-08-15"], TODAY);
 

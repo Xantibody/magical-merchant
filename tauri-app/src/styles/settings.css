@@ -1,4 +1,4 @@
-/* 設定は 3 頁。左のナビ 220px で選び、右に 1 頁 680px を出す */
+/* Settings is 3 pages. A 220px nav on the left picks one, and one 680px page shows on the right */
 .settings {
   flex: 1;
   display: flex;
@@ -48,7 +48,7 @@
   background: var(--app-surface-2);
 }
 
-/* 現在地は塗りと太さだけで言う。線や印は足さない */
+/* The current location is said with fill and weight alone. No line or marker is added */
 .settings-nav-row--on {
   background: var(--app-accent-soft);
   color: var(--app-text);
@@ -63,7 +63,7 @@
   gap: 1px;
 }
 
-/* 頁に何があるかの補助。入り切らなければ畳まず省略記号にする */
+/* A hint at what is on the page. If it does not fit, it is ellipsised rather than wrapped */
 .settings-nav-hint {
   font-size: 11px;
   font-weight: 400;
@@ -73,13 +73,13 @@
   text-overflow: ellipsis;
 }
 
-/* 1 頁ずつ出すモバイルだけに意味がある印 */
+/* A marker that only means something on mobile, where one page shows at a time */
 .settings-nav-caret {
   display: none;
   color: var(--app-text-faint);
 }
 
-/* 端末に載っているビルド。ナビの足元に置いて、頁を 1 つ使わない */
+/* The build on the device. It sits at the foot of the nav and does not use up a page */
 .settings-version {
   margin: auto 0 0;
   padding: 16px 12px 8px;
@@ -107,7 +107,7 @@
   margin-bottom: 6px;
 }
 
-/* 一覧へ戻るボタンはモバイルの 1 頁ずつのときだけ意味がある */
+/* The back-to-list button only means something on mobile, one page at a time */
 .settings-back {
   display: none;
 }
@@ -125,7 +125,7 @@
   color: var(--app-text-faint);
 }
 
-/* 1 行。左に項目名と説明、右に操作 */
+/* One row: the item name and its description on the left, the control on the right */
 .settings-row {
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);
@@ -135,7 +135,7 @@
   border-top: 1px solid var(--app-hairline);
 }
 
-/* 背の高い操作を持つ行。項目名は操作の頭に揃える */
+/* A row with a tall control. The item name aligns with the top of the control */
 .settings-row--tall {
   align-items: start;
 }
@@ -159,7 +159,7 @@
   min-width: 0;
 }
 
-/* 別の画面へ渡す行。押せることは右端の caret が示す */
+/* A row that hands over to another screen. The caret at the right says it can be pressed */
 .settings-row--link {
   color: inherit;
   text-decoration: none;
@@ -184,8 +184,8 @@
   color: var(--app-text-faint);
 }
 
-/* 3 つしかない選択肢。開いて選ぶメニューにするほどのものではない。
-   枠で 3 つ並べるのではなく、地の上に 1 つだけ色が乗る */
+/* Only three choices. Not enough to be worth a menu that opens to pick from.
+   Rather than three framed boxes side by side, one colour rides on the ground */
 .settings-seg {
   display: flex;
   gap: 2px;
@@ -219,7 +219,7 @@
   font-weight: 600;
 }
 
-/* 入 / 切のスイッチ。地は切で枠色、入で accent。動かすのは丸だけ */
+/* The on / off switch. The ground is the border colour when off and accent when on. Only the knob moves */
 .settings-switch {
   position: relative;
   width: 34px;
@@ -235,7 +235,7 @@
   background: var(--app-accent);
 }
 
-/* 動かすのは transform だけ。left を動かすとレイアウトを引き直す */
+/* Only transform moves. Moving left would redraw the layout */
 .settings-switch-thumb {
   position: absolute;
   top: 2px;
@@ -254,7 +254,7 @@
   background: var(--app-surface);
 }
 
-/* 名前を訊く欄(特殊文字)。項目名は欄の上 */
+/* A field that asks for a name (glyphs). The item name sits above the field */
 .settings-field {
   display: flex;
   flex-direction: column;
@@ -279,7 +279,7 @@
   outline: none;
 }
 
-/* アドレスは等幅で。打ち間違いは字の形で見つかる */
+/* An address is monospaced. A typo is found by the shape of the characters */
 .settings-input--mono {
   font-family: ui-monospace, monospace;
 }
@@ -288,7 +288,7 @@
   box-shadow: 0 0 0 3px var(--app-accent-soft);
 }
 
-/* 設定ファイルで固定されている環境では読むだけ */
+/* Read-only where the value is pinned by a config file */
 .settings-readonly {
   margin: 0;
   font-family: ui-monospace, monospace;
@@ -324,7 +324,7 @@
   background: var(--app-ok);
 }
 
-/* ---------------- 特殊文字 ---------------- */
+/* ---------------- glyphs ---------------- */
 
 .glyph-list {
   display: flex;
@@ -350,7 +350,7 @@
   border-top: 1px solid var(--app-hairline);
 }
 
-/* 縮小表示の枠。本文の 1.2em ではなく、一覧で見分けられる大きさに */
+/* The thumbnail frame. Not the body's 1.2em, but a size that can be told apart in a list */
 .glyph-thumb {
   display: inline-flex;
   align-items: center;
@@ -393,7 +393,7 @@
   color: var(--app-danger);
 }
 
-/* 選択は button-secondary が受け持つ。本物の input は見せない */
+/* button-secondary takes care of picking. The real input is never shown */
 .glyph-file {
   display: none;
 }
@@ -418,14 +418,14 @@
 }
 
 @media (max-width: 767px) {
-  /* 1 頁ずつ。一覧か頁のどちらかだけを出す */
+  /* One page at a time. Only the list or the page is shown, never both */
   .settings-nav {
     width: 100%;
     padding: 12px 8px;
     border-right: none;
   }
 
-  /* 題はヘッダが出している */
+  /* The header already shows the title */
   .settings-title {
     display: none;
   }
@@ -435,7 +435,7 @@
     font-size: 15px;
   }
 
-  /* 一覧を見ているあいだ現在地は無い。次に開く頁を先に塗らない */
+  /* While the list is on screen there is no current location. Do not pre-fill the next page */
   .settings-nav-row--on {
     background: none;
     color: var(--app-text-muted);
@@ -464,12 +464,12 @@
     margin-left: -8px;
   }
 
-  /* 項目名の 220px は取れない。操作を項目名の下に置く */
+  /* There is no room for the item name's 220px. Put the control under the item name */
   .settings-row {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  /* 指で押せる高さ。段の中で字は 12.5px のまま */
+  /* A height a finger can press. Inside the row the text stays at 12.5px */
   .settings-seg-item {
     min-height: 36px;
   }

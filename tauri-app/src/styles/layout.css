@@ -1,16 +1,17 @@
 .app {
   display: flex;
-  /* レールと本文は横に並ぶ。モバイルではレールが消えて 1 列になる */
+  /* The rail and the body stand side by side. On mobile the rail goes and one column is left */
   flex-direction: row;
-  /* html が safe-area ぶんの padding を持つので、100dvh のままだとその合計だけ
-     画面下にはみ出し、下タブと入力バーが Android のナビゲーションバーの
-     向こう側へ消える。dvh は端末側のバーの出入りにも追従する */
+  /* html carries padding for the safe area, so at a plain 100dvh the page runs past the
+     bottom of the screen by that total, and the bottom tabs and the input bar disappear
+     behind Android's navigation bar. dvh also follows the device's own bars in and out */
   height: calc(100dvh - var(--safe-top) - var(--safe-bottom));
   position: relative;
   overflow: hidden;
 }
 
-/* レールの右、本文・ボトムバー・(モバイルの)ヘッダと下タブが縦に積む列 */
+/* Right of the rail: the column where the body, the bottom bar and (on mobile) the header
+   and the bottom tabs stack vertically */
 .app-column {
   flex: 1;
   min-width: 0;
@@ -35,8 +36,9 @@
 
 /* ---------------- bottom bar (desktop only) ---------------- */
 
-/* 着地したことだけを言う細い帯。現在地は出さない — レールの線と題で足りる。
-   版の距離と比較中の表示は Codex のもので、履歴のスライスがここへ足す */
+/* A thin band that says only where the save landed. It gives no current location: the
+   rail's line and the title are enough. The distance from a version and the comparing
+   indicator belong to Codex, and the history slice adds them here */
 .bottom-bar {
   display: flex;
   align-items: center;
@@ -49,7 +51,7 @@
   border-top: 1px solid var(--app-hairline);
   font-size: 12px;
   color: var(--app-text-faint);
-  /* フライアウトは bottom:30px までなので重ならないが、影はこの上に落ちる */
+  /* The flyout stops at bottom: 30px so they do not overlap, but its shadow falls on this */
   position: relative;
   z-index: 25;
 }
@@ -62,7 +64,7 @@
   transition: color 250ms var(--app-ease);
 }
 
-/* 保存できた直後の 2 秒だけ緑。出しっぱなしにすると視界の端が光り続ける */
+/* Green for the 2 seconds right after a save. Left on, the edge of vision keeps glowing */
 .bottom-bar-save[data-status="saved"] {
   color: var(--app-ok);
 }
@@ -78,7 +80,8 @@
 
 /* ---------------- mobile header ---------------- */
 
-/* デスクトップのヘッダは無くなった。狭い画面だけ、題と数個の入口を持つ帯が残る */
+/* The desktop header is gone. Only on a narrow screen does a band with the title and a few
+   entry points remain */
 .mobile-header {
   display: none;
   align-items: center;
@@ -106,30 +109,32 @@
   margin-left: auto;
 }
 
-/* 指で押せる大きさにする */
+/* Make it a size a finger can press */
 .mobile-header-actions .icon-button {
   padding: 10px;
   text-decoration: none;
 }
 
-/* ポップオーバーはヘッダーの下端に吊るす */
+/* A popover hangs from the bottom edge of the header */
 .popover-anchor {
   position: absolute;
   top: 100%;
   z-index: 120;
 }
 
-/* 同期の器は面の列に 1 つだけ吊るす。入口はレール(広い窓)と帯(狭い窓)の
-   2 つあるが、開く先は同じ器。ヘッダの下端に吊るす基底(`top: 100%`)は
-   ここでは使えない — この列は窓の高さいっぱいなので真下は画面の外で、
-   `.app` の overflow に刈られて何も見えなくなる */
+/* Only one sync container hangs off the surface column. There are two entry points, the
+   rail (wide window) and the band (narrow window), but they open the same container. The
+   base rule that hangs from the bottom edge of the header (`top: 100%`) cannot be used
+   here: this column is the full height of the window, so straight below it is off screen,
+   cropped by `.app`'s overflow, and nothing would be visible */
 .popover-anchor--sync {
   top: 48px;
   right: var(--size-2);
 }
 
 @media (min-width: 768px) {
-  /* 広い窓に帯は無く、入口はレールの足元。真下ではなく右へ開く */
+  /* A wide window has no band, and the entry point is at the foot of the rail. It opens to
+     the right rather than straight below */
   .popover-anchor--sync {
     top: auto;
     right: auto;
@@ -177,7 +182,7 @@
     display: flex;
   }
 
-  /* 保存の合図はメタ行が持つ。下タブの上に帯を足すと二段になる */
+  /* The meta line carries the save signal. A band above the bottom tabs would stack two rows */
   .bottom-bar {
     display: none;
   }

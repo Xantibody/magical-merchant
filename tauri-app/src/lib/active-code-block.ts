@@ -6,10 +6,10 @@ export interface NodeRange {
 }
 
 /**
- * 選択範囲 [from, to] に触れている code_block のノード範囲を集める。
- * mermaid ブロックの「カーソルが中にある間だけソースを見せる」判定に使う。
- * カーソル(from === to)が中にあるブロックも、選択が部分的にかすった
- * ブロックも「触れている」として扱う。
+ * Collect the node ranges of the code_block nodes that touch the selection [from, to].
+ * Used by the mermaid block to decide "show the source only while the cursor is inside".
+ * A block holding the cursor (from === to) and a block the selection only partly grazes
+ * both count as touched.
  */
 export function activeCodeBlockRanges(doc: Node, from: number, to: number): NodeRange[] {
   const ranges: NodeRange[] = [];

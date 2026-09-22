@@ -17,32 +17,32 @@ import type { JSX } from "solid-js";
 
 interface MarkdownPreviewProps {
   source: string;
-  /** `[[ID]]` をタイトルで描くための解決表。無ければ保存形のまま出る。 */
+  /** Lookup table that draws `[[ID]]` as a title. Without it the stored form shows. */
   noteTitles?: ReadonlyMap<string, string>;
-  /** `:name:` を画像で描くための登録表。無ければ保存形のまま出る。 */
+  /** Registry that draws `:name:` as an image. Without it the stored form shows. */
   glyphs?: ReadonlyMap<string, string>;
-  /** 図を書き出すときのファイル名の頭。ノートの stem。無ければ generic な名前 */
+  /** Leading part of the filename when exporting a diagram. The note's stem. Without it, a generic name */
   exportStem?: string;
-  /** 書き出しに失敗したとき、利用者に見せる文。無ければ黙って失敗する */
+  /** Text shown to the user when an export fails. Without it, the failure is silent */
   onError?: (message: string) => void;
   /**
-   * 履歴を開いているあいだの行ごとの印(`lib/diff-marks.ts`)。あれば欄外に
-   * +/− を立てる。本文の色も字も変えない。
+   * Per-line marks while the history is open (`lib/diff-marks.ts`). When given,
+   * +/- stand in the margin. Neither the body's colour nor its text changes.
    */
   marks?: readonly (LineMark | undefined)[];
 }
 
-/** コピー後にチェック表示を戻すまでの時間。エディタの node view と同じ */
+/** Time until the check shown after a copy is reset. Same as the editor's node view */
 const COPY_RESET_MS = 1500;
 
-/** 押された道具が属する図。道具のアイコンも svg なので、図の入れ物で絞る */
+/** The diagram the pressed tool belongs to. Tool icons are svg too, so narrow by the figure container */
 function diagramOf(from: Element): { figure: Element; svg: SVGSVGElement } | undefined {
   const figure = from.closest(".mermaid-block");
   const svg = figure?.querySelector<SVGSVGElement>(".mermaid-figure svg");
   return figure && svg ? { figure, svg } : undefined;
 }
 
-/** PNG の下地。透明のままだと暗い背景のビューアで線が消える */
+/** The PNG background. Left transparent, the lines vanish in a viewer with a dark background */
 function surfaceColor(): string {
   const color = getComputedStyle(document.documentElement).getPropertyValue("--app-surface");
   return color.trim() || "#ffffff";
@@ -57,8 +57,8 @@ export default function MarkdownPreview(props: MarkdownPreviewProps): JSX.Elemen
 
   createEffect(
     on(
-      // mermaid はテーマの色を SVG に焼き込むので、切り替えたら描き直すしかない。
-      // 道具のラベルも描画結果に焼き込まれるので、言語が変わっても描き直す
+      // mermaid bakes the theme colours into the SVG, so a theme switch forces a
+      // redraw. The tool labels are baked into the output too, so a language change redraws as well
       () =>
         [props.source, resolvedTheme(), props.noteTitles, props.glyphs, t(), props.marks] as const,
       async ([source, , noteTitles, glyphs, , marks]) => {
@@ -75,8 +75,8 @@ export default function MarkdownPreview(props: MarkdownPreviewProps): JSX.Elemen
     ),
   );
 
-  // 「コピー済み」を出しているボタン。道具は innerHTML の中にあるので signal では
-  // 持てず、押されたボタンそのものに印を付ける。描き直しで外れても構わない
+  // The button showing "copied". The tools live inside innerHTML, so a signal
+  // cannot hold them; the pressed button itself is marked. Losing the mark on a redraw is fine
   let copiedButton: HTMLElement | undefined;
 
   const applyCopyState = (copied: boolean): void => {
@@ -99,7 +99,7 @@ export default function MarkdownPreview(props: MarkdownPreviewProps): JSX.Elemen
     if (source === undefined) {
       return;
     }
-    // 別のブロックへ移ったら前の印は下ろす。戻すタイマーは最後の 1 回分しか無い
+    // Moving to another block takes the previous mark down. There is only one reset timer, for the last copy
     if (copiedButton !== button) {
       applyCopyState(false);
       copiedButton = button;
@@ -107,8 +107,8 @@ export default function MarkdownPreview(props: MarkdownPreviewProps): JSX.Elemen
     copyFeedback.copy(source);
   };
 
-  // 図は本文と違って折り返せない。狭い画面では幅に合わせて縮めておき、
-  // 押されたときだけ原寸で開く
+  // Unlike the body, a diagram cannot wrap. On a narrow screen it is shrunk to
+  // fit the width and opens at full size only when pressed
   const openZoom = (from: Element): void => {
     const diagram = diagramOf(from);
     if (!diagram) {
@@ -116,14 +116,14 @@ export default function MarkdownPreview(props: MarkdownPreviewProps): JSX.Elemen
     }
     const { svg } = diagram;
     const size = zoomSize(svg.viewBox.baseVal, svg.getBoundingClientRect());
-    // 測れない図は開かない。0×0 で開くと閉じるボタンだけの白い画面になる
+    // A diagram that cannot be measured does not open. Opened with no measurable size it is a white screen with only a close button
     if (!size) {
       return;
     }
     setZoomed({ svg: svg.outerHTML, ...size });
   };
 
-  /** ネイティブの保存ダイアログへ。キャンセルは失敗ではないので何も言わない */
+  /** To the native save dialog. Cancel is not a failure, so it says nothing */
   const exportDiagram = async (from: Element, format: ExportFormat): Promise<void> => {
     const diagram = diagramOf(from);
     if (!diagram) {
@@ -144,7 +144,7 @@ export default function MarkdownPreview(props: MarkdownPreviewProps): JSX.Elemen
     }
   };
 
-  /** 道具は描画結果の中に静的な HTML で居るので、押されたものをここで 1 か所で受ける */
+  /** The tools sit as static HTML inside the render output, so presses are received in this one place */
   const onClick = (e: MouseEvent): void => {
     const target = e.target instanceof Element ? e.target : null;
     if (!target) {

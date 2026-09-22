@@ -2,9 +2,9 @@ import { describe, it, expect, beforeAll, afterEach } from "vitest";
 import { page } from "vitest/browser";
 
 /**
- * Android のシステムバーとの重なりは実機を触るまで分からなかった。
- * `--safe-top` / `--safe-bottom` に実寸を集約してあるので、ここで値を差し込んで
- * レイアウトが画面内に収まるかを検証できる。
+ * The overlap with the Android system bars was not visible until a real device was used.
+ * The real sizes are collected into `--safe-top` / `--safe-bottom`, so values can be
+ * injected here to check that the layout fits inside the screen.
  */
 const ANDROID_SAFE_TOP = "42px";
 const ANDROID_SAFE_BOTTOM = "24px";
@@ -51,8 +51,8 @@ describe("app shell inside the system bars", () => {
     document.body.innerHTML = "";
   });
 
-  // html が safe-area ぶんの padding を持つので、.app が 100dvh のままだと
-  // 下端が画面外へ出て、下タブと入力バーがナビゲーションバーの裏に回り込む
+  // html carries the safe-area padding, so leaving .app at 100dvh pushes its bottom edge
+  // off screen and sends the bottom tabs and the input bar behind the navigation bar
   it("does not overflow the viewport when the system bars take space", () => {
     setInsets(ANDROID_SAFE_TOP, ANDROID_SAFE_BOTTOM);
     const app = mountApp();
@@ -66,7 +66,8 @@ describe("app shell inside the system bars", () => {
     setInsets(ANDROID_SAFE_TOP, ANDROID_SAFE_BOTTOM);
     mountApp();
     const tabs = element(".bottom-tabs");
-    // 下タブはモバイル幅でしか出ない。テストの実行幅に依らず位置だけを見る
+    // The bottom tabs show only at mobile widths. Look at the position alone, whatever
+    // width the test runs at
     tabs.style.display = "flex";
 
     const { bottom } = tabs.getBoundingClientRect();
@@ -83,7 +84,7 @@ describe("app shell inside the system bars", () => {
   });
 });
 
-/** レールと、その左端を滑る現在地の線。`top` はビューが決めて style で渡す。 */
+/** The rail, and the current-location line sliding down its left edge. The view decides `top` and passes it through style. */
 function mountRail(markerTop: number, off = false): void {
   document.body.innerHTML = `
     <div class="app">
@@ -103,7 +104,7 @@ function mountAction(): HTMLElement {
   return element("[data-hint-key]");
 }
 
-/** 札は擬似要素なので、出ているかどうかは content でしか見られない。 */
+/** The badge is a pseudo-element, so whether it shows can only be read from content. */
 function badge(target: HTMLElement): string {
   return getComputedStyle(target, "::after").content;
 }
@@ -128,8 +129,8 @@ describe("the rail tells you where you are", () => {
     expect(style.borderRightWidth).toBe("1px");
   });
 
-  // 字が無いので、現在地は塗りで言う。ヘッダのタブは文字の重さだけで
-  // 示していたが、レールの入口はアイコン 1 つしかない
+  // There are no words, so the current location is said with a fill. The header tabs showed
+  // it with font weight alone, but a rail entry is only one icon
   it("fills the button you are on and leaves the others bare", () => {
     mountRail(18);
 
@@ -140,7 +141,8 @@ describe("the rail tells you where you are", () => {
     expect(idle.backgroundColor).toBe("rgba(0, 0, 0, 0)");
   });
 
-  // 線は 3 つの面のあいだを滑る。位置は面が決め、滑らかさはここが持つ
+  // The line slides between the three surfaces. The surface decides the position; the
+  // smoothness lives here
   it("slides the marker with a transition on top alone", () => {
     mountRail(58);
 
@@ -155,7 +157,8 @@ describe("the rail tells you where you are", () => {
     expect(style.transitionDuration).toContain("0.22s");
   });
 
-  // 設定を開いているあいだは線を出さない。面ではないので、滑らせる先もない
+  // While Settings is open the line is not shown. It is not a surface, so there is nowhere
+  // to slide it to
   it("hides the marker where there is no mode to point at", () => {
     mountRail(58, true);
 
@@ -177,7 +180,7 @@ describe("the rail tells you where you are", () => {
     expect(getComputedStyle(bar).borderTopWidth).toBe("1px");
   });
 
-  // 下タブはモバイルのもの。広い窓では帯が二段になる
+  // The bottom tabs belong to mobile. On a wide window the bands would stack two deep
   it("keeps the bottom tabs off a wide window", () => {
     mountApp();
 
@@ -205,9 +208,10 @@ describe("the shell on a phone", () => {
     expect(getComputedStyle(element(".bottom-bar")).display).toBe("none");
   });
 
-  // キーボードが出ているあいだ下タブを畳む `body.md-toolbar-open .bottom-tabs`
-  // は書式バーの CSS が持っていて、`@media (hover: none)` の中にある。
-  // headless Chromium は hover を持つのでここからは試せない — 実機で見る
+  // `body.md-toolbar-open .bottom-tabs`, which folds the bottom tabs away while the
+  // keyboard is up, belongs to the formatting bar's CSS and sits inside
+  // `@media (hover: none)`. Headless Chromium has hover, so it cannot be tried from here:
+  // check it on a real device
 });
 
 describe("what floats over the app", () => {
@@ -219,8 +223,9 @@ describe("what floats over the app", () => {
     document.body.innerHTML = "";
   });
 
-  // メニュー・パレット・頁・戻すボタンは 1 つの動きで入ってくる。パレットが
-  // 出しっぱなしの物のように現れると、⌘K を押したことと出てきた物が繋がらない
+  // Menus, the palette, pages and the restore button all enter with one movement. If the
+  // palette appeared like something that had been there all along, pressing ⌘K and what
+  // came up would not connect
   it("rises the palette like every other thing that floats", () => {
     document.body.innerHTML = `<div class="palette-overlay"><div class="palette"></div></div>`;
 
@@ -247,7 +252,7 @@ describe("the hint layer", () => {
     expect(badge(action)).toBe("none");
   });
 
-  // 札は擬似要素。出ているあいだも DOM のノードは 1 つも増えない
+  // The badge is a pseudo-element. Not one DOM node is added while it is showing
   it("prints the key from the attribute while the modifier is held", () => {
     const action = mountAction();
 
@@ -258,9 +263,9 @@ describe("the hint layer", () => {
   });
 
   /**
-   * 部品ライブラリ(Kobalte)の集まりは、行の内部の識別子を `data-key` に書く。
-   * メニュー・一覧・タブ・アコーディオンの 4 家系が同じことをするので、役割で
-   * 除くやり方では足りない — 札はこちらの名前だけを読む。
+   * The collections of the component library (Kobalte) write a row's internal identifier
+   * into `data-key`. Menu, list, tab and accordion, four families, all do the same, so
+   * excluding by role is not enough: the badge reads only our own attribute name.
    */
   it("draws no badge for the identifier a component library writes", () => {
     document.body.innerHTML = `<div role="menuitem" data-key="item-3">削除</div>
@@ -274,12 +279,13 @@ describe("the hint layer", () => {
 });
 
 /**
- * 同期の器は面の列に 1 つだけ吊るす。入口はレール(広い窓)と帯(狭い窓)の
- * 2 つあるが、開く先は同じ器。
+ * Only one sync popover hangs off the column of surfaces. There are two entry points, the
+ * rail (wide window) and the band (narrow window), but both open the same popover.
  *
- * ヘッダの下端に吊るす基底(`.popover-anchor { top: 100% }`)はここでは使え
- * ない。この列は窓の高さいっぱいなので真下は画面の外で、`.app` の
- * `overflow: hidden` に刈られる。押すと状態だけ変わって何も見えない。
+ * The base that hangs it under the header (`.popover-anchor { top: 100% }`) cannot be used
+ * here. This column is the full height of the window, so straight below it is off screen
+ * and the `overflow: hidden` on `.app` cuts it away. Pressing it would change only the
+ * state and show nothing.
  */
 function mountSyncPopover(): HTMLElement {
   document.body.innerHTML = `

@@ -2,9 +2,9 @@ import { describe, it, expect, beforeAll, afterEach } from "vitest";
 import { renderDiffBlock } from "../lib/diff-block";
 
 /**
- * diff の行は「その行が増えたか減ったか」を背景で示す。行の色がコードの
- * 幅で切れて pre の余白まで届かないと、色の帯がブロックの中に浮いて
- * どこまでが 1 行なのか読めなくなる。
+ * A diff row says whether it was added or removed through its background. If the row's
+ * colour stops at the width of the code and does not reach the pre's padding, the coloured
+ * band floats inside the block and it can no longer be read where one row ends.
  */
 function element(selector: string): HTMLElement {
   const found = document.querySelector<HTMLElement>(selector);
@@ -45,7 +45,7 @@ describe("diff rows in the preview", () => {
     expect(row.left).toBeCloseTo(pre.left, 0);
   });
 
-  // color-mix の相手が欠けていると背景は透明のまま落ちる
+  // If a `color-mix` operand is missing, the background falls through as transparent
   it("tints the row from the status tokens", () => {
     mountDiff("+added\n-removed\n");
 
@@ -53,8 +53,8 @@ describe("diff rows in the preview", () => {
     expect(getComputedStyle(element(".diff-del")).backgroundColor).not.toBe("rgba(0, 0, 0, 0)");
   });
 
-  // 明暗それぞれの下地に合う濃さを 1 つの宣言から出すために color-mix にしている。
-  // 固定色に戻すと、ダークテーマでは緑と赤が黒い下地の上で浮く
+  // `color-mix` is used so that one declaration gives a strength suited to both the light
+  // and the dark ground. Back at a fixed colour, green and red float on the dark theme's black
   it("follows the theme without a second rule", () => {
     mountDiff("+added\n");
     const light = getComputedStyle(element(".diff-add")).backgroundColor;
@@ -66,13 +66,13 @@ describe("diff rows in the preview", () => {
 });
 
 /**
- * ホバーツールはブロックの右上に居続ける。コードブロックは横に長い行を
- * スクロールで見せるので、道具がその中身と一緒に流れると、読みたいところへ
- * 寄せた瞬間にコピーのボタンが画面の外へ出ていってしまう。
+ * The hover tools stay at the top right of the block. A code block shows a long line by
+ * scrolling sideways, so if the tools flowed with its contents, the copy button would leave
+ * the screen the moment the reader scrolled to the part they want to read.
  */
 const LONG_LINE = "const answer = 1;".padEnd(400, "-");
 
-/** markdown.ts がコードブロックに付けるのと同じ道具 */
+/** The same tools markdown.ts attaches to a code block */
 const TOOLS =
   '<div class="preview-tools"><span class="preview-tools-lang">ts</span>' +
   '<button type="button" class="preview-tool" data-action="copy">c</button></div>';
@@ -104,11 +104,11 @@ describe("hover tools in the preview", () => {
     const pre = element("pre");
     const code = element("pre code");
 
-    // どちらがスクロール箱でも「右へ送った」が成り立つよう、両方に送る
+    // Scroll both, so that "scrolled right" holds whichever one is the scroll box
     pre.scrollLeft = pre.scrollWidth;
     code.scrollLeft = code.scrollWidth;
 
-    // そもそも横に流れる長さがあること(ここが 0 だと以下は何も見ていない)
+    // There is length to scroll sideways at all (at 0 here, the rest checks nothing)
     expect(Math.max(pre.scrollLeft, code.scrollLeft)).toBeGreaterThan(0);
     const tools = element(".preview-tools").getBoundingClientRect();
     const block = pre.getBoundingClientRect();
@@ -116,7 +116,8 @@ describe("hover tools in the preview", () => {
     expect(tools.left).toBeGreaterThan(block.left);
   });
 
-  // 道具は紙面の高さを変えない。エディタと閲覧でブロックの高さが違うと本文がずれる (#168)
+  // The tools do not change the height of the page. A block whose height differs between
+  // the editor and reading shifts the body (#168)
   it("adds nothing to the height of the block it sits in", () => {
     mountCodeBlock(TOOLS);
     const withTools = element("pre").getBoundingClientRect().height;

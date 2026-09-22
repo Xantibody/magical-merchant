@@ -4,16 +4,18 @@ import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
 import type { MilkdownPlugin } from "@milkdown/kit/ctx";
 
 /**
- * テンプレの記入例を、その見出しのセクションの末尾に薄字で置く Milkdown
- * プラグイン。
+ * A Milkdown plugin that puts a template's example text in faint type at the end of the
+ * section under its heading.
  *
- * 文書には 1 文字も入れない — widget decoration なので、書き戻す Markdown
- * にも、保存にも、検索にも現れない。ノートリンクやグリフ(`glyph-plugin.ts`)が
- * 「保存形はそのまま、見え方だけ変える」のと同じ流儀の、その極端な側。
+ * Not one character goes into the document: it is a widget decoration, so it appears
+ * neither in the Markdown written back, nor in the save, nor in search. It is the extreme
+ * end of the same style as note links and glyphs (`glyph-plugin.ts`), where the saved form
+ * stays as it is and only the appearance changes.
  *
- * 書き始めても消さない。1 つの見出しに問いが 2 つ並ぶテンプレで、最初の
- * 1 文字で例ごと消えると、2 つ目の問いを答えようとしたその瞬間に失う。
- * 邪魔になったときは `…` から全部消せる。
+ * It is not removed once writing starts. In a template with two questions under one
+ * heading, if the first character removed the example with it, the example would be lost at
+ * the exact moment of answering the second question. When it gets in the way, the whole set
+ * can be hidden from the `...` menu.
  */
 function render(lines: string[]): HTMLElement {
   const box = document.createElement("div");
@@ -47,15 +49,16 @@ export function createExamplePlugin(
               const lines = table.get(heading);
               if (lines) {
                 decos.push(
-                  // 描き直さないための key。無いと打鍵のたびに DOM が
-                  // 作り直され、同じ文字が一瞬ちらつく
+                  // The key that prevents a redraw. Without it the DOM is rebuilt on every
+                  // keystroke and the same text flickers for an instant
                   Decoration.widget(at, () => render(lines), { side: -1, key: `eg:${heading}` }),
                 );
               }
             };
 
-            // 見出しで区切って、そのセクションの終わり(次の見出しの直前)に置く。
-            // 書いたものの下に付くので、例は書いた行を押しのけない
+            // Split at the headings and place it at the end of that section (just before
+            // the next heading). It hangs under what was written, so the example never
+            // pushes a written line aside
             state.doc.forEach((node, offset) => {
               if (node.type.name === "heading") {
                 place(offset);

@@ -2,18 +2,18 @@ import { NodeSelection, TextSelection } from "@milkdown/kit/prose/state";
 import type { Command, EditorState, Selection, Transaction } from "@milkdown/kit/prose/state";
 
 /**
- * カーソル(選択の始点)がコードブロックの中にいるか。コードブロックでしか
- * 意味のないもの — 抜けるコマンド・Tab の字下げ・ツールバーの「ブロックから
- * 抜ける」を出すかどうか — が、みなこの 1 つの答えを使う。
+ * Whether the cursor (the start of the selection) is inside a code block. Everything that
+ * means nothing outside a code block, the exit command, the Tab indent, whether to show
+ * the toolbar's "leave the block", all use this one answer.
  */
 export function isInCodeBlock(selection: Selection): boolean {
   return selection.$from.parent.type.name === "code_block";
 }
 
 /**
- * コードブロックの直後に段落を作ってカーソルを移す。キーボードでは
- * Mod-Enter に割り当てているが、スマホには修飾キーがないので
- * ツールバーからも同じコマンドを呼べるようにしておく。
+ * Make a paragraph right after the code block and move the cursor into it. The keyboard
+ * binds it to Mod-Enter, but a phone has no modifier key, so the same command can also be
+ * called from the toolbar.
  */
 export const exitCodeBlock: Command = (state, dispatch) => {
   if (!isInCodeBlock(state.selection)) {
@@ -35,9 +35,9 @@ export const exitCodeBlock: Command = (state, dispatch) => {
 const CODE_INDENT = "  ";
 
 /**
- * 選択にかかるコードブロックの行の、行頭の位置(文書座標)。選択が 1 つの
- * コードブロックに収まっていなければ undefined。行末ちょうどで終わる選択は
- * 次の行を含めない。
+ * The line-head positions (document coordinates) of the code block lines the selection
+ * covers. undefined unless the selection fits inside one code block. A selection that ends
+ * exactly at a line end does not include the next line.
  */
 function codeLineStarts(state: EditorState): number[] | undefined {
   const { $from, $to } = state.selection;
@@ -58,13 +58,14 @@ function codeLineStarts(state: EditorState): number[] | undefined {
 }
 
 /**
- * コードブロックの中の Tab は字下げ。ProseMirror は Tab を扱わないので、
- * 素通しにするとブラウザがフォーカスを次の要素へ移し、書きかけの手が
- * エディタの外に落ちる。2 スペースなのは、Markdown のコードブロックで
- * 一番ありふれた幅だから(タブ文字は表示幅が環境で変わる)。
+ * Tab inside a code block indents. ProseMirror does not handle Tab, so letting it pass
+ * moves the browser's focus to the next element and drops the writing hand out of the
+ * editor. Two spaces because that is the most common width in a Markdown code block (a
+ * tab character's displayed width varies by environment).
  *
- * 範囲を選んでいれば、その行すべての行頭に入れる。カーソルだけなら
- * その場に入れる(行の途中の Tab は行頭ではなくそこを空けたい)。
+ * With a range selected, it goes at the head of every one of those lines. With only a
+ * cursor, it goes where the cursor is (a Tab mid-line should open space there, not at the
+ * line head).
  */
 export const indentCodeLine: Command = (state, dispatch) => {
   const starts = codeLineStarts(state);
@@ -78,7 +79,7 @@ export const indentCodeLine: Command = (state, dispatch) => {
   if (state.selection.empty) {
     tr.insertText(CODE_INDENT);
   } else {
-    // 後ろの行から入れれば、前の行の位置がずれない
+    // Inserting from the last line backwards keeps the earlier lines' positions in place
     for (const start of starts.toReversed()) {
       tr.insertText(CODE_INDENT, start, start);
     }
@@ -88,9 +89,9 @@ export const indentCodeLine: Command = (state, dispatch) => {
 };
 
 /**
- * コードブロックの中の Shift-Tab は行頭の字下げを一段戻す。範囲を選んで
- * いればその行すべて。戻すものがなくても受けたことにするのは、フォーカスを
- * 外へ逃がさないため。
+ * Shift-Tab inside a code block takes one step of indent off the line head. With a range
+ * selected, off every one of those lines. It reports the key handled even with nothing to
+ * take off, so that focus does not escape outside.
  */
 export const outdentCodeLine: Command = (state, dispatch) => {
   const starts = codeLineStarts(state);
@@ -114,13 +115,15 @@ export const outdentCodeLine: Command = (state, dispatch) => {
 };
 
 /**
- * 入力ルールが `---` を水平線に置き換えたあと、カーソルを罫線の下の新しい
- * 段落へ置く。Milkdown の insertHrInputRule は置き換えるだけで選択を決めず、
- * 罫線そのものが選ばれた(NodeSelection の)状態で終わる。そこで次の文字を
- * 打つと罫線が消える。返すのは追記する tr で、直す必要がなければ null。
+ * After the input rule replaces `---` with a horizontal rule, put the cursor in a new
+ * paragraph below the rule. Milkdown's insertHrInputRule only replaces and does not set
+ * the selection, so it ends with the rule itself selected (a NodeSelection). Typing the
+ * next character there deletes the rule. Returns the tr to append, or null when there is
+ * nothing to fix.
  *
- * 直後が空の段落ならそこへ置くだけ。文書の末尾では trailing プラグインが
- * 先に空段落を足しているので、こちらも足すと空行が 2 つ並ぶ。
+ * If an empty paragraph already follows, it only moves there. At the end of the document
+ * the trailing plugin has added an empty paragraph first, so adding one here too would
+ * leave two blank lines.
  */
 export function stepPastHr(state: EditorState): Transaction | null {
   const { selection } = state;

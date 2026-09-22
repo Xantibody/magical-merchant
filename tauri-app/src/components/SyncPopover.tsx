@@ -13,7 +13,7 @@ interface SyncPopoverProps {
   onClose: () => void;
 }
 
-/** 見た目と文言を決める 4 つの状態。同期の細かい内訳はここでは出さない。 */
+/** The four states that decide the look and wording. The detailed sync breakdown stays out. */
 type Face = "synced" | "syncing" | "offline" | "failed";
 
 const FACE_ICONS: Record<Face, IconName> = {
@@ -64,7 +64,7 @@ export default function SyncPopover(props: SyncPopoverProps): JSX.Element {
         <p class="sync-popover-body">{t().sync.localOnly}</p>
       </Show>
 
-      {/* 失敗の理由は言い換えず、返ってきた文をそのまま見せる */}
+      {/* The reason for the failure is not reworded: the returned text is shown as it is */}
       <Show when={face() === "failed" && props.sync.message()}>
         {(message) => <pre class="sync-popover-error">{message()}</pre>}
       </Show>

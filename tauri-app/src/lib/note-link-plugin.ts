@@ -8,7 +8,7 @@ import type { MilkdownPlugin } from "@milkdown/kit/ctx";
 import { isImeComposing } from "./ime";
 import { splitNoteLinks } from "./note-link";
 
-/** リンク先の候補。Workspace が今の一覧から作って渡す。 */
+/** The link target candidates. Workspace builds them from the current list and passes them. */
 export interface NoteLinkTarget {
   id: string;
   title: string;
@@ -18,11 +18,11 @@ interface LinkRange {
   from: number;
   to: number;
   id: string;
-  /** `|` の後ろに書かれた表示文字。チップはタイトルよりこちらを優先する。 */
+  /** The display text written after `|`. The chip prefers this over the title. */
   alias: string | null;
 }
 
-/** 文書中の `[[ID]]` の位置を集める。 */
+/** Collect the positions of `[[ID]]` in the document. */
 function linkRanges(doc: ProseNode): LinkRange[] {
   const ranges: LinkRange[] = [];
   doc.descendants((node, pos) => {
@@ -57,16 +57,17 @@ function titleOf(targets: NoteLinkTarget[], id: string): string | undefined {
 }
 
 /**
- * `[[` を打つ。閉じ括弧は入れない — 続きは下の NoteLinkSuggest が受け、ID を
- * 選んだ時点で `[[ID]]` に完成する。スマホのキーボードでは括弧が記号面の奥に
- * あって 2 手かかるので、書式バーからの入口を用意する。
+ * Type `[[`. The closing brackets are not inserted: NoteLinkSuggest below takes the rest,
+ * and it is completed to `[[ID]]` the moment an ID is chosen. On a phone keyboard the
+ * brackets sit deep in the symbol plane and take two steps, so an entry from the format
+ * bar is provided.
  */
 export const startNoteLink: Command = (state, dispatch) => {
   dispatch?.(state.tr.insertText("[[").scrollIntoView());
   return true;
 };
 
-/** `[[` を打っている途中の補完候補ポップアップ。それ以外のときは何も出さない。 */
+/** The completion popup while `[[` is being typed. At any other time it shows nothing. */
 class NoteLinkSuggest {
   private readonly root: HTMLDivElement;
   private readonly view: EditorView;
@@ -115,7 +116,7 @@ class NoteLinkSuggest {
     this.render(view);
   }
 
-  /** ポップアップが出ている間だけ矢印と Enter を横取りする。 */
+  /** Intercept the arrows and Enter only while the popup is shown. */
   handleKey(event: KeyboardEvent): boolean {
     if (this.root.style.display === "none") {
       return false;
@@ -130,7 +131,7 @@ class NoteLinkSuggest {
       this.render(this.view);
       return true;
     }
-    // 変換確定の Enter は IME のもの。候補の確定には使わない (#102)
+    // The Enter that confirms a conversion belongs to the IME. It does not pick a candidate (#102)
     if (event.key === "Enter" && !isImeComposing(event)) {
       this.pick(this.items[this.cursor]);
       return true;
@@ -147,7 +148,7 @@ class NoteLinkSuggest {
       return;
     }
     const { state } = this.view;
-    // 打ちかけの `[[query` を `[[ID]]` に完成させる
+    // Complete the half-typed `[[query` into `[[ID]]`
     this.view.dispatch(state.tr.insertText(`${target.id}]]`, this.matchFrom, state.selection.from));
     this.view.focus();
     this.hide();
@@ -161,7 +162,7 @@ class NoteLinkSuggest {
         row.className = "note-link-suggest-item";
         row.classList.toggle("note-link-suggest-item--active", index === this.cursor);
         row.textContent = target.title;
-        // click より前の mousedown でエディタがフォーカスを失うのを防ぐ
+        // Keep the editor from losing focus on the mousedown that comes before click
         row.addEventListener("mousedown", (e) => {
           e.preventDefault();
           this.pick(target);
@@ -185,12 +186,11 @@ class NoteLinkSuggest {
 }
 
 /**
- * `[[ID]]` のリンクをタイトルのチップとして見せる Milkdown プラグイン束。
+ * The bundle of Milkdown plugins that shows a `[[ID]]` link as a chip of its title.
  *
- * スキーマにノードは足さない — 保存形はあくまで本文中のプレーンテキストで、
- * 装飾(decoration)が表示だけをタイトルに差し替える。カーソルが範囲に
- * 触れている間は保存形をそのまま見せる(コードブロックの is-active と
- * 同じ流儀)。
+ * No node is added to the schema: the stored form stays plain text in the body, and a
+ * decoration swaps only the display for the title. While the cursor touches the range,
+ * the stored form is shown as it is (the same manner as a code block's is-active).
  */
 export function createNoteLinkPlugin(targets: () => NoteLinkTarget[]): MilkdownPlugin[] {
   const decorations = $prose(
@@ -198,14 +198,15 @@ export function createNoteLinkPlugin(targets: () => NoteLinkTarget[]): MilkdownP
       new Plugin({
         props: {
           decorations(state) {
-            // 速い経路: リンクの無い文書を毎打鍵ごとに走査しない
+            // Fast path: do not scan a document with no links on every keystroke
             if (!state.doc.textContent.includes("[[")) {
               return DecorationSet.empty;
             }
             const { from, to } = state.selection;
             const decos: Decoration[] = [];
             for (const range of linkRanges(state.doc)) {
-              // 端に触れただけでも保存形に戻す。隣で打っていて急に化けない
+              // Even touching an edge returns the stored form: typing beside it, it does
+              // not suddenly change shape
               if (from <= range.to && to >= range.from) {
                 decos.push(Decoration.inline(range.from, range.to, { class: "note-link-source" }));
               } else {
@@ -218,7 +219,7 @@ export function createNoteLinkPlugin(targets: () => NoteLinkTarget[]): MilkdownP
                       chip.className = "note-link-chip";
                       chip.textContent =
                         range.alias ?? titleOf(targets(), range.id) ?? `[[${range.id}]]`;
-                      // 押すとカーソルが中に入り、保存形が現れて編集できる
+                      // Pressing it puts the cursor inside; the stored form appears and can be edited
                       chip.addEventListener("mousedown", (e) => {
                         e.preventDefault();
                         view.dispatch(

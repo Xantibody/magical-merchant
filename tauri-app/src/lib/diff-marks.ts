@@ -1,27 +1,27 @@
 import { splitTitle } from "./note-title";
 
 /**
- * 版と下書きの unified diff を、本文の行ごとの印に変える。
+ * Turns the unified diff between a version and the draft into per-line marks on the body.
  *
- * 履歴を開いても本文を差分の枠に置き換えない — 下書きの本文そのものに
- * 「増えた」「消えた」の印を欄外に立てる。消えた行は選んだ版にしか無いので、
- * 下書きの該当位置へ差し込んだ 1 つの文書(合わせた本文)を作り、その行に
- * 印を添える。描くのは MarkdownPreview で、印はブロックごとに class になる
- * (`lib/markdown.ts` の lineMarksPlugin)。
+ * Opening the history never replaces the body with a diff frame. It raises "added" and
+ * "removed" marks in the margin of the draft body itself. A removed line exists only in the
+ * selected version, so one document (the merged body) is built with those lines inserted at
+ * their place in the draft, and the marks are attached to those lines. MarkdownPreview draws
+ * it, and each mark becomes a class on a block (lineMarksPlugin in `lib/markdown.ts`).
  */
 
 export type LineMark = "add" | "del";
 
 export interface MarkedBody {
-  /** 下書きに、消えた行を元の位置へ差し込んだ本文。 */
+  /** The draft with the removed lines inserted back at their original positions. */
   source: string;
-  /** `source` の行ごとの印。変わっていない行は undefined。 */
+  /** The mark for each line of `source`. An unchanged line is undefined. */
   marks: readonly (LineMark | undefined)[];
 }
 
 const HUNK = /^@@ -(?<oldStart>\d+)(?:,(?<oldLen>\d+))? \+(?<newStart>\d+)(?:,(?<newLen>\d+))? @@/u;
 
-/** 行に切る。末尾の改行は「最後の行の終わり」であって空行ではない。 */
+/** Splits into lines. A trailing newline ends the last line; it is not an empty line. */
 function linesOf(text: string): string[] {
   if (text === "") {
     return [];
@@ -34,11 +34,11 @@ function linesOf(text: string): string[] {
 }
 
 /**
- * 下書き + diff → 合わせた本文と行ごとの印。diff が空(同じ内容)なら
- * 下書きそのままで印は無い。
+ * Draft + diff gives the merged body and the per-line marks. An empty diff (identical
+ * content) returns the draft as it is, with no marks.
  *
- * ハンクの `+c,d` は下書き側の 1 始まりの行番号。`d` が 0(消えただけの
- * ハンク)のときの `c` は「その行の後ろ」を指す。
+ * A hunk's `+c,d` is a 1-based line number on the draft side. When `d` is 0 (a hunk that
+ * only removes), `c` points at the position after that line.
  */
 export function markLines(draft: string, diff: string): MarkedBody {
   const source = linesOf(draft);
@@ -53,7 +53,7 @@ export function markLines(draft: string, diff: string): MarkedBody {
     }
   };
 
-  /** 最初のハンクより前は `+++` / `---` のヘッダ。本文の行ではない。 */
+  /** Before the first hunk come the `+++` / `---` headers. They are not body lines. */
   let inHunk = false;
 
   for (const line of linesOf(diff)) {
@@ -64,8 +64,8 @@ export function markLines(draft: string, diff: string): MarkedBody {
       take(length === 0 ? start : start - 1);
       inHunk = true;
     }
-    // ハンクの中では `+---`(罫線が増えた)も本文の行。ヘッダと見分けるのは
-    // 位置であって綴りではない
+    // Inside a hunk, `+---` (an added rule) is a body line too. What tells it from a
+    // header is the position, not the spelling
     switch (hunk || !inHunk ? "@" : line[0]) {
       case " ": {
         out.push(line.slice(1));
@@ -85,7 +85,7 @@ export function markLines(draft: string, diff: string): MarkedBody {
         break;
       }
       default: {
-        // `\ No newline at end of file` は行ではない
+        // `\ No newline at end of file` is not a line
         break;
       }
     }
@@ -95,10 +95,10 @@ export function markLines(draft: string, diff: string): MarkedBody {
 }
 
 /**
- * 画面に出す形。先頭の H1 はタイトル欄が持つので、`splitTitle` と同じ規則で
- * 合わせた本文からも外す。題が変わっていれば古い題(消えた行)が先頭に
- * 来るのでそれが外れ、新しい題は `+` の付いた H1 として本文に残る —
- * 題が変わったことは読める。
+ * The form put on screen. The leading H1 belongs to the title field, so it is dropped from
+ * the merged body too, by the same rule as `splitTitle`. If the title changed, the old title
+ * (a removed line) comes first and is the one dropped, and the new title stays in the body as
+ * an H1 carrying `+`, so the title change is still readable.
  */
 export function markedBody(draft: string, diff: string): MarkedBody {
   const marked = markLines(draft, diff);
@@ -117,18 +117,18 @@ export function markedBody(draft: string, diff: string): MarkedBody {
   };
 }
 
-/** 選んだ版と下書きのあいだで動いた行の数。 */
+/** The number of lines that moved between the selected version and the draft. */
 export interface LineCounts {
   added: number;
   removed: number;
 }
 
 /**
- * 「3 行追加 · 1 行削除」の数。比較モードが既に読んでいる diff から数えるので、
- * これを出すために IPC は 1 本も増えない。
+ * The numbers behind "3 lines added, 1 line removed". They are counted from the diff the
+ * compare mode has already read, so producing them adds no IPC call at all.
  *
- * ヘッダの `---` / `+++` は行ではないが、ハンクの中の `+---`(罫線が増えた)は
- * 行。見分けるのは位置であって綴りではない — [`markLines`] と同じ規則。
+ * The `---` / `+++` headers are not lines, but `+---` inside a hunk (an added rule) is. What
+ * tells them apart is the position, not the spelling: the same rule as [`markLines`].
  */
 export function diffLineCounts(diff: string): LineCounts {
   let added = 0;
@@ -147,8 +147,8 @@ export function diffLineCounts(diff: string): LineCounts {
 }
 
 /**
- * ブロック 1 つぶんの印。範囲の全行が消えていれば `del`、増えた行か消えた行を
- * 1 つでも含めば `add`(変わった)、どちらも無ければ印なし。
+ * The mark for one block. `del` if every line in the range is removed, `add` (changed) if the
+ * range holds at least one added or removed line, and no mark if it holds neither.
  */
 export function blockMark(
   marks: readonly (LineMark | undefined)[],

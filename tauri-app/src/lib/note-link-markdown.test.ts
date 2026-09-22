@@ -12,8 +12,8 @@ describe("note links in the preview", () => {
     expect(html).not.toContain("[[20260813_083000]]");
   });
 
-  // 指し先が消えたリンク。タイトルに化けさせると「あるはずのノート」に
-  // 見えてしまうので、保存形のまま出す
+  // A link whose target is gone. Turning it into a title would make it look like a note
+  // that ought to be there, so it is emitted in its saved form
   it("leaves an unresolvable link as raw text", () => {
     const html = renderMarkdownSync("[[20990101_000000]]", TITLES);
 
@@ -36,8 +36,8 @@ describe("note links in the preview", () => {
     expect(html).not.toContain("短いメモ");
   });
 
-  // 表示文字が付いていても、指し先が無いなら「あるはずのノート」に
-  // 見せてはいけない
+  // Even with display text, a link with no target must not be shown as a note that
+  // ought to be there
   it("leaves an unresolvable link with display text as raw text", () => {
     const html = renderMarkdownSync("[[20990101_000000|消えたノート]]", TITLES);
 

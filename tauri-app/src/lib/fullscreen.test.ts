@@ -17,7 +17,7 @@ interface Invoked {
 
 const invoked: Invoked[] = [];
 
-// vi.mock ではなく mockIPC を使う理由は commands.test.ts に書いたとおり
+// The reason for mockIPC instead of vi.mock is written in commands.test.ts
 function mockWindow(fail = false): void {
   mockWindows("main");
   mockIPC((cmd, args) => {
@@ -84,7 +84,7 @@ describe("applyStartFullscreen", () => {
     expect(invoked).toHaveLength(0);
   });
 
-  // Android に全画面の窓は無い。設定が同期されて残っていても触らない
+  // Android has no fullscreen window. Even a setting left behind by sync is not acted on
   it("leaves the window alone off a Mac even with the setting on", async () => {
     writeStartFullscreen(true);
 
@@ -93,7 +93,7 @@ describe("applyStartFullscreen", () => {
     expect(invoked).toHaveLength(0);
   });
 
-  // ブラウザハーネスやテストでは窓が無い。起動を落とす理由にはならない
+  // The browser harness and the tests have no window. That is no reason to crash startup
   it("resolves even when the window refuses", async () => {
     mockWindow(true);
     writeStartFullscreen(true);

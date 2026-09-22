@@ -39,7 +39,7 @@ import {
 import type { BrowsePeriod } from "../lib/browse";
 import "../styles/browse.css";
 
-/** 期間のチップの字。数の入らない 3 語なので、表を引くだけ。 */
+/** Text of a period chip. Three words with no count in them, so it only looks up the table. */
 function periodLabel(period: BrowsePeriod): string {
   if (period === "month") {
     return t().browse.thisMonth;
@@ -47,11 +47,11 @@ function periodLabel(period: BrowsePeriod): string {
   return period === "week" ? t().browse.thisWeek : t().common.all;
 }
 
-/** 右の欄に出す 1 件ぶん。全文とメタは選んでから読むので、行とは別に持つ。 */
+/** One record for the right column. Body and meta are read after selecting, so kept apart from the row. */
 interface HitDetail {
-  /** 題の行を落とした本文。Scrawl の 1 行はそれ自体が題なので空。 */
+  /** The body with the title line dropped. A Scrawl line is itself the title, so empty. */
   body: string;
-  /** 「2026/05/03 15:39」。行が持つのは日付までなので、ここで時刻まで足す。 */
+  /** "2026/05/03 15:39". The row only carries the date, so the time is added here. */
   at: string;
   device: MetaSegment | null;
 }
@@ -59,9 +59,10 @@ interface HitDetail {
 const NO_DETAIL: HitDetail = { body: "", at: "", device: null };
 
 /**
- * 選んだ 1 件だけを読む。`browse_all` が返すのは先頭 40 字の抜粋までで、
- * 全文も時刻も端末も持っていない — 全件ぶん抱えると走査が「全文を配る」
- * ことになるので、右の欄に出す 1 件だけをその都度読む。
+ * Reads only the selected record. `browse_all` returns no more than a 40-character
+ * excerpt, with no full body, time or device. Carrying those for every record
+ * would turn the scan into "hand out every body", so only the one record shown
+ * in the right column is read, each time.
  */
 async function loadDetail(hit: SearchHit): Promise<HitDetail> {
   try {
@@ -88,19 +89,20 @@ async function loadDetail(hit: SearchHit): Promise<HitDetail> {
       device: deviceSegment(meta.context),
     };
   } catch {
-    // 目を離しているあいだに CLI や他の端末が消したもの。欄が空になるだけで、
-    // 一覧ごと落とさない
+    // Something the CLI or another device deleted while nobody was looking. The
+    // column just goes empty; the list is not taken down with it
     return NO_DETAIL;
   }
 }
 
 /**
- * 種類 / タグ / 期間で絞る画面。**文字列で探す仕掛けは持たない** — それは
- * ⌘K の仕事で、ここは「思い出せない綴りを打たずに辿り着く」ほうを引き受ける。
+ * The Browse screen: narrow by kind / tag / period. **It has no text search.** That
+ * is the job of Cmd+K; this screen takes the other case, reaching a record without
+ * typing a spelling you cannot recall.
  *
- * 絞り込みと件数は全件から数える。`browse_all` は引数を取らず全件を返すだけ
- * で、チップの数字は「他の軸を掛けたうえでの件数」なので軸ごとに母集団が
- * 違う(`lib/browse.ts`)。
+ * The filter and the counts are taken over every record. `browse_all` takes no
+ * arguments and just returns everything; a chip's number is "the count with the
+ * other axes applied", so each axis has its own population (`lib/browse.ts`).
  */
 export default function Browse(): JSX.Element {
   const shell = useShell();
@@ -109,10 +111,11 @@ export default function Browse(): JSX.Element {
   const today = new Date();
 
   /**
-   * 走査は Scrawl の全日ファイルと全ノートの本文を読む。呼ぶのは画面を開いた
-   * ときの 1 回だけで、チップを押しても呼び直さない — 数えるのは全部ここに
-   * 届いている(#280)。`dataVersion` にも繋げていない。窓に戻るたびに合図が
-   * 来るので、繋ぐと画面を開いたまま全ツリーを読み直し続けることになる。
+   * The scan reads every Scrawl day file and every note body. It is called once,
+   * when the screen opens, and not again when a chip is pressed: everything to
+   * count has already arrived here (#280). It is not wired to `dataVersion`
+   * either. That signal fires every time the window regains focus, so wiring it
+   * would keep re-reading the whole tree while the screen stays open.
    */
   const [all] = createResource(() => typedInvoke("browse_all"));
   const hits = createMemo<SearchHit[]>(() => all() ?? []);
@@ -123,10 +126,10 @@ export default function Browse(): JSX.Element {
   const kinds = createMemo(() => kindFacets(hits(), filter(), today));
   const tags = createMemo(() => tagFacets(hits(), filter(), today));
 
-  /** 選んだ 1 件。絞り直して消えたら先頭に戻る — 空の欄を出しておかない。 */
+  /** The selected record. If a new filter removes it, fall back to the first: no empty column. */
   const [selectedId, setSelectedId] = createSignal<string | null>(null);
 
-  // Scrawl のチップと ⌘K からの着地。開きたい形は道に載っている(`?kind=&tag=`)
+  // Landing from a Scrawl chip or from Cmd+K. The wanted filter rides on the route (`?kind=&tag=`)
   createEffect(() => {
     const seed = browseSeed({ kind: searchParams.kind, tag: searchParams.tag });
     if (!seed) {
@@ -143,8 +146,8 @@ export default function Browse(): JSX.Element {
   const [detail] = createResource(selected, loadDetail);
 
   /**
-   * プレビュー欄を並べられる幅か。狭い画面では列を持たず、行を押したら
-   * その場で開く(ハンドオフ)。
+   * Whether the width allows a preview column beside the list. A narrow screen has
+   * no column; pressing a row opens it right away (a handoff).
    */
   const wideEnough = globalThis.matchMedia("(min-width: 768px)");
   const [twoPane, setTwoPane] = createSignal(wideEnough.matches);
@@ -154,7 +157,7 @@ export default function Browse(): JSX.Element {
   wideEnough.addEventListener("change", onWidthChange);
   onCleanup(() => wideEnough.removeEventListener("change", onWidthChange));
 
-  /** 見つけたものを開く。ノートはその 1 件を、Scrawl はその日を道で指す。 */
+  /** Opens what was found. A note is pointed at by the route as that one note, a Scrawl entry as its day. */
   const open = (hit: SearchHit): void => {
     if (hit.kind !== "scrawl" && hit.filename) {
       navigate(noteRoute(hit.kind, hit.filename));
@@ -199,7 +202,7 @@ export default function Browse(): JSX.Element {
           </For>
         </div>
 
-        {/* タグが 1 つも無いツリーでは、空の群見出しだけが残る */}
+        {/* In a tree with no tags at all, only an empty group heading would remain */}
         <Show when={tags().length}>
           <div class="browse-group browse-group--tags" role="group" aria-label={t().common.tags}>
             <span class="browse-group-label">{t().common.tags}</span>
@@ -219,8 +222,9 @@ export default function Browse(): JSX.Element {
           </div>
         </Show>
 
-        {/* 期間に件数を添えないのは、3 択が排他で「すべて」が総数そのもの
-            になるから。数字が 1 つだけ意味を持たない列になる */}
+        {/* Periods carry no count because the three choices are exclusive and
+            "all" would be the total itself. It would be a column where one
+            number means nothing */}
         <div class="browse-group" role="group" aria-label={t().browse.period}>
           <span class="browse-group-label">{t().browse.period}</span>
           <For each={BROWSE_PERIODS}>
@@ -269,7 +273,7 @@ export default function Browse(): JSX.Element {
                 <Icon name={HIT_ICONS[hit.kind]} size={15} />
                 <span class="browse-row-title">{hit.title || t().notes.untitled}</span>
                 <span class="browse-row-date">{formatMonthDay(hit.date)}</span>
-                {/* 題と同じことしか言わない抜粋は出さない。行は 1 段で足りる */}
+                {/* An excerpt that only repeats the title is not shown. One line is enough for the row */}
                 <Show when={rowSnippet(hit)}>
                   {(snippet) => <span class="browse-row-snippet">{snippet()}</span>}
                 </Show>
@@ -277,7 +281,7 @@ export default function Browse(): JSX.Element {
             )}
           </For>
 
-          {/* 読み終わるまでは「無い」と言わない */}
+          {/* Do not say "nothing" until the read has finished */}
           <Show when={!all.loading && shown().length === 0}>
             <p class="browse-empty">{t().browse.empty}</p>
           </Show>
@@ -316,8 +320,8 @@ export default function Browse(): JSX.Element {
               <h2 class="browse-preview-title">{hit.title || t().notes.untitled}</h2>
               <p class="browse-preview-body">{detail()?.body || t().browse.noBody}</p>
 
-              {/* 行き先は 1 つだけ。Scrawl のエントリが住んでいるのはその日で、
-                  「開く」と「その日へ」を並べると同じ場所へ行くボタンが 2 つ出る */}
+              {/* Only one destination. A Scrawl entry lives in its day, so putting
+                  "open" beside "to that day" would show two buttons going to the same place */}
               <div class="browse-preview-actions">
                 <button type="button" class="browse-open" onClick={() => open(hit)}>
                   {hit.kind === "scrawl" ? t().browse.toDay : t().browse.open}

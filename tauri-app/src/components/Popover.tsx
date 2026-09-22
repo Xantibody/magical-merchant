@@ -5,31 +5,34 @@ interface PopoverProps {
   open: boolean;
   onClose: () => void;
   /**
-   * これを開けたボタン。押されたぶんは「外側」に数えない — 先に閉じてしまうと
-   * 直後の click がもう一度開けてしまい、同じボタンでは畳めなくなる。
+   * The button that opened this. A press on it does not count as "outside":
+   * closing first would let the click right after reopen it, and the same
+   * button could never fold it.
    */
   trigger?: () => HTMLElement | undefined;
-  /** 読み上げの名前。中に見出しがあっても、器の名前は器が持つ。 */
+  /** The name for a screen reader. Even with a heading inside, the container names itself. */
   label: string;
   /**
-   * 吊るす場所を決める入れ物の class。中の `.popover` が自分で位置を持って
-   * いるなら要らない — 素の div は位置の基準を変えない。
+   * Class of the container that decides where it hangs. Not needed when the
+   * `.popover` inside positions itself: a plain div does not change the
+   * positioning reference.
    */
   class?: string;
   children: JSX.Element;
 }
 
 /**
- * 外側を押したら自分で閉じる、幕を張らないポップオーバーの器。
+ * A popover container without a backdrop that closes itself on an outside press.
  *
- * 以前は AppLayout が 1 つの `pointerdown` で全部を閉じていて、開閉のたびに
- * 除外する class を足しにいく必要があった(足し忘れると、開いた直後に自分の
- * ボタンのぶんで畳まれる)。閉じる責任は開く場所の隣に置くほうが短い。
+ * AppLayout used to close everything from one `pointerdown`, and every new
+ * popover meant adding a class to its exclusion list (forget it, and the popover
+ * folds right after opening from its own button's press). Putting the closing
+ * responsibility next to the opening place is shorter.
  *
- * corvu の Dialog を `modal={false}` で使う。幕もスクロール止めも要らず、
- * 欲しいのは「外側を押したら閉じる」1 つだけ — フォーカスは奪わない
- * (書いている手を止めない)。Escape は AppLayout が 1 箇所で受ける
- * (パレットも一緒に畳むので、ここで二重に拾わない)。
+ * corvu's Dialog is used with `modal={false}`. No backdrop, no scroll lock; the
+ * one thing wanted is "close on an outside press". It does not take focus (it
+ * does not stop a writing hand). Escape is handled by AppLayout in one place
+ * (it folds the palette too, so it is not caught twice here).
  */
 export default function Popover(props: PopoverProps): JSX.Element {
   return (
@@ -42,8 +45,8 @@ export default function Popover(props: PopoverProps): JSX.Element {
       }}
       modal={false}
       closeOnOutsidePointer
-      // 押した瞬間に畳む。以前の集約もそうで、離すまで残ると「消したい物の
-      // 向こうを押した」1 回が空振りになる
+      // Fold on the press itself. The old central handler did the same; staying
+      // until release makes the one press "through the thing to dismiss" a miss
       closeOnOutsidePointerStrategy="pointerdown"
       closeOnEscapeKeyDown={false}
       trapFocus={false}
@@ -54,7 +57,7 @@ export default function Popover(props: PopoverProps): JSX.Element {
         }
       }}
     >
-      {/* AIDEV-NOTE: ここに animation を直に書かない — corvu の presence が終わりを待ち続けて閉じなくなる。動きは中の .popover に */}
+      {/* AIDEV-NOTE: Do not put an animation directly here: corvu's presence keeps waiting for it to end and never closes. Motion goes on the .popover inside */}
       <Dialog.Content class={props.class} aria-label={props.label}>
         {props.children}
       </Dialog.Content>

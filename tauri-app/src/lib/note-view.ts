@@ -1,19 +1,20 @@
 /**
- * ノートの表示モード。frontmatter の `view` キーとの相互変換を一箇所に寄せる。
+ * A note's view mode. The conversion to and from the frontmatter `view` key is kept in
+ * one place.
  *
- * キーは「書いてあるときだけ意味を持つ」約束にしてある。既定のエディタ表示を
- * わざわざ書くと、切り替えたことのないノートまで frontmatter が書き換わり、
- * 内容ハッシュが変わった扱いになり、同期が無変更のノートを転送し直すことになる。
+ * The key is promised to mean something only when it is written. Writing out the default
+ * editor view would rewrite the frontmatter of notes that were never switched, which
+ * counts as a changed content hash, and sync would send unchanged notes again.
  */
 
 export type NoteView = "editor" | "mindmap" | "preview";
 
-/** frontmatter の `view` の値を表示モードに解決する。未知の値はエディタに倒す。 */
+/** Resolve the frontmatter `view` value to a view mode. An unknown value falls to the editor. */
 export function resolveNoteView(view?: string): NoteView {
   return view === "mindmap" || view === "preview" ? view : "editor";
 }
 
-/** frontmatter に書く値。既定のエディタ表示はキーごと消す(null)。 */
+/** The value written to the frontmatter. The default editor view drops the key (null). */
 export function viewToFrontmatter(view: NoteView): string | null {
   return view === "editor" ? null : view;
 }
@@ -21,15 +22,15 @@ export function viewToFrontmatter(view: NoteView): string | null {
 export interface NoteContent {
   body: string;
   view: NoteView;
-  /** 読んだ時点の本文の指紋。保存に添える。 */
+  /** The body's revision at the moment it was read. Attached to the save. */
   revision: string;
 }
 
 /**
- * 本文と表示モードを対で読む。別々に画面へ流すと、先に届いた本文が一瞬
- * 違うモードで描かれる(マインドマップのノートが Markdown で光ってから
- * 差し替わる)。メタの読み損ねは既定のエディタ表示に倒すが、本文の
- * 読み損ねはごまかさない — 空のノートに見せるほうが害が大きい。
+ * Read the body and the view mode as a pair. Sent to the screen separately, the body that
+ * arrives first is drawn for an instant in the wrong mode (a mindmap note flashes as
+ * Markdown before it is replaced). A failed meta read falls back to the default editor
+ * view, but a failed body read is not papered over: showing an empty note does more harm.
  */
 export async function readNoteContent(
   readBody: () => Promise<{ body: string; revision: string }>,

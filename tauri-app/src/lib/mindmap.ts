@@ -1,14 +1,14 @@
 /**
- * 本文の見出し・リスト構造をマインドマップの木にする。
+ * Turn the heading and list structure of the body into a mindmap tree.
  *
- * markmap-lib を使わないのは 2 つの理由から:
- * - 変換器(markmap-html-parser)は、見出しとリストが同じ親の下に並ぶと
- *   リストを捨てる。ノートは「H1 の下に `-` と小見出しが混在」が普通の形で、
- *   枝が黙って消えるのは受け入れられない
- * - HTML 経由の変換のために cheerio を丸ごと連れてくる。トークン列から
- *   直接組めば、既にある markdown-it だけで足りる
+ * markmap-lib is not used, for two reasons:
+ * - The converter (markmap-html-parser) throws the lists away when headings and lists sit
+ *   side by side under the same parent. A note normally mixes `-` and subheadings under an
+ *   H1, and branches disappearing silently is not acceptable
+ * - It drags in the whole of cheerio for a conversion that goes through HTML. Built
+ *   straight from the token stream, the markdown-it already here is enough
  *
- * 描画(markmap-view)にはこの木をそのまま渡す。
+ * This tree is handed to the renderer (markmap-view) as it is.
  */
 
 import MarkdownIt from "markdown-it";
@@ -19,8 +19,8 @@ export interface MindmapNode {
   children: MindmapNode[];
 }
 
-// html: false(既定)のまま使う。ノートは同期先から降ってくることもあり、
-// 生の HTML はエスケープして文字として見せる
+// html: false (the default) is kept. A note can also come down from the sync target, so
+// raw HTML is escaped and shown as text
 const md = new MarkdownIt();
 
 function renderInline(token: Token): string {
@@ -32,15 +32,15 @@ function headingLevel(tag: string): number {
 }
 
 /**
- * 見出し(H1〜H6)とリスト項目だけを拾って木を組む。地の文の段落や
- * コードブロックは構造ではなく中身なので、マップには出さない。
+ * Pick up only the headings (H1 to H6) and list items and build the tree. Plain paragraphs
+ * and code blocks are content, not structure, so they do not go on the map.
  */
 export function outlineToTree(markdown: string): MindmapNode {
   const root: MindmapNode = { content: "", children: [] };
-  // 見出しの階層。先頭は常にルート(レベル 0)なので空にはならない
+  // The heading hierarchy. The first entry is always the root (level 0), so it never empties
   const headings: { node: MindmapNode; level: number }[] = [{ node: root, level: 0 }];
   const currentHeading = (): MindmapNode => headings.at(-1)?.node ?? root;
-  // 入れ子リストの親。bullet_list_open で積み、close で下ろす
+  // The parent of a nested list. Pushed on bullet_list_open, popped on close
   const listParents: MindmapNode[] = [];
   let lastItem: MindmapNode | undefined;
   let itemDepth = 0;
@@ -57,7 +57,7 @@ export function outlineToTree(markdown: string): MindmapNode {
         const node: MindmapNode = { content: renderInline(tokens[i + 1]), children: [] };
         currentHeading().children.push(node);
         headings.push({ node, level });
-        i += 2; // inline と heading_close を読み飛ばす
+        i += 2; // skip the inline and the heading_close
         break;
       }
       case "bullet_list_open":
@@ -82,7 +82,7 @@ export function outlineToTree(markdown: string): MindmapNode {
         break;
       }
       case "inline": {
-        // リスト項目の最初の行だけが項目の名前。2 段落目以降は中身とみなす
+        // Only a list item's first line is its name. From the second paragraph on it is content
         if (itemDepth > 0 && lastItem && lastItem.content === "") {
           lastItem.content = renderInline(token);
         }
@@ -94,8 +94,8 @@ export function outlineToTree(markdown: string): MindmapNode {
     }
   }
 
-  // トップレベルが 1 つだけなら、それをルートに昇格させる。空のルートを
-  // 真ん中に置くと、中心に名無しの丸だけが浮かぶ
+  // If there is exactly one top-level node, promote it to the root. An empty root placed in
+  // the middle leaves just a nameless circle floating at the centre
   if (root.children.length === 1) {
     return root.children[0];
   }

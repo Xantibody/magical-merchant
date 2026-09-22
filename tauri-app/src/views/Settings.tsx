@@ -1,7 +1,7 @@
 import { createResource, createSignal, For, onMount, onCleanup, Show } from "solid-js";
 import { A } from "@solidjs/router";
-// Kobalte は route 単位の lazy チャンクからだけ。ここは設定なので起動バンドルに
-// 乗らない(`.claude/skills/ui-design/SKILL.md`)
+// Kobalte is imported only from a per-route lazy chunk. This is Settings, so it
+// stays out of the startup bundle (`.claude/skills/ui-design/SKILL.md`)
 import { Switch } from "@kobalte/core/switch";
 import { ToggleGroup } from "@kobalte/core/toggle-group";
 import Icon from "../components/Icon";
@@ -34,7 +34,7 @@ import type { JSX } from "solid-js";
 
 const UNDO_MS = 5000;
 
-/** 設定の 3 頁。並びはナビの並び。 */
+/** The three pages of Settings. The order is the nav order. */
 type PageId = "general" | "records" | "sync";
 
 const PAGE_IDS: readonly PageId[] = ["general", "records", "sync"] as const;
@@ -45,20 +45,20 @@ const PAGE_ICONS: Record<PageId, IconName> = {
   sync: "cloud-check",
 };
 
-/** Workers URL の欄。行の項目名を `for` で結ぶために ID が要る。 */
+/** The Workers URL field. An ID is needed to tie the row's label to it with `for`. */
 const WORKERS_URL_FIELD = "settings-workers-url";
 
-/** 選んだが、まだ登録していない画像。名前を決めてから保存する。 */
+/** An image chosen but not yet registered. Saved once a name is decided. */
 interface PendingGlyph {
   file: File;
   format: "png" | "svg";
 }
 
 /**
- * 3 択以下の選択肢。開いて選ぶメニューにするほどのものではない。
+ * A choice of three or fewer. Not enough to justify a menu that opens to pick from.
  *
- * AIDEV-NOTE: ToggleGroup の中に `data-key` を足さないこと — Kobalte が
- * 巡回フォーカスの当たり先を `[data-key]` で引くので、⌘ 札の印と衝突する
+ * AIDEV-NOTE: do not add `data-key` inside a ToggleGroup. Kobalte looks up the
+ * roving focus target by `[data-key]`, so it collides with the Cmd badge marker
  */
 function Seg<T extends string>(props: {
   label: string;
@@ -71,8 +71,8 @@ function Seg<T extends string>(props: {
       class="settings-seg"
       aria-label={props.label}
       value={props.value}
-      // 選択中をもう一度押すと Kobalte は null を返す。設定に「どれも選んで
-      // いない」状態は無いので、その報せは捨てる
+      // Pressing the selected item again makes Kobalte return null. Settings has
+      // no "nothing selected" state, so that report is dropped
       onChange={(value) => {
         if (value !== null) {
           props.onPick(value as T);
@@ -91,15 +91,15 @@ function Seg<T extends string>(props: {
 }
 
 /**
- * 設定の 1 行。左に項目名と説明、右に操作。
- * `labelFor` を渡した行だけ項目名が本物の `<label>` になる — ToggleGroup や
- * スイッチの群には `for` が効かないので、欄を持つ行にしか付けない。
+ * One Settings row. Label and description on the left, the control on the right.
+ * Only a row given `labelFor` gets a real `<label>` as its label: `for` has no
+ * effect on a ToggleGroup or a group of switches, so only rows with a field get one.
  */
 function Row(props: {
   label: string;
   desc?: string;
   labelFor?: string;
-  /** 背の高い操作(特殊文字の管理・Workers URL)は上端で揃える。 */
+  /** A tall control (glyph management, Workers URL) is aligned to the top edge. */
   tall?: boolean;
   children: JSX.Element;
 }): JSX.Element {
@@ -120,7 +120,7 @@ function Row(props: {
   );
 }
 
-/** 入 / 切の 1 行。Kobalte の Switch がそのまま行になる。 */
+/** An on / off row. The Kobalte Switch is the row itself. */
 function SwitchRow(props: {
   label: string;
   desc: string;
@@ -147,11 +147,11 @@ function SwitchRow(props: {
   );
 }
 
-/** 画像ファイルを base64 に。IPC は文字列しか運ばない。 */
+/** An image file as base64. IPC carries only strings. */
 async function readAsBase64(file: File): Promise<string> {
   const bytes = new Uint8Array(await file.arrayBuffer());
   let binary = "";
-  // 一度に fromCodePoint へ渡すと引数の上限に当たる。上限の 256 KiB でも刻む
+  // Passing it all to fromCodePoint at once hits the argument limit. Even a file at the 256 KiB cap is chunked
   for (let at = 0; at < bytes.length; at += 0x80_00) {
     binary += String.fromCodePoint(...bytes.subarray(at, at + 0x80_00));
   }
@@ -160,7 +160,7 @@ async function readAsBase64(file: File): Promise<string> {
 
 export default function Settings(): JSX.Element {
   const shell = useShell();
-  /** 出している頁。モバイルは開くまで一覧だけを見せる(`settings--page`)。 */
+  /** The page shown. Mobile shows only the list until one is opened (`settings--page`). */
   const [page, setPage] = createSignal<PageId>("general");
   const [pageOpen, setPageOpen] = createSignal(false);
   const [workersUrl, setWorkersUrl] = createSignal("");
@@ -172,9 +172,10 @@ export default function Settings(): JSX.Element {
     createSignal<LocalePreference>(readStoredLocale());
   const [templates] = createResource(() => typedInvoke("list_templates"));
   /**
-   * tauri.conf.json の version がそのまま返る。リリースタグと一致するので、
-   * 端末に載っているビルドはこれで見分けられる。読めなければ空にしてナビの
-   * 足元ごと隠す — バージョンが出ないことより、設定が開けないことのほうが困る
+   * Returns the version from tauri.conf.json as is. It matches the release tag, so
+   * it tells which build is on the device. If it cannot be read, it is left empty
+   * and the foot of the nav is hidden with it: Settings failing to open is worse
+   * than the version not showing
    */
   const [version] = createResource(async () => {
     try {
@@ -184,7 +185,7 @@ export default function Settings(): JSX.Element {
     }
   });
   const [glyphList, { refetch: refetchGlyphs }] = createResource(() => typedInvoke("list_glyphs"));
-  /** 削除の猶予中で、一覧から隠している名前。 */
+  /** Names hidden from the list while their deletion is still undoable. */
   const [hiddenGlyphs, setHiddenGlyphs] = createSignal<string[]>([]);
   const [pendingGlyph, setPendingGlyph] = createSignal<PendingGlyph | null>(null);
   const [glyphName, setGlyphName] = createSignal("");
@@ -220,8 +221,9 @@ export default function Settings(): JSX.Element {
   };
 
   /**
-   * フォルダや複数選択。名前は訊かずファイル名から決めて、まとめて登録する。
-   * 同じ名前は core が置き換えるので上書きになる — ヒントにそう書いてある。
+   * A folder or a multi-selection. Names are taken from the file names without
+   * asking, and all are registered at once. core replaces a same name, so it is
+   * an overwrite; the hint says so.
    */
   const importGlyphs = async (files: File[]): Promise<void> => {
     const plan = planGlyphImport(files);
@@ -232,16 +234,16 @@ export default function Settings(): JSX.Element {
     try {
       for (const { name, format, file } of plan.ready) {
         try {
-          // 一枚ずつ書く。同じフォルダへ一斉に書かせて競わせる理由がない
+          // Written one at a time. There is no reason to make them race into the same folder
           // oxlint-disable-next-line no-await-in-loop
           await typedInvoke("save_glyph", { name, format, dataBase64: await readAsBase64(file) });
           savedCount += 1;
         } catch {
-          // 一枚の失敗で残りを止めない。壊れた SVG が混ざっていても他は登録する
+          // One failure does not stop the rest. A broken SVG in the mix still lets the others register
           failed += 1;
         }
       }
-      // 登録表は最後に一度だけ読み直す。一枚ごとに読むと一覧が枚数分跳ねる
+      // The registry is reread once, at the end. Reading per file makes the list jump once per file
       await refetchGlyphs();
       await loadGlyphs();
     } finally {
@@ -250,7 +252,7 @@ export default function Settings(): JSX.Element {
     flash(t().settings.glyphsImported(savedCount, plan.skipped.length + failed));
   };
 
-  // 一枚なら名前を確かめる形のまま。二枚以上でまとめ登録になる
+  // One file keeps the form that confirms the name. Two or more become a bulk import
   const pickGlyphFiles = (list: FileList | null): void => {
     const files = [...(list ?? [])];
     if (files.length === 1) {
@@ -276,8 +278,8 @@ export default function Settings(): JSX.Element {
       });
       cancelGlyph();
       await refetchGlyphs();
-      // 描画側の登録表も読み直す。ここで書いた画像を、戻った先の本文が
-      // すぐ引けるように
+      // Reread the renderer's registry too, so the body returned to can look up
+      // the image written here right away
       await loadGlyphs();
       flash(t().settings.glyphSaved(name));
     } catch (error) {
@@ -287,7 +289,7 @@ export default function Settings(): JSX.Element {
     }
   };
 
-  // 削除 + Undo。テンプレと同じ 5 秒の tombstone
+  // Delete + Undo. The same 5-second tombstone as templates
   const removeGlyph = (glyph: GlyphSummary): void => {
     setHiddenGlyphs((names) => [...names, glyph.name]);
 
@@ -316,8 +318,9 @@ export default function Settings(): JSX.Element {
   const chooseStartFullscreen = (on: boolean): void => {
     setStartFullscreen(on);
     writeStartFullscreen(on);
-    // 入れた側は次回を待たせずその場で全画面にする。切った側は触らない —
-    // いま全画面で使っているのを設定の操作で解く理由はない
+    // Turning it on goes fullscreen right now instead of waiting for next launch.
+    // Turning it off touches nothing: a Settings action has no reason to leave
+    // the fullscreen in use right now
     if (on) {
       void enterFullscreen();
     }
@@ -330,8 +333,8 @@ export default function Settings(): JSX.Element {
       const config = await typedInvoke("get_sync_config");
       setWorkersUrl(config.workers_url);
     } catch (error) {
-      // 未設定のまま開いた場合は空欄で始める。壊れているときだけは知らせる —
-      // 空欄と区別が付かないと、入力し直したつもりの保存で上書きしてしまう
+      // Opened with nothing configured, it starts blank. Only a corrupt config is
+      // reported: if it looked like a blank one, a save meant as a re-entry would overwrite it
       if (syncErrorKind(error) === "configCorrupt") {
         setMessage(t().sync.configCorrupt);
       }
@@ -349,7 +352,7 @@ export default function Settings(): JSX.Element {
       setAuthenticated(false);
     }
 
-    // Android はディープリンク経由で認証が完了するので、イベントで状態を反映する
+    // On Android the sign-in completes through a deep link, so the state is updated from events
     unlisteners.push(
       await listen(EVENTS.AUTH_SUCCESS, () => {
         setAuthenticated(true);
@@ -372,7 +375,7 @@ export default function Settings(): JSX.Element {
     setSaving(true);
     setMessage("");
     try {
-      // auto_sync は同期ポップオーバー側が持つ設定なので、現在値を保って書き戻す
+      // auto_sync belongs to the sync popover, so its current value is kept and written back
       const current = await typedInvoke("get_sync_config");
       await typedInvoke("save_sync_config", {
         config: { ...current, workers_url: workersUrl() },
@@ -388,8 +391,8 @@ export default function Settings(): JSX.Element {
   const login = async (): Promise<void> => {
     setMessage(t().settings.continueSignIn);
     try {
-      // デスクトップはアプリ内の窓でログインを終え、コマンド完了時点でトークン保存済み。
-      // Android はブラウザを開くだけで、完了はディープリンクの auth-success で通知される
+      // Desktop finishes the sign-in in an in-app window; the token is saved by the time the command returns.
+      // Android only opens the browser; completion is reported by the auth-success deep link
       await typedInvoke("auth_login");
       const status = await typedInvoke("auth_status");
       setAuthenticated(status);
@@ -414,7 +417,7 @@ export default function Settings(): JSX.Element {
   const general = (): JSX.Element => (
     <>
       <Row label={t().settings.language} desc={t().settings.languageDesc}>
-        {/* テーマと違い巡回では選べない。押すたびに読めない言語を通る */}
+        {/* Unlike the theme, this cannot be a cycling button. Each press would pass through a language you cannot read */}
         <Seg
           label={t().settings.language}
           value={localePreference()}
@@ -429,8 +432,8 @@ export default function Settings(): JSX.Element {
         />
       </Row>
 
-      {/* ヘッダーの巡回ボタンから移した。年に数回しか触らないものが、
-          毎回見る場所に居座っていた */}
+      {/* Moved here from the cycling button in the header. Something touched a
+          few times a year was sitting where it was seen every time */}
       <Row label={t().settings.theme} desc={t().settings.themeDesc}>
         <Seg
           label={t().settings.theme}
@@ -440,7 +443,7 @@ export default function Settings(): JSX.Element {
         />
       </Row>
 
-      {/* 全画面の窓があるのは macOS だけ。Android に出しても何も起きない */}
+      {/* Only macOS has a window that can go fullscreen. On Android the switch would do nothing */}
       <Show when={isMacDesktop()}>
         <SwitchRow
           label={t().settings.startFullscreen}
@@ -454,8 +457,8 @@ export default function Settings(): JSX.Element {
 
   const records = (): JSX.Element => (
     <>
-      {/* テンプレートの管理は別画面(`ROUTES.TEMPLATES`)。ここはその入口で、
-          行ごと押せる */}
+      {/* Template management is its own screen (`ROUTES.TEMPLATES`). This is the
+          entry to it, and the whole row is pressable */}
       <A
         href={ROUTES.TEMPLATES}
         class="settings-row settings-row--link"
@@ -480,7 +483,7 @@ export default function Settings(): JSX.Element {
             <For each={visibleGlyphs()}>
               {(glyph) => (
                 <li class="glyph-row">
-                  {/* 縮小表示。画像が届いていない(登録表に無い)ときは枠だけ */}
+                  {/* A thumbnail. Only the frame when the image has not arrived (not in the registry) */}
                   <span class="glyph-thumb">
                     <Show when={glyphs().get(glyph.name)}>
                       {(url) => <img class="glyph" src={url()} alt="" draggable={false} />}
@@ -527,7 +530,7 @@ export default function Settings(): JSX.Element {
                 <Icon name="folder" size={14} />
                 {t().settings.addGlyphsFolder}
               </button>
-              {/* ダイアログのプラグインは入れない。ファイル選択はブラウザで足りる */}
+              {/* No dialog plugin is added. The browser's file picker is enough */}
               <input
                 ref={fileInput}
                 type="file"
@@ -537,15 +540,15 @@ export default function Settings(): JSX.Element {
                 aria-label={t().settings.addGlyph}
                 onChange={(e) => {
                   pickGlyphFiles(e.currentTarget.files);
-                  // 同じファイルを選び直しても change が飛ぶように
+                  // So that choosing the same file again still fires change
                   e.currentTarget.value = "";
                 }}
               />
-              {/* webkitdirectory は標準外だが、どのエンジンもフォルダ選択に
-                  これを見る。Solid の JSX 型に無いので ref で付ける。
-                  Android の WebView は出せないことがあるので、上の複数選択の
-                  input も残している。accept はフォルダ選択では効かない —
-                  中身の選別は planGlyphImport がやる */}
+              {/* webkitdirectory is non-standard, but every engine reads it for a
+                  folder pick. It is not in Solid's JSX types, so it is set through
+                  a ref. Android's WebView sometimes cannot show it, so the
+                  multi-select input above is kept as well. accept has no effect on
+                  a folder pick; planGlyphImport does the filtering of the contents */}
               <input
                 ref={(el) => {
                   folderInput = el;
@@ -627,7 +630,7 @@ export default function Settings(): JSX.Element {
         <Show
           when={editable()}
           fallback={
-            // 設定ファイルで固定されている環境では読むだけ
+            // Read-only where the config file fixes it
             <p class="settings-readonly">{workersUrl() || t().settings.notSet}</p>
           }
         >
@@ -732,7 +735,7 @@ export default function Settings(): JSX.Element {
                   {(hint) => <span class="settings-nav-hint">{hint()}</span>}
                 </Show>
               </span>
-              {/* 1 頁ずつ出すモバイルだけに出る、頁へ進む印 */}
+              {/* The "go to page" mark, shown only on mobile where pages come one at a time */}
               <span class="settings-nav-caret">
                 <Icon name="caret-right" size={14} />
               </span>
@@ -744,13 +747,13 @@ export default function Settings(): JSX.Element {
         </Show>
       </nav>
 
-      {/* 頁は切り替えるたびに作り直す。8px 上がりながら入る動きがそこで走る */}
+      {/* A page is rebuilt on every switch. That is where the 8px rise-in motion runs */}
       <div class="settings-page">
         <Show when={page()} keyed>
           {(id) => (
             <div class="settings-page-inner">
               <div class="settings-page-head">
-                {/* 一覧へ戻る道。1 頁ずつ出すモバイルだけで意味がある */}
+                {/* The way back to the list. Only meaningful on mobile, where pages come one at a time */}
                 <button
                   type="button"
                   class="icon-button settings-back"

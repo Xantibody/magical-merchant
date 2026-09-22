@@ -34,11 +34,12 @@ describe("diagram pending", () => {
     setDiagramPending(dom, false);
 
     expect(hasPendingDiagram(root)).toBe(false);
-    // 合図はブロックから浮かんでエディタまで届く
+    // The event bubbles out of the block and reaches the editor
     expect(settled).toHaveBeenCalledTimes(1);
   });
 
-  // 打鍵のたびに走る sync が、待っていない相手に合図を投げ続けないこと
+  // The sync that runs on every keystroke must not keep firing the event at a side that
+  // is not waiting
   it("stays quiet when nothing was pending", () => {
     const { root, dom } = block();
     const settled = vi.fn<() => void>();
@@ -49,7 +50,7 @@ describe("diagram pending", () => {
     expect(settled).not.toHaveBeenCalled();
   });
 
-  // 図が 2 つあるノートは、両方が決着するまで「まだ描いている」
+  // A note with two diagrams is "still drawing" until both are settled
   it("stays pending while any diagram is still drawing", () => {
     const { root, dom } = block();
     const other = document.createElement("div");

@@ -18,8 +18,9 @@ const TABS: { path: RoutePath; shortcut: ShortcutName }[] = [
 ];
 
 /**
- * 現在地の線の位置。レールの上余白 10px + ボタン 36px + 隙間 4px から出る値で、
- * 線 (20px) をボタンの中央に合わせたもの。`styles/rail.css` の実寸と対で動く。
+ * The position of the current-place line. The value comes from the rail's 10px top padding
+ * + the 36px button + the 4px gap, with the line (20px) centred on the button. It moves in
+ * step with the real measurements in `styles/rail.css`.
  */
 const MARKER_TOP: Partial<Record<RoutePath, number>> = {
   [ROUTES.SCRAWL]: 18,
@@ -28,13 +29,16 @@ const MARKER_TOP: Partial<Record<RoutePath, number>> = {
 };
 
 /**
- * 面と全体の操作を縦に並べた 48px の柱。ヘッダの代わり。
+ * A 48px column with the surfaces and the app-wide actions stacked vertically. It stands
+ * in for the header.
  *
- * ヘッダを畳んだのは、横に伸びる帯が「全画面のメモ欄」から高さを奪っていた
- * から。縦に置けば本文の高さは丸ごと残り、面の切替と検索・同期・設定が
- * 同じ距離に並ぶ。現在地は塗りと、左端を滑る 2px の線が言う。
+ * The header was folded away because a band running sideways took height from the
+ * "full-screen memo area". Placed vertically, the body keeps its whole height, and
+ * switching surfaces sits the same distance away as search, sync and settings. The
+ * current place is said by the fill and by a 2px line sliding down the left edge.
  *
- * 「絞る」は面ではなく操作なので、押しても線は動かない(`MARKER_TOP` に無い)。
+ * Browse is an action rather than a surface, so pressing it does not move the line (it is
+ * not in `MARKER_TOP`).
  */
 export default function Rail(props: { sync: SyncState; onSearch: () => void }): JSX.Element {
   const shell = useShell();
@@ -43,8 +47,9 @@ export default function Rail(props: { sync: SyncState; onSearch: () => void }): 
   const isActive = (path: RoutePath): boolean => location.pathname === path;
 
   /**
-   * 線を最後に置いた高さ。設定のように面でない場所へ移ったときは消すだけに
-   * して、位置はそのままにしておく — 戻ったときに線が遠くから飛んでこない。
+   * The height the line was last placed at. Moving somewhere that is not a surface, such
+   * as Settings, only hides it and leaves the position alone: coming back, the line does
+   * not fly in from far away.
    */
   const [markerTop, setMarkerTop] = createSignal(MARKER_TOP[ROUTES.SCRAWL] ?? 18);
   createEffect(() => {
@@ -59,7 +64,7 @@ export default function Rail(props: { sync: SyncState; onSearch: () => void }): 
     <nav
       class="rail"
       aria-label={t().rail.label}
-      // 一覧フライアウトはレールの続き。ポインタが柱に乗っているあいだ開く
+      // The list flyout is a continuation of the rail. It opens while the pointer is on the column
       onPointerEnter={() => shell.setListHover(true)}
       onPointerLeave={() => shell.setListHover(false)}
     >
@@ -78,7 +83,7 @@ export default function Rail(props: { sync: SyncState; onSearch: () => void }): 
         )}
       </For>
 
-      {/* 面でないところに居るあいだは消す。CSS 側は data-off だけを見る */}
+      {/* Hidden while on somewhere that is not a surface. The CSS looks only at data-off */}
       <span
         class="rail-marker"
         style={{ top: `${markerTop()}px` }}

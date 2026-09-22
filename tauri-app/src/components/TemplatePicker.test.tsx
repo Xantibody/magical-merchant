@@ -41,8 +41,8 @@ describe("TemplatePicker", () => {
     expect(screen.getByText("meeting")).toBeDefined();
   });
 
-  // ここは押せば今すぐノートになる場所。知りたいのは「今日作ると何が付くか」で、
-  // `{{date:YYYY-MM}}` のままでは何のタグか分からない
+  // Pressing here makes a note right now. What the reader wants to know is what tag it
+  // gets if created today, and `{{date:YYYY-MM}}` left as it is says nothing.
   it("resolves the leading tag so it reads as today's value", () => {
     const now = new Date();
     const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -61,7 +61,7 @@ describe("TemplatePicker", () => {
     expect(onPick).toHaveBeenCalledExactlyOnceWith(TEMPLATES[0]);
   });
 
-  // タップで空の Note を作る道は、テンプレが増えても塞がない
+  // One tap to an empty Note stays open no matter how many templates there are
   it("keeps the empty note as its own row", () => {
     const { onPickEmpty } = renderPicker();
 
@@ -78,7 +78,7 @@ describe("TemplatePicker", () => {
     expect(onManage).toHaveBeenCalledTimes(1);
   });
 
-  // 1 件も無いうちから見出しだけ出ていると、壊れているように見える
+  // A heading standing alone with not one entry under it looks broken
   it("drops the section label when there is no template", () => {
     renderPicker([]);
 

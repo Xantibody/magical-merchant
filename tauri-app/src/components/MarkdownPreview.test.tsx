@@ -7,19 +7,19 @@ import MarkdownPreview from "./MarkdownPreview";
 
 const FLOWCHART = ["```mermaid", "flowchart TD", "  A[Start] --> B[End]", "```"].join("\n");
 
-/** コマンドに渡った base64 を文字列に戻す */
+/** Turn the base64 handed to the command back into a string */
 function decodeBase64(base64: string): string {
   return new TextDecoder().decode(
     Uint8Array.from(atob(base64), (char) => char.codePointAt(0) ?? 0),
   );
 }
 
-/** SVG の開始タグだけ。mermaid の <style> の中の max-width は図の体裁で、見たいのはルートの属性 */
+/** The opening tag of the svg only. The max-width inside mermaid's <style> is the diagram's own look; what is wanted is the root attribute */
 function openingTagOf(svg: string): string {
   return svg.match(/^<svg[^>]*>/u)?.[0] ?? "";
 }
 
-/** 右下の倍率表示を数で読む */
+/** Read the zoom percentage at the bottom right as a number */
 function percentOf(locator: Locator): number {
   return Number.parseInt(locator.element().textContent ?? "", 10);
 }
@@ -66,7 +66,7 @@ describe("MarkdownPreview", () => {
     const canvas = screen.locator(".mermaid-zoom-canvas");
     await expect.element(canvas).toBeInTheDocument();
 
-    // 開いた直後から transform が付いている(fit)。原寸の 2 倍まで
+    // A transform is on it from the moment it opens (fit). Up to twice the natural size
     const before = (canvas.element() as HTMLElement).style.transform;
     expect(before).toMatch(/^translate\(.+\) scale\(.+\)$/u);
     const percent = screen.locator(".mermaid-zoom-percent");
@@ -100,11 +100,11 @@ describe("MarkdownPreview", () => {
     });
     zoom.element().dispatchEvent(wheel);
 
-    // preventDefault されていれば、ページのスクロールやブラウザのズームには渡らない
+    // If preventDefault was called, it never reaches the page scroll or the browser zoom
     expect(wheel.defaultPrevented).toBe(true);
     const zoomed = percentOf(percent);
     expect(zoomed).toBeGreaterThan(fitted);
-    // 背景を押しても閉じない — ドラッグの始点と区別が付かないので
+    // Pressing the background does not close it: it cannot be told from the start of a drag
     await userEvent.click(zoom);
     await expect.element(zoom).toBeInTheDocument();
   });
@@ -165,14 +165,14 @@ describe("MarkdownPreview", () => {
 
       await expect.poll(() => calls.map((call) => call.cmd)).toStrictEqual(["save_export"]);
       expect(calls[0].args.suggestedName).toBe("diagram-1.png");
-      // PNG の先頭 8 バイト (\x89PNG\r\n\x1a\n) の base64
+      // The base64 of the first 8 bytes of a PNG (\x89PNG\r\n\x1a\n)
       expect(calls[0].args.dataBase64).toMatch(/^iVBORw0KGgo/u);
     });
 
     /**
-     * canvas は大きすぎる図に対して `data:,` を返す。空の base64 を渡すと、
-     * 中身の無い PNG がダイアログを通って「保存しました」になる — 0 バイトの
-     * ファイルができたことは開くまで分からない
+     * canvas returns `data:,` for a diagram that is too large. Handing over an empty
+     * base64 lets a PNG with no content through the dialog and into "saved": that a 0 byte
+     * file was created is not visible until it is opened
      */
     it("never hands an empty png to the save command", async () => {
       const toDataURL = vi
@@ -215,8 +215,8 @@ describe("MarkdownPreview", () => {
 
     beforeEach(() => {
       written.length = 0;
-      // ヘッドレスの Chromium はクリップボードへの書き込みを許可しない。
-      // 見たいのは「押したブロックの生ソースが渡ること」だけ
+      // Headless Chromium does not allow writing to the clipboard. All that is wanted here
+      // is "the raw source of the block that was pressed is handed over"
       Object.defineProperty(navigator, "clipboard", {
         configurable: true,
         value: {
@@ -232,7 +232,7 @@ describe("MarkdownPreview", () => {
       if (clipboard) {
         Object.defineProperty(Navigator.prototype, "clipboard", clipboard);
       }
-      // インスタンス側に置いた上書きを外し、プロトタイプの本物に戻す
+      // Remove the override put on the instance and go back to the real one on the prototype
       Reflect.deleteProperty(navigator, "clipboard");
     });
 

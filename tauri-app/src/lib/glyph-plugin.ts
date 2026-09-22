@@ -12,12 +12,12 @@ interface GlyphRange {
   shortcode: string;
 }
 
-/** コードスパンの中身。プレビューが文字のまま出すところは、ここでも同じ。 */
+/** Inside a code span. Where the preview leaves text as text, so does this. */
 function isInlineCode(node: ProseNode): boolean {
   return node.marks.some((mark) => mark.type.name === "inlineCode");
 }
 
-/** 文書中の、登録済みの `:name:` の位置を集める。 */
+/** Collects the positions of registered `:name:` in the document. */
 function glyphRanges(doc: ProseNode, glyphs: ReadonlyMap<string, string>): GlyphRange[] {
   const ranges: GlyphRange[] = [];
   doc.descendants((node, pos) => {
@@ -44,12 +44,12 @@ function glyphRanges(doc: ProseNode, glyphs: ReadonlyMap<string, string>): Glyph
 }
 
 /**
- * `:name:` を登録済みの画像として見せる Milkdown プラグイン。
+ * Milkdown plugin that shows `:name:` as the registered image.
  *
- * ノート間リンクと同じ流儀で、スキーマにノードは足さない — 保存形は
- * 本文中のプレーンテキストのままで、装飾(decoration)が表示だけを画像に
- * 差し替える。カーソルが範囲に触れている間は保存形をそのまま見せる。
- * 画像ノードを持たないので、Markdown への書き戻しにも手が入らない。
+ * In the same manner as note links, no node is added to the schema. The saved
+ * form stays plain text in the body, and a decoration swaps in the image for
+ * display only. While the cursor touches the range the saved form is shown as is.
+ * With no image node, the write-back to Markdown is untouched too.
  */
 export function createGlyphPlugin(glyphs: () => ReadonlyMap<string, string>): MilkdownPlugin[] {
   const decorations = $prose(
@@ -58,14 +58,14 @@ export function createGlyphPlugin(glyphs: () => ReadonlyMap<string, string>): Mi
         props: {
           decorations(state) {
             const registry = glyphs();
-            // 速い経路: 登録が無い・`:` の無い文書を毎打鍵ごとに走査しない
+            // Fast path: do not scan a document with no registry or no `:` on every keystroke
             if (registry.size === 0 || !state.doc.textContent.includes(":")) {
               return DecorationSet.empty;
             }
             const { from, to } = state.selection;
             const decos: Decoration[] = [];
             for (const range of glyphRanges(state.doc, registry)) {
-              // 端に触れただけでも保存形に戻す。隣で打っていて急に化けない
+              // Touching an edge is enough to revert to the saved form. Typing next to it does not suddenly transform
               if (from <= range.to && to >= range.from) {
                 decos.push(Decoration.inline(range.from, range.to, { class: "glyph-source" }));
               } else {
@@ -79,7 +79,7 @@ export function createGlyphPlugin(glyphs: () => ReadonlyMap<string, string>): Mi
                       img.src = registry.get(range.name) ?? "";
                       img.alt = range.shortcode;
                       img.draggable = false;
-                      // 押すとカーソルが中に入り、保存形が現れて編集できる
+                      // A press puts the cursor inside; the saved form appears and can be edited
                       img.addEventListener("mousedown", (e) => {
                         e.preventDefault();
                         const pos = getPos();
@@ -93,8 +93,8 @@ export function createGlyphPlugin(glyphs: () => ReadonlyMap<string, string>): Mi
                       });
                       return img;
                     },
-                    // 同じ名前の画像は描き直さない。key が無いと打鍵のたびに
-                    // <img> が作り直され、データ URL の読み直しでちらつく
+                    // An image of the same name is not redrawn. Without a key the
+                    // <img> is rebuilt on every keystroke and flickers while the data URL reloads
                     { side: 1, key: `glyph:${range.name}` },
                   ),
                 );

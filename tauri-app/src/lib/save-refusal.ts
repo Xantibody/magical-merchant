@@ -1,48 +1,51 @@
 /**
- * 断られた保存の言い分。「どの理由で断られたか」「打った字が残ったか」
- * 「断られたノートの打鍵がいま画面に出ているか」の 3 つだけで決まる純関数。
+ * What a refused save says. A pure function decided by only three things: which reason it
+ * was refused for, whether the typed text was kept, and whether the keystrokes of the
+ * refused note are on screen right now.
  *
- * 画面から切り離してあるのは、この判断が保存の失敗経路すべての出口で、
- * 組み合わせの数がいちばん多いところだから。ノートを開いて打って断らせる
- * ところまで組まずに、表として確かめられるようにしておく。
+ * It is kept apart from the screen because this decision is the exit of every failing save
+ * path, the place with the most combinations. That way it can be checked as a table,
+ * without building up to opening a note, typing, and making it refuse.
  */
 
 import { isBrokenNoteSave, isMissingNoteSave, isNotTextNoteSave, isStaleSave } from "./commands";
 import { t } from "./i18n";
 
 /**
- * 読み直しでは直らない拒否か。壊れた記録・消えたノート・文字として読めない
- * ファイルの 3 つ。どれも次の打鍵に望みが無いので、打った字はその場で退避する。
- * 判断を 1 か所に置くのは、印が増えたときに退避の経路から漏れると、打った字が
- * ディスクにも控えにも残らないまま黙って消えるから。
+ * Whether the refusal is one a reload cannot fix. Three of them: a corrupt record, a
+ * missing note, and a file that cannot be read as text. None leave any hope for the next
+ * keystroke, so the typed text is set aside there and then. The decision sits in one place
+ * because if a new reason were added and slipped past the set-aside path, the typed text
+ * would vanish silently, left neither on disk nor in the copy.
  */
 export const refusedForGood = (error: unknown): boolean =>
   isBrokenNoteSave(error) || isMissingNoteSave(error) || isNotTextNoteSave(error);
 
 /**
- * 断られた保存のあと、画面に何が出ているか。言い分はこれで決まる。
+ * What is on screen after a refused save. This decides what is said.
  *
- * - `draft`: 断られたノートが選ばれていて、本文は打ったぶんのまま。
- *   「画面にあるうちに写して」が届く唯一の場合
- * - `reloaded`: そのノートは選ばれているが、本文は読み直しで入れ替わった
- *   (譲ったぶんでも、A → B → A と戻って着いたぶんでも同じ)。打った字は
- *   もう画面に無いので、控えから取り出す話しかできない
- * - `away`: 画面にあるのは別のノート。画面の本文を指す案内は届かない
+ * - `draft`: the refused note is selected and the body is still what was typed. The only
+ *   case where "copy it while it is still on screen" reaches the reader
+ * - `reloaded`: that note is selected, but the body was replaced by a reload (the same
+ *   whether it gave way or arrived back through A to B to A). The typed text is no longer
+ *   on screen, so the only thing left to say is how to take it out of the copy
+ * - `away`: another note is on screen. Advice pointing at the body on screen does not reach
  */
 export type RefusedScreen = "draft" | "reloaded" | "away";
 
 /**
- * 断られた保存の言い分。`screen` は「断られたノートの打鍵がいま画面に出ているか」。
- * 出ていないなら画面の本文を指す案内は届かない — 画面にあるのは別のノートで、
- * 写す相手がそこに無い。名乗ってから、控えの在り処と取り出せるかだけを言う。
- * 消えたノートと、文字として読めないノートの控えは、控えとしては残るが、いま
- * 取り出す道が無い。開き直しても `read_note` が断られるので本文は載らず、
- * 「戻す」もそこで引き返す。
- * Stale だけはノートが書ける状態で残るので、開き直せば「戻す」で取り出せる —
- * ただし読み直しは選んでいるノートにしか走らないので、画面に無いぶんは
- * 「開き直してから」を先に言う。読み直しそのものが失敗した(`draft`)ときは、
- * 打った本文がまだ画面に残っているので、それを指して写してもらう。
- * AIDEV-NOTE: 孤児の控え(消えた・読めないノートのぶん)を開く一覧が無いので、取り出せないことを文言で正直に言うに留める(道は別 PR)
+ * What a refused save says. `screen` is whether the keystrokes of the refused note are on
+ * screen right now. If they are not, advice pointing at the body on screen does not reach:
+ * another note is on screen, and what would be copied is not there. Name the note first,
+ * then say only where the copy is and whether it can be taken out.
+ * The copies for a missing note and for a note that cannot be read as text do survive as
+ * copies, but there is no way to take them out right now. Reopening does not load the body
+ * because `read_note` is refused, so "restore" turns back there too.
+ * Only Stale leaves the note in a writable state, so reopening it makes "restore" able to
+ * take the text out. A reload runs only on the selected note, though, so for one that is
+ * not on screen, say "reopen it first" before anything else. When the reload itself failed
+ * (`draft`), the typed body is still on screen, so point at it and ask for it to be copied.
+ * AIDEV-NOTE: there is no list that opens orphaned copies (those of missing or unreadable notes), so this only says honestly in words that they cannot be taken out (the way out is a separate PR)
  */
 export function refusalToast(
   error: unknown,
@@ -51,14 +54,14 @@ export function refusalToast(
   screen: RefusedScreen,
 ): string {
   const words = t().notes;
-  // 打鍵が画面に残っているときだけ、画面の本文を指す案内が届く
+  // Only while the keystrokes are still on screen does advice pointing at the body reach
   const onScreen = screen === "draft";
   if (!kept) {
     if (onScreen) {
       return words.saveNotKept;
     }
-    // 読み直しが載ったぶんは、画面の本文もディスクのぶんに入れ替わっている。
-    // 控えも無いので、打った字はもうどこにも無い
+    // Where a reload landed, the body on screen was replaced by the one from disk.
+    // There is no copy either, so the typed text is nowhere any more
     if (screen === "reloaded" && isStaleSave(error)) {
       return words.staleNotKept;
     }
@@ -73,9 +76,9 @@ export function refusalToast(
   if (isMissingNoteSave(error)) {
     return onScreen ? words.missingNote : words.missingNoteAway(title);
   }
-  // 文字として読めないファイルは、記録が壊れているのとは手当てが違う。
-  // 直すのは frontmatter ではなくファイルそのもので、開き直しても
-  // `read_note` が同じ理由で断られるので「戻す」で取り出す道も無い
+  // A file that cannot be read as text needs different care from a corrupt record.
+  // What is fixed is the file itself, not the frontmatter, and reopening it is refused by
+  // `read_note` for the same reason, so there is no way to take it out with "restore"
   if (isNotTextNoteSave(error)) {
     return onScreen ? words.notTextNote : words.notTextNoteAway(title);
   }

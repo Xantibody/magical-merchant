@@ -15,9 +15,9 @@ import { getNetworkIcon } from "../lib/parse-scrawl";
 import type { DeviceContext } from "../lib/parse-scrawl";
 
 interface CalendarPopoverProps {
-  /** 記録のある日 (`YYYY-MM-DD`)。太字で示す。 */
+  /** Days that have records (`YYYY-MM-DD`). Shown in bold. */
   recordedDates: string[];
-  /** 選択日のコンテキスト。集計に使う。 */
+  /** The contexts of the selected day. Used for the summary. */
   contextsFor: (iso: string) => (DeviceContext | null)[];
   onPick: (iso: string) => void;
 }

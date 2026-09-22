@@ -8,9 +8,9 @@ import { createLocationTracker } from "./location-tracker";
 export type NetworkType = "WiFi" | "Ethernet" | "Mobile" | "Offline";
 
 /**
- * ネイティブ側では取れない実行環境の情報。Android には `battery` クレートも
- * SystemConfiguration も無く、Rust 側は一律 `None` を返すしかない。
- * WebView が持っている値で埋めて Tauri コマンドに渡す。
+ * Runtime information the native side cannot get. Android has neither the `battery` crate
+ * nor SystemConfiguration, and the Rust side can only return `None` across the board.
+ * Filled with the values the WebView holds and passed to the Tauri command.
  */
 export interface ClientContext {
   latitude: number | null;
@@ -27,12 +27,12 @@ interface BatteryStatus {
   charging: boolean;
 }
 
-/** Battery Status API は標準の lib.dom から外れているので自前で型を置く。 */
+/** The Battery Status API is outside the standard lib.dom, so the type is declared here. */
 interface BatteryCapableNavigator extends Navigator {
   getBattery?: () => Promise<BatteryStatus>;
 }
 
-/** Network Information API も同様。`type` は Chromium の Android ビルドにしか無い。 */
+/** The Network Information API likewise. `type` exists only in Chromium's Android build. */
 interface ConnectionCapableNavigator extends Navigator {
   connection?: { type?: string };
 }
@@ -58,8 +58,8 @@ export function toNetworkType(online: boolean, connectionType?: string): Network
     case "none": {
       return "Offline";
     }
-    // bluetooth / wimax / unknown、あるいは API 自体が無いブラウザ。
-    // 分からないものを WiFi に丸めると記録が嘘になるので黙って諦める。
+    // bluetooth / wimax / unknown, or a browser without the API at all.
+    // Rounding something unknown to WiFi would make the record a lie, so give up silently.
     default: {
       return null;
     }
@@ -95,9 +95,9 @@ async function locationPermitted(request: boolean): Promise<boolean> {
 }
 
 /**
- * Android の GPS はコールドスタートで数秒かかるので、保存のたびに測り直すと
- * 送信がそのぶん止まる。手元の座標を使い回し、測位は裏で回して次に備える。
- * macOS がネイティブ側で「起動と同時に受け取り始める」のと同じ理屈。
+ * Android's GPS takes seconds on a cold start, so measuring again on every save stalls the
+ * send for that long. The coordinates at hand are reused and the fix runs behind, ready
+ * for the next one. Same reasoning as macOS "start receiving at launch" on the native side.
  */
 const locationTracker = createLocationTracker({
   permitted: locationPermitted,
@@ -107,15 +107,15 @@ const locationTracker = createLocationTracker({
   },
 });
 
-/** 許可ダイアログを出さずに測位を始めておく。起動時に呼ぶ。 */
+/** Start locating without raising the permission dialog. Called at startup. */
 export function warmLocation(): void {
   locationTracker.warmUp();
 }
 
 /**
- * 端末に聞くだけで分かる情報を集める。位置情報だけは許可ダイアログを伴うので
- * 含めない。自動保存のように頻繁に走る経路はこちらを使う。
- * 取れないものは null で、呼び出しは失敗させない。
+ * Collect what can be known by asking the device alone. Location is the one thing left
+ * out, because it comes with a permission dialog. Paths that run often, such as autosave,
+ * use this one. What cannot be read is null, and the call is never failed.
  */
 export async function getDeviceSignals(): Promise<ClientContext> {
   return {
@@ -131,7 +131,7 @@ export async function getDeviceSignals(): Promise<ClientContext> {
   };
 }
 
-/** 端末情報に位置情報を足したもの。ユーザーが明示的に記録した瞬間だけ使う。 */
+/** The device information plus the location. Used only when the user records explicitly. */
 export async function getClientContext(): Promise<ClientContext> {
   const [signals, location] = await Promise.all([getDeviceSignals(), locationTracker.read()]);
   return { ...signals, ...location };

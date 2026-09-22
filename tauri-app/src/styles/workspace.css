@@ -3,7 +3,7 @@
   display: flex;
   min-height: 0;
   min-width: 0;
-  /* フライアウトの位置の基準。左端はレールの右、下端はボトムバーの上 */
+  /* Positioning base for the flyout. Its left edge is the rail's right, its bottom the bottom bar's top */
   position: relative;
 }
 
@@ -33,8 +33,9 @@
   gap: 2px;
 }
 
-/* 常設の留め具。留めているあいだも塗らない — 押せる物が 2 つ並ぶ場所で、
-   塗りは「新規」のほうが強いままでいい。合図は字と同じ濃さになること */
+/* The permanent pin. Not filled even while pinned: where two pressable things sit
+   side by side, the fill should stay the stronger signal of "new". The cue is the
+   colour reaching the same darkness as the text */
 .list-pin {
   position: relative;
   display: flex;
@@ -55,7 +56,7 @@
   color: var(--app-text);
 }
 
-/* 開け閉ての決まり。狭い画面には開け閉てが無いので出さない */
+/* The open/close rule. A narrow screen has no open/close, so it is not shown there */
 .list-pane-foot {
   display: none;
   margin-top: auto;
@@ -65,7 +66,7 @@
   color: var(--app-text-hint);
 }
 
-/* ペインの中で唯一の押し物なので、枠で囲わなくても見つかる */
+/* The only pressable thing in the pane, so it is found without a frame around it */
 .new-note {
   display: inline-flex;
   align-items: center;
@@ -86,8 +87,8 @@
   color: var(--app-text);
 }
 
-/* AIDEV-NOTE: 総大文字は CSS の仕事 — 文字列を "NOTES" と書くと、面の名が
-   MODE_LABELS ともう 1 箇所に分かれ、読み上げも N-O-T-E-S になる */
+/* AIDEV-NOTE: all-caps is CSS's job. Writing the string as "NOTES" splits the surface
+   name between MODE_LABELS and one more place, and the screen reader says N-O-T-E-S */
 .list-pane-title {
   font-size: 11px;
   font-weight: 700;
@@ -121,13 +122,14 @@
 
 /* ---------------- list flyout (desktop) ---------------- */
 
-/* 一覧は常設のペインをやめ、レールの続きとして本文の上に浮く。本文の列は
-   一覧の開け閉てで動かない — 読んでいる行が横に跳ねるほうが、一覧が常に
-   見えていないことより高くつく。
-   `hover: hover` で絞るのは、開ける手がホバーとピン(ピンは一覧の中にある)
-   しか無いから。広くてもホバーの無い端末では、タップで一瞬開いて指が離れた
-   時点で畳まれ、中のピンに届く前に一覧そのものへ行けなくなる。そこでは
-   常設の列のまま置く */
+/* The list is no longer a permanent pane; it floats over the body as a continuation
+   of the rail. The body column does not move when the list opens or closes: a line
+   you are reading jumping sideways costs more than the list not always being visible.
+   It is limited to `hover: hover` because the only ways to open it are hover and the
+   pin (and the pin is inside the list). On a wide device without hover, a tap opens
+   it for a moment and it folds the instant the finger lifts, so the list itself is
+   out of reach before the pin inside can be touched. There it stays a permanent
+   column */
 @media (min-width: 768px) and (hover: hover) {
   .list-pane {
     position: absolute;
@@ -140,10 +142,10 @@
     box-shadow: 16px 0 40px -20px rgb(20 20 25 / 50%);
     transform: translateX(-24px);
     opacity: 0;
-    /* 閉じているあいだに当たり判定が残ると、本文の左 280px が押せない */
+    /* If the hit area stayed while closed, the left 280px of the body could not be pressed */
     pointer-events: none;
-    /* 透きが滑りより先に終わる(180 < 220)のはプロトタイプの値。畳むとき、
-       消えてから動き終わるので影が本文の上に残らない */
+    /* The fade ending before the slide (180 < 220) is the prototype's value. When
+       folding, it is gone before it stops moving, so no shadow lingers over the body */
     transition:
       transform 220ms var(--app-ease),
       opacity 180ms var(--app-ease);
@@ -160,8 +162,8 @@
   }
 }
 
-/* 群の名前は字だけで示す。罫線を引くと、行 1 つぶんの区切りに層が 1 つ増える。
-   長い群を送っているあいだも、いまどこを見ているかは上に残す */
+/* A group's name is shown by text alone. A rule line would add one more layer to a
+   one-row separation. While scrolling a long group, where you are stays at the top */
 .list-group-label {
   position: sticky;
   top: 0;
@@ -178,7 +180,7 @@
   padding-top: 8px;
 }
 
-/* 行は 1 行。題と時刻だけを、ベースラインを揃えて並べる */
+/* A row is one line. Only the title and the time, aligned on the baseline */
 .list-row {
   display: flex;
   align-items: baseline;
@@ -198,13 +200,14 @@
   background: var(--app-hairline);
 }
 
-/* 選んだ行の合図は背景だけ。太字も足すと、同じことを 2 回言うことになる */
+/* The selected row is signalled by background alone. Adding bold would say the same thing twice */
 .list-row--selected {
   background: var(--app-accent-soft);
 }
 
-/* ↑↓ でたどっているあいだ、いまどの行に居るかが見える。内側に引くのは、
-   行の幅いっぱいに描いた背景の外へ線がはみ出て隣の行にかかるから */
+/* While stepping with the arrow keys, the current row is visible. The outline is drawn
+   inward because a background painted the full row width would let the line spill
+   over onto the neighbouring row */
 .list-row:focus-visible {
   outline: 2px solid var(--app-accent);
   outline-offset: -2px;
@@ -232,15 +235,17 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Codex の行。角折りのページを日付の左に置くぶん、字ではなく箱の中心で
-   揃え、上下を 1px ずつ詰めて Note の行と同じ高さに保つ */
+/* A Codex row. The folded-corner page sits left of the date, so align on the box
+   centre rather than the text, and trim 1px top and bottom to keep the same height
+   as a Note row */
 .list-row--codex {
   align-items: center;
   padding: 7px 10px;
 }
 
-/* 角折りのページ。中に版の数。形は clip-path だけで、画像も追加依存も無い。
-   外の span が枠の色、内の span が同じ形の面、右上に折り目の三角 */
+/* The folded-corner page, with the version count inside. The shape is clip-path only:
+   no image, no extra dependency. The outer span is the frame colour, the inner span
+   the same shape as the face, and a triangle for the fold at the top right */
 .page-mark {
   position: relative;
   flex-shrink: 0;
@@ -281,7 +286,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* 版あり: 枠は薄く、数は読める濃さ。下書きが動いていれば枠を濃くする */
+/* With versions: the frame is faint, the count readable. When the draft has moved on, the frame darkens */
 .page-mark[data-state="clean"] {
   background: var(--app-text-faint);
 }
@@ -349,8 +354,8 @@
   min-width: 0;
   min-height: 0;
   position: relative;
-  /* 本文の列の右に並ぶもの: 履歴パネル(Codex)とマップ。題の段はこの幅を
-     除いた残りの中央に本文の列を置く */
+  /* What stands to the right of the body column: the history panel (Codex) and the
+     map. The head row centres the body column in what remains after these widths */
   --hist-w: 0px;
   --map-w: 0px;
 }
@@ -363,17 +368,19 @@
   --map-w: 400px;
 }
 
-/* 題・記録・操作をまとめた段。本文と同じ 640px + 左右 28px の幅に収めるので、
-   ノートについて知りたいことが本文と同じ列に並ぶ。履歴パネルとマップのぶんを
-   除いた残りの中央に置くのは padding で — 幅を max-width で切って margin auto
-   にすると、残りが 696px より広いとき本文の列の中央から外れる */
+/* The row holding the title, the record and the actions. It fits the body's width,
+   640px + 28px either side, so what you want to know about a note lines up in the
+   same column as the body. It is centred in what remains after the history panel
+   and the map with padding: cutting the width with max-width and using margin auto
+   drifts off the body column's centre once the remainder is wider than 696px */
 .detail-head {
   position: relative;
   flex: 0 0 auto;
   width: calc(100% - var(--hist-w) - var(--map-w));
   padding: 28px max(28px, calc((100% - var(--hist-w) - var(--map-w) - 640px) / 2)) 0;
-  /* パネルと同じ 220ms で、パネルが空ける幅に合わせて詰める。動かすのが幅と
-     余白なのは、transform では中の題と記録が折り返し直せないから */
+  /* Same 220ms as the panel, tightening to the width the panel opens up. Width and
+     padding are what move because a transform cannot re-wrap the title and the
+     record inside */
   transition:
     width 220ms var(--app-ease),
     padding 220ms var(--app-ease);
@@ -385,12 +392,12 @@
   gap: 12px;
 }
 
-/* 一覧に戻るボタンはモバイルの 1 ペイン時だけ意味がある */
+/* The back-to-list button only means something in the one-pane mobile layout */
 .detail-back {
   display: none;
 }
 
-/* 作成日時・保存の様子・タグの 1 行。すべて同じ薄さで、本文より静かに */
+/* One line of created time, save state and tags. All equally faint, quieter than the body */
 .detail-meta-line {
   display: flex;
   align-items: baseline;
@@ -410,8 +417,9 @@
   color: var(--app-text-muted);
 }
 
-/* 保存の様子はメタ行とボトムバーの両方に置き場があるが、出すのはどちらか
-   一方だけ。広い画面ではバーが言うので、メタ行は日付とタグに戻る */
+/* The save state has a place in both the meta line and the bottom bar, but only one
+   of them shows it. On a wide screen the bar says it, so the meta line goes back to
+   the date and the tags */
 .detail-save-status {
   display: inline-flex;
   align-items: baseline;
@@ -424,7 +432,7 @@
   }
 }
 
-/* 緑が点くのは保存できた直後の 2 秒だけ。書いているあいだ光り続けさせない */
+/* Green lights up only for the 2 seconds right after a save. It must not keep glowing while writing */
 .detail-save-status[data-status="saved"] {
   color: var(--app-ok);
 }
@@ -433,8 +441,8 @@
   align-self: center;
 }
 
-/* AIDEV-NOTE: 動きの規則の外。「まだ書き込んでいる」という続きの合図で、1 度で終わる mm-rise では代わりにならない */
-/* 回るものは linear でないと脈打つので、イージングも --app-ease ではない */
+/* AIDEV-NOTE: outside the motion rules. It is an ongoing "still writing" signal; mm-rise runs once and cannot stand in for it */
+/* A spinning thing pulses unless it is linear, so the easing is not --app-ease either */
 .detail-save-status[data-status="saving"] .icon {
   animation: spin 1s linear infinite;
 }
@@ -445,13 +453,14 @@
   }
 }
 
-/* 比較しているあいだだけ出る。携帯では本文の下の比較バーが同じことを言う */
+/* Shown only while comparing. On a phone the compare bar under the body says the same thing */
 .detail-compare-status {
   color: var(--app-text-muted);
 }
 
-/* 履歴の入口。滅多に押さない操作は … に畳んであるが、これは Codex を開いて
-   いる人がいちばん押すもので、ホバーでは開かないパネルの唯一のボタン */
+/* The entrance to the history. Rarely used actions are folded into the note menu, but
+   this is what someone with a Codex open presses most, and it is the only button of a
+   panel that never opens on hover */
 .history-button {
   flex-shrink: 0;
   display: inline-flex;
@@ -476,13 +485,13 @@
   color: var(--app-text);
 }
 
-/* 開いているあいだは押し込まれたまま。同じボタンで畳める */
+/* Stays pressed in while open. The same button folds it */
 .history-button[aria-pressed="true"] {
   background: var(--app-accent-soft);
   color: var(--app-text);
 }
 
-/* 指で押せる高さ。狭い窓でも履歴の入口はここにある */
+/* A height a finger can press. Even in a narrow window the history's entrance is here */
 @media (max-width: 767px) {
   .history-button {
     min-height: 44px;
@@ -503,7 +512,7 @@
   color: var(--app-text);
 }
 
-/* 「…」の真下に右揃えで吊るす。測るのは部品なので、ここは姿だけ */
+/* Hangs right-aligned directly under the note menu button. The component does the measuring, so only the look lives here */
 .note-menu {
   width: 220px;
   padding: 6px;
@@ -513,8 +522,8 @@
   box-shadow: 0 12px 24px -8px rgb(20 20 25 / 40%);
 }
 
-/* 入るときだけ動かす。開いている印に掛けておかないと、閉じる側は
-   「まだ動いている」と見なして畳むのを待ち続ける(部品の presence) */
+/* Animate only on entry. Unless it is keyed to the open marker, the closing side
+   treats it as "still moving" and waits forever to fold (the component's presence) */
 .note-menu[data-expanded] {
   animation: mm-rise 160ms var(--app-ease);
 }
@@ -535,8 +544,8 @@
   user-select: none;
 }
 
-/* 指が乗っている行とキーで辿っている行は同じもの。部品がどちらも
-   data-highlighted で言うので、:hover と :focus を別に書かない */
+/* The row under a finger and the row reached by keyboard are the same thing. The
+   component says both with data-highlighted, so :hover and :focus are not written separately */
 .note-menu-row[data-highlighted] {
   background: var(--app-surface-2);
 }
@@ -572,9 +581,9 @@
   background: var(--app-hairline);
 }
 
-/* タイトルは本文先頭の H1。枠を持たせず、大きな 1 行として本文の続きに
-   見えるようにする。スクロールする本文の外に置くので、長いノートでも
-   何を書いているノートなのかが消えない */
+/* The title is the H1 at the head of the body. No frame, so it reads as one large
+   line continuing into the body. It sits outside the scrolling body, so even in a
+   long note what the note is about never disappears */
 .note-title-input {
   flex: 1;
   min-width: 0;
@@ -597,8 +606,8 @@
   outline: none;
 }
 
-/* 本文とマップは横に並ぶ。マップを開いていなければ本文だけが伸びる。
-   履歴パネルのぶんは幅で空ける — パネルはペインの高さいっぱいに立つ */
+/* The body and the map sit side by side. With the map closed only the body stretches.
+   The history panel's share is left free by width: the panel stands the full height of the pane */
 .detail-panes {
   flex: 1;
   display: flex;
@@ -617,7 +626,7 @@
   line-height: 1.8;
 }
 
-/* 本文を押しのけず、右に並ぶ。畳むと本文は元の幅に戻る */
+/* Sits to the right without pushing the body aside. Fold it and the body returns to its original width */
 .detail-map {
   flex: 0 0 400px;
   min-width: 0;
@@ -625,8 +634,8 @@
   overflow: hidden;
 }
 
-/* 並べる幅が無いところでは、マップは本文と入れ替わる形に落とす。履歴パネルは
-   320px のまま — 本文が残っていることが履歴の要点なので、そこは詰めない */
+/* Where there is no width to stand side by side, the map replaces the body instead.
+   The history panel keeps its 320px: the body staying is the point of the history, so that is not squeezed */
 @media (max-width: 1099px) {
   .detail-panes--map .detail-body {
     display: none;
@@ -642,8 +651,8 @@
   }
 }
 
-/* プレビューが出るのは `view: preview` の読むだけのノートだけ。押しても
-   書き始まらないので、書けるという合図の I ビームを出さない */
+/* The preview appears only for a read-only `view: preview` note. Pressing it does not
+   start writing, so no I-beam that signals "you can write here" */
 .detail-body .markdown-preview {
   cursor: default;
 }
@@ -691,7 +700,7 @@
   gap: var(--size-2);
   padding: 12px 20px 16px;
   border-top: 1px solid var(--app-border);
-  /* タグ補完はこのバーの上に出す。基準がないと画面の隅へ飛ぶ */
+  /* Tag completion opens above this bar. Without a positioning base it flies off to a corner of the screen */
   position: relative;
 }
 
@@ -742,16 +751,16 @@
   .list-pane {
     width: 100%;
     border-right: none;
-    /* 残り高さを埋めないとキャプチャバーが宙に浮く */
+    /* Unless it fills the remaining height, the capture bar floats in mid-air */
     flex: 1;
   }
 
-  /* 浮いていないものは留められない */
+  /* What does not float cannot be pinned */
   .list-pin {
     display: none;
   }
 
-  /* 一覧を見ている間も記録はできる。キャプチャバーだけ残して詳細を畳む */
+  /* Capture works while looking at the list too. Keep only the capture bar and fold the detail */
   .detail-pane {
     flex: 0 0 auto;
   }
@@ -766,9 +775,10 @@
     display: none;
   }
 
-  /* 一覧と本文は同じ場所に入れ替わる 1 枚ずつの頁。履歴の頁と同じ 180ms で
-     上がってくる — 入れ替わりに動きが無いと、押した行が開いたのか別の場所へ
-     飛んだのかが読めない。畳むほうは動かさない(一覧がすぐ戻ってくる) */
+  /* The list and the body are single pages that swap in the same place. The body rises
+     at the same 180ms as the history page: without motion in the swap, you cannot tell
+     whether the row you pressed opened or you jumped somewhere else. Folding does not
+     animate (the list comes straight back) */
   .workspace--detail .detail-pane {
     flex: 1;
     animation: mm-rise 180ms var(--app-ease);
@@ -782,14 +792,14 @@
     display: flex;
   }
 
-  /* 一覧へ戻る道はここだけ。題と「…」と同じ行に置いて、行を 1 段増やさない */
+  /* The only way back to the list. It shares the row with the title and the note menu, so it adds no extra row */
   .detail-back {
     display: flex;
     margin: -8px 0 0 -8px;
     padding: 10px;
   }
 
-  /* 指で押せる高さ。字も本文と同じくらいまで上げる */
+  /* A height a finger can press. The text also goes up to about the body's size */
   .list-row {
     padding: 12px;
     min-height: 44px;
@@ -817,7 +827,7 @@
     padding: 4px 20px 0;
   }
 
-  /* パネルを立てる幅が無い。履歴は本文と入れ替わる専用の面になる */
+  /* No width to stand a panel. The history becomes its own screen, swapped in for the body */
   .detail-pane--history {
     --hist-w: 0px;
   }
@@ -827,18 +837,18 @@
   }
 
   .note-title-input {
-    /* 指で押せる高さを確保する。詰めると本文との境目も分かりにくい */
+    /* Keep a height a finger can press. Squeezed, the boundary with the body also becomes hard to see */
     min-height: 44px;
     font-size: 19px;
   }
 
-  /* 指で押せる高さ。字も一覧の行と同じまで上げる */
+  /* A height a finger can press. The text also goes up to the list row's size */
   .note-menu-row {
     min-height: 44px;
     font-size: 15px;
   }
 
-  /* ⌘⇧M は押せないキーの案内。触る端末には出さない(テンプレ選択と同じ) */
+  /* The spelled keys (⌘⇧M and the others) describe keys that cannot be pressed. Not shown on a touch device (same as the template picker) */
   .note-menu-key {
     display: none;
   }
@@ -866,7 +876,7 @@
   }
 }
 
-/* ---- マインドマップ表示 ---- */
+/* ---- mindmap view ---- */
 
 .mindmap-view {
   height: 100%;
@@ -878,9 +888,9 @@
   height: 100%;
 }
 
-/* markmap は SVG の中に <style> を差し込む。色はカスタムプロパティで
-   開けてあるので、アプリのトークンをそこへ流し込む(セレクタは注入側の
-   `.markmap` より詳細度を上げておく) */
+/* markmap injects a <style> into the SVG. Its colours are opened up as custom
+   properties, so the app's tokens are poured in there (the selector is given more
+   specificity than the injected `.markmap`) */
 .mindmap-view .markmap {
   --markmap-text-color: var(--app-text);
   --markmap-font: 400 14px/1.6 var(--font-sans);
@@ -889,9 +899,9 @@
   --markmap-code-color: var(--app-text);
 }
 
-/* ---- バックリンク(このノートを指している記録) ---- */
+/* ---- backlinks (records that point at this note) ---- */
 
-/* 本文の末尾に畳んで置く。罫線を引くほど別の話ではない */
+/* Folded at the end of the body. Not a different enough topic to deserve a rule line */
 .backlinks {
   margin-top: 40px;
 }
@@ -949,8 +959,8 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* 「Codex にする」の確認。行の代わりに同じ幅へ出す — 別のダイアログを
-   開くほどの重さではないが、戻れない操作なので一段挟む */
+/* The confirmation for "Make this a Codex". Shown in the rows' place at the same width:
+   not heavy enough to open a separate dialog, but the action cannot be undone, so one step is put between */
 .note-menu-confirm {
   display: flex;
   flex-direction: column;
@@ -979,7 +989,7 @@
   color: var(--app-text-muted);
 }
 
-/* 戻れないことだけ、少しだけ濃く */
+/* Only the "cannot be undone" part, a little darker */
 .note-menu-confirm-label strong {
   font-weight: inherit;
   color: var(--gray-7);

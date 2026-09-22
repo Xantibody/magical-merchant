@@ -8,17 +8,17 @@ import { shortcutLabel } from "../lib/shortcuts";
 import type { ShortcutName } from "../lib/shortcuts";
 
 interface NoteMenuProps {
-  /** 開いているか。面の側が持つ(⌘. や他のポップオーバーと排他にする)。 */
+  /** Whether it is open. The surface owns this (to make it exclusive with Cmd-. and other popovers). */
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** どの面のノートか。Codex にできるのは Note だけ。 */
+  /** Which surface the note is on. Only a Note can become a Codex. */
   kind: NoteKind;
   mapOpen: boolean;
   readOnly: boolean;
-  /** テンプレの記入例を持つノートか。持たない相手に切り替えは出さない。 */
+  /** Whether the note has template examples. The toggle is not shown for one that has none. */
   hasExamples: boolean;
   examplesShown: boolean;
-  /** この端末に「編集前の本文」が残っているか。無ければ押せない。 */
+  /** Whether this device still holds the body from before the edit. Unpressable without it. */
   revertable: boolean;
   onToggleMap: () => void;
   onToggleReadOnly: () => void;
@@ -26,9 +26,9 @@ interface NoteMenuProps {
   onRevert: () => void;
   onInfo: () => void;
   onPromote: () => void;
-  /** Codex だけ。いまの下書きを版として刻む。 */
+  /** Codex only. Commit the current draft as a version. */
   onCommit: () => void;
-  /** Codex だけ。版の一覧と差分を本文の場所に出す。 */
+  /** Codex only. Show the version list and the diff where the body is. */
   onHistory: () => void;
   onDelete: () => void;
 }
@@ -39,7 +39,7 @@ function Row(props: {
   shortcut?: ShortcutName;
   danger?: boolean;
   disabled?: boolean;
-  /** 押しても閉じない行。確認を同じ幅に出すときだけ false にする。 */
+  /** A row that stays open when pressed. Set only when the confirmation takes over the same width. */
   keepOpen?: boolean;
   onClick: () => void;
 }): JSX.Element {
@@ -61,20 +61,22 @@ function Row(props: {
 }
 
 /**
- * ノート 1 件に効く、滅多に押さない操作をまとめた場所。
+ * The place for the rarely pressed actions that act on one note.
  *
- * 常時見えていたボタンをここへ畳んだのは、どれも「開いたら書く」の邪魔に
- * なる頻度でしか使われないから。よく使う人にはキーが用意してあるので、
- * この menu を開かずに済む。危険な削除だけは色で分け、いちばん下に置く。
+ * The buttons that used to be always visible were folded in here because each is
+ * used only often enough to get in the way of "open, then write". Frequent users
+ * have keys, so they never need to open this menu. Only the dangerous delete is
+ * set apart by colour and placed at the bottom.
  *
- * 「Codex にする」だけは Undo ではなく確認を挟む。削除と違って戻す操作が
- * 無い(Codex → Note の経路は無い)ので、押した後に取り消せない。
+ * "Make it a Codex" alone gets a confirmation instead of Undo. Unlike delete
+ * there is no way back (there is no Codex to Note path), so it cannot be
+ * reverted once pressed.
  */
 export default function NoteMenu(props: NoteMenuProps): JSX.Element {
   const [confirming, setConfirming] = createSignal(false);
 
-  // 確認は開いているあいだだけのもの。閉じる道は ⌘. ・外側・行の実行と
-  // いくつもあるので、開閉そのものを見て畳む
+  // The confirmation lives only while the menu is open. There are several ways to
+  // close it (Cmd-., outside, running a row), so it folds by watching the open state itself
   createEffect(() => {
     if (!props.open) {
       setConfirming(false);
@@ -85,12 +87,12 @@ export default function NoteMenu(props: NoteMenuProps): JSX.Element {
     <DropdownMenu
       open={props.open}
       onOpenChange={(open) => props.onOpenChange(open)}
-      // 書いている手を止める幕は張らない。背後は読めたままで、スクロールも生きる
+      // No backdrop that stops a writing hand. What is behind stays readable and scrolling stays alive
       modal={false}
       placement="bottom-end"
       gutter={6}
     >
-      {/* ノート単位の操作はここ 1 つに畳む。どれも滅多に押さない */}
+      {/* Per-note actions fold into this one place. None is pressed often */}
       <DropdownMenu.Trigger
         class="icon-button note-menu-button"
         title={t().notes.actions}
@@ -106,8 +108,8 @@ export default function NoteMenu(props: NoteMenuProps): JSX.Element {
             when={!confirming()}
             fallback={
               <div class="note-menu-confirm">
-                {/* 戻れないことより先に、何が増えるかを言う。押すかどうかは
-                    それで決まる */}
+                {/* Say what is gained before saying there is no way back. That is
+                    what decides whether to press */}
                 <span class="note-menu-confirm-title">
                   <Icon name="book" size={15} />
                   {t().codex.promote}
@@ -117,11 +119,12 @@ export default function NoteMenu(props: NoteMenuProps): JSX.Element {
                   {t().codex.promoteBody2}
                   <strong>{t().codex.promoteBody2Strong}</strong>
                 </p>
-                {/* 確認が出た瞬間、焦点は消えたメニューの行に取り残される。
-                    矢印キーが辿るのはメニューの行だけで、外へ出ればメニュー
-                    ごと畳まれるので、キーボードだけで開いた人は押すことも
-                    取り消すこともできない。出したこちらが引き取る。
-                    微小タスクに逃がすのは、部品が焦点を配り終えるのを待つため */}
+                {/* The moment the confirmation appears, focus is stranded on the
+                    menu row that vanished. The arrow keys only walk the menu rows,
+                    and leaving them folds the whole menu, so someone who opened it
+                    by keyboard alone can neither press nor cancel. The side that
+                    showed it takes focus over. Deferring to a microtask waits for
+                    the component to finish handing out focus */}
                 <button
                   type="button"
                   class="button-primary"
@@ -147,8 +150,8 @@ export default function NoteMenu(props: NoteMenuProps): JSX.Element {
               label={props.readOnly ? t().notes.makeEditable : t().notes.makeReadOnly}
               onClick={() => props.onToggleReadOnly()}
             />
-            {/* 記入例を持たないノートには出さない。押しても何も変わらない行は、
-                読む人に「効かなかった」としか伝わらない */}
+            {/* Not shown for a note without examples. A row that changes nothing
+                when pressed only tells the reader "it did not work" */}
             <Show when={props.hasExamples}>
               <Row
                 icon={<Icon name="file-text" size={15} />}
@@ -178,7 +181,7 @@ export default function NoteMenu(props: NoteMenuProps): JSX.Element {
                 onClick={() => props.onHistory()}
               />
             </Show>
-            {/* 時計の矢印は履歴に譲った。こちらは 1 段だけ巻き戻す矢印 */}
+            {/* The clock arrow went to the history. This is the arrow that rewinds one step */}
             <Row
               icon={<Icon name="arrow-counter-clockwise" size={15} />}
               label={t().notes.revert}

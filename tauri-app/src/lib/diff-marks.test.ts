@@ -6,8 +6,8 @@ describe("markLines", () => {
     expect(markLines("a\nb", "")).toStrictEqual({ source: "a\nb", marks: [undefined, undefined] });
   });
 
-  // core の unified diff(前後 3 行の文脈)。消えた行は下書きのその位置に
-  // 戻り、増えた行はそのまま残る
+  // core's unified diff (three lines of context either side). A deleted line goes back to
+  // its place in the draft, and an added line stays as it is
   it("puts deleted lines back where they were and marks added ones", () => {
     const draft = "a\nB\nc\nd\n";
     const diff = "--- v1\n+++ draft\n@@ -1,3 +1,4 @@\n a\n-b\n+B\n c\n+d\n";
@@ -18,7 +18,7 @@ describe("markLines", () => {
     });
   });
 
-  // 文脈の外の行は diff に出てこない。下書きから埋める
+  // Lines outside the context do not appear in the diff. They are filled in from the draft
   it("fills the lines outside every hunk from the draft", () => {
     const draft = ["1", "2", "3", "4", "5", "6", "six", "7", "8", "9"].join("\n");
     const diff = "--- v\n+++ draft\n@@ -5,3 +5,4 @@\n 5\n 6\n+six\n 7\n";
@@ -31,7 +31,7 @@ describe("markLines", () => {
   });
 
   it("handles a hunk that only deletes, and a hunk of one line", () => {
-    // `+2,0` は「2 行目の後ろ」。`@@ -1 +1 @@` は長さ省略の 1 行
+    // `+2,0` means "after line 2". `@@ -1 +1 @@` is one line with the length left out
     const removed = markLines("a\nb", "--- v\n+++ draft\n@@ -3,1 +2,0 @@\n-c\n");
     expect(removed).toStrictEqual({ source: "a\nb\nc", marks: [undefined, undefined, "del"] });
 
@@ -39,8 +39,8 @@ describe("markLines", () => {
     expect(one).toStrictEqual({ source: "A\nB", marks: ["del", "add"] });
   });
 
-  // 題の無い Codex の先頭に罫線が増えると、最初の本文の行が `+---` で始まる。
-  // ヘッダは最初のハンクより前にしか無い
+  // When a rule is added at the head of a Codex with no title, the first body line begins
+  // with `+---`. The header only ever sits before the first hunk
   it("keeps a first line that spells like a header once the hunk has begun", () => {
     const diff = "--- v\n+++ draft\n@@ -0,0 +1,2 @@\n+---\n+++x\n";
 
@@ -71,8 +71,8 @@ describe("markedBody", () => {
     });
   });
 
-  // 題が変わると古い題が消えた行として先頭に来る。それを外し、新しい題は
-  // 印付きの H1 として残す
+  // When the title changes, the old title comes first as a deleted line. That is taken
+  // out, and the new title is kept as a marked H1
   it("keeps a changed title visible as an added heading", () => {
     const diff = "--- v\n+++ draft\n@@ -1,3 +1,3 @@\n-# 前\n+# 後\n \n 本文\n";
 
@@ -98,7 +98,7 @@ describe("diffLineCounts", () => {
     expect(diffLineCounts(diff)).toStrictEqual({ added: 2, removed: 1 });
   });
 
-  // ヘッダの `---` / `+++` は行ではない。ハンクの中の `+---` は行
+  // The `---` / `+++` of the header are not lines. A `+---` inside a hunk is a line
   it("does not count the header, and does count body lines spelled like it", () => {
     const diff = "--- v\n+++ draft\n@@ -0,0 +1,2 @@\n+---\n+++x\n";
 

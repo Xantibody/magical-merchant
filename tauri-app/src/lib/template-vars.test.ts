@@ -8,7 +8,7 @@ import {
   splitVariables,
 } from "./template-vars";
 
-/** 2026-08-31 (月) 09:12:45 */
+/** 2026-08-31 (Mon) 09:12:45 */
 const now = new Date(2026, 7, 31, 9, 12, 45);
 
 describe("resolveLine", () => {
@@ -20,7 +20,7 @@ describe("resolveLine", () => {
     expect(resolveLine("{{date:YYYY-MM}}", now, "ja")).toBe("2026-08");
   });
 
-  // `{{time:HH:mm:ss}}` の `:` は 1 つ目だけが名前と書式の区切り
+  // In `{{time:HH:mm:ss}}` only the first `:` separates the name from the format
   it("splits the name off at the first colon only", () => {
     expect(resolveLine("{{time:HH:mm:ss}}", now, "ja")).toBe("09:12:45");
   });
@@ -36,7 +36,7 @@ describe("resolveLine", () => {
     );
   });
 
-  // 綴りを間違えた変数が黙って消えると、書いた人は気づけない
+  // If a misspelled variable disappeared silently, the writer could not notice it
   it("leaves an unknown variable as written", () => {
     expect(resolveLine("{{tomorrow}}", now, "ja")).toBe("{{tomorrow}}");
   });
@@ -61,8 +61,8 @@ describe("resolveBody", () => {
     );
   });
 
-  // 前回のノートはここからは読めない。空に潰すと「前回: 」だけの行が残って
-  // 何が入るのか分からなくなるので、書かれたまま見せる
+  // The previous note cannot be read from here. Collapsing it to empty would leave a line
+  // with only the label and no sign of what belongs there, so it is shown as written
   it("leaves the link to the previous note as written", () => {
     expect(resolveBody("上\n前回: {{prev}}\n下", now, "ja")).toBe("上\n前回: {{prev}}\n下");
   });
@@ -74,8 +74,8 @@ describe("resolveBody", () => {
 });
 
 describe("formatStamp", () => {
-  // パターンはユーザーが書いた文字列。書式として展開してよいのは
-  // 決まったトークンだけで、それ以外は文字のまま出す
+  // The pattern is a string the user wrote. Only the fixed tokens may be expanded as
+  // format; everything else comes out as the characters themselves
   it("keeps everything that is not a token", () => {
     expect(formatStamp(now, "YYYY年MM月DD日")).toBe("2026年08月31日");
     expect(formatStamp(now, "100% YYYY")).toBe("100% 2026");
@@ -94,8 +94,8 @@ describe("addTemplateTag", () => {
     expect(addTemplateTag([], "#Daily")).toStrictEqual(["Daily"]);
   });
 
-  // 小文字に寄せると `YYYY` がトークンでなくなり、その月ではなく
-  // "yyyy-mm" という文字列がタグになってしまう
+  // Lowercasing it would stop `YYYY` from being a token, and the tag would become the
+  // literal string "yyyy-mm" instead of that month
   it("keeps a tag with a variable exactly as written", () => {
     expect(addTemplateTag([], "{{date:YYYY-MM}}")).toStrictEqual(["{{date:YYYY-MM}}"]);
   });

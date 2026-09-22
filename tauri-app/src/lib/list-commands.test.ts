@@ -11,8 +11,8 @@ import {
   toggleTaskItem,
 } from "./list-commands";
 
-// commonmark / gfm の list まわりの形だけを再現した最小スキーマ。属性名と
-// 既定値は Milkdown のもの(list_item の checked は gfm が足す)
+// A minimal schema reproducing only the shapes around commonmark / gfm lists. The
+// attribute names and defaults are Milkdown's (the checked of list_item is added by gfm)
 const schema = new Schema({
   nodes: {
     doc: { content: "block+" },
@@ -52,7 +52,7 @@ function stateAt(document: Node, from: number, to = from): EditorState {
   });
 }
 
-/** コマンドを撃ち、書き換わった state と「受けたかどうか」を返す。 */
+/** Fire the command and return the rewritten state and whether it was handled. */
 function apply(state: EditorState, command: Command): { next: EditorState; handled: boolean } {
   let next = state;
   const handled = command(state, (tr) => {
@@ -61,7 +61,7 @@ function apply(state: EditorState, command: Command): { next: EditorState; handl
   return { next, handled };
 }
 
-/** 文書の骨組みを一行で。属性は checked だけ添える。 */
+/** The skeleton of the document on one line. Only the checked attribute is attached. */
 function outline(node: Node): string {
   if (node.isText) {
     return JSON.stringify(node.text);
@@ -191,7 +191,7 @@ describe("toggleBulletList", () => {
     const { next } = apply(stateAt(doc(ol(ordered)), 4), toggleBulletList);
 
     expect(outline(next.doc)).toBe('doc(bullet_list(list_item(paragraph("one"))))');
-    // syncListOrderPlugin は listType が ordered の bullet_list を番号付きに戻す
+    // syncListOrderPlugin turns a bullet_list whose listType is ordered back into a numbered one
     expect(next.doc.firstChild?.firstChild?.attrs.listType).toBe("bullet");
   });
 });

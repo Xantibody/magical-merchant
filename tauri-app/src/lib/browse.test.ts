@@ -20,9 +20,10 @@ const isoOf = (date: Date): string =>
   `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 
 /**
- * 今日を固定で書ける。境目を数えるのは `today` を引数で受ける関数だけなので、
- * 走らせた日でテストが揺れない — カレンダー次第で落ちるのは、日付を中で
- * 読む実装のほうだった。9/20 は日曜で、月曜起点の週の 7 日目。
+ * Today can be written as a fixed value. Only functions that take `today` as an argument
+ * count the boundaries, so the tests do not shift with the day they are run on: what used
+ * to fail depending on the calendar was the implementation that read the date inside.
+ * 2026-09-20 is a Sunday, the seventh day of a week that starts on Monday.
  */
 const TODAY = new Date(2026, 8, 20);
 const TODAY_ISO = isoOf(TODAY);
@@ -48,7 +49,7 @@ describe("hitId", () => {
     expect(hitId(hit("note", "2026-09-20"))).toBe("20260920_120000.md");
   });
 
-  // Scrawl の 1 行はファイルを持たない。日と行位置の組だけが行を指す
+  // A Scrawl line has no file. Only the pair of day and line position points at it
   it("names a scrawl entry by its day and line", () => {
     const entry = { ...hit("scrawl", "2026-09-20"), index: 3 };
     expect(hitId(entry)).toBe("2026-09-20#3");
@@ -64,8 +65,8 @@ describe("periodStart", () => {
     expect(periodStart("month", TODAY)).toBe("2026-09-01");
   });
 
-  // 週の起点は月曜。Scrawl の週次ダイジェストと同じ数え方でなければ、
-  // 同じ「今週」が画面ごとに違う件数を出す
+  // The week starts on Monday. If it were not counted the same way as Scrawl's weekly
+  // digest, the same "this week" would give a different count on each screen
   it("starts the week on monday", () => {
     expect(periodStart("week", new Date(2026, 8, 20))).toBe("2026-09-14");
     expect(periodStart("week", new Date(2026, 8, 14))).toBe("2026-09-14");
@@ -91,8 +92,8 @@ describe("filterHits", () => {
     ]);
   });
 
-  // 軸の中は OR。2 つ選ぶのは「どちらも見たい」であって、両方を兼ねる
-  // 記録を探すことではない
+  // Within an axis it is OR. Choosing two means "show me both", not looking for a record
+  // that is both at once
   it("keeps a hit matching any chosen kind", () => {
     const kept = filterHits(hits, { ...NO_FILTER, kinds: ["scrawl", "codex"] }, TODAY);
     expect(kept.map((h) => h.kind)).toStrictEqual(["scrawl", "codex"]);
@@ -103,8 +104,8 @@ describe("filterHits", () => {
     expect(kept.map((h) => h.kind)).toStrictEqual(["scrawl", "note"]);
   });
 
-  // チップの綴りは代表の 1 つだけ。大小違いで書かれた記録が落ちると、
-  // チップの件数と一覧が食い違う
+  // A chip carries only one representative spelling. If records written with a different
+  // case were dropped, the chip's count and the list would disagree
   it("matches a tag however it was spelled", () => {
     const mixed = [hit("note", TODAY_ISO, ["Memo"])];
     expect(filterHits(mixed, { ...NO_FILTER, tags: ["memo"] }, TODAY)).toHaveLength(1);
@@ -120,8 +121,8 @@ describe("filterHits", () => {
     expect(kept.map((h) => h.date)).toStrictEqual([daysAgo(10)]);
   });
 
-  // time を持たないノートは日付が空で届く。期間を選んだら数えようがないので
-  // 外し、「すべて」では出す — 消えたままにはしない
+  // A note without a time arrives with an empty date. Once a period is chosen there is no
+  // way to count it, so it is dropped; under "all" it is shown, never left missing
   it("keeps a dateless note only while the period is all", () => {
     const dateless = [hit("note", "")];
     expect(filterHits(dateless, NO_FILTER, TODAY)).toHaveLength(1);
@@ -149,8 +150,9 @@ describe("kindFacets", () => {
     expect(kindFacets(hits, NO_FILTER, TODAY).map((f) => f.count)).toStrictEqual([1, 1, 2]);
   });
 
-  // 種類の件数は「その種類を選んだら何件になるか」。自分の軸の選択は
-  // 母集団に掛けない — 掛けると、選んでいない種類が必ず 0 件になる
+  // A kind's count answers "how many records if this kind were chosen". The selection on
+  // its own axis is not applied to the population: if it were, every kind not chosen would
+  // always be 0
   it("ignores the kind already chosen", () => {
     const facets = kindFacets(hits, { ...NO_FILTER, kinds: ["note"] }, TODAY);
     expect(facets.map((f) => f.count)).toStrictEqual([1, 1, 2]);
@@ -174,8 +176,8 @@ describe("chipTags", () => {
     expect(chipTags(hits)).toStrictEqual(["Memo", "run"]);
   });
 
-  // チップの並びは絞り込みで動かさない。押すたびに行が入れ替わると、
-  // 隣のチップを押すつもりで別のタグを押す
+  // The chip order does not move with the filter. If the row reshuffled on every press,
+  // aiming at the neighbouring chip would hit a different tag
   it("names every tag in the corpus, filter or not", () => {
     const hits = [hit("note", TODAY_ISO, ["design"]), hit("scrawl", daysAgo(60), ["run"])];
     expect(chipTags(hits)).toStrictEqual(["design", "run"]);
@@ -204,7 +206,8 @@ describe("tagFacets", () => {
     ]);
   });
 
-  // 0 件のチップも残す。消すと、押した先で行が入れ替わって次に押す物が変わる
+  // A chip at 0 stays. Removing it would reshuffle the row after a press and change what
+  // is under the finger next
   it("keeps a tag that the other axes have emptied", () => {
     const facets = tagFacets(hits, { ...NO_FILTER, period: "month" }, TODAY);
     expect(facets).toStrictEqual([
@@ -235,12 +238,13 @@ describe("rowSnippet", () => {
     );
   });
 
-  // 1 行の記録は題がそのまま抜粋。2 段目に同じ字を並べない
+  // For a one-line record the excerpt is the title itself. The same text is not repeated on
+  // a second row
   it("is empty when the excerpt says nothing the title did not", () => {
     expect(rowSnippet(excerpt("朝ラン 5km #run", "朝ラン 5km #run"))).toBe("");
   });
 
-  // 題が 40 字に収まらなければ、抜粋は題の途中で切れた形になる
+  // If the title does not fit in 40 characters, the excerpt is the title cut off midway
   it("is empty when the excerpt is only part of the title", () => {
     expect(rowSnippet(excerpt("長い題がずっと続いている記録", "長い題がずっと…"))).toBe("");
   });
@@ -263,7 +267,8 @@ describe("browseSeed", () => {
     expect(browseSeed({ tag: "#run" })?.tags).toStrictEqual(["run"]);
   });
 
-  // 押していない絞り込みを黙って掛けない。⌘F で開いたときは何も選ばれていない
+  // A filter nobody pressed is never applied silently. Opening Browse with `⌘F` selects
+  // nothing
   it("is null when the road says nothing", () => {
     expect(browseSeed({})).toBeNull();
     expect(browseSeed({ kind: "tasks" })).toBeNull();
@@ -280,8 +285,8 @@ describe("toggleKind / toggleTag", () => {
     expect(toggleKind(["note", "codex"], "note")).toStrictEqual(["codex"]);
   });
 
-  // 外すときも同一性で見る。完全一致だと、選んだ綴りとチップの綴りが
-  // 違うタグは押しても外れない
+  // Removal also goes by identity. With an exact match, a tag whose chosen spelling differs
+  // from the chip's would not come off when pressed
   it("removes a tag whatever the spelling", () => {
     expect(toggleTag(["Memo"], "memo")).toStrictEqual([]);
     expect(toggleTag([], "memo")).toStrictEqual(["memo"]);

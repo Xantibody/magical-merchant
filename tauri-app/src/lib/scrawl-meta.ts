@@ -2,19 +2,19 @@ import type { IconName } from "../components/Icon";
 import { getBatteryIcon, getNetworkIcon, networkLabel, sourceLabel } from "./parse-scrawl";
 import type { DeviceContext } from "./parse-scrawl";
 
-/** エントリ本文の下に並べる、記録時の状況ひとつ。 */
+/** One piece of the situation at capture time, listed below an entry's body. */
 export interface MetaSegment {
   icon: IconName;
   label: string;
 }
 
-/** 座標に付ける地名を引くもの。まだ引けていなければ undefined。 */
+/** Looks up the place name for a coordinate. undefined while it is not resolved yet. */
 export type PlaceLookup = (location: { latitude: number; longitude: number }) => string | undefined;
 
 /**
- * 記録した端末。Scrawl の行末 JSON(`DeviceContext`)とノートの frontmatter
- * (`NoteContext`)は os が必須かどうかだけが違うので、要る 2 つのキーだけで
- * 受ける — 同じ「どの端末で書いたか」を 2 通りに綴らないため。
+ * The device that recorded the entry. Scrawl's end-of-line JSON (`DeviceContext`) and a note's
+ * frontmatter (`NoteContext`) differ only in whether os is required, so this takes just the two
+ * keys it needs: the same "which device wrote this" is not spelled two ways.
  */
 export function deviceSegment(
   ctx: { os?: string; os_version?: string } | null | undefined,
@@ -28,14 +28,14 @@ export function deviceSegment(
   };
 }
 
-/** 小数 4 桁 ≒ 11m。地名が引けなかったときだけ出る、素のままの記録。 */
+/** 4 decimal places is about 11 m. The raw record, shown only when no place name resolved. */
 const COORDINATE_DIGITS = 4;
 
 /**
- * 記録された場所。地名が分かっていればそれを、まだなら座標を出す。
+ * The recorded place. Shows the place name when it is known, the coordinates until then.
  *
- * 記録に残るのは座標のほうで、地名は読むための言い換え。行末 JSON に
- * 書き戻すと、どこにいたかがジオコーダの当たり外れで変わる。
+ * What the record keeps is the coordinates; the place name is only a readable paraphrase. Writing
+ * it back into the end-of-line JSON would make where you were depend on the geocoder's luck.
  */
 function locationSegment(ctx: DeviceContext, nameOf?: PlaceLookup): MetaSegment | null {
   if (!ctx.location) {
@@ -66,9 +66,9 @@ function sourceSegment(ctx: DeviceContext): MetaSegment | null {
 }
 
 /**
- * 記録できていたものだけを、端末 → 場所 → 回線 → 電源 → 入り口の順に並べる。
- * 入り口を末尾に置くのは、端末や場所より後から足された記録だからで、
- * 古いエントリだけ並びが違って見えることがない。
+ * Lists only what could be recorded, in the order device, place, network, battery, source.
+ * Source goes last because it was added to the record later than device and place, so older
+ * entries never look ordered differently.
  */
 export function entryMeta(context: DeviceContext | null, nameOf?: PlaceLookup): MetaSegment[] {
   if (!context) {

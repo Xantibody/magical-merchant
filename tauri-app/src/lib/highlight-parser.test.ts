@@ -19,8 +19,9 @@ describe("withKnownLanguages", () => {
     expect(result).toStrictEqual([]);
   });
 
-  // フェンスの info 文字列は手打ちなので、大文字や前後の空白はよくある揺れ。
-  // Shiki の言語 ID は小文字なので、正規化してから照合・委譲する
+  // The fence info string is typed by hand, so upper case and surrounding
+  // whitespace are common variations. Shiki's language IDs are lower case, so
+  // normalise before matching and delegating
   it("normalizes case and whitespace before matching", () => {
     const inner = vi.fn<Parser>().mockReturnValue([]);
     const parser = withKnownLanguages(inner, LOADED);
@@ -30,9 +31,9 @@ describe("withKnownLanguages", () => {
     expect(inner).toHaveBeenCalledExactlyOnceWith(parserOptions("ts"));
   });
 
-  // 読み込んでいない言語を Shiki に渡すと ShikiError が投げられ、
-  // prosemirror-highlight が console error を出した上で後続ブロックの
-  // ハイライトまで打ち切ってしまう(issue #101)
+  // Passing a language Shiki has not loaded throws a ShikiError, and
+  // prosemirror-highlight logs a console error and then abandons the
+  // highlighting of the following blocks as well (issue #101)
   it("returns no decorations for a language the highlighter has not loaded", () => {
     const inner = vi.fn<Parser>();
     const parser = withKnownLanguages(inner, LOADED);

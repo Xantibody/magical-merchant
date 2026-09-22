@@ -1,12 +1,12 @@
 import type { MarkdownIt, StateCore, Token } from "markdown-it";
 import { splitGlyphs } from "./glyphs";
 
-/** 描画時に渡す、名前 → データ URL の登録表。 */
+/** The name -> data URL registry passed at render time. */
 interface GlyphEnv {
   glyphs?: ReadonlyMap<string, string>;
 }
 
-/** `<img>` 1 つぶんの HTML。`src` は登録表の値であって、本文の文字ではない。 */
+/** HTML for one `<img>`. `src` is the registry value, not text from the body. */
 function glyphImageHtml(md: MarkdownIt, shortcode: string, url: string): string {
   const alt = md.utils.escapeHtml(shortcode);
   return `<img class="glyph" src="${md.utils.escapeHtml(url)}" alt="${alt}" draggable="false">`;
@@ -37,10 +37,10 @@ function split(
 }
 
 /**
- * 本文の `:name:` を登録済みの画像にする markdown-it プラグイン。
+ * markdown-it plugin that turns `:name:` in the body into the registered image.
  *
- * noteLinkPlugin と同じく `text` トークンだけを割るので、コードスパンや
- * フェンスの中の `:236p:` は文字のまま残る。
+ * Like noteLinkPlugin it splits only `text` tokens, so a `:236p:` inside a code
+ * span or a fence stays as text.
  */
 export function glyphPlugin(md: MarkdownIt): void {
   md.core.ruler.push("glyph", (state) => {

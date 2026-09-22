@@ -1,7 +1,7 @@
 /**
- * 描画済みの図(mermaid の SVG)をファイルにできる形に整える。保存そのものは
- * `save_export` コマンド(ネイティブの保存ダイアログ)に渡すので、ここから
- * 出るのはコマンドに渡す base64 まで。
+ * Shapes a rendered diagram (mermaid's SVG) into something that can become a file.
+ * The saving itself goes to the `save_export` command (the native save dialog), so
+ * what leaves here is only the base64 handed to that command.
  */
 
 export interface Size {
@@ -11,20 +11,20 @@ export interface Size {
 
 export type ExportFormat = "svg" | "png";
 
-/** PNG の解像度。原寸のままだと Retina で文字がにじむ */
+/** PNG resolution. At natural size the text blurs on Retina */
 const PNG_SCALE = 2;
 
 /**
- * mermaid の出力は HTML としてシリアライズされているので、XML として読むと
- * `&nbsp;` などで壊れることがある。HTML として読み、書き出すときに XML に
- * 直す — XMLSerializer が名前空間を補うので、単体の .svg として開ける
+ * mermaid's output is serialised as HTML, so reading it as XML can break on
+ * `&nbsp;` and the like. Read it as HTML and fix it up to XML on the way out:
+ * XMLSerializer fills in the namespaces, so the file opens as a standalone .svg
  */
 function parseSvg(svg: string): SVGSVGElement | undefined {
   const doc = new DOMParser().parseFromString(svg, "text/html");
   return doc.querySelector("svg") ?? undefined;
 }
 
-/** 原寸。mermaid は viewBox にも style の max-width にも同じ値を書く */
+/** Natural size. mermaid writes the same value into the viewBox and the style's max-width */
 export function naturalSize(svg: string): Size | undefined {
   const box = parseSvg(svg)?.viewBox.baseVal;
   if (!box || box.width <= 0 || box.height <= 0) {
@@ -34,14 +34,14 @@ export function naturalSize(svg: string): Size | undefined {
 }
 
 /**
- * 単体のファイルとして開いたときに原寸で出るよう、viewBox の実寸を
- * width / height に入れ、mermaid が本文用に付けた `max-width` を外す。
- * 外さないとビューアによっては幅 100% で開いて縦横比が崩れる。
+ * Puts the viewBox's real size into width / height so the file opens at natural
+ * size on its own, and removes the `max-width` mermaid added for the note body.
+ * Left in, some viewers open it at 100% width and the aspect ratio breaks.
  *
- * ラベルが foreignObject(HTML)のまま残っている図は、書き出さずに投げる。
- * `<img>` として読んだ SVG の中の foreignObject はブラウザが描かないので、
- * PNG は「有効な data URL」のまま文字だけが抜け、保存まで黙って通ってしまう。
- * AIDEV-NOTE: mermaid 側の secure htmlLabels が本命。ここは図種や将来の抜け道に対する最後の砦
+ * A diagram whose labels are still foreignObject (HTML) is thrown, not exported.
+ * The browser does not draw foreignObject inside an SVG loaded as `<img>`, so the
+ * PNG stays a "valid data URL" with only the text missing, and passes silently to the save.
+ * AIDEV-NOTE: mermaid's secure htmlLabels is the real fix. This is the last line of defence against diagram types and future loopholes
  */
 export function sizedSvg(svg: string): string {
   const element = parseSvg(svg);
@@ -64,9 +64,9 @@ export function sizedSvg(svg: string): string {
 }
 
 /**
- * 文字列を UTF-8 のバイト列として base64 に。`btoa` は Latin-1 しか受けないので
- * 一度バイトにする。spread で一気に渡さないのは、大きな図で引数の数が
- * 呼び出しの上限を超えるため
+ * A string as UTF-8 bytes in base64. `btoa` accepts only Latin-1, so go through
+ * bytes first. Not passed in one go with spread because on a large diagram the
+ * argument count exceeds the call limit
  */
 export function textToBase64(text: string): string {
   const bytes = new TextEncoder().encode(text);
@@ -78,19 +78,19 @@ export function textToBase64(text: string): string {
 }
 
 /**
- * canvas に置ける画素数の上限。WebKit がいちばん厳しく 16M px で、それを超えた
- * canvas は確保に失敗したまま黙って空を返す。長い sequence 図は縦にいくらでも
- * 伸びるので、原寸の 2 倍で描くとこの上限に届く
+ * Upper bound on the pixels a canvas can hold. WebKit is the strictest at 16M px,
+ * and a canvas beyond that fails to allocate and silently returns blank. A long
+ * sequence diagram grows downward without limit, so drawing at 2x natural size reaches this bound
  */
 export const MAX_PNG_PIXELS = 16_777_216;
 
-/** `toDataURL("image/png")` が成功したときに必ず付く頭 */
+/** The prefix always present when `toDataURL("image/png")` succeeds */
 const PNG_DATA_URL_PREFIX = "data:image/png;base64,";
 
 /**
- * 図の原寸から、実際に用意する canvas の大きさ(px)。上限に収まらない図は
- * 解像度を諦めて縮める — 書き出せないより、粗くても絵が出るほうがいい。
- * 端数を切り上げないのは、丸めで上限をまたがないため
+ * From the diagram's natural size, the size (px) of the canvas actually prepared.
+ * A diagram that does not fit the bound gives up resolution and shrinks: a coarse
+ * picture beats no export. No rounding up, so that rounding never crosses the bound
  */
 export function pngCanvasSize(size: Size): Size {
   const scale = Math.min(PNG_SCALE, Math.sqrt(MAX_PNG_PIXELS / (size.width * size.height)));
@@ -101,9 +101,9 @@ export function pngCanvasSize(size: Size): Size {
 }
 
 /**
- * `toDataURL` の返り値から base64 の中身だけを取り出す。canvas が PNG を
- * 作れなかったときは例外ではなく `data:,` が返るので、カンマ以降をそのまま
- * 切ると空の base64 が保存まで届き、0 バイトの PNG が「保存しました」になる
+ * Takes only the base64 payload out of the `toDataURL` result. When the canvas could
+ * not make a PNG it returns `data:,` instead of throwing, so cutting after the comma
+ * would let an empty base64 reach the save, and a 0-byte PNG would report "saved"
  */
 export function pngBase64(dataUrl: string): string {
   const base64 = dataUrl.startsWith(PNG_DATA_URL_PREFIX)
@@ -116,9 +116,10 @@ export function pngBase64(dataUrl: string): string {
 }
 
 /**
- * SVG を PNG に描き、base64 で返す。`background` で塗るのは、透明のままだと
- * 暗い背景のビューアで線が消えるため。画像は data URL で読む — Blob URL でも
- * 描けるが、同一生成元の扱いが環境で揺れ、canvas が汚染されると書き出せない
+ * Draws the SVG as a PNG and returns base64. `background` is painted because left
+ * transparent the lines vanish in a viewer with a dark background. The image is read
+ * from a data URL: a Blob URL draws too, but same-origin handling varies by
+ * environment, and a tainted canvas cannot be exported
  */
 export async function rasterize(svg: string, background: string): Promise<string> {
   const sized = sizedSvg(svg);
@@ -142,13 +143,13 @@ export async function rasterize(svg: string, background: string): Promise<string
   context.fillRect(0, 0, canvas.width, canvas.height);
   context.drawImage(image, 0, 0, canvas.width, canvas.height);
 
-  // toBlob と違って同期で、結果はそのまま base64。汚染されていれば例外
+  // Unlike toBlob this is synchronous, and the result is base64 as is. Throws if tainted
   return pngBase64(canvas.toDataURL("image/png"));
 }
 
 /**
- * 保存ダイアログに出す名前。ノートの stem と何番目の図かで決める —
- * 固定名だと 1 つのノートの 2 枚目で上書きを聞かれる
+ * The name shown in the save dialog. Decided by the note's stem and which diagram
+ * it is: a fixed name asks about overwriting on the second diagram of one note
  */
 export function exportName(stem: string | undefined, index: number, format: ExportFormat): string {
   return `${stem ?? "diagram"}-${index}.${format}`;

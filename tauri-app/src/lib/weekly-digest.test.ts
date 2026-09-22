@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { digestWeekKey, isDigestDismissed, summarizeWeek, yearAgoToday } from "./weekly-digest";
 import type { ScrawlItem } from "./items";
 
-/** 2026-08-16 は日曜。その週の月曜は 08-10。 */
+/** 2026-08-16 is a Sunday. The Monday of that week is 08-10. */
 const SUNDAY = new Date(2026, 7, 16);
 const MONDAY = new Date(2026, 7, 10);
 
@@ -38,7 +38,7 @@ describe("isDigestDismissed", () => {
     expect(isDigestDismissed("2026-08-10", SUNDAY)).toBe(true);
   });
 
-  // 先週閉じたカードが今週も出ないなら「週に一度」ではない
+  // If a card dismissed last week stayed away this week too, it is not "once a week"
   it("reappears the next week", () => {
     expect(isDigestDismissed("2026-08-03", SUNDAY)).toBe(false);
   });
@@ -63,7 +63,7 @@ describe("summarizeWeek", () => {
     expect(summary.days).toBe(2);
   });
 
-  // 先週のエントリを混ぜると「今週のふりかえり」ではなくなる
+  // Mixing in last week's entries makes it no longer "this week's look back"
   it("ignores entries before the week started", () => {
     const summary = summarizeWeek([entry("2026-08-09", "old")], SUNDAY);
 

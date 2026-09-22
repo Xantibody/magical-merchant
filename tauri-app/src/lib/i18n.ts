@@ -1,14 +1,14 @@
 /**
- * 画面に出る言葉。日本語と英語だけを持つ。
+ * The words that appear on screen. It holds Japanese and English only.
  *
- * ライブラリは入れていない。必要なのは「表を 2 つ持って、片方を返す」
- * ことだけで、複数形の規則も日付書式の交渉も要らない — 数の入る文は
- * 関数にしてある。テーマ(`theme.ts`)と同じく、選択は localStorage に
- * 残し、system は端末の設定に従う。
+ * No library was added. All that is needed is "hold two tables and return one of them":
+ * no plural rules, no date format negotiation, and a sentence that takes a number is a
+ * function. As with the theme (`theme.ts`), the choice is kept in localStorage, and
+ * system follows the device setting.
  *
- * `t()` は signal を読む。JSX や createMemo の中から呼べば、言語を
- * 切り替えた瞬間に描き直される — 文字列を配る関数(`day-labels.ts` など)を
- * 経由していても追跡は切れない。
+ * `t()` reads a signal. Called from JSX or inside createMemo, it is redrawn the moment the
+ * language is switched, and the tracking is not cut even through a function that hands out
+ * strings (`day-labels.ts` and the like).
  */
 
 import { createSignal } from "solid-js";
@@ -17,8 +17,8 @@ import type { SyncIssue } from "./sync-status";
 export type Locale = "ja" | "en";
 
 /**
- * 版どうしのバイト差。`+1.2 KB` / `−340 B` / `±0`。単位はどちらの言語でも
- * 同じ綴りなので、表を 2 つ持たず 1 つの関数を両方から指す。
+ * The byte difference between versions. `+1.2 KB` / `−340 B` / `±0`. The unit is spelled
+ * the same in both languages, so one function is pointed at from both, not two tables.
  */
 function sizeDelta(bytes: number): string {
   if (bytes === 0) {
@@ -29,17 +29,17 @@ function sizeDelta(bytes: number): string {
   return size < 1024 ? `${sign}${size} B` : `${sign}${(size / 1024).toFixed(1)} KB`;
 }
 
-/** 大きさそのもの。いちばん古い版は差ではなくこれを出す。`820 B` / `1.1 KB`。 */
+/** The size itself. The oldest version shows this instead of a difference. `820 B` / `1.1 KB`. */
 function sizeOf(bytes: number): string {
   return bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
 }
 
-/** 「N か月で M 回刻んだ」の期間。月が満ちていなければ日で。 */
+/** The span in "committed M versions over N months". In days when a month is not full. */
 interface Span {
   months: number;
   days: number;
 }
-/** 設定に残す値。`system` は端末の言語に従う。 */
+/** The value kept in the settings. `system` follows the device's language. */
 export type LocalePreference = Locale | "system";
 
 const ja = {
@@ -112,7 +112,7 @@ const ja = {
     empty: "この組み合わせの記録はありません",
     open: "開く",
     toDay: "その日へ",
-    /** 1 行だけの記録。題がそのまま全文なので、下に出す本文が無い */
+    /** A one-line record. The title is the whole text, so there is no body to show below */
     noBody: "(本文なし — 1 行の記録)",
   },
   notes: {
@@ -146,22 +146,24 @@ const ja = {
     editedElsewhere:
       "別の場所で書き換えられたので読み直しました。入力した本文は「戻す」で呼び出せます",
     /**
-     * 譲ったのに読み直しが画面に載らなかったとき(読めなかった・届く前に
-     * 打ち始めた)。画面にあるのはまだ入力した本文なので、「読み直しました」
-     * と言うと、人はディスクのぶんを見ているつもりで写すのをやめる。
+     * When the write gave way but the reload never reached the screen (it could not be
+     * read, or typing began before it arrived). What is on screen is still the typed body,
+     * so saying "it was reloaded" makes people stop copying, believing they are looking at
+     * the disk's version.
      */
     staleNotReloaded:
       "別の場所で書き換えられていたので保存できませんでした。ディスクの本文は読み直せず、画面にあるのは入力した本文のままです。この端末に控えましたが、別の場所へも写してください",
     brokenMeta:
       "この Note の先頭の記録が読めないので保存できません。入力した本文はこの端末に控えました。開き直せば「戻す」で画面に出せます",
     /**
-     * ファイルそのものが文字として読めない。壊れているのは先頭の記録ではなく
-     * 中身なので `brokenMeta` とは言い分を分ける — 開き直しても `read_note` が
-     * 同じ理由で断られ、「戻す」で控えを画面に出す道が無い。
+     * The file itself cannot be read as text. What is broken is the contents, not the
+     * leading record, so the wording is kept apart from `brokenMeta`: reopening it has
+     * `read_note` refuse for the same reason, and there is no way to put the backup on
+     * screen with "undo".
      */
     notTextNote:
       "この Note のファイルは文字として読めないので保存できません。入力した本文はこの端末に控えましたが、開き直しても読めないので、画面にあるうちに別の場所へ写してください",
-    /** 無い Note は行ごと消えるので、「戻す」で呼び出せるとは言えない。 */
+    /** A missing Note loses its whole row, so it cannot be said that "undo" will bring it back. */
     missingNote:
       "この Note はもう在りません。保存できないので、入力した本文は画面にあるうちに別の場所へ写してください",
     shownFromBackup:
@@ -171,15 +173,16 @@ const ja = {
     saveFailedKept: (title: string) =>
       `「${title}」を保存できませんでした。入力した本文はこの端末に控えました。保存が復旧してから、開き直して「戻す」で取り出してください`,
     /**
-     * Stale で控えも残せなかったとき。画面の本文はディスクのぶんに入れ替わって
-     * いるので、「画面にあるうちに写して」と言っても写す相手がもう無い。
+     * When it was Stale and no backup could be kept either. The body on screen has been
+     * swapped for the disk's, so telling the user to "copy it while it is on screen" leaves
+     * nothing to copy.
      */
     staleNotKept:
       "別の場所で書き換えられていたので保存できず、この端末にも控えを残せませんでした。入力した本文は失われました",
     /**
-     * 断られた Note が画面に出ていないときの言い分。画面にあるのは別の Note の
-     * 本文なので、「画面にあるうちに写して」は届かない。どの Note かを名乗り、
-     * 控えの在り処と、いま取り出せるかどうかだけを言う。
+     * The wording for when the refused Note is not on screen. What is on screen is another
+     * Note's body, so "copy it while it is on screen" does not land. It names which Note,
+     * and says only where the backup is and whether it can be taken out now.
      */
     editedElsewhereAway: (title: string) =>
       `「${title}」は別の場所で書き換えられていたので保存できませんでした。入力した本文はこの端末に控えました。「${title}」を開き直して「戻す」を押せば画面に出せます`,
@@ -197,7 +200,7 @@ const ja = {
     empty: "育てる文書がまだありません",
     emptyHint: "Note の「…」から Codex にするか、新規から始めます。",
     promote: "Codex にする",
-    /** 「Codex にする」の確認。何が増えるかを先に言い、戻れないことは最後に。 */
+    /** The confirmation for "make it a Codex". What is gained comes first, no way back last. */
     promoteBody1:
       "書き足し続ける文書になります。区切りごとに版を刻み、前の版からどれだけ変わったかを見返せます。",
     promoteBody2: "Codex タブへ移ります。ID とリンクはそのまま。",
@@ -211,8 +214,9 @@ const ja = {
     draft: "下書き",
     restored: "この版に戻しました。戻す前の下書きは履歴にあります",
     /**
-     * 戻す書き込みは通ったが、そのあとの読み直しが画面に届かなかった。戻ったとは
-     * 言えない — 画面に出ているのは戻す前の本文なので、開き直す一手まで言う。
+     * The restoring write went through, but the reload after it never reached the screen.
+     * It cannot be called restored: what is on screen is the body from before the restore,
+     * so the message goes as far as telling the user to reopen it.
      */
     restoredNotShown:
       "この版に戻しましたが、戻した本文を画面に出せませんでした。開き直してください",
@@ -221,27 +225,27 @@ const ja = {
     noVersions: "版なし",
     noVersionsHint: "まだ版がありません。いまの本文が最初の版になります。",
     close: "閉じる",
-    /** 「版 4」。背骨の行・メタ行・一覧の記号の説明。 */
+    /** "Version 4". The spine row, the meta line, and the description of the list's mark. */
     versionN: (n: number) => `版 ${n}`,
-    /** 「版 4 から +312 B」。最新の版からの距離。 */
+    /** "+312 B from version 4". The distance from the latest version. */
     deltaFromLatest: (n: number, delta: number) => `版 ${n} から ${sizeDelta(delta)}`,
-    /** 「9 か月で 4 回刻んだ」。最初の版からの経過と版の数。 */
+    /** "Committed 4 versions over 9 months". The time since the first version and the count. */
     cadence: (count: number, span: Span): string => {
       if (span.months >= 1) {
         return `${span.months} か月で ${count} 回刻んだ`;
       }
       return span.days >= 1 ? `${span.days} 日で ${count} 回刻んだ` : `今日 ${count} 回刻んだ`;
     },
-    /** 「7 日ぶり」。刻んだ直後のトースト。 */
+    /** "After 7 days". The toast right after a version is committed. */
     sinceDays: (days: number) => `${days} 日ぶり`,
-    /** 一覧の角折りページの説明。 */
+    /** The description of the folded-corner page in the list. */
     pageMark: (count: number, dirty: boolean): string => {
       if (count === 0) {
         return "版なし";
       }
       return dirty ? `版 ${count} · 変更あり` : `版 ${count}`;
     },
-    /** 履歴パネルの見出しに添える「3 版 · 9 か月」。 */
+    /** The "3 versions · 9 months" put beside the history panel's heading. */
     historySummary: (count: number, span: Span): string => {
       const versions = `${count} 版`;
       if (span.months >= 1) {
@@ -249,25 +253,25 @@ const ja = {
       }
       return span.days >= 1 ? `${versions} · ${span.days} 日` : `${versions} · 今日`;
     },
-    /** 下書きの行の 2 行目。刻んだら何番になるか。 */
+    /** The second line of the draft row. Which number it becomes once committed. */
     nextVersion: (n: number) => `刻めば版 ${n}`,
-    /** 下書きが最新の版から動いていないとき。 */
+    /** When the draft has not moved from the latest version. */
     sameAsVersion: (n: number) => `版 ${n} と同じ内容`,
-    /** 「最初の版 · 2.1 KB」。いちばん古い行の 2 行目。 */
+    /** "First version · 2.1 KB". The second line of the oldest row. */
     firstVersion: (bytes: number) => `最初の版 · ${sizeOf(bytes)}`,
-    /** 選んだ版の下に出る「版 3 に戻す」。 */
+    /** The "restore version 3" shown under the selected version. */
     restoreN: (n: number) => `版 ${n} に戻す`,
-    /** 携帯の履歴の画面から戻る先は一覧ではなく本文。読み上げにはそう言う。 */
+    /** From the phone's history screen the way back is the body, not the list. Say so to the reader. */
     backToBody: "本文に戻る",
-    /** 比較バーの中。狭いので版の番号は上の行が言う。 */
+    /** Inside the compare bar. It is narrow, so the line above says the version number. */
     restoreShort: "戻す",
-    /** 履歴パネルの足元。 */
+    /** The foot of the history panel. */
     historyFoot: "版を押すと本文で比べる · Esc で閉じる",
-    /** 履歴の画面(携帯)の案内。閉じ方はヘッダの ← が言う。 */
+    /** The guide on the history screen (phone). How to close it is said by the header's back arrow. */
     historyHint: "版を押すと本文で比べる",
-    /** 比較モードの名乗り。比較バーとボトムバーが出す。 */
+    /** What compare mode calls itself. The compare bar and the bottom bar show it. */
     comparing: (n: number) => `版 ${n} と比較中`,
-    /** 「3 行追加 · 1 行削除」。選んだ版と下書きのあいだで動いた行の数。 */
+    /** "3 lines added · 1 line removed". The lines moved between the chosen version and the draft. */
     lineDelta: (added: number, removed: number): string =>
       [added > 0 ? `${added} 行追加` : undefined, removed > 0 ? `${removed} 行削除` : undefined]
         .filter(Boolean)
@@ -364,8 +368,8 @@ const ja = {
     minutesAgo: (minutes: number) => `${minutes}分前`,
     hoursAgo: (hours: number) => `${hours}時間前`,
     daysAgo: (days: number) => `${days}日前`,
-    // 1 回の同期が終わったあとの知らせ。core は kind と材料だけを返すので、
-    // 文にするのはここ (`sync-status.ts` の describeSyncResult)
+    // The report after one sync finishes. The core returns only the kind and the material,
+    // so the sentence is made here (describeSyncResult in `sync-status.ts`)
     result: {
       upToDate: "すべて同期済み",
       synced: (parts: string) => `同期しました ${parts}`,
@@ -400,7 +404,7 @@ const ja = {
   },
   settings: {
     title: "設定",
-    // 3 頁の題・ナビの補助・頁の説明。ナビの行がそのまま頁の頭になる
+    // The three page titles, the nav subtitles and the page leads. A nav row becomes the page's head
     pages: {
       general: {
         title: "一般",
@@ -414,7 +418,7 @@ const ja = {
       },
       sync: {
         title: "同期",
-        // 頁が 2 行しかないので、題だけで足りる
+        // The page has only two rows, so the title alone is enough
         hint: "",
         lead: "Cloudflare Workers + R2。端末は自分の状態を送らず、Worker が正を持つ。",
       },
@@ -462,8 +466,8 @@ const ja = {
     workersUrlDesc: "デプロイした Worker のアドレス",
     account: "アカウント",
     accountDesc: "Google でログイン",
-    // 端末に載っているビルドを名乗る唯一の場所。版は `getVersion()` が返す
-    // tauri.conf.json の値で、リリースタグと一致する
+    // The only place that names the build on the device. The number is the tauri.conf.json
+    // value `getVersion()` returns, and it matches the release tag
     versionLine: (version: string) => `Magical Merchant ${version}`,
   },
   palette: {
@@ -473,9 +477,9 @@ const ja = {
     recentNotes: "最近の Note",
     empty: "一致するものがありません",
     count: (count: number) => `${count}件`,
-    // 入力欄の右。種類の束を合わせて幾つ当たったか
+    // To the right of the input. How many hits there are across all the kinds together
     hitCount: (count: number) => `${count} 件`,
-    // 足元と選択行に出すキーの札。記号はキーそのものなので訳さない
+    // The key badges shown at the foot and on the selected row. The symbols are the keys themselves, so they are not translated
     hintMove: "選ぶ",
     hintOpen: "開く",
     hintClose: "閉じる",
@@ -487,7 +491,7 @@ const ja = {
     openSettings: "設定を開く",
     scopeTag: (tag: string) => `#${tag} で絞り込み`,
     removeScope: "絞り込みを外す",
-    // 引数は「#a #b」の形に揃えた範囲の文字(scopeLabel)。タグが幾つでも一文で済む
+    // The argument is the scope text laid out as "#a #b" (scopeLabel). One sentence covers any number of tags
     emptyScoped: (scope: string) => `${scope} の中に一致するものがありません`,
   },
   editor: {
@@ -514,7 +518,7 @@ const ja = {
     taskList: "チェックリスト",
     outdent: "インデントを戻す",
     indent: "インデント",
-    // リンク先は Note でも Codex でもありうる。バックリンクの文と同じ「記録」で
+    // A link target can be a Note or a Codex. It says "record", the same word as the backlink text
     noteLink: "記録へのリンク",
     codeBlock: "コードブロック",
     closeKeyboard: "キーボードを閉じる",
@@ -539,7 +543,7 @@ const ja = {
   calendar: {
     prevMonth: "前の月",
     nextMonth: "次の月",
-    /** 週の始まりは月曜。曜日の見出しは 1 文字ぶんの幅しかない */
+    /** The week starts on Monday. A weekday heading has only one character of width */
     weekdays: ["月", "火", "水", "木", "金", "土", "日"],
     monthTitle: (year: number, month: number) => `${year}年${month + 1}月`,
     monthDay: (month: number, day: number) => `${month}月${day}日`,
@@ -552,9 +556,9 @@ const ja = {
     lastWeek: "先週",
     earlier: "それ以前",
     weekdays: ["日曜日", "月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日"],
-    /** 日グループの見出しに出す暦日。 */
+    /** The calendar date shown on a day group's heading. */
     monthDay: (month: number, day: number) => `${month}月${day}日`,
-    /** Note の作成日。年まで言うのはここだけ。 */
+    /** A Note's creation date. This is the only place that says the year as well. */
     fullDate: (year: number, month: number, day: number) => `${year}年${month}月${day}日`,
   },
 };
@@ -1066,8 +1070,9 @@ export function readStoredLocale(): LocalePreference {
 }
 
 /**
- * 実際に使う言語。持っていない言語の端末は英語に倒す — 日本語を
- * 既定にすると、読めない人が読めない設定画面から言語を探すことになる。
+ * The language actually used. A device in a language that is not held falls to English:
+ * with Japanese as the default, someone who cannot read it would have to look for the
+ * language in a settings screen they cannot read.
  */
 export function resolveLocale(preference: LocalePreference, systemLanguage: string): Locale {
   if (preference !== "system") {
@@ -1082,16 +1087,16 @@ const [locale, setResolved] = createSignal<Locale>(
 
 export { locale };
 
-// index.html は `lang="ja"` で出荷される。読み上げと日本語の行組みが
-// 言語と食い違わないよう、決まった時点で書き換える
+// index.html ships with `lang="ja"`. It is rewritten the moment the language is decided,
+// so that the screen reader and the Japanese line breaking do not disagree with it
 document.documentElement.lang = locale();
 
-/** いま使う言葉の表。JSX から呼べば、切り替えたときに描き直される。 */
+/** The table of words in use now. Called from JSX, it is redrawn when the language switches. */
 export function t(): Messages {
   return messages[locale()];
 }
 
-/** 表示だけを切り替える。設定として残すのは `applyLocale`。 */
+/** Switch the display only. Keeping it as a setting is `applyLocale`. */
 export function setLocale(next: Locale): void {
   setResolved(next);
   document.documentElement.lang = next;

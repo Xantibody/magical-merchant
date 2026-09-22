@@ -69,7 +69,8 @@ describe("summarizeDay", () => {
     expect(summarizeDay([ctx(), null]).networks).toStrictEqual([]);
   });
 
-  // 緯度経度を並べても地名にはならない。数えて意味が出るのは件数のほう。
+  // Listing latitudes and longitudes does not make a place name. What means something when
+  // counted is how many entries there were.
   it("counts the entries that kept their coordinates", () => {
     const summary = summarizeDay([
       ctx({ location: { latitude: 35, longitude: 139 } }),

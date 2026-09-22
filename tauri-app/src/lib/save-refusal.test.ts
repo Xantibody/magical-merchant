@@ -14,7 +14,7 @@ const notText = refusal("notText");
 const words = (): ReturnType<typeof t>["notes"] => t().notes;
 
 describe("refusedForGood", () => {
-  // 読み直しても直らない 3 つ。打った字はその場で退避する側に回る
+  // The three a reload cannot fix. What was typed goes to the backup side immediately
   it("names the refusals a reload cannot fix", () => {
     expect([broken, missing, notText].map((error) => refusedForGood(error))).toStrictEqual([
       true,
@@ -23,7 +23,7 @@ describe("refusedForGood", () => {
     ]);
   });
 
-  // Stale は譲って読み直せば書ける。退避したうえで読み直しに進む
+  // Stale can be written after yielding and reloading. It backs up, then goes on to the reload
   it("leaves stale to the reload path", () => {
     expect(refusedForGood(stale)).toBe(false);
   });
@@ -41,20 +41,20 @@ describe("refusedForGood", () => {
 });
 
 describe("refusalToast", () => {
-  // 控えが残らなかったときは、どの理由でも先に「残っていない」と言う。
-  // 理由の説明より、打った字がどこにも無いことのほうが先に届く必要がある
+  // When no backup was kept, whatever the reason, "it was not kept" is said first. That
+  // what was typed is nowhere has to arrive before the explanation of the reason
   describe("控えが残らなかったとき", () => {
     it("points at the body still on screen", () => {
       expect(refusalToast(stale, false, TITLE, "draft")).toBe(words().saveNotKept);
       expect(refusalToast(broken, false, TITLE, "draft")).toBe(words().saveNotKept);
     });
 
-    // 読み直しが載ったぶんは、画面の本文もディスクのぶんに入れ替わっている
+    // Once a reload has landed, the body on screen has been replaced by the one from disk
     it("says the draft is gone once a reload replaced it", () => {
       expect(refusalToast(stale, false, TITLE, "reloaded")).toBe(words().staleNotKept);
     });
 
-    // Stale 以外は読み直しを走らせないので、`reloaded` でも名乗るしかない
+    // Nothing but stale runs a reload, so even under `reloaded` it can only name the note
     it("names the note when the screen moved on", () => {
       expect(refusalToast(broken, false, TITLE, "reloaded")).toBe(words().saveNotKeptAway(TITLE));
       expect(refusalToast(stale, false, TITLE, "away")).toBe(words().saveNotKeptAway(TITLE));
@@ -74,14 +74,14 @@ describe("refusalToast", () => {
       expect(refusalToast(broken, true, TITLE, "draft")).toBe(words().brokenMeta);
     });
 
-    // 画面に無いぶんは、どの理由でもノートの名前から始める
+    // What is not on screen starts with the note's name, whatever the reason
     it("names the note instead of pointing at the one now on screen", () => {
       expect(refusalToast(missing, true, TITLE, "away")).toBe(words().missingNoteAway(TITLE));
       expect(refusalToast(notText, true, TITLE, "away")).toBe(words().notTextNoteAway(TITLE));
       expect(refusalToast(broken, true, TITLE, "away")).toBe(words().brokenMetaAway(TITLE));
     });
 
-    // 読み直しが載ったあとも、画面にあるのは打った字ではない。`away` と同じ扱い
+    // Even after a reload has landed, what is on screen is not what was typed. Treated the same as `away`
     it("treats a reload the same as being away for the refusals it cannot fix", () => {
       expect(refusalToast(missing, true, TITLE, "reloaded")).toBe(words().missingNoteAway(TITLE));
       expect(refusalToast(broken, true, TITLE, "reloaded")).toBe(words().brokenMetaAway(TITLE));

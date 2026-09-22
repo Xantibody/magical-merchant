@@ -10,8 +10,8 @@ import { setLocale } from "./i18n";
 
 const TODAY = new Date(2026, 7, 4); // 2026-08-04
 
-// 見出しは言語ごとに語も並びも変わる。日本語だけ見ていると、英語で
-// 「8月4日 Monday」のような混ざった行が出ても気付けない
+// A heading changes both its words and their order per language. Watching only Japanese,
+// a mixed line in English, a Japanese-style date followed by "Monday", would go unnoticed
 describe("in english", () => {
   it("names the day in english", () => {
     setLocale("en");
@@ -78,7 +78,7 @@ describe("formatDayHeading", () => {
     });
   });
 
-  // 「3日前」より日付そのもののほうが手がかりになる距離。
+  // A distance at which the date itself is more of a clue than "3 days ago".
   it("uses the date itself as the label further back", () => {
     expect(formatDayHeading("2026-07-29", TODAY)).toStrictEqual({
       label: "7月29日",
@@ -92,8 +92,8 @@ describe("formatDayHeading", () => {
 });
 
 describe("formatNoteGroupLabel", () => {
-  // いま書いているノートは一覧の先頭にまとまっていてほしい。「今週」に
-  // 混ぜると、さっき作った 1 本を 7 日ぶんの中から探すことになる
+  // The notes being written now should sit together at the head of the list. Mixed into
+  // "this week", the one made a moment ago has to be found among seven days of them
   it("keeps today's notes in their own group", () => {
     expect(formatNoteGroupLabel("2026-08-04", TODAY)).toBe("今日");
   });

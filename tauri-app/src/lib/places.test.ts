@@ -8,7 +8,7 @@ function at(latitude: number, longitude: number): DeviceContext {
   return { os: "android", arch: "aarch64", location: { latitude, longitude } };
 }
 
-/** `resolve_places` に渡された引数を控えつつ、`answers` を返す。 */
+/** Record the arguments passed to `resolve_places` while returning `answers`. */
 function mockPlaces(answers: [string, string][]): {
   calls: [number, number][][];
   locales: string[];
@@ -28,7 +28,7 @@ function mockPlaces(answers: [string, string][]): {
 }
 
 describe("placeKey", () => {
-  /** Rust 側の `place_key` と同じ丸めでないと、答えを引き当てられない。 */
+  /** Without the same rounding as `place_key` on the Rust side, the answer is never found. */
   it("rounds to the same grid the cache is keyed by", () => {
     expect(placeKey(35.6761403, 139.5465634)).toBe("35.68,139.55");
   });
@@ -50,7 +50,7 @@ describe("createPlaceStore", () => {
     expect(store.nameOf({ latitude: 35.6761403, longitude: 139.5465634 })).toBe("渋谷区");
   });
 
-  /** 同じ町で書いた 1 日ぶんの記録に、同じ問い合わせを何十回もさせない。 */
+  /** A day of records written in one town must not repeat the same query dozens of times. */
   it("asks about each grid square only once", async () => {
     const store = createPlaceStore();
     const { calls } = mockPlaces([["35.68,139.55", "渋谷区"]]);
@@ -74,8 +74,8 @@ describe("createPlaceStore", () => {
   });
 
   /**
-   * 圏外では 1 件も返らない。同じ座標をその都度聞き直すと、Scrawl が
-   * 再描画されるたびに返らない IPC を積み上げる。
+   * Out of range nothing comes back. Asking about the same coordinate every time would
+   * pile up IPC calls that never answer on each Scrawl re-render.
    */
   it("does not retry a coordinate the OS could not name", async () => {
     const store = createPlaceStore();
@@ -87,7 +87,7 @@ describe("createPlaceStore", () => {
     expect(calls).toHaveLength(1);
   });
 
-  /** 地名は OS が言語ごとに違う答えを返す。どの言語で聞くかを渡す。 */
+  /** The OS answers a place name differently per language. Pass which language to ask in. */
   it("asks in the language the interface is in", async () => {
     const store = createPlaceStore();
     const { locales } = mockPlaces([["35.68,139.55", "Shibuya"]]);
@@ -99,8 +99,8 @@ describe("createPlaceStore", () => {
   });
 
   /**
-   * 言語を変えたら地名も変わる。前の言語の答えを残すと、英語の画面に
-   * 日本語の地名が並んだままになる。
+   * Change the language and the place names change too. Keeping the previous language's
+   * answers leaves Japanese place names standing on an English screen.
    */
   it("forgets what it knows when the language changes", async () => {
     const store = createPlaceStore();
@@ -128,7 +128,7 @@ describe("createPlaceStore", () => {
     expect(calls).toHaveLength(0);
   });
 
-  /** 地名が出ないことより、Scrawl が出ないことのほうが困る。 */
+  /** A missing place name is less trouble than a missing Scrawl. */
   it("stays quiet when the lookup fails", async () => {
     const store = createPlaceStore();
     const failed = vi.fn<() => void>();

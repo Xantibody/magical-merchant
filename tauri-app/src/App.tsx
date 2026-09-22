@@ -5,22 +5,22 @@ import Scrawl from "./views/Scrawl";
 import { ROUTES } from "./lib/routes";
 import type { JSX } from "solid-js";
 
-// 起動時に表示しない view は遅延読み込みして初期バンドルを軽くする。
-// Workspace は Milkdown + ProseMirror + Shiki を引き連れており、
-// これを外すだけで起動時に parse する JS が大きく減る。
+// Views not shown at startup are lazy-loaded to keep the initial bundle small.
+// Workspace drags in Milkdown + ProseMirror + Shiki; taking it out alone
+// greatly reduces the JS parsed at startup.
 const Workspace = lazy(() => import("./views/Workspace"));
-// Codex は同じ Workspace の別の面。読むディレクトリが違うだけで、開いたら
-// 書く形は同じなので、画面を 2 つ持たない
+// Codex is another face of the same Workspace. Only the directory it reads differs;
+// once open, writing works the same, so there are not two screens
 const Codex = (): JSX.Element => <Workspace kind="codex" />;
 const Settings = lazy(() => import("./views/Settings"));
-// 絞る画面。レールの入口だが、起動時に見えるものではない
+// The Browse screen. An entry on the rail, but not something visible at startup
 const Browse = lazy(() => import("./views/Browse"));
-// テンプレート管理は Settings の下の画面。開く人はさらに少ないので
-// 先読みもしない
+// Template management is a screen under Settings. Even fewer people open it,
+// so it is not prefetched either
 const Templates = lazy(() => import("./views/Templates"));
 
-// 遅延にした代わりに、起動が落ち着いてから裏で読んでおく。
-// これが無いと Notes タブを初めて開いた瞬間に読み込み待ちが挟まる
+// In exchange for the lazy loading, read them in the background once startup settles.
+// Without this, the first opening of the Note tab has a loading wait in the way
 function prefetchLazyViews(): void {
   const idle: (task: () => void) => unknown =
     typeof requestIdleCallback === "function"

@@ -23,7 +23,7 @@ describe("renderMarkdownSync", () => {
     expect(html).toContain("<li>item2</li>");
   });
 
-  // エディタ(gfm)と同じ li を出す。印は CSS が描くので、文字の `[ ]` は外す
+  // Emit the same li as the editor (gfm). CSS draws the mark, so the literal `[ ]` is dropped
   it("marks a task list item with its state and drops the bracket", () => {
     const html = renderMarkdownSync("- [ ] 牛乳\n- [x] パン");
     expect(html).toContain('<li data-item-type="task" data-checked="false">牛乳</li>');
@@ -67,7 +67,7 @@ describe("Milkdown の空行 (<br /> 行)", () => {
   it("単独行の <br /> は文字ではなく空の段落として描く", () => {
     const html = renderMarkdownSync("一段落目\n\n<br />\n\n二段落目");
     expect(html).not.toContain("&lt;br");
-    // 空行は 1 行ぶんの高さを持つ空の段落になる
+    // An empty line becomes an empty paragraph one line high
     expect(html).toContain("<p>\u00A0</p>");
   });
 
@@ -79,7 +79,7 @@ describe("Milkdown の空行 (<br /> 行)", () => {
   it("コードフェンスの中の <br /> はコードのまま", async () => {
     const source = ["```html", "<br />", "```"].join("\n");
     const html = await renderMarkdown(source);
-    // Shiki は < を &#x3C; にエスケープする。コードとして残っていればよい
+    // Shiki escapes < as &#x3C;. It only has to survive as code
     expect(html).toMatch(/&(?:lt|#x3C);/u);
     expect(html).not.toContain("<p>\u00A0</p>");
   });
@@ -102,8 +102,8 @@ describe("renderMarkdown", () => {
   });
 
   it("leaves no marker behind when the code contains a replacement pattern", async () => {
-    // "$&" は String.replace の置換文字列ではマッチ全体に展開される。差し替えを
-    // 文字列で渡していると、目印の markup がそのまま本文に混ざって出てくる。
+    // "$&" expands to the whole match in a String.replace replacement string. Passing the
+    // replacement as a string mixes the marker markup straight into the body.
     const source = ["```bash", 'echo "cost: 1 $& 2" $` $\' $$', "```"].join("\n");
 
     const html = await renderMarkdown(source);
@@ -114,8 +114,8 @@ describe("renderMarkdown", () => {
   });
 
   it("does not let the source forge a slot marker", async () => {
-    // markdown-it が U+0000 を U+FFFD に潰すことに寄りかかっている。潰れなければ
-    // 本文がハイライト結果の差し込み位置を偽装できてしまう。
+    // This leans on markdown-it crushing U+0000 to U+FFFD. Without that crush, the body
+    // could forge the position where the highlight result is spliced in.
     const source = [`${FENCE_SLOT} は本文`, "", "```text", FENCE_SLOT, "```"].join("\n");
 
     const html = await renderMarkdown(source);
@@ -130,7 +130,7 @@ describe("renderMarkdown", () => {
     expect(html).toContain("<h1>Hello</h1>");
   });
 
-  // Shiki は diff を持たないので、渡してもプレーンテキストに落ちるだけ
+  // Shiki does not carry diff, so sending it there only drops it to plain text
   it("draws a diff fence with its own renderer instead of the highlighter", async () => {
     const source = ["```diff", "-old", "+new", "```"].join("\n");
 
@@ -141,8 +141,8 @@ describe("renderMarkdown", () => {
     expect(html).toContain('class="diff-line diff-add"');
   });
 
-  // コピーは innerHTML の中の 1 つのハンドラが拾う。押されたブロックの
-  // 生ソースは DOM から引けないと、描画結果から逆算することになる
+  // A single handler inside innerHTML catches the copy. Unless the pressed block's raw
+  // source can be read from the DOM, it has to be worked back out of the render result
   it("hangs a copy tool and the fence source on a highlighted block", async () => {
     const source = ["```ts", 'const a = "<b>";', "```"].join("\n");
 
@@ -153,7 +153,7 @@ describe("renderMarkdown", () => {
     );
     expect(html).toContain('data-action="copy"');
     expect(html).toContain('<span class="preview-tools-lang">ts</span>');
-    // 道具はブロックの中に置く。外に置くと pre の位置決めの基準にならない
+    // The tools go inside the block. Outside, they are no reference for positioning the pre
     expect(html.indexOf('data-action="copy"')).toBeLessThan(html.lastIndexOf("</pre>"));
   });
 
@@ -172,7 +172,7 @@ describe("renderMarkdown", () => {
     expect(html).toContain('aria-label="コードをコピー"');
   });
 
-  // 種類ごとに別の配列へ振り分けて描くので、戻すときの番号がずれやすい
+  // Each kind is sorted into its own array to be drawn, so the index slips easily on the way back
   it("keeps a diff fence in source order next to a highlighted one", async () => {
     const source = ["```diff", "+added", "```", "", "```ts", "const a = 1;", "```"].join("\n");
 
@@ -227,7 +227,7 @@ describe("renderMarkdown with mermaid", () => {
 
     expect(html).toContain("<figcaption");
     expect(html).toContain("図1 — 同期の流れ");
-    // コメントは mermaid が読み飛ばす。本文から消してはいない
+    // mermaid skips the comment. It is not removed from the body
     expect(html).toContain("<svg");
   });
 
@@ -259,8 +259,8 @@ describe("renderMarkdown with mermaid", () => {
   });
 });
 
-// 履歴を開いているあいだの欄外の印。差分を別枠に描かず、本文のブロックに
-// class と記号だけを足す。本文の色・字は変えない
+// The margin mark while the history is open. The diff is not drawn in a separate pane;
+// only a class and a sign are added to the body's block. The body's colour and type are left alone
 describe("renderMarkdown with line marks", () => {
   it("marks the block a line belongs to and leaves the rest alone", async () => {
     const html = await renderMarkdown("そのまま\n\n増えた\n\n消えた", undefined, undefined, [
@@ -280,7 +280,7 @@ describe("renderMarkdown with line marks", () => {
     );
   });
 
-  // 詰めた箇条書きの段落は描かれない。印は項目に上がる
+  // The paragraph of a tight list item is not drawn. The mark rises onto the item
   it("lifts the mark of a tight list item onto the li", async () => {
     const html = await renderMarkdown("- 残る\n- 増えた", undefined, undefined, [undefined, "add"]);
 
@@ -288,7 +288,7 @@ describe("renderMarkdown with line marks", () => {
     expect(html).toContain('<li class="diff-mark diff-mark--add"><span class="diff-sign"');
   });
 
-  // 段落の一部の行だけが消えたときは、段落は「変わった」で、その行の字だけを消す
+  // When only some lines of a paragraph are deleted, the paragraph is "changed" and only that line's text is struck
   it("strikes only the deleted lines inside a paragraph that survived", async () => {
     const html = await renderMarkdown("一行目\n二行目\n三行目", undefined, undefined, [
       undefined,

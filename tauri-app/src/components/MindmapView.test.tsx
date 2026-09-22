@@ -47,8 +47,8 @@ describe("MindmapView", () => {
   });
 
   describe("ダブルクリックで拡大しない", () => {
-    // markmap の描画ルート (<svg> 直下の無名 <g>) の transform。d3-zoom は
-    // ここに拡大・移動を書き込むので、これが動かなければズームしていない
+    // The transform on markmap's drawing root, the unnamed `<g>` directly under the
+    // `<svg>`. d3-zoom writes scale and pan there, so if it does not move, nothing zoomed
     async function renderAndSettle(baseElement: HTMLElement) {
       const screen = page.elementLocator(baseElement);
       await expect
@@ -56,14 +56,14 @@ describe("MindmapView", () => {
         .toBeInTheDocument();
       const svg = query<SVGSVGElement>(baseElement, ".mindmap-view svg");
       const rootGroup = query<SVGGElement>(svg, ":scope > g:not([class])");
-      // markmap の fit() は duration 0 でも d3 の transition 経由なので、初期 transform が
-      // 書かれるまで待たないと「前」の値が取れない
+      // markmap's `fit()` goes through a d3 transition even at duration 0, so we have to
+      // wait until the initial transform is written to read the "before" value
       await expect.poll(() => rootGroup.getAttribute("transform")).toBeTruthy();
       return { svg, rootGroup, before: rootGroup.getAttribute("transform") };
     }
 
-    // d3-zoom のダブルクリック拡大は 250ms の transition で動くので、
-    // 「変わらなかった」と言うにはその時間ぶん待って見届ける必要がある
+    // d3-zoom's double-click zoom runs as a 250ms transition, so claiming "it did not
+    // change" means waiting that long and watching it
     async function expectTransformUnchanged(rootGroup: SVGGElement, before: string | null) {
       await sleep(400);
       expect(rootGroup.getAttribute("transform")).toBe(before);

@@ -30,7 +30,7 @@ describe("createLongPress", () => {
     expect(fired).toHaveBeenCalledTimes(1);
   });
 
-  // PC の長押しに意味はない。マウスにはホバーのボタンがある
+  // A long press means nothing on desktop. A mouse has the button that appears on hover
   it("ignores mouse presses", () => {
     const fired = vi.fn<() => void>();
     const press = createLongPress(fired, HOLD_MS);
@@ -53,8 +53,8 @@ describe("createLongPress", () => {
     expect(fired).not.toHaveBeenCalled();
   });
 
-  // 置いたままの指は数 px 揺れ続ける。1 回の pointermove で捨てると、
-  // 実機の長押しは 500ms を完走できない(#253)
+  // A finger left resting keeps jittering by a few px. Giving up on a single pointermove
+  // would stop a long press on a real device from reaching 500ms (#253)
   it("holds on through the jitter of a finger that is only resting", () => {
     const fired = vi.fn<() => void>();
     const press = createLongPress(fired, HOLD_MS);
@@ -67,7 +67,7 @@ describe("createLongPress", () => {
     expect(fired).toHaveBeenCalledTimes(1);
   });
 
-  // 指が動いた=スクロール。押しっぱなしとは区別する
+  // A finger that moved is a scroll. It is kept apart from a held press
   it("cancels once the finger has travelled further than a slip", () => {
     const fired = vi.fn<() => void>();
     const press = createLongPress(fired, HOLD_MS);
@@ -79,7 +79,8 @@ describe("createLongPress", () => {
     expect(fired).not.toHaveBeenCalled();
   });
 
-  // 揺れの許容は押すたびに測り直す。少しずつ流れた指で 2 回目が固まらない
+  // The jitter allowance is measured afresh on every press, so a finger that drifted a
+  // little does not lock up the second attempt
   it("measures the slip from the point the finger landed at", () => {
     const fired = vi.fn<() => void>();
     const press = createLongPress(fired, HOLD_MS);
@@ -94,7 +95,8 @@ describe("createLongPress", () => {
     expect(fired).toHaveBeenCalledTimes(1);
   });
 
-  // 長押し後に指を離すと click が飛ぶ。それを編集開始に流さない
+  // Lifting the finger after a long press fires a click. That click must not reach the
+  // start of editing
   it("swallows exactly the click that follows a long press", () => {
     const press = createLongPress(vi.fn<() => void>(), HOLD_MS);
 
@@ -106,8 +108,8 @@ describe("createLongPress", () => {
     expect(press.shouldClick()).toBe(true);
   });
 
-  // contextmenu を preventDefault した後に click を出さない機種がある。
-  // 飲み込む札を残したままにすると、次の tap が道連れになる
+  // Some devices emit no click after contextmenu has been preventDefault'ed. Leaving the
+  // swallow flag set would take the next tap down with it
   it("lets the next tap through when no click followed the long press", () => {
     const press = createLongPress(vi.fn<() => void>(), HOLD_MS);
 
@@ -122,8 +124,8 @@ describe("createLongPress", () => {
     expect(press.shouldClick()).toBe(true);
   });
 
-  // 押しっぱなしは WebView から見るとテキスト選択の始まり。放っておくと
-  // 「コピー」のメニューが長押しの手応えに割り込む
+  // To the WebView a held press is the start of a text selection. Left alone, the copy menu
+  // cuts in on the feedback of the long press
   it("keeps the platform context menu from opening", () => {
     const press = createLongPress(vi.fn<() => void>(), HOLD_MS);
     const preventDefault = vi.fn<() => void>();

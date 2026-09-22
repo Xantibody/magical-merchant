@@ -27,8 +27,9 @@ describe("CaptureBar", () => {
     expect(onSend).toHaveBeenCalledExactlyOnceWith("買い物メモ");
   });
 
-  // macOS の WKWebView では、日本語 IME の変換確定 Enter も keydown として
-  // 届く。isComposing を見ずに送信すると、漢字変換を確定できない (#102)
+  // In the WKWebView on macOS, the Enter that commits a Japanese IME conversion also
+  // arrives as a keydown. Sending without looking at isComposing makes it impossible to
+  // commit a kanji conversion (#102)
   it("does not send while the IME is composing", () => {
     const { onSend, textarea } = renderCaptureBar();
     fireEvent.input(textarea, { target: { value: "かんじへんかん" } });
@@ -38,7 +39,7 @@ describe("CaptureBar", () => {
     expect(onSend).not.toHaveBeenCalled();
   });
 
-  // WebKit は互換のため合成中の keydown を keyCode 229 で届けることがある
+  // For compatibility, WebKit sometimes delivers a keydown during composition as keyCode 229
   it("does not send on the legacy keyCode 229 Enter", () => {
     const { onSend, textarea } = renderCaptureBar();
     fireEvent.input(textarea, { target: { value: "かんじへんかん" } });

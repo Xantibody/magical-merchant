@@ -31,7 +31,7 @@ describe("shortcutLabel", () => {
     expect(shortcutLabel("settings")).toBe("⌘,");
   });
 
-  // 大文字にするだけでは「ARROWUP」になる。矢印は矢印で出す
+  // Upper-casing alone would give "ARROWUP". An arrow is printed as an arrow
   it("draws the arrows rather than naming them", () => {
     setUserAgent(MAC);
 
@@ -39,7 +39,8 @@ describe("shortcutLabel", () => {
     expect(shortcutLabel("noteNext")).toBe("⌘↓");
   });
 
-  // Codex の 2 つの入口。どちらもボタンの肩の札と … の行の綴りに出る
+  // The two ways into a Codex. Both appear in the badge at a button's shoulder and spelled
+  // out on the rows of the overflow menu
   it("prints the keys the Codex answers to", () => {
     setUserAgent(MAC);
 
@@ -47,7 +48,8 @@ describe("shortcutLabel", () => {
     expect(shortcutLabel("noteHistory")).toBe("⌘⇧H");
   });
 
-  // 一覧フライアウトを常設にするキー。札も、一覧の足元の言葉も、ここから配る
+  // The key that keeps the list flyout out. Both the badge and the wording at the foot of
+  // the list are handed out from here
   it("prints the key that keeps the list flyout open", () => {
     setUserAgent(MAC);
     expect(shortcutLabel("listPin")).toBe("⌘\\");
@@ -73,13 +75,13 @@ describe("shortcutLabel", () => {
 });
 
 describe("matchesShortcut", () => {
-  // 修飾キーがどちらで来るかは端末とキーボード次第なので、両方受ける
+  // Which modifier arrives depends on the device and the keyboard, so both are accepted
   it("accepts either Meta or Control", () => {
     expect(matchesShortcut(press("1", { metaKey: true }), "scrawl")).toBe(true);
     expect(matchesShortcut(press("1", { ctrlKey: true }), "scrawl")).toBe(true);
   });
 
-  // 面は 1・2・3 の並びで開く。Codex が 3 つ目
+  // The surfaces open in the order 1, 2, 3. Codex is the third
   it("opens the third surface on the third digit", () => {
     expect(matchesShortcut(press("3", { metaKey: true }), "codex")).toBe(true);
   });
@@ -88,7 +90,7 @@ describe("matchesShortcut", () => {
     expect(matchesShortcut(press("1"), "scrawl")).toBe(false);
   });
 
-  // ⌘S(そんな割り当ては無い)で同期が走ると、書いたものが消えたように見える
+  // If `⌘S` (which is bound to nothing) ran a sync, what was written would look lost
   it("keeps ⌘⇧S apart from ⌘S", () => {
     expect(matchesShortcut(press("S", { metaKey: true, shiftKey: true }), "syncNow")).toBe(true);
     expect(matchesShortcut(press("s", { metaKey: true }), "syncNow")).toBe(false);
@@ -108,7 +110,8 @@ describe("isTypingTarget", () => {
     expect(isTypingTarget(document.createElement("input"))).toBe(true);
     expect(isTypingTarget(document.createElement("textarea"))).toBe(true);
 
-    // Milkdown の中では、押した瞬間の target は段落など内側の要素になる
+    // Inside Milkdown, the target at the moment of the press is an inner element such as a
+    // paragraph
     const editor = document.createElement("div");
     editor.setAttribute("contenteditable", "true");
     const paragraph = document.createElement("p");

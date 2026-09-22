@@ -1,4 +1,4 @@
-/* キャプチャバーに被らない高さに置く */
+/* Placed at a height that does not overlap the capture bar */
 .undo-toast {
   position: absolute;
   bottom: 76px;
@@ -28,7 +28,7 @@
   font-family: inherit;
 }
 
-/* 本文の横に薄く添える要約。「版 4 から +312 B · 7 日ぶり」 */
+/* A faint summary set beside the message, such as "+312 B since version 4, 7 days on" */
 .undo-toast-detail {
   color: var(--app-text-faint);
   font-variant-numeric: tabular-nums;
