@@ -60,6 +60,8 @@
       matchManagers: ["npm"],
       matchFileNames: ["workers/package.json"],
       groupName: "workers dependencies",
+      minimumReleaseAge: "1 day",
+      internalChecksFilter: "strict",
     },
     {
       description: "ワークスペース 3 crate ぶんが個別に出ると多い。major は config:recommended が切り出す",
