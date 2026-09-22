@@ -20,10 +20,11 @@ pub fn scrawl_file_path(base_dir: &Path, date: NaiveDate) -> PathBuf {
         .join(format!("{}.md", date.format("%Y-%m-%d")))
 }
 
-/// ファイル名は時刻が指しているその土地の壁時計で決まる。`FixedOffset` で
-/// 受けるのは、frontmatter の `time` と同じ型でそのまま持ち回るため —
-/// ここで端末のタイムゾーンに直すと、`+09:00` の記録を別の土地で作り直した
-/// ときに ID の日付だけがずれる。
+/// The filename follows the wall clock of the place the timestamp points at.
+///
+/// It takes a `FixedOffset` so the same type as the frontmatter `time` is carried through as is:
+/// converting to the device's timezone here would shift only the date in the ID when a `+09:00`
+/// record is rebuilt in another place.
 #[must_use]
 pub fn note_file_path(base_dir: &Path, timestamp: DateTime<FixedOffset>) -> PathBuf {
     data_dir(base_dir)
@@ -36,56 +37,61 @@ pub fn notes_dir(base_dir: &Path) -> PathBuf {
     data_dir(base_dir).join(NOTES_DIR)
 }
 
-/// テンプレの置き場。`data/` の中に置くのは、テンプレも同期されてほしいから。
-/// 端末ごとに違うテンプレを持つと、ウィジェットから同じ名前を叩いても
-/// 出てくるノートが端末で変わる。
+/// Where templates live.
+///
+/// Inside `data/` because templates should sync too. With different templates per device, tapping
+/// the same name from the widget would produce a different note depending on the device.
 #[must_use]
 pub fn templates_dir(base_dir: &Path) -> PathBuf {
     data_dir(base_dir).join(TEMPLATES_DIR)
 }
 
-/// 特殊文字(グリフ)画像の置き場。`data/` の中に置くのは、画像も同期されて
-/// ほしいから。`:236p:` と書いたノートが別の端末で文字のまま出ては、
-/// 登録した意味がない。同期の走査は data 配下を拡張子で選ばず丸ごと辿る。
+/// Where special-character (glyph) images live.
+///
+/// Inside `data/` because the images should sync too. If a note with `:236p:` showed as plain text
+/// on another device, registering it would be pointless. The sync scan walks everything under data
+/// without selecting by extension.
 #[must_use]
 pub fn glyphs_dir(base_dir: &Path) -> PathBuf {
     data_dir(base_dir).join(GLYPHS_DIR)
 }
 
-/// Codex(書き足し続ける文書)とその版の置き場。
+/// Where a Codex (a document that keeps growing) and its versions live.
 ///
-/// `data/` の中に置くのは同期されてほしいから — 履歴が端末ごとに違っては
-/// 蓄積にならない。`notes/` と分けるのは、Codex を知らない版の `list_notes`
-/// が読まない場所に置くため。frontmatter のキーで分けると、知らない版が
-/// 保存した瞬間にキーが落ちて普通のノートに戻る。
+/// Inside `data/` because it should sync: a history that differs per device does
+/// not accumulate. Separate from `notes/` so that it sits where a `list_notes`
+/// from a version that does not know Codex never reads. Separating by a
+/// frontmatter key instead, the key would drop the moment an unknowing version
+/// saved, and it would turn back into a plain note.
 #[must_use]
 pub fn codex_dir(base_dir: &Path) -> PathBuf {
     data_dir(base_dir).join(CODEX_DIR)
 }
 
-/// 書き換え前のノートの控えの置き場。
+/// Where the copy of a note taken before a rewrite lives.
 ///
-/// `data/` の外に置く。同期に載せると、書き換えのたびに控えが端末間を
-/// 往復する。控えは戻すためのもので、共有するものではない。
+/// Outside `data/`. Put on sync, a copy would travel between devices on every
+/// rewrite. A copy is for restoring, not for sharing.
 #[must_use]
 pub fn history_dir(base_dir: &Path) -> PathBuf {
     base_dir.join("history")
 }
 
-/// 競合で負けた側の控えの置き場。
+/// Where the copy of the side that lost a conflict lives.
 ///
-/// `data/` の外に置く。同期の走査から外れるのはもちろん、ノート一覧が拾う
-/// `data/notes/*.md` からも外れる。控えは戻すためのもので、書き続ける
-/// ノートとして並ぶものではない。
+/// Outside `data/`. It stays out of the sync scan, and also out of the
+/// `data/notes/*.md` the note list picks up. A copy is for restoring, not
+/// something to line up as a note that keeps being written.
 #[must_use]
 pub fn conflicts_dir(base_dir: &Path) -> PathBuf {
     base_dir.join("conflicts")
 }
 
-/// 地名キャッシュの置き場。
+/// Where the place-name cache lives.
 ///
-/// `data/` の外に置く。中身は座標から引き直せる派生物でしかなく、同期に
-/// 載せると端末ごとに違う言語のキャッシュが往復するだけになる。
+/// Outside `data/`. The content is only a derivative that can be looked up again
+/// from coordinates; on sync, caches in a different language per device would just
+/// travel back and forth.
 #[must_use]
 pub fn place_cache_path(base_dir: &Path) -> PathBuf {
     base_dir.join("places.json")
@@ -113,9 +119,9 @@ mod tests {
         assert_eq!(path, PathBuf::from("/app/data/notes/20260320_143045.md"));
     }
 
-    /// 同じ瞬間でも、時刻が名乗っているオフセットの壁時計で名前が決まる。
-    /// 取り込みは元の記録の `+09:00` をそのまま渡すので、走らせた端末の
-    /// タイムゾーンで日付が動かない。
+    /// For the same instant, the name follows the wall clock of the offset the
+    /// timestamp names. An import passes the original record's `+09:00` as is, so
+    /// the date does not move with the timezone of the device that ran it.
     #[test]
     fn the_filename_follows_the_timestamps_own_offset() {
         let jst = FixedOffset::east_opt(9 * 3600)
@@ -142,8 +148,8 @@ mod tests {
         assert_eq!(path, PathBuf::from("/app/data/notes"));
     }
 
-    /// テンプレも `data/` の中。同期の走査は data 配下を丸ごと辿るので、
-    /// ここに置くだけで他の端末にも届く。
+    /// Templates are inside `data/` too. The sync scan walks everything under data,
+    /// so just being here gets them to the other devices.
     #[test]
     fn templates_live_inside_the_synced_tree() {
         assert_eq!(
@@ -152,7 +158,7 @@ mod tests {
         );
     }
 
-    /// グリフ画像も `data/` の中。ノートと一緒に他の端末へ届く。
+    /// Glyph images are inside `data/` too. They reach the other devices along with the notes.
     #[test]
     fn glyphs_live_inside_the_synced_tree() {
         assert_eq!(
@@ -161,7 +167,7 @@ mod tests {
         );
     }
 
-    /// Codex の版は `data/` の中。人が刻んだ記録なので他の端末にも届く。
+    /// Codex versions are inside `data/`. A person committed them, so they reach the other devices.
     #[test]
     fn codex_versions_live_inside_the_synced_tree() {
         assert_eq!(
@@ -170,8 +176,8 @@ mod tests {
         );
     }
 
-    /// 控えは history と同じく `data/` の外。中に置くと同期で往復するうえ、
-    /// ノート一覧にも並ぶ。
+    /// Copies sit outside `data/`, like history. Inside, they would travel back and
+    /// forth on sync and also line up in the note list.
     #[test]
     fn conflict_copies_sit_outside_the_synced_tree() {
         assert_eq!(
@@ -180,7 +186,7 @@ mod tests {
         );
     }
 
-    /// 同期されるのは `data/` 以下だけ。派生物のキャッシュはその外に置く。
+    /// Only what is under `data/` syncs. A derivative cache sits outside it.
     #[test]
     fn the_place_cache_sits_outside_the_synced_tree() {
         assert_eq!(

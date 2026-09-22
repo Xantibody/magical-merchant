@@ -63,9 +63,9 @@ impl Scrawl {
             .unwrap_or_default())
     }
 
-    /// その日のファイルをそのまま返す。存在しなければ `None`。
-    /// 先に `exists()` を挟まないのは、読めるかどうかは開いてみれば分かるからで、
-    /// 全日付を舐める検索では stat の 1 回が日数ぶん積み上がる。
+    /// Returns the day's file as is. `None` if it does not exist.
+    /// No `exists()` check first: opening the file tells whether it can be read, and in a
+    /// search over every date one stat per day adds up.
     pub(crate) fn read_raw(&self, date: NaiveDate) -> Result<Option<String>, CoreError> {
         match fs::read_to_string(scrawl_file_path(&self.base_dir, date)) {
             Ok(content) => Ok(Some(content)),
@@ -74,7 +74,7 @@ impl Scrawl {
         }
     }
 
-    /// `raw` は書き手が読んだときの行。index がその行を指していなければ書かない。
+    /// `raw` is the line the writer read. Nothing is written if index does not point at that line.
     pub(crate) fn update_entry(
         &self,
         date: NaiveDate,
@@ -93,7 +93,7 @@ impl Scrawl {
         })
     }
 
-    /// `raw` は `update_entry` と同じ、書き手が読んだときの行。
+    /// `raw` is the same as in `update_entry`: the line as the writer read it.
     pub(crate) fn delete_entry(
         &self,
         date: NaiveDate,
@@ -101,24 +101,24 @@ impl Scrawl {
         raw: &str,
     ) -> Result<(), CoreError> {
         self.rewrite(date, |day| {
-            // 範囲の確認も `expect_same_entry` が済ませている — 行が無ければ
-            // 読んだ行とは一致しようがない
+            // `expect_same_entry` has checked the range too: a missing line cannot
+            // match the line that was read
             expect_same_entry(day, index, raw)?;
             day.entries_mut().remove(index);
             Ok(())
         })
     }
 
-    /// 日を読んで `edit` に渡し、空になっていなければ書き戻す。
-    /// 渡すのが行の `Vec` ではなく `DayLog` なのは、行だけでは畳まれた端末
-    /// 情報を戻せず、読み手が見たのと同じ行を組み立てられないため。
+    /// Reads the day, hands it to `edit`, and writes it back unless it has become empty.
+    /// It passes a `DayLog` rather than a `Vec` of lines because lines alone cannot restore
+    /// the folded device information, so the same lines the reader saw cannot be rebuilt.
     ///
-    /// 読んでから書くまでは不可分ではない。`write_atomic` が原子なのは書き込み
-    /// 1 回きりで、`read_raw` → `expect_same_entry` → 書き の間に同じ日へ書かれ
-    /// れば、古い `DayLog` を突き合わせて書き戻す — 割り込んだ記録は消える。
-    /// 塞ぐにはこの日ファイルへ書く全員が 1 つのロックを取る必要がある:
-    /// `save_entry` と、同期の `write_under` / `delete_local_file`。
-    // AIDEV-NOTE: 読み→照合→書きは不可分でない。SyncLock 流用は capture が busy で落ちるので見送り、排他は別 PR
+    /// Read to write is not atomic. `write_atomic` is atomic only for the single write; if
+    /// the same day is written between `read_raw` -> `expect_same_entry` -> write, the old
+    /// `DayLog` is checked and written back, and the record that slipped in is lost.
+    /// Closing this needs everyone who writes this day file to take one lock:
+    /// `save_entry`, and the sync's `write_under` / `delete_local_file`.
+    // AIDEV-NOTE: read -> compare -> write is not atomic. Reusing SyncLock was rejected because capture fails with busy; exclusion is a separate PR
     fn rewrite<F>(&self, date: NaiveDate, edit: F) -> Result<(), CoreError>
     where
         F: FnOnce(&mut DayLog) -> Result<(), CoreError>,
@@ -141,14 +141,14 @@ impl Scrawl {
     }
 }
 
-/// `index` がいま指している行が、書き手の読んだ `raw` と同じかを確かめる。
+/// Checks that the line `index` points at now is the same `raw` the writer read.
 ///
-/// 日ファイルは追記で育つので、index は「読んだときの位置」でしかない。同期や
-/// ウィジェットがその日の前へ 1 行足せば、同じ index は隣の記録を指す。
+/// Day files grow by appending, so index is only "the position at read time". If the sync or
+/// the widget adds a line earlier in the day, the same index points at the record next to it.
 ///
-/// 突き合わせるのは `read` が返した展開後の行。ディスク上の行は端末情報が
-/// frontmatter に畳まれていて、書き手はそれを見ていない。
-// AIDEV-NOTE: ずれは NotFound ではなく Stale — 出口が「読み直して再試行」で、消えた行とは違う
+/// The comparison is against the expanded line that `read` returned. The line on disk has
+/// its device information folded into the frontmatter, which the writer never saw.
+// AIDEV-NOTE: a mismatch is Stale, not NotFound: the way out is "re-read and retry", unlike a line that is gone
 fn expect_same_entry(day: &DayLog, index: usize, raw: &str) -> Result<(), CoreError> {
     let Some(entry) = day.expanded_at(index) else {
         return Err(CoreError::NotFound(format!("scrawl entry {index}")));
@@ -159,8 +159,8 @@ fn expect_same_entry(day: &DayLog, index: usize, raw: &str) -> Result<(), CoreEr
     Err(CoreError::Stale(format!("scrawl entry {index}")))
 }
 
-/// 本文だけを差し替え、時刻プレフィックスと末尾のコンテキスト JSON は元のまま残す。
-/// 記録時の状況は後からの編集で書き換わってはいけない。
+/// Replaces only the body; the time prefix and the trailing context JSON stay as they were.
+/// The circumstances at record time must not be rewritten by a later edit.
 fn replace_entry_text(entry: &str, text: &str) -> String {
     let Some((prefix, rest)) = split_time_prefix(entry) else {
         return text.to_string();
@@ -253,8 +253,8 @@ mod tests {
         assert!(matches!(result, Err(CoreError::NotFound(_))));
     }
 
-    /// 読んでから書くまでに同じ日の前へ 1 行入ると、同じ index は隣の記録を
-    /// 指す。読んだ行と違うものを指していたら、書かずに断る。
+    /// If a line lands earlier in the same day between read and write, the same index points at
+    /// the next record. If it points at a line other than the one read, refuse without writing.
     #[test]
     fn update_entry_refuses_a_line_it_did_not_read() {
         let (_tmp, scrawl) = seed(&["- [08:00:00] slipped in", "- [09:00:00] the one I read"]);
@@ -268,8 +268,8 @@ mod tests {
         );
     }
 
-    /// 誤削除はやり直しがきかない。指した行が読んだものと違うなら、
-    /// ファイルには 1 バイトも触れずに断る。
+    /// A wrong deletion cannot be undone. If the line pointed at is not the one that was read,
+    /// refuse without touching a single byte of the file.
     #[test]
     fn delete_entry_refuses_a_line_it_did_not_read() {
         let (tmp, scrawl) = seed(&["- [08:00:00] slipped in", "- [09:00:00] the one I read"]);
@@ -284,9 +284,9 @@ mod tests {
         );
     }
 
-    /// 突き合わせるのは `read` が返した形。ディスク上の行は端末情報が
-    /// frontmatter へ畳まれているので、そのまま比べると端末を書いた日の
-    /// 削除がすべて断られる。
+    /// The comparison is against the form `read` returned. The line on disk has its device
+    /// information folded into the frontmatter, so comparing it as is would refuse every
+    /// deletion on a day that recorded a device.
     #[test]
     fn delete_entry_matches_the_line_the_reader_was_given() {
         let tmp = TempDir::new().unwrap();
@@ -348,9 +348,9 @@ mod tests {
         assert!(matches!(result, Err(CoreError::NotFound(_))));
     }
 
-    /// 実際に保存されていた日（macOS と Android が同居し、行末に完全な
-    /// コンテキストが載った旧形式）に追記しても、既存の記録は 1 件も
-    /// 意味を変えてはならない。
+    /// Appending to a day as it was actually saved (macOS and Android side by side, old format
+    /// with the full context at the end of each line) must not change the meaning of a single
+    /// existing record.
     #[test]
     fn appending_to_a_legacy_day_leaves_every_old_entry_intact() {
         let legacy = [
@@ -374,7 +374,7 @@ mod tests {
         let today = Local::now().date_naive();
         let entries = scrawl.read(date()).unwrap();
         assert_eq!(entries, legacy);
-        // 今日ぶんは別ファイルなので、上の日には増えていない。
+        // Today is a separate file, so the day above has not grown.
         assert_eq!(
             scrawl.read(today).unwrap().len(),
             usize::from(today != date())
@@ -401,8 +401,8 @@ mod tests {
         );
     }
 
-    /// 編集で書き換わるのは本文だけ。書いたツールの記録は行末 JSON ごと
-    /// 残る — `s` は作成時の記録で、「最後に直したツール」ではない。
+    /// An edit rewrites only the body. The record of the tool that wrote it stays with the
+    /// trailing JSON: `s` is a record of creation, not "the tool that last edited it".
     #[test]
     fn editing_an_entry_keeps_the_source_that_wrote_it() {
         let (_tmp, scrawl) = seed(&["- [09:00:00] on the phone {\"battery\":80,\"s\":\"widget\"}"]);

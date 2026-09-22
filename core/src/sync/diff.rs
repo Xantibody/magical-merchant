@@ -24,7 +24,7 @@ pub enum SyncAction {
 }
 
 impl SyncAction {
-    /// どの action もファイル 1 つについての話で、キーはその名前。
+    /// Every action is about one file, and the key is its name.
     #[must_use]
     pub fn key(&self) -> &str {
         match self {
@@ -86,10 +86,10 @@ pub fn compute(
             }
 
             // Both exist, never synced (first sync with data on both sides)
-            // 中身が同じなら転送するものは何もない。ここを競合にすると、
-            // `.sync-state.json` を消して再同期する復旧手順が、一致している
-            // ファイルまで競合コピーに分裂させてしまう。state はサーバーが
-            // 返す new_state から `save_local_state` が記録し直す
+            // Same content means nothing to transfer. Making this a conflict would let the
+            // recovery procedure (delete `.sync-state.json` and resync) split even
+            // matching files into conflict copies. `save_local_state` records the state
+            // again from the new_state the server returns
             (Some(local), Some(remote), None) => {
                 if local.content_hash != remote.content_hash {
                     actions.push(SyncAction::Conflict {
@@ -113,7 +113,7 @@ pub fn compute(
             }
 
             // Local exists, remote gone, was synced → remote deleted it
-            // ただしローカルに未同期の変更があれば、削除より変更を優先して復活させる
+            // An unsynced local change, though, wins over the delete and revives the file
             (Some(local), None, Some(record)) => {
                 if local.content_hash == record.content_hash {
                     actions.push(SyncAction::DeleteLocal {
@@ -127,7 +127,7 @@ pub fn compute(
             }
 
             // Remote exists, local gone, was synced → local deleted it
-            // ただしリモートに未取得の変更があれば、削除より変更を優先して復活させる
+            // An unfetched remote change, though, wins over the delete and revives the file
             (None, Some(remote), Some(record)) => {
                 if remote.last_modified == record.last_synced_modified {
                     actions.push(SyncAction::DeleteRemote {
@@ -189,10 +189,10 @@ mod tests {
         assert!(actions.is_empty());
     }
 
-    /// `data/timeline/` を `data/scrawl/` へ移したあとの最初の同期
-    /// (`scrawl/migrate.rs`)。ローカルには新しいキーしかなく、リモートと
-    /// state には旧いキーしかない。片方を送り、片方を消せば移り切る —
-    /// ここが競合や再ダウンロードになると、移行が同じ日を二重に残す。
+    /// The first sync after `data/timeline/` moved to `data/scrawl/`
+    /// (`scrawl/migrate.rs`). Local has only the new keys; remote and state have only
+    /// the old ones. Sending one side and deleting the other completes the move. If this
+    /// turned into a conflict or a re-download, the migration would keep the same day twice.
     #[test]
     fn a_renamed_directory_uploads_the_new_keys_and_deletes_the_old_ones() {
         let local_files = vec![local("scrawl/2026-03-20.md", "hash_day")];
@@ -259,8 +259,8 @@ mod tests {
         );
     }
 
-    /// `.sync-state.json` を消して再同期する復旧手順で、中身が一致するファイルまで
-    /// 競合にすると全ノートぶんの `.sync-conflict-*.md` が両側に生まれる
+    /// In the recovery procedure (delete `.sync-state.json` and resync), treating files with
+    /// matching content as conflicts creates a `.sync-conflict-*.md` per note on both sides
     #[test]
     fn both_exist_no_state_same_hash_needs_no_transfer() {
         let local_files = vec![local("notes/c.md", "same_hash")];
@@ -376,7 +376,7 @@ mod tests {
 
     #[test]
     fn remote_deleted_but_local_modified_uploads_instead_of_deleting() {
-        // リモートで削除されたが、ローカルに未同期の変更がある → 変更を優先して復活させる
+        // Deleted on remote, but local has an unsynced change: the change wins and revives it
         let local_files = vec![local("notes/j.md", "new_hash")];
         let mut state = SyncState::default();
         state.files.insert(
@@ -394,7 +394,7 @@ mod tests {
 
     #[test]
     fn local_deleted_but_remote_modified_downloads_instead_of_deleting() {
-        // ローカルで削除されたが、リモートに未取得の変更がある → 変更を優先して復活させる
+        // Deleted locally, but remote has an unfetched change: the change wins and revives it
         let remote_files = vec![remote("notes/k.md", "2026-04-22T14:00:00Z")];
         let mut state = SyncState::default();
         state.files.insert(

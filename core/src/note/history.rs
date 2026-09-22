@@ -1,19 +1,20 @@
-//! ノートを書き換える前の全文の控え。
+//! A snapshot of the whole text of a note, taken before it is rewritten.
 //!
-//! 人が画面で書き直すぶんには要らない — 目の前で消えるのは自分の字だけ。
-//! 外部(MCP)からの書き換えは本人が見ていないところで起きるので、
-//! 「戻れる」ことが書かせる条件になる。
+//! A person rewriting on screen does not need it: what vanishes in front of them is only
+//! their own text. A rewrite from outside (MCP) happens where the owner is not looking,
+//! so "it can be undone" is the condition for letting it write.
 //!
-//! 置き場は `data/` の外。同期に載せると、書き換えのたびに控えが端末を
-//! 往復し、控えの控えが増える。派生物ではなく退避なので `places.json` とは
-//! 違って壊れていても作り直せないが、失って困るのは戻したいときだけで、
-//! そのときはノート本体が残っている。
+//! The location is outside `data/`. On sync, every rewrite would send the snapshot back
+//! and forth between devices, and snapshots of snapshots would pile up. It is a fallback,
+//! not a derivative, so unlike `places.json` it cannot be rebuilt when broken; but losing
+//! it only hurts when one wants to restore, and the note itself is still there then.
 //!
-//! 残すのはノートごとに直近 [`KEEP`] 件。ノート本体が消えても控えは残す —
-//! 消したノートを控えから戻せることが、そもそも控えを取っている理由。
+//! The most recent [`KEEP`] per note are kept. The snapshots stay even when the note itself
+//! is deleted: restoring a deleted note from its snapshot is the reason for taking one.
 //!
-//! Codex の版は別物で [`super::version`] にある。あちらは人が刻み、
-//! 文書の一部として同期される。こちらは機械が退避し、端末に留まる。
+//! Codex versions are a different thing and live in [`super::version`]. Those a person
+//! commits, and they sync as part of the document. These a machine sets aside, and they
+//! stay on the device.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -28,20 +29,21 @@ use crate::utils::fs::{ensure_dir, list_md_files, write_atomic};
 use crate::utils::paths::{history_dir, notes_dir};
 use crate::utils::validated::NoteFilename;
 
-/// ノート 1 つあたりに残す控えの数。同じ秒の枝番も 1 件と数える。
+/// The number of snapshots kept per note. A branch number within the same second counts
+/// as one too.
 ///
-/// 期間で切らないのは、久しぶりに開いたノートの控えが全部消えているのを
-/// 避けるため。戻したいのは大抵、直前の数回。20 は MCP が 1 セッションで
-/// 書き換える回数を余裕で上回る。
+/// It is not cut by age, so that a note opened after a long time does not find all its
+/// snapshots gone. What one wants back is usually one of the last few. 20 is well above
+/// the number of rewrites MCP makes in one session.
 const KEEP: usize = 20;
 
-/// 控え 1 件。`id` がそのまま `restore` の引数。
+/// One snapshot. `id` is passed to `restore` as it is.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct Snapshot {
-    /// `YYYYMMDD_HHMMSS`、同じ秒に 2 つ目以降は `-2` `-3` と続く。
+    /// `YYYYMMDD_HHMMSS`; the second and later ones in the same second continue as `-2` `-3`.
     pub id: String,
-    /// 控えを取った時刻。ノートの `time`(作成)とも `updated`(最後の編集)とも
-    /// 別で、「この中身が最後に有効だった瞬間」。
+    /// The time the snapshot was taken. Distinct from the note's `time` (creation) and
+    /// `updated` (last edit): it is "the moment this content was last in effect".
     pub time: DateTime<Local>,
     pub bytes: u64,
 }
@@ -50,8 +52,8 @@ fn note_history_dir(base_dir: &Path, filename: &NoteFilename) -> PathBuf {
     history_dir(base_dir).join(filename.as_str().trim_end_matches(".md"))
 }
 
-/// 控えの名前として通るのは日時とその枝番だけ。`..` や `/` を含む id で
-/// 履歴の外を読み書きさせない。
+/// Only a datetime and its branch number pass as a snapshot name. An id containing `..`
+/// or `/` must not read or write outside the history.
 fn snapshot_path(dir: &Path, id: &str) -> Result<PathBuf, CoreError> {
     let (stamp, suffix) = id.split_once('-').unwrap_or((id, "1"));
     let well_formed = NaiveDateTime::parse_from_str(stamp, "%Y%m%d_%H%M%S").is_ok()
@@ -63,15 +65,16 @@ fn snapshot_path(dir: &Path, id: &str) -> Result<PathBuf, CoreError> {
     Ok(dir.join(format!("{id}.md")))
 }
 
-/// いまの全文を控えに取る。ノートがまだ無ければ何も取らず `None`。
+/// Take a snapshot of the current whole text. If the note does not exist yet, take
+/// nothing and return `None`.
 ///
-/// frontmatter ごと丸写しにする。本文だけ残して戻すと、戻した瞬間の
-/// メタデータが「書き換える前」を名乗ることになる。
+/// It copies the file whole, frontmatter included. Keeping only the body and restoring
+/// it would let the metadata at the moment of restore claim to be "before the rewrite".
 pub fn snapshot_note(
     base_dir: &Path,
     filename: &NoteFilename,
 ) -> Result<Option<Snapshot>, CoreError> {
-    // 置き場は問わない。Codex にしたノートも同じ ID で控えを取る
+    // The location does not matter. A note turned into a Codex is snapshotted under the same ID
     let path = match Notes::new(base_dir.to_path_buf()).locate(filename) {
         Ok((_, path)) => path,
         Err(CoreError::NotFound(_)) => return Ok(None),
@@ -82,8 +85,8 @@ pub fn snapshot_note(
     let now = Local::now();
     let stamp = now.format("%Y%m%d_%H%M%S").to_string();
 
-    // 同じ秒に 2 回書き換えても前の控えを潰さない。戻したいのは大抵、
-    // 立て続けに間違えた直前の 1 つ。
+    // Two rewrites in the same second do not clobber the earlier snapshot. What one wants
+    // back is usually the one just before a run of mistakes.
     let mut id = stamp.clone();
     let mut n = 1;
     while dir.join(format!("{id}.md")).exists() {
@@ -101,33 +104,36 @@ pub fn snapshot_note(
     }))
 }
 
-/// 並べるための (秒, 枝番) の組。枝番だけは数として比べる — 文字列のままだと
-/// 同じ秒の 2 桁目が来た時点で `-10` が `-2` より前に落ちる。
+/// The (second, branch number) pair for sorting. Only the branch number is compared as a
+/// number: as a string, `-10` falls before `-2` as soon as the same second reaches two digits.
 ///
-/// 枝番はゼロ埋めしない。名前が桁で変わると、既に置かれている控えの id が
-/// 過去のものと今のもので 2 通りになる。並べる側だけを直せば名前は不変。
+/// The branch number is not zero-padded. If the name changed with the digit count, the ids
+/// of snapshots already on disk would come in two shapes, old and new. Fixing only the
+/// sorting side keeps the names immutable.
 fn sort_key(id: &str) -> (&str, u32) {
     let (stamp, suffix) = id.split_once('-').unwrap_or((id, "1"));
     (stamp, suffix.parse().unwrap_or(0))
 }
 
-/// `KEEP` 件を超えたぶんを古いほうから落とす。呼ぶのは控えを 1 件書いた直後
-/// だけ — 掃除の起点を書き込みに寄せておくと、溜まったまま誰も来ない
-/// ディレクトリが残らない。
+/// Drop whatever exceeds `KEEP`, oldest first. It is called only right after one snapshot
+/// is written: tying the cleanup to the write means no directory is left piled up with
+/// nobody coming back to it.
 ///
-/// いま書いた `written` は数に入れるが落とさない。採番は「最初の空き」なので、
-/// 掃除で空いた素の stamp を同じ秒に取り直すと `sort_key` ではその秒の
-/// 最古になる。時計が戻ったときも同じ。呼び手はその id を「戻せる控え」として
-/// 返すのだから、返した直後に無いのは許されない。
+/// The `written` one just taken is counted but never dropped. Numbering takes "the first
+/// free slot", so a bare stamp freed by cleanup and retaken in the same second sorts as
+/// the oldest of that second in `sort_key`. The same happens when the clock goes back.
+/// The caller returns that id as "a snapshot to restore from", so it must not be gone
+/// right after it is returned.
 ///
-/// 失敗は無視する。控えを取ること自体は済んでいて、落とせなかったぶんは
-/// 次の snapshot で改めて落ちる。掃除の失敗で書き換えを止める理由はない。
+/// Failures are ignored. The snapshot itself is already taken, and whatever could not be
+/// dropped is dropped again on the next snapshot. A failed cleanup is no reason to stop
+/// the rewrite.
 fn prune(dir: &Path, written: &str) {
     let Ok(entries) = list_md_files(dir) else {
         return;
     };
-    // list_md_files の並びは名前順、つまり枝番が文字列のまま。落とす順は
-    // 一覧と同じ `sort_key` で決め直す。
+    // list_md_files orders by name, so the branch number is still a string. The drop
+    // order is decided again with the same `sort_key` the list uses.
     let mut others: Vec<(String, PathBuf)> = entries
         .into_iter()
         .filter_map(|entry| {
@@ -143,7 +149,7 @@ fn prune(dir: &Path, written: &str) {
     }
 }
 
-/// 新しいものから順に。
+/// Newest first.
 pub fn list_note_history(
     base_dir: &Path,
     filename: &NoteFilename,
@@ -162,13 +168,13 @@ pub fn list_note_history(
             })
         })
         .collect();
-    // id は時刻そのものなので、名前順が時刻順。mtime はコピー先の時刻で、
-    // 同じ秒の枝番を並べ替える力はない。
+    // The id is the time itself, so name order is time order. mtime is the time of the
+    // copy destination and cannot order branch numbers within the same second.
     snapshots.sort_by(|a, b| sort_key(&b.id).cmp(&sort_key(&a.id)));
     Ok(snapshots)
 }
 
-/// 控えの全文。読む側が本文だけ欲しければ frontmatter を剥がす。
+/// The whole text of a snapshot. A reader that wants only the body strips the frontmatter.
 pub fn read_note_history(
     base_dir: &Path,
     filename: &NoteFilename,
@@ -181,13 +187,14 @@ pub fn read_note_history(
     Ok(fs::read_to_string(path)?)
 }
 
-/// 控えの中身をノートに書き戻す。戻す前にいまの全文も控えに取るので、
-/// 戻したこと自体も戻せる。
+/// Write a snapshot's content back into the note. The current whole text is snapshotted
+/// before restoring, so the restore itself can be undone.
 ///
-/// `expected` は読んだときの本文の指紋。復元も本文を丸ごと差し替える書き込み
-/// なので、[`crate::update_note`] と同じ照合を通す — 履歴を読んでから戻すまでの
-/// あいだにアプリで打った字が、断りなく消えないように。`None` は読まずに戻す
-/// 呼び出し(消したノートを控えから戻す)のために残してある。
+/// `expected` is the revision of the body as it was read. A restore is also a write that
+/// replaces the whole body, so it goes through the same check as [`crate::update_note`]:
+/// text typed in the app between reading the history and restoring must not vanish without
+/// notice. `None` is kept for callers that restore without reading (restoring a deleted note
+/// from its snapshot).
 pub fn restore_note(
     base_dir: &Path,
     filename: &NoteFilename,
@@ -196,8 +203,8 @@ pub fn restore_note(
 ) -> Result<Option<Snapshot>, CoreError> {
     let content = read_note_history(base_dir, filename, id)?;
     if let Some(expected) = expected {
-        // 読めないノート(消えている)も食い違いとして断る。指紋を持っている
-        // ということは、在ったものを読んだということ
+        // An unreadable (deleted) note is refused as a mismatch too. Holding a revision
+        // means something that existed was read
         let current = Notes::new(base_dir.to_path_buf())
             .read(filename)
             .ok()
@@ -207,8 +214,8 @@ pub fn restore_note(
         }
     }
     let before = snapshot_note(base_dir, filename)?;
-    // いまある場所へ戻す。Codex の控えを `notes/` に書くと、同じ ID の
-    // 普通のノートが隣に生まれる。消えたノートの控えは `notes/` に戻る
+    // Restore to where it is now. Writing a Codex's snapshot into `notes/` would spawn a
+    // plain note with the same ID beside it. A deleted note's snapshot goes back to `notes/`
     let target = match Notes::new(base_dir.to_path_buf()).locate(filename) {
         Ok((_, path)) => path,
         Err(CoreError::NotFound(_)) => notes_dir(base_dir).join(filename.as_str()),
@@ -227,8 +234,8 @@ mod tests {
     use crate::{create_draft_note, promote_note_to_codex, read_note_by_filename, update_note};
     use tempfile::TempDir;
 
-    /// Codex にしたノートも同じ ID で控えが取れ、戻る先は Codex の置き場。
-    /// `notes/` に戻すと同じ ID の普通のノートが隣に生まれる。
+    /// A note turned into a Codex is snapshotted under the same ID, and restores into the
+    /// Codex location. Restoring into `notes/` would spawn a plain note with the same ID beside it.
     #[test]
     fn a_codex_is_snapshotted_and_restored_where_it_lives() {
         let tmp = TempDir::new().unwrap();
@@ -264,8 +271,8 @@ mod tests {
         assert!(list_note_history(tmp.path(), &filename).unwrap().is_empty());
     }
 
-    /// 控えは本文ではなくファイルそのもの。frontmatter が欠けた控えを戻すと、
-    /// 作成時刻とタグが消える。
+    /// A snapshot is the file itself, not the body. Restoring a snapshot without its
+    /// frontmatter would lose the creation time and the tags.
     #[test]
     fn a_snapshot_is_the_whole_file_frontmatter_included() {
         let tmp = TempDir::new().unwrap();
@@ -293,23 +300,24 @@ mod tests {
             read_note_by_filename(tmp.path(), &filename).unwrap(),
             "before"
         );
-        // 戻す直前の「after」も控えに残っている
+        // The "after" from just before the restore is kept as a snapshot too
         let content = read_note_history(tmp.path(), &filename, &undo.id).unwrap();
         assert!(content.ends_with("after"));
     }
 
-    /// 履歴を読んでから戻すまでのあいだに、アプリで打った字は消させない。
-    /// MCP から見ると復元も「本文を丸ごと差し替える書き込み」で、`update_note` が
-    /// 断る状況をこちらだけ通すと、同じ書き手が同じノートを守りなしで潰せる。
+    /// Text typed in the app between reading the history and restoring must not be lost.
+    /// From MCP's side a restore is also "a write that replaces the whole body"; if only this
+    /// path let through what `update_note` refuses, the same writer could clobber the same
+    /// note with no guard.
     #[test]
     fn restoring_over_a_body_that_moved_since_it_was_read_is_refused() {
         let tmp = TempDir::new().unwrap();
         let (path, filename) = note(tmp.path(), "first");
         let snap = snapshot_note(tmp.path(), &filename).unwrap().unwrap();
         update_note(&path, "second", &Context::default(), None).unwrap();
-        // エージェントが読んだのはここ
+        // This is what the agent read
         let read = Revision::of("second");
-        // 読んだあとにアプリが打った
+        // The app typed after the read
         update_note(&path, "third", &Context::default(), None).unwrap();
 
         let result = restore_note(tmp.path(), &filename, &snap.id, Some(&read));
@@ -326,7 +334,8 @@ mod tests {
         );
     }
 
-    /// 読んだ指紋のまま戻すのは通る。返るのは戻す直前の控え。
+    /// Restoring with the revision as read goes through. What comes back is the snapshot
+    /// from just before the restore.
     #[test]
     fn restoring_with_the_revision_it_read_goes_through() {
         let tmp = TempDir::new().unwrap();
@@ -354,7 +363,7 @@ mod tests {
         );
     }
 
-    /// 同じ秒に 2 回書き換えたとき、1 回目の控えが 2 回目に潰されない。
+    /// When rewritten twice in the same second, the first snapshot is not clobbered by the second.
     #[test]
     fn two_snapshots_in_the_same_second_both_survive() {
         let tmp = TempDir::new().unwrap();
@@ -375,12 +384,13 @@ mod tests {
         );
     }
 
-    /// 枝番が 2 桁に届くと文字列順が時刻順から外れる(`-10` < `-2`)。
-    /// 一覧の先頭は「戻したい直前の 1 つ」なので、そこが入れ替わると
-    /// 復元の既定の候補が 9 個前の控えになる。
+    /// Once the branch number reaches two digits, string order leaves time order
+    /// (`-10` < `-2`). The head of the list is "the one just before, the one to restore", so
+    /// if that swaps, the default restore candidate becomes the snapshot from 9 steps back.
     ///
-    /// 控えは `snapshot_note` を 11 回呼ばずに直に置く。11 回のあいだに
-    /// 秒が変わると枝番が振り直され、並びの前提そのものが消える。
+    /// The snapshots are placed directly rather than by calling `snapshot_note` 11 times.
+    /// If the second changes during the 11 calls, the branch numbers restart and the
+    /// premise of the ordering itself is gone.
     #[test]
     fn eleven_snapshots_in_the_same_second_are_listed_newest_first() {
         let tmp = TempDir::new().unwrap();
@@ -403,8 +413,8 @@ mod tests {
         assert_eq!(ids.last().unwrap(), "20260101_120000");
     }
 
-    /// 控えを直に置くための下ごしらえ。`snapshot_note` を並べて呼ぶと途中で
-    /// 秒が変わって枝番が振り直され、いくつ溜まった状態を試したいのかが消える。
+    /// Setup for placing snapshots directly. Calling `snapshot_note` in a row lets the second
+    /// change midway, the branch numbers restart, and the count being tested is lost.
     fn seed_history(base: &Path, filename: &NoteFilename, ids: &[String]) -> PathBuf {
         let dir = note_history_dir(base, filename);
         fs::create_dir_all(&dir).unwrap();
@@ -414,8 +424,8 @@ mod tests {
         dir
     }
 
-    /// 溜まる一方だと 1 台のディスクを AI の書き換え回数ぶん食い続ける。
-    /// 上限を超えたぶんは古いほうから落ちる。
+    /// If they only piled up, one device's disk would keep filling with every AI rewrite.
+    /// Whatever exceeds the limit drops, oldest first.
     #[test]
     fn twenty_one_snapshots_keep_the_newest_twenty() {
         let tmp = TempDir::new().unwrap();
@@ -440,8 +450,8 @@ mod tests {
         assert_eq!(listed.last().unwrap(), "20200101_120000-2");
     }
 
-    /// 落とす順も `sort_key` で決める。文字列順のままだと `-10` が `-2` より
-    /// 古い扱いになり、同じ秒に 10 回書き換えたノートで消える控えが逆になる。
+    /// The drop order is decided by `sort_key` too. In string order `-10` would count as
+    /// older than `-2`, and a note rewritten 10 times in one second would drop the wrong snapshot.
     #[test]
     fn the_oldest_branch_number_is_the_one_dropped() {
         let tmp = TempDir::new().unwrap();
@@ -461,10 +471,10 @@ mod tests {
         assert!(listed.contains(&"20200101_120000-10".to_string()));
     }
 
-    /// いま書いた控えが `sort_key` で最古になることがある — 掃除で空いた
-    /// 素の stamp を同じ秒に取り直したとき、時計が戻ったとき。それでも
-    /// 返した id のファイルが消えていてはいけない。ここでは未来の stamp を
-    /// 20 件 seed して「新しい控えが一番古く並ぶ」状況を作る。
+    /// The snapshot just written can sort as the oldest in `sort_key`: when a bare stamp
+    /// freed by cleanup is retaken in the same second, or when the clock goes back. Even
+    /// then the file of the returned id must not be gone. Here 20 future stamps are seeded
+    /// to build the situation where "the new snapshot sorts oldest".
     #[test]
     fn the_copy_just_written_survives_even_when_it_sorts_oldest() {
         let tmp = TempDir::new().unwrap();
@@ -489,7 +499,8 @@ mod tests {
         assert!(!listed.contains(&"20990101_120000".to_string()));
     }
 
-    /// 控えの置き場は同期の走査範囲の外。載せると端末間で控えが往復する。
+    /// The snapshot location is outside the sync scan. Inside it, snapshots would go back
+    /// and forth between devices.
     #[test]
     fn history_lives_outside_the_synced_data_dir() {
         let tmp = TempDir::new().unwrap();
@@ -520,8 +531,8 @@ mod tests {
         }
     }
 
-    /// 戻したノートの frontmatter は控えの時点のもの。`updated` が戻すたびに
-    /// 進んでいくと、「最後に書き直した時刻」が嘘になる。
+    /// A restored note's frontmatter is the one from the snapshot. If `updated` advanced on
+    /// every restore, "the time of the last rewrite" would be a lie.
     #[test]
     fn restoring_does_not_touch_the_frontmatter_it_restores() {
         let tmp = TempDir::new().unwrap();

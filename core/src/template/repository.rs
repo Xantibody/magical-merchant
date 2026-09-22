@@ -9,17 +9,17 @@ use crate::utils::fs::{ensure_dir, list_md_files, write_atomic};
 use crate::utils::paths::templates_dir;
 use crate::utils::validated::NoteFilename;
 
-/// テンプレファイルの frontmatter。ノートのものとは別の型にする。
-/// ノート側は `time` を必ず持つが、テンプレに作成時刻の意味はない —
-/// 使い回されるのがテンプレで、時刻を持つのはそこから生まれたノートのほう。
+/// The frontmatter of a template file. A separate type from the note's.
+/// A note always has `time`, but a creation time means nothing for a template: a template
+/// is reused, and the thing that has a time is the note born from it.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub(crate) struct TemplateFrontmatter {
-    /// テンプレであることの印。`templates/` に置いてあるだけでは、
-    /// このファイルを他の Markdown ツールで開いた人に区別がつかない。
+    /// The mark that this is a template. Sitting in `templates/` alone does not tell
+    /// someone who opens this file in another Markdown tool.
     #[serde(default = "yes")]
     pub template: bool,
-    /// ここから作るノートに自動で付くタグ。`{{date:YYYY-MM}}` のような
-    /// 変数を書けて、解決されるのはノートを作る瞬間。
+    /// Tags added automatically to notes created from here. A variable such as
+    /// `{{date:YYYY-MM}}` can be written, and it resolves at the moment a note is created.
     #[serde(default)]
     pub tags: Vec<String>,
 }
@@ -37,16 +37,16 @@ impl Default for TemplateFrontmatter {
     }
 }
 
-/// テンプレ一覧の 1 件。
+/// One entry of the template list.
 #[derive(Debug, Clone, Serialize)]
 pub struct Summary {
     pub filename: String,
-    /// 拡張子を落とした名前(`daily.md` なら `daily`)。画面に出す名前であり、
-    /// ここから作ったノートの frontmatter に刻まれる値でもある。
+    /// The name minus the extension (`daily` for `daily.md`). It is the name shown on
+    /// screen, and also the value recorded in the frontmatter of notes created from here.
     pub name: String,
     pub tags: Vec<String>,
-    /// 本文の先頭行。変数は解決しない — テンプレの一覧で `{{date}}` が
-    /// 今日の日付に化けていると、それが固定文なのか変数なのか分からない。
+    /// The first line of the body. Variables are not resolved: if `{{date}}` turned into
+    /// today's date in the template list, one could not tell fixed text from a variable.
     pub preview: String,
 }
 
@@ -67,9 +67,9 @@ impl Templates {
         crate::utils::fs::resolve_existing(&self.dir(), filename.as_str())
     }
 
-    /// まだ無いファイルの書き込み先。存在しないものは canonicalize できないので、
-    /// 置き場のほうを解決してから名前を繋ぐ。`NoteFilename` が `/` と `..` を
-    /// 弾いているので、結果は必ずこのディレクトリの直下になる。
+    /// The write target for a file that does not exist yet. What does not exist cannot be
+    /// canonicalized, so the directory is resolved first and the name joined on.
+    /// `NoteFilename` rejects `/` and `..`, so the result is always directly under this directory.
     fn writable_path(&self, filename: &NoteFilename) -> Result<PathBuf, CoreError> {
         let dir = self.dir();
         fs::create_dir_all(&dir)?;
@@ -86,21 +86,21 @@ impl Templates {
             })
             .collect();
 
-        // 名前順。テンプレに新旧の意味は無く、探す手がかりは名前しかない
+        // By name. Old and new mean nothing for a template; the name is the only handle to find one
         summaries.sort_by(|a, b| a.name.cmp(&b.name));
         Ok(summaries)
     }
 
-    /// frontmatter と本文を分けて返す。本文は所有権つき — 呼ぶ側は必ず
-    /// 変数を解決して作り直すので、借りたまま返しても得がない。
+    /// Return the frontmatter and the body separately. The body is owned: the caller always
+    /// resolves variables and rebuilds it, so returning a borrow gains nothing.
     pub(crate) fn read(
         &self,
         filename: &NoteFilename,
     ) -> Result<(TemplateFrontmatter, String), CoreError> {
         let content = fs::read_to_string(self.existing_path(filename)?)?;
         frontmatter::parse::<TemplateFrontmatter>(&content).map_or_else(
-            // frontmatter を持たないテンプレは、素の Markdown をそのまま
-            // 本文として扱う。テンプレはユーザーが手で置くこともできる
+            // A template without frontmatter is treated as plain Markdown, used as the
+            // body as is. A user can also drop a template in by hand
             |_| {
                 Ok((
                     TemplateFrontmatter::default(),
@@ -135,7 +135,7 @@ impl Templates {
 
 fn summarize(filename: String, content: &str) -> Summary {
     let (tags, body) = frontmatter::parse::<TemplateFrontmatter>(content).map_or_else(
-        // 壊れた frontmatter を本文扱いすると、一覧のプレビューに YAML が出る
+        // Treating broken frontmatter as body puts YAML in the list preview
         |_| (Vec::new(), frontmatter::strip(content)),
         |(fm, body)| (fm.tags, body),
     );
@@ -144,7 +144,7 @@ fn summarize(filename: String, content: &str) -> Summary {
         .strip_suffix(".md")
         .unwrap_or(&filename)
         .to_string();
-    // 見出し記号は落とす。一覧に出したいのは題であって Markdown ではない
+    // Heading marks are dropped. What the list wants to show is the title, not Markdown
     let preview = body
         .lines()
         .find(|line| !line.trim().is_empty())
@@ -192,8 +192,8 @@ mod tests {
         assert_eq!(body, "# Daily {{date}}\n\n## メモ");
     }
 
-    /// テンプレは `data/` の中に置く。同期の走査が data 配下を辿るので、
-    /// ここを外すと他の端末にテンプレが届かない。
+    /// Templates live under `data/`. The sync scan walks everything under data, so outside
+    /// it a template never reaches other devices.
     #[test]
     fn templates_are_written_inside_the_data_directory() {
         let tmp = TempDir::new().unwrap();
@@ -205,8 +205,8 @@ mod tests {
         assert!(tmp.path().join("data/templates/daily.md").exists());
     }
 
-    /// 変数はテンプレの中では文字列のまま。保存で解決してしまうと
-    /// 2 回目以降そのテンプレは固定の日付を吐き続ける。
+    /// Variables stay strings inside the template. Resolved on save, the template would
+    /// keep emitting a fixed date from the second use on.
     #[test]
     fn saving_does_not_resolve_variables() {
         let tmp = TempDir::new().unwrap();
@@ -251,11 +251,11 @@ mod tests {
 
         assert_eq!(listed[0].filename, "daily.md");
         assert_eq!(listed[0].tags, vec!["daily"]);
-        // 見出し記号は落とし、変数は残す
+        // Heading marks are dropped, variables are kept
         assert_eq!(listed[0].preview, "Daily {{date}}");
     }
 
-    /// テンプレは手で置ける。frontmatter が無いファイルも素の Markdown として読む。
+    /// A template can be dropped in by hand. A file without frontmatter is read as plain Markdown.
     #[test]
     fn a_file_without_frontmatter_is_still_a_template() {
         let tmp = TempDir::new().unwrap();
@@ -291,7 +291,7 @@ mod tests {
         assert!(matches!(result, Err(CoreError::NotFound(_))));
     }
 
-    /// 名前の検証だけでは、リンク越しに置き場の外を読ませられる。
+    /// Name validation alone can be made to read outside the directory through a link.
     #[test]
     fn a_symlink_out_of_the_directory_is_refused() {
         let tmp = TempDir::new().unwrap();

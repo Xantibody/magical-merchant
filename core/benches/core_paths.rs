@@ -1,5 +1,6 @@
-//! UI 操作ごとに走る core の経路を測る。ここに出てくる関数は Tauri コマンド
-//! から直接呼ばれるので、そのまま体感レイテンシになる。
+//! Measures the core paths that run on each UI action. The functions here are called from
+//! Tauri commands, directly or (the scan) through the sync engine, so they are the perceived
+//! latency as is.
 #![allow(
     clippy::unwrap_used,
     clippy::expect_used,
@@ -36,8 +37,8 @@ fn search(c: &mut Criterion) {
     group.finish();
 }
 
-/// ノートを開くたびに走る。索引を持たず毎回全文を走査するので、`search_all` が
-/// 全文検索になったときにどちらも同じ天井に当たる — 並べて測る。
+/// Runs every time a note is opened. It has no index and scans the full text each time, as
+/// `search_all` does, so both hit the same ceiling: measure them together.
 fn backlinks(c: &mut Criterion) {
     let tmp = fixture::build();
     let base = tmp.path();
@@ -60,7 +61,7 @@ fn listing(c: &mut Criterion) {
         b.iter(|| list_scrawl_dates(black_box(base)).unwrap());
     });
 
-    // 起動直後に Scrawl タブが読む分。
+    // What the Scrawl tab reads right after start.
     let dates = fixture::recent_dates();
     c.bench_function("read_scrawl_recent_14", |b| {
         b.iter(|| {

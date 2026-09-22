@@ -1,17 +1,18 @@
-//! 検索の突き合わせに使う小文字化。
+//! Lowercasing used for search matching.
 
-/// `str::to_lowercase` と同じ結果を返す。日本語が主の本文で速い。
+/// Returns the same result as `str::to_lowercase`. Fast on mostly Japanese text.
 ///
-/// 標準の `to_lowercase` は ASCII でない文字を 1 つずつ Unicode の変換表で
-/// 引く。仮名・漢字・句読点には大文字も小文字も無いのに、その表引きが
-/// 検索(全日・全ノートの本文を小文字にする)の 15% を占めていた。
+/// The standard `to_lowercase` looks up every non-ASCII character one by one in
+/// the Unicode mapping table. Kana, kanji and punctuation have neither upper nor
+/// lower case, yet that table lookup took 15% of search (lowercasing the body of
+/// every day and every note).
 ///
-/// 大小の区別が無いと分かっている範囲の文字はそのまま写し、ASCII は
-/// ビット演算で倒す。それ以外の文字(ラテン拡張・ギリシャ文字など)が
-/// 1 つでも混じる本文は、標準の `to_lowercase` にそっくり渡す —
-/// 語末のシグマのような文脈依存の規則を、ここで真似はしない。
+/// Characters in ranges known to have no case are copied as is, and ASCII is
+/// folded with a bit operation. A body with even one other character (Latin
+/// Extended, Greek and so on) is handed whole to the standard `to_lowercase`:
+/// context-dependent rules like the final sigma are not imitated here.
 ///
-/// 「範囲に大小の区別が無い」ことはテストが全文字について確かめている。
+/// That "the ranges have no case" is verified by a test over every character.
 #[must_use]
 pub(crate) fn lowercase(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
@@ -27,18 +28,18 @@ pub(crate) fn lowercase(text: &str) -> String {
     out
 }
 
-/// 大文字・小文字の対応を 1 つも持たない、日本語の本文でよく出る範囲。
+/// Ranges common in Japanese text that have no upper/lower case pair at all.
 ///
-/// 全角英字(U+FF21–FF5A)はここに入れない — `Ａ` には `ａ` がある。
+/// Fullwidth Latin letters (U+FF21 to FF5A) are not included: `Ａ` has `ａ`.
 const CASELESS: &[std::ops::RangeInclusive<char>] = &[
-    // 一般句読点(— … など)
+    // General Punctuation (em dash, ellipsis and so on)
     '\u{2000}'..='\u{206F}',
-    // CJK の記号と句読点、ひらがな、カタカナ
+    // CJK Symbols and Punctuation, Hiragana, Katakana
     '\u{3000}'..='\u{30FF}',
-    // CJK 統合漢字(拡張 A と本体)
+    // CJK Unified Ideographs (Extension A and the main block)
     '\u{3400}'..='\u{4DBF}',
     '\u{4E00}'..='\u{9FFF}',
-    // 半角カタカナ
+    // Halfwidth Katakana
     '\u{FF61}'..='\u{FF9F}',
 ];
 
@@ -50,8 +51,8 @@ fn is_caseless(c: char) -> bool {
 mod tests {
     use super::*;
 
-    /// 速い経路の前提。範囲の中に 1 文字でも小文字の対応を持つものが
-    /// 混じると、標準との結果がずれて検索の取りこぼしになる。
+    /// The premise of the fast path. If even one character in the ranges had a
+    /// lowercase mapping, the result would differ from the standard and search would miss.
     #[test]
     fn every_char_in_the_caseless_ranges_lowercases_to_itself() {
         for range in CASELESS {
@@ -78,7 +79,7 @@ mod tests {
         }
     }
 
-    /// 全角英字は範囲の外なので標準に倒される。
+    /// Fullwidth Latin letters are outside the ranges, so they fall back to the standard.
     #[test]
     fn fullwidth_latin_still_gets_lowercased() {
         assert_eq!(lowercase("ＡＢＣ"), "ａｂｃ");

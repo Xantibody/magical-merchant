@@ -1,16 +1,16 @@
 use serde::{Deserialize, Serialize};
 
-/// 端末を計って [`Context`] を埋める部分。`hostname` や電池の残量を OS に
-/// 聞くので、ノートを読み書きするだけの利用者には要らない。
+/// The part that measures the device and fills a [`Context`]. It asks the OS for
+/// `hostname` and battery level, so a user who only reads and writes notes does not need it.
 #[cfg(feature = "device-probe")]
 mod probe;
 #[cfg(feature = "device-probe")]
 pub use probe::{location, probe};
 
-/// どうやって外に繋がっていたか。
+/// How the device was connected to the outside.
 ///
-/// 回線の名前（SSID）は持たない。macOS 14 以降は位置情報の許可がないと
-/// 伏せられるうえ、どこで書いたかは位置情報のほうが正確に答える。
+/// The network name (SSID) is not held. From macOS 14 on it is hidden without the
+/// location permission, and the location answers "where was this written" more precisely anyway.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum NetworkType {
     WiFi,
@@ -25,29 +25,29 @@ pub struct Location {
     pub longitude: f64,
 }
 
-/// どの入り口から書かれたか。作成時にだけ決まる記録で、あとから別の
-/// ツールで編集しても変わらない(`context` / `origin` / `template` と同じ)。
+/// Which entry point wrote it. A record fixed only at creation; editing later with
+/// another tool does not change it (the same as `context` / `origin` / `template`).
 ///
-/// `Context` には入れない。あれは「端末がどういう状態だったか」で、
-/// 1 日を通して変わらない `identity` と記録ごとに変わる `volatile` に
-/// 割れている。書いたツールはそのどちらでもないし、混ぜるとノートの
-/// `context:` ブロックにも紛れ込む。
+/// It does not go into `Context`. That is "what state the device was in", split
+/// into `identity`, which does not change through the day, and `volatile`, which
+/// changes per record. The tool that wrote it is neither, and mixing it in would
+/// also let it slip into a note's `context:` block.
 ///
-/// 語彙は固定。外へ出るのは [`Self::as_str`] の小文字の文字列だけで、
-/// 知らない値を読む側は素通しできる。
+/// The vocabulary is fixed. Only the lowercase strings of [`Self::as_str`] go
+/// outside, and a reader can pass an unknown value through untouched.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Source {
-    /// Tauri アプリ本体。
+    /// The Tauri app itself.
     App,
-    /// `magical-merchant` CLI。
+    /// The `magical-merchant` CLI.
     Cli,
-    /// MCP サーバー越しのエージェント。
+    /// An agent through the MCP server.
     Mcp,
-    /// Android のホーム画面ウィジェット。
+    /// The Android home-screen widget.
     Widget,
-    /// 外にあった記録を移してきたぶん。書かれたのはこのアプリの外で、
-    /// 作成時刻も移す側が渡す([`crate::create_note_at`])。`cli` に混ぜると、
-    /// 移してきたぶんだけを選び直す手段が無くなる。
+    /// Records moved in from outside. They were written outside this app, and the
+    /// creation time is passed by the moving side too ([`crate::create_note_at`]).
+    /// Mixed into `cli`, there would be no way to select just the moved ones again.
     Import,
 }
 
@@ -86,11 +86,12 @@ pub struct Context {
     pub locale: Option<String>,
 }
 
-/// 同じ端末で書いている限り 1 日を通して変わらない部分。
+/// The part that does not change through the day as long as the same device is writing.
 ///
-/// 日ファイルの先頭にまとめて置き、各エントリの行末からは省く。エントリ 1 件
-/// あたり 100 文字を超えるこれらを全行で繰り返すと、本文が数文字のエントリでは
-/// メタデータのほうが桁で長くなり、Markdown として読めたものではなくなる。
+/// Placed together at the head of the day file and left off the end of each entry.
+/// Repeating these, over 100 characters per entry, on every line would make the
+/// metadata an order of magnitude longer than a body of a few characters, and the
+/// file would no longer be readable as Markdown.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct DeviceIdentity {
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -106,7 +107,7 @@ pub struct DeviceIdentity {
 }
 
 impl Context {
-    /// 日ファイルの先頭に移す部分。
+    /// The part moved to the head of the day file.
     #[must_use]
     pub fn identity(&self) -> DeviceIdentity {
         DeviceIdentity {
@@ -118,7 +119,7 @@ impl Context {
         }
     }
 
-    /// 記録のたびに変わりうる部分だけを残したもの。行末に書くのはこちら。
+    /// Only the part that may change per record. This is what goes at the end of the line.
     #[must_use]
     pub fn volatile(&self) -> Self {
         Self {
@@ -130,7 +131,8 @@ impl Context {
         }
     }
 
-    /// 分けて保存したものを 1 つに戻す。読み出し側から見た形は分割前と変わらない。
+    /// Puts what was stored apart back into one. To the reading side the shape is the
+    /// same as before the split.
     #[must_use]
     pub fn with_identity(mut self, identity: &DeviceIdentity) -> Self {
         self.os.clone_from(&identity.os);
@@ -262,8 +264,9 @@ mod tests {
         assert_eq!(ctx.network_type, None);
     }
 
-    /// 外へ出るのは小文字の固定語彙。表示にもファイルにもこの文字列が乗る
-    /// ので、`Debug` の綴り(`App`)が漏れると記録が版ごとにばらける。
+    /// What goes outside is the fixed lowercase vocabulary. This string lands on the
+    /// display and in the file, so a leaked `Debug` spelling (`App`) would scatter the
+    /// records across versions.
     #[test]
     fn a_source_names_itself_in_lowercase() {
         assert_eq!(Source::App.as_str(), "app");

@@ -1,10 +1,11 @@
-//! 座標を地名に直した答えの置き場。
+//! Where the answers from turning coordinates into place names are kept.
 //!
-//! 変換そのものは OS のジオコーダに任せるので、ここにあるのは「どこまで
-//! 近ければ同じ場所とみなすか」と「一度もらった答えをどう残すか」だけ。
+//! The conversion itself is left to the OS geocoder, so all that is here is "how
+//! close counts as the same place" and "how an answer, once received, is kept".
 //!
-//! 記録された座標には手を触れない。地名はあくまで読むための粗い言い換えで、
-//! 行末 JSON に書き戻すと、どこにいたかの記録がジオコーダの機嫌に左右される。
+//! The recorded coordinates are never touched. A place name is only a coarse
+//! paraphrase for reading; written back into the trailing JSON, the record of
+//! where you were would be at the mercy of the geocoder.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -14,23 +15,24 @@ use serde::{Deserialize, Serialize};
 use crate::error::CoreError;
 use crate::utils::fs::write_atomic;
 
-/// キーを丸める小数桁。2 桁 ≒ 1.1km 四方。
+/// Decimal digits the key is rounded to. 2 digits is roughly a 1.1km square.
 ///
-/// 市区町村より細かく刻んでも同じ地名が返るだけで、ジオコーダを余分に叩く。
-/// 粗いほど 1 件の答えを使い回せる。
+/// Cutting finer than a municipality only returns the same place name and hits
+/// the geocoder more. The coarser it is, the more one answer is reused.
 const KEY_DIGITS: usize = 2;
 
-/// 同じ場所として扱う座標のまとまりを表す文字列。
+/// A string for the group of coordinates treated as the same place.
 #[must_use]
 pub fn place_key(latitude: f64, longitude: f64) -> String {
     let digits = KEY_DIGITS;
     format!("{latitude:.digits$},{longitude:.digits$}")
 }
 
-/// 一度聞いた地名。キーは [`place_key`]。
+/// Place names asked once. The key is [`place_key`].
 ///
-/// 引けなかった座標は覚えない。圏外で失敗しただけの座標を「地名なし」として
-/// 残すと、電波の戻った後もその場所だけ座標のまま据え置かれる。
+/// Coordinates that could not be resolved are not remembered. Keeping a coordinate
+/// that only failed for lack of signal as "no place name" would leave that one place
+/// stuck as coordinates even after signal returns.
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct PlaceCache {
@@ -38,8 +40,8 @@ pub struct PlaceCache {
 }
 
 impl PlaceCache {
-    /// 読めなければ空で始める。派生物でしかないので、壊れていても
-    /// 作り直せばよく、読み出し側を止める理由がない。
+    /// Starts empty if unreadable. It is only a derivative, so a broken one can be
+    /// rebuilt, and there is no reason to stop the reading side.
     #[must_use]
     pub fn load(path: &Path) -> Self {
         std::fs::read_to_string(path)
@@ -68,12 +70,13 @@ impl PlaceCache {
         self.places.is_empty()
     }
 
-    /// 言語の希望つきで引く。希望の言語に無ければ他の言語、それも無ければ
-    /// 言語を付けて書く前の控えを見る。
+    /// Looks up with a preferred language. If the preferred language has none, any
+    /// other language; if that has none either, the cache written before languages
+    /// were added.
     ///
-    /// 画面(`resolve`)はこれを使わない。あちらは希望の言語に無ければ
-    /// ジオコーダに聞き直せるが、MCP のように聞き直す手段のない読み手には、
-    /// 別の言語の名前でも座標だけよりは役に立つ。
+    /// The screen (`resolve`) does not use this. It can ask the geocoder again when
+    /// the preferred language has none, but for a reader with no way to ask again,
+    /// such as MCP, a name in another language is more useful than coordinates alone.
     #[must_use]
     pub fn lookup(&self, locale: &str, key: &str) -> Option<&str> {
         let suffix = format!(":{key}");
@@ -88,12 +91,13 @@ impl PlaceCache {
     }
 }
 
-/// 控えの中でのキー。言語を変えると同じ座標に別の名前が付くので、
-/// 座標だけで引くと前の言語の名前をそのまま出してしまう。
+/// The key inside the cache. Changing the language gives the same coordinates a
+/// different name, so looking up by coordinates alone would show the name in the
+/// previous language as is.
 ///
-/// この変更より前に書かれた控え(言語の付かないキー)はもう一致しない。
-/// 派生ファイルなので消しには行かず、次に同じ場所を通ったときに
-/// 言語付きで書き直されるに任せる。
+/// A cache written before this change (keys without a language) no longer matches.
+/// It is a derived file, so it is not deleted; it is left to be rewritten with a
+/// language the next time the same place is passed.
 #[must_use]
 pub fn cache_key(locale: &str, place_key: &str) -> String {
     format!("{locale}:{place_key}")
@@ -117,7 +121,8 @@ mod tests {
         assert_ne!(place_key(35.676, 139.546), place_key(35.651, 139.544));
     }
 
-    /// 南半球・西半球の座標が北東側のキーに潰れると、地球の裏の地名が付く。
+    /// If southern or western coordinates collapsed into a northeastern key, they would
+    /// get a place name from the other side of the globe.
     #[test]
     fn the_key_keeps_the_hemisphere() {
         assert_eq!(place_key(-33.86, -70.66), "-33.86,-70.66");
@@ -149,8 +154,8 @@ mod tests {
         assert_eq!(PlaceCache::load(&path).get("35.68,139.55"), Some("渋谷区"));
     }
 
-    /// 派生物なので、壊れていたら聞き直せばよい。読めないことを理由に
-    /// タイムラインが開けなくなるほうが困る。
+    /// It is a derivative, so a broken one is simply asked again. Scrawl failing to
+    /// open because it cannot be read would be the worse problem.
     #[test]
     fn an_unreadable_cache_starts_empty() {
         let tmp = TempDir::new().unwrap();
@@ -166,8 +171,8 @@ mod tests {
 
         assert!(PlaceCache::load(&tmp.path().join("places.json")).is_empty());
     }
-    /// 画面の言語で聞いた名前があればそれ。無ければ別の言語のものでも、
-    /// 座標だけ見せられるより読める。
+    /// The name asked in the screen's language, if there is one. Otherwise one in
+    /// another language still reads better than being shown coordinates alone.
     #[test]
     fn lookup_prefers_the_asked_language_and_falls_back_to_any() {
         let mut cache = PlaceCache::default();
@@ -180,7 +185,8 @@ mod tests {
         assert_eq!(cache.lookup("en", "0.00,0.00"), None);
     }
 
-    /// 言語を付けて書く前の控え。消しには行かないので、読めるうちは読む。
+    /// A cache written before languages were added. It is not deleted, so it is read
+    /// while it can be.
     #[test]
     fn lookup_reads_a_legacy_key_without_a_language() {
         let mut cache = PlaceCache::default();

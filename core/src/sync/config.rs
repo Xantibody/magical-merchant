@@ -1,5 +1,5 @@
-//! `sync-config.json` — 同期の設定。読むのはアプリと CLI の `sync`、
-//! 書くのはアプリの設定画面だけ。
+//! `sync-config.json`: the sync settings. The app and the CLI's `sync` read it;
+//! only the app's settings screen writes it.
 
 use std::fs;
 use std::path::Path;
@@ -15,15 +15,16 @@ const SYNC_CONFIG_FILENAME: &str = "sync-config.json";
 pub struct SyncConfig {
     #[serde(default)]
     pub workers_url: String,
-    /// 保存が成功したら自動で同期するか。既存の設定ファイルには無いので default。
+    /// Whether to sync automatically after a successful save. Existing config files lack
+    /// it, so default.
     #[serde(default)]
     pub auto_sync: bool,
 }
 
 impl SyncConfig {
-    /// 設定が無ければ `None`。読めなかった場合は `None` に丸めない —
-    /// 「未設定」として扱うと設定画面が空欄で開き、ユーザーが URL を
-    /// 入れ直した瞬間に、壊れているだけの設定が上書きされる。
+    /// `None` when there is no config. An unreadable one is not rounded to `None`:
+    /// treated as "not configured", the settings screen opens blank, and the moment the
+    /// user re-enters the URL, a config that was merely corrupt gets overwritten.
     pub fn load(base_dir: &Path) -> Result<Option<Self>, SyncError> {
         let path = base_dir.join(SYNC_CONFIG_FILENAME);
         if !path.exists() {
@@ -42,7 +43,7 @@ impl SyncConfig {
     }
 
     pub fn save(&self, base_dir: &Path) -> Result<(), String> {
-        // 初回起動時は app_data_dir がまだ存在しないことがある
+        // On first launch app_data_dir may not exist yet
         fs::create_dir_all(base_dir).map_err(|e| e.to_string())?;
         let path = base_dir.join(SYNC_CONFIG_FILENAME);
         let content = serde_json::to_string_pretty(self).map_err(|e| e.to_string())?;
@@ -65,8 +66,9 @@ impl SyncConfig {
     }
 }
 
-/// Workers URL を保存前に正規化・検証する。
-/// 末尾スラッシュは API パスが "//files" になり Worker 側で 400 になるため除去する。
+/// Normalizes and validates the Workers URL before it is saved.
+/// A trailing slash turns the API path into "//files", which the Worker answers with 400,
+/// so it is removed.
 pub fn normalize_workers_url(input: &str) -> Result<String, String> {
     let trimmed = input.trim().trim_end_matches('/');
     if trimmed.is_empty() {
@@ -102,7 +104,7 @@ mod tests {
     #[test]
     fn sync_config_save_creates_missing_directory() {
         let dir = tempfile::tempdir().unwrap();
-        // 初回起動時は app_data_dir 自体がまだ存在しない
+        // On first launch app_data_dir itself does not exist yet
         let base = dir.path().join("not-yet-created");
         let config = SyncConfig {
             workers_url: "https://sync.example.com".to_string(),
@@ -174,8 +176,8 @@ mod tests {
         assert_eq!(SyncConfig::load(dir.path()).unwrap(), None);
     }
 
-    /// 壊れた設定を「未設定」として返すと、設定画面が空欄で開く。そこに
-    /// URL を入れ直した時点で、読めなかっただけの設定が上書きされる
+    /// Returning a corrupt config as "not configured" opens the settings screen blank. The
+    /// moment a URL is re-entered there, a config that was merely unreadable gets overwritten
     #[test]
     fn sync_config_load_refuses_a_corrupt_file() {
         let dir = tempfile::tempdir().unwrap();

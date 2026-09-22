@@ -6,44 +6,45 @@ use crate::utils::device::{Context, DeviceIdentity, Source};
 use crate::utils::frontmatter;
 use crate::utils::markdown::{format_scrawl_line, split_context_json, split_time_prefix};
 
-/// 日ファイルの先頭に置く、その日に使われた端末の一覧。
+/// The list of devices used that day, placed at the head of the day file.
 ///
-/// 1 日 1 端末とは限らない。実際の記録には、朝は Android・夜は Mac という日が
-/// ある。単一の端末として畳むと、どちらで書いたのか分からなくなる。
+/// A day is not always one device. The real records have days that are Android in the
+/// morning and Mac at night. Folding them into a single device loses which one wrote what.
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 struct DayFrontmatter {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     devices: Vec<DeviceIdentity>,
 }
 
-/// 行末に書く、そのエントリだけの情報。
+/// Per-entry information written at the end of the line.
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct StoredContext {
     #[serde(flatten)]
     context: Context,
-    /// `devices` の何番目か。1 始まりで、0（省略）は「端末が分からない」。
+    /// Index into `devices`. 1-based; 0 (omitted) means "device unknown".
     ///
-    /// 0 始まりにすると、端末を記録していない旧いエントリと「1 台目で書いた」
-    /// エントリを見分けられない。前者に後者の端末が付いてしまう。
+    /// With a 0-based index, an old entry that recorded no device cannot be told apart from
+    /// one "written on the first device". The former would take on the latter's device.
     #[serde(default, rename = "d", skip_serializing_if = "is_unknown_device")]
     device: usize,
-    /// どの入り口で書かれたか(`app` / `cli` / `mcp` / `widget`)。
+    /// Which entry point wrote it. Scrawl is written by `app`, `cli` and `widget`; `Source`
+    /// also spells `mcp` and `import`, which only notes use.
     ///
-    /// `d` と同じく 1 文字のキーにする。1 行あたり数十文字の本文に対して
-    /// `"source":"widget"` を毎行足すと、読める Markdown ではなくなる。
-    /// 記録していないエントリには付けない — 既存の日ファイルが書き換わると
-    /// 内容ハッシュが動いて同期が丸ごと走る。
+    /// A one-character key, like `d`. Against a body of a few dozen characters per line,
+    /// adding `"source":"widget"` to every line stops the file being readable Markdown.
+    /// Not added to entries that did not record it: rewriting an existing day file moves
+    /// its content hash, and the sync runs over the whole file.
     #[serde(default, rename = "s", skip_serializing_if = "Option::is_none")]
     source: Option<String>,
 }
 
-#[allow(clippy::trivially_copy_pass_by_ref)] // skip_serializing_if は参照しか渡さない
+#[allow(clippy::trivially_copy_pass_by_ref)] // skip_serializing_if only passes a reference
 const fn is_unknown_device(device: &usize) -> bool {
     *device == 0
 }
 
-/// 1 日ぶんの Scrawl。ディスク上は端末情報を先頭にまとめた圧縮形、
-/// 読み出しでは分割前と同じ「行末に完全なコンテキストが載った行」に戻す。
+/// One day of Scrawl. On disk it is the compact form with device information gathered at
+/// the head; on read it is restored to the pre-split "line with its full context at the end".
 #[derive(Debug, Default, PartialEq, Eq)]
 pub(crate) struct DayLog {
     devices: Vec<DeviceIdentity>,
@@ -51,8 +52,8 @@ pub(crate) struct DayLog {
 }
 
 impl DayLog {
-    /// frontmatter の有無どちらの形式も読む。frontmatter が壊れていても
-    /// 本文を捨てはしない。記録が読めなくなるくらいなら端末情報を諦める。
+    /// Reads both formats, with and without frontmatter. Broken frontmatter does not throw
+    /// the body away. Giving up the device information beats making the records unreadable.
     pub(crate) fn parse(content: &str) -> Self {
         let (devices, body) = frontmatter::parse::<DayFrontmatter>(content)
             .map_or((Vec::new(), content), |(fm, body)| (fm.devices, body));
@@ -78,9 +79,10 @@ impl DayLog {
         )
     }
 
-    /// 記録を 1 件足す。端末情報は既出なら使い回し、初めてなら一覧に加える。
+    /// Adds one record. Device information is reused when already listed, and added to the
+    /// list when seen for the first time.
     ///
-    /// `source` が `None` なら行末は今までと 1 バイトも変わらない。
+    /// With `source` set to `None` the end of the line does not change by a single byte.
     pub(crate) fn push(
         &mut self,
         text: &str,
@@ -97,13 +99,13 @@ impl DayLog {
             .push(format_scrawl_line(text, timestamp, &stored));
     }
 
-    /// 分割前と同じ形の行に戻す。呼び出し側にディスク上の都合は見せない。
+    /// Restores lines to their pre-split form. Callers never see how the disk is laid out.
     pub(crate) fn expanded(&self) -> Vec<String> {
         self.entries.iter().map(|e| self.expand(e)).collect()
     }
 
-    /// `expanded()` の 1 件ぶん。行を 1 本だけ照合する呼び出しに、日ぜんぶを
-    /// 組み直す手間を払わせない。
+    /// One item of `expanded()`. A caller that checks a single line should not pay for
+    /// rebuilding the whole day.
     pub(crate) fn expanded_at(&self, index: usize) -> Option<String> {
         self.entries.get(index).map(|e| self.expand(e))
     }
@@ -112,7 +114,7 @@ impl DayLog {
         &mut self.entries
     }
 
-    /// 端末情報を戻さないままエントリだけ取る。本文しか見ない検索が使う。
+    /// The entries with device information left folded. For search, which reads only the body.
     pub(crate) fn into_entries(self) -> Vec<String> {
         self.entries
     }
@@ -142,15 +144,15 @@ impl DayLog {
         let Ok(stored) = serde_json::from_str::<StoredContext>(json) else {
             return entry.to_string();
         };
-        // 端末を書いていないエントリ（旧形式）は行末がすでに完全な形。
+        // An entry that wrote no device (old format) already has a complete end of line.
         let Some(identity) = self.devices.get(stored.device.wrapping_sub(1)) else {
             return entry.to_string();
         };
 
         let text = &rest[..rest.len() - json.len()];
-        // 戻すのは端末情報だけ。`d` は畳んだまま(0 は書かれない)で、`s` は
-        // 端末の状態ではなく行そのものの記録なので展開後の行にも残す —
-        // 落とすと、読む側(MCP 出力・行のメタ表示)から出所が消える。
+        // Only the device information is restored. `d` stays folded (0 is not written), and `s`
+        // is a record of the line itself, not of the device state, so it stays on the expanded
+        // line too. Dropping it would hide the origin from readers (MCP output, the line's meta).
         let full = StoredContext {
             context: stored.context.with_identity(identity),
             device: 0,
@@ -163,7 +165,7 @@ impl DayLog {
     }
 }
 
-/// エントリは "- [" で始まる行から次の "- [" まで（本文に改行を含み得る）
+/// An entry runs from a line starting with "- [" to the next "- [" (the body may contain newlines)
 pub(crate) fn split_entries(content: &str) -> Vec<String> {
     let mut entries: Vec<String> = Vec::new();
     for line in content.lines() {
@@ -177,7 +179,7 @@ pub(crate) fn split_entries(content: &str) -> Vec<String> {
             last.push_str(line);
         }
     }
-    // 末尾を落とすのに to_string() を挟むと 1 エントリにつきもう 1 回確保する。
+    // Going through to_string() to drop the trailing whitespace allocates once more per entry.
     for entry in &mut entries {
         entry.truncate(entry.trim_end().len());
     }
@@ -289,9 +291,9 @@ mod tests {
         );
     }
 
-    /// 入り口を名乗らないエントリの行は、`s` を足す前と 1 バイトも違わない。
-    /// 日ファイルは同期の単位そのもので、行末が 1 文字でも動けば全端末が
-    /// 「その日は変わった」と見て転送し直す。
+    /// The line of an entry that names no entry point differs by not a single byte from
+    /// before `s` existed. The day file is the unit of sync itself: if the end of a line moves
+    /// by one character, every device sees "that day changed" and transfers it again.
     #[test]
     fn an_entry_that_names_no_source_is_written_exactly_as_before() {
         let mut day = DayLog::default();
@@ -307,8 +309,8 @@ mod tests {
         ));
     }
 
-    /// 名乗ったぶんだけ、行末に 1 文字のキーで付く。読み戻しても消えない —
-    /// 端末情報を戻す展開は `s` を落としてはいけない。
+    /// A named source is added at the end of the line as a one-character key. Reading it back
+    /// does not lose it: the expansion that restores device information must not drop `s`.
     #[test]
     fn an_entry_carries_the_source_that_wrote_it() {
         let mut day = DayLog::default();
@@ -343,15 +345,15 @@ mod tests {
         assert_eq!(day.devices.len(), 1);
     }
 
-    /// 空行だけの日は記録が無い日。空のエントリを 1 件作ってはいけない。
+    /// A day of blank lines only is a day with no records. It must not create one empty entry.
     #[test]
     fn an_empty_body_has_no_entries() {
         assert!(split_entries("").is_empty());
         assert!(split_entries("\n\n\n").is_empty());
     }
 
-    /// 先頭が `- [` でない行から始まる本文。時刻の無い旧い記録を捨てずに
-    /// 最初のエントリとして拾い、続く行はその続きにする。
+    /// A body whose first line does not start with `- [`. An old record without a time is
+    /// picked up as the first entry instead of dropped, and the following lines continue it.
     #[test]
     fn a_body_that_does_not_start_with_a_bullet_keeps_its_first_line() {
         let entries = split_entries("plain first\nstill first\n- [10:00:00] second\n");
@@ -362,8 +364,8 @@ mod tests {
         );
     }
 
-    /// 端末一覧に無い番号を指す行は、壊れた行として触らずに返す。
-    /// 別の端末の情報を付けて返すよりは、そのままのほうがまし。
+    /// A line that points at a number not in the device list is returned untouched, as a
+    /// broken line. That is better than returning it with another device's information.
     #[test]
     fn an_entry_pointing_past_the_device_list_is_returned_unchanged() {
         let mut day = DayLog::default();

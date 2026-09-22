@@ -9,14 +9,15 @@ use crate::utils::frontmatter::{self, NoteFrontmatter};
 use crate::utils::fs::{ensure_dir, list_md_files, rename_without_clobber, write_atomic};
 use crate::utils::paths::{NOTES_DIR, codex_dir, conflicts_dir, data_dir, notes_dir};
 
-/// 編集画面が frontmatter ごと Milkdown に通していた時期に保存されたノートは、
-/// 本文の先頭に「化けたメタデータ」を抱えている。開始区切りの `---` は `***` に、
-/// YAML はエスケープ付きの平文(`tags: \[]`)に、終了区切りは直前の行と合わさって
-/// setext 見出しの下線(`------`)になった塊で、frontmatter の time も編集時刻で
-/// 上書きされている。その塊を取り除き、time をファイル名の作成時刻へ戻す。
+/// Notes saved while the editor screen passed the frontmatter through Milkdown carry
+/// "mangled metadata" at the head of the body. The opening `---` became `***`, the YAML
+/// became escaped plain text (`tags: \[]`), and the closing delimiter merged with the line
+/// before it into a setext heading underline (`------`); the frontmatter time was also
+/// overwritten with the edit time. Remove that block and reset time to the creation time
+/// in the filename.
 ///
-/// 該当しないファイルには一切書き込まない。全ファイルを書き直すと
-/// 内容ハッシュが変わった扱いになり、同期が無変更のノートまで転送し直すことになる。
+/// Files that do not match are never written. Rewriting every file counts as a changed
+/// content hash, and sync would re-transfer even unchanged notes.
 pub(crate) fn repair_all(notes_dir: &Path) -> Result<usize, CoreError> {
     let mut repaired = 0;
     for entry in list_md_files(notes_dir)? {
@@ -42,23 +43,26 @@ pub(crate) fn repair_all(notes_dir: &Path) -> Result<usize, CoreError> {
     Ok(repaired)
 }
 
-/// 古い版が `data/` に置いた競合コピーを `conflicts/` へ移す。移した件数を返す。
+/// Move conflict copies that an older release left in `data/` to `conflicts/`. Returns
+/// how many were moved.
 ///
-/// 控えは同期の走査からは外れていたが、ノート一覧は `data/notes/*.md` を
-/// 素通しで拾うので、元のノートが消えたあとも残骸として並び続けていた。
-/// Scrawl の控えは一覧には出ないが、走査の除外をやめた以上、
-/// 置いたままだと次の同期で新しいファイルとして全端末へ配られる。
+/// The copies were excluded from the sync scan, but the note list picks up
+/// `data/notes/*.md` as is, so they stayed in the list as leftovers after the original
+/// note was gone. Scrawl copies do not show in the list, but now that the scan exclusion
+/// is gone, leaving them in place distributes them to every device as new files on the
+/// next sync.
 ///
-/// 探すのは `data/` 全体。走査が `data/` を丸ごと同期対象にする以上、
-/// 残骸が配られるかどうかは置き場所によらない — 利用者が自分で切った
-/// ディレクトリの下にある控えも、`notes/` にあるのと同じ扱いになる。
+/// The whole of `data/` is searched. Since the scan syncs all of `data/`, whether a
+/// leftover gets distributed does not depend on where it sits: a copy under a directory
+/// the user made is treated the same as one in `notes/`.
 ///
-/// 中身は読まず `rename` するだけ。控えが壊れていても、ノートの形をして
-/// いなくても運べる。起動時、最初の同期より前に呼ぶこと — あとで呼ぶと、
-/// 除外をやめたスキャンが残骸を新しいノートとして全端末へ配ってしまう。
+/// The content is not read; it is only a `rename`. A copy can be moved even if it is
+/// broken or does not look like a note. Call this at startup, before the first sync:
+/// called later, the scan without the exclusion distributes the leftovers to every device
+/// as new notes.
 ///
-/// 1 件の失敗では止まらない。運べなかった控えは次の起動でまた試すだけで、
-/// そのために残りの引っ越しを諦める理由はない。
+/// One failure does not stop it. A copy that could not be moved is simply retried on the
+/// next startup, and that is no reason to give up on the rest of the move.
 pub(crate) fn relocate_conflict_copies(base_dir: &Path) -> usize {
     let data = data_dir(base_dir);
     let mut moved = 0;
@@ -66,20 +70,21 @@ pub(crate) fn relocate_conflict_copies(base_dir: &Path) -> usize {
     moved
 }
 
-/// 同じ ID が `notes/` と `codex/` の両方にあるとき、`notes/` 側を控えにする。
+/// When the same ID exists in both `notes/` and `codex/`, turn the `notes/` side into a copy.
 ///
-/// 昇格は rename なので 1 台の中では両方に同時に在ることはないが、別の端末が
-/// 同期の前に同じノートを編集していると、同期はその `notes/` 側を新しい
-/// ファイルとして配る。Codex 側が本物 — 版を刻んでいるのはそちら。負けた側は
-/// 消さず、同期の競合コピーと同じ `conflicts/notes/<stem>/<時刻>.md` に置く。
+/// Promotion is a rename, so on one device both never exist at once; but if another device
+/// edited the same note before syncing, sync distributes that `notes/` side as a new file.
+/// The Codex side is the real one: that is where versions are committed. The losing side is
+/// not deleted; it goes to `conflicts/notes/<stem>/<time>.md`, the same place as a sync
+/// conflict copy.
 ///
-/// `relocate_conflict_copies` と同じく、1 件の失敗では止まらない。
+/// As with `relocate_conflict_copies`, one failure does not stop it.
 pub(crate) fn relocate_duplicate_ids(base_dir: &Path) -> usize {
     relocate_duplicate_ids_at(base_dir, Utc::now())
 }
 
-/// 控えの時刻を渡す版。同じ秒に 2 回走った状況をテストが作れるようにするため
-/// だけに切ってある — 秒精度の名前が衝突したときどうなるかが、ここの要点なので。
+/// The variant that takes the copy's time. Split out only so a test can set up two runs in
+/// the same second: what happens when second-precision names collide is the point here.
 fn relocate_duplicate_ids_at(base_dir: &Path, now: DateTime<Utc>) -> usize {
     let codex = codex_dir(base_dir);
     let conflicts = conflicts_dir(base_dir);
@@ -115,8 +120,8 @@ fn relocate_under(root: &Path, current: &Path, conflicts: &Path, moved: &mut usi
             relocate_under(root, &path, conflicts, moved);
             continue;
         }
-        // 走査キーと同じ形にしてから読ませる。控えの置き場は
-        // ダウンロードで降ってきたぶんと同じ `conflicts/<キー>/…` になる
+        // Shape it like a scan key before parsing. The copy lands in the same
+        // `conflicts/<key>/` place as the ones that came down through a download
         let Some(relative) = path
             .strip_prefix(root)
             .ok()
@@ -133,10 +138,12 @@ fn relocate_under(root: &Path, current: &Path, conflicts: &Path, moved: &mut usi
     }
 }
 
-/// 本文先頭の化けたメタデータ塊を取り除いた本文を返す。塊が無ければ `None`。
+/// Return the body with the mangled metadata block at its head removed. `None` if there is
+/// no block.
 ///
-/// `***` も `time:` で始まる行もユーザーが書き得るので、開始区切り・時刻として
-/// 読める time 行・ダッシュだけの終了行、の三点が揃ったときだけ塊とみなす。
+/// A user can write both `***` and a line starting with `time:`, so it counts as a block
+/// only when all three are present: the opening delimiter, a time line that parses as a
+/// time, and a closing line of dashes only.
 fn strip_mangled_metadata(body: &str) -> Option<String> {
     let lines: Vec<&str> = body.lines().collect();
     let mut i = 0;
@@ -155,7 +162,7 @@ fn strip_mangled_metadata(body: &str) -> Option<String> {
     let time_value = lines.get(i)?.strip_prefix("time: ")?;
     DateTime::parse_from_rfc3339(time_value.trim()).ok()?;
 
-    // 終了区切りの成れの果て: ダッシュ 3 本以上だけの行
+    // What is left of the closing delimiter: a line of three or more dashes only
     let is_dash_line = |l: &str| l.len() >= 3 && l.bytes().all(|b| b == b'-');
     while i < lines.len() && !is_dash_line(lines[i]) {
         i += 1;
@@ -165,7 +172,8 @@ fn strip_mangled_metadata(body: &str) -> Option<String> {
     }
     i += 1;
 
-    // 塊の直後に残った空行と `<br />`(空段落の成れの果て)も本文には要らない
+    // The blank lines and `<br />` (what is left of empty paragraphs) right after the block
+    // are not wanted in the body either
     while lines
         .get(i)
         .is_some_and(|l| l.trim().is_empty() || l.trim() == "<br />")
@@ -176,9 +184,9 @@ fn strip_mangled_metadata(body: &str) -> Option<String> {
     Some(lines[i..].join("\n"))
 }
 
-/// `20260503_153910.md` のようなファイル名から作成時刻を読む。
-/// frontmatter の time は編集で上書きされてきた履歴があるが、
-/// ファイル名は作成時に振られたまま変わらない。
+/// Read the creation time from a filename like `20260503_153910.md`.
+/// The frontmatter time has a history of being overwritten by edits,
+/// but the filename stays as assigned at creation.
 fn filename_time(filename: &str) -> Option<DateTime<FixedOffset>> {
     let stem = filename.get(..15)?;
     let naive = NaiveDateTime::parse_from_str(stem, "%Y%m%d_%H%M%S").ok()?;
@@ -192,7 +200,7 @@ mod tests {
     use crate::utils::paths::{SCRAWL_DIR, notes_dir};
     use tempfile::TempDir;
 
-    /// 実際に壊れていたファイルと同じ形の再現。
+    /// A reproduction in the same shape as a file that was actually broken.
     const MANGLED: &str = concat!(
         "---\n",
         "time: 2026-08-09T20:38:50.370362+09:00\n",
@@ -259,8 +267,8 @@ mod tests {
         assert_eq!(after_first, after_second);
     }
 
-    /// ユーザーが本文に書いた `***`(水平線)を化けたメタデータと
-    /// 取り違えて消してはいけない。
+    /// A `***` (horizontal rule) the user wrote in the body must not be mistaken for
+    /// mangled metadata and removed.
     #[test]
     fn a_user_written_horizontal_rule_is_not_metadata() {
         let tmp = TempDir::new().unwrap();
@@ -276,7 +284,7 @@ mod tests {
         );
     }
 
-    /// `***` 直後でも、日時として読めない行が続くなら塊ではない。
+    /// Even right after `***`, a following line that does not parse as a datetime means no block.
     #[test]
     fn a_rule_followed_by_plain_text_is_left_alone() {
         let tmp = TempDir::new().unwrap();
@@ -287,7 +295,7 @@ mod tests {
         assert_eq!(repair_all(tmp.path()).unwrap(), 0);
     }
 
-    /// 同期の衝突ファイル名でも先頭のタイムスタンプは読める。
+    /// The leading timestamp is readable even from a sync conflict filename.
     #[test]
     fn filename_time_reads_conflict_filenames() {
         let time = filename_time("20260320_033440.sync-conflict-20260511-031336..md").unwrap();
@@ -309,7 +317,7 @@ mod tests {
         assert_eq!(repair_all(&tmp.path().join("nope")).unwrap(), 0);
     }
 
-    // ──────────── 競合コピーの引っ越し ────────────
+    // ──────────── Moving conflict copies ────────────
 
     fn seed_note(base: &Path, name: &str, content: &str) {
         let notes = notes_dir(base);
@@ -317,8 +325,8 @@ mod tests {
         fs::write(notes.join(name), content).unwrap();
     }
 
-    /// 古い版が置いた控えは `data/notes/` に残っている。一覧に並ぶし、
-    /// 除外をやめたスキャンに乗れば他の端末へも配られる。
+    /// Copies left by an older release remain in `data/notes/`. They show in the list, and
+    /// once the scan without the exclusion picks them up they go to other devices too.
     #[test]
     fn conflict_copies_left_in_the_notes_directory_move_out() {
         let tmp = TempDir::new().unwrap();
@@ -328,7 +336,7 @@ mod tests {
             "20260320_033440.sync-conflict-20260511-031336.md",
             "first copy",
         );
-        // 元のノートが既に消えている残骸。今の手元はほとんどこれ
+        // A leftover whose original note is already gone. Most of what is on hand now is this
         seed_note(
             tmp.path(),
             "20260101_000000.sync-conflict-20260511-031336..md",
@@ -355,7 +363,7 @@ mod tests {
         );
     }
 
-    /// 起動のたびに走る。2 回目に動くものが残っていてはいけない。
+    /// It runs on every startup. Nothing may be left that moves on the second run.
     #[test]
     fn relocating_twice_moves_nothing_the_second_time() {
         let tmp = TempDir::new().unwrap();
@@ -381,9 +389,9 @@ mod tests {
         );
     }
 
-    /// Scrawl の控えも同じ残骸。一覧には並ばない（日付でない名前は
-    /// 捨てられる）が、走査の除外をやめた以上、置いたままだと次の同期で
-    /// 新しいファイルとして全端末へ配られる。
+    /// Scrawl copies are the same kind of leftover. They do not show in the list (a name
+    /// that is not a date is discarded), but now that the scan exclusion is gone, leaving
+    /// them in place distributes them to every device as new files on the next sync.
     #[test]
     fn conflict_copies_left_in_the_scrawl_directory_move_out() {
         let tmp = TempDir::new().unwrap();
@@ -413,9 +421,9 @@ mod tests {
         );
     }
 
-    /// 控えが溜まるのは `notes/` と `scrawl/` だけではない。`data/` の下は
-    /// 丸ごと同期の走査対象なので、自分で切ったディレクトリに残った控えも
-    /// 置いたままだと新しいファイルとして全端末へ配られる。
+    /// Copies pile up not only in `notes/` and `scrawl/`. Everything under `data/` is in
+    /// the sync scan, so a copy left in a directory the user made is also distributed to
+    /// every device as a new file if left in place.
     #[test]
     fn conflict_copies_in_a_nested_directory_move_out() {
         let tmp = TempDir::new().unwrap();
@@ -446,7 +454,7 @@ mod tests {
         );
     }
 
-    /// 引っ越しは中身を見ない。控えが壊れていても、ノートで無くても運ぶ。
+    /// The move does not look at content. A copy is moved even if broken or not a note.
     #[test]
     fn a_note_that_is_not_a_conflict_copy_stays_put() {
         let tmp = TempDir::new().unwrap();
@@ -457,7 +465,7 @@ mod tests {
         assert!(!conflicts_dir(tmp.path()).exists());
     }
 
-    // ──────────── 重複 ID の引っ越し ────────────
+    // ──────────── Moving duplicate IDs ────────────
 
     fn seed_codex(base: &Path, name: &str, content: &str) {
         let codex = codex_dir(base);
@@ -476,10 +484,10 @@ mod tests {
         found
     }
 
-    /// 1 回の同期で、入口と成功の直前の 2 回走る。あいだのダウンロードが
-    /// 同じ ID を `notes/` に戻すので、同じ秒に 2 回退避することが実際に起きる。
-    /// 控えの名前は秒までしか持たないので、2 回目の宛先は 1 回目と同じ。
-    /// そこで素直に `rename` すると、Unix では黙って 1 回目の控えが消える。
+    /// One sync runs it twice: at the entry and right before success. The download in
+    /// between puts the same ID back in `notes/`, so setting aside twice in the same second
+    /// actually happens. A copy's name only goes down to the second, so the second target
+    /// is the same as the first. A plain `rename` there silently loses the first copy on Unix.
     #[test]
     fn a_second_relocation_in_the_same_second_keeps_the_first_copy() {
         let tmp = TempDir::new().unwrap();
@@ -488,7 +496,7 @@ mod tests {
         seed_note(tmp.path(), "20260320_033440.md", "the offline edit");
 
         assert_eq!(relocate_duplicate_ids_at(tmp.path(), now), 1);
-        // ダウンロードが同じ ID をもう一度 `notes/` に置いた
+        // The download put the same ID in `notes/` once more
         seed_note(tmp.path(), "20260320_033440.md", "the downloaded one");
         assert_eq!(relocate_duplicate_ids_at(tmp.path(), now), 1);
 
@@ -500,8 +508,8 @@ mod tests {
         assert!(codex_dir(tmp.path()).join("20260320_033440.md").exists());
     }
 
-    /// 古い名前(点が 1 つ多い)と今の名前は同じ控えを指す。どちらも
-    /// `notes/<stem>/<時刻>.md` へ行くので、同じ引っ越しの中で衝突する。
+    /// The old name (one extra dot) and the current name point at the same copy. Both go to
+    /// `notes/<stem>/<time>.md`, so they collide within the same move.
     #[test]
     fn two_copies_of_the_same_second_both_survive_the_move() {
         let tmp = TempDir::new().unwrap();

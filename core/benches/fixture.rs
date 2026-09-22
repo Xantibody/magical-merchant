@@ -1,5 +1,5 @@
-//! ベンチ用のデータセット生成。API を通さず直接ファイルを書くのは、
-//! `Local::now()` に依存する保存経路だと日付分布を作り分けられないため。
+//! Dataset generation for the benches. Files are written directly rather than through the
+//! API because the save path depends on `Local::now()` and cannot spread the dates.
 
 use std::fmt::Write as _;
 use std::fs;
@@ -10,26 +10,28 @@ use magical_merchant_core::NoteFilename;
 use magical_merchant_core::frontmatter::{self, NoteFrontmatter};
 use tempfile::TempDir;
 
-/// ヘビーユーザーの 1 年分。数値を変えると before/after が比較できなくなるので固定する。
-/// 件数と本文長を振って測りたいときは、この 2 つ(と `NOTE_BODY_LINES`)だけを
-/// 一時的に書き換えて取り直す — fixture の形そのものは変えない。
+/// One year of a heavy user. The numbers are fixed because changing them breaks before/after
+/// comparison. To measure across counts and body lengths, temporarily rewrite only these two
+/// (and `NOTE_BODY_LINES`) and measure again: the shape of the fixture itself does not change.
 pub(crate) const DAYS: i64 = 365;
 pub(crate) const ENTRIES_PER_DAY: usize = 20;
 pub(crate) const NOTES: usize = 500;
-/// 1 ノートの本文行数。preview は先頭 100 文字しか読まれないので、
-/// 全文検索とプレビュー検索の差が出るだけの長さがいる。
+/// Body lines per note. `search_all` reads the full text, while the list's preview is only
+/// the first 100 characters, so the body must be well past that for the bench to measure a
+/// full-text scan rather than a preview-sized one.
 const NOTE_BODY_LINES: usize = 12;
 
-/// 全エントリのうち 1/`RARE_EVERY` だけに現れる語。
+/// A word that appears in only 1/`RARE_EVERY` of all entries.
 pub(crate) const RARE_NEEDLE: &str = "ゼオライト";
-/// ほぼ全エントリに現れる語。
+/// A word that appears in every entry: `body` always appends it.
 pub(crate) const COMMON_NEEDLE: &str = "メモ";
-/// どこにも現れない語。全件を走査させる最悪ケース。
+/// A word that appears nowhere. The worst case, which scans every record.
 pub(crate) const MISS_NEEDLE: &str = "quetzalcoatlus";
 
 const RARE_EVERY: usize = 97;
 
-/// 再現性のための線形合同法。`rand` を dev-dependency に足すほどの用途ではない。
+/// A linear congruential generator for reproducibility. Not a use that justifies adding
+/// `rand` as a dev-dependency.
 struct Lcg(u64);
 
 impl Lcg {
@@ -72,7 +74,7 @@ fn body(rng: &mut Lcg, index: usize) -> String {
     if index.is_multiple_of(RARE_EVERY) {
         let _ = write!(text, " — {RARE_NEEDLE} を試す");
     }
-    // 実データに合わせて一部は複数行になる
+    // Some are multi-line, matching real data
     if index.is_multiple_of(5) {
         text.push_str("\n続き: 明日あらためて確認する");
     }
@@ -121,7 +123,7 @@ fn write_notes(base: &Path, rng: &mut Lcg) {
             tags: vec!["memo".to_string(), rng.pick(SUBJECTS).to_string()],
             ..NoteFrontmatter::new(time)
         };
-        // preview は先頭 100 文字しか読まれない。本文はそれより十分長くする。
+        // preview reads only the first 100 characters. The body is made well longer than that.
         let mut text = String::new();
         for line in 0..NOTE_BODY_LINES {
             text.push_str(&body(rng, index * NOTE_BODY_LINES + line));
@@ -132,12 +134,12 @@ fn write_notes(base: &Path, rng: &mut Lcg) {
     }
 }
 
-/// ノートのファイル名。バックリンクの的を指すのに呼び出し側も使う。
+/// A note's filename. Callers use it too, to point at the backlink target.
 fn note_filename(index: usize) -> String {
     format!("note-{index:04}.md")
 }
 
-/// 一度だけ生成して全ベンチで共有する。`TempDir` は返り値が生きている間だけ有効。
+/// Built once and shared by every bench. The `TempDir` lives only as long as the return value.
 #[must_use]
 pub(crate) fn build() -> TempDir {
     let tmp = TempDir::new().expect("create tempdir");
@@ -147,15 +149,15 @@ pub(crate) fn build() -> TempDir {
     tmp
 }
 
-/// バックリンクを引く的のノート。fixture には `[[...]]` を 1 本も書いていない
-/// ので、これは「全ノートと全日を読み切って 1 件も当たらない」最悪ケースになる。
-/// 当たる件数が増えても増えるのは抜粋作りだけで、走査の量は変わらない。
+/// The note whose backlinks are looked up. The fixture contains not one `[[...]]`, so this
+/// is the worst case: "read every note and every day through and hit nothing". More hits
+/// would only add excerpt building; the amount scanned does not change.
 #[must_use]
 pub(crate) fn backlink_target() -> NoteFilename {
     NoteFilename::parse(&note_filename(0)).expect("fixture filename is valid")
 }
 
-/// UI が初期表示で読む日付（新しい順に 14 日）。
+/// The dates the UI reads on first display (the newest 14 days).
 #[must_use]
 pub(crate) fn recent_dates() -> Vec<NaiveDate> {
     (0..14)

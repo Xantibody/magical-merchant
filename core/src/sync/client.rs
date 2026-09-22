@@ -1,8 +1,8 @@
-//! Workers/R2 同期 API の wire 型と HTTP クライアント。
+//! Wire types and HTTP client for the Workers/R2 sync API.
 //!
-//! `reqwest::Client` は組み立てずに受け取る。Android だけは端末の検証器を迂回した
-//! TLS 設定で組む必要があり(`android_tls::sync_tls_config`)、その判断は
-//! プラットフォームを知っているアプリ側にしか置けない。
+//! The `reqwest::Client` is received, not built here. Android alone has to build it with a
+//! TLS config that bypasses the device's verifier (`android_tls::sync_tls_config`), and
+//! that decision can only live on the app side, which knows the platform.
 
 use std::collections::HashMap;
 
@@ -12,15 +12,15 @@ use super::SyncError;
 
 // ──────────── HTTP wire types ────────────
 
-/// 同期状態はサーバーが持つ。クライアントは受け取った状態をそのまま保存するだけで、
-/// 自分で組み立てて送り返さない（送り返すと、まだ手元に無いファイルが状態から
-/// 抜け落ち、次の同期で全端末がそれを「削除された」と解釈してしまう）
+/// The server owns the sync state. The client only saves the state it receives as is; it
+/// never builds one and sends it back (if it did, files not yet on disk would drop out of
+/// the state, and on the next sync every device would read that as "deleted")
 #[derive(Debug, Clone, Deserialize)]
 pub(crate) struct ServerSyncState {
     pub(crate) files: HashMap<String, ServerFileRecord>,
     #[allow(dead_code)]
     pub(crate) last_sync: Option<String>,
-    /// bulk レスポンスの `new_state` には付かない
+    /// Absent from the `new_state` of a bulk response
     #[serde(default)]
     pub(crate) etag: Option<String>,
 }
@@ -39,8 +39,8 @@ pub(crate) struct WireUpload {
     pub(crate) hash: String,
 }
 
-/// 競合は常にローカル優先。上書きされるリモート側は `conflict_key` に退避され、
-/// レスポンスでも返ってくるのでローカルにも競合コピーとして残す
+/// A conflict always favors local. The overwritten remote side is set aside under
+/// `conflict_key` and comes back in the response, so it is kept locally as a conflict copy too
 #[derive(Debug, Serialize)]
 pub(crate) struct WireConflictOp {
     pub(crate) key: String,
@@ -96,12 +96,12 @@ impl HttpClient {
     }
 }
 
-/// OS の信頼ストアで検証する、ふつうの HTTP クライアント。
+/// The ordinary HTTP client, verifying against the OS trust store.
 ///
-/// `Client::new()` は組み立てに失敗すると panic する。同期はユーザーの操作で
-/// 走るので、TLS の初期化がこけても落とさずエラーとして返す。
-/// Android 版はアプリに残る — 端末の検証器を迂回する設定が要り、その判断は
-/// プラットフォームを知っている側にしか置けない。
+/// `Client::new()` panics when the build fails. Sync runs on a user action, so a failed
+/// TLS setup is returned as an error instead of crashing.
+/// The Android version stays in the app: it needs a config that bypasses the device's
+/// verifier, and that decision can only live on the side that knows the platform.
 #[cfg(not(target_os = "android"))]
 pub fn desktop_http_client() -> Result<reqwest::Client, SyncError> {
     reqwest::Client::builder()
@@ -109,15 +109,15 @@ pub fn desktop_http_client() -> Result<reqwest::Client, SyncError> {
         .map_err(|e| SyncError::other(format!("HTTP client setup failed: {}", describe(&e))))
 }
 
-/// 同期エンジンがサーバーに頼むことの全部。
+/// Everything the sync engine asks of the server.
 ///
-/// `HttpClient` が唯一の本番実装で、この trait は試験台のためにある:
-/// reqwest 直結のままだと、1 回の同期が bulk を何回に割ったかを見る場所が
-/// どこにも無い。エンジンはこの 2 つしかサーバーに頼まない。
+/// `HttpClient` is the only production implementation; this trait exists for the test
+/// bench: wired straight to reqwest, there is nowhere to see how many bulks one sync
+/// split into. The engine asks the server for only these two things.
 ///
-/// `async fn` ではなく `impl Future + Send` と書くのは、同期が Tauri の
-/// マルチスレッド runtime に spawn されるから。`async fn` の戻りは既定で
-/// `Send` が付かず、呼び出し側が丸ごと `!Send` になる。
+/// It is written as `impl Future + Send` rather than `async fn` because the sync is
+/// spawned on Tauri's multi-threaded runtime. The return of an `async fn` is not `Send`
+/// by default, and the whole caller becomes `!Send`.
 pub(crate) trait SyncTransport {
     fn get_sync_state(
         &self,
@@ -170,9 +170,9 @@ impl SyncTransport for HttpClient {
     }
 }
 
-/// reqwest 0.12 以降の `Display` は「error sending request for url (…)」で
-/// 止まり、DNS・TCP・TLS のどこで落ちたかは `source()` を辿らないと出てこない。
-/// Android の TLS 検証は Java 経由で、ログも無いので、この連鎖が唯一の手がかり。
+/// Since reqwest 0.12, `Display` stops at "error sending request for url" plus the URL,
+/// and whether DNS, TCP or TLS failed only shows up by walking `source()`.
+/// Android's TLS verification goes through Java with no logs, so this chain is the only clue.
 fn network_error(e: &reqwest::Error) -> SyncError {
     SyncError::new("network", format!("Network error: {}", describe(e)))
 }
@@ -189,9 +189,9 @@ pub fn describe(e: &dyn std::error::Error) -> String {
     out
 }
 
-/// 非成功ステータスを kind 付きエラーに変換する。
-/// これを怠ると失敗したアップロードを成功扱いで同期状態に記録したり、
-/// エラーレスポンスのボディをノート本文としてローカルに書き込んだりしてしまう。
+/// Turns a non-success status into an error with a kind.
+/// Skipping this would record a failed upload in the sync state as a success, or write
+/// the body of an error response to disk as a note body.
 async fn check_status(
     resp: reqwest::Response,
     context: &str,

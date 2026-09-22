@@ -37,12 +37,12 @@ pub use template::{
     delete_template, list_templates, read_template, save_template,
 };
 pub use utils::device::Context as DeviceContext;
-/// 書いた入り口の固定語彙。作成の入口はどれもこれを 1 つ受け取る。
+/// The fixed vocabulary of entry points that wrote a record. Every creation entry takes one.
 pub use utils::device::Source;
 pub use utils::frontmatter;
-/// 1 件ぶんのノートメタデータ。中身は frontmatter そのもの。
+/// The metadata of one note. Its content is the frontmatter itself.
 pub use utils::frontmatter::NoteFrontmatter as NoteMeta;
-/// ノートを作るときにだけ書ける出自。作成の入口はこれを 1 つ受け取る。
+/// The provenance that can be written only when a note is created. Every creation entry takes one.
 pub use utils::frontmatter::Provenance;
 pub use utils::markdown::{ScrawlEntry, parse_scrawl_entry};
 pub use utils::validated::{GlyphFormat, GlyphName, NoteFilename};

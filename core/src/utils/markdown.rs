@@ -6,8 +6,8 @@ use crate::error::CoreError;
 use crate::utils::device::Context;
 use crate::utils::frontmatter::{self, NoteFrontmatter, Provenance};
 
-/// 行末に載せるものは `Context` そのものとは限らない。日ファイルでは
-/// 端末情報を先頭に追い出した縮約版を書く。
+/// What goes at the end of the line is not always `Context` itself. A day file
+/// writes the reduced form with the device information pushed out to the head.
 #[must_use]
 pub fn format_scrawl_line<C: Serialize>(
     text: &str,
@@ -21,7 +21,7 @@ pub fn format_scrawl_line<C: Serialize>(
     }
 }
 
-/// `- [HH:MM:SS] ` を prefix として切り出す。
+/// Cuts `- [HH:MM:SS] ` out as the prefix.
 pub(crate) fn split_time_prefix(entry: &str) -> Option<(&str, &str)> {
     let rest = entry.strip_prefix("- [")?;
     let close = rest.find("] ")?;
@@ -32,26 +32,27 @@ pub(crate) fn split_time_prefix(entry: &str) -> Option<(&str, &str)> {
     Some(entry.split_at("- [".len() + close + "] ".len()))
 }
 
-/// 末尾のコンテキスト JSON（最後の " {" 以降が JSON オブジェクトなら）を返す。
+/// Returns the trailing context JSON (if what follows the last " {" is a JSON object).
 pub(crate) fn split_context_json(rest: &str) -> Option<&str> {
     let start = rest.rfind(" {")?;
     let candidate = &rest[start + 1..];
-    // `Value` を組み立てて is_object を見ない: candidate は必ず `{` で始まるので、
-    // 構文として通れば JSON オブジェクト以外にはなり得ない。`IgnoredAny` なら
-    // 検証だけを行い、Map も String も確保しない。
+    // no building a `Value` to check is_object: candidate always starts with `{`,
+    // so if it passes as syntax it cannot be anything but a JSON object. `IgnoredAny`
+    // only validates and allocates neither a Map nor a String.
     serde_json::from_str::<IgnoredAny>(candidate)
         .ok()
         .map(|_| candidate)
 }
 
-/// 時刻プレフィックスと記録時コンテキストを取り除き、ユーザーが書いた本文だけを返す。
+/// Removes the time prefix and the context recorded at the time, returning only the
+/// text the user wrote.
 #[must_use]
 pub fn strip_scrawl_prefix(entry: &str) -> &str {
     let rest = split_time_prefix(entry).map_or(entry, |(_, rest)| rest);
     split_context_json(rest).map_or(rest, |json| rest[..rest.len() - json.len()].trim_end())
 }
 
-/// エントリの `HH:MM:SS`。プレフィックスが無い旧い行では `None`。
+/// The entry's `HH:MM:SS`. `None` for an old line without the prefix.
 #[must_use]
 pub fn scrawl_entry_time(entry: &str) -> Option<&str> {
     let (prefix, _) = split_time_prefix(entry)?;
@@ -60,26 +61,28 @@ pub fn scrawl_entry_time(entry: &str) -> Option<&str> {
         .and_then(|t| t.strip_suffix("] "))
 }
 
-/// 1 行を分解したもの。行の形(時刻の括弧、行末 JSON)を読む側に見せない。
+/// One line taken apart. The line's shape (the time brackets, the trailing JSON)
+/// is hidden from the reader.
 ///
-/// 画面は行のまま扱えるが、外部(MCP)に渡すときは書式ではなく値が要る。
-/// 突き合わせたいのは「いつ・どこで」であって、`- [` の位置ではない。
+/// The screen can work with the line as is, but handing it outside (MCP) needs
+/// values, not a format. What is matched is "when and where", not the position of `- [`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ScrawlEntry {
-    /// 端末のローカル時刻。旧い行では `None`。
+    /// The device's local time. `None` for an old line.
     pub time: Option<NaiveTime>,
-    /// 書き手が打った本文だけ。
+    /// Only the text the writer typed.
     pub text: String,
-    /// 記録時の端末の状態。何も残っていなければ既定値。
+    /// The device's state at the time of recording. The default if nothing remains.
     pub context: Context,
-    /// どの入り口で書かれたか(`app` / `cli` / `mcp` / `widget`)。
-    /// 名乗らなかった行と、この語彙を知らない版が書いた行では `None`。
+    /// Which entry point wrote it (`app` / `cli` / `mcp` / `widget`).
+    /// `None` for a line that did not name one, and for a line written by a version
+    /// that does not know this vocabulary.
     pub source: Option<String>,
 }
 
-/// 行末 JSON をそのまま写したもの。`Context` は端末の状態だけを持つので、
-/// 同じ括弧に入っている `s` はここで拾う。日ファイルの `d` は展開の時点で
-/// 畳まれていて、外に出る行には残らない。
+/// A direct copy of the trailing JSON. `Context` holds only the device state, so
+/// the `s` that shares the same braces is picked up here. The `d` of a day file is
+/// folded away at expansion time and does not remain on a line that goes outside.
 #[derive(Debug, Default, Deserialize)]
 struct StoredEntry {
     #[serde(flatten)]
@@ -88,10 +91,10 @@ struct StoredEntry {
     source: Option<String>,
 }
 
-/// 保存された行を [`ScrawlEntry`] に戻す。
+/// Turns a stored line back into a [`ScrawlEntry`].
 ///
-/// 読めない部分は本文に倒す。行末が JSON として壊れていても、時刻の括弧が
-/// 無くても、書かれた文字は失わない。
+/// Whatever cannot be read falls back into the text. Even if the line end is
+/// broken as JSON, or the time brackets are missing, the written characters are not lost.
 #[must_use]
 pub fn parse_scrawl_entry(entry: &str) -> ScrawlEntry {
     let time = scrawl_entry_time(entry).and_then(|t| NaiveTime::parse_from_str(t, "%H:%M:%S").ok());
@@ -171,14 +174,15 @@ mod tests {
         assert_eq!(scrawl_entry_time(&line), Some("14:30:45"));
     }
 
-    /// 時刻を持たない旧い行。落として扱う側に判断させる。
+    /// An old line without a time. Dropped, and the handling side decides.
     #[test]
     fn test_scrawl_entry_time_without_prefix() {
         assert_eq!(scrawl_entry_time("- plain bullet"), None);
     }
 
-    /// 括弧の中は `HH:MM:SS` の 8 文字だけを時刻と見る。本文が `- [` で
-    /// 始まる普通の箇条書き(`- [x] done` など)を時刻と取り違えない。
+    /// Only the 8 characters of `HH:MM:SS` inside the brackets count as a time. An
+    /// ordinary bullet whose text starts with `- [` (such as `- [x] done`) is not
+    /// mistaken for a time.
     #[test]
     fn a_time_prefix_is_exactly_eight_digits_and_colons() {
         assert_eq!(
@@ -265,8 +269,8 @@ mod tests {
         assert_eq!(entry.context, ctx);
     }
 
-    /// 行末の `s` は端末の状態ではないので `Context` には入らない。
-    /// それでも読む側は「どこから来た記録か」を知りたい。
+    /// The trailing `s` is not device state, so it does not go into `Context`.
+    /// The reader still wants to know "where this record came from".
     #[test]
     fn a_line_reports_the_source_that_wrote_it() {
         let entry = parse_scrawl_entry("- [09:00:00] tapped {\"battery\":30,\"s\":\"widget\"}");
@@ -276,7 +280,7 @@ mod tests {
         assert_eq!(entry.context.battery, Some(30));
     }
 
-    /// 名乗っていない行(この語彙より前に書かれたもの)は空欄のまま。
+    /// A line that names no source (written before this vocabulary) stays blank.
     #[test]
     fn a_line_without_a_source_reports_none() {
         let entry = parse_scrawl_entry("- [09:00:00] typed {\"battery\":30}");
@@ -284,7 +288,7 @@ mod tests {
         assert_eq!(entry.source, None);
     }
 
-    /// 時刻もコンテキストも持たない旧い行。本文だけは落とさない。
+    /// An old line with neither time nor context. The text alone is not dropped.
     #[test]
     fn a_bare_line_is_all_text() {
         let entry = parse_scrawl_entry("- plain bullet");
@@ -303,8 +307,8 @@ mod tests {
         assert_eq!(entry.text, "line1\nline2");
     }
 
-    /// 本文が `{` で終わる JSON 風の文だと、末尾がコンテキストと紛れる。
-    /// 読めない JSON は本文のまま残す。
+    /// A JSON-like text ending in `{` makes the tail look like a context.
+    /// Unreadable JSON stays as text.
     #[test]
     fn a_trailing_brace_in_the_text_is_not_a_context() {
         let entry = parse_scrawl_entry("- [09:00:00] fn main() {");

@@ -20,18 +20,18 @@ pub struct LocalFile {
 
 const CACHE_FILENAME: &str = ".scan-cache.json";
 
-/// mtime がこれより新しいファイルはキャッシュに記録しない。
-/// mtime の粒度が粗いファイルシステムでは「記録した直後・同じ mtime のまま」の
-/// 書き換えにキャッシュが気づけない（git index と同じ racily-clean 問題）。
-/// できたてのファイルを対象外にしておけば、その窓は次のスキャンで必ず閉じる。
+/// A file whose mtime is newer than this is not recorded in the cache.
+/// On a filesystem with coarse mtime granularity, the cache cannot notice a rewrite made
+/// "right after recording, with the same mtime" (the racily-clean problem of the git index).
+/// Leaving freshly made files out means that window always closes on the next scan.
 const RACY_MARGIN: Duration = Duration::from_secs(2);
 
-/// 前回スキャンの結果。mtime と size が一致したファイルはハッシュを使い回し、
-/// 読み直しも SHA-256 もしない。同期は書き込みのたびに走るので、全ファイルの
-/// 再読込は端末の電池と同期の待ち時間にそのまま乗る。
+/// The result of the last scan. A file whose mtime and size match reuses its hash, with
+/// no re-read and no SHA-256. Sync runs on every write, so re-reading every file goes
+/// straight onto the device's battery and the sync's wait time.
 ///
-/// キャッシュは正しさに関与しない: 壊れていれば捨てて全件ハッシュし直すだけ。
-/// data の外に置くのは、中に置くと自分自身が同期対象になるため。
+/// The cache plays no part in correctness: if it is corrupt, it is dropped and everything
+/// is hashed again. It lives outside data because inside it would become a sync target itself.
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct ScanCache {
     files: HashMap<String, CachedHash>,
@@ -39,7 +39,8 @@ struct ScanCache {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct CachedHash {
-    /// UNIX epoch ミリ秒。文字列の日時より比較が速く、キャッシュも小さい。
+    /// Milliseconds since the UNIX epoch. Faster to compare than a datetime string, and
+    /// the cache is smaller.
     mtime_ms: i64,
     size: u64,
     hash: String,
@@ -53,12 +54,12 @@ impl ScanCache {
             .unwrap_or_default()
     }
 
-    /// 書けなくても致命ではない。次のスキャンが全件ハッシュに戻るだけ。
+    /// A failed write is not fatal. The next scan just falls back to hashing everything.
     ///
-    /// それでも書き換えは原子的にする。`fs::write` は先に切り詰めるので、
-    /// 書いている途中で落ちると半端な JSON が残り、そこから同期が始まると
-    /// 全ファイルを読み直す羽目になる。書き手はアプリと CLI の 2 つ
-    /// あるので、途中の状態を他人に見せない意味もある。
+    /// The replacement is still atomic. `fs::write` truncates first, so a crash mid-write
+    /// leaves half a JSON, and a sync that starts from it ends up re-reading every file.
+    /// There are two writers, the app and the CLI, so it also matters that no one sees
+    /// the in-between state.
     fn save(&self, base_dir: &Path) {
         if let Ok(content) = serde_json::to_string(self) {
             let _ = crate::utils::fs::write_atomic(&base_dir.join(CACHE_FILENAME), content);
@@ -81,7 +82,7 @@ pub fn scan_local_files(base_dir: &Path) -> Result<Vec<LocalFile>, CoreError> {
     };
     walk_dir(&data_dir, &data_dir, &mut walk)?;
 
-    // 変化が無ければ書かない。同期は頻繁に走るので、無駄な書き込みも積もる。
+    // No write when nothing changed. Sync runs often, so needless writes add up.
     if walk.fresh.files != walk.cached.files {
         walk.fresh.save(base_dir);
     }
@@ -101,11 +102,11 @@ fn walk_dir(root: &Path, current: &Path, walk: &mut Walk) -> Result<(), CoreErro
         let entry = entry?;
         let path = entry.path();
 
-        // readdir が返す d_type をそのまま使う。path.is_dir() と path.is_file() は
-        // それぞれ stat を発行するので、metadata と合わせて 1 件につき 3 回叩いていた。
+        // Use the d_type readdir returns as is. path.is_dir() and path.is_file() each
+        // issue a stat, so together with metadata this was 3 calls per entry.
         let file_type = entry.file_type()?;
         let metadata = if file_type.is_symlink() {
-            // リンク先を見るのは従来どおり。壊れたリンクは走査対象から外す。
+            // Following the link target is unchanged. A broken link is left out of the scan.
             let Ok(metadata) = fs::metadata(&path) else {
                 continue;
             };
@@ -143,7 +144,7 @@ fn walk_dir(root: &Path, current: &Path, walk: &mut Walk) -> Result<(), CoreErro
         let hash = match walk.cached.files.get(&key) {
             Some(c) if c.mtime_ms == mtime_ms && c.size == size => c.hash.clone(),
             _ => {
-                // バッファを使い回してファイル 1 件ごとの確保をなくす。
+                // Reuse the buffer to avoid one allocation per file.
                 content.clear();
                 content.reserve(usize::try_from(size).unwrap_or(0));
                 File::open(&path)?.read_to_end(&mut content)?;
@@ -175,23 +176,23 @@ fn walk_dir(root: &Path, current: &Path, walk: &mut Walk) -> Result<(), CoreErro
     Ok(())
 }
 
-/// 同期の道具立てそのものは同期しない。競合コピーはここに出てこない —
-/// `data/` の外 (`conflicts/`) に置くので、そもそも走査が届かない。
+/// The sync machinery itself is not synced. Conflict copies do not show up here: they
+/// live outside `data/` (in `conflicts/`), so the scan never reaches them.
 fn is_excluded(file_name: &str) -> bool {
     file_name == ".sync-state.json"
-        // `write_atomic` が rename の直前に置く一時ファイル。クラッシュで残る
+        // The temp file `write_atomic` puts down just before the rename. A crash leaves it behind
         || file_name.starts_with(".sync-tmp-")
 }
 
-/// 同期のハッシュはここでしか作らない。engine が削除の直前に計算し直すぶんも
-/// 同じ関数を通す — 定義が 2 つに割れると、片方の版が「変更あり」に見え続ける
+/// The sync hash is made only here. What the engine recomputes right before a delete
+/// goes through the same function: with two definitions, one version keeps looking "changed"
 pub(crate) fn compute_hash(content: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
 
     let mut hasher = Sha256::new();
     hasher.update(content);
-    // format!("{:x}") は 32 バイトぶん fmt を通る。出力長は常に 64 文字なので
-    // 直接組み立てたほうが速く、確保も 1 回で済む。
+    // format!("{:x}") runs 32 bytes through fmt. The output is always 64 characters, so
+    // building it directly is faster and takes one allocation.
     let digest = hasher.finalize();
     let mut out = String::with_capacity(digest.len() * 2);
     for byte in digest {
@@ -213,8 +214,8 @@ mod tests {
         assert!(files.is_empty());
     }
 
-    /// `data/` はあるが中身が無い。無い場合の早期 return とは別の経路で、
-    /// 走査そのものが空を返さなければならない。
+    /// `data/` exists but is empty. This is a different path from the early return when
+    /// it is missing; the scan itself has to return empty.
     #[test]
     fn scan_an_existing_but_empty_data_directory() {
         let dir = tempfile::tempdir().unwrap();
@@ -225,8 +226,8 @@ mod tests {
         assert!(files.is_empty());
     }
 
-    /// 同期の道具立て(状態ファイルと書きかけの一時ファイル)は、data の中に
-    /// あっても同期しない。載ると端末同士が互いの状態を上書きし合う。
+    /// The sync machinery (the state file and a half-written temp file) is not synced even
+    /// when it sits inside data. If it were, devices would overwrite each other's state.
     #[test]
     fn sync_state_and_temp_files_inside_data_are_not_scanned() {
         let dir = tempfile::tempdir().unwrap();
@@ -275,7 +276,7 @@ mod tests {
         assert_ne!(h1, compute_hash(b"different"));
     }
 
-    /// ハッシュはサーバーと突き合わせる値なので、桁落ちや大文字化は同期を壊す。
+    /// The hash is compared against the server's, so a dropped digit or uppercase breaks sync.
     #[test]
     fn compute_hash_is_lowercase_zero_padded_hex() {
         assert_eq!(
@@ -310,7 +311,7 @@ mod tests {
         assert!(scan_local_files(dir.path()).unwrap().is_empty());
     }
 
-    // ──────────── ハッシュキャッシュ ────────────
+    // ──────────── hash cache ────────────
 
     use std::time::Duration;
 
@@ -331,19 +332,19 @@ mod tests {
             .unwrap();
     }
 
-    /// mtime を過去に倒し、その値を返す。書きたてのファイルは racily-clean
-    /// 対策でキャッシュされないので、テストでは十分に古くしてから測る。
-    /// 「同じ mtime」を再現する側は返り値をそのまま使う。`now() - 10s` を
-    /// 呼び直すとミリ秒がずれて、別の mtime になってしまう。
+    /// Pushes the mtime into the past and returns that value. A freshly written file is
+    /// not cached because of the racily-clean guard, so the tests age it enough first.
+    /// A test that reproduces "the same mtime" uses the return value as is. Calling
+    /// `now() - 10s` again shifts the milliseconds and yields a different mtime.
     fn age(path: &Path, secs_ago: u64) -> SystemTime {
         let t = SystemTime::now() - Duration::from_secs(secs_ago);
         set_mtime(path, t);
         t
     }
 
-    /// mtime と size が変わっていなければ中身を読み直さない、が仕様。
-    /// それを観測するため、中身だけ同サイズで差し替えて mtime を戻す。
-    /// 旧ハッシュが返れば読んでいない証拠。
+    /// The spec: no re-read of the content when mtime and size are unchanged.
+    /// To observe it, swap only the content for one of the same size and restore the mtime.
+    /// Getting the old hash back proves nothing was read.
     #[test]
     fn an_unchanged_file_is_not_rehashed_on_the_next_scan() {
         let dir = tempfile::tempdir().unwrap();
@@ -387,15 +388,15 @@ mod tests {
         assert_eq!(second[0].content_hash, compute_hash(b"hi"));
     }
 
-    /// git index と同じ racily-clean 対策。書きたてのファイルは mtime の
-    /// 粒度内で書き換わってもキャッシュが気づけないので、記録しない。
+    /// The same racily-clean guard as the git index. A freshly written file is not
+    /// recorded, because the cache cannot notice a rewrite within the mtime granularity.
     #[test]
     fn a_freshly_written_file_is_rehashed_on_every_scan() {
         let dir = tempfile::tempdir().unwrap();
         let path = seed_note(dir.path(), "a.md", "hello");
         scan_local_files(dir.path()).unwrap();
 
-        // mtime を保ったまま同サイズで書き換える最悪ケース
+        // The worst case: a same-size rewrite that keeps the mtime
         let mtime = fs::metadata(&path).unwrap().modified().unwrap();
         fs::write(&path, "world").unwrap();
         set_mtime(&path, mtime);
@@ -415,9 +416,9 @@ mod tests {
         assert_eq!(files[0].content_hash, compute_hash(b"hello"));
     }
 
-    /// 落ちても半端な JSON を残さない。置き換えは rename なので、先に開いた
-    /// 読み手は最後まで旧内容を読み切れる。`fs::write` は書く前に切り詰めるので、
-    /// 同じ読み手が空か途中までの JSON を読むことになる。
+    /// A crash leaves no half JSON. The replacement is a rename, so a reader that opened
+    /// the file first reads the old content to the end. `fs::write` truncates before it
+    /// writes, so the same reader would get an empty or partial JSON.
     #[test]
     fn the_cache_is_replaced_whole_rather_than_truncated_in_place() {
         let dir = tempfile::tempdir().unwrap();
@@ -444,7 +445,7 @@ mod tests {
         );
     }
 
-    /// キャッシュは data の外に置く。data 配下だと自分自身が同期対象になる。
+    /// The cache lives outside data. Under data it would become a sync target itself.
     #[test]
     fn the_cache_file_never_appears_in_scan_results() {
         let dir = tempfile::tempdir().unwrap();
