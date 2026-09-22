@@ -14,7 +14,7 @@ use rmcp::handler::server::tool::ToolRouter;
 use rmcp::handler::server::wrapper::{Json, Parameters};
 use rmcp::model::{
     CallToolRequestParams, CallToolResponse, ListToolsResult, PaginatedRequestParams,
-    ServerCapabilities, ServerInfo,
+    ServerCapabilities, ServerConfig,
 };
 use rmcp::service::RequestContext;
 use rmcp::{ErrorData, RoleServer, ServerHandler, schemars, tool, tool_router};
@@ -684,8 +684,8 @@ fn round_to_key(value: f64) -> f64 {
 }
 
 impl ServerHandler for McpServer {
-    fn get_info(&self) -> ServerInfo {
-        let mut info = ServerInfo::new(ServerCapabilities::builder().enable_tools().build());
+    fn get_info(&self) -> ServerConfig {
+        let mut info = ServerConfig::new(ServerCapabilities::builder().enable_tools().build());
         info.server_info.name = "magical-merchant".into();
         info.server_info.version = env!("CARGO_PKG_VERSION").into();
         info.instructions = Some(self.instructions.clone());
