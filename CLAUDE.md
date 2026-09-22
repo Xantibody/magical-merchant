@@ -156,6 +156,12 @@ ready to record the moment it opens (widgets exist for exactly this).
   through the core by `core/tests/fixtures.rs` on every run, so a format change
   cannot quietly leave it behind. Never copy personal notes into it
 - Formatting is `nix fmt` (treefmt); CI fails on unformatted files
+- **Source comments are English.** Their reader is an AI session, and one
+  language keeps the terms greppable; Japanese belongs in string tables, never
+  in a comment. `just comments` runs Vale (`.vale.ini`: no Japanese, the proper
+  nouns, proselint) and typos over the tree; CI runs it on the files a PR
+  touches, so editing a file that still carries Japanese comments means
+  translating them in the same change
 
 ## Skills (read before touching the area)
 

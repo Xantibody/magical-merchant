@@ -1,0 +1,7 @@
+# English spelling in code, comments and strings. Non-ASCII text is ignored.
+[files]
+extend-exclude = ["*.lock", "pnpm-lock.yaml", "*.svg"]
+
+[default.extend-words]
+# Slite is a product (the mermaid preview borrows its figure-first layout)
+Slite = "Slite"

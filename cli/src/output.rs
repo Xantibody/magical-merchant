@@ -25,7 +25,7 @@ pub(crate) struct NoteInfo {
     pub(crate) tags: Vec<String>,
     /// First 100 characters of the body.
     pub(crate) preview: String,
-    /// Local datetime (`YYYY-MM-DDTHH:MM:SS`) of the scrawl entry this note
+    /// Local datetime (`YYYY-MM-DDTHH:MM:SS`) of the Scrawl entry this note
     /// was promoted from, if any.
     pub(crate) origin: Option<String>,
     /// Name of the template this note was created from, if any.
@@ -87,7 +87,7 @@ pub(crate) struct SearchHitInfo {
     pub(crate) date: String,
     /// Set for note hits; the argument to pass to `read_note`.
     pub(crate) filename: Option<String>,
-    /// Set for scrawl hits; the entry's position within its day.
+    /// Set for Scrawl hits; the entry's position within its day.
     pub(crate) index: Option<usize>,
     pub(crate) tags: Vec<String>,
 }
@@ -125,7 +125,7 @@ pub(crate) struct ScrawlOutput {
     pub(crate) truncated: bool,
 }
 
-/// One scrawl entry with its recorded context flattened into fields an
+/// One Scrawl entry with its recorded context flattened into fields an
 /// agent can filter and join on.
 #[derive(Serialize, schemars::JsonSchema)]
 pub(crate) struct EntryInfo {
@@ -174,7 +174,7 @@ pub(crate) struct LocationInfo {
 
 #[derive(Serialize, schemars::JsonSchema)]
 pub(crate) struct DeviceInfo {
-    /// `macos`, `android`, `linux`, `windows`, ...
+    /// `macos`, `android`, `linux`, `windows` and so on.
     pub(crate) os: String,
     pub(crate) os_version: Option<String>,
     pub(crate) arch: String,

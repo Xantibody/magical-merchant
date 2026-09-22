@@ -446,14 +446,14 @@ mod tests {
             written_at("2026-01-14T00:00:00+09:00"),
             "# 2026-01-14",
             &[],
-            Some("jounal"),
+            Some("journal"),
         )
         .unwrap()
         .unwrap();
 
         let meta = magical_merchant_core::read_note_meta(tmp.path(), &filename).unwrap();
         assert_eq!(meta.source, Some("import".to_string()));
-        assert_eq!(meta.template, Some("jounal".to_string()));
+        assert_eq!(meta.template, Some("journal".to_string()));
     }
 
     /// 同じ時刻の記録が 2 本あっても、片方が消えることはない。
