@@ -5,11 +5,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::utils::paths::{codex_dir, notes_dir};
 
-/// ノートの種別。決めるのは置き場のディレクトリで、frontmatter ではない。
+/// The kind of a note. The directory it lives in decides it, not the frontmatter.
 ///
-/// `Note` は 1 本の文書、`Codex` は書き足し続けて版を刻む文書。frontmatter の
-/// キーで分けると、Codex を知らない版が保存した瞬間にキーが落ちて普通の
-/// ノートに戻る。ディレクトリなら知らない版は読まないだけで、壊さない。
+/// A `Note` is a single document; a `Codex` is a document that keeps growing and commits
+/// versions. Telling them apart by a frontmatter key would drop the key the moment a build
+/// that does not know Codex saves, turning it back into a plain note. With a directory, an
+/// unaware build just does not read it, and breaks nothing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum NoteKind {
@@ -18,7 +19,7 @@ pub enum NoteKind {
 }
 
 impl NoteKind {
-    /// この種別のノートが並ぶディレクトリ。
+    /// The directory where notes of this kind sit.
     #[must_use]
     pub fn dir(self, base_dir: &Path) -> PathBuf {
         match self {
@@ -27,15 +28,15 @@ impl NoteKind {
         }
     }
 
-    /// 作成時刻から決まるファイルの置き場。名前の付け方は種別によらず
-    /// 同じ — ID は種別をまたいでも 1 つの名前空間で、昇格は rename だけ。
+    /// The file location decided by the creation time. The naming is the same for every
+    /// kind: IDs share one namespace across kinds, and promotion is only a rename.
     #[must_use]
     pub fn file_path(self, base_dir: &Path, time: DateTime<FixedOffset>) -> PathBuf {
         self.dir(base_dir)
             .join(format!("{}.md", time.format("%Y%m%d_%H%M%S")))
     }
 
-    /// JSON に出すのと同じ綴り。core の serde を知らない出口(MCP)向け。
+    /// The same spelling as the JSON output. For exits (MCP) that do not know core's serde.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -44,7 +45,7 @@ impl NoteKind {
         }
     }
 
-    /// 同じ ID がもう片方の置き場に無いか確かめるための相方。
+    /// The counterpart, for checking that the same ID is not in the other location.
     #[must_use]
     pub const fn other(self) -> Self {
         match self {
@@ -75,7 +76,7 @@ mod tests {
         );
     }
 
-    /// 一覧と検索は JSON で種別を渡す。TS 側の `"note" | "codex"` と揃える。
+    /// List and search pass the kind as JSON. It matches `"note" | "codex"` on the TS side.
     #[test]
     fn serializes_lowercase() {
         assert_eq!(

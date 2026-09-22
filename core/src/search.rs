@@ -11,7 +11,7 @@ use crate::utils::markdown::strip_scrawl_prefix;
 use crate::utils::tags;
 use crate::utils::text::lowercase;
 
-/// 検索結果がどちらの保管場所から来たか。
+/// Which store a search hit came from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum HitKind {
@@ -32,40 +32,41 @@ impl From<NoteKind> for HitKind {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SearchHit {
     pub kind: HitKind,
-    /// リストに出す 1 行。Scrawl はエントリ本文、Note は先頭行。
+    /// The one line shown in the list: the first line of the entry text for Scrawl, of the
+    /// body for a Note.
     pub title: String,
-    /// ヒット箇所の前後を含む抜粋。
+    /// An excerpt with context around the hit.
     pub snippet: String,
-    /// `YYYY-MM-DD`。
+    /// `YYYY-MM-DD`.
     pub date: String,
-    /// Note を開くためのファイル名。Scrawl では `None`。
+    /// The filename for opening a Note. `None` for Scrawl.
     pub filename: Option<String>,
-    /// その日の何番目のエントリか。Note では `None`。
+    /// The position of the entry within its day. `None` for a Note.
     pub index: Option<usize>,
     pub tags: Vec<String>,
-    /// `snippet` 内でクエリが一致し始める位置(文字数、省略記号込み)。
-    /// タグなど本文の外だけに一致したときは `None`。
+    /// Where the query starts matching inside `snippet` (in characters, ellipsis included).
+    /// `None` when it matched only outside the body, such as a tag.
     pub match_start: Option<usize>,
-    /// 一致した長さ(文字数)。`match_start` と対で使う。
+    /// The matched length (in characters). Used as a pair with `match_start`.
     pub match_len: Option<usize>,
 }
 
 const SNIPPET_CONTEXT: usize = 40;
 const MAX_HITS: usize = 100;
 
-/// 検索の範囲を切るタグ(`tags::normalize` 済み)。空なら切らない。
-/// 複数あれば全部を持つ記録だけが残る。
+/// The tags that scope the search (already `tags::normalize`d). Empty means no scoping.
+/// With several, only records carrying all of them remain.
 ///
-/// 両側とも打たれた綴りのままなので、突き合わせで大小を無視する。
-/// チップを押して絞った範囲が、本文の `#CognitiveBias` に当たるように。
+/// Both sides keep the spelling as typed, so the comparison ignores case.
+/// This lets a scope chosen by pressing a chip hit `#CognitiveBias` in a body.
 fn in_scope(scope: &[String], own: &[String]) -> bool {
     scope
         .iter()
         .all(|wanted| own.iter().any(|tag| tags::same_tag(tag, wanted)))
 }
 
-/// Scrawl 全日を走査して needle(小文字化済み)に一致し、`scope` の
-/// タグを全て持つエントリを集める。needle が空なら本文は見ない。
+/// Scan every Scrawl day and collect the entries that match needle (already lowercased)
+/// and carry every tag in `scope`. With an empty needle the text filters nothing out.
 fn scrawl_hits(
     base_dir: &Path,
     needle: &str,
@@ -73,24 +74,24 @@ fn scrawl_hits(
 ) -> Result<Vec<SearchHit>, CoreError> {
     let mut hits = Vec::new();
     let scrawl = Scrawl::new(base_dir.to_path_buf());
-    // 改行をまたぐ needle だけは日単位の足切りが使えない。CRLF のファイルでは
-    // エントリ内の改行が "\n" に正規化され、ファイル本文の部分文字列にならない。
-    // needle が空なら足切りは常に通るので、小文字化のぶんだけ無駄になる。
+    // Only a needle spanning a newline cannot use the per-day cutoff. In a CRLF file the
+    // newlines inside an entry are normalized to "\n", so it is not a substring of the file.
+    // With an empty needle the cutoff always passes, so the lowercasing would be wasted.
     let day_filter_applies = !needle.is_empty() && !needle.contains('\n');
 
     for date in list_scrawl_dates(base_dir)? {
         let Some(content) = scrawl.read_raw(date)? else {
             continue;
         };
-        // エントリ本文はその日のファイルの部分文字列なので、ファイル全体に無いなら
-        // どのエントリにも無い。分割もコンテキスト JSON の判定も丸ごと省ける。
+        // An entry's text is a substring of its day file, so if the whole file lacks it, no
+        // entry has it. Splitting and the context JSON check can be skipped entirely.
         if day_filter_applies && !lowercase(&content).contains(needle) {
             continue;
         }
 
         let formatted = date.format("%Y-%m-%d").to_string();
-        // 生の行ではなくエントリを数える。日ファイルの先頭には端末情報が載って
-        // いることがあり、行で数えると index が呼び出し側の並びとずれる。
+        // Count entries, not raw lines. A day file may carry device info at its head, and
+        // counting lines would put index out of step with the caller's ordering.
         for (index, entry) in DayLog::parse(&content)
             .into_entries()
             .into_iter()
@@ -122,15 +123,15 @@ fn scrawl_hits(
     Ok(hits)
 }
 
-/// Scrawl と Notes を横断して大文字小文字を無視した部分一致で検索する。
-/// 新しいものから順に返す。
+/// Search across Scrawl and Notes by case-insensitive substring match.
+/// Returns newest first.
 ///
-/// ノートは `find_backlinks` と同じく本文全文を読む。索引は持たない。
+/// Notes are read in full, as in `find_backlinks`. There is no index.
 ///
-/// `tags` は範囲。渡された全てのタグを持つ記録だけが対象になる(`#` の有無と
-/// ASCII の大小は見ない)。query が空でも tags があれば、そのタグの付いた記録を
-/// 全部返す — 画面でタグを選んで絞った状態を、そのまま検索の入り口にするため。
-/// どちらも空なら何も返さない。
+/// `tags` is the scope. Only records carrying every given tag are candidates (a leading `#`
+/// and ASCII case are ignored). With an empty query but tags present, every record with
+/// those tags is returned: the state of having narrowed by a tag on screen becomes the
+/// entry to search as it is. With both empty, nothing is returned.
 pub fn search_all(
     base_dir: &Path,
     query: &str,
@@ -149,19 +150,19 @@ pub fn search_all(
     let mut hits = scrawl_hits(base_dir, &needle, &scope)?;
 
     let mut tag_haystack = String::new();
-    // 一覧の preview(先頭 100 文字)ではなく全文。長く書いたノートほど
-    // 後半に書いたことが探せなくなる。本文は frontmatter を剥がしてあるので、
-    // `time:` や `tags:` の行には当たらない。
-    // 読めないノートは空の本文で来て、needle にもタグにも当たらず結果に
-    // 出ないだけ — 1 本のせいで検索全体を失敗させない
+    // The full text, not the list's preview (first 100 characters). The longer a note, the
+    // less of its later part could be found. The body has the frontmatter stripped, so the
+    // `time:` and `tags:` lines are never hit.
+    // An unreadable note comes with an empty body, matches neither the needle nor a tag,
+    // and just stays out of the results: one note must not fail the whole search
     Notes::new(base_dir.to_path_buf()).scan(|note, body| {
         if !in_scope(&scope, &note.tags) {
             return;
         }
         let lowered = lowercase(body);
         if !lowered.contains(&needle) {
-            // 本文に無ければタグ。format! + join だとノート 1 件につき
-            // 2 回余分に確保するので、1 本の String を使い回す
+            // Not in the body, so try the tags. format! + join would allocate twice more
+            // per note, so one String is reused
             tag_haystack.clear();
             for tag in &note.tags {
                 tag_haystack.push(' ');
@@ -193,21 +194,23 @@ pub fn search_all(
     Ok(hits)
 }
 
-/// Scrawl の全エントリと Note / Codex の全ノートを、1 本の並びで新しい順に返す。
+/// Return every Scrawl entry and every Note / Codex note as one sequence, newest first.
 ///
-/// 文字列で絞らないぶん [`search_all`] と 3 つ違う。抜粋は一致位置ではなく
-/// 本文の先頭 40 字、`match_start` / `match_len` は常に `None`(一致という概念が
-/// 無い)、そして**件数を切らない** — 「絞る」画面は返ったこの一覧から種類 /
-/// タグ / 期間ごとの件数を数えるので、上限を付けるとチップの数字が嘘になる。
+/// Since it does not narrow by text, it differs from [`search_all`] in three ways. The
+/// snippet is the first 40 characters of the body rather than the match position,
+/// `match_start` / `match_len` are always `None` (there is no notion of a match), and
+/// **the count is not capped**: the Browse screen counts per kind / tag / period from the
+/// list returned here, so a cap would make the chip numbers lie.
 ///
-/// 走査の重さは `search_all` を query 無しで呼ぶのと同じ(Scrawl の全日 +
-/// 全ノートの本文)。呼ぶのは画面を開いたときの 1 回だけにする。
+/// The scan costs the same as calling `search_all` with no query (every Scrawl day plus
+/// every note's body). Call it only once, when the screen opens.
 pub fn browse_all(base_dir: &Path) -> Result<Vec<SearchHit>, CoreError> {
-    // needle も範囲も無い走査は「全部通す」走査。検索と同じ入口を使う
+    // A scan with no needle and no scope is a "let everything through" scan. It uses the
+    // same entry as search
     let mut hits = scrawl_hits(base_dir, "", &[])?;
 
-    // 読めないノートは空の本文で来る(`scan`)。題も抜粋も空の行になるが、
-    // 1 本のせいで一覧全体を失敗させない — `search_all` と同じ方針
+    // An unreadable note comes with an empty body (`scan`). Its title and snippet become
+    // an empty row, but one note must not fail the whole list: same policy as `search_all`
     Notes::new(base_dir.to_path_buf()).scan(|note, body| {
         hits.push(SearchHit {
             kind: note.kind.into(),
@@ -229,30 +232,30 @@ pub fn browse_all(base_dir: &Path) -> Result<Vec<SearchHit>, CoreError> {
     Ok(hits)
 }
 
-/// 本文の先頭を抜粋として切り出す。空の needle を渡した [`snippet`] そのもので、
-/// 照合しないので小文字版も要らない(`lowered` は一致探しにしか使われない)。
+/// Cut the head of the body as the excerpt. It is [`snippet`] with an empty needle; nothing
+/// is matched, so no lowercased copy is needed (`lowered` is used only to find the match).
 fn head(text: &str) -> String {
     snippet(text, text, "").text
 }
 
-/// `target` へ `[[ID]]` で言及している記録(ノート・Scrawl)を集める。
+/// Collect the records (notes, Scrawl) that mention `target` with `[[ID]]`.
 ///
-/// インデックスは持たず、開かれるたびに走査で導出する。ノートは一覧の
-/// preview(先頭 100 文字)ではなく全文を読む — リンクは本文のどこにでも
-/// 書かれるため。
+/// There is no index; it is derived by a scan each time it is opened. Notes are read in
+/// full, not the list's preview (first 100 characters): a link can be written anywhere
+/// in the body.
 pub fn find_backlinks(
     base_dir: &Path,
     target: &crate::utils::validated::NoteFilename,
 ) -> Result<Vec<SearchHit>, CoreError> {
     let stem = target.as_str().trim_end_matches(".md");
-    // 閉じ括弧まで含めない。`[[ID]]` と `[[ID|表示文字]]` は同じ 1 本のリンクで、
-    // 書き方の違いでバックリンクが消えてはいけない
+    // The closing brackets are not included. `[[ID]]` and `[[ID|display text]]` are the
+    // same single link, and a backlink must not vanish over the way it is written
     let needle = format!("[[{stem}");
 
     let mut hits = scrawl_hits(base_dir, &needle, &[])?;
 
-    // 読めないノートは空の本文で来て、バックリンク欄から消えるだけ。
-    // 開けない一覧を出すより良い
+    // An unreadable note comes with an empty body and just drops out of the backlinks.
+    // Better than showing a list that cannot be opened
     Notes::new(base_dir.to_path_buf()).scan(|note, body| {
         if note.filename == target.as_str() || !body.contains(&needle) {
             return;
@@ -283,10 +286,10 @@ pub fn find_backlinks(
     Ok(hits)
 }
 
-/// 抜粋の強調をリンクの保存形の終わりまで伸ばす。
+/// Extend the excerpt's highlight to the end of the link's stored form.
 ///
-/// 一致に使う needle は `[[ID` までなので、そのままでは `|表示文字]]` が
-/// 地の文の色で残り、どこまでがリンクなのか読めない。
+/// The needle used for matching ends at `[[ID`, so as it is `|display text]]` would stay
+/// in the body-text color and one could not tell where the link ends.
 fn extend_match_to_link_end(hit: &mut SearchHit) {
     let (Some(start), Some(len)) = (hit.match_start, hit.match_len) else {
         return;
@@ -294,7 +297,7 @@ fn extend_match_to_link_end(hit: &mut SearchHit) {
     let chars: Vec<char> = hit.snippet.chars().collect();
     let mut at = start + len;
     while at + 1 < chars.len() {
-        // 抜粋が途中で切れている・別のリンクが始まったなら伸ばさない
+        // Do not extend if the excerpt is cut off midway or another link starts
         if chars[at] == '\n' || chars[at] == '[' {
             return;
         }
@@ -306,11 +309,11 @@ fn extend_match_to_link_end(hit: &mut SearchHit) {
     }
 }
 
-/// 一覧に出す 1 行。ノートの題は本文先頭の `# 見出し` なので記号は落とす
-/// (一覧ペインの行も同じ形で出している)。
+/// The one line shown in the list. A note's title is the `# heading` at the head of the
+/// body, so the marker is dropped (the list pane's rows show the same shape).
 ///
-/// 落とすのは後ろに空白のある `#` だけ。Scrawl のエントリは `#タグ`
-/// で始まることがあり、そこまで削ると分類が題から消える。
+/// Only a `#` followed by whitespace is dropped. A Scrawl entry can start with a `#tag`,
+/// and cutting that too would lose the category from the title.
 fn first_line(text: &str) -> &str {
     let line = text.lines().next().unwrap_or("").trim();
     let rest = line.trim_start_matches('#');
@@ -320,19 +323,19 @@ fn first_line(text: &str) -> &str {
     rest.trim_start()
 }
 
-/// 切り出した抜粋と、その中でクエリが一致し始める位置(文字数)。
+/// The cut excerpt and where the query starts matching inside it (in characters).
 struct Excerpt {
     text: String,
-    /// 本文に一致がない(タグだけに当たった)ときは `None`。
+    /// `None` when there is no match in the body (only a tag was hit).
     match_start: Option<usize>,
 }
 
-/// ヒット位置の前後 `SNIPPET_CONTEXT` 文字を、文字境界を壊さずに切り出す。
-/// `lowered` は照合に使った `text` の小文字版。作り直さず受け取るのは、
-/// ここが 1 ヒットごとに走るため。
+/// Cut `SNIPPET_CONTEXT` characters on each side of the hit without breaking a character
+/// boundary. `lowered` is the lowercased `text` used for matching. It is taken rather than
+/// rebuilt because this runs once per hit.
 fn snippet(text: &str, lowered: &str, needle: &str) -> Excerpt {
-    // ヒットしたのが本文以外(ノートのタグなど)なら先頭から切り出す。
-    // needle が空(タグだけで絞った一覧)のときも同じ — 光らせる場所はない。
+    // If the hit was outside the body (a note's tag, for instance), cut from the head.
+    // The same with an empty needle (a list narrowed by tag only): there is nothing to highlight.
     let found = if needle.is_empty() {
         None
     } else {
@@ -348,9 +351,10 @@ fn snippet(text: &str, lowered: &str, needle: &str) -> Excerpt {
     if start > 0 {
         out.push('…');
     }
-    // 先頭の「…」も 1 文字。位置に入れないとハイライトが 1 文字ずれる
+    // The leading ellipsis is one character too. Left out of the position, the highlight
+    // is off by one character
     let match_start = found.map(|at| at - start + usize::from(start > 0));
-    // Vec<char> を 3 本作らずに 1 度だけ走査する。
+    // Walk once instead of building three Vec<char>.
     let mut chars = text.chars().skip(start);
     for _ in start..end {
         match chars.next() {
@@ -385,12 +389,12 @@ mod tests {
         Context::default()
     }
 
-    /// 検索に引っかける普通のノート。出自は検索の対象ではないので名乗らない。
+    /// A plain note for search to hit. Provenance is not searched, so none is declared.
     fn draft(tmp: &TempDir, body: &str, tags: &[String]) -> Result<std::path::PathBuf, CoreError> {
         create_draft_note(tmp.path(), body, tags, &context(), Provenance::default())
     }
 
-    /// Codex のヒットは Codex と名乗る。開く先の面が違う。
+    /// A hit in a Codex says it is a Codex. It opens on a different surface.
     #[test]
     fn a_hit_in_a_codex_says_so() {
         let tmp = TempDir::new().unwrap();
@@ -409,15 +413,15 @@ mod tests {
         assert_eq!(hits[0].kind, HitKind::Codex);
     }
 
-    /// 一覧ペインは `# ` を落とした題を出す。パレットとバックリンクだけ
-    /// 記号付きだと、同じノートが画面ごとに違う名前を名乗る。
+    /// The list pane shows the title with `# ` dropped. If only the palette and backlinks
+    /// kept the marker, the same note would go by a different name on each screen.
     #[test]
     fn a_note_title_drops_the_heading_marker() {
         assert_eq!(first_line("# 設計メモ\n本文"), "設計メモ");
         assert_eq!(first_line("## 小見出し"), "小見出し");
     }
 
-    /// エントリは `#タグ` で始まることがある。見出しの `# ` とは違う。
+    /// An entry can start with a `#tag`. That is not a heading's `# `.
     #[test]
     fn an_entry_that_starts_with_a_tag_keeps_it() {
         assert_eq!(first_line("#sync を直す"), "#sync を直す");
@@ -445,8 +449,8 @@ mod tests {
         assert_eq!(hits[0].index, Some(0));
     }
 
-    /// ノートのヒットはタグを名乗るのに、エントリのヒットだけ空だった。
-    /// 呼び出し側が「同じ形」と信じて読むので、片方だけ黙っていてはいけない。
+    /// A note hit reported its tags, but an entry hit alone came back empty. The caller
+    /// reads them trusting "the same shape", so one side must not stay silent.
     #[test]
     fn a_scrawl_hit_reports_the_tags_in_its_text() {
         let tmp = TempDir::new().unwrap();
@@ -465,9 +469,9 @@ mod tests {
         assert_eq!(search_all(tmp.path(), "local-first", &[]).unwrap().len(), 1);
     }
 
-    /// 日ファイルの先頭に端末情報が載っている日でも、返す index は
-    /// エントリの並び順でなければならない。ここがずれると検索結果を
-    /// 開いたときに別のエントリが出る。
+    /// Even on a day whose file carries device info at its head, the returned index must
+    /// be the entry's position in order. If this is off, opening a search result shows a
+    /// different entry.
     #[test]
     fn an_index_counts_entries_not_lines_of_the_day_file() {
         let tmp = TempDir::new().unwrap();
@@ -521,7 +525,7 @@ mod tests {
 
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].kind, HitKind::Note);
-        // 開くときに使う名前なので、作られたファイルの名前そのものでなければならない
+        // It is the name used to open the note, so it must be exactly the created file's name
         assert_eq!(
             hits[0].filename.as_deref(),
             path.file_name().and_then(|n| n.to_str())
@@ -529,12 +533,12 @@ mod tests {
         assert_eq!(hits[0].index, None);
     }
 
-    /// 一覧の preview は先頭 100 文字しかない。長く書いたノートほど、後半に
-    /// 書いたことが探せなくなる — 検索が本文全体を見ないと記録を見失う。
+    /// The list's preview is only the first 100 characters. The longer a note, the less of
+    /// its later part could be found: unless search reads the whole body, records get lost.
     #[test]
     fn a_needle_deep_in_a_long_note_is_found() {
         let tmp = TempDir::new().unwrap();
-        // 題・タグ・先頭 100 文字のどこにも needle を置かない
+        // Put the needle nowhere in the title, the tags or the first 100 characters
         let body = format!(
             "# 長いノート\n{}\n後半にだけリトライと書いた",
             "あ".repeat(300)
@@ -547,15 +551,16 @@ mod tests {
         assert_eq!(hits[0].kind, HitKind::Note);
         assert_eq!(hits[0].title, "長いノート");
         assert!(hits[0].snippet.contains("リトライ"), "{}", hits[0].snippet);
-        // UI はこの位置でハイライトを塗る。抜粋の中を指していないと別の字が光る
+        // The UI paints the highlight at this position. Unless it points inside the excerpt,
+        // other characters light up
         let start = hits[0].match_start.unwrap();
         let len = hits[0].match_len.unwrap();
         let matched: String = hits[0].snippet.chars().skip(start).take(len).collect();
         assert_eq!(matched, "リトライ");
     }
 
-    /// 本文全体を読むようになっても、見せるのは本文だけ。frontmatter の
-    /// `tags:` や `time:` に当たると、書いた覚えのない語でノートが出る。
+    /// Even now that the whole body is read, only the body is exposed. Hitting `tags:` or
+    /// `time:` in the frontmatter would surface a note for a word never written in it.
     #[test]
     fn the_frontmatter_is_not_searchable() {
         let tmp = TempDir::new().unwrap();
@@ -565,7 +570,7 @@ mod tests {
         assert!(search_all(tmp.path(), "tags", &[]).unwrap().is_empty());
     }
 
-    /// 日付を固定して 1 行書く。`save_scrawl_entry` は今日にしか書けない。
+    /// Write one line on a fixed date. `save_scrawl_entry` can only write to today.
     fn write_day(tmp: &TempDir, date: chrono::NaiveDate, text: &str) {
         let dir = tmp.path().join("data/scrawl");
         std::fs::create_dir_all(&dir).unwrap();
@@ -576,8 +581,8 @@ mod tests {
         .unwrap();
     }
 
-    /// 返すのは新しい方から 100 件まで。古い方を落とすのは、探しているのは
-    /// たいてい最近書いたものだから。
+    /// Up to 100 are returned, newest first. The older ones are dropped because what one
+    /// looks for is usually something written recently.
     #[test]
     fn hits_are_capped_at_the_newest_hundred() {
         let tmp = TempDir::new().unwrap();
@@ -660,8 +665,8 @@ mod tests {
         assert_eq!(hits[0].snippet, "needle のあと 改行");
     }
 
-    /// 前後 40 文字ちょうどなら丸ごと収まり、41 文字目から省略する。
-    /// 文字数で数える — バイトで数えると日本語では 13 文字で切れる。
+    /// Exactly 40 characters on each side fit whole; elision starts at the 41st.
+    /// Counted in characters: counted in bytes, Japanese would be cut at 13 characters.
     #[test]
     fn a_snippet_elides_only_beyond_forty_chars_of_context() {
         let tmp = TempDir::new().unwrap();
@@ -692,8 +697,8 @@ mod tests {
         assert_eq!(hits[0].snippet, "short needle here");
     }
 
-    /// 抜粋のどこが一致したか。UI はこの位置でハイライトを塗るので、
-    /// ずれると無関係な文字が光る。
+    /// Where in the excerpt the match sits. The UI paints the highlight at this position,
+    /// so if it is off, unrelated characters light up.
     #[test]
     fn a_hit_reports_where_the_match_sits_in_the_snippet() {
         let tmp = TempDir::new().unwrap();
@@ -705,8 +710,8 @@ mod tests {
         assert_eq!(hits[0].match_len, Some(6));
     }
 
-    /// 前が省略された抜粋では先頭に「…」が 1 文字入る。位置はそれ込みで
-    /// 返さないと、ハイライトが 1 文字ずれる。
+    /// An excerpt elided at the front starts with one ellipsis character. Unless the
+    /// position counts it, the highlight is off by one character.
     #[test]
     fn an_elided_snippet_counts_the_leading_ellipsis() {
         let tmp = TempDir::new().unwrap();
@@ -721,8 +726,8 @@ mod tests {
         assert_eq!(matched, "NEEDLE");
     }
 
-    /// マルチバイト文字圏でも位置は文字数で数える。バイト数で返すと
-    /// 日本語の本文で必ずずれる。
+    /// The position is counted in characters even for multibyte text. Returned in bytes,
+    /// it would always be off in a Japanese body.
     #[test]
     fn a_match_position_counts_chars_not_bytes() {
         let tmp = TempDir::new().unwrap();
@@ -740,7 +745,7 @@ mod tests {
         assert_eq!(hits[0].match_len, Some(4));
     }
 
-    /// タグだけに一致したときは本文に光らせる場所がない。
+    /// When only a tag matched, there is nothing in the body to highlight.
     #[test]
     fn a_tag_only_hit_has_no_match_position() {
         let tmp = TempDir::new().unwrap();
@@ -756,7 +761,8 @@ mod tests {
         tags.iter().map(|t| (*t).to_string()).collect()
     }
 
-    /// 画面でタグを選んで絞り込んだまま検索できるように、範囲はタグで切る。
+    /// The scope is cut by tag, so that one can search while still narrowed by a tag
+    /// chosen on screen.
     #[test]
     fn a_tag_scope_keeps_only_entries_carrying_the_tag() {
         let tmp = TempDir::new().unwrap();
@@ -782,8 +788,8 @@ mod tests {
         assert_eq!(hits[0].tags, vec!["sync"]);
     }
 
-    /// 何も打たずにタグだけ渡すと、そのタグの付いた記録が一覧になる。
-    /// パレットで「タグで絞った状態」をそのまま眺められるようにするため。
+    /// Passing only a tag with nothing typed lists the records carrying that tag.
+    /// This lets the palette show "narrowed by tag" as it is.
     #[test]
     fn an_empty_query_with_a_tag_lists_everything_carrying_it() {
         let tmp = TempDir::new().unwrap();
@@ -796,12 +802,12 @@ mod tests {
         assert_eq!(hits.len(), 2);
         assert!(hits.iter().any(|h| h.kind == HitKind::Scrawl));
         assert!(hits.iter().any(|h| h.kind == HitKind::Note));
-        // 本文には光らせる場所がない
+        // There is nothing in the body to highlight
         assert!(hits.iter().all(|h| h.match_start.is_none()));
     }
 
-    /// 一覧のチップは打った綴りで出るが、打ち込む側は大小を合わせない。
-    /// 範囲と記録のどちらを大文字で書いても同じ結果になること。
+    /// The list's chips show the spelling as typed, but the typist does not match case.
+    /// Whether the scope or the record is the one in capitals, the result is the same.
     #[test]
     fn a_tag_scope_ignores_case_on_both_sides() {
         let tmp = TempDir::new().unwrap();
@@ -816,7 +822,7 @@ mod tests {
 
         let hits = search_all(tmp.path(), "", &scope(&["cognitivebias"])).unwrap();
         assert_eq!(hits.len(), 2);
-        // 打った綴りのまま返る
+        // Returned with the spelling as typed
         assert!(hits.iter().any(|h| h.tags == vec!["CognitiveBias"]));
 
         assert_eq!(
@@ -839,8 +845,8 @@ mod tests {
         );
     }
 
-    /// 選んだチップは `#Sync` でも、書かれているのは `#sync` かもしれない。
-    /// 先頭の `#` も書き手が付けがちなので、付いていても同じタグとして読む。
+    /// The chosen chip may be `#Sync` while what is written is `#sync`. Writers also tend
+    /// to add a leading `#`, so with it the tag is read as the same one.
     #[test]
     fn tag_scope_matching_ignores_case_and_a_leading_hash() {
         let tmp = TempDir::new().unwrap();
@@ -854,7 +860,7 @@ mod tests {
         );
     }
 
-    /// 複数渡したら AND。どれか 1 つで良いなら、1 つずつ引けばいい。
+    /// Several tags mean AND. If any one would do, query them one at a time.
     #[test]
     fn every_tag_in_the_scope_must_be_present() {
         let tmp = TempDir::new().unwrap();
@@ -867,8 +873,8 @@ mod tests {
         assert_eq!(hits[0].title, "両方 #a #b");
     }
 
-    /// 空のタグは範囲を狭めない。`""` を渡されて全件が消えると、呼び出し側は
-    /// 何が起きたか分からない。
+    /// An empty tag does not narrow the scope. If passing `""` wiped every result, the
+    /// caller could not tell what happened.
     #[test]
     fn blank_tags_do_not_narrow_the_scope() {
         let tmp = TempDir::new().unwrap();
@@ -910,8 +916,8 @@ mod tests {
         assert!(hits[0].snippet.contains("これ参照"));
     }
 
-    /// 一覧の preview は先頭 100 文字しかない。リンクは本文のどこにでも
-    /// 書かれるので、全文を読まないと深い位置のリンクを見落とす。
+    /// The list's preview is only the first 100 characters. A link can be written anywhere
+    /// in the body, so without reading the whole text a deep link is missed.
     #[test]
     fn a_link_deep_in_a_long_note_is_still_found() {
         let tmp = TempDir::new().unwrap();
@@ -925,7 +931,7 @@ mod tests {
         assert_eq!(hits[0].kind, HitKind::Note);
     }
 
-    /// 自分の中に自分へのリンクを書いても「リンクされている記録」ではない。
+    /// A note that links to itself in its own body is not "a record that links to it".
     #[test]
     fn a_note_is_not_its_own_backlink() {
         let tmp = TempDir::new().unwrap();
@@ -940,8 +946,8 @@ mod tests {
         );
     }
 
-    /// 表示文字を付けたリンクも同じ 1 本のリンク。書き方でバックリンクが
-    /// 消えると、文中に自然に埋め込んだ参照だけが見えなくなる。
+    /// A link with display text is the same single link. If a backlink vanished over the
+    /// way it is written, only the references embedded naturally in prose would go unseen.
     #[test]
     fn a_link_with_display_text_is_a_backlink() {
         let tmp = TempDir::new().unwrap();
@@ -952,8 +958,8 @@ mod tests {
         let hits = find_backlinks(tmp.path(), &filename_of(&target)).unwrap();
 
         assert_eq!(hits.len(), 1);
-        // 強調は保存形の終わりまで。`|前の話]]` が地の文の色で残ると、
-        // どこまでがリンクなのか読めない
+        // The highlight runs to the end of the stored form. If `|前の話]]` stayed in the
+        // body-text color, one could not tell where the link ends
         let start = hits[0].match_start.unwrap();
         let len = hits[0].match_len.unwrap();
         let matched: String = hits[0].snippet.chars().skip(start).take(len).collect();
@@ -981,8 +987,8 @@ mod tests {
         assert!(browse_all(tmp.path()).unwrap().is_empty());
     }
 
-    /// 「絞る」画面は絞り込みが 1 つも無い状態でも全件を並べる。エントリと
-    /// ノートが 1 本の並びに混ざり、新しいものから来ること。
+    /// The Browse screen lists everything even with no filter chosen. Entries and notes
+    /// mix into one sequence, newest first.
     #[test]
     fn browsing_lists_scrawl_entries_and_notes_newest_first() {
         let tmp = TempDir::new().unwrap();
@@ -1003,7 +1009,7 @@ mod tests {
         assert_eq!(hits[1].index, Some(0));
     }
 
-    /// 開く先の面が違うので、Codex は Codex と名乗る。
+    /// A Codex says it is a Codex, because it opens on a different surface.
     #[test]
     fn a_browsed_codex_says_so() {
         let tmp = TempDir::new().unwrap();
@@ -1022,7 +1028,7 @@ mod tests {
         assert_eq!(hits[0].kind, HitKind::Codex);
     }
 
-    /// チップは件数付きでタグを出す。数える元がタグを落としていては数えられない。
+    /// The chips show tags with counts. They cannot be counted if the source drops the tags.
     #[test]
     fn browsing_carries_the_tags_of_each_record() {
         let tmp = TempDir::new().unwrap();
@@ -1037,8 +1043,8 @@ mod tests {
         assert_eq!(note.tags, vec!["Plan"]);
     }
 
-    /// 抜粋は本文の先頭 40 字。検索の抜粋と同じ数字で、超えた分は同じ作法で
-    /// 省略記号を付ける。
+    /// The snippet is the first 40 characters of the body. The same number as the search
+    /// snippet, and anything beyond gets an ellipsis in the same manner.
     #[test]
     fn a_browsed_snippet_is_the_first_forty_chars_of_the_body() {
         let snippet_of = |len: usize| {
@@ -1051,7 +1057,7 @@ mod tests {
         assert_eq!(snippet_of(41), format!("{}…", "あ".repeat(40)));
     }
 
-    /// 一致という概念が無いので、光らせる場所も無い。
+    /// There is no notion of a match, so there is nothing to highlight either.
     #[test]
     fn a_browsed_hit_has_no_match_position() {
         let tmp = TempDir::new().unwrap();
@@ -1065,9 +1071,9 @@ mod tests {
         assert!(hits.iter().all(|h| h.match_len.is_none()));
     }
 
-    /// 1 本読めなくても走査全体は失敗させない(`search_all` と同じ方針)。
-    /// 本文が空で来るので題も抜粋も空だが、件数からは消えない — 数えるのは
-    /// ツリーにあるファイルで、空の本文で絞ることはできないため。
+    /// One unreadable note does not fail the whole scan (same policy as `search_all`).
+    /// Its body comes empty, so the title and snippet are empty, but it stays in the count:
+    /// what is counted is the files in the tree, and an empty body cannot filter them out.
     #[test]
     fn an_unreadable_note_does_not_fail_the_browse() {
         use std::os::unix::fs::PermissionsExt;
@@ -1082,8 +1088,8 @@ mod tests {
         assert!(hits.iter().any(|h| h.title == "読めるノート"));
     }
 
-    /// 「絞る」画面はこの一覧から件数を数える。`search_all` の 100 件を
-    /// 流用すると、101 本目からは件数が嘘になる。
+    /// The Browse screen counts from this list. Reusing the 100-hit cap of `search_all`
+    /// would make the counts lie from the 101st record on.
     #[test]
     fn browsing_is_not_capped() {
         let tmp = TempDir::new().unwrap();

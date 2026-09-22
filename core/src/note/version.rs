@@ -1,22 +1,25 @@
-//! Codex の版 — 人が「ここまで」と刻んだ本文の全文。
+//! Codex versions: the full body text a person committed as "this far".
 //!
-//! `history.rs` の控えとは別物。控えは外部からの上書きの前に機械が取る退避で、
-//! 端末の中だけ・直近 20 件。版は人が message を添えて刻む記録で、どの端末で
-//! 開いても同じ履歴が見えなければ「蓄積」にならないので `data/` の中に置き、
-//! 同期に載せる。
+//! Not the same as the snapshots in `history.rs`. A snapshot is set aside by the machine
+//! before an overwrite from outside, stays on the device, and only the latest 20 are kept.
+//! A version is a record a person commits with a message; unless the same history shows
+//! on every device it is opened on, it is not an "accumulation", so it lives under `data/`
+//! and rides on sync.
 //!
-//! 1 版 = 本文の全文 + 小さな frontmatter(`time` / `message`)の Markdown 1 つ。
-//! 差分の鎖で持たないのは、同期がキー単位で独立していて順序も欠落も保証しない
-//! から — 全文なら届いた版はそれだけで読めて戻せる。diff は読むときに計算する。
-//! git も 1 版を全文で持っている。差分が取りやすいのは保存形式ではなく、
-//! 比べたい 2 つの全文がすぐ手に入ることによる。
+//! One version = one Markdown file: the full body plus a small frontmatter (`time` /
+//! `message`). It is not kept as a chain of diffs because sync is independent per key and
+//! guarantees neither order nor completeness; with full text, a version that arrives can be
+//! read and restored on its own. The diff is computed on read. git also holds each version
+//! as full text. Diffs are easy to take not because of the storage format but because the
+//! two full texts to compare are at hand.
 //!
-//! 版 ID は `YYYYMMDD_HHMMSS-<本文 SHA-256 の先頭 8 hex>`。時刻だけでは 2 端末が
-//! 同じ秒に刻むとぶつかる。内容のハッシュを添えると、ぶつかるのは「同じ秒に
-//! 同じ本文」のときだけで、それは同じ版なので 1 つに畳まれて正しい。
+//! The version ID is `YYYYMMDD_HHMMSS-<first 8 hex of the body's SHA-256>`. Time alone
+//! collides when two devices commit in the same second. With the content hash attached, a
+//! collision needs "the same body in the same second", and that is the same version, so
+//! folding it into one is correct.
 //!
-//! 版を持てるのは `data/codex/` にある Codex だけ。普通のノートには刻めず、
-//! 残骸の版があっても履歴として見せない。
+//! Only a Codex under `data/codex/` can hold versions. A plain note cannot commit one, and
+//! leftover versions are not shown as its history.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -36,34 +39,35 @@ use crate::utils::fs::{ensure_dir, list_md_files, write_atomic};
 use crate::utils::paths::codex_dir;
 use crate::utils::validated::NoteFilename;
 
-/// diff のヘッダで「いまの下書き」を指す名前。版 ID の形(数字と `-` と hex)
-/// とは重ならないので、読む側が版と見間違えない。
+/// The name for "the current draft" in a diff header. It does not overlap with the shape
+/// of a version ID (digits, `-` and hex), so a reader cannot mistake it for a version.
 pub const DRAFT: &str = "draft";
 
-/// 戻す直前に刻む版の message。ファイルに書く記録なので言語で変えず、表示側が
-/// この文字列を知っていれば訳して出せる。
+/// The message of the version committed right before a restore. It is a record written to
+/// a file, so it does not vary by language; a display side that knows this string can
+/// translate it.
 pub const BEFORE_RESTORE: &str = "before restore";
 
-/// 版 1 つ。`id` がそのまま `read` / `diff` / `restore` の引数。
+/// One version. `id` is the argument to `read` / `diff` / `restore` as is.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct Version {
     pub id: String,
-    /// 刻んだ時刻。frontmatter から読む — 同期で降ってきた版の mtime は届いた
-    /// 時刻でしかない。
+    /// The time it was committed. Read from the frontmatter: the mtime of a version that
+    /// arrived through sync is only the time it arrived.
     pub time: DateTime<FixedOffset>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
-    /// 本文のバイト数。一覧で前の版との増減を出すため。
+    /// Byte count of the body. For showing the change from the previous version in the list.
     pub bytes: u64,
 }
 
-/// 開いている 1 本の「版 N から +X B」。
+/// The "+X B from version N" of the one note that is open.
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 pub struct VersionStatus {
     pub count: usize,
-    /// 最新の版と下書きの本文が違うか。版が無ければ false。
+    /// Whether the latest version and the draft body differ. false when there is no version.
     pub dirty: bool,
-    /// 下書きのバイト数から最新の版のバイト数を引いた差。版が無ければ 0。
+    /// The draft's byte count minus the latest version's byte count. 0 when there is no version.
     pub bytes_delta: i64,
 }
 
@@ -93,8 +97,8 @@ fn version_id(time: DateTime<FixedOffset>, body: &str) -> String {
     format!("{}-{}", time.format("%Y%m%d_%H%M%S"), short_hash(body))
 }
 
-/// 版の名前として通るのは日時と 8 桁の hex だけ。`..` や `/` を含む id で
-/// 版の置き場の外を読み書きさせない。
+/// Only a datetime plus 8 hex digits passes as a version name. An id containing `..` or
+/// `/` must not read or write outside the versions directory.
 fn version_path(dir: &Path, id: &str) -> Result<PathBuf, CoreError> {
     let well_formed = id.split_once('-').is_some_and(|(stamp, hash)| {
         NaiveDateTime::parse_from_str(stamp, "%Y%m%d_%H%M%S").is_ok()
@@ -107,9 +111,9 @@ fn version_path(dir: &Path, id: &str) -> Result<PathBuf, CoreError> {
     Ok(dir.join(format!("{id}.md")))
 }
 
-/// 版を持てるのは Codex だけ。読む側も書く側もまずこれを通す — 普通の
-/// ノートに版のディレクトリが残っていても(同期の途中、消し損ね)、それは
-/// 誰のものでもない残骸で、一覧に見せる履歴ではない。
+/// Only a Codex can hold versions. Readers and writers both go through this first: even
+/// if a plain note still has a versions directory (mid-sync, a missed delete), it is
+/// leftover that belongs to nobody, not history to show in the list.
 fn ensure_codex(base_dir: &Path, filename: &NoteFilename) -> Result<Notes, CoreError> {
     let notes = Notes::new(base_dir.to_path_buf());
     let (kind, _) = notes.locate(filename)?;
@@ -119,8 +123,8 @@ fn ensure_codex(base_dir: &Path, filename: &NoteFilename) -> Result<Notes, CoreE
     Ok(notes)
 }
 
-/// いまの下書き。普通のノートの本文を返してしまうと、`data/codex/<stem>/` に
-/// 本体の無い版が生まれ、同期で配られ続ける。
+/// The current draft. Returning a plain note's body would create versions under
+/// `data/codex/<stem>/` with no note to own them, and sync would keep distributing them.
 fn read_body(base_dir: &Path, filename: &NoteFilename) -> Result<String, CoreError> {
     ensure_codex(base_dir, filename)?.read(filename)
 }
@@ -131,8 +135,8 @@ fn read_version_file(path: &Path) -> Result<(VersionFrontmatter, String), CoreEr
     Ok((fm, body.to_string()))
 }
 
-/// いまの本文を版として刻む。同じ秒に同じ本文の版がすでにあれば、それを
-/// 書き直さずに返す(同じ版なので)。
+/// Commit the current body as a version. If a version with the same body already exists
+/// in the same second, return it without rewriting (it is the same version).
 pub fn commit_note_version(
     base_dir: &Path,
     filename: &NoteFilename,
@@ -166,8 +170,8 @@ pub fn commit_note_version(
     })
 }
 
-/// 版を新しい順に。読めない版(壊れた frontmatter)は一覧から落とすだけで、
-/// 他の版は読める。
+/// The versions, newest first. A version that cannot be read (broken frontmatter) is only
+/// dropped from the list; the other versions stay readable.
 pub fn list_note_versions(
     base_dir: &Path,
     filename: &NoteFilename,
@@ -188,14 +192,14 @@ pub fn list_note_versions(
             })
         })
         .collect();
-    // 同じ秒の版は id(hex)で決定的に並べる。時刻は端末ごとのオフセット付きで
-    // 書かれているので、比べるのは瞬間であって壁時計ではない
+    // Versions in the same second are ordered deterministically by id (hex). Times are
+    // written with each device's offset, so the comparison is of instants, not wall clocks
     versions.sort_by(|a, b| b.time.cmp(&a.time).then_with(|| b.id.cmp(&a.id)));
     Ok(versions)
 }
 
-/// 版の本文。frontmatter は付けない — `read_note` と同じく、読む側に見せる
-/// ものではない。
+/// The body of a version. The frontmatter is not attached: as with `read_note`, it is not
+/// something the reader is shown.
 pub fn read_note_version(
     base_dir: &Path,
     filename: &NoteFilename,
@@ -209,8 +213,8 @@ pub fn read_note_version(
     Ok(read_version_file(&path)?.1)
 }
 
-/// `from` の版から `to` への unified diff。`to` が `None` なら下書き(いまの
-/// 本文)。同じなら空文字列で、ヘッダも出さない。
+/// The unified diff from version `from` to `to`. When `to` is `None`, the target is the
+/// draft (the current body). When they are equal, the result is an empty string with no header.
 pub fn diff_note_versions(
     base_dir: &Path,
     filename: &NoteFilename,
@@ -225,8 +229,8 @@ pub fn diff_note_versions(
     Ok(unified_diff(&old, &new, from, to.unwrap_or(DRAFT)))
 }
 
-/// 3.x の Histogram は大きい入力で極端に遅い(10 万行で秒単位)。Myers は
-/// ノートの大きさでは十分速く、無関係な 2 文でも線形時間の経路がある。
+/// Histogram in 3.x is extremely slow on large input (seconds at 100,000 lines). Myers is
+/// fast enough at note sizes, and has a linear-time path even for two unrelated texts.
 fn unified_diff(old: &str, new: &str, old_name: &str, new_name: &str) -> String {
     if old == new {
         return String::new();
@@ -240,9 +244,10 @@ fn unified_diff(old: &str, new: &str, old_name: &str, new_name: &str) -> String 
         .to_string()
 }
 
-/// 版の本文を下書きにする。先にいまの下書きを [`BEFORE_RESTORE`] の版として
-/// 刻むので、戻したこと自体も戻せる。書き込みは `update_note` と同じ経路 —
-/// `expected` が古ければ [`CoreError::Stale`] で何も書かない(刻みもしない)。
+/// Make a version's body the draft. The current draft is committed first as a
+/// [`BEFORE_RESTORE`] version, so the restore itself can be undone. The write takes the
+/// same path as `update_note`: a stale `expected` gives [`CoreError::Stale`] and writes
+/// nothing (and commits nothing).
 pub fn restore_note_version(
     base_dir: &Path,
     filename: &NoteFilename,
@@ -262,9 +267,9 @@ pub fn restore_note_version(
     Notes::update(&path, &restored, context, expected)
 }
 
-/// 版を 1 つ消す。刻んだ直後の「取り消す」のためにある — 版は人が刻む印
-/// なので、それ以外の経路(MCP・CLI・同期の片付け)からは呼ばない。
-/// 本文には触れない。
+/// Delete one version. It exists for the "undo" right after a commit: a version is a mark
+/// a person makes, so no other path (MCP, CLI, sync cleanup) calls this.
+/// The body is not touched.
 pub fn delete_note_version(
     base_dir: &Path,
     filename: &NoteFilename,
@@ -279,18 +284,18 @@ pub fn delete_note_version(
     Ok(())
 }
 
-/// 版の数と、最新の版から下書きがどれだけ動いたか。
+/// The number of versions, and how far the draft has moved from the latest one.
 pub fn note_version_status(
     base_dir: &Path,
     filename: &NoteFilename,
 ) -> Result<VersionStatus, CoreError> {
-    // 版が無くても本文は読む — 普通のノートには `NotCodex` で答える
+    // The body is read even without versions: a plain note gets `NotCodex`
     let body = read_body(base_dir, filename)?;
     let versions = list_note_versions(base_dir, filename)?;
     let (dirty, bytes_delta) = match versions.first() {
         Some(latest) => (
             read_note_version(base_dir, filename, &latest.id)? != body,
-            // 本文が i64 を超えることはない。超えたらそれは差ではなく別の問題
+            // A body never exceeds i64. If it did, that is another problem, not a delta
             i64::try_from(body.len()).unwrap_or(i64::MAX)
                 - i64::try_from(latest.bytes).unwrap_or(i64::MAX),
         ),
@@ -303,19 +308,20 @@ pub fn note_version_status(
     })
 }
 
-/// 一覧の行ぶんの「版 N」と「動いたか」。版のファイルは 1 つも開かない —
-/// 版 ID の末尾は本文の SHA-256 の先頭 8 hex なので、いちばん新しい名前の
-/// 末尾と下書きの指紋を比べれば足りる。
+/// The "version N" and "has it moved" for a list row. Not one version file is opened:
+/// the tail of a version ID is the first 8 hex of the body's SHA-256, so comparing the
+/// tail of the newest name with the draft's fingerprint is enough.
 ///
-/// 「いちばん新しい」はファイル名(刻んだ端末の壁時計)で決める。
-/// [`list_note_versions`] は frontmatter の瞬間で並べるので、時差のある
-/// 2 端末が近い時刻に刻んだときだけ両者が食い違いうる。行の印のためにそこ
-/// まで払わない — 開けば [`note_version_status`] が本文を読んで正確に答える。
+/// "Newest" is decided by filename (the wall clock of the device that committed).
+/// [`list_note_versions`] orders by the instant in the frontmatter, so the two can
+/// disagree only when two devices in different time zones commit at close times. That
+/// is not worth paying for a row mark: once opened, [`note_version_status`] reads the
+/// body and answers exactly.
 ///
-/// `dir` は本体のパスから `.md` を外した場所([`versions_dir`] と同じ)。
-/// 一覧の走査は `NoteFilename` を持たずにここへ来る。
+/// `dir` is the note's path minus `.md` (the same as [`versions_dir`]).
+/// The list scan arrives here without a `NoteFilename`.
 pub(crate) fn list_status(dir: &Path, body: &str) -> Result<(usize, bool), CoreError> {
-    // list_md_files は名前の降順。先頭が最新
+    // list_md_files is in descending name order. The first is the newest
     let entries = list_md_files(dir)?;
     let dirty = entries.first().is_some_and(|newest| {
         let name = newest.file_name();
@@ -334,7 +340,7 @@ mod tests {
     use chrono::TimeZone;
     use tempfile::TempDir;
 
-    /// 版を刻む相手。Codex でなければ刻めないので、テストの既定は Codex。
+    /// The note to commit versions on. Only a Codex can commit, so the test default is a Codex.
     fn note(base: &Path, body: &str) -> (PathBuf, NoteFilename) {
         let path = create_draft_codex(base, body, &[], &Context::default(), Provenance::default())
             .unwrap();
@@ -342,7 +348,7 @@ mod tests {
         (path, filename)
     }
 
-    /// 普通のノートには刻めない。断るだけで、版のディレクトリも作らない。
+    /// A plain note cannot commit a version. It is only refused; no versions directory is created.
     #[test]
     fn a_plain_note_cannot_be_given_versions() {
         let tmp = TempDir::new().unwrap();
@@ -365,7 +371,7 @@ mod tests {
             Err(CoreError::NotCodex(_))
         ));
 
-        // 残骸の版があっても、普通のノートの履歴として見せない
+        // Even with leftover versions, they are not shown as a plain note's history
         let orphan = versions_dir(tmp.path(), &filename);
         fs::create_dir_all(&orphan).unwrap();
         fs::write(
@@ -426,7 +432,7 @@ mod tests {
         );
     }
 
-    /// 版は `data/` の中、その Codex の stem の下。同期の走査に載る。
+    /// A version lives under `data/`, under that Codex's stem. It shows up in the sync scan.
     #[test]
     fn a_version_is_a_markdown_file_under_the_synced_codex_tree() {
         let tmp = TempDir::new().unwrap();
@@ -469,7 +475,8 @@ mod tests {
         assert_eq!(list_note_versions(tmp.path(), &filename).unwrap().len(), 1);
     }
 
-    /// 同じ本文でも秒が違えば別の版、同じ秒でも本文が違えば別の版。
+    /// The same body in a different second is another version; a different body in the
+    /// same second is another version too.
     #[test]
     fn the_id_is_the_second_and_the_body_together() {
         let t1 = FixedOffset::east_opt(9 * 3600)
@@ -637,8 +644,8 @@ mod tests {
         assert!(matches!(err, CoreError::NotFound(_)), "{err}");
     }
 
-    /// 一覧の行に出す版の数と「動いたか」。版の本文は読まず、ファイル名の
-    /// ハッシュだけで比べる。
+    /// The version count and "has it moved" shown on a list row. Version bodies are not
+    /// read; only the hash in the filename is compared.
     #[test]
     fn the_list_carries_the_version_count_and_whether_the_draft_moved() {
         let tmp = TempDir::new().unwrap();
@@ -666,7 +673,7 @@ mod tests {
         assert_eq!(moved.dirty, Some(true));
     }
 
-    /// 普通のノートの行には版の欄そのものが無い。
+    /// A plain note's row has no version fields at all.
     #[test]
     fn a_plain_note_row_has_no_version_fields() {
         let tmp = TempDir::new().unwrap();
@@ -686,7 +693,8 @@ mod tests {
         assert_eq!(rows[0].dirty, None);
     }
 
-    /// 「版 N から +X B」の X。最新の版と下書きのバイト差。
+    /// The X in "+X B from version N". The byte difference between the latest version and
+    /// the draft.
     #[test]
     fn the_status_measures_the_draft_against_the_latest_version() {
         let tmp = TempDir::new().unwrap();
@@ -714,7 +722,7 @@ mod tests {
         );
     }
 
-    /// 刻んだ直後の「取り消す」。版のファイルを消すだけで、本文には触れない。
+    /// The "undo" right after a commit. Only the version file is deleted; the body is not touched.
     #[test]
     fn deleting_a_version_removes_only_that_version() {
         let tmp = TempDir::new().unwrap();
@@ -732,12 +740,12 @@ mod tests {
             .collect();
         assert_eq!(ids, vec![first.id]);
         assert_eq!(read_note_by_filename(tmp.path(), &filename).unwrap(), "two");
-        // 二度目は無い
+        // There is no second time
         assert!(matches!(
             delete_note_version(tmp.path(), &filename, &second.id),
             Err(CoreError::NotFound(_))
         ));
-        // 名前の形が違えば置き場の外に手を出さない
+        // A name of the wrong shape does not reach outside the directory
         assert!(matches!(
             delete_note_version(tmp.path(), &filename, "../../x"),
             Err(CoreError::PathTraversal(_))

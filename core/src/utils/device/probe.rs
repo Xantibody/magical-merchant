@@ -1,19 +1,21 @@
-//! いまこの端末がどういう状態かを、OS に直接聞いて [`Context`] にする。
+//! Asks the OS directly what state this device is in and makes a [`Context`] of it.
 //!
-//! アプリ・CLI・MCP のどこから書いても同じ内容が残るように、測り方は
-//! ここ 1 か所に置く。入り口ごとに実装を持つと、同じ端末で書いた記録が
-//! 入り口の違いだけで別物に見える。
+//! The measuring lives in this one place so that the same content is recorded
+//! whether written from the app, the CLI or MCP. With one implementation per
+//! entry point, records written on the same device would look different just
+//! because of the entry point.
 //!
-//! 位置情報だけはここに無い。測位は許可と待ち時間を伴い、常駐している
-//! アプリと 1 回で終わる CLI とで取り方が変わる。要る側が足す。
+//! Only the location is not here. Positioning involves permission and waiting,
+//! and a resident app and a one-shot CLI obtain it differently. The side that
+//! needs it adds it.
 
 use super::{Context, Location, NetworkType};
 
-/// 端末に聞いて分かるぶんだけを埋めた [`Context`]。
+/// A [`Context`] filled with only what the device can be asked about.
 ///
-/// 分からなかった項目は `None` のまま返す。Android のようにネイティブから
-/// 電源もネットワークも見えない環境では、`WebView` 側の値で埋め直す
-/// 前提の下地になる。
+/// Items that could not be found are returned as `None`. On a platform like
+/// Android, where neither power nor network is visible from native code, this is
+/// the base that the `WebView` side is expected to fill in again.
 #[must_use]
 pub fn probe() -> Context {
     let (battery, is_charging) = battery();
@@ -31,7 +33,7 @@ pub fn probe() -> Context {
     }
 }
 
-/// 座標を 2 つ揃って渡されたときだけ [`Location`] にする。
+/// Makes a [`Location`] only when both coordinates are passed together.
 #[must_use]
 pub const fn location(latitude: Option<f64>, longitude: Option<f64>) -> Option<Location> {
     match (latitude, longitude) {
@@ -43,8 +45,8 @@ pub const fn location(latitude: Option<f64>, longitude: Option<f64>) -> Option<L
     }
 }
 
-/// Android の hostname は端末によらず "localhost" で、どの端末で書いたのかを
-/// 何も語らない。記録する意味のない値なので落とす。
+/// On Android the hostname is "localhost" on every device and says nothing about
+/// which device wrote the record. The value is not worth recording, so it is dropped.
 fn hostname() -> Option<String> {
     hostname::get()
         .ok()
@@ -69,17 +71,18 @@ fn os_version() -> Option<String> {
     }
 }
 
-/// Linux は配布物ごとに版の付け方が違うので、`/etc/os-release` に聞く。
+/// Linux versions differently per distribution, so `/etc/os-release` is asked.
 #[cfg(target_os = "linux")]
 fn os_version() -> Option<String> {
     parse_os_release(&std::fs::read_to_string("/etc/os-release").ok()?)
 }
 
-/// `/etc/os-release` から「配布物の名前 + 版」を組む。
+/// Builds "distribution name + version" from `/etc/os-release`.
 ///
-/// `os` は Linux ではただの "linux" で、版だけを足しても何の Linux か分からない。
-/// 名前と並べて初めて、macOS の "26.6.2" と同じだけのことを語る。版を持たない
-/// rolling release は `PRETTY_NAME` が名前だけを返すので、それをそのまま使う。
+/// On Linux `os` is just "linux", and adding only the version does not say which
+/// Linux. Only next to the name does it say as much as "26.6.2" does on macOS. A
+/// rolling release without a version gets only the name from `PRETTY_NAME`, and
+/// that is used as is.
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 fn parse_os_release(contents: &str) -> Option<String> {
     fn field(contents: &str, key: &str) -> Option<String> {
@@ -140,11 +143,12 @@ const fn battery() -> (Option<u8>, Option<bool>) {
     (None, None)
 }
 
-/// いま外に出ている経路が有線か無線かを、名前を聞かずに判定する。
+/// Decides whether the current outbound route is wired or wireless, without asking
+/// for a network name.
 ///
-/// 既定経路のインターフェース名を引き、それがどのハードウェアポートかを
-/// 名前で引き直す。SSID を読むのと違い、どちらのコマンドも位置情報の許可を
-/// 必要としない。
+/// Looks up the interface name of the default route, then looks up by name which
+/// hardware port it is. Unlike reading the SSID, neither command needs the location
+/// permission.
 #[cfg(target_os = "macos")]
 fn network() -> Option<NetworkType> {
     let route = std::process::Command::new("route")
@@ -152,7 +156,7 @@ fn network() -> Option<NetworkType> {
         .output()
         .ok()?;
     let Some(interface) = parse_default_interface(&String::from_utf8_lossy(&route.stdout)) else {
-        // 既定経路が無い = どこにも出られない。
+        // no default route = no way out.
         return Some(NetworkType::Offline);
     };
 
@@ -165,7 +169,7 @@ fn network() -> Option<NetworkType> {
     Some(classify_port(&port))
 }
 
-/// `route -n get default` の `interface:` 行。
+/// The `interface:` line of `route -n get default`.
 #[cfg(target_os = "macos")]
 fn parse_default_interface(stdout: &str) -> Option<String> {
     stdout.lines().find_map(|line| {
@@ -174,8 +178,9 @@ fn parse_default_interface(stdout: &str) -> Option<String> {
     })
 }
 
-/// `networksetup -listallhardwareports` から、その `Device` を持つ
-/// `Hardware Port` の名前を返す。ポート名と Device 行は必ずこの順で対になる。
+/// Returns, from `networksetup -listallhardwareports`, the name of the
+/// `Hardware Port` that has that `Device`. A port name and its Device line always
+/// pair up in this order.
 #[cfg(target_os = "macos")]
 fn parse_hardware_port(stdout: &str, interface: &str) -> Option<String> {
     let mut port: Option<&str> = None;
@@ -192,11 +197,11 @@ fn parse_hardware_port(stdout: &str, interface: &str) -> Option<String> {
     None
 }
 
-/// ポート名から回線の種類を決める。
+/// Decides the kind of connection from the port name.
 ///
-/// iPhone の USB テザリングは見た目こそ有線だが、出ていく先は携帯回線。
-/// 有線として記録すると、実際には電波の届く所でしか書けなかった記録が
-/// 机の上で書いたように見える。
+/// USB tethering to an iPhone looks wired, but the traffic goes out over the
+/// mobile network. Recorded as wired, a record that could only be written where
+/// there was signal would look as if it was written at a desk.
 #[cfg(target_os = "macos")]
 fn classify_port(port: &str) -> NetworkType {
     let lowered = port.to_lowercase();
@@ -209,13 +214,14 @@ fn classify_port(port: &str) -> NetworkType {
     }
 }
 
-/// Linux も既定経路から辿る。経路表は `/proc/net/route` がそのまま持っている
-/// ので、`ip` を起動する必要はない。無線かどうかは `/sys` のマークが答える。
+/// Linux also starts from the default route. `/proc/net/route` holds the routing
+/// table as is, so there is no need to launch `ip`. Whether it is wireless is
+/// answered by the marker in `/sys`.
 #[cfg(target_os = "linux")]
 fn network() -> Option<NetworkType> {
     let route = std::fs::read_to_string("/proc/net/route").ok()?;
     let Some(interface) = parse_default_route_interface(&route) else {
-        // 既定経路が無い = どこにも出られない。
+        // no default route = no way out.
         return Some(NetworkType::Offline);
     };
 
@@ -225,9 +231,9 @@ fn network() -> Option<NetworkType> {
     Some(classify_interface(&interface, wireless))
 }
 
-/// `/proc/net/route` の、宛先が `00000000` の行のインターフェース名。
+/// The interface name on the `/proc/net/route` line whose destination is `00000000`.
 ///
-/// 1 行目は見出しなので読み飛ばす。
+/// The first line is a header and is skipped.
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 fn parse_default_route_interface(contents: &str) -> Option<String> {
     contents.lines().skip(1).find_map(|line| {
@@ -237,11 +243,12 @@ fn parse_default_route_interface(contents: &str) -> Option<String> {
     })
 }
 
-/// インターフェース名と `/sys` の無線マークから回線の種類を決める。
+/// Decides the kind of connection from the interface name and the wireless marker in `/sys`.
 ///
-/// USB テザリングは Linux では `usb0` や `enp0s20u1` として現れ、机の上の
-/// 有線と見分けが付かない。macOS のようにハードウェアポートの名前を引けない
-/// ので、携帯回線と言い切れるのは専用の接頭辞を持つものだけ。
+/// On Linux, USB tethering shows up as `usb0` or `enp0s20u1` and cannot be told
+/// from the wired connection at a desk. The hardware port name cannot be looked
+/// up as on macOS, so only interfaces with a dedicated prefix can be called mobile
+/// with certainty.
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 fn classify_interface(interface: &str, wireless: bool) -> NetworkType {
     const MOBILE_PREFIXES: [&str; 4] = ["wwan", "wwp", "ppp", "rmnet"];
@@ -267,8 +274,8 @@ const fn network() -> Option<NetworkType> {
 mod tests {
     use super::*;
 
-    /// どの OS でも名乗れる 2 つ。ここが空だと、どの端末で書いたのかを
-    /// 記録が一切語らなくなる。
+    /// The two that every OS can name. If these were empty, the record would say
+    /// nothing at all about which device wrote it.
     #[test]
     fn always_names_the_machine_it_ran_on() {
         let context = probe();
@@ -277,8 +284,8 @@ mod tests {
         assert!(!context.arch.is_empty());
     }
 
-    /// 測位はしない。許可も待ち時間も要らない範囲がここの担当で、
-    /// 座標は取れる入り口が後から足す。
+    /// No positioning. What needs neither permission nor waiting is the job here;
+    /// an entry point that can get coordinates adds them afterwards.
     #[test]
     fn leaves_the_location_to_the_caller() {
         assert!(probe().location.is_none());
@@ -303,7 +310,7 @@ mod tests {
 mod macos_tests {
     use super::*;
 
-    /// 実機の `networksetup -listallhardwareports` の抜粋。
+    /// An excerpt of `networksetup -listallhardwareports` from a real machine.
     const PORTS: &str = "\n\
         Hardware Port: Ethernet Adapter (en3)\n\
         Device: en3\n\
@@ -324,7 +331,7 @@ mod macos_tests {
         assert_eq!(parse_default_interface(stdout).as_deref(), Some("en0"));
     }
 
-    /// 既定経路が無いときの `route` はこの行を出さない。
+    /// Without a default route, `route` does not print this line.
     #[test]
     fn finds_no_interface_without_a_default_route() {
         assert_eq!(
@@ -358,25 +365,27 @@ mod macos_tests {
         assert_eq!(classify_port("Thunderbolt Bridge"), NetworkType::Ethernet);
     }
 
-    /// USB で挿していても出ていく先は携帯回線。有線として記録すると、
-    /// 電波の届く所でしか書けなかった記録が机の上で書いたように見える。
+    /// Even plugged in over USB, the traffic goes out over the mobile network. Recorded
+    /// as wired, a record that could only be written where there was signal would look
+    /// as if it was written at a desk.
     #[test]
     fn counts_a_tethered_phone_as_mobile() {
         assert_eq!(classify_port("iPhone USB"), NetworkType::Mobile);
     }
 
-    /// macOS は `sw_vers` を持っているので、版まで名乗れる。
+    /// macOS has `sw_vers`, so it can name the version too.
     #[test]
     fn names_the_os_version_on_macos() {
         assert!(probe().os_version.is_some());
     }
 }
 
-/// Linux 側の読み取りのうち、ファイルの中身を解くところだけを取り出したもの。
+/// The part of the Linux readers that only decodes file contents, taken out on its own.
 ///
-/// 呼ぶのは Linux のビルドだけだが、全プラットフォームでビルドしてテストする。
-/// 手元も CI の macOS ジョブも Linux ではなく、`cfg` で閉じると誰も実行しない
-/// テストになる。ファイルを開く側と違い、ここは中身さえあれば検証できる。
+/// Only the Linux build calls it, but it is built and tested on every platform.
+/// Neither the local machine nor the CI macOS job is Linux, and closing it behind
+/// `cfg` would make a test nobody runs. Unlike the side that opens files, this can
+/// be verified with the contents alone.
 #[cfg(test)]
 mod linux_tests {
     use super::*;
@@ -395,15 +404,15 @@ VERSION_ID="25.05"
 PRETTY_NAME="NixOS 25.05 (Warbler)"
 "#;
 
-    /// `os` が "linux" としか言わないので、版だけでは何の Linux か分からない。
-    /// 名前と版を組にして初めて、macOS の "26.6.2" と同じ重さの記録になる。
+    /// `os` says only "linux", so the version alone does not say which Linux.
+    /// Only the name paired with the version makes a record as weighty as "26.6.2" on macOS.
     #[test]
     fn names_the_distribution_and_its_version() {
         assert_eq!(parse_os_release(UBUNTU).as_deref(), Some("Ubuntu 24.04"));
         assert_eq!(parse_os_release(NIXOS).as_deref(), Some("NixOS 25.05"));
     }
 
-    /// 版を持たない rolling release は名前だけで名乗る。
+    /// A rolling release without a version names itself by name alone.
     #[test]
     fn falls_back_to_the_pretty_name_without_a_version() {
         let arch = "NAME=\"Arch Linux\"\nPRETTY_NAME=\"Arch Linux\"\nID=arch\n";
@@ -417,7 +426,8 @@ PRETTY_NAME="NixOS 25.05 (Warbler)"
         assert_eq!(parse_os_release("ID=ubuntu\n"), None);
     }
 
-    /// `/proc/net/route` の抜粋。既定経路は宛先が 00000000 の行。
+    /// An excerpt of `/proc/net/route`. The default route is the line whose destination
+    /// is 00000000.
     const ROUTE: &str = "Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\n\
         enp0s3\t0002A8C0\t00000000\t0001\t0\t0\t100\t00FFFFFF\n\
         wlp2s0\t00000000\t0102A8C0\t0003\t0\t0\t600\t00000000\n";
@@ -430,7 +440,7 @@ PRETTY_NAME="NixOS 25.05 (Warbler)"
         );
     }
 
-    /// 既定経路の行が無い = どこにも出られない。
+    /// No default route line = no way out.
     #[test]
     fn finds_no_interface_without_a_default_route() {
         let only_lan = "Iface\tDestination\tGateway\n\
@@ -440,16 +450,16 @@ PRETTY_NAME="NixOS 25.05 (Warbler)"
         assert_eq!(parse_default_route_interface(""), None);
     }
 
-    /// 実機の Linux で読める場所を見ているかは、パースのテストでは分からない。
-    /// CI の Linux ジョブが通る唯一の確認。
+    /// A parsing test cannot tell whether a readable location on real Linux is being
+    /// looked at. The CI Linux job passing is the only check.
     #[cfg(target_os = "linux")]
     #[test]
     fn names_the_distribution_it_runs_on() {
         assert!(probe().os_version.is_some());
     }
 
-    /// 無線かどうかは名前ではなく `/sys` が答える。名前で見分けるのは
-    /// 携帯回線のインターフェースだけで、そちらは慣習の接頭辞しか手がかりが無い。
+    /// Whether it is wireless is answered by `/sys`, not the name. Only mobile
+    /// interfaces are told by name, and for those the conventional prefix is the only clue.
     #[test]
     fn tells_wireless_from_wired() {
         assert_eq!(classify_interface("wlp2s0", true), NetworkType::WiFi);

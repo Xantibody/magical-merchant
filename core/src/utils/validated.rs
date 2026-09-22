@@ -33,17 +33,17 @@ impl fmt::Display for NoteFilename {
     }
 }
 
-/// グリフ(特殊文字画像)の名前。`:236p:` の `236p` の部分。
+/// The name of a glyph (special-character image). The `236p` part of `:236p:`.
 ///
-/// 小文字英数で始まる 32 文字まで、使えるのは `a-z 0-9 _ + -` だけ。
-/// 本文の中で `:name:` として探す都合、`:` `.` `/` 空白は名前に入れられない。
-/// 大文字を弾くのは、`:236P:` と `:236p:` が別のファイルになる環境と
-/// ならない環境があり、同期でぶつかるから。`NoteFilename` を使わないのは、
-/// あちらが `.md` を要求するため。
+/// Up to 32 characters, starting with a lowercase letter or digit; only `a-z 0-9 _ + -`
+/// are allowed. Because it is searched for as `:name:` in the body, `:` `.` `/` and
+/// whitespace cannot be in the name. Uppercase is rejected because on some platforms
+/// `:236P:` and `:236p:` are different files and on others they are not, and sync
+/// collides. `NoteFilename` is not used because it requires `.md`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GlyphName(String);
 
-/// 名前の上限。`:` を挟んで本文に埋める文字で、長い名前は打つ気にならない。
+/// The name limit. It is typed into the body between `:`, and nobody wants to type a long one.
 const GLYPH_NAME_MAX: usize = 32;
 
 impl GlyphName {
@@ -72,7 +72,7 @@ impl fmt::Display for GlyphName {
     }
 }
 
-/// グリフ画像の形式。ファイルの拡張子と、データ URL に書く MIME を決める。
+/// The glyph image format. Decides the file extension and the MIME written in the data URL.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GlyphFormat {
     Png,
@@ -119,8 +119,8 @@ mod tests {
         assert!(GlyphName::parse("hcb_p-2").is_ok());
     }
 
-    /// 本文の `:name:` を探す規則と同じ文字集合でないと、登録できたのに
-    /// 描けない名前ができる。
+    /// Unless the character set matches the rule that finds `:name:` in the body, a
+    /// name could be registered yet never rendered.
     #[test]
     fn glyph_names_refuse_what_the_shortcode_cannot_carry() {
         assert!(GlyphName::parse("").is_err());

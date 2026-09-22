@@ -25,10 +25,10 @@ use crate::utils::device::Context;
 use crate::utils::frontmatter::{self, Provenance};
 use crate::utils::validated::NoteFilename;
 
-/// ノートを 1 本作る。出自([`Provenance`])は作成時にしか書けない記録で、
-/// 何も名乗らないなら [`Provenance::default`]。タイムラインエントリの昇格は
-/// `origin` を添えた同じ呼び出し — 経路ごとに関数を生やすと、出自の記録が
-/// 1 つ増えるたびに全部のシグネチャが壊れる。
+/// Create one note. The provenance ([`Provenance`]) is a record that can be written only
+/// at creation; [`Provenance::default`] when nothing is declared. Promoting a Scrawl entry
+/// is the same call with `origin` attached: growing a function per path would break every
+/// signature each time one more provenance record is added.
 pub fn create_draft_note(
     base_dir: &Path,
     body: &str,
@@ -39,10 +39,10 @@ pub fn create_draft_note(
     Notes::new(base_dir.to_path_buf()).create(body, tags, context, provenance)
 }
 
-/// Codex(書き足し続けて版を刻む文書)を 1 本作る。置き場が `data/codex/`
-/// になるだけで、名前の付け方も frontmatter も [`create_draft_note`] と同じ。
-/// 引数に `kind` を足さず別の入口にしたのは、Codex を知らない呼び出し
-/// (CLI・MCP・テンプレ)を 1 つも書き換えないため。
+/// Create one Codex (a document that keeps growing and commits versions). Only the
+/// location becomes `data/codex/`; the naming and the frontmatter are the same as
+/// [`create_draft_note`]. It is a separate entry rather than a `kind` argument so that no
+/// caller unaware of Codex (CLI, MCP, templates) has to change.
 pub fn create_draft_codex(
     base_dir: &Path,
     body: &str,
@@ -53,20 +53,21 @@ pub fn create_draft_codex(
     Notes::new(base_dir.to_path_buf()).create_codex(body, tags, context, provenance)
 }
 
-/// ノートを Codex にする。ID も中身も変わらず、置き場が `data/codex/` に
-/// 移るだけ。戻す入口は無い — 版を刻み始めた文書を普通のノートに戻すと、
-/// 刻んだ版が誰のものでもなくなる。すでに Codex なら何もしない。
+/// Turn a note into a Codex. Neither the ID nor the content changes; only the location
+/// moves to `data/codex/`. There is no entry back: turning a document that has started
+/// committing versions back into a plain note would leave its versions belonging to
+/// nothing. If it is already a Codex, nothing happens.
 pub fn promote_note_to_codex(base_dir: &Path, filename: &NoteFilename) -> Result<(), CoreError> {
     Notes::new(base_dir.to_path_buf()).promote_to_codex(filename)
 }
 
-/// 作成時刻を渡してノートを 1 本作る。外にあった記録を移してくるための
-/// 入口で、それ以外は [`create_draft_note`] と同じ(名前の付け方も、同じ秒が
-/// 埋まっていたら 1 秒進めるのも、frontmatter の書き方も core の規則のまま)。
+/// Create one note with a given creation time. It is the entry for moving in records that
+/// lived elsewhere; otherwise it is the same as [`create_draft_note`] (the naming, the
+/// one-second step when the same second is taken, and the frontmatter all follow core's rules).
 ///
-/// ファイル名は作成時刻そのもの、つまり不変の ID なので、移してきた記録に
-/// 「今」の名前を付けると元の日付は二度と戻らない。時刻は自分のオフセットを
-/// 名乗った値で渡す — 名前もその壁時計で決まる。
+/// The filename is the creation time itself, that is, the immutable ID, so naming a moved
+/// record after "now" loses its original date for good. Pass the time with its own offset
+/// declared: the name is decided by that wall clock too.
 pub fn create_note_at(
     base_dir: &Path,
     time: chrono::DateTime<chrono::FixedOffset>,
@@ -78,9 +79,9 @@ pub fn create_note_at(
     Notes::new(base_dir.to_path_buf()).create_at(time, body, tags, context, provenance)
 }
 
-/// 本文を書き換える。`expected` に読んだときの [`Revision`] を添えると、
-/// そのあいだに本文が変わっていれば [`CoreError::Stale`] で断る。
-/// 返るのは書いた本文の revision — 続けて書くときの `expected` になる。
+/// Rewrite the body. With the [`Revision`] as read attached in `expected`, the write is
+/// refused with [`CoreError::Stale`] if the body changed in between.
+/// It returns the revision of the written body: the `expected` for the next write.
 pub fn update_note(
     file_path: &Path,
     body: &str,
@@ -90,9 +91,9 @@ pub fn update_note(
     Notes::update(file_path, body, context, expected)
 }
 
-/// ID からノートの種別と実際の置き場を引く。本文を書き換える入口(CLI・MCP)
-/// はこれで得た path を [`update_note`] に渡す — `notes/` を決め打ちすると、
-/// Codex にしたノートが「無い」ことになるか、隣に普通のノートを作り直す。
+/// Look up a note's kind and actual location from its ID. Entries that rewrite the body
+/// (CLI, MCP) pass the path obtained here to [`update_note`]: hardcoding `notes/` would
+/// make a note turned into a Codex "missing", or recreate a plain note beside it.
 pub fn locate_note(
     base_dir: &Path,
     filename: &NoteFilename,
@@ -104,8 +105,8 @@ pub fn list_notes(base_dir: &Path) -> Result<Vec<NoteSummary>, CoreError> {
     Notes::new(base_dir.to_path_buf()).list()
 }
 
-/// ノートの本文を返す。frontmatter は保存形式の都合であって、
-/// 読む側(プレビュー・エディタ・MCP)に見せるものではない。
+/// Return the note's body. Frontmatter is a matter of the storage format and is not
+/// something to show the reader (preview, editor, MCP).
 pub fn read_note(file_path: &Path) -> Result<String, CoreError> {
     let content = std::fs::read_to_string(file_path)?;
     Ok(frontmatter::strip(&content).to_string())
@@ -122,9 +123,9 @@ pub fn delete_note(base_dir: &Path, filename: &NoteFilename) -> Result<(), CoreE
     Notes::new(base_dir.to_path_buf()).delete(filename)
 }
 
-/// frontmatter を 1 件ぶんそのまま返す。`NoteSummary` は一覧向けの要約
-/// (本文プレビュー入り・タグは本文の `#記法` と合流済み)で、こちらは
-/// メタデータ編集パネルが見る「ファイルに書いてある記録」そのもの。
+/// Return one note's frontmatter as it is. `NoteSummary` is the digest for the list (with
+/// a body preview, and tags already merged with the body's `#` syntax); this is "the record
+/// written in the file" itself, which the metadata edit panel looks at.
 pub fn read_note_meta(
     base_dir: &Path,
     filename: &NoteFilename,
@@ -132,8 +133,8 @@ pub fn read_note_meta(
     Notes::new(base_dir.to_path_buf()).read_meta(filename)
 }
 
-/// time と tags だけを差し替える。本文はもちろん、context も「どの端末で
-/// 書いたか」の記録なので編集の対象にしない。
+/// Replace only time and tags. The body of course, and context too, are not editable:
+/// context is the record of "which device wrote it".
 pub fn update_note_meta(
     base_dir: &Path,
     filename: &NoteFilename,
@@ -143,8 +144,8 @@ pub fn update_note_meta(
     Notes::new(base_dir.to_path_buf()).update_meta(filename, time, tags)
 }
 
-/// 表示モードだけを差し替える。`None` で既定(エディタ)に戻す。
-/// time / tags / context / 本文には触れない。
+/// Replace only the view mode. `None` returns it to the default (editor).
+/// time / tags / context / body are not touched.
 pub fn update_note_view(
     base_dir: &Path,
     filename: &NoteFilename,
@@ -153,8 +154,8 @@ pub fn update_note_view(
     Notes::new(base_dir.to_path_buf()).update_view(filename, view)
 }
 
-/// 昇格元エントリとの繋がりだけを差し替える。`None` で関係を解いて
-/// 独立したノートに戻す。time / tags / context / 本文には触れない。
+/// Replace only the link to the entry it was promoted from. `None` cuts the link and
+/// makes it an independent note again. time / tags / context / body are not touched.
 pub fn update_note_origin(
     base_dir: &Path,
     filename: &NoteFilename,
@@ -163,20 +164,23 @@ pub fn update_note_origin(
     Notes::new(base_dir.to_path_buf()).update_origin(filename, origin)
 }
 
-/// 過去の編集で本文に混入した化けメタデータを直す。直したファイル数を返す。
+/// Repair garbled metadata that past edits mixed into the body. Returns the number of
+/// files repaired.
 pub fn repair_notes(base_dir: &Path) -> Result<usize, CoreError> {
     repair::repair_all(&crate::utils::paths::notes_dir(base_dir))
 }
 
-/// 古い版が `data/` に置いた競合コピーを `conflicts/` へ移す。移した件数を返す。
-/// 呼ぶのは同期を持つアプリだけ、それも最初の同期より前に一度。
+/// Move conflict copies that an old build put in `data/` to `conflicts/`. Returns the count moved.
+/// The app calls it once per process at start, and the sync engine calls it under the
+/// lock before every scan.
 #[must_use]
 pub fn relocate_conflict_copies(base_dir: &Path) -> usize {
     repair::relocate_conflict_copies(base_dir)
 }
 
-/// 同じ ID が `notes/` と `codex/` の両方にあれば、`notes/` 側を `conflicts/` へ
-/// 移す。移した件数を返す。同期を持つアプリが、同期の前と後に呼ぶ。
+/// If the same ID is in both `notes/` and `codex/`, move the `notes/` side to `conflicts/`.
+/// Returns the count moved. The sync engine calls it under the lock before the scan and
+/// again after a successful run; the app also calls it once per process at start.
 #[must_use]
 pub fn relocate_duplicate_ids(base_dir: &Path) -> usize {
     repair::relocate_duplicate_ids(base_dir)
@@ -198,8 +202,8 @@ mod tests {
         }
     }
 
-    /// 何も名乗らない普通の新規ノート。作成そのものを見るテスト以外は
-    /// これを通す — 出自が 1 つ増えるたびに全テストが書き換わる形にしない。
+    /// A plain new note that declares nothing. Every test except those about creation
+    /// itself goes through this, so adding a provenance kind does not rewrite every test.
     fn draft(tmp: &TempDir, body: &str, tags: &[String]) -> Result<PathBuf, CoreError> {
         create_draft_note(
             tmp.path(),
@@ -229,7 +233,7 @@ mod tests {
         .unwrap();
         assert_eq!(meta.origin, Some("2026-08-13T08:30:00".to_string()));
 
-        // 一覧にも乗る。タイムラインのチップはここから導出される
+        // It is on the list too. Scrawl's chips are derived from here
         let listed = list_notes(tmp.path()).unwrap();
         assert_eq!(listed[0].origin, Some("2026-08-13T08:30:00".to_string()));
     }
@@ -246,16 +250,17 @@ mod tests {
         )
         .unwrap();
         let content = fs::read_to_string(&path).unwrap();
-        // origin はエントリ由来のノートだけの記録。普通の新規ノートに書くと
-        // 全ノートが「どこかのエントリから来た」ことになってしまう
+        // origin is a record only for notes that came from an entry. Writing it on a plain
+        // new note would make every note "come from some entry"
         assert!(!content.contains("origin"));
         assert!(path.exists());
         let content = fs::read_to_string(&path).unwrap();
         assert!(content.contains("draft body"));
     }
 
-    /// 時刻を渡して作ったノートは、その時刻の名前で並ぶ。ID は作成時刻
-    /// そのものなので、外から持ち込む記録は元の時刻を名前に写すしかない。
+    /// A note created with a given time is named after that time. The ID is the creation
+    /// time itself, so a record brought in from outside can only copy its original time
+    /// into the name.
     #[test]
     fn a_note_created_at_a_given_time_is_named_after_it() {
         let tmp = TempDir::new().unwrap();
@@ -277,8 +282,8 @@ mod tests {
         assert_eq!(read_note(&path).unwrap(), "移してきた本文");
     }
 
-    /// 渡された時刻でも衝突の避け方は変わらない。1 本目は残り、2 本目が
-    /// 1 秒進んだ名前を取り、その `time` も進んだほうに揃う。
+    /// Collision avoidance is the same with a given time. The first stays, the second takes
+    /// a name one second later, and its `time` matches the later one too.
     #[test]
     fn two_notes_given_the_same_time_both_survive_one_second_apart() {
         let tmp = TempDir::new().unwrap();
@@ -309,8 +314,8 @@ mod tests {
         );
     }
 
-    /// 取り込みは自分の名前で名乗る。あとから「どれが移してきたぶんか」を
-    /// 探せるのは、この記録だけ(`cli` に混ぜると区別が付かない)。
+    /// An import declares itself by its own name. This record is the only way to find
+    /// "which ones were moved in" later (mixed into `cli`, they cannot be told apart).
     #[test]
     fn an_imported_note_names_import_as_its_source() {
         let tmp = TempDir::new().unwrap();
@@ -335,8 +340,9 @@ mod tests {
         assert_eq!(meta.updated, None, "取り込んだ時点ではまだ書き直していない");
     }
 
-    /// ファイル名は秒までの時刻。同じ秒に 2 本作っても 1 本目を潰さない。
-    /// 2 本目は 1 秒後の名前を取る — 形式(`YYYYMMDD_HHMMSS.md`)は不変。
+    /// The filename is the time down to the second. Creating two in the same second does
+    /// not clobber the first. The second takes a name one second later: the format
+    /// (`YYYYMMDD_HHMMSS.md`) is immutable.
     #[test]
     fn two_notes_created_in_the_same_second_both_survive() {
         let tmp = TempDir::new().unwrap();
@@ -354,8 +360,8 @@ mod tests {
         );
     }
 
-    /// ずらした秒はファイル名だけの話ではない。frontmatter の `time` が
-    /// 名前とずれると、一覧(名前順)と表示(`time`)で並びが食い違う。
+    /// The shifted second is not only about the filename. If the frontmatter `time` drifts
+    /// from the name, the list (name order) and the display (`time`) disagree on the order.
     #[test]
     fn a_shifted_name_carries_the_same_time_in_the_frontmatter() {
         let tmp = TempDir::new().unwrap();
@@ -387,8 +393,8 @@ mod tests {
         assert!(!content.contains("original"));
     }
 
-    /// time は作成時刻。一覧はファイル名(作成時刻)順に並ぶので、編集で
-    /// time が動くと日付グループと並び順が食い違う。
+    /// time is the creation time. The list is ordered by filename (creation time), so if an
+    /// edit moved time, the date groups and the order would disagree.
     #[test]
     fn update_note_keeps_the_creation_time() {
         let tmp = TempDir::new().unwrap();
@@ -404,8 +410,8 @@ mod tests {
         assert_eq!(body, "updated");
     }
 
-    /// time が作成時刻に固定されている以上、書き直した事実はどこにも
-    /// 残らない。本文の保存だけが updated を打つ。
+    /// With time fixed to the creation time, the fact of a rewrite is recorded nowhere
+    /// else. Only a body save stamps updated.
     #[test]
     fn update_note_stamps_the_updated_time() {
         let tmp = TempDir::new().unwrap();
@@ -413,8 +419,8 @@ mod tests {
         let filename = filename_of(&path);
         assert_eq!(read_note_meta(tmp.path(), &filename).unwrap().updated, None);
 
-        // 作成時刻は秒に丸まっているので、書き直した瞬間はそれより後になる。
-        // `>= time` では作成時刻を写しただけでも通ってしまう
+        // The creation time is rounded to the second, so the moment of the rewrite is later
+        // than it. `>= time` would pass even if the creation time were merely copied
         let before = chrono::Local::now();
         update_note(&path, "updated", &mock_context(), None).unwrap();
 
@@ -424,9 +430,9 @@ mod tests {
         assert!(updated <= chrono::Local::now());
     }
 
-    /// 読んでから書くまでに別の書き手が本文を変えていたら、その上に書かない。
-    /// アプリはファイルを監視しないので、外(CLI・MCP)で書き換えたノートを
-    /// 開いたまま打つと、古い本文ごと上書きしてしまう。
+    /// If another writer changed the body between the read and the write, do not write over
+    /// it. The app does not watch files, so typing into a note that was rewritten outside
+    /// (CLI, MCP) while it is open would overwrite the old body along with it.
     #[test]
     fn update_note_refuses_to_overwrite_a_body_that_moved_since_it_was_read() {
         let tmp = TempDir::new().unwrap();
@@ -452,15 +458,15 @@ mod tests {
 
         assert_eq!(read_note(&path).unwrap(), "mine");
         assert_eq!(next, Revision::of("mine"));
-        // 返った revision で続けて書ける
+        // The returned revision lets the next write go through
         update_note(&path, "again", &mock_context(), Some(&next)).unwrap();
         assert_eq!(read_note(&path).unwrap(), "again");
     }
 
-    /// frontmatter が読めないノートには本文を書き戻さない。今の時刻と
-    /// 今の端末でっち上げて書くと、作成時刻・タグ・出自・表示モードが
-    /// 1 文字の編集で消え、ファイル名と `time` も食い違う。
-    /// メタデータ編集(`update_note_meta`)が断るのと同じ理由。
+    /// A note whose frontmatter cannot be read gets no body written back. Making up the
+    /// current time and the current device and writing would lose the creation time, tags,
+    /// provenance and view mode on a one-character edit, and the filename and `time` would
+    /// disagree. The same reason the metadata edit (`update_note_meta`) refuses.
     #[test]
     fn update_note_refuses_a_note_whose_frontmatter_cannot_be_read() {
         let tmp = TempDir::new().unwrap();
@@ -476,10 +482,11 @@ mod tests {
         assert_eq!(fs::read_to_string(&path).unwrap(), broken);
     }
 
-    /// 閉じ区切りが無いファイルも「記録が壊れている」側。`---` の下の行は
-    /// 記録のつもりで書かれたもので、素の Markdown として作り直せば丸ごと
-    /// 消える。書き込みが途中で切れた・同期が半分だけ配ったファイルがこの姿に
-    /// なるので、ここを素通しにすると `parse` の拒否も画面の退避も効かない。
+    /// A file with no closing delimiter is on the "damaged record" side too. The lines under
+    /// `---` were written as a record, and recreating it as plain Markdown would wipe them
+    /// whole. A write cut off midway, or a file sync delivered only half of, ends up in
+    /// this shape, so letting it pass here would defeat both the `parse` refusal and the
+    /// screen's fallback.
     #[test]
     fn update_note_refuses_a_note_whose_frontmatter_delimiter_is_unclosed() {
         let tmp = TempDir::new().unwrap();
@@ -495,11 +502,11 @@ mod tests {
         assert_eq!(fs::read_to_string(&path).unwrap(), truncated);
     }
 
-    /// 文字として読めないファイル(不正な UTF-8)。同期や外の道具が、開いて
-    /// いるノートを壊れたバイト列や別形式のファイルで置き換えると、この姿に
-    /// なる。`Io` のまま返すと、呼ぶ側には「ディスクが一時的に不調」と
-    /// 区別が付かず、読み直しでは直らない拒否が「あとで再試行すればよい」に
-    /// 見える。名前の付いた拒否として返し、打った字を退避させる。
+    /// A file that cannot be read as text (invalid UTF-8). It ends up in this shape when
+    /// sync or an outside tool replaces an open note with broken bytes or a file in another
+    /// format. Returned as `Io`, the caller could not tell it from "the disk is briefly
+    /// unwell", and a refusal that rereading cannot fix would look like "retry later".
+    /// Return it as a named refusal and save the typed text aside.
     #[test]
     fn update_note_refuses_a_note_whose_bytes_are_not_text() {
         let tmp = TempDir::new().unwrap();
@@ -517,8 +524,8 @@ mod tests {
         assert_eq!(fs::read(&path).unwrap(), garbled);
     }
 
-    /// 区切りが 1 つも無いファイル(外から置かれた素の Markdown)は今までどおり
-    /// 記録を付けて書く。壊れた記録と違って、作り直しても消えるものが無い。
+    /// A file with no delimiter at all (plain Markdown placed from outside) is written with
+    /// a record attached, as before. Unlike a damaged record, recreating it loses nothing.
     #[test]
     fn update_note_gives_a_plain_markdown_file_its_first_frontmatter() {
         let tmp = TempDir::new().unwrap();
@@ -535,9 +542,9 @@ mod tests {
         assert_eq!(read_note(&path).unwrap(), "書き足した");
     }
 
-    /// 消えたノートへの保存は、ノートを作り直す入口ではない。書き手が
-    /// 開いたままのタブから遅れて保存すると、消したノート・Codex に移した
-    /// ノートが古い置き場に本文だけの姿で生き返る。
+    /// Saving to a deleted note is not an entry for recreating it. A late save from a tab
+    /// the writer left open would bring a deleted note, or one moved to Codex, back to life
+    /// in its old location as a bare body.
     #[test]
     fn update_note_refuses_a_file_that_is_not_there_and_creates_nothing() {
         let tmp = TempDir::new().unwrap();
@@ -550,8 +557,8 @@ mod tests {
         assert!(!path.exists());
     }
 
-    /// 指紋は本文だけから取る。編集中に表示モードを切り替えても、
-    /// 自分の保存が「古い」ことにはならない。
+    /// The revision is taken from the body only. Switching the view mode while editing
+    /// does not make one's own save "stale".
     #[test]
     fn a_metadata_edit_does_not_make_the_body_revision_stale() {
         let tmp = TempDir::new().unwrap();
@@ -567,8 +574,8 @@ mod tests {
         assert_eq!(read_note(&path).unwrap(), "mine");
     }
 
-    /// メタデータや表示モードの差し替えは本文を書き直していない。
-    /// ここで updated を打つと「編集していないのに更新日が動く」ことになる。
+    /// Replacing metadata or the view mode does not rewrite the body. Stamping updated here
+    /// would mean "the updated date moves without an edit".
     #[test]
     fn update_note_meta_and_view_do_not_stamp_updated() {
         let tmp = TempDir::new().unwrap();
@@ -581,7 +588,7 @@ mod tests {
         assert_eq!(read_note_meta(tmp.path(), &filename).unwrap().updated, None);
     }
 
-    /// 打たれた updated は、その後のメタデータ編集で消えてはいけない。
+    /// A stamped updated must not be lost by a later metadata edit.
     #[test]
     fn update_note_meta_keeps_the_updated_time() {
         let tmp = TempDir::new().unwrap();
@@ -599,7 +606,7 @@ mod tests {
         );
     }
 
-    /// 書いた入り口は作成時に決まる。CLI で作ったノートはそう名乗る。
+    /// The entry point that wrote it is decided at creation. A note created by the CLI says so.
     #[test]
     fn a_note_records_the_tool_that_created_it() {
         let tmp = TempDir::new().unwrap();
@@ -620,8 +627,8 @@ mod tests {
         assert_eq!(meta.source, Some("cli".to_string()));
     }
 
-    /// 名乗らなければキーは付かない。既存のノートを書き直しても
-    /// `source` が生えないのと同じ約束。
+    /// No declaration, no key. The same promise as rewriting an existing note not
+    /// growing a `source`.
     #[test]
     fn a_note_that_names_no_source_has_no_source_key() {
         let tmp = TempDir::new().unwrap();
@@ -630,8 +637,8 @@ mod tests {
         assert!(!fs::read_to_string(&path).unwrap().contains("source"));
     }
 
-    /// `source` は作成時の記録。別のツールで本文を書き直しても、
-    /// 「誰が作ったか」は書き換わらない(`updated_by` は別の問い)。
+    /// `source` is a record from creation. Rewriting the body with another tool does not
+    /// change "who created it" (`updated_by` is a different question).
     #[test]
     fn update_note_keeps_the_creation_source() {
         let tmp = TempDir::new().unwrap();
@@ -653,8 +660,8 @@ mod tests {
         assert_eq!(meta.source, Some("widget".to_string()));
     }
 
-    /// メタデータ編集も表示モードの切り替えも本文を書いていない。
-    /// ましてや作成の記録には触れない。
+    /// Neither a metadata edit nor a view-mode switch writes the body.
+    /// Still less do they touch the creation record.
     #[test]
     fn update_note_meta_and_view_do_not_touch_the_source() {
         let tmp = TempDir::new().unwrap();
@@ -680,8 +687,8 @@ mod tests {
         );
     }
 
-    /// context は「どの端末で書いたか」の記録。別の端末で編集しても
-    /// 作成時の記録が上書きされてはいけない。
+    /// context is the record of "which device wrote it". Editing on another device must
+    /// not overwrite the record from creation.
     #[test]
     fn update_note_keeps_the_creation_context() {
         let tmp = TempDir::new().unwrap();
@@ -701,7 +708,7 @@ mod tests {
         assert_eq!(ctx.is_charging, Some(false));
     }
 
-    /// タグ欄で付けていた頃のノートを編集しても、分類は消えてはいけない。
+    /// Editing a note tagged back when the tag field was used must not lose its category.
     #[test]
     fn update_note_keeps_tags_that_predate_the_hash_syntax() {
         let tmp = TempDir::new().unwrap();
@@ -740,8 +747,8 @@ mod tests {
         assert!(content.contains("full content"));
     }
 
-    /// 読み取りが返すのは本文だけ。frontmatter を返すと、そのまま
-    /// プレビューやエディタに流れてメタデータが画面に出る。
+    /// A read returns only the body. Returning the frontmatter would flow straight into
+    /// the preview or the editor and put metadata on screen.
     #[test]
     fn read_note_returns_body_without_frontmatter() {
         let tmp = TempDir::new().unwrap();
@@ -750,8 +757,8 @@ mod tests {
         assert_eq!(read_note(&path).unwrap(), "# Title\nbody");
     }
 
-    /// 検索とバックリンクは全ノートの本文を読む。一覧の後に 1 本ずつ
-    /// `read_note` すると open(2) が 2 回になるので、要約と本文を一緒に渡す。
+    /// Search and backlinks read every note's body. Calling `read_note` one by one after
+    /// the list would mean two open(2) calls each, so the summary and body are passed together.
     #[test]
     fn scan_visits_each_summary_with_its_body_without_frontmatter() {
         let tmp = TempDir::new().unwrap();
@@ -887,8 +894,8 @@ mod tests {
         assert_eq!(meta.tags, vec!["log"]);
     }
 
-    /// メタデータの編集で本文が動いてはいけない。逆(本文編集がメタデータを
-    /// 保つ)は `update_note` 側のテストが見ている。
+    /// A metadata edit must not move the body. The reverse (a body edit keeps the
+    /// metadata) is covered by the tests on the `update_note` side.
     #[test]
     fn update_note_meta_keeps_body_and_context() {
         let tmp = TempDir::new().unwrap();
@@ -902,8 +909,8 @@ mod tests {
         assert_eq!(meta.context.unwrap().battery, Some(50));
     }
 
-    /// frontmatter が読めないファイルに time/tags をでっち上げて書き込むと、
-    /// 壊れた記録が正当なものに見えてしまう。書かずに断る。
+    /// Making up time/tags and writing them into a file whose frontmatter cannot be read
+    /// would make a damaged record look legitimate. Refuse without writing.
     #[test]
     fn update_note_meta_rejects_broken_frontmatter() {
         let tmp = TempDir::new().unwrap();
@@ -944,7 +951,7 @@ mod tests {
         assert!(!fs::read_to_string(&path).unwrap().contains("view"));
     }
 
-    /// 表示モードの切り替えで本文とメタデータの記録が動いてはいけない。
+    /// A view-mode switch must not move the body or the metadata records.
     #[test]
     fn update_note_view_keeps_body_time_and_context() {
         let tmp = TempDir::new().unwrap();
@@ -960,7 +967,7 @@ mod tests {
         assert_eq!(meta.context.unwrap().battery, Some(50));
     }
 
-    /// 本文の保存で表示モードが消えると、開き直すたびにエディタへ戻ってしまう。
+    /// If a body save lost the view mode, every reopen would fall back to the editor.
     #[test]
     fn update_note_keeps_the_view_mode() {
         let tmp = TempDir::new().unwrap();
@@ -974,7 +981,7 @@ mod tests {
         assert_eq!(meta.view, Some("mindmap".to_string()));
     }
 
-    /// time/tags の編集でも表示モードは保たれる。
+    /// A time/tags edit keeps the view mode too.
     #[test]
     fn update_note_meta_keeps_the_view_mode() {
         let tmp = TempDir::new().unwrap();
@@ -1019,7 +1026,7 @@ mod tests {
         assert!(!content.contains("origin"));
     }
 
-    /// 解除は関係を断つだけで、ノートそのものの記録には触れない。
+    /// Unlinking only cuts the link; it does not touch the note's own records.
     #[test]
     fn update_note_origin_keeps_body_time_and_context() {
         let tmp = TempDir::new().unwrap();
@@ -1038,7 +1045,7 @@ mod tests {
         );
     }
 
-    /// Undo(繋ぎ直し)の経路。解除した値をそのまま書き戻せる。
+    /// The undo (relink) path. The unlinked value can be written back as it was.
     #[test]
     fn update_note_origin_restores_the_link() {
         let tmp = TempDir::new().unwrap();
@@ -1062,8 +1069,8 @@ mod tests {
         assert!(matches!(result, Err(CoreError::NotFound(_))));
     }
 
-    /// 本文の保存で昇格元との繋がりが消えると、タイムラインのチップが
-    /// 編集のたびに消えてしまう。
+    /// If a body save lost the link to the entry it was promoted from, Scrawl's chip
+    /// would vanish on every edit.
     #[test]
     fn update_note_keeps_the_origin() {
         let tmp = TempDir::new().unwrap();
@@ -1109,8 +1116,8 @@ mod tests {
         .unwrap()
     }
 
-    /// Codex は `notes/` ではなく `codex/` に置く。種別は置き場で決まり、
-    /// ID(ファイル名)だけで両方の置き場から見つかる。
+    /// A Codex goes in `codex/`, not `notes/`. The kind is decided by the location, and the
+    /// ID (filename) alone finds it in either location.
     #[test]
     fn a_codex_lives_in_its_own_directory_and_is_found_by_filename() {
         let tmp = TempDir::new().unwrap();
@@ -1134,8 +1141,8 @@ mod tests {
         assert_eq!(of(&path), NoteKind::Codex);
     }
 
-    /// ID は種別をまたいで 1 つの名前空間。同じ秒に Note と Codex を作っても
-    /// 同じ名前にはならず、後から来たほうが 1 秒進む。
+    /// IDs share one namespace across kinds. Creating a Note and a Codex in the same second
+    /// never gives them the same name; the later one steps one second ahead.
     #[test]
     fn a_note_and_a_codex_never_share_an_id() {
         let tmp = TempDir::new().unwrap();
@@ -1164,7 +1171,8 @@ mod tests {
         assert_eq!(second.file_name().unwrap(), "20260503_153902.md");
     }
 
-    /// 昇格は置き場が変わるだけ。ID も、frontmatter も本文も 1 バイト変わらない。
+    /// Promotion only changes the location. Neither the ID, the frontmatter nor the body
+    /// changes by a byte.
     #[test]
     fn promoting_moves_the_file_without_touching_its_bytes() {
         let tmp = TempDir::new().unwrap();
@@ -1194,7 +1202,7 @@ mod tests {
         assert!(matches!(result, Err(CoreError::NotFound(_))));
     }
 
-    /// frontmatter の差し替えと削除も ID だけで Codex に届く。
+    /// Replacing the frontmatter and deleting reach a Codex by ID alone too.
     #[test]
     fn a_codex_is_edited_and_deleted_by_filename() {
         let tmp = TempDir::new().unwrap();
@@ -1214,13 +1222,14 @@ mod tests {
         delete_note(tmp.path(), &filename).unwrap();
 
         assert!(!path.exists());
-        // 版のディレクトリごと消える。本体だけ消すと版が同期で配られ続ける
+        // The version directory goes with it. Deleting only the note would keep sync
+        // delivering the versions
         assert!(!versions.exists());
     }
 
-    /// 昇格と、別の端末でのオフライン編集が同じ ID に重なると、同期は
-    /// notes/ 側を新しいファイルとして配る。Codex 側を残し、notes/ 側は
-    /// 競合コピーと同じ場所に控える。
+    /// When a promotion and an offline edit on another device land on the same ID, sync
+    /// delivers the notes/ side as a new file. The Codex side stays, and the notes/ side is
+    /// set aside in the same place as conflict copies.
     #[test]
     fn a_duplicate_id_in_notes_is_moved_to_conflicts() {
         let tmp = TempDir::new().unwrap();

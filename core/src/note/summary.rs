@@ -10,29 +10,30 @@ use super::kind::NoteKind;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Summary {
-    /// どちらの置き場から来たか。一覧は面ごとに種別で絞る。
+    /// Which location it came from. The list filters by kind per surface.
     pub kind: NoteKind,
     pub path: PathBuf,
     pub filename: String,
     pub time: Option<DateTime<FixedOffset>>,
     pub tags: Vec<String>,
     pub preview: String,
-    /// 昇格元エントリの日時。タイムラインが日毎のチップ表示を導出するのに使う。
+    /// The datetime of the entry it was promoted from. Scrawl derives the per-day chips from it.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub origin: Option<String>,
-    /// 生まれ元のテンプレ名。テンプレ起動が「同じテンプレの今日のノート」と
-    /// 直近の 1 本をここから探すので、一覧に乗っていないと毎回全ファイルを
-    /// 開き直すことになる。
+    /// The name of the template it was born from. Launching a template looks here for
+    /// "today's note from the same template" and for the most recent one, so without it
+    /// on the list every launch would reopen every file.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub template: Option<String>,
-    /// 表示モード(`preview` / `mindmap`)。一覧が読み取り専用のノートに鍵を
-    /// 出すのに使う。本文を開くまで分からないと、書けないノートを書こうとする。
+    /// The view mode (`preview` / `mindmap`). The list uses it to show a lock on read-only
+    /// notes. If it were unknown until the body opens, one would try to write an unwritable note.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub view: Option<String>,
-    /// 刻んだ版の数。Codex の行だけが持ち、一覧が角折りページの記号に出す。
+    /// The number of committed versions. Only Codex rows have it; the list shows it on the
+    /// folded-corner page symbol.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub version_count: Option<usize>,
-    /// 最新の版から下書きが動いたか。Codex の行だけ。
+    /// Whether the draft has moved on from the latest version. Codex rows only.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dirty: Option<bool>,
 }
@@ -51,8 +52,8 @@ impl Summary {
                     fm.view,
                 )
             } else {
-                // parse に失敗しても frontmatter の区切りは剥がす。壊れた
-                // メタデータを本文扱いすると、一覧のタイトルとプレビューに YAML が出る。
+                // Strip the frontmatter delimiters even when the parse fails. Treating broken
+                // metadata as body would put YAML into the list's title and preview.
                 (
                     None,
                     Vec::new(),
@@ -130,8 +131,8 @@ mod tests {
         assert_eq!(summary.preview, "# Title\nBody");
     }
 
-    /// 一覧に載せるのは先頭 100 文字。バイトではなく文字で切らないと、
-    /// 日本語の本文は 3 分の 1 しか見えない。
+    /// The list shows the first 100 characters. Cutting by characters rather than bytes
+    /// matters: a Japanese body would otherwise show only a third of that.
     #[test]
     fn the_preview_is_the_first_hundred_chars_of_the_body() {
         let preview_of = |len: usize| {
@@ -152,8 +153,8 @@ mod tests {
         assert_eq!(preview_of(101), "あ".repeat(100));
     }
 
-    /// 読み取り専用にしたノートは一覧でも鍵で分かる。一覧に乗らないと、
-    /// 開いて書こうとするまで書けないことが分からない。
+    /// A note made read-only shows a lock on the list too. Without it on the list, one
+    /// would not know the note is unwritable until opening it and trying to write.
     #[test]
     fn from_file_carries_the_view() {
         let fm = NoteFrontmatter {
@@ -170,8 +171,8 @@ mod tests {
         assert_eq!(summary.view, Some("preview".to_string()));
     }
 
-    /// origin はタイムラインのチップ表示が使う。一覧に乗らないと、昇格した
-    /// ノートがどの日のものか誰にも分からない。
+    /// Scrawl's chips use origin. Without it on the list, nobody can tell which day a
+    /// promoted note belongs to.
     #[test]
     fn test_from_file_carries_origin() {
         let fm = NoteFrontmatter {
@@ -188,9 +189,9 @@ mod tests {
         assert_eq!(summary.origin, Some("2026-08-13T08:30:00".to_string()));
     }
 
-    /// タグ欄で `Rust` と付けていた頃のノートに本文で `#rust` と書いたら、
-    /// 一覧に同じ分類が 2 つ並ぶ。大小を無視して 1 つに畳み、綴りは
-    /// frontmatter 側を残す。
+    /// Writing `#rust` in the body of a note tagged `Rust` back when the tag field was used
+    /// puts the same category on the list twice. Fold them into one ignoring case, and keep
+    /// the frontmatter's spelling.
     #[test]
     fn frontmatter_tags_are_merged_with_body_tags_ignoring_case() {
         let fm = NoteFrontmatter {
@@ -207,8 +208,8 @@ mod tests {
         assert_eq!(summary.tags, vec!["Rust"]);
     }
 
-    /// frontmatter が YAML として壊れているノート。時刻とタグは諦めるが、
-    /// メタデータをタイトル・プレビューに出してはいけない。
+    /// A note whose frontmatter is broken as YAML. The time and tags are given up, but the
+    /// metadata must not show up in the title or the preview.
     #[test]
     fn broken_frontmatter_does_not_leak_into_preview() {
         let content = "---\ntime: [broken\n---\n# Title\nbody";

@@ -1,14 +1,14 @@
-//! 「読んだときの本文」の指紋。書き戻すときに添えると、そのあいだに
-//! 別の書き手(アプリ・MCP・CLI)が本文を変えていれば書き込みが断られる。
+//! The revision: a fingerprint of "the body as it was read". Attached to a write-back, it
+//! makes the write refused if another writer (app, MCP, CLI) changed the body in between.
 //!
-//! アプリはファイルを監視しないので、外から書き換えられたノートを開いた
-//! まま 1 文字打つと、autosave が古い本文ごと上書きする。書き手が誰であれ
-//! 同じ穴なので、守りは書き込みの入口に 1 つだけ置く。
+//! The app does not watch files, so typing one character into a note that was rewritten
+//! from outside makes autosave overwrite the old body with it. Whoever the writer is, the
+//! hole is the same, so the guard sits in one place: the entry of the write.
 //!
-//! 指紋は本文だけから取る。frontmatter は表示モードの切替やタグ編集でも
-//! 動くが、それは本文を書き直したわけではなく、本文の書き込みは既存の
-//! frontmatter を読み直して残す。frontmatter ごと指紋にすると、編集中に
-//! 表示モードを切り替えただけで自分の保存が「古い」ことになる。
+//! The revision is taken from the body only. Frontmatter also moves on a view-mode switch
+//! or a tag edit, but that is not a rewrite of the body, and a body write rereads the
+//! existing frontmatter and keeps it. If the revision covered the frontmatter too, switching
+//! the view mode while editing would make one's own save "stale".
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};

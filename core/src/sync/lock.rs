@@ -1,37 +1,37 @@
-//! 同期のプロセス間排他。
+//! Cross-process mutual exclusion for sync.
 //!
-//! アプリ側の「同期中」フラグ (`AtomicBool`) はプロセス内でしか効かない。
-//! 2 つの同期が同時に走ると `.sync-state.json` を後勝ちで上書きし合い、
-//! `to_local_state` が「手元に無い」として落としたキーが相手の状態から消える。
-//! 次の同期でそれは差分として蘇り、偽の競合コピーになる (`diff.rs`)。
-//! 排他はプロセスをまたぐ必要があるので、ファイルシステムに置く。
+//! The app's "syncing" flag (`AtomicBool`) only works inside one process.
+//! When two syncs run at once, they overwrite `.sync-state.json` last-writer-wins, and a
+//! key that `to_local_state` dropped as "not on disk" vanishes from the other's state.
+//! On the next sync it comes back as a difference and becomes a false conflict copy
+//! (`diff.rs`). The exclusion has to span processes, so it lives on the filesystem.
 //!
-//! 同期を始めるのはアプリと CLI の `sync` の 2 つで、別プロセスから
-//! 同時に走りうる。後から来たほうは `kind: "busy"` で断る。
+//! Two things start a sync, the app and the CLI's `sync`, and they can run at the same
+//! time from separate processes. The one that comes second is refused with `kind: "busy"`.
 
 use std::fs::{self, File, TryLockError};
 use std::path::Path;
 
 use super::SyncError;
 
-/// `data/` の外に置く。中に置けばロックファイル自身が同期対象になる。
+/// Kept outside `data/`. Inside, the lock file itself would become a sync target.
 const LOCK_FILENAME: &str = ".sync.lock";
 
-/// 生きているあいだだけ同期してよい。落とすと解放される。
+/// Syncing is allowed only while this is alive. Dropping it releases the lock.
 ///
-/// ロックの実体は開いたファイル記述子に付く advisory lock なので、
-/// プロセスが panic で落ちても kill されても OS が確実に外す。
-/// 「前回の異常終了で残ったロックファイル」を人手で消す必要はない。
+/// The lock itself is an advisory lock on the open file descriptor, so the OS reliably
+/// removes it whether the process dies from a panic or gets killed.
+/// Nobody has to delete "a lock file left over from the last crash" by hand.
 #[derive(Debug)]
 pub struct SyncLock {
     file: File,
 }
 
 impl SyncLock {
-    /// 取れなければ待たずに `busy` を返す。
-    /// 同期は次の書き込みでも自動で走るので、順番待ちで固まるより見送るほうが安い。
+    /// Returns `busy` without waiting when the lock cannot be taken.
+    /// The next write runs a sync again anyway, so skipping is cheaper than freezing in a queue.
     pub fn acquire(base_dir: &Path) -> Result<Self, SyncError> {
-        // 初回起動直後はアプリのデータディレクトリ自体がまだ無いことがある
+        // Right after the first launch the app data directory itself may not exist yet
         fs::create_dir_all(base_dir).map_err(|e| {
             SyncError::other(format!(
                 "Failed to prepare the sync lock directory ({}): {e}",
@@ -40,9 +40,9 @@ impl SyncLock {
         })?;
 
         let path = base_dir.join(LOCK_FILENAME);
-        // truncate も削除もしない。意味を持つのはロックそのもので中身ではなく、
-        // 消したり切り詰めたりすれば、ロックを持っていない側が持っている側の
-        // ファイルに触ることになる
+        // Neither truncate nor delete. The lock itself carries the meaning, not the
+        // content, and deleting or truncating would let the side without the lock touch
+        // the file of the side that holds it
         let file = File::options()
             .create(true)
             .write(true)
@@ -61,8 +61,8 @@ impl SyncLock {
                 "busy",
                 "Another sync is already running. Try again in a moment.",
             )),
-            // ロックが取れたか分からないなら同期しない。
-            // 排他できていないまま進むほうが高くつく
+            // No sync when it is unclear whether the lock was taken.
+            // Going ahead without exclusion costs more
             Err(TryLockError::Error(e)) => Err(SyncError::other(format!(
                 "Failed to lock {}: {e}",
                 path.display()
@@ -73,7 +73,7 @@ impl SyncLock {
 
 impl Drop for SyncLock {
     fn drop(&mut self) {
-        // ファイルを閉じても外れるが、解放の責任がこの型にあることを明示しておく
+        // Closing the file releases it too, but this makes explicit that this type owns the release
         let _ = self.file.unlock();
     }
 }
@@ -84,9 +84,9 @@ mod tests {
     use std::path::Path;
     use std::process::Command;
 
-    /// 子プロセスに「どのディレクトリを取りにいくか」を渡す。
+    /// Tells the child process which directory to try to lock.
     const CHILD_DIR_ENV: &str = "MM_SYNC_LOCK_TEST_DIR";
-    /// 自分自身を起動し直すので、テスト名がそのまま子プロセスの入口になる。
+    /// The binary relaunches itself, so the test name is the child process's entry point.
     const CHILD_TEST: &str = "sync::lock::tests::a_second_process_cannot_take_a_held_lock";
 
     #[test]
@@ -108,11 +108,11 @@ mod tests {
         assert!(SyncLock::acquire(dir.path()).is_ok());
     }
 
-    /// スレッドを 2 つ回しても「プロセス間」を確かめたことにはならないので、
-    /// テストバイナリ自身をもう 1 つ起動して、この同じテストを子として走らせる。
+    /// Running two threads would not prove "across processes", so this launches one more
+    /// copy of the test binary and runs this same test as the child.
     #[test]
     fn a_second_process_cannot_take_a_held_lock() {
-        // 子として起動された側。ロックを取りにいって結果を親に報告する
+        // The side launched as the child. It tries the lock and reports the result to the parent
         if let Ok(dir) = std::env::var(CHILD_DIR_ENV) {
             match SyncLock::acquire(Path::new(&dir)) {
                 Ok(_) => println!("child: acquired"),
@@ -138,8 +138,8 @@ mod tests {
         );
     }
 
-    /// 上のテストが「子を起動したつもりで何も走らせていなかった」に化けないよう、
-    /// ロックが空いていれば子は取れることも確かめる。
+    /// So the test above cannot degrade into "meant to launch a child but ran nothing",
+    /// this also checks that the child can take the lock when it is free.
     #[test]
     fn a_second_process_takes_a_free_lock() {
         let dir = tempfile::tempdir().unwrap();

@@ -1,10 +1,10 @@
-//! 特殊文字(グリフ)。ユーザーが登録した小さな画像に短い名前を付け、
-//! 本文に `:name:` と書くと絵文字のように描かれる。格闘ゲームの
-//! コマンド表記(`:236p:`)のような、文字では書けない記号のためのもの。
+//! Special characters (glyphs). A small image the user registers gets a short name, and
+//! writing `:name:` in the body draws it like an emoji. It is for symbols that cannot be
+//! typed, such as fighting game command notation (`:236p:`).
 //!
-//! 画像は `data/glyphs/<name>.<png|svg>` に置き、ノートと同じ経路で同期
-//! される。本文側は `:name:` の文字列のままで、描くときに名前を引くだけ —
-//! 画像が届いていない端末では文字のまま見える。
+//! Images live at `data/glyphs/<name>.<png|svg>` and sync by the same path as notes. The
+//! body side stays the string `:name:`; the name is only looked up at draw time, so on a
+//! device the image has not reached, it shows as text.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -16,12 +16,12 @@ use crate::utils::fs::{resolve_existing, write_atomic};
 use crate::utils::paths::glyphs_dir;
 use crate::utils::validated::{GlyphFormat, GlyphName};
 
-/// 1 枚の上限。同期は変更分をまとめて 1 回の POST に base64 で載せるので、
-/// 大きな画像を許すとそれだけで同期が重くなる。絵文字大の記号に
-/// 256 KiB は十分すぎる。
+/// The limit for one image. Sync bundles the changes into one POST as base64, so allowing
+/// a large image makes sync heavy by itself. 256 KiB is more than enough for an
+/// emoji-sized symbol.
 pub const GLYPH_MAX_BYTES: usize = 256 * 1024;
 
-/// グリフ一覧の 1 件。画像そのものは持たない。
+/// One entry of the glyph list. It does not hold the image itself.
 #[derive(Debug, Clone, Serialize)]
 pub struct GlyphSummary {
     pub name: String,
@@ -30,7 +30,7 @@ pub struct GlyphSummary {
     pub bytes: u64,
 }
 
-/// グリフ 1 枚の中身。
+/// The content of one glyph.
 #[derive(Debug, Clone)]
 pub struct GlyphData {
     pub format: GlyphFormat,
@@ -54,7 +54,7 @@ impl Glyphs {
         format!("{name}.{}", format.extension())
     }
 
-    /// 名前から実ファイルを探す。形式はファイル名にしか無いので、両方を試す。
+    /// Find the actual file from a name. The format exists only in the filename, so both are tried.
     fn find(&self, name: &GlyphName) -> Result<(PathBuf, GlyphFormat), CoreError> {
         let dir = self.dir();
         for format in [GlyphFormat::Png, GlyphFormat::Svg] {
@@ -67,8 +67,8 @@ impl Glyphs {
         Err(CoreError::NotFound(name.to_string()))
     }
 
-    /// まだ無いファイルの書き込み先。テンプレと同じく、置き場を解決してから
-    /// 検証済みの名前を繋ぐ。
+    /// The write target for a file that does not exist yet. As with templates, the directory
+    /// is resolved first and the validated name joined on.
     fn writable_path(&self, name: &GlyphName, format: GlyphFormat) -> Result<PathBuf, CoreError> {
         let dir = self.dir();
         fs::create_dir_all(&dir)?;
@@ -94,7 +94,7 @@ impl Glyphs {
                 })
             })
             .collect();
-        // 名前順。探す手がかりは名前しかない
+        // By name. The name is the only handle to find one
         glyphs.sort_by(|a, b| a.name.cmp(&b.name));
         Ok(glyphs)
     }
@@ -112,8 +112,8 @@ impl Glyphs {
         let path = self.writable_path(name, format)?;
         write_atomic(&path, bytes)?;
 
-        // 同じ名前は 1 枚だけ。PNG を SVG で置き換えたら古いほうを消す —
-        // 残すと `:name:` がどちらを指すのか読む側で決めることになる
+        // One image per name. When a PNG is replaced by an SVG, the old one is deleted:
+        // left in place, the reader would have to decide which one `:name:` means
         let other = match format {
             GlyphFormat::Png => GlyphFormat::Svg,
             GlyphFormat::Svg => GlyphFormat::Png,
@@ -132,8 +132,8 @@ impl Glyphs {
     }
 }
 
-/// `<name>.<ext>` を名前と形式に分ける。どちらかが規則に合わなければ
-/// グリフではない(手で置かれた無関係なファイルは黙って飛ばす)。
+/// Split `<name>.<ext>` into name and format. If either does not fit the rules, it is not
+/// a glyph (an unrelated file dropped in by hand is silently skipped).
 fn summarize_filename(filename: &str) -> Option<(GlyphName, GlyphFormat)> {
     let path = Path::new(filename);
     let name = GlyphName::parse(path.file_stem()?.to_str()?).ok()?;
@@ -141,9 +141,9 @@ fn summarize_filename(filename: &str) -> Option<(GlyphName, GlyphFormat)> {
     Some((name, format))
 }
 
-/// 中身が名乗った形式かを確かめる。厳密な解析はしない — PNG は先頭の
-/// 8 バイト、SVG は UTF-8 で `<svg` を含むことだけ。拡張子と中身が食い違う
-/// ファイルを弾ければ十分で、XML パーサを抱える価値はない。
+/// Check that the content is the format it claims. No strict parsing: for PNG only the
+/// first 8 bytes, for SVG only that it is UTF-8 and contains `<svg`. Rejecting a file
+/// whose extension and content disagree is enough; an XML parser is not worth carrying.
 fn validate(format: GlyphFormat, bytes: &[u8]) -> Result<(), CoreError> {
     if bytes.len() > GLYPH_MAX_BYTES {
         return Err(CoreError::Parse(format!(
@@ -173,8 +173,8 @@ pub fn read_glyph(base_dir: &Path, name: &GlyphName) -> Result<GlyphData, CoreEr
     Glyphs::new(base_dir.to_path_buf()).read(name)
 }
 
-/// 無ければ作り、あれば上書きする。名前は ID ではなくただの名前なので、
-/// 同じ名前で別の画像を入れ直すのは呼ぶ側の自由。
+/// Create if missing, overwrite if present. The name is just a name, not an ID, so the
+/// caller is free to put a different image under the same name.
 pub fn save_glyph(
     base_dir: &Path,
     name: &GlyphName,
@@ -211,8 +211,8 @@ mod tests {
         assert_eq!(glyph.bytes, PNG);
     }
 
-    /// グリフは `data/` の中に置く。同期の走査が data 配下を辿るので、
-    /// ここを外すと他の端末に画像が届かない。
+    /// Glyphs live under `data/`. The sync scan walks everything under data, so outside it
+    /// an image never reaches other devices.
     #[test]
     fn glyphs_are_written_inside_the_data_directory() {
         let tmp = TempDir::new().unwrap();
@@ -238,7 +238,7 @@ mod tests {
         assert_eq!(listed[1].format, "svg");
     }
 
-    /// 手で置かれた無関係なファイルはグリフではない。壊れた名前も同じ。
+    /// An unrelated file dropped in by hand is not a glyph. Nor is a broken name.
     #[test]
     fn the_list_ignores_files_that_are_not_glyphs() {
         let tmp = TempDir::new().unwrap();
@@ -282,7 +282,7 @@ mod tests {
         assert!(matches!(result, Err(CoreError::NotFound(_))));
     }
 
-    /// 同期に載せる 1 回の POST に丸ごと乗るので、大きさには上限を置く。
+    /// It rides whole on the one POST that sync sends, so the size has a limit.
     #[test]
     fn an_oversized_image_is_refused() {
         let tmp = TempDir::new().unwrap();
@@ -295,7 +295,8 @@ mod tests {
         assert!(!tmp.path().join("data/glyphs/big.png").exists());
     }
 
-    /// 上限ちょうどは通す。`>=` で弾くと、上限を狙って縮めた画像が入らない。
+    /// Exactly the limit passes. Rejecting with `>=` would keep out an image shrunk to hit
+    /// the limit.
     #[test]
     fn an_image_of_exactly_the_limit_is_accepted() {
         let tmp = TempDir::new().unwrap();
@@ -308,7 +309,7 @@ mod tests {
         assert_eq!(saved.bytes.len(), GLYPH_MAX_BYTES);
     }
 
-    /// 拡張子と中身が食い違うファイルは描けないので、入り口で弾く。
+    /// A file whose extension and content disagree cannot be drawn, so it is rejected at the door.
     #[test]
     fn content_that_is_not_the_named_format_is_refused() {
         let tmp = TempDir::new().unwrap();
@@ -323,7 +324,7 @@ mod tests {
         assert!(list_glyphs(tmp.path()).unwrap().is_empty());
     }
 
-    /// 1 つの名前は 1 枚の画像を指す。形式を変えて入れ直したら古いほうは消える。
+    /// One name means one image. Re-saved in the other format, the old one is gone.
     #[test]
     fn saving_the_other_format_replaces_the_old_file() {
         let tmp = TempDir::new().unwrap();
@@ -340,7 +341,7 @@ mod tests {
         );
     }
 
-    /// 名前の検証だけでは、リンク越しに置き場の外を読ませられる。
+    /// Name validation alone can be made to read outside the directory through a link.
     #[test]
     fn a_symlink_out_of_the_directory_is_refused() {
         let tmp = TempDir::new().unwrap();

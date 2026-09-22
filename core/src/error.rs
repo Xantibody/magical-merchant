@@ -17,19 +17,20 @@ pub enum CoreError {
     #[error("Parse error: {0}")]
     Parse(String),
 
-    /// 読んでから書くまでのあいだに、別の書き手が本文を変えていた。
+    /// Another writer changed the body between the read and the write.
     #[error("Stale: {0} changed since it was read")]
     Stale(String),
 
-    /// ファイルの中身が文字として読めない(不正な UTF-8)。同期や外の道具が
-    /// 置いていったバイト列で、書き直しても読み直しても直らない。
-    /// [`Self::Io`] と分けるのは、あとで再試行すれば通る失敗ではないから —
-    /// 呼ぶ側は拒否として扱い、打った字を退避させる。
-    /// [`Self::Parse`](記録が読めない)とも分ける: 直す手当てが違う。
+    /// The file content cannot be read as text (invalid UTF-8). It is a byte sequence
+    /// left behind by sync or an outside tool, and neither rewriting nor rereading fixes it.
+    /// It is kept apart from [`Self::Io`] because it is not a failure that a later retry
+    /// gets through: the caller treats it as a refusal and saves the typed text aside.
+    /// It is also kept apart from [`Self::Parse`] (the record cannot be parsed): the remedy
+    /// differs.
     #[error("Not text: {0} is not valid UTF-8")]
     NotText(String),
 
-    /// 版を持てるのは Codex だけ。普通のノートに刻もうとした。
+    /// Only a Codex can hold versions. Someone tried to commit one on a plain note.
     #[error("Not a Codex: {0}")]
     NotCodex(String),
 

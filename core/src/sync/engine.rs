@@ -1,9 +1,9 @@
-//! 同期の本体。呼び出し元が増えても 1 本しかない実装。
-//! 呼ぶのはアプリと CLI の `sync` の 2 つ。
+//! The body of sync. However many callers there are, there is only one implementation.
+//! Two things call it: the app and the CLI's `sync`.
 //!
-//! ここに書かれた不変条件（自分の state を送り返さない、ダウンロード後に
-//! 再スキャンで state を組み直さない、全消しを拒否する）はコメントでしか
-//! 守られていない。2 本目を書くと必ずドリフトするので分岐させない。
+//! The invariants written here (never send our own state back, never rebuild the state
+//! from a rescan after downloading, refuse a wholesale delete) are guarded only by
+//! comments. A second copy would drift without fail, so do not fork it.
 
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -28,30 +28,30 @@ use crate::utils::paths;
 
 const MAX_SYNC_ATTEMPTS: usize = 3;
 
-/// 1 回の同期で回す round の上限。予算より高くつく action は無い
-/// (競合の 3 でも予算 40 に収まる) ので、ここに当たるのはバグのとき。
-/// 進まない round はその場で `stalled` になるが、念のための天井。
+/// The cap on rounds in one sync. No action costs more than the budget
+/// (even a conflict's 3 fits in the budget of 40), so hitting this means a bug.
+/// A round that makes no progress becomes `stalled` at once; this ceiling is a backstop.
 const MAX_ROUNDS: usize = 200;
 
-/// round が 1 つ終わるたびに呼ばれる。進捗を出すのは CLI だけで、アプリは
-/// spinner を回したままにする。
+/// Called each time a round finishes. Only the CLI shows progress; the app keeps its
+/// spinner turning.
 #[derive(Debug, Clone, Copy)]
 pub struct RoundProgress {
-    /// 1 から数えた round の番号。全体で何 round になるかは、やってみるまで
-    /// 分からない — 途中で他端末が書けば増える
+    /// The round number, counted from 1. How many rounds there will be in total is
+    /// unknown until it is done: another device writing midway adds more
     pub round: usize,
-    /// この round で送った action の数
+    /// The number of actions sent in this round
     pub done: usize,
-    /// 予算に入らず次に回した action の数
+    /// The number of actions that did not fit the budget and moved to the next round
     pub remaining: usize,
 }
 
-/// 1 回の同期。呼び出し側は認証済みの `HttpClient` を渡す。
+/// One sync. The caller passes an authenticated `HttpClient`.
 pub async fn run(client: &HttpClient, base_dir: &Path) -> Result<SyncResult, SyncError> {
     run_over(client, base_dir, BULK_OPERATION_BUDGET, |_| {}).await
 }
 
-/// round ごとに知らせる版。何百本を送るときに、止まって見えないようにする。
+/// The variant that reports per round. Keeps a send of hundreds of files from looking stuck.
 pub async fn run_with_progress<F: FnMut(RoundProgress)>(
     client: &HttpClient,
     base_dir: &Path,
@@ -60,18 +60,18 @@ pub async fn run_with_progress<F: FnMut(RoundProgress)>(
     run_over(client, base_dir, BULK_OPERATION_BUDGET, on_round).await
 }
 
-/// 本体。`HttpClient` ではなく `SyncTransport` を取るのも、予算を引数に
-/// するのもテストのため — 公開する口は上の 2 つに保つ。
+/// The body. Taking a `SyncTransport` instead of an `HttpClient`, and the budget as an
+/// argument, are both for the tests. The public entry points stay the two above.
 async fn run_over<T: SyncTransport + Sync, F: FnMut(RoundProgress)>(
     client: &T,
     base_dir: &Path,
     budget: usize,
     mut on_round: F,
 ) -> Result<SyncResult, SyncError> {
-    // 同じデータディレクトリを見ている別のプロセスと同時に走ると、
-    // 最後に書いたほうの `.sync-state.json` が残って相手の記録が消える。
-    // 再試行のあいだも手放さないので、ここで 1 回だけ取る。
-    // 名前付きで束縛すること: `let _ = ` だとその場で解放されてしまう
+    // Running at the same time as another process on the same data directory, the
+    // `.sync-state.json` written last survives and the other's records vanish.
+    // It is held through the retries too, so it is taken once, here.
+    // Bind it to a name: `let _ = ` would release it immediately
     let _lock = SyncLock::acquire(base_dir)?;
 
     sweep_stale_temp_files(base_dir);
@@ -80,38 +80,40 @@ async fn run_over<T: SyncTransport + Sync, F: FnMut(RoundProgress)>(
     let result = run_rounds(client, base_dir, budget, &mut on_round).await;
 
     if result.is_ok() {
-        // 同じ ID が notes/ と codex/ に並ぶのはダウンロードの直後なので、
-        // 走り終えたぶんをもう一度見る。ロックはまだ手元にある
+        // The same ID sits in both `notes/` and `codex/` right after a download, so look
+        // again at what the run brought in. The lock is still held
         let _ = crate::relocate_duplicate_ids(base_dir);
     }
     result
 }
 
-/// 走査より前に済ませるツリーの繕い。同期を始める側がそれぞれ呼んでいたのを
-/// ここへ移した: 修復はファイルを動かすので、ロックの外でやると、もう一方の
-/// プロセスが走査している最中のツリーを書き換えてしまう。動かされたノートは
-/// 相手にローカル消失と映り、リモートの本体まで消える (#250)。
+/// Mending of the tree that happens before the scan. Each side that starts a sync used
+/// to call this itself; it moved here because a repair moves files, and outside the lock
+/// it would rewrite the tree while the other process is scanning it. A moved note looks
+/// to the other side like a local disappearance, and the remote copy gets deleted too
+/// (#250).
 ///
-/// 直せなくても同期はできるので、失敗は握りつぶしてログにも残さない —
-/// 繕えなかったことを理由に同期を止めるほうが高くつく。
+/// Sync works even when a repair fails, so failures are swallowed and not even logged.
+/// Stopping the sync because a repair did not succeed would cost more.
 ///
-/// AIDEV-NOTE: 呼び出し側でロックを取る案は不可。flock は fd 単位なので engine の acquire が busy を返す
+/// AIDEV-NOTE: Taking the lock on the caller's side is not an option. flock is per fd, so
+/// the engine's acquire returns busy
 fn repair_tree(base_dir: &Path) {
-    // 改名前の `data/timeline/`。走査より前に動かさないと、同期が旧い
-    // キーのまま組み上げる
+    // `data/timeline/` from before the rename. Unless it moves before the scan, the sync
+    // builds on the old keys
     let _ = crate::migrate_scrawl_dir(base_dir);
-    // 過去の編集で本文の先頭に混入した化けメタデータ
+    // Garbled metadata that past edits mixed into the head of the body
     let _ = crate::repair_notes(base_dir);
-    // 古い版が `data/` に置いた競合コピー。走査より前に外へ出さないと、
-    // 残骸が新しいノートとして全端末へ配られる
+    // Conflict copies an old version put in `data/`. Unless they move out before the
+    // scan, the leftovers get handed to every device as new notes
     let _ = crate::relocate_conflict_copies(base_dir);
-    // 他端末の昇格と自分のオフライン編集が重なって、同じ ID が notes/ と
-    // codex/ の両方にあるとき。Codex 側が本物で、notes/ 側を控えにする
+    // When another device's promotion and our offline edit overlap, the same ID is in
+    // both `notes/` and `codex/`. The Codex side is the real one; the `notes/` side becomes a copy
     let _ = crate::relocate_duplicate_ids(base_dir);
 }
 
-/// round を回し切るまで。`run_over` から切り出してあるのは、ロックを持って
-/// いるあいだにやることを入口の数行で読めるようにするため。
+/// Until the rounds run out. Split out of `run_over` so what happens while the lock is
+/// held can be read in the few lines of the entry point.
 async fn run_rounds<T: SyncTransport + Sync, F: FnMut(RoundProgress)>(
     client: &T,
     base_dir: &Path,
@@ -137,17 +139,17 @@ async fn run_rounds<T: SyncTransport + Sync, F: FnMut(RoundProgress)>(
             )));
         }
     }
-    // 途中で止めても壊れない: round ごとに state は書けているので、
-    // 送り終えたぶんは次の同期でやり直しにならない
+    // Stopping midway breaks nothing: the state is written per round, so what was
+    // sent is not redone on the next sync
     Err(stalled(&format!(
         "Sync gave up after {MAX_ROUNDS} rounds. What it managed to send is kept; \
          run it again to continue."
     )))
 }
 
-/// 回り続けても終わらない、と分かったとき。予算に収まらない action は
-/// 無い(競合の 3 でも 40 に入る)ので、ここに来るのはバグか、同じキーで
-/// 詰まり続けているとき。黙って回り続けるより止めて見せる。
+/// For when it is clear that looping on will never finish. No action exceeds the budget
+/// (even a conflict's 3 fits in 40), so getting here means a bug, or the same key
+/// jamming over and over. Better to stop and show it than to spin in silence.
 fn stalled(what_happened: &str) -> SyncError {
     SyncError::new(
         "stalled",
@@ -164,7 +166,7 @@ fn absorb(total: &mut SyncResult, round: SyncResult) {
     total.errors.extend(round.errors);
 }
 
-/// 1 round ぶんの結果と、まだ残っている数。
+/// The result of one round and the number still left.
 struct RoundOutcome {
     result: SyncResult,
     done: usize,
@@ -176,8 +178,8 @@ async fn sync_round<T: SyncTransport + Sync>(
     base_dir: &Path,
     budget: usize,
 ) -> Result<RoundOutcome, SyncError> {
-    // 他端末と同時に同期すると CAS で弾かれる。ユーザーに再試行させる理由はないので
-    // 取得し直して自動でやり直す
+    // Syncing at the same time as another device gets rejected by the CAS. There is no
+    // reason to make the user retry, so fetch again and redo it automatically
     for attempt in 1..=MAX_SYNC_ATTEMPTS {
         let outcome = sync_once(client, base_dir, budget).await;
         let retryable =
@@ -203,8 +205,9 @@ async fn sync_once<T: SyncTransport + Sync>(
     let remote_files = server_state_to_remote_files(&server_state);
     let actions = diff::compute(&local_files, &remote_files, &local_state);
 
-    // 全消しの判定は毎 round、分ける前の全部で行う。分けたあとだと、
-    // 40 件ずつの「一部削除」に見えて歯止めが効かない
+    // The wholesale-delete check runs every round, over everything, before the split.
+    // After the split it would look like a "partial delete" of 40 at a time and the brake
+    // would not work
     refuse_wholesale_local_deletion(&actions, &local_files)?;
 
     let (actions, deferred) = round::take_round(&actions, budget);
@@ -218,31 +221,32 @@ async fn sync_once<T: SyncTransport + Sync>(
         server_state.etag.clone(),
         &mut result,
     )
-    // 同期そのものが止まる側。CLI もアプリの汎用エラー表示も英文で扱う
+    // The side where the sync itself stops. The CLI and the app's generic error display
+    // both take English
     .map_err(|issue| SyncError::other(issue.to_string()))?;
 
     let bulk_resp = client.bulk(bulk_req).await?;
 
     let unwritten = apply_response(&bulk_resp, &actions, &local_files, base_dir, &mut result);
 
-    // 送った数ではなく、片付いた数を進み具合とする。書き込みに失敗した
-    // キーは次の round でも同じ順に選ばれるので、送った数で数えると
-    // 「進んでいる」と言いながら同じ 40 件を 200 round 繰り返す
+    // Progress is the number settled, not the number sent. A key whose write failed is
+    // picked in the same order in the next round too, so counting by sent would repeat
+    // the same 40 for 200 rounds while claiming "progress"
     let settled = actions
         .iter()
         .filter(|a| !unwritten.contains(a.key()))
         .count();
 
     let mut unsettled = unwritten;
-    // 次の round に回したキーも、取得に失敗したキーと同じ扱いにする。
-    // サーバーが確定させた版で記録してしまうと、手元にあるのは古い版なので
-    // 次の round には「ローカルの編集」に見え、取りに行くはずだった
-    // ダウンロードがアップロードに化けて新しい版を潰す
+    // Keys moved to the next round get the same treatment as keys whose fetch failed.
+    // Recorded at the version the server settled on, the old version on disk would look
+    // like "a local edit" in the next round, and the download that was meant to fetch
+    // it would turn into an upload and crush the new version
     unsettled.extend(deferred.iter().map(|a| a.key().to_string()));
 
-    // サーバーが確定させた状態をそのままローカルにも記録する。
-    // ここでローカルを再スキャンして組み直すと、ダウンロード直後の mtime が
-    // サーバーの版と食い違い、同じファイルを永久に再取得し続ける
+    // Record the state the server settled on locally, as is.
+    // Rescanning local files to rebuild it here would make the mtime right after a
+    // download disagree with the server's version, and the same file would be fetched forever
 
     save_local_state(
         base_dir,
@@ -260,16 +264,16 @@ async fn sync_once<T: SyncTransport + Sync>(
     })
 }
 
-/// これより古い `.sync-tmp-*` は、書き手が落ちて置き去りにしたものと見なす。
-/// 生きている書き込みは `fs::write` から `rename` までの一瞬しか持たない
+/// A `.sync-tmp-*` older than this counts as left behind by a writer that crashed.
+/// A live write holds one only for the instant between `fs::write` and `rename`
 const STALE_TMP_AGE: std::time::Duration = std::time::Duration::from_hours(1);
 
-/// `write_atomic` の一時ファイルは rename の前にプロセスが落ちると残る。
-/// `<base>` 直下のものは誰の掃除対象でもないので、ここで拾う。
+/// The temp file of `write_atomic` remains when the process dies before the rename.
+/// Nobody else cleans up the ones directly under `<base>`, so they are picked up here.
 ///
-/// 年齢で絞るのは、いま別の書き込みが rename を待っている一時ファイルを
-/// 消さないため — 消すとその保存が失敗する。掃除に失敗しても同期には
-/// 関係がないので黙って進む。
+/// Filtering by age is so a temp file another write is about to rename does not get
+/// deleted, which would make that save fail. A failed cleanup has no bearing on the
+/// sync, so it goes on in silence.
 fn sweep_stale_temp_files(base_dir: &Path) {
     let Ok(entries) = fs::read_dir(base_dir) else {
         return;
@@ -296,12 +300,12 @@ fn sweep_stale_temp_files(base_dir: &Path) {
     }
 }
 
-/// これ以下ならユーザーが本当に消したと考えて素通しする。
-/// 1〜2件の全消しは事故が起きても取り返しがつく
+/// Below this, assume the user really deleted them and let it through.
+/// A wholesale delete of 1 or 2 files can be recovered from even if it is an accident
 const WHOLESALE_DELETION_THRESHOLD: usize = 3;
 
-/// サーバーの同期状態が壊れて空になっていると、差分計算にはローカル全消しに見える。
-/// 1回の同期で手元のノートが全部消えるのはまず意図された結果ではないので止める。
+/// When the server's sync state is corrupt and empty, the diff sees a wholesale local delete.
+/// Every local note vanishing in one sync is almost never the intended result, so stop it.
 fn refuse_wholesale_local_deletion(
     actions: &[SyncAction],
     local_files: &[LocalFile],
@@ -340,12 +344,13 @@ fn server_state_to_remote_files(state: &ServerSyncState) -> Vec<RemoteFile> {
         .collect()
 }
 
-/// data ディレクトリの外を指せないキーか。
+/// Whether the key cannot point outside the data directory.
 ///
-/// 危ないのは `..` という**パス要素**であって、名前の中に並んだ点ではない。
-/// 部分一致で弾くと `….sync-conflict-20260511-031336..md`(サーバー駆動同期
-/// 以前の控えにある、点が 1 つ多い名前)まで巻き込み、その控えを抱えた端末は
-/// 毎回の同期が失敗し続ける。`Path` に読ませれば区切りの解釈は OS に合う。
+/// The danger is the **path component** `..`, not dots next to each other in a name.
+/// Rejecting on a substring match would also catch `<stem>.sync-conflict-20260511-031336..md`
+/// (a name with one dot too many, found in copies from before server-driven sync), and a
+/// device holding such a copy would fail every sync. Reading it through `Path` makes the
+/// separator handling match the OS.
 fn is_safe_key(key: &str) -> bool {
     !key.is_empty()
         && !key.contains('\0')
@@ -401,11 +406,11 @@ fn build_bulk_request(
                 delete_remote.push(key.clone());
             }
             SyncAction::DeleteLocal { key: _ } => {
-                // ローカル削除は client 側だけで完結（bulk request には含めない）
+                // A local delete is handled entirely on the client side (not in the bulk request)
             }
             SyncAction::Conflict { key } => {
-                // 双方が変わっていたらローカルを採用する。捨てたほうも競合コピーとして
-                // 残るので、どちらの編集も失われない
+                // When both sides changed, local wins. The discarded side remains as a
+                // conflict copy, so neither edit is lost
                 let local = local_map
                     .get(key.as_str())
                     .ok_or_else(|| SyncIssue::MissingLocalFile { key: key.clone() })?;
@@ -446,8 +451,8 @@ fn write_under(data_dir: &Path, key: &str, content: &[u8]) -> Result<(), SyncIss
             detail: format!("mkdir: {e}"),
         })?;
     }
-    // 直接上書きだと、ダウンロード書き込み中のクラッシュで手元のメモが
-    // 半分だけ書けたファイルに置き換わる
+    // Overwriting in place, a crash while writing a download would replace the local
+    // note with a half-written file
     crate::utils::fs::write_atomic(&path, content).map_err(|e| SyncIssue::WriteFailed {
         key: key.to_string(),
         detail: e.to_string(),
@@ -462,11 +467,11 @@ fn decode(file: &DownloadedFile) -> Result<Vec<u8>, SyncIssue> {
         })
 }
 
-/// サーバーの返事をローカルに反映する。書けなかったキーを返す。
+/// Applies the server's reply locally. Returns the keys that could not be written.
 ///
-/// 1 件の失敗でここを抜けると `save_local_state` に届かず、壊れたキーが
-/// 毎回同じ所で同期を止める。失敗は `result.errors` に積んで先へ進み、
-/// 書けなかったキーは「同期済み」として記録させない。
+/// Leaving here on one failure would never reach `save_local_state`, and the broken key
+/// would stop every sync at the same spot. Failures go onto `result.errors` and the
+/// work goes on; a key that could not be written is not recorded as "synced".
 fn apply_response(
     bulk_resp: &BulkResponse,
     actions: &[SyncAction],
@@ -487,13 +492,13 @@ fn apply_response(
         }
     }
 
-    // 競合で負けたリモート側。`data/` の外に置くので同期にも載らず、
-    // ノート一覧にも並ばない。
-    // 失敗しても `unwritten` には入れない: 控えのキーは state に載らないので、
-    // 入れたところで何も除けない（サーバー側の控えは残るので中身も失われない）
+    // The remote side that lost the conflict. It goes outside `data/`, so it is neither
+    // synced nor listed among the notes.
+    // A failure does not go into `unwritten`: a copy's key is not in the state, so
+    // adding it would exclude nothing (the server keeps its copy, so no content is lost)
     let conflicts_dir = paths::conflicts_dir(base_dir);
     for d in &bulk_resp.conflict_downloads {
-        // 名前が読めなければキーのまま置く。形が古くても控えは控え
+        // If the name does not parse, file it under the key as is. An old shape is still a copy
         let key = conflict::conflict_copy_path(&d.key).unwrap_or_else(|| d.key.clone());
         if let Err(e) = decode(d).and_then(|content| write_under(&conflicts_dir, &key, &content)) {
             result.errors.push(e);
@@ -521,11 +526,12 @@ fn apply_response(
     unwritten
 }
 
-/// リモートで消されたファイルをローカルからも消す。
+/// Deletes locally a file that was deleted on remote.
 ///
-/// scan の判定からここまでにサーバーとの往復が挟まる。その隙に書かれた編集は
-/// まだ誰も知らないので、削除の直前に中身を数え直し、scan 時と違えば残す。
-/// 残ったファイルは次の同期で `UploadModified` として復活する
+/// A round trip to the server sits between the scan's verdict and here. An edit written
+/// in that gap is known to nobody yet, so the content is hashed again right before the
+/// delete, and the file is kept if it differs from the scan.
+/// A kept file comes back as `UploadModified` on the next sync
 fn delete_local_file(
     key: &str,
     local_files: &[LocalFile],
@@ -535,7 +541,7 @@ fn delete_local_file(
     let path = data_dir.join(key);
     let content = match fs::read(&path) {
         Ok(content) => content,
-        // すでに無いなら消す手間が省けただけ
+        // Already gone: that just saved the trouble of deleting it
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             result.deleted_local += 1;
             return;
@@ -570,17 +576,17 @@ fn delete_local_file(
     }
 }
 
-/// サーバーが確定させた状態を、実際に手元にあるファイルだけに絞って保存する。
-/// 手元に無いものを「同期済み」と記録すると、次の同期でリモート側を消してしまう。
-/// `unwritten` は取得に失敗したキー: ファイル自体は古い版のまま残っているので、
-/// 存在チェックだけでは除けない。
+/// Saves the state the server settled on, narrowed to the files actually on disk.
+/// Recording a file not on disk as "synced" deletes the remote side on the next sync.
+/// `unwritten` holds the keys whose fetch failed: the file itself is still there at the
+/// old version, so an existence check alone cannot exclude it.
 ///
-/// 取得に失敗したキーには `previous`（同期前に読んだ state）の記録を残す。
-/// 手元にあるのは前回見届けたとおりの版なので、それが実際の状態でもある。
-/// 記録ごと落とすと次の同期が「state 無し・両側にあり・ハッシュ違い」＝
-/// Conflict に落ちて、取り直すだけで済む所に競合コピーが 1 つ増える。
-/// `previous` に記録が無い場合（初回同期での失敗）は落とすのが正しい —
-/// 手元の版を誰も知らないので、突き合わせる先が無い。
+/// A key whose fetch failed keeps its record from `previous` (the state read before the
+/// sync). What is on disk is the version seen last time, so that is also the real state.
+/// Dropping the record makes the next sync fall into "no state, present on both sides,
+/// hashes differ", that is Conflict, and a conflict copy appears where a re-fetch would do.
+/// When `previous` has no record (a failure on the first sync), dropping is right:
+/// nobody knows the local version, so there is nothing to match it against.
 fn to_local_state(
     server_state: &ServerSyncState,
     data_dir: &Path,
@@ -659,15 +665,15 @@ mod tests {
         }
     }
 
-    /// テストはどれもアプリと同じ `base_dir` を渡す。同期が触るのはその下の
-    /// `data/` だけなので、置くのもそこ。
+    /// Every test passes the same `base_dir` as the app. Sync touches only the `data/`
+    /// under it, so that is where files are placed.
     fn seed(base_dir: &Path, key: &str, content: &str) {
         let path = paths::data_dir(base_dir).join(key);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, content).unwrap();
     }
 
-    /// ハッシュが欠けたアップロードはサーバーが 400 で弾く
+    /// The server rejects an upload without a hash with 400
     #[test]
     fn upload_carries_the_local_content_hash() {
         let dir = tempfile::tempdir().unwrap();
@@ -738,8 +744,8 @@ mod tests {
         );
     }
 
-    /// 手元に無いファイルを「同期済み」と記録すると、次の同期で
-    /// リモート側が削除扱いになって消える
+    /// Recording a file not on disk as "synced" makes the next sync treat the remote
+    /// side as deleted and remove it
     #[test]
     fn local_state_drops_files_that_are_not_on_disk() {
         let dir = tempfile::tempdir().unwrap();
@@ -774,10 +780,10 @@ mod tests {
         );
     }
 
-    /// 抜け出せるのは `..` というパス要素であって、名前の中に並んだ点ではない。
-    /// サーバー駆動同期以前の控えには `….sync-conflict-20260511-031336..md` の
-    /// ように点が 1 つ多い名前があり、部分一致で弾くと毎回の同期が
-    /// 「安全でない名前」で失敗し続ける。
+    /// What escapes is the path component `..`, not dots next to each other in a name.
+    /// Copies from before server-driven sync can carry a name with one dot too many,
+    /// such as `<stem>.sync-conflict-20260511-031336..md`, and rejecting on a substring
+    /// match would make every sync fail with "unsafe name".
     #[test]
     fn a_doubled_dot_inside_a_filename_is_not_traversal() {
         assert!(is_safe_key(
@@ -814,8 +820,9 @@ mod tests {
             fs::read_to_string(data.join("notes/a.md")).unwrap(),
             "remote"
         );
-        // 控えは書き続けるノートではない。`data/notes/` に置くと同期からは
-        // 外れていてもノート一覧に並び、元のノートが消えたあとも残骸として残る
+        // A copy is not a note that keeps being written. Put in `data/notes/`, it would
+        // appear in the note list even while excluded from sync, and remain as a
+        // leftover after the original note is gone
         assert!(
             !data
                 .join("notes/a.sync-conflict-20260805-000000.md")
@@ -829,16 +836,16 @@ mod tests {
         assert_eq!(result.downloaded, 1);
     }
 
-    /// bulk が通ったあとの書き込みで 1 件こけたら、そこで抜けずに残りを書く。
-    /// 抜けると `save_local_state` に届かず、壊れた 1 キーが毎回同じ所で
-    /// 同期を止める。失敗したキーは前回の記録を残し、次の同期が
-    /// Conflict ではなく Download としてやり直せるようにする
+    /// When one write fails after the bulk went through, the rest still gets written
+    /// instead of bailing out. Bailing out would never reach `save_local_state`, and
+    /// one broken key would stop every sync at the same spot. The failed key keeps its
+    /// previous record, so the next sync can redo it as a Download rather than a Conflict
     #[test]
     fn a_failed_download_is_retried_as_a_download_next_time() {
         let dir = tempfile::tempdir().unwrap();
-        // 更新版の取得に失敗したので、手元には古い版が残ったまま
+        // The fetch of the updated version failed, so the old version is still on disk
         seed(dir.path(), "notes/bad.md", "stale local copy");
-        // 前回の同期は古い版まで見届けている
+        // The last sync saw the old version through
         let previous = SyncState {
             files: HashMap::from([(
                 "notes/bad.md".to_string(),
@@ -882,8 +889,8 @@ mod tests {
         assert_eq!(result.downloaded, 1);
         assert_eq!(result.errors.len(), 1, "errors: {:?}", result.errors);
 
-        // 取れなかったキーを「同期済み」と記録すると、手元の古い版が
-        // 新しいハッシュで確定してしまう。かわりに前回の記録をそのまま残す
+        // Recording the key that could not be fetched as "synced" would settle the old
+        // local version under the new hash. Instead the previous record stays as it was
         let state = to_local_state(&resp.new_state, &data, &unwritten, &previous);
         assert_eq!(state.files["notes/good.md"].content_hash, "hash-good");
         let kept = &state.files["notes/bad.md"];
@@ -893,9 +900,9 @@ mod tests {
             "2026-08-01T00:00:00Z".parse::<DateTime<Utc>>().unwrap()
         );
 
-        // その記録があるおかげで、次の同期は「ローカル不変・リモート変更」に
-        // 落ちる。落としてしまうと state 無しの「両側にあってハッシュ違い」＝
-        // Conflict になり、競合コピーが 1 つ増える
+        // Thanks to that record, the next sync lands on "local unchanged, remote
+        // changed". Dropping it would give "present on both sides, hashes differ" with
+        // no state, that is Conflict, and one more conflict copy
         let next = diff::compute(
             &[local_file("notes/bad.md", "hash-stale")],
             &[RemoteFile {
@@ -947,8 +954,8 @@ mod tests {
         assert!(result.errors.is_empty(), "errors: {:?}", result.errors);
     }
 
-    /// scan と削除のあいだにはネットワーク往復が挟まる。その隙に書かれた
-    /// 編集まで消さないよう、削除の直前に中身を見直す
+    /// A network round trip sits between the scan and the delete. So an edit written in
+    /// that gap is not deleted too, the content is checked again right before the delete
     #[test]
     fn a_local_delete_is_skipped_when_the_file_changed_after_the_scan() {
         let dir = tempfile::tempdir().unwrap();
@@ -973,8 +980,8 @@ mod tests {
             "edited while the sync was in flight"
         );
         assert_eq!(result.deleted_local, 0);
-        // 表示するのはアプリ (日本語) と CLI (英語) の両方なので、理由は
-        // 英文ではなくキーで返す
+        // Both the app (Japanese) and the CLI (English) display it, so the reason comes
+        // back as a key, not an English sentence
         assert_eq!(
             result.errors,
             vec![SyncIssue::DeleteSkippedChanged {
@@ -983,8 +990,8 @@ mod tests {
         );
     }
 
-    /// サーバーの同期状態が壊れて空になったときに、それを「全部削除された」と
-    /// 解釈してノートを消してしまうのを防ぐ
+    /// When the server's sync state is corrupt and empty, this keeps it from being read
+    /// as "everything was deleted" and wiping the notes
     #[test]
     fn refuses_a_sync_that_would_delete_every_local_file() {
         let locals = vec![
@@ -1014,7 +1021,7 @@ mod tests {
         assert!(refuse_wholesale_local_deletion(&actions, &locals).is_ok());
     }
 
-    /// 数件しか無いうちは取り返しがつくので素通しする
+    /// With only a few files it can be recovered from, so it is let through
     #[test]
     fn allows_clearing_a_tiny_workspace() {
         let locals = vec![local_file("notes/a.md", "h1")];
@@ -1023,7 +1030,7 @@ mod tests {
         assert!(refuse_wholesale_local_deletion(&actions, &locals).is_ok());
     }
 
-    /// しきい値(3)の 1 つ下。2 件の全消しはまだ「取り返しがつく」側。
+    /// One below the threshold (3). A wholesale delete of 2 is still on the "recoverable" side.
     #[test]
     fn allows_clearing_a_workspace_just_below_the_threshold() {
         let locals = vec![
@@ -1036,9 +1043,9 @@ mod tests {
         assert!(refuse_wholesale_local_deletion(&actions, &locals).is_ok());
     }
 
-    /// ロックは入口で取る。取れないまま走査や HTTP に進むと、
-    /// もう一方のプロセスが書いている最中の状態を読んでしまう。
-    /// 到達できない宛先を渡してあるので、通信まで進んでいれば kind は `network` になる。
+    /// The lock is taken at the entry. Going on to the scan or HTTP without it would
+    /// read a state the other process is in the middle of writing.
+    /// The destination is unreachable, so if it got as far as the network, kind would be `network`.
     #[tokio::test]
     async fn a_held_lock_stops_the_run_before_it_talks_to_the_server() {
         let dir = tempfile::tempdir().unwrap();
@@ -1051,9 +1058,9 @@ mod tests {
         drop(held);
     }
 
-    /// 壊れたノート 1 本ぶん。開始区切りの成れの果て・時刻として読める行・
-    /// ダッシュだけの終了行が揃って初めて「化けたメタデータ」になる
-    /// (`note/repair.rs`)。実際に壊れていたファイルの再現はそちらにある。
+    /// One broken note's worth. Only the remains of an opening fence, a line that reads
+    /// as a time, and a closing line of dashes together count as "garbled metadata"
+    /// (`note/repair.rs`). The reproduction of the file that was actually broken is there.
     const MANGLED: &str = concat!(
         "---\n",
         "time: 2026-05-03T15:39:10+09:00\n",
@@ -1067,13 +1074,14 @@ mod tests {
         "# 本文\n",
     );
 
-    /// 修復は走査より前、かつロックの内側。外で走っていたころは、もう一方の
-    /// プロセスが走査している最中にツリーを書き換えられた (#250)。
-    /// 到達できない宛先を渡してあるので、直っていれば通信より前に走っている。
+    /// The repair runs before the scan and inside the lock. When it ran outside, the tree
+    /// could be rewritten while the other process was scanning it (#250).
+    /// The destination is unreachable, so if it is repaired, the repair ran before the network.
     #[tokio::test]
     async fn the_run_entry_repairs_the_tree_once_it_holds_the_lock() {
         let dir = tempfile::tempdir().unwrap();
-        // 古い版が `data/` に置いた競合コピー。走査が拾うと残骸が全端末へ配られる
+        // A conflict copy an old version put in `data/`. If the scan picks it up, the
+        // leftover is handed to every device
         let leftover = "notes/20260320_033440.sync-conflict-20260511-031336.md";
         seed(dir.path(), leftover, "leftover");
         seed(dir.path(), "notes/20260320_033440.md", "the note");
@@ -1103,8 +1111,8 @@ mod tests {
         );
     }
 
-    /// 同期のあとに走っていた重複 ID の片付けも内側へ。外だと、解放した
-    /// ロックの隙に相手が走査を始める。
+    /// The duplicate-ID cleanup that ran after the sync moves inside too. Outside, the
+    /// other side starts scanning in the gap after the lock is released.
     #[tokio::test]
     async fn the_run_entry_relocates_an_id_that_landed_in_both_kinds() {
         let dir = tempfile::tempdir().unwrap();
@@ -1128,8 +1136,8 @@ mod tests {
         );
     }
 
-    /// ロックを取れなかった側は 1 バイトも書かない。相手が走査している最中に
-    /// ツリーを書き換えるのが、そもそも直したかったこと。
+    /// The side that failed to take the lock writes not one byte. Rewriting the tree
+    /// while the other side is scanning is exactly what this set out to fix.
     #[tokio::test]
     async fn a_refused_run_does_not_repair_either() {
         let dir = tempfile::tempdir().unwrap();
@@ -1145,8 +1153,8 @@ mod tests {
         drop(held);
     }
 
-    /// `write_atomic` の一時ファイルは、書いている途中で落ちると `<base>` に
-    /// 残る。誰も消さないので、ロックを持っている同期の入口で拾う
+    /// The temp file of `write_atomic` remains in `<base>` after a crash mid-write.
+    /// Nobody deletes it, so the sync entry, which holds the lock, picks it up
     #[tokio::test]
     async fn the_run_entry_sweeps_temp_files_left_by_a_crash() {
         let dir = tempfile::tempdir().unwrap();
@@ -1156,13 +1164,13 @@ mod tests {
         fs::write(&in_flight, "being renamed right now").unwrap();
         set_age(&stale, STALE_TMP_AGE * 2);
 
-        // 到達できない宛先。掃除はロック取得の直後で、通信より前
+        // An unreachable destination. The sweep is right after the lock, before the network
         let client = HttpClient::new(reqwest::Client::new(), "http://127.0.0.1:1", "token");
         let _ = run(&client, dir.path()).await;
 
         assert!(!stale.exists());
-        // 他の書き込みが今まさに rename しようとしているものを消すと、
-        // その保存が失敗する
+        // Deleting a file another write is about to rename right now makes that save
+        // fail
         assert!(in_flight.exists());
     }
 
@@ -1196,19 +1204,19 @@ mod tests {
         assert!(unwritten.contains("../escaped.md"));
     }
 
-    // ──────────── round をまたぐ同期 ────────────
+    // ──────────── sync across rounds ────────────
 
-    /// サーバーの代役。R2 と同じく 1 ファイル 1 操作で数え、bulk 1 回あたり
-    /// いくつ使ったかを覚えておく — 予算どおりに切れているかは、送った先で
-    /// しか見られない。
+    /// A stand-in for the server. Like R2 it counts one operation per file, and it
+    /// remembers how many each bulk spent. Whether the split fits the budget can only be
+    /// seen at the receiving end.
     #[derive(Default)]
     struct FakeStore {
-        /// key -> (中身, ハッシュ, `last_modified`)
+        /// key -> (content, hash, `last_modified`)
         files: HashMap<String, (Vec<u8>, String, String)>,
         bulk_ops: Vec<usize>,
         uploaded_keys: Vec<String>,
-        /// 手元に書けない状況(読み取り専用・容量不足)の代わり。
-        /// 壊れた base64 を返せば `apply_response` が同じ道を通る
+        /// Stands in for a state where nothing can be written locally (read-only, out of space).
+        /// Returning broken base64 sends `apply_response` down the same path
         corrupt_downloads: bool,
     }
 
@@ -1276,8 +1284,8 @@ mod tests {
         }
     }
 
-    // 待つものが何も無いので `async fn` にはしない — 中身が同期なら
-    // `ready` のほうが、future を跨いでロックを持たないことも一目で分かる
+    // Not `async fn`, since there is nothing to await. With a synchronous body, `ready`
+    // also shows at a glance that no lock is held across a future
     impl SyncTransport for FakeServer {
         fn get_sync_state(
             &self,
@@ -1303,8 +1311,8 @@ mod tests {
     impl FakeServer {
         fn apply_bulk(&self, req: &BulkRequest) -> BulkResponse {
             let mut store = self.store.lock().unwrap();
-            // Worker の数え方をそのまま写す。競合は退避の get + put と
-            // 上書きの put、リモート削除は何本でも 1 回
+            // Copies the Worker's counting as is. A conflict is get + put to set aside
+            // and a put to overwrite; remote deletes are 1 however many
             store.bulk_ops.push(
                 req.uploads.len()
                     + req.downloads.len()
@@ -1365,8 +1373,8 @@ mod tests {
         }
     }
 
-    /// 取り込み直後の Mac がこれ。1 本の bulk に全部を載せると Free プランの
-    /// サブリクエスト上限で Worker が落ち、何度やっても通らない。
+    /// This is the Mac right after an import. Putting everything in one bulk crashes the
+    /// Worker on the Free plan's subrequest limit, and no retry ever gets through.
     #[tokio::test]
     async fn a_hundred_uploads_go_in_rounds_that_each_fit_the_budget() {
         let dir = tempfile::tempdir().unwrap();
@@ -1392,10 +1400,10 @@ mod tests {
         assert_eq!(server.content("notes/099.md").as_deref(), Some("body 99"));
     }
 
-    /// **持ち越したキーをどう記録するかが芯。**次の round に回した
-    /// ダウンロードを「サーバーの版で同期済み」と書くと、手元に残っている
-    /// 古い版が次の round には「ローカルの編集」に見える。ダウンロードが
-    /// アップロードに化けて、取りに行くはずだった新しい版を潰す。
+    /// **The core is how a carried-over key is recorded.** Writing a download moved to
+    /// the next round as "synced at the server's version" makes the old version still
+    /// on disk look like "a local edit" in the next round. The download turns into an
+    /// upload and crushes the new version it was meant to fetch.
     #[tokio::test]
     async fn a_download_carried_to_the_next_round_does_not_become_an_upload() {
         let dir = tempfile::tempdir().unwrap();
@@ -1433,12 +1441,12 @@ mod tests {
         }
     }
 
-    /// 送った数ではなく片付いた数で進み具合を測る。
+    /// Progress is measured by the number settled, not the number sent.
     ///
-    /// 手元に 1 件も書けない状況(読み取り専用・容量不足)だと、選ばれた
-    /// 40 件はどれも失敗して記録も進まない。次の round はキー順で同じ
-    /// 40 件を選ぶので、送った数で数えていると「進んでいる」と言いながら
-    /// 200 round 繰り返し、残りの 5 件には一度も手が届かない。
+    /// When nothing can be written locally (read-only, out of space), all 40 chosen
+    /// fail and the record does not advance. The next round picks the same 40 by key
+    /// order, so counting by sent would repeat 200 rounds while claiming "progress",
+    /// and the remaining 5 would never be reached.
     #[tokio::test]
     async fn a_round_where_nothing_could_be_written_stops_instead_of_spinning() {
         let dir = tempfile::tempdir().unwrap();
@@ -1468,8 +1476,8 @@ mod tests {
         );
     }
 
-    /// 送るものが残っているのに 1 件も送れない round は、何度回しても同じ。
-    /// 無限ループの唯一の入口なので、ここで止める。
+    /// A round that sends nothing while something is left to send comes out the same
+    /// however often it runs. It is the only way into an infinite loop, so it stops here.
     #[tokio::test]
     async fn a_round_that_sends_nothing_stops_the_sync() {
         let dir = tempfile::tempdir().unwrap();

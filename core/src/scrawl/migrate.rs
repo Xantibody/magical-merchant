@@ -1,13 +1,13 @@
-//! `data/timeline/` を `data/scrawl/` へ移す、一度きりの繕い。
+//! A one-time repair that moves `data/timeline/` to `data/scrawl/`.
 //!
-//! 面の名は Scrawl なのに、置き場だけが改名前の `timeline` で残っていた。
-//! ディスクの名前はそのまま同期キーなので、ここを動かすと他の端末からは
-//! 「`timeline/*` が消えて `scrawl/*` が生えた」と映る — 差分は `UploadNew` と
-//! `DeleteRemote` になり、1 回の同期で移り切る(`sync/diff.rs`)。
+//! The surface is named Scrawl, but its directory alone kept the pre-rename `timeline`.
+//! The name on disk is the sync key as is, so moving it looks to the other devices like
+//! "`timeline/*` disappeared and `scrawl/*` appeared": the diff becomes `UploadNew` and
+//! `DeleteRemote`, and one sync carries it over in full (`sync/diff.rs`).
 //!
-//! 走査より前に呼ぶこと。同期のロックの内側(`sync/engine.rs` の `repair_tree`)、
-//! アプリの起動時、CLI の起動時、ウィジェットの JNI —— 日ファイルを書ける
-//! 入り口すべてが通る。あとから呼ぶと、改名の途中のツリーを走査に見られる。
+//! Call it before the scan. Inside the sync lock (`repair_tree` in `sync/engine.rs`), at app
+//! start, at CLI start, in the widget's JNI: every entry point that can write a day file
+//! goes through it. Called later, the scan would see a tree halfway through the rename.
 
 use std::fs;
 use std::path::Path;
@@ -15,43 +15,45 @@ use std::path::Path;
 use crate::error::CoreError;
 use crate::utils::paths::{SCRAWL_DIR, data_dir};
 
-/// 改名前の置き場。この綴りが残っているのはここだけで、移行が済めば誰も読まない。
+/// The pre-rename directory. This spelling survives only here, and once the migration is
+/// done nobody reads it.
 const LEGACY_DIR: &str = "timeline";
 
-/// 移した結果。
+/// The result of the move.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct ScrawlDirMigration {
-    /// 新しい置き場へ移したファイルの数。
+    /// Number of files moved to the new directory.
     pub moved: usize,
-    /// 同じ名前が移動先に既にあったので、旧い置き場に残したファイル。
+    /// Files left in the old directory because the same name already existed at the target.
     ///
-    /// 日ファイルは追記で育つので、機械的に混ぜると片方の記録が消える。
-    /// 残しておけば同期には `timeline/` のまま乗り続けるが、人が中身を見て
-    /// 決められる。
+    /// Day files grow by appending, so merging them mechanically loses one side's records.
+    /// Left where they are, they keep riding the sync as `timeline/`, but a person can look
+    /// at the contents and decide.
     pub left_behind: Vec<String>,
 }
 
 impl ScrawlDirMigration {
-    /// 何も動かさなかったか。移行済み、または一度も書いていない端末。
+    /// Whether nothing was moved. Already migrated, or a device that has never written.
     #[must_use]
     pub const fn is_noop(&self) -> bool {
         self.moved == 0 && self.left_behind.is_empty()
     }
 }
 
-/// `data/timeline/` があれば `data/scrawl/` へ移す。何度呼んでもよい。
+/// Moves `data/timeline/` to `data/scrawl/` if it exists. Safe to call any number of times.
 ///
-/// 移動先がまだ無ければディレクトリごと `rename` する — 1 回のシステムコール
-/// で済み、途中で落ちても「旧いほうが丸ごと残っている」か「新しいほうが
-/// 丸ごとある」かのどちらかにしかならない。
+/// If the target does not exist yet, the whole directory is `rename`d: one system call, and
+/// a crash midway leaves either "the old one intact in full" or "the new one there in full",
+/// nothing else.
 ///
-/// 移動先が既にある(新しい版のアプリが先に書いた)ときだけ 1 ファイルずつ
-/// 運ぶ。名前がぶつかったものは上書きも連番退避もせず、旧い置き場に残す。
+/// Only when the target already exists (a newer version of the app wrote first) are files
+/// carried one by one. A name that collides is neither overwritten nor moved aside under a
+/// numbered name; it stays in the old directory.
 ///
 /// # Errors
 ///
-/// 旧い置き場を読めない、または移せないとき。呼び出し側は握りつぶしてよい —
-/// 次の起動でまた試すだけで、失ったものは何もない。
+/// When the old directory cannot be read or moved. The caller may swallow it: the next
+/// start simply tries again, and nothing is lost.
 pub fn migrate_scrawl_dir(base_dir: &Path) -> Result<ScrawlDirMigration, CoreError> {
     let legacy = data_dir(base_dir).join(LEGACY_DIR);
     if !legacy.is_dir() {
@@ -80,9 +82,9 @@ pub fn migrate_scrawl_dir(base_dir: &Path) -> Result<ScrawlDirMigration, CoreErr
         fs::rename(entry.path(), &landing)?;
         result.moved += 1;
     }
-    // 空になった旧い置き場は消す。残すと、次の同期がディレクトリだけを
-    // 見て「まだ移っていない」と読む道はないが、人の目には移行が済んで
-    // いないように見える
+    // Remove the old directory once it is empty. Leaving it cannot make the next sync read
+    // the directory alone as "not migrated yet", but to a person it looks as if the
+    // migration is not done
     if result.left_behind.is_empty() {
         let _ = fs::remove_dir(&legacy);
     }
@@ -131,7 +133,7 @@ mod tests {
         assert!(!data_dir(tmp.path()).join(LEGACY_DIR).exists());
     }
 
-    /// 起動のたびに呼ぶので、2 回目が何も壊さないことが前提になる。
+    /// It runs on every start, so the premise is that the second run breaks nothing.
     #[test]
     fn running_it_again_changes_nothing() {
         let tmp = TempDir::new().unwrap();
@@ -144,7 +146,7 @@ mod tests {
         assert_eq!(read_scrawl_day(tmp.path(), "2026-03-20"), "- [09:00:00] 朝");
     }
 
-    /// 一度も書いていない端末には旧い置き場が無い。
+    /// A device that has never written has no old directory.
     #[test]
     fn a_tree_without_the_old_directory_is_left_alone() {
         let tmp = TempDir::new().unwrap();
@@ -154,7 +156,7 @@ mod tests {
         assert_eq!(read_scrawl_day(tmp.path(), "2026-03-20"), "- [09:00:00] 朝");
     }
 
-    /// 新しい版が先に書いていれば、移動先は既にある。ぶつからない日は運ぶ。
+    /// If a newer version wrote first, the target already exists. Days that do not collide move.
     #[test]
     fn days_that_do_not_collide_move_into_an_existing_directory() {
         let tmp = TempDir::new().unwrap();
@@ -175,8 +177,8 @@ mod tests {
         );
     }
 
-    /// 同じ日が両方にあるとき。日ファイルは追記で育つので、混ぜると片方の
-    /// 記録が消える。どちらも残して人に決めさせる。
+    /// The same day exists in both. Day files grow by appending, so merging them loses one
+    /// side's records. Keep both and let a person decide.
     #[test]
     fn a_day_that_exists_in_both_is_left_where_it_is() {
         let tmp = TempDir::new().unwrap();

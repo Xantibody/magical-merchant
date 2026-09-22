@@ -24,7 +24,7 @@ impl Notes {
         Self { base_dir }
     }
 
-    /// 今この場でノートを 1 本作る。時刻は `create_at` に渡すだけ。
+    /// Create one note right now. The time is just passed to `create_at`.
     pub(crate) fn create(
         &self,
         body: &str,
@@ -35,8 +35,8 @@ impl Notes {
         self.create_at(Local::now().fixed_offset(), body, tags, context, provenance)
     }
 
-    /// 今この場で Codex を 1 本作る。置き場が違うだけで、名前も frontmatter も
-    /// ノートと同じ。
+    /// Create one Codex right now. Only the directory differs; the name and the
+    /// frontmatter are the same as a Note's.
     pub(crate) fn create_codex(
         &self,
         body: &str,
@@ -54,22 +54,23 @@ impl Notes {
         )
     }
 
-    /// 作成時刻を渡してノートを 1 本作る。返るのは書いたファイルのパス。
+    /// Create one note with the given creation time. Returns the path of the file written.
     ///
-    /// ファイル名は秒までの時刻で、それがそのままノートの ID になる
-    /// (形式は不変)。同じ秒に 2 本作られたときは空いている秒まで
-    /// 1 秒ずつ進める — 名前を変えるのではなく、まだ誰も使っていない
-    /// 名前を選び直すだけ。frontmatter の `time` も進めたあとの時刻に
-    /// 揃える。名前(一覧の並び)と `time`(表示)がずれると、同じ一覧の
-    /// 中で並びと日時が食い違う。渡された時刻が過去でも同じで、移して
-    /// きた記録は元の時刻で並び、同じ秒のぶんも 1 本も落ちない。
+    /// The filename is the time down to the second, and that is the note's ID
+    /// (the format is immutable). When two notes are created in the same second,
+    /// advance one second at a time until a free second is found. This does not
+    /// rename anything; it only picks a name nobody uses yet. The frontmatter
+    /// `time` is aligned to the advanced time too. If the name (list order) and
+    /// `time` (display) drift apart, order and date disagree within one list.
+    /// The same holds for a time in the past: imported records sort at their
+    /// original time, and none of the same-second ones is lost.
     ///
-    /// 予約は `create_new` に任せる。`exists()` で見てから書くと、その
-    /// あいだに別スレッド・別プロセスが同じ名前を取れてしまう。
-    /// 作成は `write_atomic`(tmp → rename)を通さない: rename は既存の
-    /// ファイルを黙って置き換えるので、衝突回避と両立しない。ここで
-    /// 書き途中に落ちても失うのは書きかけの新規ノートだけで、
-    /// 既存の記録は壊れない。
+    /// Reservation is left to `create_new`. Checking with `exists()` and then
+    /// writing lets another thread or process take the same name in between.
+    /// Creation does not go through `write_atomic` (tmp, then rename): rename
+    /// silently replaces an existing file, which defeats collision avoidance.
+    /// A crash mid-write here loses only the half-written new note; existing
+    /// records are not damaged.
     pub(crate) fn create_at(
         &self,
         time: DateTime<FixedOffset>,
@@ -81,10 +82,11 @@ impl Notes {
         self.create_kind_at(NoteKind::Note, time, body, tags, context, provenance)
     }
 
-    /// ID は種別をまたいで 1 つの名前空間。もう片方の置き場に同じ名前が
-    /// あれば、それも「埋まっている秒」として 1 秒進める。こちらは
-    /// `exists()` で見るので隙間はあるが、2 つの置き場・2 つのプロセス・
-    /// 同じ秒が重なったときだけで、その実害は `relocate_duplicate_ids` が拾う。
+    /// IDs are one namespace across both kinds. If the other directory holds
+    /// the same name, that second counts as taken too, and we advance one second.
+    /// This side checks with `exists()`, so there is a gap, but only when two
+    /// directories, two processes and the same second all coincide; the actual
+    /// damage is picked up by `relocate_duplicate_ids`.
     fn create_kind_at(
         &self,
         kind: NoteKind,
@@ -129,19 +131,21 @@ impl Notes {
         Ok(summaries)
     }
 
-    /// 全ノートを 1 回ずつ読み、要約と frontmatter を剥がした本文を `visit` に
-    /// 渡す。全ノートの本文を見る経路(検索・バックリンク)が `list` の後に
-    /// 1 本ずつ読み直すと、ノート 1 件につき open(2) が 2 回になる。macOS では
-    /// open が経路全体の 6 割を占めるので、要約を作るために読んだ内容をそのまま
-    /// 渡す。
+    /// Read every note once and hand `visit` the summary and the body with the
+    /// frontmatter stripped. If a path that looks at every body (search, backlinks)
+    /// re-reads each note after `list`, that is two open(2) calls per note. On macOS
+    /// open takes about 60% of the whole path, so the content read to build the
+    /// summary is passed on as is.
     ///
-    /// 本文は 1 本ずつ貸すだけで、全ノートぶんを同時には持たない。要約と本文の
-    /// 組を Vec で返すと、大きな保管庫では山の使用量が本文の合計になる。
+    /// The body is lent one note at a time; all bodies are never held at once.
+    /// Returning summary and body pairs in a Vec makes heap usage the sum of all
+    /// bodies in a large store.
     ///
-    /// 読めなかったノートは `list` と同じく空の要約と空の本文になる。
+    /// A note that cannot be read yields an empty summary and an empty body, as in
+    /// `list`.
     ///
-    /// 両方の置き場を 1 つの一覧に混ぜ、ファイル名(作成時刻)の新しい順に
-    /// 並べる。面ごとの絞り込みは呼ぶ側が `kind` で行う。
+    /// Both directories are merged into one list, sorted by filename (creation
+    /// time), newest first. Filtering per surface is done by the caller via `kind`.
     pub(crate) fn scan(&self, mut visit: impl FnMut(NoteSummary, &str)) -> Result<(), CoreError> {
         let mut entries: Vec<(NoteKind, fs::DirEntry)> = Vec::new();
         for kind in [NoteKind::Note, NoteKind::Codex] {
@@ -156,7 +160,8 @@ impl Notes {
             let filename = entry.file_name().to_string_lossy().to_string();
             let content = fs::read_to_string(&path).unwrap_or_default();
             let body = frontmatter::strip(&content);
-            // 版の置き場は本体の隣、`.md` を外した名前。版の本文は読まない
+            // Versions live next to the note, under the name minus `.md`. Version bodies
+            // are not read
             let versions = path.with_extension("");
             let mut summary = NoteSummary::from_file(kind, path, filename, &content);
             if kind == NoteKind::Codex {
@@ -169,10 +174,11 @@ impl Notes {
         Ok(())
     }
 
-    /// ID だけでノートを探す。見つかった置き場が種別。Codex を先に見るのは、
-    /// 昇格直後に同期が古い `notes/` 側を戻してきても Codex のほうを
-    /// 開くため — 版を刻んでいる側が本物で、戻ってきたほうは
-    /// `relocate_duplicate_ids` が片付ける。
+    /// Find a note by ID alone. The directory it is found in is its kind. Codex is
+    /// checked first so that, when sync brings back the old `notes/` copy right
+    /// after a promotion, the Codex one is opened: the side with committed versions
+    /// is the real one, and the returned copy is cleaned up by
+    /// `relocate_duplicate_ids`.
     pub(crate) fn locate(&self, filename: &NoteFilename) -> Result<(NoteKind, PathBuf), CoreError> {
         for kind in [NoteKind::Codex, NoteKind::Note] {
             match crate::utils::fs::resolve_existing(&kind.dir(&self.base_dir), filename.as_str()) {
@@ -194,9 +200,10 @@ impl Notes {
         Ok(self.locate(filename)?.1)
     }
 
-    /// ノートを Codex の置き場へ移す。ID(ファイル名)も中身も変えない —
-    /// 同じファイルシステム内の rename なので原子的で、読みかけの相手が
-    /// 途中の状態を見ることはない。すでに Codex なら何もしない。
+    /// Move a note into the Codex directory. Neither the ID (filename) nor the
+    /// content changes. It is a rename within one filesystem, so it is atomic and
+    /// a concurrent reader never sees a half-way state. A note that is already a
+    /// Codex is left alone.
     pub(crate) fn promote_to_codex(&self, filename: &NoteFilename) -> Result<(), CoreError> {
         let (kind, path) = self.locate(filename)?;
         if kind == NoteKind::Codex {
@@ -213,36 +220,39 @@ impl Notes {
         Ok(frontmatter::strip(&content).to_string())
     }
 
-    /// 本文だけを書き換える。frontmatter は作成時の記録なので手を付けない。
+    /// Rewrite the body only. The frontmatter is a record from creation, so it is left alone.
     ///
-    /// - time: 作成時刻。一覧はファイル名(作成時刻)順に並ぶため、編集で
-    ///   動かすと日付グループと並び順が食い違う
-    /// - tags: 本文の `#記法` に移行済みだが、タグ欄で付けていた頃のぶんを
-    ///   空で上書きすると過去のノートから分類が消える
-    /// - context: どの端末で書いたかの記録。編集端末で上書きしない
+    /// - time: creation time. The list is ordered by filename (creation time), so
+    ///   moving it on edit makes the date group and the order disagree
+    /// - tags: already migrated to `#` notation in the body, but overwriting the
+    ///   ones set from the tag field back then with an empty list strips old
+    ///   notes of their classification
+    /// - context: a record of which device wrote it. Not overwritten with the editing device
     ///
-    /// frontmatter が読めないファイルは断る([`CoreError::Parse`])。今この場の
-    /// 時刻と端末で作り直すと、`time` / `tags` / `origin` / `view` / `template` /
-    /// `source` が 1 文字の編集で消え、ファイル名(= 作成時刻)とも食い違う。
-    /// 記録をでっち上げて書くくらいなら断る — `edit_frontmatter` と同じ判断。
-    /// 区切りが 1 つも無いファイルだけは、消える記録が無いので今までどおり書く。
-    /// 開いた区切りが閉じていないファイルは「記録が無い」ではなく「壊れている」:
-    /// `---` の下の行は記録のつもりで書かれていて、本文で上書きすれば消える。
+    /// A file whose frontmatter cannot be parsed is refused ([`CoreError::Parse`]).
+    /// Rebuilding it with the current time and device would drop `time` / `tags` /
+    /// `origin` / `view` / `template` / `source` on a one-character edit, and disagree
+    /// with the filename (= creation time). Refusing beats writing a fabricated
+    /// record: the same call as `edit_frontmatter`. Only a file with no delimiter
+    /// at all is written as before, since there is no record to lose. A file whose
+    /// opening delimiter is never closed is not "no record" but "broken": the lines
+    /// under `---` were written as a record, and overwriting them with the body loses them.
     ///
-    /// 文字として読めないファイルも断る([`CoreError::NotText`])。中身を
-    /// 読めていないので、`expected` の照合も frontmatter の引き継ぎもできず、
-    /// 書けば読めなかったバイト列ごと本文で上書きすることになる。
+    /// A file that cannot be read as text is refused too ([`CoreError::NotText`]).
+    /// Its content could not be read, so neither the `expected` check nor the
+    /// frontmatter carry-over is possible, and writing would overwrite the
+    /// unreadable bytes with the body.
     ///
-    /// 無いファイルには書かない([`CoreError::NotFound`])。ここは既にある
-    /// ノートの本文を差し替える経路で、作る経路は `create` 系にしかない。
-    /// 書けてしまうと、消したノートや Codex へ移したノートが、開いたままの
-    /// 画面からの遅れた保存で古い置き場に生き返る。
+    /// A missing file is not written ([`CoreError::NotFound`]). This path replaces
+    /// the body of an existing note; creation happens only in the `create` family.
+    /// If it could write, a deleted note or one moved to Codex would come back to
+    /// life in its old directory through a late save from a screen still open.
     ///
-    /// 唯一ここが書き足すのが `updated`。本文を書き直したのはこの経路だけで、
-    /// メタデータや表示モードの差し替えは「書き直し」ではない。
+    /// The only thing added here is `updated`. This path is the only one that
+    /// rewrites the body; replacing metadata or the view mode is not a "rewrite".
     ///
-    /// `expected` は読んだときの本文の指紋。今の本文と食い違えば、誰かが
-    /// 先に書いている — その上に書くと相手の編集が黙って消える。
+    /// `expected` is the fingerprint of the body as read. If it differs from the
+    /// current body, someone wrote first; writing over it silently loses their edit.
     pub(crate) fn update(
         path: &Path,
         body: &str,
@@ -251,9 +261,10 @@ impl Notes {
     ) -> Result<Revision, CoreError> {
         let existing = fs::read_to_string(path).map_err(|e| match e.kind() {
             io::ErrorKind::NotFound => CoreError::NotFound(path.display().to_string()),
-            // 文字として読めないファイルは、書き直しても読み直しても同じ理由で
-            // 断られる。`Io` に混ぜると呼ぶ側には一時的な不調と区別が付かず、
-            // 諦めた保存が「あとで通る」ものとして扱われる
+            // A file that cannot be read as text is refused for the same reason on
+            // every rewrite or re-read. Folded into `Io`, the caller cannot tell it
+            // from a transient fault, and a save that was given up on is treated as
+            // one that "will go through later"
             io::ErrorKind::InvalidData => CoreError::NotText(path.display().to_string()),
             _ => CoreError::Io(e),
         })?;
@@ -273,9 +284,9 @@ impl Notes {
                 updated: Some(now.into()),
                 ..fm
             },
-            // 記録が無いファイル(外から置かれた素の Markdown)には書いてよい。
-            // 区切りが 1 つも無いものだけがここに来る — 閉じていない区切りは
-            // 「壊れた記録」で、下の行ごと作り直すと消える
+            // A file with no record (plain Markdown dropped in from outside) may be
+            // written. Only a file with no delimiter at all gets here: an unclosed
+            // delimiter is a record that is broken, and rebuilding it loses the lines below
             Err(_) if frontmatter::is_plain_markdown(&existing) => NoteFrontmatter {
                 context: Some(context.clone()),
                 ..NoteFrontmatter::new(now.into())
@@ -294,11 +305,11 @@ impl Notes {
         Ok(fm)
     }
 
-    /// frontmatter の一部だけを差し替えて書き戻す。本文には触れない。
+    /// Replace part of the frontmatter and write it back. The body is not touched.
     ///
-    /// frontmatter が読めないファイルは `update` と違って作り直さない。
-    /// 本文の保存は失敗させられないが、メタデータ編集はでっち上げた記録を
-    /// 書くくらいなら断ったほうがいい。
+    /// Unlike `update`, a file whose frontmatter cannot be parsed is not rebuilt.
+    /// A body save must not be allowed to fail, but a metadata edit is better
+    /// refused than written as a fabricated record.
     fn edit_frontmatter<F>(&self, filename: &NoteFilename, edit: F) -> Result<(), CoreError>
     where
         F: FnOnce(NoteFrontmatter) -> NoteFrontmatter,
@@ -310,7 +321,7 @@ impl Notes {
         Ok(())
     }
 
-    /// time と tags だけを差し替える。context には触れない。
+    /// Replace only time and tags. context is not touched.
     pub(crate) fn update_meta(
         &self,
         filename: &NoteFilename,
@@ -324,7 +335,7 @@ impl Notes {
         })
     }
 
-    /// 表示モードだけを差し替える。
+    /// Replace only the view mode.
     pub(crate) fn update_view(
         &self,
         filename: &NoteFilename,
@@ -336,7 +347,7 @@ impl Notes {
         })
     }
 
-    /// 昇格元エントリとの繋がりだけを差し替える。
+    /// Replace only the link to the entry it was promoted from.
     pub(crate) fn update_origin(
         &self,
         filename: &NoteFilename,
@@ -348,8 +359,9 @@ impl Notes {
         })
     }
 
-    /// Codex は版のディレクトリ(`codex/<stem>/`)ごと消す。本体だけ消すと、
-    /// 誰のものでもない版が同期で配られ続ける。
+    /// A Codex is deleted together with its versions directory (`codex/<stem>/`).
+    /// Deleting only the note leaves versions that belong to nobody, and sync
+    /// keeps distributing them.
     pub(crate) fn delete(&self, filename: &NoteFilename) -> Result<(), CoreError> {
         let (kind, path) = self.locate(filename)?;
         fs::remove_file(path)?;

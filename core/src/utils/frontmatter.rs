@@ -11,41 +11,44 @@ pub struct NoteFrontmatter {
     pub tags: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub context: Option<Context>,
-    /// 表示モード(例: `mindmap`)。time/tags/context と違い「作成時の記録」では
-    /// なく閲覧の好みだが、ノート単位の設定はノートと一緒に同期されてほしいので
-    /// frontmatter に持つ。未指定・未知の値は読む側がエディタ表示に倒す。
+    /// Display mode (for example `mindmap`). Unlike time/tags/context it is not a
+    /// record made at creation but a viewing preference; a per-note setting should
+    /// sync with the note, so it lives in the frontmatter. Absent or unknown values
+    /// fall back to the editor view on the reading side.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub view: Option<String>,
-    /// 昇格元タイムラインエントリの日時(`YYYY-MM-DDTHH:MM:SS`)。エントリから
-    /// 作ったノートだけが持つ出自の記録で、タイムライン側のチップ表示は
-    /// この値から毎回導出する(エントリ側のファイルには何も書かない)。
+    /// Datetime of the Scrawl entry this note was promoted from (`YYYY-MM-DDTHH:MM:SS`).
+    /// Only notes made from an entry carry this provenance record; the chip on the
+    /// Scrawl side is derived from this value every time (nothing is written to the
+    /// entry's file).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub origin: Option<String>,
-    /// 本文を最後に書き直した時刻。`time` は作成時刻に固定されている(一覧が
-    /// ファイル名順に並ぶ)ので、書き直した事実はここにしか残らない。
-    /// 一度も編集していないノートには書かない — 既定値を書くと、触っても
-    /// いないノートの frontmatter が全部変わって同期が丸ごと走る。
+    /// When the body was last rewritten. `time` is fixed at creation (the list is
+    /// ordered by filename), so the fact of a rewrite survives only here.
+    /// Not written for a note that was never edited: writing a default would change
+    /// the frontmatter of every untouched note and trigger a full sync.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub updated: Option<DateTime<FixedOffset>>,
-    /// 生まれ元のテンプレ名(`templates/daily.md` なら `daily`)。`origin` と
-    /// 同じ作成時の記録で、`{{prev}}` の解決も「同じテンプレの今日のノートは
-    /// もう在るか」の判定も、この値を走査する以外に手がない。
+    /// Name of the template the note was born from (`daily` for `templates/daily.md`).
+    /// A creation-time record like `origin`; resolving `{{prev}}` and deciding whether
+    /// "today's note from the same template already exists" have no way other than
+    /// scanning this value.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub template: Option<String>,
-    /// どの入り口で書かれたか(`app` / `cli` / `mcp` / `widget`)。
-    /// `origin` / `template` と同じ作成時の記録で、あとから別のツールで
-    /// 編集しても変わらない。「最後に編集したツール」が要るなら別のキーを
-    /// 足す — 1 つのキーに両方の意味を持たせると、どちらの問いにも答えられない。
+    /// Which entry point wrote it (`app` / `cli` / `mcp` / `widget` / `import`).
+    /// A creation-time record like `origin` / `template`; editing later with another
+    /// tool does not change it. If "the tool that last edited" is needed, add another
+    /// key: one key carrying both meanings can answer neither question.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
 }
 
 impl NoteFrontmatter {
-    /// 作成直後の記録。任意のキーは持たない状態から始め、書くものだけを
-    /// `..NoteFrontmatter::new(time)` で足す。
+    /// The record right after creation. Start with no optional keys and add only
+    /// what is written, through `..NoteFrontmatter::new(time)`.
     ///
-    /// 構築のたびに全フィールドを並べていると、キーが 1 つ増えるだけで
-    /// 関係のない呼び出し側とテストが全部書き換わる。増える先はここだけにする。
+    /// Listing every field at each construction means that one new key rewrites
+    /// every unrelated caller and test. New keys are added here only.
     #[must_use]
     pub const fn new(time: DateTime<FixedOffset>) -> Self {
         Self {
@@ -61,16 +64,16 @@ impl NoteFrontmatter {
     }
 }
 
-/// 作成時にだけ書かれる出自の記録。後の編集では書き換わらない。
-/// 両方を持つノートは今のところ無い — エントリの昇格はテンプレを通らない。
+/// Provenance record written only at creation. Later edits do not rewrite it.
+/// No note carries both so far: promoting an entry does not go through a template.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Provenance<'a> {
-    /// 昇格元タイムラインエントリの日時(`YYYY-MM-DDTHH:MM:SS`)。
+    /// Datetime of the Scrawl entry this note was promoted from (`YYYY-MM-DDTHH:MM:SS`).
     pub origin: Option<&'a str>,
-    /// 生まれ元のテンプレ名。
+    /// Name of the template the note was born from.
     pub template: Option<&'a str>,
-    /// どの入り口で書かれたか。呼び出し側が自分で名乗る — 共有のヘルパに
-    /// 決めさせると、CLI と MCP のように同じ経路を通るものが同じ名前になる。
+    /// Which entry point wrote it. The caller names itself: if a shared helper
+    /// decided, things that share a path, like the CLI and MCP, would get the same name.
     pub source: Option<Source>,
 }
 
@@ -79,16 +82,16 @@ pub fn render<T: Serialize>(fm: &T, body: &str) -> Result<String, CoreError> {
     Ok(format!("---\n{yaml}---\n{body}"))
 }
 
-/// 本文は `content` を借りて返す。呼び出し側の多くは先頭だけしか使わないので、
-/// ここで所有権を持たせると読み捨てるぶんまで丸ごと複製することになる。
+/// The body is returned as a borrow of `content`. Most callers use only the head,
+/// so owning it here would copy the whole thing, including the part they discard.
 ///
-/// frontmatter が無ければ空の対応表として読む — 全キーが省略可能な型は
-/// 既定値で通り、`time` のような必須キーを持つ型はここで失敗する。
-/// 区切りだけあって中身が無い(`---\n---`)ものも同じ扱い。
+/// Without a frontmatter it reads as an empty map: a type whose keys are all
+/// optional passes with defaults, and a type with a required key such as `time`
+/// fails here. Delimiters with nothing between them (`---\n---`) are treated the same.
 ///
-/// YAML は `T` に直接読む。いったん `serde_yaml::Value` を組み立ててから
-/// 変換すると、ノート 1 本ごとに木を 1 つ余分に作って捨てることになり、
-/// 一覧(`list_notes`)で最も広い frame だった。
+/// The YAML is read straight into `T`. Building a `serde_yaml::Value` first and
+/// converting it would create and discard one extra tree per note, and that was
+/// the widest frame in the list (`list_notes`).
 pub fn parse<T: DeserializeOwned>(content: &str) -> Result<(T, &str), CoreError> {
     let (matter, body) = match split(content) {
         Split::Some { matter, body } => (matter, body),
@@ -108,9 +111,10 @@ pub fn parse<T: DeserializeOwned>(content: &str) -> Result<(T, &str), CoreError>
     Ok((fm, body))
 }
 
-/// frontmatter を捨てて本文だけを返す。`parse` と違い YAML の中身は見ないので、
-/// メタデータが壊れているファイルでも本文が画面に漏れ出さない。
-/// 区切りが閉じていなければ frontmatter とはみなさず全文を返す。
+/// Drops the frontmatter and returns only the body. Unlike `parse` it does not look
+/// at the YAML, so a file with broken metadata does not leak it into the body on screen.
+/// If the delimiter is not closed it is not treated as a frontmatter and the whole
+/// text is returned.
 #[must_use]
 pub fn strip(content: &str) -> &str {
     match split(content) {
@@ -119,27 +123,28 @@ pub fn strip(content: &str) -> &str {
     }
 }
 
-/// 区切りが 1 つも無いか。`parse` が失敗したとき、「記録が壊れている」のか
-/// 「そもそも記録が無い」のかを分けるためにある — 前者を作り直すと元の記録が
-/// 消えるが、後者には消えるものが無い。
-// AIDEV-NOTE: 「閉じた区切りがあるか」ではなく作り直してよい側を聞く。否定形だと Unclosed が許可側に落ちた
+/// Whether there is no delimiter at all. When `parse` fails, this tells "the record
+/// is broken" from "there is no record in the first place": rebuilding the former
+/// erases the original record, while the latter has nothing to erase.
+// AIDEV-NOTE: Asks for the side that may be rebuilt, not "is there a closed delimiter". In the negated form Unclosed fell on the permitted side
 #[must_use]
 pub fn is_plain_markdown(content: &str) -> bool {
     matches!(split(content), Split::None { .. })
 }
 
 enum Split<'a> {
-    /// 区切りの内側と、閉じ区切りの次の行からの本文。
+    /// The inside of the delimiters, and the body from the line after the closing one.
     Some { matter: &'a str, body: &'a str },
-    /// 先頭が `---` ではない。本文は先頭の空白を落とした全文。
+    /// Does not start with `---`. The body is the whole text with leading whitespace dropped.
     None { body: &'a str },
-    /// 開き区切りはあるが閉じていない。
+    /// There is an opening delimiter but no closing one.
     Unclosed,
 }
 
-/// 区切りの規則はここ 1 か所: 先頭の空白は落とす、行末は LF / CRLF / CR の
-/// どれでもよい、開始直後の `---` も閉じ区切り。`parse` と `strip` が同じ
-/// 分割を使うので、一覧と編集経路で本文の始まりがずれることはない。
+/// The delimiter rules live in this one place: leading whitespace is dropped, a line
+/// may end in LF / CRLF / CR, and a `---` right after the opening one also closes.
+/// `parse` and `strip` share this split, so the list and the editing path never
+/// disagree on where the body starts.
 fn split(content: &str) -> Split<'_> {
     let content = content.trim_start();
     let Some(first) = next_line(content, 0) else {
@@ -162,15 +167,15 @@ fn split(content: &str) -> Split<'_> {
 }
 
 struct Line<'a> {
-    /// 行末の改行を含まない行の中身。
+    /// The line's content without its line ending.
     text: &'a str,
-    /// この行の開始位置。
+    /// Where this line starts.
     start: usize,
-    /// 次の行の開始位置。行末が無い(末尾の行)なら文字列の長さ。
+    /// Where the next line starts. The string length if there is no line ending (last line).
     next_start: usize,
 }
 
-/// `pos` から 1 行を切り出す。行末は LF / CRLF / CR のどれでもよい。
+/// Cuts one line out from `pos`. The line may end in LF / CRLF / CR.
 fn next_line(s: &str, pos: usize) -> Option<Line<'_>> {
     let bytes = s.as_bytes();
     if pos >= bytes.len() {
@@ -241,15 +246,15 @@ mod tests {
         assert_eq!(parsed.view, Some("mindmap".to_string()));
     }
 
-    /// view を持たないノートの frontmatter は今までと 1 バイトも変わらない。
-    /// 余計なキーを書くと内容ハッシュが変わり、同期が全ノートを転送し直すことになる。
+    /// The frontmatter of a note without a view does not change by a single byte.
+    /// Writing an extra key changes the content hash, and sync re-transfers every note.
     #[test]
     fn test_render_omits_absent_view() {
         let rendered = render(&sample_fm(), "body").unwrap();
         assert!(!rendered.contains("view"));
     }
 
-    /// view キーを知らない版のアプリが書いたノートも今まで通り読める。
+    /// A note written by an app version that does not know the view key still reads as before.
     #[test]
     fn test_parse_defaults_view_to_none() {
         let yaml = "---\ntime: 2026-03-20T14:30:45+09:00\ntags: []\n---\nbody";
@@ -268,15 +273,15 @@ mod tests {
         assert_eq!(parsed.updated, Some(sample_datetime()));
     }
 
-    /// 一度も編集していないノートに更新日時は無い。空の値でも書けば、
-    /// 全ノートの frontmatter が書き換わって同期が丸ごと走る。
+    /// A note that was never edited has no updated time. Writing even an empty value
+    /// rewrites the frontmatter of every note and triggers a full sync.
     #[test]
     fn test_render_omits_absent_updated() {
         let rendered = render(&sample_fm(), "body").unwrap();
         assert!(!rendered.contains("updated"));
     }
 
-    /// updated キーを知らない版のアプリが書いたノートも今まで通り読める。
+    /// A note written by an app version that does not know the updated key still reads as before.
     #[test]
     fn test_parse_defaults_updated_to_none() {
         let yaml = "---\ntime: 2026-03-20T14:30:45+09:00\ntags: []\n---\nbody";
@@ -295,15 +300,15 @@ mod tests {
         assert_eq!(parsed.origin, Some("2026-08-13T08:30:00".to_string()));
     }
 
-    /// origin を持たないノートの frontmatter は今までと 1 バイトも変わらない。
-    /// view と同じ約束: 書いていないキーは書かない。
+    /// The frontmatter of a note without an origin does not change by a single byte.
+    /// The same promise as view: a key that was not written is not written.
     #[test]
     fn test_render_omits_absent_origin() {
         let rendered = render(&sample_fm(), "body").unwrap();
         assert!(!rendered.contains("origin"));
     }
 
-    /// origin キーを知らない版のアプリが書いたノートも今まで通り読める。
+    /// A note written by an app version that does not know the origin key still reads as before.
     #[test]
     fn test_parse_defaults_origin_to_none() {
         let yaml = "---\ntime: 2026-03-20T14:30:45+09:00\ntags: []\n---\nbody";
@@ -322,16 +327,17 @@ mod tests {
         assert_eq!(parsed.source, Some("cli".to_string()));
     }
 
-    /// source を名乗らないノートの frontmatter は今までと 1 バイトも変わらない。
-    /// view / origin と同じ約束: 書いていないキーは書かない。既存のノートに
-    /// キーが増えると内容ハッシュが動き、全端末で「変更あり」として同期が走る。
+    /// The frontmatter of a note that names no source does not change by a single byte.
+    /// The same promise as view / origin: a key that was not written is not written. A
+    /// key added to an existing note moves the content hash, and every device syncs it
+    /// as "changed".
     #[test]
     fn test_render_omits_absent_source() {
         let rendered = render(&sample_fm(), "body").unwrap();
         assert!(!rendered.contains("source"));
     }
 
-    /// source キーを知らない版のアプリが書いたノートも今まで通り読める。
+    /// A note written by an app version that does not know the source key still reads as before.
     #[test]
     fn test_parse_defaults_source_to_none() {
         let yaml = "---\ntime: 2026-03-20T14:30:45+09:00\ntags: []\n---\nbody";
@@ -365,7 +371,7 @@ mod tests {
         assert_eq!(strip("just body"), "just body");
     }
 
-    /// YAML として壊れていても、区切りの中身を本文に漏らさない。
+    /// Even when the YAML is broken, what is between the delimiters does not leak into the body.
     #[test]
     fn strip_drops_broken_yaml_frontmatter() {
         assert_eq!(strip("---\n:{ not yaml ::\n---\nbody"), "body");
@@ -376,29 +382,31 @@ mod tests {
         assert_eq!(strip("---\ntime: x\n---"), "");
     }
 
-    /// 閉じ区切りが無いなら frontmatter ではない(本文先頭の水平線かもしれない)。
+    /// Without a closing delimiter it is not a frontmatter (it may be a horizontal rule
+    /// at the top of the body).
     #[test]
     fn strip_keeps_unclosed_delimiter() {
         assert_eq!(strip("---\nno closing"), "---\nno closing");
     }
 
-    /// CRLF で書かれたノート。`parse` は受けるので一覧は正常に出るのに、
-    /// `strip` が剥がせないと編集経路にだけ frontmatter が本文として流れ込み、
-    /// そのまま保存されて固定される。
+    /// A note written with CRLF. `parse` accepts it, so the list comes out fine, but
+    /// if `strip` cannot peel it, the frontmatter flows into the body on the editing
+    /// path only, gets saved as is, and sticks.
     #[test]
     fn strip_removes_crlf_frontmatter() {
         assert_eq!(strip("---\r\ntime: x\r\n---\r\nbody line"), "body line");
     }
 
-    /// 空の frontmatter は開始直後の `---` が閉じ区切り。
+    /// In an empty frontmatter the `---` right after the opening one is the closing delimiter.
     #[test]
     fn strip_removes_empty_frontmatter() {
         assert_eq!(strip("---\n---\nbody line"), "body line");
     }
 
-    /// `parse` と `strip` は同じノートから同じ本文を返す。行末や空 frontmatter の
-    /// 扱いが片方にしか入っていないのが元のバグで、一覧(`parse`)は正しいのに
-    /// 編集経路(`strip`)だけ frontmatter を本文として抱えた。
+    /// `parse` and `strip` return the same body from the same note. The original bug
+    /// was that line endings and empty frontmatters were handled on only one side: the
+    /// list (`parse`) was right while the editing path (`strip`) alone held the
+    /// frontmatter as body.
     #[test]
     fn strip_matches_parse_body() {
         for content in [
@@ -406,15 +414,15 @@ mod tests {
             "---\ntime: x\n---\nbody line\n",
             // CRLF
             "---\r\ntime: x\r\n---\r\nbody line\r\n",
-            // CR だけ
+            // CR only
             "---\rtime: x\r---\rbody line\r",
-            // 空 frontmatter
+            // empty frontmatter
             "---\n---\nbody line\n",
-            // 本文中に閉じ区切りと同じ行がある
+            // a line equal to the closing delimiter inside the body
             "---\ntime: x\n---\nbefore\n---\nafter\n",
-            // 先頭の空白
+            // leading whitespace
             "\n\n  ---\ntime: x\n---\nbody line\n",
-            // frontmatter 無し
+            // no frontmatter
             "body line\n",
         ] {
             let (_fm, body): (serde_yaml::Value, &str) = parse(content).unwrap();
@@ -422,11 +430,11 @@ mod tests {
         }
     }
 
-    // ──────────── 境界 ────────────
+    // ──────────── boundaries ────────────
 
-    /// 全キーが省略可能な型は、frontmatter が無くても・空でも既定値で読める。
-    /// 日ファイルの端末一覧がこれ。区切りだけの `---\n---` を壊れた
-    /// メタデータ扱いにすると、`---` の行が本文(エントリ)として残る。
+    /// A type whose keys are all optional reads as defaults whether the frontmatter is
+    /// absent or empty. The device list of a day file is one. Treating a bare `---\n---`
+    /// as broken metadata leaves the `---` lines in the body (as entries).
     #[test]
     fn an_absent_or_empty_frontmatter_reads_as_defaults() {
         #[derive(Debug, Default, PartialEq, serde::Deserialize)]
@@ -442,16 +450,16 @@ mod tests {
         }
     }
 
-    /// `time` を必須とするノートは、frontmatter が無ければ読めない。
-    /// 一覧はそこで `strip` に倒れ、本文をプレビューに出す。
+    /// A note that requires `time` cannot be read without a frontmatter.
+    /// The list falls back to `strip` there and shows the body as the preview.
     #[test]
     fn a_note_without_frontmatter_is_a_parse_error() {
         let result = parse::<NoteFrontmatter>("just body");
         assert!(matches!(result, Err(CoreError::Parse(_))));
     }
 
-    /// 開き区切りだけの本文。`parse` は失敗し、`strip` は全文を返す —
-    /// 閉じていないものを frontmatter とみなすと本文が丸ごと消える。
+    /// A body with only an opening delimiter. `parse` fails and `strip` returns the
+    /// whole text: treating an unclosed one as a frontmatter erases the entire body.
     #[test]
     fn an_unclosed_delimiter_is_not_a_frontmatter() {
         let content = "---\ntime: x\nbody line";
@@ -462,14 +470,15 @@ mod tests {
         assert_eq!(strip(content), content);
     }
 
-    /// 閉じ区切りの直後で終わるファイル。本文は空で、範囲外に触れない。
+    /// A file that ends right after the closing delimiter. The body is empty and nothing
+    /// is read out of range.
     #[test]
     fn a_closing_delimiter_at_the_very_end_leaves_an_empty_body() {
         let (_fm, body): (serde_yaml::Value, &str) = parse("---\ntime: x\n---").unwrap();
         assert_eq!(body, "");
     }
 
-    /// `---` に前後の空白や余分な記号が付いた行は区切りではない。
+    /// A line with whitespace around `---` or extra symbols on it is not a delimiter.
     #[test]
     fn a_delimiter_must_be_exactly_three_dashes() {
         for content in ["--- \ntime: x\n---\nbody", "----\ntime: x\n---\nbody"] {

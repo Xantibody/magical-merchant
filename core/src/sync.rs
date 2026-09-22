@@ -5,8 +5,8 @@ pub mod diff;
 pub mod scan;
 pub mod state;
 
-// HTTP を話す部分だけ feature の裏。Android の JNI ビルドと MCP-only の CLI は
-// reqwest も keyring も要らないので、既定では引き込まない。
+// Only the parts that speak HTTP sit behind the feature. The Android JNI build and the
+// MCP-only CLI need neither reqwest nor keyring, so the default does not pull them in.
 #[cfg(feature = "sync-client")]
 pub mod client;
 #[cfg(feature = "sync-client")]
@@ -20,7 +20,7 @@ pub mod round;
 #[cfg(feature = "sync-client")]
 pub mod token;
 
-/// 1 回の同期でおきたことの内訳。
+/// The breakdown of what happened in one sync.
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct SyncResult {
     pub uploaded: usize,
@@ -31,22 +31,24 @@ pub struct SyncResult {
     pub errors: Vec<SyncIssue>,
 }
 
-/// 同期そのものは続いたが、1 つのキーだけこけたときの記録。
+/// A record of one key that failed while the sync itself went on.
 ///
-/// core は文章を組まない: 呼び手はアプリ (日本語にもなる UI)・CLI・MCP・
-/// Android の JNI と分かれていて、翻訳表を置ける場所は core ではない。
-/// 素材だけを返し、文にするのは表示する側 (アプリは `lib/i18n.ts` の
-/// `sync.issue`)。`Display` は英語のままでよい CLI とログ用。
+/// core composes no sentences: the callers are split across the app (a UI that can be
+/// Japanese), the CLI, MCP and the Android JNI, and core is not the place for a
+/// translation table. It returns only the parts; the side that displays them builds the
+/// sentence (the app in `sync.result.issue` of `lib/i18n.ts`). `Display` serves the CLI and the
+/// logs, where English is fine.
 ///
-/// `kind` の文字列は TypeScript 側が分岐に使う識別子なので変えない。
+/// The `kind` strings are identifiers the TypeScript side branches on, so do not change them.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum SyncIssue {
-    /// `..` や先頭の `/` を含むキー。手元にもサーバーにも渡さない
+    /// A key that contains `..` or a leading `/`. It goes neither to disk nor to the server
     UnsafeKey {
         key: String,
     },
-    /// 走査には出たのに送る段になって見つからない
+    /// An upload or conflict names a key the scan did not list (a file gone by the time
+    /// it is read is `ReadFailed`)
     MissingLocalFile {
         key: String,
     },
@@ -66,7 +68,7 @@ pub enum SyncIssue {
         key: String,
         detail: String,
     },
-    /// 走査から削除までのあいだに書き換わったので、消さずに残した
+    /// It changed between the scan and the delete, so it was kept instead of deleted
     DeleteSkippedChanged {
         key: String,
     },
@@ -88,10 +90,10 @@ impl std::fmt::Display for SyncIssue {
     }
 }
 
-/// フロントが「設定へ誘導」「再試行」などを出し分けられるよう、
-/// エラーを kind 付きで返す。
+/// Returns the error with a kind, so the frontend can choose between "go to settings",
+/// "retry" and the like.
 ///
-/// `kind` の文字列は TypeScript 側が分岐に使っている識別子なので変えない。
+/// The `kind` strings are identifiers the TypeScript side branches on, so do not change them.
 #[derive(Debug, Clone, Serialize)]
 pub struct SyncError {
     pub kind: &'static str,
@@ -107,7 +109,7 @@ impl SyncError {
         }
     }
 
-    /// 分類できない内部エラー用。UI は汎用のエラー表示にフォールバックする
+    /// For internal errors that fit no category. The UI falls back to the generic error display
     #[must_use]
     pub fn other<M: Into<String>>(message: M) -> Self {
         Self::new("other", message)
@@ -126,8 +128,8 @@ impl std::error::Error for SyncError {}
 mod tests {
     use super::{SyncError, SyncIssue};
 
-    /// TypeScript 側は `kind` で分岐して文言を選ぶ。この形が変わると、
-    /// 型は通ったまま画面の文言だけが消える
+    /// The TypeScript side branches on `kind` to pick the wording. If this shape changes,
+    /// the types still pass and only the wording on screen disappears
     #[test]
     fn an_issue_goes_over_the_wire_as_a_kind_and_its_parts() {
         let json = serde_json::to_value(SyncIssue::DeleteSkippedChanged {
@@ -139,7 +141,7 @@ mod tests {
         assert_eq!(json["key"], "notes/a.md");
     }
 
-    /// CLI とログは英語のまま。翻訳するのはアプリだけ
+    /// The CLI and the logs stay English. Only the app translates
     #[test]
     fn an_issue_still_prints_the_english_sentence() {
         let issue = SyncIssue::ReadFailed {

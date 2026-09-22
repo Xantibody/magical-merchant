@@ -12,9 +12,9 @@ use chrono::NaiveDate;
 use crate::error::CoreError;
 use crate::utils::device::{Context, Source};
 
-/// 今日のファイルに 1 行足す。`source` は書き手が名乗る入り口で、
-/// アプリ・CLI・MCP・ウィジェットは同じ core 関数を通るため、ここで
-/// 名乗らないと記録からは区別が付かない。
+/// Adds one line to today's file. `source` is the entry point the writer names itself as;
+/// the app, the CLI and the widget all go through the same core function (the MCP server
+/// only reads Scrawl), so unless it is named here the records cannot tell them apart.
 pub fn save_scrawl_entry(
     base_dir: &Path,
     text: &str,
@@ -32,8 +32,8 @@ pub fn read_scrawl(base_dir: &Path, date: NaiveDate) -> Result<Vec<String>, Core
     Scrawl::new(base_dir.to_path_buf()).read(date)
 }
 
-/// `raw` は書き手が読んだときの行(`read_scrawl` が返した形そのもの)。
-/// 行を指す index だけでは、読んでから書くまでに入った追記や同期でずれる。
+/// `raw` is the line as the writer read it (exactly the form `read_scrawl` returned).
+/// An index alone drifts with any append or sync that lands between the read and the write.
 pub fn update_scrawl_entry(
     base_dir: &Path,
     date: NaiveDate,
@@ -44,7 +44,7 @@ pub fn update_scrawl_entry(
     Scrawl::new(base_dir.to_path_buf()).update_entry(date, index, raw, text)
 }
 
-/// `raw` は `update_scrawl_entry` と同じ、書き手が読んだときの行。
+/// `raw` is the same as in `update_scrawl_entry`: the line as the writer read it.
 pub fn delete_scrawl_entry(
     base_dir: &Path,
     date: NaiveDate,
@@ -83,8 +83,8 @@ mod tests {
         assert!(content.contains("battery"));
     }
 
-    /// アプリも CLI も MCP もウィジェットもこの 1 つの関数を通る。
-    /// 行末の `s` だけが、あとから記録を見て入り口を見分ける手がかり。
+    /// The app, the CLI and the widget all go through this one function (MCP only reads).
+    /// The `s` at the end of the line is the only later clue to which entry point wrote it.
     #[test]
     fn a_saved_entry_names_the_tool_that_wrote_it() {
         let tmp = TempDir::new().unwrap();

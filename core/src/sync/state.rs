@@ -53,8 +53,8 @@ mod tests {
         assert!(state.last_sync.is_none());
     }
 
-    /// 書いた値がそのまま戻る。時刻は秒より細かい桁まで — ここが丸まると
-    /// 次の同期で「ローカルが新しい」と誤判定して転送し直す。
+    /// A written value comes back as it was. Times keep their sub-second digits: if they
+    /// round here, the next sync wrongly decides "local is newer" and transfers again.
     #[test]
     fn save_and_load_roundtrip() {
         let dir = tempfile::tempdir().unwrap();

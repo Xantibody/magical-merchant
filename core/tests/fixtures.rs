@@ -1,15 +1,15 @@
-//! `fixtures/` が本物のデータディレクトリとして通用することを確かめる。
+//! Checks that `fixtures/` passes as a real data directory.
 //!
-//! あの木は `just sandbox` が展開して人が触るものなので、形式が変わったのに
-//! 置き去りになっていると、次に開いた人が「アプリが壊れた」と読む。壊れたのは
-//! 見本のほうだと CI が先に言う。
+//! That tree is what `just sandbox` unpacks for a person to touch, so if the format changes
+//! and it is left behind, the next person to open it reads "the app is broken". CI says
+//! first that it is the sample that broke.
 //!
-//! 読むだけでなく書き込みまで通すのは、fixtures を「parse できる Markdown の
-//! 山」ではなく「そこから続きを書けるデータディレクトリ」として検査するため。
-//! そのために毎回 temp へ写す — 元の木は 1 バイトも動かさない。
+//! Writing is exercised, not only reading, because this inspects the fixtures as "a data
+//! directory you can keep writing from", not "a pile of Markdown that parses".
+//! For that it copies them to temp every time: the original tree does not move by a byte.
 
-// 落ちることがテストの仕事。握り潰す道を証明しなければならないのは本番の
-// コードだけ(`core/src/lib.rs` の同じ断り書きと揃えてある)。
+// Failing is the test's job. Only production code has to prove its path for a swallowed
+// error (aligned with the same disclaimer in `core/src/lib.rs`).
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::path::{Path, PathBuf};
@@ -30,7 +30,7 @@ fn fixtures() -> PathBuf {
         .join("fixtures")
 }
 
-/// fixtures を写した、書き換えてよいデータディレクトリ。
+/// A writable data directory copied from the fixtures.
 fn sandbox() -> TempDir {
     let temp = TempDir::new().expect("temp dir");
     temp.copy_from(fixtures(), &["**/*"])
@@ -56,10 +56,10 @@ fn every_note_in_the_fixtures_can_be_read() {
     }
 }
 
-/// 本文の 1 行目は必ず `# 見出し`。それがタイトル欄に出る文字そのもので
-/// (`note-title.ts`)、frontmatter との間に空行が 1 つ入るだけでタイトルが
-/// 空になり、見出しが本文に居座る。Markdown の整形器にかけると入る類の差なので、
-/// 見本のほうで止める。
+/// The first line of the body is always `# heading`. That is the exact text shown in the
+/// title field (`note-title.ts`); a single blank line between it and the frontmatter leaves
+/// the title empty and the heading sitting in the body. A Markdown formatter introduces that
+/// kind of difference, so it is stopped at the sample.
 #[test]
 fn every_note_body_opens_with_its_title() {
     let dir = sandbox();
@@ -75,8 +75,8 @@ fn every_note_body_opens_with_its_title() {
     }
 }
 
-/// 一覧が種別・表示モード・出自を拾えるところまで見る。どれか 1 つでも
-/// 落ちていれば、その面の画面が空になる。
+/// Looks as far as the list picking up kind, view mode, origin, template and tags. If any
+/// one of them is missing, that surface's screen is empty.
 #[test]
 fn the_fixtures_cover_every_kind_of_note() {
     let dir = sandbox();
@@ -138,7 +138,7 @@ fn every_scrawl_day_parses_into_entries() {
         assert!(!entries.is_empty(), "{date} has entries");
     }
 
-    // 端末の記録が畳まれている日は、読み出しで 1 行ずつに戻る
+    // A day with folded device records comes back one line at a time on read
     let busy = read_scrawl(
         dir.path(),
         NaiveDate::from_ymd_opt(2026, 8, 1).expect("date"),
@@ -165,7 +165,7 @@ fn every_template_can_be_read() {
     );
 }
 
-/// 読めるだけでは足りない。そこから書き続けられて初めてデータディレクトリ。
+/// Being readable is not enough. It is a data directory only once you can keep writing from it.
 #[test]
 fn the_fixtures_can_be_written_to() {
     let dir = sandbox();
@@ -182,7 +182,7 @@ fn the_fixtures_can_be_written_to() {
         .find(|n| n.filename == "20260801_093000.md")
         .expect("the plain note");
     let body = read_note_by_filename(dir.path(), &filename(&note.filename)).expect("body");
-    // 読んだときの revision を添える。core はこれが合わないと書かせない
+    // Attach the revision as read. core refuses the write when it does not match
     let revision = Revision::of(&body);
     update_note(
         &note.path,

@@ -11,10 +11,10 @@ pub fn ensure_dir(path: &Path) -> Result<(), CoreError> {
     Ok(())
 }
 
-/// 検証済みのファイル名を `dir` 直下の実ファイルパスに解決する。
-/// 名前の検証だけではシンボリックリンク越しに `dir` の外へ出られるので、
-/// canonicalize した実体が `dir` 配下にあることまで確かめる。
-/// セキュリティ境界なので、置き場ごとに写経せずここだけに置く。
+/// Resolves a validated filename to the real file path directly under `dir`.
+/// Validating the name alone still allows escaping `dir` through a symbolic link,
+/// so it also checks that the canonicalized target sits under `dir`.
+/// This is a security boundary, so it lives here only and is not copied per storage location.
 pub fn resolve_existing(dir: &Path, filename: &str) -> Result<PathBuf, CoreError> {
     let path = dir.join(filename);
     if !path.exists() {
@@ -29,20 +29,20 @@ pub fn resolve_existing(dir: &Path, filename: &str) -> Result<PathBuf, CoreError
     Ok(canonical_path)
 }
 
-/// 同一プロセス内の一時ファイル名の衝突を避ける通し番号。
+/// A running number that keeps temporary file names from colliding within one process.
 static TMP_SEQ: AtomicU64 = AtomicU64::new(0);
 
-/// 同じディレクトリに一時ファイルを書いてから rename で置き換える。
-/// `fs::write` の直接上書きは、書いている途中でプロセスが落ちると
-/// 半分だけ書けたファイルを残す。タイムラインは追記のたびに 1 日ぶんを
-/// 丸ごと書き直すので、それはその日の記録全体の破損を意味する。
-/// rename は同一ファイルシステム内なら原子的で、読者は旧内容か新内容の
-/// どちらかしか見ない。
+/// Writes a temporary file in the same directory, then replaces the target by rename.
+/// Overwriting directly with `fs::write` leaves a half-written file if the process
+/// dies mid-write. Scrawl rewrites a whole day on every append, so that would mean
+/// the corruption of the entire day's record.
+/// A rename is atomic within one filesystem, so a reader sees either the old
+/// content or the new, never anything else.
 ///
-/// 名前が `.sync-tmp-` なのは、クラッシュで残っても同期スキャンの既存の
-/// 除外に一致し、`.md` を持たないのでノート一覧にも現れないため。
-/// 電源断への fsync までは踏み込まない: 保存のたびの fsync は
-/// モバイルの電池と引き換えになる。ここで防ぐのはプロセス死での破損。
+/// The name is `.sync-tmp-` so that a leftover from a crash matches the existing
+/// exclusion of the sync scan, and without `.md` it does not show up in the note list.
+/// It does not go as far as fsync against power loss: an fsync on every save trades
+/// against battery on mobile. What is prevented here is corruption from process death.
 pub fn write_atomic<C: AsRef<[u8]>>(path: &Path, contents: C) -> Result<(), CoreError> {
     let dir = match path.parent() {
         Some(parent) if !parent.as_os_str().is_empty() => parent,
@@ -53,27 +53,28 @@ pub fn write_atomic<C: AsRef<[u8]>>(path: &Path, contents: C) -> Result<(), Core
 
     fs::write(&tmp, contents)?;
     fs::rename(&tmp, path).inspect_err(|_| {
-        // rename に失敗した一時ファイルを残すと次の書き込みの邪魔はしないが
-        // ゴミが積もる。消せなかったところで元のエラーのほうが重要。
+        // a temporary file left behind by a failed rename does not block the next
+        // write, but garbage piles up. If it cannot be removed, the original error matters more.
         let _ = fs::remove_file(&tmp);
     })?;
     Ok(())
 }
 
-/// 枝番を諦める上限。控えが同じ秒に 100 本並ぶことはないので、ここに当たるのは
-/// バグのとき。数え続けて固まるより、その 1 件を運ばず次の起動へ回す。
+/// The limit at which suffixes are given up. 100 copies never line up in the same
+/// second, so hitting this means a bug. Rather than hang counting, leave that one
+/// item unmoved and let the next start pick it up.
 const MAX_SPARE_NAMES: u32 = 100;
 
-/// `from` を `to` へ移す。`to` が塞がっていたら `-2`, `-3` … と枝番を足した
-/// 隣へ置き、実際に置いた場所を返す。
+/// Moves `from` to `to`. If `to` is taken, puts it next door with a suffix `-2`,
+/// `-3` and so on, and returns where it actually landed.
 ///
-/// `write_atomic` とは逆で、既にあるものを消さないことがこの関数の仕事。
-/// 控えの名前は秒までしか持たないので、同じ秒に 2 回退避すると同じ名前を
-/// 指す。`fs::rename` は Unix では宛先を黙って消すため、素直に呼ぶと先に
-/// 取った控えが失われる — 控えは失った編集を取り戻すためだけのものなので、
-/// 消える控えは置かないのと同じ。
+/// The opposite of `write_atomic`: this function's job is to never erase what is
+/// already there. A copy's name only goes down to the second, so two evacuations
+/// in the same second point at the same name. On Unix `fs::rename` silently
+/// removes the destination, so calling it plainly loses the copy taken first. A
+/// copy exists only to recover lost edits, so a copy that vanishes is the same as none.
 ///
-/// AIDEV-NOTE: 空き確認は `create_new`(`O_EXCL`)で。`exists()` → `rename` は見てから移すまでの隙に負ける
+/// AIDEV-NOTE: The free check is `create_new` (`O_EXCL`). `exists()` then `rename` loses in the window between looking and moving
 pub fn rename_without_clobber(from: &Path, to: &Path) -> Result<PathBuf, CoreError> {
     for n in 1..=MAX_SPARE_NAMES {
         let candidate = if n == 1 {
@@ -91,8 +92,8 @@ pub fn rename_without_clobber(from: &Path, to: &Path) -> Result<PathBuf, CoreErr
             Err(e) => return Err(e.into()),
         };
         if reserved {
-            // 名前は押さえた。中身を入れるのは自分が作った空ファイルの
-            // 上への rename なので、ここで消えるのは自分の目印だけ
+            // the name is reserved. Filling it is a rename over the empty file we
+            // created, so the only thing erased here is our own marker
             return fs::rename(from, &candidate)
                 .map(|()| candidate.clone())
                 .inspect_err(|_| {
@@ -107,8 +108,8 @@ pub fn rename_without_clobber(from: &Path, to: &Path) -> Result<PathBuf, CoreErr
     )))
 }
 
-/// `a/b.md` の 2 番目 → `a/b-2.md`。拡張子は残す — 控えも `.md` のまま
-/// 読めないと、戻すときに開けない。
+/// The second `a/b.md` becomes `a/b-2.md`. The extension stays: unless a copy
+/// still reads as `.md`, it cannot be opened when restoring.
 fn spare_name(path: &Path, n: u32) -> PathBuf {
     let stem = path
         .file_stem()
@@ -121,8 +122,8 @@ fn spare_name(path: &Path, n: u32) -> PathBuf {
     path.with_file_name(name)
 }
 
-/// `e.path()` はディレクトリ名まで含めた `PathBuf` を確保する。拡張子を見るだけなら
-/// ファイル名で足りるので、エントリごとの確保をそのぶん小さくできる。
+/// `e.path()` allocates a `PathBuf` that includes the directory name. Just checking
+/// the extension needs only the file name, so the per-entry allocation is that much smaller.
 fn is_md(entry: &DirEntry) -> bool {
     Path::new(&entry.file_name())
         .extension()
@@ -139,7 +140,7 @@ pub fn list_md_files(dir: &Path) -> Result<Vec<DirEntry>, CoreError> {
         .filter(is_md)
         .collect();
 
-    // file_name() は毎回 OsString を確保するので、比較のたびに呼ばせない。
+    // file_name() allocates an OsString each time, so it is not called on every comparison.
     entries.sort_by_cached_key(|e| std::cmp::Reverse(e.file_name()));
     Ok(entries)
 }
@@ -170,8 +171,8 @@ mod tests {
         assert_eq!(names, vec!["b.md", "a.md"]);
     }
 
-    /// `.md` はドットファイルであって拡張子ではない。`Path::extension` の判定に
-    /// 揃えているので、名前の末尾一致に置き換わっていないことを確かめる。
+    /// `.md` is a dotfile, not an extension. The check follows `Path::extension`, so
+    /// this confirms it has not been replaced by a suffix match on the name.
     #[test]
     fn a_file_named_just_md_is_not_a_note() {
         let tmp = seed(&[".md"]);
@@ -208,7 +209,8 @@ mod tests {
         assert_eq!(fs::read_to_string(&path).unwrap(), "new");
     }
 
-    /// 一時ファイルが残ると、名前次第でノート一覧や同期対象に化ける。
+    /// A leftover temporary file turns into a note list entry or a sync target, depending
+    /// on its name.
     #[test]
     fn write_atomic_leaves_no_temp_file_behind() {
         let tmp = TempDir::new().unwrap();
@@ -236,8 +238,8 @@ mod tests {
         assert_eq!(fs::read_to_string(&to).unwrap(), "body");
     }
 
-    /// 宛先が塞がっていても消さない。控えは失った編集を取り戻すためのもので、
-    /// 上書きされる控えは置かないのと同じ。
+    /// Even when the destination is taken, nothing is erased. A copy exists to
+    /// recover lost edits, and a copy that gets overwritten is the same as none.
     #[test]
     fn rename_without_clobber_keeps_what_is_already_there() {
         let tmp = TempDir::new().unwrap();
@@ -253,7 +255,8 @@ mod tests {
         assert_eq!(fs::read_to_string(&landed).unwrap(), "newcomer");
     }
 
-    /// 枝番は空くまで進む。拡張子は落とさない — `.md` でないと戻すとき読めない。
+    /// The suffix counts up until a name is free. The extension is kept: without `.md` it
+    /// cannot be read when restoring.
     #[test]
     fn rename_without_clobber_counts_up_until_a_name_is_free() {
         let tmp = TempDir::new().unwrap();
@@ -269,8 +272,8 @@ mod tests {
         assert_eq!(fs::read_to_string(&landed).unwrap(), "third");
     }
 
-    /// 元が無ければ何も置いていかない。押さえた名前を空ファイルのまま
-    /// 残すと、次の控えが「塞がっている」と読んで枝番へ逃げ続ける。
+    /// If the source is missing, nothing is left behind. Leaving the reserved name
+    /// as an empty file makes the next copy read it as "taken" and keep escaping to suffixes.
     #[test]
     fn rename_without_clobber_leaves_no_placeholder_when_the_move_fails() {
         let tmp = TempDir::new().unwrap();
@@ -281,8 +284,8 @@ mod tests {
         assert!(!to.exists());
     }
 
-    /// クラッシュで万一残っても、`.md` でないのでノート一覧には現れず、
-    /// `.sync-tmp-` なので同期スキャンの既存の除外にも一致する。
+    /// Even if one is left behind by a crash, it is not `.md` so it does not show in
+    /// the note list, and it is `.sync-tmp-` so it matches the sync scan's existing exclusion.
     #[test]
     fn write_atomic_temp_names_are_invisible_to_md_listing() {
         let tmp = TempDir::new().unwrap();

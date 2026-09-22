@@ -1,9 +1,9 @@
-//! 同期用 JWT の保管と有効期限の判定。
+//! Storage of the sync JWT and the expiry check.
 //!
-//! keyring クレートは Android にストアを持たず、既定でプロセス内 mock に落ちる。
-//! mock は Entry ごとに空の入れ物を作るので、保存したトークンは二度と読めない
-//! （ログイン直後から「未ログイン」のまま）。Android だけアプリ専用ディレクトリの
-//! ファイルに置く。OS がアプリ間のアクセスを遮断しているので、他アプリからは読めない。
+//! The keyring crate has no store on Android and falls back to an in-process mock by default.
+//! The mock creates an empty container per Entry, so a stored token can never be read back
+//! (the app stays "not logged in" right after login). Android alone keeps it in a file in the
+//! app-private directory. The OS blocks access between apps, so other apps cannot read it.
 
 use std::path::Path;
 
@@ -95,8 +95,8 @@ struct Claims {
     exp: i64,
 }
 
-/// 署名は検証しない。鍵は Worker 側にしか無く、ここで見たいのは
-/// 「まだ使える token か」だけ — 実際の可否は Worker が握っている。
+/// Does not verify the signature. The key exists only on the Worker side, and all this
+/// needs to know is "is the token still usable". The Worker holds the real decision.
 #[must_use]
 pub fn is_token_valid(token: &str) -> bool {
     let Ok(token_data) = insecure_decode::<Claims>(token) else {
@@ -114,9 +114,9 @@ mod tests {
     use base64::Engine as _;
     use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 
-    /// 署名は誰も見ないので、鍵も crypto backend も要らない。
-    /// jsonwebtoken の `encode` を呼ぶとテストのためだけに署名実装を
-    /// 抱き込むことになるため、3 つのパートを直に組む。
+    /// Nobody looks at the signature, so neither a key nor a crypto backend is needed.
+    /// Calling jsonwebtoken's `encode` would pull in a signing implementation only for
+    /// the tests, so the three parts are assembled by hand.
     fn make_jwt(exp: i64) -> String {
         let header = URL_SAFE_NO_PAD.encode(r#"{"alg":"HS256","typ":"JWT"}"#);
         let claims = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&Claims { exp }).unwrap());
@@ -141,8 +141,8 @@ mod tests {
         assert!(!is_token_valid(&make_jwt(soon)));
     }
 
-    /// 猶予ちょうど(`exp == now + 300`)は「まだ使える」に入れない。判定は
-    /// `>` なので、テスト側の now より判定時の now が進んでいても結論は同じ。
+    /// Exactly at the buffer (`exp == now + 300`) does not count as "still usable". The check
+    /// is `>`, so the verdict stays the same even if the check's now is later than the test's now.
     #[test]
     fn a_token_expiring_exactly_at_the_buffer_is_not_valid() {
         let at_buffer = chrono::Utc::now().timestamp() + 300;

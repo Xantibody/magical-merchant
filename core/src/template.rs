@@ -1,9 +1,9 @@
-//! ノートのテンプレート。
+//! Note templates.
 //!
-//! テンプレ自体は `data/templates/*.md` に置く素の Markdown で、ノートと
-//! 同じように同期される。特別なのは本文とタグに `{{…}}` を書けることだけで、
-//! それが値になるのはここからノートを作る瞬間 — テンプレファイルの中では
-//! 最後まで文字列のまま(`vars`)。
+//! A template itself is plain Markdown under `data/templates/*.md`, synced the same way
+//! as a note. The only special thing is that `{{...}}` can be written in the body and the
+//! tags; it becomes a value at the moment a note is created from here. Inside the template
+//! file it stays a string to the end (`vars`).
 
 mod repository;
 mod vars;
@@ -24,14 +24,14 @@ use crate::utils::validated::NoteFilename;
 use repository::Templates;
 use vars::resolve_vars;
 
-/// テンプレ起動の結果。
+/// The result of running a template.
 #[derive(Debug, Clone, Serialize)]
 pub struct CreatedNote {
     pub path: PathBuf,
-    /// 今日のぶんが既にあったので、作らずにそれを開いた。
+    /// Today's note already existed, so it was opened instead of creating one.
     ///
-    /// 呼ぶ側にとっては「開く」で同じだが、押しても件数が増えない理由は
-    /// 伝わらないと不親切なので、区別できるようにしておく。
+    /// To the caller both are "open", but it is unkind not to convey why pressing does not
+    /// raise the count, so the two are kept distinguishable.
     pub reused: bool,
 }
 
@@ -39,11 +39,11 @@ pub fn list_templates(base_dir: &Path) -> Result<Vec<TemplateSummary>, CoreError
     Templates::new(base_dir.to_path_buf()).list()
 }
 
-/// テンプレ 1 件の中身。本文と自動タグは編集画面が同時に描くもので、
-/// 別々に読ませればファイルを 2 回開くことになる。
+/// The content of one template. The edit screen draws the body and the automatic tags at
+/// the same time; reading them separately would open the file twice.
 #[derive(Debug, Clone, Serialize)]
 pub struct TemplateDetail {
-    /// 変数を解決していない、書かれたままの本文。
+    /// The body as written, with variables unresolved.
     pub body: String,
     pub tags: Vec<String>,
 }
@@ -60,8 +60,8 @@ pub fn read_template(
         })
 }
 
-/// 無ければ作り、あれば上書きする。テンプレのファイル名は ID ではなく
-/// ただの名前なので、ノートと違って作り直しも改名も呼ぶ側の自由。
+/// Create if missing, overwrite if present. A template's filename is just a name, not an
+/// ID, so unlike a note the caller is free to recreate or rename it.
 pub fn save_template(
     base_dir: &Path,
     filename: &NoteFilename,
@@ -75,14 +75,14 @@ pub fn delete_template(base_dir: &Path, filename: &NoteFilename) -> Result<(), C
     Templates::new(base_dir.to_path_buf()).delete(filename)
 }
 
-/// テンプレからノートを作る。
+/// Create a note from a template.
 ///
-/// 同じテンプレの今日のノートが既にあれば作らずにそれを返す。日次テンプレを
-/// ウィジェットから 1 日に何度も叩くのは普通のことで、そのたびに空の
-/// 「Daily」が増えるとテンプレのほうが邪魔になる。
+/// If today's note from the same template already exists, return it instead of creating
+/// one. Tapping a daily template from the widget several times a day is normal, and if an
+/// empty "Daily" piled up each time, the template would be the nuisance.
 ///
-/// `provenance` は呼ぶ側が名乗る出自。テンプレ名だけはここで埋める —
-/// ファイル名から導けるものを呼ぶ側に渡させても間違いが増えるだけ。
+/// `provenance` is the origin the caller declares. Only the template name is filled in
+/// here: making the caller pass what the filename already gives only adds mistakes.
 pub fn create_note_from_template(
     base_dir: &Path,
     filename: &NoteFilename,
@@ -104,8 +104,8 @@ pub fn create_note_from_template(
 
     let prev = previous_note_link(&notes, name);
     let resolved = resolve_vars(&body, now, prev.as_deref(), locale);
-    // タグに `{{prev}}` を書く人はいないが、書かれても行ごと落とす規則が
-    // そのまま効いて空文字になる。空のタグはタグではない
+    // Nobody writes `{{prev}}` in a tag, but if one did, the drop-the-line rule applies as
+    // is and yields an empty string. An empty tag is not a tag
     let tags: Vec<String> = fm
         .tags
         .iter()
@@ -129,7 +129,7 @@ pub fn create_note_from_template(
     })
 }
 
-/// frontmatter に刻む名前。拡張子を落としたファイル名そのもの。
+/// The name recorded in the frontmatter. The filename itself minus the extension.
 fn template_name(filename: &NoteFilename) -> &str {
     let name = filename.as_str();
     name.strip_suffix(".md").unwrap_or(name)
@@ -149,7 +149,7 @@ fn todays_note<'a>(
     })
 }
 
-/// 同じテンプレから最後に作られたノートへの `[[ID]]` リンク。
+/// The `[[ID]]` link to the note last created from the same template.
 fn previous_note_link(notes: &[NoteSummary], template: &str) -> Option<String> {
     notes
         .iter()
@@ -186,9 +186,9 @@ mod tests {
         .unwrap();
     }
 
-    /// 過去の日付のノートを直に書く。`{{prev}}` も「今日のぶんはもう在るか」も
-    /// 日付で判定するので、`create_note_from_template`(作成時刻は今)では
-    /// 昨日以前のノートを用意できない。
+    /// Write a note with a past date directly. Both `{{prev}}` and "does today's already
+    /// exist" are decided by date, so `create_note_from_template` (creation time is now)
+    /// cannot set up a note from yesterday or earlier.
     fn seed_note(tmp: &TempDir, filename: &str, template: &str, days_ago: i64) {
         let time = (Local::now() - chrono::Duration::days(days_ago)).fixed_offset();
         let fm = NoteFrontmatter {
@@ -225,7 +225,7 @@ mod tests {
         assert!(!created.reused);
     }
 
-    /// 1 本目には前回が無い。「前回: 」だけの行を残さない。
+    /// The first note has no previous one. No line of only `前回: ` is left.
     #[test]
     fn the_first_note_has_no_previous_line() {
         let tmp = TempDir::new().unwrap();
@@ -265,7 +265,8 @@ mod tests {
         );
     }
 
-    /// 前回は「同じテンプレの」直近。別のテンプレのノートは指さない。
+    /// "Previous" is the latest note "from the same template". It never points at another
+    /// template's note.
     #[test]
     fn the_previous_link_ignores_other_templates() {
         let tmp = TempDir::new().unwrap();
@@ -304,7 +305,8 @@ mod tests {
         assert!(listed[0].tags.contains(&month));
     }
 
-    /// 出自が残っていないと、次のノートの `{{prev}}` も同日の判定も成り立たない。
+    /// Without the origin recorded, neither the next note's `{{prev}}` nor the same-day
+    /// check works.
     #[test]
     fn the_note_records_which_template_it_came_from() {
         let tmp = TempDir::new().unwrap();
@@ -325,7 +327,7 @@ mod tests {
         );
     }
 
-    /// 日次テンプレを 1 日に何度叩いても、その日のノートは 1 本。
+    /// However many times a daily template is tapped in a day, that day has one note.
     #[test]
     fn the_same_template_reuses_todays_note() {
         let tmp = TempDir::new().unwrap();
@@ -353,7 +355,7 @@ mod tests {
         assert_eq!(list_notes(tmp.path()).unwrap().len(), 1);
     }
 
-    /// 昨日のぶんは今日のぶんではない。日をまたいだら新しく作る。
+    /// Yesterday's note is not today's. Once the day changes, a new one is created.
     #[test]
     fn yesterdays_note_does_not_stand_in_for_todays() {
         let tmp = TempDir::new().unwrap();
@@ -373,7 +375,7 @@ mod tests {
         assert_eq!(list_notes(tmp.path()).unwrap().len(), 2);
     }
 
-    /// 曜日だけが言語で変わる。テンプレの中身は同じ。
+    /// Only the weekday changes with the language. The template content is the same.
     #[test]
     fn the_weekday_follows_the_locale_of_the_caller() {
         let tmp = TempDir::new().unwrap();
