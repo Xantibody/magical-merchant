@@ -9,6 +9,7 @@ import type { TagCount } from "../lib/tags";
 interface CaptureBarProps {
   /** Records into Scrawl whichever tab is open. */
   onSend: (text: string) => Promise<void>;
+  onError: () => void;
   /** The tags used so far, offered as completions. */
   knownTags?: TagCount[];
 }
@@ -90,16 +91,21 @@ export default function CaptureBar(props: CaptureBarProps): JSX.Element {
   };
 
   const send = async (): Promise<void> => {
-    const trimmed = text().trim();
+    const submitted = text();
+    const trimmed = submitted.trim();
     if (!trimmed || sending()) {
       return;
     }
     setSending(true);
     try {
       await props.onSend(trimmed);
-      setText("");
-      setDismissed(false);
-      queueMicrotask(autoGrow);
+      if (text() === submitted) {
+        setText("");
+        setDismissed(false);
+        queueMicrotask(autoGrow);
+      }
+    } catch {
+      props.onError();
     } finally {
       setSending(false);
     }

@@ -50,6 +50,7 @@ const DAYS: Record<string, string[]> = {
 
 /** Recording rewrites it, so it is rebuilt for each test. */
 let days: Record<string, string[]>;
+let captureFailure: Error | undefined;
 
 const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
   list_scrawl_dates: () => [...RECENT_DATES, YEAR_AGO],
@@ -57,6 +58,9 @@ const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
   list_notes: () => [],
   // It appends, so it becomes the newest record of that day
   save_quick_capture: ({ text }) => {
+    if (captureFailure) {
+      throw captureFailure;
+    }
     days[TODAY]?.push(`- [22:00:00] ${String(text)}`);
   },
 };
@@ -98,6 +102,7 @@ async function setupScrawl(): Promise<void> {
   await page.viewport(1280, 800);
   localStorage.clear();
   days = structuredClone(DAYS);
+  captureFailure = undefined;
   mockWindows("main");
   mockIPC((cmd, args) => {
     const handler = HANDLERS[cmd];
@@ -113,6 +118,31 @@ function teardownScrawl(): void {
   clearMocks();
   document.body.innerHTML = "";
 }
+
+describe("Scrawl capture failures", () => {
+  beforeEach(setupScrawl);
+  afterEach(teardownScrawl);
+
+  it("keeps the draft after a failed save and lets it be retried", async () => {
+    await openScrawl();
+    captureFailure = new Error("disk full");
+    const input = screen.getByPlaceholderText<HTMLTextAreaElement>("いま何を記録する？");
+    fireEvent.input(input, { target: { value: "残しておきたい記録" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() =>
+      expect(shell.toast()?.message).toBe("記録を保存できませんでした。入力は残っています。"),
+    );
+    expect(input.value).toBe("残しておきたい記録");
+    expect(days[TODAY]).toHaveLength(DAYS[TODAY].length);
+
+    captureFailure = undefined;
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await screen.findByText("残しておきたい記録");
+    await waitFor(() => expect(input.value).toBe(""));
+    expect(days[TODAY]).toHaveLength(DAYS[TODAY].length + 1);
+  });
+});
 
 describe("Scrawl › 週次ダイジェスト", () => {
   beforeEach(setupScrawl);

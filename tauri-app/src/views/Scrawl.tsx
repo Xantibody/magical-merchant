@@ -491,7 +491,16 @@ export default function Scrawl(): JSX.Element {
       </div>
 
       <div class="capture-dock">
-        <Show when={selecting()} fallback={<CaptureBar onSend={capture} knownTags={knownTags()} />}>
+        <Show
+          when={selecting()}
+          fallback={
+            <CaptureBar
+              onSend={capture}
+              onError={() => shell.showToast(t().capture.saveFailed)}
+              knownTags={knownTags()}
+            />
+          }
+        >
           <div class="select-bar" role="toolbar" aria-label={t().scrawl.bulkDelete}>
             <Show
               when={confirming()}
