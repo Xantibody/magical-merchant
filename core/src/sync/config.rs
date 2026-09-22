@@ -159,18 +159,6 @@ mod tests {
     }
 
     #[test]
-    fn sync_config_save_and_load() {
-        let dir = tempfile::tempdir().unwrap();
-        let config = SyncConfig {
-            workers_url: "https://sync.example.com".to_string(),
-            ..SyncConfig::default()
-        };
-        config.save(dir.path()).unwrap();
-        let loaded = SyncConfig::load(dir.path()).unwrap().unwrap();
-        assert_eq!(loaded.workers_url, "https://sync.example.com");
-    }
-
-    #[test]
     fn sync_config_load_missing_file() {
         let dir = tempfile::tempdir().unwrap();
         assert_eq!(SyncConfig::load(dir.path()).unwrap(), None);

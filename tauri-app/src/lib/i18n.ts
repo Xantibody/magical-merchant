@@ -97,6 +97,7 @@ const ja = {
   },
   capture: {
     placeholder: "いま何を記録する？",
+    saveFailed: "記録を保存できませんでした。入力は残っています。",
     suggestLabel: "タグ候補",
     newTag: (draft: string) => `+「#${draft}」を新規タグとして確定`,
   },
@@ -639,6 +640,7 @@ const en: Messages = {
   },
   capture: {
     placeholder: "What's on your mind?",
+    saveFailed: "Could not save the entry. Your text is still here.",
     suggestLabel: "Tag suggestions",
     newTag: (draft: string) => `+ Use “#${draft}” as a new tag`,
   },

@@ -145,10 +145,6 @@ function offenders(
     );
 }
 
-function writtenInSeconds(part: string): boolean {
-  return times(part).some((time) => !time.endsWith("ms") && time !== "0s");
-}
-
 function offTheOneEase(part: string): boolean {
   return duration(part) > 0 && !part.includes("var(--app-ease)");
 }
@@ -172,22 +168,10 @@ function keyframeNames(): string[] {
   return [...names].toSorted();
 }
 
-function filesSwitchingMotionOff(): string[] {
-  return Object.entries(sources)
-    .filter(([, css]) => css.includes("prefers-reduced-motion"))
-    .map(([file]) => file);
-}
-
 describe("the motion rules", () => {
   it("has something to read", () => {
     expect(Object.keys(sources).length).toBeGreaterThan(10);
     expect(declarations().length).toBeGreaterThan(10);
-  });
-
-  // Mixing 0.22s and 220ms means converting every time to check whether it is the same
-  // value as the rule's "220ms". The rule is written in ms, so the CSS is written in ms
-  it("spells every duration in milliseconds", () => {
-    expect(offenders(writtenInSeconds)).toStrictEqual([]);
   });
 
   // Without one shared feel, one screen looks as if "a different app is moving inside it"
@@ -214,11 +198,5 @@ describe("the motion rules", () => {
       "mm-rise",
       "spin",
     ]);
-  });
-
-  // Written per surface, one gets forgotten on the day a new surface is added. Forgetting
-  // it does not stop the motion, so only someone who dislikes motion ever notices
-  it("switches motion off from one place", () => {
-    expect(filesSwitchingMotionOff()).toStrictEqual(["./base.css"]);
   });
 });

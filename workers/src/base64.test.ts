@@ -12,15 +12,6 @@ function referenceEncode(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-function referenceDecode(s: string): Uint8Array {
-  const binary = atob(s);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.codePointAt(i) ?? 0;
-  }
-  return bytes;
-}
-
 /// A linear congruential generator. It builds the same 256 KiB every run, so a failing
 /// test always reproduces.
 function pseudoRandomBytes(length: number): Uint8Array {
@@ -57,16 +48,12 @@ const CASES = [
 ];
 
 describe("base64", () => {
-  it.each(CASES)("restores $name unchanged", ({ bytes }) => {
-    expect(base64Decode(base64Encode(bytes.buffer))).toStrictEqual(bytes);
-  });
-
   it.each(CASES)("encodes $name like the byte-at-a-time reference", ({ bytes }) => {
     expect(base64Encode(bytes.buffer)).toBe(referenceEncode(bytes));
   });
 
-  it.each(CASES)("decodes $name like the byte-at-a-time reference", ({ bytes }) => {
+  it.each(CASES)("decodes $name back to the original bytes", ({ bytes }) => {
     const encoded = referenceEncode(bytes);
-    expect(base64Decode(encoded)).toStrictEqual(referenceDecode(encoded));
+    expect(base64Decode(encoded)).toStrictEqual(bytes);
   });
 });

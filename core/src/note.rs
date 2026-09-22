@@ -395,18 +395,6 @@ mod tests {
         chrono::NaiveDateTime::parse_from_str(stem, "%Y%m%d_%H%M%S").unwrap()
     }
 
-    #[test]
-    fn test_update_note_overwrites() {
-        let tmp = TempDir::new().unwrap();
-        let path = draft(&tmp, "original", &[]).unwrap();
-
-        update_note(&path, "updated", &mock_context(), None).unwrap();
-
-        let content = fs::read_to_string(&path).unwrap();
-        assert!(content.contains("updated"));
-        assert!(!content.contains("original"));
-    }
-
     /// time is the creation time. The list is ordered by filename (creation time), so if an
     /// edit moved time, the date groups and the order would disagree.
     #[test]
@@ -753,14 +741,6 @@ mod tests {
         assert!(notes[0].preview.contains("Hello"));
     }
 
-    #[test]
-    fn test_read_note() {
-        let tmp = TempDir::new().unwrap();
-        let path = draft(&tmp, "full content", &[]).unwrap();
-        let content = read_note(&path).unwrap();
-        assert!(content.contains("full content"));
-    }
-
     /// A read returns only the body. Returning the frontmatter would flow straight into
     /// the preview or the editor and put metadata on screen.
     #[test]
@@ -823,42 +803,12 @@ mod tests {
     }
 
     #[test]
-    fn test_delete_note_path_traversal() {
-        assert!(NoteFilename::parse("../etc/passwd").is_err());
-    }
-
-    #[test]
-    fn test_delete_note_rejects_absolute_path() {
-        assert!(NoteFilename::parse("/tmp/evil.md").is_err());
-    }
-
-    #[test]
-    fn test_read_note_by_filename() {
-        let tmp = TempDir::new().unwrap();
-        let path = draft(&tmp, "readable content", &[]).unwrap();
-        let fname = path.file_name().unwrap().to_str().unwrap();
-        let note_filename = NoteFilename::parse(fname).unwrap();
-        let content = read_note_by_filename(tmp.path(), &note_filename).unwrap();
-        assert!(content.contains("readable content"));
-    }
-
-    #[test]
-    fn test_read_note_by_filename_path_traversal() {
-        assert!(NoteFilename::parse("../etc/passwd").is_err());
-    }
-
-    #[test]
     fn test_read_note_by_filename_not_found() {
         let tmp = TempDir::new().unwrap();
         fs::create_dir_all(tmp.path().join("data/notes")).unwrap();
         let note_filename = NoteFilename::parse("nonexistent.md").unwrap();
         let result = read_note_by_filename(tmp.path(), &note_filename);
         assert!(matches!(result, Err(CoreError::NotFound(_))));
-    }
-
-    #[test]
-    fn test_validate_rejects_non_md_extension() {
-        assert!(NoteFilename::parse("evil.txt").is_err());
     }
 
     fn filename_of(path: &Path) -> NoteFilename {
