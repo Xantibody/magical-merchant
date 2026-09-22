@@ -28,6 +28,8 @@
       matchManagers: ["npm"],
       matchFileNames: ["tauri-app/package.json"],
       groupName: "tauri-app dependencies",
+      minimumReleaseAge: "1 day",
+      internalChecksFilter: "strict",
       prBodyNotes: [
         "この PR は `nix-package` が赤のままではマージできない。`nix/package.nix` の `pnpmDeps.hash` を `lib.fakeHash` に置き換えて `nix build .#pnpm-deps` を回し、エラーの `got:` の値を書き戻すこと。",
       ],
