@@ -6,7 +6,7 @@ function press(key: string, init: Partial<KeyboardEventInit> = {}): KeyboardEven
   return new KeyboardEvent("keydown", { key, ...init });
 }
 
-/** createHints は onCleanup を使う。持ち主のいない場所で作らない */
+/** createHints uses onCleanup. Do not create it where it has no owner */
 function withHints(enabled: boolean, run: (hints: ReturnType<typeof createHints>) => void): void {
   createRoot((dispose) => {
     run(createHints(enabled));
@@ -45,7 +45,7 @@ describe("createHints", () => {
     });
   });
 
-  // ⌘N を打った人は札を見たいのではなく、ノートを作りたい
+  // Someone who typed ⌘N wants to make a note, not to look at the badges
   it("gives up as soon as the held modifier turns into a shortcut", () => {
     withHints(true, (hints) => {
       hints.keyDown(press("Meta"));
@@ -67,8 +67,8 @@ describe("createHints", () => {
     });
   });
 
-  // 修飾キーを押し続けると keydown が繰り返し届く環境がある。
-  // そのたびに数え直すと、押し続けているのに札がいつまでも出ない
+  // In some environments holding the modifier delivers keydown over and over. Restarting
+  // the count each time means the badges never appear however long it is held
   it("does not restart the wait on a repeated keydown", () => {
     withHints(true, (hints) => {
       hints.keyDown(press("Meta"));
@@ -80,8 +80,8 @@ describe("createHints", () => {
     });
   });
 
-  // 札には「⌘⇧S」と書いてある。その ⇧ を押した瞬間に札が消えては、
-  // 読んだ通りに押せない
+  // The badge says "⌘⇧S". If it vanished the moment that ⇧ was pressed, it could not be
+  // pressed as read
   it("stays up while Shift joins the held modifier", () => {
     withHints(true, (hints) => {
       hints.keyDown(press("Meta"));
@@ -98,7 +98,7 @@ describe("createHints", () => {
     });
   });
 
-  // タッチしかない端末に修飾キーは無い。出す先も無い
+  // A touch-only device has no modifier key, and nowhere to show them
   it("never shows anything where there is no hover", () => {
     withHints(false, (hints) => {
       hints.keyDown(press("Meta"));

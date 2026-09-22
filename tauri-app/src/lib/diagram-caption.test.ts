@@ -22,13 +22,13 @@ describe("extractCaption", () => {
     expect(extractCaption("flowchart TD\n  A --> B")).toBeUndefined();
   });
 
-  // mermaid のコメントは caption 専用ではない。他のコメントを拾うと、
-  // 設定や覚書がそのまま図の説明として出てしまう
+  // A mermaid comment is not reserved for captions. Picking up other comments would
+  // put settings and stray notes out as the diagram's description
   it("ignores a comment that is not a caption", () => {
     expect(extractCaption("%% theme を上書きする\nflowchart TD")).toBeUndefined();
   });
 
-  // 先頭に限るのは、図の途中のコメントを説明文として引き上げないため
+  // Only the first line counts, so a comment in the middle of the diagram is not lifted out
   it("ignores a caption comment that is not the first line", () => {
     expect(extractCaption("flowchart TD\n%% caption: 図4")).toBeUndefined();
   });

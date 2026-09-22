@@ -2,15 +2,15 @@ import { $prose } from "@milkdown/kit/utils";
 import { Plugin } from "@milkdown/kit/prose/state";
 import { stepPastHr } from "./block-commands";
 
-/** Milkdown の入力ルールが tr に残す印。プラグインの key 名 + "$"。 */
+/** The mark Milkdown's input rules leave on a tr. The plugin's key name plus "$". */
 const INPUT_RULE_META = "MILKDOWN_CUSTOM_INPUTRULES$";
 
 /**
- * `---` の入力ルールのあとにカーソルを罫線の下へ置く。
+ * Puts the cursor below the rule after the `---` input rule runs.
  *
- * AIDEV-NOTE: handleTextInput で先回りする案は捨てた。Android の IME は文字を
- * composition で入れるので、そちらは compositionend 後に走る Milkdown の
- * ルールしか通らない。ルールが残す meta を見て後から直せば、両方の道に効く。
+ * AIDEV-NOTE: getting ahead of it in handleTextInput was rejected. Android's IME enters characters
+ * through composition, so that path only ever goes through Milkdown's rule, which runs after
+ * compositionend. Fixing it afterwards from the meta the rule leaves works for both paths.
  */
 export const hrSelectionPlugin = $prose(
   () =>

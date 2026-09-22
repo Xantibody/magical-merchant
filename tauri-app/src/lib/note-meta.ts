@@ -1,10 +1,10 @@
 /**
- * ノートメタデータパネルの表示・編集ロジック。
+ * Display and edit logic of the note metadata panel.
  *
- * frontmatter の time はオフセット付き RFC 3339。ここでは Date に通さず
- * 文字列のまま扱う。一覧(`items.ts`)が slice で「書かれた土地の時刻」を
- * そのまま見せているので、パネルだけ端末のタイムゾーンに換算すると
- * 同じノートが画面ごとに違う時刻を名乗ることになる。
+ * The frontmatter time is RFC 3339 with an offset. It is handled as a string here,
+ * never through Date. The list (`items.ts`) shows "the local time where it was
+ * written" as is via slice, so converting only the panel to the device's time zone
+ * would make the same note claim a different time on each screen.
  */
 
 import type { NoteContext } from "./commands";
@@ -12,18 +12,18 @@ import { t } from "./i18n";
 import { networkLabel, sourceLabel } from "./parse-scrawl";
 import { normalizeTag, sameTag } from "./tags";
 
-/** RFC 3339 の time を datetime-local input の値(分まで)にする。 */
+/** Turns an RFC 3339 time into the value of a datetime-local input (to the minute). */
 export function toDatetimeLocal(rfc3339: string): string {
   return rfc3339.slice(0, 16);
 }
 
 /**
- * datetime-local の入力を保存する time に解決する。
+ * Resolves the datetime-local input into the time to save.
  *
- * - 入力が元の値のままなら元の文字列を返す。input は秒を持たないので、
- *   組み立て直すと開いて閉じただけで秒が消える
- * - 変わっていたら元のオフセットを引き継ぐ。作成時のタイムゾーンは
- *   context と同じ「記録」であり、編集した端末のもので上書きしない
+ * - If the input still equals the original value, return the original string. The
+ *   input has no seconds, so rebuilding would drop them just by opening and closing
+ * - If it changed, carry over the original offset. The creation time zone is a
+ *   "record" like the context, and is not overwritten with the editing device's
  */
 export function resolveEditedTime(original: string, edited: string): string {
   if (edited === toDatetimeLocal(original)) {
@@ -34,8 +34,8 @@ export function resolveEditedTime(original: string, edited: string): string {
 }
 
 /**
- * 読み取り専用で見せる日時。「2026/05/03 15:39」
- * time と同じく文字列のまま切り出す — 端末のタイムゾーンに換算しない。
+ * Date and time shown read-only. "2026/05/03 15:39"
+ * Sliced as a string like time, with no conversion to the device's time zone.
  */
 export function formatRecordedAt(rfc3339?: string): string {
   if (!rfc3339) {
@@ -45,8 +45,8 @@ export function formatRecordedAt(rfc3339?: string): string {
 }
 
 /**
- * 入力をタグとして追加する。先頭の `#` は落とし、空と重複は無視する。
- * 同一性は本文の `#記法` と同じ規則で見る(`tags.ts`)。
+ * Adds the input as a tag. The leading `#` is dropped; empty and duplicates are ignored.
+ * Identity follows the same rule as the body's `#tag` syntax (`tags.ts`).
  */
 export function addTag(tags: string[], raw: string): string[] {
   const tag = normalizeTag(raw);
@@ -62,11 +62,11 @@ export interface ContextRow {
 }
 
 /**
- * context のうち記録されているフィールドだけを、表示する行にする。
+ * Turns only the recorded fields of the context into rows to display.
  *
- * `source` は frontmatter の直下にあって context の中ではない(端末の状態
- * ではないため)が、読む人にとっては「どこで・何で書いたか」の一続きなので
- * 同じ表に並べる。
+ * `source` sits directly under the frontmatter, not inside the context (it is not
+ * device state), but to the reader it is one record of "where and with what this was
+ * written", so it goes in the same table.
  */
 export function contextRows(ctx: NoteContext | undefined, source?: string): ContextRow[] {
   const labels = t().meta;

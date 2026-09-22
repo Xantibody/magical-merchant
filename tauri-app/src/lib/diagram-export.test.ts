@@ -10,14 +10,14 @@ import {
   textToBase64,
 } from "./diagram-export";
 
-/** mermaid が返す形。width 100% と max-width で本文幅に収まるようにしてある */
+/** The shape mermaid returns. width 100% and max-width keep it inside the body width */
 const MERMAID_SVG =
   '<svg id="mermaid-1" width="100%" viewBox="0 0 320.5 120" ' +
   'style="max-width: 320.5px;" role="graphics-document">' +
   '<rect x="0" y="0" width="320" height="120" fill="#fff"></rect>' +
   "<text>A&nbsp;B</text></svg>";
 
-/** ラベルが HTML のまま残った図。<img> として読むとこの中身だけ描かれない */
+/** A diagram whose labels are still HTML. Read as an <img>, only these contents go undrawn */
 const HTML_LABEL_SVG =
   '<svg id="mermaid-2" width="100%" viewBox="0 0 320.5 120" ' +
   'style="max-width: 320.5px;" role="graphics-document">' +
@@ -53,9 +53,9 @@ describe("sizedSvg", () => {
   it("writes a standalone svg document", () => {
     const sized = sizedSvg(MERMAID_SVG);
 
-    // 名前空間が無いと、単体のファイルとして開いたビューアは画像と認識しない
+    // Without the namespace, a viewer opening it as a standalone file does not see an image
     expect(sized).toMatch(/^<svg[^>]* xmlns="http:\/\/www\.w3\.org\/2000\/svg"/u);
-    // HTML の実体は文字(U+00A0)に直っている。XML の中で &nbsp; は未定義
+    // The HTML entity has been turned into the character (U+00A0). &nbsp; is undefined in XML
     expect(sized).not.toContain("&nbsp;");
     expect(sized).toContain("A\u00A0B");
   });
@@ -65,9 +65,10 @@ describe("sizedSvg", () => {
   });
 
   /**
-   * mermaid 側で htmlLabels を封じてあるが、図ごとのディレクティブや将来の図種で
-   * 抜ける道が残る。foreignObject は <img> 越しに描かれないので、通すと文字の
-   * 抜けた PNG が「保存しました」で終わる。書き出す手前で止めるのが最後の砦
+   * htmlLabels is shut off on the mermaid side, but a per-diagram directive or a future
+   * diagram type leaves a way through. A foreignObject is not drawn through an <img>, so
+   * letting one pass ends in a PNG with its text missing and a "saved" message. Stopping it
+   * just before the export is the last line of defence
    */
   it("refuses an svg whose labels are still html", () => {
     expect(() => sizedSvg(HTML_LABEL_SVG)).toThrow("svg has html labels");
@@ -79,7 +80,8 @@ describe("pngCanvasSize", () => {
     expect(pngCanvasSize({ width: 320.5, height: 120 })).toStrictEqual({ width: 641, height: 240 });
   });
 
-  // 上限を超えた canvas は例外を投げずに空を返す。原寸を諦めてでも絵は出す
+  // A canvas past the limit returns empty instead of throwing. Give up the natural size, but
+  // still produce a picture
   it("gives up resolution rather than the area limit for a huge diagram", () => {
     const size = pngCanvasSize({ width: 8000, height: 6000 });
 
@@ -98,9 +100,9 @@ describe("pngBase64", () => {
   });
 
   /**
-   * canvas が PNG を作れないとき(面積の上限超過)、`toDataURL` は例外ではなく
-   * `data:,` を返す。カンマ以降を切って送ると空の base64 が保存まで届き、
-   * 0 バイトの PNG が「保存しました」になる
+   * When canvas cannot make a PNG (the area limit is exceeded), `toDataURL` returns
+   * `data:,` instead of throwing. Cutting after the comma and sending that lets an empty
+   * base64 reach the save, and a 0 byte PNG becomes "saved"
    */
   it("refuses a data url that carries no png", () => {
     expect(() => pngBase64("data:,")).toThrow("canvas produced no png");
@@ -115,7 +117,7 @@ describe("rasterize", () => {
   it("draws a png at twice the natural size", async () => {
     const base64 = await rasterize(MERMAID_SVG, "#ffffff");
 
-    // PNG の先頭 8 バイト (\x89PNG\r\n\x1a\n)
+    // The first 8 bytes of a PNG (\x89PNG\r\n\x1a\n)
     expect(base64).toMatch(/^iVBORw0KGgo/u);
     const bitmap = await createImageBitmap(new Blob([bytesOf(base64)], { type: "image/png" }));
     expect([bitmap.width, bitmap.height]).toStrictEqual([641, 240]);
@@ -129,7 +131,7 @@ describe("rasterize", () => {
     toDataURL.mockRestore();
   });
 
-  /** PNG の道でも同じ。canvas は文字の無い絵を「有効な PNG」として返してしまう */
+  /** The same on the PNG path. canvas hands back a picture with no text as a "valid PNG" */
   it("refuses an svg whose labels are still html", async () => {
     await expect(rasterize(HTML_LABEL_SVG, "#ffffff")).rejects.toThrow("svg has html labels");
   });

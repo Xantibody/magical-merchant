@@ -1,20 +1,22 @@
 /**
- * 開いているノートの、ディスクと画面のあいだの調停。本文を読む・指紋を憶える・
- * 自動保存を予約する・断られたら譲る、までを 1 か所に集めたもの。画面
- * (`views/Workspace.tsx`)は「何を見せるか」だけを持ち、「いつ・どのノートに・
- * どの本文を書くか」はここが決める。
+ * Mediation between disk and screen for the open note. Reading the body, remembering
+ * the fingerprint, scheduling the autosave and yielding when refused are all kept in
+ * one place. The screen (`views/Workspace.tsx`) only owns "what to show"; "when, to
+ * which note, and which body to write" is decided here.
  *
- * 読みと書きを同じ場所に置いてあるのは、この 2 つが指紋(`revision`)で
- * 噛み合っているから。読んだときの指紋を添えて書き、合わなければ core が
- * 断る — 読みだけを画面側に残すと、指紋を渡す経路が画面を一周することになり、
- * 「どの本文を読んだときの指紋で書いたのか」が追えなくなる。
+ * Reading and writing live together because the two interlock through the fingerprint
+ * (`revision`). A write carries the fingerprint from the read, and core refuses it when
+ * they differ. Leaving the read on the screen side would route the fingerprint through
+ * the whole screen, and "which body's read produced the fingerprint of this write" could
+ * no longer be traced.
  *
- * ここに集めてあるもう 1 つの理由は、判断が全部「時間のずれ」の話だから。
- * 保存は 1 秒遅れて起き、IPC の往復のあいだに人は隣のノートへ移り、同じ
- * ノートを CLI や他の端末も書く。画面の中に散らしておくと、どの経路がどの
- * ずれを見ているのかが追えない — 打った字が黙って消えるのは、たいていその隙間。
+ * The other reason to gather it here is that every decision is about a time gap. The
+ * save fires 1 second late, the person moves to the next note during the IPC round
+ * trip, and the CLI or another device writes the same note. Spread across the screen,
+ * it is impossible to tell which path sees which gap. Typed characters that vanish
+ * silently usually fall into exactly that gap.
  *
- * Solid には依存しない。必要なものは全部 `NoteSessionDeps` で受ける。
+ * No dependency on Solid. Everything needed comes in through `NoteSessionDeps`.
  */
 
 import { beginEditSession, recordSaved, shouldSave, tryWriteBackup } from "./edit-backup";
@@ -26,123 +28,123 @@ import type { RefusedScreen } from "./save-refusal";
 import { splitTitle } from "./note-title";
 import type { NoteContent, NoteView } from "./note-view";
 
-/** 自動保存を起こすまでの間。打鍵が止まってから書く。 */
+/** Delay before the autosave fires. Writes once the typing stops. */
 const SAVE_DEBOUNCE_MS = 1000;
 
-/** メタ行に出る保存の様子。 */
+/** Save state shown in the meta line. */
 export type SaveStatus = "idle" | "saving" | "saved" | "savedAt";
 
-/** 調停の相手。`items.ts` の `NoteItem` のうち、ここが見るぶんだけ。 */
+/** The counterpart of the mediation. Only the part of `NoteItem` in `items.ts` seen here. */
 export interface SaveTarget {
-  /** 一覧の中での同一性。ファイル名と同じだが、意味が違うので分けてある。 */
+  /** Identity within the list. Same as the filename, but kept apart because the meaning differs. */
   id: string;
   filename: string;
-  /** 断られたときの言い分に出す題。 */
+  /** Title shown in the message when a save is refused. */
   title: string;
 }
 
 /**
- * 保存 1 回ぶんの単位。「どのノートに・何を・どのセッションで」を
- * 呼ばれた時点で固める。タイマーが起きる頃には別のノートが選ばれて
- * いることがあり、そのとき画面の本文を読むと隣のノートへ書いてしまう。
+ * The unit of one save. "Which note, what body, which session" is fixed at the
+ * moment of the call. By the time the timer fires another note may be selected,
+ * and reading the screen's body then would write it into the neighbouring note.
  */
 export interface PendingSave {
   item: SaveTarget;
   body: string;
   session: EditSession;
-  /** 写しを取った時点の世代。読み直しをまたいだ写しは書かない。 */
+  /** Generation at the time the copy was taken. A copy that straddles a reload is not written. */
   generation: number;
   /**
-   * 写しを取った時点の `bodyEpoch`。断られたときに「画面の本文はまだこの
-   * 写しの続きか」を見るのに使う。ノートの id では足りない — A → B → A と
-   * 戻れば id は揃うのに、本文は B のものか A を読み直したものになっている。
+   * `bodyEpoch` at the time the copy was taken. Used after a refusal to check whether
+   * the screen's body is still a continuation of this copy. The note id is not enough:
+   * after A -> B -> A the ids match, yet the body is B's or a fresh reload of A.
    */
   bodyEpoch: number;
 }
 
 export interface NoteSessionDeps {
-  /** いま選んでいるノート。読みも書きもこの相手に向かう。 */
+  /** The note selected now. Both reads and writes go to this target. */
   selected: () => SaveTarget | undefined;
-  /** 画面の本文が、選んでいるノートのものとして届いているか。 */
+  /** Whether the body on screen has arrived as the selected note's. */
   loaded: () => boolean;
-  /** 画面に出ている本文。題を結合した、ファイルに書くぶんそのもの。 */
+  /** The body on screen. Title joined in, exactly what goes to the file. */
   body: () => string;
-  /** 本文を外から入れ替えた回数。写しがまだ画面に続いているかを見る。 */
+  /** How many times the body was replaced from outside. Tells whether a copy still continues. */
   bodyEpoch: () => number;
-  /** 本文にカーソルが入っているか。書いている最中は本文を差し替えない。 */
+  /** Whether the cursor is in the body. The body is not replaced while someone is writing. */
   bodyHasFocus: () => boolean;
-  /** 控えの置き場。テストはメモリ実装を差し込む。 */
+  /** Where the backup lives. Tests inject a memory implementation. */
   store: BackupStore;
-  /** ディスクの本文とモードと指紋を読む。 */
+  /** Reads the body, the mode and the fingerprint from disk. */
   read: (filename: string) => Promise<NoteContent>;
-  /** 本文を書く。返るのは書いた本文の指紋。断られたら throw。 */
+  /** Writes the body. Returns the fingerprint of the written body. Throws when refused. */
   write: (filename: string, body: string, revision: string) => Promise<string>;
-  /** 読めた本文を画面に置く。エディタごと作り直す唯一の道。 */
+  /** Puts the read body on screen. The only way to rebuild the editor. */
   showBody: (id: string, title: string, body: string, view: NoteView) => void;
-  /** 一覧を読み直す。行に出る題は本文の先頭行から導かれる。 */
+  /** Reloads the list. The title on a row is derived from the body's first line. */
   refreshList: () => unknown;
   setStatus: (status: SaveStatus) => void;
-  /** 画面に出ているノートの保存が着地した。見せ方は画面が決める。 */
+  /** The save of the note shown on screen has landed. The screen decides how to show it. */
   onSaved: () => void;
   showToast: (text: string) => void;
 }
 
 export interface NoteSession {
   /**
-   * いま人が本文を書いている最中か。エディタは開きっぱなしなので、
-   * 「編集モードに入っているか」では区別が付かない。まだディスクに無い
-   * 打鍵があるか、本文にカーソルが入っているかで見る — どちらの場合も
-   * 本文を差し替えるとカーソル・選択・IME ごと壊す(editor skill)。
+   * Whether a person is writing the body right now. The editor is always open, so
+   * "is edit mode on" cannot tell. Instead: are there keystrokes not yet on disk, or
+   * is the cursor in the body. In either case replacing the body destroys the cursor,
+   * the selection and the IME state (editor skill).
    */
   isTyping: () => boolean;
   /**
-   * ディスクから読み直して画面に出す。選択の切り替えと、外からの書き換えの後に。
-   * `force` は「打った字はもう退避してあるので、書いている最中でも譲る」の合図。
+   * Reload from disk and show on screen. After a selection change and after an outside edit.
+   * `force` signals "the typed characters are already backed up, so yield even mid-write".
    *
-   * 返るのは「読み直しを実際に画面へ載せたか」。読めなかったぶんと、届く前に
-   * 選択が移って見送ったぶんは `false` — 呼ぶ側が「読み直しました」と言う前に
-   * 確かめられるように、載せたかどうかはここからしか分からない。
+   * Returns whether the reload was actually put on screen. A failed read, and one skipped
+   * because the selection moved before it arrived, return `false`. The caller can only learn
+   * from here whether it landed, so that it checks before saying "reloaded".
    */
   reload: (item: SaveTarget, force?: boolean) => Promise<boolean>;
-  /** 書き換える直前の本文でセッションを開く。開いている間は開き直さない。 */
+  /** Opens a session on the body just before it is edited. Not reopened while one is open. */
   ensure: () => void;
-  /** 別のノートへ移る・ディスクの本文が入れ替わったときに畳む。 */
+  /** Folds the session when moving to another note or when the disk body is replaced. */
   drop: () => void;
-  /** 控えを取り終えたセッションとして開き直す。「編集前に戻す」の着地点。 */
+  /** Reopens as a session whose backup is already taken. Where "restore pre-edit" lands. */
   reopenAt: (filename: string, body: string) => void;
-  /** 画面に出ている本文を読んだときの指紋。 */
+  /** Fingerprint from when the body shown on screen was read. */
   revisionOf: (filename: string) => string | undefined;
   setRevision: (filename: string, revision: string) => void;
   forgetRevision: (filename: string) => void;
-  /** 指したノートぶんの写し。`loaded` の判断を済ませた経路が使う。 */
+  /** A copy for the given note. Used by paths that have already made the `loaded` decision. */
   snapshotFor: (item: SaveTarget) => PendingSave;
-  /** 打鍵のたびに呼ぶ。実際に走るのは最後の打鍵の写し。 */
+  /** Called on every keystroke. What actually runs is the copy from the last keystroke. */
   schedule: () => void;
-  /** 予約を捨てて、いま書く。`pending` を省くとその場で写しを取る。 */
+  /** Drops the reservation and writes now. Omitting `pending` takes a copy there and then. */
   flush: (pending?: PendingSave) => Promise<void>;
-  /** 予約を捨てる。書かない。 */
+  /** Drops the reservation. Does not write. */
   cancelPending: () => void;
-  /** 保存が着地したぶんだけ一覧を読み直す。行に出る題が動いていなければ何もしない。 */
+  /** Reloads the list only if a save landed. Does nothing when the row titles have not moved. */
   refreshListIfStale: () => Promise<void>;
-  /** 待っている保存を出しきってから離れる。選択を動かす手前で必ず通す道。 */
+  /** Drains the waiting save before leaving. The path every selection change must go through. */
   settleEdit: () => Promise<void>;
-  /** ファイルを動かす前の `settleEdit`。発火済みの書き込みの着地まで待つ。 */
+  /** `settleEdit` before moving a file. Also waits for writes already fired to land. */
   settleWrites: () => Promise<void>;
-  /** 読んでから書くまでに外で書き換えられていた。譲って読み直す。 */
+  /** The note was edited outside between the read and the write. Yield and reload. */
   yieldToOutsideEdit: (pending: PendingSave, error: unknown) => Promise<void>;
-  /** 画面を閉じるとき。待っている保存は出しきる。 */
+  /** When the screen closes. Waiting saves are drained. */
   dispose: () => void;
 }
 
 export function createNoteSession(deps: NoteSessionDeps): NoteSession {
-  /** いま開いている編集セッション。保存のスキップ判断とバックアップを持つ。 */
+  /** The edit session open now. Holds the skip decision for saves and the backup. */
   let session = beginEditSession("");
-  /** そのセッションがどのノートのものか。null なら開いていない。 */
+  /** Which note that session belongs to. null means none is open. */
   let sessionFile: string | null = null;
   /**
-   * ノートごとの、最後に読んだ(または書いた)本文の指紋。保存に添えると、
-   * CLI や MCP がそのあいだに書き換えていれば断られる。ノート単位で持つ
-   * のは、保存が遅れて届く頃には別のノートが選ばれていることがあるから。
+   * Per note, the fingerprint of the body last read (or written). Attached to a save,
+   * it makes core refuse when the CLI or MCP rewrote the note in between. Kept per note
+   * because by the time a late save lands another note may be selected.
    */
   const revisions = new Map<string, string>();
   /**
@@ -151,23 +153,24 @@ export function createNoteSession(deps: NoteSessionDeps): NoteSession {
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
   let timerFile: string | undefined;
   let draft: PendingSave | undefined;
-  /** 保存は直列に流す。同じノートへの 2 本が同時に飛ぶと後の勝ちが決まらない。 */
+  /** Saves run in series. Two in flight to the same note leave "last wins" undecided. */
   let saveChain: Promise<void> = Promise.resolve();
   /**
-   * 保存の世代。外からの書き換えに譲って読み直すたびに、その Note だけ進める。
-   * 譲るより前に `saveChain` に並んだ写しは、読み直した版を知らないまま
-   * 順番が来る。そのまま書くと、いま画面に出ている相手の本文を古い draft で
-   * 潰す — 読み直しで `revisions` が新しくなっているので core も止められない。
-   * `session.lastSavedBody` を合わせるだけでは「同じ本文の写し」しか止まらない。
+   * Save generation. Advanced for that Note alone each time we yield to an outside edit
+   * and reload. A copy queued on `saveChain` before the yield gets its turn without
+   * knowing about the reloaded version. Written as is, it overwrites the other party's
+   * body now on screen with an old draft, and core cannot stop it because the reload
+   * has refreshed `revisions`. Matching `session.lastSavedBody` only stops "a copy of
+   * the same body".
    */
   const saveGenerations = new Map<string, number>();
   const generationOf = (filename: string): number => saveGenerations.get(filename) ?? 0;
   let readGeneration = 0;
   let editGeneration = 0;
   /**
-   * 一覧の行に出る題がディスクと食い違っているか。保存が着地するたびに立て、
-   * 読み直したら下ろす。「待っている保存があるか」で代用すると、自動保存が
-   * 先に着地していたときに読み直しが飛ばされ、行だけ古い題のまま残る。
+   * Whether the titles on the list rows differ from disk. Raised each time a save lands,
+   * lowered on reload. Substituting "is a save waiting" skips the reload when the
+   * autosave landed first, and only the row keeps the old title.
    */
   let listStale = false;
 
@@ -196,12 +199,12 @@ export function createNoteSession(deps: NoteSessionDeps): NoteSession {
     const editing = editGeneration;
     try {
       const content = await deps.read(item.filename);
-      // 一覧を素早くたどると、遅い読みが速い読みを追い越して届く。
-      // いま選ばれているノートへの答えだけを画面に出す。読み始める前に
-      // 確かめた「編集中でも保存待ちでもない」も、届いた時点でもう一度見る —
-      // 応答を待つあいだにタップして書き始められる。
-      // revision まで見送るのは、画面に出していない版で保存に行くと、
-      // 読んでいない相手の本文の上に書けてしまうから
+      // Stepping quickly through the list, a slow read overtakes a fast one and
+      // arrives later. Only the answer for the note selected now goes on screen.
+      // "Not editing and no save waiting", checked before the read started, is
+      // checked again on arrival: a tap can start writing during the wait.
+      // The revision is held back too, because a save with a version not shown
+      // on screen could write over another party's body that was never read
       if (
         reading !== readGeneration ||
         editing !== editGeneration ||
@@ -211,16 +214,16 @@ export function createNoteSession(deps: NoteSessionDeps): NoteSession {
         return false;
       }
       revisions.set(item.filename, content.revision);
-      // 本文とモードは対で出す。バラすと一瞬だけ違うモードで描かれる
+      // Body and mode go out as a pair. Split, the wrong mode is drawn for a moment
       const titled = splitTitle(content.body);
       deps.showBody(item.id, titled.title, titled.body, content.view);
       drop();
       draft = undefined;
       return true;
     } catch {
-      // 読めなかったことを本文の入れ替えにしない。空のエディタを立てると
-      // 「空のノート」に見え、そこへ打った数文字がノート全体になる。
-      // `loadedId` を進めないので、本文も題も書ける状態にならない
+      // A failed read must not become a body replacement. An empty editor looks
+      // like an "empty note", and the few characters typed into it become the
+      // whole note. `loadedId` is not advanced, so neither body nor title is writable
       if (reading === readGeneration && deps.selected()?.id === item.id && (force || !isTyping())) {
         deps.showToast(t().notes.loadFailed);
       }
@@ -238,8 +241,8 @@ export function createNoteSession(deps: NoteSessionDeps): NoteSession {
   };
 
   const reopenAt = (filename: string, body: string): void => {
-    // 開き直さないと、次に題や本文を触ったときに新しいセッションが立ち上がり、
-    // その最初の保存が復元直前の本文を控えに書いて、もう一度押しても戻れなくなる
+    // Without reopening, the next touch of the title or body starts a new session,
+    // whose first save writes the pre-restore body to the backup, and pressing again cannot go back
     session = beginEditSession(body);
     session.committed = true;
     sessionFile = filename;
@@ -255,7 +258,7 @@ export function createNoteSession(deps: NoteSessionDeps): NoteSession {
 
   const snapshot = (): PendingSave | undefined => {
     const item = deps.selected();
-    // 本文が届いていないノートには写しを取らない。画面にあるのは前のノート
+    // No copy of a note whose body has not arrived. What is on screen is the previous note
     return item && deps.loaded() ? snapshotFor(item) : undefined;
   };
 
@@ -268,28 +271,30 @@ export function createNoteSession(deps: NoteSessionDeps): NoteSession {
   };
 
   /**
-   * 断られた保存から退避する本文。飛んでいった写しではなく、いま画面にある
-   * ぶん — 端末の信号待ちと IPC の往復のあいだに打った字は、まだファイルにも
-   * 控えにも無い。写しのほうを退避すると、その打鍵だけが黙って消える。
+   * The body to back up from a refused save. Not the copy that was sent but what is
+   * on screen now: characters typed between the device's signal wait and the IPC round
+   * trip are in neither the file nor the backup yet. Backing up the copy would silently
+   * drop exactly those keystrokes.
    *
-   * ただし画面のぶんを使えるのは、写しを取った読み込みがまだ続いている
-   * あいだだけ。見るのは `bodyEpoch` — ノートの id を見ても、往復のあいだに
-   * A → B → A と移れば id は揃ったまま、画面の本文は B のものか A を
-   * 読み直したものになっている。それを退避すると、断られた打鍵ごと A の
-   * 控えを別のノートの本文で潰す。epoch は本文を外から入れ替えるたびに
-   * 進むので、揃っているなら画面にあるのは「この写し + その後の打鍵」だけ。
+   * The screen's body is usable only while the load that the copy was taken from is
+   * still current. `bodyEpoch` decides. Looking at the note id, a move A -> B -> A
+   * during the round trip leaves the ids matching while the screen body is B's or a
+   * fresh reload of A. Backing that up crushes A's backup, refused keystrokes and all,
+   * with another note's body. The epoch advances each time the body is replaced from
+   * outside, so when it matches the screen holds only "this copy + later keystrokes".
    */
   const typedBody = (pending: PendingSave): string =>
     deps.bodyEpoch() === pending.bodyEpoch ? deps.body() : pending.body;
 
   /**
-   * 断られた保存のあと、画面に何が出ているか。譲る前の姿ではなく、読み直しが
-   * 済んだ「いま」を見る — 読めずに引き返すことも、往復のあいだに隣へ
-   * 移られることもあり、そのどちらでも画面は譲る前と違う。
+   * What is on screen after a refused save. Not the state before yielding but "now",
+   * after the reload is done: the read may fail and turn back, and the person may move
+   * to a neighbour during the round trip, and either way the screen differs from before.
    *
-   * 打鍵がまだ画面に在るかは `bodyEpoch` で見る(`typedBody` と同じ理由)。
-   * 読み直しが載れば epoch は進むが、A → B → A と戻って別の読み込みが
-   * 載った場合も進む — どちらも「画面にもう打った字は無い」で同じ扱いでよい。
+   * Whether the keystrokes are still on screen is read from `bodyEpoch` (same reason as
+   * `typedBody`). The epoch advances when a reload lands, but also when A -> B -> A
+   * brings a different load. Both mean "the typed characters are no longer on screen",
+   * so one treatment fits.
    */
   const refusedScreen = (pending: PendingSave, reloaded: boolean): RefusedScreen => {
     if (deps.selected()?.id !== pending.item.id) {
@@ -299,19 +304,20 @@ export function createNoteSession(deps: NoteSessionDeps): NoteSession {
   };
 
   /**
-   * 読んでから書くまでに、CLI や MCP が同じノートを書き換えていた。
-   * 相手の本文の上には書かず、打った字はこの端末のバックアップに退避して
-   * ディスクの本文を読み直す。「戻す」を押せば退避した本文と入れ替わる —
-   * 相手の版がバックアップに回るので、どちらも失わない。
+   * The CLI or MCP rewrote the same note between the read and the write. Do not write
+   * over the other party's body: move the typed characters to this device's backup and
+   * reload the disk body. Pressing "restore" swaps in the backed-up body, and the other
+   * party's version goes to the backup, so neither is lost.
    *
-   * 読み直すのは、譲ったノートがまだ選ばれているときだけ。往復のあいだに
-   * 隣へ移っていれば画面にあるのは別のノートで、そこへディスクの本文を
-   * 流し込むわけにはいかない。言い分もそれに合わせる — 断られた保存の
-   * 言い分は `refusalToast` が一手に決める。
+   * Reload only while the yielded note is still selected. If the person moved to a
+   * neighbour during the round trip, the screen holds a different note, and the disk
+   * body cannot be poured into it. The message follows suit; the message for a refused
+   * save is decided by `refusalToast` alone.
    */
   const yieldToOutsideEdit = async (pending: PendingSave, error: unknown): Promise<void> => {
-    // 「戻す」で呼び出せると言う前に、控えが実際に残ったかを見る。
-    // 満杯・無効の localStorage では残らず、そこで約束すると人は信じて閉じる
+    // Check that the backup actually landed before saying it can be recalled with
+    // "restore". A full or disabled localStorage keeps nothing; a promise made there
+    // is believed, and the person closes the app on it
     const kept = tryWriteBackup(deps.store, pending.item.filename, typedBody(pending));
     saveGenerations.set(pending.item.filename, generationOf(pending.item.filename) + 1);
     if (timerFile === pending.item.filename) {
@@ -330,9 +336,9 @@ export function createNoteSession(deps: NoteSessionDeps): NoteSession {
     const previous = saveChain;
     saveChain = (async () => {
       await previous;
-      // 触っていない誤タップのセッションを書き込みに変えない。書いても
-      // 内容が変わらないなら、ファイルの mtime を動かして同期を起こすだけ。
-      // 読み直しをまたいだ写しも書かない(世代が置いていかれている)
+      // Do not turn an untouched stray tap session into a write. A write that changes
+      // nothing only moves the file's mtime and triggers a sync.
+      // A copy that straddles a reload is not written either (its generation was left behind)
       if (
         !pending ||
         pending.generation !== generationOf(pending.item.filename) ||
@@ -340,13 +346,13 @@ export function createNoteSession(deps: NoteSessionDeps): NoteSession {
       ) {
         return;
       }
-      // 保存の様子はそのノートの持ち物。書き込みが遅い端末では、隣へ移った
-      // あとに着地することがあり、そのまま出すと開いたばかりのノートが
-      // 「保存しました」と言う。画面に出ているノートの保存のときだけ出す
+      // The save state belongs to that note. On a device with slow writes it can land
+      // after a move to the neighbour, and shown as is the note just opened would say
+      // "saved". Show it only for the save of the note on screen
       const shown = (): boolean => deps.selected()?.id === pending.item.id;
-      // 指紋を持たないノートには書かない。`revision` 無しの保存は core の
-      // 照合を素通りするので、読めていない本文の上に画面のぶんを丸ごと
-      // 書いてしまう。読み直しが通れば指紋が入り、次の保存から書ける
+      // Do not write a note that has no fingerprint. A save without `revision` passes
+      // core's check untouched, and writes the whole screen body over a body that was
+      // never read. Once a reload gets through the fingerprint is in, and the next save can write
       const expected = revisions.get(pending.item.filename);
       if (expected === undefined) {
         return;
@@ -358,9 +364,9 @@ export function createNoteSession(deps: NoteSessionDeps): NoteSession {
         const revision = await deps.write(pending.item.filename, pending.body, expected);
         revisions.set(pending.item.filename, revision);
         recordSaved(deps.store, pending.item.filename, pending.session, pending.body);
-        // 一覧はここでは読み直さない。1 秒おきの保存のたびに全ノートを
-        // 読み直すのは低スペック端末に重く、編集中は一覧が見えてもいない。
-        // 書く手が止まったときに 1 回だけ読み直す。
+        // The list is not reloaded here. Reloading every note on each 1-second save
+        // is heavy on a low-end device, and the list is not even visible while editing.
+        // Reload once when the writing hand stops.
         listStale = true;
         if (shown()) {
           deps.onSaved();
@@ -375,7 +381,7 @@ export function createNoteSession(deps: NoteSessionDeps): NoteSession {
           // Even a transient I/O failure may be followed by navigation instead
           // of another keystroke. Keep the draft before the screen can leave.
           const kept = tryWriteBackup(deps.store, pending.item.filename, typedBody(pending));
-          // ここは読み直しを走らせない。画面にあるのは打鍵の続きか、別のノート
+          // No reload runs here. The screen holds either the continuing keystrokes or another note
           deps.showToast(
             refusalToast(error, kept, pending.item.title, refusedScreen(pending, false)),
           );
@@ -387,14 +393,14 @@ export function createNoteSession(deps: NoteSessionDeps): NoteSession {
 
   const schedule = (): void => {
     editGeneration += 1;
-    // 打鍵ごとに取り直すので、実際に走るのは最後の打鍵の写し
+    // Retaken on every keystroke, so what actually runs is the copy from the last keystroke
     const pending = snapshot();
     draft = pending;
     cancelPending();
     timerFile = pending?.item.filename;
     saveTimer = setTimeout(() => {
-      // 起きたタイマーは終わったタイマー。掃除しないと「保存待ちがある」が
-      // 立ったままになり、フォーカス復帰の読み直しが二度と通らない
+      // A fired timer is a finished timer. Without cleanup "a save is waiting" stays
+      // raised, and the reload on focus return never gets through again
       saveTimer = undefined;
       timerFile = undefined;
       void flush(pending);
@@ -402,20 +408,21 @@ export function createNoteSession(deps: NoteSessionDeps): NoteSession {
   };
 
   /**
-   * 待っている保存を出しきってから離れる。選択を動かす手前で必ず通す道。
-   * 出しきらずに移ると本文が「次のノートの題 + 前のノートの本文」になり、
-   * 次の保存がその混ぜ物を隣のノートへ書き込む。読み直しが `revisions` を
-   * 更新済みなので Stale でも止まらない。
-   * 何も保存していないなら一覧も読み直さない — 行に出る題は変わっていない。
+   * Drains the waiting save before leaving. The path every selection change must go
+   * through. Moving without draining makes the body "next note's title + previous
+   * note's body", and the next save writes that mixture into the neighbouring note.
+   * The reload has already updated `revisions`, so Stale does not stop it either.
+   * If nothing was saved the list is not reloaded: the row titles have not changed.
    */
   const settleEdit = async (): Promise<void> => {
-    // 次に書き始めるときは新しいセッション。戻る先が 1 段ずつ進む
+    // The next write starts a new session. The restore point advances one step at a time
     drop();
     if (saveTimer) {
       cancelPending();
       await flush();
     }
-    // 行に出る題は本文の先頭行から導かれる。読み直さないと一覧だけ古い題のまま
+    // The row title is derived from the body's first line. Without a reload only the
+    // list keeps the old title
     await refreshListIfStale();
   };
 

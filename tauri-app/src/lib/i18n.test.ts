@@ -7,7 +7,7 @@ describe("resolveLocale", () => {
     expect(resolveLocale("system", "en-US")).toBe("en");
   });
 
-  // 対応しているのは日本語と英語だけ。知らない言語は英語に倒す
+  // Only Japanese and English are supported. An unknown language falls to English
   it("falls back to english for a language we do not have", () => {
     expect(resolveLocale("system", "de-DE")).toBe("en");
   });
@@ -39,7 +39,7 @@ describe("t", () => {
   });
 });
 
-/** 値の形だけを取り出す。文字列は "string"、関数は "function" になる。 */
+/** Take only the shape of a value. A string becomes "string", a function "function". */
 function shapeOf(value: unknown): unknown {
   if (typeof value !== "object" || value === null) {
     return typeof value;
@@ -54,15 +54,15 @@ function shapeOf(value: unknown): unknown {
 const JAPANESE = /[ぁ-んァ-ヶ一-龥]/u;
 
 /**
- * 面の名を訳した綴り。3 面は固有名詞なので、どちらの言語でも Scrawl /
- * Note / Codex と書く(#255)。英語は小文字の綴りだけを拾う — `\b` と
- * 大文字小文字の区別で、正しい `Note` には当たらない。
+ * Translated spellings of a surface name. The three surfaces are proper nouns, so both
+ * languages write Scrawl / Note / Codex (#255). For English only the lowercase spellings
+ * are picked up: with `\b` and case sensitivity, a correct `Note` is not matched.
  */
 const TRANSLATED_SURFACE_NAME = /ノート|メモ|タイムライン|\b(?:notes?|timelines?)\b/u;
 
 /**
- * `re` に当たる文字列のキーを、`a.b.c` の形で集める。見るのは文字列だけで、
- * 関数が組み立てる文は通らない。
+ * Collect the keys of the strings that match `re`, in `a.b.c` form. Only strings are
+ * looked at; a sentence a function assembles does not pass through.
  */
 function keysMatching(value: unknown, path: string, re: RegExp): string[] {
   if (typeof value === "string") {
@@ -75,19 +75,20 @@ function keysMatching(value: unknown, path: string, re: RegExp): string[] {
 }
 
 describe("the two tables", () => {
-  // 片方にしかないキーは、その言語でだけ画面が空になる。型でも防いでいるが、
-  // 入れ子の取りこぼしはここで気付きたい
+  // A key in only one table leaves the screen empty in that language alone. The types
+  // guard this too, but a nested miss should be caught here
   it("have the same shape", () => {
     expect(shapeOf(messages.en)).toStrictEqual(shapeOf(messages.ja));
   });
 
   it("leaves no english string in japanese characters", () => {
-    // 言語の選択肢だけは、その言語自身の名前で出す
+    // The language choices alone are shown under the name of the language itself
     expect(keysMatching(messages.en, "en", JAPANESE)).toStrictEqual(["en.settings.languageJa"]);
   });
 
-  // 訳した綴りが 1 つ混じると、同じ面がタブでは Note、文の中では「ノート」と
-  // 名乗る。ラベル(`routes.ts`)だけを改名した #255 の続き
+  // One translated spelling mixed in and the same surface goes by Note in the tab and by a
+  // translated word in a sentence. A follow-on to #255, which renamed only the labels
+  // (`routes.ts`)
   it("never spells a surface name any way but Scrawl, Note and Codex", () => {
     expect(keysMatching(messages.ja, "ja", TRANSLATED_SURFACE_NAME)).toStrictEqual([]);
     expect(keysMatching(messages.en, "en", TRANSLATED_SURFACE_NAME)).toStrictEqual([]);

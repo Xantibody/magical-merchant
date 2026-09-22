@@ -34,7 +34,7 @@ describe("toNetworkType", () => {
     expect(toNetworkType(true, "none")).toBe("Offline");
   });
 
-  // 種別が分からないまま WiFi と決め打つと記録が嘘になる。
+  // Assuming WiFi while the type is unknown would make the record a lie.
   it("returns null when the connection type is unknown or absent", () => {
     expect(toNetworkType(true)).toBeNull();
     expect(toNetworkType(true, "bluetooth")).toBeNull();

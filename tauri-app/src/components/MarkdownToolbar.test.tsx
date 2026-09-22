@@ -9,8 +9,8 @@ import type { Editor } from "@milkdown/kit/core";
 import type { Selection, Transaction } from "@milkdown/kit/prose/state";
 import MarkdownToolbar from "./MarkdownToolbar";
 
-// 本物の commonmark スキーマはエディタの初期化ごと必要になる。ここで要るのは
-// 「カーソルが段落かコードブロックのどちらにいるか」だけなので形だけ作る。
+// The real commonmark schema needs the whole editor initialised. All that is
+// needed here is whether the caret is in a paragraph or a code block, so build only the shape.
 const schema = new Schema({
   nodes: {
     doc: { content: "block+" },
@@ -24,32 +24,32 @@ const schema = new Schema({
 
 type Block = "paragraph" | "code_block";
 
-/** 段落とコードブロックが 1 つずつある文書。カーソルは指した側に置く。 */
+/** A document with one paragraph and one code block. The caret goes in the one named. */
 function stateWithCursorIn(block: Block): EditorState {
   const doc = schema.nodes.doc.create(null, [
     schema.nodes.paragraph.create(null, schema.text("plain")),
     schema.nodes.code_block.create(null, schema.text("code")),
   ]);
-  // 段落は 0..7 を占め、続くコードブロックの中身は 8 から
+  // The paragraph occupies 0..7; the content of the code block after it starts at 8
   const pos = block === "paragraph" ? 2 : 9;
   return EditorState.create({ doc, selection: TextSelection.create(doc, pos) });
 }
 
 interface MockEditor {
   editor: Editor;
-  /** 本文の contenteditable。書式バーがフォーカスをどう扱うかをここで見る。 */
+  /** The body's contenteditable. Where the toolbar's handling of focus is observed. */
   body: HTMLElement;
-  /** commandsCtx 経由で撃たれたコマンドのキー。 */
+  /** Keys of the commands fired through commandsCtx. */
   fired: unknown[];
-  /** view.dispatch に渡った transaction。 */
+  /** Transactions passed to view.dispatch. */
   dispatched: Transaction[];
-  /** 選択が動いたことにする。本物と同じ listener の経路で伝える。 */
+  /** Pretend the selection moved. Delivered through the same listener path as the real thing. */
   moveCursorTo: (block: Block) => void;
 }
 
 /**
- * 作りものの Editor。本物を立てるとエディタのバンドルまで要るので、書式バーが
- * 触る slice — root / view / commands / listener — だけを答える。
+ * A fake Editor. Standing up the real one would pull in the editor bundle, so
+ * this answers only the slices the toolbar touches: root, view, commands, listener.
  */
 function createMockEditor(
   options: { cursorIn?: Block; commandRetypesTo?: Block } = {},
@@ -81,8 +81,9 @@ function createMockEditor(
         return {
           call: (key: unknown) => {
             fired.push(key);
-            // 本物の createCodeBlockCommand は節の種類だけを変えて選択を動かさ
-            // ないので、listener には何も伝わらない。その黙り方をここで再現する
+            // The real createCodeBlockCommand changes only the node type and
+            // leaves the selection alone, so the listener hears nothing. That
+            // silence is reproduced here
             if (options.commandRetypesTo) {
               view.state = stateWithCursorIn(options.commandRetypesTo);
             }
@@ -116,7 +117,7 @@ function createMockEditor(
   };
 }
 
-/** hidden も対象にするのは、デスクトップ (hover あり) では display: none だから。 */
+/** hidden elements are included because on desktop (with hover) the bar is display: none. */
 function labels(): (string | null)[] {
   return screen
     .getAllByRole("button", { hidden: true })
@@ -139,7 +140,7 @@ describe("MarkdownToolbar", () => {
     render(() => <MarkdownToolbar editor={editor} />);
 
     expect(screen.getByRole("toolbar", { hidden: true })).toBeDefined();
-    // 打ちにくい記法から順に。最後は書き終わってキーボードを畳むためのもの
+    // Hardest syntax to type first. The last one folds the keyboard once writing is done
     expect(labels()).toStrictEqual([
       "箇条書き",
       "番号付きリスト",
@@ -150,7 +151,7 @@ describe("MarkdownToolbar", () => {
       "コードブロック",
       "キーボードを閉じる",
     ]);
-    // 幅を取り合うので落としたもの。`---` の入力ルールと選択削除で足りる
+    // Dropped because they compete for width. The `---` input rule and select-and-delete suffice
     expect(screen.queryByLabelText("区切り線")).toBeNull();
     expect(screen.queryByLabelText("ブロックを削除")).toBeNull();
   });
@@ -164,7 +165,7 @@ describe("MarkdownToolbar", () => {
 
     fireEvent.click(button);
 
-    // 続きは補完の板が受けるので、ここは `[[` を打つところまで
+    // The completion panel takes it from there; this only goes as far as typing `[[`
     expect(mock.dispatched).toHaveLength(1);
     expect(mock.dispatched[0].doc.textContent).toContain("[[");
   });
@@ -183,8 +184,9 @@ describe("MarkdownToolbar", () => {
     expect(screen.queryByLabelText("ブロックから抜ける")).toBeNull();
   });
 
-  // 押した瞬間は、選択が動かないまま居場所が変わる唯一のとき。listener を
-  // 待っていると「抜ける」がカーソルを動かすまで出ない・消えない
+  // The moment of a press is the only time the location changes without the
+  // selection moving. Waiting on the listener, "exit" would not appear or
+  // disappear until the caret moves
   it("offers the way out as soon as a press makes the block a code block", () => {
     const mock = createMockEditor({ cursorIn: "paragraph", commandRetypesTo: "code_block" });
     render(() => <MarkdownToolbar editor={mock.editor} />);
@@ -220,8 +222,8 @@ describe("MarkdownToolbar", () => {
     mock.body.focus();
 
     const button = screen.getByLabelText("インデント");
-    // 押し下げの既定動作を止めるのが要点。指にフォーカスが移ると IME の
-    // 変換中の文字が落ちる (#102)
+    // The point is stopping the default pointerdown action. If focus moves to the
+    // finger, the characters mid-conversion in the IME are dropped (#102)
     expect(fireEvent.pointerDown(button)).toBe(false);
     fireEvent.click(button);
 
@@ -236,7 +238,7 @@ describe("MarkdownToolbar", () => {
 
     fireEvent.click(screen.getByLabelText("キーボードを閉じる"));
 
-    // キーボードを畳む手立ては、本文のフォーカスを放すことしかない
+    // The only way to fold the keyboard is to let go of the body's focus
     expect(document.activeElement).not.toBe(mock.body);
   });
 

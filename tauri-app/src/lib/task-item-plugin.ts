@@ -2,7 +2,7 @@ import { $prose } from "@milkdown/kit/utils";
 import { Plugin } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 
-/** その li を立てている list_item の checked を反転する。task でなければ何もしない。 */
+/** Flips checked on the list_item that raised this li. Does nothing if it is not a task. */
 function toggleTask(view: EditorView, li: HTMLElement): boolean {
   const $inside = view.state.doc.resolve(view.posAtDOM(li, 0));
   const item = $inside.parent;
@@ -19,14 +19,15 @@ function toggleTask(view: EditorView, li: HTMLElement): boolean {
 }
 
 /**
- * task list の印を押したら checked を反転する。gfm プリセットは `- [ ]` を
- * list_item の checked 属性に畳むだけで、文字には残らず、印も切り替えも持たない
- * (印そのものは editor.css が li の ::before に描く)。
+ * Pressing a task list marker flips checked. The gfm preset only folds `- [ ]` into the
+ * list_item's checked attribute; it does not remain as text, and the preset carries neither
+ * the marker nor the toggle (editor.css draws the marker itself on the li's ::before).
  *
- * 印は li の内容箱の左、ul の padding に置いてあるので、押された target が
- * li 自身で、内容箱より左なら印。mousedown で受けるのは、ProseMirror が
- * 押された座標にカーソルを置きに行く前に止めるため — 段落の文字を押した
- * ときは target が p なので通り過ぎ、いつもどおりカーソルが動く。
+ * The marker sits left of the li's content box, in the ul's padding, so a press is on the
+ * marker when its target is the li itself and it is left of the content box. mousedown is
+ * what is handled, to stop ProseMirror before it goes to place the cursor at the pressed
+ * coordinates. A press on the text of a paragraph has p as its target, so it passes through
+ * and the cursor moves as usual.
  */
 export const taskItemPlugin = $prose(
   () =>

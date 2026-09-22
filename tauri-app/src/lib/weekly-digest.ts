@@ -1,35 +1,36 @@
 /**
- * Scrawl 先頭に週 1 回だけ出すふりかえりカードの材料。
+ * Material for the review card shown once a week at the top of Scrawl.
  *
- * すべて読み込み済みの Scrawl と日付一覧からの集計で、core にも
- * データファイルにも何も書かない。閉じた記録だけを端末ローカル
- * (localStorage)に持つ — どの端末で閉じたかは他の端末に関係ない。
+ * Everything is aggregated from the already loaded Scrawl and the date list;
+ * nothing is written to core or to the data files. Only the dismissal is kept
+ * locally on the device (localStorage): which device dismissed it is of no
+ * concern to the other devices.
  */
 
 import { toIsoDate } from "./day-labels";
 import type { ScrawlItem } from "./items";
 
-/** 週の身元は月曜の日付。閉じた週と今の週の比較に使う。 */
+/** A week's identity is Monday's date. Used to compare the dismissed week with the current one. */
 export function digestWeekKey(today: Date): string {
-  // getDay(): 日曜 0。月曜起点に写像する
+  // getDay(): Sunday is 0. Map it to a Monday start
   const sinceMonday = (today.getDay() + 6) % 7;
   const monday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - sinceMonday);
   return toIsoDate(monday);
 }
 
-/** 閉じたのが今週なら出さない。週が変われば出し直す。 */
+/** Not shown if dismissed this week. Shown again once the week changes. */
 export function isDigestDismissed(stored: string | null, today: Date): boolean {
   return stored === digestWeekKey(today);
 }
 
 export interface WeekSummary {
-  /** 今週のエントリ数。 */
+  /** Entries this week. */
   count: number;
-  /** 記録のあった日数。 */
+  /** Days that have a record. */
   days: number;
 }
 
-/** 今週(月曜起点)のエントリだけを数える。 */
+/** Counts only the entries of this week (Monday start). */
 export function summarizeWeek(items: ScrawlItem[], today: Date): WeekSummary {
   const start = digestWeekKey(today);
   const week = items.filter((item) => item.date >= start && item.date <= toIsoDate(today));
@@ -39,7 +40,7 @@ export function summarizeWeek(items: ScrawlItem[], today: Date): WeekSummary {
   };
 }
 
-/** 1 年前の今日。記録が無い日は出しても着地する先がないので null。 */
+/** Today one year ago. null when that day has no record, as there is nowhere to land. */
 export function yearAgoToday(today: Date, recordedDates: string[]): string | null {
   const target = toIsoDate(new Date(today.getFullYear() - 1, today.getMonth(), today.getDate()));
   return recordedDates.includes(target) ? target : null;

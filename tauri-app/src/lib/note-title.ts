@@ -1,22 +1,22 @@
 /**
- * ノートのタイトルは本文先頭の H1。frontmatter には持たない。
+ * A note's title is the H1 at the top of the body. It is not held in frontmatter.
  *
- * 別のキーに持つと、本文の見出しと二重管理になって必ずどちらかが古くなる。
- * 他の Markdown ツールで開いたときに題が消えるのも避けたい。ここでは
- * 「先頭の H1 を切り出す/書き戻す」だけを引き受け、画面はタイトル欄と
- * エディタを別々に見せる — ファイルの中では 1 つの本文のまま。
+ * Holding it in a separate key would duplicate the body's heading, and one of the two would always
+ * go stale. Losing the title when the file is opened in another Markdown tool is also to be
+ * avoided. This module only takes on cutting the leading H1 out and writing it back; the screen
+ * shows the title field and the editor separately. Inside the file it stays one body.
  *
- * 一覧のタイトル(`items.ts` の firstLine)は今までどおり先頭行から導く。
- * 切り出しはあくまで表示と編集の都合で、保存形は変わらない。
+ * The list's title (`firstLine` in `items.ts`) is still derived from the first line. The split is
+ * only for display and editing; the stored form does not change.
  */
 
 export interface TitledNote {
   title: string;
-  /** タイトル行を除いた本文。エディタとプレビューが見るのはこちら。 */
+  /** The body without the title line. This is what the editor and the preview see. */
   body: string;
 }
 
-/** ATX の H1 だけ。`#タグ` と区別するために `# ` の空白まで求める。 */
+/** ATX H1 only. Requires the space in `# ` so that a `#tag` is not taken for a heading. */
 const H1 = /^#[ \t]+(?<title>.*)$/u;
 
 export function splitTitle(source: string): TitledNote {
@@ -25,8 +25,8 @@ export function splitTitle(source: string): TitledNote {
   if (title === undefined) {
     return { title: "", body: source };
   }
-  // 見出しと本文の間の空行は書式であって本文ではない。ここで落とし、
-  // 書き戻すときに同じ形で足す
+  // The blank line between the heading and the body is formatting, not body. Drop it here and
+  // add it back in the same shape when writing out
   if (rest[0] === "") {
     rest.shift();
   }

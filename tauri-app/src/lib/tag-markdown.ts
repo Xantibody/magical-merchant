@@ -1,7 +1,7 @@
 import type { MarkdownIt, StateCore, Token } from "markdown-it";
 import { splitTagged } from "./tags";
 
-/** `text` トークン 1 つを、本文とタグのトークン列に割る。 */
+/** Split one `text` token into a run of body tokens and tag tokens. */
 function split(md: MarkdownIt, state: StateCore, token: Token): Token[] {
   const segments = splitTagged(token.content);
   if (!segments.some((segment) => segment.tag)) {
@@ -21,10 +21,10 @@ function split(md: MarkdownIt, state: StateCore, token: Token): Token[] {
 }
 
 /**
- * 本文の `#タグ` に色を付ける markdown-it プラグイン。
+ * A markdown-it plugin that colours the `#tag` words in the body.
  *
- * `text` トークンだけを割るので、コードスパンやフェンスの中身、リンクの
- * URL には手が入らない。それらは先に別のトークンとして切り出されている。
+ * It splits only `text` tokens, so the inside of a code span or a fence, and a link
+ * URL, are left alone. Those have already been cut out as tokens of their own.
  */
 export function tagPlugin(md: MarkdownIt): void {
   md.core.ruler.push("inline_tag", (state) => {

@@ -12,9 +12,10 @@ export interface DeviceContext {
   hostname?: string;
   locale?: string;
   /**
-   * どの入り口で書かれたか(`app` / `cli` / `mcp` / `widget`)。行末 JSON では
-   * 1 文字のキー — エントリ 1 行あたり数十文字の本文に対して、`"source"` と
-   * 綴ると読める Markdown ではなくなる。名乗る前に書かれた行には無い。
+   * Which entry point wrote this (`app` / `cli` / `mcp` / `widget`). In the JSON at
+   * the end of the line it is a one-character key: against a body of a few dozen
+   * characters per entry, spelling it `"source"` stops the line being readable
+   * Markdown. Lines written before the entry points named themselves do not have it.
    */
   s?: string;
 }
@@ -97,8 +98,9 @@ export function getNetworkIcon(ctx: DeviceContext): IconName | null {
 }
 
 /**
- * 回線の呼び名。記録に残っているのは `WiFi` のような素の値で、これは
- * 読むための言い換え。Scrawl の行にもメタデータパネルにも出る。
+ * The display name of the connection. What the record holds is a raw value such as
+ * `WiFi`; this is the rewording that reads well. It appears both on a Scrawl line
+ * and in the metadata panel.
  */
 export function networkLabel(type: string): string {
   const labels = t().meta;
@@ -122,9 +124,10 @@ export function networkLabel(type: string): string {
 }
 
 /**
- * 書いたツールの呼び名。記録に残っているのは `widget` のような素の値で、
- * これは読むための言い換え。知らない値はそのまま出す — 語彙が増えた版で
- * 書いた記録を、古い版が「不明」に潰してはいけない。
+ * The display name of the tool that wrote the entry. What the record holds is a raw
+ * value such as `widget`; this is the rewording that reads well. An unknown value is
+ * shown as it is: an older build must not flatten to "unknown" a record written by a
+ * build whose vocabulary has grown.
  */
 export function sourceLabel(source: string): string {
   const labels = t().meta;

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { dropExamples, extractExamples } from "./template-examples";
 
 describe("dropExamples", () => {
-  /** 書き出す core (`template/vars.rs`) と同じ姿にする。 */
+  /** Produce the same shape the core that writes it (`template/vars.rs`) produces. */
   it("leaves the note the way the core writes it", () => {
     expect(dropExamples("### 状況\n{{eg}}\n- 問い\n- もう一つ\n\n### 影響")).toBe(
       "### 状況\n\n### 影響",

@@ -4,9 +4,9 @@ import { render, screen, fireEvent, cleanup } from "@solidjs/testing-library";
 import Popover from "./Popover";
 
 /**
- * 開閉の始末は開く場所の隣に置く。以前は AppLayout の 1 つの `pointerdown` が
- * 全部を閉じていて、除外する class の表を足し忘れると「開いた直後に自分の
- * ボタンのぶんで畳まれる」が起きた。
+ * Opening and closing are settled next to the place that opens. Before, one `pointerdown`
+ * in AppLayout closed everything, and forgetting to add a class to the exclusion table
+ * caused "it folds right after opening, on its own button".
  */
 function mount() {
   const [open, setOpen] = createSignal(true);
@@ -51,8 +51,8 @@ describe("Popover", () => {
     expect(screen.queryByText("中身")).toBeNull();
   });
 
-  // 自分のボタンのぶんで閉じてしまうと、押した直後の click が開け直して
-  // しまい、同じボタンでは畳めなくなる
+  // Closing on its own button lets the click right after the press reopen it, and then
+  // the same button can never fold it
   it("leaves the button that opened it to do the closing", () => {
     const { trigger } = mount();
 

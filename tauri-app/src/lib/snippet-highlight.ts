@@ -1,6 +1,6 @@
 /**
- * 検索ヒットの抜粋を「前・一致・後」に分ける。core が返す位置は文字数
- * なので、UTF-16 の添字ではなくコードポイントで数える。
+ * Split a search hit's snippet into before, match and after. The position core returns is
+ * a count of characters, so it is counted in code points, not UTF-16 indices.
  */
 
 export interface SnippetParts {

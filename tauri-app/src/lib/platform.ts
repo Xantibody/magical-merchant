@@ -1,11 +1,12 @@
 /**
- * 実行している OS の見分け。Rust 側に聞けば確実だが、設定画面の出し分けの
- * ために IPC を往復させるほどのことではない。WebView の UA で足りる。
+ * Telling apart the OS we run on. Asking the Rust side would be certain, but a round
+ * trip over IPC is more than deciding what the settings screen shows is worth. The
+ * WebView user agent is enough.
  */
 
 /**
- * macOS のデスクトップ版か。iPad の Safari も "Mac OS X" を名乗るので、
- * "Macintosh" を見たうえでモバイルの印を除く。
+ * Whether this is desktop macOS. Safari on an iPad also calls itself "Mac OS X", so
+ * we look for "Macintosh" and then rule out the mobile markers.
  */
 export function isMacDesktop(userAgent: string = navigator.userAgent): boolean {
   return (

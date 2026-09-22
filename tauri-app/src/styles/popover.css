@@ -18,7 +18,7 @@
   color: var(--app-text);
 }
 
-/* 状態は色でも伝える。文言を読まなくても様子が分かるように */
+/* The state is told by color too, so how things stand reads without reading the words */
 .sync-popover[data-face="synced"] .icon {
   color: var(--app-ok);
 }
@@ -39,7 +39,7 @@
   color: var(--app-text-faint);
 }
 
-/* 返ってきた文をそのまま出すので、折り返しも改行も原文どおりに */
+/* The returned message is shown as it came, so wrapping and line breaks follow the original */
 .sync-popover-error {
   margin: 0;
   padding: 8px 10px;
@@ -77,7 +77,7 @@
   cursor: pointer;
 }
 
-/* チェックボックスは隠し、右のスイッチ(base.css の .switch)が状態を映す */
+/* The checkbox is hidden; the switch on the right (.switch in base.css) shows the state */
 .sync-popover-toggle input {
   position: absolute;
   opacity: 0;
@@ -98,7 +98,7 @@
 
 /* ---------------- note metadata ---------------- */
 
-/* 詳細ペインの右上、ⓘ ボタンの真下に吊るす */
+/* Hung at the top right of the detail pane, directly under the note menu button */
 .note-meta-popover {
   top: 44px;
   right: 12px;
@@ -122,7 +122,7 @@
   color: var(--app-text-faint);
 }
 
-/* frontmatter のタグが本文の #タグ と別物であることを控えめに伝える */
+/* Says quietly that a frontmatter tag is not the same thing as a #tag in the body */
 .note-meta-hint {
   font-size: 11px;
   color: var(--app-text-faint);
@@ -161,7 +161,7 @@
   cursor: pointer;
 }
 
-/* 編集できない記録。入力欄と同じ高さの枠を作らず、地の文として置く */
+/* A record that cannot be edited. No box as tall as an input; it sits as plain text */
 .note-meta-readonly {
   font-size: 12.5px;
   color: var(--app-text-muted);
@@ -264,7 +264,7 @@
   color: var(--app-border);
 }
 
-/* 記録のある日だけ濃く出す。カレンダーが「どこに何かある」の地図になる */
+/* Only days with a record are drawn dark, so the calendar becomes a map of "where something is" */
 .calendar-day--recorded {
   color: var(--app-text);
   font-weight: 600;

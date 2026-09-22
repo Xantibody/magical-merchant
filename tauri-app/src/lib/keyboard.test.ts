@@ -4,8 +4,8 @@ import { keyboardTop, keyboardTopStyle } from "./keyboard";
 describe("keyboardTop", () => {
   const WINDOW_HEIGHT = 900;
 
-  // Android では閉じていても visualViewport がナビゲーションバーぶんを含んだ
-  // 全高を返すので、その値で固定すると道具立てがバーの裏に潜り込む
+  // On Android `visualViewport` returns the full height including the navigation bar even
+  // while closed, so pinning to that value slips the tools under the bar
   it("returns nothing while the keyboard is closed", () => {
     expect(keyboardTop({ offsetTop: 0, height: WINDOW_HEIGHT }, WINDOW_HEIGHT)).toBeUndefined();
   });
@@ -24,7 +24,7 @@ describe("keyboardTop", () => {
 });
 
 describe("keyboardTopStyle", () => {
-  // 閉じているあいだは貼り付く場所を CSS の bottom に預ける
+  // While it is closed, leave where it sticks to the CSS `bottom`
   it("returns no style while the keyboard is closed", () => {
     expect(keyboardTopStyle()).toBeUndefined();
   });

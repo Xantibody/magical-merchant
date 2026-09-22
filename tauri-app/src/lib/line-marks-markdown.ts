@@ -3,19 +3,19 @@ import { blockMark } from "./diff-marks";
 import type { LineMark } from "./diff-marks";
 
 /**
- * 履歴を開いているあいだの欄外の印。`env.marks`(行ごとの add / del)を、
- * ブロックの token に class として載せる — 描く側は差分を別枠に置かず、
- * 本文の色も字も変えない。印の DOM は `.diff-sign` の span 1 つだけで、
- * 変わったブロックにしか付かない。
+ * Gutter signs while the history is open. Puts `env.marks` (add / del per line)
+ * onto the block tokens as a class. The renderer does not place the diff in a
+ * separate frame, and neither the colour nor the text of the body changes. The
+ * sign's DOM is a single `.diff-sign` span, attached only to a changed block.
  *
- * 印を付けるのは行を持つ「いちばん内側の」ブロック: 段落・見出し・罫線・
- * 表の行。ぴったり詰めた箇条書きの段落は描かれない(`hidden`)ので、その
- * 印は項目(`li`)に上げる。フェンスは描画が別経路なので `meta` に持たせ、
- * `markdown.ts` が `<pre>` に載せる。
+ * Signs go on the "innermost" block that owns lines: paragraph, heading, rule,
+ * table row. The paragraph of a tight list item is not rendered (`hidden`), so
+ * its sign moves up to the item (`li`). A fence is rendered by a separate path,
+ * so it carries the sign in `meta` and `markdown.ts` puts it on the `<pre>`.
  *
- * 段落の中の一部の行だけが消えたときは、段落ごと消したことにせず、その
- * 行の文字だけを `<s>` で括る。段落は行を柔らかい改行(softbreak)で
- * 繋いでいるので、その数で行を数える。
+ * When only some lines inside a paragraph were deleted, the paragraph is not
+ * treated as deleted: only those lines' text is wrapped in `<s>`. A paragraph joins
+ * its lines with soft line breaks (softbreak), so lines are counted by those.
  */
 
 export interface LineMarksEnv {
@@ -36,7 +36,7 @@ function applyMark(token: Token, mark: LineMark | undefined): void {
   }
 }
 
-/** 消えた行だけを `<s>` で括る。段落全体が消えたときは CSS が引くので呼ばない。 */
+/** Wraps only the deleted lines in `<s>`. Not called when the whole paragraph is deleted; CSS strikes that. */
 function strikeDeletedLines(
   inline: Token,
   marks: readonly (LineMark | undefined)[],
@@ -81,7 +81,7 @@ function strikeDeletedLines(
   inline.children = out;
 }
 
-/** 印の記号。段落の先頭に浮かせ、CSS が欄外へ出す。 */
+/** The sign glyph. Floated at the head of the paragraph; CSS moves it into the gutter. */
 function signToken(
   mark: LineMark,
   makeToken: (type: string, tag: string, nesting: 1 | 0 | -1) => Token,
@@ -99,12 +99,12 @@ export function lineMarksPlugin(markdownIt: MarkdownIt): void {
     }
     const makeToken = (type: string, tag: string, nesting: 1 | 0 | -1): Token =>
       new state.Token(type, tag, nesting);
-    /** 開いている `li`。詰めた段落の印はここへ上げる。 */
+    /** Open `li` tokens. The sign of a tight paragraph moves up to here. */
     const items: Token[] = [];
-    /** 直前に印を決めたブロック。次の inline token がその中身。 */
+    /** The block whose sign was just decided. The next inline token is its content. */
     let pending: { target: Token; mark: LineMark; partial: boolean } | undefined;
 
-    /** 印を決めたブロックの中身(inline)に、記号と消えた行の打ち消しを入れる。 */
+    /** Puts the sign and the strike-through of deleted lines into the content (inline) of a marked block. */
     const fillInline = (token: Token): void => {
       if (!pending) {
         return;

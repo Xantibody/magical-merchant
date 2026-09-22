@@ -1,10 +1,11 @@
 /**
- * Milkdown は空の段落(見た目の空行)を `<br />` という HTML 行として
- * Markdown に保存し、読み戻すときに空行へ復元する(remark-preserve-empty-line)。
- * エディタの外 — プレビューや一覧のタイトル — がこの行を文字どおり
- * `<br />` と見せないよう、判定を一箇所に寄せる。
+ * Milkdown saves an empty paragraph (a blank line as it looks) into Markdown as an HTML
+ * line, `<br />`, and restores it to a blank line on the way back
+ * (remark-preserve-empty-line). The test is gathered in one place so that outside the
+ * editor, the preview and the titles in the list, that line is not shown literally as
+ * `<br />`.
  *
- * 揺れ(`<br>` `<br/>` `<br >`)も Milkdown の認識と同じく空行として扱う。
+ * The variants (`<br>` `<br/>` `<br >`) count as a blank line too, as Milkdown reads them.
  */
 export function isPreservedEmptyLine(line: string): boolean {
   return /^<br[ \t]*\/?[ \t]*>$/iu.test(line.trim());

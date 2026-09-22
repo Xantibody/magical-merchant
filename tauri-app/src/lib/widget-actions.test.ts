@@ -28,7 +28,7 @@ describe("parseWidgetAction", () => {
     });
   });
 
-  // 認証のコールバックは同じスキームを使う。拾うとログイン中に画面が飛ぶ
+  // The auth callback uses the same scheme. Picking it up jumps the screen mid-login
   it("widget 以外のホストは対象外", () => {
     expect(parseWidgetAction("magical-merchant://auth?token=abc")).toBeNull();
   });

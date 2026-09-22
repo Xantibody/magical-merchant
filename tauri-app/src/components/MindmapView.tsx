@@ -8,20 +8,20 @@ interface MindmapViewProps {
 }
 
 /**
- * d3-zoom が既定で付けるダブルクリック 2 倍拡大だけを外す。
- * markmap はラベル (foreignObject) では dblclick を止めているが、折りたたみの
- * 丸と余白では止めていないので、そこをダブルタップすると意図せず拡大していた。
- * `zoom: false` にするとホイール・ピンチの拡大まで消えてしまうので、
- * リスナーを名前空間 "dblclick.zoom" で狙い撃ちにする。
+ * Remove only the double-click 2x zoom that d3-zoom attaches by default.
+ * markmap stops dblclick on labels (foreignObject) but not on the fold circles
+ * or the empty space, so a double tap there zoomed in unintentionally.
+ * `zoom: false` would also remove wheel and pinch zoom, so the listener is
+ * targeted by its namespace "dblclick.zoom".
  */
 function disableDoubleClickZoom(mm: Markmap): void {
   mm.svg.on("dblclick.zoom", null);
 }
 
 /**
- * 本文の見出し・リスト構造をマインドマップとして描く読み取り専用ビュー。
- * このコンポーネントは Workspace から lazy import される。markmap-view は
- * d3 を連れてくる重い依存なので、mermaid と同じく使うノートだけに払わせる。
+ * A read-only view that draws the body's heading and list structure as a mindmap.
+ * This component is lazy imported from Workspace. markmap-view is a heavy
+ * dependency that brings d3 along, so like mermaid only the notes that use it pay for it.
  */
 export default function MindmapView(props: MindmapViewProps): JSX.Element {
   let svgRef: SVGSVGElement | undefined;
@@ -32,19 +32,20 @@ export default function MindmapView(props: MindmapViewProps): JSX.Element {
     if (!svgRef) {
       return;
     }
-    // duration: 0 — 開いた瞬間に全体が見えてほしい。枝が生えていく
-    // アニメーションは読むだけのビューには飾りで、破棄後に d3 の transition が
-    // 宙に残る原因にもなる。
-    // データは create に渡さない。渡すと markmap の内部で setData → fit が
-    // つながり、破棄後でも fit が走って取り外された SVG の寸法を読もうとする
+    // duration: 0. The whole map should be visible the moment it opens. The
+    // animation of branches growing out is decoration in a read-only view, and
+    // it also leaves d3 transitions hanging after disposal.
+    // The data is not passed to create. If it were, markmap would chain setData
+    // into fit internally, and fit would run even after disposal and try to read
+    // the size of a detached SVG
     markmap ??= Markmap.create(svgRef, { duration: 0 });
     const current = markmap;
     disableDoubleClickZoom(current);
     void (async () => {
-      // 全消し + 作り直しではなく差分更新。ユーザーが畳んだ枝はここで保たれる
+      // An incremental update, not clear and rebuild. Branches the user folded survive here
       await current.setData(root);
-      // setData にオプションを渡すと markmap が zoom を付け直すので、その後で
-      // 改めて外す。今は渡していないが、一行で済む保険なので毎回やっておく
+      // Passing options to setData makes markmap reattach zoom, so remove it
+      // again afterwards. No options are passed now, but it is a one-line safeguard, so do it every time
       disableDoubleClickZoom(current);
       if (markmap === current) {
         await current.fit();
@@ -53,8 +54,8 @@ export default function MindmapView(props: MindmapViewProps): JSX.Element {
   });
 
   onCleanup(() => {
-    // fit() の遷移が残ったまま SVG を外すと、d3 が取り外された要素の寸法を
-    // 読もうとして落ちる。destroy は遷移までは止めてくれない
+    // Detaching the SVG while a fit() transition is still running makes d3 crash
+    // reading the size of a detached element. destroy does not stop the transition
     markmap?.svg.interrupt();
     markmap?.destroy();
     markmap = undefined;

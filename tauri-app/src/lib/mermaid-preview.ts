@@ -1,27 +1,28 @@
 /**
- * フェンスの言語が mermaid かどうか。info 文字列は手打ちなので、
- * 大文字小文字や前後の空白の揺れは同じ言語として扱う。
+ * Whether the fence language is mermaid. The info string is typed by hand, so
+ * differences in case and surrounding whitespace count as the same language.
  */
 export function isMermaidLanguage(language: string): boolean {
   return language.trim().toLowerCase() === "mermaid";
 }
 
 interface RequestOptions {
-  /** ノート起動時など、既に完成しているソースは待たせず即描く */
+  /** Source that is already complete, as at note open, is drawn at once without waiting */
   immediate?: boolean;
 }
 
 export interface DebouncedDiagramRenderer {
   request: (source: string, options?: RequestOptions) => void;
-  /** 予約済み・進行中の描画を捨てる。プレビュー自体を畳むときに使う */
+  /** Drops the scheduled and in-flight render. Used when the preview itself is folded */
   cancel: () => void;
   dispose: () => void;
 }
 
 /**
- * mermaid の描画を「手が止まってから 1 回」にまとめる。描画は非同期なので、
- * 古い描画が新しい描画を追い越して届くことがあり、版数で最新以外を捨てる。
- * render 関数を注入させるのは、重い mermaid 本体なしでこの制御をテストするため。
+ * Coalesces mermaid rendering into "once after the hand stops". Rendering is async,
+ * so an old render can overtake a new one and arrive later; a version number drops
+ * everything but the latest. The render function is injected so this control can be
+ * tested without the heavy mermaid itself.
  */
 export function createDebouncedDiagramRenderer(
   render: (source: string) => Promise<string | null>,
@@ -64,7 +65,7 @@ export function createDebouncedDiagramRenderer(
     },
     cancel() {
       clearTimer();
-      // 進行中の結果も版数を進めて無効化する
+      // Advance the version so the in-flight result is invalidated too
       version += 1;
     },
     dispose() {

@@ -1,7 +1,7 @@
 import type { MarkdownIt, StateCore, Token } from "markdown-it";
 import { noteLinkFile, splitNoteLinks } from "./note-link";
 
-/** 描画時に渡す、ID → タイトルの解決表。 */
+/** The resolution table from ID to title, passed in at render time. */
 interface NoteLinkEnv {
   noteTitles?: ReadonlyMap<string, string>;
 }
@@ -19,8 +19,8 @@ function split(
 
   return segments.map((segment) => {
     const title = segment.id === null ? undefined : titles.get(segment.id);
-    // 指し先の消えたリンクはタイトルに化けさせず、保存形のまま見せる。
-    // 表示文字が書いてあっても同じ — 無いノートを在るように見せない
+    // A link whose target is gone does not become a title; it is shown in its saved form.
+    // The same holds with display text written: a note that is not there is not made to look like it is
     if (segment.id === null || title === undefined) {
       const text = new state.Token("text", "", 0);
       text.content = segment.text;
@@ -34,10 +34,10 @@ function split(
 }
 
 /**
- * 本文の `[[ID]]` をタイトル表示のリンクにする markdown-it プラグイン。
+ * The markdown-it plugin that turns `[[ID]]` in the body into a link shown as a title.
  *
- * tagPlugin と同じく `text` トークンだけを割るので、コードスパンや
- * フェンスの中身には手が入らない。
+ * Like tagPlugin it splits only `text` tokens, so it never reaches inside a code span or
+ * a fence.
  */
 export function noteLinkPlugin(md: MarkdownIt): void {
   md.core.ruler.push("note_link", (state) => {

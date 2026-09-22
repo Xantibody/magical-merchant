@@ -6,11 +6,11 @@ const RESET = 1500;
 type WriteFn = (text: string) => Promise<void>;
 type StateFn = (copied: boolean) => void;
 
-/** 書き込み完了の順番をテスト側で握るための、外から解決できる Promise */
+/** A Promise resolvable from outside, so the test controls when the write completes */
 function deferred(): { promise: Promise<void>; resolve: () => void; reject: () => void } {
   let storedResolve!: () => void;
   let storedReject!: () => void;
-  // 解決を外から握るには executor を書くしかない
+  // Writing an executor is the only way to hold the resolution from outside
   // oxlint-disable-next-line promise/avoid-new
   const promise = new Promise<void>((resolve, reject) => {
     storedResolve = resolve;
@@ -19,7 +19,7 @@ function deferred(): { promise: Promise<void>; resolve: () => void; reject: () =
   return { promise, resolve: storedResolve, reject: storedReject };
 }
 
-/** vi.waitFor はタイマーも進めてしまうので、マイクロタスクだけを流す */
+/** vi.waitFor would advance the timers too, so run only the microtasks */
 function flushMicrotasks(): Promise<void> {
   return vi.advanceTimersByTimeAsync(0);
 }
@@ -47,7 +47,7 @@ describe("createCopyFeedback", () => {
     expect(onState).toHaveBeenLastCalledWith(false);
   });
 
-  // 連打しても「コピー済み」表示がチカチカしないよう、リセットは最後の 1 回分だけ
+  // So repeated presses do not make the "copied" state flicker, only the last press's reset counts
   it("restarts the reset timer when copy is pressed again", async () => {
     const write = vi.fn<WriteFn>(() => Promise.resolve());
     const onState = vi.fn<StateFn>();
@@ -66,7 +66,7 @@ describe("createCopyFeedback", () => {
     expect(onState).toHaveBeenLastCalledWith(false);
   });
 
-  // クリップボードが使えない環境では黙って何もしない。誤った「コピー済み」を出すよりよい
+  // Where the clipboard is unavailable, do nothing silently. Better than a false "copied"
   it("reports nothing when the clipboard write fails", async () => {
     const failure = deferred();
     const write = vi.fn<WriteFn>().mockReturnValue(failure.promise);

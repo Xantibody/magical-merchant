@@ -1,9 +1,10 @@
 /**
- * テストは日本語で走る。
+ * Tests run in Japanese.
  *
- * 言語は端末の設定から決まる(`i18n.ts`)ので、そのままだと画面の文言を
- * 見るテストが「実行した端末の言語」で結果を変える。ここで固定して、
- * 英語を見たいテストだけが自分で `setLocale("en")` と言うようにする。
+ * The language comes from the device settings (`i18n.ts`), so left alone, a test
+ * that looks at screen text changes its result with the language of the device
+ * it runs on. It is fixed here, and only a test that wants English says
+ * `setLocale("en")` itself.
  */
 
 import { beforeEach } from "vitest";

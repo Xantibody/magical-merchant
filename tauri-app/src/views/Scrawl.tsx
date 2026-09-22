@@ -44,22 +44,22 @@ import {
 } from "../lib/weekly-digest";
 import type { DeviceContext } from "../lib/parse-scrawl";
 
-/** 一覧に最初から載せる日数。カレンダーで遡ったぶんは都度足す。 */
+/** Days loaded into the list from the start. Days reached through the calendar are added as needed. */
 const RECENT_DAYS = 14;
 
-/** 週次ダイジェストを閉じた週(月曜の日付)。端末ローカルの表示状態。 */
+/** The week (Monday's date) whose weekly digest was dismissed. Display state local to the device. */
 const DIGEST_DISMISS_KEY = "weekly-digest-dismissed";
 
 interface ScrawlData {
   items: ScrawlItem[];
-  /** 記録のある全日付(新しい順)。ダイジェストの「1年前の今日」判定が使う。 */
+  /** Every date with a record (newest first). The digest's "a year ago today" check uses it. */
   dates: string[];
 }
 
 /**
- * 直近の日々と全日付一覧を 1 つの値で返す。別々のリソースに分けると
- * 描画が別フラッシュになり、先に出た日リストへ後からダイジェストが
- * 割り込んでレイアウトシフトを起こす。
+ * Returns the recent days and the full date list as one value. Split into separate
+ * resources, they would render in separate flushes, and the digest would cut into
+ * the day list already shown and cause a layout shift.
  */
 async function loadScrawl(extraDates: string[]): Promise<ScrawlData> {
   const dates = await typedInvoke("list_scrawl_dates");
@@ -93,25 +93,26 @@ export default function Scrawl(): JSX.Element {
   const today = new Date();
 
   const [extraDates, setExtraDates] = createSignal<string[]>([]);
-  /** カレンダーで選ばれた、これから見せたい日。表示できたら消す。 */
+  /** The day chosen in the calendar that is about to be shown. Cleared once it is on screen. */
   const [jumpTo, setJumpTo] = createSignal<string | null>(null);
-  /** 選択モード。入っている間だけ本文がクリックで選択できる。 */
+  /** Select mode. Only while in it can an entry body be selected by clicking. */
   const [selecting, setSelecting] = createSignal(false);
   const [selected, setSelected] = createSignal<ReadonlySet<string>>(new Set());
-  /** 削除前のワンクッション。確認バーが出ている間だけ true。 */
+  /** The one step before deleting. True only while the confirm bar is shown. */
   const [confirming, setConfirming] = createSignal(false);
-  /** 削除の実行中。連打で同じ行を二度消さないための鍵。 */
+  /** A delete in progress. The lock that keeps a double press from deleting the same row twice. */
   const [deleting, setDeleting] = createSignal(false);
-  /** 選択にまつわる 3 つを一度に畳む。抜け方はどこから戻っても同じ。 */
+  /** Folds the three selection states at once. Leaving works the same from anywhere. */
   const exitSelecting = (): void => {
     setSelecting(false);
     setSelected(new Set<string>());
     setConfirming(false);
   };
   /**
-   * 一覧を読み直す前に選択を畳む。選択は `date#index` で行を指すので、
-   * 読み直しで同じ日の前に行が増えるとその index は隣の記録を指す。
-   * 選び直しは確認バーを 1 つ押し直すだけ、誤削除は取り返しがつかない。
+   * Folds the selection before the list is reread. A selection points at a row by
+   * `date#index`, so if a reread adds a row earlier in the same day, that index
+   * points at the neighbouring record. Reselecting is one more press on the
+   * confirm bar; a wrong deletion cannot be undone.
    */
   const dropSelectionForReload = (): void => {
     if (!selecting()) {
@@ -122,19 +123,19 @@ export default function Scrawl(): JSX.Element {
   };
 
   const [scrawl, { refetch, mutate }] = createResource(extraDates, loadScrawl);
-  // 昇格ノートのチップに使う。Scrawl の描画は待たない — ノート一覧が
-  // 届いてからチップだけ後から現れる
+  // Used for the promoted-note chips. Scrawl's render does not wait for it: the
+  // chips alone appear later, once the note list arrives
   const [notes, { refetch: refetchNotes }] = createResource(async () =>
     toNoteItems(await typedInvoke("list_notes")),
   );
 
-  // 初回は createResource が読む。defer しないとマウント直後に同じ全読みを
-  // もう一度走らせ、起動時の IPC がまるごと倍になる
+  // The first read is done by createResource. Without defer, the same full read
+  // would run once more right after mount, doubling the IPC at startup
   createEffect(
     on(
       shell.dataVersion,
       () => {
-        // 行が入れ替わる前に選択ごと畳む
+        // Fold the selection before the rows are replaced
         dropSelectionForReload();
         void refetch();
         void refetchNotes();
@@ -143,14 +144,15 @@ export default function Scrawl(): JSX.Element {
     ),
   );
 
-  // 読み直しの引き金は refetch だけではない。extraDates はリソースの源なので、
-  // カレンダーや「1年前の今日」が日を足すだけでも一覧は丸ごと取り直される。
-  // 畳むのは日を足す関数の中ではなく源の側 — 足し手が増えても穴が開かない
+  // refetch is not the only trigger for a reread. extraDates is the resource's source,
+  // so the calendar or "a year ago today" adding a day is enough to refetch the whole list.
+  // The fold sits on the source, not inside the function that adds days, so a new
+  // caller cannot leave a gap
   createEffect(on(extraDates, dropSelectionForReload, { defer: true }));
 
   const entries = createMemo(() => scrawl()?.items ?? []);
-  // 地名は記録の一部ではないので、これを待って一覧を出さない。座標のまま先に
-  // 並べ、引けたものから名前に差し替わる。
+  // A place name is not part of the record, so the list does not wait for it. Rows
+  // are laid out with coordinates first and swap to names as each one is resolved.
   createEffect(() => {
     void places.load(entries().map((item) => item.context));
   });
@@ -158,14 +160,14 @@ export default function Scrawl(): JSX.Element {
 
   const days = createMemo(() => groupScrawlByDay(entries()));
 
-  // エントリの日時 → ノート。チップは元のエントリの真下に付く
+  // Entry datetime -> notes. A chip sits right under its origin entry
   const originNotes = createMemo(() => notesByOrigin(notes() ?? []));
   const notesFor = (item: ScrawlItem): NoteItem[] => originNotes().get(originKeyOf(item)) ?? [];
 
-  // 元のエントリが消えたノートだけ、これまでどおり日の見出し直下に出す
+  // Only notes whose origin entry is gone still appear right under the day heading, as before
   const orphanNotes = createMemo(() => orphanNotesByDate(notes() ?? [], entries()));
 
-  // ---- 週次ダイジェスト(週に一度、閉じるまで先頭に出る)----
+  // ---- Weekly digest (once a week, shown at the top until dismissed) ----
   const [digestDismissed, setDigestDismissed] = createSignal(
     localStorage.getItem(DIGEST_DISMISS_KEY),
   );
@@ -175,9 +177,9 @@ export default function Scrawl(): JSX.Element {
     if (isDigestDismissed(digestDismissed(), today)) {
       return false;
     }
-    // items と dates は同じリソースの 1 値なので、カードと日リストは
-    // 必ず同じフラッシュで描画される(後から割り込んで押し下げない)
-    // 語ることが何も無い週に空のカードを出さない
+    // items and dates are one value of the same resource, so the card and the day
+    // list always render in the same flush (nothing cuts in later and pushes down)
+    // A week with nothing to tell gets no empty card
     return weekSummary().count > 0 || yearAgo() !== null;
   });
 
@@ -192,8 +194,8 @@ export default function Scrawl(): JSX.Element {
     setJumpTo(iso);
   };
 
-  // 検索やパレットからの着地 (?day=)。カレンダーで選んだときと同じ経路に
-  // 流す — 直近 14 日より前ならデータを足し、その日の見出しまでスクロール
+  // Landing from search or the palette (?day=). Goes down the same path as a
+  // calendar pick: add the data if older than the last 14 days, then scroll to that day's heading
   createEffect(() => {
     const { day } = searchParams;
     if (typeof day !== "string" || !day) {
@@ -204,8 +206,8 @@ export default function Scrawl(): JSX.Element {
   });
 
   /**
-   * 日付を足すとデータを取り直すぶん行が作り直され、その場でスクロールしても
-   * 描き直しで先頭に戻る。読み込みが終わってから動かす。
+   * Adding a date refetches the data, so the rows are rebuilt; scrolling right away
+   * is undone by the redraw, which returns to the top. Move only after loading ends.
    */
   createEffect(() => {
     const iso = jumpTo();
@@ -220,7 +222,7 @@ export default function Scrawl(): JSX.Element {
   const contextsFor = (iso: string): (DeviceContext | null)[] =>
     (scrawl()?.items ?? []).filter((i) => i.date === iso).map((i) => i.context);
 
-  /** 書いた日だけ読み直す。全日の読み直しは保存 1 回に日数ぶんの IPC を払う。 */
+  /** Rereads only the day written to. Rereading every day pays one IPC per day for a single save. */
   const reloadDay = async (date: string): Promise<void> => {
     const items = toScrawlItems(date, await typedInvoke("read_scrawl_by_date", { date }));
     mutate((prev) => ({
@@ -235,9 +237,9 @@ export default function Scrawl(): JSX.Element {
   };
 
   /**
-   * エントリを昇格させてノートを作り、そのまま書き始められる状態で開く。
-   * エントリ側のファイルには何も書かない — ノートの frontmatter `origin`
-   * だけが両者を繋ぎ、チップは毎回そこから導出される。
+   * Promotes an entry into a note and opens it ready to write. Nothing is written
+   * to the entry's file: only the note's frontmatter `origin` links the two, and
+   * the chip is derived from it every time.
    */
   const promote = async (item: ScrawlItem): Promise<void> => {
     const path = await typedInvoke("create_draft", {
@@ -259,9 +261,9 @@ export default function Scrawl(): JSX.Element {
   };
 
   /**
-   * 昇格元エントリとの関係を解く。消えるのは繋がりの記録だけで、
-   * ノート本体には触れない。戻すときは同じ値を書き戻すだけなので、
-   * 削除と同じく確認ではなく Undo で受ける。
+   * Unlinks a note from its origin entry. Only the record of the link goes; the
+   * note itself is untouched. Restoring is just writing the same value back, so
+   * like deletion it is handled by Undo, not by a confirmation.
    */
   const unlinkNote = async (note: NoteItem): Promise<void> => {
     const { origin } = note;
@@ -278,9 +280,9 @@ export default function Scrawl(): JSX.Element {
     });
   };
 
-  // ---- まとめて削除（選択 → 確認 → 実行）----
+  // ---- Bulk delete (select -> confirm -> run) ----
   const toggleSelected = (id: string): void => {
-    // 選び直したら確認は仕切り直す。件数の変わった確認をそのまま実行させない
+    // Changing the selection restarts the confirmation. A confirmation whose count changed must not run as is
     setConfirming(false);
     setSelected((prev) => {
       const next = new Set(prev);
@@ -294,7 +296,7 @@ export default function Scrawl(): JSX.Element {
   };
 
   const runDelete = async (): Promise<void> => {
-    // 連打で同じ index を二度消させない
+    // A double press must not delete the same index twice
     if (deleting()) {
       return;
     }
@@ -302,7 +304,7 @@ export default function Scrawl(): JSX.Element {
     try {
       const ids = selected();
       const plan = planBulkDelete(entries().filter((item) => ids.has(item.id)));
-      // 同じ日の index は前の削除で行が繰り上がると意味が変わるので、並列にせず順に消す
+      // An index in the same day changes meaning once an earlier delete shifts the rows up, so delete in order, not in parallel
       for (const target of plan) {
         // oxlint-disable-next-line no-await-in-loop
         await typedInvoke("delete_scrawl_entry", {
@@ -321,7 +323,7 @@ export default function Scrawl(): JSX.Element {
     }
   };
 
-  // Esc で一段ずつ戻る: 確認バー → 選択モード → 通常
+  // Esc steps back one level at a time: confirm bar -> select mode -> normal
   createEffect(() => {
     if (!selecting()) {
       return;
@@ -345,14 +347,15 @@ export default function Scrawl(): JSX.Element {
     <div class="scrawl">
       <div class="scrawl-scroll">
         <div class="scrawl-column">
-          {/* タグ行と週の要約はひと続きの見出し帯。列の 36px ではなく帯の中の
-              14px で寄せる — 要約はタグの続きであって、独立した層ではない。
-              digest を TagFilter より上に挿さないのは、データが遅れて届いたとき
-              最初の描画に存在した行が押し下げられてレイアウトシフトになるから */}
+          {/* The tag row and the week summary are one continuous heading strip. They
+              sit at the strip's 14px, not the column's 36px: the summary continues
+              the tags, it is not a layer of its own. The digest is not inserted
+              above TagFilter because when the data arrives late, a row present in
+              the first paint would be pushed down and cause a layout shift */}
           <div class="scrawl-head">
             <div class="scrawl-head-row">
-              {/* 押してもここでは絞らない。絞る画面を Scrawl とそのタグで
-                  開く — 絞り込みの答えを 2 か所に持たない */}
+              {/* Pressing does not filter here. It opens the Browse screen with Scrawl
+                  and that tag: the filter's answer is not kept in two places */}
               <TagFilter
                 tags={knownTags()}
                 onPick={(tag) =>
@@ -360,9 +363,9 @@ export default function Scrawl(): JSX.Element {
                 }
               />
 
-              {/* 日をまたいで遡る唯一の入口。狭い画面ではヘッダが持っている
-                  ので出さない(CSS)。タグが 1 つも無い日でも消えないよう、
-                  この帯は中身の有無に関わらず描く */}
+              {/* The only way to go back across days. Not shown on a narrow screen
+                  (CSS), where the header has it. So it does not vanish on a day
+                  with no tags at all, this strip is drawn whether or not it has content */}
               <button
                 type="button"
                 class="icon-button scrawl-calendar"
@@ -384,7 +387,7 @@ export default function Scrawl(): JSX.Element {
                 <Show when={yearAgo()}>
                   {(iso) => (
                     <>
-                      {/* 中黒は要約と行き先を隔てるだけの字。読み上げには要らない */}
+                      {/* The middle dot only separates the summary from the link. A screen reader does not need it */}
                       <Show when={weekSummary().count > 0}>
                         <span class="digest-sep" aria-hidden="true">
                           ·
@@ -427,9 +430,9 @@ export default function Scrawl(): JSX.Element {
                       <span class="day-heading-date">{heading().date}</span>
                       <span class="day-heading-count">
                         {t().scrawl.entryCount(day.items.length)}
-                        {/* 選択の入り口は、いま書いている日の件数の隣に字で 1 つ。
-                            浮かせた専用のバーを 1 段作らない。入ったあとの操作は
-                            下のバーが引き受けるので、その間は出さない */}
+                        {/* The entry into selection is one word beside the count of the
+                            day being written. No floating bar of its own is added. Once
+                            inside, the bottom bar takes over, so it is hidden meanwhile */}
                         <Show when={index() === 0 && !selecting()}>
                           <span aria-hidden="true">·</span>
                           <button
@@ -443,8 +446,8 @@ export default function Scrawl(): JSX.Element {
                       </span>
                     </header>
 
-                    {/* 元のエントリが消えたノートだけの避難先。通常のチップは
-                        各エントリの真下に出る */}
+                    {/* A shelter only for notes whose origin entry is gone. A normal
+                        chip appears right under its entry */}
                     <Show when={orphans().length}>
                       <div class="origin-chips">
                         <For each={orphans()}>
@@ -494,8 +497,8 @@ export default function Scrawl(): JSX.Element {
               when={confirming()}
               fallback={
                 <>
-                  {/* 何も選んでいないうちは件数を数えても始まらない。
-                      入り口のバーが消えたぶん、次にすることはここで言う */}
+                  {/* Counting means nothing while nothing is selected. The entry
+                      bar is gone, so what to do next is said here instead */}
                   <span class="select-bar-label">
                     {selected().size === 0
                       ? t().scrawl.selectHint

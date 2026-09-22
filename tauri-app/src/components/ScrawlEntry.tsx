@@ -15,12 +15,12 @@ interface OriginChipProps {
 }
 
 /**
- * 昇格ノートへの入り口。開くのがタップ、繋がりを解くのが隠しアクション。
- * 通常は各エントリの真下に出るが、元のエントリが消えたノートの避難先として
- * Scrawl が日見出しの直下にも並べる。
+ * The way into a promoted note. A tap opens it; unlinking is the hidden action.
+ * It normally appears directly under its entry, but Scrawl also lines these up under the day
+ * heading as the place a note goes when its originating entry is gone.
  */
 export function OriginChip(props: OriginChipProps): JSX.Element {
-  // モバイルの解除は長押し。PC はホバーで出る × が受ける
+  // On mobile, a long press unlinks. On desktop the close button shown on hover takes it
   const press = createLongPress(() => props.onUnlink(props.note));
 
   return (
@@ -29,7 +29,7 @@ export function OriginChip(props: OriginChipProps): JSX.Element {
         type="button"
         class="origin-chip-open long-press"
         onClick={() => {
-          // 長押しで解除した直後の click で開かない
+          // The click that follows a long-press unlink must not open it
           if (press.shouldClick()) {
             props.onOpen(props.note);
           }
@@ -61,7 +61,7 @@ export function OriginChip(props: OriginChipProps): JSX.Element {
 
 interface ScrawlEntryProps {
   item: ScrawlItem;
-  /** このエントリから育ったノート。チップとして本文の真下に出す。 */
+  /** Notes grown from this entry. They appear as chips directly under the body. */
   notes: NoteItem[];
   selecting: boolean;
   selected: boolean;
@@ -73,7 +73,7 @@ interface ScrawlEntryProps {
 
 export default function ScrawlEntry(props: ScrawlEntryProps): JSX.Element {
   const meta = createMemo(() => entryMeta(props.item.context, places.nameOf));
-  // モバイルの入り口は長押し。タップには何も割り当てない
+  // On mobile the way in is a long press. Nothing is assigned to a tap
   const press = createLongPress(() => props.onPromote());
 
   return (
@@ -92,7 +92,7 @@ export default function ScrawlEntry(props: ScrawlEntryProps): JSX.Element {
 
       <div class="entry-body">
         <Show when={props.selecting}>
-          {/* 選択モード中だけ本文がクリックできる。押すと選択のトグル */}
+          {/* The body is clickable only in select mode. A press toggles the selection */}
           <button
             type="button"
             class="entry-select"
@@ -107,9 +107,11 @@ export default function ScrawlEntry(props: ScrawlEntryProps): JSX.Element {
         </Show>
 
         <Show when={!props.selecting}>
-          {/* 記録は書き換えない。本文は読むだけで、触れる先はノートへの昇格だけ */}
-          {/* 長押しは指の合図で、本文を button にすると読み物が押し物に見える。
-              そのぶんキーボードからの昇格は無い */}
+          {/* A record is never rewritten. The body is only read, and the one thing it leads
+              to is promotion to a note */}
+          {/* The long press is a gesture for a finger; making the body a button would make
+              something to read look like something to press. The cost is that there is no
+              promotion from the keyboard */}
           {/* oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
           <p
             class="entry-text long-press"
@@ -134,8 +136,8 @@ export default function ScrawlEntry(props: ScrawlEntryProps): JSX.Element {
             </div>
           </Show>
 
-          {/* このエントリから育ったノート。origin の日時で引くので
-              日単位ではなく元の記録の真下に付く */}
+          {/* Notes grown from this entry. They are looked up by the origin timestamp, so
+              they attach directly under the original record rather than per day */}
           <Show when={props.notes.length}>
             <div class="entry-notes">
               <For each={props.notes}>
@@ -146,7 +148,7 @@ export default function ScrawlEntry(props: ScrawlEntryProps): JSX.Element {
             </div>
           </Show>
 
-          {/* PC の入り口。隠しアクションの流儀どおり、ホバーでだけ現れる */}
+          {/* The way in on desktop. In the manner of a hidden action, it appears on hover only */}
           <div class="entry-actions">
             <button
               type="button"

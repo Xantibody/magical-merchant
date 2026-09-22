@@ -1,9 +1,9 @@
 import type { MarkdownIt, Token } from "markdown-it";
 
-/** GFM の task list marker。後ろに空白が要るのは remark(エディタ側)と同じ。 */
+/** The GFM task list marker. It needs a trailing space, the same as remark (the editor). */
 const TASK_MARKER = /^\[(?<mark>[ xX])\] /u;
 
-/** i 番目が、li 直下の最初の段落の inline か。marker はそこにしか立たない。 */
+/** Whether token i is the inline of the first paragraph under an li. A marker only sits there. */
 function opensListItem(tokens: Token[], i: number): boolean {
   return (
     tokens[i].type === "inline" &&
@@ -13,13 +13,13 @@ function opensListItem(tokens: Token[], i: number): boolean {
 }
 
 /**
- * `- [ ]` / `- [x]` を task の li にする markdown-it プラグイン。
+ * A markdown-it plugin that turns `- [ ]` / `- [x]` into a task li.
  *
- * markdown-it は GFM の task list を知らず、`[ ]` を文字のまま出す。エディタ
- * (Milkdown の gfm)は同じ行を li の checked 属性に畳んで文字を消すので、
- * 両面で同じ DOM(`li[data-item-type="task"][data-checked]`)を出し、印は
- * CSS が描く。inline の前に走らせるのは、`[ ]` が children に割られる前に
- * 本文から外すため。
+ * markdown-it does not know GFM task lists and emits `[ ]` as plain text. The editor
+ * (Milkdown's gfm) folds the same line into the li's checked attribute and removes the
+ * text, so both surfaces emit the same DOM (`li[data-item-type="task"][data-checked]`) and
+ * CSS draws the mark. It runs before inline so that `[ ]` is taken out of the body before
+ * it is split into children.
  */
 export function taskListPlugin(md: MarkdownIt): void {
   md.core.ruler.before("inline", "task_list", (state) => {

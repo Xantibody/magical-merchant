@@ -1,10 +1,11 @@
 /**
- * 「起動時に全画面」の設定。macOS のデスクトップ版だけの話。
+ * The "fullscreen at startup" setting. Concerns the macOS desktop build only.
  *
- * テーマ(`theme.ts`)や言語(`i18n.ts`)と同じく localStorage に残す。
- * 窓の状態は Rust 側に持たせるものではない — 次回の起動で読むのは
- * この WebView 自身で、`getCurrentWindow().setFullscreen` を呼ぶだけで
- * 緑ボタンと同じネイティブの全画面(専用 Space)に入れる。
+ * Kept in localStorage like the theme (`theme.ts`) and the language (`i18n.ts`).
+ * The window state is not something for the Rust side to hold: what reads it at
+ * the next startup is this WebView itself, and one call to
+ * `getCurrentWindow().setFullscreen` enters the same native fullscreen (its own
+ * Space) as the green button.
  */
 
 import { isMacDesktop } from "./platform";
@@ -20,21 +21,21 @@ export function writeStartFullscreen(on: boolean): void {
 }
 
 /**
- * 今の窓を全画面にする。ブラウザハーネスやテストには窓が無く、
- * 呼び出しが落ちる。設定ひとつのために起動を止める理由はないので黙る。
+ * Makes the current window fullscreen. The browser harness and the tests have no
+ * window, and the call fails. One setting is no reason to halt startup, so stay silent.
  */
 export async function enterFullscreen(): Promise<void> {
   try {
-    // window モジュールは dpi/image を連れて 14 kB ある。ここと Settings
-    // からしか呼ばれないので、起動バンドルには入れない
+    // The window module brings dpi/image along and weighs 14 kB. It is called only
+    // from here and from Settings, so keep it out of the startup bundle
     const { getCurrentWindow } = await import("@tauri-apps/api/window");
     await getCurrentWindow().setFullscreen(true);
   } catch {
-    // 窓が無い(ハーネス・テスト)か、権限が無い。どちらも見た目が変わらないだけ
+    // No window (harness, tests) or no permission. Either way only the look stays the same
   }
 }
 
-/** 起動時に呼ぶ。Mac で設定が入っているときだけ窓に触る。 */
+/** Called at startup. Touches the window only on a Mac with the setting on. */
 export async function applyStartFullscreen(userAgent: string = navigator.userAgent): Promise<void> {
   if (!isMacDesktop(userAgent) || !readStartFullscreen()) {
     return;

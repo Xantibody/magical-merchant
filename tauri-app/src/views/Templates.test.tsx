@@ -6,7 +6,7 @@ import { ShellProvider } from "../lib/shell";
 import UndoToast from "../components/UndoToast";
 import Templates from "./Templates";
 
-// vi.mock ではなく mockIPC を使う理由は commands.test.ts に書いたとおり
+// The reason for mockIPC rather than vi.mock is written in commands.test.ts
 const DAILY = {
   filename: "daily.md",
   name: "daily",
@@ -43,8 +43,8 @@ function mockCommands(): void {
   });
 }
 
-// トーストは AppLayout が描いている。破棄を伝えるところまで見たいので、
-// テストでも同じ組で並べる
+// AppLayout draws the toast. The test should reach as far as reporting the discard, so it
+// lines up the same pair
 function renderTemplates() {
   return render(() => (
     <ShellProvider>
@@ -56,7 +56,7 @@ function renderTemplates() {
   ));
 }
 
-/** 一覧が届き、1 件目を開いた状態まで進める。 */
+/** Advance until the list has arrived and the first entry is open. */
 async function openDaily() {
   const rendered = renderTemplates();
   await waitFor(() => expect(screen.getByText("daily")).toBeDefined());
@@ -99,8 +99,8 @@ describe("Templates", () => {
     expect(screen.getByText("Daily {{date}}")).toBeDefined();
   });
 
-  // 編集画面が見せるのは書かれたままの姿。ここで変数が解けていると、
-  // 直したつもりが固定の日付を書き込むことになる
+  // The edit screen shows it exactly as written. If the variables were resolved here, an
+  // intended correction would write a fixed date in
   it("shows the body with its variables unresolved", async () => {
     const { container } = await openDaily();
 
@@ -118,8 +118,8 @@ describe("Templates", () => {
     await waitFor(() => expect(body.value).toBe("##{{date}} メモ"));
   });
 
-  // 変数は最後に触っていた欄に入る。タイトルを打っている最中に本文へ
-  // 落ちると、タイトルに変数を置く手段がなくなる
+  // A variable goes into the field touched last. Dropping into the body while the title is
+  // being typed would leave no way to put a variable in the title
   it("puts a variable into the title while the title has the focus", async () => {
     await openDaily();
     const title = screen.getByLabelText<HTMLInputElement>("タイトル");
@@ -142,7 +142,7 @@ describe("Templates", () => {
     expect(bodyInput(container).value).toBe("## メモ");
   });
 
-  // 本文に戻ってきたら挿し先も本文に戻る
+  // Come back to the body and the insertion target returns to the body too
   it("goes back to the body once the body has the focus again", async () => {
     const { container } = await openDaily();
     const body = bodyInput(container);
@@ -155,7 +155,7 @@ describe("Templates", () => {
     await waitFor(() => expect(body.value).toBe("##{{date}} メモ"));
   });
 
-  // 「今日作るとこうなる」。変数の書き方が合っているかはここで分かる
+  // "This is what it becomes made today". Whether a variable is written right is seen here
   it("previews the title as it will be written today", async () => {
     const { container } = await openDaily();
     const now = new Date();
@@ -166,7 +166,7 @@ describe("Templates", () => {
     expect(preview?.textContent).toContain(`Daily ${today}`);
   });
 
-  // 本文まで見えないと、変数を書いた行が思ったとおりになるか確かめられない
+  // Without seeing the body too, there is no way to check that a line with a variable comes out as intended
   it("previews the body once the preview is opened", async () => {
     const { container } = await openDaily();
     const now = new Date();
@@ -179,8 +179,8 @@ describe("Templates", () => {
     await waitFor(() => expect(body?.textContent).toContain(`## ${today} のメモ`));
   });
 
-  // 記入例はノートに書かれない。「今日作ると」は書かれる姿を見せる場所なので、
-  // ここに残っていると、消えないものとして読める
+  // The example block is not written into a note. "Made today" is where the written shape is
+  // shown, so leaving it here would read as something that does not go away
   it("keeps the example block out of the preview", async () => {
     const { container } = await openDaily();
 
@@ -195,7 +195,7 @@ describe("Templates", () => {
     expect(body?.textContent).not.toContain("{{eg}}");
   });
 
-  // 手で打てる記法だが、打てるだけでは「書ける」と気づけない
+  // The syntax can be typed by hand, but being typeable alone does not make it discoverable
   it("offers the example marker as a chip", async () => {
     const { container } = await openDaily();
 
@@ -216,11 +216,11 @@ describe("Templates", () => {
     await waitFor(() =>
       expect(container.querySelectorAll(".templates-tags .tag-badge--var")).toHaveLength(1),
     );
-    // 固定タグのほうは実線のまま
+    // The fixed tag keeps its solid border
     expect(container.querySelectorAll(".templates-tags .tag-badge")).toHaveLength(2);
   });
 
-  // 変換確定の Enter でタグが増えると、漢字のタグを打ち終えられない (#102)
+  // If the Enter that confirms a conversion added a tag, a kanji tag could never be finished (#102)
   it("does not add a tag while the IME is composing", async () => {
     const { container } = await openDaily();
     const tagInput = screen.getByLabelText("タグを追加");
@@ -231,7 +231,7 @@ describe("Templates", () => {
     expect(container.querySelectorAll(".templates-tags .tag-badge")).toHaveLength(1);
   });
 
-  // 同じ名前で保存すると、既にあるテンプレを黙って上書きしてしまう
+  // Saving under the same name would silently overwrite the template that already exists
   it("refuses to save a new template onto an existing name", async () => {
     renderTemplates();
     await waitFor(() => expect(screen.getByText("daily")).toBeDefined());
@@ -245,7 +245,7 @@ describe("Templates", () => {
     expect(saved).toHaveLength(0);
   });
 
-  // 名前が決まるまで保存できない。まずそこへ連れていく
+  // Nothing can be saved until the name is settled. Take the user there first
   it("puts the cursor in the name field when a new template starts", async () => {
     renderTemplates();
     await waitFor(() => expect(screen.getByText("daily")).toBeDefined());
@@ -268,12 +268,12 @@ describe("Templates", () => {
 
     await waitFor(() => expect(saved).toHaveLength(1));
     expect(saved[0].filename).toBe("weekly.md");
-    // 保存されるのは書かれたまま。解決はノートを作る core の仕事
+    // What is saved is exactly what was written. Resolving is the job of the core that makes the note
     expect(saved[0].body).toBe("# 週次 {{date}}\n");
   });
 
-  // テンプレは書きかけのまま置かれると、そこから作るノートまで壊れる。
-  // 書いている途中の姿がディスクに出ていくことはない
+  // A template left half-written breaks the notes made from it as well. A shape that is
+  // still being typed never goes out to disk
   it("writes nothing until save is pressed", async () => {
     const { container } = await openDaily();
 
@@ -308,8 +308,8 @@ describe("Templates", () => {
     await waitFor(() => expect(saved).toHaveLength(1));
   });
 
-  // ⌘⇧S はアプリ全体の「今すぐ同期」。ここで保存まで走ると、同期のつもりの
-  // 一押しで書きかけがディスクに出ていく
+  // ⌘⇧S is the app-wide "sync now". If a save ran here too, one press meant as a sync would
+  // send half-written text out to disk
   it("leaves ⌘⇧S to the sync shortcut", async () => {
     const { container } = await openDaily();
 
@@ -319,7 +319,7 @@ describe("Templates", () => {
     expect(saved).toHaveLength(0);
   });
 
-  // 保存していない変更は戻ると消える。消したことは伝えて、戻す道も残す
+  // Unsaved changes go when leaving. The discard is reported, and a way back is left open
   it("discards unsaved changes on the way back, and can put them back", async () => {
     const { container } = await openDaily();
     fireEvent.input(bodyInput(container), { target: { value: "書きかけ" } });

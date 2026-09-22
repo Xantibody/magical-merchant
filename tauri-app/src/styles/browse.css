@@ -1,5 +1,6 @@
-/* 「絞る」画面 (⌘F)。左にチップ 240px、中央に一覧 280〜380px、右に選んだ
-   1 件の全文。文字を打って探す欄は持たない — それは ⌘K のもの */
+/* The Browse screen (`⌘F`). Chips on the left at 240px, the list in the middle at 280 to
+   380px, the one selected record in full on the right. It has no field for typing to find
+   something: that is what `⌘K` is for */
 
 .browse {
   flex: 1;
@@ -8,7 +9,7 @@
   min-width: 0;
 }
 
-/* ---------------- 左: 3 軸のチップ ---------------- */
+/* ---------------- Left: the chips of the three axes ---------------- */
 
 .browse-facets {
   box-sizing: border-box;
@@ -30,15 +31,15 @@
   letter-spacing: -0.01em;
 }
 
-/* チップは縦に積む。240px の列では、折り返すより 1 行 1 つのほうが読める */
+/* The chips stack vertically. In a 240px column, one per line reads better than wrapping */
 .browse-group {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-/* タグだけは幾つまで増えるか分からない。ここで送れるようにしておかないと、
-   タグの多いツリーでは「期間」のチップが列の下へ押し出されて見えなくなる */
+/* Tags are the one axis with no known upper count. Without scrolling here, a tree with many
+   tags pushes the period chips below the column and out of sight */
 .browse-group--tags {
   max-height: 42vh;
   overflow: auto;
@@ -60,7 +61,7 @@
   min-height: 30px;
   border: 1px solid var(--app-border);
   border-radius: 16px;
-  /* 塗るのは選んでいるチップだけ。押していないチップは枠だけで立つ */
+  /* Only a chosen chip is filled. An unpressed chip stands on its border alone */
   background: none;
   color: var(--app-text-muted);
   font-family: inherit;
@@ -82,8 +83,9 @@
   color: var(--app-text);
 }
 
-/* 件数は「押したら何件になるか」。選んでいるチップの中では字より薄く、
-   選んでいないチップではさらに薄い — 数字が名前を追い越さないように */
+/* A count says how many records there would be if it were pressed. Inside a chosen chip it
+   is fainter than the text, and fainter still in a chip not chosen, so the number never
+   overtakes the name */
 .browse-chip-count {
   margin-left: auto;
   color: var(--app-text-hint);
@@ -111,7 +113,7 @@
   color: var(--app-text);
 }
 
-/* ---------------- 中央: 一覧 ---------------- */
+/* ---------------- Middle: the list ---------------- */
 
 .browse-results {
   flex: 1;
@@ -192,7 +194,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* 2 行目は本文の先頭 40 字。題の真下に揃える */
+/* The second line is the first 40 characters of the body, aligned directly under the title */
 .browse-row-snippet {
   grid-column: 2;
   font-size: 12px;
@@ -210,7 +212,7 @@
   color: var(--app-text-faint);
 }
 
-/* ---------------- 右: 選んだ 1 件 ---------------- */
+/* ---------------- Right: the one selected record ---------------- */
 
 .browse-preview {
   display: flex;
@@ -298,22 +300,23 @@
   opacity: 0.6;
 }
 
-/* ---------------- モバイル ---------------- */
+/* ---------------- Mobile ---------------- */
 
 @media (max-width: 767px) {
   .browse {
     flex-direction: column;
   }
 
-  /* 題も群見出しも出さない。狭い画面の上端はヘッダが題を持っている */
+  /* Neither the title nor the group labels are shown. On a narrow screen the header at the
+     top already carries the title */
   .browse-title,
   .browse-group-label {
     display: none;
   }
 
-  /* タグの数だけ縦に伸びる帯。伸びきると結果の列が 0 になって届かなくなる。
-     `.app` は overflow: hidden で外に送れる場所が無いので、高さを切って
-     この帯自身が送れるようにする */
+  /* A band that grows vertically with the number of tags. Grown to the full height it
+     leaves the results column at 0 and out of reach. `.app` is overflow: hidden, so there
+     is nowhere outside to scroll; the height is capped and the band scrolls itself */
   .browse-facets {
     width: 100%;
     flex: 0 0 auto;
@@ -331,7 +334,7 @@
     flex-wrap: wrap;
   }
 
-  /* 帯ごと縦に送る。群の中だけを送る二重のスクロールを作らない */
+  /* The whole band scrolls vertically. No second scroll is made inside the group alone */
   .browse-group--tags {
     max-height: none;
     overflow: visible;
@@ -347,7 +350,7 @@
     min-height: 34px;
   }
 
-  /* プレビュー列は無い。行を押したらその場で開く */
+  /* There is no preview column. Pressing a row opens it in place */
   .browse-results {
     grid-template-columns: minmax(0, 1fr);
   }

@@ -25,7 +25,7 @@ interface PaletteCommand {
 
 interface CommandPaletteProps {
   commands: PaletteCommand[];
-  /** 開いた画面から引き継ぐ検索の範囲(タグ、AND)。開いた後はパレットの中で外せる。 */
+  /** Search scope handed over from the opening screen (tags, AND). Removable inside the palette. */
   scopeTags?: string[];
   onSelectHit: (hit: SearchHit) => void;
   onClose: () => void;
@@ -35,10 +35,10 @@ interface PaletteRow {
   key: string;
   icon: IconName;
   label: string;
-  /** 題の中の一致語。下線を引く場所で、当たっていなければ無い。 */
+  /** The matched word inside the title. Where the underline goes; absent when nothing matched. */
   labelMatch?: SnippetParts | null;
   meta?: string;
-  /** 一致箇所つきの抜粋。題で当たっているときは出さない。 */
+  /** Excerpt with the match position. Not shown when the title already carries the match. */
   highlight?: SnippetParts | null;
   run: () => void;
 }
@@ -62,24 +62,26 @@ function searchHits(source: SearchSource): Promise<SearchHit[]> {
 }
 
 /**
- * search_all は全 Scrawl + 全ノートのファイル走査で、実機では 1 回
- * 100ms を超えうる。打鍵ごとに発行せず、指が止まってからまとめて聞く。
- * コマンドの絞り込みはメモリ内なので query を直に見て即時に効かせる。
+ * search_all scans the files of every Scrawl day and every note, and on a real
+ * device one call can exceed 100ms. Do not issue it per keystroke; ask once the
+ * fingers stop. Command filtering is in memory, so it reads query directly and
+ * applies at once.
  */
 const SEARCH_DEBOUNCE_MS = 200;
 
-/** zero-query に出すタグの数。全部出すと入り口ではなく一覧になってしまう。 */
+/** Number of tags shown on zero-query. Showing all turns the entry point into a list. */
 const HOME_TAG_LIMIT = 6;
 
 /**
- * 結果の束の並び。書いた量の多い順 — Codex は探して開くもの、Scrawl は
- * 数が多く日付で辿れるものなので、下に置く。
+ * Order of the result groups. By how much was written: a Codex is something you
+ * search for and open, Scrawl entries are many and reachable by date, so they go last.
  */
 const HIT_GROUP_ORDER: HitKind[] = ["codex", "note", "scrawl"];
 
 /**
- * 束の見出しに出す種類の名。面の名をそのまま引く(`routes.ts`)。固有名詞なので
- * どちらの言語でも同じ綴りで、`t()` は通らない。
+ * Kind names for the group headings. Taken straight from the surface names
+ * (`routes.ts`). They are proper nouns, spelled the same in both languages, so
+ * they do not go through `t()`.
  */
 const HIT_LABELS: Record<HitKind, string> = {
   scrawl: MODE_LABELS[ROUTES.SCRAWL],
@@ -88,11 +90,12 @@ const HIT_LABELS: Record<HitKind, string> = {
 };
 
 /**
- * 題の中の一致語を「前・一致・後」に分ける。
+ * Split the matched word inside the title into "before, match, after".
  *
- * core が返す `match_start` は抜粋の中の位置で、題(本文の 1 行目)には使えない。
- * 題にも下線を引きたいので、ここで探す。突き合わせは core と同じく大小を
- * 無視するが、返す綴りは書いた形のまま。
+ * The `match_start` core returns is a position inside the excerpt and cannot be
+ * used on the title (the first line of the body). The title should be underlined
+ * too, so the search happens here. Matching ignores case like core does, but the
+ * returned spelling is the one that was written.
  */
 function matchInLabel(label: string, word: string): SnippetParts | null {
   if (!word) {
@@ -101,8 +104,8 @@ function matchInLabel(label: string, word: string): SnippetParts | null {
   const chars = [...label];
   const hay = chars.map((char) => char.toLowerCase());
   const want = [...word].map((char) => char.toLowerCase());
-  // 小文字にすると 1 文字が 2 文字になる綴り(ǅ → dž)があると位置がずれる。
-  // 下線を 1 文字ずらして引くより、引かないほうがいい
+  // A spelling where one character lowercases to two (ǅ to dž) shifts the
+  // positions. Better no underline than one drawn one character off
   if ([...hay, ...want].some((char) => [...char].length !== 1)) {
     return null;
   }
@@ -120,10 +123,12 @@ function matchInLabel(label: string, word: string): SnippetParts | null {
 
 export default function CommandPalette(props: CommandPaletteProps): JSX.Element {
   const [query, setQuery] = createSignal("");
-  // 開いた瞬間の範囲を初期値にするだけ。開いている間に外から変わることはない
+  // The scope at the moment of opening is only the initial value. It never changes
+  // from outside while the palette is open
   const [scope, setScope] = createSignal<string[]>(props.scopeTags ?? []);
   const [cursor, setCursor] = createSignal(0);
-  // 打鍵はまとめるが、チップの付け外しは即時に効かせる。1 回の操作で結果が変わる
+  // Keystrokes are batched, but adding or removing a chip applies at once. One
+  // action changes the results
   const debouncedQuery = createDebouncedAccessor(query, SEARCH_DEBOUNCE_MS);
   const [hits] = createResource<SearchHit[], SearchSource>(
     () => ({ query: debouncedQuery(), tags: scope() }),
@@ -131,18 +136,20 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
   );
 
   /**
-   * いま効いている範囲。チップに加えて、打った `#タグ` も入る(searchRequest)。
+   * The scope in effect now. Besides the chips, it includes typed `#tag` words
+   * (searchRequest).
    *
-   * 打った `#タグ` はチップにしない。打っている途中で `#sf` がチップになると
-   * 続きが打てず、`#sf6` と `#sf` のどちらを消したいかも分からなくなる。
-   * 打ったままの文字が範囲として効けばよく、消すのも文字を消すだけでいい。
+   * A typed `#tag` does not become a chip. If `#sf` turned into a chip while still
+   * being typed, the rest could not be typed, and it would be unclear whether
+   * `#sf6` or `#sf` should be removed. The typed characters only need to act as
+   * scope, and removing them is just deleting the characters.
    */
   const activeTags = createMemo(() => searchRequest(debouncedQuery(), scope())?.tags ?? []);
 
-  /** 本文の検索語(打った `#タグ` を除いた残り)。題の下線もこれで引く。 */
+  /** The body search word (what remains after the typed `#tag` words). Underlines the title too. */
   const searchWord = createMemo(() => searchRequest(debouncedQuery(), scope())?.query ?? "");
 
-  /** 範囲は検索の入り口なので、zero-query でもチップがあれば結果を出す。 */
+  /** The scope is a search entry point, so with chips present results show even on zero-query. */
   const browsing = (): boolean => Boolean(query().trim() || scope().length > 0);
 
   let inputRef: HTMLInputElement | undefined;
@@ -152,15 +159,15 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
     setCursor(0);
   };
 
-  /** 範囲は足していく(AND)。置き換えると二つ目のタグで一つ目が消える。 */
+  /** The scope accumulates (AND). Replacing would lose the first tag on the second. */
   const addScope = (tag: string): void => {
     setScope((tags) => (tags.includes(tag) ? tags : [...tags, tag]));
     setCursor(0);
     inputRef?.focus();
   };
 
-  // zero-query の入り口。どれも既存の IPC から導出するだけで、開いた瞬間に
-  // 1 回読めば足りる
+  // The zero-query entry point. Everything derives from existing IPC calls, so one
+  // read at the moment of opening is enough
   const [home] = createResource(async () => {
     const [notes, dates] = await Promise.all([
       typedInvoke("list_notes"),
@@ -214,8 +221,9 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
         icon: "magnifying-glass",
         label: `#${tag.tag}`,
         meta: t().palette.count(tag.count),
-        // タグは着地先が一つに決まらないので、範囲として引き継ぐ。文字列に
-        // すると本文の一致も混ざり、しかもそこから絞って打ち足せない
+        // A tag has no single landing place, so it is carried over as scope. As
+        // query text it would also match bodies, and typing on from there could
+        // not narrow it
         run: () => addScope(tag.tag),
       }));
       return [
@@ -226,8 +234,8 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
       ].filter((section) => section.rows.length > 0);
     }
 
-    // 1 本の並びではなく種類の束にする。どこに居たものかは、行の印より
-    // 見出しのほうが早い。件数は「この中に何件あるか」の手応え
+    // Groups by kind rather than one flat list. A heading tells where a hit lived
+    // faster than an icon on the row. The count gives a feel for how many are inside
     const found = hits() ?? [];
     const groups: PaletteSection[] = HIT_GROUP_ORDER.map((kind) => {
       const rows: PaletteRow[] = found
@@ -262,7 +270,7 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
       props.onClose();
       return;
     }
-    // 空の入力欄で Backspace を押したら、その手前にあるチップ(最後の一つ)が消える
+    // Backspace in an empty field removes the chip just before it (the last one)
     const last = scope().at(-1);
     if (e.key === "Backspace" && !query() && last !== undefined) {
       e.preventDefault();
@@ -279,14 +287,14 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
       setCursor(Math.max(clampedCursor() - 1, 0));
       return;
     }
-    // 変換確定の Enter は IME のもの。行の実行には使わない (#102)
+    // The Enter that confirms a conversion belongs to the IME. It does not run the row (#102)
     if (e.key === "Enter" && !isImeComposing(e)) {
       e.preventDefault();
       flatRows()[clampedCursor()]?.run();
     }
   };
 
-  /** セクションをまたいだ通し番号。↑↓ のカーソルはこの並びで動く。 */
+  /** Running index across sections. The up/down cursor moves along this order. */
   const globalIndex = (row: PaletteRow): number =>
     flatRows().findIndex((candidate) => candidate.key === row.key);
 
@@ -360,8 +368,8 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
                             )}
                           </Show>
                         </span>
-                        {/* 題で当たっているなら抜粋は同じことの繰り返し。
-                            本文の奥で当たったときだけ、その前後を出す */}
+                        {/* When the title carries the match, the excerpt repeats it.
+                            Only a match deeper in the body shows its surroundings */}
                         <Show when={row.labelMatch ? undefined : row.highlight}>
                           {(parts) => (
                             <span class="palette-row-snippet">
@@ -375,7 +383,7 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
                       <Show when={row.meta}>
                         {(meta) => <span class="palette-row-meta">{meta()}</span>}
                       </Show>
-                      {/* 選んでいる行だけ、押したら何が起きるかを添える */}
+                      {/* Only the selected row says what pressing it does */}
                       <Show when={clampedCursor() === globalIndex(row)}>
                         <span class="palette-row-enter">↩ {t().palette.hintOpen}</span>
                       </Show>
@@ -395,7 +403,7 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
           </Show>
         </div>
 
-        {/* キーの案内。指で触る画面には要らないので CSS で隠す */}
+        {/* Key hints. A touch screen has no use for them, so CSS hides them there */}
         <div class="palette-footer">
           <span>
             <kbd>↑↓</kbd> {t().palette.hintMove}

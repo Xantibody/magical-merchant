@@ -7,8 +7,8 @@ describe("splitTitle", () => {
   });
 
   it("keeps a body that does not start with a heading", () => {
-    // タイムラインから昇格したノートは本文で始まる。地の文を勝手に
-    // 見出しへ格上げすると、次の保存で本文が書き換わってしまう
+    // A note promoted from Scrawl starts with its body. Promoting plain text to a
+    // heading on its own would rewrite the body on the next save
     expect(splitTitle("走った。#run\n続き")).toStrictEqual({
       title: "",
       body: "走った。#run\n続き",
@@ -19,7 +19,7 @@ describe("splitTitle", () => {
     expect(splitTitle("## 小見出し\n本文")).toStrictEqual({ title: "", body: "## 小見出し\n本文" });
   });
 
-  // `#タグ` は見出しではない。`# ` の空白まで含めて見出しと決める
+  // A `#tag` is not a heading. The space in `# ` is part of what makes a heading
   it("does not read a tag as a title", () => {
     expect(splitTitle("#sync を直す")).toStrictEqual({ title: "", body: "#sync を直す" });
   });
@@ -45,7 +45,7 @@ describe("joinTitle", () => {
     expect(joinTitle("設計メモ", "本文")).toBe("# 設計メモ\n\n本文");
   });
 
-  // 空の見出しを残すと、一覧のタイトルが「#」だけの行になる
+  // Leaving an empty heading would make the list's title a line holding only "#"
   it("writes no heading when the title is empty", () => {
     expect(joinTitle("", "本文")).toBe("本文");
     expect(joinTitle("   ", "本文")).toBe("本文");

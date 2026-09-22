@@ -28,7 +28,7 @@ describe("chooseTheme", () => {
     delete document.documentElement.dataset.theme;
   });
 
-  // 選ぶのは Settings、当たっている色を読むのは他の画面。同じ値を見せる
+  // Settings chooses; the other screens read the colour in effect. Both must see the same value
   it("paints the document and remembers the choice", () => {
     chooseTheme("dark");
 
@@ -37,7 +37,7 @@ describe("chooseTheme", () => {
     expect(localStorage.getItem("theme")).toBe("dark");
   });
 
-  // system は「今の端末の色」に解決するが、覚えるのは system のまま
+  // system resolves to "the device's current colour", but what is remembered stays system
   it("keeps system as system while resolving it for the document", () => {
     chooseTheme("system");
 

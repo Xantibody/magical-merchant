@@ -21,8 +21,8 @@ describe("splitNoteLinks", () => {
     expect(segments.map((s) => s.id)).toStrictEqual(["20260813_083000", "20260810_090000"]);
   });
 
-  // ファイル名はゼロ埋めの日時と決まっている。それ以外の [[...]] は
-  // ユーザーの本文であって、リンクに化けてはいけない
+  // A filename is fixed as a zero-padded datetime. Any other `[[...]]` is the user's own
+  // body text and must not turn into a link
   it("leaves non-filename brackets alone", () => {
     expect(splitNoteLinks("[[wiki 風のメモ]]")).toStrictEqual([
       { text: "[[wiki 風のメモ]]", id: null, alias: null },
@@ -35,7 +35,7 @@ describe("splitNoteLinks", () => {
     ]);
   });
 
-  // `[[ID|]]` は表示文字を消した途中の状態。タイトルに解決させる
+  // `[[ID|]]` is the halfway state after the display text was deleted. Let it resolve to the title
   it("treats an empty display text as absent", () => {
     expect(splitNoteLinks("[[20260813_083000|]]")[0].alias).toBeNull();
   });

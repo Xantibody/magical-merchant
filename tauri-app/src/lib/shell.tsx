@@ -5,23 +5,23 @@ import type { BrowseFilter } from "./browse";
 import type { PaletteScope } from "./search-scope";
 import type { SaveStatus } from "./note-session";
 
-/** ボトムバーに出す保存の様子と、最後に保存できた時刻。 */
+/** The save state shown in the bottom bar, and the time of the last successful save. */
 interface SaveState {
   status: SaveStatus;
-  /** 「22:18」。`status` が `savedAt` のときだけ意味を持つ。 */
+  /** A clock time such as "22:18". It means something only when `status` is `savedAt`. */
   at: string;
 }
 
 const IDLE_SAVE: SaveState = { status: "idle", at: "" };
 
-/** 同時に開けるポップオーバーは 1 つだけ。 */
+/** Only one popover can be open at a time. */
 type PopoverName = "sync" | "calendar" | "note-meta" | "note-menu" | "new-note-menu" | null;
 
 interface Toast {
   message: string;
-  /** 与えられていれば「元に戻す」を出す。 */
+  /** When given, an undo action is offered. */
   undo?: () => void;
-  /** 本文の横に薄く添える要約。「版 4 から +312 B · 7 日ぶり」 */
+  /** A faint summary set beside the message, such as "+312 B since version 4, 7 days on". */
   detail?: string;
 }
 
@@ -30,47 +30,48 @@ const TOAST_MS = 5000;
 export interface Shell {
   popover: Accessor<PopoverName>;
   /**
-   * 開けたボタンを渡すと、そのボタンを押したぶんは「外側」に数えなくなる
-   * (`components/Popover.tsx`)。先に閉じてしまうと、直後の click がもう一度
-   * 開けてしまい、同じボタンでは畳めない。
+   * Passing the button that opened it stops a press on that button from counting as
+   * "outside" (`components/Popover.tsx`). Closing first would let the click that follows
+   * open it again, and the same button could not fold it away.
    */
   togglePopover: (name: Exclude<PopoverName, null>, trigger?: HTMLElement) => void;
-  /** いま開いているポップオーバーを開けたボタン。 */
+  /** The button that opened the popover currently open. */
   popoverTrigger: Accessor<HTMLElement | undefined>;
   closePopovers: () => void;
   paletteOpen: Accessor<boolean>;
-  /** 開いたときに引き継いだ範囲。無ければ全体を探す。 */
+  /** The scope carried over when it was opened. Without one, everything is searched. */
   paletteScope: Accessor<PaletteScope | null>;
   openPalette: (scope?: PaletteScope) => void;
   closePalette: () => void;
   /**
-   * レールか一覧フライアウトにポインタが乗っているか。レールは AppLayout に、
-   * 一覧は Workspace にあるので、開閉の合図はここで落ち合う。
+   * Whether the pointer is on the rail or on the list flyout. The rail lives in AppLayout
+   * and the list in Workspace, so the open/close signal meets here.
    */
   listHover: Accessor<boolean>;
   setListHover: (on: boolean) => void;
-  /** ピンと ⌘\ で常設にしているか。離れても畳まない。 */
+  /** Whether the pin or `⌘\` keeps it out. It does not fold away when the pointer leaves. */
   listPinned: Accessor<boolean>;
   toggleListPin: () => void;
-  /** 一覧フライアウトが開いているか。 */
+  /** Whether the list flyout is open. */
   listOpen: Accessor<boolean>;
   /**
-   * 保存の着地。書いているのは `Workspace` で、出すのはボトムバー
-   * (`AppLayout`)なので、ここで落ち合う。面を離れたら `idle` に戻す —
-   * 持ち越すと、保存していない画面が「22:18 に保存」と言い続ける。
+   * Where the save landed. `Workspace` writes it and the bottom bar (`AppLayout`) shows it,
+   * so they meet here. Leaving the surface resets it to `idle`: carried over, a screen that
+   * saved nothing would keep saying "saved at 22:18".
    */
   saveState: Accessor<SaveState>;
   setSaveState: (state: SaveState) => void;
   /**
-   * 「絞る」画面の 3 軸。画面の中だけで持つと、離れて戻るたびに絞り直しに
-   * なるうえ、⌘K の処理(AppLayout)からタグが見えない。
+   * The three axes of the Browse screen. Held inside the screen alone, it would have to be
+   * narrowed again on every return, and the tags would not be visible from the `⌘K`
+   * handling in AppLayout.
    */
   browseFilter: Accessor<BrowseFilter>;
   setBrowseFilter: (filter: BrowseFilter) => void;
   toast: Accessor<Toast | null>;
   showToast: (message: string, undo?: () => void, detail?: string) => void;
   dismissToast: () => void;
-  /** データを読み直させる合図。増えたら再取得する。 */
+  /** The signal to reread the data. When it increases, everything is fetched again. */
   dataVersion: Accessor<number>;
   refreshData: () => void;
 }

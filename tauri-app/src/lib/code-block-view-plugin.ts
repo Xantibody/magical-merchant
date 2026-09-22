@@ -13,25 +13,27 @@ import { LANGUAGE_DATALIST_ID } from "./language-suggestions";
 import type { Node } from "@milkdown/kit/prose/model";
 import type { EditorView, NodeView, ViewMutationRecord } from "@milkdown/kit/prose/view";
 
-/** 打鍵が止まったと見なすまでの時間。短いと打鍵中の構文エラー描画が増えるだけ */
+/** How long typing must pause before it counts as stopped. Shorter only draws more syntax errors mid-typing */
 const RENDER_DELAY_MS = 400;
 
-/** コピー後にチェック表示を戻すまでの時間。押した実感が持てる最短くらい */
+/** How long the check mark stays after a copy. About the shortest that still feels like a press */
 const COPY_RESET_MS = 1500;
 
 /**
- * code_block の node view。pre>code の既定構造は保ちつつ、ホバーで現れる
- * コピー ボタンを角に置き、mermaid のときだけ直下にレンダリング済みの図を
- * ぶら下げる。図が最新ソースを描けている間は has-diagram クラスが立ち、
- * カーソルがブロック外にあるとき CSS がソースを隠して図だけを見せる
- * (Slite/Typora 流)。描画に失敗している間はクラスを下ろし、ソースを
- * 隠さない — 隠すと壊れた図を直せなくなる。
+ * Node view for code_block. It keeps the default pre>code structure, puts a
+ * copy button that appears on hover in the corner, and only for mermaid hangs
+ * the rendered diagram right below. While the diagram reflects the latest
+ * source the has-diagram class is set, and CSS hides the source and shows only
+ * the diagram when the cursor is outside the block (the Slite/Typora way).
+ * While rendering fails the class is dropped and the source stays visible:
+ * hiding it would make a broken diagram impossible to fix.
  *
- * widget decoration ではなく node view にしたのは、図の寿命がブロックの寿命と
- * 一致するから。decoration set はトランザクションごとに再計算・再マッピングが
- * 要るが、node view ならインスタンスがブロックごとに立ち、debounce タイマーや
- * 直前の SVG をローカルに持てる。Shiki(@milkdown/plugin-highlight)は inline
- * decoration しか使わないので、contentDOM を公開していれば干渉しない。
+ * A node view rather than a widget decoration, because the diagram's lifetime
+ * matches the block's. A decoration set must be recomputed and remapped on
+ * every transaction; a node view gets one instance per block and can hold the
+ * debounce timer and the previous SVG locally. Shiki (@milkdown/plugin-highlight)
+ * uses only inline decorations, so it does not interfere as long as contentDOM
+ * is exposed.
  */
 class CodeBlockPreviewView implements NodeView {
   dom: HTMLElement;
@@ -47,7 +49,7 @@ class CodeBlockPreviewView implements NodeView {
   private node: Node;
   private lastSource: string | undefined;
   private lastSvg: string | undefined;
-  /** 描画を頼んだソースのキャプション。図と一緒に出すため結果まで持ち越す */
+  /** Caption of the source sent for rendering. Carried until the result so it appears with the diagram */
   private pendingCaption: string | undefined;
 
   private readonly copyFeedback = createCopyFeedback(
@@ -89,10 +91,11 @@ class CodeBlockPreviewView implements NodeView {
   }
 
   /**
-   * 編集ノードの外の部品(図・コピー ボタン・言語入力)への操作は
-   * ProseMirror に渡さない。渡すと言語入力の打鍵をエディタの keymap が
-   * 拾ったり、図のクリックが node selection になったりする。
-   * pre の余白クリック(カーソル配置)は通すため、部品だけに絞る
+   * Events on the parts outside the editable node (diagram, caption, copy
+   * button, language input) are not passed to ProseMirror. If they were, the
+   * editor keymap would pick up keystrokes in the language input, and a click
+   * on the diagram would become a node selection. A click in the pre's margin
+   * (placing the cursor) must still go through, so only those parts are stopped
    */
   stopEvent(event: Event): boolean {
     const { target } = event;
@@ -111,21 +114,22 @@ class CodeBlockPreviewView implements NodeView {
     if (mutation.type === "selection") {
       return false;
     }
-    // 図の差し込みや data-language の付け替えを ProseMirror が「外部からの
-    // 編集」と誤認して re-parse すると、カーソルとスクロールが飛ぶ
+    // If ProseMirror mistook inserting the diagram or swapping data-language for
+    // an "external edit" and re-parsed, the cursor and the scroll would jump
     return !this.contentDOM.contains(mutation.target);
   }
 
   destroy(): void {
     this.renderer.dispose();
     this.copyFeedback.dispose();
-    // 描き終わりは二度と来ない。待っている側を締切まで待たせない
+    // The render will never finish now. Do not make the waiting side wait until its deadline
     setDiagramPending(this.dom, false);
   }
 
   /**
-   * ホバーで現れるコピー ボタン(表示制御は CSS)。編集ノードの外なので
-   * contentEditable を切り、mousedown を止めてカーソルと選択を守る
+   * Copy button that appears on hover (visibility is controlled by CSS). It is
+   * outside the editable node, so contentEditable is off and mousedown is
+   * stopped to protect the cursor and the selection
    */
   private createCopyButton(): HTMLButtonElement {
     const button = document.createElement("button");
@@ -150,9 +154,10 @@ class CodeBlockPreviewView implements NodeView {
   }
 
   /**
-   * 言語ラベルを兼ねる小さな入力。datalist(highlighter の読込済み言語+
-   * mermaid)から補完が出る。未知言語のハイライトを黙ってスキップする分
-   * (#101)、綴り違いに気づく場所はここになる
+   * Small input that doubles as the language label. Completion comes from the
+   * datalist (the highlighter's loaded languages plus mermaid). Since
+   * highlighting an unknown language is skipped silently (#101), this is the
+   * place where a misspelling gets noticed
    */
   private createLanguageInput(): HTMLInputElement {
     const input = document.createElement("input");
@@ -169,7 +174,7 @@ class CodeBlockPreviewView implements NodeView {
     });
     input.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
-        // change(コミット)を発火させてから、続けて書けるよう本文へ戻す
+        // Fire change (the commit) first, then return to the body so writing can continue
         event.preventDefault();
         input.blur();
         this.focusSource();
@@ -198,15 +203,15 @@ class CodeBlockPreviewView implements NodeView {
     this.node = node;
     const language = node.attrs.language as string;
 
-    // node view が立つと schema の toDOM は使われない。data-language は
-    // ここで出し直す(スタイルのフックとして残す)
+    // Once a node view exists the schema's toDOM is not used. data-language is
+    // re-emitted here (kept as a hook for styles)
     if (language) {
       this.pre.dataset.language = language;
     } else {
       delete this.pre.dataset.language;
     }
 
-    // 編集中の値をエディタ側の更新で潰さない
+    // Do not overwrite a value being edited with an update from the editor side
     if (document.activeElement !== this.languageInput) {
       this.languageInput.value = language;
     }
@@ -217,8 +222,8 @@ class CodeBlockPreviewView implements NodeView {
     }
 
     const source = node.textContent;
-    // update は選択移動やハイライト装飾の更新でも呼ばれる。ソースが同じなら
-    // 描画し直さない(変換の局所化)
+    // update is also called for selection moves and highlight decoration
+    // updates. Same source, no re-render (keep the transform local)
     if (source === this.lastSource) {
       return;
     }
@@ -229,23 +234,24 @@ class CodeBlockPreviewView implements NodeView {
       this.resetPreview();
       return;
     }
-    // ここから図が入るまで、ブロックはソースの高さで場所を取る。高さが確定
-    // していないことを外へ知らせる — 座標から位置を引く側が待てるように (#168)
+    // From here until the diagram lands, the block takes the source's height.
+    // Tell the outside that the height is not settled, so the side that maps
+    // coordinates to positions can wait (#168)
     setDiagramPending(this.dom, true);
     this.renderer.request(source, { immediate: initial });
   }
 
   private applyResult(svg: string | null): void {
     this.showResult(svg);
-    // 描けても描けなくても、この時点で高さは決まっている
+    // Rendered or not, the height is settled at this point
     setDiagramPending(this.dom, false);
   }
 
   private showResult(svg: string | null): void {
     if (svg === null) {
-      // 打鍵の途中は書きかけの構文になるのが普通。最後に描けた図を残して
-      // 落ち着きを保ち、まだ一度も描けていないときだけ控えめに伝える。
-      // 描けていない間はソースを隠さない(隠すと直せない)
+      // Mid-typing the syntax is usually incomplete. Keep the last diagram that
+      // rendered so nothing flickers, and only say so quietly when nothing has
+      // rendered yet. While it fails, do not hide the source (hidden, it cannot be fixed)
       this.dom.classList.remove("has-diagram");
       if (!this.lastSvg) {
         this.showNotice(t().editor.diagramFailed);
@@ -262,12 +268,14 @@ class CodeBlockPreviewView implements NodeView {
   }
 
   /**
-   * `%% caption:` をプレビューと同じ figcaption で図の下に出す。閲覧側だけに
-   * 出すと図の高さが 2 つの面で食い違い、押した座標の文字にカーソルを置く
-   * 前提が崩れて下の本文が 1 ブロックずれる (#168)。
+   * Show `%% caption:` below the diagram as the same figcaption the preview
+   * uses. Showing it only on the reading side makes the diagram's height differ
+   * between the two surfaces, breaks the assumption that the cursor lands on the
+   * character at the pressed coordinates, and shifts the body below by one
+   * block (#168).
    *
-   * 要素は作り直さず文字だけ差し替える。ノードを入れ替えると、その中に
-   * 選択が乗っているときにカーソルが飛ぶ
+   * Only the text is replaced; the element is not rebuilt. Swapping the node
+   * makes the cursor jump when the selection sits inside it
    */
   private applyCaption(text?: string): void {
     if (text === undefined) {
@@ -278,7 +286,7 @@ class CodeBlockPreviewView implements NodeView {
     if (!this.caption) {
       this.caption = document.createElement("figcaption");
       this.caption.className = "mermaid-caption";
-      // 図と同じく編集の対象外。書き換えられるのはあくまで上のソース
+      // Not editable, like the diagram. What gets edited is the source above
       this.caption.contentEditable = "false";
       this.dom.append(this.caption);
     }
@@ -295,9 +303,9 @@ class CodeBlockPreviewView implements NodeView {
     if (!this.preview) {
       this.preview = document.createElement("div");
       this.preview.className = "mermaid-editor-preview";
-      // 図は読み取り専用。編集対象はあくまで上のコードブロック
+      // The diagram is read-only. What gets edited is the code block above
       this.preview.contentEditable = "false";
-      // 図だけの表示のとき、図をクリックしたらソースを開いて編集に入る
+      // When only the diagram is shown, a click on it opens the source for editing
       this.preview.addEventListener("click", () => {
         this.focusSource();
       });
@@ -306,7 +314,7 @@ class CodeBlockPreviewView implements NodeView {
     return this.preview;
   }
 
-  /** カーソルをブロック末尾に置いて is-active(ソース表示)に入る */
+  /** Put the cursor at the end of the block and enter is-active (source shown) */
   private focusSource(): void {
     const pos = this.getPos();
     if (pos === undefined) {
@@ -319,7 +327,7 @@ class CodeBlockPreviewView implements NodeView {
   }
 
   private resetPreview(): void {
-    // 予約済みの描画を残すと、畳んだ後から図が生えてくる
+    // A render left scheduled would grow a diagram after the block was folded
     this.renderer.cancel();
     this.lastSource = undefined;
     this.lastSvg = undefined;
@@ -328,7 +336,7 @@ class CodeBlockPreviewView implements NodeView {
     this.preview = undefined;
     this.applyCaption();
     this.dom.classList.remove("has-diagram");
-    // 捨てた描画の結果は届かない。畳んだ姿で高さは決まっている
+    // The result of the discarded render never arrives. The folded shape settles the height
     setDiagramPending(this.dom, false);
   }
 }

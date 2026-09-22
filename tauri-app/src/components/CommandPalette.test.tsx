@@ -16,7 +16,7 @@ const TAGGED_HIT: SearchHit = {
   match_len: null,
 };
 
-/** zero-query の入り口にタグ行を出すためのノート。 */
+/** Notes that make the zero-query home show tag rows. */
 const TAGGED_NOTES: Note[] = [
   {
     path: "notes/20260901_090000.md",
@@ -80,7 +80,7 @@ describe("CommandPalette with a tag scope", () => {
     document.body.innerHTML = "";
   });
 
-  // 絞った状態をそのまま眺められるのが、範囲を引き継ぐ意味
+  // Being able to browse the narrowed state as it is, is the point of inheriting the scope
   it("lists everything under the tag before anything is typed", async () => {
     const { container, chips, searches } = renderPalette(["sync"]);
 
@@ -103,7 +103,7 @@ describe("CommandPalette with a tag scope", () => {
     await waitFor(() => expect(searches).toContainEqual({ query: "", tags: ["sf6", "ベガ"] }));
   });
 
-  // 打った `#タグ` はチップにならず、そのまま範囲として効く
+  // A typed `#tag` does not become a chip; it takes effect as the scope directly
   it("sends typed hashtags as scope, not as query text", async () => {
     const { input, chips, searches } = renderPalette([]);
     fireEvent.input(input, { target: { value: "#SF6 #ベガ コンボ" } });
@@ -138,7 +138,7 @@ describe("CommandPalette with a tag scope", () => {
     expect(chips()).toStrictEqual(["#ベガ"]);
   });
 
-  // 入り口のタグ行は文字を貼らず、チップとして範囲に足す
+  // A home tag row pastes no text; it adds itself to the scope as a chip
   it("turns a home tag row into a chip", async () => {
     const { container, chips, searches } = renderPalette([]);
     let row: HTMLButtonElement | undefined;
@@ -155,7 +155,8 @@ describe("CommandPalette with a tag scope", () => {
     await waitFor(() => expect(searches).toContainEqual({ query: "", tags: ["sf6"] }));
   });
 
-  // 大小だけ違う綴りで 2 行並ぶと、同じ分類が別々の件数で 2 回出る
+  // Two rows for spellings that differ only in case put the same category on screen twice
+  // with separate counts
   it("shows one home tag row for spellings that differ only in case", async () => {
     const { container } = renderPalette([], [], [note("a.md", ["Memo"]), note("b.md", ["memo"])]);
 
@@ -201,7 +202,7 @@ function searchHit(
   };
 }
 
-/** 3 種類が 1 件ずつ。束ね方と、束をまたぐ上下移動を見るための並び。 */
+/** One hit of each of the three kinds. The order shows the grouping and movement across groups. */
 const MIXED: SearchHit[] = [
   searchHit("note", "ベガのノート"),
   searchHit("scrawl", "ベガと走った"),
@@ -220,7 +221,8 @@ describe("CommandPalette results grouped by kind", () => {
     document.body.innerHTML = "";
   });
 
-  // どこに居たものかを見出しで示す。種類の名は固有名詞なので訳さない
+  // The heading says where the hit lived. The kind names are proper nouns, so they are
+  // not translated
   it("heads each kind with its name and count, Codex first", async () => {
     const { input, sections } = renderPalette([], MIXED);
 
@@ -235,7 +237,7 @@ describe("CommandPalette results grouped by kind", () => {
     await search(input, "ベガ", () => expect(sections()).toStrictEqual(["NOTE · 1"]));
   });
 
-  // 束ねても上下移動は 1 本の並び。見出しは飛ばす
+  // Grouped or not, up and down move through one list. The headings are skipped
   it("moves the cursor across the groups as one list", async () => {
     const { input, container, selected, rows } = renderPalette([], MIXED);
     await search(input, "ベガ", () => expect(rows()).toHaveLength(3));
@@ -250,7 +252,8 @@ describe("CommandPalette results grouped by kind", () => {
     expect(selected.map((s) => s.title)).toStrictEqual(["ベガと走った"]);
   });
 
-  // 一致語は下線(CSS)で示す。塗らないので、どこに当たったかは mark の位置だけ
+  // The matched word is shown with an underline (CSS). Nothing is filled in, so where the
+  // hit landed is only the position of the `mark`
   it("marks the matched word inside the title", async () => {
     const { input, container, rows } = renderPalette([], MIXED);
     await search(input, "ベガ", () => expect(rows()).toHaveLength(3));
@@ -260,8 +263,8 @@ describe("CommandPalette results grouped by kind", () => {
     expect(marks.map((mark) => mark.textContent)).toStrictEqual(["ベガ", "ベガ", "ベガ"]);
   });
 
-  // core は大小を無視して当てる。題の側でも同じように当て、綴りは打った形でなく
-  // 書いた形を残す
+  // core matches with case ignored. The title matches the same way, and the spelling kept
+  // is the one that was written, not the one that was typed
   it("marks the title however the word is cased", async () => {
     const { input, container, rows } = renderPalette([], [searchHit("note", "Vega のノート")]);
     await search(input, "vega", () => expect(rows()).toHaveLength(1));
@@ -291,7 +294,8 @@ describe("CommandPalette results grouped by kind", () => {
     expect(snippets[0]?.querySelector("mark")?.textContent).toBe("ベガ");
   });
 
-  // 足元の札。上下で選んで ↩ で開くことは、押してみるまで分からない
+  // The hints at the foot. That you choose with `↑↓` and open with `↩` cannot be known until
+  // you press a key
   it("spells the keys at the foot", () => {
     const { container } = renderPalette([], MIXED);
 

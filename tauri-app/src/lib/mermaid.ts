@@ -1,12 +1,12 @@
 import type { MermaidConfig, Mermaid } from "mermaid";
 
 /**
- * mermaid はこのアプリの依存の中で飛び抜けて重い。図を含まないノートにその重さを
- * 払わせないよう、最初の図に出会うまで import しない。
+ * mermaid is by far the heaviest dependency in this app. So that a note with no diagram
+ * does not pay that weight, it is not imported until the first diagram is met.
  */
 let mermaidPromise: Promise<Mermaid> | undefined;
 
-/** 図ごとに固有の id。mermaid は SVG 内の <style> をこの id で絞り込む */
+/** An id unique to each diagram. mermaid scopes the <style> inside the SVG by this id */
 let diagramCount = 0;
 
 async function importMermaid(): Promise<Mermaid> {
@@ -15,10 +15,11 @@ async function importMermaid(): Promise<Mermaid> {
 }
 
 /**
- * 図の配色をアプリのトークンから引く。カスタムプロパティの計算値は var() が
- * 解決済みなので、テーマを切り替えた後に読めばその時点の色がそのまま返る。
- * トークンが読めない場面では mermaid 既定の単色テーマに任せる。空文字を渡すと
- * mermaid は色の解析で例外を投げ、図がまるごと出なくなる。
+ * Read the diagram's colours from the app's tokens. A custom property's computed value has
+ * var() already resolved, so reading it after a theme switch returns the colours as of
+ * that moment. Where the tokens cannot be read, mermaid's default single-colour theme
+ * takes over. Passing an empty string makes mermaid throw while parsing the colour, and
+ * the whole diagram disappears.
  */
 function themeConfig(): MermaidConfig {
   const styles = getComputedStyle(document.documentElement);
@@ -69,15 +70,15 @@ async function renderOne(mermaid: Mermaid, source: string): Promise<string | nul
     const { svg } = await mermaid.render(id, source);
     return svg;
   } catch {
-    // 構文エラーのときは mermaid が作りかけの図を body に置き去りにする
+    // On a syntax error mermaid leaves the half-built diagram behind in the body
     document.querySelector(`#d${id}`)?.remove();
     return null;
   }
 }
 
 /**
- * mermaid のソースを SVG に描く。描けなかったものは null を返し、
- * 呼び出し側がソースを見せる側に倒せるようにする。
+ * Draw mermaid sources into SVG. Anything that could not be drawn returns null, so the
+ * caller can fall back to showing the source.
  */
 export async function renderDiagrams(sources: string[]): Promise<(string | null)[]> {
   if (sources.length === 0) {
@@ -94,24 +95,25 @@ export async function renderDiagrams(sources: string[]): Promise<(string | null)
 
   mermaid.initialize({
     startOnLoad: false,
-    // ノートは同期先から降ってくることもある。ラベルの HTML は DOMPurify に通す
+    // A note can also come down from the sync target. The label HTML goes through DOMPurify
     securityLevel: "strict",
-    // ラベルを foreignObject(HTML)ではなく SVG の text で描く。<img> として
-    // 読んだ SVG の中の foreignObject はブラウザが描かないので、残っていると
-    // PNG から文字だけが消える。ラベル内の <br/> や太字の見え方は変わる。
-    // AIDEV-NOTE: 図ごとの htmlLabels(flowchart.htmlLabels)は mermaid 11 で無効。根元のこれだけが効く
+    // Draw labels with SVG text rather than a foreignObject (HTML). A browser does not
+    // draw a foreignObject inside an SVG loaded as an <img>, so if one is left the text
+    // alone vanishes from the PNG. How <br/> and bold look inside a label does change.
+    // AIDEV-NOTE: per-diagram htmlLabels (flowchart.htmlLabels) is dead in mermaid 11. Only this root one works
     htmlLabels: false,
-    // `secure` に載せた鍵は図の中の `%%{init: …}%%` から書き換えられない。mermaid の
-    // sanitize は入れ子にも同じ名前で降りるので、flowchart.htmlLabels もこれで落ちる。
-    // AIDEV-NOTE: 既定の secure は配列。initialize の配列は置換ではなく和で混ざるので既定の鍵は残る
+    // A key listed in `secure` cannot be rewritten by a `%%{init: ...}%%` inside the
+    // diagram. mermaid's sanitize descends into nested objects under the same name, so
+    // flowchart.htmlLabels falls with it.
+    // AIDEV-NOTE: the default secure is an array. initialize merges arrays as a union, not a replacement, so the default keys stay
     secure: ["htmlLabels"],
     ...themeConfig(),
   });
 
   const svgs: (string | null)[] = [];
   for (const source of sources) {
-    // mermaid は描画のたびに設定と DOM をグローバルに借りる。Promise.all で
-    // 並べると互いの状態を踏み合うので、ここは順番に待つ
+    // mermaid borrows the config and the DOM globally on every render. Lined up with
+    // Promise.all they tread on each other's state, so these are awaited in order
     // oxlint-disable-next-line no-await-in-loop
     svgs.push(await renderOne(mermaid, source));
   }

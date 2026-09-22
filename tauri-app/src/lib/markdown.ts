@@ -16,16 +16,16 @@ import { tagPlugin } from "./tag-markdown";
 import { taskListPlugin } from "./task-list-markdown";
 
 /**
- * Milkdown が空行の保存に使う `<br />` 行を、1 行ぶんの高さを持つ空の段落に
- * 変える。html: false のままだと文字どおり `<br />` と表示されてしまう。
- * トークン列で見るのは、コードフェンスの中の同じ文字列を巻き込まないため。
+ * Turn the `<br />` line Milkdown uses to store an empty line into an empty paragraph one
+ * line high. Left at html: false it would literally display `<br />`.
+ * It is looked at on the token stream so the same string inside a code fence is not caught.
  */
 function preservedEmptyLinePlugin(markdownIt: MarkdownItInstance): void {
   markdownIt.core.ruler.push("preserved_empty_line", (state) => {
     for (const token of state.tokens) {
       if (token.type === "inline" && isPreservedEmptyLine(token.content)) {
         const space = new state.Token("text", "", 0);
-        // 普通の空白だと行ボックスが立たず、段落が高さ 0 に潰れるので nbsp
+        // An ordinary space raises no line box and collapses the paragraph to height 0, hence nbsp
         space.content = " ";
         token.children = [space];
       }
@@ -34,9 +34,10 @@ function preservedEmptyLinePlugin(markdownIt: MarkdownItInstance): void {
 }
 
 /**
- * `md` と `fenceMd` は同じ構成の 2 インスタンス。分かれているのは fence の
- * renderer rule だけが違うため — 同期版 (`renderMarkdownSync`) にスロット差し
- * 込みの目印を出させないための分離で、構成そのものは常に揃える。
+ * `md` and `fenceMd` are two instances of the same configuration. They are apart only
+ * because the fence renderer rule differs: the split keeps the sync version
+ * (`renderMarkdownSync`) from emitting the slot markers, and the configuration itself is
+ * always kept in step.
  */
 function createRenderer(): MarkdownItInstance {
   const renderer = new MarkdownIt({
@@ -67,23 +68,23 @@ export function renderMarkdownSync(
 interface FenceBlock {
   code: string;
   lang: string;
-  /** 履歴を開いているあいだの欄外の印。フェンスは別経路で描くのでここに持つ。 */
+  /** The margin mark while the history is open. A fence is drawn elsewhere, so it is held here. */
   mark?: LineMark;
 }
 
 interface RenderEnv extends Env, LineMarksEnv {
   fenceBlocks?: FenceBlock[];
   noteTitles?: ReadonlyMap<string, string>;
-  /** `:name:` → データ URL。無ければ保存形のまま出る。 */
+  /** `:name:` to a data URL. Without one, the stored form is printed as it is. */
   glyphs?: ReadonlyMap<string, string>;
 }
 
 const fenceMd = createRenderer();
 
 /**
- * フェンスの描画結果を差し込む目印。markdown-it は CommonMark どおり入力中の U+0000 を
- * U+FFFD に潰すので、本文がこの形を作ることはない。
- * リテラルに直接書くと制御文字が混ざるため、コード側で組み立てる。
+ * The marker where a fence's render result is spliced in. markdown-it crushes a U+0000 in
+ * the input to U+FFFD as CommonMark says, so the body can never form this shape.
+ * Written straight into a literal it would embed a control character, so it is built in code.
  */
 const NUL = String.fromCodePoint(0);
 export const FENCE_SLOT = `${NUL}fence${NUL}`;
@@ -93,9 +94,10 @@ function plainBlock(code: string): string {
 }
 
 /**
- * 欄外の印をブロックの開始タグに載せる。段落なら plugin が token に付けるが、
- * フェンスの描画結果は Shiki や mermaid から来る文字列なので、ここで class を
- * 足す。記号の span はブロックの中の先頭に置き、CSS が余白へ寄せる。
+ * Put the margin mark on the block's opening tag. For a paragraph the plugin attaches it to
+ * the token, but a fence's render result is a string that comes from Shiki or mermaid, so
+ * the class is added here. The sign's span goes at the head inside the block, and CSS
+ * pulls it out into the margin.
  */
 function withMark(html: string, mark: LineMark | undefined): string {
   if (!mark) {
@@ -115,9 +117,9 @@ function withMark(html: string, mark: LineMark | undefined): string {
 }
 
 /**
- * ホバーで現れる操作。描画結果は innerHTML に流すので SolidJS の部品は置けず、
- * node view (code-block-view-plugin.ts) と同じく raw の SVG 文字列を埋める。
- * 押されたときの処理は MarkdownPreview が data-action で受ける。
+ * The actions that appear on hover. The render result is fed to innerHTML, so no SolidJS
+ * part can sit there; as in the node view (code-block-view-plugin.ts) a raw SVG string is
+ * embedded. What happens on a press is taken by MarkdownPreview through data-action.
  */
 function toolButton(action: string, label: string, content: string): string {
   const escaped = fenceMd.utils.escapeHtml(label);
@@ -128,11 +130,12 @@ function toolButton(action: string, label: string, content: string): string {
 }
 
 /**
- * コードブロックにコピーの道具と生ソースを付ける。ソースを DOM に持たせるのは、
- * 押されたブロックの中身を描画結果から逆算しないため — diff の行は改行を
- * 持たない div なので textContent では戻らない。
- * 道具は pre の中に置く(node view と同じ構造)。外に包むと、閲覧とエディタで
- * ブロック直下の要素が変わり、幾何を突き合わせる前提が崩れる。
+ * Attach the copy tool and the raw source to a code block. The source is held in the DOM so
+ * the pressed block's contents need not be worked back out of the render result: a diff's
+ * lines are divs with no newlines, so textContent does not restore them.
+ * The tools go inside the pre (the same structure as the node view). Wrapped outside, the
+ * element directly under a block would differ between the preview and the editor, and the
+ * assumption that their geometry lines up would break.
  */
 function codeBlock(pre: string, block: FenceBlock): string {
   const openEnd = pre.indexOf(">");
@@ -144,7 +147,7 @@ function codeBlock(pre: string, block: FenceBlock): string {
     ? `<span class="preview-tools-lang">${fenceMd.utils.escapeHtml(block.lang)}</span>`
     : "";
   const tools = `<div class="preview-tools">${lang}${toolButton("copy", t().editor.copyCode, copyIcon)}</div>`;
-  // Shiki の付けた class を先頭に残す。後ろに足せば `<pre class="shiki` で数えられる
+  // Keep the class Shiki attached at the head. Added after it, `<pre class="shiki` still counts
   const source = fenceMd.utils.escapeHtml(block.code);
   return withMark(
     `${pre.slice(0, openEnd)} data-source="${source}"${pre.slice(openEnd, end)}${tools}${pre.slice(end)}`,
@@ -162,8 +165,8 @@ function diagramTools(): string {
 
 fenceMd.renderer.rules.fence = (tokens, idx, _options, renderEnv) => {
   const token = tokens[idx];
-  // `render()` は env を必ず渡すが、型の上では省略できることになっている。
-  // 差し込み先が無ければ本文を落とすより素の <pre> に倒す
+  // `render()` always passes env, but the type says it may be omitted.
+  // With nowhere to splice into, fall back to a plain <pre> rather than drop the body
   const env = renderEnv as RenderEnv | undefined;
   if (!env) {
     return plainBlock(token.content);
@@ -180,21 +183,21 @@ fenceMd.renderer.rules.fence = (tokens, idx, _options, renderEnv) => {
 async function highlightBlocks(blocks: FenceBlock[]): Promise<string[]> {
   let highlighter;
   try {
-    // 動的 import: shiki (コア + 正規表現エンジン) はコードフェンスを含む
-    // ノートを開くまで読まない。静的に書くと Workspace チャンクに同梱される
+    // Dynamic import: shiki (the core plus the regex engine) is not read until a note that
+    // holds a code fence is opened. Written statically it ships in the Workspace chunk
     const { getHighlighter } = await import("./highlighter");
     highlighter = await getHighlighter();
   } catch {
     return blocks.map((block) => plainBlock(block.code));
   }
 
-  // getLoadedLanguages() は呼ぶたびに配列を組み直すので、ブロックごとには引かない
+  // getLoadedLanguages() rebuilds the array on every call, so it is not read per block
   const loaded = new Set(highlighter.getLoadedLanguages());
   return blocks.map((block) => {
     try {
-      // デュアルテーマで描画し、テーマ切替にはCSS変数で即追従させる
+      // Render with dual themes and follow a theme switch at once through CSS variables
       return highlighter.codeToHtml(block.code, {
-        // 未ロード言語はプレーンテキストとして描画（フルバンドルを避けるため）
+        // An unloaded language is rendered as plain text (to avoid the full bundle)
         lang: loaded.has(block.lang) ? block.lang : "text",
         themes: {
           light: "github-light-default",
@@ -209,9 +212,10 @@ async function highlightBlocks(blocks: FenceBlock[]): Promise<string[]> {
 }
 
 /**
- * 図は `<figure>` で包み、説明があれば `<figcaption>` を足す。同じ figcaption を
- * エディタの node view も出す — 片方だけ背が高くなると、押した座標の文字に
- * カーソルを置く前提が崩れて図の下の本文がずれる (#168)。
+ * A diagram is wrapped in `<figure>`, and a `<figcaption>` is added when it has a caption.
+ * The editor's node view emits the same figcaption: if only one of them grew taller, the
+ * assumption that the cursor lands on the character at the pressed coordinate would break
+ * and the body below the diagram would shift (#168).
  */
 function diagramBlock(svg: string, block: FenceBlock): string {
   const caption = extractCaption(block.code);
@@ -232,14 +236,15 @@ function kindOf(block: FenceBlock): FenceKind {
   if (lang === "mermaid") {
     return "diagram";
   }
-  // diff は Shiki の読込済み言語に無い。回してもプレーンテキストになるだけで、
-  // +/- の行こそが読みたいもの
+  // diff is not among Shiki's loaded languages. Sending it there only yields plain text,
+  // and the +/- lines are exactly what is worth reading
   return lang === "diff" ? "diff" : "code";
 }
 
 /**
- * フェンスを種類ごとに描く。図は mermaid、diff は専用のレンダラ、残りは
- * Shiki に回し、描けなかった図はソースが読める素のコードブロックに落とす。
+ * Draw the fences by kind. Diagrams go to mermaid, diff to its own renderer and the rest to
+ * Shiki; a diagram that could not be drawn falls back to a plain code block whose source
+ * can be read.
  */
 async function renderFences(blocks: FenceBlock[]): Promise<string[]> {
   const kinds = blocks.map((block) => kindOf(block));
@@ -263,7 +268,7 @@ async function renderFences(blocks: FenceBlock[]): Promise<string[]> {
       }
       default: {
         const svg = svgs[diagramIndex++];
-        // 描けなかった図はソースを読ませる。読めるなら写せてもよい
+        // A diagram that could not be drawn shows its source. If it can be read it may as well be copied
         return svg ? diagramBlock(svg, block) : codeBlock(plainBlock(block.code), block);
       }
     }
@@ -271,9 +276,10 @@ async function renderFences(blocks: FenceBlock[]): Promise<string[]> {
 }
 
 /**
- * 目印を描画結果で埋める。ブロックごとに replace すると、そのたびに文書全体を
- * 走査して作り直すうえ、置換文字列の "$&" などが置換パターンとして解かれて
- * 目印そのものが出力に混ざる。スロットは本文の出現順に積まれている。
+ * Fill the markers with the render results. A replace per block would rescan and rebuild
+ * the whole document each time, and "$&" and the like in the replacement string would be
+ * read as a replacement pattern, mixing the marker itself into the output. The slots are
+ * stacked in the order they appear in the body.
  */
 function fillSlots(html: string, rendered: string[]): string {
   const parts = html.split(FENCE_SLOT);

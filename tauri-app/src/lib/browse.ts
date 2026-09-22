@@ -1,14 +1,17 @@
 /**
- * 「絞る」画面の勘定。種類 / タグ / 期間の 3 軸と、軸ごとの件数。
+ * The arithmetic of the Browse screen: the three axes kind / tag / period, and
+ * the counts per axis.
  *
- * 絞り込みを core に持たせていないのは、チップに出す件数が「他の軸を掛けた
- * うえでの件数」で、軸ごとに母集団が違うから — 種類の数字はタグと期間だけを
- * 掛けた母集団から、タグの数字は種類と期間だけを掛けた母集団から出る。
- * core に持たせると facet プロトコルを 1 つ発明することになるので、
- * `browse_all` は全件を 1 回返すだけにして、数えるのはここでやる(#279)。
+ * Filtering is not in core because the count shown on a chip is "the count
+ * after the other axes are applied", and the population differs per axis: the
+ * kind numbers come from the population filtered by tag and period only, the
+ * tag numbers from the population filtered by kind and period only. Putting it
+ * in core would mean inventing a facet protocol, so `browse_all` returns
+ * everything once and the counting happens here (#279).
  *
- * ここは画面を描かない純粋な関数だけ。日付は引数で受ける — `new Date()` を
- * 中で読むと、境目をまたぐ瞬間にしか再現しないテストになる。
+ * Only pure functions that draw nothing. The date comes in as an argument:
+ * reading `new Date()` inside gives a test that only reproduces at the moment
+ * a boundary is crossed.
  */
 
 import type { HitKind, SearchHit } from "./commands";
@@ -16,27 +19,27 @@ import { toIsoDate } from "./day-labels";
 import { countTagLists, normalizeTag, sameTag } from "./tags";
 import { digestWeekKey } from "./weekly-digest";
 
-/** 期間の軸。3 択で、既定は「すべて」。 */
+/** The period axis. Three choices; the default is "all". */
 export type BrowsePeriod = "all" | "month" | "week";
 
-/** 期間のチップの並び。広いほうから狭いほうへ。 */
+/** Order of the period chips, from the widest to the narrowest. */
 export const BROWSE_PERIODS: readonly BrowsePeriod[] = ["all", "month", "week"];
 
 /**
- * 種類のチップの並び。CODEX → NOTE → SCRAWL。外へは出さない — 画面が読むのは
- * `kindFacets` が返す並びで、そこに順序が入っている。
+ * Order of the kind chips: CODEX, then NOTE, then SCRAWL. Not exported: the
+ * screen reads the order `kindFacets` returns, and the order is in there.
  */
 const BROWSE_KINDS: readonly HitKind[] = ["codex", "note", "scrawl"];
 
 export interface BrowseFilter {
-  /** 選んだ種類。空なら全部。複数選べて、どれかに当たれば残る。 */
+  /** Chosen kinds. Empty means all. Several can be chosen; matching any one keeps the hit. */
   kinds: HitKind[];
-  /** 選んだタグ。空なら全部。種類と同じくどれかに当たれば残る。 */
+  /** Chosen tags. Empty means all. As with kinds, matching any one keeps the hit. */
   tags: string[];
   period: BrowsePeriod;
 }
 
-/** 何も絞っていない状態。 */
+/** The state with nothing filtered. */
 export const NO_FILTER: BrowseFilter = { kinds: [], tags: [], period: "all" };
 
 export function hasFilter(filter: BrowseFilter): boolean {
@@ -44,18 +47,19 @@ export function hasFilter(filter: BrowseFilter): boolean {
 }
 
 /**
- * 一覧の行を指す鍵。ノートはファイル名(不変の ID)、Scrawl の 1 行は
- * ファイルを持たないので日と行位置の組。
+ * Key that names a list row. A note is its filename (the immutable ID); a
+ * Scrawl entry has no file of its own, so it is the pair of day and line index.
  */
 export function hitId(hit: SearchHit): string {
   return hit.kind === "scrawl" ? `${hit.date}#${hit.index ?? 0}` : (hit.filename ?? hit.date);
 }
 
 /**
- * 期間の下限。この日以降が残る。「すべて」は境目を持たない。
+ * Lower bound of the period. This day and later are kept. "all" has no boundary.
  *
- * 週の起点は月曜で、Scrawl の週次ダイジェスト(`weekly-digest.ts`)と同じ数え方。
- * 別に数えると、同じ「今週」が画面ごとに違う件数を出す。
+ * The week starts on Monday, counted the same way as Scrawl's weekly digest
+ * (`weekly-digest.ts`). Counted separately, the same "this week" would give a
+ * different count on each screen.
  */
 export function periodStart(period: BrowsePeriod, today: Date): string | null {
   if (period === "all") {
@@ -68,8 +72,9 @@ export function periodStart(period: BrowsePeriod, today: Date): string | null {
 }
 
 /**
- * 期間に入っているか。`date` が空なのは frontmatter に time を持たない
- * ノートで、期間を選んだら数えようがないので外す。「すべて」では出す。
+ * Whether the hit falls inside the period. An empty `date` is a note whose
+ * frontmatter has no time; once a period is chosen there is no way to count
+ * it, so it is dropped. Under "all" it is shown.
  */
 function inPeriod(hit: SearchHit, start: string | null): boolean {
   return start === null || (hit.date !== "" && hit.date >= start);
@@ -79,12 +84,12 @@ function inKinds(hit: SearchHit, kinds: readonly HitKind[]): boolean {
   return kinds.length === 0 || kinds.includes(hit.kind);
 }
 
-/** 綴りの違いは見ない。チップに出るのは代表の 1 つだけなので(`tags.ts`)。 */
+/** Spelling differences are ignored, since a chip shows only the one representative (`tags.ts`). */
 function inTags(hit: SearchHit, tags: readonly string[]): boolean {
   return tags.length === 0 || tags.some((tag) => hit.tags.some((own) => sameTag(own, tag)));
 }
 
-/** 3 軸を全部掛けた結果。並びは受け取った順(core が並べた新しい順)のまま。 */
+/** The result of applying all three axes. Order stays as received (newest first, as core sorted it). */
 export function filterHits(
   hits: readonly SearchHit[],
   filter: BrowseFilter,
@@ -96,15 +101,16 @@ export function filterHits(
   );
 }
 
-/** チップ 1 つぶんの「押したら何件になるか」。 */
+/** For one chip: how many hits there would be if it were pressed. */
 export interface Facet<T> {
   value: T;
   count: number;
 }
 
 /**
- * 種類の件数。母集団にタグと期間は掛けるが、種類の選択は掛けない —
- * 掛けると、いま選んでいない種類が必ず 0 件になって選び直せない。
+ * Counts per kind. The population is filtered by tag and period, but not by
+ * the chosen kinds: with that applied, every kind not currently chosen would
+ * always be 0 and could not be picked again.
  */
 export function kindFacets(
   hits: readonly SearchHit[],
@@ -119,18 +125,20 @@ export function kindFacets(
 }
 
 /**
- * チップに出すタグを、よく使う順に。数えるのは絞り込む前の全件 — 押すたびに
- * 並びが変わると、隣のチップを押すつもりで別のタグを押すことになる。
- * 綴りは最初に見たものが代表(`tags.ts` の畳み方)。
+ * The tags to show as chips, most used first. Counted over everything before
+ * filtering: if the order changed on every press, a hand aiming at the next
+ * chip would press a different tag. The first spelling seen is the
+ * representative (the folding in `tags.ts`).
  */
 export function chipTags(hits: readonly SearchHit[]): string[] {
   return countTagLists(hits.map((hit) => hit.tags)).map((counted) => counted.tag);
 }
 
 /**
- * タグの件数。種類の facet と対で、母集団に種類と期間は掛けるがタグの選択は
- * 掛けない。他の軸が空にしたタグも 0 件で残す — チップを消すと、押した先で
- * 行が入れ替わって次に押す物が変わる。
+ * Counts per tag. The twin of the kind facet: the population is filtered by
+ * kind and period, but not by the chosen tags. A tag the other axes emptied
+ * stays with a count of 0: removing the chip would reorder the rows after a
+ * press and change what the next press lands on.
  */
 export function tagFacets(
   hits: readonly SearchHit[],
@@ -145,10 +153,11 @@ export function tagFacets(
 }
 
 /**
- * 一覧の行の 2 段目。`browse_all` の抜粋は本文の先頭 40 字で、その先頭には
- * 題がそのまま入っている — ノートは `# 題`、Scrawl の 1 行は題そのもの。
- * 題は 1 段目に出ているので、重なるぶんを落として、残りが無ければ空にする。
- * 同じことを 2 行にわたって読ませない。
+ * Second line of a list row. The excerpt from `browse_all` is the first 40
+ * characters of the body, and the title sits verbatim at its head: a note
+ * starts with `# title`, and a Scrawl entry is its own title. The title is
+ * already on the first line, so the overlap is dropped, and the result is
+ * empty when nothing remains. The same thing is not read twice over two lines.
  */
 export function rowSnippet(hit: SearchHit): string {
   const title = hit.title.trim();
@@ -159,22 +168,24 @@ export function rowSnippet(hit: SearchHit): string {
   if (rest.startsWith(title)) {
     return rest.slice(title.length).trim();
   }
-  // 抜粋のほうが短い = 題が 40 字に収まらなかった。全部が題の一部でしかない
+  // The excerpt is the shorter one: the title did not fit in 40 characters, so all of it is part of the title
   return title.startsWith(rest.replace(/…$/u, "")) ? "" : rest;
 }
 
-/** 同じ名前が 2 度書かれた道も 1 つとして読む。 */
+/** A route that repeats the same name twice is read as one. */
 function first(value?: string | string[]): string {
   return (Array.isArray(value) ? value[0] : value) ?? "";
 }
 
 /**
- * URL の `?kind=` `?tag=` を絞り込みに写す。Scrawl のチップは「Scrawl と
- * そのタグ」で画面を開くので、着地の絞り込みは道に載せる — 画面の状態を
- * 外から触れるように引き上げるより、開きたい形を URL に持たせるほうが素直
- * (`?day=` と同じ作り)。
+ * Copy the URL's `?kind=` and `?tag=` into a filter. A Scrawl tag chip opens
+ * the screen with "Scrawl and that tag", so the filter to land on rides on the
+ * route: carrying the desired shape in the URL is more natural than lifting the
+ * screen's state so it can be touched from outside (same construction as
+ * `?day=`).
  *
- * 読めるものが 1 つも無ければ `null`。押していない絞り込みを黙って掛けない。
+ * `null` when nothing readable is there. A filter nobody pressed is never
+ * applied silently.
  */
 export function browseSeed(params: {
   kind?: string | string[];
@@ -192,7 +203,7 @@ export function toggleKind(kinds: readonly HitKind[], kind: HitKind): HitKind[] 
   return kinds.includes(kind) ? kinds.filter((own) => own !== kind) : [...kinds, kind];
 }
 
-/** 外すときも同一性で見る。完全一致だと、綴りの違うタグが押しても外れない。 */
+/** Removal also goes by identity. With exact matching, a tag spelled differently would not come off when pressed. */
 export function toggleTag(tags: readonly string[], tag: string): string[] {
   return tags.some((own) => sameTag(own, tag))
     ? tags.filter((own) => !sameTag(own, tag))

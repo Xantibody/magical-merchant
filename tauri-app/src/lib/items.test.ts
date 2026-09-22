@@ -71,8 +71,8 @@ describe("toNoteItems", () => {
   });
 
   it("空行として保存された <br /> 行はタイトルに拾わない", () => {
-    // 本文の先頭で Enter を押したノートは <br /> 行から始まる。
-    // それをタイトルにすると一覧に「<br />」と並ぶ
+    // A note where Enter was pressed at the head of the body starts with a <br /> line.
+    // Taking that as the title lines the list with "<br />"
     expect(toNoteItems([note({ preview: "<br />\n見出し" })])[0].title).toBe("見出し");
   });
 
@@ -97,12 +97,12 @@ describe("toNoteItems", () => {
     expect(item.origin).toBe("2026-08-03T08:30:00");
   });
 
-  // 鍵は一覧で出す。開くまで書けないと分からないのでは遅い
+  // The lock is shown in the list. Learning it cannot be written only on opening is too late
   it("marks a note kept as preview as read-only", () => {
     expect(toNoteItems([note({ view: "preview" })])[0].readOnly).toBe(true);
   });
 
-  // マップで見ているだけのノートは書ける。鍵を出すと書けないものに見える
+  // A note merely being viewed as a map is writable. A lock would make it look otherwise
   it("leaves every other view writable", () => {
     expect(toNoteItems([note({ view: "mindmap" })])[0].readOnly).toBe(false);
     expect(toNoteItems([note()])[0].readOnly).toBe(false);
@@ -110,8 +110,8 @@ describe("toNoteItems", () => {
 });
 
 describe("noteRowStamp", () => {
-  // 今日のノートに「08/04」と出しても、今日だという以上のことは言わない。
-  // 時刻なら「さっき書いたやつ」が分かる
+  // Printing "08/04" on a note written today says no more than that it is today.
+  // A time says "the one written a moment ago"
   it("gives the time for a note written today", () => {
     expect(noteRowStamp(toNoteItems([note()])[0], TODAY)).toBe("15:27");
   });

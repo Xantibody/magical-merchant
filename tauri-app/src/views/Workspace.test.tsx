@@ -11,12 +11,13 @@ import type { Shell } from "../lib/shell";
 import { shortcutLabel } from "../lib/shortcuts";
 import Workspace from "./Workspace";
 
-// 本物の Milkdown は ProseMirror 一式を連れてくる。ここで見たいのは
-// 「どのノートに何を書くか」という判断だけなので、開いているという事実と
-// 打鍵の入り口だけを持つ板に差し替える。`.ProseMirror` と contenteditable は
-// 本物と揃える — 「いま書いている最中か」の判断がカーソルの居場所を見る。
-// 立ち上がりも本物と同じく 1 拍遅れる。マウントした瞬間には ProseMirror も
-// onEditorReady も無く、それを待たずに置いたカーソルは空を切る
+// The real Milkdown drags in all of ProseMirror. What matters here is only the decision of
+// what gets written into which note, so it is replaced by a board that carries just the
+// fact that an editor is open and an entry point for typing. `.ProseMirror` and
+// contenteditable match the real thing, because the check for "is the body being written
+// right now" reads where the caret is. It also comes up one beat late like the real one:
+// at the moment of mount there is no ProseMirror and no `onEditorReady`, and a caret placed
+// without waiting for them lands on nothing
 let typeInEditor: ((markdown: string) => void) | undefined;
 vi.mock(import("../components/MilkdownEditor"), () => ({
   default: (props: {
@@ -29,14 +30,14 @@ vi.mock(import("../components/MilkdownEditor"), () => ({
     const el = document.createElement("div");
     el.dataset.testid = "editor-body";
     el.textContent = props.defaultValue ?? "";
-    // `[[` 補完の候補は本物なら入力中に引く。板は ID だけ並べて見せる
+    // The real editor looks `[[` completions up while typing. The board just lists the IDs
     el.dataset.noteLinks = (props.noteLinks?.() ?? []).map((t) => t.id).join(",");
     const ready = setTimeout(() => {
       el.className = "ProseMirror";
       el.contentEditable = "true";
       props.onEditorReady?.({} as Editor);
     }, 0);
-    // 本文が入れ替わると作り直される。畳むときに「もう居ない」を返すのも本物どおり
+    // It is rebuilt when the body is swapped. Reporting "gone" on teardown matches the real one
     onCleanup(() => {
       clearTimeout(ready);
       props.onEditorReady?.();
@@ -45,12 +46,12 @@ vi.mock(import("../components/MilkdownEditor"), () => ({
   },
 }));
 
-// エディタが立つと出る道具の列。ここで見たいものは無い
+// The row of tools that appears once the editor is up. Nothing here matters for these tests
 vi.mock(import("../components/MarkdownToolbar"), () => ({
   default: (): JSX.Element => null,
 }));
 
-// markmap は d3 を連れてくる。ここで見たいのは「並んでいるか」と「いつ描き直すか」だけ
+// markmap drags in d3. All that matters here is whether it is alongside and when it redraws
 vi.mock(import("../components/MindmapView"), () => ({
   default: (props: { source: string }): JSX.Element => {
     const el = document.createElement("div");
@@ -62,7 +63,7 @@ vi.mock(import("../components/MindmapView"), () => ({
   },
 }));
 
-/** 自動保存の debounce。Workspace.tsx と揃える。 */
+/** The autosave debounce. Kept in step with `Workspace.tsx`. */
 const SAVE_DEBOUNCE_MS = 1000;
 
 const FILE_A = "20260903_120000.md";
@@ -70,49 +71,50 @@ const FILE_B = "20260903_130000.md";
 const TITLE_A = "会議メモ";
 const TEXT_A = "ここまで書いた";
 const BODY_A = `# ${TITLE_A}\n\n${TEXT_A}`;
-/** 他の端末が書いた版。同期で降ってきたことにする。 */
+/** A version written by another device. Treated as having come down through sync. */
 const BODY_A_SYNCED = "# 会議メモ (同期後)\n\n他の端末で足された行";
 const TITLE_B = "買い物";
 const BODY_B = `# ${TITLE_B}\n\n牛乳`;
 
-/** ディスクの中身(filename → 全文)。テストの途中で外から書き換わったことにする。 */
+/** What is on disk: filename to full text. Stands in for a change made from outside mid-test. */
 let disk: Map<string, string>;
-/** frontmatter のうち一覧と詳細が読むぶん。書いていないノートは既定のまま。 */
+/** The part of the frontmatter the list and detail read. A note without it keeps the defaults. */
 let meta: Map<string, { tags?: string[]; view?: string }>;
-/** どの置き場に居るか。書いていないノートは Note。 */
+/** Which directory it lives in. A note with no entry is a Note. */
 let kinds: Map<string, "note" | "codex">;
-/** Codex の版(新しい順)。本文ごと持ち、差分はここから作る。 */
+/** Codex versions, newest first. Each carries its body, and the diff is made from these. */
 let versions: Map<string, { id: string; message: string | null; body: string }[]>;
-/** 呼ばれたコマンドと引数。どのノートに何が書かれたかをこれで見る。 */
+/** The commands called and their arguments. This is how we see what was written to which note. */
 let calls: { cmd: string; args: Record<string, unknown> }[];
-/** read_note を止めておく関門。応答が届く前の操作を再現する。 */
+/** A gate that holds `read_note`. Reproduces acting before the answer arrives. */
 let readGate: Promise<void> | undefined;
 let openGate: (() => void) | undefined;
-/** update_draft が飛んでいる間に起きること。往復の途中の打鍵を再現する。 */
+/** What happens while `update_draft` is in flight. Reproduces typing mid round trip. */
 let duringSave: (() => void) | undefined;
-/** update_draft を止めておく関門。書き込みが遅い端末を再現する。 */
+/** A gate that holds `update_draft`. Reproduces a device whose writes are slow. */
 let writeGate: Promise<void> | undefined;
 let openWriteGate: (() => void) | undefined;
-/** 先頭の記録が読めないノート。core がこれに書き込みを断る。 */
+/** A note whose leading frontmatter cannot be read. core refuses to write to it. */
 let brokenMeta: Set<string>;
 /**
- * 中身が文字として読めないノート(不正な UTF-8)。同期や外の道具が置いていった
- * バイト列で、core は読む段で断る — 書き込みも、そのあとの読み直しも。
+ * A note whose contents do not read as text, that is invalid UTF-8. It is a byte sequence
+ * left behind by sync or an outside tool, and core refuses at the read step: both the
+ * write and the reread that follows.
  */
 let notText: Set<string>;
-/** read_note を失敗させる。ディスクが一時的に読めない端末を再現する。 */
+/** Makes `read_note` fail. Reproduces a device whose disk is temporarily unreadable. */
 let readFails: boolean;
 
-/** 本文の指紋。core と同じ「読んだ版で書く」照合をテストでも同じ形で行う。 */
+/** The body's revision. The test checks "write with the revision you read" the way core does. */
 const revisionOf = (body: string): string => `rev:${body}`;
 
 const countOf = (command: string): number => calls.filter((c) => c.cmd === command).length;
 
-/** そのノートへの書き込みだけを取り出す。隣のノートへ着地していないかを見る。 */
+/** Picks out only the writes to that note. Used to see that none landed on the next note. */
 const writesTo = (filename: string): Record<string, unknown>[] =>
   calls.filter((c) => c.cmd === "update_draft" && c.args.filename === filename).map((c) => c.args);
 
-/** 一覧の 1 行。時刻はファイル名(= ID)から導く。 */
+/** One row of the list. The time is derived from the filename, which is the ID. */
 const summaryOf = (filename: string): Record<string, unknown> => ({
   kind: kinds.get(filename) ?? "note",
   path: `/data/${kinds.get(filename) ?? "notes"}/${filename}`,
@@ -122,9 +124,10 @@ const summaryOf = (filename: string): Record<string, unknown> => ({
     `T${filename.slice(9, 11)}:${filename.slice(11, 13)}:${filename.slice(13, 15)}+09:00`,
   tags: meta.get(filename)?.tags ?? [],
   preview: disk.get(filename) ?? "",
-  // core は書いていないキーを落とす。一覧の読み手が undefined を見る形に揃える
+  // core drops a key that was not written. This matches the shape where the list reader
+  // sees undefined
   ...(meta.get(filename)?.view ? { view: meta.get(filename)?.view } : {}),
-  // Codex の行だけ版の数と「動いたか」
+  // Only a Codex row carries the version count and whether it has moved on
   ...(kinds.get(filename) === "codex"
     ? {
         version_count: (versions.get(filename) ?? []).length,
@@ -135,7 +138,7 @@ const summaryOf = (filename: string): Record<string, unknown> => ({
 
 const WRITE_COMMANDS = ["update_draft", "create_draft", "set_note_view", "delete_note"];
 
-/** Tauri から返る SaveError の形。フロントが見るのは `kind` だけ。 */
+/** The shape of the `SaveError` Tauri returns. The frontend reads only `kind`. */
 const saveError = (kind: string, message: string): Error =>
   Object.assign(new Error(message), { kind });
 
@@ -145,7 +148,7 @@ const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
   find_backlinks: () => [],
   read_note: async ({ filename }) => {
     await readGate;
-    // 文字として読めないファイルは読む段で断られる。開き直しても本文は載らない
+    // A file that does not read as text is refused at the read step. Reopening loads no body
     if (readFails || notText.has(String(filename))) {
       throw new Error(`could not read: ${String(filename)}`);
     }
@@ -169,19 +172,19 @@ const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
     await writeGate;
     const name = String(filename);
     const current = disk.get(name);
-    // core はノートを作り直さない。消えたノートへの保存は探す段で断られる
+    // core does not recreate a note. A save to a note that is gone is refused at the lookup
     if (current === undefined) {
       throw saveError("missing", `Not found: ${name}`);
     }
-    // core は中身を読めないファイルには書かない。読み直しでも直らない
+    // core does not write to a file whose contents cannot be read. A reread does not fix it
     if (notText.has(name)) {
       throw saveError("notText", `Not text: ${name} is not valid UTF-8`);
     }
-    // core は記録をでっち上げて書くより断る。読み直しても直らない
+    // core refuses rather than inventing frontmatter and writing. A reread does not fix it
     if (brokenMeta.has(name)) {
       throw saveError("broken", `Parse error: ${name}`);
     }
-    // core と同じ照合。読んでから誰かが書き換えていれば、その上に書かない
+    // The same check core makes. If someone rewrote it after the read, nothing goes over it
     if (typeof revision === "string" && revision !== revisionOf(current)) {
       throw saveError("stale", `Stale: ${name} changed since it was read`);
     }
@@ -217,7 +220,7 @@ const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
       message: v.message,
       bytes: v.body.length,
     })),
-  // core の unified diff の形だけ真似る。行の突き合わせはしない
+  // Only the shape of core's unified diff is imitated. No lines are matched up
   diff_note_versions: ({ filename, from }) => {
     const name = String(filename);
     const version = versions.get(name)?.find((v) => v.id === from);
@@ -288,21 +291,21 @@ function CaptureShell(): JSX.Element {
   return null;
 }
 
-/** ウィジェットの `?file=` を流し込めるように、ルータの中から navigate を借りる。 */
+/** Borrows `navigate` from inside the router so the widget's `?file=` can be fed in. */
 function WorkspaceRoute(): JSX.Element {
   const navigate = useNavigate();
   navigateTo = (to) => navigate(to);
   return <Workspace />;
 }
 
-/** 同じ画面の Codex の面。`/codex` に載るのは App.tsx と同じ形。 */
+/** The Codex surface of the same view. What sits at `/codex` has the same shape as in `App.tsx`. */
 function CodexRoute(): JSX.Element {
   const navigate = useNavigate();
   navigateTo = (to) => navigate(to);
   return <Workspace kind="codex" />;
 }
 
-/** 一覧だけを描く。詳細を開かないので、見えているのは行そのもの。 */
+/** Renders the list alone. Nothing is opened, so what is visible is the rows themselves. */
 function renderWorkspace(): void {
   render(() => (
     <ShellProvider>
@@ -318,17 +321,17 @@ function renderWorkspace(): void {
 const rowOf = (title: string): Promise<HTMLElement> =>
   screen.findByRole("button", { name: new RegExp(title, "u") });
 
-/** 本文のエディタ。立ち上がりきるまでは contenteditable にならない。 */
+/** The body editor. It does not become contenteditable until it has fully come up. */
 function editorBody(): HTMLElement {
   return screen.getByTestId("editor-body");
 }
 
-/** ノート A を 1 件開いた状態まで進める。狭い画面では詳細を開くまで本文が出ない。 */
+/** Gets as far as note A being open. On a narrow screen the body appears only once it is open. */
 async function openNoteA(): Promise<void> {
   renderWorkspace();
   fireEvent.click(await rowOf(TITLE_A));
-  // 本文が届き、そのエディタが立ち上がりきるまで。エディタは本文が届いて
-  // から立つので、字が出ていて contenteditable になったところを待つ
+  // Until the body arrives and its editor has fully come up. The editor stands up after the
+  // body arrives, so wait for the text to be on screen and contenteditable to be set
   await waitFor(() => {
     expect(screen.getByText(TEXT_A)).toBeDefined();
     expect(editorBody().isContentEditable).toBe(true);
@@ -339,26 +342,27 @@ function titleInput(): HTMLInputElement {
   return screen.getByPlaceholderText<HTMLInputElement>("タイトル");
 }
 
-/** Codex のメタ行に出る版の数。 */
+/** The version count shown on the Codex meta line. */
 const metaLine = (): HTMLElement | null => document.querySelector(".detail-version-status");
 
 /**
- * 履歴の版の行。1 行目は「版 N」+ 日時なので、番号のあとに日付の数字が来る —
- * 選んだ行の下に出る「版 N に戻す」ボタンと取り違えないための目印。
+ * A version row in the history. Its first line is `版 N` plus a timestamp, so a digit of the
+ * date follows the number. That is the marker that keeps it apart from the `版 N に戻す`
+ * button shown under the selected row.
  */
 const versionRow = (n: number): Promise<HTMLElement> =>
   screen.findByRole("button", { name: new RegExp(`^版 ${n} \\d`, "u") });
 
 /**
- * 一覧の行の角折りページ。読み直した一覧は行を作り直すので、掴んでいた行では
- * なく、いまその題を名乗る行の印を見る。
+ * The folded-corner page on a list row. A reread list rebuilds its rows, so this reads the
+ * mark on the row that carries that title now, not on the row that was held before.
  */
 const markOf = (title: string): HTMLElement | null =>
   screen
     .getByRole("button", { name: new RegExp(title, "u") })
     .querySelector<HTMLElement>(".page-mark");
 
-/** 「起きないこと」を見るための間。waitFor は起きるまで待つので使えない。 */
+/** A pause for seeing something not happen. `waitFor` waits until it does, so it is no use. */
 function sleep(ms: number): Promise<void> {
   // oxlint-disable-next-line promise/avoid-new
   return new Promise((resolve) => {
@@ -367,8 +371,8 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
- * 本文にカーソルを置く。エディタは開いた時点から在るので、これは
- * 「書き始める」ではなく「書いている人の手をそこに置く」だけ。
+ * Puts the caret in the body. The editor is there from the moment the note opens, so this is
+ * not "start writing" but only "put the writer's hand there".
  */
 async function startEditingBody(): Promise<void> {
   fireEvent.keyDown(titleInput(), { key: "Enter" });
@@ -376,28 +380,28 @@ async function startEditingBody(): Promise<void> {
 }
 
 /**
- * 押す。メニューの開閉と行の選択は pointerdown / pointerup で決まる
- * (部品の作法)ので、click だけでは何も起きない。
+ * Presses. Opening and closing a menu and selecting a row are decided by pointerdown and
+ * pointerup, which is how the component library works, so a click alone does nothing.
  */
 function press(target: HTMLElement): void {
   fireEvent.pointerDown(target, { button: 0 });
   fireEvent.pointerUp(target, { button: 0 });
 }
 
-/** 「…」を開く。返すのは開いたメニュー。 */
+/** Opens the `...` menu. Returns the menu that opened. */
 function openNoteMenu(): Promise<HTMLElement> {
   press(screen.getByRole("button", { name: "この Note の操作" }));
   return screen.findByRole("menu");
 }
 
-/** 「…」を開いてから、その中の 1 行を押す。 */
+/** Opens the `...` menu, then presses one row inside it. */
 async function runNoteAction(name: string): Promise<void> {
-  // 背骨も「履歴」と名乗る。押すのはメニューの行
+  // The history spine answers to the same name. What is pressed is the row in the menu
   const menu = await openNoteMenu();
   press(await within(menu).findByRole("menuitem", { name: new RegExp(name, "u") }));
 }
 
-/** シートの背後を暗くしている幕。role も名前も持たないので class で引く。 */
+/** The curtain darkening behind the sheet. It has no role and no name, so class finds it. */
 function templateBackdrop(): Element {
   const found = document.querySelector(".template-picker-backdrop");
   if (!found) {
@@ -406,7 +410,7 @@ function templateBackdrop(): Element {
   return found;
 }
 
-/** 「新規」→「空の Note」。テンプレのシートを経由するのは本物と同じ順序。 */
+/** `新規`, then `空の Note`. Going through the template sheet is the same order as the real thing. */
 async function createEmptyNote(): Promise<void> {
   fireEvent.click(screen.getByRole("button", { name: /新規/u }));
   fireEvent.click(await screen.findByRole("menuitem", { name: /空の Note/u }));
@@ -436,10 +440,10 @@ const releaseWrites = (): void => {
   openWriteGate = undefined;
 };
 
-/** ディスク・IPC・画面の幅を、テスト 1 本ぶんの初期状態に戻す。 */
+/** Resets the disk, the IPC and the viewport width to the starting state for one test. */
 async function setupWorkspace(): Promise<void> {
-  // 一覧と詳細が並ぶ幅。編集中に「+ 新規」を押せるのはこの形のときだけで、
-  // 携帯の幅では一覧ペインごと隠れている
+  // The width where the list and the detail sit side by side. Only in this shape can the
+  // new-note button be pressed mid-edit; at phone width the whole list pane is hidden
   await page.viewport(1280, 800);
   disk = new Map([[FILE_A, BODY_A]]);
   meta = new Map();
@@ -469,7 +473,7 @@ async function setupWorkspace(): Promise<void> {
 }
 
 function teardownWorkspace(): void {
-  // 止めたままの読み書きを解いてから畳む。待ち続ける promise を残さない
+  // Release the held reads and writes before tearing down. Leave no promise still waiting
   releaseReads();
   releaseWrites();
   cleanup();
@@ -481,8 +485,8 @@ describe("Workspace › 一覧の行", () => {
   beforeEach(setupWorkspace);
   afterEach(teardownWorkspace);
 
-  // タグは本文にも書いてある。行にも並べると、選ぶ前に読む字が二重になり、
-  // 長い題ほど先に切られる
+  // The tags are written in the body too. Listing them on the row as well doubles the text
+  // read before choosing, and the longer the title the sooner it is cut off
   it("keeps a row down to its title and one stamp", async () => {
     meta.set(FILE_A, { tags: ["sf6", "vega"] });
     renderWorkspace();
@@ -490,11 +494,11 @@ describe("Workspace › 一覧の行", () => {
     const row = await rowOf(TITLE_A);
 
     expect(row.textContent).not.toContain("sf6");
-    // 右端に残るのは 1 つだけ。今日なら時刻、それ以前なら日付
+    // Only one thing is left at the right edge: the time if today, otherwise the date
     expect(row.textContent).toMatch(new RegExp(`^${TITLE_A}(\\d\\d:\\d\\d|\\d\\d/\\d\\d)$`, "u"));
   });
 
-  // 書けないノートだと開くまで分からないと、書こうとしてから気づくことになる
+  // If a note being unwritable only shows once it is open, you find out after trying to write
   it("marks a read-only note with a lock", async () => {
     meta.set(FILE_A, { view: "preview" });
     renderWorkspace();
@@ -510,14 +514,15 @@ describe("Workspace › 一覧の行", () => {
   });
 
   /**
-   * ⌘ を押し続けているあいだ肩に浮かぶ札。一覧の頭の 2 つはどちらもキーを
-   * 持っているので、片方にだけ札が出ていると、もう片方はキーが無いように読める。
+   * The badge that floats at the shoulder while `Cmd` is held down. Both buttons at the head
+   * of the list have a key, so a badge on only one of them reads as the other having no key.
    */
   it("wears its key on the shoulder of both buttons at the head of the list", async () => {
     renderWorkspace();
     await rowOf(TITLE_A);
 
-    // 綴りは台に依る(macOS は ⌘、他は Ctrl+)。表から引いて、書き写さない
+    // The spelling depends on the platform: `Cmd` on macOS, `Ctrl+` elsewhere. Read it from
+    // the table; do not copy it out
     expect(screen.getByRole("button", { name: /新規/u }).dataset.hintKey).toBe(
       shortcutLabel("newNote"),
     );
@@ -531,9 +536,10 @@ describe("Workspace › 触る端末からのテンプレート", () => {
   beforeEach(setupWorkspace);
   afterEach(teardownWorkspace);
 
-  // 触る端末でテンプレートのシートを開く道は「新規」の長押ししかない。
-  // 指は押しているあいだ数 px 揺れ続けるので、その揺れで長押しが切れると
-  // シートには一生たどり着けず、離した指が空のノートを作る(#253)
+  // On a touch device the only way to the template sheet is a long press on the new-note
+  // button. A finger keeps jittering a few px while it presses, and if that jitter cancels
+  // the long press the sheet is never reached and lifting the finger makes an empty note
+  // (#253)
   it("opens the template sheet on a long press the finger jitters through", async () => {
     renderWorkspace();
     const newNote = await screen.findByRole("button", { name: /新規/u });
@@ -542,19 +548,20 @@ describe("Workspace › 触る端末からのテンプレート", () => {
     fireEvent.pointerMove(newNote, { pointerType: "touch", clientX: 103, clientY: 102 });
     fireEvent.pointerMove(newNote, { pointerType: "touch", clientX: 99, clientY: 104 });
 
-    // 長押しの 500ms は本物の時間で待つ
+    // The 500ms of the long press is waited out in real time
     await screen.findByRole("menuitem", { name: /空の Note/u }, { timeout: 2000 });
 
-    // シートが出たあとに離した指の click は飲み込む。開いたうえに
-    // 空の Note まで増えていたら、長押しは入り口として使えない
+    // The click from lifting the finger after the sheet appears is swallowed. If an empty
+    // Note were added on top of the sheet opening, the long press would be unusable
     fireEvent.pointerUp(newNote, { pointerType: "touch", clientX: 99, clientY: 104 });
     fireEvent.click(newNote);
     expect(countOf("create_draft")).toBe(0);
   });
 
-  // シートには取り消しのボタンが無く、幕は開けたボタンごと覆う。その幕は器の
-  // 中に居るので部品から見ると内側の押下で、自分で受けないかぎり指だけでは
-  // 何かを選ぶまで抜け出せない
+  // The sheet has no cancel button, and the curtain covers the button that opened it. The
+  // curtain sits inside the container, so the component reads a press on it as an inside
+  // press; unless the curtain handles it itself, a finger cannot get out without choosing
+  // something
   it("closes the template sheet when the finger taps the backdrop", async () => {
     renderWorkspace();
     const newNote = await screen.findByRole("button", { name: /新規/u });
@@ -566,7 +573,7 @@ describe("Workspace › 触る端末からのテンプレート", () => {
     fireEvent.click(templateBackdrop());
 
     await waitFor(() => expect(screen.queryByRole("menuitem", { name: /空の Note/u })).toBeNull());
-    // 抜け出しただけ。ノートは増えていない
+    // Only got out. No note was added
     expect(countOf("create_draft")).toBe(0);
   });
 });
@@ -575,14 +582,14 @@ describe("Workspace › 常時編集", () => {
   beforeEach(setupWorkspace);
   afterEach(teardownWorkspace);
 
-  // 「読む姿」と「書く姿」を行き来させると、書くたびに 1 手ぶん遠くなる
+  // Moving between a reading mode and a writing mode puts one extra step before every write
   it("opens a note with the editor already in it", async () => {
     await openNoteA();
 
     expect(screen.getByTestId("editor-body").textContent).toBe(TEXT_A);
   });
 
-  // 読むだけのノートは、書ける合図をどこにも出さない
+  // A read-only note gives no sign anywhere that it can be written
   it("gives a read-only note no editor and no writable title", async () => {
     meta.set(FILE_A, { view: "preview" });
     renderWorkspace();
@@ -602,8 +609,8 @@ describe("Workspace › 常時編集", () => {
     await waitFor(() => expect(screen.queryByTestId("editor-body")).toBeNull());
   });
 
-  // 鍵をかけた瞬間に読む姿へ変わる。そこに出るのが読み込み直後の本文だと、
-  // さっき打った字が消えたように見える
+  // Locking switches to the reading mode at once. If what appears there is the body as it
+  // was just after loading, the characters just typed look as if they vanished
   it("keeps what was just typed when the note is locked", async () => {
     await openNoteA();
     typeInEditor?.("打ちかけの本文");
@@ -622,12 +629,12 @@ describe("Workspace › 常時編集", () => {
     await waitFor(() => expect(screen.getByRole("menu")).toBeDefined());
   });
 
-  // 外側を押して閉じるのはメニュー自身の仕事。画面の外(AppLayout)の
-  // 一括処理に預けていると、この面だけを描いたときに開いたまま残る
+  // Closing on an outside press is the menu's own job. Handing it to a central handler
+  // outside this view (`AppLayout`) leaves it open when only this surface is rendered
   it("closes the menu when a press lands outside it", async () => {
     await openNoteA();
     await openNoteMenu();
-    // 外側の見張りが立つのは開いた次のタスク。人の指はそれより遅い
+    // The outside watcher is installed on the task after the open. A human finger is slower
     await sleep(0);
 
     fireEvent.pointerDown(titleInput());
@@ -644,11 +651,11 @@ describe("Workspace › 常時編集", () => {
     await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
   });
 
-  // ⌘. で開く道があるので、開いた先も指に持ち替えずに辿れる
+  // There is a `Cmd .` route that opens it, so what it opens can also be walked without a finger
   it("walks the rows with the arrow keys", async () => {
     await openNoteA();
     const menu = await openNoteMenu();
-    // 開いたメニューがまず手を受け取る。辿り始められるのはそこから
+    // The opened menu takes the focus first. Walking can only start from there
     await waitFor(() => expect(document.activeElement).toBe(menu));
 
     fireEvent.keyDown(menu, { key: "ArrowDown" });
@@ -658,8 +665,8 @@ describe("Workspace › 常時編集", () => {
     );
   });
 
-  // 昇格した記録は、開いた瞬間に続きを打てる形で渡す。本文が届いた時点では
-  // エディタがまだ立っていないので、そこで置いたカーソルは空を切る
+  // A promoted record is handed over ready to type into the moment it opens. At the point
+  // the body arrives the editor is not up yet, so a caret placed there lands on nothing
   it("puts the caret in a promoted note once its editor is up", async () => {
     renderWorkspace();
     await rowOf(TITLE_A);
@@ -670,7 +677,7 @@ describe("Workspace › 常時編集", () => {
     expect(editorBody().textContent).toBe(TEXT_A);
   });
 
-  // 置き換えると、書いていた本文が図を見ているあいだ消える
+  // Replacing it would make the body being written disappear while the map is looked at
   it("lays the map beside the note instead of over it", async () => {
     await openNoteA();
 
@@ -680,8 +687,8 @@ describe("Workspace › 常時編集", () => {
     expect(screen.getByTestId("editor-body")).toBeDefined();
   });
 
-  // 並べた図を打鍵のたびに組み替えると、書いている横で枝が跳ね続ける。
-  // 手が止まってから追いつかせる
+  // Rebuilding the map alongside on every keystroke keeps the branches jumping next to the
+  // writing. Let it catch up once the hand stops
   it("redraws the map once the typing pauses, not on every keystroke", async () => {
     await openNoteA();
     await runNoteAction("マップを並べる");
@@ -696,7 +703,7 @@ describe("Workspace › 常時編集", () => {
     );
   });
 
-  // 隣のノートを開いたときまで待たせると、前のノートの図が 1 拍残る
+  // Waiting on opening the next note would leave the previous note's map up for one beat
   it("draws the next note's map right away", async () => {
     disk.set(FILE_B, BODY_B);
     meta.set(FILE_B, { view: "mindmap" });
@@ -724,8 +731,8 @@ describe("Workspace › ノートに効くキー", () => {
     await waitFor(() => expect(titleInput().value).toBe(TITLE_B));
   });
 
-  // 一覧の行に居るときの ↑↓ は、その一覧の中を動くキー。押した先の行へ
-  // フォーカスも移す — 動かさないと、2 度目の ↓ が最初の行から数え直す
+  // While the focus is on a list row, `Up` and `Down` move within that list. The focus moves
+  // to the row they land on: without that, a second `Down` counts again from the first row
   it("steps to the next note on ↓ inside the list and moves focus with it", async () => {
     disk.set(FILE_B, BODY_B);
     await openNoteA();
@@ -738,7 +745,8 @@ describe("Workspace › ノートに効くキー", () => {
     expect(document.activeElement).toBe(await rowOf(TITLE_B));
   });
 
-  // 本文の ↓ はカーソルを 1 行下げるキー。一覧の外で押した矢印は奪わない
+  // In the body, `Down` moves the caret one line. An arrow pressed outside the list is not
+  // taken away
   it("leaves a plain ↓ to the caret while the body is being written", async () => {
     disk.set(FILE_B, BODY_B);
     await openNoteA();
@@ -750,7 +758,8 @@ describe("Workspace › ノートに効くキー", () => {
     expect(titleInput().value).toBe(TITLE_A);
   });
 
-  // 端で押した ↑ は行き先が無い。preventDefault もしないので、一覧のスクロールに落ちる
+  // `Up` pressed at the end has nowhere to go. It does not preventDefault either, so it falls
+  // through to scrolling the list
   it("does nothing on ↑ at the top of the list", async () => {
     disk.set(FILE_B, BODY_B);
     await openNoteA();
@@ -764,8 +773,9 @@ describe("Workspace › ノートに効くキー", () => {
     expect(consumed).toBe(false);
   });
 
-  // macOS の ⌘↑ / ⌘↓ は文頭・文末へ飛ぶキー。ブラウザ既定の動きなので
-  // エディタは preventDefault せず、カーソルの居場所で見分けるしかない
+  // On macOS `Cmd Up` and `Cmd Down` jump to the start and the end of the document. That is
+  // the browser default, so the editor does not preventDefault and the only way to tell them
+  // apart is where the caret is
   it("leaves ⌘↑ and ⌘↓ to the caret while the body is being written", async () => {
     disk.set(FILE_B, BODY_B);
     await openNoteA();
@@ -778,8 +788,8 @@ describe("Workspace › ノートに効くキー", () => {
     expect(titleInput().value).toBe(TITLE_A);
   });
 
-  // 常時編集なので、ノートを開いているあいだカーソルはほぼ本文の中にある。
-  // 本文で効かないキーは、無いのと同じ (#211)
+  // The editor is always open, so while a note is open the caret is nearly always in the
+  // body. A key that does not work in the body may as well not exist (#211)
   it("opens the note info on ⌘⇧I while the caret is in the body", async () => {
     await openNoteA();
     await startEditingBody();
@@ -800,7 +810,8 @@ describe("Workspace › ノートに効くキー", () => {
     await waitFor(() => expect(disk.get(FILE_A)).toBe(before));
   });
 
-  // ⌘I は Milkdown の斜体。書いている最中はそちらが正しいので、こちらは拾わない
+  // `Cmd I` is Milkdown's italic. While writing, that is the right meaning, so it is not
+  // picked up here
   it("leaves ⌘I to the editor's italic while the body is being written", async () => {
     await openNoteA();
     await startEditingBody();
@@ -811,7 +822,8 @@ describe("Workspace › ノートに効くキー", () => {
     expect(screen.queryByText("作成日時")).toBeNull();
   });
 
-  // 入力欄の ⌘⇧R は何でもない。題を打っている手でも、押したなら戻す
+  // `Cmd Shift R` means nothing else in a text field. Even with the hand on the title,
+  // pressing it reverts
   it("reverts on ⌘⇧R while the title is being typed", async () => {
     const before = `# ${TITLE_A}\n\n前の本文`;
     localStorage.setItem(`note-backup:${FILE_A}`, before);
@@ -828,8 +840,8 @@ describe("Workspace › 保存の見え方", () => {
   beforeEach(setupWorkspace);
   afterEach(teardownWorkspace);
 
-  // 緑の「保存しました」が点きっぱなしだと、書いているあいだじゅう視界の端が
-  // 光る。2 秒で「何時に保存したか」に落ち着かせる
+  // A green "saved" left lit keeps glowing at the edge of vision the whole time you write.
+  // After 2 seconds it settles onto the time it saved at
   it("settles from the green tick onto the time it saved at", async () => {
     await openNoteA();
 
@@ -840,8 +852,9 @@ describe("Workspace › 保存の見え方", () => {
   });
 
   /**
-   * 広い画面で保存の様子を出すのはボトムバーで、それは画面の外(AppLayout)に
-   * ある。受け渡しは shell なので、そこへ着地が届いているかを見る。
+   * On a wide screen the save state is shown by the bottom bar, which lives outside this
+   * view (`AppLayout`). The hand-off goes through the shell, so this checks the landing
+   * reached it.
    */
   it("hands the landing to the shell for the bar outside this view", async () => {
     await openNoteA();
@@ -854,8 +867,8 @@ describe("Workspace › 保存の見え方", () => {
     expect(shell?.saveState().at).toMatch(/^\d\d:\d\d$/u);
   });
 
-  // 2 秒の緑はそのノートの持ち物。隣へ移ったあとに落ちてくる「21:40 に保存」は、
-  // 保存していないノートに保存したと言うことになる
+  // The 2 seconds of green belong to that note. A "saved at 21:40" that lands after moving
+  // to the next note claims a save on a note that was never saved
   it("does not carry the saved time onto the next note", async () => {
     disk.set(FILE_B, BODY_B);
     await openNoteA();
@@ -869,8 +882,8 @@ describe("Workspace › 保存の見え方", () => {
     expect(screen.queryByText(/に保存$/u)).toBeNull();
   });
 
-  // 書き込みが遅い端末では、隣へ移ったあとに前のノートの保存が着地する。
-  // その合図を出すと、開いたばかりのノートが「保存しました」と言う
+  // On a device with slow writes, the previous note's save lands after moving to the next
+  // one. Showing that signal makes the note just opened claim it was saved
   it("keeps a late save's tick off the note opened after it", async () => {
     disk.set(FILE_B, BODY_B);
     await openNoteA();
@@ -892,7 +905,7 @@ describe("Workspace › 外から書き換わったノートの読み直し", ()
   beforeEach(setupWorkspace);
   afterEach(teardownWorkspace);
 
-  // 同期でダウンロードされた変更が、開いたままのノートに届く
+  // A change downloaded by sync reaches a note that is still open
   it("reloads the open note when dataVersion increases", async () => {
     await openNoteA();
     expect(titleInput().value).toBe(TITLE_A);
@@ -903,13 +916,13 @@ describe("Workspace › 外から書き換わったノートの読み直し", ()
     await waitFor(() => expect(screen.getByText("他の端末で足された行")).toBeDefined());
     expect(titleInput().value).toBe("会議メモ (同期後)");
     expect(countOf("read_note")).toBe(2);
-    // 読み直しは読むだけ。ここで書き戻すと、相手の版を自分の版で潰す
+    // A reread only reads. Writing back here would crush the other side's version with ours
     for (const command of WRITE_COMMANDS) {
       expect(countOf(command)).toBe(0);
     }
   });
 
-  // エディタを開いたまま本文を差し替えると、カーソル・選択・IME が消える
+  // Swapping the body while the editor is open destroys the caret, the selection and the IME
   it("leaves the body alone while the editor is open", async () => {
     await openNoteA();
     await startEditingBody();
@@ -918,7 +931,7 @@ describe("Workspace › 外から書き換わったノートの読み直し", ()
     disk.set(FILE_A, BODY_A_SYNCED);
     shell?.refreshData();
 
-    // 一覧の読み直しが届くまで待つ。そのうえで本文だけが読み直されないことを見る
+    // Wait until the list reread arrives, then check that the body alone is not reread
     await screen.findByText("会議メモ (同期後)");
     expect(countOf("read_note")).toBe(readsBefore);
     expect(screen.getByTestId("editor-body").textContent).toBe(TEXT_A);
@@ -927,7 +940,8 @@ describe("Workspace › 外から書き換わったノートの読み直し", ()
     }
   });
 
-  // 自動保存が起きたあとも「保存待ち」のままだと、同期の版が二度と画面に出ない
+  // If it stays "waiting to save" after an autosave has fired, the synced version never
+  // reaches the screen again
   it("reloads the open note after an autosave has already fired", async () => {
     await openNoteA();
     fireEvent.input(titleInput(), { target: { value: "会議メモ 改" } });
@@ -946,8 +960,8 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
   beforeEach(setupWorkspace);
   afterEach(teardownWorkspace);
 
-  // 「+ 新規」は編集中でも押せる。押した瞬間に選択だけが移ると、
-  // 次の保存が新しいノートに前のノートの本文を書く
+  // The new-note button can be pressed mid-edit. If only the selection moves at that moment,
+  // the next save writes the previous note's body into the new note
   it("keeps the typed body in its own note when a new note takes the selection", async () => {
     await openNoteA();
     await startEditingBody();
@@ -956,7 +970,7 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     await createEmptyNote();
     await waitFor(() => expect(titleInput().value).toBe(""));
 
-    // 画面を離れると、待っている保存は出しきられる
+    // Leaving the screen flushes every save that is waiting
     cleanup();
     await waitFor(() => expect(countOf("update_draft")).toBe(1));
     expect(writesTo(FILE_B)).toStrictEqual([]);
@@ -964,7 +978,7 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     expect(disk.get(FILE_B)).toBe("");
   });
 
-  // ウィジェットの行から `?file=` で別のノートが開く経路も同じ
+  // The path where a widget row opens another note through `?file=` is the same
   it("keeps the typed body in its own note when ?file= opens another note", async () => {
     disk.set(FILE_B, BODY_B);
     await openNoteA();
@@ -981,37 +995,38 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     expect(disk.get(FILE_B)).toBe(BODY_B);
   });
 
-  // 削除は隣のノートを選ぶ。待っている保存はそれでも「打った本人」に着地する
+  // A delete selects the next note. A waiting save still lands on the note it was typed into
   it("keeps the typed body in its own note when a delete moves the selection", async () => {
     disk.set(FILE_B, BODY_B);
     await openNoteA();
     await startEditingBody();
     typeInEditor?.(`${TEXT_A}\n\nもう一行`);
 
-    // 隣のノートの本文が届く前にタイトル欄を離れる = 待っている保存を出しきる
+    // Leaving the title field before the next note's body arrives flushes the waiting save
     blockReads();
     await runNoteAction("削除");
     fireEvent.change(titleInput(), { target: { value: TITLE_A } });
 
-    // 打った字は消すノートに着地する。隣のノートには何も書かない
+    // What was typed lands on the note being deleted. Nothing is written to the next note
     await waitFor(() => expect(disk.get(FILE_A)).toContain("もう一行"), { timeout: 3000 });
     expect(writesTo(FILE_B)).toStrictEqual([]);
 
-    // 5 秒後の本削除はテストの外まで生き残る。UI の「元に戻す」と同じ道で畳む
+    // The real delete 5 seconds later outlives the test. Undo it the same way the UI does
     await waitFor(() => expect(shell?.toast()?.undo).toBeInstanceOf(Function));
     shell?.toast()?.undo?.();
   });
 
-  // 隣のノートの本文が届くまで、前のノートのエディタと題が画面に残る。
-  // そこに打った字は「前のノートの本文 + 打った字」を隣のノートへ書き、
-  // 初めて開く相手には revision も無いので core も止められない
+  // Until the next note's body arrives, the previous note's editor and title stay on screen.
+  // Typing there would write "the previous note's body plus what was typed" into the next
+  // note, and for a note opened for the first time there is no revision either, so core
+  // cannot stop it
   it("does not write what is typed while the next note is still loading", async () => {
     disk.set(FILE_B, BODY_B);
     await openNoteA();
 
     blockReads();
     fireEvent.click(await rowOf(TITLE_B));
-    // 選択は移り、記録の段は B の作成日時を出しているが、本文はまだ A のもの
+    // The selection has moved and the meta line shows B's creation time, but the body is still A's
     await waitFor(() => expect(screen.getByText("2026年9月3日 13:00")).toBeDefined());
     typeInEditor?.(`${TEXT_A}\n\n届く前に打った行`);
     fireEvent.input(titleInput(), { target: { value: "届く前に打った題" } });
@@ -1024,8 +1039,8 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     expect(titleInput().value).toBe(TITLE_B);
   });
 
-  // 自動保存が先に着地していると、離れるときに「待っている保存」が無い。
-  // それでも行の題は変わっているので、一覧は読み直さないと古いまま
+  // When the autosave already landed, there is no waiting save left on leaving. The row's
+  // title has changed all the same, so without a reread the list stays stale
   it("refreshes the list on leaving a note whose autosave already landed", async () => {
     disk.set(FILE_B, BODY_B);
     await openNoteA();
@@ -1038,9 +1053,9 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     await expect(rowOf("会議メモ 改")).resolves.toBeDefined();
   });
 
-  // フォーカス復帰の読み直しが飛んでいる間にタップして書き始めると、
-  // 画面に出ているのは読む前の本文。保存に添える版もそれに揃っていないと、
-  // 相手の版を「読んだつもり」で潰す
+  // Tapping and starting to write while the reread triggered by regaining focus is in flight
+  // leaves the pre-read body on screen. Unless the revision sent with the save matches that
+  // body, the other side's version is crushed on the pretence of having read it
   it("saves with the revision it actually read when a refresh lands mid-edit", async () => {
     await openNoteA();
 
@@ -1053,12 +1068,12 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
 
     await waitFor(() => expect(countOf("update_draft")).toBe(1), { timeout: 3000 });
     expect(writesTo(FILE_A)[0]?.revision).toBe(revisionOf(BODY_A));
-    // 読んだ版で断られるので、相手の行は残る
+    // The revision that was read gets it refused, so the other side's line survives
     expect(disk.get(FILE_A)).toBe(BODY_A_SYNCED);
   });
 
-  // Stale で退避するのは「飛んでいった写し」ではなく、いま画面にある本文。
-  // 往復のあいだに打った字は、まだどこにも残っていない
+  // What a Stale backs up is the body on screen now, not the copy that flew off. Characters
+  // typed during the round trip are not kept anywhere yet
   it("backs up the draft as it stands when the save is refused as stale", async () => {
     await openNoteA();
     await startEditingBody();
@@ -1075,8 +1090,8 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     expect(localStorage.getItem(`note-backup:${FILE_A}`)).toContain("二回目");
   });
 
-  // 退避して読み直したあとに、その手前で並んだ保存が出てくると、
-  // 読み直した版の指紋で古い draft が通ってしまう
+  // If a save queued before the backup and reread comes out afterwards, the old draft gets
+  // through carrying the revision of the reread version
   it("drops a save that was queued before the stale reload", async () => {
     await openNoteA();
     await startEditingBody();
@@ -1085,15 +1100,15 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     duringSave = () => {
       duringSave = undefined;
       typeInEditor?.(`${TEXT_A}\n\n二回目`);
-      // 飛んでいる保存の後ろに、もう 1 回ぶんの保存を並べる
+      // Queue one more save behind the one in flight
       fireEvent.change(titleInput(), { target: { value: TITLE_A } });
     };
 
     await waitFor(() => expect(screen.getByText("他の端末で足された行")).toBeDefined(), {
       timeout: 3000,
     });
-    // 読み直したあとの保存は通る。それが着く時点までに、並んでいた古い
-    // draft が書かれていないことを見る(書かれていれば 3 回になる)
+    // A save after the reread goes through. By the time it lands, check that the old queued
+    // draft was not written; if it had been, the count would be 3
     fireEvent.input(titleInput(), { target: { value: "読み直したあとの題" } });
     await waitFor(() => expect(disk.get(FILE_A)).toContain("読み直したあとの題"), {
       timeout: 3000,
@@ -1102,8 +1117,9 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     expect(disk.get(FILE_A)).toBe("# 読み直したあとの題\n\n他の端末で足された行");
   });
 
-  // 読み直しが失敗しても、画面の本文は入れ替えない。空のエディタを立てると
-  // 「空のノート」に見え、次の打鍵が数文字だけの本文をディスクへ書きに行く
+  // Even when the reread fails, the body on screen is not swapped. Standing up an empty
+  // editor looks like an empty note, and the next keystroke goes to write a body of a few
+  // characters to disk
   it("keeps the draft on screen when a refresh read fails mid-edit", async () => {
     await openNoteA();
 
@@ -1115,24 +1131,24 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     releaseReads();
 
     await waitFor(() => expect(countOf("update_draft")).toBe(1), { timeout: 3000 });
-    // エディタは作り直されていない。作り直されると打っていた本文が空に戻る
+    // The editor was not rebuilt. A rebuild would empty the body that was being typed
     expect(screen.getByText(TEXT_A)).toBeDefined();
-    // 指紋も読めた版のまま。読み直せなかったのだから進みようがない
+    // The revision also stays the one that was read. Nothing could move it, since the reread failed
     expect(writesTo(FILE_A)[0]?.revision).toBe(revisionOf(BODY_A));
     expect(disk.get(FILE_A)).toContain("読めなかったあとの行");
   });
 
-  // 読めなかったノートには書かない。指紋を持たない保存は core の照合を
-  // 素通りするので、打った数文字がそのままファイル全体になる
+  // Nothing is written to a note that could not be read. A save with no revision walks
+  // straight past core's check, so the few characters typed become the whole file
   it("writes nothing to a note whose body could not be read", async () => {
     readFails = true;
     renderWorkspace();
     fireEvent.click(await rowOf(TITLE_A));
     await waitFor(() => expect(countOf("read_note")).toBe(1));
-    // 読みが断られきるまで。ここで空のエディタが立つかどうかを見る
+    // Until the read has been refused. This is where we see whether an empty editor stands up
     await sleep(50);
 
-    // 読めなかった本文をエディタに載せない。載せると「空のノート」に見える
+    // A body that could not be read is not put in the editor. Doing so looks like an empty note
     expect(screen.queryByTestId("editor-body")).toBeNull();
     typeInEditor?.("数文字");
     await sleep(SAVE_DEBOUNCE_MS + 500);
@@ -1141,8 +1157,8 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     expect(disk.get(FILE_A)).toBe(BODY_A);
   });
 
-  // 記録が壊れたノートは core が書き込みごと断る。読み直しても直らないので、
-  // 打った字を退避しておかないと、打鍵のたびに黙って捨てられる
+  // core refuses every write to a note whose frontmatter is broken. A reread does not fix it,
+  // so without backing up what was typed, every keystroke is silently thrown away
   it("backs up the draft and says so when the note's frontmatter cannot be read", async () => {
     brokenMeta.add(FILE_A);
     await openNoteA();
@@ -1152,13 +1168,13 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     await waitFor(() => expect(countOf("update_draft")).toBe(1), { timeout: 3000 });
     await waitFor(() => expect(shell?.toast()?.message).toMatch(/保存できません/u));
     expect(localStorage.getItem(`note-backup:${FILE_A}`)).toContain("壊れたノートに足した行");
-    // 断られた書き込みは何も変えない
+    // A refused write changes nothing
     expect(disk.get(FILE_A)).toBe(BODY_A);
   });
 
-  // 断られたときに退避するのも、Stale と同じく「飛んでいった写し」ではなく
-  // いま画面にある本文。往復のあいだに打った字はファイルにも控えにも無く、
-  // 警告を見てそのまま閉じられたらそこで消える
+  // What is backed up on a refusal is, as with Stale, the body on screen now and not the
+  // copy that flew off. Characters typed during the round trip are in neither the file nor
+  // the backup, and they are gone if the warning is read and the note simply closed
   it("backs up the draft as it stands when the save is refused as broken", async () => {
     brokenMeta.add(FILE_A);
     await openNoteA();
@@ -1172,15 +1188,16 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     await waitFor(() => expect(shell?.toast()?.message).toMatch(/保存できません/u), {
       timeout: 3000,
     });
-    // 次の debounce が届く前に見る。ここが「一回目」なら、閉じた人は二回目を失う
+    // Checked before the next debounce arrives. If this were the first round, whoever closes
+    // the note loses the second
     expect(countOf("update_draft")).toBe(1);
     expect(localStorage.getItem(`note-backup:${FILE_A}`)).toContain("二回目");
   });
 
-  // 「いま画面にある本文」が打った本人のものだとは限らない。往復のあいだに
-  // A → B → A と移ると、選んでいるノートは A に戻っていても、画面の本文は
-  // まだ B のまま(A の読み直しが届いていない)。そこで画面のぶんを退避すると、
-  // A の控えが B の本文になり、断られた打鍵はどこにも残らない
+  // The body on screen now is not necessarily the one it was typed into. Moving A to B to A
+  // during the round trip puts the selection back on A while the body on screen is still B's,
+  // because A's reread has not arrived. Backing up what is on screen there would make A's
+  // backup B's body, and the refused keystrokes would survive nowhere
   it("keeps the refused note's own draft when the selection went away and back", async () => {
     disk.set(FILE_B, BODY_B);
     brokenMeta.add(FILE_A);
@@ -1188,14 +1205,14 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     await startEditingBody();
     typeInEditor?.(`${TEXT_A}\n\n一回目`);
 
-    // 保存が飛んだところで止める。予約はもう消えているので、この先の選択の
-    // 差し替えは飛んでいる保存を待ってくれない
+    // Stop it right where the save took off. The scheduled save is already gone, so a later
+    // change of selection will not wait for the save in flight
     blockWrites();
     await waitFor(() => expect(countOf("update_draft")).toBe(1), { timeout: 3000 });
 
     fireEvent.click(await rowOf(TITLE_B));
     await waitFor(() => expect(titleInput().value).toBe(TITLE_B));
-    // A へ戻るが、本文は届かない。選択だけが A で、画面にあるのは B の本文
+    // Back to A, but the body does not arrive. Only the selection is A; on screen is B's body
     blockReads();
     fireEvent.click(await rowOf(TITLE_A));
     await waitFor(() => expect(screen.getByText("牛乳")).toBeDefined());
@@ -1207,37 +1224,38 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     const backup = localStorage.getItem(`note-backup:${FILE_A}`);
     expect(backup).toContain("一回目");
     expect(backup).not.toContain("牛乳");
-    // 画面に出ているのは A の打鍵ではない。名乗って控えの在り処を言う
+    // What is on screen is not A's typing. Name the note and say where the backup is
     expect(shell?.toast()?.message).toContain(TITLE_A);
   });
 
-  // 開いてから消えたノート。core は「作り直す入口ではない」と断るので、
-  // 壊れた記録と同じく読み直しても直らない。退避しないと、離れた時点で
-  // 打った字がどこにも残らないまま消える
+  // A note deleted after it was opened. core refuses on the grounds that this is not the
+  // entry point for recreating a note, so, like broken frontmatter, a reread does not fix it.
+  // Without a backup, what was typed is gone the moment the note is left
   it("backs up the draft and says so when the note is already gone", async () => {
     await openNoteA();
     await startEditingBody();
-    // 打鍵から保存が飛ぶまでのあいだに、別の画面・別の端末がこれを消す
+    // Between the keystroke and the save taking off, another screen or device deletes it
     duringSave = () => disk.delete(FILE_A);
     typeInEditor?.(`${TEXT_A}\n\n消えたノートに足した行`);
 
     await waitFor(() => expect(countOf("update_draft")).toBe(1), { timeout: 3000 });
     await waitFor(() => expect(shell?.toast()?.message).toMatch(/もう在りません/u));
     expect(localStorage.getItem(`note-backup:${FILE_A}`)).toContain("消えたノートに足した行");
-    // 無いノートは一覧を取り直せば行ごと消える。開き直して「戻す」で呼び出す
-    // 道も無いので、呼び出せるとは言わない — 言えば人はそれを信じて閉じる
+    // A note that is gone loses its row as soon as the list is fetched again. There is no way
+    // to reopen it and call the draft back with Revert either, so we do not say it can be
+    // called back. Saying so would have people believe it and close the note
     expect(shell?.toast()?.message).not.toMatch(/戻す/u);
     expect(shell?.toast()?.message).toMatch(/写して/u);
   });
 
-  // 開いているノートが、同期や外の道具に文字として読めないバイト列で
-  // 置き換えられた。core は読む段で書き込みを断るが、それを一時的な失敗と
-  // して黙って捨てると、打った字はディスクにも控えにも残らず、警告も出ない
-  // ままそのノートを閉じられる
+  // The open note was replaced by sync or an outside tool with a byte sequence that does not
+  // read as text. core refuses the write at the read step, and silently dropping that as a
+  // temporary failure leaves what was typed neither on disk nor in a backup, and the note can
+  // be closed without any warning
   it("backs up the draft and says so when the note is no longer text", async () => {
     await openNoteA();
     await startEditingBody();
-    // 打鍵から保存が飛ぶまでのあいだに、同期が読めないバイト列を置いていく
+    // Between the keystroke and the save taking off, sync leaves an unreadable byte sequence
     duringSave = () => notText.add(FILE_A);
     typeInEditor?.(`${TEXT_A}\n\n読めなくなったノートに足した行`);
 
@@ -1246,27 +1264,28 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     expect(localStorage.getItem(`note-backup:${FILE_A}`)).toContain(
       "読めなくなったノートに足した行",
     );
-    // 開き直しても本文が読めないので、「戻す」で取り出せるとは言わない
+    // Reopening cannot read the body either, so we do not say Revert can get it back
     expect(shell?.toast()?.message).not.toMatch(/戻す/u);
     expect(shell?.toast()?.message).toMatch(/写して/u);
-    // 断られた書き込みは何も変えない
+    // A refused write changes nothing
     expect(disk.get(FILE_A)).toBe(BODY_A);
   });
 
-  // 「画面にあるうちに写して」が届くのは、断られたノートが画面に出ている
-  // ときだけ。往復のあいだに隣へ移っていると、画面にあるのは別のノートの
-  // 本文で、指した先には写すものが無い。名乗って、控えの在り処を言う
+  // "Copy it out while it is still on screen" only lands when the refused note is the one on
+  // screen. If the selection moved on during the round trip, what is on screen is another
+  // note's body and there is nothing to copy where it points. Name the note and say where
+  // the backup is
   it("names the vanished note instead of pointing at the note now on screen", async () => {
     disk.set(FILE_B, BODY_B);
     await openNoteA();
     await startEditingBody();
     typeInEditor?.(`${TEXT_A}\n\n消えたノートに足した行`);
 
-    // 保存が飛んだところで止める。予約は消えているので、この先の選択の
-    // 差し替えは飛んでいる保存を待たない
+    // Stop it right where the save took off. The scheduled save is gone, so a later change
+    // of selection does not wait for the save in flight
     blockWrites();
     await waitFor(() => expect(countOf("update_draft")).toBe(1), { timeout: 3000 });
-    // 往復のあいだに、別の画面・別の端末が A を消す
+    // During the round trip, another screen or device deletes A
     disk.delete(FILE_A);
 
     fireEvent.click(await rowOf(TITLE_B));
@@ -1277,30 +1296,30 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
       timeout: 3000,
     });
     const message = shell?.toast()?.message;
-    // どのノートの話かを名乗る。画面に出ている B の話だと読まれない
+    // Name which note this is about, so it is not read as being about the B on screen
     expect(message).toContain(TITLE_A);
-    // 画面にも「戻す」にも無いものを指さない
+    // Do not point at something that is neither on screen nor behind Revert
     expect(message).not.toMatch(/画面にあるうち|写して|戻す/u);
-    // 控えが端末に在ることは言う。失うより残すほうがよい
+    // Do say the backup is on the device. Keeping it beats losing it
     expect(message).toMatch(/この端末に控え/u);
     expect(localStorage.getItem(`note-backup:${FILE_A}`)).toContain("消えたノートに足した行");
   });
 
-  // Stale も同じ穴だった。往復のあいだに隣へ移っていると、選択が外れた A は
-  // 読み直されないのに「読み直しました。『戻す』で呼び出せます」と言う —
-  // 画面にあるのは B なので、B を読み直して B を戻す話に読める。A を名乗り、
-  // A を開き直してからだと言う。書けるノートなので取り出す道はある
+  // Stale had the same hole. When the selection moved on during the round trip, A is never
+  // reread, yet the message said "reloaded; you can call it back with Revert". What is on
+  // screen is B, so it reads as B having been reread and B being reverted. Name A, and say it
+  // takes reopening A first. The note is writable, so there is a way to get the draft back
   it("names the note changed elsewhere instead of pointing at the note now on screen", async () => {
     disk.set(FILE_B, BODY_B);
     await openNoteA();
     await startEditingBody();
     typeInEditor?.(`${TEXT_A}\n\n譲る前に打った行`);
 
-    // 保存が飛んだところで止める。予約は消えているので、この先の選択の
-    // 差し替えは飛んでいる保存を待たない
+    // Stop it right where the save took off. The scheduled save is gone, so a later change
+    // of selection does not wait for the save in flight
     blockWrites();
     await waitFor(() => expect(countOf("update_draft")).toBe(1), { timeout: 3000 });
-    // 往復のあいだに、別の画面・別の端末が A を書き換える
+    // During the round trip, another screen or device rewrites A
     disk.set(FILE_A, BODY_A_SYNCED);
 
     fireEvent.click(await rowOf(TITLE_B));
@@ -1309,29 +1328,29 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
 
     await waitFor(() => expect(shell?.toast()?.message).toContain(TITLE_A), { timeout: 3000 });
     const message = shell?.toast()?.message;
-    // 選択が外れた A は読み直していない。読み直したと言えば、人は画面に
-    // 出ている B が入れ替わったのだと読む
+    // A, no longer selected, was not reread. Claiming a reread is read as the B on screen
+    // having been swapped
     expect(message).not.toMatch(/読み直しました/u);
-    // 控えは在り、ノートは書ける。開き直してからなら「戻す」で取り出せる
+    // The backup exists and the note is writable. After reopening, Revert can get it back
     expect(message).toMatch(/この端末に控え/u);
     expect(message).toMatch(/開き直/u);
     expect(message).toMatch(/戻す/u);
-    // 画面は B のまま。A を読み直すのは開き直したときだけ
+    // The screen stays on B. A is reread only when it is reopened
     expect(titleInput().value).toBe(TITLE_B);
     expect(localStorage.getItem(`note-backup:${FILE_A}`)).toContain("譲る前に打った行");
   });
 
-  // Stale の言い分は「読み直したか」で変わるのに、読み直す前の状態で決めて
-  // いた。読み直しが読めずに引き返すと、画面には打った本文が残っているのに
-  // 「読み直しました」と言う — 人はディスクのぶんが出ていると思って写すのを
-  // やめる
+  // What Stale says depends on whether a reread happened, yet it used to be decided from the
+  // state before the reread. When the reread cannot read and turns back, the typed body is
+  // still on screen while the message claims a reload, and the reader assumes what is shown
+  // came from disk and stops copying it out
   it("does not claim a reload that the read never delivered", async () => {
     await openNoteA();
     await startEditingBody();
     typeInEditor?.(`${TEXT_A}\n\n譲る前に打った行`);
     duringSave = () => {
       duringSave = undefined;
-      // 別の端末が書き換え、そのうえ読み直しも通らない端末
+      // Another device rewrites it, and on top of that this device's reread does not go through
       disk.set(FILE_A, BODY_A_SYNCED);
       readFails = true;
     };
@@ -1339,19 +1358,19 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     await waitFor(() => expect(shell?.toast()?.message).toMatch(/別の場所で書き換えられていた/u), {
       timeout: 3000,
     });
-    // エディタは作り直されていない。画面にあるのは打った本文のままで、
-    // ディスクのぶんは載っていない — 読み直したとは言えない
+    // The editor was not rebuilt. What is on screen is still the typed body, and nothing from
+    // disk is on it, so no reread can be claimed
     expect(screen.getByText(TEXT_A)).toBeDefined();
     expect(screen.queryByText("他の端末で足された行")).toBeNull();
     expect(shell?.toast()?.message).not.toMatch(/読み直しました/u);
-    // 控えは在る。画面にあるうちに写せることを言う
+    // The backup exists. Say it can be copied out while it is still on screen
     expect(shell?.toast()?.message).toMatch(/この端末に控え/u);
     expect(shell?.toast()?.message).toMatch(/写して/u);
     expect(localStorage.getItem(`note-backup:${FILE_A}`)).toContain("譲る前に打った行");
   });
 
-  // 控えも残せず、しかも読み直せなかったとき。画面にはまだ打った本文が
-  // 在るのに「失われました」と言うと、人は諦めてそのまま閉じる
+  // When the backup could not be kept and the reread failed as well. Saying the draft is lost
+  // while the typed body is still on screen makes the reader give up and close it
   it("does not say the draft is gone while it is still on screen", async () => {
     const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
       throw new Error("QuotaExceededError");
@@ -1367,16 +1386,15 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     };
 
     await waitFor(() => expect(shell?.toast()?.message).toMatch(/写して/u), { timeout: 3000 });
-    // エディタは作り直されていない。画面にはまだ打った本文が在るのだから、
-    // 失われたとは言わない
+    // The editor was not rebuilt. The typed body is still on screen, so we do not say it is lost
     expect(screen.getByText(TEXT_A)).toBeDefined();
     expect(screen.queryByText("他の端末で足された行")).toBeNull();
     expect(shell?.toast()?.message).not.toMatch(/失われました/u);
   });
 
-  // 読み直しの答えが届く前に隣のノートへ移ると、読み直しは見送られる。
-  // 譲る前の「画面に出ていた」で言うと、画面にあるのは別のノートなのに
-  // そのノートを指して「読み直しました」と言うことになる
+  // Moving to the next note before the reread answers makes the reread be dropped. Wording it
+  // from what was on screen before yielding claims a reload for that note while a different
+  // note is on screen
   it("names the note it yielded when the screen moved on during the read", async () => {
     disk.set(FILE_B, BODY_B);
     await openNoteA();
@@ -1385,26 +1403,26 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     duringSave = () => {
       duringSave = undefined;
       disk.set(FILE_A, BODY_A_SYNCED);
-      // 譲ったあとの読み直しを止めておく
+      // Hold the reread that follows the yield
       blockReads();
     };
 
-    // 読み直しが飛んだところ(開いたときの 1 回 + 譲ったあとの 1 回)
+    // Where the reread took off: one on opening plus one after the yield
     await waitFor(() => expect(countOf("read_note")).toBe(2), { timeout: 3000 });
     fireEvent.click(await rowOf(TITLE_B));
     releaseReads();
     await waitFor(() => expect(titleInput().value).toBe(TITLE_B));
 
     await waitFor(() => expect(shell?.toast()?.message).toContain(TITLE_A), { timeout: 3000 });
-    // A の読み直しは画面に載っていない。載ったと言えば、人は画面に出ている
-    // B が入れ替わったのだと読む
+    // A's reread never reached the screen. Claiming it did is read as the B on screen having
+    // been swapped
     expect(shell?.toast()?.message).not.toMatch(/読み直しました/u);
     expect(localStorage.getItem(`note-backup:${FILE_A}`)).toContain("譲る前に打った行");
   });
 
-  // 退避そのものが失敗する端末(localStorage が満杯・無効)。ディスクへの
-  // 保存は既に断られているので、ここで「戻す」で呼び出せると言うと、
-  // 人はそれを信じて閉じ、唯一の写しごと失う
+  // A device where the backup itself fails, with `localStorage` full or disabled. The save to
+  // disk has already been refused, so promising here that Revert can call it back has the
+  // reader believe it, close the note, and lose the only copy with it
   it("warns instead of promising Revert when the backup cannot be written", async () => {
     const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
       throw new Error("QuotaExceededError");
@@ -1417,7 +1435,7 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
 
     await waitFor(() => expect(countOf("update_draft")).toBe(1), { timeout: 3000 });
     await waitFor(() => expect(shell?.toast()?.message).toMatch(/失われます/u));
-    // 在りもしない写しを指して「戻す」と言わない
+    // Do not say Revert while pointing at a copy that does not exist
     expect(shell?.toast()?.message).not.toMatch(/戻す/u);
     expect(localStorage.getItem(`note-backup:${FILE_A}`)).toBeNull();
   });
@@ -1449,8 +1467,9 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     expect(localStorage.getItem(`note-backup:${FILE_A}`)).toBeNull();
   });
 
-  // 壊れた記録のノートは「戻す」の書き込みも同じ理由で断る。書けないことを
-  // 理由に控えを見せないと、退避は残っているのに取り出す道がどこにも無い
+  // A note with broken frontmatter refuses Revert's write for the same reason. Not showing the
+  // backup on the grounds that it cannot be written leaves the backup in place with no way
+  // anywhere to get it out
   it("shows the backup on screen when the note it belongs to cannot be written", async () => {
     const typed = `# ${TITLE_A}\n\n壊れたノートで打った行`;
     localStorage.setItem(`note-backup:${FILE_A}`, typed);
@@ -1459,22 +1478,22 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
 
     await runNoteAction("編集前に戻す");
 
-    // 打った字が実際に画面へ戻る。ここから選んで写せる
+    // What was typed really comes back on screen. From here it can be selected and copied
     await waitFor(() => expect(screen.getByText("壊れたノートで打った行")).toBeDefined());
     expect(shell?.toast()?.message).toMatch(/ディスクには書けない/u);
-    // 断られた書き込みは何も変えない。控えはまだ唯一の写しなので入れ替えない
+    // A refused write changes nothing. The backup is still the only copy, so it is not replaced
     expect(disk.get(FILE_A)).toBe(BODY_A);
     expect(localStorage.getItem(`note-backup:${FILE_A}`)).toBe(typed);
   });
 
-  // 文字として読めなくなったノートも「戻す」の書き込みを断る。書けないことを
-  // 理由に控えを見せないと、開いているあいだに取り出す最後の道が閉じる —
-  // 開き直せば本文ごと読めないので、次の機会はもう無い
+  // A note that no longer reads as text also refuses Revert's write. Not showing the backup on
+  // the grounds that it cannot be written closes the last way to get it out while the note is
+  // open: reopening cannot read the body at all, so there is no next chance
   it("shows the backup on screen when the note it belongs to is no longer text", async () => {
     const typed = `# ${TITLE_A}\n\n読めなくなる前に打った行`;
     localStorage.setItem(`note-backup:${FILE_A}`, typed);
     await openNoteA();
-    // 開いたあとにファイルが読めないバイト列になった。画面の本文はまだ在る
+    // After opening, the file became an unreadable byte sequence. The body on screen is still there
     notText.add(FILE_A);
 
     await runNoteAction("編集前に戻す");
@@ -1485,12 +1504,13 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     expect(localStorage.getItem(`note-backup:${FILE_A}`)).toBe(typed);
   });
 
-  // 読み直せば書けるノートでは、控えを画面に出して終わりにしない。画面と
-  // ディスクが黙って食い違い、次の保存が相手の本文を控えで潰す
+  // For a note that becomes writable after a reread, showing the backup on screen is not the
+  // end of it. The screen and the disk would silently disagree, and the next save would crush
+  // the other side's body with the backup
   it("still refuses to revert when the write is turned down as stale", async () => {
     localStorage.setItem(`note-backup:${FILE_A}`, `# ${TITLE_A}\n\n控えの行`);
     await openNoteA();
-    // 読んでから押すまでに、別の端末がこれを書き換えた
+    // Between the read and the press, another device rewrote it
     disk.set(FILE_A, BODY_A_SYNCED);
 
     await runNoteAction("編集前に戻す");
@@ -1500,8 +1520,8 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     expect(disk.get(FILE_A)).toBe(BODY_A_SYNCED);
   });
 
-  // 復元は入れ替え。戻した直後の「戻る先」を次の保存で押し出すと、
-  // もう一度押しても戻れない
+  // Restoring is a swap. If the next save pushes out the place to go back to that the revert
+  // just created, pressing it again cannot go back
   it("keeps the reverted body reachable after the next save", async () => {
     const bodyOld = "# 会議メモ\n\nいちばん最初の本文";
     localStorage.setItem(`note-backup:${FILE_A}`, bodyOld);
@@ -1517,8 +1537,8 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
   });
 });
 
-// Codex は同じ画面の別の面。置き場(ディレクトリ)が違うだけで、開いたら
-// 書く形は Note と同じ(#255)
+// Codex is another surface of the same view. Only the directory it lives in differs; once
+// open, the writing shape is the same as a Note (#255)
 describe("Workspace › Codex の面", () => {
   beforeEach(setupWorkspace);
   afterEach(teardownWorkspace);
@@ -1533,9 +1553,9 @@ describe("Workspace › Codex の面", () => {
   };
 
   /**
-   * ⌘N が作るのは Note で、押せば Notes へ移る。この面の「新規」は今いる面の
-   * ものを作るので、ここに札を出すと、札のとおりに打った人には別の物が別の
-   * 場所にできる。キーが無いのではなく、このボタンのキーではない
+   * `Cmd N` makes a Note and moves to Notes. This surface's new button makes one of the
+   * surface it is on, so a badge here means someone who types what the badge says gets a
+   * different thing in a different place. The key is not missing; it is not this button's key.
    */
   it("wears no key on its new button, where ⌘N would make the other thing", async () => {
     addCodex();
@@ -1558,8 +1578,8 @@ describe("Workspace › Codex の面", () => {
     expect(screen.queryByRole("button", { name: new RegExp(TITLE_A, "u") })).toBeNull();
   });
 
-  // ウィジェットや [[リンク]] は ID しか知らないので /notes に着く。相手が
-  // Codex なら、その面へ送り直す
+  // A widget or a `[[link]]` knows only the ID, so it arrives at `/notes`. If the target is a
+  // Codex, it is forwarded to that surface
   it("forwards ?file= that points at a codex to the Codex surface", async () => {
     addCodex();
     renderWorkspace();
@@ -1576,20 +1596,21 @@ describe("Workspace › Codex の面", () => {
     await openNoteA();
 
     await runNoteAction("Codex にする");
-    // 戻れない操作なので、押した瞬間には動かない
+    // The action cannot be undone, so nothing moves at the moment it is pressed
     expect(countOf("promote_note_to_codex")).toBe(0);
     fireEvent.click(await screen.findByRole("button", { name: "Codex にする" }));
 
     await waitFor(() => expect(kinds.get(FILE_A)).toBe("codex"));
-    // 着地したのは Codex の面。同じノートが開いたまま
+    // It landed on the Codex surface, with the same note still open
     await waitFor(() => expect(screen.getByText("Codex")).toBeDefined());
     await rowOf(TITLE_A);
     await waitFor(() => expect(titleInput().value).toBe(TITLE_A));
   });
 
-  // 確認が出た瞬間、焦点は消えたメニューの行に取り残される。矢印キーが辿るのは
-  // メニューの行だけで、外へ出ればメニューごと畳まれるので、キーボードだけで
-  // 開いた人は戻れない操作を押すことも取り消すこともできなくなる
+  // The moment the confirmation appears, the focus is stranded on the row of the menu that
+  // just vanished. Arrow keys walk only the menu rows, and leaving them folds the whole menu,
+  // so someone who opened it from the keyboard alone can neither press nor cancel the
+  // irreversible action
   it("hands the focus to the confirmation the menu just replaced", async () => {
     await openNoteA();
 
@@ -1599,8 +1620,9 @@ describe("Workspace › Codex の面", () => {
     await waitFor(() => expect(document.activeElement).toBe(confirm));
   });
 
-  // 予約が発火済みで書き込みが飛んでいる最中に昇格すると、書き込みは移動前の
-  // path に向かい、Codex には古い本文だけが残る。書き終わるまで移さない
+  // Promoting while the scheduled save has fired and the write is in flight sends that write
+  // to the path from before the move, leaving only the old body in the Codex. Do not move the
+  // file until the write has finished
   it("waits for an in-flight save before moving the file", async () => {
     await openNoteA();
     await startEditingBody();
@@ -1633,8 +1655,8 @@ describe("Workspace › Codex の面", () => {
     expect(screen.queryByRole("menuitem", { name: "Codex にする" })).toBeNull();
   });
 
-  // 一覧の行の右端、日付の左に角折りのページ。中の数が版の数で、枠の色が
-  // 「動いたか」。Note の行には無い
+  // A folded-corner page at the right edge of the row, left of the date. The number inside is
+  // the version count and the frame colour says whether it has moved on. A Note row has none
   it("marks each codex row with a page that counts its versions", async () => {
     addCodex();
     versions.set(FILE_C, [{ id: "v1", message: null, body: BODY_C }]);
@@ -1678,7 +1700,7 @@ describe("Workspace › Codex の版", () => {
   const BODY_C = `# ${TITLE_C}\n\n${TEXT_C}`;
   const TITLE_D = "もう 1 本";
 
-  /** Codex を 1 本開いた状態まで進める。 */
+  /** Gets as far as one Codex being open. */
   async function openCodexC(): Promise<void> {
     disk.set(FILE_C, BODY_C);
     kinds.set(FILE_C, "codex");
@@ -1691,7 +1713,7 @@ describe("Workspace › Codex の版", () => {
     });
   }
 
-  // 版は人が刻む印。保存にも、別のノートへの移動にも掛けない
+  // A version is a mark a person cuts. Neither a save nor moving to another note triggers one
   it("never commits a version on its own", async () => {
     disk.set(FILE_D, `# ${TITLE_D}\n\n本文`);
     kinds.set(FILE_D, "codex");
@@ -1708,8 +1730,9 @@ describe("Workspace › Codex の版", () => {
     expect(versions.get(FILE_C)).toBeUndefined();
   });
 
-  // 履歴はディスクの本文と版を比べる。画面にしか無い打鍵を残して開くと、
-  // 「戻す」がそれを「戻す前」の版にも下書きにも入れずに消してしまう
+  // The history compares the body on disk against the versions. Opening it with keystrokes that
+  // exist only on screen makes Revert erase them, putting them neither into the before-restore
+  // version nor into the draft
   it("flushes pending edits before showing history", async () => {
     await openCodexC();
     await waitFor(() => expect(metaLine()?.textContent).toBe("版なし"));
@@ -1718,14 +1741,14 @@ describe("Workspace › Codex の版", () => {
     typeInEditor?.(`# ${TITLE_C}\n\n${TEXT_C}\n\n足した行`);
     await runNoteAction("履歴");
 
-    // パネルが開いた時点で、打った字はもうディスクにある
+    // By the time the panel is open, what was typed is already on disk
     await waitFor(() => expect(document.querySelector(".history-panel--open")).not.toBeNull());
     expect(writesTo(FILE_C)).toHaveLength(1);
     expect(disk.get(FILE_C)).toContain("足した行");
   });
 
-  // 刻むのはディスクの本文。発火済みで飛んでいる保存を待たないと、最後の
-  // 打鍵が入っていない版を「刻めた」と言ってしまう
+  // What is committed is the body on disk. Without waiting for a save that has fired and is in
+  // flight, we claim to have committed a version that is missing the last keystroke
   it("waits for an in-flight save before committing", async () => {
     await openCodexC();
     await startEditingBody();
@@ -1743,8 +1766,8 @@ describe("Workspace › Codex の版", () => {
     expect(versions.get(FILE_C)?.[0]?.body).toContain("足した行");
   });
 
-  // 版は他の端末でも刻まれる。同期の読み直しで本文と一覧は新しくなるのに、
-  // メタ行の「版 N」だけ古いままでは信用できない
+  // Versions are committed on other devices too. If a sync reread freshens the body and the
+  // list while only the version count on the meta line stays stale, it cannot be trusted
   it("refreshes the version status when data changes elsewhere", async () => {
     await openCodexC();
     await waitFor(() => expect(metaLine()?.textContent).toBe("版なし"));
@@ -1755,8 +1778,9 @@ describe("Workspace › Codex の版", () => {
     await waitFor(() => expect(metaLine()?.textContent).toBe("版 1"));
   });
 
-  // Note から Codex に移しても [[ID]] は同じ ID を指し続ける。面で絞った
-  // 解決表だと、移した瞬間にリンクの題が消えて補完からも落ちる
+  // Moving a Note to Codex keeps `[[ID]]` pointing at the same ID. With a resolution table
+  // narrowed by surface, the link's title would vanish the moment it moved and it would drop
+  // out of completion too
   it("resolves [[links]] and offers completion across both surfaces", async () => {
     disk.set(FILE_C, BODY_C);
     kinds.set(FILE_C, "codex");
@@ -1767,8 +1791,9 @@ describe("Workspace › Codex の版", () => {
     expect(editorBody().dataset.noteLinks?.split(",")).toContain(FILE_C.replace(/\.md$/u, ""));
   });
 
-  // 一言は聞かない。押した瞬間に刻み、トーストで要約を言い、猶予のあいだは
-  // 取り消せる — 取り消しは版のファイルを消すだけで、本文には触れない
+  // No message is asked for. It commits the moment it is pressed, the toast summarises it, and
+  // during the grace period it can be undone. The undo only deletes the version file; it does
+  // not touch the body
   it("commits at once without a message and can be undone from the toast", async () => {
     await openCodexC();
     await waitFor(() => expect(metaLine()?.textContent).toBe("版なし"));
@@ -1780,8 +1805,8 @@ describe("Workspace › Codex の版", () => {
       filename: FILE_C,
       message: null,
     });
-    // 履歴にも点が 1 つ増える(下書きの中空 + 版の塗り)。刻んだばかりの
-    // 行は跳ねて入るので、その 1 行だけが印を持つ
+    // The history gains one dot as well: the hollow one for the draft plus the filled one for
+    // the version. The row just committed enters with a hop, so only that one row is marked
     await waitFor(() => expect(document.querySelector(".history-row--fresh")).not.toBeNull());
     await waitFor(() => expect(metaLine()?.textContent).toBe("版 1"));
     expect(document.querySelectorAll(".history-panel .history-dot")).toHaveLength(2);
@@ -1807,8 +1832,9 @@ describe("Workspace › Codex の版", () => {
     await waitFor(() => expect(countOf("commit_note_version")).toBe(1));
   });
 
-  // 履歴を開いても本文は消えない。右にパネルが立って最新の版が選ばれ、版との
-  // 差は本文の欄外の印になる。エディタは畳み、読むだけの本文になる
+  // Opening the history does not remove the body. A panel stands up on the right with the
+  // newest version selected, and the difference from that version becomes marks in the body's
+  // gutter. The editor folds away and the body becomes read-only
   it("opens the history beside the body with the latest version selected", async () => {
     await openCodexC();
     versions.set(FILE_C, [
@@ -1821,11 +1847,11 @@ describe("Workspace › Codex の版", () => {
     const newest = await versionRow(2);
     await waitFor(() => expect(newest.getAttribute("aria-current")).toBe("true"));
     expect(screen.queryByTestId("editor-body")).toBeNull();
-    // 最新の版は下書きと同じ。印は 1 つも立たず、下書きの行がそう言う
+    // The newest version equals the draft. No mark is raised, and the draft row says so
     expect(document.querySelector(".history-row--draft")?.textContent).toContain("同じ内容");
     expect(screen.getByText(TEXT_C)).toBeDefined();
     expect(document.querySelector(".diff-mark")).toBeNull();
-    // 選んだ版に戻すボタンは、その行の下にだけ在る
+    // The button that restores the selected version is only under that row
     expect(screen.getByRole("button", { name: "版 2 に戻す" })).toBeDefined();
     expect(screen.queryByRole("button", { name: "版 1 に戻す" })).toBeNull();
 
@@ -1835,30 +1861,33 @@ describe("Workspace › Codex の版", () => {
       expect(document.querySelectorAll(".diff-mark--del").length).toBeGreaterThan(0);
       expect(document.querySelectorAll(".diff-mark--add").length).toBeGreaterThan(0);
     });
-    // 開いた瞬間の版 2 との比較が先に走っている。見るのは押した後のほう
+    // The comparison against version 2 from the moment it opened ran first. What we read is
+    // the one after the press
     expect(calls.findLast((c) => c.cmd === "diff_note_versions")?.args).toStrictEqual({
       filename: FILE_C,
       from: "v1",
     });
-    // 消えた行は選んだ版にしか無い行。下書きの本文に差し込まれて読める
+    // A deleted line is one that exists only in the selected version. It is slotted into the
+    // draft body so it can be read
     expect(screen.getByText("最初の一行")).toBeDefined();
     expect(screen.getByText(TEXT_C)).toBeDefined();
-    // 何と比べていて何行動いたかはメタ行が言う。行数は既に読んでいる差分から
-    // 数えるので、IPC は 1 本も増えない
+    // The meta line says what is being compared and how many lines moved. The line counts come
+    // from the diff already read, so not one extra IPC call is made
     await waitFor(() =>
       expect(document.querySelector(".detail-compare-status")?.textContent).toBe(
         "版 1 と比較中 · 3 行追加 · 3 行削除 · 読み取り専用",
       ),
     );
 
-    // Esc で閉じる。パネルは畳まれ、エディタが戻る
+    // Esc closes it. The panel folds away and the editor comes back
     fireEvent.keyDown(globalThis, { key: "Escape" });
     await waitFor(() => expect(document.querySelector(".history-panel--open")).toBeNull());
     await waitFor(() => expect(screen.getByTestId("editor-body")).toBeDefined());
   });
 
-  // 開いた瞬間に選ぶ最新の版は、開くときに読み直した一覧のもの。手元の一覧で
-  // 選ぶと、別の端末で刻まれた新しい版があっても 1 つ古いほうが開く
+  // The newest version selected on opening comes from the list reread at that moment. Choosing
+  // from the list already at hand would open the one that is a version behind whenever another
+  // device has committed a newer one
   it("selects the version that is newest at the moment the history opens", async () => {
     versions.set(FILE_C, [{ id: "v1", message: null, body: BODY_C }]);
     await openCodexC();
@@ -1874,15 +1903,15 @@ describe("Workspace › Codex の版", () => {
     await waitFor(() => expect(newest.getAttribute("aria-current")).toBe("true"));
   });
 
-  // 履歴のボタンは Codex にだけ在り、同じボタンで開いて畳める。ホバーでは
-  // 開かない — 書いている手の横で、通りすがりに 320px が現れてはいけない
+  // The history button exists only on a Codex, and the same button opens and folds it. It never
+  // opens on hover: 320px must not appear in passing beside a writing hand
   it("opens and folds the panel from the one history button, never on hover", async () => {
     await openCodexC();
 
     const button = screen.getByRole("button", { name: "履歴" });
     expect(document.querySelector(".history-panel--open")).toBeNull();
 
-    // 乗っただけでは開かない
+    // Merely moving onto it does not open it
     fireEvent.pointerEnter(document.querySelector(".history-panel") as HTMLElement);
     await sleep(50);
     expect(document.querySelector(".history-panel--open")).toBeNull();
@@ -1890,10 +1919,10 @@ describe("Workspace › Codex の版", () => {
     fireEvent.click(button);
     await waitFor(() => expect(document.querySelector(".history-panel--open")).not.toBeNull());
     expect(button.getAttribute("aria-pressed")).toBe("true");
-    // 版が無ければ、次の一手(刻む)がそこにある
+    // With no versions, the next move, committing one, is right there
     expect(screen.getByText("まだ版がありません。いまの本文が最初の版になります。")).toBeDefined();
 
-    // 同じボタンで畳む。× と Esc も同じところへ着く
+    // The same button folds it. The close button and Esc arrive at the same place
     fireEvent.click(button);
     await waitFor(() => expect(document.querySelector(".history-panel--open")).toBeNull());
 
@@ -1905,8 +1934,8 @@ describe("Workspace › Codex の版", () => {
   });
 
   /**
-   * ホバーでは開かないパネルなので、キーの無いあいだ入口はボタン 1 つだけ
-   * だった。⌘ を押したときに肩へ札が出る以上、そのキーは効かなければならない。
+   * The panel never opens on hover, so while there was no key the only way in was one button.
+   * Now that a badge appears at its shoulder when `Cmd` is held, that key must work.
    */
   it("opens and folds the history from ⌘⇧H", async () => {
     await openCodexC();
@@ -1920,7 +1949,8 @@ describe("Workspace › Codex の版", () => {
     await waitFor(() => expect(document.querySelector(".history-panel--open")).toBeNull());
   });
 
-  // ⌘ を押し続けているあいだ肩に浮かぶ札。押せるキーのある入口には出す
+  // The badge that floats at the shoulder while `Cmd` is held. It appears on every way in
+  // that has a key which works
   it("wears its key on the shoulder of the history button", async () => {
     await openCodexC();
 
@@ -1929,7 +1959,7 @@ describe("Workspace › Codex の版", () => {
     );
   });
 
-  // × は Esc と同じところへ着く。開けた人が閉じ方を探さない
+  // The close button arrives where Esc does, so whoever opened it does not hunt for a way to close
   it("folds the panel from its own close button", async () => {
     await openCodexC();
     versions.set(FILE_C, [{ id: "v1", message: null, body: BODY_C }]);
@@ -1956,18 +1986,20 @@ describe("Workspace › Codex の版", () => {
     const args = calls.find((c) => c.cmd === "restore_note_version")?.args;
     expect(args?.filename).toBe(FILE_C);
     expect(args?.id).toBe("v1");
-    // 読んだときの指紋で書く。外で書き換えられていれば core が断る
+    // Writes with the revision read at the time. If it was rewritten elsewhere, core refuses
     expect(args?.revision).toBe(revisionOf(BODY_C));
-    // 戻した本文が画面に出て、履歴は畳まれる
+    // The restored body appears on screen and the history folds away
     await waitFor(() => expect(screen.getByText("最初の一行")).toBeDefined());
     expect(document.querySelector(".history-panel--open")).toBeNull();
-    // 戻す前の下書きが最新の版になり、戻した本文はそれと違うので距離が出る
+    // The pre-restore draft becomes the newest version, and the restored body differs from it,
+    // so a distance is shown
     await waitFor(() => expect(metaLine()?.textContent).toMatch(/^版 2 から /u));
   });
 
-  // 戻す書き込みは通ったのに、そのあとの読み直しが画面に届かないことがある。
-  // 画面は戻す前の本文なのに指紋だけ戻した後のものになり、そのまま次の打鍵を
-  // 保存すると core の照合を素通りして、いま戻した版を黙って潰す
+  // The restore write can go through while the reread that follows never reaches the screen.
+  // The screen then holds the pre-restore body while only the revision is the post-restore one,
+  // and saving the next keystroke walks straight past core's check and silently crushes the
+  // version just restored
   it("does not claim a restore the screen never received, nor overwrite it on the next save", async () => {
     await openCodexC();
     const OLD_BODY = `# ${TITLE_C}\n\n最初の一行`;
@@ -1975,19 +2007,19 @@ describe("Workspace › Codex の版", () => {
 
     await runNoteAction("履歴");
     fireEvent.click(await versionRow(1));
-    // 戻す書き込みは通るが、そのあとの読み直しでディスクが読めない
+    // The restore write goes through, but the reread that follows cannot read the disk
     readFails = true;
     fireEvent.click(await screen.findByRole("button", { name: "版 1 に戻す" }));
 
     await waitFor(() => expect(countOf("restore_note_version")).toBe(1));
     expect(disk.get(FILE_C)).toBe(OLD_BODY);
-    // 戻したとは言わない。画面に出せなかったことを言う
+    // Do not claim a restore. Say that it could not be put on screen
     await waitFor(() => expect(shell?.toast()?.message).toMatch(/画面に出せませんでした/u));
     expect(shell?.toast()?.message).not.toMatch(/戻す前の下書きは履歴にあります/u);
-    // 画面にあるのは戻す前の本文のまま
+    // What is on screen is still the pre-restore body
     expect(screen.getByText(TEXT_C)).toBeDefined();
 
-    // その本文に書き足しても、いま戻した版は残る
+    // Even writing more into that body leaves the version just restored intact
     readFails = false;
     await waitFor(() => expect(editorBody().isContentEditable).toBe(true));
     await startEditingBody();
@@ -2009,8 +2041,8 @@ describe("Workspace › Codex の版", () => {
     expect(restore.disabled).toBe(true);
   });
 
-  // 携帯にはパネルを立てる幅が無い。履歴はシートではなく本文と入れ替わる
-  // 専用の面で、版を押すと本文へ戻って比較モードになる
+  // A phone has no width to stand a panel in. The history is not a sheet but its own screen
+  // that replaces the body, and pressing a version returns to the body in compare mode
   it("gives a phone a history screen instead of a panel", async () => {
     await page.viewport(390, 844);
     versions.set(FILE_C, [
@@ -2022,14 +2054,16 @@ describe("Workspace › Codex の版", () => {
     await runNoteAction("履歴");
 
     await waitFor(() => expect(document.querySelector(".history-panel--screen")).not.toBeNull());
-    // 面ごと入れ替わるので本文は残らない。戻すも行の下には出ない — 比較バーが持つ
+    // The whole screen is replaced, so no body remains. Restore is not under the row either;
+    // the compare bar carries it
     expect(screen.queryByTestId("editor-body")).toBeNull();
     expect(document.querySelector(".detail-body")).toBeNull();
     expect(screen.queryByRole("button", { name: "版 2 に戻す" })).toBeNull();
 
     fireEvent.click(await versionRow(1));
 
-    // 本文へ戻って比較モード。欄外の印が立ち、何と比べているかは下の帯が言う
+    // Back to the body in compare mode. Gutter marks are raised, and the bar below says what
+    // is being compared
     const bar = await waitFor(() => {
       const found = document.querySelector<HTMLElement>(".compare-bar");
       expect(found).not.toBeNull();
@@ -2045,19 +2079,20 @@ describe("Workspace › Codex の版", () => {
     await waitFor(() =>
       expect(document.querySelectorAll(".diff-mark--add").length).toBeGreaterThan(0),
     );
-    // 比較中は読み取り専用。メタ行の側には出さない — 帯と二重に言わない
+    // While comparing it is read-only. That is not shown on the meta line, so the bar does not
+    // say it twice
     expect(document.querySelector(".detail-compare-status")).toBeNull();
 
-    // 帯の「履歴」で面へ戻れる
+    // The history button on the bar goes back to the screen
     fireEvent.click(within(bar).getByRole("button", { name: "履歴" }));
     await waitFor(() => expect(document.querySelector(".history-panel--screen")).not.toBeNull());
 
-    // ← で本文へ。比較モードのままなので帯は残る。
-    // 読み上げ名で引くのは、この矢印が戻る先を言い当てているかを一緒に見るため
+    // The back arrow returns to the body. Compare mode is still on, so the bar stays. Looking
+    // it up by its screen-reader name also checks that the arrow names where it goes back to
     fireEvent.click(screen.getByLabelText("本文に戻る"));
     await waitFor(() => expect(document.querySelector(".compare-bar")).not.toBeNull());
 
-    // × で比較をやめる。エディタが戻る
+    // The close button ends the comparison. The editor comes back
     fireEvent.click(document.querySelector(".compare-bar-close") as HTMLElement);
     await waitFor(() => expect(document.querySelector(".compare-bar")).toBeNull());
     await waitFor(() => expect(screen.getByTestId("editor-body")).toBeDefined());

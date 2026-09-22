@@ -1,10 +1,11 @@
 import { t } from "./i18n";
 
 /**
- * 同期の途中で 1 件だけこけたときの記録 (core の `SyncIssue`)。
+ * The record of one item failing in the middle of a sync (core's `SyncIssue`).
  *
- * core は文を組まない — CLI や MCP からも呼ばれ、翻訳表を置く場所が無いので、
- * `kind` と材料だけが届く。日本語にするのは `i18n.ts` の `sync.result.issue`。
+ * core composes no sentences. It is also called from the CLI and MCP and has nowhere
+ * to keep a translation table, so only `kind` and the material arrive. The Japanese
+ * wording is `sync.result.issue` in `i18n.ts`.
  */
 export type SyncIssue =
   | { kind: "unsafe_key"; key: string }
@@ -51,7 +52,7 @@ export function describeSyncResult(result: SyncResultPayload): SyncUiState {
     return { status: "success", message: strings.upToDate };
   }
 
-  // 矢印と数字は言語を持たない。訳すのは前後の言葉だけ
+  // Arrows and numbers have no language. Only the words around them are translated
   const parts: string[] = [];
   if (result.uploaded) {
     parts.push(`↑${result.uploaded}`);
@@ -75,7 +76,7 @@ function toErrorInfo(err: unknown): SyncErrorInfo {
     : { kind: "other", message: String(err) };
 }
 
-/** core が付けた `kind`。分類できない失敗 (投げられた文字列など) は `"other"`。 */
+/** The `kind` core attached. A failure that cannot be classified (a thrown string etc.) is `"other"`. */
 export function syncErrorKind(err: unknown): string {
   return toErrorInfo(err).kind;
 }
@@ -83,10 +84,10 @@ export function syncErrorKind(err: unknown): string {
 export function describeSyncError(err: unknown): SyncUiState {
   const info = toErrorInfo(err);
 
-  // 別の同期が走っていただけ。アプリ内の再入と、`magical-merchant sync` が
-  // ロックを持っている場合の両方が来る。異常ではないので何も知らせないが、
-  // 待機に戻すのは必須: "syncing" のまま止めると syncNow の再入ガードに
-  // 引っかかり、以後どの同期も始まらなくなる
+  // Another sync was just running. Both re-entry inside the app and
+  // `magical-merchant sync` holding the lock arrive here. Not abnormal, so nothing
+  // is reported, but returning to idle is mandatory: stuck at "syncing" it trips
+  // the re-entry guard of syncNow, and no sync ever starts again
   if (info.kind === "busy") {
     return { status: "idle", message: "" };
   }

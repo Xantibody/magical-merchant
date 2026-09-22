@@ -5,17 +5,17 @@ import type { ClientContext } from "./client-context";
 import { isStaleSave, onLocalMutation, typedInvoke } from "./commands";
 import { describeSyncResult } from "./sync-status";
 import type { SyncResultPayload } from "./sync-status";
-// browser mode に node:fs は無い。Vite の `?raw` がソースをそのまま文字列で渡す。
-// oxlint は `?raw` を知らず、素の .ts に default export を探しに行くので黙らせる
+// There is no node:fs in browser mode. Vite's `?raw` hands the source over as a string.
+// oxlint does not know `?raw` and hunts for a default export in a plain .ts, so silence it
 // oxlint-disable-next-line import/default
 import commandsSource from "./commands.ts?raw";
 import mockSource from "../../dev/ipc-mock.js?raw";
 
-// vi.mock("@tauri-apps/api/core") は使わない。browser mode のモジュールモックは
-// サーバー側の単一レジストリ越しに差し替えるため、並列実行下でモックが適用され
-// ないまま本物の invoke が渡ることがある (vitest-dev/vitest#8339)。CI だけで
-// 落ちる原因だった。mockIPC は window.__TAURI_INTERNALS__ を差し替えるだけで
-// モジュールグラフに触らないので、この競合と無縁。
+// vi.mock("@tauri-apps/api/core") is not used. A module mock in browser mode is swapped in
+// through a single registry on the server side, so under parallel runs the real invoke can
+// be handed over with the mock never applied (vitest-dev/vitest#8339). That was the cause
+// of failures only in CI. mockIPC only replaces window.__TAURI_INTERNALS__ and does not
+// touch the module graph, so it is free of that race.
 const CLIENT: ClientContext = {
   latitude: null,
   longitude: null,
@@ -41,7 +41,7 @@ describe("typedInvoke local mutation notifications", () => {
     clearMocks();
   });
 
-  // 自動同期の合図。呼び出し側ごとに書くと必ず取りこぼす
+  // The signal for automatic sync. Written at each call site, some would always be missed
   it("notifies after a write command succeeds", async () => {
     await typedInvoke("update_draft", { filename: "a.md", body: "x", client: CLIENT });
     expect(seen).toHaveLength(1);
@@ -58,7 +58,7 @@ describe("typedInvoke local mutation notifications", () => {
     expect(seen).toHaveLength(0);
   });
 
-  // 失敗した書き込みで同期すると、書けなかった内容を「同期済み」と見せてしまう
+  // Syncing after a failed write would show what could not be written as "synced"
   it("stays quiet when the write fails", async () => {
     mockIPC(() => {
       throw new Error("disk full");
@@ -74,15 +74,16 @@ describe("typedInvoke local mutation notifications", () => {
   });
 });
 
-/** Tauri の内部 API に公開の型は無い。テストが触るぶんだけ形を書く */
+/** Tauri's internal API has no public type. Write only the shape the test touches */
 interface TauriInternals {
   __TAURI_INTERNALS__?: { invoke: (cmd: string, args?: unknown) => Promise<unknown> };
 }
 const tauri = globalThis as unknown as TauriInternals;
 
 /**
- * `CommandMap` は型なので実行時に列挙できない。宣言そのものを読んで名前を拾う。
- * 書き方が変わって 1 件も読めなくなったら、テストは静かに通らず落ちる。
+ * `CommandMap` is a type, so it cannot be enumerated at run time. Read the declaration
+ * itself and pick up the names. If the way it is written changes and nothing can be read,
+ * the test fails rather than passing quietly.
  */
 function declaredCommands(): string[] {
   const from = commandsSource.indexOf("interface CommandMap {");
@@ -92,18 +93,18 @@ function declaredCommands(): string[] {
     .filter((name) => name !== undefined);
 }
 
-// CLAUDE.md の「新しい Tauri コマンドには ipc-mock のハンドラを足す」を守らせる。
-// 忘れるとブラウザ検証だけが `mock: unknown command` で死に、気付くのは
-// dev-browser を開いた人になる
+// Enforces CLAUDE.md's "every new Tauri command gets a handler in ipc-mock".
+// Forget it and only the browser check dies with `mock: unknown command`, and the person
+// who notices is whoever opens dev-browser
 describe("dev/ipc-mock.js", () => {
   let previous: TauriInternals["__TAURI_INTERNALS__"];
 
   beforeAll(() => {
     previous = tauri.__TAURI_INTERNALS__;
-    // モックは自分より先に誰かが居れば何もしない。譲る相手を先に退かす
+    // The mock does nothing if someone is there before it. Clear that one out first
     delete tauri.__TAURI_INTERNALS__;
-    // `new Function` ではなく <script>。index.html に注入されるときと同じ経路で
-    // `__TAURI_INTERNALS__` が置かれることまで見る
+    // A <script>, not `new Function`. This also checks that `__TAURI_INTERNALS__` is placed
+    // through the same path as when it is injected into index.html
     const script = document.createElement("script");
     script.textContent = mockSource;
     document.head.append(script);
@@ -115,15 +116,15 @@ describe("dev/ipc-mock.js", () => {
 
   it("answers every command declared in CommandMap", async () => {
     const names = declaredCommands();
-    // 0 件は「モックが完璧」ではなく「正規表現が宣言の書き方から外れた」
+    // Zero means "the regex drifted from how the declaration is written", not "the mock is perfect"
     expect(names.length).toBeGreaterThan(0);
 
     const invoke = tauri.__TAURI_INTERNALS__?.invoke;
     const answers = await Promise.all(
       names.map(async (name) => {
         try {
-          // 引数は渡さない。ハンドラが中で転ぶのは構わない。見たいのは
-          // 「そのコマンドを知っているか」だけ
+          // No arguments are passed. The handler tripping inside is fine. All that is
+          // being looked at is whether it knows that command
           await invoke?.(name, {});
           return `${name}: ok`;
         } catch (error) {
@@ -134,16 +135,16 @@ describe("dev/ipc-mock.js", () => {
     expect(answers.filter((answer) => answer.includes("unknown command"))).toStrictEqual([]);
   });
 
-  // 同期の結果はコマンドの戻りではなくイベントで届く。モックが流す形が
-  // core の `SyncIssue` からずれると、ブラウザ検証では出ているように見えて
-  // 実機では文言が空になる
+  // A sync result arrives as an event, not as a command's return. If the shape the mock
+  // sends drifts from core's `SyncIssue`, the browser check looks like it shows something
+  // while on a real device the wording comes out empty
   it("delivers sync results the app can put into words", async () => {
     const results: SyncResultPayload[] = [];
     const unlisten = await listen<SyncResultPayload>("sync-complete", (event) =>
       results.push(event.payload),
     );
     const invoke = tauri.__TAURI_INTERNALS__?.invoke;
-    // 成功と失敗を交互に流すので、2 回押せば両方が来る
+    // Success and failure are sent alternately, so pressing twice brings both
     await invoke?.("sync_start", {});
     await invoke?.("sync_start", {});
     await vi.waitFor(() => expect(results).toHaveLength(2));
@@ -156,7 +157,7 @@ describe("dev/ipc-mock.js", () => {
 });
 
 describe("isStaleSave", () => {
-  // update_draft の失敗は kind 付きで届く。stale だけが「読み直して知らせる」に分岐する
+  // An update_draft failure arrives with a kind. Only stale branches to "reload and tell"
   it("recognises the stale kind and nothing else", () => {
     expect(isStaleSave({ kind: "stale", message: "Stale: a.md changed" })).toBe(true);
     expect(isStaleSave({ kind: "other", message: "disk full" })).toBe(false);

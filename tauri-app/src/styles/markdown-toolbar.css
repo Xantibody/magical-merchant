@@ -5,17 +5,17 @@
   .markdown-toolbar {
     display: flex;
     position: fixed;
-    /* position: fixed は html の padding を無視するので、0 だと Android の
-       ナビゲーションバーの裏に入る。キーボードが開いている間は JS が top を
-       打つので、この値は使われない */
+    /* position: fixed ignores the padding on html, so at 0 it goes behind Android's
+       navigation bar. While the keyboard is open JS sets top, so this value is not
+       used */
     bottom: var(--safe-bottom, 0px);
     left: 0;
     right: 0;
     z-index: 150;
     background: var(--app-surface-2);
     border-top: 1px solid var(--app-border);
-    /* コードブロックの中では「抜ける」が増えて 9 個になり、狭い端末では
-       44px × 9 が入らない。詰めるのではなく送れるようにする */
+    /* Inside a code block the release button is added, making 9, and 44px times 9 does not
+       fit on a narrow device. Rather than packing them tighter, they scroll */
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
   }
@@ -25,7 +25,8 @@
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    /* 指で押す当たり判定。余白ではなく寸法で持つ(モバイルの規則の 44px) */
+    /* The hit area for a finger. It is held as a size, not as padding (the mobile rule's
+       44px) */
     inline-size: 44px;
     block-size: 44px;
     padding: 0;
@@ -41,12 +42,14 @@
     background: var(--app-surface);
   }
 
-  /* 書式ではなく「書き終わり」のボタンなので、記法の並びから離して右端へ */
+  /* This button ends the writing rather than formatting it, so it is set apart from the row
+     of notation buttons, at the right edge */
   .markdown-toolbar-release {
     margin-inline-start: auto;
   }
 
-  /* `[[` はアイコンに置き換えず記号のまま見せる。本文に入る文字そのものだから */
+  /* `[[` is shown as the characters themselves, not replaced by an icon, because they are
+     exactly what goes into the body */
   .markdown-toolbar-glyph {
     font-family: var(--font-mono);
     font-size: var(--font-size-1);
@@ -54,8 +57,8 @@
     line-height: 1;
   }
 
-  /* 編集中はツールバーが下端を使う。タブを残すと fixed のツールバーが上に
-     重なって押せないボタンが並ぶだけなので、場所ごと譲ってもらう */
+  /* While editing, the toolbar uses the bottom edge. Leaving the tabs there would only put
+     a row of unpressable buttons under the fixed toolbar, so they give up the space */
   body.md-toolbar-open .bottom-tabs {
     display: none;
   }

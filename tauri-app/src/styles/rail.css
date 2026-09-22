@@ -1,5 +1,6 @@
-/* 面と全体の操作を縦に並べた 48px の柱。ヘッダの代わりで、デスクトップだけ。
-   字は持たない — 入口はアイコン 1 つで、名前は title と読み上げにだけ出す */
+/* A 48px column with the surfaces and the app-wide actions stacked vertically. It stands
+   in for the header, desktop only. It carries no words: each entry is one icon, and the
+   name appears only in title and in the screen reader */
 
 .rail {
   position: relative;
@@ -40,24 +41,25 @@
   color: var(--app-text);
 }
 
-/* 現在地は塗り。ヘッダのタブは字の重さだけで示していたが、ここには
-   重さを載せる字が無い */
+/* The current place is a fill. The header tabs showed it with font weight alone, but here
+   there are no words to put weight on */
 .rail-button--active {
   background: var(--app-accent-soft);
   color: var(--app-text);
 }
 
-/* 面ではない入口 (検索・同期)。現在地にはならないので、塗りを待たずに
-   読める濃さにしておく */
+/* Entries that are not surfaces (search, sync). They never become the current place, so
+   they are kept dark enough to read without waiting for a fill */
 .rail-button--plain {
   color: var(--app-text-muted);
 }
 
-/* 現在地の線。3 つの面のあいだを滑る。位置はレールの中の実寸で、
-   ボタン (36px) と隙間 (4px) と上の余白 (10px) から出る。
-   動かすのが transform ではなく top なのは、位置そのものが面から決まる
-   1 つの数で、translateY にすると同じ数を 2 通りに書くことになるから。
-   レールの中で絶対配置なので、動いても隣は流れない */
+/* The current-place line. It slides between the three surfaces. The position is the real
+   measurement inside the rail, and comes from the button (36px), the gap (4px) and the
+   top padding (10px).
+   It moves with top rather than transform because the position itself is one number
+   decided by the surface, and translateY would write that same number a second way.
+   It is absolutely positioned inside the rail, so moving it does not push the neighbours */
 .rail-marker {
   position: absolute;
   left: 0;
@@ -70,8 +72,8 @@
     opacity 160ms var(--app-ease);
 }
 
-/* 設定のように面ではない場所に居るあいだは線を出さない。top はそのままに
-   しておく — 面へ戻ったとき、線が遠くから飛んでこない */
+/* While on somewhere that is not a surface, such as Settings, the line is not shown. top
+   is left as it was: coming back to a surface, the line does not fly in from far away */
 .rail-marker[data-off] {
   opacity: 0;
 }
@@ -84,7 +86,7 @@
   background: var(--app-surface-2);
 }
 
-/* 同期から下は足元に寄せる。日に何度も押す物ではない */
+/* From sync down, push to the foot. These are not pressed many times a day */
 .rail-button--foot {
   margin-top: auto;
 }

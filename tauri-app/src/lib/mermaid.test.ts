@@ -5,20 +5,20 @@ const FLOWCHART = ["flowchart TD", "  A[Start] --> B[End]"].join("\n");
 const SEQUENCE = ["sequenceDiagram", "  Alice->>Bob: こんにちは", "  Bob-->>Alice: やあ"].join(
   "\n",
 );
-/** ノート側から初期化を上書きしにくる図。同期先から降ってきた本文でも起こりうる */
+/** A diagram that comes to overwrite the initialization from the note side. It can also arrive in a body that came down from sync */
 const HTML_LABEL_DIRECTIVE = [
   '%%{init: {"htmlLabels": true}}%%',
   "flowchart TD",
   "  A[Start] --> B[End]",
 ].join("\n");
-/** 古い書き方の同じ攻撃。flowchart.htmlLabels も同じ名前なので同じ守りに入る */
+/** The same attack in the older spelling. flowchart.htmlLabels carries the same name, so it falls under the same guard */
 const FLOWCHART_HTML_LABEL_DIRECTIVE = [
   '%%{init: {"flowchart": {"htmlLabels": true}}}%%',
   "flowchart TD",
   "  A[Start] --> B[End]",
 ].join("\n");
 
-/** 描けた図だけを取り出す。null は描画に失敗した図 */
+/** Take out only the diagrams that were drawn. null is a diagram that failed to draw */
 function drawn(svgs: (string | null)[]): string[] {
   return svgs.map((svg) => {
     if (svg === null) {
@@ -30,8 +30,8 @@ function drawn(svgs: (string | null)[]): string[] {
 
 describe("renderDiagrams", () => {
   /**
-   * foreignObject は HTML なので canvas を汚染し、PNG に描こうとすると例外になる。
-   * flowchart だけを見ていると sequence で取りこぼす — どの図でも SVG の text で描く
+   * A foreignObject is HTML, so it taints the canvas and throws when it is drawn into a
+   * PNG. Watching flowchart alone misses sequence: every diagram draws with SVG text
    */
   it("draws every diagram's labels as svg text, never foreignObject", async () => {
     const [flowchart, sequence] = drawn(await renderDiagrams([FLOWCHART, SEQUENCE]));
@@ -41,8 +41,9 @@ describe("renderDiagrams", () => {
   });
 
   /**
-   * 図の中の `%%{init: …}%%` は初期化の後から設定を書き換えられる。htmlLabels を
-   * 取り返されると PNG は「成功」したまま文字だけが抜けるので、ここで止める
+   * A `%%{init: …}%%` inside a diagram can rewrite the settings after initialization. If
+   * htmlLabels is taken back, the PNG stays "successful" while only the text goes missing,
+   * so it is stopped here
    */
   it("does not let a diagram directive turn html labels back on", async () => {
     const [root, scoped] = drawn(

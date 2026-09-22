@@ -2,8 +2,9 @@ import { describe, it, expect } from "vitest";
 import { Schema } from "@milkdown/kit/prose/model";
 import { activeCodeBlockRanges } from "./active-code-block";
 
-// milkdown の schema はエディタ ctx がないと組めないので、位置計算に必要な
-// 形だけの最小 schema で文書を作る(判定は node type 名しか見ない)
+// Milkdown's schema cannot be built without an editor ctx, so the document is built on a
+// minimal schema that only has the shape the position math needs. The check reads nothing
+// but the node type name.
 const schema = new Schema({
   nodes: {
     doc: { content: "block+" },
@@ -14,7 +15,7 @@ const schema = new Schema({
   },
 });
 
-// 位置: paragraph "hello" = [0,7)、code_block "graph TD;" = [7,18)
+// Positions: paragraph "hello" = [0,7), code_block "graph TD;" = [7,18)
 const doc = schema.node("doc", null, [
   schema.node("paragraph", null, [schema.text("hello")]),
   schema.node("code_block", null, [schema.text("graph TD;")]),
@@ -39,19 +40,19 @@ describe("activeCodeBlockRanges", () => {
       schema.node("paragraph", null, [schema.text("x")]),
       schema.node("code_block", null, [schema.text("b")]),
     ]);
-    // code_block "a" = [0,3)、paragraph = [3,6)、code_block "b" = [6,9)
+    // code_block "a" = [0,3), paragraph = [3,6), code_block "b" = [6,9)
     expect(activeCodeBlockRanges(two, 0, two.content.size)).toStrictEqual([
       { from: 0, to: 3 },
       { from: 6, to: 9 },
     ]);
   });
 
-  // blockquote 内の code_block も編集対象。入れ子でも見つける
+  // A code_block inside a blockquote is edited too. Nested ones are found as well
   it("finds a block nested inside another node", () => {
     const nested = schema.node("doc", null, [
       schema.node("blockquote", null, [schema.node("code_block", null, [schema.text("a")])]),
     ]);
-    // blockquote = [0,5)、code_block "a" = [1,4)
+    // blockquote = [0,5), code_block "a" = [1,4)
     expect(activeCodeBlockRanges(nested, 2, 2)).toStrictEqual([{ from: 1, to: 4 }]);
   });
 });

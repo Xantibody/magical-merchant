@@ -12,7 +12,7 @@ import type { Transform } from "./zoom-transform";
 
 const VIEWPORT = { width: 1000, height: 800 };
 
-/** 画面上の点 → 図の座標。ズームの前後でこれが動かなければ、その点を軸に拡大している */
+/** A screen point mapped to diagram coordinates. Unchanged across a zoom means it is the anchor */
 function diagramPoint(transform: Transform, x: number, y: number): [number, number] {
   return [(x - transform.tx) / transform.scale, (y - transform.ty) / transform.scale];
 }
@@ -25,7 +25,7 @@ describe("zoomSize", () => {
     });
   });
 
-  // viewBox の無い SVG は原寸が書かれていない。縮めて描いている今の大きさで代用する
+  // An SVG with no viewBox does not state its natural size. The drawn size stands in
   it("falls back to the drawn size when there is no viewBox", () => {
     expect(zoomSize({ width: 0, height: 0 }, { width: 700, height: 262 })).toStrictEqual({
       width: 700,
@@ -34,8 +34,9 @@ describe("zoomSize", () => {
   });
 
   /**
-   * 隠れている面の SVG も、描き終える前の SVG も 0 で測れる。0 のまま開くと
-   * 何も映らない画面が出たうえ、倍率の計算が 0 除算で NaN になる
+   * An SVG on a hidden surface, and an SVG that has not finished drawing, both measure
+   * as 0. Opening with a 0 gives a screen showing nothing, and the scale math divides by
+   * zero and comes out NaN
    */
   it("has no answer when neither the viewBox nor the rect can be measured", () => {
     expect(zoomSize({ width: 0, height: 0 }, { width: 0, height: 0 })).toBeUndefined();
@@ -71,8 +72,9 @@ describe("fitToViewport", () => {
   });
 
   /**
-   * 0 で割ると倍率は NaN か Infinity になり、transform はまるごと無視されて
-   * 図が消え、右下の表示が「NaN%」になる。測れないときは原寸のまま置く
+   * Dividing by 0 makes the scale NaN or Infinity, the transform is then ignored whole,
+   * the diagram disappears, and the readout at the bottom right says "NaN%". When it
+   * cannot be measured, leave it at natural size
    */
   it("stays at natural size when the diagram has no size", () => {
     expect(fitToViewport(VIEWPORT, { width: 0, height: 0 })).toStrictEqual({

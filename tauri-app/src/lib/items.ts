@@ -18,7 +18,7 @@ export interface ScrawlItem {
 }
 
 export interface NoteItem {
-  /** `codex` も Note と同じ形の 1 件。面が違うだけで、行の作りは同じ。 */
+  /** A `codex` is one record of the same shape as a Note. Only the surface differs; the row is the same. */
   kind: NoteKind;
   id: string;
   filename: string;
@@ -28,15 +28,15 @@ export interface NoteItem {
   title: string;
   tags: string[];
   preview: string;
-  /** 昇格元エントリの日時。Scrawl のチップ表示が使う。 */
+  /** Datetime of the entry this note was promoted from. Scrawl uses it to show the chip. */
   origin?: string;
-  /** 読み取り専用にしたノート。一覧が鍵を出す。 */
+  /** A note made read-only. The list shows a lock for it. */
   readOnly: boolean;
-  /** 生まれ元のテンプレ名。開いたときに記入例を引くのに使う。 */
+  /** Name of the template it was born from. Used to look up the examples when it is opened. */
   template?: string;
-  /** 刻んだ版の数。Codex の行だけが持ち、角折りページの記号に出る。 */
+  /** Number of committed versions. Only a Codex row has it; it shows on the folded-corner page mark. */
   versionCount?: number;
-  /** 最新の版から下書きが動いたか。Codex の行だけ。 */
+  /** Whether the draft has moved on from the latest version. Codex rows only. */
   dirty?: boolean;
 }
 
@@ -47,19 +47,19 @@ export interface ItemGroup {
   items: Item[];
 }
 
-/** 題を持たない記録の呼び名。一覧の行が空欄になるのを避けるためだけのもの。 */
+/** What a record without a title is called. Exists only so a list row is not left blank. */
 const untitled = (): string => t().notes.untitled;
 
 function firstLine(text: string): string {
-  // Milkdown は空行を <br /> 行として保存する。タイトルはそれも読み飛ばす
+  // Milkdown saves an empty line as a <br /> line. The title skips those too
   const line = text.split("\n").find((l) => l.trim().length > 0 && !isPreservedEmptyLine(l));
   return line?.replace(/^#+\s*/u, "").trim() ?? "";
 }
 
 /**
- * 1 日ぶんの行を、新しい順（画面と同じ並び）の ScrawlItem にする。
- * ファイルは追記なので行は古い順に並ぶ。index には元の行位置を残す。
- * 更新・削除はこの index で行を指すので、並べ替えは index を振った後にやる。
+ * Turns one day's lines into ScrawlItems, newest first (the order the screen shows).
+ * The file is append-only, so its lines are oldest first. `index` keeps the original line position.
+ * Update and delete point at a line by this index, so the reversal happens after the indexes are set.
  */
 export function toScrawlItems(date: string, raws: string[]): ScrawlItem[] {
   return raws
@@ -98,16 +98,16 @@ export function toNoteItems(notes: Note[]): NoteItem[] {
   }));
 }
 
-/** エントリを origin の書式（`YYYY-MM-DDTHH:MM:SS`）で指す鍵。昇格時と同じ組み立て。 */
+/** Key that names an entry in the origin format (`YYYY-MM-DDTHH:MM:SS`). Built the same way as at promotion. */
 export function originKeyOf(item: ScrawlItem): string {
   return `${item.date}T${item.time}`;
 }
 
 /**
- * 昇格ノートを origin の日時そのもので引けるようにする。エントリ側の
- * `originKeyOf` と同じ文字列が鍵なので、チップを元のエントリの真下に
- * 出せる — エントリ側のファイルには何も書いていないので、並び替えや
- * 行の増減でズレる心配がない。
+ * Makes promoted notes retrievable by the origin datetime itself. The key is the
+ * same string as the entry side's `originKeyOf`, so the chip can sit right under
+ * the original entry. Nothing is written into the entry's file, so reordering or
+ * adding and removing lines cannot shift it.
  */
 export function notesByOrigin(items: NoteItem[]): Map<string, NoteItem[]> {
   const map = new Map<string, NoteItem[]>();
@@ -125,11 +125,11 @@ export function notesByOrigin(items: NoteItem[]): Map<string, NoteItem[]> {
 }
 
 /**
- * 昇格元のエントリがもう見つからないノートを、origin の暦日でまとめる。
- * エントリを消してもノートは残るので、その入り口が消えないよう日の見出し
- * 直下に避難させる。突き合わせるのは絞り込み前の全エントリ — タグで
- * 隠れているだけのエントリを「消えた」と読むと、絞り込むたびに無関係な
- * チップが見出しへ湧いてしまう。
+ * Groups the notes whose source entry can no longer be found, by the calendar day
+ * of the origin. Deleting an entry leaves the note, so it is moved right under the
+ * day heading to keep its entrance visible. The match runs against all entries
+ * before filtering: reading an entry that is merely hidden by a tag as "gone"
+ * would make unrelated chips pop up under the heading on every filter.
  */
 export function orphanNotesByDate(notes: NoteItem[], items: ScrawlItem[]): Map<string, NoteItem[]> {
   const known = new Set(items.map((item) => originKeyOf(item)));
@@ -148,7 +148,7 @@ export function orphanNotesByDate(notes: NoteItem[], items: ScrawlItem[]): Map<s
   return map;
 }
 
-/** 連続する同じラベルだけをまとめる。日付順は呼び出し側の並びを尊重する。 */
+/** Groups only consecutive items with the same label. The date order is whatever the caller passed. */
 function groupBy(items: Item[], labelOf: (item: Item) => string): ItemGroup[] {
   const groups: ItemGroup[] = [];
   for (const item of items) {
@@ -164,9 +164,9 @@ function groupBy(items: Item[], labelOf: (item: Item) => string): ItemGroup[] {
 }
 
 /**
- * 新しい順に並んだ Scrawl の、1 日ぶんだけを差し替える。
- * 記録のたびに全日を読み直すと保存 1 回に日数ぶんの IPC がかかるので、
- * 書いた日だけ読み直してここで継ぎ合わせる。
+ * Replaces one day's items in a Scrawl list sorted newest first.
+ * Re-reading every day on each record would cost one IPC per day for a single save,
+ * so only the day written is re-read and spliced in here.
  */
 export function replaceDayItems(
   items: ScrawlItem[],
@@ -182,15 +182,15 @@ export function replaceDayItems(
 export interface DeleteTarget {
   date: string;
   index: number;
-  /** 選んだ時点で読めていた行。core が「同じ記録か」を確かめるのに使う。 */
+  /** The line as it read when selected. core uses it to confirm it is the same record. */
   raw: string;
 }
 
 /**
- * まとめて消すときの実行順を決める。delete_scrawl_entry は date + index で
- * 行を指すので、同じ日の中で小さい index から消すと残りの行が繰り上がって
- * 後続の index が別の行を指してしまう。日ごとにまとめ、index の大きい順に
- * 並べることでズレを起こさない。日どうしの順は選択順を尊重する。
+ * Decides the execution order of a bulk delete. delete_scrawl_entry points at a
+ * line by date + index, so deleting from the smallest index within a day shifts
+ * the remaining lines up and later indexes point at other lines. Grouping by day
+ * and sorting by index descending avoids the shift. Days keep the selection order.
  */
 export function planBulkDelete(targets: DeleteTarget[]): DeleteTarget[] {
   const byDate = new Map<string, DeleteTarget[]>();
@@ -206,9 +206,10 @@ export function planBulkDelete(targets: DeleteTarget[]): DeleteTarget[] {
 }
 
 /**
- * 消したあとに選び直す隣の id。一覧で真上にあったものを優先し、先頭を
- * 消したときだけ真下へ落ちる。ノートは新しい順に並ぶので「上」は直近の
- * 記録 — 消した直後に目が向く先と同じ。残りがなければ null。
+ * The neighbouring id to select after a delete. Prefers the one directly above
+ * in the list and falls to the one below only when the first was deleted. Notes
+ * are newest first, so "above" is the more recent record, the same place the eye
+ * goes right after a delete. null when nothing is left.
  */
 export function neighborOf(items: readonly { id: string }[], id: string): string | null {
   const at = items.findIndex((item) => item.id === id);
@@ -219,14 +220,14 @@ export function neighborOf(items: readonly { id: string }[], id: string): string
 }
 
 export interface ScrawlDay {
-  /** `YYYY-MM-DD`。見出しの文字は表示側で作る。 */
+  /** `YYYY-MM-DD`. The heading text is built on the display side. */
   date: string;
   items: ScrawlItem[];
 }
 
 /**
- * 暦日でまとめる。見出しの文字ではなく日付そのもので束ねるのは、
- * 「7月29日」のように見出しが日付から作られる日が複数あるため。
+ * Groups by calendar day. It groups on the date itself rather than the heading
+ * text because several days get a heading built from the date, like `7月29日`.
  */
 export function groupScrawlByDay(items: ScrawlItem[]): ScrawlDay[] {
   const days: ScrawlDay[] = [];
@@ -246,9 +247,9 @@ export function groupNotes(items: NoteItem[], today: Date): ItemGroup[] {
 }
 
 /**
- * タイトル直下に出す作成日時。「2026年9月5日 21:14」
- * ファイル名は同期やウィジェットが指す不変の ID であって、人に見せる
- * ものではない。人が読むのはこちら。
+ * The creation datetime shown right under the title, like `2026年9月5日 21:14`.
+ * The filename is the immutable ID that sync and the widgets point at, not
+ * something to show a person. This is what a person reads.
  */
 export function noteCreatedLabel(item: NoteItem): string {
   const date = parseIsoDate(item.date);
@@ -260,8 +261,8 @@ export function noteCreatedLabel(item: NoteItem): string {
 }
 
 /**
- * 一覧の並びで 1 つ前(-1)/後ろ(+1)のノート。端では動かない —
- * キーで送っているうちに知らないノートへ回り込むほうが分かりにくい。
+ * The note one before (-1) or after (+1) in list order. Stops at the ends:
+ * wrapping around to an unknown note while stepping by key is more confusing.
  */
 export function stepNote(
   items: NoteItem[],
@@ -273,9 +274,9 @@ export function stepNote(
 }
 
 /**
- * 一覧の行の右端に置く 1 つの値。今日のノートは時刻、それ以前は日付。
- * 今日のノートに「08/04」と出しても、見出しが既に言っていること以上は
- * 分からない — 時刻なら、さっき書いたどれなのかが読める。
+ * The one value at the right edge of a list row: the time for today's notes,
+ * the date for older ones. Showing "08/04" on today's note says nothing the
+ * heading does not already say; the time tells which one was written just now.
  */
 export function noteRowStamp(item: NoteItem, today: Date): string {
   const date = parseIsoDate(item.date);

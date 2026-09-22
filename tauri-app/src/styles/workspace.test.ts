@@ -2,17 +2,18 @@ import { describe, it, expect, beforeAll, afterEach } from "vitest";
 import { page } from "vitest/browser";
 
 /**
- * プレビューを押すと、その場でエディタに入れ替わる。文字の位置や大きさが
- * 少しでも違うと本文が目に見えてズレ、「押した座標の文字にカーソルを置く」
- * 前提も崩れる。同じ本文を両方の DOM で組み、ブロックごとの幾何を突き合わせる。
+ * Clicking the preview swaps it for the editor in place. If the position or size of a
+ * character differs at all, the body visibly shifts and the premise "put the cursor on the
+ * character at the clicked point" breaks too. Build the same body in both DOMs and compare
+ * the geometry of every block.
  */
 
 /**
- * 同じ本文を、それぞれの面が実際に出す DOM で組む。
- * - コードブロック: プレビューは Shiki が `pre.shiki` として出す
- * - 表: markdown-it は見出し行を `thead` に出し、セルに文字を直に置く。
- *   Milkdown(prosemirror-tables)は `tbody` だけで、見出し行は
- *   `tr[data-is-header]`、セルの中身は段落
+ * Build the same body in the DOM each surface actually emits.
+ * - Code block: in the preview Shiki emits it as `pre.shiki`
+ * - Table: markdown-it puts the header row in `thead` and the text directly in the cell.
+ *   Milkdown (prosemirror-tables) has only `tbody`, the header row is
+ *   `tr[data-is-header]`, and a cell's contents are paragraphs
  */
 function bodyBlocks(surface: "preview" | "editor"): string {
   const preClass = surface === "preview" ? "shiki" : "";
@@ -83,7 +84,7 @@ function mountDetail(body: string, view: "editor" | "mindmap" | "preview" = "edi
   return element(".detail-body");
 }
 
-/** ブロックの入れ物。プレビューは .markdown-preview、エディタは .ProseMirror */
+/** The block container: .markdown-preview for the preview, .ProseMirror for the editor */
 function blockRoot(body: HTMLElement): HTMLElement {
   return body.querySelector<HTMLElement>(".ProseMirror") ?? element(".markdown-preview", body);
 }
@@ -98,12 +99,12 @@ interface Geometry {
   backgroundColor: string;
 }
 
-/** サブピクセルの揺れは丸めて捨てる */
+/** Round away the sub-pixel jitter */
 function round(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
-/** 位置は本文欄の左上からの相対 */
+/** Positions are relative to the top left of the body area */
 function geometry(target: HTMLElement, body: HTMLElement): Geometry {
   const rect = target.getBoundingClientRect();
   const origin = body.getBoundingClientRect();
@@ -119,7 +120,7 @@ function geometry(target: HTMLElement, body: HTMLElement): Geometry {
   };
 }
 
-/** getComputedStyle は生きた参照なので、次の DOM を組む前に値を写し取る */
+/** getComputedStyle is a live reference, so copy the values out before the next DOM is built */
 function captionType(target: HTMLElement): Record<string, string> {
   const style = getComputedStyle(target);
   return { fontSize: style.fontSize, color: style.color, marginTop: style.marginTop };
@@ -139,7 +140,7 @@ function measureBlocks(
 describe("note body: preview and editor draw the same page", () => {
   beforeAll(async () => {
     await import("../index.css");
-    // これらは index.css に無い(遅延ビューと一緒に読まれる)ので明示する
+    // These are not in index.css (they load with the lazy view), so import them explicitly
     await import("./workspace.css");
     await import("./editor.css");
     await import("./markdown-preview.css");
@@ -149,7 +150,7 @@ describe("note body: preview and editor draw the same page", () => {
     document.body.innerHTML = "";
   });
 
-  // 本文欄の余白はモバイル(767px 以下)で変わる。両方の幅で見る
+  // The body area's padding changes on mobile (767px and below). Check both widths
   it.each([
     ["mobile", 414, 896],
     ["desktop", 1280, 800],
@@ -161,8 +162,8 @@ describe("note body: preview and editor draw the same page", () => {
     expect(edited).toStrictEqual(previewed);
   });
 
-  // `view: preview` のノートは MarkdownPreview を読むだけの姿で出す。
-  // 押しても書き始まらないので、書けるという合図の I ビームは出さない
+  // A `view: preview` note is drawn through MarkdownPreview as read-only.
+  // Clicking does not start writing, so it shows no I-beam, the signal that it is editable
   it("gives a read-only note no I-beam", async () => {
     await page.viewport(1280, 800);
     mountDetail(preview(bodyBlocks("preview")), "preview");
@@ -170,10 +171,10 @@ describe("note body: preview and editor draw the same page", () => {
     expect(getComputedStyle(element(".markdown-preview")).cursor).toBe("default");
   });
 
-  // mermaid はカーソルが離れている間、エディタでもソースを隠して図だけを見せる。
-  // その状態の図と、その次のブロックがプレビューと同じ高さに来ること。
-  // `%% caption:` を書いた図はキャプションのぶんだけ背が伸びるので、
-  // 片側にしか出さないと図の下の本文がずれる (#168 と同じ壊れ方)
+  // While the cursor is away, mermaid hides the source in the editor too and shows only the
+  // figure. In that state the figure and the block after it must sit at the same height as
+  // in the preview. A figure written with `%% caption:` grows taller by the caption, so
+  // drawing it on only one side shifts the body under the figure (the same break as #168)
   it.each([
     ["without a caption", ""],
     ["with a caption", '<figcaption class="mermaid-caption">図1 — 同期の流れ</figcaption>'],
@@ -208,9 +209,9 @@ describe("note body: preview and editor draw the same page", () => {
     expect(editorAfter).toStrictEqual(previewAfter);
   });
 
-  // 幾何が一致していても、両側とも素の figcaption のままなら通ってしまう。
-  // キャプションの体裁は 2 つの面が共有する 1 枚 (diagram-caption.css) から
-  // 来ていること — 片方だけが読み込みに失敗していれば、ここで落ちる
+  // Matching geometry still passes if both sides are left as a bare figcaption.
+  // The caption's type must come from the one sheet the two surfaces share
+  // (diagram-caption.css): if only one side failed to load it, this fails
   it("takes the caption's type from the sheet both surfaces share", () => {
     const caption = '<figcaption class="mermaid-caption">図1</figcaption>';
     const previewBody = mountDetail(
@@ -233,8 +234,8 @@ describe("note body: preview and editor draw the same page", () => {
     expect(captionType(element("figcaption", editorBody))).toStrictEqual(previewType);
   });
 
-  // キャプションを出したぶんだけ、次のブロックは下がっていること。
-  // 両側が同じ高さでも 0px なら「両方とも出ていない」で通ってしまう
+  // The next block must move down by exactly the height the caption adds.
+  // Equal heights on both sides still pass at 0px, which means "neither one is drawn"
   it("pushes the block after the diagram down by the caption", () => {
     const figure = (caption: string): string =>
       preview(
@@ -250,9 +251,10 @@ describe("note body: preview and editor draw the same page", () => {
     expect(captionedAfter).toBeGreaterThan(plainAfter);
   });
 
-  // Open Props の normalize は p/li/blockquote/見出しに 20〜60ch の読みやすさ上限を
-  // 掛ける。ch は「0」の幅なので日本語では半分ほどの文字数で折り返され、段の
-  // 右半分が空く。段幅は .detail-body が決めるので、どのブロックも段いっぱいに伸びること
+  // Open Props' normalize caps p/li/blockquote/headings at a 20-60ch readability measure.
+  // A ch is the width of "0", so Japanese wraps at about half that many characters and the
+  // right half of the column goes empty. .detail-body sets the column width, so every block
+  // must stretch to fill the column
   it.each([
     ["preview", preview],
     ["editor", editor],
@@ -287,9 +289,9 @@ describe("note body: preview and editor draw the same page", () => {
     expect(element("li", root).getBoundingClientRect().width).toBeCloseTo(listInner, 0);
   });
 
-  // スクロールするのは両モードとも .detail-body。エディタが自分で
-  // スクロールすると .detail-body の余白が固定の額縁になり、押した瞬間の
-  // scrollTop を別の要素に写し替える必要が生まれる
+  // In both modes it is .detail-body that scrolls. If the editor scrolled itself,
+  // .detail-body's padding would become a fixed frame, and the scrollTop at the moment of
+  // the click would have to be copied over to another element
   it("scrolls the body itself while editing, not the editor", () => {
     const paragraphs = Array.from({ length: 80 }, (_, i) => `<p>段落 ${i}</p>`).join("");
     const body = mountDetail(editor(paragraphs));
@@ -299,7 +301,7 @@ describe("note body: preview and editor draw the same page", () => {
     expect(milkdown.scrollHeight).toBeLessThanOrEqual(milkdown.clientHeight + 0.5);
   });
 
-  // 短い本文でも、余白を押せば書き始められるようエディタは欄いっぱいに伸びる
+  // Even with a short body the editor fills the area, so clicking the padding starts writing
   it("stretches a short editor to the bottom of the body", () => {
     const body = mountDetail(editor("<p>一行だけ</p>"));
     const style = getComputedStyle(body);
@@ -350,8 +352,8 @@ describe("note head: the title column follows the body", () => {
     return round(rect.left + rect.width / 2);
   };
 
-  // マップを右に並べると本文の列は左へ寄る。題だけペイン全幅の中央に残ると、
-  // 題と本文の左端が揃わない
+  // Laying the map alongside on the right shifts the body column left. If only the title
+  // stayed centred on the full pane, the title and the body would not share a left edge
   it.each([
     ["without the map", false],
     ["with the map alongside", true],
@@ -362,7 +364,8 @@ describe("note head: the title column follows the body", () => {
     expect(centerOf(head)).toBe(centerOf(body));
   });
 
-  // 並べる幅が無いところではマップが本文と入れ替わる。題は再びペイン全幅の中央
+  // Where there is no width to stand them side by side, the map replaces the body. The
+  // title is centred on the full pane again
   it("centers the head over the whole pane once the map replaces the body", async () => {
     await page.viewport(1000, 800);
     const { head } = mountHead(true);
@@ -371,7 +374,7 @@ describe("note head: the title column follows the body", () => {
   });
 });
 
-/** この `@media` の中で `.list-pane` が本文の上に浮いているか。 */
+/** Whether `.list-pane` floats over the body inside this `@media`. */
 function floatsTheList(rule: CSSMediaRule): boolean {
   return [...rule.cssRules].some(
     (inner) =>
@@ -381,7 +384,7 @@ function floatsTheList(rule: CSSMediaRule): boolean {
   );
 }
 
-/** `.list-pane` を浮かせている `@media` の条件。無ければ空。 */
+/** The conditions of the `@media` rules that float `.list-pane`. Empty if there are none. */
 function flyoutConditions(): string[] {
   const media = [...document.styleSheets].flatMap((sheet) =>
     [...sheet.cssRules].filter((rule): rule is CSSMediaRule => rule instanceof CSSMediaRule),
@@ -390,9 +393,9 @@ function flyoutConditions(): string[] {
 }
 
 /**
- * 一覧は常設のペインをやめ、本文の上に浮くフライアウトになった。閉じている
- * あいだは場所を取らず、押されもしない — 本文は 48px のレールの右から
- * まるごと始まる。
+ * The list is no longer a permanent pane. It is a flyout that floats over the body. While
+ * it is closed it takes no space and cannot be clicked, and the body starts in full to the
+ * right of the 48px rail.
  */
 function mountFlyout(open: boolean, detail = false): HTMLElement {
   document.body.innerHTML = `
@@ -435,7 +438,7 @@ describe("the list flyout", () => {
 
     expect(rect.width).toBeCloseTo(280, 0);
     expect(rect.left).toBeCloseTo(48, 0);
-    // 本文はフライアウトに押しのけられない。開いても下に続いている
+    // The flyout does not push the body aside. It carries on underneath while it is open
     expect(detail.left).toBeCloseTo(48, 0);
   });
 
@@ -448,7 +451,7 @@ describe("the list flyout", () => {
     expect(pane.getBoundingClientRect().bottom).toBeCloseTo(bar.top, 0);
   });
 
-  // 閉じているあいだに当たり判定が残ると、本文の左 280px が押せなくなる
+  // If the hit area stayed while it is closed, the left 280px of the body could not be clicked
   it("is out of the way and out of reach while it is closed", async () => {
     await page.viewport(1280, 800);
     const pane = mountFlyout(false);
@@ -472,11 +475,12 @@ describe("the list flyout", () => {
   });
 
   /**
-   * 狭い画面では一覧は 1 枚の頁。浮かせる相手(本文)が横に無い。
+   * On a narrow screen the list is a page of its own. There is nothing beside it (the body)
+   * to float over.
    *
-   * 見るのは「流れの中に居ること」で、`static` ではない — 一覧はテンプレの
-   * シートを内側に置くので、基底の規則がもとから `relative` を持っている。
-   * 浮いているかどうかを言うのは `absolute` かどうか。
+   * What is checked is that it is in the flow, not that it is `static`: the list holds the
+   * template's sheet inside it, so the base rule already carries `relative`. What says
+   * whether it floats is `absolute`.
    */
   it("goes back to being a full page on a phone", async () => {
     await page.viewport(390, 800);
@@ -491,12 +495,12 @@ describe("the list flyout", () => {
   });
 
   /**
-   * 広くてもホバーの無い端末 — タブレット — では、タップで開いた一覧は指が
-   * 離れた時点で畳まれる。開ける手はホバーとピンしか無く、そのピンは一覧の
-   * 中にあるので、ノートを開いている人は別のノートへ行けなくなる。
+   * On a wide device with no hover, a tablet, a list opened by a tap folds away the moment
+   * the finger leaves. The only ways to open it are hover and the pin, and the pin is inside
+   * the list, so someone with a note open can no longer reach another note.
    *
-   * headless Chromium は必ず `hover: hover` を名乗るので、その画面を作って
-   * 測ることはできない。浮かせる規則が条件の内側に居ることだけを見る
+   * headless Chromium always reports `hover: hover`, so that screen cannot be built and
+   * measured. Only check that the floating rule sits inside the condition
    */
   it("floats the list only where a pointer can hover", () => {
     const conditions = flyoutConditions();
@@ -506,9 +510,10 @@ describe("the list flyout", () => {
   });
 
   /**
-   * 携帯では一覧と本文が 1 枚ずつの頁で、同じ場所に入れ替わる。入れ替わりに
-   * 動きが無いと、押した行が開いたのか別の画面へ飛んだのかが読めない。履歴の
-   * 頁(`history.css`)と同じ 180ms で上がってくる。
+   * On a phone the list and the body are one page each and swap in the same place. Without
+   * motion in the swap it cannot be read whether the row that was tapped opened or the
+   * screen jumped somewhere else. It rises over 180ms, the same as the history page
+   * (`history.css`).
    */
   it("rises when the note takes the page on a phone", async () => {
     await page.viewport(390, 800);
@@ -520,7 +525,7 @@ describe("the list flyout", () => {
     expect(style.animationDuration).toBe("0.18s");
   });
 
-  // 広い窓では一覧と本文が並んでいて、頁は入れ替わらない
+  // In a wide window the list and the body stand side by side and the pages do not swap
   it("does not rise where the list and the body stand side by side", async () => {
     await page.viewport(1280, 800);
     mountFlyout(false, true);

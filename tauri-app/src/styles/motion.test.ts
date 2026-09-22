@@ -1,16 +1,16 @@
 import { describe, it, expect } from "vitest";
 
 /**
- * 動きの規則は 1 つしかない。
+ * There is only one motion rule.
  *
- * transform と opacity だけを 120〜350ms 動かし、イージングは `--app-ease` の
- * 1 本、keyframes は `mm-rise` と `mm-pop` の 2 つだけ。面ごとに CSS を分けて
- * あるので、規則から外れた値は「その面だけ癖が違う」という形で入り込み、
- * 並べて見ないと気づけない。ここで全部の面の CSS を文字として読み、外れて
- * いるものを名指しで落とす。
+ * Only transform and opacity move, over 120 to 350ms, the easing is the single
+ * `--app-ease`, and the keyframes are only the two `mm-rise` and `mm-pop`. The CSS is
+ * split per surface, so a value outside the rule creeps in as "only this surface feels
+ * different" and cannot be noticed without putting them side by side. This reads the CSS
+ * of every surface as text and fails whatever is outside the rule, by name.
  *
- * 例外は `EXCEPTIONS` に理由ごと書く。数を増やすかどうかを毎回考えるための
- * 場所で、増えないことを期待している。
+ * An exception is written in `EXCEPTIONS` together with its reason. It is the place to
+ * think each time about whether to add one, and the hope is that it does not grow.
  */
 
 const sources = import.meta.glob("./*.css", {
@@ -19,28 +19,29 @@ const sources = import.meta.glob("./*.css", {
   eager: true,
 }) as Record<string, string>;
 
-/** この規則で動かしていいもの。どれもハンドオフの transition の内訳にある。 */
+/** What this rule may move. Each one is in the transition breakdown of the handoff. */
 const ANIMATABLE = new Set([
-  // 本命。これだけは面を問わず動かせる
+  // The main pair. Only these can move on any surface
   "transform",
   "opacity",
-  // ホバー色・保存できた印・比較の地色
+  // Hover color, the mark that a save landed, the background color of a comparison
   "background",
   "background-color",
   "border-color",
   "color",
-  // レールの現在地の線。レールの中で絶対配置なので、動いても隣は流れない
+  // The rail's current-location line. It is absolutely positioned inside the rail, so
+  // moving it does not push its neighbours around
   "top",
-  // 本文の列。パネルが空けるぶんを詰めるのは幅で — transform では折り返せない
+  // The body column. The room a panel frees is taken up by width: transform cannot re-wrap
   "width",
   "padding",
-  // 当たり判定の門。0s で切り替えるだけで、動きではない
+  // The gate for hit testing. It only switches at 0s, so it is not motion
   "visibility",
-  // 打ち消し
+  // Cancellation
   "none",
 ]);
 
-/** 規則の外に置くと決めたもの。残す理由は CSS 側のコメントにも書いてある。 */
+/** What was decided to lie outside the rule. The reason to keep it is in the CSS comment too. */
 const EXCEPTIONS = [
   {
     file: "./workspace.css",
@@ -54,7 +55,7 @@ const EXCEPTIONS = [
   },
 ];
 
-/** 曲線を名乗らない書き方(`transition-property` など)。 */
+/** Forms that name no curve (`transition-property` and the like). */
 const NO_CURVE = new Set(["transition-property", "animation-name"]);
 
 interface Declaration {
@@ -63,7 +64,7 @@ interface Declaration {
   value: string;
 }
 
-/** コメントの中の例示を数えない。 */
+/** Do not count the examples written inside comments. */
 function code(css: string): string {
   return css.replaceAll(/\/\*.*?\*\//gsu, "");
 }
@@ -93,8 +94,9 @@ function isException(declaration: Declaration): boolean {
 }
 
 /**
- * `transition: a 150ms, b 220ms` の 1 つぶん。`animation` は 1 つしか書かない。
- * `cubic-bezier(.2,.8,.2,1)` の中のカンマでは切らないので、括弧の中を先に畳む。
+ * One entry of `transition: a 150ms, b 220ms`. Only one `animation` is ever written.
+ * The commas inside `cubic-bezier(.2,.8,.2,1)` must not split it, so what is in the
+ * parentheses is folded away first.
  */
 function parts(declaration: Declaration): string[] {
   const folded = declaration.value.replaceAll(/\([^()]*\)/gu, (group) =>
@@ -106,7 +108,7 @@ function parts(declaration: Declaration): string[] {
     .filter((part) => part.length > 0);
 }
 
-/** `220ms` / `0.22s` / `0s` を、書かれたまま順に返す。1 つめが長さ、2 つめが待ち。 */
+/** Return `220ms` / `0.22s` / `0s` as written, in order. The first is the duration, the second the delay. */
 function times(part: string): string[] {
   return [...part.matchAll(/(?<![\w.])\d*\.?\d+m?s\b/gu)].map((match) => match[0]);
 }
@@ -115,7 +117,7 @@ function milliseconds(time: string): number {
   return time.endsWith("ms") ? Number.parseFloat(time) : Number.parseFloat(time) * 1000;
 }
 
-/** 動いている長さ。書いていなければ、そして 0s なら 0。 */
+/** How long it moves. 0 when nothing is written, and when it is 0s. */
 function duration(part: string): number {
   const written = times(part).at(0);
   return written === undefined ? 0 : milliseconds(written);
@@ -126,8 +128,8 @@ function subject(declaration: Declaration, part: string): string {
 }
 
 /**
- * 規則から外れている書き方を、CSS の中の場所ごと名指しで返す。
- * `properties` を渡すと、その書き方(`transition` など)だけを見る。
+ * Return every declaration outside the rule, named with its place in the CSS.
+ * Pass `properties` to look at only that form (`transition` and the like).
  */
 function offenders(
   wrong: (part: string) => boolean,
@@ -182,23 +184,23 @@ describe("the motion rules", () => {
     expect(declarations().length).toBeGreaterThan(10);
   });
 
-  // 0.22s と 220ms が混ざると、規則の「220ms」と同じ値なのかを毎回換算して
-  // 確かめることになる。規則が ms で書かれているので CSS も ms で書く
+  // Mixing 0.22s and 220ms means converting every time to check whether it is the same
+  // value as the rule's "220ms". The rule is written in ms, so the CSS is written in ms
   it("spells every duration in milliseconds", () => {
     expect(offenders(writtenInSeconds)).toStrictEqual([]);
   });
 
-  // 癖が揃っていないと、同じ画面の中で「別のアプリが動いている」ように見える
+  // Without one shared feel, one screen looks as if "a different app is moving inside it"
   it("routes every curve through --app-ease", () => {
     expect(offenders(offTheOneEase, (property) => !NO_CURVE.has(property))).toStrictEqual([]);
   });
 
-  // 速いほうは気づかれず、遅いほうは待たされる
+  // Faster than that goes unnoticed; slower than that keeps people waiting
   it("keeps every duration between 120ms and 350ms", () => {
     expect(offenders(outOfRange)).toStrictEqual([]);
   });
 
-  // 動かすものを増やすほど、その動きが何を意味するのかが薄まる
+  // The more things move, the thinner the meaning of each movement gets
   it("moves only what the handoff lists", () => {
     expect(offenders(movesSomethingElse, (property) => property === "transition")).toStrictEqual(
       [],
@@ -214,8 +216,8 @@ describe("the motion rules", () => {
     ]);
   });
 
-  // 面ごとに書いていると、新しい面が足された日に 1 つだけ忘れられる。忘れても
-  // 動きは止まらないので、気づくのは動きを嫌う人の手元だけ
+  // Written per surface, one gets forgotten on the day a new surface is added. Forgetting
+  // it does not stop the motion, so only someone who dislikes motion ever notices
   it("switches motion off from one place", () => {
     expect(filesSwitchingMotionOff()).toStrictEqual(["./base.css"]);
   });

@@ -8,16 +8,16 @@ import { isImeComposing } from "../lib/ime";
 const DISMISSED_KEY = "first-run-dismissed";
 
 interface FirstRunCardProps {
-  /** 同期が未設定のときだけ出す。設定済みなら初回でも出す意味がない。 */
+  /** Shown only when sync is unconfigured. Once set up there is no point, even on first run. */
   when: boolean;
   onConnected: () => void;
 }
 
 /**
- * 初回起動で 1 度だけ出す同期の案内。
+ * The sync guide, shown once on the first launch.
  *
- * 同期は必須ではない。設定しないまま使い続けられることを先に伝えないと、
- * 「設定しないと使えない」と読めてしまう。
+ * Sync is not required. Unless it says first that the app keeps working without being
+ * set up, it reads as "it cannot be used unless it is set up".
  */
 export default function FirstRunCard(props: FirstRunCardProps): JSX.Element {
   const [dismissed, setDismissed] = createSignal(localStorage.getItem(DISMISSED_KEY) === "1");
@@ -72,7 +72,7 @@ export default function FirstRunCard(props: FirstRunCardProps): JSX.Element {
             placeholder="https://....workers.dev"
             onInput={(e) => setUrl(e.currentTarget.value)}
             onKeyDown={(e) => {
-              // 変換確定の Enter は IME のもの。接続には使わない (#102)
+              // The Enter that confirms a conversion belongs to the IME. It does not connect (#102)
               if (e.key === "Enter" && !isImeComposing(e)) {
                 e.preventDefault();
                 connect();

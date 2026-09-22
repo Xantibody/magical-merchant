@@ -25,7 +25,7 @@ describe("parseTags", () => {
     expect(parseTags("#local-first #note_taking")).toStrictEqual(["local-first", "note_taking"]);
   });
 
-  // `# ` で始まる行は見出し。タグとして数えるとほぼ全ノートに付いてしまう。
+  // A line starting with `# ` is a heading. Counted as a tag, one would land on almost every note.
   it("ignores a markdown heading", () => {
     expect(parseTags("# 見出し\n本文")).toStrictEqual([]);
   });
@@ -35,12 +35,12 @@ describe("parseTags", () => {
     expect(parseTags("C#")).toStrictEqual([]);
   });
 
-  // core の tags.rs と同じ約束。打った綴りをそのまま返す
+  // The same promise as core's tags.rs. The spelling as typed is returned
   it("keeps the spelling a tag was written with", () => {
     expect(parseTags("#CognitiveBias を疑う")).toStrictEqual(["CognitiveBias"]);
   });
 
-  // 別々に数えると同じ分類が二重に並ぶ。残すのは最初に見た綴り
+  // Counted separately, the same category lines up twice. The spelling seen first is kept
   it("folds case when deduping and keeps the first spelling", () => {
     expect(parseTags("#Rust と #rust と #RUST")).toStrictEqual(["Rust"]);
   });
@@ -53,7 +53,7 @@ describe("parseTags", () => {
     expect(parseTags("一行目\n#二行目")).toStrictEqual(["二行目"]);
   });
 
-  // 日本語は語の間に空白を置かない。句点の直後を拾えないとほとんど落ちる。
+  // Japanese puts no space between words. Without picking up what follows a full stop, almost everything is lost.
   it("finds a tag right after japanese punctuation", () => {
     expect(parseTags("走った。#run")).toStrictEqual(["run"]);
     expect(parseTags("バグ、#bug を直す")).toStrictEqual(["bug"]);
@@ -76,7 +76,7 @@ describe("countTags", () => {
     ]);
   });
 
-  // 同じ本文に 2 回書いても、その本文が 1 件であることは変わらない。
+  // Written twice in the same text, that text is still one record.
   it("counts a tag once per text", () => {
     expect(countTags(["#a と #a"])).toStrictEqual([{ tag: "a", count: 1 }]);
   });
@@ -85,7 +85,7 @@ describe("countTags", () => {
     expect(countTags(["#b #a"]).map((t) => t.tag)).toStrictEqual(["a", "b"]);
   });
 
-  // チップが 2 つに割れると、同じ分類を 2 回押し分けることになる
+  // Split into two chips, the same category has to be pressed twice
   it("counts tags that differ only in case as one chip", () => {
     expect(countTags(["#CognitiveBias", "#cognitivebias"])).toStrictEqual([
       { tag: "CognitiveBias", count: 2 },
@@ -107,7 +107,7 @@ describe("countTagLists", () => {
     ]);
   });
 
-  // frontmatter は書かれたまま残るので、1 件が両方の綴りを名乗ることがある
+  // frontmatter stays as written, so one record can claim both spellings
   it("counts a list once even when it carries both spellings", () => {
     expect(countTagLists([["Memo", "memo"]])).toStrictEqual([{ tag: "Memo", count: 1 }]);
   });
@@ -149,7 +149,7 @@ describe("tagDraftAt", () => {
     expect(tagDraftAt("ただの本文", 5)).toBeNull();
   });
 
-  // URL の途中で補完が開くと、打っている最中に邪魔になる。
+  // Completion opening in the middle of a URL gets in the way while typing.
   it("is null when the hash is not at a word boundary", () => {
     expect(tagDraftAt("https://x.com/a#fr", 18)).toBeNull();
   });
@@ -178,7 +178,7 @@ describe("matchTagPrefix", () => {
     expect(matchTagPrefix(known, "SYN").map((t) => t.tag)).toStrictEqual(["sync", "syntax"]);
   });
 
-  // 候補の綴りは打った形のまま残るので、両側を畳まないと補完が出ない
+  // A candidate keeps the spelling as typed, so without folding both sides no completion appears
   it("ignores case on the known tag too", () => {
     expect(
       matchTagPrefix([{ tag: "CognitiveBias", count: 1 }], "cog").map((t) => t.tag),

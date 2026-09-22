@@ -1,23 +1,23 @@
 /**
- * 画面の下に貼り付くものを、ソフトキーボードの上に逃がすための道具。
+ * Tools for moving whatever sticks to the bottom of the screen above the soft keyboard.
  *
- * 下端に置いた道具立て(記法のツールバー・変数の挿入列)は、キーボードが
- * 出た瞬間にその裏へ隠れる。隠れたら押せないので、開いているあいだだけ
- * 上端に合わせて持ち上げる。
+ * The tools placed at the bottom edge (the syntax toolbar, the variable insert row)
+ * hide behind the keyboard the moment it appears. Hidden, they cannot be pressed,
+ * so while the keyboard is open they are lifted to sit on its top edge.
  */
 
 import { createSignal, onCleanup, onMount } from "solid-js";
 import type { Accessor } from "solid-js";
 
-/** これ以下の縮みはスクロールバーや URL バーの誤差で、キーボードとは見なさない。 */
+/** A shrink up to this much is scrollbar or URL bar noise, not a keyboard. */
 const KEYBOARD_MIN_HEIGHT = 100;
 
 /**
- * キーボードの上端。閉じているあいだは `undefined` を返し、CSS の
- * `bottom: var(--safe-bottom)` に任せる。
+ * The keyboard's top edge. Returns `undefined` while closed and leaves it to the
+ * CSS `bottom: var(--safe-bottom)`.
  *
- * Android では閉じていても `visualViewport.height` がナビゲーションバーを含んだ
- * 全高になるため、その値で `top` を固定すると道具立てがバーの裏に潜り込む。
+ * On Android `visualViewport.height` is the full height including the navigation
+ * bar even when closed, so pinning `top` to that value pushes the tools under the bar.
  */
 export function keyboardTop(
   viewport: { offsetTop: number; height: number },
@@ -29,7 +29,7 @@ export function keyboardTop(
   return viewport.offsetTop + viewport.height;
 }
 
-/** 開いているあいだだけキーボードの上端を返す。閉じていれば `undefined`。 */
+/** Returns the keyboard's top edge only while it is open. `undefined` when closed. */
 export function createKeyboardTop(): Accessor<number | undefined> {
   const [top, setTop] = createSignal<number | undefined>();
 
@@ -54,8 +54,8 @@ export function createKeyboardTop(): Accessor<number | undefined> {
 }
 
 /**
- * キーボードの上に貼り付けるための style。閉じているあいだは何も返さず、
- * 貼り付く場所を CSS の `bottom` に預ける。
+ * The style for sticking above the keyboard. Returns nothing while closed and
+ * leaves the anchoring to the CSS `bottom`.
  */
 export function keyboardTopStyle(
   top?: number,

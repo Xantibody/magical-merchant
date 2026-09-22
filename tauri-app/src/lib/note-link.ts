@@ -1,20 +1,20 @@
 /**
- * ノート間リンクの保存形は `[[YYYYMMDD_HHMMSS]]`。ファイル名(不変の ID)を
- * 指すのでタイトルを変えてもリンクは切れない。表示側が毎回タイトルに
- * 解決する — 解決結果はどこにも書かない。
+ * The stored form of a note-to-note link is `[[YYYYMMDD_HHMMSS]]`. It points at the filename (the
+ * immutable ID), so changing the title never breaks the link. The display side resolves it to a
+ * title every time; the resolved result is never written anywhere.
  *
- * `[[ID|表示文字]]` と書くと、その文字で見せる。タイトルをそのまま出すと
- * 文が繋がらない場所(「詳しくは〜を見る」)のための逃げ道で、リンクの
- * 指し先は変わらない。
+ * Writing `[[ID|alias]]` shows that text instead. It is an escape hatch for places where the title
+ * as it stands does not join into the sentence ("see X for details"), and it does not change what
+ * the link points at.
  */
 
 const LINK = /\[\[(?<id>\d{8}_\d{6})(?:\|(?<alias>[^\n[\]]*))?\]\]/gu;
 
 export interface NoteLinkSegment {
   text: string;
-  /** リンクなら指し先の ID(拡張子なしのファイル名)。地の文なら null。 */
+  /** For a link, the target ID (the filename without its extension). null for plain text. */
   id: string | null;
-  /** `|` の後ろに書かれた表示文字。無い(または空)なら null。 */
+  /** The display text written after `|`. null when it is absent or empty. */
   alias: string | null;
 }
 

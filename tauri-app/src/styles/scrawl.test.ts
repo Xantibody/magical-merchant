@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeAll, afterEach } from "vitest";
 
 /**
- * 入力バーは Scrawl の上に浮いている。スクロール領域の下 padding が
- * バーより薄いと、一番下のエントリが最後までスクロールしても隠れたままになる。
- * 目で見て気づくのはたいてい書いた直後の一件が読めないときで、遅い。
+ * The capture bar floats over Scrawl. If the scroll area's bottom padding is thinner than
+ * the bar, the bottom entry stays hidden even when scrolled all the way down. By eye this
+ * is usually noticed only when the entry just written cannot be read, which is too late.
  */
 function mountScrawl(entries: number): void {
   const rows = Array.from(
@@ -78,7 +78,7 @@ describe("scrawl under the floating capture bar", () => {
     expect(dock.top).toBeGreaterThanOrEqual(scrawl.top);
   });
 
-  // 本文が短くても長くても、時刻とレールと本文の 3 列がずれない
+  // Short body or long, the three columns of time, rail and body stay aligned
   it("lines the entries up on one rail", () => {
     mountScrawl(3);
     const rails = [...document.querySelectorAll<HTMLElement>(".entry-rail-dot")].map(
@@ -89,7 +89,7 @@ describe("scrawl under the floating capture bar", () => {
   });
 });
 
-/** タグ行・ダイジェスト・日見出し・昇格リンクを、区切りが見える形で並べる。 */
+/** Lay out the tag row, digest, day heading and promotion link so the separations show. */
 function mountChrome(): void {
   document.body.innerHTML = `
     <div class="scrawl">
@@ -128,7 +128,7 @@ function mountChrome(): void {
     </div>`;
 }
 
-/** 一行に収まる高さの上限。12.5px の字が 2 行になれば必ず超える。 */
+/** The height limit for one line. Text at 12.5px on two lines always exceeds it. */
 const ONE_LINE = 24;
 
 const TRANSPARENT = "rgba(0, 0, 0, 0)";
@@ -142,7 +142,7 @@ describe("scrawl chrome", () => {
     document.body.innerHTML = "";
   });
 
-  // 週の要約に枠と下地を与えると、読み物の上に箱が 1 つ増える
+  // Giving the weekly summary a border and a ground adds one more box on top of the reading
   it("prints the weekly digest as a line, not a card", () => {
     mountChrome();
     const digest = element(".digest-line");
@@ -154,7 +154,7 @@ describe("scrawl chrome", () => {
     expect(digest.getBoundingClientRect().height).toBeLessThanOrEqual(ONE_LINE);
   });
 
-  // 見出しの大小と余白で足りるところに罫線を引くと、区切りの合図が二重になる
+  // A rule where heading size and spacing already suffice doubles the signal for a break
   it("separates one day from the next with space alone", () => {
     mountChrome();
     const second = element(".day-group + .day-group .day-heading");
@@ -162,14 +162,14 @@ describe("scrawl chrome", () => {
     expect(getComputedStyle(second).borderTopWidth).toBe("0px");
   });
 
-  // ここでは絞らないので、塗られたチップは無い。どれも枠だけで立つ
+  // Nothing is filtered here, so no chip is filled. Each stands on its border alone
   it("leaves the tag chips as outlines", () => {
     mountChrome();
 
     expect(getComputedStyle(element(".tag-chip")).backgroundColor).toBe(TRANSPARENT);
   });
 
-  // 昇格ノートは本文の続きの 1 行。丸い枠を付けると押し物の島になる
+  // A promoted note is one more line of the body. A rounded border makes it an island of controls
   it("hangs the promoted note under the entry as a plain line", () => {
     mountChrome();
     const chip = element(".origin-chip");

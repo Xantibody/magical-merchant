@@ -13,7 +13,7 @@ const emptyResult = {
 };
 
 describe("describeSyncResult", () => {
-  // 既定は test-setup の ja。英語を見たいところだけ切り替える
+  // The default is `ja`, set in test-setup. Only the cases that want English switch it
   afterEach(() => setLocale("ja"));
 
   it("reports up to date when nothing changed", () => {
@@ -42,8 +42,8 @@ describe("describeSyncResult", () => {
     expect(ui.message).toContain(t().sync.result.conflictsSaved(2));
   });
 
-  // core は英文ではなく kind とキーを返す。文にするのはここなので、
-  // 選ばれている言語で出る
+  // core returns a kind and a key, not an English sentence. The sentence is built here, so
+  // it comes out in the language that is chosen
   it("reports failures in japanese", () => {
     const ui = describeSyncResult({
       ...emptyResult,
@@ -68,7 +68,8 @@ describe("describeSyncResult", () => {
     expect(ui.message).toContain("notes/a.md");
   });
 
-  // 詳細を落とすと、書き込み失敗の原因 (容量・権限) が画面から消える
+  // Dropping the detail would remove the cause of a write failure (disk space, permissions)
+  // from the screen
   it("keeps the detail core attached to a failure", () => {
     const ui = describeSyncResult({
       ...emptyResult,
@@ -96,8 +97,9 @@ describe("describeSyncError", () => {
     expect(ui.message).toBe("Network error: timeout");
   });
 
-  // アプリ内の再入だけでなく、CLI がロックを持っているときにも返ってくる。
-  // 待機に戻さないと "syncing" のまま固まり、以後の同期が始められない
+  // This comes back not only on re-entry within the app but also when the CLI holds the
+  // lock. Without returning to idle it would stay stuck on "syncing" and no later sync
+  // could start
   it("returns to idle without a message when another process is syncing", () => {
     const ui = describeSyncError({ kind: "busy", message: "Sync already in progress" });
     expect(ui.status).toBe("idle");

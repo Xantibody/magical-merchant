@@ -6,10 +6,10 @@ const DELAY = 300;
 type RenderFn = (source: string) => Promise<string | null>;
 type ResultFn = (svg: string | null) => void;
 
-/** 描画完了の順番をテスト側で並べ替えるための、外から解決できる Promise */
+/** A Promise resolvable from outside, so the test can reorder when renders complete */
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let stored!: (value: T) => void;
-  // 解決を外から握るには executor を書くしかない
+  // Writing the executor is the only way to hold the resolve from outside
   // oxlint-disable-next-line promise/avoid-new
   const promise = new Promise<T>((resolve) => {
     stored = resolve;
@@ -22,7 +22,8 @@ describe("isMermaidLanguage", () => {
     expect(isMermaidLanguage("mermaid")).toBe(true);
   });
 
-  // フェンスの info 文字列は手打ちなので、大文字や前後の空白はよくある揺れ
+  // A fence's info string is typed by hand, so capitals and surrounding whitespace are
+  // common variations
   it("ignores case and surrounding whitespace", () => {
     expect(isMermaidLanguage("Mermaid")).toBe(true);
     expect(isMermaidLanguage(" mermaid ")).toBe(true);
@@ -66,7 +67,8 @@ describe("createDebouncedDiagramRenderer", () => {
     expect(render).toHaveBeenCalledExactlyOnceWith("graph TD;");
   });
 
-  // 1 打鍵ごとに mermaid を回しては重すぎる。描くのは手が止まったあとの最新版だけ
+  // Running mermaid on every keystroke is too heavy. Only the newest source, once the hands
+  // have stopped, is rendered
   it("collapses a burst of requests into one render of the newest source", () => {
     const render = vi.fn<RenderFn>().mockResolvedValue("<svg/>");
     const renderer = createDebouncedDiagramRenderer(render, vi.fn<ResultFn>(), DELAY);
@@ -81,7 +83,7 @@ describe("createDebouncedDiagramRenderer", () => {
     expect(render).toHaveBeenCalledExactlyOnceWith("graph TD;");
   });
 
-  // 描画は非同期なので、古い描画が新しい描画を追い越して届くことがある
+  // Rendering is asynchronous, so an older render can overtake a newer one on arrival
   it("drops a stale result that resolves after a newer request", async () => {
     const first = deferred<string | null>();
     const second = deferred<string | null>();

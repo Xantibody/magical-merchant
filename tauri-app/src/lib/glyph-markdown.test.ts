@@ -12,7 +12,7 @@ describe("glyphs in the preview", () => {
     expect(html).not.toContain(">:236p:<");
   });
 
-  // 登録の無い名前を画像扱いすると、時刻や URL の一部が消える
+  // Treating an unregistered name as an image would swallow part of a time or a URL
   it("leaves an unregistered shortcode as text", () => {
     const html = renderMarkdownSync("これは :foo: のまま", undefined, GLYPHS);
 

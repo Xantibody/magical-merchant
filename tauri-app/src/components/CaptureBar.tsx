@@ -7,9 +7,9 @@ import { matchTagPrefix, sameTag, tagDraftAt } from "../lib/tags";
 import type { TagCount } from "../lib/tags";
 
 interface CaptureBarProps {
-  /** どのタブを見ていても Scrawl に記録する。 */
+  /** Records into Scrawl whichever tab is open. */
   onSend: (text: string) => Promise<void>;
-  /** 補完に出す、これまでに使ったタグ。 */
+  /** The tags used so far, offered as completions. */
   knownTags?: TagCount[];
 }
 
@@ -19,14 +19,14 @@ const MAX_SUGGESTIONS = 6;
 export default function CaptureBar(props: CaptureBarProps): JSX.Element {
   const [text, setText] = createSignal("");
   const [sending, setSending] = createSignal(false);
-  /** 補完を出す位置。カーソルが動いたら測り直す。 */
+  /** Where the completion is anchored. Measured again whenever the cursor moves. */
   const [caret, setCaret] = createSignal(0);
   const [cursor, setCursor] = createSignal(0);
   const [dismissed, setDismissed] = createSignal(false);
 
   let textareaRef: HTMLTextAreaElement | undefined;
 
-  /** 入力に合わせて高さを伸ばす。上限を超えたらスクロールに切り替える。 */
+  /** Grows the height with the input. Switches to scrolling once it passes the limit. */
   const autoGrow = (): void => {
     const el = textareaRef;
     if (!el) {
@@ -48,9 +48,9 @@ export default function CaptureBar(props: CaptureBarProps): JSX.Element {
   });
 
   /**
-   * 打ちかけの語をそのまま新しいタグとして確定できる。
-   * 大小だけ違う候補があるなら新しくない — 並べて出すと、すでにある
-   * タグを「作る」ように見えてしまう。
+   * The half-typed word can be committed as a new tag as it stands.
+   * It is not new if a candidate differs only in case: listing it as well would
+   * make creating a tag that already exists look like the thing to do.
    */
   const isNew = createMemo(() => {
     const typing = draft();
@@ -111,7 +111,7 @@ export default function CaptureBar(props: CaptureBarProps): JSX.Element {
   };
 
   const onKeyDown = (e: KeyboardEvent & { currentTarget: HTMLTextAreaElement }): void => {
-    // 変換確定の Enter は IME のもの。送信にもタグ確定にも使わない (#102)
+    // The Enter that ends IME conversion is the IME's. It neither sends nor picks a tag (#102)
     if (e.key === "Enter" && isImeComposing(e)) {
       return;
     }
@@ -126,7 +126,7 @@ export default function CaptureBar(props: CaptureBarProps): JSX.Element {
         setCursor((c) => Math.max(c - 1, 0));
         return;
       }
-      // 補完が開いている間の Enter はタグの確定。記録は閉じてから
+      // While the completion is open, Enter picks a tag. Recording waits until it closes
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         commitRow();

@@ -4,9 +4,9 @@ import { mockIPC, mockWindows, clearMocks } from "@tauri-apps/api/mocks";
 import { t } from "./i18n";
 import { AUTO_SYNC_DEBOUNCE_MS, createSyncState } from "./sync";
 
-// vi.mock ではなく mockIPC を使う理由は commands.test.ts に書いたとおり
+// The reason mockIPC is used instead of vi.mock is written in commands.test.ts
 
-/** Tauri の内部 API に公開の型は無い。テストが触るぶんだけ形を書く */
+/** Tauri's internal API has no public type. Only the parts the tests touch are shaped here */
 interface TauriInternals {
   __TAURI_INTERNALS__: { transformCallback: () => number };
   __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener: () => void };
@@ -37,8 +37,8 @@ function mockCommands(): void {
 }
 
 /**
- * `onMount` は createRoot のコールバックが返ってから走り、中身は非同期。
- * 何周で落ち着くかは数えず、呼び出し側が `vi.waitFor` で待つ。
+ * `onMount` runs after the createRoot callback has returned, and its body is asynchronous.
+ * How many turns it takes to settle is not counted; the caller waits with `vi.waitFor`.
  */
 function mount(): {
   state: ReturnType<typeof createSyncState>;
@@ -76,11 +76,11 @@ describe("createSyncState readiness", () => {
     dispose();
   });
 
-  // 壊れた設定を「未設定」と見せると、設定画面で入力し直させることになり、
-  // その保存が読めなかったファイルを上書きする
+  // Showing a damaged config as "not set up" makes the user type it again in Settings, and
+  // that save overwrites the file that could not be read
   it("reports a damaged config instead of asking for setup", async () => {
     handlers.get_sync_config = () => {
-      // 実際の IPC も core の SyncError をそのまま渡してくる。Error ではない
+      // The real IPC passes core's SyncError through as it is too. It is not an Error
       // oxlint-disable-next-line no-throw-literal
       throw { kind: "configCorrupt", message: "Could not read sync-config.json" };
     };
@@ -102,7 +102,7 @@ describe("createSyncState auto sync after a busy result", () => {
       get_sync_config: () => ({ workers_url: "https://sync.example", auto_sync: true }),
       auth_status: () => true,
       sync_start: () => {
-        // 同じデータディレクトリを別プロセスが握っていた。異常ではない
+        // Another process was holding the same data directory. This is not a fault
         // oxlint-disable-next-line no-throw-literal
         throw { kind: "busy", message: "Sync already in progress" };
       },
@@ -115,8 +115,8 @@ describe("createSyncState auto sync after a busy result", () => {
     vi.useRealTimers();
   });
 
-  /// busy は「今は無理」でしかないのに、そのまま捨てると保存したぶんが
-  /// 次に手で同期するまで送られない
+  /// busy only means "not right now", and dropping it there leaves what was saved unsent
+  /// until the next manual sync
   it("retries once after a busy result", async () => {
     const { state, dispose } = mount();
     await vi.waitFor(() => {
@@ -132,7 +132,7 @@ describe("createSyncState auto sync after a busy result", () => {
     dispose();
   });
 
-  /// 相手がロックを握ったまま止まっていることもある。取り直しは 1 回で切る
+  /// The other side can be stopped while still holding the lock. The retry is cut off after one
   it("does not retry again when the retry is busy too", async () => {
     const { state, dispose } = mount();
     await vi.waitFor(() => {

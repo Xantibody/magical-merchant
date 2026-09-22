@@ -1,6 +1,6 @@
 import { t } from "./i18n";
 
-/** `YYYY-MM-DD` を UTC ではなくローカル日付として読む。 */
+/** Reads `YYYY-MM-DD` as a local date, not UTC. */
 export function parseIsoDate(iso: string): Date | null {
   const match = /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/u.exec(iso);
   if (!match) {
@@ -16,14 +16,14 @@ export function toIsoDate(date: Date): string {
   return `${date.getFullYear()}-${month}-${day}`;
 }
 
-/** 暦日の差。時刻は無視する。 */
+/** Difference in calendar days. The time of day is ignored. */
 export function daysBetween(from: Date, to: Date): number {
   const a = new Date(from.getFullYear(), from.getMonth(), from.getDate());
   const b = new Date(to.getFullYear(), to.getMonth(), to.getDate());
   return Math.round((b.getTime() - a.getTime()) / 86_400_000);
 }
 
-/** 日グループの見出し。見出し語と、その下に添える日付に分けて返す。 */
+/** Heading of a day group. Returns the heading word and the date placed under it separately. */
 export function formatDayHeading(iso: string, today: Date): { label: string; date: string } {
   const date = parseIsoDate(iso);
   if (!date) {
@@ -39,18 +39,18 @@ export function formatDayHeading(iso: string, today: Date): { label: string; dat
   if (diff === 1) {
     return { label: t().day.yesterday, date: `${day} ${weekday}` };
   }
-  // ここまで来ると「N 日前」は数えないと分からない。日付を見出しに上げる。
+  // From here on "N days ago" needs counting to understand. Promote the date to the heading.
   return { label: day, date: weekday };
 }
 
-/** 時計の読み。「21:40」 */
+/** Clock reading. "21:40" */
 export function formatClock(date: Date): string {
   const hours = String(date.getHours()).padStart(2, "0");
   const minutes = String(date.getMinutes()).padStart(2, "0");
   return `${hours}:${minutes}`;
 }
 
-/** 一覧・検索結果の 2 段目に出す短い日付。「08/04」 */
+/** Short date on the second line of lists and search results. "08/04" */
 export function formatMonthDay(iso: string): string {
   return iso.slice(5).replace("-", "/");
 }
@@ -64,8 +64,8 @@ export function formatNoteGroupLabel(iso: string, today: Date): string {
   if (diff === 0) {
     return t().day.today;
   }
-  // 先の日付のノート(端末の時計がずれている・意図して未来に置いた)は
-  // 今週側に寄せる。「今日」と言い切ると嘘になる
+  // A note dated in the future (device clock off, or placed there on purpose)
+  // is folded into this week. Calling it "today" would be a lie
   if (diff < 7) {
     return t().day.thisWeek;
   }

@@ -4,10 +4,10 @@ export interface CopyFeedback {
 }
 
 /**
- * コピー操作の「コピー済み」表示を制御する。書き込みが成功したときだけ
- * copied を報せ、一定時間後に自動で戻す。連打してもリセットは最後の
- * 1 回分だけ。writeText を注入させるのは、実クリップボードなしで
- * この制御をテストするため。
+ * Controls the copied indicator of a copy action. It reports copied only when the write
+ * succeeded and returns on its own after a fixed time. Repeated presses leave only the last
+ * reset pending. writeText is injected so this control can be tested without a real
+ * clipboard.
  */
 export function createCopyFeedback(
   writeText: (text: string) => Promise<void>,
@@ -33,7 +33,7 @@ export function createCopyFeedback(
         try {
           await writeText(text);
         } catch {
-          // クリップボードが使えないときは黙る。誤った「コピー済み」を出すよりよい
+          // Stay silent when the clipboard is unavailable. Better than a false copied state
           return;
         }
         if (disposed) {

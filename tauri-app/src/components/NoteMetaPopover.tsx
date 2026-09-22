@@ -14,20 +14,20 @@ import {
 
 interface NoteMetaPopoverProps {
   filename: string;
-  /** この端末に「編集前の本文」が残っているときだけ復元の行を出す。 */
+  /** Show the revert row only while this device still holds the body from before the edit. */
   revertable?: boolean;
   onRevert?: () => void;
-  /** 保存後に一覧を読み直させる。time を変えると日付グループも動く。 */
+  /** Make the list reload after a save. Changing time moves the date group too. */
   onSaved: () => Promise<void>;
   onClose: () => void;
 }
 
 /**
- * ノートの frontmatter を見せる小さなパネル。
+ * A small panel that shows a note's frontmatter.
  *
- * 編集できるのは time と tags だけ。updated(書き直した時刻)と context
- * (どの端末で書いたか)は記録なので読み取り専用で並べる。ファイル名は
- * 同期とウィジェットが指す ID であり、ここにも出さない。
+ * Only time and tags can be edited. updated (the time it was rewritten) and context (which
+ * device it was written on) are records, so they are laid out read-only. The filename is
+ * the ID that sync and the widgets point at, and it is not shown here either.
  */
 export default function NoteMetaPopover(props: NoteMetaPopoverProps): JSX.Element {
   const [meta] = createResource(
@@ -41,7 +41,7 @@ export default function NoteMetaPopover(props: NoteMetaPopoverProps): JSX.Elemen
   const [saving, setSaving] = createSignal(false);
   const [failed, setFailed] = createSignal(false);
 
-  // 開いた時点でファイルに書いてある記録を編集の初期値にする
+  // The record written in the file at the moment of opening becomes the initial edit value
   createEffect(() => {
     const m = meta();
     if (m) {
@@ -60,7 +60,7 @@ export default function NoteMetaPopover(props: NoteMetaPopoverProps): JSX.Elemen
     if (!m || saving()) {
       return;
     }
-    // 入力欄に打ちかけのタグが残っていたら、それも保存の意思とみなす
+    // A half-typed tag left in the input counts as meant to be saved too
     commitTagInput();
     setSaving(true);
     setFailed(false);
@@ -95,8 +95,9 @@ export default function NoteMetaPopover(props: NoteMetaPopoverProps): JSX.Elemen
                 />
               </label>
 
-              {/* 作成日時は編集できるが、更新日時は「いつ書き直したか」の記録。
-                  手で動かせては記録にならないので読み取り専用で出す */}
+              {/* The created time can be edited, but the updated time is the record of when
+                  it was rewritten. A record that can be moved by hand is no record, so it
+                  is shown read-only */}
               <Show when={m().updated}>
                 {(updated) => (
                   <div class="note-meta-field">
@@ -134,7 +135,8 @@ export default function NoteMetaPopover(props: NoteMetaPopoverProps): JSX.Elemen
                   value={tagInput()}
                   onInput={(e) => setTagInput(e.currentTarget.value)}
                   onKeyDown={(e) => {
-                    // 変換確定の Enter は IME のもの。タグ確定には使わない (#102)
+                    // The Enter that commits a conversion belongs to the IME. It does not
+                    // commit a tag (#102)
                     if (e.key === "Enter" && !isImeComposing(e)) {
                       e.preventDefault();
                       commitTagInput();

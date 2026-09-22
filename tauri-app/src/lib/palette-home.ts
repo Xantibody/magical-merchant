@@ -1,9 +1,9 @@
 /**
- * パレットの zero-query 状態(何も打っていないとき)に出す入り口。
+ * The entry points the palette shows in its zero-query state, when nothing is typed.
  *
- * どれも既にある IPC(list_notes / list_scrawl_dates)から導出するだけで、
- * 新しいコマンドは増やさない。行は既存の SearchHit の形に寄せて、選んだ
- * ときの着地を検索ヒットと同じ経路に流す。
+ * Every one of them is derived from IPC that already exists (`list_notes` /
+ * `list_scrawl_dates`); no new command is added. The rows take the shape of the
+ * existing `SearchHit`, so choosing one lands through the same path as a search hit.
  */
 
 import type { SearchHit } from "./commands";
@@ -27,16 +27,17 @@ function noteHit(item: NoteItem): SearchHit {
   };
 }
 
-/** 一覧の先頭 = 最近のノート。開く行にして返す。 */
+/** The head of the list is the recent notes. Returns them as rows that open. */
 export function recentNoteHits(items: NoteItem[]): SearchHit[] {
   return items.slice(0, RECENT_LIMIT).map((item) => noteHit(item));
 }
 
 /**
- * ノートに付いたタグを数える。多い順。
+ * Counts the tags on the notes, most frequent first.
  *
- * 数え方は本文の `#タグ` と同じ(`tags.ts`)。生の綴りで数えると `Memo` と
- * `memo` が別の行になり、同じ分類を件数ごと押し分けることになる。
+ * Counting works the same way as for a `#tag` in the body (`tags.ts`). Counting the
+ * raw spelling would put `Memo` and `memo` on separate rows, splitting one category
+ * into two counts the reader has to press apart.
  */
 export function countNoteTags(items: NoteItem[]): TagCount[] {
   return countTagLists(items.map((item) => item.tags));
@@ -47,7 +48,7 @@ export interface DayJump {
   hit: SearchHit;
 }
 
-/** 今日・昨日への入り口。記録のある日だけ出す — 空の日に着地させない。 */
+/** Entry points for today and yesterday. Only days with records, never an empty day. */
 export function dayJumpHits(recordedDates: string[], today: Date): DayJump[] {
   const dates = new Set(recordedDates);
   const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);

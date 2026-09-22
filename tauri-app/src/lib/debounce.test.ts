@@ -6,8 +6,8 @@ import { createDebouncedAccessor } from "./debounce";
 const DELAY = 200;
 
 /**
- * effect は createRoot のコールバックが返るまで走らない。値の更新は
- * root の外から行わないと、購読前の変更として黙って落ちる。
+ * An effect does not run until the createRoot callback returns. Unless the value is updated
+ * from outside the root, the change is dropped silently as one made before subscription.
  */
 function setup(): {
   setSource: (value: string) => void;
@@ -59,7 +59,7 @@ describe("createDebouncedAccessor", () => {
     dispose();
   });
 
-  // 1 打鍵ごとに発火しては debounce の意味がない。タイマーは打鍵で巻き戻る。
+  // Firing on every keystroke would defeat the debounce. A keystroke rewinds the timer.
   it("collapses a burst of changes into one update", () => {
     const { setSource, debounced, dispose } = setup();
 

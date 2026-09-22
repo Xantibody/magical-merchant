@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { ClientContext } from "./client-context";
 
-/** どの面に住むか。`codex` は書き足し続けて版を刻む文書。置き場(ディレクトリ)で決まる。 */
+/** Which surface it lives on. `codex` is a document that keeps growing and commits versions. Decided by where it is stored (the directory). */
 export type NoteKind = "note" | "codex";
 
 export interface Note {
@@ -11,48 +11,48 @@ export interface Note {
   time?: string;
   tags: string[];
   preview: string;
-  /** 昇格元エントリの日時(`YYYY-MM-DDTHH:MM:SS`)。エントリ由来のノートだけ持つ。 */
+  /** Time of the entry it was promoted from (`YYYY-MM-DDTHH:MM:SS`). Only notes born from an entry have it. */
   origin?: string;
-  /** 生まれ元のテンプレ名。テンプレから作ったノートだけ持つ。 */
+  /** Name of the template it was born from. Only notes made from a template have it. */
   template?: string;
-  /** frontmatter の表示モード。一覧が読み取り専用の印を出すのに使う。 */
+  /** Display mode from the frontmatter. The list uses it to show the read-only mark. */
   view?: string;
-  /** 刻んだ版の数。Codex の行だけが持つ。 */
+  /** Number of committed versions. Only Codex rows have it. */
   version_count?: number;
-  /** 最新の版から下書きが動いたか。Codex の行だけ。 */
+  /** Whether the draft has moved on from the latest version. Codex rows only. */
   dirty?: boolean;
 }
 
-/** Codex の版 1 つ。`id` がそのまま read / diff / restore の引数。 */
+/** One Codex version. `id` is passed as is to read / diff / restore. */
 export interface Version {
   id: string;
-  /** 刻んだ時刻。オフセット付き RFC 3339。 */
+  /** When it was committed. RFC 3339 with an offset. */
   time: string;
-  /** 刻んだ人が添えた一言。無ければ null。 */
+  /** The line the committer attached. null when there is none. */
   message: string | null;
-  /** 本文のバイト数。隣の版との差を出すのに使う。 */
+  /** Byte count of the body. Used to show the difference from the neighbouring version. */
   bytes: number;
 }
 
-/** 版の数と、最新の版から下書きがどれだけ動いたか。 */
+/** The number of versions, and how far the draft has moved from the latest one. */
 export interface VersionStatus {
   count: number;
   dirty: boolean;
-  /** 下書きのバイト数から最新の版のを引いた差。版が無ければ 0。 */
+  /** Draft byte count minus the latest version's. 0 when there is no version. */
   bytes_delta: number;
 }
 
 interface NoteRead {
   body: string;
-  /** 本文の指紋。`update_draft` に添えて、外からの書き換えの上に書かない。 */
+  /** Fingerprint of the body. Attached to `update_draft` so we never write over an outside change. */
   revision: string;
 }
 
 /**
- * `update_draft` の失敗。`stale` は「読んでから誰かが書き換えた」、
- * `broken` は「ノート先頭の記録が読めないので core が断った」、
- * `missing` は「ノートがもう無いので core が断った」、
- * `notText` は「ファイルの中身が文字として読めないので core が断った」。
+ * Failure of `update_draft`. `stale` means "someone rewrote it after the read",
+ * `broken` means "core refused because the record at the head of the note cannot be read",
+ * `missing` means "core refused because the note no longer exists",
+ * `notText` means "core refused because the file's content cannot be read as text".
  */
 interface SaveError {
   kind: "stale" | "broken" | "missing" | "notText" | "other";
@@ -70,77 +70,78 @@ export function isStaleSave(error: unknown): boolean {
 }
 
 /**
- * 記録が壊れていて書けないノート。Stale と違って読み直しても直らないので、
- * 呼ぶ側は打った字を退避して人に知らせる。
+ * A note whose record is broken, so it cannot be written. Unlike Stale, rereading
+ * does not fix it, so the caller sets the typed text aside and tells the person.
  */
 export function isBrokenNoteSave(error: unknown): boolean {
   return saveErrorKind(error) === "broken";
 }
 
 /**
- * 保存しようとした先のノートがもう無い。開いたあとに消された、あるいは
- * Codex へ移った。core はここでノートを作り直さないので、`broken` と同じく
- * 読み直しても直らない — 呼ぶ側は打った字を退避して人に知らせる。
+ * The note being saved to no longer exists. It was deleted after it was opened,
+ * or it moved to Codex. core does not recreate the note here, so like `broken`
+ * a reread does not fix it: the caller sets the typed text aside and tells the person.
  */
 export function isMissingNoteSave(error: unknown): boolean {
   return saveErrorKind(error) === "missing";
 }
 
 /**
- * 保存しようとした先のファイルが文字として読めない(不正な UTF-8)。同期や
- * 外の道具が置いていったバイト列で、`broken` と同じく読み直しても直らない —
- * 呼ぶ側は打った字を退避して人に知らせる。
+ * The file being saved to cannot be read as text (invalid UTF-8). It is bytes
+ * left behind by sync or an outside tool, and like `broken` a reread does not
+ * fix it: the caller sets the typed text aside and tells the person.
  *
- * `broken` と分けるのは伝わる意味が違うから。壊れているのは先頭の記録では
- * なくファイルそのもので、`read_note` も同じ理由で断られる。つまり開き直して
- * 「戻す」で控えを画面に出す道が無い — そこまで案内すると嘘になる。
+ * It is kept apart from `broken` because the message differs. What is broken is
+ * not the record at the head but the file itself, and `read_note` is refused for
+ * the same reason. So there is no path of reopening and putting the backup on
+ * screen with "Revert"; guiding that far would be a lie.
  */
 export function isNotTextNoteSave(error: unknown): boolean {
   return saveErrorKind(error) === "notText";
 }
 
-/** テンプレ一覧の 1 件。 */
+/** One row of the template list. */
 export interface Template {
   filename: string;
-  /** 拡張子を落とした名前。画面に出す名前でもある。 */
+  /** Name without the extension. Also the name shown on screen. */
   name: string;
   tags: string[];
-  /** 本文の先頭行。変数は解決されていない。 */
+  /** First line of the body. Variables are not resolved. */
   preview: string;
 }
 
-/** テンプレ 1 件の中身。本文と自動タグは編集画面が同時に描く。 */
+/** Contents of one template. The edit screen draws the body and the automatic tags together. */
 interface TemplateDetail {
-  /** 変数を解決していない、書かれたままの本文。 */
+  /** The body as written, variables unresolved. */
   body: string;
   tags: string[];
 }
 
-/** 登録済みグリフ(特殊文字画像)一覧の 1 件。画像そのものは持たない。 */
+/** One row of the registered glyph (special character image) list. It does not carry the image. */
 export interface GlyphSummary {
   name: string;
   filename: string;
-  /** `png` か `svg`。 */
+  /** `png` or `svg`. */
   format: string;
   bytes: number;
 }
 
-/** `:name:` を描くための 1 件。`url` はデータ URL。 */
+/** One entry for drawing `:name:`. `url` is a data URL. */
 interface GlyphAsset {
   name: string;
   url: string;
 }
 
-/** テンプレ起動の結果。 */
+/** Result of launching a template. */
 interface CreatedNote {
   path: string;
-  /** 今日のぶんが既にあったので、作らずにそれを開いた。 */
+  /** Today's already existed, so it was opened instead of created. */
   reused: boolean;
 }
 
 /**
- * 記録時の端末情報。core の `Context` は空のフィールドを省いて
- * シリアライズするので、全部が省略可能。
+ * Device information at record time. core's `Context` skips empty fields when
+ * it serializes, so everything is optional.
  */
 export interface NoteContext {
   battery?: number;
@@ -154,18 +155,19 @@ export interface NoteContext {
   locale?: string;
 }
 
-/** 1 件ぶんの frontmatter。`time` はオフセット付き RFC 3339。 */
+/** frontmatter of one record. `time` is RFC 3339 with an offset. */
 interface NoteMeta {
   time: string;
   tags: string[];
   context?: NoteContext;
-  /** 表示モード。`"mindmap"` 以外の値の解釈は `note-view.ts` に寄せてある。 */
+  /** Display mode. Interpreting values other than `"mindmap"` is gathered in `note-view.ts`. */
   view?: string;
-  /** 本文を最後に書き直した時刻。一度も編集していないノートは持たない。 */
+  /** When the body was last rewritten. A note never edited does not have it. */
   updated?: string;
   /**
-   * 作ったツール(`app` / `cli` / `mcp` / `widget`)。作成時の記録なので、
-   * 別のツールで編集しても変わらない。名乗る前に書かれたノートは持たない。
+   * The tool that created it (`app` / `cli` / `mcp` / `widget`). It records the
+   * creation, so editing with another tool does not change it. Notes written
+   * before tools named themselves do not have it.
    */
   source?: string;
 }
@@ -180,9 +182,9 @@ export interface SearchHit {
   filename: string | null;
   index: number | null;
   tags: string[];
-  /** `snippet` 内の一致開始位置(文字数)。タグだけに当たったときは無い。 */
+  /** Start of the match inside `snippet` (in characters). Absent when only a tag matched. */
   match_start?: number | null;
-  /** 一致の長さ(文字数)。`match_start` と対。 */
+  /** Length of the match (in characters). Pairs with `match_start`. */
   match_len?: number | null;
 }
 
@@ -191,7 +193,7 @@ interface SyncConfig {
   auto_sync: boolean;
 }
 
-/** 記録時の実行環境。ネイティブから見えないぶんを WebView 側が埋めて渡す。 */
+/** Runtime environment at record time. The WebView fills in what the native side cannot see. */
 interface ClientArgs {
   client: ClientContext;
 }
@@ -200,23 +202,24 @@ interface CommandMap {
   save_quick_capture: { args: { text: string } & ClientArgs; result: void };
   list_scrawl_dates: { args: void; result: string[] };
   read_scrawl_by_date: { args: { date: string }; result: string[] };
-  /** `raw` は画面が読んだときの行。index だけでは、読んだあとに入った追記でずれる。 */
+  /** `raw` is the line as the screen read it. The index alone drifts when an append lands after the read. */
   delete_scrawl_entry: { args: { date: string; index: number; raw: string }; result: void };
   /**
-   * `tags` は範囲。全部を持つ記録だけが返り、query が空でも tags があれば
-   * そのタグの付いた記録を全部返す。
+   * `tags` is a scope. Only records carrying all of them come back; with an empty
+   * query and tags set, every record with those tags is returned.
    */
   search_all: { args: { query: string; tags: string[] }; result: SearchHit[] };
   /**
-   * 全記録。文字列で絞らないので引数は無く、件数も切られない — チップに出す
-   * 件数はここから数える。`match_start` / `match_len` は常に `null`。
+   * Every record. It does not filter by string, so it has no arguments and the
+   * count is not capped: the counts on the chips are taken from here.
+   * `match_start` / `match_len` are always `null`.
    */
   browse_all: { args: void; result: SearchHit[] };
-  /** このノートを `[[ID]]` で指している記録。開くたびに走査で導出される。 */
+  /** Records that point at this note with `[[ID]]`. Derived by a scan every time the note is opened. */
   find_backlinks: { args: { filename: string }; result: SearchHit[] };
   /**
-   * 座標 → 地名。引けたものだけが `["緯度,経度", 地名]` で返る。
-   * `locale` は OS のジオコーダに渡す言語(`ja` / `en`)。
+   * Coordinates to place names. Only those that resolved come back, as
+   * `["lat,lon", name]`. `locale` is the language passed to the OS geocoder (`ja` / `en`).
    */
   resolve_places: {
     args: { coordinates: [number, number][]; locale: string };
@@ -227,9 +230,9 @@ interface CommandMap {
     result: string;
   };
   /**
-   * `revision` は `read_note` が返した本文の指紋。添えると、そのあいだに
-   * CLI や MCP が同じノートを書き換えていれば `kind: "stale"` で断られる。
-   * 返るのは書いた本文の revision。
+   * `revision` is the fingerprint of the body `read_note` returned. When it is
+   * attached and the CLI or MCP rewrote the same note in between, the call is
+   * refused with `kind: "stale"`. Returns the revision of the body written.
    */
   update_draft: {
     args: { filename: string; body: string; revision?: string | null } & ClientArgs;
@@ -240,32 +243,32 @@ interface CommandMap {
   read_note_meta: { args: { filename: string }; result: NoteMeta };
   update_note_meta: { args: { filename: string; time: string; tags: string[] }; result: void };
   set_note_view: { args: { filename: string; view: string | null }; result: void };
-  /** 昇格元エントリとの繋がりを書き換える。`null` で関係を解く。 */
+  /** Rewrites the link to the entry it was promoted from. `null` cuts the tie. */
   set_note_origin: { args: { filename: string; origin: string | null }; result: void };
   delete_note: { args: { filename: string }; result: void };
-  /** Note を Codex の置き場へ移す。ID は変わらない。すでに Codex なら何もしない。 */
+  /** Moves a Note into the Codex directory. The ID does not change. Does nothing if it is already a Codex. */
   promote_note_to_codex: { args: { filename: string }; result: void };
-  // ---- Codex の版。どれも Codex にしか効かず、Note に呼ぶと `kind: "other"` で断られる ----
-  /** いまの下書きを版として刻む。人が押したときだけ。自動では呼ばない。 */
+  // ---- Codex versions. Each works only on a Codex; called on a Note it is refused with `kind: "other"` ----
+  /** Commits the current draft as a version. Only when a person presses it. Never called automatically. */
   commit_note_version: { args: { filename: string; message?: string | null }; result: Version };
-  /** 新しい順。 */
+  /** Newest first. */
   list_note_versions: { args: { filename: string }; result: Version[] };
-  /** 版の本文だけ。frontmatter は含まない。 */
+  /** Body of the version only. No frontmatter. */
   read_note_version: { args: { filename: string; id: string }; result: string };
   /**
-   * 版 `from` → いまの下書きの unified diff。同じなら空文字列。
-   * 先頭は `--- <from>` / `+++ draft`。
+   * Unified diff from version `from` to the current draft. Empty string when they
+   * are the same. The header is `--- <from>` / `+++ draft`.
    */
   diff_note_versions: { args: { filename: string; from: string }; result: string };
   /**
-   * 版の本文を下書きにする。先にいまの下書きを「戻す前」として刻む。
-   * `revision` は `update_draft` と同じ照合で、返るのも新しい revision。
+   * Makes the version's body the draft. The current draft is committed first as
+   * "before restore". `revision` is checked as in `update_draft`, and the new revision is returned.
    */
   restore_note_version: {
     args: { filename: string; id: string; revision?: string | null } & ClientArgs;
     result: string;
   };
-  /** 刻んだ直後の「取り消す」だけが呼ぶ。版のファイルを消すだけで本文には触れない。 */
+  /** Called only by the "undo" right after a commit. Deletes the version file and never touches the body. */
   delete_note_version: { args: { filename: string; id: string }; result: void };
   note_version_status: { args: { filename: string }; result: VersionStatus };
   list_templates: { args: void; result: Template[] };
@@ -273,17 +276,17 @@ interface CommandMap {
   save_template: { args: { filename: string; body: string; tags: string[] }; result: void };
   delete_template: { args: { filename: string }; result: void };
   /**
-   * テンプレからノートを作る。`locale` は `{{weekday}}` のため —
-   * 曜日の呼び名だけは端末の言語に従う。
+   * Creates a note from a template. `locale` is for `{{weekday}}`:
+   * only the weekday's name follows the device language.
    */
   create_from_template: {
     args: { filename: string; locale: string } & ClientArgs;
     result: CreatedNote;
   };
   list_glyphs: { args: void; result: GlyphSummary[] };
-  /** 登録済みグリフを全部データ URL で。本文を描く前に 1 回引いておく。 */
+  /** Every registered glyph as a data URL. Fetched once before the body is drawn. */
   read_glyphs: { args: void; result: GlyphAsset[] };
-  /** `format` は `png` か `svg`。中身は base64。 */
+  /** `format` is `png` or `svg`. The content is base64. */
   save_glyph: { args: { name: string; format: string; dataBase64: string }; result: void };
   delete_glyph: { args: { name: string }; result: void };
   sync_start: { args: void; result: void };
@@ -295,15 +298,15 @@ interface CommandMap {
   save_sync_config: { args: { config: SyncConfig }; result: void };
   is_sync_config_editable: { args: void; result: boolean };
   /**
-   * 図の書き出し。保存ダイアログを出し、選ばれた場所に書く。ノートには
-   * 触れないので MUTATING には入れない。`saved: false` はキャンセル。
+   * Exports a diagram. Shows the save dialog and writes where the person chose.
+   * It does not touch notes, so it is not in MUTATING. `saved: false` is a cancel.
    */
   save_export: { args: { suggestedName: string; dataBase64: string }; result: { saved: boolean } };
 }
 
 export type CommandName = keyof CommandMap;
 
-/** `data/` の下のファイルを書き換えるコマンド。同期の合図になる。 */
+/** Commands that rewrite files under `data/`. They signal a sync. */
 const MUTATING: ReadonlySet<CommandName> = new Set<CommandName>([
   "save_quick_capture",
   "delete_scrawl_entry",
@@ -327,8 +330,8 @@ const MUTATING: ReadonlySet<CommandName> = new Set<CommandName>([
 const mutationListeners = new Set<() => void>();
 
 /**
- * 書き込みコマンドが成功するたびに呼ばれる。
- * 呼び出し側ごとに通知を書くと必ずどこかで漏れるので、ここ一箇所に寄せる。
+ * Called every time a writing command succeeds.
+ * Writing the notification at each call site always leaks somewhere, so it is gathered here.
  */
 export function onLocalMutation(listener: () => void): () => void {
   mutationListeners.add(listener);

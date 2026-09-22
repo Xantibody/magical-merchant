@@ -30,8 +30,8 @@ describe("outlineToTree", () => {
   });
 
   /**
-   * markmap-lib はこの形でリストを捨てる(見出しとリストが同じ親の下に並ぶと
-   * 見出しだけが残る)。ノートは「H1 と `-` の混在」が普通なので、両方を保つ。
+   * markmap-lib discards the list in this shape (when a heading and a list sit under
+   * the same parent, only the heading survives). A note mixing H1 and `-` is normal, so keep both.
    */
   it("同じ見出しの下でリストと小見出しが共存する", () => {
     const root = outlineToTree(["# 計画", "- 買い出し", "## 当日", "- 集合"].join("\n"));

@@ -7,7 +7,7 @@ export const ROUTES = {
   CODEX: "/codex",
   SETTINGS: "/settings",
   TEMPLATES: "/templates",
-  /** 種類 / タグ / 期間で絞る画面。文字列で探すのは ⌘K の仕事なので持たない */
+  /** The screen that narrows by kind / tag / period. Finding by string is ⌘K's job, so it has none */
   BROWSE: "/browse",
 } as const;
 
@@ -22,9 +22,9 @@ export const MODE_ICONS: Record<RoutePath, IconName> = {
   [ROUTES.BROWSE]: "funnel",
 };
 
-// テンプレート管理と絞る画面はタブに出ない。ヘッダの題だけがここを引く。
-// 3 面は固有名詞なので訳さない(#255)。レールの「絞る」はタブではなく操作の
-// 入口なので、そちらは i18n の `browse.title` を読む
+// Template management and Browse do not appear in the tabs. Only the header title reads
+// these. The three surfaces are proper nouns, so they are not translated (#255). The
+// rail's Browse is the entry to an action, not a tab, so it reads i18n's `browse.title`
 export const MODE_LABELS: Record<RoutePath, string> = {
   [ROUTES.SCRAWL]: "Scrawl",
   [ROUTES.NOTES]: "Note",
@@ -34,7 +34,7 @@ export const MODE_LABELS: Record<RoutePath, string> = {
   [ROUTES.BROWSE]: "Browse",
 };
 
-/** 記録の種類が住んでいる面。印と名前はどちらもここを経由して引く。 */
+/** The surface a record kind lives on. Both the mark and the name are read through here. */
 export const HIT_ROUTES: Record<HitKind, RoutePath> = {
   scrawl: ROUTES.SCRAWL,
   note: ROUTES.NOTES,
@@ -42,9 +42,10 @@ export const HIT_ROUTES: Record<HitKind, RoutePath> = {
 };
 
 /**
- * 検索・バックリンク・絞る画面の行に出す、記録の種類の印。住んでいる面の
- * アイコンをそのまま引く — 直に綴ると、タブの印を変えたときに行の印だけが
- * 取り残される。種類の名前も同じ理由で `MODE_LABELS[HIT_ROUTES[kind]]`。
+ * The mark for a record kind, shown on the rows of search, backlinks and Browse. It takes
+ * the icon of the surface the kind lives on: spelled out directly, changing a tab's mark
+ * would leave the row's mark behind. The kind's name is `MODE_LABELS[HIT_ROUTES[kind]]`
+ * for the same reason.
  */
 export const HIT_ICONS: Record<HitKind, IconName> = {
   scrawl: MODE_ICONS[HIT_ROUTES.scrawl],

@@ -32,8 +32,9 @@ describe("Icon", () => {
   });
 
   it("reserves the icon box before the SVG arrives", () => {
-    // SVG は動的 import で遅れて届く。それまで span が 0px だと、届いた瞬間に
-    // 周りのレイアウトが育って画面全体が揺れる(起動時 CLS の主因だった)
+    // The SVG arrives late through a dynamic import. If the span is 0px until then, the
+    // layout around it grows the moment it arrives and the whole screen shifts. This was
+    // the main source of CLS at startup.
     const { baseElement } = render(() => <Icon name="caret-left" size={18} />);
     const span = query<HTMLSpanElement>(baseElement, ".icon");
     expect(span.style.width).toBe("18px");
@@ -48,8 +49,9 @@ describe("Icon", () => {
   });
 
   it("renders a fill weight icon from the fill asset directory", async () => {
-    // fill ウェイトは assets/fill/ の別ファイル。登録が regular を指したままでも
-    // SVG 自体は描けてしまうので、regular と形が違うことまで確かめる
+    // The fill weight is a separate file under `assets/fill/`. An SVG still renders even
+    // if the registration still points at regular, so we check the shape differs from
+    // regular as well.
     const { baseElement: regular } = render(() => <Icon name="push-pin" />);
     const regularScreen = page.elementLocator(regular);
     await expect.element(regularScreen.locator(".icon svg")).toBeInTheDocument();

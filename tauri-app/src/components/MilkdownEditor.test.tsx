@@ -7,14 +7,17 @@ import MilkdownEditor from "./MilkdownEditor";
 import type { CaretPoint } from "./MilkdownEditor";
 
 /**
- * プレビューを押した場所からそのまま書き始められること。プレビューとエディタの
- * 幾何は揃えてある(styles/workspace.test.ts)ので、同じ本文をエディタで 2 回組み、
- * 1 回目に測った座標を 2 回目のカーソル位置として渡せば同じ話になる。
+ * Writing can start right where the preview was pressed. The preview and the
+ * editor share the same geometry (styles/workspace.test.ts), so building the same
+ * body twice in the editor and passing the point measured the first time as the
+ * caret position the second time tells the same story.
  *
- * 図は node view が非同期に描く。描き上がるまでブロックはソースの高さで並ぶので、
- * ソースが図より背が高いこの本文では、待たずに座標を引くと図の下の段落を狙った
- * 座標がソース(コードブロック)を指す (#168)。`%%` は mermaid のコメントなので、
- * 図は小さいままソースだけが伸びる。
+ * A diagram is drawn asynchronously by its node view. Until it is drawn, the
+ * block sits at the height of its source, so in this body, where the source is
+ * taller than the diagram, resolving the point without waiting makes a point
+ * aimed at the paragraph below the diagram land on the source (the code block)
+ * (#168). `%%` is a mermaid comment, so the diagram stays small while only the
+ * source grows.
  */
 const COMMENTS = Array.from({ length: 12 }, (_, i) => `%% 注釈 ${i}`).join("\n");
 const TAIL = "図の下の段落。";
@@ -24,7 +27,7 @@ function body(diagram: string): string {
 }
 
 const DRAWABLE = body("flowchart LR\n  A --> B");
-/** 描けないソース。図は永遠に来ないが、カーソルは置かれなければならない */
+/** A source that cannot be drawn. The diagram never comes, but the caret must still be placed */
 const BROKEN = body("nosuchdiagram LR\n  A --> B");
 
 interface Mounted {
@@ -32,7 +35,7 @@ interface Mounted {
   editor: () => Editor | undefined;
 }
 
-/** 図の描画が決着する(図が出る/描けなかったと知らせが出る)まで待って返す */
+/** Wait until the diagram settles (it appears, or the failure notice appears), then return */
 async function mountEditor(source: string, caret?: CaretPoint): Promise<Mounted> {
   let editor: Editor | undefined;
   const { container } = render(() => (
@@ -52,7 +55,7 @@ async function mountEditor(source: string, caret?: CaretPoint): Promise<Mounted>
   return { container, editor: () => editor };
 }
 
-/** その文字を持つ段落。trailing プラグインが足す末尾の空段落と取り違えない */
+/** The paragraph with that text. Not the empty paragraph the trailing plugin adds at the end */
 function paragraph(container: HTMLElement, text: string): HTMLElement {
   const found = [...container.querySelectorAll<HTMLElement>(".ProseMirror > p")].find(
     (element) => element.textContent === text,
@@ -63,13 +66,13 @@ function paragraph(container: HTMLElement, text: string): HTMLElement {
   return found;
 }
 
-/** 段落の中の、押しても不自然でない一点 */
+/** A point inside the paragraph that is natural to press */
 function pointInside(element: HTMLElement): CaretPoint {
   const rect = element.getBoundingClientRect();
   return { x: rect.left + 6, y: rect.top + rect.height / 2, scrollTop: 0 };
 }
 
-/** カーソルが今どのブロックにいるか。文字で見るのが読み手には一番早い */
+/** Which block the caret is in now. Its text is the quickest thing for a reader to check */
 function caretBlock(editor: Editor | undefined): string | undefined {
   return editor?.action((ctx) => ctx.get(editorViewCtx).state.selection.$head.parent.textContent);
 }
@@ -92,10 +95,11 @@ describe("MilkdownEditor caret placement", () => {
 });
 
 /**
- * 立ち上がる前に畳まれたエディタは「居る」と言わない。置く側は onEditorReady を
- * 「ProseMirror がもうある」の合図に使う(昇格したノートにカーソルを置く、
- * タッチ端末のツールバーを出す)。消えた root に立ったエディタを渡すと、
- * その合図で置きに行ったカーソルが空を切る。
+ * An editor torn down before it came up does not report itself as present. The
+ * host uses onEditorReady as the signal that ProseMirror exists (placing the
+ * caret in a promoted note, showing the toolbar on a touch device). Handing over
+ * an editor built on a root that is gone sends the caret placement triggered by
+ * that signal into nothing.
  */
 describe("MilkdownEditor torn down while building", () => {
   afterEach(() => cleanup());
@@ -112,7 +116,7 @@ describe("MilkdownEditor torn down while building", () => {
     ));
     unmount();
 
-    // 同じ道を後から通る 2 本目が立つころには、1 本目の create も済んでいる
+    // By the time a second editor taking the same path is up, the first one's create is done too
     const later = await mountEditor(DRAWABLE);
     await expect.poll(() => later.editor(), { timeout: 5000 }).toBeDefined();
 
@@ -121,9 +125,9 @@ describe("MilkdownEditor torn down while building", () => {
 });
 
 /**
- * 編集モードを無くしてエディタが常時出るようになった(#210)ので、プレビュー
- * (markdown-it)が描けてエディタが描けない記法は、ノートを開いた瞬間から崩れる。
- * CommonMark に表と取り消し線は無い — GFM のプリセットで両方を描く。
+ * With edit mode gone and the editor always open (#210), any syntax the preview
+ * (markdown-it) draws but the editor does not breaks the moment a note opens.
+ * CommonMark has no tables or strikethrough; the GFM preset draws both.
  */
 const TABLE = ["| 見出し | 値 |", "| --- | --- |", "| a | b |"].join("\n");
 
@@ -134,7 +138,7 @@ function sleep(ms: number): Promise<void> {
   });
 }
 
-/** 図の待ちは要らない。ProseMirror が立つまでだけ待って返す */
+/** No need to wait for a diagram. Wait only until ProseMirror is up, then return */
 async function mountPlain(source: string, onChange?: (markdown: string) => void): Promise<Mounted> {
   let editor: Editor | undefined;
   const { container } = render(() => (
@@ -171,8 +175,8 @@ describe("MilkdownEditor GFM blocks", () => {
     expect(container.querySelector(".ProseMirror del, .ProseMirror s")?.textContent).toBe("消す");
   });
 
-  // Milkdown は最初の編集で本文全体を remark で書き直す(表はパディングで揃う)。
-  // それは編集のときだけで、開いただけの本文には触らないこと
+  // On the first edit Milkdown rewrites the whole body through remark (tables get
+  // aligned with padding). That happens only on edit; a body merely opened is left alone
   it("does not rewrite the body just by opening it", async () => {
     const changes: string[] = [];
     await mountPlain(TABLE, (markdown) => changes.push(markdown));
@@ -194,8 +198,8 @@ describe("MilkdownEditor GFM blocks", () => {
     });
 
     await expect.poll(() => changes.length, { timeout: 3000 }).toBeGreaterThan(0);
-    // remark は列幅を見出しに揃えてパディングする(仕様として受け入れる)。
-    // 見るのは、パイプが文字として逃げずに行のまま残っていること
+    // remark pads the columns to the heading width (accepted as its behaviour).
+    // What matters is that the pipes stay as rows and are not escaped into text
     const lines = changes
       .at(-1)
       ?.split("\n")
@@ -207,8 +211,9 @@ describe("MilkdownEditor GFM blocks", () => {
 });
 
 /**
- * gfm は `- [ ]` を li の checked 属性に畳む。文字としての `[ ]` は消えるので、
- * 印(CSS)と切り替え(task-item-plugin)が無いと、開いた瞬間に状態が見えなくなる。
+ * gfm folds `- [ ]` into the li's checked attribute. The literal `[ ]` disappears,
+ * so without the box (CSS) and the toggle (task-item-plugin) the state becomes
+ * invisible the moment the note opens.
  */
 function taskItem(container: HTMLElement): HTMLElement {
   const item = container.querySelector<HTMLElement>('.ProseMirror li[data-item-type="task"]');
@@ -218,7 +223,7 @@ function taskItem(container: HTMLElement): HTMLElement {
   return item;
 }
 
-/** その項目の段落。gfm の li は段落を包む */
+/** The item's paragraph. A gfm li wraps a paragraph */
 function itemText(item: HTMLElement): HTMLElement {
   const text = item.querySelector("p");
   if (!text) {
@@ -227,7 +232,7 @@ function itemText(item: HTMLElement): HTMLElement {
   return text;
 }
 
-/** 印は li の内容箱の左に描かれる。そこを押す */
+/** The box is drawn to the left of the li's content box. Press there */
 function pressBox(item: HTMLElement): void {
   const rect = item.getBoundingClientRect();
   fireEvent.mouseDown(item, { button: 0, clientX: rect.left - 8, clientY: rect.top + 8 });
@@ -256,7 +261,7 @@ describe("MilkdownEditor task list", () => {
     await expect.poll(() => changes.at(-1)).toContain("[x] 牛乳");
   });
 
-  // 文字を押すのはカーソルを置く操作。印の外で状態が変わってはいけない
+  // Pressing the text places the caret. The state must not change outside the box
   it("leaves the item alone when its text is pressed", async () => {
     const changes: string[] = [];
     const { container } = await mountPlain("- [ ] 牛乳", (markdown) => changes.push(markdown));

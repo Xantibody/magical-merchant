@@ -18,7 +18,7 @@ const OTHER: SaveTarget = {
 
 const refusal = (kind: string): unknown => ({ kind, message: kind });
 
-/** 控えの置き場。書けない端末を作れるように失敗も差せる。 */
+/** Where backups are kept. A failure can be injected too, to make a device that cannot write. */
 function memoryStore(broken = false): BackupStore & { items: Map<string, string> } {
   const items = new Map<string, string>();
   return {
@@ -35,16 +35,16 @@ function memoryStore(broken = false): BackupStore & { items: Map<string, string>
 
 interface Harness {
   session: NoteSession;
-  /** 実際にディスクへ向かった書き込み。 */
+  /** The writes that actually went to disk. */
   writes: { filename: string; body: string; revision: string }[];
   toasts: string[];
   statuses: SaveStatus[];
-  /** 画面に載った本文。`showBody` の呼ばれたぶん。 */
+  /** The bodies put on screen, one per `showBody` call. */
   shown: { id: string; title: string; body: string }[];
   refreshes: number;
   saved: number;
   store: ReturnType<typeof memoryStore>;
-  /** 画面の状態。テストが直に動かす。 */
+  /** The screen state. The tests move it directly. */
   view: {
     selected: SaveTarget | undefined;
     loaded: boolean;
@@ -52,14 +52,14 @@ interface Harness {
     bodyEpoch: number;
     focus: boolean;
   };
-  /** 次の読みが返す本文。null なら読みが失敗する。 */
+  /** The body the next read returns. null makes the read fail. */
   disk: { content: NoteContent | null };
-  /** 次の書き込みを断る理由。null なら書ける。 */
+  /** The reason the next write is refused. null lets it write. */
   refuse: { error: unknown };
 }
 
 function harness(options: { store?: ReturnType<typeof memoryStore> } = {}): Harness {
-  // 1 秒の debounce を待たずに進める。片付けはテストごとに
+  // Move past the 1 second debounce without waiting. Cleanup happens per test
   vi.useFakeTimers();
   onTestFinished(() => vi.useRealTimers());
 
@@ -101,7 +101,7 @@ function harness(options: { store?: ReturnType<typeof memoryStore> } = {}): Harn
     },
     showBody: (id, title, body) => {
       shown.push({ id, title, body });
-      // 本物の画面と同じように、載せたら世代が 1 つ進む
+      // As on the real screen, putting a body up advances the epoch by one
       view.bodyEpoch += 1;
       view.body = title ? `${title}\n\n${body}` : body;
     },
@@ -134,14 +134,14 @@ function harness(options: { store?: ReturnType<typeof memoryStore> } = {}): Harn
   };
 }
 
-/** 1 文字打った状態にする。保存の入口はここから。 */
+/** Put it in the state of one character typed. This is the entry point for saving. */
 function keystroke(h: Harness, body: string): void {
   h.session.ensure();
   h.view.body = body;
   h.session.schedule();
 }
 
-/** 読み終えたノートに 1 文字打つ。指紋を持たないノートには保存が行かない。 */
+/** Type one character into a note that has been read. A note with no fingerprint is never saved. */
 function typed(h: Harness, body: string): void {
   h.session.setRevision(NOTE.filename, "r-read");
   keystroke(h, body);
@@ -161,7 +161,7 @@ describe("自動保存の予約", () => {
     expect(h.saved).toBe(1);
   });
 
-  // 誤タップを書き込みに変えない。書いても中身が同じなら mtime だけが動く
+  // Do not turn a stray tap into a write. Writing the same content only moves mtime
   it("skips a save whose body never changed", async () => {
     const h = harness();
     h.session.setRevision(NOTE.filename, "r-read");
@@ -173,8 +173,8 @@ describe("自動保存の予約", () => {
   });
 
   /**
-   * 指紋が無いノートに書くと、core の照合を素通りして読めていない本文の上に
-   * 画面のぶんを丸ごと書いてしまう
+   * Writing to a note with no fingerprint slips past core's check and puts the whole
+   * screen body over a body that was never read
    */
   it("writes nothing to a note it has no fingerprint for", async () => {
     const h = harness();
@@ -186,7 +186,7 @@ describe("自動保存の予約", () => {
     expect(h.writes).toStrictEqual([]);
   });
 
-  // 本文が届いていないノートには写しを取らない。画面にあるのは前のノート
+  // Take no snapshot of a note whose body has not arrived. What is on screen is the previous note
   it("takes no snapshot before the body has arrived", async () => {
     const h = harness();
     h.session.setRevision(NOTE.filename, "r-read");
@@ -199,7 +199,7 @@ describe("自動保存の予約", () => {
     expect(h.writes).toStrictEqual([]);
   });
 
-  // 打鍵のたびに取り直すので、走るのは最後の 1 回だけ
+  // The snapshot is retaken on every keystroke, so only the last one runs
   it("collapses a run of keystrokes into the last snapshot", async () => {
     const h = harness();
     typed(h, "一");
@@ -221,7 +221,7 @@ describe("自動保存の予約", () => {
     expect(h.saved).toBe(1);
   });
 
-  // 書き込みが遅い端末では、隣へ移ったあとに着地する
+  // On a device that writes slowly, the save lands after the move to the next note
   it("keeps a late save's landing off the note opened after it", async () => {
     const h = harness();
     typed(h, "打った");
@@ -263,7 +263,7 @@ describe("読み直し", () => {
     expect(h.session.revisionOf(NOTE.filename)).toBe("r-disk");
   });
 
-  // 本文の差し替えはカーソル・選択・IME ごと壊す
+  // Replacing the body destroys the caret, the selection and the IME with it
   it("leaves the body alone while it is being written", async () => {
     const h = harness();
     h.view.focus = true;
@@ -281,7 +281,7 @@ describe("読み直し", () => {
     expect(h.shown).toHaveLength(1);
   });
 
-  // 一覧を素早くたどると、遅い読みが速い読みを追い越して届く
+  // Stepping quickly down the list, a slow read overtakes a fast one and arrives out of order
   it("drops an answer for a note that is no longer selected", async () => {
     const h = harness();
     const reloading = h.session.reload(NOTE);
@@ -292,7 +292,7 @@ describe("読み直し", () => {
     expect(h.session.revisionOf(NOTE.filename)).toBeUndefined();
   });
 
-  // 読めなかったことを本文の入れ替えにしない。空のノートに見せる害が大きい
+  // Do not turn a failed read into a body swap. Showing the note as empty does more harm
   it("says so instead of emptying the body when the read fails", async () => {
     const h = harness();
     h.disk.content = null;
@@ -318,8 +318,8 @@ describe("外からの書き換えに譲る", () => {
   });
 
   /**
-   * 退避するのは飛んでいった写しではなく、いま画面にあるぶん。IPC の往復の
-   * あいだに打った字は、まだファイルにも控えにも無い
+   * What is backed up is what is on screen now, not the snapshot that was sent. Characters
+   * typed during the IPC round trip are in neither the file nor the backup yet
    */
   it("keeps the keystrokes that landed during the round trip", async () => {
     const h = harness();
@@ -332,7 +332,7 @@ describe("外からの書き換えに譲る", () => {
     expect(h.store.items.get(`note-backup:${NOTE.filename}`)).toBe("打った、さらに打った");
   });
 
-  // 画面の本文が入れ替わっていれば、退避するのは写しのほう
+  // If the screen body has been replaced, the snapshot is what gets backed up
   it("backs up the snapshot once the screen body has been replaced", async () => {
     const h = harness();
     typed(h, "打った");
@@ -345,7 +345,7 @@ describe("外からの書き換えに譲る", () => {
     expect(h.store.items.get(`note-backup:${NOTE.filename}`)).toBe("打った");
   });
 
-  // 往復のあいだに隣へ移っていれば、画面にディスクの本文を流し込めない
+  // If the screen moved to the next note during the round trip, the disk body cannot be poured in
   it("does not reload into a note the screen has left", async () => {
     const h = harness();
     typed(h, "打った");
@@ -358,7 +358,7 @@ describe("外からの書き換えに譲る", () => {
     expect(h.toasts).toStrictEqual([t().notes.editedElsewhereAway(NOTE.title)]);
   });
 
-  // 控えが残らなかったのに「戻す」で呼び出せると言うと、人は信じて閉じる
+  // Saying Revert can bring it back when no backup was kept makes people believe it and close
   it("promises no Revert when the backup cannot be written", async () => {
     const h = harness({ store: memoryStore(true) });
     typed(h, "打った");
@@ -371,9 +371,9 @@ describe("外からの書き換えに譲る", () => {
   });
 
   /**
-   * 譲るより前に並んだ写しは、読み直した版を知らないまま順番が来る。そのまま
-   * 書くと画面に出ている相手の本文を古い draft で潰す — 指紋は新しいので
-   * core も止められない
+   * A snapshot queued before the yield comes up for its turn knowing nothing of the
+   * reloaded version. Writing it as is puts an old draft over the other body now on
+   * screen, and core cannot stop it either, because the fingerprint is new
    */
   it("drops a save that was queued before the yield", async () => {
     const h = harness();
@@ -424,7 +424,7 @@ describe("離れる手前", () => {
     expect(h.refreshes).toBe(1);
   });
 
-  // 何も保存していないなら、行に出る題も変わっていない
+  // If nothing was saved, the title shown in the row has not changed either
   it("does not refresh the list when nothing was written", async () => {
     const h = harness();
 
@@ -433,7 +433,7 @@ describe("離れる手前", () => {
     expect(h.refreshes).toBe(0);
   });
 
-  // 自動保存が先に着地していても、行だけ古い題のまま残してはいけない
+  // Even when an autosave has already landed, the row must not be left with the old title
   it("refreshes the list after an autosave has already landed", async () => {
     const h = harness();
     typed(h, "打った");
@@ -445,7 +445,7 @@ describe("離れる手前", () => {
     expect(h.refreshes).toBe(1);
   });
 
-  // rename の後に着地する書き込みは移動前の path に向かう
+  // A write that lands after a rename goes to the path from before the move
   it("waits for a write that is still in flight", async () => {
     const h = harness();
     typed(h, "打った");
@@ -459,7 +459,7 @@ describe("離れる手前", () => {
 });
 
 describe("編集セッション", () => {
-  // 1 枠しかない戻る先を、編集前ではない本文で潰さない
+  // There is one slot to go back to. Do not overwrite it with a body that is not the pre-edit one
   it("keeps the pre-edit body as the one step back across several saves", async () => {
     const h = harness();
     typed(h, "一");
@@ -470,7 +470,8 @@ describe("編集セッション", () => {
     expect(h.store.items.get(`note-backup:${NOTE.filename}`)).toBe("# 歩いた日\n\n三丁目まで");
   });
 
-  // 別のノートへ移ったら畳む。戻る先が前のノートのままだと他人の控えを潰す
+  // Close the session on a move to another note. A back target left on the previous note
+  // overwrites that note's backup
   it("opens a new session for the next note after a drop", async () => {
     const h = harness();
     h.session.setRevision(NOTE.filename, "r-read");
@@ -485,7 +486,7 @@ describe("編集セッション", () => {
     expect(h.store.items.get(`note-backup:${NOTE.filename}`)).toBe("畳んだあとの本文");
   });
 
-  // 控えを取り終えたセッションとして開き直さないと、もう一度押しても戻れない
+  // Unless it reopens as a session whose backup is already taken, pressing again cannot go back
   it("does not overwrite the backup it just handed out", async () => {
     const h = harness();
     h.store.items.set(`note-backup:${NOTE.filename}`, "戻す前");
@@ -513,7 +514,7 @@ describe("指紋", () => {
     const h = harness();
     typed(h, "一");
     await vi.advanceTimersByTimeAsync(1000);
-    // 2 打目は読み直していない。添えるのは 1 打目の書き込みが返した指紋
+    // The second keystroke did not reload. What it carries is the fingerprint the first write returned
     keystroke(h, "一二");
     await vi.advanceTimersByTimeAsync(1000);
 
@@ -543,7 +544,7 @@ describe("画面を閉じるとき", () => {
 });
 
 describe("snapshotFor", () => {
-  // 「戻す」の拒否経路は、画面の判断を済ませてから写しを取る
+  // The refusal path of Revert takes the snapshot after the screen has made its decision
   it("snapshots a note the screen has already vouched for", () => {
     const h = harness();
     h.view.body = "いまの本文";

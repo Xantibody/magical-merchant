@@ -1,6 +1,6 @@
-/* ここに置くのは初回描画 (Scrawl) と全ビュー共通のぶんだけ。
-   lazy なビュー専用の CSS は、そのチャンクと一緒に読まれるように
-   ビュー/コンポーネント側で import する (settings.css / workspace.css /
+/* Only the first paint (Scrawl) and what every view shares belongs here.
+   CSS for a lazy view alone is imported from the view or component itself,
+   so that it loads with that chunk (settings.css / workspace.css /
    editor.css / markdown-preview.css / markdown-toolbar.css / templates.css) */
 @import "./styles/base.css";
 @import "./styles/layout.css";

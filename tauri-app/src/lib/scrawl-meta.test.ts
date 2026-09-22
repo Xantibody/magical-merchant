@@ -100,19 +100,22 @@ describe("entryMeta", () => {
     ]);
   });
 
-  /** 入り口は末尾。後から足した記録なので、古い行だけ並びが変わらない。 */
+  /** The entry point goes last: a record added later, so older lines keep their order. */
   it("names the tool that wrote the entry, last", () => {
     const meta = entryMeta(context({ battery: 30, s: "widget" }));
 
     expect(meta.at(-1)).toStrictEqual({ icon: "pencil", label: "ウィジェット" });
   });
 
-  /** 名乗る前に書かれた行に項目は生えない。 */
+  /** A line written before it named itself grows no such item. */
   it("leaves the tool out when the entry names none", () => {
     expect(entryMeta(context({ battery: 30 })).map((s) => s.label)).toStrictEqual(["macos", "30%"]);
   });
 
-  /** 知らない値でも「不明」に潰さない。語彙が増えた版で書いた行も読める。 */
+  /**
+   * An unknown value is not flattened to "unknown". A line written by a version with a
+   * wider vocabulary can still be read.
+   */
   it("passes an unknown tool through as written", () => {
     expect(entryMeta(context({ s: "future" })).at(-1)).toStrictEqual({
       icon: "pencil",

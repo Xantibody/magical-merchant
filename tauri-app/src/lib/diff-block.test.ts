@@ -42,8 +42,8 @@ describe("renderDiffBlock", () => {
     ]);
   });
 
-  // `diff` の 1〜2 行目は必ず +++ / --- で始まる。行として色を付けると
-  // ヘッダ全体が「追加」「削除」に見え、どこから差分なのか読めなくなる
+  // The first two lines of a `diff` always start with +++ / ---. Coloured as
+  // lines, the whole header looks "added" and "deleted", and where the diff begins cannot be read
   it("leaves the +++ and --- file headers uncoloured", () => {
     expect(lines("--- a/note.md\n+++ b/note.md\n")).toStrictEqual([
       { className: "diff-line", text: "--- a/note.md" },
@@ -51,9 +51,10 @@ describe("renderDiffBlock", () => {
     ]);
   });
 
-  // core の diff_note_versions(similar の unified_diff)が返す文字列そのもの。
-  // 版の履歴ペインはフェンスを通さずこれを直接渡すので、ヘッダの版 ID と
-  // `draft` が色付きにならず、hunk・追加・削除が既存のクラスに落ちること
+  // The exact string core's diff_note_versions (similar's unified_diff) returns.
+  // The version history pane hands this over directly without a fence, so the
+  // version ID and `draft` in the header must stay uncoloured, and hunk, added
+  // and deleted lines must fall into the existing classes
   it("renders what core's version diff returns, header and all", () => {
     const fromCore =
       "--- 20260917_140300-0123abcd\n+++ draft\n@@ -1,3 +1,4 @@\n a\n-b\n+B\n c\n+d\n";
@@ -74,8 +75,8 @@ describe("renderDiffBlock", () => {
     expect(lines(" unchanged\n")).toStrictEqual([{ className: "diff-line", text: " unchanged" }]);
   });
 
-  // 空行を空の div にすると行ボックスが立たず、その行だけ高さが消えて
-  // 前後の差分が詰まって見える
+  // A blank line as an empty div gets no line box; that line alone loses its
+  // height and the diff around it looks squeezed together
   it("keeps a blank line one row tall", () => {
     expect(lines("+a\n\n-b\n")).toStrictEqual([
       { className: "diff-line diff-add", text: "+a" },
@@ -103,8 +104,8 @@ describe("renderDiffBlock", () => {
     expect(html).toContain("&quot;");
   });
 
-  // pre は改行をそのまま描く。行 div の間に改行を挟むと、行ごとに空行が
-  // 1 本ずつ増えて差分が倍の高さになる
+  // pre draws newlines as they are. A newline between the line divs adds one
+  // blank line per line, and the diff becomes twice as tall
   it("puts nothing between the line elements", () => {
     const html = renderDiffBlock("+a\n-b\n");
 

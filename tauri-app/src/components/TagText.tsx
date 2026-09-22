@@ -4,14 +4,14 @@ import { glyphs, splitGlyphs } from "../lib/glyphs";
 import { splitTagged } from "../lib/tags";
 
 /**
- * 本文をそのまま出しつつ、`#タグ` にだけ色を付け、`:name:` を登録済みの
- * 画像に置き換える。
+ * Print the body as it is, colour only the `#tag` words, and replace `:name:` with the
+ * registered image.
  *
- * 本文と別に並べると同じ語が 2 度出て場所を食う。書いた位置のまま示せば、
- * 何に対して付けたタグなのかも一緒に読める。
+ * Listing them apart from the body prints the same word twice and takes space. Shown
+ * where they were written, what the tag was put on is read along with it.
  *
- * グリフを先に切るのは、`#` の判定が `:` を語の区切りと見ないため —
- * `:236p:#fgc` のように続けて書かれても、画像とタグの両方として読める。
+ * Glyphs are cut first because the `#` test does not treat `:` as a word break: written
+ * run together as `:236p:#fgc`, it still reads as both an image and a tag.
  */
 export default function TagText(props: { text: string }): JSX.Element {
   return (

@@ -31,10 +31,10 @@ import "../styles/templates.css";
 
 const UNDO_MS = 5000;
 
-/** 変数チップの挿し先。テンプレで `{{…}}` を書ける欄はこの 3 つ。 */
+/** Where a variable chip is inserted. These three fields are the ones that take `{{...}}`. */
 type VarField = "title" | "body" | "tag";
 
-/** 編集中の 1 枚。ディスクの姿と見比べて「未保存」を出すのに使う。 */
+/** The one template being edited. Compared with what is on disk to show "unsaved". */
 interface Draft {
   title: string;
   body: string;
@@ -44,21 +44,21 @@ interface Draft {
 const EMPTY_DRAFT: Draft = { title: "", body: "", tags: [] };
 
 /**
- * ファイル名にできない文字を落とす。テンプレ名はそのままファイル名になる。
+ * Drop characters a filename cannot hold. A template's name becomes its filename as is.
  *
- * ここは打ち間違いを直すためのもので、守りの最後ではない。区切り文字も
- * `..` も NUL も、受け取った core の `NoteFilename` が改めて弾く。
+ * This is here to fix a typo, not as the last line of defence. Separators, `..` and NUL are
+ * all rejected again by core's `NoteFilename` once it receives them.
  */
 function toFileStem(raw: string): string {
   return raw.trim().replaceAll(/[/\\:*?"<>|]/gu, "");
 }
 
 /**
- * テンプレートの管理画面。
+ * The template management screen.
  *
- * 作りは Workspace と同じ 2 ペインで、書くものが「ノート」から
- * 「ノートのひな型」に変わるだけ。編集にエディタ(Milkdown)を使わないのは、
- * ここで見たいのが本文の見た目ではなく `{{…}}` がどこにあるかだから。
+ * It is built as the same two panes as Workspace; only what is written changes, from a
+ * "note" to a "note template". The editor (Milkdown) is not used for editing because what
+ * matters here is not how the body looks but where the `{{...}}` are.
  */
 export default function Templates(): JSX.Element {
   const shell = useShell();
@@ -67,16 +67,16 @@ export default function Templates(): JSX.Element {
   const [templates, { refetch }] = createResource(() => typedInvoke("list_templates"));
   const [selectedFile, setSelectedFile] = createSignal<string | null>(null);
   const [detailOpen, setDetailOpen] = createSignal(false);
-  /** 新規作成中だけ名前の下書きが入る。既存を編集しているあいだは null。 */
+  /** Holds a draft name only while creating a new one. null while editing an existing one. */
   const [draftName, setDraftName] = createSignal<string | null>(null);
   const [title, setTitle] = createSignal("");
   const [body, setBody] = createSignal("");
   const [tags, setTags] = createSignal<string[]>([]);
   const [tagInput, setTagInput] = createSignal("");
   const [saveStatus, setSaveStatus] = createSignal<"idle" | "saving" | "saved">("idle");
-  /** 最後にディスクから読んだ / ディスクへ書いた姿。 */
+  /** The last state read from disk or written to disk. */
   const [baseline, setBaseline] = createSignal<Draft>(EMPTY_DRAFT);
-  /** 削除の猶予中だけ一覧から伏せる。 */
+  /** Hidden from the list only during the delete grace period. */
   const [hidden, setHidden] = createSignal<string[]>([]);
 
   let bodyRef: HTMLTextAreaElement | undefined;
@@ -85,7 +85,7 @@ export default function Templates(): JSX.Element {
   let nameRef: HTMLInputElement | undefined;
   let highlightRef: HTMLPreElement | undefined;
 
-  /** 最後に触っていた欄。開いた直後に押されたら本文に入れる。 */
+  /** The field touched last. If a chip is pressed right after opening, it goes in the body. */
   const [varField, setVarField] = createSignal<VarField>("body");
 
   const fieldInput = (field: VarField): HTMLInputElement | HTMLTextAreaElement | undefined => {
@@ -98,8 +98,8 @@ export default function Templates(): JSX.Element {
     return bodyRef;
   };
 
-  // 変数の挿入列は画面の下端にある。触る端末ではキーボードがちょうどそこを
-  // 覆うので、開いているあいだだけその上へ逃がす
+  // The variable row sits at the bottom edge of the screen. On a touch device the keyboard
+  // covers exactly that spot, so move the row above it only while the keyboard is open
   const keyboardTop = createKeyboardTop();
 
   const visible = createMemo<Template[]>(() => {
@@ -111,7 +111,7 @@ export default function Templates(): JSX.Element {
     visible().find((template) => template.filename === selectedFile()),
   );
 
-  /** 新規作成中に打たれた名前が、既にあるテンプレとぶつかっていないか。 */
+  /** Whether the name typed while creating a new one collides with an existing template. */
   const nameTaken = createMemo<boolean>(() => {
     const draft = toFileStem(draftName() ?? "");
     return draft !== "" && visible().some((template) => template.name === draft);
@@ -120,12 +120,12 @@ export default function Templates(): JSX.Element {
   const editing = (): boolean => selected() !== undefined || draftName() !== null;
 
   /**
-   * 元に戻したばかりの書きかけ。ディスクの読み込みで潰さないための目印で、
-   * 立っているのは復元の batch のあいだだけ。
+   * A draft that has just been restored. It marks the draft so a read from disk does not
+   * clobber it, and it is set only for the duration of the restoring batch.
    */
   let restoring: Draft | undefined;
 
-  /** ディスクから来た姿を写す。ここが「未保存かどうか」の基準になる。 */
+  /** Copy in the state that came from disk. This becomes the baseline for "unsaved". */
   const load = (draft: Draft): void => {
     batch(() => {
       setTitle(draft.title);
@@ -138,8 +138,8 @@ export default function Templates(): JSX.Element {
 
   const current = (): Draft => ({ title: title(), body: body(), tags: tags() });
 
-  // 選んだテンプレの中身を読む。新規作成中は読まない — 空の枠に
-  // 前に選んでいたテンプレの本文が流れ込む
+  // Read the contents of the selected template. Not while creating a new one: the body of
+  // the previously selected template would flow into the empty form
   createEffect(() => {
     const file = selectedFile();
     if (!file || draftName() !== null || restoring) {
@@ -161,7 +161,7 @@ export default function Templates(): JSX.Element {
     })();
   });
 
-  /** ディスクの姿と食い違っているか。保存ボタンが押せるかはこれで決まる。 */
+  /** Whether it differs from what is on disk. This decides if the save button is enabled. */
   const dirty = createMemo<boolean>(() => {
     const base = baseline();
     return (
@@ -172,20 +172,20 @@ export default function Templates(): JSX.Element {
     );
   });
 
-  /** いま書いているものの保存先。名前が決まっていなければ保存しない。 */
+  /** Where what is being written is saved. Nothing is saved until the name is settled. */
   const targetFilename = (): string | undefined => {
     const draft = draftName();
     if (draft !== null) {
       const stem = toFileStem(draft);
-      // 名前が空、または既にある名前。どちらも上書き事故になる
+      // The name is empty, or it already exists. Either one would overwrite by accident
       return stem === "" || nameTaken() ? undefined : `${stem}.md`;
     }
     return selected()?.filename;
   };
 
   /**
-   * 保存するものがあるか。新規は名前さえ決まっていれば書ける — 中身が空の
-   * ひな型にも意味がある。既存は変えたときだけ。
+   * Whether there is anything to save. A new one can be written as soon as the name is
+   * settled: an empty template is still meaningful. An existing one only when it changed.
    */
   const canSave = (): boolean =>
     targetFilename() !== undefined &&
@@ -193,8 +193,8 @@ export default function Templates(): JSX.Element {
     (draftName() !== null || dirty());
 
   /**
-   * 明示的に保存する。テンプレは書きかけのまま置かれると、そこから作る
-   * ノートまで壊れる。打つたびに書き出す作りにはしない。
+   * Save explicitly. A template left half-written breaks every note made from it, so this
+   * is not built to write out on each keystroke.
    */
   const save = (): void => {
     const filename = targetFilename();
@@ -216,7 +216,7 @@ export default function Templates(): JSX.Element {
           setSaveStatus("saved");
         });
         await refetch();
-        // 名前が決まった時点で、新規作成から「そのテンプレの編集」に変わる
+        // Once the name is settled, this turns from creating a new one into editing it
         if (draftName() !== null) {
           batch(() => {
             setDraftName(null);
@@ -230,8 +230,8 @@ export default function Templates(): JSX.Element {
     })();
   };
 
-  // ⌘S / Ctrl+S。保存ボタンしか入口がないと、書きながら残せない。
-  // Shift 付きはアプリ全体の「今すぐ同期」なので、ここでは拾わない
+  // Cmd+S / Ctrl+S. With the save button as the only way in, nothing can be kept while
+  // writing. With Shift it is the app-wide "sync now", so it is not picked up here
   const onKeyDown = (e: KeyboardEvent): void => {
     if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "s") {
       e.preventDefault();
@@ -241,7 +241,7 @@ export default function Templates(): JSX.Element {
   globalThis.addEventListener("keydown", onKeyDown);
   onCleanup(() => globalThis.removeEventListener("keydown", onKeyDown));
 
-  /** 書きかけを抱えたまま編集を離れる。捨てたことは伝えて、戻す道も残す。 */
+  /** Leave the editor holding a draft. Say it was discarded, and leave a way back. */
   const leaveEditor = (next: () => void): void => {
     if (!dirty()) {
       next();
@@ -258,7 +258,7 @@ export default function Templates(): JSX.Element {
         setTags(undo.draft.tags);
         setDetailOpen(true);
       });
-      // 読み込みの effect は batch の終わりに走り終えている
+      // The loading effect has finished running by the end of the batch
       restoring = undefined;
     });
     next();
@@ -273,7 +273,7 @@ export default function Templates(): JSX.Element {
         setDetailOpen(true);
         load(EMPTY_DRAFT);
       });
-      // 名前が決まるまでは保存できない。最初に要るものへ先に連れていく
+      // Nothing can be saved until the name is settled, so go to what is needed first
       queueMicrotask(() => nameRef?.focus());
     });
   };
@@ -315,9 +315,9 @@ export default function Templates(): JSX.Element {
   };
 
   /**
-   * カーソルの居る場所に変数を差し込む。挿し先は最後に触っていた欄 —
-   * 常に本文だと、タイトルやタグに変数を置く手段がなくなる。押したあとも
-   * その欄に戻す。
+   * Insert a variable where the cursor is. The target is the field touched last: were it
+   * always the body, there would be no way to put a variable in the title or a tag. Focus
+   * returns to that field after the press.
    */
   const insertVariable = (token: string): void => {
     const field = varField();
@@ -344,7 +344,7 @@ export default function Templates(): JSX.Element {
     });
   };
 
-  /** 「今日作るとこうなる」。変数の書き方が合っているかはここで分かる。 */
+  /** "This is what it makes today". Whether a variable is written right shows up here. */
   const preview = createMemo<{ title: string; tags: string[]; body: string }>(() => {
     const now = new Date();
     return {
@@ -397,8 +397,9 @@ export default function Templates(): JSX.Element {
                   <span class="list-row-title">{template.name}</span>
                   <span class="list-row-meta">
                     {template.preview}
-                    {/* 一覧では変数を解かない。定義そのものを見る場所なので、
-                        `{{date}}` が今日の日付に化けていると区別がつかない */}
+                    {/* Variables are not resolved in the list. This is where the definition
+                        itself is read, so a `{{date}}` turned into today's date is
+                        indistinguishable from a literal date */}
                     <For each={template.tags}>
                       {(tag) => (
                         <span class="tag-badge" classList={{ "tag-badge--var": hasVariable(tag) }}>
@@ -445,11 +446,12 @@ export default function Templates(): JSX.Element {
                   />
                 }
               >
-                {/* 名前はノートの frontmatter に刻まれる値。あとから変えると
-                    そのテンプレから育ったノートとの繋がりが切れるので出すだけ */}
+                {/* The name is the value written into a note's frontmatter. Changing it
+                    later cuts the link to the notes grown from that template, so it is
+                    only shown */}
                 <span class="detail-created">{selected()?.name}</span>
               </Show>
-              {/* 未保存のあいだは、保存の手応えより先にそのことを出す */}
+              {/* While it is unsaved, say so before showing any save feedback */}
               <Show
                 when={dirty()}
                 fallback={
@@ -532,7 +534,7 @@ export default function Templates(): JSX.Element {
               onInput={(e) => setTagInput(e.currentTarget.value)}
               onBlur={commitTagInput}
               onKeyDown={(e) => {
-                // 変換確定の Enter は IME のもの (#102)
+                // The Enter that commits a conversion belongs to the IME (#102)
                 if (e.key === "Enter" && !isImeComposing(e)) {
                   e.preventDefault();
                   commitTagInput();
@@ -541,9 +543,9 @@ export default function Templates(): JSX.Element {
             />
           </div>
 
-          {/* 本文。書かれたままの文字は textarea が持ち、`{{…}}` の色は
-              真下に敷いた同じ文字の層が描く。textarea 自体は部分的に
-              色を変えられないので、重ねる以外に見せる手がない */}
+          {/* The body. The textarea holds the text as written, and the colour of `{{...}}`
+              is drawn by a layer of the same text laid directly under it. A textarea cannot
+              colour part of itself, so stacking is the only way to show it */}
           <div class="templates-body">
             <pre class="templates-body-highlight" aria-hidden="true" ref={highlightRef}>
               <For each={splitVariables(body())}>
@@ -574,15 +576,15 @@ export default function Templates(): JSX.Element {
             classList={{ "templates-footer--floating": keyboardTop() !== undefined }}
             style={keyboardTopStyle(keyboardTop())}
           >
-            {/* 見出しは置かない。チップが `{{date}} 日付` と自分で名乗るので、
-                読めば分かるものに 1 行ぶんの高さを使わない */}
+            {/* No heading here. A chip names itself, as in `{{date}}` plus its label, so no
+                line of height is spent on something reading the chip already tells you */}
             <div class="templates-vars" role="group" aria-label={t().templates.insertVariable}>
               <For each={TEMPLATE_VARS}>
                 {(variable) => (
                   <button
                     type="button"
                     class="tag-chip templates-var-chip"
-                    // textarea から選択位置を奪わない。奪うと挿し込む先を見失う
+                    // Do not take the selection from the textarea: the insert point is lost
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => insertVariable(variable.token)}
                   >
@@ -592,9 +594,9 @@ export default function Templates(): JSX.Element {
                 )}
               </For>
             </div>
-            {/* 畳んだ 1 行で「今日作るとこうなる」のタイトルまでは常に見える。
-                本文まで確かめたいときだけ開く — 開きっぱなしにすると、
-                書く場所より読む場所のほうが広い画面になる */}
+            {/* Folded into one line, the title of "this is what it makes today" is always
+                visible. It opens only when the body needs checking too: left open, the
+                screen gives more room to reading than to writing */}
             <details class="templates-preview">
               <summary class="templates-preview-summary">
                 {t().templates.todayPreview} — {preview().title || t().templates.untitled}
@@ -607,8 +609,9 @@ export default function Templates(): JSX.Element {
                     </For>
                   </p>
                 </Show>
-                {/* 解けずに残った変数は本文の層と同じ印で示す。ここに出るのは
-                    綴りを間違えたものか、作るときにしか決まらない {{prev}} */}
+                {/* A variable left unresolved is marked the same way as in the body layer.
+                    What shows up here is either a misspelling or {{prev}}, which is only
+                    settled at creation time */}
                 <pre class="templates-preview-text">
                   <For each={splitVariables(preview().body)}>
                     {(run) => <span classList={{ "templates-var": run.variable }}>{run.text}</span>}

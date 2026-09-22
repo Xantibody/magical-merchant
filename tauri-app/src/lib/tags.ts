@@ -1,27 +1,28 @@
 /**
- * 本文中の `#タグ`。
+ * A `#tag` inside the body.
  *
- * タグを別枠で管理させると、書く手が止まって分類の作業になる。本文に混ぜて
- * 書けるなら、書いた勢いのまま残せる。
+ * Managing tags in a separate pane stops the writing hand and turns it into filing work.
+ * Written mixed into the body, a tag can be left behind with the momentum of writing.
  *
- * 同じ規則が `core/src/utils/tags.rs` にもある。あちらはノート一覧を作るのに
- * 全文を読む必要があり（一覧の要約は先頭 100 文字しか持たない）、こちらは
- * 画面で本文をそのまま解釈する。片方を直したらもう片方も直すこと。
+ * The same rules exist in `core/src/utils/tags.rs`. That side has to read the whole text
+ * to build the note list (the list summary only holds the first 100 characters); this side
+ * interprets the body as it is on screen. Fix one and fix the other.
  *
- * ひとつだけ意図的に違う: core はコードフェンスとコードスパンを読み飛ばす。
- * あちらが読むのは Markdown のノート全文で、`#include` を拾ってしまうため。
- * こちらが読むのはタイムラインの 1 行で、ノートのプレビュー描画では
- * markdown-it が先にコードを切り分けている(`tag-markdown.ts`)。
+ * One difference is deliberate: core skips code fences and code spans, because what it
+ * reads is a whole Markdown note and it would otherwise pick up `#include`. What this side
+ * reads is a single Scrawl line, and when a note preview is rendered markdown-it has
+ * already separated out the code (`tag-markdown.ts`).
  */
 
 /**
- * `#` の直前がタグに使える文字でないこと。`https://example.com#frag` のような
- * URL の断片や `C#` の `#` を拾わないため。
+ * The character just before `#` must not be one a tag can use, so that a URL fragment such
+ * as `https://example.com#frag` or the `#` of `C#` is not picked up.
  *
- * 「直前が空白」ではない。日本語は語の間に空白を置かないので、それだと
- * 「走った。#run」のような、ごく普通の書き方を取りこぼす。
+ * The rule is not "the character before is a space". Japanese puts no space between words,
+ * so that rule would miss a perfectly ordinary line where `#run` follows a Japanese full
+ * stop with no space in between.
  *
- * `#` の直後が空白なら Markdown の見出しなので、そもそも 1 文字も一致しない。
+ * If a space follows the `#` it is a Markdown heading, so nothing matches at all.
  */
 const TAG = /(?<![\p{L}\p{N}_-])#(?<tag>[\p{L}\p{N}_-]+)/gu;
 
@@ -36,26 +37,28 @@ export interface TagSegment {
 }
 
 /**
- * タグの同一性を決める鍵。突き合わせと数え上げにだけ使う。
+ * The key that decides tag identity. Used only for matching and counting.
  *
- * 大文字小文字の違いは書き手にとって同じタグなので ASCII だけ小文字に寄せる
- * (日本語に大文字小文字は無く、ロケール依存の変換も持ち込まない)。
- * 同じ規則が `core/src/utils/tags.rs` の `fold_tag` にもある。
+ * A difference in case is the same tag to the writer, so only ASCII is folded to lower
+ * case (Japanese has no case, and no locale-dependent conversion is brought in).
+ * The same rule exists as `fold_tag` in `core/src/utils/tags.rs`.
  */
 function foldTag(tag: string): string {
   return tag.replaceAll(/[A-Z]/gu, (c) => c.toLowerCase());
 }
 
-/** 2 つのタグが同じか。綴りの違いは見ない。 */
+/** Whether two tags are the same. The difference in spelling is ignored. */
 export function sameTag(a: string, b: string): boolean {
   return foldTag(a) === foldTag(b);
 }
 
 /**
- * 大小だけ違う綴りを 1 つに畳む。出てきた順で、残すのは先に見たほう。
+ * Fold spellings that differ only in case into one. Order of appearance is kept, and the
+ * one seen first is the one kept.
  *
- * 「どの綴りを代表にするか」をここ 1 箇所に閉じ込める。本文から拾うのも
- * frontmatter から来るのも、同じ答えでなければ画面ごとに違う字が出る。
+ * "Which spelling represents the tag" is decided in this one place. A tag picked up from
+ * the body and a tag coming from frontmatter must give the same answer, or different
+ * screens show different letters.
  */
 function foldUnique(tags: string[]): string[] {
   const seen = new Map<string, string>();
@@ -68,20 +71,21 @@ function foldUnique(tags: string[]): string[] {
 }
 
 /**
- * 外から渡されたタグを、`parseTags` が返す形に揃える。
+ * Bring a tag passed in from outside into the shape `parseTags` returns.
  *
- * 落とすのは飾りの `#` と前後の空白だけで、綴りには触らない。大小を無視した
- * 突き合わせは `sameTag` の仕事で、ここで潰すと打った字が呼び出し側から消える。
+ * Only the decorative `#` and the surrounding whitespace are dropped; the spelling is not
+ * touched. Case-insensitive matching is `sameTag`'s job, and flattening it here would take
+ * the letters that were typed away from the caller.
  */
 export function normalizeTag(tag: string): string {
   return tag.trim().replace(/^#+/u, "");
 }
 
 /**
- * 本文の `#タグ` を、出てきた順に重複なく返す。
+ * Return the `#tag`s in the body in order of appearance, without duplicates.
  *
- * 返すのは打たれた綴りそのもの。重複を落とすときだけ大小を無視するので、
- * `#Memo` と `#memo` は 1 つになり、残るのは先に出てきたほう。
+ * What is returned is the spelling as typed. Case is ignored only when dropping
+ * duplicates, so `#Memo` and `#memo` become one and the one that appeared first is kept.
  */
 export function parseTags(text: string): string[] {
   const tags: string[] = [];
@@ -95,11 +99,11 @@ export function parseTags(text: string): string[] {
 }
 
 /**
- * 既にタグとして取り出されたものを数える。1 つの配列が 1 件。
+ * Count tags that have already been extracted. One array is one record.
  *
- * ノートのタグは frontmatter に書かれたまま core から届くので、1 枚が
- * `Memo` と `memo` の両方を名乗ることがある。畳んだ鍵で数えて、同じ件を
- * 二度足さない — チップの件数は「何件に付いているか」でなければならない。
+ * A note's tags arrive from core exactly as written in frontmatter, so one note can claim
+ * both `Memo` and `memo`. Count by the folded key and do not add the same record twice: a
+ * chip's count must be "how many records carry it".
  */
 export function countTagLists(lists: string[][]): TagCount[] {
   const counts = new Map<string, TagCount>();
@@ -117,14 +121,15 @@ export function countTagLists(lists: string[][]): TagCount[] {
 }
 
 /**
- * よく使うものから順に数える。同数なら名前順にして並びが揺れないようにする。
- * 大小だけ違う綴りは同じタグ。チップに出すのは最初に見た綴り。
+ * Count from the most used down. On a tie, sort by name so the order does not wobble.
+ * Spellings that differ only in case are the same tag. The chip shows the spelling seen
+ * first.
  */
 export function countTags(texts: string[]): TagCount[] {
   return countTagLists(texts.map((text) => parseTags(text)));
 }
 
-/** 本文をタグとそれ以外に切り分ける。色を付けて描くために使う。 */
+/** Split the body into tags and the rest. Used to draw the tags in color. */
 export function splitTagged(text: string): TagSegment[] {
   const segments: TagSegment[] = [];
   let at = 0;
@@ -145,10 +150,10 @@ export function splitTagged(text: string): TagSegment[] {
 }
 
 /**
- * カーソルの直前で打ちかけているタグ。タグの途中でなければ `null`。
+ * The tag being typed just before the caret. `null` if the caret is not inside a tag.
  *
- * `#` を打った直後は空文字を返す。まだ 1 文字も入っていない状態でも候補を
- * 出したいので、「タグではない」とは区別する。
+ * Right after a `#` is typed it returns an empty string. Candidates should show even
+ * before a single character is entered, so that state is distinguished from "not a tag".
  */
 export function tagDraftAt(text: string, caret: number): string | null {
   const before = text.slice(0, caret);
@@ -167,8 +172,9 @@ export function tagDraftAt(text: string, caret: number): string | null {
 }
 
 /**
- * 打ちかけの文字で始まるタグだけを、よく使う順のまま残す。
- * 候補も打ちかけも綴りは打った形のままなので、両側を畳んで比べる。
+ * Keep only the tags that start with the characters being typed, in the same most-used
+ * order. Both the candidates and the draft keep the spelling as typed, so both sides are
+ * folded before they are compared.
  */
 export function matchTagPrefix(known: TagCount[], draft: string): TagCount[] {
   const needle = foldTag(draft);

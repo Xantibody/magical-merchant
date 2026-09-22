@@ -1,33 +1,33 @@
 /**
- * テンプレに書かれた記入例を、見出しごとに取り出す。
+ * Pull the examples written into a template out, heading by heading.
  *
- * 記入例はノートのファイルには一度も書かれない — 書き出す core が
- * `{{eg}}` のブロックを落とす(`core/src/template/vars.rs`)。だからここは
- * 「保存された本文から読む」のではなく、ノートが名乗るテンプレ
- * (frontmatter の `template:`)を読み直して、書く人に薄字で見せるためだけの
- * 写しを作る。区切りの規則は core と同じものを二度書いている: ブロックは
- * 空行か次の見出しで終わり、閉じ印は無い。
+ * An example is never written into a note file: core drops the `{{eg}}` block when it
+ * writes (`core/src/template/vars.rs`). So this does not "read from the saved body". It
+ * re-reads the template the note claims (`template:` in frontmatter) and builds a copy
+ * whose only purpose is to show the writer, in faint type. The rules for the delimiters
+ * are written twice, the same as in core: a block ends at a blank line or at the next
+ * heading, and there is no closing marker.
  */
 
 import { createSignal } from "solid-js";
 
 const MARKER = /^\{\{\s*eg\s*(?::(?<example>[^}]*))?\}\}$/u;
 
-/** 行頭の箇条書き記号。記入例は内容ではなく問いかけなので、印は外して見せる。 */
+/** A list marker at the head of a line. An example is a prompt, not content, so the marker is stripped before it is shown. */
 const LIST_MARKER = /^(?:[-*+]|\d+\.)\s+/u;
 
 function headingText(line: string): string {
   return line.replace(/^#+/u, "").trim();
 }
 
-/** ブロックを閉じる行か。閉じる行そのものは残る。 */
+/** Whether the line closes the block. The closing line itself is kept. */
 function endsExample(line: string): boolean {
   return line === "" || line.startsWith("#");
 }
 
 /**
- * 記入例の行を落とす。「今日作ると」のプレビューが通る道で、書き出す core と
- * 同じ姿を見せるためにある。
+ * Drop the example lines. This is the path the `todayPreview` preview takes, and it exists
+ * to show the same shape that core writes out.
  */
 export function dropExamples(body: string): string {
   const kept: string[] = [];
@@ -35,7 +35,7 @@ export function dropExamples(body: string): string {
 
   for (const raw of body.split("\n")) {
     const line = raw.trim();
-    // ブロックの中にいるあいだは何も残さない。閉じる行はブロックの外
+    // Keep nothing while inside the block. The closing line is outside it
     const inside = dropping && !endsExample(line);
     if (!inside) {
       dropping = MARKER.test(line);
@@ -53,9 +53,10 @@ const STORAGE_KEY = "show-examples";
 const [shown, setShown] = createSignal(localStorage.getItem(STORAGE_KEY) !== "false");
 
 /**
- * 記入例を出すか。テーマ(`theme.ts`)や言語と同じく端末ごとの好みなので
- * localStorage に残す — 同期に乗せるものではない。既定は「出す」で、
- * 書いたテンプレがいきなり効かないほうが分かりにくい。
+ * Whether to show the examples. Like the theme (`theme.ts`) and the language it is a
+ * per-device preference, so it is kept in localStorage: it does not belong on sync. The
+ * default is to show them, because a template you wrote having no effect at all is harder
+ * to understand.
  */
 export const examplesShown = shown;
 
@@ -64,13 +65,13 @@ export function setExamplesShown(on: boolean): void {
   localStorage.setItem(STORAGE_KEY, String(on));
 }
 
-/** 見出し → その下に書かれた記入例の行。見出しの前に書かれた分は空文字の鍵。 */
+/** Heading to the example lines written under it. What comes before any heading is keyed by the empty string. */
 export function extractExamples(body: string): ReadonlyMap<string, string[]> {
   const examples = new Map<string, string[]>();
   let heading = "";
-  /** 集めている最中のブロック。閉じるまでこれが立つ。 */
+  /** The block being collected. It stands until the block closes. */
   let block: string[] | undefined;
-  /** そのブロックが属する見出し。次の見出しで閉じたときに取り違えない。 */
+  /** The heading that block belongs to, so closing on the next heading does not mix them up. */
   let owner = "";
 
   const close = (): void => {

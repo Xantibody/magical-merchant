@@ -1,11 +1,12 @@
-/* テンプレート管理と、「新規」から開くテンプレ選択。
-   土台は Workspace と同じ 2 ペイン(workspace.css)で、ここにあるのは
-   その上に足すぶんだけ。 */
+/* Template management, and the template picker opened from "new".
+   The base is the same two panes as Workspace (workspace.css); what is here is
+   only what is added on top. */
 
-/* ---------------- 詳細ヘッダ ---------------- */
+/* ---------------- Detail header ---------------- */
 
-/* ノート側は題の直下の 1 行に畳んだが、テンプレは名前と自動タグを編集する
-   場所なので、操作の並ぶバーが要る。ここだけが使う */
+/* On the note side this was folded into one line under the title, but a
+   template is where the name and the automatic tags are edited, so it needs a
+   bar of controls. Only this screen uses it */
 
 .detail-meta-bar {
   display: flex;
@@ -47,9 +48,10 @@
   color: var(--app-text);
 }
 
-/* ---------------- 選択メニュー / シート ---------------- */
+/* ---------------- Picker menu / sheet ---------------- */
 
-/* PC ではボタンの下のドロップダウン。位置の基準は .list-pane */
+/* On desktop it is a dropdown under the button. .list-pane is the positioning
+   reference */
 .template-picker {
   top: 46px;
   right: 14px;
@@ -59,7 +61,8 @@
   flex-direction: column;
 }
 
-/* 掴み手と見出しは下から出るシートのためのもの。PC には要らない */
+/* The grab handle and the heading exist for the sheet that rises from the
+   bottom. Desktop does not need them */
 .template-picker-handle,
 .template-picker-title {
   display: none;
@@ -117,12 +120,13 @@
   color: var(--app-text-muted);
 }
 
-/* 背後を暗くするのはシートのときだけ。ドロップダウンは画面を覆わない */
+/* Only the sheet darkens what is behind it. The dropdown does not cover the
+   screen */
 .template-picker-backdrop {
   display: none;
 }
 
-/* ---------------- 管理画面 ---------------- */
+/* ---------------- Management screen ---------------- */
 
 .templates .list-pane-head {
   gap: 8px;
@@ -159,8 +163,9 @@
   outline: none;
 }
 
-/* テンプレは自動保存しない。押せるうちは押せると分かる濃さで、押すものが
-   無いあいだは沈める(消すと、保存の入口が無いように見える) */
+/* A template is not saved automatically. While it can be pressed it is dark
+   enough to look pressable, and it sinks while there is nothing to press
+   (removing it would make it look as if there were no way to save) */
 .templates-save {
   padding: 5px 14px;
   font-size: 12px;
@@ -173,7 +178,8 @@
   cursor: default;
 }
 
-/* 未保存は「保存しました」と同じ場所に出す。色だけで急かさない */
+/* The unsaved state appears in the same place as "saved". It does not press the
+   user with colour alone */
 .templates-unsaved {
   color: var(--app-text-muted);
 }
@@ -187,7 +193,8 @@
   color: var(--app-danger);
 }
 
-/* 自動タグ。本文と同じ段の幅に揃えてタイトルの真下に置く */
+/* Automatic tags. Aligned to the same column width as the body and placed
+   directly under the title */
 .templates-tags {
   display: flex;
   align-items: center;
@@ -219,14 +226,15 @@
   outline: none;
 }
 
-/* 変数を含むタグは破線。固定のタグと、作るたびに変わるタグを見分ける */
+/* A tag containing a variable is dashed. It tells a fixed tag apart from one
+   that changes on every creation */
 .tag-badge--var {
   border-style: dashed;
   border-color: var(--app-text-hint);
   font-family: ui-monospace, monospace;
 }
 
-/* ---------------- 本文（textarea + 色の層）---------------- */
+/* ---------------- Body (textarea + colour layer) ---------------- */
 
 .templates-body {
   position: relative;
@@ -237,8 +245,9 @@
   min-height: 0;
 }
 
-/* 書いた文字を持つのは textarea、色を持つのはその下の層。
-   2 つは 1 文字もずれてはいけないので、字送りに関わる指定を必ず揃える */
+/* The textarea holds the typed text; the layer under it holds the colour.
+   The two must not drift by a single character, so every property that affects
+   letter advance is kept identical */
 .templates-body-highlight,
 .templates-body-input {
   position: absolute;
@@ -263,7 +272,8 @@
 
 .templates-body-input {
   background: none;
-  /* 文字は下の層が描く。ここが持つのはキャレットと選択だけ */
+  /* The layer below draws the text. This one holds only the caret and the
+     selection */
   color: transparent;
   caret-color: var(--app-text);
   resize: none;
@@ -281,8 +291,9 @@
   background: var(--app-accent-soft);
 }
 
-/* 変数の印。チップらしく padding を足すと文字送りが変わって、下の層と
-   キャレットの位置がずれる。地の色だけで示す */
+/* The variable marker. Adding padding to make it look like a chip would change
+   letter advance and shift the caret against the layer below. It is shown with
+   the background colour alone */
 .templates-var {
   background: var(--app-surface-2);
   border-radius: var(--radius-2);
@@ -290,7 +301,7 @@
   box-decoration-break: clone;
 }
 
-/* ---------------- フッター（変数の挿入とプレビュー）---------------- */
+/* ---------------- Footer (variable insertion and preview) ---------------- */
 
 .templates-footer {
   flex: 0 0 auto;
@@ -304,8 +315,8 @@
   border-top: 1px solid var(--app-hairline);
 }
 
-/* キーボードが開いているあいだだけ、その上へ浮かせる。位置は JS が打つ
-   (`keyboard.ts`) — 高さを知っているのは visualViewport だけ */
+/* Only while the keyboard is open does it float above it. JS sets the position
+   (`keyboard.ts`): visualViewport is the only thing that knows the height */
 .templates-footer--floating {
   position: fixed;
   left: 0;
@@ -317,15 +328,17 @@
   border-top: 1px solid var(--app-border);
 }
 
-/* 押せるものは 1 行に収める。折り返すとフッターが縦に伸びて本文を押し上げ、
-   キーボードの上に浮いたときには画面の半分を占める。溢れたぶんは横に流す */
+/* The pressable items fit on one line. Wrapping would grow the footer
+   vertically and push the body up, and once it floats above the keyboard it
+   would take half the screen. The overflow scrolls sideways */
 .templates-vars {
   display: flex;
   align-items: center;
   flex-wrap: nowrap;
   gap: 6px;
   overflow-x: auto;
-  /* 指で送る列。バーは場所を取るだけで、押せる的にはならない */
+  /* A row scrolled with a finger. A scrollbar would only take space and would
+     not be a usable target */
   scrollbar-width: none;
 }
 
@@ -337,8 +350,8 @@
   flex-shrink: 0;
 }
 
-/* 浮いているあいだは見える面積が限られる。プレビューは畳んで、
-   キーボードのすぐ上に押せるものだけを残す */
+/* While floating, the visible area is limited. The preview is folded away and
+   only the pressable items are left right above the keyboard */
 .templates-footer--floating .templates-preview {
   display: none;
 }
@@ -349,8 +362,9 @@
   color: var(--app-text-faint);
 }
 
-/* Open Props の normalize は details/summary を箱として描く。ここは
-   フッターに寝かせた注記なので、地と padding を戻して 1 行に見せる */
+/* Open Props' normalize draws details/summary as a box. Here it is a note laid
+   in the footer, so the background and padding are reset to make it read as one
+   line */
 .templates-preview,
 .templates-preview-summary {
   background: none;
@@ -366,7 +380,7 @@
 .templates-preview-summary {
   cursor: pointer;
   user-select: none;
-  /* 畳んだときは 1 行。長いタイトルで 2 行にしない */
+  /* One line when folded. A long title must not make it two */
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -377,11 +391,13 @@
   flex-direction: column;
   gap: 6px;
   margin-top: 8px;
-  /* 引用のように 1 本の線で括る。書いている本文とほぼ同じ字面が並ぶので、
-     どちらが書き出される姿なのかを線で分ける */
+  /* Bracketed by a single line, like a quotation. The text lines up almost
+     identically with the body being written, so the line separates which one is
+     the form that gets written out */
   border-left: 2px solid var(--app-hairline);
   padding-left: 10px;
-  /* 長いテンプレでも本文の場所を奪わない。溢れたぶんはここで送る */
+  /* Even a long template does not take the body's space. The overflow scrolls
+     here */
   max-height: 34vh;
   overflow-y: auto;
 }
@@ -394,7 +410,8 @@
   margin: 0;
 }
 
-/* 書き出される本文そのもの。折り返しと字送りは編集中の層に揃える */
+/* The body exactly as it will be written out. Wrapping and letter advance match
+   the layer being edited */
 .templates-preview-text {
   margin: 0;
   font-family: ui-monospace, monospace;
@@ -406,7 +423,8 @@
 }
 
 @media (max-width: 767px) {
-  /* 一度に見せるのは片方のペインだけ。ヘッダは詳細を開いたときに出す */
+  /* Only one pane shows at a time. The header appears when the detail is
+     opened */
   .detail-meta-bar {
     display: none;
   }
@@ -415,7 +433,8 @@
     display: flex;
   }
 
-  /* 下から出るシート。押せる高さと安全域はここで確保する */
+  /* The sheet that rises from the bottom. The pressable height and the safe
+     area are secured here */
   .template-picker {
     position: fixed;
     inset: auto 0 0 0;
@@ -450,7 +469,8 @@
     font-size: 15px;
   }
 
-  /* ⌘N は押せないキーの案内。触る端末には出さない */
+  /* `⌘N` spells a key that cannot be pressed here. It is not shown on a touch
+     device */
   .template-picker-key {
     display: none;
   }
@@ -476,7 +496,8 @@
     padding-inline: 18px;
   }
 
-  /* 一覧の下端の注記は場所を取る。ペインを切り替える幅では畳む */
+  /* The note at the foot of the list takes space. At the width where panes are
+     swapped it is folded away */
   .templates-file-hint {
     display: none;
   }

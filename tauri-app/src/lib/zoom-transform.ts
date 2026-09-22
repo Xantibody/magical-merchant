@@ -1,10 +1,11 @@
 /**
- * 図のズーム画面の座標計算。DOM を触らない純関数なので、ホイール・ピンチ・
- * ボタンのどれから来ても同じ式で動き、テストは数値だけで書ける。
+ * The coordinate maths for the diagram zoom screen. These are pure functions that do not
+ * touch the DOM, so the same formula runs whether it comes from the wheel, a pinch or a
+ * button, and the tests can be written with numbers alone.
  *
- * 変換は `translate(tx, ty) scale(s)`。tx/ty は画面のピクセル、図の左上が
- * どこに来るか。倍率を変えるときは「カーソルの下の点が動かない」ように
- * 平行移動を合わせて直す — そうしないと拡大のたびに図が逃げていく。
+ * The transform is `translate(tx, ty) scale(s)`. tx/ty are screen pixels: where the top
+ * left of the diagram lands. When the scale changes, the translation is corrected so that
+ * the point under the cursor does not move. Otherwise the diagram runs away on every zoom.
  */
 
 export interface Size {
@@ -26,10 +27,10 @@ export interface Transform {
 export const MIN_SCALE = 0.15;
 export const MAX_SCALE = 8;
 
-/** 開いたときに原寸の何倍まで広げるか。小さい図を画面いっぱいにするとぼやけるだけ */
+/** How far past natural size to grow on open. Filling the screen with a small figure blurs it */
 const FIT_MAX_SCALE = 2;
 
-/** 開いたときに図の周りに残す余白(px)。閉じるボタンやコントロールが図に被らない */
+/** Margin (px) left around the diagram on open. The close button and controls do not cover it */
 const FIT_PADDING = 96;
 
 function clamp(value: number, lo: number, hi: number): number {
@@ -37,17 +38,18 @@ function clamp(value: number, lo: number, hi: number): number {
 }
 
 /**
- * 測れた辺かどうか。隠れている面や描き終える前の SVG は 0 を返し、
- * 属性の無い SVGRect は NaN を返す。どちらも割り算に入れてはいけない
+ * Whether the side could be measured. A hidden surface or an SVG before it finishes drawing
+ * returns 0, and an SVGRect with no attributes returns NaN. Neither may go into a division
  */
 function measured(length: number): boolean {
   return Number.isFinite(length) && length > 0;
 }
 
 /**
- * 開いたときの原寸。mermaid は viewBox に原寸を書くのでそれを読み、viewBox を
- * 持たない SVG は縮めて描いている今の大きさ(`getBoundingClientRect`)で代用する。
- * どちらも測れなければ答えを返さない — 0×0 で開いても白い画面が出るだけ
+ * The natural size on open. mermaid writes the natural size into the viewBox, so read that;
+ * an SVG with no viewBox falls back to the shrunk size it is drawn at right now
+ * (`getBoundingClientRect`). If neither can be measured, give no answer: opening at a size
+ * of zero only puts a blank screen up
  */
 export function zoomSize(viewBox: Size, rendered: Size): Size | undefined {
   const width = measured(viewBox.width) ? viewBox.width : rendered.width;
@@ -55,13 +57,14 @@ export function zoomSize(viewBox: Size, rendered: Size): Size | undefined {
   return measured(width) && measured(height) ? { width, height } : undefined;
 }
 
-/** 倍率を測れないときに置く場所。原寸のまま左上に */
+/** Where to put it when the scale cannot be measured: natural size, at the top left */
 const NATURAL: Transform = { scale: 1, tx: 0, ty: 0 };
 
 /**
- * 画面の真ん中に、余白を残して収まる大きさで置く。どちらかが測れていなければ
- * 原寸のまま置く — 0 で割った倍率は NaN や Infinity になり、transform ごと
- * 無視されて図が消え、倍率の表示が「NaN%」になる
+ * Put it in the middle of the screen, at a size that fits with a margin left over. If
+ * either side could not be measured, put it at natural size: a scale divided by 0 becomes
+ * NaN or Infinity, the whole transform is ignored, the diagram vanishes, and the scale
+ * readout says "NaN%"
  */
 export function fitToViewport(viewport: Size, diagram: Size): Transform {
   if (
@@ -88,7 +91,7 @@ export function fitToViewport(viewport: Size, diagram: Size): Transform {
   };
 }
 
-/** `point`(画面座標)の下にある図の点を動かさずに倍率を `factor` 倍する */
+/** Multiply the scale by `factor` while the diagram point under `point` (screen) stays put */
 export function zoomAtPoint(current: Transform, point: Point, factor: number): Transform {
   const scale = clamp(current.scale * factor, MIN_SCALE, MAX_SCALE);
   if (scale === current.scale) {
@@ -103,9 +106,9 @@ export function zoomAtPoint(current: Transform, point: Point, factor: number): T
 }
 
 /**
- * ホイール 1 回ぶんの倍率。指数にするのは、上に 100 回して下に 100 戻せば
- * ちょうど元に戻るため。トラックパッドのピンチはブラウザが ctrl+wheel で
- * 届けてくる。1 回の delta が小さいので、係数を上げて指の動きに追いつかせる
+ * The factor for one wheel notch. It is exponential so that 100 steps up and 100 steps back
+ * down land exactly where it started. The browser delivers a trackpad pinch as ctrl+wheel.
+ * Its delta per event is small, so the coefficient is raised to keep up with the finger
  */
 export function wheelFactor(deltaY: number, pinch: boolean): number {
   return Math.exp(-deltaY * (pinch ? 0.01 : 0.0022));
