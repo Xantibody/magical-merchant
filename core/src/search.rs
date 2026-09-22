@@ -71,6 +71,7 @@ fn scrawl_hits(
     base_dir: &Path,
     needle: &str,
     scope: &[String],
+    limit: Option<usize>,
 ) -> Result<Vec<SearchHit>, CoreError> {
     let mut hits = Vec::new();
     let scrawl = Scrawl::new(base_dir.to_path_buf());
@@ -118,6 +119,11 @@ fn scrawl_hits(
                 match_start: excerpt.match_start,
                 match_len: excerpt.match_start.map(|_| needle.chars().count()),
             });
+            // Dates are descending; later entries cannot displace these hits.
+            // Browsing needs every match to count its filter choices.
+            if limit.is_some_and(|limit| hits.len() >= limit) {
+                return Ok(hits);
+            }
         }
     }
     Ok(hits)
@@ -147,7 +153,7 @@ pub fn search_all(
         return Ok(Vec::new());
     }
 
-    let mut hits = scrawl_hits(base_dir, &needle, &scope)?;
+    let mut hits = scrawl_hits(base_dir, &needle, &scope, Some(MAX_HITS))?;
 
     let mut tag_haystack = String::new();
     // The full text, not the list's preview (first 100 characters). The longer a note, the
@@ -207,7 +213,7 @@ pub fn search_all(
 pub fn browse_all(base_dir: &Path) -> Result<Vec<SearchHit>, CoreError> {
     // A scan with no needle and no scope is a "let everything through" scan. It uses the
     // same entry as search
-    let mut hits = scrawl_hits(base_dir, "", &[])?;
+    let mut hits = scrawl_hits(base_dir, "", &[], None)?;
 
     // An unreadable note comes with an empty body (`scan`). Its title and snippet become
     // an empty row, but one note must not fail the whole list: same policy as `search_all`
@@ -252,7 +258,7 @@ pub fn find_backlinks(
     // same single link, and a backlink must not vanish over the way it is written
     let needle = format!("[[{stem}");
 
-    let mut hits = scrawl_hits(base_dir, &needle, &[])?;
+    let mut hits = scrawl_hits(base_dir, &needle, &[], Some(MAX_HITS))?;
 
     // An unreadable note comes with an empty body and just drops out of the backlinks.
     // Better than showing a list that cannot be opened
@@ -598,6 +604,68 @@ mod tests {
         assert_eq!(hits[0].date, "2025-04-11");
         assert_eq!(hits[MAX_HITS - 1].date, "2025-01-02");
         assert!(hits.iter().all(|h| h.date != "2025-01-01"));
+    }
+
+    #[test]
+    fn a_full_search_page_does_not_read_older_scrawl_days() {
+        let tmp = TempDir::new().unwrap();
+        let date = chrono::NaiveDate::from_ymd_opt(2025, 1, 2).unwrap();
+        let entries = (0..MAX_HITS)
+            .map(|index| format!("needle {index}"))
+            .collect::<Vec<_>>()
+            .join("\n- [09:00:00] ");
+        write_day(&tmp, date, &entries);
+        std::fs::write(tmp.path().join("data/scrawl/2025-01-01.md"), [0xff]).unwrap();
+
+        let hits = search_all(tmp.path(), "needle", &[]).unwrap();
+
+        assert_eq!(hits.len(), MAX_HITS);
+        assert_eq!(hits[0].index, Some(0));
+        assert_eq!(hits[MAX_HITS - 1].index, Some(MAX_HITS - 1));
+    }
+
+    #[test]
+    fn newer_notes_displace_scrawl_hits_from_a_full_search_page() {
+        let tmp = TempDir::new().unwrap();
+        let date = chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
+        for offset in 0..=MAX_HITS {
+            let day = date + chrono::Duration::days(i64::try_from(offset).unwrap());
+            write_day(&tmp, day, "needle");
+        }
+        crate::create_note_at(
+            tmp.path(),
+            "2025-04-12T09:00:00+09:00".parse().unwrap(),
+            "needle note",
+            &[],
+            &context(),
+            Provenance::default(),
+        )
+        .unwrap();
+
+        let hits = search_all(tmp.path(), "needle", &[]).unwrap();
+
+        assert_eq!(hits.len(), MAX_HITS);
+        assert_eq!(hits[0].kind, HitKind::Note);
+        assert_eq!(hits[0].date, "2025-04-12");
+        assert_eq!(hits[MAX_HITS - 1].date, "2025-01-03");
+    }
+
+    #[test]
+    fn a_search_page_counts_only_matches_in_the_tag_scope() {
+        let tmp = TempDir::new().unwrap();
+        let date = chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
+        let entries = (0..MAX_HITS)
+            .map(|index| format!("needle {index} #other\n- [09:00:00] needle {index} #wanted"))
+            .collect::<Vec<_>>()
+            .join("\n- [09:00:00] ");
+        write_day(&tmp, date, &entries);
+
+        let hits = search_all(tmp.path(), "needle", &["wanted".to_string()]).unwrap();
+
+        assert_eq!(hits.len(), MAX_HITS);
+        assert_eq!(hits[0].index, Some(1));
+        assert_eq!(hits[MAX_HITS - 1].index, Some(2 * MAX_HITS - 1));
+        assert!(hits.iter().all(|hit| hit.tags == ["wanted"]));
     }
 
     #[test]
