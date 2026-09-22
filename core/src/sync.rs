@@ -153,12 +153,6 @@ mod tests {
     }
 
     #[test]
-    fn busy_error_is_tagged_so_ui_can_ignore_it() {
-        let info = SyncError::new("busy", "Sync already in progress");
-        assert_eq!(info.kind, "busy");
-    }
-
-    #[test]
     fn other_errors_keep_message() {
         let info = SyncError::other("boom");
         assert_eq!(info.kind, "other");

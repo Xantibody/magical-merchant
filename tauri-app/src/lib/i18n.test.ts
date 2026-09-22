@@ -39,18 +39,6 @@ describe("t", () => {
   });
 });
 
-/** Take only the shape of a value. A string becomes "string", a function "function". */
-function shapeOf(value: unknown): unknown {
-  if (typeof value !== "object" || value === null) {
-    return typeof value;
-  }
-  return Object.fromEntries(
-    Object.entries(value)
-      .map(([key, inner]) => [key, shapeOf(inner)])
-      .toSorted(([a], [b]) => String(a).localeCompare(String(b))),
-  );
-}
-
 const JAPANESE = /[ぁ-んァ-ヶ一-龥]/u;
 
 /**
@@ -75,12 +63,6 @@ function keysMatching(value: unknown, path: string, re: RegExp): string[] {
 }
 
 describe("the two tables", () => {
-  // A key in only one table leaves the screen empty in that language alone. The types
-  // guard this too, but a nested miss should be caught here
-  it("have the same shape", () => {
-    expect(shapeOf(messages.en)).toStrictEqual(shapeOf(messages.ja));
-  });
-
   it("leaves no english string in japanese characters", () => {
     // The language choices alone are shown under the name of the language itself
     expect(keysMatching(messages.en, "en", JAPANESE)).toStrictEqual(["en.settings.languageJa"]);

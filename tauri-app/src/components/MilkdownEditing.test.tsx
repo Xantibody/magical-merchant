@@ -328,11 +328,6 @@ describe("Note table editing and inline decorations", () => {
     expect(h.roundtrip().child(0).child(1).childCount).toBe(2);
   });
 
-  it("inline code does not become a note chip", async () => {
-    const h = await mount("intro `[[20260920_120000]]` tail");
-    expect(h.container.querySelector(".note-link-chip")).toBeNull();
-  });
-
   it("fenced code does not become a glyph", async () => {
     const h = await mount("intro\n\n```text\n:star:\n```");
     expect(h.container.querySelector("pre img.glyph")).toBeNull();

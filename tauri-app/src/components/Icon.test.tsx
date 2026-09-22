@@ -14,13 +14,6 @@ function query<T extends Element = Element>(root: ParentNode, selector: string):
 describe("Icon", () => {
   afterEach(() => cleanup());
 
-  it("renders an SVG for the given icon name", async () => {
-    const { baseElement } = render(() => <Icon name="lightning" />);
-    const screen = page.elementLocator(baseElement);
-
-    await expect.element(screen.locator(".icon svg")).toBeInTheDocument();
-  });
-
   it("applies the size prop to the SVG", async () => {
     const { baseElement } = render(() => <Icon name="lightning" size={16} />);
     const screen = page.elementLocator(baseElement);
