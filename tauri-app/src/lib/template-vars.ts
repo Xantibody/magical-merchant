@@ -13,6 +13,7 @@
 import { t } from "./i18n";
 import type { Locale } from "./i18n";
 import { sameTag } from "./tags";
+import { dropExamples } from "./template-examples";
 
 const WEEKDAYS: Record<Locale, string[]> = {
   ja: ["日", "月", "火", "水", "木", "金", "土"],
@@ -74,7 +75,7 @@ export function resolveLine(line: string, now: Date, locale: Locale, prev = ""):
  * 決まらない。
  */
 export function resolveBody(body: string, now: Date, locale: Locale): string {
-  return body
+  return dropExamples(body)
     .split("\n")
     .map((line) => resolveLine(line, now, locale, "{{prev}}"))
     .join("\n");
@@ -139,4 +140,7 @@ export const TEMPLATE_VARS: readonly TemplateVar[] = [
   { token: "{{time}}", label: () => t().templates.varTime },
   { token: "{{weekday}}", label: () => t().templates.varWeekday },
   { token: "{{prev}}", label: () => t().templates.varPrev },
+  // 値にならない唯一の変数。下に書いた行を「ノートには書かれない記入例」に
+  // する印で、解決ではなく行落としが仕事(`core/src/template/vars.rs`)
+  { token: "{{eg}}", label: () => t().templates.varExample },
 ];

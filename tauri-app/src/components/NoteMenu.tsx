@@ -15,10 +15,14 @@ interface NoteMenuProps {
   kind: NoteKind;
   mapOpen: boolean;
   readOnly: boolean;
+  /** テンプレの記入例を持つノートか。持たない相手に切り替えは出さない。 */
+  hasExamples: boolean;
+  examplesShown: boolean;
   /** この端末に「編集前の本文」が残っているか。無ければ押せない。 */
   revertable: boolean;
   onToggleMap: () => void;
   onToggleReadOnly: () => void;
+  onToggleExamples: () => void;
   onRevert: () => void;
   onInfo: () => void;
   onPromote: () => void;
@@ -143,6 +147,15 @@ export default function NoteMenu(props: NoteMenuProps): JSX.Element {
               label={props.readOnly ? t().notes.makeEditable : t().notes.makeReadOnly}
               onClick={() => props.onToggleReadOnly()}
             />
+            {/* 記入例を持たないノートには出さない。押しても何も変わらない行は、
+                読む人に「効かなかった」としか伝わらない */}
+            <Show when={props.hasExamples}>
+              <Row
+                icon={<Icon name="file-text" size={15} />}
+                label={props.examplesShown ? t().notes.hideExamples : t().notes.showExamples}
+                onClick={() => props.onToggleExamples()}
+              />
+            </Show>
             <Show when={props.kind === "note"}>
               <Row
                 icon={<Icon name="book" size={15} />}
