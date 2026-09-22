@@ -12,9 +12,10 @@ pub fn ensure_dir(path: &Path) -> Result<(), CoreError> {
 }
 
 /// Resolves a validated filename to the real file path directly under `dir`.
-/// Validating the name alone still allows escaping `dir` through a symbolic link,
-/// so it also checks that the canonicalized target sits under `dir`.
-/// This is a security boundary, so it lives here only and is not copied per storage location.
+///
+/// Validating the name alone still allows escaping `dir` through a symbolic link, so it also checks
+/// that the canonicalized target sits under `dir`. This is a security boundary, so it lives here
+/// only and is not copied per storage location.
 pub fn resolve_existing(dir: &Path, filename: &str) -> Result<PathBuf, CoreError> {
     let path = dir.join(filename);
     if !path.exists() {
@@ -33,11 +34,11 @@ pub fn resolve_existing(dir: &Path, filename: &str) -> Result<PathBuf, CoreError
 static TMP_SEQ: AtomicU64 = AtomicU64::new(0);
 
 /// Writes a temporary file in the same directory, then replaces the target by rename.
-/// Overwriting directly with `fs::write` leaves a half-written file if the process
-/// dies mid-write. Scrawl rewrites a whole day on every append, so that would mean
-/// the corruption of the entire day's record.
-/// A rename is atomic within one filesystem, so a reader sees either the old
-/// content or the new, never anything else.
+///
+/// Overwriting directly with `fs::write` leaves a half-written file if the process dies mid-write.
+/// Scrawl rewrites a whole day on every append, so that would mean the corruption of the entire
+/// day's record. A rename is atomic within one filesystem, so a reader sees either the old content
+/// or the new, never anything else.
 ///
 /// The name is `.sync-tmp-` so that a leftover from a crash matches the existing
 /// exclusion of the sync scan, and without `.md` it does not show up in the note list.

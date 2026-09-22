@@ -111,10 +111,11 @@ pub fn parse<T: DeserializeOwned>(content: &str) -> Result<(T, &str), CoreError>
     Ok((fm, body))
 }
 
-/// Drops the frontmatter and returns only the body. Unlike `parse` it does not look
-/// at the YAML, so a file with broken metadata does not leak it into the body on screen.
-/// If the delimiter is not closed it is not treated as a frontmatter and the whole
-/// text is returned.
+/// Drops the frontmatter and returns only the body.
+///
+/// Unlike `parse` it does not look at the YAML, so a file with broken metadata does not leak it
+/// into the body on screen. If the delimiter is not closed it is not treated as a frontmatter and
+/// the whole text is returned.
 #[must_use]
 pub fn strip(content: &str) -> &str {
     match split(content) {
@@ -123,9 +124,10 @@ pub fn strip(content: &str) -> &str {
     }
 }
 
-/// Whether there is no delimiter at all. When `parse` fails, this tells "the record
-/// is broken" from "there is no record in the first place": rebuilding the former
-/// erases the original record, while the latter has nothing to erase.
+/// Whether there is no delimiter at all.
+///
+/// When `parse` fails, this tells "the record is broken" from "there is no record in the first
+/// place": rebuilding the former erases the original record, while the latter has nothing to erase.
 // AIDEV-NOTE: Asks for the side that may be rebuilt, not "is there a closed delimiter". In the negated form Unclosed fell on the permitted side
 #[must_use]
 pub fn is_plain_markdown(content: &str) -> bool {

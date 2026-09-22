@@ -20,10 +20,11 @@ pub fn scrawl_file_path(base_dir: &Path, date: NaiveDate) -> PathBuf {
         .join(format!("{}.md", date.format("%Y-%m-%d")))
 }
 
-/// The filename follows the wall clock of the place the timestamp points at. It
-/// takes a `FixedOffset` so the same type as the frontmatter `time` is carried
-/// through as is: converting to the device's timezone here would shift only the
-/// date in the ID when a `+09:00` record is rebuilt in another place.
+/// The filename follows the wall clock of the place the timestamp points at.
+///
+/// It takes a `FixedOffset` so the same type as the frontmatter `time` is carried through as is:
+/// converting to the device's timezone here would shift only the date in the ID when a `+09:00`
+/// record is rebuilt in another place.
 #[must_use]
 pub fn note_file_path(base_dir: &Path, timestamp: DateTime<FixedOffset>) -> PathBuf {
     data_dir(base_dir)
@@ -36,17 +37,19 @@ pub fn notes_dir(base_dir: &Path) -> PathBuf {
     data_dir(base_dir).join(NOTES_DIR)
 }
 
-/// Where templates live. Inside `data/` because templates should sync too.
-/// With different templates per device, tapping the same name from the widget
-/// would produce a different note depending on the device.
+/// Where templates live.
+///
+/// Inside `data/` because templates should sync too. With different templates per device, tapping
+/// the same name from the widget would produce a different note depending on the device.
 #[must_use]
 pub fn templates_dir(base_dir: &Path) -> PathBuf {
     data_dir(base_dir).join(TEMPLATES_DIR)
 }
 
-/// Where special-character (glyph) images live. Inside `data/` because the images
-/// should sync too. If a note with `:236p:` showed as plain text on another device,
-/// registering it would be pointless. The sync scan walks everything under data
+/// Where special-character (glyph) images live.
+///
+/// Inside `data/` because the images should sync too. If a note with `:236p:` showed as plain text
+/// on another device, registering it would be pointless. The sync scan walks everything under data
 /// without selecting by extension.
 #[must_use]
 pub fn glyphs_dir(base_dir: &Path) -> PathBuf {

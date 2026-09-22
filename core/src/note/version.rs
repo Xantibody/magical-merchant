@@ -244,10 +244,11 @@ fn unified_diff(old: &str, new: &str, old_name: &str, new_name: &str) -> String 
         .to_string()
 }
 
-/// Make a version's body the draft. The current draft is committed first as a
-/// [`BEFORE_RESTORE`] version, so the restore itself can be undone. The write takes the
-/// same path as `update_note`: a stale `expected` gives [`CoreError::Stale`] and writes
-/// nothing (and commits nothing).
+/// Make a version's body the draft.
+///
+/// The current draft is committed first as a [`BEFORE_RESTORE`] version, so the restore itself can
+/// be undone. The write takes the same path as `update_note`: a stale `expected` gives
+/// [`CoreError::Stale`] and writes nothing (and commits nothing).
 pub fn restore_note_version(
     base_dir: &Path,
     filename: &NoteFilename,

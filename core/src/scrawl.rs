@@ -12,9 +12,11 @@ use chrono::NaiveDate;
 use crate::error::CoreError;
 use crate::utils::device::{Context, Source};
 
-/// Adds one line to today's file. `source` is the entry point the writer names itself as;
-/// the app, the CLI and the widget all go through the same core function (the MCP server
-/// only reads Scrawl), so unless it is named here the records cannot tell them apart.
+/// Adds one line to today's file.
+///
+/// `source` is the entry point the writer names itself as; the app, the CLI and the widget all go
+/// through the same core function (the MCP server only reads Scrawl), so unless it is named here
+/// the records cannot tell them apart.
 pub fn save_scrawl_entry(
     base_dir: &Path,
     text: &str,

@@ -25,10 +25,12 @@ use crate::utils::device::Context;
 use crate::utils::frontmatter::{self, Provenance};
 use crate::utils::validated::NoteFilename;
 
-/// Create one note. The provenance ([`Provenance`]) is a record that can be written only
-/// at creation; [`Provenance::default`] when nothing is declared. Promoting a Scrawl entry
-/// is the same call with `origin` attached: growing a function per path would break every
-/// signature each time one more provenance record is added.
+/// Create one note.
+///
+/// The provenance ([`Provenance`]) is a record that can be written only at creation;
+/// [`Provenance::default`] when nothing is declared. Promoting a Scrawl entry is the same call with
+/// `origin` attached: growing a function per path would break every signature each time one more
+/// provenance record is added.
 pub fn create_draft_note(
     base_dir: &Path,
     body: &str,
@@ -39,10 +41,11 @@ pub fn create_draft_note(
     Notes::new(base_dir.to_path_buf()).create(body, tags, context, provenance)
 }
 
-/// Create one Codex (a document that keeps growing and commits versions). Only the
-/// location becomes `data/codex/`; the naming and the frontmatter are the same as
-/// [`create_draft_note`]. It is a separate entry rather than a `kind` argument so that no
-/// caller unaware of Codex (CLI, MCP, templates) has to change.
+/// Create one Codex (a document that keeps growing and commits versions).
+///
+/// Only the location becomes `data/codex/`; the naming and the frontmatter are the same as
+/// [`create_draft_note`]. It is a separate entry rather than a `kind` argument so that no caller
+/// unaware of Codex (CLI, MCP, templates) has to change.
 pub fn create_draft_codex(
     base_dir: &Path,
     body: &str,
@@ -53,17 +56,20 @@ pub fn create_draft_codex(
     Notes::new(base_dir.to_path_buf()).create_codex(body, tags, context, provenance)
 }
 
-/// Turn a note into a Codex. Neither the ID nor the content changes; only the location
-/// moves to `data/codex/`. There is no entry back: turning a document that has started
-/// committing versions back into a plain note would leave its versions belonging to
-/// nothing. If it is already a Codex, nothing happens.
+/// Turn a note into a Codex.
+///
+/// Neither the ID nor the content changes; only the location moves to `data/codex/`. There is no
+/// entry back: turning a document that has started committing versions back into a plain note would
+/// leave its versions belonging to nothing. If it is already a Codex, nothing happens.
 pub fn promote_note_to_codex(base_dir: &Path, filename: &NoteFilename) -> Result<(), CoreError> {
     Notes::new(base_dir.to_path_buf()).promote_to_codex(filename)
 }
 
-/// Create one note with a given creation time. It is the entry for moving in records that
-/// lived elsewhere; otherwise it is the same as [`create_draft_note`] (the naming, the
-/// one-second step when the same second is taken, and the frontmatter all follow core's rules).
+/// Create one note with a given creation time.
+///
+/// It is the entry for moving in records that lived elsewhere; otherwise it is the same as
+/// [`create_draft_note`] (the naming, the one-second step when the same second is taken, and the
+/// frontmatter all follow core's rules).
 ///
 /// The filename is the creation time itself, that is, the immutable ID, so naming a moved
 /// record after "now" loses its original date for good. Pass the time with its own offset
@@ -79,9 +85,11 @@ pub fn create_note_at(
     Notes::new(base_dir.to_path_buf()).create_at(time, body, tags, context, provenance)
 }
 
-/// Rewrite the body. With the [`Revision`] as read attached in `expected`, the write is
-/// refused with [`CoreError::Stale`] if the body changed in between.
-/// It returns the revision of the written body: the `expected` for the next write.
+/// Rewrite the body.
+///
+/// With the [`Revision`] as read attached in `expected`, the write is refused with
+/// [`CoreError::Stale`] if the body changed in between. It returns the revision of the written
+/// body: the `expected` for the next write.
 pub fn update_note(
     file_path: &Path,
     body: &str,
@@ -91,9 +99,11 @@ pub fn update_note(
     Notes::update(file_path, body, context, expected)
 }
 
-/// Look up a note's kind and actual location from its ID. Entries that rewrite the body
-/// (CLI, MCP) pass the path obtained here to [`update_note`]: hardcoding `notes/` would
-/// make a note turned into a Codex "missing", or recreate a plain note beside it.
+/// Look up a note's kind and actual location from its ID.
+///
+/// Entries that rewrite the body (CLI, MCP) pass the path obtained here to [`update_note`]:
+/// hardcoding `notes/` would make a note turned into a Codex "missing", or recreate a plain note
+/// beside it.
 pub fn locate_note(
     base_dir: &Path,
     filename: &NoteFilename,
@@ -123,9 +133,11 @@ pub fn delete_note(base_dir: &Path, filename: &NoteFilename) -> Result<(), CoreE
     Notes::new(base_dir.to_path_buf()).delete(filename)
 }
 
-/// Return one note's frontmatter as it is. `NoteSummary` is the digest for the list (with
-/// a body preview, and tags already merged with the body's `#` syntax); this is "the record
-/// written in the file" itself, which the metadata edit panel looks at.
+/// Return one note's frontmatter as it is.
+///
+/// `NoteSummary` is the digest for the list (with a body preview, and tags already merged with the
+/// body's `#` syntax); this is "the record written in the file" itself, which the metadata edit
+/// panel looks at.
 pub fn read_note_meta(
     base_dir: &Path,
     filename: &NoteFilename,
@@ -170,17 +182,19 @@ pub fn repair_notes(base_dir: &Path) -> Result<usize, CoreError> {
     repair::repair_all(&crate::utils::paths::notes_dir(base_dir))
 }
 
-/// Move conflict copies that an old build put in `data/` to `conflicts/`. Returns the count moved.
-/// The app calls it once per process at start, and the sync engine calls it under the
-/// lock before every scan.
+/// Move conflict copies that an old build put in `data/` to `conflicts/`.
+///
+/// Returns the count moved. The app calls it once per process at start, and the sync engine calls
+/// it under the lock before every scan.
 #[must_use]
 pub fn relocate_conflict_copies(base_dir: &Path) -> usize {
     repair::relocate_conflict_copies(base_dir)
 }
 
 /// If the same ID is in both `notes/` and `codex/`, move the `notes/` side to `conflicts/`.
-/// Returns the count moved. The sync engine calls it under the lock before the scan and
-/// again after a successful run; the app also calls it once per process at start.
+///
+/// Returns the count moved. The sync engine calls it under the lock before the scan and again after
+/// a successful run; the app also calls it once per process at start.
 #[must_use]
 pub fn relocate_duplicate_ids(base_dir: &Path) -> usize {
     repair::relocate_duplicate_ids(base_dir)
