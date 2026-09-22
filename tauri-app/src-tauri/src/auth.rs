@@ -10,7 +10,11 @@ use magical_merchant_core::sync::config::{SyncConfig, normalize_workers_url};
 #[cfg(not(target_os = "android"))]
 use magical_merchant_core::sync::token::store_token;
 use magical_merchant_core::sync::token::{clear_token, get_token, is_token_valid};
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
+// ログイン窓を探して作るのはデスクトップだけ。Android は既定のブラウザへ
+// 投げるので、この trait を使う先がない
+#[cfg(not(target_os = "android"))]
+use tauri::Manager;
 #[cfg(target_os = "android")]
 use tauri_plugin_opener::OpenerExt;
 #[cfg(not(target_os = "android"))]
@@ -404,7 +408,7 @@ mod tests {
 
 #[tauri::command]
 pub(crate) async fn auth_login(handle: AppHandle) -> Result<(), String> {
-    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let base_dir = crate::app_base_dir(&handle)?;
     let config = SyncConfig::load(&base_dir)
         .map_err(|e| e.message)?
         .unwrap_or_default();
@@ -431,13 +435,13 @@ pub(crate) async fn auth_login(handle: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 pub(crate) fn auth_status(handle: AppHandle) -> Result<bool, String> {
-    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let base_dir = crate::app_base_dir(&handle)?;
     Ok(get_token(&base_dir)?.is_some_and(|token| is_token_valid(&token)))
 }
 
 #[tauri::command]
 pub(crate) fn auth_logout(handle: AppHandle) -> Result<(), String> {
-    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let base_dir = crate::app_base_dir(&handle)?;
     clear_token(&base_dir)
 }
 
@@ -445,16 +449,13 @@ pub(crate) fn auth_logout(handle: AppHandle) -> Result<(), String> {
 /// 設定画面が空欄で開き、入力し直した URL が壊れたファイルを上書きする
 #[tauri::command]
 pub(crate) fn get_sync_config(handle: AppHandle) -> Result<SyncConfig, SyncError> {
-    let base_dir = handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| SyncError::other(e.to_string()))?;
+    let base_dir = crate::app_base_dir(&handle).map_err(SyncError::other)?;
     Ok(SyncConfig::load(&base_dir)?.unwrap_or_default())
 }
 
 #[tauri::command]
 pub(crate) fn save_sync_config(handle: AppHandle, config: SyncConfig) -> Result<(), String> {
-    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let base_dir = crate::app_base_dir(&handle)?;
     let config = SyncConfig {
         workers_url: normalize_workers_url(&config.workers_url)?,
         auto_sync: config.auto_sync,
@@ -464,6 +465,6 @@ pub(crate) fn save_sync_config(handle: AppHandle, config: SyncConfig) -> Result<
 
 #[tauri::command]
 pub(crate) fn is_sync_config_editable(handle: AppHandle) -> Result<bool, String> {
-    let base_dir = handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let base_dir = crate::app_base_dir(&handle)?;
     Ok(SyncConfig::is_editable(&base_dir))
 }

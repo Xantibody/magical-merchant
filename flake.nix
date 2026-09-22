@@ -106,6 +106,14 @@
           typescript
           just
         ];
+        # Source comments: Vale (English style + no Japanese) and typos (spelling)
+        # read .vale.ini / typos.toml at the repo root; go runs the script that
+        # narrows Vale to the lines a change added. See `just comments`
+        commentLint = with pkgs; [
+          vale
+          typos
+          go
+        ];
 
         # `tauri android init` は rustup 前提。Nix がターゲットを持っているので no-op にする
         rustupShimHook = ''
@@ -139,6 +147,11 @@
 
         treefmtEval = treefmt-nix.lib.evalModule pkgs {
           projectRootFile = "flake.nix";
+          # fixtures/ はアプリが書いたままの姿でなければ意味がない見本データで、
+          # ソースではない。整形器に通すと frontmatter の直後に空行が入り、
+          # 「本文の 1 行目がタイトル」という約束が崩れる
+          # (core/tests/fixtures.rs の every_note_body_opens_with_its_title)。
+          settings.global.excludes = [ "fixtures/**" ];
           programs.nixfmt.enable = true;
           programs.rustfmt.enable = true;
           programs.taplo.enable = true;
@@ -173,6 +186,7 @@
                 pkgs.agent-browser
               ]
               ++ jsToolchain
+              ++ commentLint
               ++ linuxTauriDeps;
             shellHook = rustupShimHook;
           }
@@ -203,6 +217,11 @@
         # wrangler は workers/package.json の devDependency なので nix 版は不要
         devShells.workers = pkgs.mkShell {
           buildInputs = jsToolchain;
+        };
+
+        # CI's comment lint: two static binaries, no toolchain
+        devShells.comments = pkgs.mkShell {
+          buildInputs = commentLint ++ [ pkgs.just ];
         };
       }
     )

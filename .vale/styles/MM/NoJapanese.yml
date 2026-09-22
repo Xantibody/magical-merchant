@@ -1,0 +1,9 @@
+# Comments are written in English: the reader is an AI session, and one
+# language keeps the terminology greppable. User-facing Japanese lives in
+# string literals (lib/i18n.ts, widget_strings.xml), which Vale never sees.
+extends: existence
+message: "Comments are English; '%s' is Japanese"
+level: error
+nonword: true
+tokens:
+  - '[\p{Hiragana}\p{Katakana}\p{Han}。、「」（）]+'

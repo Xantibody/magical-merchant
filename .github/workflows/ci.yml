@@ -41,6 +41,7 @@ jobs:
       macos-package: ${{ steps.filter.outputs.macos-package || 'true' }}
       nix-mcp: ${{ steps.filter.outputs.nix-mcp || 'true' }}
       android: ${{ steps.filter.outputs.android || 'true' }}
+      comments: ${{ steps.filter.outputs.comments || 'true' }}
     steps:
       # AIDEV-NOTE: persist-credentials: false は公開リポジトリだから置ける。paths-filter の git fetch は匿名で通る
       - uses: actions/checkout@v7
@@ -143,6 +144,20 @@ jobs:
               - 'tauri-app/src-tauri/**'
               - 'tauri-app/justfile'
               - 'Cargo.lock'
+              - 'flake.nix'
+              - 'flake.lock'
+            # Everything the comments job reads
+            comments:
+              - '**/*.rs'
+              - '**/*.ts'
+              - '**/*.tsx'
+              - '**/*.js'
+              - '**/*.css'
+              - '.vale.ini'
+              - '.vale/**'
+              - 'typos.toml'
+              - 'scripts/comments-changed/**'
+              - 'justfile'
               - 'flake.nix'
               - 'flake.lock'
 
@@ -415,3 +430,26 @@ jobs:
           hash: ${{ hashFiles('flake.lock', 'flake.nix') }}
           max-store-size: 2G
       - run: nix fmt -- --fail-on-change
+
+  # Source comments are English and spelled right (justfile: comments). Vale
+  # is applied to the lines this run added, not to whole files: the tree still
+  # carries Japanese comments from before the switch, and a one-line fix must
+  # not have to translate the 100 lines around it. typos covers the whole tree
+  comments:
+    needs: changes
+    if: needs.changes.outputs.comments == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          # HEAD^1 is the base: on a PR the merge commit's first parent is
+          # main, on a push to main it is the previous main
+          fetch-depth: 2
+      - uses: ./.github/actions/setup-nix
+        with:
+          name: comments
+          hash: ${{ hashFiles('flake.lock', 'flake.nix') }}
+          max-store-size: 2G
+      - run: nix develop .#comments --command just comments-changed HEAD^1

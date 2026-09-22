@@ -32,6 +32,8 @@ export interface NoteItem {
   origin?: string;
   /** 読み取り専用にしたノート。一覧が鍵を出す。 */
   readOnly: boolean;
+  /** 生まれ元のテンプレ名。開いたときに記入例を引くのに使う。 */
+  template?: string;
   /** 刻んだ版の数。Codex の行だけが持ち、角折りページの記号に出る。 */
   versionCount?: number;
   /** 最新の版から下書きが動いたか。Codex の行だけ。 */
@@ -90,6 +92,7 @@ export function toNoteItems(notes: Note[]): NoteItem[] {
     preview: note.preview,
     origin: note.origin,
     readOnly: resolveNoteView(note.view) === "preview",
+    template: note.template,
     versionCount: note.version_count,
     dirty: note.dirty,
   }));

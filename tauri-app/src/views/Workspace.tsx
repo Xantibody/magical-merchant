@@ -29,6 +29,7 @@ import { getDeviceSignals } from "../lib/client-context";
 import { createDebouncedAccessor } from "../lib/debounce";
 import { diffLineCounts, markedBody } from "../lib/diff-marks";
 import { glyphs } from "../lib/glyphs";
+import { examplesShown, extractExamples, setExamplesShown } from "../lib/template-examples";
 import { useShell } from "../lib/shell";
 import {
   groupNotes,
@@ -71,6 +72,8 @@ const SAVED_MS = 2000;
 const MAP_DEBOUNCE_MS = 300;
 /** 刻んだばかりの版が跳ねている時間(`mm-pop`)。過ぎたら普通の行に戻す。 */
 const POP_MS = 350;
+/** 記入例を持たないノートが渡す空表。作り直すとプラグインが毎回描き直す。 */
+const NO_EXAMPLES: ReadonlyMap<string, string[]> = new Map();
 /** 一覧の中で隣の行へ送るキーと、その向き。 */
 const LIST_STEP_KEYS: Readonly<Record<string, 1 | -1>> = { ArrowUp: -1, ArrowDown: 1 };
 
@@ -336,6 +339,29 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     allItems()
       .filter((item) => item.id !== selected()?.id)
       .map((item) => ({ id: item.filename.replace(/\.md$/u, ""), title: item.title }));
+
+  /**
+   * テンプレの記入例。テンプレから生まれたノートだけが引く。
+   *
+   * ノートのファイルには一度も書かれないので、本文から読むことはできない —
+   * 出自(`template:`)の言うテンプレを読み直すしかない。読めなければ何も
+   * 出さない: テンプレを消した人に、消したものを出し続けない。
+   */
+  const [templateExamples] = createResource(
+    () => (examplesShown() ? selected()?.template : undefined),
+    async (name) => {
+      try {
+        const detail = await typedInvoke("read_template", { filename: `${name}.md` });
+        return extractExamples(detail.body);
+      } catch {
+        return new Map<string, string[]>();
+      }
+    },
+  );
+  // createResource は源が undefined になっても最後の値を抱えたままなので、
+  // 畳んだかどうかはここでもう一度見る
+  const examples = (): ReadonlyMap<string, string[]> =>
+    examplesShown() ? (templateExamples() ?? NO_EXAMPLES) : NO_EXAMPLES;
 
   // このノートを [[ID]] で指している記録。開くたびに走査で導出される
   const [backlinks] = createResource(
@@ -1404,12 +1430,16 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                       mapOpen={mapOpen()}
                       readOnly={readOnly()}
                       revertable={revertable()}
+                      // 畳んでいるあいだは表が空なので、出自のテンプレで測る
+                      hasExamples={item().template !== undefined}
+                      examplesShown={examplesShown()}
                       onToggleMap={() => {
                         void toggleMap(item());
                       }}
                       onToggleReadOnly={() => {
                         void toggleReadOnly(item());
                       }}
+                      onToggleExamples={() => setExamplesShown(!examplesShown())}
                       onRevert={() => {
                         void revertEdit(item());
                       }}
@@ -1565,6 +1595,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                             placeholder={t().notes.bodyPlaceholder}
                             noteLinks={linkTargets}
                             glyphs={glyphs}
+                            examples={examples}
                             defaultValue={noteBody()}
                             onChange={(markdown) => {
                               if (!loaded()) {

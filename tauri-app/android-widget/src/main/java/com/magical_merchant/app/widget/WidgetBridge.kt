@@ -122,7 +122,7 @@ internal object WidgetBridge {
      * normal state — the app may simply not have been opened yet.
      *
      * Normal, but not silent: an empty result is logged because it is also what
-     * a broken JNI link and an unparseable payload look like from here.
+     * a broken JNI link and an unparsable payload look like from here.
      */
     fun readCapture(context: Context): CaptureData =
         runCatching { parseCapture(read(context, ::readCaptureData)) }

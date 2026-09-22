@@ -323,7 +323,7 @@ mod tests {
             &mock_context(),
             Provenance {
                 source: Some(Source::Import),
-                template: Some("jounal"),
+                template: Some("journal"),
                 ..Provenance::default()
             },
         )
@@ -331,7 +331,7 @@ mod tests {
 
         let meta = read_note_meta(tmp.path(), &filename_of(&path)).unwrap();
         assert_eq!(meta.source, Some("import".to_string()));
-        assert_eq!(meta.template, Some("jounal".to_string()));
+        assert_eq!(meta.template, Some("journal".to_string()));
         assert_eq!(meta.updated, None, "取り込んだ時点ではまだ書き直していない");
     }
 

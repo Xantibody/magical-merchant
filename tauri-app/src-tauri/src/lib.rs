@@ -55,7 +55,19 @@ where
         .map_err(|e| e.to_string())?
 }
 
-fn app_base_dir(handle: &AppHandle) -> Result<std::path::PathBuf, String> {
+/// このアプリのデータの在処。ノートも同期の設定もトークンも、ここから下に
+/// しか無い。
+///
+/// debug ビルドに限り `MAGICAL_MERCHANT_DATA_DIR` で差し替えられる。CLI が
+/// 前から持っている同じ変数(`cli/src/main.rs`)に揃えたもので、本番の記録を
+/// 触らずに新機能を試すための入口 — `just sandbox` がこれを使う。配ったアプリ
+/// が環境変数でデータの置き場を変えられる必要はないので、release では枝ごと
+/// 消える。
+pub(crate) fn app_base_dir(handle: &AppHandle) -> Result<std::path::PathBuf, String> {
+    #[cfg(debug_assertions)]
+    if let Some(dir) = std::env::var_os("MAGICAL_MERCHANT_DATA_DIR") {
+        return Ok(std::path::PathBuf::from(dir));
+    }
     handle.path().app_data_dir().map_err(|e| e.to_string())
 }
 

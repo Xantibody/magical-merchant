@@ -1,4 +1,4 @@
-import { createSignal, Show, onCleanup, onMount } from "solid-js";
+import { createEffect, createSignal, Show, onCleanup, onMount } from "solid-js";
 import TableMenu from "./TableMenu";
 import { tableMenuPlugin } from "../lib/table-menu-plugin";
 import { Editor, rootCtx, defaultValueCtx, editorViewCtx } from "@milkdown/kit/core";
@@ -28,6 +28,7 @@ import { createPlaceholderPlugin } from "../lib/placeholder-plugin";
 import { createNoteLinkPlugin } from "../lib/note-link-plugin";
 import type { NoteLinkTarget } from "../lib/note-link-plugin";
 import { createGlyphPlugin } from "../lib/glyph-plugin";
+import { createExamplePlugin } from "../lib/example-plugin";
 import { getShikiTheme } from "../lib/theme";
 import "../styles/editor.css";
 import type { JSX } from "solid-js";
@@ -50,6 +51,8 @@ interface MilkdownEditorProps {
   noteLinks?: () => NoteLinkTarget[];
   /** `:name:` を画像で見せるための登録表。渡したときだけ有効。 */
   glyphs?: () => ReadonlyMap<string, string>;
+  /** 見出し → テンプレの記入例。文書には入らず、薄字で添えるだけ。 */
+  examples?: () => ReadonlyMap<string, string[]>;
 }
 
 /**
@@ -149,6 +152,17 @@ export default function MilkdownEditor(props: MilkdownEditorProps): JSX.Element 
     apply(false);
   };
 
+  // 記入例の出し入れは文書を動かさないので、ProseMirror は描き直す理由を
+  // 持たない。空のトランザクションを 1 つ流して decorations を引き直させる —
+  // 文書もカーソルも変わらないまま、薄字だけが付いたり消えたりする
+  createEffect(() => {
+    props.examples?.();
+    editor?.action((ctx) => {
+      const view = ctx.get(editorViewCtx);
+      view.dispatch(view.state.tr);
+    });
+  });
+
   onMount(async () => {
     const root = ref;
     if (!root) {
@@ -208,6 +222,7 @@ export default function MilkdownEditor(props: MilkdownEditorProps): JSX.Element 
       .use(props.placeholder ? createPlaceholderPlugin(props.placeholder) : [])
       .use(props.noteLinks ? createNoteLinkPlugin(props.noteLinks) : [])
       .use(props.glyphs ? createGlyphPlugin(props.glyphs) : [])
+      .use(props.examples ? createExamplePlugin(props.examples) : [])
       .create();
 
     // create を待つあいだに畳まれていた(一覧を素早く送った・本文が入れ替わった)。

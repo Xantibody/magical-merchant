@@ -702,6 +702,13 @@ const unifiedDiff = (from, to, fromName, toName) => {
       },
     ],
     [
+      "review.md",
+      {
+        tags: ["review"],
+        body: "### 1. 状況（Context）\n{{eg}}\n- その場の状態と、本来の方向性は？\n- どんなズレや違和感があったか？\n\n### 2. 影響（Impact）\n{{eg}}\n- 行動や結果にどう影響したか？\n\n### 3. 次の一手（Next Action）\n{{eg}}\n- 次に同じ状況で使う「トリガー」は？",
+      },
+    ],
+    [
       "meeting.md",
       {
         tags: ["meeting"],
@@ -724,6 +731,30 @@ const unifiedDiff = (from, to, fromName, toName) => {
   };
 
   const PREV_LINE = /\{\{\s*prev\s*(?::[^}]*)?\}\}/u;
+  /** 記入例ブロックの開き印。core と同じく、行がまるごとこれのときだけ。 */
+  const EG_MARKER = /^\{\{\s*eg\s*(?::[^}]*)?\}\}$/u;
+
+  /**
+   * 記入例を落とす。core の `resolve_vars` と同じ規則 — 印の行と、空行か
+   * 次の見出しまでのブロックはノートに書かれない。
+   * @param {string[]} lines
+   */
+  const withoutExamples = (lines) => {
+    const kept = [];
+    let dropping = false;
+    for (const line of lines) {
+      const trimmed = line.trim();
+      // ブロックを閉じる行(空行・見出し)はブロックの外なので残る
+      const inside = dropping && trimmed !== "" && !trimmed.startsWith("#");
+      if (!inside) {
+        dropping = EG_MARKER.test(trimmed);
+        if (!dropping) {
+          kept.push(line);
+        }
+      }
+    }
+    return kept;
+  };
 
   /**
    * core の `resolve_vars` と同じ規則で解く。ハーネスだけ違う結果を返すと、
@@ -733,8 +764,7 @@ const unifiedDiff = (from, to, fromName, toName) => {
    * @param {string} locale
    */
   const resolveVars = (body, prev, locale) =>
-    body
-      .split("\n")
+    withoutExamples(body.split("\n"))
       // 前回が無いときは、その行を丸ごと落とす(「前回: 」だけを残さない)
       .filter((line) => prev !== null || !PREV_LINE.test(line))
       .map((line) =>

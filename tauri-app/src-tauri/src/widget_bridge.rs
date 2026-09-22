@@ -28,7 +28,7 @@ use crate::widget_summary;
 /// a value the Rust side already knows.
 const WIDGET_SOURCE: Source = Source::Widget;
 
-/// Appends `text` to today's scrawl file under `base_dir`.
+/// Appends `text` to today's Scrawl file under `base_dir`.
 ///
 /// The symbol name is the JNI mangling of
 /// `com.magical_merchant.app.widget.WidgetBridge.saveQuickCapture`: dots become
