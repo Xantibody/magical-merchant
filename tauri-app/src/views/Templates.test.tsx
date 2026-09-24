@@ -28,7 +28,7 @@ const drafts = new Map<string, { body: string; tags: string[] }>();
 const discardedDrafts: string[] = [];
 const renamed: { from: string; to: string }[] = [];
 /** The notes on disk, by the template they came from. Only `template` is read here. */
-const notes: { template?: string }[] = [];
+const notes: { template?: string; filename?: string; time?: string; preview?: string }[] = [];
 
 function mockCommands(): void {
   mockIPC((cmd, args) => {
@@ -250,16 +250,63 @@ describe("Templates", () => {
   });
 
   // Without seeing the body too, there is no way to check that a line with a variable comes out as intended
-  it("previews the body once the preview is opened", async () => {
+  it("previews the body as it will be written today", async () => {
     const { container } = await openDaily();
     const now = new Date();
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
-    fireEvent.input(bodyInput(container), { target: { value: "## {{date}} のメモ" } });
-    fireEvent.click(container.querySelector(".templates-preview-summary") as HTMLElement);
+    fireEvent.input(bodyInput(container), { target: { value: "## {{date}} のメモ\n- [ ] 洗濯" } });
 
-    const body = container.querySelector(".templates-preview-body");
-    await waitFor(() => expect(body?.textContent).toContain(`## ${today} のメモ`));
+    await waitFor(() =>
+      expect(container.querySelector(".templates-preview-body h2")?.textContent).toBe(
+        `${today} のメモ`,
+      ),
+    );
+    expect(container.querySelector(".templates-preview-task")?.textContent).toBe("洗濯");
+  });
+
+  it("links the previous note where the body asks for it", async () => {
+    notes.push({
+      template: "daily",
+      filename: "20260924_090000.md",
+      time: "2026-09-24T09:00:00+09:00",
+      preview: "Daily 2026-09-24",
+    });
+    const { container } = await openDaily();
+
+    fireEvent.input(bodyInput(container), { target: { value: "前回: {{prev}}" } });
+
+    await waitFor(() =>
+      expect(container.querySelector(".templates-preview-prev")?.textContent).toBe(
+        "Daily 2026-09-24",
+      ),
+    );
+    expect(screen.getByText("「前回」は Daily 2026-09-24 へのリンクになります")).toBeDefined();
+  });
+
+  // Core drops the line on creation when there is nothing to link to; the preview shows that
+  it("leaves out the previous-note line while there is no previous note", async () => {
+    const { container } = await openDaily();
+
+    fireEvent.input(bodyInput(container), { target: { value: "上\n前回: {{prev}}" } });
+
+    await waitFor(() =>
+      expect(screen.getByText("前回の Note がまだないので「前回」の行は省かれます")).toBeDefined(),
+    );
+    expect(container.querySelector(".templates-preview-paragraph")?.textContent).toBe("上");
+    expect(container.querySelectorAll(".templates-preview-paragraph")).toHaveLength(1);
+  });
+
+  it("says how many example lines stay out of the note", async () => {
+    const { container } = await openDaily();
+
+    fireEvent.input(bodyInput(container), {
+      target: { value: "## 状況\n{{eg}}\n- 何?\n- なぜ?\n\n## 次" },
+    });
+
+    await waitFor(() =>
+      expect(screen.getByText("記入例 2 行は Note に書き出されません")).toBeDefined(),
+    );
   });
 
   // The example block is not written into a note. "Made today" is where the written shape is
@@ -270,10 +317,8 @@ describe("Templates", () => {
     fireEvent.input(bodyInput(container), {
       target: { value: "## 状況\n{{eg}}\n- 何があったか?\n\n## 次" },
     });
-    fireEvent.click(container.querySelector(".templates-preview-summary") as HTMLElement);
-
     const body = container.querySelector(".templates-preview-body");
-    await waitFor(() => expect(body?.textContent).toContain("## 状況"));
+    await waitFor(() => expect(body?.textContent).toContain("状況"));
     expect(body?.textContent).not.toContain("何があったか?");
     expect(body?.textContent).not.toContain("{{eg}}");
   });
@@ -500,7 +545,12 @@ describe("Templates", () => {
   });
 
   it("says how many notes lose their link before renaming", async () => {
-    notes.push({ template: "daily" }, { template: "daily" }, { template: "weekly" }, {});
+    notes.push(
+      { template: "daily", filename: "20260901_090000.md", preview: "Daily" },
+      { template: "daily", filename: "20260902_090000.md", preview: "Daily" },
+      { template: "weekly", filename: "20260903_090000.md", preview: "Weekly" },
+      { filename: "20260904_090000.md", preview: "Plain" },
+    );
     await openDaily();
 
     fireEvent.click(screen.getByRole("button", { name: "名前を変更" }));
@@ -584,7 +634,10 @@ describe("Templates", () => {
   });
 
   it("counts the notes made from each template on its row", async () => {
-    notes.push({ template: "daily" }, { template: "daily" });
+    notes.push(
+      { template: "daily", filename: "20260901_090000.md", preview: "Daily" },
+      { template: "daily", filename: "20260902_090000.md", preview: "Daily" },
+    );
     const { container } = renderTemplates();
     const now = new Date();
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
@@ -818,6 +871,20 @@ describe("Templates on a wide screen", () => {
     expect(textLeft(title)).toBeCloseTo(textLeft(bodyInput(container)), 0);
   });
 
+  // What it makes today stands beside what is being written; nothing to open first
+  it("keeps the preview beside the editor", async () => {
+    const { container } = await openDaily();
+
+    const preview = container.querySelector<HTMLElement>(".templates-preview");
+    const tabs = container.querySelector<HTMLElement>(".templates-tabs");
+
+    expect(preview?.getBoundingClientRect().width).toBe(320);
+    expect(preview?.getBoundingClientRect().left).toBeGreaterThan(
+      bodyInput(container).getBoundingClientRect().right - 1,
+    );
+    expect(getComputedStyle(tabs as HTMLElement).display).toBe("none");
+  });
+
   // The name gets a line of its own, so a long title beside it cannot cut it short
   it("puts the title under the name, not beside it", async () => {
     const { container } = renderTemplates();
@@ -829,5 +896,41 @@ describe("Templates on a wide screen", () => {
     expect(name?.getBoundingClientRect().bottom).toBeLessThanOrEqual(
       Number(meta?.getBoundingClientRect().top),
     );
+  });
+});
+
+/** A phone has room for one of the two at a time; a segmented control switches them. */
+describe("Templates on a phone", () => {
+  beforeAll(async () => {
+    await import("../index.css");
+    await import("../styles/workspace.css");
+  });
+
+  beforeEach(async () => {
+    notes.length = 0;
+    drafts.clear();
+    mockCommands();
+    await page.viewport(390, 844);
+  });
+
+  afterEach(() => {
+    clearMocks();
+    cleanup();
+    document.body.innerHTML = "";
+  });
+
+  it("switches between editing and what it makes today", async () => {
+    const { container } = await openDaily();
+    const preview = container.querySelector(".templates-preview") as HTMLElement;
+    expect(getComputedStyle(preview).display).toBe("none");
+
+    fireEvent.click(screen.getByRole("tab", { name: "今日作ると" }));
+
+    await waitFor(() => expect(getComputedStyle(preview).display).not.toBe("none"));
+    expect(bodyInput(container).getClientRects()).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole("tab", { name: "編集" }));
+
+    await waitFor(() => expect(getComputedStyle(preview).display).toBe("none"));
   });
 });

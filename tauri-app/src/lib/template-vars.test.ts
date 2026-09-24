@@ -6,6 +6,7 @@ import {
   resolveBody,
   resolveLine,
   splitVariables,
+  usesPrev,
 } from "./template-vars";
 
 /** 2026-08-31 (Mon) 09:12:45 */
@@ -70,6 +71,19 @@ describe("resolveBody", () => {
   it("leaves a body without variables untouched", () => {
     const body = "# 見出し\n\n- [ ] やること";
     expect(resolveBody(body, now, "ja")).toBe(body);
+  });
+
+  // Known to have no previous note, it drops the line the way core does on creation
+  it("drops the lines that use the previous note when there is none", () => {
+    expect(resolveBody("上\n前回: {{prev}}\n下", now, "ja", { dropPrev: true })).toBe("上\n下");
+  });
+});
+
+describe("usesPrev", () => {
+  it("finds {{prev}} outside the example blocks only", () => {
+    expect(usesPrev("前回: {{prev}}")).toBe(true);
+    expect(usesPrev("## 状況\n{{eg}}\n{{prev}} を見る")).toBe(false);
+    expect(usesPrev("{{date}}")).toBe(false);
   });
 });
 

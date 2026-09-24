@@ -37,6 +37,9 @@ export function formatStamp(date: Date, pattern: string): string {
 const DEFAULT_DATE = "YYYY-MM-DD";
 const DEFAULT_TIME = "HH:mm";
 
+/** A `{{prev}}` token, spaces allowed inside the braces as core allows them. */
+const PREV = /\{\{\s*prev\s*\}\}/u;
+
 const PLACEHOLDER = /\{\{(?<inner>[^}]*)\}\}/gu;
 
 /**
@@ -73,14 +76,25 @@ export function resolveLine(line: string, now: Date, locale: Locale, prev = ""):
  * "prev: " would remain and nobody could read what it waits for.
  *
  * On actual creation it becomes a link if there is a previous note, and the whole
- * line is dropped if there is none (`template/vars.rs`). Which one happens is not
- * decided now, while no note exists yet.
+ * line is dropped if there is none (`template/vars.rs`). A caller that knows there is none
+ * says `dropPrev`, and the lines go here too.
  */
-export function resolveBody(body: string, now: Date, locale: Locale): string {
+export function resolveBody(
+  body: string,
+  now: Date,
+  locale: Locale,
+  { dropPrev = false }: { dropPrev?: boolean } = {},
+): string {
   return dropExamples(body)
     .split("\n")
+    .filter((line) => !(dropPrev && PREV.test(line)))
     .map((line) => resolveLine(line, now, locale, "{{prev}}"))
     .join("\n");
+}
+
+/** Whether the body links to the previous note anywhere that is written into the note. */
+export function usesPrev(body: string): boolean {
+  return PREV.test(dropExamples(body));
 }
 
 /** Whether the string contains a variable. Used to draw a tag solid or dashed. */

@@ -329,6 +329,12 @@ const ja = {
     fieldTag: "タグ",
     fieldBody: "本文",
     todayPreview: "今日作ると",
+    editTab: "編集",
+    previewOn: (monthDay: string, weekday: string) => `${monthDay}（${weekday}）に作成した場合`,
+    previewUntitled: "無題",
+    egDropped: (count: number) => `記入例 ${count} 行は Note に書き出されません`,
+    prevDropped: "前回の Note がまだないので「前回」の行は省かれます",
+    prevLink: (title: string) => `「前回」は ${title} へのリンクになります`,
     nameTaken: "同じ名前のテンプレートがあります",
     fileHint: "テンプレートは他の端末にも同期されます",
     deleted: "テンプレートを削除しました",
@@ -341,7 +347,6 @@ const ja = {
     count: (count: number) => `${count}件`,
     backToSettings: "設定に戻る",
     backToList: "一覧に戻る",
-    untitled: "(名前なし)",
   },
   tags: {
     /** The label over the meta line's suggestions. */
@@ -866,6 +871,15 @@ const en: Messages = {
     fieldTag: "tag",
     fieldBody: "body",
     todayPreview: "Made today",
+    editTab: "Edit",
+    previewOn: (monthDay: string, weekday: string) => `If made on ${weekday} ${monthDay}`,
+    previewUntitled: "Untitled",
+    egDropped: (count: number) =>
+      count === 1
+        ? "1 example line is not written into the Note"
+        : `${count} example lines are not written into the Note`,
+    prevDropped: "No previous Note yet, so the “previous” line is left out",
+    prevLink: (title: string) => `“Previous” links to ${title}`,
     nameTaken: "A template with this name already exists",
     fileHint: "Templates sync to your other devices",
     deleted: "Template deleted",
@@ -878,7 +892,6 @@ const en: Messages = {
     count: (count: number) => `${count}`,
     backToSettings: "Back to settings",
     backToList: "Back to the list",
-    untitled: "(unnamed)",
   },
   tags: {
     suggestLabel: "Tags you have used",
