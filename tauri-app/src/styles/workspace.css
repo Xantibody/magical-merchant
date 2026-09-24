@@ -362,14 +362,17 @@
      remains after these widths */
   --panel-w: 0px;
   --map-w: 0px;
-  --edge-w: 0px;
+  /* The hot zone's width while nothing is docked. Docking takes it away (--edge-w), and
+     the column's resting place is worked out from this one */
+  --edge-rest: 0px;
+  --edge-w: var(--edge-rest);
 }
 
 /* Where a pointer can hover, the right edge is the panel's hot zone (8px). The body
    column ends before it, so its scrollbar never sits in the zone */
 @media (min-width: 768px) and (hover: hover) {
   .detail-pane {
-    --edge-w: 8px;
+    --edge-rest: 8px;
   }
 }
 
@@ -384,17 +387,20 @@
 }
 
 /* The row holding the title and the record. It lines up with the body column: its left
-   padding is the body text's left edge, 640px centred in what remains after the docked
-   panel, the map and the edge. With the map alongside it runs on over the map, so the
+   padding is the body text's left edge (the same --col-left as .detail-body, here worked
+   out from the pane's width). With the map alongside it runs on over the map, so the
    title is not cut at the map's edge; only its right padding shrinks back to 28px.
    Cutting the width with max-width and using margin auto would drift off the body
-   column's centre once the remainder is wider than 696px */
+   column's left edge */
 .detail-head {
-  --head-side: max(28px, calc((100% - var(--panel-w) - var(--edge-w) - var(--map-w) - 640px) / 2));
+  --col-room: calc(100% - var(--panel-w) - var(--edge-w) - var(--map-w) - 696px);
+  --col-free: calc(100% - var(--edge-rest) - var(--map-w) - 696px);
+  --col-left: max(0px, min(var(--col-free) / 2, var(--col-room)));
   position: relative;
   flex: 0 0 auto;
   width: calc(100% - var(--panel-w) - var(--edge-w));
-  padding: 28px var(--head-right, var(--head-side)) 0 var(--head-side);
+  padding: 28px var(--head-right, max(28px, calc(var(--col-room) + 28px - var(--col-left)))) 0
+    calc(28px + var(--col-left));
   /* Same 220ms as the panel, tightening to the width the panel opens up. Width and
      padding are what move because a transform cannot re-wrap the title and the
      record inside */
@@ -587,13 +593,28 @@
   transition: width 220ms var(--app-ease);
 }
 
+/* The 640px column rests centred while nothing is docked. A docked panel's 320px comes
+   out of the margin to the right of the column first; the column moves left only once
+   that margin is gone, and then only as far as keeps it 28px short of the panel.
+   --col-room is the slack beside the column now, --col-free the slack it had undocked.
+   Percentages here are of .detail-panes, whose width is the pane's less the panel and
+   the edge, so the undocked slack adds those back.
+   AIDEV-NOTE: not re-centred in the remaining width. Centring moves the text under
+   the reader's eye by half the panel (160px) every time the panel docks or the history
+   opens, which is the jump this replaced */
 .detail-body {
+  --col-room: calc(100% - var(--map-w) - 696px);
+  --col-free: calc(var(--col-room) + var(--panel-w) + var(--edge-w) - var(--edge-rest));
+  --col-left: max(0px, min(var(--col-free) / 2, var(--col-room)));
   flex: 1;
   min-width: 0;
   overflow-y: auto;
-  padding: 20px 28px 40px;
+  padding: 20px max(28px, calc(var(--col-room) + 28px - var(--col-left))) 40px
+    calc(28px + var(--col-left));
   font-size: 15px;
   line-height: 1.8;
+  /* Moves with the panes' width, over the panel's 220ms */
+  transition: padding 220ms var(--app-ease);
 }
 
 /* Sits to the right without pushing the body aside. Fold it and the body returns to its original width */
@@ -620,9 +641,11 @@
     --map-w: 0px;
   }
 
-  /* Nothing stands beside the body any more, so the head is centred again */
+  /* Nothing stands beside the body any more, so the head is centred over the map again,
+     docked or not: there is no body column to hold still */
   .detail-pane--map .detail-head {
     --head-right: initial;
+    --col-left: max(0px, var(--col-room) / 2);
   }
 }
 
