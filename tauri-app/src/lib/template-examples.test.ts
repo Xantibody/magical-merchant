@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dropExamples, extractExamples } from "./template-examples";
+import { classifyLines, dropExamples, extractExamples } from "./template-examples";
 
 describe("dropExamples", () => {
   /** Produce the same shape the core that writes it (`template/vars.rs`) produces. */
@@ -12,6 +12,29 @@ describe("dropExamples", () => {
   it("keeps a body that has no examples", () => {
     const body = "# {{date}}\n\n- \n\n{{prev}}";
     expect(dropExamples(body)).toBe(body);
+  });
+});
+
+describe("classifyLines", () => {
+  // The editor draws the example lines faint, so it must find the same lines core drops
+  it("marks the lines of an example block, up to a blank line or a heading", () => {
+    expect(
+      classifyLines("### 状況\n{{eg}}\n- 問い\n- もう一つ\n\n### 影響\n{{eg}}\n- 別\n## 次"),
+    ).toStrictEqual([
+      "text",
+      "marker",
+      "example",
+      "example",
+      "text",
+      "text",
+      "marker",
+      "example",
+      "text",
+    ]);
+  });
+
+  it("marks nothing in a body without examples", () => {
+    expect(classifyLines("# {{date}}\n\n{{prev}}")).toStrictEqual(["text", "text", "text"]);
   });
 });
 
