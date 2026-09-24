@@ -82,8 +82,9 @@ ready to record the moment it opens (widgets exist for exactly this).
   edge — the view switches, 詳細 (created time editable, updated, surroundings),
   revert / Codex にする (a corvu confirm, `PromoteDialog.tsx`) / delete. Resting
   the pointer 300ms on the 8px right edge floats it over the body; the toggle
-  beside the title and ⌘. dock it (the body gives up 320px). The pin is the
-  app's (`shell.notePanelPinned`), not the note's. Esc peels one layer: tag
+  beside the title and ⌘. dock it (the body gives up 320px) — the panel has no
+  pin of its own. Docked is the app's state (`shell.notePanelPinned`), not
+  the note's. Esc peels one layer: tag
   input → confirm → history → a floating panel; a docked one stays. On a phone
   the meta line opens it as its own screen
 - **Codex** (`views/Workspace.tsx` with `kind="codex"`, route `/codex`): the

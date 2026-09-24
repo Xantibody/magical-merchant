@@ -129,8 +129,6 @@ const ja = {
     readOnly: "読み取り専用",
     /** The right panel's name. Upper case is CSS's job (`.list-pane-title`). */
     panel: "この Note",
-    panelOpen: (key: string) => `開いたままにする ${key}`,
-    panelClose: (key: string) => `パネルを閉じる ${key}`,
     panelFootHover: (key: string) => `右端に置くと開く · ${key} で固定`,
     panelFootPinned: (key: string) => `${key} で閉じる`,
     view: "表示",
@@ -678,8 +676,6 @@ const en: Messages = {
     backToList: "Back to the list",
     readOnly: "Read-only",
     panel: "This Note",
-    panelOpen: (key: string) => `Keep it open ${key}`,
-    panelClose: (key: string) => `Close the panel ${key}`,
     panelFootHover: (key: string) => `Rest on the right edge to open · ${key} keeps it`,
     panelFootPinned: (key: string) => `${key} closes it`,
     view: "View",

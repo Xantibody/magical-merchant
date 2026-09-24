@@ -395,10 +395,15 @@ function openedPanel(): HTMLElement | null {
   return document.querySelector<HTMLElement>(".note-panel--open");
 }
 
+/** The toggle in the title row: the one control that docks and folds the right panel. */
+function panelToggle(): HTMLElement {
+  return screen.getByRole("button", { name: /^この (?:Note|Codex)$/u });
+}
+
 /** Docks the right panel from the toggle in the title row, unless it is already open. */
 function openPanel(): Promise<HTMLElement> {
   if (!openedPanel()) {
-    fireEvent.click(screen.getByRole("button", { name: /^この (?:Note|Codex)$/u }));
+    fireEvent.click(panelToggle());
   }
   return waitFor(() => {
     const panel = openedPanel();
@@ -696,6 +701,21 @@ describe("Workspace › 常時編集", () => {
     expect(shell?.notePanelPinned()).toBe(false);
   });
 
+  // The toggle beside the title and Cmd+. already dock and fold it, and the foot says so. A
+  // second control for the same thing in the panel's own corner only asked which one to press
+  it("has no pin of its own; the title's toggle folds it", async () => {
+    await openNoteA();
+    const panel = await openPanel();
+
+    expect(panel.querySelector(".note-panel-pin")).toBeNull();
+    expect(within(panel).queryByRole("button", { pressed: true })).toBeNull();
+    expect(within(panel).queryByRole("button", { pressed: false })).toBeNull();
+
+    fireEvent.click(panelToggle());
+    await waitFor(() => expect(openedPanel()).toBeNull());
+    expect(shell?.notePanelPinned()).toBe(false);
+  });
+
   // Passing over the edge on the way to the scrollbar must not open 320px over the body. Only
   // a pointer that has rested there does, and leaving lets it go again
   it("floats the panel in only after the pointer rests on the right edge", async () => {
@@ -742,7 +762,7 @@ describe("Workspace › 常時編集", () => {
     await waitFor(() => expect(shell?.noteBar()?.readOnly).toBe(false));
 
     await flipSwitch("読み取り専用");
-    fireEvent.click(within(await openPanel()).getByRole("button", { name: /パネルを閉じる/u }));
+    fireEvent.click(panelToggle());
     await waitFor(() => expect(shell?.noteBar()?.readOnly).toBe(true));
     await waitFor(() => expect(openedPanel()).toBeNull());
 
@@ -2124,15 +2144,17 @@ describe("Workspace › Codex の版", () => {
     );
   });
 
-  // The pin folds the whole panel, history included, and the editor comes back
-  it("folds the history and the panel from the pin", async () => {
+  // The toggle beside the title folds the whole panel, history included, and the editor
+  // comes back
+  it("folds the history and the panel from the title's toggle", async () => {
     await openCodexC();
     versions.set(FILE_C, [{ id: "v1", message: null, body: BODY_C }]);
 
     await openHistoryTab();
     await waitFor(() => expect(historyShown()).toBe(true));
 
-    fireEvent.click(within(await openPanel()).getByRole("button", { name: /パネルを閉じる/u }));
+    await openPanel();
+    fireEvent.click(panelToggle());
 
     await waitFor(() => expect(openedPanel()).toBeNull());
     expect(historyShown()).toBe(false);
