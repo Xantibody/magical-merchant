@@ -23,9 +23,13 @@ interface SavedTemplate {
 
 const saved: SavedTemplate[] = [];
 const deleted: string[] = [];
+/** Drafts as core keeps them, by filename. Seed one to open a template that has a draft. */
+const drafts = new Map<string, { body: string; tags: string[] }>();
+const discardedDrafts: string[] = [];
 
 function mockCommands(): void {
   mockIPC((cmd, args) => {
+    const filename = (args as { filename?: string }).filename ?? "";
     if (cmd === "list_templates") {
       return [DAILY];
     }
@@ -34,10 +38,33 @@ function mockCommands(): void {
     }
     if (cmd === "save_template") {
       saved.push(args as unknown as SavedTemplate);
+      drafts.delete(filename);
       return;
     }
     if (cmd === "delete_template") {
-      deleted.push((args as { filename: string }).filename);
+      deleted.push(filename);
+      drafts.delete(filename);
+      return;
+    }
+    if (cmd === "list_template_drafts") {
+      return [...drafts.entries()].map(([file, draft]) => ({
+        filename: file,
+        name: file.replace(/\.md$/u, ""),
+        tags: draft.tags,
+        preview: draft.body.split("\n")[0].replace(/^#+\s*/u, ""),
+      }));
+    }
+    if (cmd === "read_template_draft") {
+      return drafts.get(filename) ?? null;
+    }
+    if (cmd === "save_template_draft") {
+      const { body, tags } = args as unknown as SavedTemplate;
+      drafts.set(filename, { body, tags });
+      return true;
+    }
+    if (cmd === "discard_template_draft") {
+      discardedDrafts.push(filename);
+      drafts.delete(filename);
       return;
     }
     throw new Error(`unexpected command ${cmd}`);
@@ -97,6 +124,8 @@ describe("Templates", () => {
   beforeEach(() => {
     saved.length = 0;
     deleted.length = 0;
+    drafts.clear();
+    discardedDrafts.length = 0;
     mockCommands();
   });
 
@@ -347,27 +376,89 @@ describe("Templates", () => {
     expect(saved).toHaveLength(0);
   });
 
-  // Unsaved changes go when leaving. The discard is reported, and a way back is left open
-  it("discards unsaved changes on the way back, and can put them back", async () => {
+  // Leaving keeps the edit as a draft. The template itself is untouched until save
+  it("keeps unsaved changes as a draft on the way back", async () => {
     const { container } = await openDaily();
     fireEvent.input(bodyInput(container), { target: { value: "書きかけ" } });
 
     fireEvent.click(screen.getByLabelText("一覧に戻る"));
 
-    await waitFor(() => expect(screen.getByText("保存していない変更を破棄しました")).toBeDefined());
+    await waitFor(() => expect(drafts.get("daily.md")?.body).toBe("# Daily {{date}}\n\n書きかけ"));
     expect(saved).toHaveLength(0);
+    expect(screen.queryByText("保存していない変更を破棄しました")).toBeNull();
+  });
+
+  it("opens a template with its draft in place of the saved text", async () => {
+    drafts.set("daily.md", { body: "# Daily {{date}}\n\n書きかけ", tags: ["daily"] });
+    const { container } = await openDaily();
+
+    await waitFor(() => expect(bodyInput(container).value).toBe("書きかけ"));
+    expect(saveButton().disabled).toBe(false);
+  });
+
+  it("marks a row whose template has a draft as unsaved", async () => {
+    drafts.set("daily.md", { body: "# Daily {{date}}\n\n書きかけ", tags: ["daily"] });
+    const { container } = renderTemplates();
+
+    await waitFor(() =>
+      expect(listPane(container).querySelector(".list-row .templates-row-unsaved")).not.toBeNull(),
+    );
+  });
+
+  // A new template is only a draft until its first save. It still has a row to come back to
+  it("lists a template never saved as new", async () => {
+    drafts.set("weekly.md", { body: "# 週次", tags: [] });
+    const { container } = renderTemplates();
+
+    await waitFor(() => expect(screen.getByText("weekly")).toBeDefined());
+    const row = [...listPane(container).querySelectorAll(".list-row")].find((el) =>
+      el.textContent?.includes("weekly"),
+    );
+    expect(row?.querySelector(".list-row-meta")?.textContent).toBe("新規");
+  });
+
+  it("keeps a new template as a draft under the name typed", async () => {
+    renderTemplates();
+    await waitFor(() => expect(screen.getByText("daily")).toBeDefined());
+
+    fireEvent.click(screen.getByText("新規"));
+    fireEvent.input(screen.getByLabelText("テンプレート名"), { target: { value: "weekly" } });
+    fireEvent.input(screen.getByLabelText("タイトル"), { target: { value: "週次" } });
+
+    await waitFor(() => expect(drafts.get("weekly.md")?.body).toBe("# 週次\n"));
+    expect(saved).toHaveLength(0);
+  });
+
+  // Every keystroke of the name would otherwise leave a draft behind under each prefix
+  it("moves a new template's draft when its name changes", async () => {
+    renderTemplates();
+    await waitFor(() => expect(screen.getByText("daily")).toBeDefined());
+    fireEvent.click(screen.getByText("新規"));
+    const name = screen.getByLabelText("テンプレート名");
+    fireEvent.input(name, { target: { value: "week" } });
+    await waitFor(() => expect(drafts.has("week.md")).toBe(true));
+
+    fireEvent.input(name, { target: { value: "weekly" } });
+
+    await waitFor(() => expect(drafts.has("weekly.md")).toBe(true));
+    expect(drafts.has("week.md")).toBe(false);
+  });
+
+  it("discards the draft back to the saved template, and can put it back", async () => {
+    const { container } = await openDaily();
+    fireEvent.input(bodyInput(container), { target: { value: "書きかけ" } });
+    await waitFor(() => expect(drafts.has("daily.md")).toBe(true));
+
+    fireEvent.click(screen.getByLabelText("保存していない変更を破棄"));
+
+    await waitFor(() => expect(bodyInput(container).value).toBe("## メモ"));
+    expect(drafts.has("daily.md")).toBe(false);
+    await waitFor(() => expect(screen.getByText("保存していない変更を破棄しました")).toBeDefined());
 
     fireEvent.click(screen.getByText("元に戻す"));
 
     await waitFor(() => expect(bodyInput(container).value).toBe("書きかけ"));
-  });
-
-  it("says nothing when leaving a template it did not change", async () => {
-    await openDaily();
-
-    fireEvent.click(screen.getByLabelText("一覧に戻る"));
-
-    expect(screen.queryByText("保存していない変更を破棄しました")).toBeNull();
+    await waitFor(() => expect(drafts.get("daily.md")?.body).toBe("# Daily {{date}}\n\n書きかけ"));
   });
 });
 

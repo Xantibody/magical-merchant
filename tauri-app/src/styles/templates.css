@@ -144,8 +144,34 @@
   gap: 1px;
 }
 
+.templates-row-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
 .templates .list-row-title {
-  flex: none;
+  flex: 1;
+  min-width: 0;
+}
+
+/* A draft is waiting. The name keeps the room; the mark never shrinks */
+.templates-row-unsaved {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--app-text-muted);
+}
+
+.templates-row-unsaved::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--app-accent);
 }
 
 .templates .list-row-meta {
