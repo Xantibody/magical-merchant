@@ -1,7 +1,13 @@
 import { createEffect, createSignal, Show, onCleanup, onMount } from "solid-js";
 import TableMenu from "./TableMenu";
 import { tableMenuPlugin } from "../lib/table-menu-plugin";
-import { Editor, rootCtx, defaultValueCtx, editorViewCtx } from "@milkdown/kit/core";
+import {
+  Editor,
+  rootCtx,
+  defaultValueCtx,
+  editorViewCtx,
+  remarkStringifyOptionsCtx,
+} from "@milkdown/kit/core";
 import { Selection, TextSelection } from "@milkdown/kit/prose/state";
 import { commonmark } from "@milkdown/kit/preset/commonmark";
 import { gfm } from "@milkdown/kit/preset/gfm";
@@ -26,6 +32,7 @@ import { hrSelectionPlugin } from "../lib/hr-selection-plugin";
 import { DIAGRAM_SETTLED_EVENT, hasPendingDiagram } from "../lib/diagram-pending";
 import { createPlaceholderPlugin } from "../lib/placeholder-plugin";
 import { createNoteLinkPlugin } from "../lib/note-link-plugin";
+import { noteLinkText } from "../lib/note-link-serializer";
 import type { NoteLinkTarget } from "../lib/note-link-plugin";
 import { createGlyphPlugin } from "../lib/glyph-plugin";
 import { createExamplePlugin } from "../lib/example-plugin";
@@ -197,6 +204,10 @@ export default function MilkdownEditor(props: MilkdownEditorProps): JSX.Element 
           ctx.set(defaultValueCtx, props.defaultValue);
         }
         ctx.set(highlightPluginConfig.key, { parser });
+        ctx.update(remarkStringifyOptionsCtx, (options) => ({
+          ...options,
+          handlers: { ...options.handlers, text: noteLinkText(options.handlers?.text) },
+        }));
         if (props.onChange) {
           const { onChange } = props;
           ctx.get(listenerCtx).markdownUpdated((_ctx, markdown) => {

@@ -49,7 +49,8 @@ async function mount(source: string) {
       }
       return doc;
     });
-  return { container, view, select, changes, roundtrip };
+  const markdown = () => created.action((ctx) => ctx.get(serializerCtx)(view.state.doc));
+  return { container, view, select, changes, roundtrip, markdown };
 }
 
 async function tableAction(label: string) {
@@ -267,6 +268,17 @@ describe("Note table editing and inline decorations", () => {
       ).toBe(true);
     },
   );
+
+  // A note link is not Markdown, so the serializer would escape it as text: `\\[\\[20260920\\_120000]]`
+  // reads back the same, but the backlink search looks for the raw `[[ID`
+  it.each([
+    ["prev: [[20260920_120000]]", "prev: [[20260920_120000]]\n"],
+    ["see [[20260920_120000|the old one]] here", "see [[20260920_120000|the old one]] here\n"],
+    ["[x] and [[20260920_120000]] and a_b_", "\\[x] and [[20260920_120000]] and a\\_b\\_\n"],
+  ])("writes a note link back unescaped: %s", async (source, expected) => {
+    const h = await mount(source);
+    expect(h.markdown()).toBe(expected);
+  });
 
   it("each repeated glyph follows its own position after preceding deletion", async () => {
     const h = await mount("prefix :star: middle :star: tail");
