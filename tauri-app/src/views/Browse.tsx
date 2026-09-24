@@ -10,9 +10,11 @@ import {
 import type { JSX } from "solid-js";
 import { useNavigate, useSearchParams } from "@solidjs/router";
 import Icon from "../components/Icon";
+import MarkdownPreview from "../components/MarkdownPreview";
 import { typedInvoke } from "../lib/commands";
 import type { HitKind, SearchHit } from "../lib/commands";
 import { formatMonthDay } from "../lib/day-labels";
+import { glyphs } from "../lib/glyphs";
 import { t } from "../lib/i18n";
 import { toScrawlItems } from "../lib/items";
 import { noteRoute } from "../lib/note-route";
@@ -146,6 +148,21 @@ export default function Browse(): JSX.Element {
   const [detail] = createResource(selected, loadDetail);
 
   /**
+   * The table that resolves `[[ID]]` to a title, the same one the note's own view reads. The scan
+   * already carries every note's filename and title, so nothing more is read for it.
+   */
+  const noteTitles = createMemo<ReadonlyMap<string, string>>(
+    () =>
+      new Map(
+        hits().flatMap((hit) =>
+          hit.kind !== "scrawl" && hit.filename
+            ? [[hit.filename.replace(/\.md$/u, ""), hit.title] as const]
+            : [],
+        ),
+      ),
+  );
+
+  /**
    * Whether the width allows a preview column beside the list. A narrow screen has
    * no column; pressing a row opens it right away (a handoff).
    */
@@ -163,6 +180,17 @@ export default function Browse(): JSX.Element {
       navigate(noteRoute(hit.kind, hit.filename));
     } else {
       navigate(`${ROUTES.SCRAWL}?day=${hit.date}`);
+    }
+  };
+
+  /** A note link in the body opens the note it points at, as it does inside the note itself. */
+  const onBodyClick = (e: MouseEvent): void => {
+    const target = e.target instanceof Element ? e.target : null;
+    const link = target?.closest("a.note-link");
+    const file = link instanceof HTMLElement ? link.dataset.file : undefined;
+    const linked = file ? hits().find((hit) => hit.filename === file) : undefined;
+    if (linked) {
+      open(linked);
     }
   };
 
@@ -318,7 +346,24 @@ export default function Browse(): JSX.Element {
               </div>
 
               <h2 class="browse-preview-title">{hit.title || t().notes.untitled}</h2>
-              <p class="browse-preview-body">{detail()?.body || t().browse.noBody}</p>
+              {/* Drawn by the same renderer as a read-only note, so a heading, a list or a
+                  diagram looks here as it does there, not as the stored Markdown */}
+              <Show
+                when={detail()?.body}
+                fallback={<p class="browse-preview-empty">{t().browse.noBody}</p>}
+              >
+                {(body) => (
+                  <div class="browse-preview-body" role="presentation" onClick={onBodyClick}>
+                    <MarkdownPreview
+                      source={body()}
+                      noteTitles={noteTitles()}
+                      glyphs={glyphs()}
+                      exportStem={hit.filename?.replace(/\.md$/u, "")}
+                      onError={(message) => shell.showToast(message)}
+                    />
+                  </div>
+                )}
+              </Show>
 
               {/* Only one destination. A Scrawl entry lives in its day, so putting
                   "open" beside "to that day" would show two buttons going to the same place */}
