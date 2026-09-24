@@ -36,7 +36,7 @@ pub struct CreatedNote {
 }
 
 pub fn list_templates(base_dir: &Path) -> Result<Vec<TemplateSummary>, CoreError> {
-    Templates::new(base_dir.to_path_buf()).list()
+    Templates::new(base_dir).list()
 }
 
 /// The content of one template. The edit screen draws the body and the automatic tags at
@@ -52,7 +52,7 @@ pub fn read_template(
     base_dir: &Path,
     filename: &NoteFilename,
 ) -> Result<TemplateDetail, CoreError> {
-    Templates::new(base_dir.to_path_buf())
+    Templates::new(base_dir)
         .read(filename)
         .map(|(fm, body)| TemplateDetail {
             body,
@@ -68,11 +68,11 @@ pub fn save_template(
     body: &str,
     tags: &[String],
 ) -> Result<(), CoreError> {
-    Templates::new(base_dir.to_path_buf()).save(filename, body, tags)
+    Templates::new(base_dir).save(filename, body, tags)
 }
 
 pub fn delete_template(base_dir: &Path, filename: &NoteFilename) -> Result<(), CoreError> {
-    Templates::new(base_dir.to_path_buf()).delete(filename)
+    Templates::new(base_dir).delete(filename)
 }
 
 /// Create a note from a template.
@@ -90,7 +90,7 @@ pub fn create_note_from_template(
     locale: VarLocale,
     provenance: Provenance<'_>,
 ) -> Result<CreatedNote, CoreError> {
-    let (fm, body) = Templates::new(base_dir.to_path_buf()).read(filename)?;
+    let (fm, body) = Templates::new(base_dir).read(filename)?;
     let name = template_name(filename);
     let now = Local::now();
     let notes = crate::note::list_notes(base_dir)?;
