@@ -96,6 +96,9 @@ local scan → diff → `POST /sync/bulk`, repeated until nothing is left over.
   name: a relocation never overwrites, the second takes `<ts>-2.md`
   (`rename_without_clobber` in `core/src/utils/fs.rs`)
 - Auto sync runs a few seconds after any successful write
+- Sync on start (`sync_on_start`) runs one round at start-up, after the event
+  listeners are in place, and on each return to the foreground at most once
+  a minute (`resume` in `lib/sync.ts`, called from `AppLayout`'s return hook)
 - `data/codex/` syncs like everything else under `data/`: the Codex file and
   its `codex/<stem>/*.md` versions are ordinary keys. A build that predates
   Codex simply never lists that directory. The sync engine runs

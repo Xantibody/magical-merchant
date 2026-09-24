@@ -119,6 +119,11 @@ Turning on **Auto sync** (sync popover, or `autoSync` in the nix-darwin
 module) runs a sync a few seconds after any successful write, so a note taken
 on the phone reaches the Mac without touching the sync button.
 
+Turning on **Sync when the app opens** (sync popover, or `syncOnStart`) runs one
+when the app starts and again when it comes back to the foreground, so the
+other device's writes are there before you start typing. Coming back counts
+at most once a minute: desktop reports every change of window focus.
+
 The session JWT lives in the macOS Keychain on desktop. Android has no
 Keychain equivalent that `keyring` supports — it silently falls back to an
 in-memory store, which loses the token immediately — so on Android the token

@@ -37,6 +37,12 @@ in
       default = false;
       description = "Sync automatically after each successful save.";
     };
+
+    syncOnStart = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = "Sync when the app starts or comes back to the foreground.";
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -56,6 +62,7 @@ in
             builtins.toJSON {
               workers_url = cfg.workersUrl;
               auto_sync = cfg.autoSync;
+              sync_on_start = cfg.syncOnStart;
             }
           )
         } > "$SYNC_DIR/sync-config.json"

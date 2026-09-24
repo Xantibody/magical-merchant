@@ -381,10 +381,15 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
 
     // While nobody is looking, the CLI, MCP or another device rewrites data/.
     // The app does not watch files, so the moment of coming back is the signal to reread.
-    // On Android it is also the only signal that a frozen process has woken
+    // On Android it is also the only signal that a frozen process has woken.
+    // It is also when another device's writes should be pulled in, if the user asked
+    const onReturn = (): void => {
+      shell.refreshData();
+      sync.resume();
+    };
     const onVisible = (): void => {
       if (document.visibilityState === "visible") {
-        shell.refreshData();
+        onReturn();
       }
     };
     document.addEventListener("visibilitychange", onVisible);
@@ -396,7 +401,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
     let unlistenFocus: UnlistenFn | undefined;
     void (async () => {
       try {
-        unlistenFocus = await listen(TauriEvent.WINDOW_FOCUS, () => shell.refreshData());
+        unlistenFocus = await listen(TauriEvent.WINDOW_FOCUS, onReturn);
       } catch {
         // No window (browser harness, tests). visibilitychange alone does the job
       }
