@@ -180,3 +180,35 @@ export function matchTagPrefix(known: TagCount[], draft: string): TagCount[] {
   const needle = foldTag(draft);
   return known.filter((t) => foldTag(t.tag).startsWith(needle));
 }
+
+/**
+ * The meta line's suggestions for `query`. Tags the note already carries are left out, a tag
+ * containing the query anywhere counts, and one that starts with it comes first. Within each
+ * half the most-used order of `known` is kept.
+ */
+export function suggestTags(
+  known: TagCount[],
+  taken: readonly string[],
+  query: string,
+  max: number,
+): TagCount[] {
+  const needle = foldTag(normalizeTag(query));
+  const open = known.filter(
+    (t) => !taken.some((own) => sameTag(own, t.tag)) && foldTag(t.tag).includes(needle),
+  );
+  const prefix = open.filter((t) => foldTag(t.tag).startsWith(needle));
+  const inner = open.filter((t) => !foldTag(t.tag).startsWith(needle));
+  return [...prefix, ...inner].slice(0, max);
+}
+
+/**
+ * Whether `query` would be a tag nobody has used yet. Offered as "add it as new" only then:
+ * next to an existing tag that differs only in case, it would make a second spelling look
+ * like the thing to do.
+ */
+export function isNewTag(known: TagCount[], taken: readonly string[], query: string): boolean {
+  const tag = normalizeTag(query);
+  return (
+    tag !== "" && !known.some((t) => sameTag(t.tag, tag)) && !taken.some((own) => sameTag(own, tag))
+  );
+}

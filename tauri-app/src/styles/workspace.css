@@ -354,36 +354,54 @@
   min-width: 0;
   min-height: 0;
   position: relative;
-  /* What stands to the right of the body column: the history panel (Codex) and the
-     map. The head row centres the body column in what remains after these widths */
-  --hist-w: 0px;
+  /* What stands to the right of the body column: the docked panel, the map, and the
+     panel's hot zone at the edge. The head row lines up with the body column in what
+     remains after these widths */
+  --panel-w: 0px;
   --map-w: 0px;
+  --edge-w: 0px;
 }
 
-.detail-pane--history {
-  --hist-w: 320px;
+/* Where a pointer can hover, the right edge is the panel's hot zone (8px). The body
+   column ends before it, so its scrollbar never sits in the zone */
+@media (min-width: 768px) and (hover: hover) {
+  .detail-pane {
+    --edge-w: 8px;
+  }
+}
+
+/* Docked, the panel takes its width from the body. There is no hot zone to keep clear */
+.detail-pane--panel {
+  --panel-w: 320px;
+  --edge-w: 0px;
 }
 
 .detail-pane--map {
   --map-w: 400px;
 }
 
-/* The row holding the title, the record and the actions. It fits the body's width,
-   640px + 28px either side, so what you want to know about a note lines up in the
-   same column as the body. It is centred in what remains after the history panel
-   and the map with padding: cutting the width with max-width and using margin auto
-   drifts off the body column's centre once the remainder is wider than 696px */
+/* The row holding the title and the record. It lines up with the body column: its left
+   padding is the body text's left edge, 640px centred in what remains after the docked
+   panel, the map and the edge. With the map alongside it runs on over the map, so the
+   title is not cut at the map's edge; only its right padding shrinks back to 28px.
+   Cutting the width with max-width and using margin auto would drift off the body
+   column's centre once the remainder is wider than 696px */
 .detail-head {
+  --head-side: max(28px, calc((100% - var(--panel-w) - var(--edge-w) - var(--map-w) - 640px) / 2));
   position: relative;
   flex: 0 0 auto;
-  width: calc(100% - var(--hist-w) - var(--map-w));
-  padding: 28px max(28px, calc((100% - var(--hist-w) - var(--map-w) - 640px) / 2)) 0;
+  width: calc(100% - var(--panel-w) - var(--edge-w));
+  padding: 28px var(--head-right, var(--head-side)) 0 var(--head-side);
   /* Same 220ms as the panel, tightening to the width the panel opens up. Width and
      padding are what move because a transform cannot re-wrap the title and the
      record inside */
   transition:
     width 220ms var(--app-ease),
     padding 220ms var(--app-ease);
+}
+
+.detail-pane--map .detail-head {
+  --head-right: 28px;
 }
 
 .detail-title-row {
@@ -417,19 +435,73 @@
   color: var(--app-text-muted);
 }
 
-/* The save state has a place in both the meta line and the bottom bar, but only one
-   of them shows it. On a wide screen the bar says it, so the meta line goes back to
-   the date and the tags */
+/* The phone's state row: save, version, the states that are on, and the two actions
+   worth offering now. A wide window says all of it in the bottom bar */
+.detail-status-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: var(--app-text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.detail-status-row:empty {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .detail-status-row {
+    display: none;
+  }
+}
+
 .detail-save-status {
   display: inline-flex;
   align-items: baseline;
   gap: 4px;
 }
 
-@media (min-width: 768px) {
-  .detail-save-status {
-    display: none;
-  }
+.detail-version-status--moved {
+  color: var(--app-text-muted);
+}
+
+/* A state that is on. Pressing it leads to its switch in the panel */
+.detail-state-pill,
+.detail-action-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.detail-state-pill {
+  border: none;
+  background: var(--app-accent-soft);
+  color: var(--app-text);
+}
+
+.detail-status-actions {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.detail-status-actions:empty {
+  display: none;
+}
+
+.detail-action-pill {
+  border: 1px solid var(--app-border);
+  background: var(--app-input-bg);
+  color: var(--app-text-muted);
 }
 
 /* Green lights up only for the 2 seconds right after a save. It must not keep glowing while writing */
@@ -453,132 +525,27 @@
   }
 }
 
-/* Shown only while comparing. On a phone the compare bar under the body says the same thing */
-.detail-compare-status {
-  color: var(--app-text-muted);
-}
-
-/* The entrance to the history. Rarely used actions are folded into the note menu, but
-   this is what someone with a Codex open presses most, and it is the only button of a
-   panel that never opens on hover */
-.history-button {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: -2px;
-  padding: 5px 11px;
-  border: none;
-  border-radius: 6px;
-  background: none;
-  color: var(--app-text-muted);
-  font: inherit;
-  font-size: 12.5px;
-  cursor: pointer;
-  transition:
-    background 150ms var(--app-ease),
-    color 150ms var(--app-ease);
-}
-
-.history-button:hover {
-  background: var(--app-surface-2);
-  color: var(--app-text);
-}
-
-/* Stays pressed in while open. The same button folds it */
-.history-button[aria-pressed="true"] {
-  background: var(--app-accent-soft);
-  color: var(--app-text);
-}
-
-/* A height a finger can press. Even in a narrow window the history's entrance is here */
-@media (max-width: 767px) {
-  .history-button {
-    min-height: 44px;
-    font-size: 14px;
-  }
-}
-
-.note-menu-button {
+/* The one visible way into the panel. The sidebar glyph is mirrored so its pane sits on
+   the right, where the panel opens. Pressed in while docked */
+.note-panel-toggle {
   flex-shrink: 0;
   margin: -2px -6px 0 0;
   padding: 6px;
   color: var(--app-text-muted);
 }
 
-.note-menu-button:hover,
-.note-menu-button[aria-expanded="true"] {
+.note-panel-toggle .icon {
+  transform: scaleX(-1);
+}
+
+.note-panel-toggle:hover {
   background: var(--app-surface-2);
   color: var(--app-text);
 }
 
-/* Hangs right-aligned directly under the note menu button. The component does the measuring, so only the look lives here */
-.note-menu {
-  width: 220px;
-  padding: 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  box-shadow: 0 12px 24px -8px rgb(20 20 25 / 40%);
-}
-
-/* Animate only on entry. Unless it is keyed to the open marker, the closing side
-   treats it as "still moving" and waits forever to fold (the component's presence) */
-.note-menu[data-expanded] {
-  animation: mm-rise 160ms var(--app-ease);
-}
-
-.note-menu-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 7px 8px;
-  border: none;
-  border-radius: var(--radius-2);
-  background: none;
+.note-panel-toggle[aria-expanded="true"] {
+  background: var(--app-accent-soft);
   color: var(--app-text);
-  font-family: inherit;
-  font-size: 13px;
-  text-align: start;
-  cursor: pointer;
-  user-select: none;
-}
-
-/* The row under a finger and the row reached by keyboard are the same thing. The
-   component says both with data-highlighted, so :hover and :focus are not written separately */
-.note-menu-row[data-highlighted] {
-  background: var(--app-surface-2);
-}
-
-.note-menu-row[data-disabled] {
-  color: var(--app-text-hint);
-  cursor: default;
-}
-
-.note-menu-row .icon {
-  flex-shrink: 0;
-  color: var(--app-text-muted);
-}
-
-.note-menu-row--danger,
-.note-menu-row--danger .icon {
-  color: var(--app-danger);
-}
-
-.note-menu-label {
-  flex: 1;
-}
-
-.note-menu-key {
-  font-size: 11px;
-  color: var(--app-text-faint);
-}
-
-.note-menu-divider {
-  height: 1px;
-  margin: 4px 0;
-  border: none;
-  background: var(--app-hairline);
 }
 
 /* The title is the H1 at the head of the body. No frame, so it reads as one large
@@ -613,7 +580,7 @@
   display: flex;
   min-height: 0;
   min-width: 0;
-  width: calc(100% - var(--hist-w));
+  width: calc(100% - var(--panel-w) - var(--edge-w));
   transition: width 220ms var(--app-ease);
 }
 
@@ -635,7 +602,7 @@
 }
 
 /* Where there is no width to stand side by side, the map replaces the body instead.
-   The history panel keeps its 320px: the body staying is the point of the history, so that is not squeezed */
+   The docked panel keeps its 320px: the body staying is the point of the history, so that is not squeezed */
 @media (max-width: 1099px) {
   .detail-panes--map .detail-body {
     display: none;
@@ -648,6 +615,11 @@
 
   .detail-pane--map {
     --map-w: 0px;
+  }
+
+  /* Nothing stands beside the body any more, so the head is centred again */
+  .detail-pane--map .detail-head {
+    --head-right: initial;
   }
 }
 
@@ -792,7 +764,7 @@
     display: flex;
   }
 
-  /* The only way back to the list. It shares the row with the title and the note menu, so it adds no extra row */
+  /* The only way back to the list. It shares the row with the title, so it adds no extra row */
   .detail-back {
     display: flex;
     margin: -8px 0 0 -8px;
@@ -827,9 +799,43 @@
     padding: 4px 20px 0;
   }
 
-  /* No width to stand a panel. The history becomes its own screen, swapped in for the body */
-  .detail-pane--history {
-    --hist-w: 0px;
+  /* No panel beside the body on a phone. The meta line opens the panel's own screen */
+  .note-panel-toggle {
+    display: none;
+  }
+
+  /* The whole line is one press into the panel screen, tall enough for a finger */
+  .detail-meta-button {
+    width: calc(100% + 16px);
+    min-height: 44px;
+    margin: 0 -8px;
+    padding: 6px 8px;
+    border: none;
+    border-radius: var(--radius-2);
+    background: none;
+    font: inherit;
+    font-size: 12px;
+    text-align: start;
+    cursor: pointer;
+  }
+
+  /* One line: long tags are cut, the caret stays at the end */
+  .detail-meta-button {
+    flex-wrap: nowrap;
+    align-items: center;
+  }
+
+  .detail-meta-button .detail-meta-tags {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .detail-meta-button .icon {
+    flex-shrink: 0;
+    margin-left: auto;
+    color: var(--app-text-hint);
   }
 
   .detail-body {
@@ -840,17 +846,6 @@
     /* Keep a height a finger can press. Squeezed, the boundary with the body also becomes hard to see */
     min-height: 44px;
     font-size: 19px;
-  }
-
-  /* A height a finger can press. The text also goes up to the list row's size */
-  .note-menu-row {
-    min-height: 44px;
-    font-size: 15px;
-  }
-
-  /* The spelled keys (⌘⇧M and the others) describe keys that cannot be pressed. Not shown on a touch device (same as the template picker) */
-  .note-menu-key {
-    display: none;
   }
 
   .capture-bar {
@@ -957,44 +952,4 @@
   font-size: 11px;
   color: var(--app-text-hint);
   font-variant-numeric: tabular-nums;
-}
-
-/* The confirmation for "Make this a Codex". Shown in the rows' place at the same width:
-   not heavy enough to open a separate dialog, but the action cannot be undone, so one step is put between */
-.note-menu-confirm {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 4px 2px 2px;
-}
-
-.note-menu-confirm-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 2px 6px;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.note-menu-confirm-title .icon {
-  color: var(--app-text-muted);
-}
-
-.note-menu-confirm-label {
-  margin: 0;
-  padding: 2px 6px;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--app-text-muted);
-}
-
-/* Only the "cannot be undone" part, a little darker */
-.note-menu-confirm-label strong {
-  font-weight: inherit;
-  color: var(--gray-7);
-}
-
-:root[data-theme="dark"] .note-menu-confirm-label strong {
-  color: var(--gray-4);
 }

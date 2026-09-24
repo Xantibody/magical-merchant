@@ -2,9 +2,11 @@ import { describe, it, expect } from "vitest";
 import {
   countTagLists,
   countTags,
+  isNewTag,
   matchTagPrefix,
   parseTags,
   splitTagged,
+  suggestTags,
   tagDraftAt,
 } from "./tags";
 
@@ -187,5 +189,51 @@ describe("matchTagPrefix", () => {
 
   it("returns nothing when no tag starts with the draft", () => {
     expect(matchTagPrefix(known, "zzz")).toStrictEqual([]);
+  });
+});
+
+describe("suggestTags", () => {
+  const known = [
+    { tag: "work", count: 9 },
+    { tag: "homework", count: 5 },
+    { tag: "Worklog", count: 3 },
+    { tag: "run", count: 2 },
+  ];
+
+  it("offers the most used tags while nothing is typed", () => {
+    expect(suggestTags(known, [], "", 2).map((t) => t.tag)).toStrictEqual(["work", "homework"]);
+  });
+
+  // "work" inside "homework" still counts, but a tag that starts with it is what was meant
+  it("puts a prefix match ahead of a tag that only contains the query", () => {
+    expect(suggestTags(known, [], "WORK", 5).map((t) => t.tag)).toStrictEqual([
+      "work",
+      "Worklog",
+      "homework",
+    ]);
+  });
+
+  it("leaves out the tags the note already carries, whatever their case", () => {
+    expect(suggestTags(known, ["Work"], "work", 5).map((t) => t.tag)).toStrictEqual([
+      "Worklog",
+      "homework",
+    ]);
+  });
+});
+
+describe("isNewTag", () => {
+  const known = [{ tag: "Memo", count: 1 }];
+
+  it("offers a word nobody has used as a new tag", () => {
+    expect(isNewTag(known, [], "#idea")).toBe(true);
+  });
+
+  it("does not offer a second spelling of a tag in use", () => {
+    expect(isNewTag(known, [], "memo")).toBe(false);
+  });
+
+  it("does not offer an empty word or one the note already has", () => {
+    expect(isNewTag(known, [], "  ")).toBe(false);
+    expect(isNewTag(known, ["idea"], "Idea")).toBe(false);
   });
 });

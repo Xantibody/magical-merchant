@@ -156,7 +156,7 @@ export interface NoteContext {
 }
 
 /** frontmatter of one record. `time` is RFC 3339 with an offset. */
-interface NoteMeta {
+export interface NoteMeta {
   time: string;
   tags: string[];
   context?: NoteContext;
