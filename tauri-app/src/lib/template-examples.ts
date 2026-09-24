@@ -56,22 +56,11 @@ export function classifyLines(body: string): LineKind[] {
  * to show the same shape that core writes out.
  */
 export function dropExamples(body: string): string {
-  const kept: string[] = [];
-  let dropping = false;
-
-  for (const raw of body.split("\n")) {
-    const line = raw.trim();
-    // Keep nothing while inside the block. The closing line is outside it
-    const inside = dropping && !endsExample(line);
-    if (!inside) {
-      dropping = MARKER.test(line);
-      if (!dropping) {
-        kept.push(raw);
-      }
-    }
-  }
-
-  return kept.join("\n");
+  const kinds = classifyLines(body);
+  return body
+    .split("\n")
+    .filter((_, at) => kinds[at] === "text")
+    .join("\n");
 }
 
 const STORAGE_KEY = "show-examples";
