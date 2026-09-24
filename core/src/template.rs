@@ -6,9 +6,11 @@
 //! file it stays a string to the end (`vars`).
 
 mod repository;
+mod today;
 mod vars;
 
 pub use repository::Summary as TemplateSummary;
+pub use today::{TemplateToday, templates_today};
 pub use vars::VarLocale;
 
 use std::path::{Path, PathBuf};

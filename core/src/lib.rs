@@ -36,6 +36,7 @@ pub use template::{
     CreatedNote, TemplateDetail, TemplateSummary, VarLocale, create_note_from_template,
     delete_template, list_templates, read_template, save_template,
 };
+pub use template::{TemplateToday, templates_today};
 pub use utils::device::Context as DeviceContext;
 /// The fixed vocabulary of entry points that wrote a record. Every creation entry takes one.
 pub use utils::device::Source;
