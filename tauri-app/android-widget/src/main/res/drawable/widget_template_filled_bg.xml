@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 先頭のテンプレボタン。14dp radius の塗りつぶしで、押す先が
-     どれなのかを他の行と分ける。 -->
+<!-- The first template tile. A 14dp-radius fill sets it apart from the others,
+     so the primary action is the one that stands out. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
     <solid android:color="@color/widget_accent" />
