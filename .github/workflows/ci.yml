@@ -453,3 +453,28 @@ jobs:
           hash: ${{ hashFiles('flake.lock', 'flake.nix') }}
           max-store-size: 2G
       - run: nix develop .#comments --command just comments-changed HEAD^1
+
+  # The one required status check (#282). The ruleset used to list jobs one
+  # by one and missed android and nix-mcp, so a broken widget or a leaking
+  # `cli` fileset could merge red. A job skipped by the paths filter counts
+  # as passed; add every new job to `needs`, or the ruleset stops seeing it
+  ci:
+    if: always()
+    needs:
+      - changes
+      - rust
+      - frontend
+      - workers
+      - android
+      - nix-package
+      - nix-package-macos
+      - nix-mcp
+      - workflows
+      - format
+      - comments
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: every job passed or was skipped
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
