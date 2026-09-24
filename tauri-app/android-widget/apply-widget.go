@@ -4,7 +4,7 @@
 // src-tauri/gen/android/ is gitignored and is recreated by `tauri android init`,
 // so widget sources cannot live there. They live in android-widget/src/main/
 // (tracked by git) and this patcher copies them in and registers the
-// <receiver> elements in the generated AndroidManifest.xml. Re-run it (via
+// <receiver> and <activity> elements in the generated AndroidManifest.xml. Re-run it (via
 // `just android-widget-setup`) after any regeneration.
 //
 // The copy also carries a MainActivity.kt that overwrites the generated stub:
@@ -35,10 +35,13 @@ const (
 
 const markerID = "widgets"
 
-// components is the manifest region: the widget receivers and the capture sheet
-// they open. exported="false" throughout — the system's AppWidgetService is
-// exempt from the export check, and the sheet is only ever started through a
-// PendingIntent this app created, which carries this app's identity.
+// components is the manifest region: the widget receivers, the capture sheet
+// and the template button's configuration. exported="false" wherever it can be —
+// the system's AppWidgetService is exempt from the export check, and the sheet is
+// only ever started through a PendingIntent this app created, which carries this
+// app's identity. The configuration activity is the exception: a launcher starts
+// it, and not every launcher goes through the system to do so. It refuses a
+// widget id that is not this app's.
 const components = `        <activity
             android:name=".widget.QuickCaptureActivity"
             android:excludeFromRecents="true"
@@ -81,6 +84,28 @@ const components = `        <activity
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_notes_list_info" />
+        </receiver>
+
+        <activity
+            android:name=".widget.TemplateButtonConfigureActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:theme="@style/Theme.TemplateButtonConfigure">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+        <receiver
+            android:name=".widget.TemplateButtonWidgetProvider"
+            android:exported="false"
+            android:label="@string/widget_template_button_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_template_button_info" />
         </receiver>
 
         <receiver

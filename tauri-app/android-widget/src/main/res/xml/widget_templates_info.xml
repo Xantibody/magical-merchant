@@ -1,15 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 30 minutes, the platform minimum: templates are edited in the app, and
-     nothing tells the widget when that happens. -->
+<!-- 4x2. The app redraws it when it writes a template or a note made from one
+     (WidgetUpdates); the 30-minute poll, the platform minimum, is what turns
+     "made today" back off after midnight and catches what a sync brought in. -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/widget_templates_description"
     android:initialLayout="@layout/widget_templates"
-    android:minHeight="180dp"
+    android:minHeight="110dp"
     android:minWidth="250dp"
     android:previewImage="@mipmap/ic_launcher"
     android:previewLayout="@layout/widget_templates"
     android:resizeMode="horizontal|vertical"
-    android:targetCellHeight="3"
+    android:targetCellHeight="2"
     android:targetCellWidth="4"
     android:updatePeriodMillis="1800000"
     android:widgetCategory="home_screen" />

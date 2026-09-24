@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 4d — choosing what a template button stands for.
+     A floating dialog rather than a full screen: it asks two things and closes.
+     The list scrolls inside a weighted ScrollView so the buttons at the foot stay
+     on screen however many templates there are. The template rows are added in
+     code (TemplateButtonConfigureActivity), one per template. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingTop="20dp"
+    android:paddingBottom="12dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"
+        android:paddingBottom="8dp"
+        android:text="@string/template_configure_title"
+        android:textColor="@color/widget_text"
+        android:textSize="16sp"
+        android:textStyle="bold" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <RadioGroup
+            android:id="@+id/template_configure_list"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingStart="16dp"
+            android:paddingEnd="24dp" />
+    </ScrollView>
+
+    <TextView
+        android:id="@+id/template_configure_empty"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:minHeight="48dp"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"
+        android:text="@string/template_configure_empty"
+        android:textColor="@color/widget_faint"
+        android:textSize="14sp"
+        android:visibility="gone" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:letterSpacing="0.08"
+        android:paddingStart="24dp"
+        android:paddingTop="16dp"
+        android:paddingEnd="24dp"
+        android:paddingBottom="4dp"
+        android:text="@string/template_configure_display"
+        android:textColor="@color/widget_faint"
+        android:textSize="11sp"
+        android:textStyle="bold" />
+
+    <RadioGroup
+        android:id="@+id/template_configure_display"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingStart="16dp"
+        android:paddingEnd="24dp">
+
+        <RadioButton
+            android:id="@+id/template_configure_name_only"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:minHeight="48dp"
+            android:text="@string/template_configure_name_only"
+            android:textColor="@color/widget_text"
+            android:textSize="14sp" />
+
+        <RadioButton
+            android:id="@+id/template_configure_with_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:minHeight="48dp"
+            android:text="@string/template_configure_with_title"
+            android:textColor="@color/widget_text"
+            android:textSize="14sp" />
+    </RadioGroup>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="end"
+        android:orientation="horizontal"
+        android:paddingStart="16dp"
+        android:paddingTop="12dp"
+        android:paddingEnd="16dp">
+
+        <Button
+            android:id="@+id/template_configure_cancel"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:text="@string/template_configure_cancel"
+            android:textColor="@color/widget_faint" />
+
+        <Button
+            android:id="@+id/template_configure_add"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:enabled="false"
+            android:minHeight="48dp"
+            android:text="@string/template_configure_add"
+            android:textColor="@color/widget_text"
+            android:textStyle="bold" />
+    </LinearLayout>
+</LinearLayout>
