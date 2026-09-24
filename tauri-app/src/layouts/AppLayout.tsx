@@ -13,6 +13,7 @@ import SyncPopover from "../components/SyncPopover";
 import UndoToast from "../components/UndoToast";
 import FirstRunCard from "../components/FirstRunCard";
 import { ShellProvider, useShell } from "../lib/shell";
+import type { NoteBar } from "../lib/shell";
 import { createSyncState, syncIconName } from "../lib/sync";
 import { applyTheme, theme } from "../lib/theme";
 import { locale, t } from "../lib/i18n";
@@ -43,6 +44,85 @@ function onSchemeChange(): void {
   if (theme() === "system") {
     applyTheme("system");
   }
+}
+
+/** A state that is on. Pressing it opens the panel where its switch is. */
+function StateChip(props: { icon: IconName; label: string; onOpen: () => void }): JSX.Element {
+  return (
+    <>
+      <span class="bottom-bar-sep" aria-hidden="true">
+        ·
+      </span>
+      <button type="button" class="bottom-bar-state" onClick={() => props.onOpen()}>
+        <Icon name={props.icon} size={12} />
+        {props.label}
+      </button>
+    </>
+  );
+}
+
+/**
+ * The open note's part of the bottom bar: the version, comparing, the states that are on,
+ * and at the right end the two actions worth offering right now. Only states that are on
+ * appear, so a plain note adds nothing to the line.
+ */
+function NoteStatus(props: { bar: NoteBar }): JSX.Element {
+  return (
+    <>
+      <Show when={props.bar.version}>
+        {(version) => (
+          <>
+            <span class="bottom-bar-sep" aria-hidden="true">
+              ·
+            </span>
+            <span class="bottom-bar-version">{version()}</span>
+          </>
+        )}
+      </Show>
+      <Show when={props.bar.comparing}>
+        {(comparing) => (
+          <StateChip
+            icon="clock-counter-clockwise"
+            label={comparing()}
+            onOpen={props.bar.openHistory}
+          />
+        )}
+      </Show>
+      <Show when={props.bar.readOnly}>
+        <StateChip icon="lock-simple" label={t().notes.readOnly} onOpen={props.bar.openSettings} />
+      </Show>
+      <Show when={props.bar.map}>
+        <StateChip icon="tree-structure" label={t().notes.map} onOpen={props.bar.openSettings} />
+      </Show>
+      <Show when={props.bar.examples}>
+        <StateChip icon="file-text" label={t().notes.examples} onOpen={props.bar.openSettings} />
+      </Show>
+      <span class="bottom-bar-actions">
+        <Show when={props.bar.canCommit}>
+          <button
+            type="button"
+            class="bottom-bar-action"
+            data-hint-key={shortcutLabel("codexCommit")}
+            onClick={() => props.bar.commit()}
+          >
+            <Icon name="book-bookmark" size={13} />
+            {t().codex.commit}
+          </button>
+        </Show>
+        <Show when={props.bar.canRevert}>
+          <button
+            type="button"
+            class="bottom-bar-action"
+            data-hint-key={shortcutLabel("noteRevert")}
+            onClick={() => props.bar.revert()}
+          >
+            <Icon name="arrow-counter-clockwise" size={13} />
+            {t().notes.revert}
+          </button>
+        </Show>
+      </span>
+    </>
+  );
 }
 
 /** An action callable from both a key and the palette. */
@@ -373,10 +453,10 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
 
         <main class="app-main">{props.children}</main>
 
-        {/* A thin bar that only says where the save landed. No current location:
-            the rail's line and the title are enough. Not shown on a narrow screen
-            (CSS), where it would stack with the bottom tabs; there the meta line
-            carries the save state */}
+        {/* The status line: where the save landed and what state the open note is in,
+            so a closed panel hides nothing. No current location: the rail's line and
+            the title are enough. Not shown on a narrow screen (CSS), where it would
+            stack with the bottom tabs; there the note's status row carries it */}
         <div class="bottom-bar">
           <Show when={shell.saveState().status !== "idle"}>
             <span class="bottom-bar-save" data-status={shell.saveState().status}>
@@ -390,6 +470,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
                 : null}
             </span>
           </Show>
+          <Show when={shell.noteBar()}>{(bar) => <NoteStatus bar={bar()} />}</Show>
         </div>
 
         <nav class="bottom-tabs">

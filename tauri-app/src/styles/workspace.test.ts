@@ -326,7 +326,10 @@ describe("note head: the title column follows the body", () => {
     document.body.innerHTML = "";
   });
 
-  function mountHead(mapOpen: boolean): { head: HTMLElement; body: HTMLElement } {
+  function mountHead(
+    mapOpen: boolean,
+    pinned = false,
+  ): { head: HTMLElement; title: HTMLElement; text: HTMLElement } {
     const flag = mapOpen ? "--map" : "";
     document.body.innerHTML = `
       <div class="app">
@@ -334,43 +337,150 @@ describe("note head: the title column follows the body", () => {
         <main class="app-main">
           <div class="workspace">
             <div class="list-pane"></div>
-            <div class="detail-pane detail-pane${flag}">
-              <div class="detail-head"><input class="note-title-input" value="題" /></div>
+            <div class="detail-pane detail-pane${flag} ${pinned ? "detail-pane--panel" : ""}">
+              <div class="detail-head"><div class="detail-title-row"><input class="note-title-input" value="題" /></div></div>
               <div class="detail-panes detail-panes${flag}">
                 <div class="detail-body"><div class="markdown-preview"><p>本文</p></div></div>
                 ${mapOpen ? '<aside class="detail-map"></aside>' : ""}
               </div>
+              <aside class="note-panel ${pinned ? "note-panel--open note-panel--pinned" : ""}"></aside>
             </div>
           </div>
         </main>
       </div>`;
-    return { head: element(".detail-head"), body: element(".detail-body") };
+    return {
+      head: element(".detail-head"),
+      title: element(".note-title-input"),
+      text: element(".markdown-preview"),
+    };
   }
 
+  const leftOf = (el: HTMLElement): number => round(el.getBoundingClientRect().left);
   const centerOf = (el: HTMLElement): number => {
     const rect = el.getBoundingClientRect();
     return round(rect.left + rect.width / 2);
   };
 
-  // Laying the map alongside on the right shifts the body column left. If only the title
-  // stayed centred on the full pane, the title and the body would not share a left edge
+  // Laying the map alongside on the right shifts the body column left. The title starts where
+  // the body text starts, whatever stands to the right of it
   it.each([
-    ["without the map", false],
-    ["with the map alongside", true],
-  ])("centers the head over the body column (%s)", async (_name, mapOpen) => {
-    await page.viewport(1280, 800);
-    const { head, body } = mountHead(mapOpen);
+    ["without the map", false, false],
+    ["with the map alongside", true, false],
+    ["with the panel docked", false, true],
+    ["with the map and the panel", true, true],
+  ])("starts the title where the body text starts (%s)", async (_name, mapOpen, pinned) => {
+    await page.viewport(1400, 800);
+    const { title, text } = mountHead(mapOpen, pinned);
 
-    expect(centerOf(head)).toBe(centerOf(body));
+    expect(leftOf(title)).toBe(leftOf(text));
+  });
+
+  // Cut at the map's edge, a long title would wrap over a column of empty space. It runs on
+  // over the map and stops 28px before the right edge
+  it("runs the head over the map, stopping 28px short of it", async () => {
+    await page.viewport(1400, 800);
+    const { head } = mountHead(true);
+
+    const right =
+      head.getBoundingClientRect().right - Number.parseFloat(getComputedStyle(head).paddingRight);
+    expect(round(right)).toBe(round(element(".detail-map").getBoundingClientRect().right - 28));
   });
 
   // Where there is no width to stand them side by side, the map replaces the body. The
-  // title is centred on the full pane again
-  it("centers the head over the whole pane once the map replaces the body", async () => {
+  // title is centred over the map, which now holds the whole column
+  it("centers the head over the map once the map replaces the body", async () => {
     await page.viewport(1000, 800);
     const { head } = mountHead(true);
 
-    expect(centerOf(head)).toBe(centerOf(element(".detail-pane")));
+    expect(centerOf(head)).toBe(centerOf(element(".detail-map")));
+  });
+});
+
+describe("the note panel", () => {
+  beforeAll(async () => {
+    await import("../index.css");
+    await import("./workspace.css");
+    await import("./note-panel.css");
+  });
+
+  afterEach(async () => {
+    document.body.innerHTML = "";
+    await page.viewport(1280, 800);
+  });
+
+  function mountPanel(state: "closed" | "floating" | "docked"): HTMLElement {
+    document.body.innerHTML = `
+      <div class="app">
+        <nav class="rail"></nav>
+        <div class="app-column">
+          <main class="app-main">
+            <div class="workspace">
+              <div class="detail-pane ${state === "docked" ? "detail-pane--panel" : ""}">
+                <div class="detail-head"></div>
+                <div class="detail-panes"><div class="detail-body"></div></div>
+                ${state === "docked" ? "" : '<div class="note-panel-edge"></div>'}
+                <aside class="note-panel ${state === "closed" ? "" : "note-panel--open"} ${state === "docked" ? "note-panel--pinned" : ""}"></aside>
+              </div>
+            </div>
+          </main>
+          <div class="bottom-bar"></div>
+        </div>
+      </div>`;
+    return element(".note-panel");
+  }
+
+  // Floating, it lies over the body. The body does not move when it comes and goes
+  it("floats 320px over the body without moving it", () => {
+    const panel = mountPanel("floating");
+    const pane = element(".detail-pane").getBoundingClientRect();
+
+    expect(panel.getBoundingClientRect().width).toBeCloseTo(320, 0);
+    expect(panel.getBoundingClientRect().right).toBeCloseTo(pane.right, 0);
+    // Only the 8px hot zone is kept clear of the body
+    expect(element(".detail-panes").getBoundingClientRect().right).toBeCloseTo(pane.right - 8, 0);
+    expect(getComputedStyle(panel).boxShadow).not.toBe("none");
+  });
+
+  // Docked, the body column gives it room, and the shadow goes: it is part of the page
+  it("takes its width from the body once docked", () => {
+    const panel = mountPanel("docked");
+
+    expect(element(".detail-panes").getBoundingClientRect().right).toBeCloseTo(
+      panel.getBoundingClientRect().left,
+      0,
+    );
+    expect(getComputedStyle(panel).boxShadow).toBe("none");
+  });
+
+  // If the hit area stayed while it is closed, the right 320px of the body could not be pressed
+  it("is out of the way and out of reach while it is closed", () => {
+    const style = getComputedStyle(mountPanel("closed"));
+
+    expect(style.opacity).toBe("0");
+    expect(style.visibility).toBe("hidden");
+    expect(style.pointerEvents).toBe("none");
+    expect(style.transform).toBe("matrix(1, 0, 0, 1, 24, 0)");
+  });
+
+  it("keeps an 8px hot zone at the right edge, under the panel", () => {
+    const panel = mountPanel("floating");
+    const edge = element(".note-panel-edge");
+
+    expect(edge.getBoundingClientRect().width).toBeCloseTo(8, 0);
+    expect(Number(getComputedStyle(edge).zIndex)).toBeLessThan(
+      Number(getComputedStyle(panel).zIndex),
+    );
+  });
+
+  // Its shadow falls under the status line, not over it
+  it("stops above the bottom bar, which stands over its shadow", () => {
+    const panel = mountPanel("floating");
+    const bar = element(".bottom-bar");
+
+    expect(panel.getBoundingClientRect().bottom).toBeCloseTo(bar.getBoundingClientRect().top, 0);
+    expect(Number(getComputedStyle(bar).zIndex)).toBeGreaterThan(
+      Number(getComputedStyle(panel).zIndex),
+    );
   });
 });
 

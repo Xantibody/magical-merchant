@@ -1,0 +1,154 @@
+/* ---- Tags edited on the meta line (and the phone's panel screen) ----
+   Read as `#tag` text until pressed. Pressed, they turn into chips with an × and an
+   input follows; the suggestions (`.tag-suggest`, tags.css) hang below it. */
+.tag-editor {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+.tag-editor--editing {
+  align-items: center;
+  gap: 4px;
+}
+
+.tag-editor-tag,
+.tag-editor-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin: -1px -3px;
+  padding: 1px 3px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+.tag-editor-tag {
+  color: var(--app-text-muted);
+}
+
+.tag-editor-add {
+  color: var(--app-text-hint);
+}
+
+.tag-editor-tag:hover,
+.tag-editor-add:hover {
+  background: var(--app-surface-2);
+  color: var(--app-text);
+}
+
+.tag-editor-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 3px 1px 7px;
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  background: var(--app-input-bg);
+  color: var(--app-text-muted);
+}
+
+/* A body `#tag` has no × to press. It keeps the same shape so the row does not jump */
+.tag-editor-chip:not(:has(button)) {
+  padding-right: 7px;
+}
+
+.tag-editor-remove {
+  display: inline-flex;
+  padding: 2px;
+  border: none;
+  border-radius: 999px;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.tag-editor-remove:hover {
+  background: var(--app-surface-2);
+}
+
+.tag-editor-field {
+  position: relative;
+  display: inline-flex;
+}
+
+.tag-editor-input {
+  width: 120px;
+  padding: 2px 6px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--radius-2);
+  background: var(--app-input-bg);
+  color: var(--app-text);
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+}
+
+.tag-editor-input:focus {
+  box-shadow: 0 0 0 3px var(--app-accent-soft);
+}
+
+/* The capture bar's suggestions open upwards; the meta line's hang below the input */
+.tag-suggest--below {
+  top: calc(100% + 6px);
+  bottom: auto;
+  left: -8px;
+  width: 248px;
+}
+
+.tag-suggest-foot {
+  margin-top: 4px;
+  padding: 6px 8px 2px;
+  border-top: 1px solid var(--app-surface-2);
+  font-size: 11px;
+  color: var(--app-text-faint);
+}
+
+/* ---- Phone: chips a finger can press ---- */
+.tag-editor--screen {
+  gap: 8px;
+}
+
+.tag-editor--screen .tag-editor-chip {
+  min-height: 36px;
+  padding: 0 4px 0 12px;
+  font-size: 14px;
+}
+
+.tag-editor--screen .tag-editor-remove {
+  padding: 10px;
+}
+
+.tag-editor-add--chip {
+  min-height: 36px;
+  margin: 0;
+  padding: 0 12px;
+  border: 1px dashed var(--app-border);
+  border-radius: 999px;
+  font-size: 14px;
+}
+
+.tag-editor--screen .tag-editor-field {
+  flex: 1 0 100%;
+}
+
+.tag-editor--screen .tag-editor-input {
+  flex: 1;
+  width: auto;
+  min-height: 44px;
+  font-size: 15px;
+}
+
+.tag-editor--screen .tag-suggest--below {
+  left: 0;
+  right: 0;
+  width: auto;
+}
+
+.tag-editor--screen .tag-suggest-row {
+  min-height: 44px;
+}

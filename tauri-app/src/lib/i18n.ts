@@ -126,16 +126,22 @@ const ja = {
     listPinnedHint: (key: string) => `${key} で畳む`,
     noSelection: "項目がありません",
     backToList: "一覧に戻る",
-    info: "Note 情報",
     readOnly: "読み取り専用",
-    actions: "この Note の操作",
-    layMap: "マップを並べる",
-    hideMap: "マップを閉じる",
-    makeReadOnly: "読み取り専用にする",
-    makeEditable: "編集できるようにする",
-    hideExamples: "記入例を隠す",
-    showExamples: "記入例を出す",
+    /** The right panel's name. Upper case is CSS's job (`.list-pane-title`). */
+    panel: "この Note",
+    panelOpen: (key: string) => `開いたままにする ${key}`,
+    panelClose: (key: string) => `パネルを閉じる ${key}`,
+    panelFootHover: (key: string) => `右端に置くと開く · ${key} で固定`,
+    panelFootPinned: (key: string) => `${key} で閉じる`,
+    view: "表示",
+    map: "マップ",
+    examples: "記入例",
+    /** Both live in the one frontmatter key `view`, so turning one on turns the other off. */
+    viewExclusive: "読み取り専用とマップはどちらか一方",
+    details: "詳細",
     revert: "編集前に戻す",
+    revertNeedsEdit: "この端末で編集するとここから戻せます",
+    revertReadOnly: "読み取り専用のあいだは戻せません",
     savedAt: (time: string) => `${time} に保存`,
     titlePlaceholder: "タイトル",
     bodyPlaceholder: "Note を書く…",
@@ -199,14 +205,18 @@ const ja = {
   },
   codex: {
     empty: "育てる文書がまだありません",
-    emptyHint: "Note の「…」から Codex にするか、新規から始めます。",
+    emptyHint: "Note のパネルから Codex にするか、新規から始めます。",
+    /** The right panel's first tab on a Codex. */
+    panel: "この Codex",
     promote: "Codex にする",
+    /** The second line under "Make a Codex" in the panel. What is gained, before any confirmation. */
+    promoteSub: "版を刻める文書として育てる",
     /** The confirmation for "make it a Codex". What is gained comes first, no way back last. */
-    promoteBody1:
-      "書き足し続ける文書になります。区切りごとに版を刻み、前の版からどれだけ変わったかを見返せます。",
-    promoteBody2: "Codex タブへ移ります。ID とリンクはそのまま。",
-    promoteBody2Strong: "Note には戻せません。",
+    promoteConfirm: "版を刻める文書として Codex タブに移ります。Codex から Note には",
+    promoteConfirmStrong: "戻せません",
+    promoteConfirmEnd: "。",
     promoteYes: "Codex にする",
+    promoteNo: "やめる",
     promoted: "Codex にしました",
     commit: "版を刻む",
     committed: (n: number) => `版 ${n} を刻みました`,
@@ -246,14 +256,6 @@ const ja = {
       }
       return dirty ? `版 ${count} · 変更あり` : `版 ${count}`;
     },
-    /** The "3 versions · 9 months" put beside the history panel's heading. */
-    historySummary: (count: number, span: Span): string => {
-      const versions = `${count} 版`;
-      if (span.months >= 1) {
-        return `${versions} · ${span.months} か月`;
-      }
-      return span.days >= 1 ? `${versions} · ${span.days} 日` : `${versions} · 今日`;
-    },
     /** The second line of the draft row. Which number it becomes once committed. */
     nextVersion: (n: number) => `刻めば版 ${n}`,
     /** When the draft has not moved from the latest version. */
@@ -266,10 +268,8 @@ const ja = {
     backToBody: "本文に戻る",
     /** Inside the compare bar. It is narrow, so the line above says the version number. */
     restoreShort: "戻す",
-    /** The foot of the history panel. */
+    /** The foot of the panel while the history tab is open. */
     historyFoot: "版を押すと本文で比べる · Esc で閉じる",
-    /** The guide on the history screen (phone). How to close it is said by the header's back arrow. */
-    historyHint: "版を押すと本文で比べる",
     /** What compare mode calls itself. The compare bar and the bottom bar show it. */
     comparing: (n: number) => `版 ${n} と比較中`,
     /** "3 lines added · 1 line removed". The lines moved between the chosen version and the draft. */
@@ -320,17 +320,25 @@ const ja = {
     backToList: "一覧に戻る",
     untitled: "(名前なし)",
   },
+  tags: {
+    /** The label over the meta line's suggestions. */
+    suggestLabel: "使ったことのあるタグ",
+    addNew: (q: string) => `「${q}」を新しく追加`,
+    footHint: "本文の #タグ は本文側で編集 · ↑↓ Enter Esc",
+    /** The `+ tag` at the end of the meta line. */
+    addShort: "タグ",
+    /** The dashed chip in the phone's panel screen. */
+    add: "追加",
+    /** A tag that comes from the body's `#tag`. It cannot be removed from here. */
+    fromBody: "本文の #タグ は本文側で編集",
+  },
   meta: {
     unreadable: "メタデータを読み取れません",
-    createdAt: "作成日時",
-    updatedAt: "更新日時",
+    created: "作成",
+    updated: "更新",
+    environment: "環境",
     removeTag: (tag: string) => `タグ ${tag} を外す`,
     addTag: "タグを追加",
-    tagsHint: "作成時の記録。本文の #タグ は本文側で編集",
-    context: "記録時の環境",
-    backup: "この端末のバックアップ",
-    revert: "編集前に戻す",
-    revertHint: "直前の編集で上書きした本文と入れ替える。もう一度押すと戻る",
     saveFailed: "保存できませんでした",
     os: "OS",
     battery: "バッテリー",
@@ -668,16 +676,20 @@ const en: Messages = {
     listPinnedHint: (key: string) => `${key} lets it fold again`,
     noSelection: "Nothing to show",
     backToList: "Back to the list",
-    info: "Note info",
     readOnly: "Read-only",
-    actions: "Actions for this Note",
-    layMap: "Lay the map alongside",
-    hideMap: "Close the map",
-    makeReadOnly: "Make read-only",
-    makeEditable: "Make editable",
-    hideExamples: "Hide the examples",
-    showExamples: "Show the examples",
+    panel: "This Note",
+    panelOpen: (key: string) => `Keep it open ${key}`,
+    panelClose: (key: string) => `Close the panel ${key}`,
+    panelFootHover: (key: string) => `Rest on the right edge to open · ${key} keeps it`,
+    panelFootPinned: (key: string) => `${key} closes it`,
+    view: "View",
+    map: "Map",
+    examples: "Examples",
+    viewExclusive: "Read-only and the map take turns",
+    details: "Details",
     revert: "Back to before this edit",
+    revertNeedsEdit: "Edit on this device and you can step back here",
+    revertReadOnly: "No stepping back while it is read-only",
     savedAt: (time: string) => `Saved at ${time}`,
     titlePlaceholder: "Title",
     bodyPlaceholder: "Write a Note…",
@@ -718,13 +730,15 @@ const en: Messages = {
   },
   codex: {
     empty: "Nothing is growing yet",
-    emptyHint: "Turn a Note into a Codex from its … menu, or start one with New.",
+    emptyHint: "Turn a Note into a Codex from its panel, or start one with New.",
+    panel: "This Codex",
     promote: "Make a Codex",
-    promoteBody1:
-      "It becomes a document you keep adding to. Commit a version at each milestone and look back at how much changed since the last one.",
-    promoteBody2: "It moves to the Codex tab. Its ID and links stay the same.",
-    promoteBody2Strong: "It cannot go back to being a Note.",
+    promoteSub: "Grow it as a document you commit versions of",
+    promoteConfirm: "It moves to the Codex tab as a document you commit versions of. It ",
+    promoteConfirmStrong: "cannot go back to being a Note",
+    promoteConfirmEnd: ".",
     promoteYes: "Make a Codex",
+    promoteNo: "Not now",
     promoted: "Made a Codex",
     commit: "Commit a version",
     committed: (n: number) => `Committed version ${n}`,
@@ -758,15 +772,6 @@ const en: Messages = {
       const versions = `${count} version${count === 1 ? "" : "s"}`;
       return dirty ? `${versions} · changed` : versions;
     },
-    historySummary: (count: number, span: Span): string => {
-      const versions = `${count} version${count === 1 ? "" : "s"}`;
-      if (span.months >= 1) {
-        return `${versions} · ${span.months} month${span.months === 1 ? "" : "s"}`;
-      }
-      return span.days >= 1
-        ? `${versions} · ${span.days} day${span.days === 1 ? "" : "s"}`
-        : `${versions} · today`;
-    },
     nextVersion: (n: number) => `commit and it is v${n}`,
     sameAsVersion: (n: number) => `same as v${n}`,
     firstVersion: (bytes: number) => `first version · ${sizeOf(bytes)}`,
@@ -774,7 +779,6 @@ const en: Messages = {
     backToBody: "Back to the document",
     restoreShort: "Restore",
     historyFoot: "Press a version to compare it in the body · Esc closes",
-    historyHint: "Press a version to compare it in the body",
     comparing: (n: number) => `Comparing with v${n}`,
     lineDelta: (added: number, removed: number): string =>
       [
@@ -826,17 +830,21 @@ const en: Messages = {
     backToList: "Back to the list",
     untitled: "(unnamed)",
   },
+  tags: {
+    suggestLabel: "Tags you have used",
+    addNew: (q: string) => `Add “${q}” as new`,
+    footHint: "Edit #tags in the body itself · ↑↓ Enter Esc",
+    addShort: "Tag",
+    add: "Add",
+    fromBody: "Edit #tags in the body itself",
+  },
   meta: {
     unreadable: "Cannot read the metadata",
-    createdAt: "Created",
-    updatedAt: "Updated",
+    created: "Created",
+    updated: "Updated",
+    environment: "Surroundings",
     removeTag: (tag: string) => `Remove the tag ${tag}`,
     addTag: "Add a tag",
-    tagsHint: "Recorded at creation. Edit #tags in the body itself",
-    context: "Recorded surroundings",
-    backup: "Backup on this device",
-    revert: "Restore the pre-edit body",
-    revertHint: "Swaps in the body your last edit overwrote. Press again to swap back",
     saveFailed: "Could not save it",
     os: "OS",
     battery: "Battery",

@@ -49,23 +49,36 @@ the title. Press Enter in the field to drop into the body.
 open — what you see is already the thing you type into, so there is no button
 to find and no state to be in the wrong one of. Saving is automatic
 (debounced), and the first content-changing save of a session keeps the
-pre-edit body on the device, so the `…` menu's 編集前に戻す (`⌘⇧R`) can undo
-an accidental edit — press it again to swap back.
+pre-edit body on the device, so 編集前に戻す (`⌘⇧R`) can undo an accidental
+edit — press it again to swap back. It sits in the note's panel, and at the
+right end of the status bar whenever there is something to go back to.
 
-Note-level actions live behind the `…` button (`⌘.`),
-because none of it is used often enough to sit in the way of writing: lay the
-map alongside, make the note read-only, revert, Note 情報, delete, and — for
-a Note — Codex にする.
+Note-level settings and actions live in a **panel at the right edge**,
+because none of it is used often enough to sit in the way of writing. Rest
+the pointer on the window's right edge and it floats in over the body; the
+toggle beside the title, or `⌘.`, docks it so the body makes room. It holds
+the view switches (読み取り専用, マップ, and 記入例 for a note from a template),
+the note's details, and the rare actions: revert, Codex にする (behind a
+confirmation, since there is no way back), delete. While it is closed the
+**status bar** at the foot of the window says what the panel would: the save,
+and every state that is on — press one to open the panel on its switch. On a
+phone the meta line under the title is the way in, and the panel is a screen
+of its own.
 
-The Note 情報 panel is also where a note's records live: the creation time
-(editable), the tags, the device context it was captured on, and — once the
-body has been rewritten at least once — the **update time**. Creation time is
+Tags are edited where they are read: press a `#tag` or `+ タグ` on the meta
+line and they turn into chips, with the tags you have used before offered as
+you type. A `#tag` written in the body shows there too, without an ×; it
+lives in the body and is removed there.
+
+The panel's 詳細 (`⌘⇧I`) is where a note's records live: the creation time
+(editable), the device context it was captured on, and — once the body has
+been rewritten at least once — the **update time**. Creation time is
 pinned to the filename order, so the update time is the only place a rewrite
 shows up. Changing metadata or the view mode is not a rewrite and leaves it
 alone.
 
 A note that is done being written can be parked in a **read-only view** —
-`…` → 読み取り専用にする, frontmatter `view: preview`. The editor is not
+the panel's 読み取り専用 switch, frontmatter `view: preview`. The editor is not
 raised at all: the body is a rendered page, the title field is fixed, and the
 list row wears a small padlock so you know before you open it. The choice
 lives in the file, so it follows the note to every device.
@@ -90,7 +103,7 @@ code block or a figure reveals a small toolbar: copy the code, or open the
 diagram full screen and save it as SVG or PNG (the file is named after the
 note and the diagram's position). The full-screen view zooms around the
 cursor with the wheel or a pinch, drags to pan, and closes with Esc. A
-per-note **map** — `…` → マップを並べる (`⌘⇧M`), frontmatter `view: mindmap` —
+per-note **map** — the panel's マップ switch (`⌘⇧M`), frontmatter `view: mindmap` —
 turns the heading and list structure into a markmap. It is laid _alongside_
 the body rather than in place of it, so the text you are reading it against
 stays on screen; only below 1100px, where there is no room for two, does it
@@ -123,7 +136,7 @@ derived by scanning at read time; there is no index to corrupt or sync.
 
 Some notes are never finished: a reading log, a project journal, a page you
 keep adding to. Codex is its own tab (Scrawl → Note → Codex) for exactly
-those. Any Note becomes a Codex from its `…` menu; the file keeps its ID and
+those. Any Note becomes a Codex from its panel; the file keeps its ID and
 every link to it, it just moves from `data/notes/` to `data/codex/`. The move
 is one-way — a Codex is defined by the history it accumulates, and that
 history has nowhere to go if the document turns back into a plain Note.
@@ -145,21 +158,22 @@ enter:
   history. It needs room to stand beside the body, so it is absent on phones,
   and below 1100px it stays collapsed and the history arrives as a horizontal
   card under the title that you drag or tap to send versions.
-- **The meta line** under the title reads how far the draft has travelled and
-  how often you commit — 版 4 から +312 B · 9 か月で 4 回刻んだ
-  ("+312 B since v4 · 4 versions in 9 months"). The two halves are
-  independent: a draft that matches the newest version drops the distance and
-  reads 版 4 · 9 か月で 4 回刻んだ, and a Codex with no versions has no
-  cadence to report either, so the line is just 版なし.
+- **The status bar** reads how far the draft has travelled — 版 4 から
+  +312 B ("+312 B since v4"), 版 4 when it matches the newest version, 版なし
+  before the first — and the history tab opens on how often you commit:
+  9 か月で 4 回刻んだ ("4 versions in 9 months").
 
-Nothing is committed for you, and committing asks nothing of you. 版を刻む in
-the `…` menu (`⌘⇧K`) flushes whatever save is still in flight and writes the
+Nothing is committed for you, and committing asks nothing of you. 版を刻む —
+in the panel, and at the right end of the status bar whenever the draft has
+moved on (`⌘⇧K`) — flushes whatever save is still in flight and writes the
 version at once — no message prompt, because a version is named by its number
 and its day, and being asked for a sentence is what stops people committing at
 all. The toast that follows does the summarising (版 5 を刻みました · 版 4 から
 +312 B · 7 日ぶり) and carries an Undo that deletes the file just written.
 
-履歴 in the same menu opens the spine rather than replacing the body. The body
+The panel's second tab, 履歴 (`⌘⇧H`), docks the panel and opens the version
+list beside the body rather than replacing it; resting on the edge never opens
+it, so a comparison does not appear beside a writing hand in passing. The body
 stays where it is and turns read-only, and the difference between the version
 you picked and the draft appears in its margin: a `+` beside every block that
 changed, a `−` beside every block that is gone — struck through and faint, in
@@ -237,7 +251,7 @@ sync now, settings — each with its key down the right-hand side.
 There is no cheat sheet to look up, because the app can show you the keys in
 the place they belong. Hold ⌘ (Ctrl on anything that is not a Mac) for a
 moment and a badge floats on the shoulder of the buttons in the chrome — the
-three mode tabs, sync, Settings, and the open note's `…` — with a pill
+three mode tabs, sync, Settings, and the open note's panel toggle — with a pill
 explaining how to make them go away; let go and they are gone. The search
 field carries its `⌘K` printed in the field itself, so it needs no badge, and
 `⌘N` is shown where 新規 Note is, in the palette. And `?`, pressed anywhere
@@ -245,29 +259,29 @@ you are not typing, opens the palette on that command list.
 
 The ones worth learning first:
 
-| Key                | What it does             |
-| ------------------ | ------------------------ |
-| `⌘K`               | The search palette       |
-| `⌘N`               | A new note               |
-| `⌘1` / `⌘2` / `⌘3` | Scrawl / Note / Codex    |
-| `⌘.`               | The open note's `…` menu |
-| `⌘⇧S`              | Sync now                 |
+| Key                | What it does                  |
+| ------------------ | ----------------------------- |
+| `⌘K`               | The search palette            |
+| `⌘N`               | A new note                    |
+| `⌘1` / `⌘2` / `⌘3` | Scrawl / Note / Codex         |
+| `⌘.`               | Dock or fold the note's panel |
+| `⌘⇧S`              | Sync now                      |
 
 That list is the palette's command section, so it holds the six global
 commands and nothing else — a new note, the three modes, sync now, and `⌘,`
 for Settings. The keys that need a note open are not in it: they are written
-down the right-hand side of the note's own `…` menu, the one `⌘.` opens —
-`⌘⇧M` for the map, `⌘⇧R` to revert, `⌘⇧I` for Note 情報, `⌘⇧K` to commit a
-Codex version. `⌘↑` / `⌘↓` walk the list pane and are printed nowhere at
+beside the rows of the note's own panel, the one `⌘.` docks — `⌘⇧M` for the
+map, `⌘⇧R` to revert, `⌘⇧I` for its details, `⌘⇧K` to commit a Codex version,
+`⌘⇧H` for a Codex's history. `⌘↑` / `⌘↓` walk the list pane and are printed nowhere at
 all; they answer only while the caret is outside every field you can type
 in — not just the title and the body, but the palette's search box and the
-time and tag fields of Note 情報 as well — so they step through notes once
+tag field on the meta line and the created time in 詳細 as well — so they step through notes once
 you have clicked away from what you are writing. With the caret in any of
 them they are left alone, and stay the jump to the top or the bottom of
 what you are typing. Where a Mac reads ⌘⇧, every other platform reads
 Ctrl+Shift.
 
-The badges, the palette's right-hand column, the keys in the note menu and
+The badges, the palette's right-hand column, the keys in the note's panel and
 the key handling itself all read one table in
 [`tauri-app/src/lib/shortcuts.ts`](../tauri-app/src/lib/shortcuts.ts),
 so a key that is written in two places cannot come to mean two things.

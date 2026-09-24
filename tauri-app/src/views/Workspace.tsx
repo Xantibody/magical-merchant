@@ -17,11 +17,15 @@ import type { Editor } from "@milkdown/kit/core";
 import HistoryPanel from "../components/HistoryPanel";
 import Icon from "../components/Icon";
 import MarkdownPreview from "../components/MarkdownPreview";
-import NoteMenu from "../components/NoteMenu";
-import NoteMetaPopover from "../components/NoteMetaPopover";
+import NotePanel from "../components/NotePanel";
+import type { NotePanelTab } from "../components/NotePanel";
 import Popover from "../components/Popover";
+import PromoteDialog from "../components/PromoteDialog";
+import TagEditor from "../components/TagEditor";
 import TemplatePicker from "../components/TemplatePicker";
 import { isStaleSave, typedInvoke } from "../lib/commands";
+import { resolveEditedTime } from "../lib/note-meta";
+import { countTagLists } from "../lib/tags";
 import { refusedForGood } from "../lib/save-refusal";
 import { createNoteSession } from "../lib/note-session";
 import type { SaveStatus } from "../lib/note-session";
@@ -53,7 +57,7 @@ import { daysSince, spanSince, withDeltas } from "../lib/versions";
 import type { VersionRow } from "../lib/versions";
 import { readBackup, writeBackup } from "../lib/edit-backup";
 import type { NoteLinkTarget } from "../lib/note-link-plugin";
-import type { NoteKind, SearchHit, Template, VersionStatus } from "../lib/commands";
+import type { NoteKind, NoteMeta, SearchHit, Template, VersionStatus } from "../lib/commands";
 import { noteRoute } from "../lib/note-route";
 import { HIT_ICONS, MODE_LABELS, ROUTES } from "../lib/routes";
 import "../styles/workspace.css";
@@ -76,6 +80,13 @@ const POP_MS = 350;
 const NO_EXAMPLES: ReadonlyMap<string, string[]> = new Map();
 /** The keys that move to the neighboring row in the list, and their direction. */
 const LIST_STEP_KEYS: Readonly<Record<string, 1 | -1>> = { ArrowUp: -1, ArrowDown: 1 };
+/**
+ * How long the pointer rests on the right edge before the panel floats in. Passing over the
+ * edge on the way to the scrollbar or another window must not open 320px over the body.
+ */
+const EDGE_DWELL_MS = 300;
+/** How long the floating panel waits after the pointer leaves it. A wobble out and back keeps it. */
+const PANEL_LEAVE_MS = 150;
 
 async function loadNotes(): Promise<NoteItem[]> {
   return toNoteItems(await typedInvoke("list_notes"));
@@ -160,7 +171,7 @@ function Backlinks(props: { hits: SearchHit[]; onOpen: (hit: SearchHit) => void 
 function NoteMap(props: { source: () => string }): JSX.Element {
   const source = createDebouncedAccessor(props.source, MAP_DEBOUNCE_MS);
   return (
-    <aside class="detail-map" aria-label={t().notes.layMap}>
+    <aside class="detail-map" aria-label={t().notes.map}>
       {/* A mindmap's root is the H1. Passing the body with the title taken off
           gives a diagram of branches with no root */}
       <MindmapView source={source()} />
@@ -202,19 +213,31 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   const [noteTitle, setNoteTitle] = createSignal("");
   const [noteView, setNoteView] = createSignal<NoteView>("editor");
   /**
-   * Whether the history is open. Codex only. It brings the panel in from the right, the body turns
-   * read-only, and the difference from the chosen version becomes gutter marks. The body
-   * never disappears.
+   * Whether the history is open, that is compare mode. Codex only. The body turns read-only and
+   * the difference from the chosen version becomes gutter marks; the body never disappears.
+   * In a wide window it is also which tab the right panel shows: the history tab is open
+   * exactly while this is on, so the two cannot disagree.
    */
   const [historyOpen, setHistoryOpen] = createSignal(false);
   /** The version chosen in the history. The newest one the moment it opens. */
   const [selectedVersionId, setSelectedVersionId] = createSignal<string | null>(null);
   /**
-   * Whether the history screen is up on a phone. There is no width to lay it alongside, so it is
-   * one surface that swaps with the body rather than a panel. Pressing a version returns to the
-   * body, with the compare bar attached below.
+   * Whether the pointer resting on the right edge has floated the panel in. The pinned state
+   * lives in the shell (`notePanelPinned`); this is only the passing one.
    */
-  const [historyScreenOpen, setHistoryScreenOpen] = createSignal(false);
+  const [panelHover, setPanelHover] = createSignal(false);
+  /**
+   * Whether the panel screen is up on a phone. There is no width to lay it alongside, so it is
+   * one surface that swaps with the body. Pressing a version returns to the body in compare
+   * mode, with the compare bar attached below.
+   */
+  const [panelScreen, setPanelScreen] = createSignal(false);
+  /** Whether the panel's details (created, updated, surroundings) are unfolded. */
+  const [detailsOpen, setDetailsOpen] = createSignal(false);
+  /** Whether the "Make a Codex" confirmation is up. */
+  const [confirmOpen, setConfirmOpen] = createSignal(false);
+  /** Whether the tags on the meta line (or the phone's panel) are being edited. */
+  const [tagEditing, setTagEditing] = createSignal(false);
   /** The version just committed. Only that row in the history pops as it enters. */
   const [freshVersionId, setFreshVersionId] = createSignal<string | null>(null);
   /** The id of the note whose body has finished loading. `?edit=1` autofocus waits on it. */
@@ -275,6 +298,18 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
 
   /** Whether the body is actually on screen. While it is not, no editor is built either. */
   const bodyVisible = createMemo<boolean>(() => twoPane() || detailOpen());
+
+  /** Whether the panel screen is up on a phone. It swaps with the body. */
+  const panelScreenShown = (): boolean => panelScreen() && !twoPane();
+
+  /**
+   * Whether the right panel is on screen in a wide window: docked by the pin or ⌘., or floated
+   * by the pointer resting on the edge.
+   */
+  const panelOpen = (): boolean => twoPane() && (shell.notePanelPinned() || panelHover());
+
+  /** Which tab the panel shows. The history tab is compare mode itself. */
+  const panelTab = (): NotePanelTab => (historyOpen() ? "history" : "note");
 
   // The list brings both stores in at once. Narrowing by surface happens here: rather than one IPC
   // call per surface, it is better to hold all of them so `?file=` knows where to send you
@@ -371,6 +406,79 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     (filename) => typedInvoke("find_backlinks", { filename }),
   );
 
+  /**
+   * The frontmatter as written. The list carries tags already merged with the body's `#tag`s,
+   * so what can be edited (the frontmatter's own tags, the created time) is read only when
+   * someone is about to edit it: the details unfolded, the tags pressed, or the phone's panel
+   * screen (its tag chips carry an × from the start). It is read again each time, so another
+   * device's edit is not written back over.
+   */
+  const [noteMeta, { refetch: refetchMeta, mutate: mutateMeta }] = createResource(
+    () =>
+      tagEditing() || panelScreenShown() || (detailsOpen() && panelOpen())
+        ? selected()?.filename
+        : undefined,
+    async (filename) => ({ filename, meta: await typedInvoke("read_note_meta", { filename }) }),
+  );
+  /**
+   * The frontmatter of the note on screen, never the previous one's. The resource keeps its
+   * last value while the next note's is on the way, and tags edited against it would carry
+   * one note's tags into another.
+   */
+  const currentMeta = (): NoteMeta | undefined => {
+    if (noteMeta.error) {
+      return undefined;
+    }
+    const read = noteMeta();
+    return read && read.filename === selected()?.filename ? read.meta : undefined;
+  };
+
+  /**
+   * Tags used anywhere, most used first: the suggestions under the tag input. Counted from the
+   * same records Browse reads, and only once the tags are pressed.
+   */
+  const [usedTags] = createResource(
+    () => tagEditing() || undefined,
+    async () => {
+      try {
+        const hits = await typedInvoke("browse_all");
+        return countTagLists(hits.map((hit) => hit.tags));
+      } catch {
+        // Without suggestions a tag can still be typed in full
+        return [];
+      }
+    },
+  );
+
+  /**
+   * Rewrites the frontmatter's tags or created time. The value on screen moves first, so a
+   * second tag added before the first write lands is added to the list that has the first.
+   */
+  const saveMeta = async (
+    item: NoteItem,
+    change: { time?: string; tags?: string[] },
+  ): Promise<void> => {
+    const meta = currentMeta();
+    if (!meta) {
+      return;
+    }
+    const next = { ...meta, ...change };
+    mutateMeta({ filename: item.filename, meta: next });
+    try {
+      await typedInvoke("update_note_meta", {
+        filename: item.filename,
+        time: next.time,
+        tags: next.tags,
+      });
+    } catch {
+      shell.showToast(t().meta.saveFailed);
+      void refetchMeta();
+      return;
+    }
+    // The created time moves the row between date groups, and the tags show on the meta line
+    await refetchNotes();
+  };
+
   // The version count and "how far it has moved from the newest version". It compares the body
   // against a version, so it reads only the one note that is open (the mark on a list row comes
   // from core using the name fingerprint alone)
@@ -409,23 +517,16 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     const text = diff();
     return text ? markedBody(fullBody(), text) : undefined;
   });
-  /** "committed 4 times in 9 months". The span since the first version comes from the list. */
+  /**
+   * "committed 4 times in 9 months", the line at the top of the history tab. The span since the
+   * first version comes from the list.
+   */
   const cadence = (): string | undefined => {
     const rows = versionRows();
     const oldest = rows.at(-1);
     return oldest
       ? t().codex.cadence(rows.length, spanSince(oldest.version.time, new Date()))
       : undefined;
-  };
-
-  /** The "3 versions, 9 months" set beside the history heading. */
-  const historySummary = (): string => {
-    const rows = versionRows();
-    const oldest = rows.at(-1);
-    return t().codex.historySummary(
-      rows.length,
-      oldest ? spanSince(oldest.version.time, new Date()) : { months: 0, days: 0 },
-    );
   };
 
   /** The row chosen in the history. It gives the number and decides what to restore to. */
@@ -454,17 +555,13 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       : [];
   };
 
-  /** Whether the history screen is up on a phone. It swaps with the body. */
-  const historyScreen = (): boolean =>
-    kind() === "codex" && historyOpen() && historyScreenOpen() && !twoPane();
-
   /**
    * Whether to show the compare bar. While compare mode is on, on a phone. It shows even when the
    * chosen version has the same content: without it there is no way back to the history and no way
    * to leave compare mode.
    */
   const compareBarOpen = (): boolean =>
-    kind() === "codex" && historyOpen() && !historyScreen() && !twoPane();
+    kind() === "codex" && historyOpen() && !panelScreenShown() && !twoPane();
 
   /**
    * Replaces the whole body on screen. The editor holds its own document as the truth, so anything
@@ -531,10 +628,12 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       // Moving to another note folds the edit session. If the place to return to stayed the
       // previous note's body, the next save would crush another note's backup
       session.drop();
-      // The history belongs to the note that was open
+      // The history, the half-typed tag and the confirmation belong to the note that was open.
+      // The pin does not: it is the app's, like the list's
       setHistoryOpen(false);
-      setHistoryScreenOpen(false);
       setSelectedVersionId(null);
+      setTagEditing(false);
+      setConfirmOpen(false);
       if (!item) {
         showBody("", "", "", "editor");
         return;
@@ -728,8 +827,9 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   const revertEdit = async (item: NoteItem): Promise<void> => {
     const backup = readBackup(localStorage, item.filename);
     const current = fullBody();
-    // Before it arrives, the body on screen is the previous note's. It must not become the backup
-    if (!loaded() || backup === null || backup === current) {
+    // Before it arrives, the body on screen is the previous note's. It must not become the backup.
+    // A read-only note is not written to, and while comparing the body on screen is a version's
+    if (!loaded() || readOnly() || historyOpen() || backup === null || backup === current) {
       return;
     }
     // Drop the pending save. The body now on screen is about to become the backup, so there is no
@@ -844,19 +944,36 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     shell.showToast(t().codex.committed(count), undo, summary);
   };
 
+  /** Pending "float the panel in" (resting on the edge) and "let it go" (left it). */
+  let edgeTimer: ReturnType<typeof setTimeout> | undefined;
+  let leaveTimer: ReturnType<typeof setTimeout> | undefined;
+  onCleanup(() => {
+    clearTimeout(edgeTimer);
+    clearTimeout(leaveTimer);
+  });
+
   /**
    * Flush the pending save before the history opens. The history is the screen that compares the
    * body on disk with a version, and "restore" also commits the body on disk as "before the
    * restore": opening while keystrokes exist only on screen loses them into neither. The version
    * chosen the moment it opens is the newest one.
+   *
+   * The history always opens docked. Floating in on hover would put 320px of comparison beside a
+   * writing hand in passing; on a phone it is the panel screen's second tab.
    */
   const openHistory = async (): Promise<void> => {
     shell.closePopovers();
+    if (kind() !== "codex") {
+      return;
+    }
+    if (twoPane()) {
+      shell.setNotePanelPinned(true);
+    } else {
+      setPanelScreen(true);
+    }
     if (historyOpen()) {
       return;
     }
-    // On a device too narrow for side by side, the history becomes one surface swapping with the body
-    setHistoryScreenOpen(!twoPane());
     await session.settleWrites();
     // Versions are committed on other devices too. Opening the compare screen is a cheap moment to
     // reread. The newest version is chosen from the reread list: from the local list, an older one
@@ -869,24 +986,92 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     });
   };
 
-  const closeHistory = (): void => {
+  /** Leaves compare mode. The panel stays where it is, on its settings tab. */
+  const leaveHistory = (): void => {
     batch(() => {
       setHistoryOpen(false);
-      setHistoryScreenOpen(false);
       setSelectedVersionId(null);
     });
   };
 
   /**
-   * The one entry the history button and the row in the note menu both go through. Without the
-   * same button folding it, whoever opened it has to find the close in the x or in Esc.
+   * Folds the panel entirely: undocked, not floating, compare mode over. Opening it again always
+   * starts on the settings tab, so a panel that appears never starts by comparing.
    */
+  const closePanel = (): void => {
+    clearTimeout(edgeTimer);
+    clearTimeout(leaveTimer);
+    batch(() => {
+      leaveHistory();
+      shell.setNotePanelPinned(false);
+      setPanelHover(false);
+      setPanelScreen(false);
+    });
+  };
+
+  /** ⌘. and the title row's toggle. Docks the panel, or folds it. On a phone, the panel screen. */
+  const togglePanel = (): void => {
+    if (!twoPane()) {
+      setPanelScreen((open) => !open);
+      return;
+    }
+    if (shell.notePanelPinned()) {
+      closePanel();
+      return;
+    }
+    setPanelHover(false);
+    shell.setNotePanelPinned(true);
+  };
+
+  /**
+   * Opens the panel on its settings tab, docked. A state in the bottom bar leads to its switch
+   * this way, and ⌘⇧I to the details.
+   */
+  const openSettings = (details = false): void => {
+    batch(() => {
+      leaveHistory();
+      if (details) {
+        setDetailsOpen(true);
+      }
+      if (twoPane()) {
+        shell.setNotePanelPinned(true);
+      } else {
+        setPanelScreen(true);
+      }
+    });
+  };
+
+  const selectTab = (tab: NotePanelTab): void => {
+    if (tab === "history") {
+      void openHistory();
+    } else {
+      leaveHistory();
+    }
+  };
+
+  /** ⌘⇧H. The same key folds it, so whoever opened it does not hunt for the way out. */
   const toggleHistory = (): void => {
     if (historyOpen()) {
-      closeHistory();
+      closePanel();
       return;
     }
     void openHistory();
+  };
+
+  /**
+   * The pointer resting on the right edge. The dwell restarts on every move, so only a pointer
+   * that has stopped there opens it, not one passing over on its way to the scrollbar.
+   */
+  const armEdge = (): void => {
+    clearTimeout(edgeTimer);
+    edgeTimer = setTimeout(() => setPanelHover(true), EDGE_DWELL_MS);
+  };
+
+  const onPanelLeave = (): void => {
+    clearTimeout(leaveTimer);
+    if (!shell.notePanelPinned()) {
+      leaveTimer = setTimeout(() => setPanelHover(false), PANEL_LEAVE_MS);
+    }
   };
 
   // If the versions have not arrived when it opens, choose the newest one that arrives. It also
@@ -937,7 +1122,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     }
     // The restored body is on disk. Rereading makes the screen show it too
     session.drop();
-    closeHistory();
+    closePanel();
     const shown = await session.reload(item, true);
     if (!shown) {
       // The reread did not reach the screen. The restored body is on disk, but the screen still
@@ -995,6 +1180,63 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   });
 
   /**
+   * Whether "back to before this edit" would do something now. A read-only note is not written
+   * to, and while comparing the body on screen is a version's, not the draft.
+   */
+  const canRevert = (): boolean => revertable() && !readOnly() && !historyOpen();
+
+  /** Why revert cannot be pressed, said under the row. Comparing already says it on its own. */
+  const revertHint = (): string | undefined => {
+    if (historyOpen()) {
+      return undefined;
+    }
+    if (readOnly()) {
+      return t().notes.revertReadOnly;
+    }
+    return revertable() ? undefined : t().notes.revertNeedsEdit;
+  };
+
+  /** Whether "commit a version" is worth offering in the bottom bar: the draft has moved on. */
+  const canCommit = (): boolean => {
+    const status = versionStatus();
+    return (
+      kind() === "codex" && loaded() && status !== undefined && (status.dirty || status.count === 0)
+    );
+  };
+
+  // The bottom bar (AppLayout) says what state the note is in, so a closed panel hides nothing.
+  // Leaving the surface clears it, the way the save state is cleared
+  createEffect(() => {
+    const item = selected();
+    if (!item || !loaded()) {
+      shell.setNoteBar(null);
+      return;
+    }
+    const status = kind() === "codex" ? versionStatus() : undefined;
+    shell.setNoteBar({
+      version: status ? versionStatusLabel(status) : undefined,
+      comparing: historyOpen() && compareLine().length > 0 ? compareLine().join(" · ") : undefined,
+      readOnly: readOnly(),
+      // The map is not drawn while comparing, so the bar does not claim it
+      map: mapOpen() && !historyOpen(),
+      examples: examplesShown() && item.template !== undefined,
+      canCommit: canCommit(),
+      canRevert: canRevert(),
+      commit: () => {
+        void commitVersion(item);
+      },
+      revert: () => {
+        void revertEdit(item);
+      },
+      openSettings: () => openSettings(),
+      openHistory: () => {
+        void openHistory();
+      },
+    });
+  });
+  onCleanup(() => shell.setNoteBar(null));
+
+  /**
    * The keys that act on the open note. They are taken here because the target is "the one note
    * now selected": AppLayout's table holds only what means the same on every screen.
    *
@@ -1005,6 +1247,27 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
    * Cmd-Up and Cmd-Down (to the start and end of the document) are the browser's default behavior,
    * and nobody calls preventDefault. Here they are told apart by whether the cursor is inside text.
    */
+  /**
+   * Esc peels one layer at a time. The tag input and the created-time field take theirs first
+   * (they mark the key as handled), the confirmation is corvu's, then the history, then a panel
+   * that floated in. A docked settings panel stays: it was put there on purpose, like the list.
+   */
+  const onEscape = (e: KeyboardEvent): void => {
+    if (confirmOpen()) {
+      return;
+    }
+    if (historyOpen()) {
+      e.preventDefault();
+      closePanel();
+    } else if (panelScreenShown()) {
+      e.preventDefault();
+      setPanelScreen(false);
+    } else if (panelHover() && !shell.notePanelPinned()) {
+      e.preventDefault();
+      closePanel();
+    }
+  };
+
   onMount(() => {
     const onKeyDown = (e: KeyboardEvent): void => {
       const item = selected();
@@ -1026,7 +1289,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       }
       if (matchesShortcut(e, "noteActions")) {
         e.preventDefault();
-        shell.togglePopover("note-menu");
+        togglePanel();
       } else if (matchesShortcut(e, "noteMap")) {
         e.preventDefault();
         void toggleMap(item);
@@ -1035,16 +1298,15 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
         void revertEdit(item);
       } else if (matchesShortcut(e, "noteInfo")) {
         e.preventDefault();
-        shell.togglePopover("note-meta");
+        openSettings(true);
       } else if (matchesShortcut(e, "codexCommit")) {
         e.preventDefault();
         void commitVersion(item);
       } else if (matchesShortcut(e, "noteHistory") && kind() === "codex") {
         e.preventDefault();
         toggleHistory();
-      } else if (e.key === "Escape" && historyOpen()) {
-        e.preventDefault();
-        closeHistory();
+      } else if (e.key === "Escape") {
+        onEscape(e);
       }
     };
     globalThis.addEventListener("keydown", onKeyDown);
@@ -1190,6 +1452,108 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       });
     });
   };
+
+  /** The panel's name, which is also what its toggle and the phone's meta line say. */
+  const panelLabel = (): string => (kind() === "codex" ? t().codex.panel : t().notes.panel);
+
+  /** The tags, edited where they are read. The phone's copy lives on the panel screen. */
+  const tagEditor = (item: () => NoteItem, screen: boolean): JSX.Element => (
+    <TagEditor
+      tags={item().tags}
+      own={currentMeta()?.tags}
+      known={usedTags() ?? []}
+      editing={tagEditing()}
+      onEditingChange={setTagEditing}
+      onChange={(tags) => {
+        void saveMeta(item(), { tags });
+      }}
+      screen={screen}
+    />
+  );
+
+  /** One panel, two presentations: the 320px slot at the right edge, or the phone's screen. */
+  const notePanel = (item: () => NoteItem, screen: boolean): JSX.Element => (
+    <NotePanel
+      kind={kind()}
+      screen={screen}
+      title={noteTitle()}
+      open={screen || panelOpen()}
+      pinned={shell.notePanelPinned()}
+      tab={panelTab()}
+      historyCount={versionRows().length}
+      onTab={selectTab}
+      onPin={togglePanel}
+      onBack={() => setPanelScreen(false)}
+      onPointerEnter={() => clearTimeout(leaveTimer)}
+      onPointerLeave={onPanelLeave}
+      readOnly={readOnly()}
+      mapOpen={mapOpen()}
+      // While folded the table is empty, so judge by the template it came from
+      hasExamples={item().template !== undefined}
+      examplesShown={examplesShown()}
+      onToggleReadOnly={() => {
+        void toggleReadOnly(item());
+      }}
+      onToggleMap={() => {
+        void toggleMap(item());
+      }}
+      onToggleExamples={() => setExamplesShown(!examplesShown())}
+      detailsOpen={detailsOpen()}
+      onToggleDetails={() => setDetailsOpen((open) => !open)}
+      meta={currentMeta()}
+      metaError={Boolean(noteMeta.error)}
+      onEditTime={(value) => {
+        const meta = currentMeta();
+        const time = meta ? resolveEditedTime(meta.time, value) : undefined;
+        if (time !== undefined && time !== meta?.time) {
+          void saveMeta(item(), { time });
+        }
+      }}
+      tags={screen ? () => tagEditor(item, true) : undefined}
+      canRevert={canRevert()}
+      revertHint={revertHint()}
+      onRevert={() => {
+        void revertEdit(item());
+      }}
+      onPromote={() => setConfirmOpen(true)}
+      onCommit={() => {
+        void commitVersion(item());
+      }}
+      onDelete={() => {
+        // The panel screen belongs to the note being deleted. Left up, it would describe the
+        // neighbour that takes its place without anyone having opened it
+        setPanelScreen(false);
+        void remove(item());
+      }}
+      history={
+        <HistoryPanel
+          screen={screen}
+          rows={versionRows()}
+          summary={cadence()}
+          dirty={versionStatus()?.dirty ?? false}
+          bytesDelta={versionStatus()?.bytes_delta ?? 0}
+          selectedId={selectedVersionId()}
+          readOnly={readOnly()}
+          freshId={freshVersionId()}
+          onSelect={(id) => {
+            batch(() => {
+              setSelectedVersionId(id);
+              // On a phone the body is where a version is compared
+              if (screen) {
+                setPanelScreen(false);
+              }
+            });
+          }}
+          onRestore={(id) => {
+            void restoreVersion(item(), id);
+          }}
+          onCommit={() => {
+            void commitVersion(item());
+          }}
+        />
+      }
+    />
+  );
 
   /**
    * Whether to show the flyout. While not one note is open it stays out: folding with nothing to
@@ -1355,15 +1719,16 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
           // While the history is open the map is not drawn. Keeping only the width would narrow it
           // by a map that has no title row, so it would stop lining up with the body column
           "detail-pane--map": mapOpen() && !historyOpen(),
-          "detail-pane--history": kind() === "codex" && historyOpen() && twoPane(),
+          // Docked, the panel takes its 320px from the body; floating, it lies over it
+          "detail-pane--panel": selected() !== undefined && twoPane() && shell.notePanelPinned(),
         }}
       >
         <Show when={selected()} fallback={<div class="detail-empty">{t().notes.noSelection}</div>}>
           {(item) => (
             <>
-              {/* On a phone the history swaps with the body. In a wide window the panel only
-                  stands to the right of the body, so the body stays (HistoryPanel below) */}
-              <Show when={!historyScreen()}>
+              {/* On a phone the panel swaps with the body. In a wide window it only stands to
+                  the right of the body, so the body stays (NotePanel below) */}
+              <Show when={!panelScreenShown()}>
                 {/* Title, record and actions in one group. They sit on the same level as the body,
                   so what you want to know about a note is not searched for somewhere far away */}
                 <div class="detail-head">
@@ -1406,101 +1771,62 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                       }}
                     />
 
-                    {/* The history alone is not folded away. It is what someone in a Codex presses
-                      most, and the only entry to a panel that never opens on hover */}
-                    <Show when={kind() === "codex"}>
-                      <button
-                        type="button"
-                        class="history-button"
-                        aria-pressed={historyOpen()}
-                        title={`${t().codex.history} ${shortcutLabel("noteHistory")}`}
-                        data-hint-key={shortcutLabel("noteHistory")}
-                        onClick={toggleHistory}
-                      >
-                        <Icon name="clock-counter-clockwise" size={13} />
-                        {t().codex.history}
-                      </button>
-                    </Show>
-
-                    {/* Per-note actions fold into this one place. None of them is pressed often */}
-                    <NoteMenu
-                      open={shell.popover() === "note-menu"}
-                      onOpenChange={(open) => {
-                        // Opening folds the other popovers. On closing, the same pointerdown may
-                        // already have opened something else, so it folds only while this one is
-                        // still open
-                        if (open) {
-                          shell.togglePopover("note-menu");
-                        } else if (shell.popover() === "note-menu") {
-                          shell.closePopovers();
-                        }
-                      }}
-                      kind={kind()}
-                      mapOpen={mapOpen()}
-                      readOnly={readOnly()}
-                      revertable={revertable()}
-                      // While folded the table is empty, so judge by the template it came from
-                      hasExamples={item().template !== undefined}
-                      examplesShown={examplesShown()}
-                      onToggleMap={() => {
-                        void toggleMap(item());
-                      }}
-                      onToggleReadOnly={() => {
-                        void toggleReadOnly(item());
-                      }}
-                      onToggleExamples={() => setExamplesShown(!examplesShown())}
-                      onRevert={() => {
-                        void revertEdit(item());
-                      }}
-                      onInfo={() => shell.togglePopover("note-meta")}
-                      onPromote={() => {
-                        void promoteToCodex(item());
-                      }}
-                      onCommit={() => {
-                        void commitVersion(item());
-                      }}
-                      onHistory={toggleHistory}
-                      onDelete={() => {
-                        void remove(item());
-                      }}
-                    />
+                    {/* The one visible way into the panel. Everything that acts on this note is
+                      in there, and its state shows in the bottom bar while it is closed */}
+                    <button
+                      type="button"
+                      class="icon-button note-panel-toggle"
+                      aria-expanded={shell.notePanelPinned()}
+                      title={`${panelLabel()} ${shortcutLabel("noteActions")}`}
+                      aria-label={panelLabel()}
+                      data-hint-key={shortcutLabel("noteActions")}
+                      onClick={togglePanel}
+                    >
+                      <Icon name="sidebar-simple" size={17} />
+                    </button>
                   </div>
 
-                  {/* Created time, save state and tags on one line. The filename is the ID that
-                    sync and widgets point at, not something to show a person */}
-                  <div class="detail-meta-line">
-                    <span>{noteCreatedLabel(item())}</span>
-                    {/* A Codex always shows how it has grown: the distance from the newest
-                      version, and since when and how many times it was committed */}
-                    <Show when={kind() === "codex" && versionStatus()}>
-                      {(status) => (
-                        <>
+                  {/* Created time and tags. The filename is the ID that sync and widgets point
+                    at, not something to show a person. State (save, version, read-only) is the
+                    bottom bar's; a phone has no bar, so there it is the row below */}
+                  <Show
+                    when={twoPane()}
+                    fallback={
+                      // The phone's way into the panel screen: the whole line is one press
+                      <button
+                        type="button"
+                        class="detail-meta-line detail-meta-button"
+                        aria-label={panelLabel()}
+                        onClick={() => setPanelScreen(true)}
+                      >
+                        <span>{noteCreatedLabel(item())}</span>
+                        <Show when={item().tags.length > 0}>
                           <span class="detail-meta-sep" aria-hidden="true">
                             ·
                           </span>
-                          <span
-                            class="detail-version-status"
-                            classList={{ "detail-meta-tags": status().dirty }}
-                          >
-                            {versionStatusLabel(status())}
+                          <span class="detail-meta-tags">
+                            {item()
+                              .tags.map((tag) => `#${tag}`)
+                              .join(" ")}
                           </span>
-                          <Show when={cadence()}>
-                            {(text) => (
-                              <>
-                                <span class="detail-meta-sep" aria-hidden="true">
-                                  ·
-                                </span>
-                                <span class="detail-version-cadence">{text()}</span>
-                              </>
-                            )}
-                          </Show>
-                        </>
-                      )}
-                    </Show>
-                    <Show when={saveStatus() !== "idle"}>
+                        </Show>
+                        <Icon name="caret-right" size={12} />
+                      </button>
+                    }
+                  >
+                    <div class="detail-meta-line">
+                      <span>{noteCreatedLabel(item())}</span>
                       <span class="detail-meta-sep" aria-hidden="true">
                         ·
                       </span>
+                      {tagEditor(item, false)}
+                    </div>
+                  </Show>
+
+                  {/* The phone's state row. A wide window says the same in the bottom bar, so it
+                    is hidden there (CSS) */}
+                  <div class="detail-status-row">
+                    <Show when={saveStatus() !== "idle"}>
                       <span class="detail-save-status" data-status={saveStatus()}>
                         <Show when={saveStatus() === "saving"}>
                           <Icon name="circle-notch" size={11} />
@@ -1513,46 +1839,75 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                         {saveStatus() === "savedAt" ? t().notes.savedAt(savedAt()) : null}
                       </span>
                     </Show>
-                    <Show when={item().tags.length > 0}>
-                      <span class="detail-meta-sep" aria-hidden="true">
-                        ·
-                      </span>
-                      <span class="detail-meta-tags">
-                        {item()
-                          .tags.map((tag) => `#${tag}`)
-                          .join(" ")}
-                      </span>
+                    {/* A Codex always shows how far it has moved from the newest version */}
+                    <Show when={kind() === "codex" && versionStatus()}>
+                      {(status) => (
+                        <span
+                          class="detail-version-status"
+                          classList={{ "detail-version-status--moved": status().dirty }}
+                        >
+                          {versionStatusLabel(status())}
+                        </span>
+                      )}
                     </Show>
-                    {/* While comparing, this says what is being compared and how many lines moved.
-                      The line counts come from the diff already read, so no IPC is added.
-                      On a phone the compare bar below the body says the same thing */}
-                    <Show when={twoPane() && historyOpen() && compareLine().length > 0}>
-                      <span class="detail-meta-sep" aria-hidden="true">
-                        ·
-                      </span>
-                      <span class="detail-compare-status">{compareLine().join(" · ")}</span>
+                    <Show when={readOnly()}>
+                      <button
+                        type="button"
+                        class="detail-state-pill"
+                        onClick={() => openSettings()}
+                      >
+                        <Icon name="lock-simple" size={12} />
+                        {t().notes.readOnly}
+                      </button>
                     </Show>
+                    <Show when={mapOpen()}>
+                      <button
+                        type="button"
+                        class="detail-state-pill"
+                        onClick={() => openSettings()}
+                      >
+                        <Icon name="tree-structure" size={12} />
+                        {t().notes.map}
+                      </button>
+                    </Show>
+                    <Show when={examplesShown() && item().template !== undefined}>
+                      <button
+                        type="button"
+                        class="detail-state-pill"
+                        onClick={() => openSettings()}
+                      >
+                        <Icon name="file-text" size={12} />
+                        {t().notes.examples}
+                      </button>
+                    </Show>
+                    <span class="detail-status-actions">
+                      <Show when={canCommit()}>
+                        <button
+                          type="button"
+                          class="detail-action-pill"
+                          onClick={() => {
+                            void commitVersion(item());
+                          }}
+                        >
+                          <Icon name="book-bookmark" size={13} />
+                          {t().codex.commit}
+                        </button>
+                      </Show>
+                      <Show when={canRevert()}>
+                        <button
+                          type="button"
+                          class="detail-action-pill"
+                          onClick={() => {
+                            void revertEdit(item());
+                          }}
+                        >
+                          <Icon name="arrow-counter-clockwise" size={13} />
+                          {t().notes.revert}
+                        </button>
+                      </Show>
+                    </span>
                   </div>
                 </div>
-
-                <Popover
-                  open={shell.popover() === "note-meta"}
-                  onClose={() => shell.closePopovers()}
-                  trigger={shell.popoverTrigger}
-                  label={t().notes.info}
-                >
-                  <NoteMetaPopover
-                    filename={item().filename}
-                    revertable={revertable()}
-                    onRevert={() => {
-                      void revertEdit(item());
-                    }}
-                    onSaved={async () => {
-                      await refetchNotes();
-                    }}
-                    onClose={() => shell.closePopovers()}
-                  />
-                </Popover>
 
                 <div
                   class="detail-panes"
@@ -1647,7 +2002,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                     <button
                       type="button"
                       class="button-secondary"
-                      onClick={() => setHistoryScreenOpen(true)}
+                      onClick={() => setPanelScreen(true)}
                     >
                       {t().codex.history}
                     </button>
@@ -1669,7 +2024,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                       type="button"
                       class="icon-button compare-bar-close"
                       aria-label={t().codex.close}
-                      onClick={closeHistory}
+                      onClick={closePanel}
                     >
                       <Icon name="x" size={16} />
                     </button>
@@ -1677,57 +2032,34 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                 </Show>
               </Show>
 
-              {/* A phone's history is its own surface. Pressing a version returns to the body,
-                  with the compare bar attached */}
-              <Show when={historyScreen()}>
-                <HistoryPanel
-                  screen
-                  open
-                  rows={versionRows()}
-                  summary={historySummary()}
-                  dirty={versionStatus()?.dirty ?? false}
-                  bytesDelta={versionStatus()?.bytes_delta ?? 0}
-                  selectedId={selectedVersionId()}
-                  readOnly={readOnly()}
-                  freshId={freshVersionId()}
-                  onClose={() => setHistoryScreenOpen(false)}
-                  onSelect={(id) => {
-                    batch(() => {
-                      setSelectedVersionId(id);
-                      setHistoryScreenOpen(false);
-                    });
-                  }}
-                  onRestore={(id) => {
-                    void restoreVersion(item(), id);
-                  }}
-                  onCommit={() => {
-                    void commitVersion(item());
-                  }}
-                />
+              {/* A phone's panel is its own screen, swapped in for the body. Pressing a version
+                  on its history tab returns to the body, with the compare bar attached */}
+              <Show when={panelScreenShown()}>{notePanel(item, true)}</Show>
+
+              {/* In a wide window, 320px at the right edge. It exists even when folded, so
+                  opening and closing read as a 220ms slide. The 8px strip at the edge floats it
+                  in when the pointer rests there; docked, there is nothing to float */}
+              <Show when={twoPane()}>
+                <Show when={!shell.notePanelPinned()}>
+                  <div
+                    class="note-panel-edge"
+                    aria-hidden="true"
+                    onPointerEnter={armEdge}
+                    onPointerMove={armEdge}
+                    onPointerLeave={() => clearTimeout(edgeTimer)}
+                  />
+                </Show>
+                {notePanel(item, false)}
               </Show>
 
-              {/* In a wide window, 320px standing to the right of the body. It exists even when
-                  folded, so opening and closing read as a 220ms slide */}
-              <Show when={kind() === "codex" && twoPane()}>
-                <HistoryPanel
-                  open={historyOpen()}
-                  rows={versionRows()}
-                  summary={historySummary()}
-                  dirty={versionStatus()?.dirty ?? false}
-                  bytesDelta={versionStatus()?.bytes_delta ?? 0}
-                  selectedId={selectedVersionId()}
-                  readOnly={readOnly()}
-                  freshId={freshVersionId()}
-                  onClose={closeHistory}
-                  onSelect={setSelectedVersionId}
-                  onRestore={(id) => {
-                    void restoreVersion(item(), id);
-                  }}
-                  onCommit={() => {
-                    void commitVersion(item());
-                  }}
-                />
-              </Show>
+              <PromoteDialog
+                open={confirmOpen()}
+                onClose={() => setConfirmOpen(false)}
+                onConfirm={() => {
+                  setConfirmOpen(false);
+                  void promoteToCodex(item());
+                }}
+              />
             </>
           )}
         </Show>

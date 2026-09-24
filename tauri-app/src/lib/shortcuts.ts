@@ -29,16 +29,17 @@ const SHORTCUTS = {
   // Make the list flyout permanent. It does not fold away when the pointer leaves
   listPin: { key: "\\" },
   // These work on the open note. Workspace takes them, and they can be pressed only
-  // while one note is open
+  // while one note is open. ⌘. docks the right panel beside the body, or folds it
   noteActions: { key: "." },
   noteMap: { key: "m", shift: true },
   // ⌘⇧ plus the initial. ⌘Z / ⌘⇧Z (redo) and ⌘I (italic) belong to Milkdown and cannot be
   // taken while the caret is in the always-editable body (#211)
   noteRevert: { key: "r", shift: true },
+  // The panel's details (created, updated, surroundings), docked and unfolded
   noteInfo: { key: "i", shift: true },
   // The K of "commit a version". ⇧ separates it from ⌘K (search). Only while a Codex is open
   codexCommit: { key: "k", shift: true },
-  // The history panel. It never opens on hover, so the button and this are the only ways in
+  // The panel's history tab. It never opens on hover, so the tab and this are the only ways in
   noteHistory: { key: "h", shift: true },
   notePrev: { key: "arrowup" },
   noteNext: { key: "arrowdown" },

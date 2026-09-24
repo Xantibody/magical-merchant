@@ -2,8 +2,8 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { cdp, page, userEvent } from "vitest/browser";
 import { cleanup, render, screen, waitFor } from "@solidjs/testing-library";
 import { createSignal } from "solid-js";
-import NoteMenu from "../components/NoteMenu";
 import Popover from "../components/Popover";
+import PromoteDialog from "../components/PromoteDialog";
 
 function element(root: ParentNode, selector: string): HTMLElement {
   const found = root.querySelector<HTMLElement>(selector);
@@ -69,44 +69,35 @@ describe("reduced motion in the browser", () => {
     }
   });
 
-  it("runs a note menu action, closes, and can reopen and close with Escape", async () => {
+  // The entrance animation sits on the inner box. If reduced motion left corvu's presence
+  // waiting on it, the confirmation would never unmount after Escape
+  it("opens the promote confirmation, and Escape unmounts it", async () => {
     await motion("reduce");
     const [open, setOpen] = createSignal(false);
-    const onInfo = vi.fn<() => void>();
     render(() => (
-      <NoteMenu
-        open={open()}
-        onOpenChange={setOpen}
-        kind="note"
-        mapOpen={false}
-        readOnly={false}
-        hasExamples={false}
-        examplesShown={false}
-        revertable={false}
-        onToggleMap={vi.fn<() => void>()}
-        onToggleReadOnly={vi.fn<() => void>()}
-        onToggleExamples={vi.fn<() => void>()}
-        onRevert={vi.fn<() => void>()}
-        onInfo={onInfo}
-        onPromote={vi.fn<() => void>()}
-        onCommit={vi.fn<() => void>()}
-        onHistory={vi.fn<() => void>()}
-        onDelete={vi.fn<() => void>()}
-      />
+      <>
+        <button type="button" onClick={() => setOpen(true)}>
+          Open
+        </button>
+        <PromoteDialog
+          open={open()}
+          onClose={() => setOpen(false)}
+          onConfirm={vi.fn<() => void>()}
+        />
+      </>
     ));
-    const trigger = screen.getByRole("button", { name: "この Note の操作" });
+    const trigger = screen.getByRole("button", { name: "Open" });
     await userEvent.click(trigger);
-    const menu = await screen.findByRole("menu");
-    expect(getComputedStyle(menu).animationDuration).toBe("0s");
-    await userEvent.click(screen.getByRole("menuitem", { name: /Note 情報/u }));
-    expect(onInfo).toHaveBeenCalledTimes(1);
-    await waitFor(() => expect(screen.queryByRole("menu", { hidden: true })).toBeNull());
+    const dialog = await screen.findByRole("dialog");
+    expect(getComputedStyle(element(dialog, ".promote-dialog")).animationDuration).toBe("0s");
+    // The press that confirms is offered first
+    await waitFor(() => expect(screen.getByRole("button", { name: "Codex にする" })).toHaveFocus());
+
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog", { hidden: true })).toBeNull());
 
     await userEvent.click(trigger);
-    await screen.findByRole("menu");
-    await userEvent.keyboard("{Escape}");
-    await waitFor(() => expect(screen.queryByRole("menu", { hidden: true })).toBeNull());
-    expect(trigger).toHaveFocus();
+    await screen.findByRole("dialog");
   });
 
   it("unmounts a popover on an outside press and opens it again", async () => {

@@ -36,32 +36,88 @@
 
 /* ---------------- bottom bar (desktop only) ---------------- */
 
-/* A thin band that says only where the save landed. It gives no current location: the
-   rail's line and the title are enough. The distance from a version and the comparing
-   indicator belong to Codex, and the history slice adds them here */
+/* The status line: where the save landed, the Codex's version, comparing, the states that
+   are on, and at the right end the two actions worth offering now. It gives no current
+   location: the rail's line and the title are enough */
 .bottom-bar {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
   box-sizing: border-box;
   height: 30px;
   flex-shrink: 0;
-  padding: 0 16px;
+  padding: 0 16px 0 24px;
   background: var(--app-surface);
   border-top: 1px solid var(--app-hairline);
   font-size: 12px;
   color: var(--app-text-faint);
-  /* The flyout stops at bottom: 30px so they do not overlap, but its shadow falls on this */
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  /* The flyouts stop at its top edge so they do not overlap, but their shadows fall on it.
+     Above the note panel (50) so the panel's shadow sits under the line */
   position: relative;
-  z-index: 25;
+  z-index: 55;
 }
 
 .bottom-bar-save {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 8px;
   transition: color 250ms var(--app-ease);
+}
+
+.bottom-bar-sep {
+  color: var(--app-text-hint);
+}
+
+/* The save state is the line's first item; a separator in front of nothing is dropped */
+.bottom-bar > .bottom-bar-sep:first-child {
+  display: none;
+}
+
+/* A state that is on. Pressing it opens the panel on its switch */
+.bottom-bar-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 -4px;
+  padding: 2px 4px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--app-text-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.bottom-bar-state:hover {
+  background: var(--app-surface-2);
+}
+
+.bottom-bar-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.bottom-bar-action {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 8px;
+  border: none;
+  border-radius: var(--radius-2);
+  background: none;
+  color: var(--app-text-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.bottom-bar-action:hover {
+  background: var(--app-surface-2);
+  color: var(--app-text);
 }
 
 /* Green for the 2 seconds right after a save. Left on, the edge of vision keeps glowing */

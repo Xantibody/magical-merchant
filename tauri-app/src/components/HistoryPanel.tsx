@@ -9,20 +9,15 @@ import "../styles/history.css";
 interface HistoryPanelProps {
   /** Versions, newest first. */
   rows: VersionRow[];
-  /** "3 versions, 9 months". The surface does the counting. */
-  summary: string;
+  /** "committed 4 times in 9 months". The surface does the counting. Absent with no versions. */
+  summary?: string;
   /** Whether the draft has moved on from the latest version. */
   dirty: boolean;
   /** Byte difference between the draft and the latest version. */
   bytesDelta: number;
   /**
-   * Whether it is open. While closed it stays in the DOM, shifted 24px to the
-   * right and faded. Watching it fold away shows that it returns to where it opened.
-   */
-  open: boolean;
-  /**
-   * Whether it is shown as the phone's own screen. It becomes a surface rather
-   * than a panel, and restoring belongs to the compare bar under the body.
+   * Whether it is shown on the phone's panel screen. The rows grow to a finger's size, and
+   * restoring belongs to the compare bar under the body.
    */
   screen?: boolean;
   /** The version selected in the history. */
@@ -31,7 +26,6 @@ interface HistoryPanelProps {
   readOnly: boolean;
   /** The version just committed. Only its row pops in. */
   freshId?: string | null;
-  onClose: () => void;
   onSelect: (id: string) => void;
   onRestore: (id: string) => void;
   onCommit: () => void;
@@ -85,13 +79,12 @@ function NoVersions(props: { onCommit: () => void }): JSX.Element {
 }
 
 /**
- * The list of versions. In a wide window it is a 320px panel standing to the
- * right of the body; on a phone it is its own screen that replaces the body.
- * Both hold the same three parts: a heading, the draft and version rows, and the
- * hint at the foot.
+ * The list of versions: the body of the right panel's history tab (`NotePanel`).
+ * The tab row names it and the panel decides where it stands, so this holds only a
+ * summary line, the draft and version rows, and the next move when there are none.
  *
- * It does not open on hover. Only the history button, Esc and the close button
- * open and close it: 320px must not appear in passing beside a hand that is
+ * It does not open on hover. Only the panel's history tab, ⌘⇧H and the bottom bar
+ * reach it: 320px of comparison must not appear in passing beside a hand that is
  * writing the body.
  *
  * Rows run from the draft at the top, then the latest, down to the oldest. The
@@ -122,50 +115,10 @@ export default function HistoryPanel(props: HistoryPanelProps): JSX.Element {
   };
 
   return (
-    <aside
-      class="history-panel"
-      classList={{
-        "history-panel--open": props.open,
-        "history-panel--screen": props.screen,
-      }}
-      aria-label={t().codex.history}
-      aria-hidden={!props.open}
-    >
-      <div class="history-head">
-        {/* On a phone the whole surface is swapped, so back leads to the body. A wide
-            window folds it with the close button */}
-        <Show when={props.screen} fallback={<span class="history-title">{t().codex.history}</span>}>
-          <button
-            type="button"
-            class="icon-button history-back"
-            aria-label={t().codex.backToBody}
-            onClick={() => props.onClose()}
-          >
-            <Icon name="arrow-left" size={18} />
-          </button>
-          <span class="history-title">{t().codex.history}</span>
-        </Show>
-        <span class="history-summary">{props.summary}</span>
-        {/* The rule for opening and closing is written inside the thing that is
-            open. A phone swaps the whole surface, so it only says how to press,
-            not how to close */}
-        <Show
-          when={props.screen}
-          fallback={
-            <button
-              type="button"
-              class="icon-button history-close"
-              aria-label={t().codex.close}
-              title={t().codex.close}
-              onClick={() => props.onClose()}
-            >
-              <Icon name="x" size={14} />
-            </button>
-          }
-        >
-          <span class="history-hint">{t().codex.historyHint}</span>
-        </Show>
-      </div>
+    <div class="history-panel" classList={{ "history-panel--screen": props.screen }}>
+      <Show when={props.summary}>
+        {(summary) => <div class="history-summary">{summary()}</div>}
+      </Show>
 
       <Show when={props.rows.length > 0} fallback={<NoVersions onCommit={props.onCommit} />}>
         {/* The rows inside receive the keys. This only bundles them */}
@@ -240,10 +193,6 @@ export default function HistoryPanel(props: HistoryPanelProps): JSX.Element {
           </For>
         </div>
       </Show>
-
-      <Show when={!props.screen}>
-        <div class="history-foot">{t().codex.historyFoot}</div>
-      </Show>
-    </aside>
+    </div>
   );
 }
