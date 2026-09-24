@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::error::CoreError;
 use crate::utils::frontmatter;
 use crate::utils::fs::{ensure_dir, list_md_files, write_atomic};
-use crate::utils::paths::templates_dir;
+use crate::utils::paths::{template_drafts_dir, templates_dir};
 use crate::utils::validated::NoteFilename;
 
 /// The frontmatter of a template file. A separate type from the note's.
@@ -60,6 +60,13 @@ impl Templates {
     pub(crate) fn new(base_dir: &Path) -> Self {
         Self {
             dir: templates_dir(base_dir),
+        }
+    }
+
+    /// The drafts: files of the same shape, one per template, outside the synced tree.
+    pub(crate) fn drafts(base_dir: &Path) -> Self {
+        Self {
+            dir: template_drafts_dir(base_dir),
         }
     }
 

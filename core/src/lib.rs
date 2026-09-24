@@ -34,7 +34,8 @@ pub use scrawl::{
 pub use search::{HitKind, SearchHit, browse_all, find_backlinks, search_all};
 pub use template::{
     CreatedNote, TemplateDetail, TemplateSummary, VarLocale, create_note_from_template,
-    delete_template, list_templates, read_template, save_template,
+    delete_template, discard_template_draft, list_template_drafts, list_templates, read_template,
+    read_template_draft, save_template, save_template_draft,
 };
 pub use utils::device::Context as DeviceContext;
 /// The fixed vocabulary of entry points that wrote a record. Every creation entry takes one.

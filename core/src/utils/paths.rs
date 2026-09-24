@@ -46,6 +46,16 @@ pub fn templates_dir(base_dir: &Path) -> PathBuf {
     data_dir(base_dir).join(TEMPLATES_DIR)
 }
 
+/// Where the unsaved edits of templates live, one file per template.
+///
+/// Outside `data/`. A draft is one device's unfinished edit: synced, it would reach
+/// another device as a stray file, or fight the same template being edited there. The
+/// template itself syncs once it is saved.
+#[must_use]
+pub fn template_drafts_dir(base_dir: &Path) -> PathBuf {
+    base_dir.join("template-drafts")
+}
+
 /// Where special-character (glyph) images live.
 ///
 /// Inside `data/` because the images should sync too. If a note with `:236p:` showed as plain text
