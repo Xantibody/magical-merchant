@@ -136,6 +136,26 @@
   margin-right: auto;
 }
 
+/* Two lines: the name alone, then the title it makes today. Sharing one line with the
+   title and the tags is what cut the name short */
+.templates .list-row {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 1px;
+}
+
+.templates .list-row-title {
+  flex: none;
+}
+
+.templates .list-row-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: var(--app-text-faint);
+}
+
 .templates-back {
   flex-shrink: 0;
   color: var(--app-text-muted);

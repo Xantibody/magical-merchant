@@ -106,11 +106,25 @@ describe("Templates", () => {
     document.body.innerHTML = "";
   });
 
-  it("lists what is on disk", async () => {
-    renderTemplates();
+  // A row says what pressing "create" makes today, not how the definition is spelled
+  it("lists each template with the title it makes today", async () => {
+    const { container } = renderTemplates();
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
     await waitFor(() => expect(screen.getByText("daily")).toBeDefined());
-    expect(screen.getByText("Daily {{date}}")).toBeDefined();
+    const meta = container.querySelector(".list-row .list-row-meta");
+
+    expect(meta?.textContent).toBe(`Daily ${today}`);
+  });
+
+  // Tags on the row squeezed the name. They are read under the automatic tags once opened
+  it("keeps tags off the list rows", async () => {
+    const { container } = renderTemplates();
+
+    await waitFor(() => expect(screen.getByText("daily")).toBeDefined());
+
+    expect(listPane(container).querySelector(".tag-badge")).toBeNull();
   });
 
   // The edit screen shows it exactly as written. If the variables were resolved here, an
@@ -400,5 +414,18 @@ describe("Templates on a wide screen", () => {
 
     expect(title.getBoundingClientRect().height).toBeLessThan(60);
     expect(textLeft(title)).toBeCloseTo(textLeft(bodyInput(container)), 0);
+  });
+
+  // The name gets a line of its own, so a long title beside it cannot cut it short
+  it("puts the title under the name, not beside it", async () => {
+    const { container } = renderTemplates();
+    await waitFor(() => expect(screen.getByText("daily")).toBeDefined());
+
+    const name = listPane(container).querySelector(".list-row-title");
+    const meta = listPane(container).querySelector(".list-row-meta");
+
+    expect(name?.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+      Number(meta?.getBoundingClientRect().top),
+    );
   });
 });
