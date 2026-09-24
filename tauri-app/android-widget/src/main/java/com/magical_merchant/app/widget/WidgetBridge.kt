@@ -2,14 +2,25 @@ package com.magical_merchant.app.widget
 
 import android.content.Context
 import org.json.JSONObject
+import java.util.Locale
 
-/** 一覧に出すノート 1 件。 */
+/** One note in the recent list. */
 internal data class NoteRow(val title: String, val filename: String, val date: String)
 
-/** ウィジェットのボタン 1 つぶんのテンプレ。名前がそのまま起動の引数になる。 */
-internal data class TemplateRow(val name: String)
+/**
+ * One template as it stands today. [name] is also the deep link's argument.
+ *
+ * [todayTitle] and [hasToday] come resolved from core — the title a tap would give
+ * today's note, and whether that note already exists. Kotlin never resolves a
+ * variable or decides "today" itself; the tap and the button have to agree.
+ */
+internal data class TemplateRow(
+    val name: String,
+    val todayTitle: String = "",
+    val hasToday: Boolean = false,
+)
 
-/** キャプチャバーとシートが描くぶん。読めなければ空。 */
+/** What the capture bar and the sheet draw. Empty when nothing could be read. */
 internal data class CaptureData(
     val lastTime: String = "",
     val lastText: String = "",
@@ -75,8 +86,11 @@ internal object WidgetBridge {
     /** The most recent notes, as JSON. Reads the whole notes tree. */
     external fun readNotes(baseDir: String): String?
 
-    /** The templates to offer, as JSON. Reads only the templates directory. */
-    external fun readTemplates(baseDir: String): String?
+    /**
+     * Every template with today's title and whether today's note exists, as JSON.
+     * [locale] is a BCP 47 tag; it only picks the weekday names.
+     */
+    external fun readTemplates(baseDir: String, locale: String): String?
 
     /**
      * The directory Tauri's `app_data_dir()` resolves to, so the widget and the
@@ -133,7 +147,12 @@ internal object WidgetBridge {
             .getOrElse { failed("notes", it, emptyList()) }
 
     fun readTemplateRows(context: Context): List<TemplateRow> =
-        runCatching { parseTemplates(read(context, ::readTemplates)) }
+        runCatching {
+            // The device's language, like every other widget string: the app's own
+            // choice lives in the WebView, which a widget process never starts.
+            val locale = Locale.getDefault().toLanguageTag()
+            parseTemplates(read(context) { dir -> readTemplates(dir, locale) })
+        }
             .getOrElse { failed("templates", it, emptyList()) }
 
     private fun <T> failed(what: String, error: Throwable, fallback: T): T {
@@ -166,7 +185,12 @@ internal object WidgetBridge {
     private fun parseTemplates(raw: String): List<TemplateRow> {
         val templates = JSONObject(raw).optJSONArray("templates")
         return List(templates?.length() ?: 0) { index ->
-            TemplateRow(name = templates?.optJSONObject(index)?.optString("name").orEmpty())
+            val template = templates?.optJSONObject(index)
+            TemplateRow(
+                name = template?.optString("name").orEmpty(),
+                todayTitle = template?.optString("todayTitle").orEmpty(),
+                hasToday = template?.optBoolean("hasToday") ?: false,
+            )
         }.filter { it.name.isNotEmpty() }
     }
 

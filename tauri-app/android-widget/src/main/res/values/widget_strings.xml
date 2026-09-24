@@ -39,4 +39,21 @@
     <string name="widget_templates_widget_label">Templates</string>
     <string name="widget_templates_description">Makes a Note from a template</string>
     <string name="widget_templates_empty">Make a template</string>
+    <string name="widget_template_create_today">+ Make today\'s</string>
+    <string name="widget_template_open_today">Made today · Open</string>
+
+    <string name="widget_template_button_label">Template button</string>
+    <string name="widget_template_button_description">Makes today\'s Note from one template, or opens it</string>
+    <string name="widget_template_has_today">Made today</string>
+    <string name="widget_template_choose">Choose a template</string>
+    <string name="widget_template_action_create">Make today\'s Note</string>
+    <string name="widget_template_action_open">Open today\'s Note</string>
+
+    <string name="template_configure_title">Template for this button</string>
+    <string name="template_configure_display">Show</string>
+    <string name="template_configure_name_only">Name only</string>
+    <string name="template_configure_with_title">Today\'s title too</string>
+    <string name="template_configure_empty">No templates yet</string>
+    <string name="template_configure_cancel">Cancel</string>
+    <string name="template_configure_add">Add</string>
 </resources>

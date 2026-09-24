@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 4a — one template as a button (2x1).
+     Name, today's title and "made today" on the left; the 42dp square on the
+     right says what a tap does. Both squares are laid out and the provider shows
+     one, so their colours stay theme resources the launcher resolves — a colour
+     set from code would be baked in and miss a switch to the night theme. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_template_button_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_bar_bg"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="14dp"
+    android:paddingTop="12dp"
+    android:paddingEnd="12dp"
+    android:paddingBottom="12dp">
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/widget_template_button_name"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/widget_text"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_template_button_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/widget_faint"
+            android:textSize="11sp"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/widget_template_button_ok"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:maxLines="1"
+            android:text="@string/widget_template_has_today"
+            android:textColor="@color/widget_ok"
+            android:textSize="10.5sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <FrameLayout
+        android:layout_width="42dp"
+        android:layout_height="42dp"
+        android:layout_marginStart="10dp">
+
+        <ImageView
+            android:id="@+id/widget_template_button_create"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/widget_action_bg"
+            android:contentDescription="@string/widget_template_action_create"
+            android:padding="11dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_plus" />
+
+        <ImageView
+            android:id="@+id/widget_template_button_open"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/widget_action_open_bg"
+            android:contentDescription="@string/widget_template_action_open"
+            android:padding="11dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_caret_right"
+            android:visibility="gone" />
+    </FrameLayout>
+</LinearLayout>

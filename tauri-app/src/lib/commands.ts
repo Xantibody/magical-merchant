@@ -302,6 +302,14 @@ interface CommandMap {
    * It does not touch notes, so it is not in MUTATING. `saved: false` is a cancel.
    */
   save_export: { args: { suggestedName: string; dataBase64: string }; result: { saved: boolean } };
+  /** Whether the launcher can place a home-screen widget on request. Always false off Android. */
+  template_widget_pinnable: { args: void; result: boolean };
+  /**
+   * Asks the launcher to place a button for one template. true = the request went
+   * out (the system confirms on its own; a refusal there is not reported).
+   * It writes nothing under data/, so it is not in MUTATING.
+   */
+  pin_template_widget: { args: { filename: string }; result: boolean };
 }
 
 export type CommandName = keyof CommandMap;
