@@ -258,13 +258,22 @@
   line-height: 1.5;
 }
 
+/* The body takes the note's own read-only size (`.detail-body`), so a record reads the same in
+   both places. The colours and the block spacing come from `.markdown-preview` itself */
 .browse-preview-body {
+  font-size: 15px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+
+.browse-preview-body .markdown-preview {
+  cursor: default;
+}
+
+.browse-preview-empty {
   margin: 0;
   font-size: 14.5px;
-  line-height: 1.8;
-  color: var(--app-text-muted);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+  color: var(--app-text-faint);
 }
 
 .browse-preview-actions {

@@ -68,7 +68,10 @@ const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
     '- [08:00:00] 起きた {"os":"macos"}',
     '- [08:15:00] 朝ラン 5km #run {"os":"android","os_version":"16"}',
   ],
-  read_note: () => ({ body: "# レールの設計\n\nヘッダを畳んで柱にする。", revision: "r1" }),
+  read_note: () => ({
+    body: "# レールの設計\n\nヘッダを畳んで柱にする。\n\n## 決めたこと\n\n- **柱**は 48px\n- 詳しくは [[20260720_090000]]",
+    revision: "r1",
+  }),
   read_note_meta: () => ({
     time: "2026-09-19T10:15:00+09:00",
     tags: ["design"],
@@ -257,6 +260,36 @@ describe("Browse › 選んだ 1 件", () => {
     expect(preview.textContent).toContain("2026/09/19 10:15");
     expect(preview.textContent).toContain("macos 26.0");
     expect(preview.textContent).toContain("#design");
+  });
+
+  // The column draws the body the way the note itself shows it read-only, not as the stored text
+  it("draws the body as Markdown, the same as the note's own read-only view", async () => {
+    await openBrowse();
+
+    clickRow("レールの設計");
+
+    const heading = await screen.findByRole("heading", { level: 2, name: "決めたこと" });
+    const preview = screen.getByRole("article");
+    expect(preview.contains(heading)).toBe(true);
+    expect(within(preview).getAllByRole("listitem")).toHaveLength(2);
+    expect(preview.querySelector("strong")?.textContent).toBe("柱");
+    // A note link reads as the title it points at, as it does in the note
+    expect(preview.textContent).toContain("見取り図");
+    expect(preview.textContent).not.toContain("## ");
+    expect(preview.textContent).not.toContain("[[");
+  });
+
+  it("opens the note a link in the body points at", async () => {
+    await openBrowse();
+
+    clickRow("レールの設計");
+    const link = await screen.findByText("見取り図", { selector: "a.note-link" });
+    fireEvent.click(link);
+
+    await waitFor(() => {
+      expect(location.pathname).toBe("/codex");
+    });
+    expect(location.search).toBe("?file=20260720_090000.md");
   });
 
   // For a one-line record the title is the whole text. There is no body to show below, so no empty paragraph
