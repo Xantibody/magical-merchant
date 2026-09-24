@@ -352,6 +352,15 @@ fn delete_template(handle: AppHandle, filename: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Renames a template and its draft. Refused when the new name is taken.
+#[tauri::command]
+fn rename_template(handle: AppHandle, from: String, to: String) -> Result<(), String> {
+    let base_dir = app_base_dir(&handle)?;
+    let from = parse_filename(&from)?;
+    let to = parse_filename(&to)?;
+    magical_merchant_core::rename_template(&base_dir, &from, &to).map_err(|e| e.to_string())
+}
+
 /// Keeps the edit in progress beside the template. Returns whether a draft is left: one
 /// equal to the saved template is removed instead.
 #[tauri::command]
@@ -806,6 +815,7 @@ pub fn run() {
             read_template,
             save_template,
             delete_template,
+            rename_template,
             save_template_draft,
             read_template_draft,
             discard_template_draft,

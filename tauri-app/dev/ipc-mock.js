@@ -1211,6 +1211,23 @@ const unifiedDiff = (from, to, fromName, toName) => {
       templates.delete(filename);
       templateDrafts.delete(filename);
     },
+    /** @param {{ from: string, to: string }} args */
+    rename_template: ({ from, to }) => {
+      const template = templates.get(from);
+      if (!template) {
+        throw new Error("template not found");
+      }
+      if (templates.has(to)) {
+        throw new Error("template already exists");
+      }
+      templates.delete(from);
+      templates.set(to, template);
+      const draft = templateDrafts.get(from);
+      if (draft) {
+        templateDrafts.delete(from);
+        templateDrafts.set(to, draft);
+      }
+    },
     /** @param {{ filename: string, body: string, tags?: string[] }} args */
     save_template_draft: ({ filename, body, tags }) => {
       const draft = { body, tags: tags ?? [] };

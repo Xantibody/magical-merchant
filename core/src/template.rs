@@ -85,6 +85,23 @@ pub fn delete_template(base_dir: &Path, filename: &NoteFilename) -> Result<(), C
     }
 }
 
+/// Give a template a new name, and its draft with it.
+///
+/// The notes made from it keep the old name in `template:`: they are records of where
+/// they came from, and rewriting them would touch every one of those files. So the link is
+/// cut, `{{prev}}` starts over, and the screen says so before the rename.
+pub fn rename_template(
+    base_dir: &Path,
+    from: &NoteFilename,
+    to: &NoteFilename,
+) -> Result<(), CoreError> {
+    Templates::new(base_dir).rename(from, to)?;
+    match Templates::drafts(base_dir).rename(from, to) {
+        Err(CoreError::NotFound(_)) => Ok(()),
+        result => result,
+    }
+}
+
 /// Keep the edit in progress without touching the template.
 ///
 /// A template is what every note made from it copies, so the file changes only on an
@@ -401,6 +418,60 @@ mod tests {
         let names: Vec<&str> = drafts.iter().map(|d| d.name.as_str()).collect();
         assert_eq!(names, vec!["a", "b"]);
         assert_eq!(drafts[1].preview, "B {{date}}");
+    }
+
+    #[test]
+    fn renaming_moves_the_template_to_the_new_name() {
+        let tmp = TempDir::new().unwrap();
+        save_template(tmp.path(), &name("a.md"), "body", &["x".to_string()]).unwrap();
+
+        rename_template(tmp.path(), &name("a.md"), &name("b.md")).unwrap();
+
+        assert_eq!(
+            read_template(tmp.path(), &name("b.md")).unwrap(),
+            detail("body", &["x"])
+        );
+        assert!(matches!(
+            read_template(tmp.path(), &name("a.md")),
+            Err(CoreError::NotFound(_))
+        ));
+    }
+
+    /// A rename onto a name in use would silently replace that template.
+    #[test]
+    fn renaming_onto_an_existing_template_is_refused() {
+        let tmp = TempDir::new().unwrap();
+        save_template(tmp.path(), &name("a.md"), "a", &[]).unwrap();
+        save_template(tmp.path(), &name("b.md"), "b", &[]).unwrap();
+
+        let result = rename_template(tmp.path(), &name("a.md"), &name("b.md"));
+
+        assert!(result.is_err());
+        assert_eq!(read_template(tmp.path(), &name("a.md")).unwrap().body, "a");
+        assert_eq!(read_template(tmp.path(), &name("b.md")).unwrap().body, "b");
+    }
+
+    /// The unsaved edit belongs to the template, whatever it is called.
+    #[test]
+    fn renaming_carries_the_draft_along() {
+        let tmp = TempDir::new().unwrap();
+        save_template(tmp.path(), &name("a.md"), "saved", &[]).unwrap();
+        save_template_draft(tmp.path(), &name("a.md"), &detail("draft", &[])).unwrap();
+
+        rename_template(tmp.path(), &name("a.md"), &name("b.md")).unwrap();
+
+        assert!(
+            read_template_draft(tmp.path(), &name("a.md"))
+                .unwrap()
+                .is_none()
+        );
+        assert_eq!(
+            read_template_draft(tmp.path(), &name("b.md"))
+                .unwrap()
+                .unwrap()
+                .body,
+            "draft"
+        );
     }
 
     #[test]

@@ -11,29 +11,73 @@
 .detail-meta-bar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--size-2);
-  padding: 9px 20px;
+  gap: 10px;
+  padding: 9px 16px 9px 24px;
   border-bottom: 1px solid var(--app-hairline);
 }
 
-.detail-meta {
+/* The small caps over every field. The name, the note's title and the body all
+   look like a title; the label is what tells them apart */
+.templates-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--app-text-faint);
+}
+
+.templates-name-block {
   display: flex;
-  align-items: center;
-  gap: var(--size-2);
-  font-size: 12px;
-  color: var(--app-text-muted);
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
   min-width: 0;
 }
 
-.detail-created {
-  font-size: 13px;
-  color: var(--app-text-faint);
+.templates-name-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.templates-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--app-text);
+}
+
+.templates-rename-button {
+  flex-shrink: 0;
+  padding: 2px 6px;
+  border: none;
+  border-radius: var(--radius-2);
+  background: none;
+  color: var(--app-text-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.templates-rename-button:hover {
+  background: var(--app-surface-2);
+  color: var(--app-text);
+}
+
+.templates-saved {
+  color: var(--app-ok);
+}
+
+.detail-meta-bar .detail-save-status {
+  flex-shrink: 0;
+  font-size: 12px;
 }
 
 .detail-actions {
   display: flex;
+  align-items: center;
   gap: 2px;
   flex-shrink: 0;
 }
@@ -46,6 +90,97 @@
 .detail-actions .icon-button:hover {
   background: var(--app-surface-2);
   color: var(--app-text);
+}
+
+/* ---------------- More menu ---------------- */
+
+.templates-more {
+  position: relative;
+}
+
+.templates-more-button {
+  width: 32px;
+  height: 30px;
+  justify-content: center;
+}
+
+.templates-menu {
+  top: calc(100% + 4px);
+  right: 0;
+  width: 250px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  animation: mm-rise 180ms var(--app-ease);
+}
+
+.templates-menu-item {
+  width: 100%;
+  padding: 7px 8px;
+  border: none;
+  border-radius: var(--radius-2);
+  background: none;
+  color: var(--app-text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.templates-menu-item:hover {
+  background: var(--app-hairline);
+}
+
+.templates-menu-item--danger {
+  color: var(--app-danger);
+}
+
+.templates-menu-divider {
+  border: none;
+  height: 1px;
+  margin: 6px 0;
+  background: var(--app-border);
+}
+
+/* ---------------- Rename panel ---------------- */
+
+.templates-rename {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 24px 14px;
+  background: var(--app-surface-2);
+}
+
+.templates-rename-input {
+  max-width: 280px;
+  padding: 9px 12px;
+}
+
+.templates-rename-input--error {
+  border-color: var(--app-danger);
+}
+
+.templates-rename-note {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--app-text-muted);
+}
+
+.templates-rename .templates-name-error {
+  margin: 0;
+  padding: 0;
+  max-width: none;
+}
+
+.templates-rename-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.templates-rename-actions button {
+  padding: 6px 14px;
+  font-size: 12.5px;
 }
 
 /* ---------------- Picker menu / sheet ---------------- */
@@ -197,16 +332,23 @@
 }
 
 .templates-name-input {
-  width: 10rem;
+  max-width: 220px;
+  padding: 0 0 2px;
   border: none;
+  border-bottom: 1.5px solid var(--app-border);
   background: none;
   color: var(--app-text);
   font-family: inherit;
-  font-size: 12px;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .templates-name-input:focus {
   outline: none;
+}
+
+.templates-name-input--error {
+  border-bottom-color: var(--app-danger);
 }
 
 /* A template is not saved automatically. While it can be pressed it is dark
@@ -234,12 +376,25 @@
    the panel toggle and so grows sideways (`flex: 1`, no padding). Here it
    stands alone in the pane's column, where the same `flex: 1` would stretch
    it down the pane. It heads the body's 640px column instead */
-.templates .note-title-input {
+.templates-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   flex: 0 0 auto;
   width: 100%;
   max-width: calc(640px + 28px * 2);
   margin-inline: auto;
-  padding: 20px 28px 0;
+  padding: 0 28px;
+}
+
+.templates-title-field {
+  padding-top: 24px;
+}
+
+.templates .note-title-input {
+  flex: 0 0 auto;
+  width: 100%;
+  padding: 0;
 }
 
 .templates-name-error {
@@ -261,7 +416,7 @@
   width: 100%;
   max-width: calc(640px + 28px * 2);
   margin-inline: auto;
-  padding: 10px 28px 0;
+  padding: 12px 28px 0;
 }
 
 .templates-tags-label {
@@ -294,6 +449,18 @@
 
 /* ---------------- Body (textarea + colour layer) ---------------- */
 
+.templates-body-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: calc(640px + 28px * 2);
+  margin-inline: auto;
+  padding: 14px 28px 2px;
+}
+
 .templates-body {
   position: relative;
   flex: 1;
@@ -311,7 +478,7 @@
   position: absolute;
   inset: 0;
   margin: 0;
-  padding: 16px 28px 32px;
+  padding: 8px 28px 32px;
   border: none;
   font-family: ui-monospace, monospace;
   font-size: 14px;
@@ -481,8 +648,34 @@
 }
 
 @media (max-width: 767px) {
-  .templates .note-title-input {
-    padding: 12px 20px 0;
+  .templates-field {
+    padding-inline: 20px;
+  }
+
+  .templates-title-field {
+    padding-top: 12px;
+  }
+
+  .detail-meta-bar {
+    padding: 4px 12px 8px 20px;
+  }
+
+  .detail-meta-bar .detail-back {
+    width: 40px;
+    height: 44px;
+    margin-left: -10px;
+  }
+
+  .templates-save {
+    min-height: 44px;
+  }
+
+  .templates-more-button {
+    height: 44px;
+  }
+
+  .templates-rename {
+    padding-inline: 20px;
   }
 
   /* Only one pane shows at a time. The header appears when the detail is
@@ -552,10 +745,11 @@
 
   .templates-name-error,
   .templates-tags,
+  .templates-body-bar,
   .templates-footer,
   .templates-body-highlight,
   .templates-body-input {
-    padding-inline: 18px;
+    padding-inline: 20px;
   }
 
   /* The note at the foot of the list takes space. At the width where panes are

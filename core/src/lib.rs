@@ -35,7 +35,7 @@ pub use search::{HitKind, SearchHit, browse_all, find_backlinks, search_all};
 pub use template::{
     CreatedNote, TemplateDetail, TemplateSummary, VarLocale, create_note_from_template,
     delete_template, discard_template_draft, list_template_drafts, list_templates, read_template,
-    read_template_draft, save_template, save_template_draft,
+    read_template_draft, rename_template, save_template, save_template_draft,
 };
 pub use template::{TemplateToday, templates_today};
 pub use utils::device::Context as DeviceContext;

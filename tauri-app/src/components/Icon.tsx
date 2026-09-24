@@ -58,6 +58,7 @@ const ICONS = {
   "corners-out": () => import("@phosphor-icons/core/assets/regular/corners-out.svg?raw"),
   "corners-in": () => import("@phosphor-icons/core/assets/regular/corners-in.svg?raw"),
   copy: () => import("@phosphor-icons/core/assets/regular/copy.svg?raw"),
+  "dots-three": () => import("@phosphor-icons/core/assets/regular/dots-three.svg?raw"),
   "calendar-blank": () => import("@phosphor-icons/core/assets/regular/calendar-blank.svg?raw"),
   info: () => import("@phosphor-icons/core/assets/regular/info.svg?raw"),
   x: () => import("@phosphor-icons/core/assets/regular/x.svg?raw"),
