@@ -19,6 +19,10 @@ pub struct SyncConfig {
     /// it, so default.
     #[serde(default)]
     pub auto_sync: bool,
+    /// Whether to sync when the app starts or comes back to the foreground, so a second
+    /// device does not start writing on a stale tree. Absent from older files, so default.
+    #[serde(default)]
+    pub sync_on_start: bool,
 }
 
 impl SyncConfig {
@@ -121,6 +125,7 @@ mod tests {
         let config = SyncConfig {
             workers_url: "https://sync.example.com".to_string(),
             auto_sync: true,
+            ..SyncConfig::default()
         };
         config.save(dir.path()).unwrap();
         assert!(SyncConfig::load(dir.path()).unwrap().unwrap().auto_sync);
@@ -135,6 +140,29 @@ mod tests {
         )
         .unwrap();
         assert!(!SyncConfig::load(dir.path()).unwrap().unwrap().auto_sync);
+    }
+
+    #[test]
+    fn sync_config_round_trips_sync_on_start() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = SyncConfig {
+            workers_url: "https://sync.example.com".to_string(),
+            sync_on_start: true,
+            ..SyncConfig::default()
+        };
+        config.save(dir.path()).unwrap();
+        assert!(SyncConfig::load(dir.path()).unwrap().unwrap().sync_on_start);
+    }
+
+    #[test]
+    fn sync_config_defaults_sync_on_start_off_for_existing_files() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(
+            dir.path().join(SYNC_CONFIG_FILENAME),
+            r#"{"workers_url":"https://sync.example.com","auto_sync":true}"#,
+        )
+        .unwrap();
+        assert!(!SyncConfig::load(dir.path()).unwrap().unwrap().sync_on_start);
     }
 
     #[test]

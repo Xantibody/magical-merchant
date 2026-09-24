@@ -1306,7 +1306,11 @@ const unifiedDiff = (from, to, fromName, toName) => {
     auth_login: () => {},
     auth_status: () => true,
     auth_logout: () => {},
-    get_sync_config: () => ({ workers_url: "https://mock.example", auto_sync: false }),
+    get_sync_config: () => ({
+      workers_url: "https://mock.example",
+      auto_sync: false,
+      sync_on_start: false,
+    }),
     save_sync_config: () => {},
     is_sync_config_editable: () => true,
 

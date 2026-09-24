@@ -137,7 +137,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         SyncConfig {
             workers_url: "https://example.workers.dev".to_string(),
-            auto_sync: false,
+            ..SyncConfig::default()
         }
         .save(dir.path())
         .unwrap();

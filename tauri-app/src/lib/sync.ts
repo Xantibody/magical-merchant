@@ -14,6 +14,12 @@ export type SyncStatus = "idle" | "syncing" | "success" | "error" | "needs-setup
 /** Gather up a burst of autosaves (1s debounce) before syncing. */
 export const AUTO_SYNC_DEBOUNCE_MS = 5000;
 
+/**
+ * The least time between two syncs started by coming back to the app. Desktop reports every
+ * focus change, and switching windows every few seconds must not become a sync each time.
+ */
+export const RESUME_SYNC_INTERVAL_MS = 60_000;
+
 export interface SyncState {
   status: Accessor<SyncStatus>;
   message: Accessor<string>;
@@ -21,6 +27,10 @@ export interface SyncState {
   autoSync: Accessor<boolean>;
   setAutoSync: (on: boolean) => Promise<void>;
   syncNow: () => Promise<void>;
+  syncOnStart: Accessor<boolean>;
+  setSyncOnStart: (on: boolean) => Promise<void>;
+  /** The app came back to the foreground. Syncs when the setting asks for it. */
+  resume: () => void;
   /** The signal to open automatically on an error. It opens when this goes up. */
   alertVersion: Accessor<number>;
 }
@@ -63,6 +73,7 @@ export function createSyncState(onSynced: () => void): SyncState {
   const [message, setMessage] = createSignal("");
   const [lastSyncedAt, setLastSyncedAt] = createSignal<Date | null>(null);
   const [autoSync, setAutoSyncSignal] = createSignal(false);
+  const [syncOnStart, setSyncOnStartSignal] = createSignal(false);
   const [alertVersion, setAlertVersion] = createSignal(0);
 
   const unlisteners: UnlistenFn[] = [];
@@ -71,6 +82,7 @@ export function createSyncState(onSynced: () => void): SyncState {
     try {
       const config = await typedInvoke("get_sync_config");
       setAutoSyncSignal(config.auto_sync);
+      setSyncOnStartSignal(config.sync_on_start);
       if (!config.workers_url) {
         setStatus("needs-setup");
         setMessage(t().sync.notConfigured);
@@ -124,10 +136,14 @@ export function createSyncState(onSynced: () => void): SyncState {
     }
   };
 
+  // When the last round started, whatever started it. `resume` counts its interval from here
+  let lastStartedAt = Number.NEGATIVE_INFINITY;
+
   const syncNow = async (): Promise<void> => {
     if (status() === "syncing") {
       return;
     }
+    lastStartedAt = Date.now();
     setStatus("syncing");
     setMessage(t().sync.syncing);
     try {
@@ -149,6 +165,16 @@ export function createSyncState(onSynced: () => void): SyncState {
     autoSyncTimer = setTimeout(() => {
       void syncNow();
     }, AUTO_SYNC_DEBOUNCE_MS);
+  };
+
+  const resume = (): void => {
+    if (!syncOnStart() || status() === "needs-setup") {
+      return;
+    }
+    if (Date.now() - lastStartedAt < RESUME_SYNC_INTERVAL_MS) {
+      return;
+    }
+    void syncNow();
   };
 
   onMount(async () => {
@@ -174,6 +200,8 @@ export function createSyncState(onSynced: () => void): SyncState {
         void checkReadiness();
       }),
     );
+    // Only now: a round started before the listeners are in place could end unheard
+    resume();
   });
 
   onCleanup(() => {
@@ -196,5 +224,26 @@ export function createSyncState(onSynced: () => void): SyncState {
     }
   };
 
-  return { status, message, lastSyncedAt, autoSync, setAutoSync, syncNow, alertVersion };
+  const setSyncOnStart = async (on: boolean): Promise<void> => {
+    setSyncOnStartSignal(on);
+    try {
+      const config = await typedInvoke("get_sync_config");
+      await typedInvoke("save_sync_config", { config: { ...config, sync_on_start: on } });
+    } catch {
+      setSyncOnStartSignal(!on);
+    }
+  };
+
+  return {
+    status,
+    message,
+    lastSyncedAt,
+    autoSync,
+    setAutoSync,
+    syncNow,
+    syncOnStart,
+    setSyncOnStart,
+    resume,
+    alertVersion,
+  };
 }

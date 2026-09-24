@@ -191,6 +191,7 @@ export interface SearchHit {
 interface SyncConfig {
   workers_url: string;
   auto_sync: boolean;
+  sync_on_start: boolean;
 }
 
 /** Runtime environment at record time. The WebView fills in what the native side cannot see. */
