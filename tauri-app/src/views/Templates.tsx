@@ -433,7 +433,12 @@ export default function Templates(): JSX.Element {
   const onKeyDown = (e: KeyboardEvent): void => {
     if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "s") {
       e.preventDefault();
-      save();
+      if (canPressSave()) {
+        pressSave();
+      }
+    } else if (e.key === "Escape" && menuOpen()) {
+      // The menu is this screen's own popover; AppLayout's Escape knows only the shell's
+      setMenuOpen(false);
     }
   };
   globalThis.addEventListener("keydown", onKeyDown);

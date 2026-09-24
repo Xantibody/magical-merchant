@@ -357,6 +357,15 @@ describe("Templates", () => {
     expect(screen.queryByText("daily")).toBeNull();
   });
 
+  it("closes the more menu on Escape", async () => {
+    await openDaily();
+    openMenu();
+
+    fireEvent.keyDown(document.body, { key: "Escape" });
+
+    await waitFor(() => expect(screen.queryByText("削除")).toBeNull());
+  });
+
   it("offers to discard only while there is something unsaved", async () => {
     await openDaily();
 
