@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One template as a button: 2x1 by default, 1x1 when resized down (the
+     provider picks the layout from the size). Placing one opens the
+     configuration activity to choose the template; "reconfigurable" lets a
+     long-press change it later. Same 30-minute poll as the 4x2, for midnight
+     and for what a sync brought in. -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:configure="com.magical_merchant.app.widget.TemplateButtonConfigureActivity"
+    android:description="@string/widget_template_button_description"
+    android:initialLayout="@layout/widget_template_button"
+    android:minHeight="40dp"
+    android:minResizeHeight="40dp"
+    android:minResizeWidth="40dp"
+    android:minWidth="110dp"
+    android:previewImage="@mipmap/ic_launcher"
+    android:previewLayout="@layout/widget_template_button"
+    android:resizeMode="horizontal|vertical"
+    android:targetCellHeight="1"
+    android:targetCellWidth="2"
+    android:updatePeriodMillis="1800000"
+    android:widgetCategory="home_screen"
+    android:widgetFeatures="reconfigurable" />

@@ -10,14 +10,14 @@ internal object WidgetDeepLink {
     const val NEW_NOTE = "magical-merchant://widget/new-note"
     const val NOTE = "magical-merchant://widget/note"
 
-    /** テンプレの管理画面。ボタンが 1 つも無いウィジェットの行き先でもある。 */
+    /** The template manager; also where a widget with no template to offer sends a tap. */
     const val TEMPLATES = "magical-merchant://widget/templates"
 
     /**
-     * [name] のテンプレからノートを作って開く。
+     * Makes today's note from the template [name] (or opens it) in the app.
      *
-     * 名前は人が付けたファイル名で、空白も日本語も入る。素で繋ぐと
-     * クエリとして壊れるので必ず通す。
+     * The name is a filename a person chose, spaces and Japanese included;
+     * concatenated raw it breaks the query, so it is always encoded.
      */
     fun template(name: String): String =
         "magical-merchant://widget/template?name=" + Uri.encode(name)
