@@ -5,8 +5,10 @@ import {
   createSignal,
   For,
   Index,
+  Match,
   onCleanup,
   Show,
+  Switch,
 } from "solid-js";
 import type { JSX } from "solid-js";
 import { useNavigate } from "@solidjs/router";
@@ -21,6 +23,8 @@ import { createKeyboardTop, keyboardTopStyle } from "../lib/keyboard";
 import { joinTitle, splitTitle } from "../lib/note-title";
 import { MODE_LABELS, ROUTES } from "../lib/routes";
 import { classifyLines } from "../lib/template-examples";
+import { previewBlocks } from "../lib/template-preview";
+import type { PreviewBlock } from "../lib/template-preview";
 import {
   addTemplateTag,
   hasVariable,
@@ -28,6 +32,7 @@ import {
   resolveLine,
   splitVariables,
   TEMPLATE_VARS,
+  usesPrev,
 } from "../lib/template-vars";
 import "../styles/templates.css";
 
@@ -47,6 +52,53 @@ interface Draft {
 }
 
 const EMPTY_DRAFT: Draft = { title: "", body: "", tags: [] };
+
+/**
+ * One line of the preview's text. `{{prev}}` becomes the previous note's title, underlined as
+ * the link it will be; any other variable still standing is marked as in the body layer.
+ */
+function PreviewText(props: { text: string; prev: string | undefined }): JSX.Element {
+  return (
+    <For each={splitVariables(props.text)}>
+      {(run) => (
+        <Show when={run.variable} fallback={run.text}>
+          <Show
+            when={/^\{\{\s*prev\s*\}\}$/u.test(run.text) && props.prev}
+            fallback={<span class="templates-var">{run.text}</span>}
+          >
+            <span class="templates-preview-prev">{props.prev}</span>
+          </Show>
+        </Show>
+      )}
+    </For>
+  );
+}
+
+function PreviewLine(props: { block: PreviewBlock; prev: string | undefined }): JSX.Element {
+  const text = (): JSX.Element => <PreviewText text={props.block.text} prev={props.prev} />;
+  return (
+    <Switch fallback={<p class="templates-preview-paragraph">{text()}</p>}>
+      <Match when={props.block.kind === "heading" && props.block}>
+        {(heading) => (heading().level === 1 ? <h1>{text()}</h1> : <h2>{text()}</h2>)}
+      </Match>
+      <Match when={props.block.kind === "task" && props.block}>
+        <p class="templates-preview-task">{text()}</p>
+      </Match>
+      <Match when={props.block.kind === "bullet"}>
+        <p class="templates-preview-bullet">{text()}</p>
+      </Match>
+    </Switch>
+  );
+}
+
+/** "9/25 (Thu)": the day the preview is made for, in the header of the preview. */
+function previewDate(): string {
+  const now = new Date();
+  return t().templates.previewOn(
+    `${now.getMonth() + 1}/${now.getDate()}`,
+    resolveLine("{{weekday}}", now, locale()),
+  );
+}
 
 /** The name of a field, as the insert button and the list say where a variable goes. */
 function fieldLabel(field: VarField): string {
@@ -133,6 +185,8 @@ export default function Templates(): JSX.Element {
   const [renaming, setRenaming] = createSignal(false);
   const [renameValue, setRenameValue] = createSignal("");
   const [renameError, setRenameError] = createSignal<string | undefined>();
+  /** Which of the two a phone shows. A wide screen shows both and ignores it. */
+  const [tab, setTab] = createSignal<"edit" | "preview">("edit");
 
   let bodyRef: HTMLTextAreaElement | undefined;
   let titleRef: HTMLInputElement | undefined;
@@ -697,15 +751,46 @@ export default function Templates(): JSX.Element {
   };
 
   /** "This is what it makes today". Whether a variable is written right shows up here. */
-  const preview = createMemo<{ title: string; tags: string[]; body: string }>(() => {
+  /**
+   * The note `{{prev}}` would link to: the latest made from this template. Its first line
+   * stands for its title, as in the note list. A new template has none.
+   */
+  const prevNote = createMemo<{ title: string } | undefined>(() => {
+    const name = selected()?.name;
+    // The filename is the creation time, so the last by name is the latest
+    const latest = (notes() ?? [])
+      .filter((note) => name !== undefined && note.template === name)
+      .toSorted((a, b) => a.filename.localeCompare(b.filename))
+      .at(-1);
+    return latest && { title: latest.preview || latest.filename.replace(/\.md$/u, "") };
+  });
+
+  const preview = createMemo<{ title: string; tags: string[]; blocks: PreviewBlock[] }>(() => {
     const now = new Date();
     return {
       title: resolveLine(title(), now, locale()),
       tags: tags()
         .map((tag) => resolveLine(tag, now, locale()))
         .filter((tag) => tag.trim() !== ""),
-      body: resolveBody(body(), now, locale()),
+      // With no previous note, core drops the {{prev}} lines on creation; so does this
+      blocks: previewBlocks(
+        resolveBody(body(), now, locale(), { dropPrev: prevNote() === undefined }),
+      ),
     };
+  });
+
+  /** What the preview leaves out or links, said under it. */
+  const previewNotes = createMemo<string[]>(() => {
+    const said: string[] = [];
+    const examples = classifyLines(body()).filter((kind) => kind === "example").length;
+    if (examples > 0) {
+      said.push(t().templates.egDropped(examples));
+    }
+    if (usesPrev(body())) {
+      const prev = prevNote();
+      said.push(prev ? t().templates.prevLink(prev.title) : t().templates.prevDropped);
+    }
+    return said;
   });
 
   return (
@@ -953,227 +1038,266 @@ export default function Templates(): JSX.Element {
             </div>
           </Show>
 
-          <Show when={nameTaken() || nameError()}>
-            <p class="templates-name-error">
-              {nameTaken() ? t().templates.nameTaken : t().templates.nameRequired}
-            </p>
-          </Show>
-
-          <div class="templates-field templates-title-field">
-            <label class="templates-label" for="templates-title-input">
-              {t().templates.titleLabel}
-            </label>
-            <input
-              id="templates-title-input"
-              type="text"
-              class="note-title-input"
-              ref={titleRef}
-              placeholder={t().templates.titlePlaceholder}
-              value={title()}
-              onFocus={() => setVarField("title")}
-              onKeyDown={varMenuKeys}
-              onInput={(e) => {
-                setTitle(e.currentTarget.value);
-                edited();
-              }}
-            />
-          </div>
-
-          <div class="templates-tags">
-            <span class="templates-tags-label">{t().templates.autoTags}</span>
-            <For each={tags()}>
-              {(tag) => (
-                <span class="tag-badge" classList={{ "tag-badge--var": hasVariable(tag) }}>
-                  #{tag}
-                  <button
-                    type="button"
-                    class="note-meta-tag-remove"
-                    aria-label={t().templates.removeTag(tag)}
-                    onClick={() => {
-                      setTags((tagList) => tagList.filter((kept) => kept !== tag));
-                      edited();
-                    }}
-                  >
-                    <Icon name="x" size={10} />
-                  </button>
-                </span>
-              )}
-            </For>
-            <input
-              type="text"
-              class="templates-tag-input"
-              ref={tagRef}
-              placeholder={t().templates.addTag}
-              aria-label={t().templates.addTag}
-              value={tagInput()}
-              onFocus={() => setVarField("tag")}
-              onInput={(e) => setTagInput(e.currentTarget.value)}
-              onBlur={commitTagInput}
-              onKeyDown={(e) => {
-                if (varMenuKeys(e)) {
-                  return;
-                }
-                // The Enter that commits a conversion belongs to the IME (#102)
-                if (e.key === "Enter" && !isImeComposing(e)) {
-                  e.preventDefault();
-                  commitTagInput();
-                } else if (e.key === "Backspace" && tagInput() === "" && tags().length > 0) {
-                  // Nothing left to delete in the field: the tag before it goes, as in a chip input
-                  e.preventDefault();
-                  setTags((tagList) => tagList.slice(0, -1));
-                  edited();
-                }
-              }}
-            />
-          </div>
-
-          {/* The body. The textarea holds the text as written, and the colour of `{{...}}`
-              is drawn by a layer of the same text laid directly under it. A textarea cannot
-              colour part of itself, so stacking is the only way to show it */}
-          <div class="templates-body-bar">
-            <span class="templates-label">{t().templates.bodyLabel}</span>
+          {/* A phone has room for one of the two. The wide screen shows both */}
+          <div class="templates-tabs" role="tablist">
             <button
               type="button"
-              class="templates-insert-button"
-              ref={insertRef}
-              aria-expanded={varMenu() === "vars"}
-              // Do not take the selection from the field: the insert point is lost
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={toggleVarMenu}
+              role="tab"
+              class="templates-tab"
+              aria-selected={tab() === "edit"}
+              onClick={() => setTab("edit")}
             >
-              {t().templates.insertVariable}
-              <span class="templates-insert-target">→ {fieldLabel(varField())}</span>
+              {t().templates.editTab}
             </button>
-            <Popover
-              open={varMenu() !== null}
-              onClose={() => setVarMenu(null)}
-              trigger={() => insertRef}
-              label={t().templates.insertVariable}
+            <button
+              type="button"
+              role="tab"
+              class="templates-tab"
+              aria-selected={tab() === "preview"}
+              onClick={() => setTab("preview")}
             >
-              <div class="popover templates-vars-menu">
-                <p class="templates-vars-menu-head">
-                  {t().templates.insertInto(fieldLabel(varField()))} · ↑↓ Enter
+              {t().templates.todayPreview}
+            </button>
+          </div>
+
+          <div
+            class="templates-columns"
+            classList={{ "templates-columns--preview": tab() === "preview" }}
+          >
+            <div class="templates-edit">
+              <Show when={nameTaken() || nameError()}>
+                <p class="templates-name-error">
+                  {nameTaken() ? t().templates.nameTaken : t().templates.nameRequired}
                 </p>
-                <div role="listbox" aria-label={t().templates.insertVariable}>
-                  <For each={TEMPLATE_VARS}>
-                    {(variable, at) => (
+              </Show>
+
+              <div class="templates-field templates-title-field">
+                <label class="templates-label" for="templates-title-input">
+                  {t().templates.titleLabel}
+                </label>
+                <input
+                  id="templates-title-input"
+                  type="text"
+                  class="note-title-input"
+                  ref={titleRef}
+                  placeholder={t().templates.titlePlaceholder}
+                  value={title()}
+                  onFocus={() => setVarField("title")}
+                  onKeyDown={varMenuKeys}
+                  onInput={(e) => {
+                    setTitle(e.currentTarget.value);
+                    edited();
+                  }}
+                />
+              </div>
+
+              <div class="templates-tags">
+                <span class="templates-tags-label">{t().templates.autoTags}</span>
+                <For each={tags()}>
+                  {(tag) => (
+                    <span class="tag-badge" classList={{ "tag-badge--var": hasVariable(tag) }}>
+                      #{tag}
                       <button
                         type="button"
-                        role="option"
-                        class="templates-vars-option"
-                        aria-selected={at() === varIndex()}
-                        // Keep the caret in the field the variable goes into
+                        class="note-meta-tag-remove"
+                        aria-label={t().templates.removeTag(tag)}
+                        onClick={() => {
+                          setTags((tagList) => tagList.filter((kept) => kept !== tag));
+                          edited();
+                        }}
+                      >
+                        <Icon name="x" size={10} />
+                      </button>
+                    </span>
+                  )}
+                </For>
+                <input
+                  type="text"
+                  class="templates-tag-input"
+                  ref={tagRef}
+                  placeholder={t().templates.addTag}
+                  aria-label={t().templates.addTag}
+                  value={tagInput()}
+                  onFocus={() => setVarField("tag")}
+                  onInput={(e) => setTagInput(e.currentTarget.value)}
+                  onBlur={commitTagInput}
+                  onKeyDown={(e) => {
+                    if (varMenuKeys(e)) {
+                      return;
+                    }
+                    // The Enter that commits a conversion belongs to the IME (#102)
+                    if (e.key === "Enter" && !isImeComposing(e)) {
+                      e.preventDefault();
+                      commitTagInput();
+                    } else if (e.key === "Backspace" && tagInput() === "" && tags().length > 0) {
+                      // Nothing left to delete in the field: the tag before it goes, as in a chip input
+                      e.preventDefault();
+                      setTags((tagList) => tagList.slice(0, -1));
+                      edited();
+                    }
+                  }}
+                />
+              </div>
+
+              {/* The body. The textarea holds the text as written, and the colour of `{{...}}`
+              is drawn by a layer of the same text laid directly under it. A textarea cannot
+              colour part of itself, so stacking is the only way to show it */}
+              <div class="templates-body-bar">
+                <span class="templates-label">{t().templates.bodyLabel}</span>
+                <button
+                  type="button"
+                  class="templates-insert-button"
+                  ref={insertRef}
+                  aria-expanded={varMenu() === "vars"}
+                  // Do not take the selection from the field: the insert point is lost
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={toggleVarMenu}
+                >
+                  {t().templates.insertVariable}
+                  <span class="templates-insert-target">→ {fieldLabel(varField())}</span>
+                </button>
+                <Popover
+                  open={varMenu() !== null}
+                  onClose={() => setVarMenu(null)}
+                  trigger={() => insertRef}
+                  label={t().templates.insertVariable}
+                >
+                  <div class="popover templates-vars-menu">
+                    <p class="templates-vars-menu-head">
+                      {t().templates.insertInto(fieldLabel(varField()))} · ↑↓ Enter
+                    </p>
+                    <div role="listbox" aria-label={t().templates.insertVariable}>
+                      <For each={TEMPLATE_VARS}>
+                        {(variable, at) => (
+                          <button
+                            type="button"
+                            role="option"
+                            class="templates-vars-option"
+                            aria-selected={at() === varIndex()}
+                            // Keep the caret in the field the variable goes into
+                            onMouseDown={(e) => e.preventDefault()}
+                            onMouseEnter={() => setVarIndex(at())}
+                            onClick={() => insertVariable(variable.token)}
+                          >
+                            <span class="templates-vars-option-line">
+                              <span>{variable.label()}</span>
+                              <code>{variable.token}</code>
+                            </span>
+                            <span class="templates-vars-option-hint">{variable.hint()}</span>
+                          </button>
+                        )}
+                      </For>
+                    </div>
+                  </div>
+                </Popover>
+              </div>
+              <p class="templates-body-hint">{t().templates.varHint}</p>
+
+              <div class="templates-body">
+                <pre class="templates-body-highlight" aria-hidden="true" ref={highlightRef}>
+                  {/* The textarea's own placeholder would be drawn in its transparent text */}
+                  <Show
+                    when={body() !== ""}
+                    fallback={
+                      <span class="templates-body-placeholder">
+                        {t().templates.bodyPlaceholder}
+                      </span>
+                    }
+                  >
+                    <Index each={bodyLines()}>
+                      {(line, at) => (
+                        <>
+                          {at > 0 ? "\n" : ""}
+                          <span classList={{ "templates-eg": line().example }}>
+                            <For each={splitVariables(line().text)}>
+                              {(run) => (
+                                <span classList={{ "templates-var": run.variable }}>
+                                  {run.text}
+                                </span>
+                              )}
+                            </For>
+                          </span>
+                        </>
+                      )}
+                    </Index>
+                  </Show>
+                  {"\n"}
+                </pre>
+                <textarea
+                  class="templates-body-input"
+                  ref={bodyRef}
+                  aria-label={t().templates.bodyLabel}
+                  spellcheck={false}
+                  value={body()}
+                  onFocus={() => setVarField("body")}
+                  onKeyDown={varMenuKeys}
+                  onBlur={() => {
+                    if (varMenu() === "auto") {
+                      setVarMenu(null);
+                    }
+                  }}
+                  onInput={(e) => {
+                    const { value, selectionEnd: caret } = e.currentTarget;
+                    setBody(value);
+                    edited();
+                    // `{{` right before the caret opens the list; typing on past it closes it
+                    if (value.slice(caret - 2, caret) === "{{") {
+                      autoAt = caret;
+                      batch(() => {
+                        setVarIndex(0);
+                        setVarMenu("auto");
+                      });
+                    } else if (varMenu() === "auto") {
+                      setVarMenu(null);
+                    }
+                  }}
+                  onScroll={(e) => {
+                    if (highlightRef) {
+                      highlightRef.scrollTop = e.currentTarget.scrollTop;
+                      highlightRef.scrollLeft = e.currentTarget.scrollLeft;
+                    }
+                  }}
+                />
+              </div>
+
+              <div
+                class="templates-footer"
+                classList={{ "templates-footer--floating": keyboardTop() !== undefined }}
+                style={keyboardTopStyle(keyboardTop())}
+              >
+                {/* The phone's way in: no insert button above the body, and no list to open */}
+                <p class="templates-vars-head">
+                  {t().templates.insertInto(fieldLabel(varField()))}
+                </p>
+                <div class="templates-vars" role="group" aria-label={t().templates.insertVariable}>
+                  <For each={TEMPLATE_VARS}>
+                    {(variable) => (
+                      <button
+                        type="button"
+                        class="tag-chip templates-var-chip"
+                        // Do not take the selection from the textarea: the insert point is lost
                         onMouseDown={(e) => e.preventDefault()}
-                        onMouseEnter={() => setVarIndex(at())}
                         onClick={() => insertVariable(variable.token)}
                       >
-                        <span class="templates-vars-option-line">
-                          <span>{variable.label()}</span>
-                          <code>{variable.token}</code>
-                        </span>
-                        <span class="templates-vars-option-hint">{variable.hint()}</span>
+                        {variable.label()}
                       </button>
                     )}
                   </For>
                 </div>
               </div>
-            </Popover>
-          </div>
-          <p class="templates-body-hint">{t().templates.varHint}</p>
-
-          <div class="templates-body">
-            <pre class="templates-body-highlight" aria-hidden="true" ref={highlightRef}>
-              {/* The textarea's own placeholder would be drawn in its transparent text */}
-              <Show
-                when={body() !== ""}
-                fallback={
-                  <span class="templates-body-placeholder">{t().templates.bodyPlaceholder}</span>
-                }
-              >
-                <Index each={bodyLines()}>
-                  {(line, at) => (
-                    <>
-                      {at > 0 ? "\n" : ""}
-                      <span classList={{ "templates-eg": line().example }}>
-                        <For each={splitVariables(line().text)}>
-                          {(run) => (
-                            <span classList={{ "templates-var": run.variable }}>{run.text}</span>
-                          )}
-                        </For>
-                      </span>
-                    </>
-                  )}
-                </Index>
-              </Show>
-              {"\n"}
-            </pre>
-            <textarea
-              class="templates-body-input"
-              ref={bodyRef}
-              aria-label={t().templates.bodyLabel}
-              spellcheck={false}
-              value={body()}
-              onFocus={() => setVarField("body")}
-              onKeyDown={varMenuKeys}
-              onBlur={() => {
-                if (varMenu() === "auto") {
-                  setVarMenu(null);
-                }
-              }}
-              onInput={(e) => {
-                const { value, selectionEnd: caret } = e.currentTarget;
-                setBody(value);
-                edited();
-                // `{{` right before the caret opens the list; typing on past it closes it
-                if (value.slice(caret - 2, caret) === "{{") {
-                  autoAt = caret;
-                  batch(() => {
-                    setVarIndex(0);
-                    setVarMenu("auto");
-                  });
-                } else if (varMenu() === "auto") {
-                  setVarMenu(null);
-                }
-              }}
-              onScroll={(e) => {
-                if (highlightRef) {
-                  highlightRef.scrollTop = e.currentTarget.scrollTop;
-                  highlightRef.scrollLeft = e.currentTarget.scrollLeft;
-                }
-              }}
-            />
-          </div>
-
-          <div
-            class="templates-footer"
-            classList={{ "templates-footer--floating": keyboardTop() !== undefined }}
-            style={keyboardTopStyle(keyboardTop())}
-          >
-            {/* The phone's way in: no insert button above the body, and no list to open */}
-            <p class="templates-vars-head">{t().templates.insertInto(fieldLabel(varField()))}</p>
-            <div class="templates-vars" role="group" aria-label={t().templates.insertVariable}>
-              <For each={TEMPLATE_VARS}>
-                {(variable) => (
-                  <button
-                    type="button"
-                    class="tag-chip templates-var-chip"
-                    // Do not take the selection from the textarea: the insert point is lost
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => insertVariable(variable.token)}
-                  >
-                    {variable.label()}
-                  </button>
-                )}
-              </For>
             </div>
-            {/* Folded into one line, the title of "this is what it makes today" is always
-                visible. It opens only when the body needs checking too: left open, the
-                screen gives more room to reading than to writing */}
-            <details class="templates-preview">
-              <summary class="templates-preview-summary">
-                {t().templates.todayPreview} — {preview().title || t().templates.untitled}
-              </summary>
+
+            {/* What pressing "create" makes today, beside what is being written. A variable
+                left unresolved is marked as in the body layer: a misspelling shows here */}
+            <aside class="templates-preview" aria-label={t().templates.todayPreview}>
+              <div class="templates-preview-head">
+                <span class="templates-label">{t().templates.todayPreview}</span>
+                <span class="templates-preview-date">{previewDate()}</span>
+              </div>
               <div class="templates-preview-body">
+                <p class="templates-preview-title">
+                  {preview().title || t().templates.previewUntitled}
+                </p>
                 <Show when={preview().tags.length > 0}>
                   <p class="templates-preview-tags">
                     <For each={preview().tags}>
@@ -1181,16 +1305,16 @@ export default function Templates(): JSX.Element {
                     </For>
                   </p>
                 </Show>
-                {/* A variable left unresolved is marked the same way as in the body layer.
-                    What shows up here is either a misspelling or {{prev}}, which is only
-                    settled at creation time */}
-                <pre class="templates-preview-text">
-                  <For each={splitVariables(preview().body)}>
-                    {(run) => <span classList={{ "templates-var": run.variable }}>{run.text}</span>}
-                  </For>
-                </pre>
+                <Index each={preview().blocks}>
+                  {(block) => <PreviewLine block={block()} prev={prevNote()?.title} />}
+                </Index>
+                <Show when={previewNotes().length > 0}>
+                  <div class="templates-preview-notes">
+                    <For each={previewNotes()}>{(note) => <p>{note}</p>}</For>
+                  </div>
+                </Show>
               </div>
-            </details>
+            </aside>
           </div>
         </Show>
       </div>
