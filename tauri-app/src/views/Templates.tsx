@@ -2,6 +2,7 @@ import { batch, createMemo, createResource, createSignal, For, onCleanup, Show }
 import type { JSX } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import Icon from "../components/Icon";
+import Popover from "../components/Popover";
 import { typedInvoke } from "../lib/commands";
 import type { Template, TemplateDetail } from "../lib/commands";
 import { useShell } from "../lib/shell";
@@ -21,6 +22,9 @@ import {
 import "../styles/templates.css";
 
 const UNDO_MS = 5000;
+
+/** How long "saved" stays. Green is for the moment right after a save, not a state. */
+const SAVED_FLASH_MS = 2000;
 
 /** Where a variable chip is inserted. These three fields are the ones that take `{{...}}`. */
 type VarField = "title" | "body" | "tag";
@@ -101,12 +105,36 @@ export default function Templates(): JSX.Element {
   const [baseline, setBaseline] = createSignal<Draft>(EMPTY_DRAFT);
   /** Hidden from the list only during the delete grace period. */
   const [hidden, setHidden] = createSignal<string[]>([]);
+  /** The notes on disk, read once, to say how many came from each template. */
+  const [notes] = createResource(() => typedInvoke("list_notes"));
+  /** A save just went through. Cleared after SAVED_FLASH_MS. */
+  const [savedFlash, setSavedFlash] = createSignal(false);
+  /** Save was pressed on a new template with no name. */
+  const [nameError, setNameError] = createSignal(false);
+  const [menuOpen, setMenuOpen] = createSignal(false);
+  const [renaming, setRenaming] = createSignal(false);
+  const [renameValue, setRenameValue] = createSignal("");
+  const [renameError, setRenameError] = createSignal<string | undefined>();
 
   let bodyRef: HTMLTextAreaElement | undefined;
   let titleRef: HTMLInputElement | undefined;
   let tagRef: HTMLInputElement | undefined;
   let nameRef: HTMLInputElement | undefined;
   let highlightRef: HTMLPreElement | undefined;
+  let moreRef: HTMLButtonElement | undefined;
+  let renameRef: HTMLInputElement | undefined;
+
+  /** Notes made from each template, by template name (`template:` in their frontmatter). */
+  const noteCounts = createMemo<ReadonlyMap<string, number>>(() => {
+    const counts = new Map<string, number>();
+    for (const note of notes() ?? []) {
+      if (note.template) {
+        counts.set(note.template, (counts.get(note.template) ?? 0) + 1);
+      }
+    }
+    return counts;
+  });
+  const noteCount = (name: string): number => noteCounts().get(name) ?? 0;
 
   /** The field touched last. If a chip is pressed right after opening, it goes in the body. */
   const [varField, setVarField] = createSignal<VarField>("body");
@@ -227,6 +255,8 @@ export default function Templates(): JSX.Element {
     (draftName() !== null || dirty());
 
   let draftTimer: ReturnType<typeof setTimeout> | undefined;
+  let flashTimer: ReturnType<typeof setTimeout> | undefined;
+  onCleanup(() => clearTimeout(flashTimer));
 
   /**
    * Write the edit in progress to the template's draft. The template file itself is not
@@ -302,8 +332,11 @@ export default function Templates(): JSX.Element {
         }
         batch(() => {
           setBaseline(draft);
-          setSaveStatus("saved");
+          setSaveStatus("idle");
+          setSavedFlash(true);
         });
+        clearTimeout(flashTimer);
+        flashTimer = setTimeout(() => setSavedFlash(false), SAVED_FLASH_MS);
         await Promise.all([refetch(), refetchDrafts()]);
         // Once the name is settled, this turns from creating a new one into editing it
         if (draftName() !== null) {
@@ -316,6 +349,81 @@ export default function Templates(): JSX.Element {
       } catch {
         setSaveStatus("idle");
         shell.showToast(t().templates.saveFailed);
+      }
+    })();
+  };
+
+  /**
+   * The save button stays pressable for a new template without a name. Disabled, it would
+   * not say why; pressed, it takes the user to the name and says what it is for.
+   */
+  const canPressSave = (): boolean =>
+    saveStatus() !== "saving" && (draftName() !== null || dirty());
+
+  const pressSave = (): void => {
+    if (draftName() !== null && toFileStem(draftName() ?? "") === "") {
+      setNameError(true);
+      nameRef?.focus();
+      return;
+    }
+    if (nameTaken()) {
+      nameRef?.focus();
+      return;
+    }
+    save();
+  };
+
+  const openRename = (): void => {
+    batch(() => {
+      setRenameValue(selected()?.name ?? "");
+      setRenameError(undefined);
+      setRenaming(true);
+    });
+    queueMicrotask(() => renameRef?.select());
+  };
+
+  /**
+   * Rename the template file. The notes made from it keep the old name, which the panel
+   * says before this runs.
+   */
+  const confirmRename = (): void => {
+    const from = selected();
+    if (!from) {
+      return;
+    }
+    const stem = toFileStem(renameValue());
+    if (stem === "") {
+      setRenameError(t().templates.nameEmpty);
+      return;
+    }
+    if (stem === from.name) {
+      setRenaming(false);
+      return;
+    }
+    if (rows().some((row) => row.name === stem)) {
+      setRenameError(t().templates.nameTaken);
+      return;
+    }
+    const to = `${stem}.md`;
+    // The draft moves with the template in core; one still waiting is written after
+    const pending = draftTimer !== undefined;
+    clearTimeout(draftTimer);
+    draftTimer = undefined;
+
+    void (async () => {
+      try {
+        await typedInvoke("rename_template", { from: from.filename, to });
+        await Promise.all([refetch(), refetchDrafts()]);
+        batch(() => {
+          setSelectedFile(to);
+          setRenaming(false);
+        });
+        if (pending) {
+          writeDraft();
+        }
+        shell.showToast(t().templates.renamed(stem));
+      } catch {
+        setRenameError(t().templates.renameFailed);
       }
     })();
   };
@@ -338,6 +446,12 @@ export default function Templates(): JSX.Element {
    */
   const leaveEditor = (next: () => void): void => {
     flushDraft();
+    batch(() => {
+      setRenaming(false);
+      setMenuOpen(false);
+      setNameError(false);
+      setSavedFlash(false);
+    });
     const unnamed = draftName() !== null && targetFilename() === undefined;
     const draft = current();
     const blank = draft.title === "" && draft.body === "" && draft.tags.length === 0;
@@ -565,7 +679,14 @@ export default function Templates(): JSX.Element {
                         A template never saved makes nothing yet */}
                     <span class="list-row-meta">
                       {row.saved
-                        ? resolveLine(row.preview, new Date(), locale())
+                        ? [
+                            resolveLine(row.preview, new Date(), locale()),
+                            noteCount(row.name) > 0
+                              ? t().templates.noteCount(noteCount(row.name))
+                              : "",
+                          ]
+                            .filter((part) => part !== "")
+                            .join(" · ")
                         : t().templates.new}
                     </span>
                   </button>
@@ -592,97 +713,188 @@ export default function Templates(): JSX.Element {
             >
               <Icon name="arrow-left" size={18} />
             </button>
-            <span class="detail-meta">
+            <div class="templates-name-block">
               <Show
                 when={draftName() === null}
                 fallback={
-                  <input
-                    type="text"
-                    class="templates-name-input"
-                    ref={nameRef}
-                    placeholder={t().templates.namePlaceholder}
-                    aria-label={t().templates.namePlaceholder}
-                    value={draftName() ?? ""}
-                    onInput={(e) => {
-                      setDraftName(e.currentTarget.value);
-                      edited();
-                    }}
-                  />
+                  <>
+                    <label class="templates-label" for="templates-name-input">
+                      {t().templates.nameLabel}
+                    </label>
+                    <input
+                      id="templates-name-input"
+                      type="text"
+                      class="templates-name-input"
+                      classList={{ "templates-name-input--error": nameError() || nameTaken() }}
+                      ref={nameRef}
+                      placeholder={t().templates.namePlaceholder}
+                      value={draftName() ?? ""}
+                      onInput={(e) => {
+                        setDraftName(e.currentTarget.value);
+                        setNameError(false);
+                        edited();
+                      }}
+                    />
+                  </>
                 }
               >
-                {/* The name is the value written into a note's frontmatter. Changing it
-                    later cuts the link to the notes grown from that template, so it is
-                    only shown */}
-                <span class="detail-created">{selected()?.name}</span>
+                <span class="templates-label">{t().templates.nameLabel}</span>
+                {/* The name is the value written into a note's frontmatter, so changing it
+                    goes through a panel that says how many notes lose their link first */}
+                <span class="templates-name-row">
+                  <span class="templates-name">{selected()?.name}</span>
+                  <button type="button" class="templates-rename-button" onClick={openRename}>
+                    {t().templates.rename}
+                  </button>
+                </span>
               </Show>
-              {/* While it is unsaved, say so before showing any save feedback */}
-              <Show
-                when={dirty()}
-                fallback={
-                  <Show when={saveStatus() !== "idle"}>
-                    <span class="detail-save-status">
-                      {saveStatus() === "saving" ? t().common.saving : t().common.saved}
-                    </span>
-                  </Show>
-                }
-              >
-                <span class="detail-save-status templates-unsaved">{t().templates.unsaved}</span>
-              </Show>
-            </span>
+            </div>
+            {/* Green only for the moment right after a save (workspace.css); unsaved is
+                said for as long as it is true; otherwise nothing is left to say */}
+            <Show
+              when={savedFlash() && !dirty() && draftName() === null}
+              fallback={
+                <Show when={dirty() || draftName() !== null}>
+                  <span class="detail-save-status templates-unsaved">{t().templates.unsaved}</span>
+                </Show>
+              }
+            >
+              <span class="detail-save-status templates-saved">{t().common.saved}</span>
+            </Show>
 
             <div class="detail-actions">
               <button
                 type="button"
                 class="button-primary templates-save"
-                disabled={!canSave()}
-                onClick={save}
+                disabled={!canPressSave()}
+                onClick={pressSave}
               >
                 {t().common.save}
               </button>
-              <Show when={selected() !== undefined && dirty()}>
-                <button
-                  type="button"
-                  class="icon-button"
-                  title={t().templates.discardDraft}
-                  aria-label={t().templates.discardDraft}
-                  onClick={discardDraft}
-                >
-                  <Icon name="arrow-counter-clockwise" size={17} />
-                </button>
-              </Show>
               <Show when={openRow()}>
                 {(row) => (
-                  <button
-                    type="button"
-                    class="icon-button"
-                    title={t().common.delete}
-                    aria-label={t().common.delete}
-                    onClick={() => remove(row())}
-                  >
-                    <Icon name="trash" size={17} />
-                  </button>
+                  <div class="templates-more">
+                    <button
+                      type="button"
+                      class="icon-button templates-more-button"
+                      ref={moreRef}
+                      title={t().templates.more}
+                      aria-label={t().templates.more}
+                      aria-expanded={menuOpen()}
+                      onClick={() => setMenuOpen(!menuOpen())}
+                    >
+                      <Icon name="dots-three" size={18} />
+                    </button>
+                    <Popover
+                      open={menuOpen()}
+                      onClose={() => setMenuOpen(false)}
+                      trigger={() => moreRef}
+                      label={t().templates.more}
+                    >
+                      <div class="popover templates-menu" role="menu">
+                        <Show when={selected() !== undefined && dirty()}>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            class="templates-menu-item"
+                            onClick={() => {
+                              setMenuOpen(false);
+                              discardDraft();
+                            }}
+                          >
+                            {t().templates.discardDraft}
+                          </button>
+                          <hr class="templates-menu-divider" />
+                        </Show>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          class="templates-menu-item templates-menu-item--danger"
+                          onClick={() => {
+                            setMenuOpen(false);
+                            remove(row());
+                          }}
+                        >
+                          {t().common.delete}
+                        </button>
+                      </div>
+                    </Popover>
+                  </div>
                 )}
               </Show>
             </div>
           </div>
 
-          <Show when={nameTaken()}>
-            <p class="templates-name-error">{t().templates.nameTaken}</p>
+          <Show when={renaming()}>
+            <div class="templates-rename">
+              <label class="templates-label" for="templates-rename-input">
+                {t().templates.renameNew}
+              </label>
+              <input
+                id="templates-rename-input"
+                type="text"
+                class="first-run-input templates-rename-input"
+                classList={{ "templates-rename-input--error": renameError() !== undefined }}
+                ref={renameRef}
+                value={renameValue()}
+                onInput={(e) => {
+                  setRenameValue(e.currentTarget.value);
+                  setRenameError(undefined);
+                }}
+                onKeyDown={(e) => {
+                  // The Enter that commits a conversion belongs to the IME (#102)
+                  if (e.key === "Enter" && !isImeComposing(e)) {
+                    e.preventDefault();
+                    confirmRename();
+                  } else if (e.key === "Escape") {
+                    e.preventDefault();
+                    setRenaming(false);
+                  }
+                }}
+              />
+              <p class="templates-rename-note">
+                {noteCount(selected()?.name ?? "") > 0
+                  ? t().templates.renameWarn(noteCount(selected()?.name ?? ""))
+                  : t().templates.renameNone}
+              </p>
+              <Show when={renameError()}>
+                {(error) => <p class="templates-name-error">{error()}</p>}
+              </Show>
+              <div class="templates-rename-actions">
+                <button type="button" class="button-secondary" onClick={() => setRenaming(false)}>
+                  {t().common.cancel}
+                </button>
+                <button type="button" class="button-primary" onClick={confirmRename}>
+                  {t().templates.rename}
+                </button>
+              </div>
+            </div>
           </Show>
 
-          <input
-            type="text"
-            class="note-title-input"
-            ref={titleRef}
-            placeholder={t().templates.titlePlaceholder}
-            aria-label={t().templates.titlePlaceholder}
-            value={title()}
-            onFocus={() => setVarField("title")}
-            onInput={(e) => {
-              setTitle(e.currentTarget.value);
-              edited();
-            }}
-          />
+          <Show when={nameTaken() || nameError()}>
+            <p class="templates-name-error">
+              {nameTaken() ? t().templates.nameTaken : t().templates.nameRequired}
+            </p>
+          </Show>
+
+          <div class="templates-field templates-title-field">
+            <label class="templates-label" for="templates-title-input">
+              {t().templates.titleLabel}
+            </label>
+            <input
+              id="templates-title-input"
+              type="text"
+              class="note-title-input"
+              ref={titleRef}
+              placeholder={t().templates.titlePlaceholder}
+              value={title()}
+              onFocus={() => setVarField("title")}
+              onInput={(e) => {
+                setTitle(e.currentTarget.value);
+                edited();
+              }}
+            />
+          </div>
 
           <div class="templates-tags">
             <span class="templates-tags-label">{t().templates.autoTags}</span>
@@ -727,6 +939,10 @@ export default function Templates(): JSX.Element {
           {/* The body. The textarea holds the text as written, and the colour of `{{...}}`
               is drawn by a layer of the same text laid directly under it. A textarea cannot
               colour part of itself, so stacking is the only way to show it */}
+          <div class="templates-body-bar">
+            <span class="templates-label">{t().templates.bodyLabel}</span>
+          </div>
+
           <div class="templates-body">
             <pre class="templates-body-highlight" aria-hidden="true" ref={highlightRef}>
               <For each={splitVariables(body())}>

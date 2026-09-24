@@ -26,6 +26,9 @@ const deleted: string[] = [];
 /** Drafts as core keeps them, by filename. Seed one to open a template that has a draft. */
 const drafts = new Map<string, { body: string; tags: string[] }>();
 const discardedDrafts: string[] = [];
+const renamed: { from: string; to: string }[] = [];
+/** The notes on disk, by the template they came from. Only `template` is read here. */
+const notes: { template?: string }[] = [];
 
 function mockCommands(): void {
   mockIPC((cmd, args) => {
@@ -44,6 +47,13 @@ function mockCommands(): void {
     if (cmd === "delete_template") {
       deleted.push(filename);
       drafts.delete(filename);
+      return;
+    }
+    if (cmd === "list_notes") {
+      return notes;
+    }
+    if (cmd === "rename_template") {
+      renamed.push(args as { from: string; to: string });
       return;
     }
     if (cmd === "list_template_drafts") {
@@ -90,7 +100,7 @@ async function openDaily() {
   await waitFor(() => expect(screen.getByText("daily")).toBeDefined());
   fireEvent.click(screen.getByText("daily"));
   await waitFor(() =>
-    expect(screen.getByLabelText<HTMLInputElement>("タイトル").value).toBe("Daily {{date}}"),
+    expect(screen.getByLabelText<HTMLInputElement>("Note のタイトル").value).toBe("Daily {{date}}"),
   );
   return rendered;
 }
@@ -115,6 +125,11 @@ function listPane(container: HTMLElement): HTMLElement {
   return el;
 }
 
+/** Open the ⋯ menu of the template being edited. */
+function openMenu(): void {
+  fireEvent.click(screen.getByLabelText("その他の操作"));
+}
+
 /** Where the text inside a field starts, on the screen. */
 function textLeft(el: HTMLElement): number {
   return el.getBoundingClientRect().left + Number.parseFloat(getComputedStyle(el).paddingLeft);
@@ -126,6 +141,8 @@ describe("Templates", () => {
     deleted.length = 0;
     drafts.clear();
     discardedDrafts.length = 0;
+    renamed.length = 0;
+    notes.length = 0;
     mockCommands();
   });
 
@@ -162,7 +179,7 @@ describe("Templates", () => {
     const { container } = await openDaily();
 
     expect(bodyInput(container).value).toBe("## メモ");
-    expect(screen.getByLabelText<HTMLInputElement>("タイトル").value).toBe("Daily {{date}}");
+    expect(screen.getByLabelText<HTMLInputElement>("Note のタイトル").value).toBe("Daily {{date}}");
   });
 
   it("puts a variable where the cursor is", async () => {
@@ -179,7 +196,7 @@ describe("Templates", () => {
   // being typed would leave no way to put a variable in the title
   it("puts a variable into the title while the title has the focus", async () => {
     await openDaily();
-    const title = screen.getByLabelText<HTMLInputElement>("タイトル");
+    const title = screen.getByLabelText<HTMLInputElement>("Note のタイトル");
     fireEvent.focus(title);
     title.setSelectionRange(0, 0);
 
@@ -203,7 +220,7 @@ describe("Templates", () => {
   it("goes back to the body once the body has the focus again", async () => {
     const { container } = await openDaily();
     const body = bodyInput(container);
-    fireEvent.focus(screen.getByLabelText("タイトル"));
+    fireEvent.focus(screen.getByLabelText("Note のタイトル"));
     fireEvent.focus(body);
     body.setSelectionRange(2, 2);
 
@@ -288,6 +305,163 @@ describe("Templates", () => {
     expect(container.querySelectorAll(".templates-tags .tag-badge")).toHaveLength(1);
   });
 
+  // Three fields that all look like a title. Named, they cannot be taken for each other
+  it("labels the name, the note's title and the body", async () => {
+    await openDaily();
+
+    expect(screen.getByText("テンプレート名")).toBeDefined();
+    expect(screen.getByText("Note のタイトル")).toBeDefined();
+    expect(screen.getByText("本文")).toBeDefined();
+  });
+
+  // Green is for the two seconds right after a save; after that nothing is left to say
+  it("says saved for a moment after saving, then nothing", async () => {
+    const { container } = await openDaily();
+    fireEvent.input(bodyInput(container), { target: { value: "直した" } });
+    expect(screen.getByText("未保存", { selector: ".detail-save-status" })).toBeDefined();
+
+    fireEvent.click(saveButton());
+
+    await waitFor(() => expect(screen.getByText("保存しました")).toBeDefined());
+    await waitFor(() => expect(screen.queryByText("保存しました")).toBeNull(), { timeout: 3000 });
+    expect(container.querySelector(".detail-save-status")).toBeNull();
+  });
+
+  // A disabled button does not say why. Pressed, it takes the user to what is missing
+  it("asks for a name when a new template without one is saved", async () => {
+    renderTemplates();
+    await waitFor(() => expect(screen.getByText("daily")).toBeDefined());
+    fireEvent.click(screen.getByText("新規"));
+    fireEvent.input(screen.getByLabelText("Note のタイトル"), { target: { value: "週次" } });
+    fireEvent.focus(screen.getByLabelText("Note のタイトル"));
+
+    expect(saveButton().disabled).toBe(false);
+    fireEvent.click(saveButton());
+
+    await waitFor(() =>
+      expect(
+        screen.getByText("名前を入れると保存できます。名前は Note との紐付けに使われます"),
+      ).toBeDefined(),
+    );
+    expect(document.activeElement).toBe(screen.getByLabelText("テンプレート名"));
+    expect(saved).toHaveLength(0);
+  });
+
+  it("deletes from the more menu", async () => {
+    await openDaily();
+
+    openMenu();
+    fireEvent.click(screen.getByText("削除"));
+
+    await waitFor(() => expect(screen.getByText("テンプレートを削除しました")).toBeDefined());
+    expect(screen.queryByText("daily")).toBeNull();
+  });
+
+  it("offers to discard only while there is something unsaved", async () => {
+    await openDaily();
+
+    openMenu();
+
+    expect(screen.queryByText("保存していない変更を破棄")).toBeNull();
+  });
+
+  it("says how many notes lose their link before renaming", async () => {
+    notes.push({ template: "daily" }, { template: "daily" }, { template: "weekly" }, {});
+    await openDaily();
+
+    fireEvent.click(screen.getByRole("button", { name: "名前を変更" }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          "このテンプレートから作った 2 件の Note との紐付けが切れます。Note 自体は残ります。",
+        ),
+      ).toBeDefined(),
+    );
+  });
+
+  it("says so when no note came from the template yet", async () => {
+    await openDaily();
+
+    fireEvent.click(screen.getByRole("button", { name: "名前を変更" }));
+
+    await waitFor(() =>
+      expect(screen.getByText("このテンプレートから作った Note はまだありません。")).toBeDefined(),
+    );
+  });
+
+  it("renames on Enter and says so", async () => {
+    await openDaily();
+    fireEvent.click(screen.getByRole("button", { name: "名前を変更" }));
+    const input = screen.getByLabelText<HTMLInputElement>("新しい名前");
+
+    fireEvent.input(input, { target: { value: "diary" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => expect(renamed).toStrictEqual([{ from: "daily.md", to: "diary.md" }]));
+    await waitFor(() => expect(screen.getByText("名前を「diary」に変更しました")).toBeDefined());
+  });
+
+  // The Enter that commits a conversion belongs to the IME (#102)
+  it("does not rename on the Enter that ends an IME conversion", async () => {
+    await openDaily();
+    fireEvent.click(screen.getByRole("button", { name: "名前を変更" }));
+    const input = screen.getByLabelText<HTMLInputElement>("新しい名前");
+
+    fireEvent.input(input, { target: { value: "日記" } });
+    fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+
+    expect(renamed).toHaveLength(0);
+  });
+
+  it("refuses to rename to nothing", async () => {
+    await openDaily();
+    fireEvent.click(screen.getByRole("button", { name: "名前を変更" }));
+    const input = screen.getByLabelText<HTMLInputElement>("新しい名前");
+    fireEvent.input(input, { target: { value: "" } });
+
+    fireEvent.click(screen.getAllByRole("button", { name: "名前を変更" }).at(-1) as HTMLElement);
+
+    await waitFor(() => expect(screen.getByText("名前を入れてください")).toBeDefined());
+    expect(renamed).toHaveLength(0);
+  });
+
+  // Renaming onto another template's name would replace that template
+  it("refuses to rename onto a name in use", async () => {
+    drafts.set("weekly.md", { body: "# 週次", tags: [] });
+    await openDaily();
+    fireEvent.click(screen.getByRole("button", { name: "名前を変更" }));
+    const input = screen.getByLabelText<HTMLInputElement>("新しい名前");
+    fireEvent.input(input, { target: { value: "weekly" } });
+
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => expect(screen.getByText("同じ名前のテンプレートがあります")).toBeDefined());
+    expect(renamed).toHaveLength(0);
+  });
+
+  it("closes the rename panel on Escape", async () => {
+    await openDaily();
+    fireEvent.click(screen.getByRole("button", { name: "名前を変更" }));
+
+    fireEvent.keyDown(screen.getByLabelText("新しい名前"), { key: "Escape" });
+
+    await waitFor(() => expect(screen.queryByLabelText("新しい名前")).toBeNull());
+  });
+
+  it("counts the notes made from each template on its row", async () => {
+    notes.push({ template: "daily" }, { template: "daily" });
+    const { container } = renderTemplates();
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+
+    await waitFor(() =>
+      expect(container.querySelector(".list-row .list-row-meta")?.textContent).toBe(
+        `Daily ${today} · 2 件`,
+      ),
+    );
+  });
+
   // Saving under the same name would silently overwrite the template that already exists
   it("refuses to save a new template onto an existing name", async () => {
     renderTemplates();
@@ -297,9 +471,9 @@ describe("Templates", () => {
     fireEvent.input(screen.getByLabelText("テンプレート名"), { target: { value: "daily" } });
 
     await waitFor(() => expect(screen.getByText("同じ名前のテンプレートがあります")).toBeDefined());
-    expect(saveButton().disabled).toBe(true);
     fireEvent.click(saveButton());
     expect(saved).toHaveLength(0);
+    expect(document.activeElement).toBe(screen.getByLabelText("テンプレート名"));
   });
 
   // Nothing can be saved until the name is settled. Take the user there first
@@ -320,7 +494,9 @@ describe("Templates", () => {
 
     fireEvent.click(screen.getByText("新規"));
     fireEvent.input(screen.getByLabelText("テンプレート名"), { target: { value: "weekly" } });
-    fireEvent.input(screen.getByLabelText("タイトル"), { target: { value: "週次 {{date}}" } });
+    fireEvent.input(screen.getByLabelText("Note のタイトル"), {
+      target: { value: "週次 {{date}}" },
+    });
     fireEvent.click(saveButton());
 
     await waitFor(() => expect(saved).toHaveLength(1));
@@ -423,7 +599,7 @@ describe("Templates", () => {
 
     fireEvent.click(screen.getByText("新規"));
     fireEvent.input(screen.getByLabelText("テンプレート名"), { target: { value: "weekly" } });
-    fireEvent.input(screen.getByLabelText("タイトル"), { target: { value: "週次" } });
+    fireEvent.input(screen.getByLabelText("Note のタイトル"), { target: { value: "週次" } });
 
     await waitFor(() => expect(drafts.get("weekly.md")?.body).toBe("# 週次\n"));
     expect(saved).toHaveLength(0);
@@ -449,7 +625,8 @@ describe("Templates", () => {
     fireEvent.input(bodyInput(container), { target: { value: "書きかけ" } });
     await waitFor(() => expect(drafts.has("daily.md")).toBe(true));
 
-    fireEvent.click(screen.getByLabelText("保存していない変更を破棄"));
+    openMenu();
+    fireEvent.click(screen.getByText("保存していない変更を破棄"));
 
     await waitFor(() => expect(bodyInput(container).value).toBe("## メモ"));
     expect(drafts.has("daily.md")).toBe(false);
@@ -501,7 +678,7 @@ describe("Templates on a wide screen", () => {
   it("sets the title as one line over the body's column", async () => {
     const { container } = await openDaily();
 
-    const title = screen.getByLabelText<HTMLInputElement>("タイトル");
+    const title = screen.getByLabelText<HTMLInputElement>("Note のタイトル");
 
     expect(title.getBoundingClientRect().height).toBeLessThan(60);
     expect(textLeft(title)).toBeCloseTo(textLeft(bodyInput(container)), 0);
