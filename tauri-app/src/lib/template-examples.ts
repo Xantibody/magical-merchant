@@ -25,27 +25,42 @@ function endsExample(line: string): boolean {
   return line === "" || line.startsWith("#");
 }
 
+/** What a line of a template body is, as far as examples go. */
+export type LineKind = "text" | "marker" | "example";
+
+/**
+ * Sort each line of the body: the `{{eg}}` marker, a line of the example block under it,
+ * or ordinary text. The editor draws the example lines faint with this, so they have to be
+ * exactly the lines core leaves out of a note.
+ */
+export function classifyLines(body: string): LineKind[] {
+  const kinds: LineKind[] = [];
+  let inBlock = false;
+
+  for (const raw of body.split("\n")) {
+    const line = raw.trim();
+    // The closing line is outside the block
+    if (inBlock && !endsExample(line)) {
+      kinds.push("example");
+    } else {
+      inBlock = MARKER.test(line);
+      kinds.push(inBlock ? "marker" : "text");
+    }
+  }
+
+  return kinds;
+}
+
 /**
  * Drop the example lines. This is the path the `todayPreview` preview takes, and it exists
  * to show the same shape that core writes out.
  */
 export function dropExamples(body: string): string {
-  const kept: string[] = [];
-  let dropping = false;
-
-  for (const raw of body.split("\n")) {
-    const line = raw.trim();
-    // Keep nothing while inside the block. The closing line is outside it
-    const inside = dropping && !endsExample(line);
-    if (!inside) {
-      dropping = MARKER.test(line);
-      if (!dropping) {
-        kept.push(raw);
-      }
-    }
-  }
-
-  return kept.join("\n");
+  const kinds = classifyLines(body);
+  return body
+    .split("\n")
+    .filter((_, at) => kinds[at] === "text")
+    .join("\n");
 }
 
 const STORAGE_KEY = "show-examples";

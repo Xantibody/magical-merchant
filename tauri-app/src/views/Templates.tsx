@@ -1,4 +1,13 @@
-import { batch, createMemo, createResource, createSignal, For, onCleanup, Show } from "solid-js";
+import {
+  batch,
+  createMemo,
+  createResource,
+  createSignal,
+  For,
+  Index,
+  onCleanup,
+  Show,
+} from "solid-js";
 import type { JSX } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import Icon from "../components/Icon";
@@ -11,6 +20,7 @@ import { isImeComposing } from "../lib/ime";
 import { createKeyboardTop, keyboardTopStyle } from "../lib/keyboard";
 import { joinTitle, splitTitle } from "../lib/note-title";
 import { MODE_LABELS, ROUTES } from "../lib/routes";
+import { classifyLines } from "../lib/template-examples";
 import {
   addTemplateTag,
   hasVariable,
@@ -37,6 +47,14 @@ interface Draft {
 }
 
 const EMPTY_DRAFT: Draft = { title: "", body: "", tags: [] };
+
+/** The name of a field, as the insert button and the list say where a variable goes. */
+function fieldLabel(field: VarField): string {
+  if (field === "title") {
+    return t().templates.fieldTitle;
+  }
+  return field === "tag" ? t().templates.fieldTag : t().templates.fieldBody;
+}
 
 /**
  * Drop characters a filename cannot hold. A template's name becomes its filename as is.
@@ -138,6 +156,23 @@ export default function Templates(): JSX.Element {
 
   /** The field touched last. If a chip is pressed right after opening, it goes in the body. */
   const [varField, setVarField] = createSignal<VarField>("body");
+  /**
+   * The list of variables: opened from the insert button ("vars"), or by typing `{{` in the
+   * body ("auto"), in which case the braces typed are replaced by the one picked.
+   */
+  const [varMenu, setVarMenu] = createSignal<"vars" | "auto" | null>(null);
+  const [varIndex, setVarIndex] = createSignal(0);
+  /** Where the caret stood right after the `{{` that opened the "auto" list. */
+  let autoAt = 0;
+  let insertRef: HTMLButtonElement | undefined;
+
+  /** The body a line at a time, with the lines of an example block told apart. */
+  const bodyLines = createMemo<{ text: string; example: boolean }[]>(() => {
+    const kinds = classifyLines(body());
+    return body()
+      .split("\n")
+      .map((text, at) => ({ text, example: kinds[at] === "example" }));
+  });
 
   const fieldInput = (field: VarField): HTMLInputElement | HTMLTextAreaElement | undefined => {
     if (field === "title") {
@@ -598,8 +633,11 @@ export default function Templates(): JSX.Element {
     if (!el) {
       return;
     }
-    const start = el.selectionStart ?? el.value.length;
-    const end = el.selectionEnd ?? start;
+    // Picked from the list the typed `{{` opened: the braces become the variable
+    const replacing = varMenu() === "auto" && field === "body";
+    setVarMenu(null);
+    const start = replacing ? autoAt - 2 : (el.selectionStart ?? el.value.length);
+    const end = replacing ? autoAt : (el.selectionEnd ?? start);
     const next = `${el.value.slice(0, start)}${token}${el.value.slice(end)}`;
 
     if (field === "title") {
@@ -616,6 +654,45 @@ export default function Templates(): JSX.Element {
     queueMicrotask(() => {
       el.focus();
       el.setSelectionRange(caret, caret);
+    });
+  };
+
+  /**
+   * The keys of an open variable list, taken before the field sees them. Returns whether the
+   * key was the list's.
+   */
+  const varMenuKeys = (e: KeyboardEvent): boolean => {
+    if (varMenu() === null) {
+      return false;
+    }
+    const count = TEMPLATE_VARS.length;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      const step = e.key === "ArrowDown" ? 1 : -1;
+      setVarIndex((at) => (at + step + count) % count);
+      return true;
+    }
+    // The Enter that commits a conversion belongs to the IME (#102)
+    if (e.key === "Enter" && !isImeComposing(e)) {
+      e.preventDefault();
+      const picked = TEMPLATE_VARS[varIndex()];
+      if (picked) {
+        insertVariable(picked.token);
+      }
+      return true;
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      setVarMenu(null);
+      return true;
+    }
+    return false;
+  };
+
+  const toggleVarMenu = (): void => {
+    batch(() => {
+      setVarIndex(0);
+      setVarMenu(varMenu() === "vars" ? null : "vars");
     });
   };
 
@@ -894,6 +971,7 @@ export default function Templates(): JSX.Element {
               placeholder={t().templates.titlePlaceholder}
               value={title()}
               onFocus={() => setVarField("title")}
+              onKeyDown={varMenuKeys}
               onInput={(e) => {
                 setTitle(e.currentTarget.value);
                 edited();
@@ -932,10 +1010,18 @@ export default function Templates(): JSX.Element {
               onInput={(e) => setTagInput(e.currentTarget.value)}
               onBlur={commitTagInput}
               onKeyDown={(e) => {
+                if (varMenuKeys(e)) {
+                  return;
+                }
                 // The Enter that commits a conversion belongs to the IME (#102)
                 if (e.key === "Enter" && !isImeComposing(e)) {
                   e.preventDefault();
                   commitTagInput();
+                } else if (e.key === "Backspace" && tagInput() === "" && tags().length > 0) {
+                  // Nothing left to delete in the field: the tag before it goes, as in a chip input
+                  e.preventDefault();
+                  setTags((tagList) => tagList.slice(0, -1));
+                  edited();
                 }
               }}
             />
@@ -946,26 +1032,108 @@ export default function Templates(): JSX.Element {
               colour part of itself, so stacking is the only way to show it */}
           <div class="templates-body-bar">
             <span class="templates-label">{t().templates.bodyLabel}</span>
+            <button
+              type="button"
+              class="templates-insert-button"
+              ref={insertRef}
+              aria-expanded={varMenu() === "vars"}
+              // Do not take the selection from the field: the insert point is lost
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={toggleVarMenu}
+            >
+              {t().templates.insertVariable}
+              <span class="templates-insert-target">→ {fieldLabel(varField())}</span>
+            </button>
+            <Popover
+              open={varMenu() !== null}
+              onClose={() => setVarMenu(null)}
+              trigger={() => insertRef}
+              label={t().templates.insertVariable}
+            >
+              <div class="popover templates-vars-menu">
+                <p class="templates-vars-menu-head">
+                  {t().templates.insertInto(fieldLabel(varField()))} · ↑↓ Enter
+                </p>
+                <div role="listbox" aria-label={t().templates.insertVariable}>
+                  <For each={TEMPLATE_VARS}>
+                    {(variable, at) => (
+                      <button
+                        type="button"
+                        role="option"
+                        class="templates-vars-option"
+                        aria-selected={at() === varIndex()}
+                        // Keep the caret in the field the variable goes into
+                        onMouseDown={(e) => e.preventDefault()}
+                        onMouseEnter={() => setVarIndex(at())}
+                        onClick={() => insertVariable(variable.token)}
+                      >
+                        <span class="templates-vars-option-line">
+                          <span>{variable.label()}</span>
+                          <code>{variable.token}</code>
+                        </span>
+                        <span class="templates-vars-option-hint">{variable.hint()}</span>
+                      </button>
+                    )}
+                  </For>
+                </div>
+              </div>
+            </Popover>
           </div>
+          <p class="templates-body-hint">{t().templates.varHint}</p>
 
           <div class="templates-body">
             <pre class="templates-body-highlight" aria-hidden="true" ref={highlightRef}>
-              <For each={splitVariables(body())}>
-                {(run) => <span classList={{ "templates-var": run.variable }}>{run.text}</span>}
-              </For>
+              {/* The textarea's own placeholder would be drawn in its transparent text */}
+              <Show
+                when={body() !== ""}
+                fallback={
+                  <span class="templates-body-placeholder">{t().templates.bodyPlaceholder}</span>
+                }
+              >
+                <Index each={bodyLines()}>
+                  {(line, at) => (
+                    <>
+                      {at > 0 ? "\n" : ""}
+                      <span classList={{ "templates-eg": line().example }}>
+                        <For each={splitVariables(line().text)}>
+                          {(run) => (
+                            <span classList={{ "templates-var": run.variable }}>{run.text}</span>
+                          )}
+                        </For>
+                      </span>
+                    </>
+                  )}
+                </Index>
+              </Show>
               {"\n"}
             </pre>
             <textarea
               class="templates-body-input"
               ref={bodyRef}
-              placeholder={t().templates.bodyPlaceholder}
-              aria-label={t().templates.bodyPlaceholder}
+              aria-label={t().templates.bodyLabel}
               spellcheck={false}
               value={body()}
               onFocus={() => setVarField("body")}
+              onKeyDown={varMenuKeys}
+              onBlur={() => {
+                if (varMenu() === "auto") {
+                  setVarMenu(null);
+                }
+              }}
               onInput={(e) => {
-                setBody(e.currentTarget.value);
+                const { value, selectionEnd: caret } = e.currentTarget;
+                setBody(value);
                 edited();
+                // `{{` right before the caret opens the list; typing on past it closes it
+                if (value.slice(caret - 2, caret) === "{{") {
+                  autoAt = caret;
+                  batch(() => {
+                    setVarIndex(0);
+                    setVarMenu("auto");
+                  });
+                } else if (varMenu() === "auto") {
+                  setVarMenu(null);
+                }
               }}
               onScroll={(e) => {
                 if (highlightRef) {
@@ -981,8 +1149,8 @@ export default function Templates(): JSX.Element {
             classList={{ "templates-footer--floating": keyboardTop() !== undefined }}
             style={keyboardTopStyle(keyboardTop())}
           >
-            {/* No heading here. A chip names itself, as in `{{date}}` plus its label, so no
-                line of height is spent on something reading the chip already tells you */}
+            {/* The phone's way in: no insert button above the body, and no list to open */}
+            <p class="templates-vars-head">{t().templates.insertInto(fieldLabel(varField()))}</p>
             <div class="templates-vars" role="group" aria-label={t().templates.insertVariable}>
               <For each={TEMPLATE_VARS}>
                 {(variable) => (
@@ -993,7 +1161,6 @@ export default function Templates(): JSX.Element {
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => insertVariable(variable.token)}
                   >
-                    <code>{variable.token}</code>
                     {variable.label()}
                   </button>
                 )}

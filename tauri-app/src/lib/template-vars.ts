@@ -11,7 +11,7 @@
  * writes the body.
  */
 
-import { t } from "./i18n";
+import { locale as currentLocale, t } from "./i18n";
 import type { Locale } from "./i18n";
 import { sameTag } from "./tags";
 import { dropExamples } from "./template-examples";
@@ -135,16 +135,39 @@ export interface TemplateVar {
   token: string;
   /** Short description attached to the chip. A function so it redraws after a language switch. */
   label: () => string;
+  /** One line on what it becomes, for the list of suggestions. Examples are today's values. */
+  hint: () => string;
 }
 
 /** Variables shown in the toolbar and the "insert variable" row. The only ones the PoC resolves. */
 export const TEMPLATE_VARS: readonly TemplateVar[] = [
-  { token: "{{date}}", label: () => t().templates.varDate },
-  { token: "{{time}}", label: () => t().templates.varTime },
-  { token: "{{weekday}}", label: () => t().templates.varWeekday },
-  { token: "{{prev}}", label: () => t().templates.varPrev },
+  {
+    token: "{{date}}",
+    label: () => t().templates.varDate,
+    hint: () => t().templates.varDateHint(formatStamp(new Date(), DEFAULT_DATE)),
+  },
+  {
+    token: "{{time}}",
+    label: () => t().templates.varTime,
+    hint: () => t().templates.varTimeHint(formatStamp(new Date(), DEFAULT_TIME)),
+  },
+  {
+    token: "{{weekday}}",
+    label: () => t().templates.varWeekday,
+    hint: () =>
+      t().templates.varWeekdayHint(resolveLine("{{weekday}}", new Date(), currentLocale())),
+  },
+  {
+    token: "{{prev}}",
+    label: () => t().templates.varPrev,
+    hint: () => t().templates.varPrevHint,
+  },
   // The only variable that never becomes a value. It marks the line below it as
   // "an example that is not written into the note"; its job is dropping the line,
   // not resolving (`core/src/template/vars.rs`)
-  { token: "{{eg}}", label: () => t().templates.varExample },
+  {
+    token: "{{eg}}",
+    label: () => t().templates.varExample,
+    hint: () => t().templates.varExampleHint,
+  },
 ];

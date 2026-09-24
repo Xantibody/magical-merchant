@@ -125,6 +125,15 @@ function listPane(container: HTMLElement): HTMLElement {
   return el;
 }
 
+/** The insert button over the body. Only a wide screen shows it, so it is found by class. */
+function insertButton(container: HTMLElement): HTMLButtonElement {
+  const el = container.querySelector<HTMLButtonElement>(".templates-insert-button");
+  if (!el) {
+    throw new Error("templates-insert-button not found");
+  }
+  return el;
+}
+
 /** Open the ⋯ menu of the template being edited. */
 function openMenu(): void {
   fireEvent.click(screen.getByLabelText("その他の操作"));
@@ -277,7 +286,123 @@ describe("Templates", () => {
       (chip) => chip.textContent,
     );
 
-    expect(chips).toContain("{{eg}}記入例");
+    expect(chips).toContain("記入例");
+  });
+
+  // The example block is never written into a note. Faint, it reads as a prompt, not content
+  it("draws the lines of an example block faint", async () => {
+    const { container } = await openDaily();
+
+    fireEvent.input(bodyInput(container), {
+      target: { value: "## 状況\n{{eg}}\n- 何があったか?\n\n## 次" },
+    });
+
+    await waitFor(() =>
+      expect(
+        [...container.querySelectorAll(".templates-body-highlight .templates-eg")].map(
+          (line) => line.textContent,
+        ),
+      ).toStrictEqual(["- 何があったか?"]),
+    );
+  });
+
+  // The textarea's own placeholder is drawn in its transparent text colour
+  it("says what the body is for while it is empty", async () => {
+    const { container } = await openDaily();
+
+    fireEvent.input(bodyInput(container), { target: { value: "" } });
+
+    await waitFor(() =>
+      expect(
+        container.querySelector(".templates-body-highlight .templates-body-placeholder")
+          ?.textContent,
+      ).toBe("テンプレートの本文…"),
+    );
+  });
+
+  it("names the field a variable will go into on the insert button", async () => {
+    const { container } = await openDaily();
+    const button = insertButton(container);
+    expect(button.textContent).toContain("→ 本文");
+
+    fireEvent.focus(screen.getByLabelText("Note のタイトル"));
+
+    await waitFor(() => expect(button.textContent).toContain("→ タイトル"));
+  });
+
+  it("inserts the variable picked from the insert button's list", async () => {
+    const { container } = await openDaily();
+    const body = bodyInput(container);
+    body.setSelectionRange(2, 2);
+
+    fireEvent.click(insertButton(container));
+    fireEvent.click(await screen.findByRole("option", { name: /時刻/u }));
+
+    await waitFor(() => expect(body.value).toBe("##{{time}} メモ"));
+  });
+
+  /** Type `{{` at the end of the body, the way a person would. */
+  async function typeBraces(container: HTMLElement): Promise<HTMLTextAreaElement> {
+    const body = bodyInput(container);
+    body.focus();
+    fireEvent.input(body, { target: { value: "前回: {{" } });
+    await screen.findByRole("listbox");
+    return body;
+  }
+
+  it("offers the variables once {{ is typed, and puts the one picked in its place", async () => {
+    const { container } = await openDaily();
+    const body = await typeBraces(container);
+
+    fireEvent.keyDown(body, { key: "ArrowDown" });
+    fireEvent.keyDown(body, { key: "ArrowDown" });
+    fireEvent.keyDown(body, { key: "ArrowDown" });
+    fireEvent.keyDown(body, { key: "Enter" });
+
+    await waitFor(() => expect(body.value).toBe("前回: {{prev}}"));
+    expect(screen.queryByRole("listbox")).toBeNull();
+  });
+
+  it("wraps around at the ends of the list", async () => {
+    const { container } = await openDaily();
+    const body = await typeBraces(container);
+
+    fireEvent.keyDown(body, { key: "ArrowUp" });
+    fireEvent.keyDown(body, { key: "Enter" });
+
+    await waitFor(() => expect(body.value).toBe("前回: {{eg}}"));
+  });
+
+  // The Enter that commits a conversion belongs to the IME (#102)
+  it("leaves the Enter that ends an IME conversion alone", async () => {
+    const { container } = await openDaily();
+    const body = await typeBraces(container);
+
+    fireEvent.keyDown(body, { key: "Enter", isComposing: true });
+
+    expect(body.value).toBe("前回: {{");
+    expect(screen.getByRole("listbox")).toBeDefined();
+  });
+
+  it("closes the suggestions on Escape", async () => {
+    const { container } = await openDaily();
+    const body = await typeBraces(container);
+
+    fireEvent.keyDown(body, { key: "Escape" });
+
+    await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
+    expect(body.value).toBe("前回: {{");
+  });
+
+  it("removes the last tag on Backspace in an empty tag field", async () => {
+    const { container } = await openDaily();
+    const tagInput = screen.getByLabelText("タグを追加");
+
+    fireEvent.keyDown(tagInput, { key: "Backspace" });
+
+    await waitFor(() =>
+      expect(container.querySelectorAll(".templates-tags .tag-badge")).toHaveLength(0),
+    );
   });
 
   it("marks a tag that holds a variable apart from a fixed one", async () => {
