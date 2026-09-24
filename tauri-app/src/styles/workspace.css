@@ -129,9 +129,12 @@
    pin (and the pin is inside the list). On a wide device without hover, a tap opens
    it for a moment and it folds the instant the finger lifts, so the list itself is
    out of reach before the pin inside can be touched. There it stays a permanent
-   column */
+   column.
+   Only the Note / Codex workspace floats its list (`workspace--flyout`, set by
+   Workspace.tsx). Templates borrows the same panes but has no rail entry and no pin,
+   so nothing could ever open its list; there it stays a permanent column */
 @media (min-width: 768px) and (hover: hover) {
-  .list-pane {
+  .workspace--flyout .list-pane {
     position: absolute;
     left: 0;
     top: 0;
@@ -151,13 +154,13 @@
       opacity 180ms var(--app-ease);
   }
 
-  .list-pane--open {
+  .workspace--flyout .list-pane--open {
     transform: none;
     opacity: 1;
     pointer-events: auto;
   }
 
-  .list-pane-foot {
+  .workspace--flyout .list-pane-foot {
     display: block;
   }
 }
