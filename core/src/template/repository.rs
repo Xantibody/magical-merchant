@@ -1,12 +1,12 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
 use crate::error::CoreError;
 use crate::utils::frontmatter;
 use crate::utils::fs::{ensure_dir, list_md_files, write_atomic};
-use crate::utils::paths::templates_dir;
+use crate::utils::paths::{template_drafts_dir, templates_dir};
 use crate::utils::validated::NoteFilename;
 
 /// The frontmatter of a template file. A separate type from the note's.
@@ -50,17 +50,28 @@ pub struct Summary {
     pub preview: String,
 }
 
+/// One directory of template files. The same shape serves the templates themselves and
+/// anything else stored as a template file.
 pub(crate) struct Templates {
-    base_dir: PathBuf,
+    dir: PathBuf,
 }
 
 impl Templates {
-    pub(crate) const fn new(base_dir: PathBuf) -> Self {
-        Self { base_dir }
+    pub(crate) fn new(base_dir: &Path) -> Self {
+        Self {
+            dir: templates_dir(base_dir),
+        }
+    }
+
+    /// The drafts: files of the same shape, one per template, outside the synced tree.
+    pub(crate) fn drafts(base_dir: &Path) -> Self {
+        Self {
+            dir: template_drafts_dir(base_dir),
+        }
     }
 
     fn dir(&self) -> PathBuf {
-        templates_dir(&self.base_dir)
+        self.dir.clone()
     }
 
     fn existing_path(&self, filename: &NoteFilename) -> Result<PathBuf, CoreError> {
@@ -167,7 +178,7 @@ mod tests {
     use tempfile::TempDir;
 
     fn templates(tmp: &TempDir) -> Templates {
-        Templates::new(tmp.path().to_path_buf())
+        Templates::new(tmp.path())
     }
 
     fn name(s: &str) -> NoteFilename {

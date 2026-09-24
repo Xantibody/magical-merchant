@@ -47,7 +47,7 @@ fn templates_today_at(
     locale: VarLocale,
     now: DateTime<Local>,
 ) -> Result<Vec<TemplateToday>, CoreError> {
-    let templates = Templates::new(base_dir.to_path_buf());
+    let templates = Templates::new(base_dir);
     let summaries = templates.list()?;
     if summaries.is_empty() {
         // No template, no reason to open every note.

@@ -690,6 +690,13 @@ const unifiedDiff = (from, to, fromName, toName) => {
   // ---- テンプレートのつくりもの ----
 
   /**
+   * Unsaved template edits, filename -> { tags, body }. Local like core's, so they
+   * never appear in a sync.
+   * @type {Map<string, MockTemplate>}
+   */
+  const templateDrafts = new Map();
+
+  /**
    * filename -> { tags, body }。変数は本物と同じく未解決のまま持つ。
    * @type {Map<string, MockTemplate>}
    */
@@ -1196,11 +1203,36 @@ const unifiedDiff = (from, to, fromName, toName) => {
     /** @param {{ filename: string, body: string, tags?: string[] }} args */
     save_template: ({ filename, body, tags }) => {
       templates.set(filename, { body, tags: tags ?? [] });
+      // As in core, the draft has now been written where it belongs
+      templateDrafts.delete(filename);
     },
     /** @param {{ filename: string }} args */
     delete_template: ({ filename }) => {
       templates.delete(filename);
+      templateDrafts.delete(filename);
     },
+    /** @param {{ filename: string, body: string, tags?: string[] }} args */
+    save_template_draft: ({ filename, body, tags }) => {
+      const draft = { body, tags: tags ?? [] };
+      const saved = templates.get(filename);
+      // A draft equal to the saved template is no draft, as in core
+      if (saved && saved.body === draft.body && saved.tags.join("\n") === draft.tags.join("\n")) {
+        templateDrafts.delete(filename);
+        return false;
+      }
+      templateDrafts.set(filename, draft);
+      return true;
+    },
+    /** @param {{ filename: string }} args */
+    read_template_draft: ({ filename }) => templateDrafts.get(filename) ?? null,
+    /** @param {{ filename: string }} args */
+    discard_template_draft: ({ filename }) => {
+      templateDrafts.delete(filename);
+    },
+    list_template_drafts: () =>
+      [...templateDrafts.entries()]
+        .map(([filename, draft]) => templateSummary(filename, draft))
+        .toSorted((a, b) => a.name.localeCompare(b.name)),
     // A browser has no home screen. Answering "unsupported" keeps the menu entry
     // hidden here, as it is on desktop
     template_widget_pinnable: () => false,

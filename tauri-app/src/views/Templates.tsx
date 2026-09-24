@@ -1,18 +1,9 @@
-import {
-  batch,
-  createEffect,
-  createMemo,
-  createResource,
-  createSignal,
-  For,
-  onCleanup,
-  Show,
-} from "solid-js";
+import { batch, createMemo, createResource, createSignal, For, onCleanup, Show } from "solid-js";
 import type { JSX } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import Icon from "../components/Icon";
 import { typedInvoke } from "../lib/commands";
-import type { Template } from "../lib/commands";
+import type { Template, TemplateDetail } from "../lib/commands";
 import { useShell } from "../lib/shell";
 import { locale, t } from "../lib/i18n";
 import { isImeComposing } from "../lib/ime";
@@ -34,7 +25,7 @@ const UNDO_MS = 5000;
 /** Where a variable chip is inserted. These three fields are the ones that take `{{...}}`. */
 type VarField = "title" | "body" | "tag";
 
-/** The one template being edited. Compared with what is on disk to show "unsaved". */
+/** The one template being edited. Compared with the template file to show "unsaved". */
 interface Draft {
   title: string;
   body: string;
@@ -53,6 +44,35 @@ function toFileStem(raw: string): string {
   return raw.trim().replaceAll(/[/\\:*?"<>|]/gu, "");
 }
 
+/** The editable shape of a template file: the title line is its own field. */
+function toDraft(detail: TemplateDetail): Draft {
+  const titled = splitTitle(detail.body);
+  return { title: titled.title, body: titled.body, tags: detail.tags };
+}
+
+/** A row as the list draws it. */
+function toRow(template: Template, saved: boolean, draft: boolean): Row {
+  return {
+    filename: template.filename,
+    name: template.name,
+    tags: template.tags,
+    preview: template.preview,
+    saved,
+    draft,
+  };
+}
+
+/** A row of the list: a saved template, or a new one that so far exists only as a draft. */
+interface Row extends Template {
+  /** Whether the template file exists. A row that is only a draft has never been saved. */
+  saved: boolean;
+  /** Whether there is an edit not yet saved into the template. */
+  draft: boolean;
+}
+
+/** How long typing pauses before the draft is written. Leaving the screen writes it at once. */
+const DRAFT_DELAY_MS = 300;
+
 /**
  * The template management screen.
  *
@@ -65,6 +85,9 @@ export default function Templates(): JSX.Element {
   const navigate = useNavigate();
 
   const [templates, { refetch }] = createResource(() => typedInvoke("list_templates"));
+  const [drafts, { refetch: refetchDrafts }] = createResource(() =>
+    typedInvoke("list_template_drafts"),
+  );
   const [selectedFile, setSelectedFile] = createSignal<string | null>(null);
   const [detailOpen, setDetailOpen] = createSignal(false);
   /** Holds a draft name only while creating a new one. null while editing an existing one. */
@@ -74,7 +97,7 @@ export default function Templates(): JSX.Element {
   const [tags, setTags] = createSignal<string[]>([]);
   const [tagInput, setTagInput] = createSignal("");
   const [saveStatus, setSaveStatus] = createSignal<"idle" | "saving" | "saved">("idle");
-  /** The last state read from disk or written to disk. */
+  /** The last state read from the template file or written to it. */
   const [baseline, setBaseline] = createSignal<Draft>(EMPTY_DRAFT);
   /** Hidden from the list only during the delete grace period. */
   const [hidden, setHidden] = createSignal<string[]>([]);
@@ -102,66 +125,77 @@ export default function Templates(): JSX.Element {
   // covers exactly that spot, so move the row above it only while the keyboard is open
   const keyboardTop = createKeyboardTop();
 
-  const visible = createMemo<Template[]>(() => {
+  /** Saved templates and never-saved drafts, one list by name. */
+  const rows = createMemo<Row[]>(() => {
     const dropped = new Set(hidden());
-    return (templates() ?? []).filter((template) => !dropped.has(template.filename));
+    const drafted = new Map((drafts() ?? []).map((draft) => [draft.filename, draft]));
+    const saved: Row[] = (templates() ?? []).map((template) =>
+      toRow(template, true, drafted.has(template.filename)),
+    );
+    const savedFiles = new Set(saved.map((row) => row.filename));
+    const fresh: Row[] = [...drafted.values()]
+      .filter((draft) => !savedFiles.has(draft.filename))
+      .map((draft) => toRow(draft, false, true));
+    return [...saved, ...fresh]
+      .filter((row) => !dropped.has(row.filename))
+      .toSorted((a, b) => a.name.localeCompare(b.name));
   });
 
-  const selected = createMemo<Template | undefined>(() =>
-    visible().find((template) => template.filename === selectedFile()),
+  const selected = createMemo<Row | undefined>(() =>
+    rows().find((row) => row.saved && row.filename === selectedFile()),
   );
 
-  /** Whether the name typed while creating a new one collides with an existing template. */
+  /**
+   * The filename a new template's draft is written under right now. Its name can still
+   * change, and the draft moves with it.
+   */
+  let newDraftFile: string | undefined;
+
+  /** Whether the name typed while creating a new one collides with another template. */
   const nameTaken = createMemo<boolean>(() => {
     const draft = toFileStem(draftName() ?? "");
-    return draft !== "" && visible().some((template) => template.name === draft);
+    return (
+      draft !== "" &&
+      // Its own draft is in the list too; it is not a collision with itself
+      rows().some((row) => row.name === draft && row.filename !== newDraftFile)
+    );
   });
 
   const editing = (): boolean => selected() !== undefined || draftName() !== null;
 
-  /**
-   * A draft that has just been restored. It marks the draft so a read from disk does not
-   * clobber it, and it is set only for the duration of the restoring batch.
-   */
-  let restoring: Draft | undefined;
-
-  /** Copy in the state that came from disk. This becomes the baseline for "unsaved". */
-  const load = (draft: Draft): void => {
+  /** Copy in the state to edit, against the saved template it is compared with. */
+  const load = (saved: Draft, shown: Draft = saved): void => {
     batch(() => {
-      setTitle(draft.title);
-      setBody(draft.body);
-      setTags(draft.tags);
-      setBaseline(draft);
+      setTitle(shown.title);
+      setBody(shown.body);
+      setTags(shown.tags);
+      setBaseline(saved);
       setSaveStatus("idle");
     });
   };
 
   const current = (): Draft => ({ title: title(), body: body(), tags: tags() });
 
-  // Read the contents of the selected template. Not while creating a new one: the body of
-  // the previously selected template would flow into the empty form
-  createEffect(() => {
-    const file = selectedFile();
-    if (!file || draftName() !== null || restoring) {
-      return;
-    }
-    void (async () => {
-      try {
-        const detail = await typedInvoke("read_template", { filename: file });
-        if (selectedFile() !== file) {
-          return;
-        }
-        const titled = splitTitle(detail.body);
-        load({ title: titled.title, body: titled.body, tags: detail.tags });
-      } catch {
-        if (selectedFile() === file) {
-          load(EMPTY_DRAFT);
-        }
+  /** Read a saved template, and its draft over it if there is one. */
+  const openSaved = async (file: string): Promise<void> => {
+    try {
+      const [detail, draft] = await Promise.all([
+        typedInvoke("read_template", { filename: file }),
+        typedInvoke("read_template_draft", { filename: file }),
+      ]);
+      if (selectedFile() !== file || draftName() !== null) {
+        return;
       }
-    })();
-  });
+      const saved = toDraft(detail);
+      load(saved, draft ? toDraft(draft) : saved);
+    } catch {
+      if (selectedFile() === file) {
+        load(EMPTY_DRAFT);
+      }
+    }
+  };
 
-  /** Whether it differs from what is on disk. This decides if the save button is enabled. */
+  /** Whether it differs from the template file. This decides if the save button is enabled. */
   const dirty = createMemo<boolean>(() => {
     const base = baseline();
     return (
@@ -192,16 +226,68 @@ export default function Templates(): JSX.Element {
     saveStatus() !== "saving" &&
     (draftName() !== null || dirty());
 
+  let draftTimer: ReturnType<typeof setTimeout> | undefined;
+
+  /**
+   * Write the edit in progress to the template's draft. The template file itself is not
+   * touched: every note made from it copies it, so it changes only on save.
+   */
+  const writeDraft = (): void => {
+    clearTimeout(draftTimer);
+    draftTimer = undefined;
+    const filename = targetFilename();
+    const previous = draftName() === null ? undefined : newDraftFile;
+    if (draftName() !== null) {
+      newDraftFile = filename;
+    }
+    const draft = current();
+    void (async () => {
+      try {
+        // A new template's name changed: the draft follows it rather than staying behind
+        if (previous && previous !== filename) {
+          await typedInvoke("discard_template_draft", { filename: previous });
+        }
+        if (filename) {
+          await typedInvoke("save_template_draft", {
+            filename,
+            body: joinTitle(draft.title, draft.body),
+            tags: draft.tags,
+          });
+        }
+        await refetchDrafts();
+      } catch {
+        shell.showToast(t().templates.saveFailed);
+      }
+    })();
+  };
+
+  /** Called by every edit. The draft is written once typing pauses. */
+  const edited = (): void => {
+    clearTimeout(draftTimer);
+    draftTimer = setTimeout(writeDraft, DRAFT_DELAY_MS);
+  };
+
+  /** Write a pending draft now: the screen is about to change. */
+  const flushDraft = (): void => {
+    if (draftTimer !== undefined) {
+      writeDraft();
+    }
+  };
+  onCleanup(flushDraft);
+
   /**
    * Save explicitly. A template left half-written breaks every note made from it, so this
-   * is not built to write out on each keystroke.
+   * is not built to write out on each keystroke; the draft is what keeps the keystrokes.
    */
   const save = (): void => {
     const filename = targetFilename();
     if (!filename || !canSave()) {
       return;
     }
+    clearTimeout(draftTimer);
+    draftTimer = undefined;
     const draft = current();
+    const previous = newDraftFile;
     setSaveStatus("saving");
 
     void (async () => {
@@ -211,13 +297,17 @@ export default function Templates(): JSX.Element {
           body: joinTitle(draft.title, draft.body),
           tags: draft.tags,
         });
+        if (previous && previous !== filename) {
+          await typedInvoke("discard_template_draft", { filename: previous });
+        }
         batch(() => {
           setBaseline(draft);
           setSaveStatus("saved");
         });
-        await refetch();
+        await Promise.all([refetch(), refetchDrafts()]);
         // Once the name is settled, this turns from creating a new one into editing it
         if (draftName() !== null) {
+          newDraftFile = undefined;
           batch(() => {
             setDraftName(null);
             setSelectedFile(filename);
@@ -241,26 +331,29 @@ export default function Templates(): JSX.Element {
   globalThis.addEventListener("keydown", onKeyDown);
   onCleanup(() => globalThis.removeEventListener("keydown", onKeyDown));
 
-  /** Leave the editor holding a draft. Say it was discarded, and leave a way back. */
+  /**
+   * Leave the editor. The draft carries whatever was unsaved, so there is nothing to
+   * discard. The one exception is a new template with no name yet: there is no filename to
+   * keep its draft under, so it is dropped with a way back.
+   */
   const leaveEditor = (next: () => void): void => {
-    if (!dirty()) {
-      next();
-      return;
-    }
-    const undo = { file: selectedFile(), name: draftName(), draft: current() };
-    shell.showToast(t().templates.discarded, () => {
-      restoring = undo.draft;
-      batch(() => {
-        setSelectedFile(undo.file);
-        setDraftName(undo.name);
-        setTitle(undo.draft.title);
-        setBody(undo.draft.body);
-        setTags(undo.draft.tags);
-        setDetailOpen(true);
+    flushDraft();
+    const unnamed = draftName() !== null && targetFilename() === undefined;
+    const draft = current();
+    const blank = draft.title === "" && draft.body === "" && draft.tags.length === 0;
+    if (unnamed && !blank) {
+      const name = draftName();
+      shell.showToast(t().templates.discarded, () => {
+        newDraftFile = undefined;
+        batch(() => {
+          setSelectedFile(null);
+          setDraftName(name);
+          load(EMPTY_DRAFT, draft);
+          setDetailOpen(true);
+        });
       });
-      // The loading effect has finished running by the end of the batch
-      restoring = undefined;
-    });
+    }
+    newDraftFile = undefined;
     next();
   };
 
@@ -278,40 +371,101 @@ export default function Templates(): JSX.Element {
     });
   };
 
-  const select = (template: Template): void => {
+  const select = (row: Row): void => {
     leaveEditor(() => {
+      if (row.saved) {
+        batch(() => {
+          setDraftName(null);
+          setSelectedFile(row.filename);
+          setDetailOpen(true);
+        });
+        void openSaved(row.filename);
+        return;
+      }
+      // A template never saved: it is still being created, under the name it was left with
+      newDraftFile = row.filename;
       batch(() => {
-        setDraftName(null);
-        setSelectedFile(template.filename);
+        setSelectedFile(null);
+        setDraftName(row.name);
+        setTagInput("");
         setDetailOpen(true);
+        load(EMPTY_DRAFT);
       });
+      void (async () => {
+        const draft = await typedInvoke("read_template_draft", { filename: row.filename });
+        if (draft && newDraftFile === row.filename) {
+          load(EMPTY_DRAFT, toDraft(draft));
+        }
+      })();
     });
   };
 
-  const remove = (template: Template): void => {
+  /** Drop the unsaved edit and go back to the saved template, with a way back. */
+  const discardDraft = (): void => {
+    const filename = selected()?.filename;
+    if (!filename) {
+      return;
+    }
+    clearTimeout(draftTimer);
+    draftTimer = undefined;
+    const dropped = current();
+    load(baseline());
+    void (async () => {
+      await typedInvoke("discard_template_draft", { filename });
+      await refetchDrafts();
+    })();
+
+    shell.showToast(t().templates.discarded, () => {
+      if (selectedFile() === filename && draftName() === null) {
+        load(baseline(), dropped);
+      }
+      void (async () => {
+        await typedInvoke("save_template_draft", {
+          filename,
+          body: joinTitle(dropped.title, dropped.body),
+          tags: dropped.tags,
+        });
+        await refetchDrafts();
+      })();
+    });
+  };
+
+  const remove = (row: Row): void => {
+    clearTimeout(draftTimer);
+    draftTimer = undefined;
+    newDraftFile = undefined;
     batch(() => {
-      setHidden((files) => [...files, template.filename]);
+      setHidden((files) => [...files, row.filename]);
       setSelectedFile(null);
+      setDraftName(null);
       setDetailOpen(false);
     });
 
     const commit = setTimeout(() => {
       void (async () => {
-        await typedInvoke("delete_template", { filename: template.filename });
-        await refetch();
-        setHidden((files) => files.filter((file) => file !== template.filename));
+        await typedInvoke("delete_template", { filename: row.filename });
+        await Promise.all([refetch(), refetchDrafts()]);
+        setHidden((files) => files.filter((file) => file !== row.filename));
       })();
     }, UNDO_MS);
 
     shell.showToast(t().templates.deleted, () => {
       clearTimeout(commit);
-      setHidden((files) => files.filter((file) => file !== template.filename));
+      setHidden((files) => files.filter((file) => file !== row.filename));
     });
   };
 
+  /** The row being edited, whether saved or still a new template's draft. */
+  const openRow = (): Row | undefined =>
+    selected() ?? rows().find((row) => !row.saved && row.filename === newDraftFile);
+
   const commitTagInput = (): void => {
+    const before = tags();
     setTags((tagList) => addTemplateTag(tagList, tagInput()));
     setTagInput("");
+    if (tags() !== before) {
+      edited();
+    }
   };
 
   /**
@@ -331,10 +485,12 @@ export default function Templates(): JSX.Element {
 
     if (field === "title") {
       setTitle(next);
+      edited();
     } else if (field === "tag") {
       setTagInput(next);
     } else {
       setBody(next);
+      edited();
     }
 
     const caret = start + token.length;
@@ -377,7 +533,7 @@ export default function Templates(): JSX.Element {
 
         <div class="list-scroll">
           <Show
-            when={visible().length > 0}
+            when={rows().length > 0}
             fallback={
               <div class="notes-empty">
                 <Icon name="file-text" size={24} />
@@ -386,22 +542,35 @@ export default function Templates(): JSX.Element {
               </div>
             }
           >
-            <For each={visible()}>
-              {(template) => (
-                <button
-                  type="button"
-                  class="list-row"
-                  classList={{ "list-row--selected": selected()?.filename === template.filename }}
-                  onClick={() => select(template)}
-                >
-                  <span class="list-row-title">{template.name}</span>
-                  {/* Resolved: the row answers "what does this make today". How the
-                      definition is spelled, `{{date}}` and all, is read once it is open */}
-                  <span class="list-row-meta">
-                    {resolveLine(template.preview, new Date(), locale())}
-                  </span>
-                </button>
-              )}
+            <For each={rows()}>
+              {(row) => {
+                const open = (): boolean => openRow()?.filename === row.filename;
+                // The open row follows the typing; the others what core last reported
+                const unsaved = (): boolean => (open() ? dirty() || !row.saved : row.draft);
+                return (
+                  <button
+                    type="button"
+                    class="list-row"
+                    classList={{ "list-row--selected": open() }}
+                    onClick={() => select(row)}
+                  >
+                    <span class="templates-row-head">
+                      <span class="list-row-title">{row.name}</span>
+                      <Show when={unsaved()}>
+                        <span class="templates-row-unsaved">{t().templates.unsaved}</span>
+                      </Show>
+                    </span>
+                    {/* Resolved: the row answers "what does this make today". How the
+                        definition is spelled, `{{date}}` and all, is read once it is open.
+                        A template never saved makes nothing yet */}
+                    <span class="list-row-meta">
+                      {row.saved
+                        ? resolveLine(row.preview, new Date(), locale())
+                        : t().templates.new}
+                    </span>
+                  </button>
+                );
+              }}
             </For>
           </Show>
         </div>
@@ -434,7 +603,10 @@ export default function Templates(): JSX.Element {
                     placeholder={t().templates.namePlaceholder}
                     aria-label={t().templates.namePlaceholder}
                     value={draftName() ?? ""}
-                    onInput={(e) => setDraftName(e.currentTarget.value)}
+                    onInput={(e) => {
+                      setDraftName(e.currentTarget.value);
+                      edited();
+                    }}
                   />
                 }
               >
@@ -467,14 +639,25 @@ export default function Templates(): JSX.Element {
               >
                 {t().common.save}
               </button>
-              <Show when={selected()}>
-                {(template) => (
+              <Show when={selected() !== undefined && dirty()}>
+                <button
+                  type="button"
+                  class="icon-button"
+                  title={t().templates.discardDraft}
+                  aria-label={t().templates.discardDraft}
+                  onClick={discardDraft}
+                >
+                  <Icon name="arrow-counter-clockwise" size={17} />
+                </button>
+              </Show>
+              <Show when={openRow()}>
+                {(row) => (
                   <button
                     type="button"
                     class="icon-button"
                     title={t().common.delete}
                     aria-label={t().common.delete}
-                    onClick={() => remove(template())}
+                    onClick={() => remove(row())}
                   >
                     <Icon name="trash" size={17} />
                   </button>
@@ -495,7 +678,10 @@ export default function Templates(): JSX.Element {
             aria-label={t().templates.titlePlaceholder}
             value={title()}
             onFocus={() => setVarField("title")}
-            onInput={(e) => setTitle(e.currentTarget.value)}
+            onInput={(e) => {
+              setTitle(e.currentTarget.value);
+              edited();
+            }}
           />
 
           <div class="templates-tags">
@@ -508,7 +694,10 @@ export default function Templates(): JSX.Element {
                     type="button"
                     class="note-meta-tag-remove"
                     aria-label={t().templates.removeTag(tag)}
-                    onClick={() => setTags((tagList) => tagList.filter((kept) => kept !== tag))}
+                    onClick={() => {
+                      setTags((tagList) => tagList.filter((kept) => kept !== tag));
+                      edited();
+                    }}
                   >
                     <Icon name="x" size={10} />
                   </button>
@@ -553,7 +742,10 @@ export default function Templates(): JSX.Element {
               spellcheck={false}
               value={body()}
               onFocus={() => setVarField("body")}
-              onInput={(e) => setBody(e.currentTarget.value)}
+              onInput={(e) => {
+                setBody(e.currentTarget.value);
+                edited();
+              }}
               onScroll={(e) => {
                 if (highlightRef) {
                   highlightRef.scrollTop = e.currentTarget.scrollTop;
