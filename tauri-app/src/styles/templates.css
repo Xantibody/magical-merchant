@@ -461,6 +461,96 @@
   padding: 14px 28px 2px;
 }
 
+.templates-insert-button {
+  margin-left: auto;
+  padding: 2px 6px;
+  border: none;
+  border-radius: var(--radius-2);
+  background: none;
+  color: var(--app-text-muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.templates-insert-button:hover {
+  background: var(--app-surface-2);
+  color: var(--app-text);
+}
+
+.templates-insert-target {
+  margin-left: 4px;
+  font-weight: 400;
+  color: var(--app-text-faint);
+}
+
+.templates-body-hint {
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: calc(640px + 28px * 2);
+  margin: 0 auto;
+  padding: 0 28px;
+  font-size: 11.5px;
+  color: var(--app-text-faint);
+}
+
+/* Hangs under the insert button, at the body bar's right edge */
+.templates-vars-menu {
+  top: calc(100% + 2px);
+  right: 28px;
+  width: 280px;
+  padding: 6px;
+  animation: mm-rise 180ms var(--app-ease);
+}
+
+.templates-vars-menu-head {
+  margin: 0;
+  padding: 4px 8px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--app-text-faint);
+}
+
+.templates-vars-option {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: var(--radius-2);
+  background: none;
+  color: var(--app-text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.templates-vars-option[aria-selected="true"] {
+  background: var(--app-accent-soft);
+}
+
+.templates-vars-option-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.templates-vars-option-line code {
+  font-family: ui-monospace, monospace;
+  font-size: 11.5px;
+  color: var(--app-text-faint);
+}
+
+.templates-vars-option-hint {
+  font-size: 11px;
+  color: var(--app-text-muted);
+}
+
 .templates-body {
   position: relative;
   flex: 1;
@@ -480,12 +570,17 @@
   margin: 0;
   padding: 8px 28px 32px;
   border: none;
-  font-family: ui-monospace, monospace;
-  font-size: 14px;
-  line-height: 1.9;
+  /* The body is read as prose, like the note it becomes. What marks a variable
+     is its background, not a monospace face */
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.8;
   white-space: pre-wrap;
   overflow-wrap: break-word;
   overflow: auto;
+  /* Both reserve the scrollbar's width, so the layer that has none cannot wrap
+     a line later than the textarea that does */
+  scrollbar-gutter: stable;
   tab-size: 2;
 }
 
@@ -508,8 +603,16 @@
   outline: none;
 }
 
-.templates-body-input::placeholder {
+/* Drawn by the layer: the textarea's own placeholder would take its
+   transparent text colour */
+.templates-body-placeholder {
   color: var(--app-text-hint);
+}
+
+/* A {{eg}} block: a prompt for the writer, never written into the note. Colour
+   only, so the letters stay where the textarea has them */
+.templates-eg {
+  color: var(--app-text-faint);
 }
 
 .templates-body-input::selection {
@@ -575,16 +678,25 @@
   flex-shrink: 0;
 }
 
+.templates-vars-head {
+  margin: 0;
+  font-size: 11px;
+  color: var(--app-text-muted);
+}
+
+/* A wide screen inserts through the button over the body; the chip row is the
+   phone's, where there is no list to open */
+@media (min-width: 768px) {
+  .templates-vars-head,
+  .templates-vars {
+    display: none;
+  }
+}
+
 /* While floating, the visible area is limited. The preview is folded away and
    only the pressable items are left right above the keyboard */
 .templates-footer--floating .templates-preview {
   display: none;
-}
-
-.templates-var-chip code {
-  font-family: ui-monospace, monospace;
-  font-size: 11.5px;
-  color: var(--app-text-faint);
 }
 
 /* Open Props' normalize draws details/summary as a box. Here it is a note laid
@@ -748,8 +860,20 @@
   .templates-body-bar,
   .templates-footer,
   .templates-body-highlight,
-  .templates-body-input {
+  .templates-body-input,
+  .templates-body-hint {
     padding-inline: 20px;
+  }
+
+  .templates-insert-button {
+    display: none;
+  }
+
+  .templates-var-chip {
+    min-height: 40px;
+    padding: 0 12px;
+    border-radius: 999px;
+    font-size: 13px;
   }
 
   /* The note at the foot of the list takes space. At the width where panes are
