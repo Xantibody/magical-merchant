@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterEach } from "vitest";
+import { page } from "vitest/browser";
 import { render, screen, fireEvent, cleanup, waitFor } from "@solidjs/testing-library";
 import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
 import { MemoryRouter, Route } from "@solidjs/router";
@@ -77,6 +78,19 @@ function bodyInput(container: HTMLElement): HTMLTextAreaElement {
     throw new Error("templates-body-input not found");
   }
   return el;
+}
+
+function listPane(container: HTMLElement): HTMLElement {
+  const el = container.querySelector<HTMLElement>(".list-pane");
+  if (!el) {
+    throw new Error("list-pane not found");
+  }
+  return el;
+}
+
+/** Where the text inside a field starts, on the screen. */
+function textLeft(el: HTMLElement): number {
+  return el.getBoundingClientRect().left + Number.parseFloat(getComputedStyle(el).paddingLeft);
 }
 
 describe("Templates", () => {
@@ -340,5 +354,51 @@ describe("Templates", () => {
     fireEvent.click(screen.getByLabelText("一覧に戻る"));
 
     expect(screen.queryByText("保存していない変更を破棄しました")).toBeNull();
+  });
+});
+
+/**
+ * The screen borrows Workspace's two panes, but it has no rail entry and no pin, so nothing
+ * could ever open a list that floats like the Note list. On a wide screen it stands as a
+ * permanent column beside the template being edited.
+ */
+describe("Templates on a wide screen", () => {
+  beforeAll(async () => {
+    await import("../index.css");
+    await import("../styles/workspace.css");
+  });
+
+  beforeEach(async () => {
+    mockCommands();
+    await page.viewport(1280, 800);
+  });
+
+  afterEach(() => {
+    clearMocks();
+    cleanup();
+    document.body.innerHTML = "";
+  });
+
+  it("keeps the list in view and within reach", async () => {
+    const { container } = renderTemplates();
+    await waitFor(() => expect(screen.getByText("daily")).toBeDefined());
+
+    const style = getComputedStyle(listPane(container));
+
+    expect(style.opacity).toBe("1");
+    expect(style.transform).toBe("none");
+    expect(style.pointerEvents).toBe("auto");
+    expect(style.position).not.toBe("absolute");
+  });
+
+  // The title is one line heading the body's 640px column, not a field that stretches down
+  // the pane and starts at its left edge
+  it("sets the title as one line over the body's column", async () => {
+    const { container } = await openDaily();
+
+    const title = screen.getByLabelText<HTMLInputElement>("タイトル");
+
+    expect(title.getBoundingClientRect().height).toBeLessThan(60);
+    expect(textLeft(title)).toBeCloseTo(textLeft(bodyInput(container)), 0);
   });
 });

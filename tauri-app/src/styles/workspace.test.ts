@@ -489,7 +489,7 @@ function floatsTheList(rule: CSSMediaRule): boolean {
   return [...rule.cssRules].some(
     (inner) =>
       inner instanceof CSSStyleRule &&
-      inner.selectorText === ".list-pane" &&
+      inner.selectorText === ".workspace--flyout .list-pane" &&
       inner.style.position === "absolute",
   );
 }
@@ -513,7 +513,7 @@ function mountFlyout(open: boolean, detail = false): HTMLElement {
       <nav class="rail"></nav>
       <div class="app-column">
         <main class="app-main">
-          <div class="workspace ${detail ? "workspace--detail" : ""}">
+          <div class="workspace workspace--flyout ${detail ? "workspace--detail" : ""}">
             <div class="list-pane ${open ? "list-pane--open" : ""}">
               <div class="list-pane-head"></div>
               <div class="list-scroll"></div>

@@ -1567,7 +1567,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       : t().notes.pinList(shortcutLabel("listPin"));
 
   return (
-    <div class="workspace" classList={{ "workspace--detail": detailOpen() }}>
+    <div class="workspace workspace--flyout" classList={{ "workspace--detail": detailOpen() }}>
       <div
         class="list-pane"
         classList={{ "list-pane--open": flyoutOpen() }}

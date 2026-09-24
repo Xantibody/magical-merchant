@@ -38,7 +38,9 @@ describe("reduced motion in the browser", () => {
     const { container } = render(() => (
       <>
         <div class="palette">Search</div>
-        <div class="list-pane list-pane--open">Notes</div>
+        <div class="workspace workspace--flyout">
+          <div class="list-pane list-pane--open">Notes</div>
+        </div>
         <span class="switch" />
       </>
     ));
