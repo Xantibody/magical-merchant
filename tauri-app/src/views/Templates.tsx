@@ -395,18 +395,10 @@ export default function Templates(): JSX.Element {
                   onClick={() => select(template)}
                 >
                   <span class="list-row-title">{template.name}</span>
+                  {/* Resolved: the row answers "what does this make today". How the
+                      definition is spelled, `{{date}}` and all, is read once it is open */}
                   <span class="list-row-meta">
-                    {template.preview}
-                    {/* Variables are not resolved in the list. This is where the definition
-                        itself is read, so a `{{date}}` turned into today's date is
-                        indistinguishable from a literal date */}
-                    <For each={template.tags}>
-                      {(tag) => (
-                        <span class="tag-badge" classList={{ "tag-badge--var": hasVariable(tag) }}>
-                          #{tag}
-                        </span>
-                      )}
-                    </For>
+                    {resolveLine(template.preview, new Date(), locale())}
                   </span>
                 </button>
               )}

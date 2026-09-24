@@ -106,7 +106,7 @@ export interface Template {
   /** Name without the extension. Also the name shown on screen. */
   name: string;
   tags: string[];
-  /** First line of the body. Variables are not resolved. */
+  /** First line of the body. Variables are not resolved; the list resolves them for today. */
   preview: string;
 }
 

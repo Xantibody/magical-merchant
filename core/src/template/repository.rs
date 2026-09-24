@@ -45,8 +45,8 @@ pub struct Summary {
     /// screen, and also the value recorded in the frontmatter of notes created from here.
     pub name: String,
     pub tags: Vec<String>,
-    /// The first line of the body. Variables are not resolved: if `{{date}}` turned into
-    /// today's date in the template list, one could not tell fixed text from a variable.
+    /// The first line of the body, variables unresolved. The list resolves them for today
+    /// on screen, in the locale the screen is in, which core does not know.
     pub preview: String,
 }
 
