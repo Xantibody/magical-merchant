@@ -347,6 +347,44 @@ fn delete_template(handle: AppHandle, filename: String) -> Result<(), String> {
     magical_merchant_core::delete_template(&base_dir, &filename).map_err(|e| e.to_string())
 }
 
+/// Keeps the edit in progress beside the template. Returns whether a draft is left: one
+/// equal to the saved template is removed instead.
+#[tauri::command]
+fn save_template_draft(
+    handle: AppHandle,
+    filename: String,
+    body: String,
+    tags: Vec<String>,
+) -> Result<bool, String> {
+    let base_dir = app_base_dir(&handle)?;
+    let filename = parse_filename(&filename)?;
+    magical_merchant_core::save_template_draft(&base_dir, &filename, &TemplateDetail { body, tags })
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn read_template_draft(
+    handle: AppHandle,
+    filename: String,
+) -> Result<Option<TemplateDetail>, String> {
+    let base_dir = app_base_dir(&handle)?;
+    let filename = parse_filename(&filename)?;
+    magical_merchant_core::read_template_draft(&base_dir, &filename).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn discard_template_draft(handle: AppHandle, filename: String) -> Result<(), String> {
+    let base_dir = app_base_dir(&handle)?;
+    let filename = parse_filename(&filename)?;
+    magical_merchant_core::discard_template_draft(&base_dir, &filename).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn list_template_drafts(handle: AppHandle) -> Result<Vec<TemplateSummary>, String> {
+    let base_dir = app_base_dir(&handle)?;
+    magical_merchant_core::list_template_drafts(&base_dir).map_err(|e| e.to_string())
+}
+
 /// Creates a note from a template.
 ///
 /// If today's note from the same template already exists, it is returned instead of
@@ -755,6 +793,10 @@ pub fn run() {
             read_template,
             save_template,
             delete_template,
+            save_template_draft,
+            read_template_draft,
+            discard_template_draft,
+            list_template_drafts,
             create_from_template,
             list_glyphs,
             read_glyphs,

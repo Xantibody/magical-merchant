@@ -111,7 +111,7 @@ export interface Template {
 }
 
 /** Contents of one template. The edit screen draws the body and the automatic tags together. */
-interface TemplateDetail {
+export interface TemplateDetail {
   /** The body as written, variables unresolved. */
   body: string;
   tags: string[];
@@ -274,7 +274,21 @@ interface CommandMap {
   list_templates: { args: void; result: Template[] };
   read_template: { args: { filename: string }; result: TemplateDetail };
   save_template: { args: { filename: string; body: string; tags: string[] }; result: void };
+  /** Also removes the template's draft. A template never saved is only a draft. */
   delete_template: { args: { filename: string }; result: void };
+  /**
+   * Keeps the edit in progress beside the template, outside the synced tree, so it
+   * neither changes what notes are made from nor signals a sync. Returns whether a draft
+   * is left: one equal to the saved template is removed instead.
+   */
+  save_template_draft: {
+    args: { filename: string; body: string; tags: string[] };
+    result: boolean;
+  };
+  read_template_draft: { args: { filename: string }; result: TemplateDetail | null };
+  discard_template_draft: { args: { filename: string }; result: void };
+  /** Every template with a draft. One missing from \`list_templates` has never been saved. */
+  list_template_drafts: { args: void; result: Template[] };
   /**
    * Creates a note from a template. `locale` is for `{{weekday}}`:
    * only the weekday's name follows the device language.
