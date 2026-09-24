@@ -138,6 +138,22 @@ impl Templates {
         Ok(())
     }
 
+    /// Move a file to a new name, never over one that exists.
+    pub(crate) fn rename(&self, from: &NoteFilename, to: &NoteFilename) -> Result<(), CoreError> {
+        let source = self.existing_path(from)?;
+        let target = self.writable_path(to)?;
+        // Reserving the name first makes "taken" an error rather than a silent replace;
+        // a plain rename overwrites whatever is there
+        fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&target)?;
+        fs::rename(&source, &target).map_err(|e| {
+            let _ = fs::remove_file(&target);
+            CoreError::from(e)
+        })
+    }
+
     pub(crate) fn delete(&self, filename: &NoteFilename) -> Result<(), CoreError> {
         fs::remove_file(self.existing_path(filename)?)?;
         Ok(())

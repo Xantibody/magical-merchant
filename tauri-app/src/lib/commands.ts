@@ -277,6 +277,11 @@ interface CommandMap {
   /** Also removes the template's draft. A template never saved is only a draft. */
   delete_template: { args: { filename: string }; result: void };
   /**
+   * Renames the template file and its draft. Refused when `to` is taken. Notes made
+   * from it keep the old name in their frontmatter, so their link to it is cut.
+   */
+  rename_template: { args: { from: string; to: string }; result: void };
+  /**
    * Keeps the edit in progress beside the template, outside the synced tree, so it
    * neither changes what notes are made from nor signals a sync. Returns whether a draft
    * is left: one equal to the saved template is removed instead.
@@ -336,6 +341,7 @@ const MUTATING: ReadonlySet<CommandName> = new Set<CommandName>([
   "delete_note_version",
   "save_template",
   "delete_template",
+  "rename_template",
   "create_from_template",
   "save_glyph",
   "delete_glyph",
