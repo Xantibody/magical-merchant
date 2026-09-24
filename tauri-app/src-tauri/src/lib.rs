@@ -27,6 +27,7 @@ pub mod widget_bridge;
 // testing.
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 mod widget_summary;
+mod widget_updates;
 
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as B64;
@@ -337,14 +338,18 @@ fn save_template(
     let base_dir = app_base_dir(&handle)?;
     let filename = parse_filename(&filename)?;
     magical_merchant_core::save_template(&base_dir, &filename, &body, &tags)
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    widget_updates::refresh_templates();
+    Ok(())
 }
 
 #[tauri::command]
 fn delete_template(handle: AppHandle, filename: String) -> Result<(), String> {
     let base_dir = app_base_dir(&handle)?;
     let filename = parse_filename(&filename)?;
-    magical_merchant_core::delete_template(&base_dir, &filename).map_err(|e| e.to_string())
+    magical_merchant_core::delete_template(&base_dir, &filename).map_err(|e| e.to_string())?;
+    widget_updates::refresh_templates();
+    Ok(())
 }
 
 /// Keeps the edit in progress beside the template. Returns whether a draft is left: one
@@ -402,7 +407,7 @@ fn create_from_template(
     let base_dir = app_base_dir(&handle)?;
     let filename = parse_filename(&filename)?;
     let context = device::get_context(client);
-    magical_merchant_core::create_note_from_template(
+    let created = magical_merchant_core::create_note_from_template(
         &base_dir,
         &filename,
         &context,
@@ -412,7 +417,12 @@ fn create_from_template(
             ..Provenance::default()
         },
     )
-    .map_err(|e| e.to_string())
+    .map_err(|e| e.to_string())?;
+    // A reused note changes nothing a button shows
+    if !created.reused {
+        widget_updates::refresh_templates();
+    }
+    Ok(created)
 }
 
 fn parse_glyph_name(name: &str) -> Result<GlyphName, String> {
@@ -647,7 +657,10 @@ fn note_version_status(handle: AppHandle, filename: String) -> Result<VersionSta
 fn delete_note(handle: AppHandle, filename: String) -> Result<(), String> {
     let base_dir = app_base_dir(&handle)?;
     let filename = parse_filename(&filename)?;
-    magical_merchant_core::delete_note(&base_dir, &filename).map_err(|e| e.to_string())
+    magical_merchant_core::delete_note(&base_dir, &filename).map_err(|e| e.to_string())?;
+    // Deleting today's note from a template turns its button back to "make today's"
+    widget_updates::refresh_templates();
+    Ok(())
 }
 
 /// Takes from a deep link only the JWT that may be stored.
@@ -810,6 +823,8 @@ pub fn run() {
             resolve_places,
             delete_note,
             export::save_export,
+            widget_updates::template_widget_pinnable,
+            widget_updates::pin_template_widget,
             sync::sync_start,
             sync::sync_status,
             auth::auth_login,

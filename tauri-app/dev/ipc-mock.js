@@ -1233,6 +1233,16 @@ const unifiedDiff = (from, to, fromName, toName) => {
       [...templateDrafts.entries()]
         .map(([filename, draft]) => templateSummary(filename, draft))
         .toSorted((a, b) => a.name.localeCompare(b.name)),
+    // A browser has no home screen. Answering "unsupported" keeps the menu entry
+    // hidden here, as it is on desktop
+    template_widget_pinnable: () => false,
+    /** @param {{ filename: string }} args */
+    pin_template_widget: ({ filename }) => {
+      if (!templates.has(filename)) {
+        throw new Error("template not found");
+      }
+      return false;
+    },
     /** @param {{ filename: string, locale: string }} args */
     create_from_template: ({ filename, locale }) => {
       const template = templates.get(filename);

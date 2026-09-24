@@ -335,7 +335,7 @@ describe("note head: the title column follows the body", () => {
       <div class="app">
         <header class="header">header</header>
         <main class="app-main">
-          <div class="workspace">
+          <div class="workspace workspace--flyout">
             <div class="list-pane"></div>
             <div class="detail-pane detail-pane${flag} ${pinned ? "detail-pane--panel" : ""}">
               <div class="detail-head"><div class="detail-title-row"><input class="note-title-input" value="題" /></div></div>
