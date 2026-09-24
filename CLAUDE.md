@@ -47,18 +47,23 @@ ready to record the moment it opens (widgets exist for exactly this).
   on desktop): 280px that floats **over** the body while the pointer is on the
   rail or on itself — the body column does not move when it opens. A pin, and
   ⌘\, keep it out. Below 768px it is the full page it always was
-- **Bottom bar** (30px, desktop only, `layouts/AppLayout.tsx`): where the save
-  landed, and nothing else. No current location — the rail's line and the title
-  already say it. A phone gets no bar (it would stack with the tabs); there the
-  save state lives in the note's meta line
+- **Bottom bar** (30px, desktop only, `layouts/AppLayout.tsx`): the status line —
+  where the save landed, a Codex's version (版 3 から +312 B), 比較中, and every
+  view state that is **on** (読み取り専用 / マップ / 記入例; pressing one docks
+  the note panel on its switch). At its right end 版を刻む (draft moved on) and
+  編集前に戻す (a backup exists), only when they would do something. Workspace
+  hands it over through the shell (`noteBar`), like the save state. No current
+  location. A phone gets no bar (it would stack with the tabs); there a status
+  row under the meta line carries the same, as pills
 - **Mobile**: a 48px header (back · title · Scrawl's calendar · search · sync)
   and four bottom tabs — Scrawl / Note / Codex / Settings
 - **Shortcuts**: one table in `lib/shortcuts.ts` feeds the key handling, the
   palette's command rows and the `data-hint-key` badges. Holding ⌘ (Ctrl) for
   300ms floats those badges (`lib/hints.ts`); `?` opens the palette as the
   list. A badge goes on every **visible** control whose key works right now —
-  the rail's seven, 新規 and the list's pin, `…`, 履歴. Keys that only exist
-  inside the `…` menu are spelled on the row instead. The attribute is
+  the rail's seven, 新規 and the list's pin, the note panel's toggle and its
+  履歴 tab, the bottom bar's two actions. Keys that only exist inside the note
+  panel are spelled on the row instead. The attribute is
   `data-hint-key`, not `data-key`, because Kobalte writes `data-key` on the
   rows of its own collections
 - **Scrawl** (`views/Scrawl.tsx`): single-column day-grouped journal, time rail,
@@ -67,28 +72,38 @@ ready to record the moment it opens (widgets exist for exactly this).
   and that tag already chosen
 - **Note** (`views/Workspace.tsx`): list flyout + detail pane; mobile shows one
   pane at a time (`workspace--detail`); title field above the body
-  (it _is_ the body's leading `# heading`), then a meta line of created time /
-  save state / tags. **There is no edit mode** — the Milkdown editor is open
-  from the moment a note is; frontmatter `view` decides the exception
-  (`preview` = read-only, `mindmap` = map laid alongside, absent = editable).
-  Rare per-note actions live behind one `…` menu (`components/NoteMenu.tsx`,
-  Kobalte `DropdownMenu`)
+  (it _is_ the body's leading `# heading`), then a meta line of created time and
+  tags, edited in place (`components/TagEditor.tsx`: chips, suggestions counted
+  from `browse_all`, a body `#tag` has no ×). **There is no edit mode** — the
+  Milkdown editor is open from the moment a note is; frontmatter `view` decides
+  the exception (`preview` = read-only, `mindmap` = map laid alongside, absent
+  = editable). Everything per-note lives in the **note panel**
+  (`components/NotePanel.tsx`, `styles/note-panel.css`): 320px at the right
+  edge — the view switches, 詳細 (created time editable, updated, surroundings),
+  revert / Codex にする (a corvu confirm, `PromoteDialog.tsx`) / delete. Resting
+  the pointer 300ms on the 8px right edge floats it over the body; the toggle
+  beside the title and ⌘. dock it (the body gives up 320px). The pin is the
+  app's (`shell.notePanelPinned`), not the note's. Esc peels one layer: tag
+  input → confirm → history → a floating panel; a docked one stays. On a phone
+  the meta line opens it as its own screen
 - **Codex** (`views/Workspace.tsx` with `kind="codex"`, route `/codex`): the
   same view over `data/codex/`. Three things tell it from a Note: the list row
   carries a folded-corner page with the version count (frame darkens when the
-  draft has moved on); the meta line reads "版 4 から +312 B · 9 か月で 4 回
-  刻んだ"; and a **history panel** (`components/HistoryPanel.tsx`) stands at the
-  right edge, 320px, opened by the 履歴 button / ⌘⇧H / folded by the same, Esc
-  or ×. It never opens on hover — 320px must not appear beside a writing hand
-  in passing. 版を刻む is in the `…` menu (commits **at once**, no message —
-  the toast summarises and offers undo, which deletes the file just written).
+  draft has moved on); the bottom bar reads "版 4 から +312 B"; and the note
+  panel gets a second tab, **履歴** (`components/HistoryPanel.tsx` is its body,
+  topped by "9 か月で 4 回刻んだ"). The tab and ⌘⇧H open it **docked**; the
+  hover flyout always opens on the first tab — 320px of comparison must not
+  appear beside a writing hand in passing. The history tab _is_ compare mode
+  (`historyOpen`). 版を刻む is in the panel and the bar (commits **at once**,
+  no message — the toast summarises and offers undo, which deletes the file
+  just written).
   Opening the history never replaces the body: it becomes read-only and each
   changed block gets a `+`/`−` and a 10% tint in the gutter
   (`lib/diff-marks.ts` → `lib/line-marks-markdown.ts`; deleted lines are struck
-  through where they used to be). On a phone the history is its own screen and
-  a compare bar sits under the body. Versions are never committed
-  automatically. A Note gets "Codex にする" in the same menu; there is no way
-  back
+  through where they used to be). On a phone the history is the panel
+  screen's second tab and a compare bar sits under the body. Versions are
+  never committed automatically. A Note gets "Codex にする" in the same panel;
+  there is no way back
 - **Browse** (`views/Browse.tsx`, `lib/browse.ts`, ⌘F): kind / tag / period
   chips with counts (240px) → the matching records, newest first → the one
   selected, in full. **It has no text search** — typing to find something is
