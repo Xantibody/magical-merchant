@@ -15,7 +15,7 @@ use jni::EnvUnowned;
 use jni::errors::LogErrorAndDefault;
 use jni::objects::{JClass, JString};
 use jni::sys::{JNI_FALSE, JNI_TRUE, jboolean};
-use magical_merchant_core::Source;
+use magical_merchant_core::{Source, VarLocale};
 use std::path::Path;
 
 use crate::device;
@@ -111,17 +111,22 @@ pub extern "system" fn Java_com_magical_1merchant_app_widget_WidgetBridge_readNo
         .resolve::<LogErrorAndDefault>()
 }
 
-/// The templates the widget offers, as JSON. Reads only the templates
-/// directory, so the buttons do not wait on the whole notes tree.
+/// Every template with today's resolved title and whether today's note exists,
+/// as JSON. `locale` is the device's language tag; it only picks the weekday
+/// names, and an unreadable one falls back to English like everywhere else.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_com_magical_1merchant_app_widget_WidgetBridge_readTemplates<'local>(
     mut unowned_env: EnvUnowned<'local>,
     _class: JClass<'local>,
     base_dir: JString<'local>,
+    locale: JString<'local>,
 ) -> JString<'local> {
     unowned_env
         .with_env(|env| -> jni::errors::Result<JString<'local>> {
-            Ok(read_json(env, base_dir, widget_summary::collect_templates))
+            let locale = VarLocale::parse(&locale.try_to_string(env).unwrap_or_default());
+            Ok(read_json(env, base_dir, |dir| {
+                widget_summary::collect_templates(dir, locale)
+            }))
         })
         .resolve::<LogErrorAndDefault>()
 }

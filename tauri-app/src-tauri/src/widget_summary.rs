@@ -12,15 +12,13 @@
 use std::path::Path;
 
 use chrono::Local;
+use magical_merchant_core::VarLocale;
 use magical_merchant_core::utils::markdown::{scrawl_entry_time, strip_scrawl_prefix};
 use magical_merchant_core::utils::tags;
 use serde::Serialize;
 
 /// How many rows fit in the `4x2` Note widget.
 const NOTE_LIMIT: usize = 4;
-/// How many buttons the template widget has. Laid out at a tappable height (46dp),
-/// this is the limit.
-const TEMPLATE_LIMIT: usize = 3;
 /// Tag chips shown on the sheet. More than three do not fit on one line.
 const TAG_LIMIT: usize = 3;
 /// The bar can show one line only. A long record shows its beginning.
@@ -43,7 +41,8 @@ pub(crate) struct NotesData {
     notes: Vec<NoteRow>,
 }
 
-/// What the template widget needs. It reads the template directory only.
+/// What the template widgets need: every template, so a button placed for any one of
+/// them finds it; the 4×2 takes the first four.
 #[derive(Debug, Default, Serialize)]
 pub(crate) struct TemplatesData {
     /// Templates in name order. If the order changed from run to run, pressing the
@@ -65,9 +64,14 @@ struct NoteRow {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct TemplateRow {
     /// The name shown on the button, and also the value put on the deep link.
     name: String,
+    /// The title a note made now would get, variables resolved here.
+    today_title: String,
+    /// Today's note already exists, so a tap opens it rather than making one.
+    has_today: bool,
 }
 
 /// Unreadable trees come back empty rather than as an error: a widget with no
@@ -88,17 +92,21 @@ pub(crate) fn collect_notes(base_dir: &Path) -> NotesData {
     }
 }
 
-/// This is kept apart from the notes list because reading the template directory is
-/// enough. Reading every note here would mean opening every file to draw three
-/// buttons.
-pub(crate) fn collect_templates(base_dir: &Path) -> TemplatesData {
+/// Every template with today's title and whether today's note exists, resolved by core
+/// with the rules a tap follows. `locale` only picks the weekday names; a widget speaks
+/// the device's language, so Kotlin passes that.
+///
+/// "Today's note exists" cannot be told from the templates directory, so this walks
+/// the notes tree once — but only when there is at least one template.
+pub(crate) fn collect_templates(base_dir: &Path, locale: VarLocale) -> TemplatesData {
     TemplatesData {
-        templates: magical_merchant_core::list_templates(base_dir)
+        templates: magical_merchant_core::templates_today(base_dir, locale)
             .unwrap_or_default()
             .into_iter()
-            .take(TEMPLATE_LIMIT)
             .map(|template| TemplateRow {
                 name: template.name,
+                today_title: truncate(&template.today_title, PREVIEW_CHARS),
+                has_today: template.has_today,
             })
             .collect(),
     }
@@ -294,23 +302,40 @@ mod tests {
         assert_eq!(title_of("\n  \n"), UNTITLED);
     }
 
-    /// Laying out as many buttons as there are templates runs them off the widget.
+    fn save_template(tmp: &tempfile::TempDir, name: &str, body: &str) {
+        let filename = magical_merchant_core::NoteFilename::parse(&format!("{name}.md")).unwrap();
+        magical_merchant_core::save_template(tmp.path(), &filename, body, &[]).unwrap();
+    }
+
+    /// A button can be placed for any template, so none is cut off here; the 4×2
+    /// takes its four on the Kotlin side.
     #[test]
-    fn only_the_first_few_templates_fit_on_the_widget() {
+    fn every_template_reaches_the_widget_in_name_order() {
         let tmp = tempfile::TempDir::new().unwrap();
-        for name in ["a", "b", "c", "d"] {
-            let filename =
-                magical_merchant_core::NoteFilename::parse(&format!("{name}.md")).unwrap();
-            magical_merchant_core::save_template(tmp.path(), &filename, "body", &[]).unwrap();
+        for name in ["e", "a", "d", "b", "c"] {
+            save_template(&tmp, name, "body");
         }
 
-        let data = collect_templates(tmp.path());
+        let data = collect_templates(tmp.path(), VarLocale::Ja);
 
-        assert_eq!(data.templates.len(), TEMPLATE_LIMIT);
         // Name order. If the order changed, pressing the same position would create
         // a different note
         let names: Vec<&str> = data.templates.iter().map(|t| t.name.as_str()).collect();
-        assert_eq!(names, ["a", "b", "c"]);
+        assert_eq!(names, ["a", "b", "c", "d", "e"]);
+    }
+
+    /// Kotlin reads these two keys by name and never resolves a variable itself.
+    #[test]
+    fn a_row_carries_todays_title_and_whether_it_exists() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        save_template(&tmp, "daily", "# Daily {{date}}\n\nbody");
+
+        let json = serde_json::to_value(collect_templates(tmp.path(), VarLocale::Ja)).unwrap();
+
+        let today = Local::now().format("%Y-%m-%d").to_string();
+        let row = &json["templates"][0];
+        assert_eq!(row["todayTitle"], format!("Daily {today}"));
+        assert_eq!(row["hasToday"], false);
     }
 
     /// A device with no templates at all is the normal state. Let it draw empty.
@@ -318,6 +343,10 @@ mod tests {
     fn a_tree_without_templates_comes_back_empty() {
         let tmp = tempfile::TempDir::new().unwrap();
 
-        assert!(collect_templates(tmp.path()).templates.is_empty());
+        assert!(
+            collect_templates(tmp.path(), VarLocale::Ja)
+                .templates
+                .is_empty()
+        );
     }
 }
