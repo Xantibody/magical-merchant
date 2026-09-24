@@ -303,7 +303,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   const panelScreenShown = (): boolean => panelScreen() && !twoPane();
 
   /**
-   * Whether the right panel is on screen in a wide window: docked by the pin or ⌘., or floated
+   * Whether the right panel is on screen in a wide window: docked by the toggle or ⌘., or floated
    * by the pointer resting on the edge.
    */
   const panelOpen = (): boolean => twoPane() && (shell.notePanelPinned() || panelHover());
@@ -629,7 +629,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       // previous note's body, the next save would crush another note's backup
       session.drop();
       // The history, the half-typed tag and the confirmation belong to the note that was open.
-      // The pin does not: it is the app's, like the list's
+      // Whether the panel is docked does not: that is the app's, like the list's pin
       setHistoryOpen(false);
       setSelectedVersionId(null);
       setTagEditing(false);
@@ -1482,7 +1482,6 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       tab={panelTab()}
       historyCount={versionRows().length}
       onTab={selectTab}
-      onPin={togglePanel}
       onBack={() => setPanelScreen(false)}
       onPointerEnter={() => clearTimeout(leaveTimer)}
       onPointerLeave={onPanelLeave}

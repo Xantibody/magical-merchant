@@ -28,7 +28,6 @@ interface NotePanelProps {
   /** The version count beside the history tab. */
   historyCount: number;
   onTab: (tab: NotePanelTab) => void;
-  onPin: () => void;
   /** The phone's back arrow. */
   onBack?: () => void;
   onPointerEnter?: () => void;
@@ -155,10 +154,6 @@ export default function NotePanel(props: NotePanelProps): JSX.Element {
   const label = (): string => (props.kind === "codex" ? t().codex.panel : t().notes.panel);
   /** A phone's rows are 48px, and their icons grow with them. */
   const iconSize = (): number => (props.screen ? 18 : 15);
-  const pinLabel = (): string =>
-    props.pinned
-      ? t().notes.panelClose(shortcutLabel("noteActions"))
-      : t().notes.panelOpen(shortcutLabel("noteActions"));
 
   const tabs = (): JSX.Element => (
     <div class="note-panel-tabs" role="tablist">
@@ -183,19 +178,6 @@ export default function NotePanel(props: NotePanelProps): JSX.Element {
         <span class="note-panel-tab-count">{props.historyCount}</span>
       </button>
     </div>
-  );
-
-  const pin = (): JSX.Element => (
-    <button
-      type="button"
-      class="list-pin note-panel-pin"
-      aria-pressed={props.pinned}
-      title={pinLabel()}
-      aria-label={pinLabel()}
-      onClick={() => props.onPin()}
-    >
-      <Icon name={props.pinned ? "push-pin-fill" : "push-pin"} size={14} />
-    </button>
   );
 
   const environment = (): string =>
@@ -374,7 +356,6 @@ export default function NotePanel(props: NotePanelProps): JSX.Element {
             >
               {tabs()}
             </Show>
-            {pin()}
           </div>
         }
       >

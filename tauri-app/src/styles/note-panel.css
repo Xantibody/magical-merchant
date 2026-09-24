@@ -1,6 +1,6 @@
 /* ---- The note's right panel ----
    One node, two presentations. Floating (the pointer rested on the edge) it lies over
-   the body with a shadow; docked (pin, ⌘., the toggle) `.detail-pane--panel` takes its
+   the body with a shadow; docked (the toggle, ⌘.) `.detail-pane--panel` takes its
    320px from the body column and the shadow goes. While folded it stays in the DOM,
    shifted 24px to the right and transparent, so opening and closing read as one slide,
    the same as the list flyout and the history panel before it. */
@@ -74,6 +74,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  /* The height a 26px button would give it, so the label lines up with the list's head
+     rather than riding up now that nothing else in the row sets it */
+  min-height: 44px;
   padding: 14px 10px 4px 20px;
 }
 
@@ -120,11 +123,6 @@
   font-weight: 400;
   color: var(--app-text-faint);
   font-variant-numeric: tabular-nums;
-}
-
-/* The tab row carries its own bottom rule, so the pin sits up with the tabs */
-.note-panel-head--tabs .note-panel-pin {
-  align-self: center;
 }
 
 .note-panel-body {
