@@ -184,6 +184,18 @@
   color: var(--app-text-muted);
 }
 
+/* The title field is shared with Note, where it sits in a flex row beside
+   the panel toggle and so grows sideways (`flex: 1`, no padding). Here it
+   stands alone in the pane's column, where the same `flex: 1` would stretch
+   it down the pane. It heads the body's 640px column instead */
+.templates .note-title-input {
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: calc(640px + 28px * 2);
+  margin-inline: auto;
+  padding: 20px 28px 0;
+}
+
 .templates-name-error {
   max-width: calc(640px + 28px * 2);
   width: 100%;
@@ -423,6 +435,10 @@
 }
 
 @media (max-width: 767px) {
+  .templates .note-title-input {
+    padding: 12px 20px 0;
+  }
+
   /* Only one pane shows at a time. The header appears when the detail is
      opened */
   .detail-meta-bar {

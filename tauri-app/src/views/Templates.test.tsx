@@ -88,6 +88,11 @@ function listPane(container: HTMLElement): HTMLElement {
   return el;
 }
 
+/** Where the text inside a field starts, on the screen. */
+function textLeft(el: HTMLElement): number {
+  return el.getBoundingClientRect().left + Number.parseFloat(getComputedStyle(el).paddingLeft);
+}
+
 describe("Templates", () => {
   beforeEach(() => {
     saved.length = 0;
@@ -384,5 +389,16 @@ describe("Templates on a wide screen", () => {
     expect(style.transform).toBe("none");
     expect(style.pointerEvents).toBe("auto");
     expect(style.position).not.toBe("absolute");
+  });
+
+  // The title is one line heading the body's 640px column, not a field that stretches down
+  // the pane and starts at its left edge
+  it("sets the title as one line over the body's column", async () => {
+    const { container } = await openDaily();
+
+    const title = screen.getByLabelText<HTMLInputElement>("タイトル");
+
+    expect(title.getBoundingClientRect().height).toBeLessThan(60);
+    expect(textLeft(title)).toBeCloseTo(textLeft(bodyInput(container)), 0);
   });
 });
