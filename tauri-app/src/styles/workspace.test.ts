@@ -375,6 +375,45 @@ describe("note head: the title column follows the body", () => {
     expect(leftOf(title)).toBe(leftOf(text));
   });
 
+  // Docking the panel must not throw the text you are reading sideways. Where the room to the
+  // right of the column covers the panel's 320px, the column does not move at all
+  it.each([
+    ["without the map", 1440, false],
+    ["with the map alongside", 1800, true],
+  ])(
+    "keeps the body column in place when the panel docks with room to spare (%s)",
+    async (_name, width, mapOpen) => {
+      await page.viewport(width, 800);
+      const before = leftOf(mountHead(mapOpen).text);
+      const docked = mountHead(mapOpen, true);
+
+      expect(leftOf(docked.text)).toBe(before);
+      expect(docked.text.getBoundingClientRect().width).toBeCloseTo(640, 0);
+      expect(leftOf(docked.title)).toBe(leftOf(docked.text));
+    },
+  );
+
+  // Where that room runs out, the column moves left only as far as it must to end 28px short
+  // of the panel, and no further. Re-centring would move it by half the panel, 160px
+  it.each([
+    ["without the map", 1280, false],
+    ["with the map alongside", 1600, true],
+  ])(
+    "moves the body column only by what the panel cannot take from the margin (%s)",
+    async (_name, width, mapOpen) => {
+      await page.viewport(width, 800);
+      const before = leftOf(mountHead(mapOpen).text);
+      const docked = mountHead(mapOpen, true);
+      const body = element(".detail-body").getBoundingClientRect();
+      const shift = before - leftOf(docked.text);
+
+      expect(shift).toBeGreaterThan(0);
+      expect(shift).toBeLessThan(160);
+      expect(round(docked.text.getBoundingClientRect().right)).toBe(round(body.right - 28));
+      expect(leftOf(docked.title)).toBe(leftOf(docked.text));
+    },
+  );
+
   // Cut at the map's edge, a long title would wrap over a column of empty space. It runs on
   // over the map and stops 28px before the right edge
   it("runs the head over the map, stopping 28px short of it", async () => {
