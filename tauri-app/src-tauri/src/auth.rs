@@ -481,7 +481,7 @@ pub(crate) fn save_sync_config(handle: AppHandle, config: SyncConfig) -> Result<
     let base_dir = crate::app_base_dir(&handle)?;
     let config = SyncConfig {
         workers_url: normalize_workers_url(&config.workers_url)?,
-        auto_sync: config.auto_sync,
+        ..config
     };
     config.save(&base_dir)
 }
