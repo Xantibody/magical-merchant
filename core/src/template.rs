@@ -30,11 +30,6 @@ use vars::resolve_vars;
 #[derive(Debug, Clone, Serialize)]
 pub struct CreatedNote {
     pub path: PathBuf,
-    /// Today's note already existed, so it was opened instead of creating one.
-    ///
-    /// To the caller both are "open", but it is unkind not to convey why pressing does not
-    /// raise the count, so the two are kept distinguishable.
-    pub reused: bool,
 }
 
 pub fn list_templates(base_dir: &Path) -> Result<Vec<TemplateSummary>, CoreError> {
@@ -153,9 +148,9 @@ pub fn list_template_drafts(base_dir: &Path) -> Result<Vec<TemplateSummary>, Cor
 
 /// Create a note from a template.
 ///
-/// If today's note from the same template already exists, return it instead of creating
-/// one. Tapping a daily template from the widget several times a day is normal, and if an
-/// empty "Daily" piled up each time, the template would be the nuisance.
+/// Every call makes a new note, even when one from the same template exists today.
+/// AIDEV-NOTE: reusing today's note was tried and dropped — a tap that sometimes opens
+/// and sometimes creates was the surprise, not the extra note.
 ///
 /// `provenance` is the origin the caller declares. Only the template name is filled in
 /// here: making the caller pass what the filename already gives only adds mistakes.
@@ -170,13 +165,6 @@ pub fn create_note_from_template(
     let name = template_name(filename);
     let now = Local::now();
     let notes = crate::note::list_notes(base_dir)?;
-
-    if let Some(existing) = todays_note(&notes, name, now) {
-        return Ok(CreatedNote {
-            path: existing.path.clone(),
-            reused: true,
-        });
-    }
 
     let prev = previous_note_link(&notes, name);
     let resolved = resolve_vars(&body, now, prev.as_deref(), locale);
@@ -199,30 +187,13 @@ pub fn create_note_from_template(
         },
     )?;
 
-    Ok(CreatedNote {
-        path,
-        reused: false,
-    })
+    Ok(CreatedNote { path })
 }
 
 /// The name recorded in the frontmatter. The filename itself minus the extension.
 fn template_name(filename: &NoteFilename) -> &str {
     let name = filename.as_str();
     name.strip_suffix(".md").unwrap_or(name)
-}
-
-fn todays_note<'a>(
-    notes: &'a [NoteSummary],
-    template: &str,
-    now: chrono::DateTime<Local>,
-) -> Option<&'a NoteSummary> {
-    let today = now.date_naive();
-    notes.iter().find(|note| {
-        note.template.as_deref() == Some(template)
-            && note
-                .time
-                .is_some_and(|time| time.with_timezone(&Local).date_naive() == today)
-    })
 }
 
 /// The `[[ID]]` link to the note last created from the same template.
@@ -262,8 +233,7 @@ mod tests {
         .unwrap();
     }
 
-    /// Write a note with a past date directly. Both `{{prev}}` and "does today's already
-    /// exist" are decided by date, so `create_note_from_template` (creation time is now)
+    /// Write a note with a past date directly. `{{prev}}` is decided by date, so `create_note_from_template` (creation time is now)
     /// cannot set up a note from yesterday or earlier.
     fn seed_note(tmp: &TempDir, filename: &str, template: &str, days_ago: i64) {
         let time = (Local::now() - chrono::Duration::days(days_ago)).fixed_offset();
@@ -492,7 +462,6 @@ mod tests {
         let today = Local::now().format("%Y-%m-%d").to_string();
         assert!(body.contains(&format!("# Daily {today}")));
         assert!(!body.contains("{{"));
-        assert!(!created.reused);
     }
 
     /// The first note has no previous one. No line of only `前回: ` is left.
@@ -575,8 +544,7 @@ mod tests {
         assert!(listed[0].tags.contains(&month));
     }
 
-    /// Without the origin recorded, neither the next note's `{{prev}}` nor the same-day
-    /// check works.
+    /// Without the origin recorded, the next note's `{{prev}}` has nothing to point at.
     #[test]
     fn the_note_records_which_template_it_came_from() {
         let tmp = TempDir::new().unwrap();
@@ -597,51 +565,26 @@ mod tests {
         );
     }
 
-    /// However many times a daily template is tapped in a day, that day has one note.
+    /// A template is a stamp: each tap makes a note, even twice in one day.
     #[test]
-    fn the_same_template_reuses_todays_note() {
+    fn every_tap_creates_a_new_note() {
         let tmp = TempDir::new().unwrap();
         daily(&tmp);
-        let first = create_note_from_template(
-            tmp.path(),
-            &name("daily.md"),
-            &context(),
-            VarLocale::Ja,
-            Provenance::default(),
-        )
-        .unwrap();
+        let run = || {
+            create_note_from_template(
+                tmp.path(),
+                &name("daily.md"),
+                &context(),
+                VarLocale::Ja,
+                Provenance::default(),
+            )
+            .unwrap()
+        };
 
-        let second = create_note_from_template(
-            tmp.path(),
-            &name("daily.md"),
-            &context(),
-            VarLocale::Ja,
-            Provenance::default(),
-        )
-        .unwrap();
+        let first = run();
+        let second = run();
 
-        assert_eq!(second.path, first.path);
-        assert!(second.reused);
-        assert_eq!(list_notes(tmp.path()).unwrap().len(), 1);
-    }
-
-    /// Yesterday's note is not today's. Once the day changes, a new one is created.
-    #[test]
-    fn yesterdays_note_does_not_stand_in_for_todays() {
-        let tmp = TempDir::new().unwrap();
-        daily(&tmp);
-        seed_note(&tmp, "20260830_090000.md", "daily", 1);
-
-        let created = create_note_from_template(
-            tmp.path(),
-            &name("daily.md"),
-            &context(),
-            VarLocale::Ja,
-            Provenance::default(),
-        )
-        .unwrap();
-
-        assert!(!created.reused);
+        assert_ne!(second.path, first.path);
         assert_eq!(list_notes(tmp.path()).unwrap().len(), 2);
     }
 

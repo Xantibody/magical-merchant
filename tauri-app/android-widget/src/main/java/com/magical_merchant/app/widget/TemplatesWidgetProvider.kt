@@ -10,12 +10,8 @@ import com.magical_merchant.app.R
 /**
  * 4c — templates (4x2): the first four by name, as 2x2 tiles.
  *
- * A tap makes the note and opens it. What decides whether a note is created or
- * an existing one is opened lives in core (`create_note_from_template`): the
- * same template tapped twice in a day opens the first note rather than making a
- * second. Kotlin knows nothing about that rule and must not learn it — the
- * in-app menu and this widget have to agree, and they only can if the decision
- * has one home. The tile's "made today" comes from that same rule (`hasToday`).
+ * A tap makes a new note and opens it, through the same core call
+ * (`create_note_from_template`) the in-app menu uses.
  *
  * The tiles are fixed in the layout rather than backed by a RemoteViewsService.
  * There are at most four, and a service exists to keep a long list's read off
@@ -55,8 +51,6 @@ class TemplatesWidgetProvider : AppWidgetProvider() {
                     tile.title,
                     if (template.todayTitle.isEmpty()) View.GONE else View.VISIBLE,
                 )
-                setViewVisibility(tile.create, if (template.hasToday) View.GONE else View.VISIBLE)
-                setViewVisibility(tile.open, if (template.hasToday) View.VISIBLE else View.GONE)
                 setOnClickPendingIntent(
                     tile.root,
                     deepLinkPendingIntent(
@@ -99,8 +93,6 @@ class TemplatesWidgetProvider : AppWidgetProvider() {
         val root: Int,
         val name: Int,
         val title: Int,
-        val create: Int,
-        val open: Int,
     )
 
     private companion object {
@@ -110,29 +102,21 @@ class TemplatesWidgetProvider : AppWidgetProvider() {
                 R.id.widget_template_tile_1,
                 R.id.widget_template_tile_name_1,
                 R.id.widget_template_tile_title_1,
-                R.id.widget_template_tile_create_1,
-                R.id.widget_template_tile_open_1,
             ),
             Tile(
                 R.id.widget_template_tile_2,
                 R.id.widget_template_tile_name_2,
                 R.id.widget_template_tile_title_2,
-                R.id.widget_template_tile_create_2,
-                R.id.widget_template_tile_open_2,
             ),
             Tile(
                 R.id.widget_template_tile_3,
                 R.id.widget_template_tile_name_3,
                 R.id.widget_template_tile_title_3,
-                R.id.widget_template_tile_create_3,
-                R.id.widget_template_tile_open_3,
             ),
             Tile(
                 R.id.widget_template_tile_4,
                 R.id.widget_template_tile_name_4,
                 R.id.widget_template_tile_title_4,
-                R.id.widget_template_tile_create_4,
-                R.id.widget_template_tile_open_4,
             ),
         )
 

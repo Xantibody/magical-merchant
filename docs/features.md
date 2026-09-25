@@ -315,7 +315,7 @@ Four home-screen widgets ship with the APK:
 | Scrawl に記録 | 4×1  | Opens a sheet over the home screen and appends to today's Scrawl through a JNI call into the core — the app is never started |
 | 新しい Note   | 4×1  | `magical-merchant://widget/new-note`                                                                                         |
 | 最近の Note   | 4×2  | The four newest notes; a row opens that note, the header plus makes a new one                                                |
-| テンプレート  | 4×3  | Three templates; a row creates today's note from it (or opens the one that already exists)                                   |
+| テンプレート  | 4×3  | Three templates; a row creates a new note from it                                                                            |
 
 All four are deep links into the app except the capture bar, which is the one
 that exists so that recording costs nothing — no launch, no wait.

@@ -13,7 +13,6 @@
     <color name="widget_on_accent">#FFFFFF</color>
     <!-- Today's note from a template already exists. Same green as
          the app's app-ok token (green-7); used for nothing else. -->
-    <color name="widget_ok">#37B24D</color>
     <!-- The capture sheet's scrim. Drawn as the root view's background rather
          than via windowBackgroundDim, which only applies to floating windows. -->
     <color name="widget_scrim">#73000000</color>

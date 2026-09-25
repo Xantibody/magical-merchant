@@ -399,10 +399,7 @@ fn list_template_drafts(handle: AppHandle) -> Result<Vec<TemplateSummary>, Strin
     magical_merchant_core::list_template_drafts(&base_dir).map_err(|e| e.to_string())
 }
 
-/// Creates a note from a template.
-///
-/// If today's note from the same template already exists, it is returned instead of
-/// creating one (`reused`).
+/// Creates a note from a template. Every call makes a new note.
 ///
 /// It takes `locale` for `{{weekday}}`. Only the names of the days should follow
 /// the device language, and the screen is the only side that knows that language.
@@ -427,10 +424,7 @@ fn create_from_template(
         },
     )
     .map_err(|e| e.to_string())?;
-    // A reused note changes nothing a button shows
-    if !created.reused {
-        widget_updates::refresh_templates();
-    }
+    widget_updates::refresh_templates();
     Ok(created)
 }
 
@@ -667,7 +661,7 @@ fn delete_note(handle: AppHandle, filename: String) -> Result<(), String> {
     let base_dir = app_base_dir(&handle)?;
     let filename = parse_filename(&filename)?;
     magical_merchant_core::delete_note(&base_dir, &filename).map_err(|e| e.to_string())?;
-    // Deleting today's note from a template turns its button back to "make today's"
+    // A template's {{prev}} may have pointed at the deleted note
     widget_updates::refresh_templates();
     Ok(())
 }

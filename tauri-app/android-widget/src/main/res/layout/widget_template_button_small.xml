@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- 4b — one template as a button (1x1).
-     The name's initial on an accent square, a green dot once today's note
-     exists, and the name along the bottom edge. The spacers are FrameLayouts:
+     The name's initial on an accent square and the name along the bottom
+     edge. The spacers are FrameLayouts:
      a bare View is not a class RemoteViews will inflate. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_template_button_root"
@@ -26,19 +26,6 @@
             android:textColor="@color/widget_on_accent"
             android:textSize="13sp"
             android:textStyle="bold" />
-
-        <FrameLayout
-            android:layout_width="0dp"
-            android:layout_height="0dp"
-            android:layout_weight="1" />
-
-        <ImageView
-            android:id="@+id/widget_template_button_dot"
-            android:layout_width="8dp"
-            android:layout_height="8dp"
-            android:contentDescription="@string/widget_template_has_today"
-            android:src="@drawable/widget_ok_dot"
-            android:visibility="gone" />
     </LinearLayout>
 
     <FrameLayout
