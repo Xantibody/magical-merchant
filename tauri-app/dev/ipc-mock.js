@@ -1268,16 +1268,6 @@ const unifiedDiff = (from, to, fromName, toName) => {
       }
       const name = filename.replace(/\.md$/u, "");
 
-      // 同じテンプレの今日のぶんが既にあれば作らない。日付はファイル名の
-      // 先頭 8 桁で見る — 保存している time は UTC で、日をまたぐと食い違う
-      const todayStamp = stampOf(new Date()).slice(0, 8);
-      const existing = [...notes.entries()].find(
-        ([fname, note]) => note.template === name && fname.slice(0, 8) === todayStamp,
-      );
-      if (existing) {
-        return { path: `/mock/data/${existing[0]}`, reused: true };
-      }
-
       const [previous] = [...notes.entries()]
         .filter(([, note]) => note.template === name)
         .toSorted(([a], [b]) => b.localeCompare(a));
@@ -1294,7 +1284,7 @@ const unifiedDiff = (from, to, fromName, toName) => {
         body: resolveVars(template.body, prev, locale),
         template: name,
       });
-      return { path: `/mock/data/${created}`, reused: false };
+      return { path: `/mock/data/${created}` };
     },
     list_glyphs: () =>
       [...glyphs.entries()]

@@ -10,14 +10,13 @@ internal data class NoteRow(val title: String, val filename: String, val date: S
 /**
  * One template as it stands today. [name] is also the deep link's argument.
  *
- * [todayTitle] and [hasToday] come resolved from core — the title a tap would give
- * today's note, and whether that note already exists. Kotlin never resolves a
- * variable or decides "today" itself; the tap and the button have to agree.
+ * [todayTitle] comes resolved from core — the title a tap would give the note
+ * made now. Kotlin never resolves a variable itself; the tap and the button have
+ * to agree.
  */
 internal data class TemplateRow(
     val name: String,
     val todayTitle: String = "",
-    val hasToday: Boolean = false,
 )
 
 /** What the capture bar and the sheet draw. Empty when nothing could be read. */
@@ -189,7 +188,6 @@ internal object WidgetBridge {
             TemplateRow(
                 name = template?.optString("name").orEmpty(),
                 todayTitle = template?.optString("todayTitle").orEmpty(),
-                hasToday = template?.optBoolean("hasToday") ?: false,
             )
         }.filter { it.name.isNotEmpty() }
     }

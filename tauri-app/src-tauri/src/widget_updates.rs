@@ -1,9 +1,9 @@
 //! What the running app asks of the Android home screen widgets.
 //!
 //! The widgets poll every 30 minutes, the platform minimum. A template saved or
-//! a note made from one in the app would otherwise leave a button promising
-//! "make today's" for up to that long after today's note exists, so the commands
-//! that write those tell the widgets at once. Pinning a template button is the
+//! a note made from one in the app would otherwise leave a button showing a stale
+//! title (or a stale `{{prev}}`) for up to that long, so the commands that write
+//! those tell the widgets at once. Pinning a template button is the
 //! other direction: the app asks the launcher to place one.
 //!
 //! Both go through `WidgetUpdates` in Kotlin

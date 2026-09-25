@@ -135,8 +135,6 @@ interface GlyphAsset {
 /** Result of launching a template. */
 interface CreatedNote {
   path: string;
-  /** Today's already existed, so it was opened instead of created. */
-  reused: boolean;
 }
 
 /**

@@ -1,9 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- 4a — one template as a button (2x1).
-     Name, today's title and "made today" on the left; the 42dp square on the
-     right says what a tap does. Both squares are laid out and the provider shows
-     one, so their colours stay theme resources the launcher resolves — a colour
-     set from code would be baked in and miss a switch to the night theme. -->
+     Name and today's title on the left; the 42dp + square on the right says a
+     tap makes a note. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_template_button_root"
     android:layout_width="match_parent"
@@ -41,17 +39,6 @@
             android:textColor="@color/widget_faint"
             android:textSize="11sp"
             android:visibility="gone" />
-
-        <TextView
-            android:id="@+id/widget_template_button_ok"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:maxLines="1"
-            android:text="@string/widget_template_has_today"
-            android:textColor="@color/widget_ok"
-            android:textSize="10.5sp"
-            android:textStyle="bold"
-            android:visibility="gone" />
     </LinearLayout>
 
     <FrameLayout
@@ -68,16 +55,5 @@
             android:padding="11dp"
             android:scaleType="fitCenter"
             android:src="@drawable/ic_plus" />
-
-        <ImageView
-            android:id="@+id/widget_template_button_open"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:background="@drawable/widget_action_open_bg"
-            android:contentDescription="@string/widget_template_action_open"
-            android:padding="11dp"
-            android:scaleType="fitCenter"
-            android:src="@drawable/ic_caret_right"
-            android:visibility="gone" />
     </FrameLayout>
 </LinearLayout>

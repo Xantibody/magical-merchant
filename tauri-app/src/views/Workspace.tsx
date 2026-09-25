@@ -1359,8 +1359,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   };
 
   /**
-   * Creates one note from a template and opens it. If today's note from the same template already
-   * exists, core returns it instead of creating one: only then is the reason nothing was added said.
+   * Creates one note from a template and opens it.
    */
   const createFromTemplate = async (template: Template): Promise<void> => {
     shell.closePopovers();
@@ -1373,13 +1372,8 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       });
       await refetchNotes();
       const filename = created.path.split("/").at(-1);
-      // "Today's one note from the same template" can turn out to be a Codex. Selecting an id that
-      // is not in this surface's list falls back to the first note, so send it by surface
       if (filename) {
         await openFile(filename);
-      }
-      if (created.reused) {
-        shell.showToast(t().templates.reused(template.name));
       }
     } catch {
       shell.showToast(t().templates.createFailed);

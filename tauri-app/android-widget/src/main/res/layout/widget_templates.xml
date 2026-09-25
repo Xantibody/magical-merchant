@@ -3,8 +3,7 @@
      Header in the same 9.5sp/0.08 label style as the other widgets, then the
      first four templates by name as 2x2 tiles: name, today's title, and at the
      foot what a tap does. The first tile is filled so it reads as the primary
-     action. Both state lines are laid out and the provider shows one, so their
-     colours stay theme resources rather than values baked in from code.
+     action.
 
      The rows share the height rather than keeping the handoff's 76dp minimum:
      two 76dp rows plus the header and padding outgrow a two-cell widget on
@@ -98,17 +97,6 @@
                 android:textColor="@color/widget_on_accent"
                 android:textSize="11sp"
                 android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/widget_template_tile_open_1"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:maxLines="1"
-                android:text="@string/widget_template_open_today"
-                android:textColor="@color/widget_on_accent"
-                android:textSize="11sp"
-                android:textStyle="bold"
-                android:visibility="gone" />
         </LinearLayout>
 
         <LinearLayout
@@ -157,17 +145,6 @@
                 android:textColor="@color/widget_faint"
                 android:textSize="11sp"
                 android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/widget_template_tile_open_2"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:maxLines="1"
-                android:text="@string/widget_template_open_today"
-                android:textColor="@color/widget_ok"
-                android:textSize="11sp"
-                android:textStyle="bold"
-                android:visibility="gone" />
         </LinearLayout>
     </LinearLayout>
 
@@ -224,17 +201,6 @@
                 android:textColor="@color/widget_faint"
                 android:textSize="11sp"
                 android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/widget_template_tile_open_3"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:maxLines="1"
-                android:text="@string/widget_template_open_today"
-                android:textColor="@color/widget_ok"
-                android:textSize="11sp"
-                android:textStyle="bold"
-                android:visibility="gone" />
         </LinearLayout>
 
         <LinearLayout
@@ -283,17 +249,6 @@
                 android:textColor="@color/widget_faint"
                 android:textSize="11sp"
                 android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/widget_template_tile_open_4"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:maxLines="1"
-                android:text="@string/widget_template_open_today"
-                android:textColor="@color/widget_ok"
-                android:textSize="11sp"
-                android:textStyle="bold"
-                android:visibility="gone" />
         </LinearLayout>
     </LinearLayout>
 

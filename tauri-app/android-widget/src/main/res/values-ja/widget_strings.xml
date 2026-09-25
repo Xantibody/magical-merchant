@@ -29,15 +29,12 @@
     <string name="widget_templates_widget_label">テンプレート</string>
     <string name="widget_templates_description">テンプレートから Note を作ります</string>
     <string name="widget_templates_empty">テンプレートを作る</string>
-    <string name="widget_template_create_today">＋ 今日の分を作る</string>
-    <string name="widget_template_open_today">今日の分あり · 開く</string>
+    <string name="widget_template_create_today">＋ 作る</string>
 
     <string name="widget_template_button_label">テンプレートのボタン</string>
-    <string name="widget_template_button_description">1 つのテンプレートから今日の Note を作るか、開きます</string>
-    <string name="widget_template_has_today">今日の分あり</string>
+    <string name="widget_template_button_description">1 つのテンプレートから Note を作ります</string>
     <string name="widget_template_choose">テンプレートを選ぶ</string>
-    <string name="widget_template_action_create">今日の Note を作る</string>
-    <string name="widget_template_action_open">今日の Note を開く</string>
+    <string name="widget_template_action_create">Note を作る</string>
 
     <string name="template_configure_title">ボタンにするテンプレート</string>
     <string name="template_configure_display">表示</string>

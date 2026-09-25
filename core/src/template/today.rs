@@ -1,18 +1,17 @@
 //! What each template would do if it were run now.
 //!
-//! The home screen buttons show the title today's note would get and whether today's
-//! note already exists. Both are answered here, with the same rules
-//! `create_note_from_template` follows, so a button never promises a title or a
-//! "create" that the tap then contradicts. The widget never resolves a variable itself.
+//! The home screen buttons show the title a note made now would get. It is answered
+//! here, with the same rules `create_note_from_template` follows, so a button never
+//! promises a title that the tap then contradicts. The widget never resolves a variable itself.
 
 use std::path::Path;
 
 use chrono::{DateTime, Local};
 use serde::Serialize;
 
+use super::previous_note_link;
 use super::repository::Templates;
 use super::vars::{VarLocale, resolve_vars};
-use super::{previous_note_link, todays_note};
 use crate::error::CoreError;
 use crate::note::list_notes;
 use crate::utils::validated::NoteFilename;
@@ -27,14 +26,12 @@ pub struct TemplateToday {
     /// The title a note made now would get: the first line of the resolved body,
     /// heading marks dropped. Empty when the body resolves to nothing.
     pub today_title: String,
-    /// Today's note from this template already exists, so a tap opens it.
-    pub has_today: bool,
 }
 
 /// Every template in name order, resolved against the notes as they are now.
 ///
-/// The notes are listed once for all templates: the "today" check and `{{prev}}` both
-/// need them, and listing per template would read the whole tree once per button.
+/// The notes are listed once for all templates: `{{prev}}` needs them, and listing
+/// per template would read the whole tree once per button.
 pub fn templates_today(
     base_dir: &Path,
     locale: VarLocale,
@@ -68,7 +65,6 @@ fn templates_today_at(
             let prev = previous_note_link(&notes, &summary.name);
             let resolved = resolve_vars(&body, now, prev.as_deref(), locale);
             TemplateToday {
-                has_today: todays_note(&notes, &summary.name, now).is_some(),
                 today_title: first_line(&resolved),
                 filename: summary.filename,
                 name: summary.name,
@@ -91,9 +87,7 @@ fn first_line(body: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::template::{create_note_from_template, save_template};
-    use crate::utils::device::Context;
-    use crate::utils::frontmatter::Provenance;
+    use crate::template::save_template;
     use chrono::TimeZone;
     use tempfile::TempDir;
 
@@ -154,42 +148,6 @@ mod tests {
         assert_eq!(rows[0].today_title, "");
     }
 
-    /// Before the first tap of the day there is nothing to open.
-    #[test]
-    fn a_template_not_run_today_has_no_today() {
-        let tmp = TempDir::new().unwrap();
-        save(&tmp, "daily.md", "# Daily");
-
-        let rows = templates_today(tmp.path(), VarLocale::Ja).unwrap();
-
-        assert!(!rows[0].has_today);
-    }
-
-    /// After a tap, the button says a second tap opens the same note — the same rule
-    /// `create_note_from_template` applies when it reuses today's note.
-    #[test]
-    fn a_template_run_today_has_today() {
-        let tmp = TempDir::new().unwrap();
-        save(&tmp, "daily.md", "# Daily");
-        save(&tmp, "weekly.md", "# Weekly");
-        create_note_from_template(
-            tmp.path(),
-            &name("daily.md"),
-            &Context::default(),
-            VarLocale::Ja,
-            Provenance::default(),
-        )
-        .unwrap();
-
-        let rows = templates_today(tmp.path(), VarLocale::Ja).unwrap();
-
-        let has: Vec<(&str, bool)> = rows
-            .iter()
-            .map(|row| (row.name.as_str(), row.has_today))
-            .collect();
-        assert_eq!(has, [("daily", true), ("weekly", false)]);
-    }
-
     /// Every template comes back, in name order: a button placed for the fifth template
     /// has to find it too.
     #[test]
@@ -223,12 +181,10 @@ mod tests {
             filename: "daily.md".to_string(),
             name: "daily".to_string(),
             today_title: "Daily".to_string(),
-            has_today: true,
         };
 
         let json = serde_json::to_value(&row).unwrap();
 
         assert_eq!(json["todayTitle"], "Daily");
-        assert_eq!(json["hasToday"], true);
     }
 }

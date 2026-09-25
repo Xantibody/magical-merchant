@@ -21,9 +21,8 @@ import com.magical_merchant.app.R
  * [TemplateButtonConfigureActivity] (or handed over by the pin request) and kept
  * in [TemplateButtonSettings].
  *
- * Like the 4x2, a tap only hands `…/widget/template?name=` to the app, and core
- * decides between making today's note and opening it. The button shows which one
- * will happen from the same core rule (`hasToday`), never from its own.
+ * Like the 4x2, a tap only hands `…/widget/template?name=` to the app, which
+ * makes a new note from the template every time.
  */
 class TemplateButtonWidgetProvider : AppWidgetProvider() {
     override fun onUpdate(
@@ -148,10 +147,6 @@ class TemplateButtonWidgetProvider : AppWidgetProvider() {
                 if (showTitle && title.isNotEmpty()) View.VISIBLE else View.GONE,
             )
             setTextViewText(R.id.widget_template_button_title, title)
-            val hasToday = row?.hasToday == true
-            setViewVisibility(R.id.widget_template_button_ok, visibleIf(hasToday))
-            setViewVisibility(R.id.widget_template_button_create, visibleIf(!hasToday))
-            setViewVisibility(R.id.widget_template_button_open, visibleIf(hasToday))
             setOnClickPendingIntent(R.id.widget_template_button_root, tap)
         }
 
@@ -163,7 +158,6 @@ class TemplateButtonWidgetProvider : AppWidgetProvider() {
             val name = row?.name ?: context.getString(R.string.widget_template_choose)
             setTextViewText(R.id.widget_template_button_name, name)
             setTextViewText(R.id.widget_template_button_glyph, initialOf(row?.name ?: "+"))
-            setViewVisibility(R.id.widget_template_button_dot, visibleIf(row?.hasToday == true))
             setOnClickPendingIntent(R.id.widget_template_button_root, tap)
         }
 
@@ -175,8 +169,6 @@ class TemplateButtonWidgetProvider : AppWidgetProvider() {
             val end = name.offsetByCodePoints(0, 1)
             return name.substring(0, end).uppercase()
         }
-
-        private fun visibleIf(shown: Boolean) = if (shown) View.VISIBLE else View.GONE
 
         /**
          * Opens the configuration for this one widget. The request code is the

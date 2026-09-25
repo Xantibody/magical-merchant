@@ -129,7 +129,7 @@ local scan → diff → `POST /sync/bulk`, repeated until nothing is left over.
 - Widget sources live in `tauri-app/android-widget/`, injected by
   `just tauri_app::android-setup` (`apply-widget.go` registers the five
   receivers in the manifest)
-- Template widgets show `todayTitle` / `hasToday` from core's
+- Template widgets show `todayTitle` from core's
   `templates_today` (same helpers as `create_note_from_template`); Kotlin
   never resolves a variable. A template button remembers only the template's
   name per `appWidgetId`. The app redraws template widgets after writing a

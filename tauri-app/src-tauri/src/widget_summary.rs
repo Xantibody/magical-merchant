@@ -70,8 +70,6 @@ struct TemplateRow {
     name: String,
     /// The title a note made now would get, variables resolved here.
     today_title: String,
-    /// Today's note already exists, so a tap opens it rather than making one.
-    has_today: bool,
 }
 
 /// Unreadable trees come back empty rather than as an error: a widget with no
@@ -92,12 +90,9 @@ pub(crate) fn collect_notes(base_dir: &Path) -> NotesData {
     }
 }
 
-/// Every template with today's title and whether today's note exists, resolved by core
-/// with the rules a tap follows. `locale` only picks the weekday names; a widget speaks
-/// the device's language, so Kotlin passes that.
-///
-/// "Today's note exists" cannot be told from the templates directory, so this walks
-/// the notes tree once — but only when there is at least one template.
+/// Every template with today's title, resolved by core with the rules a tap follows.
+/// `locale` only picks the weekday names; a widget speaks the device's language, so
+/// Kotlin passes that.
 pub(crate) fn collect_templates(base_dir: &Path, locale: VarLocale) -> TemplatesData {
     TemplatesData {
         templates: magical_merchant_core::templates_today(base_dir, locale)
@@ -106,7 +101,6 @@ pub(crate) fn collect_templates(base_dir: &Path, locale: VarLocale) -> Templates
             .map(|template| TemplateRow {
                 name: template.name,
                 today_title: truncate(&template.today_title, PREVIEW_CHARS),
-                has_today: template.has_today,
             })
             .collect(),
     }
@@ -324,9 +318,9 @@ mod tests {
         assert_eq!(names, ["a", "b", "c", "d", "e"]);
     }
 
-    /// Kotlin reads these two keys by name and never resolves a variable itself.
+    /// Kotlin reads this key by name and never resolves a variable itself.
     #[test]
-    fn a_row_carries_todays_title_and_whether_it_exists() {
+    fn a_row_carries_todays_title() {
         let tmp = tempfile::TempDir::new().unwrap();
         save_template(&tmp, "daily", "# Daily {{date}}\n\nbody");
 
@@ -335,7 +329,6 @@ mod tests {
         let today = Local::now().format("%Y-%m-%d").to_string();
         let row = &json["templates"][0];
         assert_eq!(row["todayTitle"], format!("Daily {today}"));
-        assert_eq!(row["hasToday"], false);
     }
 
     /// A device with no templates at all is the normal state. Let it draw empty.
