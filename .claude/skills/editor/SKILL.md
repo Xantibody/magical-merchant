@@ -39,6 +39,7 @@ path — `Workspace` itself is lazy, prefetched during idle time from
 | Custom   | code-block-active-plugin                                                           | is-active class on touched code blocks                                                     |
 | Custom   | task-item-plugin                                                                   | click on the box toggles a task item (gfm keeps only the attr)                             |
 | Custom   | list-keymap-plugin                                                                 | Enter after a checked task starts unchecked; Backspace at an item's start lifts it         |
+| Custom   | input-rule-undo-plugin                                                             | Backspace right after `- ` / `1. ` gives the marker back despite trailing                  |
 | Custom   | tab-keymap-plugin                                                                  | Tab / Shift-Tab never leave the editor; in code blocks they indent                         |
 | Custom   | hr-selection-plugin                                                                | after the `---` rule the cursor lands below the rule, not on it                            |
 

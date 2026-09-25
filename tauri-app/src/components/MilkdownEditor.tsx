@@ -27,6 +27,7 @@ import { codeBlockViewPlugin } from "../lib/code-block-view-plugin";
 import { codeBlockActivePlugin } from "../lib/code-block-active-plugin";
 import { taskItemPlugin } from "../lib/task-item-plugin";
 import { listKeymapPlugin } from "../lib/list-keymap-plugin";
+import { inputRuleUndoPlugin } from "../lib/input-rule-undo-plugin";
 import { tabKeymapPlugin } from "../lib/tab-keymap-plugin";
 import { hrSelectionPlugin } from "../lib/hr-selection-plugin";
 import { DIAGRAM_SETTLED_EVENT, hasPendingDiagram } from "../lib/diagram-pending";
@@ -228,6 +229,7 @@ export default function MilkdownEditor(props: MilkdownEditorProps): JSX.Element 
       .use(history)
       .use(clipboard)
       .use(trailing)
+      .use(inputRuleUndoPlugin)
       .use(linkTooltipPlugin)
       .use(exitCodeBlockPlugin)
       .use(codeBlockViewPlugin)

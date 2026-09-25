@@ -352,3 +352,37 @@ describe("Note table editing and inline decorations", () => {
     expect(h.view.state.selection.from).toBe(19);
   });
 });
+
+describe("Note list input rules", () => {
+  afterEach(cleanup);
+
+  it.each(["- ", "1. "])("backspace right after %s gives the typed marker back", async (marker) => {
+    const h = await mount("");
+    h.view.focus();
+    await userEvent.keyboard(marker);
+    expect(h.container.querySelectorAll("li")).toHaveLength(1);
+    await userEvent.keyboard("{Backspace}");
+    expect(h.container.querySelectorAll("li")).toHaveLength(0);
+    expect(h.view.state.doc.childCount).toBe(1);
+    expect(h.view.state.doc.child(0).type.name).toBe("paragraph");
+    // Chromium types a space at the end of a block as a no-break space, and the
+    // rule hands back the text it was given
+    expect(h.view.state.doc.child(0).textContent.replaceAll("\u00A0", " ")).toBe(marker);
+  });
+
+  it("keeps an empty paragraph after a list the input rule made", async () => {
+    const h = await mount("");
+    h.view.focus();
+    await userEvent.keyboard("- ");
+    const last = h.view.state.doc.lastChild;
+    expect(last?.type.name).toBe("paragraph");
+    expect(last?.content.size).toBe(0);
+  });
+
+  it("a Backspace after typing into the item no longer undoes the rule", async () => {
+    const h = await mount("");
+    h.view.focus();
+    await userEvent.keyboard("- a{Backspace}");
+    expect(h.container.querySelectorAll("li")).toHaveLength(1);
+  });
+});
