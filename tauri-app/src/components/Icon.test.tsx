@@ -15,7 +15,7 @@ describe("Icon", () => {
   afterEach(() => cleanup());
 
   it("applies the size prop to the SVG", async () => {
-    const { baseElement } = render(() => <Icon name="lightning" size={16} />);
+    const { baseElement } = render(() => <Icon name="gear" size={16} />);
     const screen = page.elementLocator(baseElement);
 
     await expect.element(screen.locator(".icon svg")).toBeInTheDocument();
@@ -58,12 +58,12 @@ describe("Icon", () => {
   });
 
   it("renders correctly on second render with the same icon name", async () => {
-    const { baseElement: first } = render(() => <Icon name="sun" />);
+    const { baseElement: first } = render(() => <Icon name="gear" />);
     const screen1 = page.elementLocator(first);
     await expect.element(screen1.locator(".icon svg")).toBeInTheDocument();
     cleanup();
 
-    const { baseElement: second } = render(() => <Icon name="sun" />);
+    const { baseElement: second } = render(() => <Icon name="gear" />);
     const screen2 = page.elementLocator(second);
     await expect.element(screen2.locator(".icon svg")).toBeInTheDocument();
   });
