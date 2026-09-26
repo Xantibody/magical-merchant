@@ -9,8 +9,11 @@ check:
   cargo machete
   cargo deny check -W rejected -W unlicensed
 
+# nextest runs each test in its own process, in parallel, and does not run
+# doctests; `cargo test --doc` keeps those
 test:
-  cargo test --workspace
+  cargo nextest run --workspace
+  cargo test --workspace --doc
 
 # rustls が 2 版に解決されると、Android の同期だけが実機で
 # `UnknownPreconfigured` で落ちる: `android_tls` が組む `ClientConfig` と
