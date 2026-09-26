@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vitest";
 import { page } from "vitest/browser";
 import { render, screen, fireEvent, cleanup, waitFor } from "@solidjs/testing-library";
 import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
@@ -158,6 +158,7 @@ describe("Templates", () => {
   afterEach(() => {
     clearMocks();
     cleanup();
+    vi.useRealTimers();
     document.body.innerHTML = "";
   });
 
@@ -517,7 +518,10 @@ describe("Templates", () => {
     expect(saved).toHaveLength(0);
   });
 
-  it("deletes from the more menu", async () => {
+  // The delete is a 5-second tombstone. Each test runs the grace out (or undoes it) while
+  // its own IPC mock is still in place: a timer left behind fires into the next file's run
+  it("deletes from the more menu after the undo window", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     await openDaily();
 
     openMenu();
@@ -525,6 +529,23 @@ describe("Templates", () => {
 
     await waitFor(() => expect(screen.getByText("テンプレートを削除しました")).toBeDefined());
     expect(screen.queryByText("daily")).toBeNull();
+    expect(deleted).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(deleted).toStrictEqual(["daily.md"]);
+  });
+
+  it("keeps the template when undo is pressed in time", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    await openDaily();
+
+    openMenu();
+    fireEvent.click(screen.getByText("削除"));
+    await waitFor(() => expect(screen.queryByText("daily")).toBeNull());
+    fireEvent.click(screen.getByRole("button", { name: "元に戻す" }));
+
+    await waitFor(() => expect(screen.getByText("daily")).toBeDefined());
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(deleted).toHaveLength(0);
   });
 
   it("closes the more menu on Escape", async () => {

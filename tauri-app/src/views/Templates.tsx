@@ -649,6 +649,10 @@ export default function Templates(): JSX.Element {
       setDetailOpen(false);
     });
 
+    // AIDEV-NOTE: this timer outlives the screen on purpose. The undo toast lives in the shell
+    // and stays after the route changes, so the delete has to wait out the same grace there:
+    // clearing it on cleanup would drop a delete the user asked for, and running it at once
+    // would leave an undo that no longer undoes anything. Tests run the grace out themselves
     const commit = setTimeout(() => {
       void (async () => {
         await typedInvoke("delete_template", { filename: row.filename });
