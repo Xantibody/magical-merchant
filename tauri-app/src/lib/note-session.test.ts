@@ -445,6 +445,39 @@ describe("離れる手前", () => {
     expect(h.refreshes).toBe(1);
   });
 
+  /**
+   * The selection can move without passing through here: `selected` falls back to the list's
+   * first row, and a sync that lands a newer note (or deletes this one) moves it. The keystrokes
+   * belong to the note they were typed into, not to whatever is selected when the leave comes
+   */
+  it("writes the typed note even after the selection has already moved", async () => {
+    const h = harness();
+    typed(h, "打った");
+    h.view.selected = OTHER;
+    h.view.loaded = false;
+
+    await h.session.settleEdit();
+
+    expect(h.writes).toStrictEqual([
+      { filename: NOTE.filename, body: "打った", revision: "r-read" },
+    ]);
+  });
+
+  it("does not write the next note's body into it once that body has arrived", async () => {
+    const h = harness();
+    typed(h, "打った");
+    h.session.setRevision(OTHER.filename, "r-other");
+    h.view.selected = OTHER;
+    h.view.body = "# 読んだ本\n\n別のノート";
+    h.view.bodyEpoch += 1;
+
+    await h.session.settleEdit();
+
+    expect(h.writes).toStrictEqual([
+      { filename: NOTE.filename, body: "打った", revision: "r-read" },
+    ]);
+  });
+
   // A write that lands after a rename goes to the path from before the move
   it("waits for a write that is still in flight", async () => {
     const h = harness();
@@ -531,6 +564,20 @@ describe("画面を閉じるとき", () => {
     await vi.advanceTimersByTimeAsync(0);
 
     expect(h.writes.map((write) => write.body)).toStrictEqual(["打った"]);
+  });
+
+  it("writes what was typed into the note it was typed into", async () => {
+    const h = harness();
+    typed(h, "打った");
+    h.view.selected = OTHER;
+    h.view.loaded = false;
+
+    h.session.dispose();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(h.writes).toStrictEqual([
+      { filename: NOTE.filename, body: "打った", revision: "r-read" },
+    ]);
   });
 
   it("writes nothing when the disk is already up to date", async () => {

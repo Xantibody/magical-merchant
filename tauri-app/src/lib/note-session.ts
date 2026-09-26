@@ -120,7 +120,10 @@ export interface NoteSession {
   snapshotFor: (item: SaveTarget) => PendingSave;
   /** Called on every keystroke. What actually runs is the copy from the last keystroke. */
   schedule: () => void;
-  /** Drops the reservation and writes now. Omitting `pending` takes a copy there and then. */
+  /**
+   * Writes now. Omitting `pending` takes a copy there and then, which is right only while the
+   * note typed into is still the one selected; leaving goes through `settleEdit` instead.
+   */
   flush: (pending?: PendingSave) => Promise<void>;
   /** Drops the reservation. Does not write. */
   cancelPending: () => void;
@@ -152,6 +155,13 @@ export function createNoteSession(deps: NoteSessionDeps): NoteSession {
    */
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
   let timerFile: string | undefined;
+  /**
+   * The copy the timer is waiting to write. A leave drains this one, not a fresh copy: by then
+   * the selection may have moved without passing through `settleEdit` (a sync moves the list's
+   * first row, which is what an unchosen selection falls back to), and a copy taken then would
+   * drop these keystrokes or write the next note's body under this note's session.
+   */
+  let scheduled: PendingSave | undefined;
   let draft: PendingSave | undefined;
   /** Saves run in series. Two in flight to the same note leave "last wins" undecided. */
   let saveChain: Promise<void> = Promise.resolve();
@@ -188,6 +198,7 @@ export function createNoteSession(deps: NoteSessionDeps): NoteSession {
       saveTimer = undefined;
     }
     timerFile = undefined;
+    scheduled = undefined;
   };
 
   const drop = (): void => {
@@ -398,13 +409,25 @@ export function createNoteSession(deps: NoteSessionDeps): NoteSession {
     draft = pending;
     cancelPending();
     timerFile = pending?.item.filename;
+    scheduled = pending;
     saveTimer = setTimeout(() => {
       // A fired timer is a finished timer. Without cleanup "a save is waiting" stays
       // raised, and the reload on focus return never gets through again
       saveTimer = undefined;
       timerFile = undefined;
+      scheduled = undefined;
       void flush(pending);
     }, SAVE_DEBOUNCE_MS);
+  };
+
+  /** Writes the copy the timer was waiting on, now. Nothing when no save is waiting. */
+  const drainScheduled = (): Promise<void> | undefined => {
+    if (!saveTimer) {
+      return undefined;
+    }
+    const pending = scheduled;
+    cancelPending();
+    return flush(pending);
   };
 
   /**
@@ -417,10 +440,7 @@ export function createNoteSession(deps: NoteSessionDeps): NoteSession {
   const settleEdit = async (): Promise<void> => {
     // The next write starts a new session. The restore point advances one step at a time
     drop();
-    if (saveTimer) {
-      cancelPending();
-      await flush();
-    }
+    await drainScheduled();
     // The row title is derived from the body's first line. Without a reload only the
     // list keeps the old title
     await refreshListIfStale();
@@ -432,10 +452,7 @@ export function createNoteSession(deps: NoteSessionDeps): NoteSession {
   };
 
   const dispose = (): void => {
-    if (saveTimer) {
-      cancelPending();
-      void flush();
-    }
+    void drainScheduled();
   };
 
   return {

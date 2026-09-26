@@ -27,6 +27,8 @@ import { isStaleSave, typedInvoke } from "../lib/commands";
 import { resolveEditedTime } from "../lib/note-meta";
 import { countTagLists } from "../lib/tags";
 import { refusedForGood } from "../lib/save-refusal";
+import { createNoteBuffer } from "../lib/note-buffer";
+import { createNoteSelection } from "../lib/note-selection";
 import { createNoteSession } from "../lib/note-session";
 import type { SaveStatus } from "../lib/note-session";
 import { getDeviceSignals } from "../lib/client-context";
@@ -47,7 +49,7 @@ import {
 import type { ItemGroup, NoteItem } from "../lib/items";
 import { readNoteContent, viewToFrontmatter } from "../lib/note-view";
 import type { NoteView } from "../lib/note-view";
-import { joinTitle, splitTitle } from "../lib/note-title";
+import { splitTitle } from "../lib/note-title";
 import { formatClock, formatMonthDay } from "../lib/day-labels";
 import { locale, t } from "../lib/i18n";
 import { isImeComposing } from "../lib/ime";
@@ -191,7 +193,6 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   const [searchParams, setSearchParams] = useSearchParams();
   const today = new Date();
 
-  const [selectedId, setSelectedId] = createSignal<string | null>(null);
   const [detailOpen, setDetailOpen] = createSignal(false);
   const [saveStatus, setSaveStatus] = createSignal<SaveStatus>("idle");
   /** The time of the last save that succeeded. The number in "saved at 21:40". */
@@ -203,15 +204,19 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   createEffect(() => shell.setSaveState({ status: saveStatus(), at: savedAt() }));
   onCleanup(() => shell.setSaveState({ status: "idle", at: "" }));
   const [hidden, setHidden] = createSignal<string[]>([]);
-  /**
-   * The body with the leading H1 split off. The editor writes it back on every keystroke, so it is
-   * always the body on screen: the preview at the moment it switches to read-only, and the map,
-   * both get the body as it was typed a moment earlier by reading this.
-   */
-  const [noteBody, setNoteBody] = createSignal("");
-  /** The H1 at the top of the body. The title field edits it, and every save writes it back. */
-  const [noteTitle, setNoteTitle] = createSignal("");
-  const [noteView, setNoteView] = createSignal<NoteView>("editor");
+  /** The open note's title, body and mode as the screen holds them (`lib/note-buffer.ts`). */
+  const buffer = createNoteBuffer();
+  const {
+    body: noteBody,
+    setBody: setNoteBody,
+    title: noteTitle,
+    setTitle: setNoteTitle,
+    view: noteView,
+    setView: setNoteView,
+    loadedId,
+    epoch: bodyEpoch,
+    full: fullBody,
+  } = buffer;
   /**
    * Whether the history is open, that is compare mode. Codex only. The body turns read-only and
    * the difference from the chosen version becomes gutter marks; the body never disappears.
@@ -240,19 +245,6 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   const [tagEditing, setTagEditing] = createSignal(false);
   /** The version just committed. Only that row in the history pops as it enters. */
   const [freshVersionId, setFreshVersionId] = createSignal<string | null>(null);
-  /** The id of the note whose body has finished loading. `?edit=1` autofocus waits on it. */
-  const [loadedId, setLoadedId] = createSignal<string | null>(null);
-  /**
-   * How many times the body was replaced from outside. The editor holds its own document as the
-   * truth, so when the body on screen changes because another note was opened, sync brought one
-   * down, or an edit was reverted, the only option is to rebuild it (inserting the body breaks the
-   * cursor, the selection and the IME). This value is the key it is rebuilt on.
-   *
-   * It is at the same time the name of "the current load session". One value maps to exactly one
-   * `showBody`, that is one load of one note, so while they match, what is on screen is the body
-   * shown then and the keystrokes after it. The backup of a refused save (`typedBody`) reads it.
-   */
-  const [bodyEpoch, setBodyEpoch] = createSignal(1);
   /** What a touch device's toolbar acts on. undefined while no note is open. */
   const [markdownEditor, setMarkdownEditor] = createSignal<Editor | undefined>();
 
@@ -330,37 +322,16 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
 
   const groups = createMemo<ItemGroup[]>(() => groupNotes(visibleItems(), today));
 
-  const selected = createMemo<NoteItem | undefined>(() => {
-    const items = visibleItems();
-    return items.find((item) => item.id === selectedId()) ?? items[0];
-  });
-
-  /**
-   * The id of the note being looked at. Refetching the list rebuilds the NoteItem, so judging
-   * "the note being looked at changed" by item identity would call it changed on every save and
-   * every sync. An id does not move while the note is the same.
-   */
-  const selectedKey = createMemo<string | undefined>(() => selected()?.id);
-
-  /**
-   * Whether the body on screen belongs to the note now selected. Between moving the selection and
-   * the body arriving, the previous note's title and body are still there, and characters typed
-   * into them head for the next note as "the previous note's body plus what was typed". A note
-   * opened for the first time has no revision either, so core cannot stop it. Every entry that
-   * writes or saves checks this.
-   */
-  const loaded = (): boolean => loadedId() === selected()?.id;
+  /** The note being looked at, and whether the body on screen is its (`lib/note-selection.ts`). */
+  const { setSelectedId, selected, selectedKey, loaded } = createNoteSelection(
+    visibleItems,
+    loadedId,
+  );
 
   /** A note only to be read. The frontmatter's `view: preview` says so. */
   const readOnly = createMemo<boolean>(() => noteView() === "preview");
   /** Whether the map is laid alongside. The same `view` key remembers it as `mindmap`. */
   const mapOpen = createMemo<boolean>(() => noteView() === "mindmap");
-
-  /**
-   * The body written to the file. The title field and the editor are shown separately, but saving,
-   * the backup and the mindmap always handle the joined whole.
-   */
-  const fullBody = (): string => joinTitle(noteTitle(), noteBody());
 
   /**
    * The table that resolves `[[ID]]` to a title. The preview looks it up every time it draws.
@@ -573,11 +544,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     // saved would show "saved at 21:40"
     clearTimeout(savedTimer);
     batch(() => {
-      setNoteTitle(title);
-      setNoteBody(body);
-      setNoteView(view);
-      setLoadedId(id);
-      setBodyEpoch((epoch) => epoch + 1);
+      buffer.show(id, title, body, view);
       setSaveStatus("idle");
     });
   };
@@ -641,7 +608,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       // Until it arrives it is "nobody's body yet". Fold the previous note's editor and make the
       // title unwritable too. Standing it up once after the body arrives is lighter than standing
       // an empty editor first and rebuilding it with the body
-      setLoadedId(null);
+      buffer.unload();
       // Opening another note is the person's intent. The pending save has already been flushed by
       // `settleEdit`, so it is fine to give way even with the cursor still in the body
       void session.reload(item, true);
@@ -798,6 +765,8 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
    */
   const commitTitle = async (): Promise<void> => {
     session.cancelPending();
+    // AIDEV-NOTE: a fresh copy, not the one the timer held. The blur comes while this note is
+    // still on screen, and the copy must carry the characters just typed into the title field
     await session.flush();
     await session.refreshListIfStale();
   };
