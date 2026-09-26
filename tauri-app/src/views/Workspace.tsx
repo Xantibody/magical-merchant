@@ -28,6 +28,7 @@ import { resolveEditedTime } from "../lib/note-meta";
 import { countTagLists } from "../lib/tags";
 import { refusedForGood } from "../lib/save-refusal";
 import { createNoteBuffer } from "../lib/note-buffer";
+import { createNoteSelection } from "../lib/note-selection";
 import { createNoteSession } from "../lib/note-session";
 import type { SaveStatus } from "../lib/note-session";
 import { getDeviceSignals } from "../lib/client-context";
@@ -192,7 +193,6 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   const [searchParams, setSearchParams] = useSearchParams();
   const today = new Date();
 
-  const [selectedId, setSelectedId] = createSignal<string | null>(null);
   const [detailOpen, setDetailOpen] = createSignal(false);
   const [saveStatus, setSaveStatus] = createSignal<SaveStatus>("idle");
   /** The time of the last save that succeeded. The number in "saved at 21:40". */
@@ -322,26 +322,11 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
 
   const groups = createMemo<ItemGroup[]>(() => groupNotes(visibleItems(), today));
 
-  const selected = createMemo<NoteItem | undefined>(() => {
-    const items = visibleItems();
-    return items.find((item) => item.id === selectedId()) ?? items[0];
-  });
-
-  /**
-   * The id of the note being looked at. Refetching the list rebuilds the NoteItem, so judging
-   * "the note being looked at changed" by item identity would call it changed on every save and
-   * every sync. An id does not move while the note is the same.
-   */
-  const selectedKey = createMemo<string | undefined>(() => selected()?.id);
-
-  /**
-   * Whether the body on screen belongs to the note now selected. Between moving the selection and
-   * the body arriving, the previous note's title and body are still there, and characters typed
-   * into them head for the next note as "the previous note's body plus what was typed". A note
-   * opened for the first time has no revision either, so core cannot stop it. Every entry that
-   * writes or saves checks this.
-   */
-  const loaded = (): boolean => loadedId() === selected()?.id;
+  /** The note being looked at, and whether the body on screen is its (`lib/note-selection.ts`). */
+  const { setSelectedId, selected, selectedKey, loaded } = createNoteSelection(
+    visibleItems,
+    loadedId,
+  );
 
   /** A note only to be read. The frontmatter's `view: preview` says so. */
   const readOnly = createMemo<boolean>(() => noteView() === "preview");
