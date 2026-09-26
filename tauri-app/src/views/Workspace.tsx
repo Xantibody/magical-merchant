@@ -798,6 +798,8 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
    */
   const commitTitle = async (): Promise<void> => {
     session.cancelPending();
+    // AIDEV-NOTE: a fresh copy, not the one the timer held. The blur comes while this note is
+    // still on screen, and the copy must carry the characters just typed into the title field
     await session.flush();
     await session.refreshListIfStale();
   };
