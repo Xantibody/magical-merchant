@@ -115,6 +115,15 @@
           go
         ];
 
+        # Dependency audits and the test runner, shared by the local shell and CI's
+        # rust shell so `just rust::check` and `just rust::test` run the same everywhere.
+        # All three are prebuilt on cache.nixos.org
+        rustDevTools = with pkgs; [
+          cargo-deny
+          cargo-machete
+          cargo-nextest
+        ];
+
         # `tauri android init` は rustup 前提。Nix がターゲットを持っているので no-op にする
         rustupShimHook = ''
           mkdir -p "$PWD/.nix-shims"
@@ -187,6 +196,7 @@
               ]
               ++ jsToolchain
               ++ commentLint
+              ++ rustDevTools
               ++ linuxTauriDeps;
             shellHook = rustupShimHook;
           }
@@ -209,6 +219,7 @@
             rustToolchainCI
             pkgs.just
           ]
+          ++ rustDevTools
           ++ linuxTauriDeps;
         };
 
