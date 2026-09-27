@@ -13,10 +13,11 @@ use tauri::{AppHandle, Emitter, Manager};
 /// feels live.
 const SETTLE: Duration = Duration::from_millis(150);
 
-/// Calls `on_change` once per settled burst of changes anywhere under `dir`. Watching stops
-/// when the returned value is dropped.
+/// Calls `on_change` once per settled burst of changes in `dir` (and below it, if
+/// `mode` says so). Watching stops when the returned value is dropped.
 pub(crate) fn watch(
     dir: &Path,
+    mode: RecursiveMode,
     mut on_change: impl FnMut() + Send + 'static,
 ) -> notify_debouncer_mini::notify::Result<Debouncer<RecommendedWatcher>> {
     let mut debouncer = new_debouncer(SETTLE, move |result: DebounceEventResult| {
@@ -24,7 +25,7 @@ pub(crate) fn watch(
             on_change();
         }
     })?;
-    debouncer.watcher().watch(dir, RecursiveMode::Recursive)?;
+    debouncer.watcher().watch(dir, mode)?;
     Ok(debouncer)
 }
 
@@ -53,7 +54,7 @@ pub(crate) fn start(handle: &AppHandle) {
         return;
     }
     let emitter = handle.clone();
-    match watch(&data, move || {
+    match watch(&data, RecursiveMode::Recursive, move || {
         let _ = emitter.emit(DATA_CHANGED, ());
     }) {
         Ok(watcher) => {
@@ -77,7 +78,7 @@ mod tests {
     fn a_file_written_under_the_directory_is_reported() {
         let dir = tempfile::tempdir().unwrap();
         let (tx, rx) = mpsc::channel();
-        let _watcher = watch(dir.path(), move || {
+        let _watcher = watch(dir.path(), RecursiveMode::Recursive, move || {
             let _ = tx.send(());
         })
         .unwrap();
