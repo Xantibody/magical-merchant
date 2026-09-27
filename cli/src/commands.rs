@@ -184,6 +184,32 @@ pub(crate) fn put(
     }
 }
 
+// --- follow / paths ---
+
+/// Tells an app started with `--follow` to show this note. The note must exist: a name
+/// that points nowhere would leave the app with nothing to show and no one to tell.
+pub(crate) fn follow(data_dir: &Path, filename: &NoteFilename) -> Result<(), CoreError> {
+    magical_merchant_core::locate_note(data_dir, filename)?;
+    magical_merchant_core::follow::follow(data_dir, filename)
+}
+
+/// Where things are, as one JSON object, so an editor plugin can open the directories
+/// without knowing the layout: `base`, `notes`, `codex`, `follow`. Absolute, since the
+/// plugin's working directory is not this one's.
+pub(crate) fn paths(data_dir: &Path) -> String {
+    use magical_merchant_core::utils::paths;
+    let base = fs::canonicalize(data_dir)
+        .or_else(|_| std::path::absolute(data_dir))
+        .unwrap_or_else(|_| data_dir.to_path_buf());
+    serde_json::json!({
+        "base": base,
+        "notes": paths::notes_dir(&base),
+        "codex": paths::codex_dir(&base),
+        "follow": magical_merchant_core::follow::follow_file(&base),
+    })
+    .to_string()
+}
+
 // --- new ---
 
 /// Turns the body straight into a note. Creates nothing when it is empty.
@@ -663,5 +689,54 @@ mod tests {
         assert_eq!(rows[0]["kind"], "note");
         assert_eq!(rows[0]["tags"], serde_json::json!(["home"]));
         assert_eq!(rows[1]["filename"], older.as_str());
+    }
+
+    // --- follow / paths ---
+
+    #[test]
+    fn following_a_note_names_it_for_the_app() {
+        let tmp = TempDir::new().unwrap();
+        let filename = seed(tmp.path(), "# a\n");
+
+        follow(tmp.path(), &filename).unwrap();
+
+        assert_eq!(
+            magical_merchant_core::follow::followed(tmp.path()),
+            Some(filename)
+        );
+    }
+
+    // A mistyped ID would leave the app showing nothing; refuse it here, where it can be said
+    #[test]
+    fn following_a_note_that_does_not_exist_is_refused() {
+        let tmp = TempDir::new().unwrap();
+        seed(tmp.path(), "# a\n");
+
+        assert!(
+            follow(
+                tmp.path(),
+                &NoteFilename::parse("19990101_000000.md").unwrap()
+            )
+            .is_err()
+        );
+        assert_eq!(magical_merchant_core::follow::followed(tmp.path()), None);
+    }
+
+    #[test]
+    fn the_paths_name_where_notes_codex_and_the_follow_file_live() {
+        let tmp = TempDir::new().unwrap();
+
+        let paths: serde_json::Value = serde_json::from_str(&paths(tmp.path())).unwrap();
+
+        assert_eq!(paths["base"], tmp.path().to_str().unwrap());
+        assert_eq!(
+            paths["notes"],
+            tmp.path().join("data/notes").to_str().unwrap()
+        );
+        assert_eq!(
+            paths["codex"],
+            tmp.path().join("data/codex").to_str().unwrap()
+        );
+        assert_eq!(paths["follow"], tmp.path().join("follow").to_str().unwrap());
     }
 }

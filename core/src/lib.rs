@@ -2,6 +2,7 @@
 // prove it handles the error case.
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
+pub mod follow;
 mod glyph;
 mod note;
 mod scrawl;

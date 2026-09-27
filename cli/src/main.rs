@@ -80,6 +80,16 @@ enum Command {
         #[arg(long)]
         no_copy: bool,
     },
+    /// Show this note in an app started with `--follow`
+    ///
+    /// For an editor beside the app: the app switches to the note without taking the
+    /// keyboard. An app started without `--follow` ignores it.
+    Follow {
+        /// Note filename or stem (`20260320_143045`)
+        note: String,
+    },
+    /// Print where notes, Codex and the follow file live, as one JSON object
+    Paths,
     /// Create a note: from stdin when piped, otherwise in $VISUAL / $EDITOR
     New {
         /// Title to start the note with
@@ -185,6 +195,11 @@ async fn main() -> anyhow::Result<()> {
             };
             quiet_on_closed_pipe(write!(std::io::stdout().lock(), "{out}"))?;
         }
+        Command::Follow { note } => {
+            let filename = commands::resolve(&data_dir, Some(&note))?;
+            commands::follow(&data_dir, &filename)?;
+        }
+        Command::Paths => println!("{}", commands::paths(&data_dir)),
         Command::Put {
             note,
             if_revision,
@@ -433,5 +448,8 @@ mod tests {
         );
         assert!(parse(&["magical-merchant", "show", "--with-revision"]).is_ok());
         assert!(parse(&["magical-merchant", "list", "--json"]).is_ok());
+        assert!(parse(&["magical-merchant", "follow"]).is_err());
+        assert!(parse(&["magical-merchant", "follow", "20260320_143045"]).is_ok());
+        assert!(parse(&["magical-merchant", "paths"]).is_ok());
     }
 }
