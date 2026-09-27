@@ -107,6 +107,20 @@ let
     export PATH="$PWD/.nix-shims:$PATH"
   '';
 
+  # What wrapGAppsHook3 gives the packaged app, for `just dev`. Without the
+  # schemas GTK3 leaves gtk-xft-dpi at -1 on Wayland, WebKitGTK takes that as
+  # the scale, and the page lays out at devicePixelRatio -1/96. Without
+  # glib-networking the webview has no TLS, so the sign-in page cannot load
+  linuxWebviewHook = lib.optionalString pkgs.stdenv.hostPlatform.isLinux ''
+    export XDG_DATA_DIRS="${
+      lib.concatMapStringsSep ":" pkgs.glib.getSchemaDataDirPath [
+        pkgs.gsettings-desktop-schemas
+        pkgs.gtk3
+      ]
+    }''${XDG_DATA_DIRS:+:$XDG_DATA_DIRS}"
+    export GIO_EXTRA_MODULES="${pkgs.glib-networking}/lib/gio/modules''${GIO_EXTRA_MODULES:+:$GIO_EXTRA_MODULES}"
+  '';
+
   androidEnv = {
     ANDROID_HOME = androidSdkRoot;
     NDK_HOME = "${androidSdkRoot}/ndk/${androidNdkVersion}";
@@ -136,7 +150,7 @@ in
         ++ commentLint
         ++ rustDevTools
         ++ linuxTauriDeps;
-      shellHook = rustupShimHook;
+      shellHook = rustupShimHook + linuxWebviewHook;
     }
   );
 
