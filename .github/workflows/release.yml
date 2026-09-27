@@ -51,7 +51,7 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           name: android
-          hash: ${{ hashFiles('flake.lock', 'flake.nix') }}
+          hash: ${{ hashFiles('flake.lock', 'flake.nix', 'nix/devshells.nix') }}
           max-store-size: 6G
           restore-only: "true"
 

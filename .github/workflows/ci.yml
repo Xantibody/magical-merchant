@@ -68,6 +68,7 @@ jobs:
               - 'Cargo.lock'
               - 'deny.toml'
               - 'flake.nix'
+              - 'nix/devshells.nix'
               - 'flake.lock'
               - 'justfile'
               - 'rust/justfile'
@@ -90,11 +91,13 @@ jobs:
               - 'tauri-app/vitest.config.ts'
               - 'tauri-app/justfile'
               - 'flake.nix'
+              - 'nix/devshells.nix'
               - 'flake.lock'
             workers:
               - 'workers/**'
               - '.oxlintrc.json'
               - 'flake.nix'
+              - 'nix/devshells.nix'
               - 'flake.lock'
             nix-package:
               - 'tauri-app/pnpm-lock.yaml'
@@ -146,6 +149,7 @@ jobs:
               - 'tauri-app/justfile'
               - 'Cargo.lock'
               - 'flake.nix'
+              - 'nix/devshells.nix'
               - 'flake.lock'
             # Everything the comments job reads
             comments:
@@ -160,6 +164,7 @@ jobs:
               - 'scripts/comments-changed/**'
               - 'justfile'
               - 'flake.nix'
+              - 'nix/devshells.nix'
               - 'flake.lock'
 
   rust:
@@ -180,7 +185,7 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           name: rust
-          hash: ${{ hashFiles('flake.lock', 'flake.nix') }}
+          hash: ${{ hashFiles('flake.lock', 'flake.nix', 'nix/devshells.nix') }}
       - uses: actions/cache/restore@v6
         id: cargo-cache
         with:
@@ -213,7 +218,7 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           name: frontend
-          hash: ${{ hashFiles('flake.lock', 'flake.nix') }}
+          hash: ${{ hashFiles('flake.lock', 'flake.nix', 'nix/devshells.nix') }}
       - name: Get pnpm store directory
         id: pnpm-cache
         run: echo "STORE_PATH=$(nix develop .#frontend --command pnpm store path)" >> "$GITHUB_OUTPUT"
@@ -246,7 +251,7 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           name: workers
-          hash: ${{ hashFiles('flake.lock', 'flake.nix') }}
+          hash: ${{ hashFiles('flake.lock', 'flake.nix', 'nix/devshells.nix') }}
           max-store-size: 2G
       - name: Get pnpm store directory
         id: pnpm-cache
@@ -294,7 +299,7 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           name: android
-          hash: ${{ hashFiles('flake.lock', 'flake.nix') }}
+          hash: ${{ hashFiles('flake.lock', 'flake.nix', 'nix/devshells.nix') }}
           max-store-size: 6G
       # rust ジョブとキーを分ける。同じ target/ でもホスト向けと Android 向けで
       # 中身が入れ替わり、共有すると毎回どちらかが作り直しになる
@@ -428,7 +433,7 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           name: format
-          hash: ${{ hashFiles('flake.lock', 'flake.nix') }}
+          hash: ${{ hashFiles('flake.lock', 'flake.nix', 'nix/treefmt.nix') }}
           max-store-size: 2G
       - run: nix fmt -- --fail-on-change
 
@@ -451,7 +456,7 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           name: comments
-          hash: ${{ hashFiles('flake.lock', 'flake.nix') }}
+          hash: ${{ hashFiles('flake.lock', 'flake.nix', 'nix/devshells.nix') }}
           max-store-size: 2G
       - run: nix develop .#comments --command just comments-changed HEAD^1
 
