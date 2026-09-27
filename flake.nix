@@ -44,6 +44,21 @@
           )
         );
       treefmtFor = pkgs: treefmt-nix.lib.evalModule pkgs ./nix/treefmt.nix;
+      # Wraps a module with this flake's packages as the defaults. nixpkgs has
+      # no such package, so mkPackageOption's own default fails to evaluate
+      withPackages =
+        module: namespace:
+        { pkgs, lib, ... }:
+        let
+          packages = self.packages.${pkgs.stdenv.hostPlatform.system};
+        in
+        {
+          imports = [ module ];
+          ${namespace}.magical-merchant = {
+            package = lib.mkDefault packages.default;
+            cli.package = lib.mkDefault packages.cli;
+          };
+        };
     in
     {
       packages = eachSystem (pkgs: rec {
@@ -84,24 +99,21 @@
       );
 
       formatter = eachSystem (pkgs: (treefmtFor pkgs).config.build.wrapper);
-      checks = eachSystem (pkgs: {
-        formatting = (treefmtFor pkgs).config.build.check self;
-      });
+      checks = eachSystem (
+        pkgs:
+        {
+          formatting = (treefmtFor pkgs).config.build.check self;
+        }
+        // pkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+          # Boots a VM, so `nix flake check` wants KVM on Linux
+          nixos-module = pkgs.testers.runNixOSTest (import ./nix/nixos-test.nix { inherit self; });
+        }
+      );
 
       devShells = eachSystem (pkgs: import ./nix/devshells.nix { inherit pkgs; });
 
-      # Plugs this flake's packages in as the defaults. nixpkgs has no such
-      # package, so mkPackageOption's own default fails to evaluate
-      darwinModules.default =
-        { pkgs, lib, ... }:
-        {
-          imports = [ ./nix/darwin-module.nix ];
-          services.magical-merchant.package =
-            lib.mkDefault
-              self.packages.${pkgs.stdenv.hostPlatform.system}.default;
-          services.magical-merchant.cli.package =
-            lib.mkDefault
-              self.packages.${pkgs.stdenv.hostPlatform.system}.cli;
-        };
+      darwinModules.default = withPackages ./nix/darwin-module.nix "services";
+      nixosModules.default = withPackages ./nix/nixos-module.nix "services";
+      homeManagerModules.default = withPackages ./nix/home-module.nix "programs";
     };
 }
