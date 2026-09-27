@@ -39,6 +39,7 @@ jobs:
       workers: ${{ steps.filter.outputs.workers || 'true' }}
       nix-package: ${{ steps.filter.outputs.nix-package || 'true' }}
       desktop-package: ${{ steps.filter.outputs.desktop-package || 'true' }}
+      nixos-module: ${{ steps.filter.outputs.nixos-module || 'true' }}
       nix-mcp: ${{ steps.filter.outputs.nix-mcp || 'true' }}
       android: ${{ steps.filter.outputs.android || 'true' }}
       comments: ${{ steps.filter.outputs.comments || 'true' }}
@@ -128,6 +129,12 @@ jobs:
               - 'nix/cli.nix'
               - 'flake.nix'
               - 'flake.lock'
+            # Only the Linux job boots the module's VM test, so a module
+            # change must not start the 10x-rate macOS build
+            nixos-module:
+              - 'nix/module-options.nix'
+              - 'nix/nixos-module.nix'
+              - 'nix/nixos-test.nix'
             nix-mcp:
               - 'nix/cli.nix'
               - 'cli/**'
@@ -394,7 +401,7 @@ jobs:
   # never rebuilt, and pushed to from main only
   nix-package-linux:
     needs: changes
-    if: needs.changes.outputs.desktop-package == 'true'
+    if: needs.changes.outputs.desktop-package == 'true' || needs.changes.outputs.nixos-module == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -414,6 +421,15 @@ jobs:
           out=$(nix build .#default --no-link --print-out-paths)
           test -x "$out/bin/magical-merchant-app"
           grep -q 'x-scheme-handler/magical-merchant' "$out"/share/applications/*.desktop
+      # The runner has /dev/kvm but only root may open it; nix enables its
+      # kvm system feature, which the VM test requires, once it can
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: the NixOS module installs the apps and sync-config.json
+        run: nix build .#checks.x86_64-linux.nixos-module --no-link -L
       - name: publish the app and the CLI
         if: github.ref == 'refs/heads/main'
         run: nix build .#default .#cli --no-link --print-out-paths | cachix push magical-merchant
