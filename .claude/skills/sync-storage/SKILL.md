@@ -34,6 +34,9 @@ description: Note/Scrawl storage invariants, sync protocol, widgets and deep lin
   The desktop app watches `data/` (`src-tauri/src/watch.rs` → `data-changed`
   → `shell.refreshData()`), but that only rereads a note nobody is typing
   in — this guard is still the only protection against overwriting
+- `<base>/follow` (core `follow`) names the note an editor beside the app
+  is on. It is this machine's state: outside `data/`, never synced, and
+  read only by an app started with `--follow`
 - **Tags** come from the body's `#記法`. Identity is the ASCII-lowercased form
   (`#Rust` = `#rust`; Japanese is left alone) and code — fences and spans — is
   not scanned. The same rule lives twice: `core/src/utils/tags.rs` and

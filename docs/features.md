@@ -332,6 +332,9 @@ magical-merchant edit 20260320_143045  # opens it in $VISUAL / $EDITOR
 magical-merchant edit --last           # the newest note; `edit` never guesses
 magical-merchant show 20260320_143045 --with-revision   # revision on line 1, then the body
 magical-merchant put 20260320_143045 --if-revision <rev> < body.md   # prints the next revision
+magical-merchant list --json          # one JSON object per note, for scripts and pickers
+magical-merchant follow 20260320_143045   # an app started with --follow shows this note
+magical-merchant paths                # where notes, Codex and the follow file live, as JSON
 echo "# Idea" | magical-merchant new   # or: magical-merchant new --title Idea
 magical-merchant import --time 2019-05-04T12:00:00+09:00 < old-note.md  # keeps that time as the ID
 magical-merchant scrawl add -m "shipped it #work"   # capture; without -m, opens the editor
@@ -359,6 +362,12 @@ the body did not change, and `--no-copy` skips the `history/` copy for the
 writes after a session's first. On the desktop the app watches `data/`, so a
 note written this way changes on screen beside the editor, unless you are
 typing in the app at that moment.
+
+Started with `--follow` (or `MAGICAL_MERCHANT_FOLLOW=1`), the desktop app also
+shows whichever note `follow` last named, and switches when it changes —
+without raising the window, so the keyboard stays with the editor. The name
+lives in `<data dir>/follow`, outside `data/`, and never syncs; an app started
+without the flag ignores it.
 
 `import` is the way in for notes written somewhere else. A note's filename
 is its creation time and its permanent ID, so anything moved in would

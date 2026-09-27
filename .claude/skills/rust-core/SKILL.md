@@ -48,6 +48,10 @@ note open (magical-merchant.vim): `put` takes the body on stdin and the
 revision as a required flag, prints the next revision, skips an unchanged
 body, and `--no-copy` goes through `notes::overwrite_without_copy` so a
 session keeps one `history/` copy rather than one per save.
+`list --json` prints the MCP `list_notes` row shape as JSON Lines; `paths`
+prints `base` / `notes` / `codex` / `follow`; `follow <id>` writes core
+`follow` (`<base>/follow`), which the app reads only under `--follow`
+(`src-tauri/src/follow.rs` → `follow-note`, plus `followed_note` at start).
 The editor launch is a closure parameter so the flows are unit-tested
 without an editor. `scrawl.rs` holds `scrawl add / show / dates`;
 `add` only appends (same core call as the Android widget), so it carries
