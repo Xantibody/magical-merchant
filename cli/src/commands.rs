@@ -54,6 +54,19 @@ pub(crate) fn list(data_dir: &Path) -> Result<Vec<Row>, CoreError> {
         .collect())
 }
 
+/// JSON Lines, one note per line, newest first, in the MCP `list_notes` row shape. For
+/// scripts and editor pickers, where a title with spaces must not shift a column.
+pub(crate) fn list_json(data_dir: &Path) -> anyhow::Result<String> {
+    let mut out = String::new();
+    for summary in magical_merchant_core::list_notes(data_dir)? {
+        out.push_str(&serde_json::to_string(&crate::output::NoteInfo::from(
+            summary,
+        ))?);
+        out.push('\n');
+    }
+    Ok(out)
+}
+
 pub(crate) fn show(data_dir: &Path, filename: &NoteFilename) -> Result<String, CoreError> {
     Ok(notes::read(data_dir, filename)?.body)
 }
@@ -626,5 +639,29 @@ mod tests {
             assert!(matches!(err, WriteError::Empty), "keep_copy={keep_copy}");
             assert_eq!(body_of(tmp.path(), &filename), "before\n");
         }
+    }
+
+    // --- list --json ---
+
+    // One object per line, the same fields as the MCP `list_notes` rows, so a title with
+    // spaces or a tag list cannot shift a column the way the plain listing can
+    #[test]
+    fn the_json_listing_is_one_object_per_note_newest_first() {
+        let tmp = TempDir::new().unwrap();
+        let older = seed(tmp.path(), "# Older one\n\nbody");
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+        let newer = seed(tmp.path(), "# Newer  with  spaces\n\nbody #home");
+
+        let out = list_json(tmp.path()).unwrap();
+        let rows: Vec<serde_json::Value> = out
+            .lines()
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect();
+
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0]["filename"], newer.as_str());
+        assert_eq!(rows[0]["kind"], "note");
+        assert_eq!(rows[0]["tags"], serde_json::json!(["home"]));
+        assert_eq!(rows[1]["filename"], older.as_str());
     }
 }

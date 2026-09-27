@@ -38,7 +38,11 @@ struct Cli {
 #[derive(Subcommand)]
 enum Command {
     /// List notes, newest first
-    List,
+    List {
+        /// One JSON object per line, the MCP `list_notes` row shape
+        #[arg(long)]
+        json: bool,
+    },
     /// Print a note's Markdown body
     Show {
         /// Note filename or stem (`20260320_143045`); the newest note if omitted
@@ -168,20 +172,7 @@ async fn main() -> anyhow::Result<()> {
     let _ = magical_merchant_core::migrate_scrawl_dir(&data_dir);
 
     match cli.command {
-        Command::List => {
-            let mut out = std::io::stdout().lock();
-            for row in commands::list(&data_dir)? {
-                let tags: Vec<String> = row.tags.iter().map(|t| format!("#{t}")).collect();
-                quiet_on_closed_pipe(writeln!(
-                    out,
-                    "{}  {}  {}  {}",
-                    row.filename.trim_end_matches(".md"),
-                    row.time,
-                    row.title,
-                    tags.join(" ")
-                ))?;
-            }
-        }
+        Command::List { json } => run_list(&data_dir, json)?,
         Command::Show {
             note,
             with_revision,
@@ -260,6 +251,29 @@ async fn main() -> anyhow::Result<()> {
             let running = server.serve(transport).await?;
             running.waiting().await?;
         }
+    }
+    Ok(())
+}
+
+fn run_list(data_dir: &Path, json: bool) -> anyhow::Result<()> {
+    let mut out = std::io::stdout().lock();
+    if json {
+        return Ok(quiet_on_closed_pipe(write!(
+            out,
+            "{}",
+            commands::list_json(data_dir)?
+        ))?);
+    }
+    for row in commands::list(data_dir)? {
+        let tags: Vec<String> = row.tags.iter().map(|t| format!("#{t}")).collect();
+        quiet_on_closed_pipe(writeln!(
+            out,
+            "{}  {}  {}  {}",
+            row.filename.trim_end_matches(".md"),
+            row.time,
+            row.title,
+            tags.join(" ")
+        ))?;
     }
     Ok(())
 }
@@ -418,5 +432,6 @@ mod tests {
             .is_ok()
         );
         assert!(parse(&["magical-merchant", "show", "--with-revision"]).is_ok());
+        assert!(parse(&["magical-merchant", "list", "--json"]).is_ok());
     }
 }
