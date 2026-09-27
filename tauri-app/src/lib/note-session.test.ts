@@ -281,6 +281,26 @@ describe("読み直し", () => {
     expect(h.shown).toHaveLength(1);
   });
 
+  // The file watcher also reports the app's own saves. Rebuilding the editor for them would
+  // throw the caret away for nothing
+  it("leaves a body on screen alone when the disk still has the revision it shows", async () => {
+    const h = harness();
+    h.session.setRevision(NOTE.filename, "r-disk");
+
+    await expect(h.session.reload(NOTE)).resolves.toBe(true);
+    expect(h.shown).toStrictEqual([]);
+  });
+
+  // Coming back to a note: the old fingerprint is remembered, but the screen shows nothing yet
+  it("still puts a body up when the screen has not shown it", async () => {
+    const h = harness();
+    h.session.setRevision(NOTE.filename, "r-disk");
+    h.view.loaded = false;
+
+    await expect(h.session.reload(NOTE)).resolves.toBe(true);
+    expect(h.shown).toHaveLength(1);
+  });
+
   // Stepping quickly down the list, a slow read overtakes a fast one and arrives out of order
   it("drops an answer for a note that is no longer selected", async () => {
     const h = harness();

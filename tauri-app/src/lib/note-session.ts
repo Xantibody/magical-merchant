@@ -224,6 +224,11 @@ export function createNoteSession(deps: NoteSessionDeps): NoteSession {
       ) {
         return false;
       }
+      // The file watcher reports the app's own saves too. The body on screen already is the disk
+      // body, and putting it up again would rebuild the editor and lose the caret
+      if (!force && deps.loaded() && revisions.get(item.filename) === content.revision) {
+        return true;
+      }
       revisions.set(item.filename, content.revision);
       // Body and mode go out as a pair. Split, the wrong mode is drawn for a moment
       const titled = splitTitle(content.body);
