@@ -35,6 +35,29 @@ nix build .#default
 open result/Applications/Magical\ Merchant.app
 ```
 
+## Linux — Nix
+
+```sh
+# Install into your Nix profile (adds magical-merchant-app and its .desktop entry)
+nix profile install github:Xantibody/magical-merchant
+
+# …or just run it
+nix run github:Xantibody/magical-merchant
+```
+
+CI publishes the x86_64-linux build of the app and the CLI to the same Cachix
+cache as above; add it to your Nix configuration the same way. aarch64-linux
+evaluates but is not built by CI, so it builds locally.
+
+The package is the `.deb` Tauri produces, unpacked and wrapped: the launcher
+carries the GSettings schemas and the GIO TLS module WebKitGTK needs, so it
+does not depend on what your desktop happens to export. The `.desktop` entry
+also registers the `magical-merchant://` scheme, which your launcher and
+browser see once the profile's `share/applications` is on `XDG_DATA_DIRS`
+(NixOS and home-manager put it there). Signing in stores the token through the
+Secret Service, so a keyring daemon (GNOME Keyring, KWallet, KeePassXC) must
+be running.
+
 ## macOS / Linux — CLI
 
 The terminal client (`list` / `show` / `edit` / `new` / `import` /
@@ -54,7 +77,7 @@ whichever one arrives second gives up (`busy`) instead of overwriting the
 other's state.
 
 Signing in stays in the app. The CLI reads the token the app saved (the
-Keychain on macOS) and never opens a browser of its own; once that login has
+Keychain on macOS, the Secret Service on Linux) and never opens a browser of its own; once that login has
 expired it stops before touching the network and tells you to log in again
 from the app's Settings.
 

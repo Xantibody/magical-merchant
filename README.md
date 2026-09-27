@@ -48,7 +48,7 @@ Everything is a plain Markdown file on disk. See the
 ## Quick Start
 
 ```sh
-# Install on macOS (Nix)
+# Install on macOS or Linux (Nix)
 nix profile install github:Xantibody/magical-merchant
 ```
 
@@ -66,13 +66,13 @@ More options (nix-darwin module, manual build, Android APK) are in
 
 ## Documentation
 
-| Page                                 | Contents                                                |
-| ------------------------------------ | ------------------------------------------------------- |
-| [Feature tour](docs/features.md)     | Every surface, with screenshots                         |
-| [Architecture](docs/introduction.md) | System overview, design decisions, data flow            |
-| [Development](docs/development.md)   | DevShell, task runner, browser harness, formatting      |
-| [Install](docs/install.md)           | macOS (Nix / nix-darwin / manual), Android APK, widgets |
-| [Sync backend](docs/sync.md)         | Worker + R2 deployment and the sync protocol            |
+| Page                                 | Contents                                                             |
+| ------------------------------------ | -------------------------------------------------------------------- |
+| [Feature tour](docs/features.md)     | Every surface, with screenshots                                      |
+| [Architecture](docs/introduction.md) | System overview, design decisions, data flow                         |
+| [Development](docs/development.md)   | DevShell, task runner, browser harness, formatting                   |
+| [Install](docs/install.md)           | macOS (Nix / nix-darwin / manual), Linux (Nix), Android APK, widgets |
+| [Sync backend](docs/sync.md)         | Worker + R2 deployment and the sync protocol                         |
 
 ## Tech Stack
 
