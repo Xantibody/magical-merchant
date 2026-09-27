@@ -1034,6 +1034,8 @@ const unifiedDiff = (from, to, fromName, toName) => {
       const body = notes.get(filename)?.body ?? "";
       return { body, revision: revisionOf(body) };
     },
+    // The browser harness is never started to follow an editor
+    followed_note: () => null,
     /** @param {{ filename: string }} args */
     read_note_meta: async ({ filename }) => {
       await delay(30);

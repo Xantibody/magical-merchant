@@ -13,6 +13,8 @@ mod android_tls;
 mod auth;
 mod device;
 mod export;
+#[cfg(desktop)]
+mod follow;
 #[cfg(target_os = "macos")]
 mod location;
 mod place;
@@ -713,6 +715,19 @@ fn store_token_from_urls(handle: &AppHandle, urls: &[url::Url]) {
     });
 }
 
+/// The note to open at startup when the app was started to follow an editor. Mobile never
+/// follows.
+#[tauri::command]
+fn followed_note(handle: AppHandle) -> Option<String> {
+    #[cfg(desktop)]
+    return follow::followed_note(&handle);
+    #[cfg(mobile)]
+    {
+        let _ = handle;
+        None
+    }
+}
+
 // `mobile_entry_point` fixes the signature to `fn run()`, so a failed startup
 // has nowhere to be returned to — panicking is the only way to report it.
 // `generate_context!` embeds every plugin's permission tables in one value;
@@ -776,6 +791,9 @@ pub fn run() {
             // no second writer on the device, and its `app_data_dir` must stay off this thread
             #[cfg(desktop)]
             watch::start(app.handle());
+            // Started with --follow, the app shows the note an editor beside it is on
+            #[cfg(desktop)]
+            follow::start(app.handle());
 
             // The geocoder and the certificate verifier need a Context. The Activity
             // can be destroyed, so hold an Application Context of our own while one
@@ -795,6 +813,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            followed_note,
             save_quick_capture,
             create_draft,
             promote_note_to_codex,

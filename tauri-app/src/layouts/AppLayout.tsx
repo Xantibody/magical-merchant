@@ -421,6 +421,24 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
       }
     })();
     onCleanup(() => unlistenData?.());
+
+    // Started with --follow, the app shows the note an editor beside it is on. The route does
+    // the rest, as for a widget row: a Codex ID is moved to `/codex` by the Workspace. Nothing
+    // here focuses the window; the keyboard stays with the editor
+    const follow = (filename: string): void => navigate(noteRoute("note", filename));
+    let unlistenFollow: UnlistenFn | undefined;
+    void (async () => {
+      try {
+        unlistenFollow = await listen<string>(EVENTS.FOLLOW_NOTE, (e) => follow(e.payload));
+        const first = await typedInvoke("followed_note");
+        if (first) {
+          follow(first);
+        }
+      } catch {
+        // No Tauri (browser harness, tests)
+      }
+    })();
+    onCleanup(() => unlistenFollow?.());
   });
 
   return (

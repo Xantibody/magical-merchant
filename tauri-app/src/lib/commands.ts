@@ -240,6 +240,8 @@ interface CommandMap {
   list_notes: { args: void; result: Note[] };
   read_note: { args: { filename: string }; result: NoteRead };
   read_note_meta: { args: { filename: string }; result: NoteMeta };
+  /** The note an editor beside the app is on, when started with `--follow`; otherwise null. */
+  followed_note: { args: void; result: string | null };
   update_note_meta: { args: { filename: string; time: string; tags: string[] }; result: void };
   set_note_view: { args: { filename: string; view: string | null }; result: void };
   /** Rewrites the link to the entry it was promoted from. `null` cuts the tie. */
