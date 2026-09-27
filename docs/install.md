@@ -35,6 +35,29 @@ nix build .#default
 open result/Applications/Magical\ Merchant.app
 ```
 
+## Linux — Nix
+
+```sh
+# Install into your Nix profile (adds magical-merchant-app and its .desktop entry)
+nix profile install github:Xantibody/magical-merchant
+
+# …or just run it
+nix run github:Xantibody/magical-merchant
+```
+
+CI publishes the x86_64-linux build of the app and the CLI to the same Cachix
+cache as above; add it to your Nix configuration the same way. aarch64-linux
+evaluates but is not built by CI, so it builds locally.
+
+The package is the `.deb` Tauri produces, unpacked and wrapped: the launcher
+carries the GSettings schemas and the GIO TLS module WebKitGTK needs, so it
+does not depend on what your desktop happens to export. The `.desktop` entry
+also registers the `magical-merchant://` scheme, which your launcher and
+browser see once the profile's `share/applications` is on `XDG_DATA_DIRS`
+(NixOS and home-manager put it there). Signing in stores the token through the
+Secret Service, so a keyring daemon (GNOME Keyring, KWallet, KeePassXC) must
+be running.
+
 ## macOS / Linux — CLI
 
 The terminal client (`list` / `show` / `edit` / `new` / `import` /
@@ -54,7 +77,7 @@ whichever one arrives second gives up (`busy`) instead of overwriting the
 other's state.
 
 Signing in stays in the app. The CLI reads the token the app saved (the
-Keychain on macOS) and never opens a browser of its own; once that login has
+Keychain on macOS, the Secret Service on Linux) and never opens a browser of its own; once that login has
 expired it stops before touching the network and tells you to log in again
 from the app's Settings.
 
@@ -94,6 +117,67 @@ and the CLI needs no configuration of its own.
 Do not add `inputs.magical-merchant.inputs.nixpkgs.follows` to that input: the
 packages would then be built against your `nixpkgs`, which is not what CI built,
 and the binary cache above would never hit. Let the flake keep its own lock.
+
+## Linux — NixOS module
+
+The same options as the nix-darwin module, plus `user`: a NixOS system has no
+single console user to guess, so name the one whose data directory gets
+`sync-config.json`.
+
+```nix
+# flake.nix
+{
+  inputs.magical-merchant.url = "github:Xantibody/magical-merchant";
+
+  outputs = { nixpkgs, magical-merchant, ... }: {
+    nixosConfigurations.myPC = nixpkgs.lib.nixosSystem {
+      modules = [
+        magical-merchant.nixosModules.default
+        {
+          services.magical-merchant = {
+            enable = true;
+            desktop.enable = true; # the app and its .desktop entry (default)
+            cli.enable = true; # `magical-merchant` on the PATH
+            user = "alice"; # required once workersUrl is set
+            workersUrl = "https://your-worker.example.workers.dev";
+            autoSync = true;
+          };
+        }
+      ];
+    };
+  };
+}
+```
+
+The settings are written to `/etc/magical-merchant/sync-config.json`, and
+`~/.local/share/com.magical-merchant.app/sync-config.json` of that user is
+a symlink to it, created by the user so no directory in their home ends up
+owned by root. Both are read-only, so the app hides the Settings fields the
+module owns. A rebuild with different options updates both at once. The
+same advice about `nixpkgs.follows` applies.
+
+## Linux / macOS — home-manager module
+
+When the configuration is per user rather than per system, the
+home-manager module takes the same options under `programs`:
+
+```nix
+{
+  imports = [ magical-merchant.homeManagerModules.default ];
+
+  programs.magical-merchant = {
+    enable = true;
+    cli.enable = true;
+    workersUrl = "https://your-worker.example.workers.dev";
+    autoSync = true;
+  };
+}
+```
+
+It installs the packages into the user's profile and puts `sync-config.json`
+where the app and the CLI read it — `$XDG_DATA_HOME/com.magical-merchant.app`
+(by default `~/.local/share/...`) on Linux, `~/Library/Application Support/…`
+on macOS — taking over any copy the app wrote when sync was set up by hand.
 
 ## macOS — manual build
 

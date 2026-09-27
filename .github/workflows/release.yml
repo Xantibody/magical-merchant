@@ -2,7 +2,7 @@ name: Release
 
 # 個人利用のテスト配信。Play Store には出さず、署名済み APK を
 # GitHub Release に添付する（端末側で「提供元不明のアプリ」を許可して入れる）。
-# macOS は Nix 経由で配るのでここではビルドしない (README の Install を参照)。
+# macOS and Linux ship through Nix, so they are not built here (see Install in the README).
 on:
   push:
     tags: ["v*"]
@@ -51,7 +51,7 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           name: android
-          hash: ${{ hashFiles('flake.lock', 'flake.nix') }}
+          hash: ${{ hashFiles('flake.lock', 'flake.nix', 'nix/devshells.nix') }}
           max-store-size: 6G
           restore-only: "true"
 
@@ -109,7 +109,7 @@ jobs:
             テスト配信ビルドです。Play Store 経由ではないので、端末側で
             「提供元不明のアプリのインストール」を許可してから APK を開いてください。
 
-            macOS は Nix から入れてください:
+            macOS / Linux は Nix から入れてください:
 
             ```sh
             nix profile install github:Xantibody/magical-merchant/${{ inputs.tag || github.ref_name }}

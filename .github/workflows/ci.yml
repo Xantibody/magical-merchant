@@ -38,7 +38,8 @@ jobs:
       frontend: ${{ steps.filter.outputs.frontend || 'true' }}
       workers: ${{ steps.filter.outputs.workers || 'true' }}
       nix-package: ${{ steps.filter.outputs.nix-package || 'true' }}
-      macos-package: ${{ steps.filter.outputs.macos-package || 'true' }}
+      desktop-package: ${{ steps.filter.outputs.desktop-package || 'true' }}
+      nixos-module: ${{ steps.filter.outputs.nixos-module || 'true' }}
       nix-mcp: ${{ steps.filter.outputs.nix-mcp || 'true' }}
       android: ${{ steps.filter.outputs.android || 'true' }}
       comments: ${{ steps.filter.outputs.comments || 'true' }}
@@ -68,6 +69,7 @@ jobs:
               - 'Cargo.lock'
               - 'deny.toml'
               - 'flake.nix'
+              - 'nix/devshells.nix'
               - 'flake.lock'
               - 'justfile'
               - 'rust/justfile'
@@ -90,11 +92,13 @@ jobs:
               - 'tauri-app/vitest.config.ts'
               - 'tauri-app/justfile'
               - 'flake.nix'
+              - 'nix/devshells.nix'
               - 'flake.lock'
             workers:
               - 'workers/**'
               - '.oxlintrc.json'
               - 'flake.nix'
+              - 'nix/devshells.nix'
               - 'flake.lock'
             nix-package:
               - 'tauri-app/pnpm-lock.yaml'
@@ -102,14 +106,16 @@ jobs:
               - 'nix/package.nix'
               - 'flake.nix'
               - 'flake.lock'
-            # AIDEV-NOTE: nix/package.nix と nix/cli.nix の fileset の写し。ここが狭いと Cachix が古い .app を持ったままになる
-            # nix-package (pnpmDeps.hash の検証だけ) より広い。macOS のジョブは
-            # .#default と .#cli を建てて Cachix に push するので、その 2 つの
-            # 入力が動いたら必ず走らせる。手元の nix profile install が 10 分の
-            # 建て直しに戻らないことが、10 倍レートを払う理由そのもの
-            macos-package:
+            # AIDEV-NOTE: a copy of the filesets in nix/package.nix and nix/cli.nix. Too narrow, and Cachix keeps serving a stale app
+            # Wider than nix-package (which only checks pnpmDeps.hash). The
+            # macOS and Linux jobs build .#default and .#cli and push them to
+            # Cachix, so they run whenever either one's inputs move. Keeping a
+            # local nix profile install from a 10-minute rebuild is the whole
+            # reason for paying the macOS runner's 10x rate
+            desktop-package:
               - 'core/**'
               - 'cli/**'
+              - 'xtask/**'
               - 'tauri-app/src/**'
               - 'tauri-app/src-tauri/**'
               - 'tauri-app/index.html'
@@ -123,6 +129,12 @@ jobs:
               - 'nix/cli.nix'
               - 'flake.nix'
               - 'flake.lock'
+            # Only the Linux job boots the module's VM test, so a module
+            # change must not start the 10x-rate macOS build
+            nixos-module:
+              - 'nix/module-options.nix'
+              - 'nix/nixos-module.nix'
+              - 'nix/nixos-test.nix'
             nix-mcp:
               - 'nix/cli.nix'
               - 'cli/**'
@@ -146,6 +158,7 @@ jobs:
               - 'tauri-app/justfile'
               - 'Cargo.lock'
               - 'flake.nix'
+              - 'nix/devshells.nix'
               - 'flake.lock'
             # Everything the comments job reads
             comments:
@@ -160,6 +173,7 @@ jobs:
               - 'scripts/comments-changed/**'
               - 'justfile'
               - 'flake.nix'
+              - 'nix/devshells.nix'
               - 'flake.lock'
 
   rust:
@@ -180,7 +194,7 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           name: rust
-          hash: ${{ hashFiles('flake.lock', 'flake.nix') }}
+          hash: ${{ hashFiles('flake.lock', 'flake.nix', 'nix/devshells.nix') }}
       - uses: actions/cache/restore@v6
         id: cargo-cache
         with:
@@ -213,7 +227,7 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           name: frontend
-          hash: ${{ hashFiles('flake.lock', 'flake.nix') }}
+          hash: ${{ hashFiles('flake.lock', 'flake.nix', 'nix/devshells.nix') }}
       - name: Get pnpm store directory
         id: pnpm-cache
         run: echo "STORE_PATH=$(nix develop .#frontend --command pnpm store path)" >> "$GITHUB_OUTPUT"
@@ -246,7 +260,7 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           name: workers
-          hash: ${{ hashFiles('flake.lock', 'flake.nix') }}
+          hash: ${{ hashFiles('flake.lock', 'flake.nix', 'nix/devshells.nix') }}
           max-store-size: 2G
       - name: Get pnpm store directory
         id: pnpm-cache
@@ -294,7 +308,7 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           name: android
-          hash: ${{ hashFiles('flake.lock', 'flake.nix') }}
+          hash: ${{ hashFiles('flake.lock', 'flake.nix', 'nix/devshells.nix') }}
           max-store-size: 6G
       # rust ジョブとキーを分ける。同じ target/ でもホスト向けと Android 向けで
       # 中身が入れ替わり、共有すると毎回どちらかが作り直しになる
@@ -348,7 +362,7 @@ jobs:
   # 特有の失敗だけで、それは merge 後の 1 回で足りる
   nix-package-macos:
     needs: changes
-    if: needs.changes.outputs.macos-package == 'true' && github.ref == 'refs/heads/main'
+    if: needs.changes.outputs.desktop-package == 'true' && github.ref == 'refs/heads/main'
     runs-on: macos-latest
     timeout-minutes: 45
     steps:
@@ -375,6 +389,48 @@ jobs:
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
           skipPush: true
       - name: publish the .app bundle and the CLI
+        if: github.ref == 'refs/heads/main'
+        run: nix build .#default .#cli --no-link --print-out-paths | cachix push magical-merchant
+
+  # The Linux distribution (x86_64-linux): cargo-tauri.hook builds the .deb and
+  # unpacks its usr/ tree, and wrapGAppsHook3 wraps the binary. The rust job
+  # compiles the same crate, but a missing buildInput or wrapper only shows up
+  # here, so it runs on PRs too; ubuntu minutes are cheap. No store cache: any
+  # source change rebuilds the whole app derivation, and everything else comes
+  # from cache.nixos.org. Cachix is read on every run so an unchanged output is
+  # never rebuilt, and pushed to from main only
+  nix-package-linux:
+    needs: changes
+    if: needs.changes.outputs.desktop-package == 'true' || needs.changes.outputs.nixos-module == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Free disk space (background)
+        run: nohup sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache >/dev/null 2>&1 &
+      - uses: nixbuild/nix-quick-install-action@v35
+      - uses: cachix/cachix-action@v17
+        with:
+          name: magical-merchant
+          authToken: ${{ github.ref == 'refs/heads/main' && secrets.CACHIX_AUTH_TOKEN || '' }}
+          skipPush: true
+      - name: the app builds and wraps
+        run: |
+          out=$(nix build .#default --no-link --print-out-paths)
+          test -x "$out/bin/magical-merchant-app"
+          grep -q 'x-scheme-handler/magical-merchant' "$out"/share/applications/*.desktop
+      # The runner has /dev/kvm but only root may open it; nix enables its
+      # kvm system feature, which the VM test requires, once it can
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: the NixOS module installs the apps and sync-config.json
+        run: nix build .#checks.x86_64-linux.nixos-module --no-link -L
+      - name: publish the app and the CLI
         if: github.ref == 'refs/heads/main'
         run: nix build .#default .#cli --no-link --print-out-paths | cachix push magical-merchant
 
@@ -428,7 +484,7 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           name: format
-          hash: ${{ hashFiles('flake.lock', 'flake.nix') }}
+          hash: ${{ hashFiles('flake.lock', 'flake.nix', 'nix/treefmt.nix') }}
           max-store-size: 2G
       - run: nix fmt -- --fail-on-change
 
@@ -451,7 +507,7 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           name: comments
-          hash: ${{ hashFiles('flake.lock', 'flake.nix') }}
+          hash: ${{ hashFiles('flake.lock', 'flake.nix', 'nix/devshells.nix') }}
           max-store-size: 2G
       - run: nix develop .#comments --command just comments-changed HEAD^1
 
