@@ -63,6 +63,26 @@
         '';
       });
 
+      # `nix run github:Xantibody/magical-merchant`. On macOS the binary lives
+      # inside the .app, where `nix run`'s bin/ lookup does not reach
+      apps = eachSystem (
+        pkgs:
+        let
+          app = self.packages.${pkgs.stdenv.hostPlatform.system}.default;
+        in
+        {
+          default = {
+            type = "app";
+            program =
+              if pkgs.stdenv.hostPlatform.isDarwin then
+                "${app}/Applications/Magical Merchant.app/Contents/MacOS/${app.meta.mainProgram}"
+              else
+                pkgs.lib.getExe app;
+            meta.description = app.meta.description;
+          };
+        }
+      );
+
       formatter = eachSystem (pkgs: (treefmtFor pkgs).config.build.wrapper);
       checks = eachSystem (pkgs: {
         formatting = (treefmtFor pkgs).config.build.check self;
