@@ -17,6 +17,8 @@ mod export;
 mod location;
 mod place;
 mod sync;
+#[cfg(desktop)]
+mod watch;
 // Public because it is a real external surface: the JNI symbol inside is what
 // the Android widget links against, and `unreachable_pub` is right that a
 // private module cannot hold one honestly.
@@ -768,6 +770,12 @@ pub fn run() {
             // back. Asking on every save is too late, so start receiving at launch.
             #[cfg(target_os = "macos")]
             location::start(app.handle());
+
+            // An editor beside the app (the CLI, magical-merchant.vim) writes the file; the
+            // screen follows without waiting for the window to be focused again. Android has
+            // no second writer on the device, and its `app_data_dir` must stay off this thread
+            #[cfg(desktop)]
+            watch::start(app.handle());
 
             // The geocoder and the certificate verifier need a Context. The Activity
             // can be destroyed, so hold an Application Context of our own while one

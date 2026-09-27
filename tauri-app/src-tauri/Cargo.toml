@@ -93,6 +93,10 @@ objc2-foundation = { version = "0.3", default-features = false, features = [
 ] }
 block2 = "0.6"
 
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+# Watches data/ so an editor beside the window updates the screen (src/watch.rs)
+notify-debouncer-mini = "0.7"
+
 [dev-dependencies]
 tempfile = "3"
 

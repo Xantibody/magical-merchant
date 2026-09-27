@@ -559,7 +559,10 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     loaded: () => loaded(),
     body: () => fullBody(),
     bodyEpoch,
-    bodyHasFocus: () => Boolean(detailBodyRef?.contains(document.activeElement)),
+    // A window in the background keeps its activeElement. Counting that as writing would hold
+    // back every reread while an editor beside the window is the one writing
+    bodyHasFocus: () =>
+      document.hasFocus() && Boolean(detailBodyRef?.contains(document.activeElement)),
     store: localStorage,
     read: (filename) =>
       readNoteContent(

@@ -4,6 +4,7 @@ import { useLocation, useNavigate, A } from "@solidjs/router";
 import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import { listen, TauriEvent } from "@tauri-apps/api/event";
 import type { UnlistenFn } from "@tauri-apps/api/event";
+import { EVENTS } from "../lib/events";
 import Icon from "../components/Icon";
 import type { IconName } from "../components/Icon";
 import CommandPalette from "../components/CommandPalette";
@@ -380,7 +381,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
     });
 
     // While nobody is looking, the CLI, MCP or another device rewrites data/.
-    // The app does not watch files, so the moment of coming back is the signal to reread.
+    // Android has no file watcher, so the moment of coming back is the signal to reread.
     // On Android it is also the only signal that a frozen process has woken.
     // It is also when another device's writes should be pulled in, if the user asked
     const onReturn = (): void => {
@@ -407,6 +408,19 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
       }
     })();
     onCleanup(() => unlistenFocus?.());
+
+    // On desktop the Tauri side watches data/ (src-tauri/src/watch.rs), so an editor beside the
+    // window updates the screen while it is still in the background. Only a reread: syncing on
+    // every keystroke saved elsewhere would be a request per second
+    let unlistenData: UnlistenFn | undefined;
+    void (async () => {
+      try {
+        unlistenData = await listen(EVENTS.DATA_CHANGED, () => shell.refreshData());
+      } catch {
+        // No Tauri (browser harness, tests)
+      }
+    })();
+    onCleanup(() => unlistenData?.());
   });
 
   return (
