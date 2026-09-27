@@ -58,6 +58,16 @@ pub(crate) fn show(data_dir: &Path, filename: &NoteFilename) -> Result<String, C
     Ok(notes::read(data_dir, filename)?.body)
 }
 
+/// The revision on the first line, then the body exactly as `show` prints it. One read, so
+/// the two cannot come from different versions of the note — `put` takes the revision back.
+pub(crate) fn show_with_revision(
+    data_dir: &Path,
+    filename: &NoteFilename,
+) -> Result<String, CoreError> {
+    let read = notes::read(data_dir, filename)?;
+    Ok(format!("{}\n{}", read.revision, read.body))
+}
+
 /// Accepts either `20260320_143045` or `20260320_143045.md`. The newest when omitted.
 pub(crate) fn resolve(data_dir: &Path, arg: Option<&str>) -> Result<NoteFilename, CoreError> {
     let Some(text) = arg else {
@@ -136,6 +146,28 @@ pub(crate) fn edit(
             reason: e,
             kept: scratch_file,
         }),
+    }
+}
+
+// --- put ---
+
+/// Replaces the body with one written elsewhere — an editor plugin that keeps the buffer
+/// open and writes on every save. Returns the revision to pass on the next `put`.
+pub(crate) fn put(
+    data_dir: &Path,
+    filename: &NoteFilename,
+    body: &str,
+    expected: &Revision,
+    keep_copy: bool,
+) -> Result<Revision, WriteError> {
+    let wanted = Revision::of(body);
+    if wanted == *expected {
+        return Ok(wanted);
+    }
+    if keep_copy {
+        Ok(notes::overwrite(data_dir, filename, body, Some(expected))?.revision)
+    } else {
+        notes::overwrite_without_copy(data_dir, filename, body, expected)
     }
 }
 
@@ -502,5 +534,97 @@ mod tests {
             None
         );
         assert!(list(tmp.path()).unwrap().is_empty());
+    }
+
+    // --- put ---
+
+    /// What `show --with-revision` printed, split the way a plugin splits it.
+    fn shown(base: &Path, filename: &NoteFilename) -> (Revision, String) {
+        let out = show_with_revision(base, filename).unwrap();
+        let (revision, body) = out.split_once('\n').unwrap();
+        (Revision::from(revision.to_string()), body.to_string())
+    }
+
+    #[test]
+    fn a_body_put_with_the_revision_it_was_shown_with_is_written() {
+        let tmp = TempDir::new().unwrap();
+        let filename = seed(tmp.path(), "# a\n\nbefore\n");
+        let (revision, body) = shown(tmp.path(), &filename);
+        assert_eq!(body, "# a\n\nbefore\n");
+
+        let written = put(tmp.path(), &filename, "# a\n\nafter\n", &revision, true).unwrap();
+
+        assert_eq!(body_of(tmp.path(), &filename), "# a\n\nafter\n");
+        assert_eq!(written, Revision::of("# a\n\nafter\n"));
+    }
+
+    fn copies(base: &Path, filename: &NoteFilename) -> usize {
+        magical_merchant_core::list_note_history(base, filename)
+            .unwrap()
+            .len()
+    }
+
+    // An editor writes on every idle pause, often with nothing new. Writing the same body
+    // only moves the mtime, sets the watcher and the sync off, and piles up copies
+    #[test]
+    fn putting_the_body_that_is_already_there_writes_nothing() {
+        let tmp = TempDir::new().unwrap();
+        let filename = seed(tmp.path(), "same\n");
+        let (revision, body) = shown(tmp.path(), &filename);
+
+        let written = put(tmp.path(), &filename, &body, &revision, true).unwrap();
+
+        assert_eq!(written, revision);
+        assert_eq!(copies(tmp.path(), &filename), 0);
+    }
+
+    // A buffer kept open writes every few seconds. One copy of the note as it stood before
+    // the session is the way back; one per pause would push it out of the history
+    #[test]
+    fn only_the_put_that_asks_for_a_copy_takes_one() {
+        let tmp = TempDir::new().unwrap();
+        let filename = seed(tmp.path(), "before\n");
+        let (revision, _) = shown(tmp.path(), &filename);
+
+        let first = put(tmp.path(), &filename, "one\n", &revision, true).unwrap();
+        let second = put(tmp.path(), &filename, "two\n", &first, false).unwrap();
+
+        assert_eq!(copies(tmp.path(), &filename), 1);
+        assert_eq!(body_of(tmp.path(), &filename), "two\n");
+        assert_eq!(second, Revision::of("two\n"));
+    }
+
+    // The app wrote while the buffer was open. The buffer's body must not land on it,
+    // whether or not this put would have taken a copy
+    #[test]
+    fn a_put_behind_another_writer_is_refused_either_way() {
+        for keep_copy in [true, false] {
+            let tmp = TempDir::new().unwrap();
+            let filename = seed(tmp.path(), "before\n");
+            let (revision, _) = shown(tmp.path(), &filename);
+            let note_path = tmp.path().join("data/notes").join(filename.as_str());
+            magical_merchant_core::update_note(&note_path, "the app\n", &Context::default(), None)
+                .unwrap();
+
+            let err = put(tmp.path(), &filename, "mine\n", &revision, keep_copy).unwrap_err();
+
+            assert!(matches!(err, WriteError::Stale(_)), "keep_copy={keep_copy}");
+            assert_eq!(body_of(tmp.path(), &filename), "the app\n");
+        }
+    }
+
+    // A buffer emptied mid-edit is not a request to delete the note
+    #[test]
+    fn an_empty_put_is_refused_either_way() {
+        for keep_copy in [true, false] {
+            let tmp = TempDir::new().unwrap();
+            let filename = seed(tmp.path(), "before\n");
+            let (revision, _) = shown(tmp.path(), &filename);
+
+            let err = put(tmp.path(), &filename, "\n", &revision, keep_copy).unwrap_err();
+
+            assert!(matches!(err, WriteError::Empty), "keep_copy={keep_copy}");
+            assert_eq!(body_of(tmp.path(), &filename), "before\n");
+        }
     }
 }

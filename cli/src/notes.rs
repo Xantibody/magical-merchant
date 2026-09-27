@@ -143,14 +143,38 @@ pub(crate) fn overwrite(
     // core refuses a missing file too, but looking here first lets us say "not found" by name
     let snapshot = magical_merchant_core::snapshot_note(data_dir, filename)?
         .ok_or_else(|| WriteError::NotFound(filename.clone()))?;
+    let revision = replace_body(data_dir, filename, body, expected)?;
+    Ok(Written { snapshot, revision })
+}
+
+/// [`overwrite`] without the copy, for a writer that already took one this session — an
+/// editor buffer that writes on every pause would otherwise fill the history with its
+/// keystrokes and push the version from before the session out.
+pub(crate) fn overwrite_without_copy(
+    data_dir: &Path,
+    filename: &NoteFilename,
+    body: &str,
+    expected: &Revision,
+) -> Result<Revision, WriteError> {
+    if body.trim().is_empty() {
+        return Err(WriteError::Empty);
+    }
+    replace_body(data_dir, filename, body, Some(expected))
+}
+
+fn replace_body(
+    data_dir: &Path,
+    filename: &NoteFilename,
+    body: &str,
+    expected: Option<&Revision>,
+) -> Result<Revision, WriteError> {
     // Ask core where it lives. A note turned into a Codex is not in `notes/`
     let (_, path) = magical_merchant_core::locate_note(data_dir, filename)?;
-    let revision = match magical_merchant_core::update_note(&path, body, &context(), expected) {
-        Ok(revision) => revision,
-        Err(CoreError::Stale(_)) => return Err(WriteError::Stale(filename.clone())),
-        Err(e) => return Err(e.into()),
-    };
-    Ok(Written { snapshot, revision })
+    match magical_merchant_core::update_note(&path, body, &context(), expected) {
+        Ok(revision) => Ok(revision),
+        Err(CoreError::Stale(_)) => Err(WriteError::Stale(filename.clone())),
+        Err(e) => Err(e.into()),
+    }
 }
 
 #[cfg(test)]

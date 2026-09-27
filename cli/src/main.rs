@@ -43,6 +43,9 @@ enum Command {
     Show {
         /// Note filename or stem (`20260320_143045`); the newest note if omitted
         note: Option<String>,
+        /// Print the body's revision on the first line, for `put --if-revision`
+        #[arg(long)]
+        with_revision: bool,
     },
     /// Open a note's body in $VISUAL / $EDITOR and write it back
     ///
@@ -56,6 +59,22 @@ enum Command {
         /// Edit the newest note instead of naming one
         #[arg(long)]
         last: bool,
+    },
+    /// Replace a note's body with stdin, if it is still the one that was read
+    ///
+    /// For an editor that keeps the note open and writes on every save: read with
+    /// `show --with-revision`, pass that revision here, and pass the printed one
+    /// on the next write. If anyone else wrote in between, nothing is written and it
+    /// exits non-zero.
+    Put {
+        /// Note filename or stem (`20260320_143045`)
+        note: String,
+        /// The revision the body was read at
+        #[arg(long)]
+        if_revision: String,
+        /// Skip the copy kept under history/; for the writes after a session's first
+        #[arg(long)]
+        no_copy: bool,
     },
     /// Create a note: from stdin when piped, otherwise in $VISUAL / $EDITOR
     New {
@@ -163,11 +182,23 @@ async fn main() -> anyhow::Result<()> {
                 ))?;
             }
         }
-        Command::Show { note } => {
+        Command::Show {
+            note,
+            with_revision,
+        } => {
             let filename = commands::resolve(&data_dir, note.as_deref())?;
-            let body = commands::show(&data_dir, &filename)?;
-            quiet_on_closed_pipe(write!(std::io::stdout().lock(), "{body}"))?;
+            let out = if with_revision {
+                commands::show_with_revision(&data_dir, &filename)?
+            } else {
+                commands::show(&data_dir, &filename)?
+            };
+            quiet_on_closed_pipe(write!(std::io::stdout().lock(), "{out}"))?;
         }
+        Command::Put {
+            note,
+            if_revision,
+            no_copy,
+        } => run_put(&data_dir, &note, if_revision, !no_copy)?,
         Command::Edit { note, last: _ } => {
             // The group requires one of the two, so no note means --last
             let filename = commands::resolve(&data_dir, note.as_deref())?;
@@ -230,6 +261,22 @@ async fn main() -> anyhow::Result<()> {
             running.waiting().await?;
         }
     }
+    Ok(())
+}
+
+/// The body comes from stdin; the revision to pass next goes to stdout, alone on its line.
+fn run_put(
+    data_dir: &Path,
+    note: &str,
+    if_revision: String,
+    keep_copy: bool,
+) -> anyhow::Result<()> {
+    let filename = commands::resolve(data_dir, Some(note))?;
+    let mut body = String::new();
+    std::io::stdin().read_to_string(&mut body)?;
+    let expected = magical_merchant_core::Revision::from(if_revision);
+    let written = commands::put(data_dir, &filename, &body, &expected, keep_copy)?;
+    println!("{written}");
     Ok(())
 }
 
@@ -339,5 +386,37 @@ mod tests {
         assert!(Cli::try_parse_from(["magical-merchant", "edit", "x", "--last"]).is_err());
         // show only reads, so it may be omitted
         assert!(Cli::try_parse_from(["magical-merchant", "show"]).is_ok());
+    }
+
+    /// `put` writes over a note from stdin, so it names the note and the revision it read
+    /// every time. Without the revision it would silently overwrite whatever the app wrote.
+    #[test]
+    fn put_needs_a_note_and_the_revision_it_read() {
+        let parse = |args: &[&str]| Cli::try_parse_from(args);
+
+        assert!(parse(&["magical-merchant", "put", "--if-revision", "ab"]).is_err());
+        assert!(parse(&["magical-merchant", "put", "20260320_143045"]).is_err());
+        assert!(
+            parse(&[
+                "magical-merchant",
+                "put",
+                "20260320_143045",
+                "--if-revision",
+                "ab"
+            ])
+            .is_ok()
+        );
+        assert!(
+            parse(&[
+                "magical-merchant",
+                "put",
+                "20260320_143045",
+                "--if-revision",
+                "ab",
+                "--no-copy",
+            ])
+            .is_ok()
+        );
+        assert!(parse(&["magical-merchant", "show", "--with-revision"]).is_ok());
     }
 }

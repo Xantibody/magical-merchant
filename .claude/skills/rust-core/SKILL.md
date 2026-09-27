@@ -25,8 +25,8 @@ description: Rust core crate conventions, Tauri command plumbing, MCP CLI, and t
 
 ## CLI (`cli/`, binary `magical-merchant`)
 
-One binary, two jobs. `commands.rs` holds `list` / `show` / `edit` / `new` /
-`import`; `edit` writes the body (never the frontmatter) to a scratch file,
+One binary, two jobs. `commands.rs` holds `list` / `show` / `edit` / `put` /
+`new` / `import`; `edit` writes the body (never the frontmatter) to a scratch file,
 runs `$VISUAL` / `$EDITOR` (`editor.rs`), and writes back only if the body
 changed. `notes.rs` is the shared write path — creation (empty body refused,
 path turned back into the note's ID) and overwrites (snapshot, revision
@@ -43,6 +43,11 @@ the body from stdin and prints the filename; quirks of any particular
 source format belong in a conversion script, not in the binary. A refused
 edit (stale, empty, editor failure) keeps the scratch file and prints its
 path.
+`show --with-revision` / `put` split `edit` for an editor that keeps the
+note open (magical-merchant.vim): `put` takes the body on stdin and the
+revision as a required flag, prints the next revision, skips an unchanged
+body, and `--no-copy` goes through `notes::overwrite_without_copy` so a
+session keeps one `history/` copy rather than one per save.
 The editor launch is a closure parameter so the flows are unit-tested
 without an editor. `scrawl.rs` holds `scrawl add / show / dates`;
 `add` only appends (same core call as the Android widget), so it carries

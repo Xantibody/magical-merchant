@@ -330,6 +330,8 @@ nix run github:Xantibody/magical-merchant#cli -- list
 magical-merchant show                  # the newest note
 magical-merchant edit 20260320_143045  # opens it in $VISUAL / $EDITOR
 magical-merchant edit --last           # the newest note; `edit` never guesses
+magical-merchant show 20260320_143045 --with-revision   # revision on line 1, then the body
+magical-merchant put 20260320_143045 --if-revision <rev> < body.md   # prints the next revision
 echo "# Idea" | magical-merchant new   # or: magical-merchant new --title Idea
 magical-merchant import --time 2019-05-04T12:00:00+09:00 < old-note.md  # keeps that time as the ID
 magical-merchant scrawl add -m "shipped it #work"   # capture; without -m, opens the editor
@@ -346,6 +348,17 @@ stays in a scratch file whose path is printed. Closing the editor without
 changes writes nothing. The app, in turn, refuses to overwrite a note the
 CLI changed while it was open, reloads it, and keeps the typed text behind
 its Revert button.
+
+`show --with-revision` and `put` are the same guard taken apart, for an
+editor that keeps the note open and writes on every save —
+[magical-merchant.vim](https://github.com/Xantibody/magical-merchant.vim) is
+one. `put` reads the body from stdin and writes it only if the note still
+has the revision it was read at; otherwise it writes nothing and exits
+non-zero. It prints the new revision for the next write, writes nothing when
+the body did not change, and `--no-copy` skips the `history/` copy for the
+writes after a session's first. On the desktop the app watches `data/`, so a
+note written this way changes on screen beside the editor, unless you are
+typing in the app at that moment.
 
 `import` is the way in for notes written somewhere else. A note's filename
 is its creation time and its permanent ID, so anything moved in would
