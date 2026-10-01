@@ -436,3 +436,49 @@ describe("Vim keys: what does not come through the keys", () => {
     expect(input.defaultPrevented).toBe(true);
   });
 });
+
+describe("Vim keys: review fixes", () => {
+  afterEach(cleanup);
+
+  it("deletes whole lines of a code block with V d, newlines included", async () => {
+    const ed = await normalAt("```\nfirst\nsecond\nthird\n```", "second", 0);
+
+    await press("Vd");
+
+    expect(ed.markdown()).toBe("```\nfirst\nthird\n```");
+  });
+
+  it("deletes the last line of a code block with V d", async () => {
+    const ed = await normalAt("```\nfirst\nsecond\n```", "second", 0);
+
+    await press("Vd");
+
+    expect(ed.markdown()).toBe("```\nfirst\n```");
+  });
+
+  it("deletes a code block whose only line is taken with V d, as dd does", async () => {
+    const ed = await normalAt("before\n\n```\nonly\n```\n\nafter", "only", 0);
+
+    await press("Vd");
+
+    expect(ed.markdown()).toBe("before\n\nafter");
+  });
+
+  // Vim's V c leaves one empty line to write the replacement on
+  it("changes whole lines into one empty line with V c", async () => {
+    const ed = await normalAt("one\n\ntwo\n\nthree", "one", 0);
+
+    await press("VjcX");
+
+    expect(ed.mode()).toBe("insert");
+    expect(ed.markdown()).toBe("X\n\nthree");
+  });
+
+  it("changes code lines into one empty line with V c", async () => {
+    const ed = await normalAt("```\nfirst\nsecond\nthird\n```", "second", 0);
+
+    await press("VcX");
+
+    expect(ed.markdown()).toBe("```\nfirst\nX\nthird\n```");
+  });
+});

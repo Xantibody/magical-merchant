@@ -224,22 +224,27 @@ export function yankLine(state: EditorState, head: number): Register {
   };
 }
 
+/**
+ * The range that removes the code lines `from`..`to` as lines: with the newline after them,
+ * or before them at the block's end, and the whole block when they are all of it.
+ */
+function codeLinesRange(doc: Node, from: number, to: number): { from: number; to: number } {
+  const $pos = doc.resolve(from);
+  const start = $pos.start();
+  const end = $pos.end();
+  if (from === start && to === end) {
+    return { from: $pos.before(), to: $pos.after() };
+  }
+  return to < end ? { from, to: to + 1 } : { from: from - 1, to };
+}
+
 /** `dd`. The cursor lands on the line that took its place. */
 export function deleteLine(state: EditorState, head: number): Transaction {
   const line = lineAt(state.doc, head);
   const { tr } = state;
   if (line.code) {
-    const $pos = state.doc.resolve(head);
-    const start = $pos.start();
-    const end = $pos.end();
-    if (line.from === start && line.to === end) {
-      // The only line: the block goes, as a line would
-      tr.delete($pos.before(), $pos.after());
-    } else if (line.to < end) {
-      tr.delete(line.from, line.to + 1);
-    } else {
-      tr.delete(line.from - 1, line.to);
-    }
+    const range = codeLinesRange(state.doc, line.from, line.to);
+    tr.delete(range.from, range.to);
   } else {
     const block = lineBlock(state.doc, head);
     // deleteRange takes a parent left empty (a list's only item) along with it
@@ -305,15 +310,38 @@ export function visualRegister(
   return registerOf(state.doc, from, to, linewise);
 }
 
-/** Visual `d` / `c`. */
+/**
+ * Visual `d` / `c`. Linewise, `d` takes the lines away whole and `c` leaves one empty line
+ * to write on, as Vim's `V c` does.
+ */
 export function deleteVisual(
   state: EditorState,
   anchor: number,
   head: number,
   linewise: boolean,
+  op: "delete" | "change",
 ): Transaction {
-  const { from, to } = visualRange(state.doc, anchor, head, linewise);
-  const tr = linewise ? state.tr.deleteRange(from, to) : state.tr.delete(from, to);
+  const { doc } = state;
+  const { tr } = state;
+  let { from, to } = visualRange(doc, anchor, head, linewise);
+  if (linewise) {
+    const [first, last] = anchor <= head ? [anchor, head] : [head, anchor];
+    const firstLine = lineAt(doc, first);
+    const lastLine = lineAt(doc, last);
+    if (op === "change") {
+      ({ from } = firstLine);
+      ({ to } = lastLine);
+      tr.delete(from, to);
+    } else if (firstLine.code && lastLine.code) {
+      ({ from, to } = codeLinesRange(doc, firstLine.from, lastLine.to));
+      tr.delete(from, to);
+    } else {
+      // deleteRange takes a parent left empty (a list's only item) along with it
+      tr.deleteRange(from, to);
+    }
+  } else {
+    tr.delete(from, to);
+  }
   const at = Math.min(tr.mapping.map(from), tr.doc.content.size);
   return tr.setSelection(Selection.near(tr.doc.resolve(at)));
 }
