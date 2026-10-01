@@ -105,7 +105,7 @@ describe("interpretKey in normal mode", () => {
     expect(run("normal", k).action).toStrictEqual({ type: "swallow" });
   });
 
-  it.each(["Shift", "ArrowDown", "F5"])("lets the non-typing key %s through", (k) => {
+  it.each(["Shift", "Home", "F5"])("lets the non-typing key %s through", (k) => {
     expect(run("normal", k).action).toStrictEqual({ type: "pass" });
   });
 });
@@ -172,5 +172,25 @@ describe("keyOf", () => {
     [{ code: "Digit4", shiftKey: true }, "$"],
   ])("reads the physical key %j while an IME holds it", (init, expected) => {
     expect(keyOf(event({ key: "Process", keyCode: 229, ...init })).key).toBe(expected);
+  });
+});
+
+// Outside insert the body is not editable, so ProseMirror's own keys (arrows, ⌘Z) no longer
+// reach the document. Vim takes the ones a hand on the keyboard expects to keep working
+describe("interpretKey outside insert: the editor's own keys", () => {
+  it.each([
+    ["ArrowLeft", "left"],
+    ["ArrowRight", "right"],
+    ["ArrowDown", "down"],
+    ["ArrowUp", "up"],
+  ])("moves on %s like its letter", (k, motion) => {
+    expect(run("normal", k).action).toStrictEqual({ type: "move", motion });
+    expect(run("visual", k).action).toStrictEqual({ type: "move", motion });
+  });
+
+  it("undoes on ⌘Z / Ctrl-Z and redoes with Shift", () => {
+    expect(run("normal", key("z", { meta: true })).action).toStrictEqual({ type: "undo" });
+    expect(run("normal", key("z", { ctrl: true })).action).toStrictEqual({ type: "undo" });
+    expect(run("normal", key("Z", { meta: true })).action).toStrictEqual({ type: "redo" });
   });
 });

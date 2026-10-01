@@ -65,6 +65,12 @@ const MOTIONS: Readonly<Record<string, VimMotion>> = {
   0: "line-start",
   $: "line-end",
   G: "doc-end",
+  // Outside insert the body is not editable, so the arrows no longer reach ProseMirror.
+  // Vim reads them as the letters anyway
+  ArrowLeft: "left",
+  ArrowRight: "right",
+  ArrowDown: "down",
+  ArrowUp: "up",
 };
 
 const INSERTS: Readonly<Record<string, InsertAt>> = {
@@ -131,11 +137,17 @@ export function interpretKey(mode: VimMode, pending: string, input: VimKey): Int
       ? done({ type: "normal" })
       : PASS;
   }
-  if (input.meta || input.alt) {
+  if (input.alt) {
     return PASS;
   }
-  if (input.ctrl) {
-    return mode === "normal" && key === "r" ? done({ type: "redo" }) : PASS;
+  if (input.meta || input.ctrl) {
+    // The editor's own undo keys: not editable outside insert, it no longer sees them
+    if (mode === "normal" && (key === "z" || key === "Z") && !input.alt) {
+      return done({ type: key === "z" ? "undo" : "redo" });
+    }
+    return mode === "normal" && input.ctrl && !input.meta && key === "r"
+      ? done({ type: "redo" })
+      : PASS;
   }
   if (pending) {
     const doubled = DOUBLED[pending];

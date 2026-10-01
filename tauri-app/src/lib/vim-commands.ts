@@ -10,7 +10,7 @@
 import { Selection, TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorState, Transaction } from "@milkdown/kit/prose/state";
 import { Fragment, Slice } from "@milkdown/kit/prose/model";
-import type { Node } from "@milkdown/kit/prose/model";
+import type { Node, ResolvedPos } from "@milkdown/kit/prose/model";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { chainCommands, splitBlock } from "@milkdown/kit/prose/commands";
 import { splitListItem } from "@milkdown/kit/prose/schema-list";
@@ -79,45 +79,76 @@ function lineBlock(doc: Node, pos: number): { from: number; to: number } {
 }
 
 /**
- * Asks the browser where the caret lands, from `head`. `j` / `k` move by the line as it
- * is drawn (Vim's `gj` / `gk`: prose wraps), and `w` / `b` stop where the platform's word
- * breaker does, which is the only word break that works in Japanese text.
+ * Where the caret lands one drawn line down or up (Vim's `gj` / `gk`: prose wraps). The
+ * editor's own geometry answers, so every engine agrees: WebKit will not move a selection by
+ * line inside a non-editable element, and the body is one outside insert. Probing in half
+ * lines from the caret's edge crosses the gap between blocks; a wide figure in the way is
+ * not crossed, and the caret stays.
  */
-function browserMove(
-  view: EditorView,
-  head: number,
-  direction: "forward" | "backward",
-  unit: "line" | "word",
-): number {
-  const selection = view.dom.ownerDocument.getSelection();
-  if (!selection) {
-    return head;
+function lineMove(view: EditorView, head: number, direction: 1 | -1): number {
+  const from = view.coordsAtPos(head);
+  const half = Math.max(from.bottom - from.top, 1) / 2;
+  for (let step = 1; step <= 16; step += 1) {
+    const top = direction > 0 ? from.bottom + step * half : from.top - step * half;
+    const found = view.posAtCoords({ left: from.left, top });
+    // The gap between two blocks answers with a position between them, in no text at all
+    if (found && view.state.doc.resolve(found.pos).parent.inlineContent) {
+      const at = view.coordsAtPos(found.pos);
+      const middle = (at.top + at.bottom) / 2;
+      if (direction > 0 ? middle > from.bottom : middle < from.top) {
+        return found.pos;
+      }
+    }
   }
-  const { node, offset } = view.domAtPos(head);
-  selection.collapse(node, offset);
-  selection.modify("move", direction, unit);
-  const { focusNode, focusOffset } = selection;
-  if (!focusNode || !view.dom.contains(focusNode)) {
-    return head;
+  return head;
+}
+
+/** Words as the platform breaks them: the only word break that works in Japanese text. */
+const segmenter = new Intl.Segmenter(undefined, { granularity: "word" });
+
+/** The offsets at which the words of `text` start. Punctuation and spaces are not words. */
+function wordStarts(text: string): number[] {
+  const starts: number[] = [];
+  for (const segment of segmenter.segment(text)) {
+    if (segment.isWordLike) {
+      starts.push(segment.index);
+    }
   }
-  try {
-    return view.posAtDOM(focusNode, focusOffset);
-  } catch {
-    // Landed inside a part drawn outside the document (a diagram, a code block's toolbar)
-    return head;
-  }
+  return starts;
+}
+
+/** The textblock around `pos`, as the text its positions index: an inline atom counts one. */
+function blockText($pos: ResolvedPos): string {
+  return $pos.parent.textBetween(0, $pos.parent.content.size, undefined, "￼");
 }
 
 /**
- * The start of the next word. A Mac's word step stops at the end of a word and other
- * platforms' at the start of the next, so step forward twice and back once: both land
- * on the start of the next word.
+ * The start of the next word (`w`) or the previous one (`b`). Past the last word of a
+ * textblock, `w` goes on to the next block's first word; `b` back to the previous block's last.
  */
-function nextWord(view: EditorView, head: number): number {
-  const once = browserMove(view, head, "forward", "word");
-  const twice = browserMove(view, once, "forward", "word");
-  const back = browserMove(view, twice, "backward", "word");
-  return back > head ? back : once;
+function wordMove(doc: Node, head: number, direction: 1 | -1): number {
+  const $pos = doc.resolve(head);
+  if (!$pos.parent.isTextblock) {
+    return head;
+  }
+  const offset = $pos.parentOffset;
+  const starts = wordStarts(blockText($pos));
+  const inBlock =
+    direction > 0
+      ? starts.find((start) => start > offset)
+      : starts.findLast((start) => start < offset);
+  if (inBlock !== undefined) {
+    return $pos.start() + inBlock;
+  }
+  const edge = direction > 0 ? $pos.after() : $pos.before();
+  const next = Selection.findFrom(doc.resolve(edge), direction, true);
+  if (!next) {
+    return head;
+  }
+  const $next = next.$from;
+  const nextStarts = wordStarts(blockText($next));
+  const landing = direction > 0 ? nextStarts[0] : nextStarts.at(-1);
+  return $next.start() + (landing ?? 0);
 }
 
 export function motionTarget(view: EditorView, head: number, motion: VimMotion): number {
@@ -143,16 +174,16 @@ export function motionTarget(view: EditorView, head: number, motion: VimMotion):
       return lineAt(doc, Selection.atEnd(doc).from).from;
     }
     case "down": {
-      return browserMove(view, head, "forward", "line");
+      return lineMove(view, head, 1);
     }
     case "up": {
-      return browserMove(view, head, "backward", "line");
+      return lineMove(view, head, -1);
     }
     case "word-forward": {
-      return nextWord(view, head);
+      return wordMove(doc, head, 1);
     }
     case "word-backward": {
-      return browserMove(view, head, "backward", "word");
+      return wordMove(doc, head, -1);
     }
   }
 }

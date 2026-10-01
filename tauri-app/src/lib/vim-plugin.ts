@@ -262,17 +262,34 @@ export function createVimPlugins(onMode?: (mode: VimMode) => void): {
           return {
             update: (view) => {
               const { mode } = vimState(view.state);
-              if (mode !== last) {
-                last = mode;
-                onMode?.(mode);
+              if (mode === last) {
+                return;
               }
+              // The browser drops the focus when the element stops being editable, and
+              // the keys would go to the page. Take it back on every change of mode: into
+              // insert through ProseMirror, so the caret is drawn where the selection is
+              if ((mode === "insert") !== (last === "insert")) {
+                if (mode === "insert") {
+                  view.focus();
+                } else {
+                  view.dom.focus({ preventScroll: true });
+                }
+              }
+              last = mode;
+              onMode?.(mode);
             },
           };
         },
         props: {
           decorations: cursorDecorations,
+          // Outside insert the body is not an editing host. With a Japanese IME on, WebKit
+          // starts a composition before the keydown reaches anyone, a composition the editor
+          // refuses never ends, and ProseMirror then ignores every key as the IME's (Enter,
+          // Esc, ⌘Z included). A non-editable element gives the IME nothing to compose into.
+          // tabindex keeps the focus, so the keys still arrive here
+          editable: (state) => vimState(state).mode === "insert",
           attributes: (state): Record<string, string> =>
-            vimState(state).mode === "insert" ? {} : { class: "vim-normal" },
+            vimState(state).mode === "insert" ? {} : { class: "vim-normal", tabindex: "0" },
           handleDOMEvents: {
             keydown: (view, event) => {
               const vim = vimState(view.state);

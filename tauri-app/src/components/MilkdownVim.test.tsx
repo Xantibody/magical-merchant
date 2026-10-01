@@ -482,17 +482,36 @@ describe("Vim keys: review fixes", () => {
     expect(ed.markdown()).toBe("```\nfirst\nX\nthird\n```");
   });
 
-  // An arrow or a shortcut passed through moves the selection outside Vim. The next d must
-  // not act on the range visual mode remembered
-  it("leaves visual when a key it lets through moves the selection", async () => {
+  // Something outside Vim (a click, a shortcut) moves the selection. The next d must not act
+  // on the range visual mode remembered
+  it("leaves visual when something outside Vim moves the selection", async () => {
     const ed = await normalAt("alpha beta", "alpha", 0);
     await press("vll");
 
-    await press("{ArrowRight}");
+    ed.view.dispatch(ed.view.state.tr.setSelection(TextSelection.create(ed.view.state.doc, 8)));
     expect(ed.mode()).toBe("normal");
     await press("d");
 
     expect(ed.markdown()).toBe("alpha beta");
+  });
+
+  // Vim reads the arrows as h j k l, in visual mode too
+  it("extends the selection with an arrow in visual", async () => {
+    const ed = await normalAt("alpha beta", "alpha", 0);
+
+    await press("v{ArrowRight}{ArrowRight}");
+
+    expect(ed.mode()).toBe("visual");
+    expect(ed.selected()).toBe("alp");
+  });
+
+  it("undoes with ⌘Z in normal, where ProseMirror no longer sees the key", async () => {
+    const ed = await normalAt("one\n\ntwo", "one", 0);
+    await press("dd");
+
+    await press("{Meta>}z{/Meta}");
+
+    expect(ed.markdown()).toBe("one\n\ntwo");
   });
 
   it("leaves visual when an undo let through changes the document", async () => {
@@ -503,5 +522,78 @@ describe("Vim keys: review fixes", () => {
     ed.view.dispatch(ed.view.state.tr.insertText("!", 1));
 
     expect(ed.mode()).toBe("normal");
+  });
+});
+
+// With a Japanese IME on, WebKit starts a composition before the keydown reaches anyone. A
+// composition the editor refuses never ends, and ProseMirror then ignores every key as "the
+// IME's". So outside insert the body is not an editing host at all: nothing to compose into
+describe("Vim keys: the body is not editable outside insert", () => {
+  afterEach(cleanup);
+
+  it("drops contenteditable in normal and keeps the focus", async () => {
+    const ed = await normalAt("alpha", "alpha", 0);
+
+    expect(ed.view.dom.contentEditable).toBe("false");
+    expect(document.activeElement).toBe(ed.view.dom);
+  });
+
+  it("is editable again in insert, and takes the typing", async () => {
+    const ed = await normalAt("alpha", "alpha", 0);
+
+    await press("aX");
+
+    expect(ed.view.dom.contentEditable).toBe("true");
+    expect(ed.markdown()).toBe("aXlpha");
+  });
+});
+
+// j / k and w / b used to ask the browser (Selection.modify). WebKit does not move a
+// selection by line inside a non-editable element, so the editor's own geometry and the
+// platform's word segmenter decide instead, the same on every engine
+describe("Vim keys: motions without the browser's help", () => {
+  afterEach(cleanup);
+
+  it("steps down through an empty line and a heading with j", async () => {
+    const ed = await normalAt("one\n\n<br />\n\n## Head\n\ntwo", "one", 0);
+
+    await press("j");
+    expect(ed.view.state.selection.$head.parent.textContent).toBe("");
+    await press("j");
+    expect(ed.view.state.selection.$head.parent.textContent).toBe("Head");
+    await press("j");
+    expect(ed.view.state.selection.$head.parent.textContent).toBe("two");
+    await press("kkk");
+    expect(ed.view.state.selection.$head.parent.textContent).toBe("one");
+  });
+
+  it("keeps the column with j where the next line is long enough", async () => {
+    const ed = await normalAt("alpha beta\n\nalpha gamma", "alpha", 6);
+
+    await press("j");
+
+    expect(ed.under()).toBe("g");
+  });
+
+  it("goes on to the next line's first word with w at the end of a line", async () => {
+    const ed = await normalAt("one two\n\nthree", "two", 0);
+
+    await press("w");
+    expect(ed.under()).toBe("t");
+    expect(ed.view.state.selection.$head.parent.textContent).toBe("three");
+    await press("b");
+    expect(ed.under()).toBe("t");
+    expect(ed.view.state.selection.$head.parent.textContent).toBe("one two");
+  });
+
+  it("stops at Japanese word breaks with w and b", async () => {
+    const ed = await normalAt("私は東京に行く。", "私", 0);
+
+    await press("w");
+    expect(ed.under()).toBe("は");
+    await press("ww");
+    expect(ed.under()).toBe("に");
+    await press("b");
+    expect(ed.under()).toBe("東");
   });
 });
