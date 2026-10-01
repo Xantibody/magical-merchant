@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { userEvent } from "vitest/browser";
 import { editorViewCtx, serializerCtx } from "@milkdown/kit/core";
 import type { Editor } from "@milkdown/kit/core";
-import { TextSelection } from "@milkdown/kit/prose/state";
+import { NodeSelection, TextSelection } from "@milkdown/kit/prose/state";
 import MilkdownEditor from "./MilkdownEditor";
 import type { VimMode } from "../lib/vim-keys";
 
@@ -659,5 +659,35 @@ describe("Vim keys: second review fixes", () => {
     expect(ed.markdown()).toBe("😀ab😀");
     await press("P");
     expect(ed.markdown()).toBe("😀ab😀ab😀");
+  });
+});
+
+describe("Vim keys: a block selected whole", () => {
+  afterEach(cleanup);
+
+  /** Normal mode with the rule selected, as a click on it leaves it. */
+  async function onRule() {
+    const ed = await normalAt("one\n\n***\n\ntwo", "one", 0);
+    const { doc } = ed.view.state;
+    ed.view.dispatch(
+      ed.view.state.tr.setSelection(NodeSelection.create(doc, doc.child(0).nodeSize)),
+    );
+    return ed;
+  }
+
+  it("deletes a selected rule with dd", async () => {
+    const ed = await onRule();
+
+    await press("dd");
+
+    expect(ed.markdown()).toBe("one\n\ntwo");
+  });
+
+  it("copies a selected rule with yy and puts it below with p", async () => {
+    const ed = await onRule();
+
+    await press("yyp");
+
+    expect(ed.markdown()).toBe("one\n\n***\n\n***\n\ntwo");
   });
 });

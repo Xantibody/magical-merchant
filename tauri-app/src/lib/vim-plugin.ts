@@ -1,6 +1,6 @@
 import { $prose } from "@milkdown/kit/utils";
-import { Plugin, PluginKey } from "@milkdown/kit/prose/state";
-import type { EditorState, Transaction } from "@milkdown/kit/prose/state";
+import { NodeSelection, Plugin, PluginKey } from "@milkdown/kit/prose/state";
+import type { EditorState, Selection, Transaction } from "@milkdown/kit/prose/state";
 import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { redo, undo } from "@milkdown/kit/prose/history";
@@ -87,6 +87,14 @@ function refuseOutsideInsert(view: EditorView, event: Event): boolean {
   return true;
 }
 
+/**
+ * Where the Vim commands start from. A block selected whole (a clicked rule) has its head
+ * after the block; the commands want its start.
+ */
+function cursorOf(selection: Selection): number {
+  return selection instanceof NodeSelection ? selection.from : selection.head;
+}
+
 /** The block cursor: the character under the caret, or a cell standing in on an empty line. */
 function cursorDecorations(state: EditorState): DecorationSet {
   const { head, $head } = state.selection;
@@ -160,7 +168,7 @@ export function createVimPlugins(onMode?: (mode: VimMode) => void): {
   const run = (view: EditorView, vim: VimState, action: VimAction): void => {
     const { state } = view;
     const visual = isVisual(vim.mode);
-    const head = visual ? vim.head : state.selection.head;
+    const head = visual ? vim.head : cursorOf(state.selection);
     const linewise = vim.mode === "visual-line";
     switch (action.type) {
       case "pass":

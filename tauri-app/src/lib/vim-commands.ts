@@ -108,10 +108,13 @@ export function caretAt(doc: Node, pos: number): Selection {
 
 /**
  * The node a whole-line command takes: the textblock, or its list item when it is the
- * item's first block.
+ * item's first block. Between blocks (a rule selected whole) it is the block after `pos`.
  */
 function lineBlock(doc: Node, pos: number): { from: number; to: number } {
   const $pos = doc.resolve(pos);
+  if (!$pos.parent.isTextblock) {
+    return { from: pos, to: pos + ($pos.nodeAfter?.nodeSize ?? 0) };
+  }
   let { depth } = $pos;
   if (depth > 1 && $pos.node(depth - 1).type.name === "list_item" && $pos.index(depth - 1) === 0) {
     depth -= 1;
