@@ -482,6 +482,8 @@ const ja = {
     languageEn: "English",
     startFullscreen: "起動時に全画面",
     startFullscreenHint: "次回の起動から反映されます",
+    vimKeys: "Vim のキー操作",
+    vimKeysHint: "本文で Esc を押すとノーマルモード。次に本文を開いたときから反映されます",
     glyphs: "特殊文字",
     glyphsHint:
       "画像を登録すると、本文に :名前: と書いた場所にその画像が出ます。PNG か SVG、256 KB まで。",
@@ -1019,6 +1021,8 @@ const en: Messages = {
     languageEn: "English",
     startFullscreen: "Start in fullscreen",
     startFullscreenHint: "Applies from the next launch",
+    vimKeys: "Vim keys",
+    vimKeysHint: "Esc in the body enters normal mode. Applies the next time a body is opened",
     glyphs: "Glyphs",
     glyphsHint:
       "Register an image and write :name: in a Note or a Scrawl entry to show it there. PNG or SVG, up to 256 KB.",

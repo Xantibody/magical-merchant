@@ -20,7 +20,8 @@ import {
 } from "../lib/glyphs";
 import { applyLocale, readStoredLocale, t } from "../lib/i18n";
 import type { LocalePreference } from "../lib/i18n";
-import { isMacDesktop } from "../lib/platform";
+import { isDesktop, isMacDesktop } from "../lib/platform";
+import { readVimEnabled, writeVimEnabled } from "../lib/vim-setting";
 import { isImeComposing } from "../lib/ime";
 import { ROUTES } from "../lib/routes";
 import { useShell } from "../lib/shell";
@@ -326,6 +327,13 @@ export default function Settings(): JSX.Element {
     }
   };
 
+  const [vimKeys, setVimKeys] = createSignal(readVimEnabled());
+
+  const chooseVimKeys = (on: boolean): void => {
+    setVimKeys(on);
+    writeVimEnabled(on);
+  };
+
   const unlisteners: UnlistenFn[] = [];
 
   onMount(async () => {
@@ -450,6 +458,16 @@ export default function Settings(): JSX.Element {
           desc={t().settings.startFullscreenHint}
           checked={startFullscreen()}
           onChange={chooseStartFullscreen}
+        />
+      </Show>
+
+      {/* A phone has no Esc and no keyboard to stay on */}
+      <Show when={isDesktop()}>
+        <SwitchRow
+          label={t().settings.vimKeys}
+          desc={t().settings.vimKeysHint}
+          checked={vimKeys()}
+          onChange={chooseVimKeys}
         />
       </Show>
     </>
