@@ -53,10 +53,51 @@ export function lineAt(doc: Node, pos: number): Line {
   };
 }
 
+/** The textblock around `pos`, as the text its positions index: an inline atom counts one. */
+function blockText($pos: ResolvedPos): string {
+  return $pos.parent.textBetween(0, $pos.parent.content.size, undefined, "￼");
+}
+
+/** What a character is to the cursor: a grapheme, so an emoji (two or four UTF-16 units) is one. */
+const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+
+/** The character of the textblock around `$pos` that holds the offset `at`, as positions. */
+function graphemeAt($pos: ResolvedPos, at: number): { from: number; to: number } | null {
+  if (!$pos.parent.isTextblock) {
+    return null;
+  }
+  const segment = graphemes.segment(blockText($pos)).containing(at);
+  if (!segment) {
+    return null;
+  }
+  const start = $pos.start();
+  return { from: start + segment.index, to: start + segment.index + segment.segment.length };
+}
+
+/** Where the character starting at `pos` ends. */
+export function charAfter(doc: Node, pos: number): number {
+  const $pos = doc.resolve(pos);
+  return graphemeAt($pos, $pos.parentOffset)?.to ?? pos + 1;
+}
+
+/** Where the character ending at `pos` starts. */
+export function charBefore(doc: Node, pos: number): number {
+  const $pos = doc.resolve(pos);
+  if ($pos.parentOffset === 0) {
+    return pos - 1;
+  }
+  return graphemeAt($pos, $pos.parentOffset - 1)?.from ?? pos - 1;
+}
+
+/** Where the cursor stands on the line's last character, or the line's start when it is empty. */
+function lastChar(doc: Node, line: Line): number {
+  return line.to > line.from ? Math.max(line.from, charBefore(doc, line.to)) : line.from;
+}
+
 /** Where the block cursor may stand: on a character, never past the last one. */
 export function clampToLine(doc: Node, pos: number): number {
   const line = lineAt(doc, pos);
-  return Math.max(line.from, Math.min(pos, line.to - 1));
+  return Math.max(line.from, Math.min(pos, lastChar(doc, line)));
 }
 
 /** A collapsed selection at `pos`, or the nearest one when `pos` is not inside text. */
@@ -117,11 +158,6 @@ function wordStarts(text: string): number[] {
   return starts;
 }
 
-/** The textblock around `pos`, as the text its positions index: an inline atom counts one. */
-function blockText($pos: ResolvedPos): string {
-  return $pos.parent.textBetween(0, $pos.parent.content.size, undefined, "￼");
-}
-
 /**
  * The start of the next word (`w`) or the previous one (`b`). Past the last word of a
  * textblock, `w` goes on to the next block's first word; `b` back to the previous block's last.
@@ -156,16 +192,16 @@ export function motionTarget(view: EditorView, head: number, motion: VimMotion):
   const line = lineAt(doc, head);
   switch (motion) {
     case "left": {
-      return Math.max(line.from, head - 1);
+      return head > line.from ? charBefore(doc, head) : head;
     }
     case "right": {
-      return Math.min(Math.max(line.from, line.to - 1), head + 1);
+      return Math.min(lastChar(doc, line), charAfter(doc, head));
     }
     case "line-start": {
       return line.from;
     }
     case "line-end": {
-      return Math.max(line.from, line.to - 1);
+      return lastChar(doc, line);
     }
     case "doc-start": {
       return Selection.atStart(doc).from;
@@ -206,7 +242,7 @@ export function visualSelection(
       ? TextSelection.between(doc.resolve(from), doc.resolve(to))
       : TextSelection.between(doc.resolve(to), doc.resolve(from));
   }
-  const past = (pos: number): number => Math.min(pos + 1, lineAt(doc, pos).to);
+  const past = (pos: number): number => Math.min(charAfter(doc, pos), lineAt(doc, pos).to);
   return head >= anchor
     ? TextSelection.between(doc.resolve(anchor), doc.resolve(past(head)))
     : TextSelection.between(doc.resolve(past(anchor)), doc.resolve(head));
@@ -301,12 +337,12 @@ export function deleteChar(state: EditorState, head: number): Transaction | null
   if (head >= line.to) {
     return null;
   }
-  const tr = state.tr.delete(head, head + 1);
+  const tr = state.tr.delete(head, charAfter(state.doc, head));
   return tr.setSelection(caretAt(tr.doc, clampToLine(tr.doc, head)));
 }
 
 export function charRegister(state: EditorState, head: number): Register {
-  return registerOf(state.doc, head, head + 1, false);
+  return registerOf(state.doc, head, charAfter(state.doc, head), false);
 }
 
 /** `p` / `P`. Linewise after / before the line's block; charwise after / at the cursor. */
@@ -319,10 +355,10 @@ export function put(
   const line = lineAt(state.doc, head);
   const { tr } = state;
   if (!register.linewise) {
-    const pos = before ? head : Math.min(head + 1, line.to);
+    const pos = before ? head : Math.min(charAfter(state.doc, head), line.to);
     tr.replace(pos, pos, register.slice);
     const end = tr.mapping.mapResult(pos, 1).pos;
-    return tr.setSelection(caretAt(tr.doc, Math.max(pos, end - 1)));
+    return tr.setSelection(caretAt(tr.doc, end > pos ? charBefore(tr.doc, end) : pos));
   }
   if (line.code) {
     if (before) {
@@ -391,7 +427,7 @@ export function insertPosition(state: EditorState, head: number, at: InsertAt): 
   const line = lineAt(state.doc, head);
   switch (at) {
     case "after": {
-      return Math.min(head + 1, line.to);
+      return Math.min(charAfter(state.doc, head), line.to);
     }
     case "line-start": {
       return line.from;

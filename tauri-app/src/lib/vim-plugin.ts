@@ -9,6 +9,8 @@ import { interpretKey, keyOf } from "./vim-keys";
 import type { VimAction, VimMode } from "./vim-keys";
 import {
   caretAt,
+  charAfter,
+  charBefore,
   charRegister,
   clampToLine,
   deleteChar,
@@ -94,7 +96,7 @@ function cursorDecorations(state: EditorState): DecorationSet {
   const line = lineAt(state.doc, head);
   const cursor =
     head < line.to
-      ? Decoration.inline(head, head + 1, { class: "vim-cursor" })
+      ? Decoration.inline(head, charAfter(state.doc, head), { class: "vim-cursor" })
       : Decoration.widget(
           head,
           () => {
@@ -347,7 +349,10 @@ export function createVimPlugins(onMode?: (mode: VimMode) => void): {
             }
             // Leaving insert steps back onto the character just typed, as Vim does
             const { head } = view.state.selection;
-            toNormal(view, head > lineAt(view.state.doc, head).from ? head - 1 : head);
+            toNormal(
+              view,
+              head > lineAt(view.state.doc, head).from ? charBefore(view.state.doc, head) : head,
+            );
             return true;
           },
         },

@@ -41,10 +41,12 @@ async function mount(source: string, vim = true) {
     view.focus();
   };
   const markdown = () => created.action((ctx) => ctx.get(serializerCtx)(view.state.doc)).trim();
-  /** The character under the block cursor, or "" on an empty line. */
+  /** The character under the block cursor (a whole grapheme), or "" on an empty line. */
   const under = () => {
-    const { head } = view.state.selection;
-    return view.state.doc.textBetween(head, Math.min(head + 1, view.state.selection.$head.end()));
+    const { head, $head } = view.state.selection;
+    const rest = view.state.doc.textBetween(head, $head.end());
+    const [first] = new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(rest);
+    return first?.segment ?? "";
   };
   const selected = () => {
     const { from, to } = view.state.selection;
@@ -612,5 +614,50 @@ describe("Vim keys: second review fixes", () => {
     await press("Vjjd");
 
     expect(ed.markdown()).toBe("intro\n\noutro");
+  });
+
+  // An emoji is two UTF-16 units (a skin tone four), and ProseMirror counts the units
+  it("steps back onto a whole emoji on Esc", async () => {
+    const ed = await mount("a😀");
+    ed.caretIn("a", 3);
+
+    await press("{Escape}");
+
+    expect(ed.under()).toBe("😀");
+  });
+
+  it("moves over an emoji with l and h, and to it with $", async () => {
+    const ed = await normalAt("a😀b👍🏽", "a", 0);
+
+    await press("l");
+    expect(ed.under()).toBe("😀");
+    await press("l");
+    expect(ed.under()).toBe("b");
+    await press("h");
+    expect(ed.under()).toBe("😀");
+    await press("$");
+    expect(ed.under()).toBe("👍🏽");
+  });
+
+  it("deletes a whole emoji with x", async () => {
+    const ed = await normalAt("a👍🏽b", "a", 0);
+
+    await press("lx");
+
+    expect(ed.markdown()).toBe("ab");
+    expect(ed.under()).toBe("b");
+    await press("p");
+    expect(ed.markdown()).toBe("ab👍🏽");
+    expect(ed.under()).toBe("👍🏽");
+  });
+
+  it("takes a whole emoji at either end of a v selection", async () => {
+    const ed = await normalAt("😀ab😀", "a", 0);
+
+    await press("v$y");
+
+    expect(ed.markdown()).toBe("😀ab😀");
+    await press("P");
+    expect(ed.markdown()).toBe("😀ab😀ab😀");
   });
 });
