@@ -597,3 +597,20 @@ describe("Vim keys: motions without the browser's help", () => {
     expect(ed.under()).toBe("東");
   });
 });
+
+describe("Vim keys: second review fixes", () => {
+  afterEach(cleanup);
+
+  // Code lines are lines only inside one block. Across two, V takes the blocks whole
+  it("deletes whole blocks with V d from one code block into another", async () => {
+    const ed = await normalAt(
+      "intro\n\n```\na\nb\n```\n\nmiddle\n\n```\nc\nd\n```\n\noutro",
+      "b",
+      0,
+    );
+
+    await press("Vjjd");
+
+    expect(ed.markdown()).toBe("intro\n\noutro");
+  });
+});

@@ -212,6 +212,15 @@ export function visualSelection(
     : TextSelection.between(doc.resolve(past(anchor)), doc.resolve(head));
 }
 
+/** Code lines count as lines only inside one block; across two, V takes the blocks whole. */
+function inOneCodeBlock(doc: Node, first: number, last: number): boolean {
+  return (
+    lineAt(doc, first).code &&
+    lineAt(doc, last).code &&
+    doc.resolve(first).start() === doc.resolve(last).start()
+  );
+}
+
 /** The range a visual operator acts on: the selection, or for linewise the whole blocks. */
 function visualRange(
   doc: Node,
@@ -226,7 +235,7 @@ function visualRange(
   const [first, last] = anchor <= head ? [anchor, head] : [head, anchor];
   const firstLine = lineAt(doc, first);
   const lastLine = lineAt(doc, last);
-  if (firstLine.code && lastLine.code) {
+  if (inOneCodeBlock(doc, first, last)) {
     return { from: firstLine.from, to: lastLine.to };
   }
   return { from: lineBlock(doc, first).from, to: lineBlock(doc, last).to };
@@ -363,7 +372,7 @@ export function deleteVisual(
       ({ from } = firstLine);
       ({ to } = lastLine);
       tr.delete(from, to);
-    } else if (firstLine.code && lastLine.code) {
+    } else if (inOneCodeBlock(doc, first, last)) {
       ({ from, to } = codeLinesRange(doc, firstLine.from, lastLine.to));
       tr.delete(from, to);
     } else {
