@@ -134,6 +134,7 @@ const ja = {
     view: "表示",
     map: "マップ",
     examples: "記入例",
+    vimMode: { normal: "ノーマル", visual: "ビジュアル", "visual-line": "ビジュアル行" },
     /** Both live in the one frontmatter key `view`, so turning one on turns the other off. */
     viewExclusive: "読み取り専用とマップはどちらか一方",
     details: "詳細",
@@ -713,6 +714,7 @@ const en: Messages = {
     view: "View",
     map: "Map",
     examples: "Examples",
+    vimMode: { normal: "Normal", visual: "Visual", "visual-line": "Visual line" },
     viewExclusive: "Read-only and the map take turns",
     details: "Details",
     revert: "Back to before this edit",
