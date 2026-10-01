@@ -481,4 +481,27 @@ describe("Vim keys: review fixes", () => {
 
     expect(ed.markdown()).toBe("```\nfirst\nX\nthird\n```");
   });
+
+  // An arrow or a shortcut passed through moves the selection outside Vim. The next d must
+  // not act on the range visual mode remembered
+  it("leaves visual when a key it lets through moves the selection", async () => {
+    const ed = await normalAt("alpha beta", "alpha", 0);
+    await press("vll");
+
+    await press("{ArrowRight}");
+    expect(ed.mode()).toBe("normal");
+    await press("d");
+
+    expect(ed.markdown()).toBe("alpha beta");
+  });
+
+  it("leaves visual when an undo let through changes the document", async () => {
+    const ed = await normalAt("one\n\ntwo\n\nthree", "three", 0);
+    await press("dd");
+    await press("ggVj");
+
+    ed.view.dispatch(ed.view.state.tr.insertText("!", 1));
+
+    expect(ed.mode()).toBe("normal");
+  });
 });

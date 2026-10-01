@@ -48,6 +48,25 @@ function vimState(state: EditorState): VimState {
 
 const isVisual = (mode: VimMode): boolean => mode === "visual" || mode === "visual-line";
 
+/**
+ * The next Vim state after a transaction. Vim's own carry it. Any other one that moves the
+ * selection or the text in visual mode (an arrow, ⌘Z let through) ends visual: the range it
+ * remembered no longer says what is selected. One appended after Vim's own only shifts it.
+ */
+function nextVimState(tr: Transaction, value: VimState): VimState {
+  const own = tr.getMeta(vimKey) as VimState | undefined;
+  if (own) {
+    return own;
+  }
+  if (!isVisual(value.mode) || (!tr.docChanged && !tr.selectionSet)) {
+    return value;
+  }
+  if (tr.getMeta("appendedTransaction")) {
+    return { ...value, anchor: tr.mapping.map(value.anchor), head: tr.mapping.map(value.head) };
+  }
+  return { ...value, mode: "normal", pending: "" };
+}
+
 /** The system clipboard is a courtesy for pasting elsewhere. A refusal is not Vim's concern. */
 async function copyOut(text: string): Promise<void> {
   try {
@@ -214,7 +233,7 @@ export function createVimPlugins(onMode?: (mode: VimMode) => void): {
           toNormal(view, first);
           return;
         }
-        const tr = deleteVisual(state, vim.anchor, head, linewise);
+        const tr = deleteVisual(state, vim.anchor, head, linewise, action.op);
         if (action.op === "change") {
           toInsert(view, tr);
         } else {
@@ -231,7 +250,7 @@ export function createVimPlugins(onMode?: (mode: VimMode) => void): {
         key: vimKey,
         state: {
           init: () => INITIAL,
-          apply: (tr, value) => (tr.getMeta(vimKey) as VimState | undefined) ?? value,
+          apply: nextVimState,
         },
         filterTransaction: (tr, state) =>
           vimState(state).mode === "insert" ||
