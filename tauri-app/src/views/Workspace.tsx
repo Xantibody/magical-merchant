@@ -35,6 +35,9 @@ import { getDeviceSignals } from "../lib/client-context";
 import { createDebouncedAccessor } from "../lib/debounce";
 import { diffLineCounts, markedBody } from "../lib/diff-marks";
 import { glyphs } from "../lib/glyphs";
+import { isDesktop } from "../lib/platform";
+import { readVimEnabled } from "../lib/vim-setting";
+import type { VimMode } from "../lib/vim-keys";
 import { examplesShown, extractExamples, setExamplesShown } from "../lib/template-examples";
 import { useShell } from "../lib/shell";
 import {
@@ -247,6 +250,8 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   const [freshVersionId, setFreshVersionId] = createSignal<string | null>(null);
   /** What a touch device's toolbar acts on. undefined while no note is open. */
   const [markdownEditor, setMarkdownEditor] = createSignal<Editor | undefined>();
+  /** The editor's Vim mode. A rebuilt editor starts in insert, and so does this. */
+  const [vimMode, setVimMode] = createSignal<VimMode>("insert");
 
   const [notes, { refetch: refetchNotes }] = createResource(loadNotes);
   // It does not open until "new" is pressed, but starting the read at that moment draws an empty
@@ -1182,8 +1187,10 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       return;
     }
     const status = kind() === "codex" ? versionStatus() : undefined;
+    const vim = vimMode();
     shell.setNoteBar({
       version: status ? versionStatusLabel(status) : undefined,
+      vim: vim === "insert" ? undefined : t().notes.vimMode[vim],
       comparing: historyOpen() && compareLine().length > 0 ? compareLine().join(" · ") : undefined,
       readOnly: readOnly(),
       // The map is not drawn while comparing, so the bar does not claim it
@@ -1932,7 +1939,14 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                               setNoteBody(markdown);
                               session.schedule();
                             }}
-                            onEditorReady={setMarkdownEditor}
+                            vim={isDesktop() && readVimEnabled()}
+                            onVimMode={setVimMode}
+                            onEditorReady={(editor) => {
+                              setMarkdownEditor(editor);
+                              if (!editor) {
+                                setVimMode("insert");
+                              }
+                            }}
                           />
                         </Show>
                         <Backlinks hits={backlinks() ?? []} onOpen={openBacklink} />

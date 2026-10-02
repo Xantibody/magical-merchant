@@ -5,6 +5,7 @@ import { mockIPC, mockWindows, clearMocks } from "@tauri-apps/api/mocks";
 import { MemoryRouter, Route } from "@solidjs/router";
 import { ShellProvider } from "../lib/shell";
 import { readStartFullscreen } from "../lib/fullscreen";
+import { readVimEnabled } from "../lib/vim-setting";
 import { chooseTheme } from "../lib/theme";
 import UndoToast from "../components/UndoToast";
 import Settings from "./Settings";
@@ -324,6 +325,48 @@ describe("Settings › start in fullscreen", () => {
 
     expect(readStartFullscreen()).toBe(false);
     expect(fullscreenCalls).toHaveLength(1);
+  });
+});
+
+// A modal editor is a special way to work. It stays off until chosen, and only a device
+// with a keyboard is offered it
+describe("Settings › Vim keys", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    listens = 0;
+    mockCommands();
+  });
+
+  afterEach(() => {
+    Reflect.deleteProperty(navigator, "userAgent");
+    cleanup();
+    clearMocks();
+    localStorage.clear();
+  });
+
+  it("offers the switch off by default on a desktop", async () => {
+    pretendUserAgent(MAC);
+
+    await renderSettings();
+
+    expect(screen.getByLabelText<HTMLInputElement>("Vim のキー操作").checked).toBe(false);
+  });
+
+  it("hides the switch on Android", async () => {
+    pretendUserAgent(ANDROID);
+
+    await renderSettings();
+
+    expect(screen.queryByLabelText("Vim のキー操作")).toBeNull();
+  });
+
+  it("remembers the switch", async () => {
+    pretendUserAgent(MAC);
+    await renderSettings();
+
+    fireEvent.click(screen.getByLabelText("Vim のキー操作"));
+
+    expect(readVimEnabled()).toBe(true);
   });
 });
 

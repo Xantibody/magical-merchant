@@ -79,6 +79,16 @@ function NoteStatus(props: { bar: NoteBar }): JSX.Element {
           </>
         )}
       </Show>
+      <Show when={props.bar.vim}>
+        {(vim) => (
+          <>
+            <span class="bottom-bar-sep" aria-hidden="true">
+              ·
+            </span>
+            <span class="bottom-bar-vim">{vim()}</span>
+          </>
+        )}
+      </Show>
       <Show when={props.bar.comparing}>
         {(comparing) => (
           <StateChip
