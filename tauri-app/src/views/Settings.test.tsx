@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { page } from "vitest/browser";
 import { render, screen, fireEvent, cleanup, waitFor, within } from "@solidjs/testing-library";
 import { mockIPC, mockWindows, clearMocks } from "@tauri-apps/api/mocks";
-import { MemoryRouter, Route } from "@solidjs/router";
+import { createMemoryHistory, MemoryRouter, Route } from "@solidjs/router";
 import { ShellProvider } from "../lib/shell";
 import { readStartFullscreen } from "../lib/fullscreen";
 import { chooseTheme } from "../lib/theme";
@@ -97,11 +97,13 @@ function navRow(title: string): HTMLElement {
  * The width is set explicitly. Settings shows one page at a time at 767px and below, and
  * at the default width the page under test is folded away
  */
-async function renderSettings(open?: string): Promise<void> {
+async function renderSettings(open?: string, url = "/"): Promise<void> {
   await page.viewport(1280, 800);
+  const history = createMemoryHistory();
+  history.set({ value: url, replace: true });
   render(() => (
     <ShellProvider>
-      <MemoryRouter>
+      <MemoryRouter history={history}>
         <Route path="/" component={Settings} />
       </MemoryRouter>
       <UndoToast />
@@ -449,6 +451,21 @@ describe("Settings › the three pages", () => {
     expect(screen.getByText("未ログイン")).toBeDefined();
     expect(screen.getByRole("button", { name: "Google でログイン" })).toBeDefined();
   });
+
+  // The sync popover's "open Settings" is about the sync page. Landing on the general page left the
+  // user one tap short of the thing it was talking about
+  it("opens on the page the link names", async () => {
+    await renderSettings(undefined, "/?page=sync");
+
+    expect(navRow("同期").ariaCurrent).toBe("page");
+    expect(screen.getByText("Workers URL")).toBeDefined();
+  });
+
+  it("falls back to 一般 when the link names no page it has", async () => {
+    await renderSettings(undefined, "/?page=bogus");
+
+    expect(navRow("一般").ariaCurrent).toBe("page");
+  });
 });
 
 // Mobile is too narrow to show the list and a page at once, so they are sent one at a time
@@ -478,5 +495,14 @@ describe("Settings › on a phone", () => {
     fireEvent.click(screen.getByRole("button", { name: "設定の一覧に戻る" }));
     expect(screen.queryByRole("group", { name: "言語" })).toBeNull();
     expect(navRow("一般")).toBeDefined();
+  });
+
+  // A link that names a page has already chosen; showing the list first would undo that
+  it("skips the list when the link names a page", async () => {
+    await renderSettings(undefined, "/?page=sync");
+    await page.viewport(414, 896);
+
+    expect(screen.getByText("Workers URL")).toBeDefined();
+    expect(screen.getByRole("button", { name: "設定の一覧に戻る" })).toBeDefined();
   });
 });

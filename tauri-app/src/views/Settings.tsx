@@ -1,5 +1,5 @@
 import { createResource, createSignal, For, onMount, onCleanup, Show } from "solid-js";
-import { A } from "@solidjs/router";
+import { A, useSearchParams } from "@solidjs/router";
 // Kobalte is imported only from a per-route lazy chunk. This is Settings, so it
 // stays out of the startup bundle (`.claude/skills/ui-design/SKILL.md`)
 import { Switch } from "@kobalte/core/switch";
@@ -22,7 +22,7 @@ import { applyLocale, readStoredLocale, t } from "../lib/i18n";
 import type { LocalePreference } from "../lib/i18n";
 import { isMacDesktop } from "../lib/platform";
 import { isImeComposing } from "../lib/ime";
-import { ROUTES, SETTINGS_PAGES } from "../lib/routes";
+import { ROUTES, SETTINGS_PAGE_PARAM, SETTINGS_PAGES } from "../lib/routes";
 import type { SettingsPage } from "../lib/routes";
 import { useShell } from "../lib/shell";
 import { chooseTheme, theme, THEMES } from "../lib/theme";
@@ -156,9 +156,14 @@ async function readAsBase64(file: File): Promise<string> {
 
 export default function Settings(): JSX.Element {
   const shell = useShell();
+  // A link can name the page (`settingsPage()`), as the sync popover does. Read once at
+  // open: the nav rows change the page without touching the URL, so the query is a
+  // starting point, not the state
+  const [searchParams] = useSearchParams();
+  const requestedPage = SETTINGS_PAGES.find((id) => id === searchParams[SETTINGS_PAGE_PARAM]);
   /** The page shown. Mobile shows only the list until one is opened (`settings--page`). */
-  const [page, setPage] = createSignal<SettingsPage>("general");
-  const [pageOpen, setPageOpen] = createSignal(false);
+  const [page, setPage] = createSignal<SettingsPage>(requestedPage ?? "general");
+  const [pageOpen, setPageOpen] = createSignal(requestedPage !== undefined);
   const [workersUrl, setWorkersUrl] = createSignal("");
   const [authenticated, setAuthenticated] = createSignal(false);
   const [editable, setEditable] = createSignal(false);

@@ -6,7 +6,7 @@ import type { IconName } from "./Icon";
 import { t } from "../lib/i18n";
 import { formatRelativeTime } from "../lib/sync";
 import type { SyncState } from "../lib/sync";
-import { ROUTES } from "../lib/routes";
+import { settingsPage } from "../lib/routes";
 
 interface SyncPopoverProps {
   sync: SyncState;
@@ -123,7 +123,7 @@ export default function SyncPopover(props: SyncPopoverProps): JSX.Element {
             class="link-button"
             onClick={() => {
               props.onClose();
-              navigate(ROUTES.SETTINGS);
+              navigate(settingsPage("sync"));
             }}
           >
             {t().sync.openSettings}
