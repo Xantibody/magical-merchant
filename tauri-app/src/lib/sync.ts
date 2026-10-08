@@ -31,6 +31,8 @@ export interface SyncState {
   setSyncOnStart: (on: boolean) => Promise<void>;
   /** The app came back to the foreground. Syncs when the setting asks for it. */
   resume: () => void;
+  /** The user is leaving the app. Syncs at once if something was saved since the last round. */
+  leave: () => void;
   /** The signal to open automatically on an error. It opens when this goes up. */
   alertVersion: Accessor<number>;
 }
@@ -163,6 +165,11 @@ export function createSyncState(onSynced: () => void): SyncState {
 
   // When the last round started, whatever started it. `resume` counts its interval from here
   let lastStartedAt = Number.NEGATIVE_INFINITY;
+  // When something was last written on this device, or -Infinity once a round that started
+  // after it has finished. While it is newer than the last round's start, the device holds
+  // something unsent: a leave syncs at once, and a return does not wait out its interval
+  let dirtiedAt = Number.NEGATIVE_INFINITY;
+  const dirty = (): boolean => dirtiedAt > lastStartedAt;
 
   // A sync asked for while one is running. Dropping it lost whatever was saved during the
   // round until the next save or return, and leaving the app has no next save. Several
@@ -208,9 +215,20 @@ export function createSyncState(onSynced: () => void): SyncState {
     }, AUTO_SYNC_DEBOUNCE_MS);
   };
 
-  /** The sync a start or a return brings, when the setting asks for it and not too soon. */
+  /**
+   * The sync a start or a return brings: at once when something is still unsent, since the
+   * leave sync can be cut short by the OS and the return is its second chance; otherwise
+   * when the setting asks for it and not too soon.
+   */
   const syncIfAsked = (): void => {
-    if (!syncOnStart() || cannotSync()) {
+    if (cannotSync()) {
+      return;
+    }
+    if (dirty() && autoSync()) {
+      void syncNow();
+      return;
+    }
+    if (!syncOnStart()) {
       return;
     }
     if (Date.now() - lastStartedAt < RESUME_SYNC_INTERVAL_MS) {
@@ -231,11 +249,28 @@ export function createSyncState(onSynced: () => void): SyncState {
     })();
   };
 
+  // The timer after a save waits for the next keystroke. Leaving the app is the end of the
+  // keystrokes, and on Android the process may be gone before the timer fires. Every switch
+  // of window on desktop is a leave too, so it does nothing when nothing was saved
+  const leave = (): void => {
+    if (!autoSync() || cannotSync() || !dirty()) {
+      return;
+    }
+    if (autoSyncTimer) {
+      clearTimeout(autoSyncTimer);
+      autoSyncTimer = undefined;
+    }
+    void syncNow();
+  };
+
   onMount(async () => {
     await checkReadiness();
 
     unlisteners.push(
-      onLocalMutation(scheduleAutoSync),
+      onLocalMutation(() => {
+        dirtiedAt = Date.now();
+        scheduleAutoSync();
+      }),
       await listen<SyncResultPayload>(EVENTS.SYNC_COMPLETE, (e) => {
         const ui = describeSyncResult(e.payload);
         setStatus(ui.status);
@@ -244,6 +279,10 @@ export function createSyncState(onSynced: () => void): SyncState {
           // A round finished, so hitting busy again may retry once more
           busyRetried = false;
           setLastSyncedAt(new Date());
+          // A save that landed during the round is newer than its start and stays unsent
+          if (!dirty()) {
+            dirtiedAt = Number.NEGATIVE_INFINITY;
+          }
           onSynced();
         } else {
           setAlertVersion((v) => v + 1);
@@ -302,6 +341,7 @@ export function createSyncState(onSynced: () => void): SyncState {
     syncOnStart,
     setSyncOnStart,
     resume,
+    leave,
     alertVersion,
   };
 }

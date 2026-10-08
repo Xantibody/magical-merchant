@@ -5,6 +5,7 @@ import { t } from "./i18n";
 import { emit } from "@tauri-apps/api/event";
 import { EVENTS } from "./events";
 import { AUTO_SYNC_DEBOUNCE_MS, RESUME_SYNC_INTERVAL_MS, createSyncState } from "./sync";
+import { typedInvoke } from "./commands";
 
 // The reason mockIPC is used instead of vi.mock is written in commands.test.ts
 
@@ -68,6 +69,10 @@ const finishRound = (): Promise<void> =>
     conflicts: 0,
     errors: [],
   });
+
+/** Something was written. Any mutating command marks the device as holding something unsent */
+const save = (): Promise<void> =>
+  typedInvoke("update_note_meta", { filename: "20260101_000000.md", time: "", tags: [] });
 
 describe("createSyncState readiness", () => {
   beforeEach(() => {
@@ -462,6 +467,115 @@ describe("createSyncState a sync asked for during a sync", () => {
     });
     await finishRound();
     expect(syncStarts()).toBe(2);
+    dispose();
+  });
+});
+
+describe("createSyncState leaving the app", () => {
+  let config: { workers_url: string; auto_sync: boolean; sync_on_start: boolean };
+
+  beforeEach(() => {
+    calls = [];
+    config = { workers_url: "https://sync.example", auto_sync: true, sync_on_start: true };
+    handlers = {
+      get_sync_config: () => config,
+      auth_status: () => true,
+      sync_start: () => null,
+      update_note_meta: () => null,
+    };
+    mockWindows("main");
+    mockIPC(
+      (cmd) => {
+        const handler = handlers[cmd];
+        if (!handler) {
+          throw new Error(`unexpected command ${cmd}`);
+        }
+        calls.push(cmd);
+        return handler();
+      },
+      { shouldMockEvents: true },
+    );
+  });
+
+  afterEach(() => {
+    clearMocks();
+    vi.useRealTimers();
+  });
+
+  const syncStarts = (): number => calls.filter((c) => c === "sync_start").length;
+
+  /** Mounts and lets the start-up round finish, so the listeners are in place and nothing is dirty */
+  async function mountSettled(): Promise<ReturnType<typeof mount>> {
+    const mounted = mount();
+    await vi.waitFor(() => {
+      expect(syncStarts()).toBe(1);
+    });
+    await finishRound();
+    expect(mounted.state.status()).toBe("success");
+    return mounted;
+  }
+
+  // The five-second timer after a save is a wait for the next keystroke. Leaving the app is
+  // the end of the keystrokes, and on Android the process may be gone before the timer fires
+  it("syncs at once when something was saved since the last round", async () => {
+    const { state, dispose } = await mountSettled();
+    vi.useFakeTimers();
+    await save();
+
+    state.leave();
+
+    expect(syncStarts()).toBe(2);
+    // The timer the save started does not add a third round
+    await vi.advanceTimersByTimeAsync(AUTO_SYNC_DEBOUNCE_MS);
+    expect(syncStarts()).toBe(2);
+    dispose();
+  });
+
+  // Every switch of window on desktop is a leave. Without a save in between, nothing to send
+  it("does nothing when nothing was saved", async () => {
+    const { state, dispose } = await mountSettled();
+
+    state.leave();
+
+    expect(syncStarts()).toBe(1);
+    dispose();
+  });
+
+  it("stays quiet while auto sync is off", async () => {
+    config.auto_sync = false;
+    const { state, dispose } = await mountSettled();
+    await save();
+
+    state.leave();
+
+    expect(syncStarts()).toBe(1);
+    dispose();
+  });
+
+  it("is clean again once the round that carried the save has finished", async () => {
+    const { state, dispose } = await mountSettled();
+    await save();
+    state.leave();
+    await finishRound();
+
+    state.leave();
+
+    expect(syncStarts()).toBe(2);
+    dispose();
+  });
+
+  // The leave sync can be cut short by the OS. The return is the second chance, and the
+  // once-a-minute rule is for returns with nothing to send
+  it("syncs on return without waiting when something is still unsent", async () => {
+    const { state, dispose } = await mountSettled();
+    await save();
+
+    state.resume();
+
+    // The return looks at the login first, so the round starts a tick later
+    await vi.waitFor(() => {
+      expect(syncStarts()).toBe(2);
+    });
     dispose();
   });
 });

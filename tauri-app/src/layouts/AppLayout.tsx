@@ -401,7 +401,11 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
     let unwatchLeave: (() => void) | undefined;
     void (async () => {
       unwatchLeave = await watchLeave(() => {
-        void shell.leave();
+        // The writes first: a sync that ran before them would leave the last words unsent
+        void (async () => {
+          await shell.leave();
+          sync.leave();
+        })();
       });
     })();
     onCleanup(() => unwatchLeave?.());
