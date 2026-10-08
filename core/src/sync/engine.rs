@@ -213,6 +213,28 @@ async fn sync_once<T: SyncTransport + Sync>(
     let (actions, deferred) = round::take_round(&actions, budget);
 
     let data_dir = paths::data_dir(base_dir);
+
+    // Nothing to transfer. The bulk would only have the Worker read the state again and
+    // write it back for a new `last_sync`, a Worker call and two R2 operations on most
+    // returns to the app. What this round has to do is record what the server says, which
+    // the state just fetched already holds; "same on both sides, no record yet" lands here.
+    // A budget of zero also empties the round and must still fall through to "stalled"
+    if actions.is_empty() && deferred.is_empty() {
+        save_local_state(
+            base_dir,
+            &server_state,
+            &data_dir,
+            &HashSet::new(),
+            &local_state,
+        )
+        .map_err(SyncError::other)?;
+        return Ok(RoundOutcome {
+            result: SyncResult::default(),
+            done: 0,
+            remaining: 0,
+        });
+    }
+
     let mut result = SyncResult::default();
     let bulk_req = build_bulk_request(
         &actions,
@@ -1371,6 +1393,53 @@ mod tests {
                 new_state: wire_state(&store.files),
             }
         }
+    }
+
+    /// Coming back to the app syncs, and most of those rounds find nothing to do. Sending
+    /// the empty bulk anyway cost a Worker call, a read of the state and a rewrite of it
+    /// on every return, for a `last_sync` nobody reads
+    #[tokio::test]
+    async fn a_round_with_nothing_to_do_sends_no_bulk() {
+        let dir = tempfile::tempdir().unwrap();
+        seed(dir.path(), "notes/a.md", "body");
+        let server = FakeServer::new();
+        run_over(&server, dir.path(), 40, |_| {}).await.unwrap();
+        assert_eq!(server.bulk_ops().len(), 1);
+
+        let result = run_over(&server, dir.path(), 40, |_| {}).await.unwrap();
+
+        assert_eq!(
+            server.bulk_ops().len(),
+            1,
+            "the second sync had nothing to send"
+        );
+        assert_eq!(result.uploaded + result.downloaded, 0);
+        let state = SyncState::load(dir.path()).unwrap();
+        assert!(state.files.contains_key("notes/a.md"));
+    }
+
+    /// The one case that transfers nothing yet has something to record: a file that is
+    /// already the same on both sides, with no local record of it (a fresh checkout of the
+    /// same tree). Skipping the bulk must not skip the record, or the next round would
+    /// read the file as new on both sides again
+    #[tokio::test]
+    async fn a_round_that_only_records_still_records_without_a_bulk() {
+        let dir = tempfile::tempdir().unwrap();
+        seed(dir.path(), "notes/a.md", "body");
+        let server = FakeServer::new();
+        server.put("notes/a.md", "body", "2026-08-05T00:00:00Z");
+
+        run_over(&server, dir.path(), 40, |_| {}).await.unwrap();
+
+        assert!(server.bulk_ops().is_empty());
+        let state = SyncState::load(dir.path()).unwrap();
+        assert_eq!(
+            state
+                .files
+                .get("notes/a.md")
+                .map(|r| r.last_synced_modified.to_rfc3339()),
+            Some("2026-08-05T00:00:00+00:00".to_string())
+        );
     }
 
     /// This is the Mac right after an import. Putting everything in one bulk crashes the
