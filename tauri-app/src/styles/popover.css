@@ -28,7 +28,8 @@
   color: var(--app-text-faint);
 }
 
-.sync-popover[data-face="failed"] .icon {
+.sync-popover[data-face="failed"] .icon,
+.sync-popover[data-face="signed-out"] .icon {
   color: var(--app-danger);
 }
 

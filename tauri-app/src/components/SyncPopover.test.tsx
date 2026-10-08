@@ -50,4 +50,19 @@ describe("SyncPopover", () => {
 
     await waitFor(() => expect(history.get()).toBe("/settings?page=sync"));
   });
+
+  // A lost login is not "local only". The device was set up for sync and it has stopped,
+  // so the popover says so and the one action is to sign in again
+  it("says the login is gone and offers to sign in again", async () => {
+    const { history } = mount("signed-out");
+
+    expect(screen.getByText("ログインが切れています")).toBeDefined();
+    expect(screen.queryByText(/この端末の中だけに残ります/u)).toBeNull();
+    // The settings are still the user's; the switches stay in reach
+    expect(screen.getByLabelText("保存時に自動同期")).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: "ログインする" }));
+
+    await waitFor(() => expect(history.get()).toBe("/settings?page=sync"));
+  });
 });

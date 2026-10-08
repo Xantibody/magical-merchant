@@ -9,7 +9,7 @@ import { describeSyncError, describeSyncResult, syncErrorKind } from "./sync-sta
 import type { SyncResultPayload } from "./sync-status";
 import type { IconName } from "../components/Icon";
 
-export type SyncStatus = "idle" | "syncing" | "success" | "error" | "needs-setup";
+export type SyncStatus = "idle" | "syncing" | "success" | "error" | "needs-setup" | "signed-out";
 
 /** Gather up a burst of autosaves (1s debounce) before syncing. */
 export const AUTO_SYNC_DEBOUNCE_MS = 5000;
@@ -40,7 +40,8 @@ export function syncIconName(status: SyncStatus): IconName {
     case "syncing": {
       return "cloud-arrow-up";
     }
-    case "error": {
+    case "error":
+    case "signed-out": {
       return "cloud-warning";
     }
     case "needs-setup": {
@@ -89,7 +90,7 @@ export function createSyncState(onSynced: () => void): SyncState {
         return;
       }
       if (!(await typedInvoke("auth_status"))) {
-        setStatus("needs-setup");
+        setStatus("signed-out");
         setMessage(t().sync.notSignedIn);
         return;
       }
@@ -154,9 +155,12 @@ export function createSyncState(onSynced: () => void): SyncState {
     }
   };
 
+  /** Not set up, or set up without a login: a round could only fail. */
+  const cannotSync = (): boolean => status() === "needs-setup" || status() === "signed-out";
+
   let autoSyncTimer: ReturnType<typeof setTimeout> | undefined;
   const scheduleAutoSync = (): void => {
-    if (!autoSync() || status() === "needs-setup") {
+    if (!autoSync() || cannotSync()) {
       return;
     }
     if (autoSyncTimer) {
@@ -168,7 +172,7 @@ export function createSyncState(onSynced: () => void): SyncState {
   };
 
   const resume = (): void => {
-    if (!syncOnStart() || status() === "needs-setup") {
+    if (!syncOnStart() || cannotSync()) {
       return;
     }
     if (Date.now() - lastStartedAt < RESUME_SYNC_INTERVAL_MS) {

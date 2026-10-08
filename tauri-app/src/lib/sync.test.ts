@@ -82,6 +82,20 @@ describe("createSyncState readiness", () => {
     dispose();
   });
 
+  // The login lasts days, not forever. A device that was set up and lost it is not "local
+  // only": the user asked for sync, and needs-setup's quiet face would hide that it stopped
+  it("treats a set-up device without a login as signed out", async () => {
+    handlers.get_sync_config = () => ({ workers_url: "https://sync.example", auto_sync: true });
+
+    const { state, dispose } = mount();
+
+    await vi.waitFor(() => {
+      expect(state.status()).toBe("signed-out");
+    });
+    expect(state.message()).toBe(t().sync.notSignedIn);
+    dispose();
+  });
+
   // Showing a damaged config as "not set up" makes the user type it again in Settings, and
   // that save overwrites the file that could not be read
   it("reports a damaged config instead of asking for setup", async () => {
@@ -204,7 +218,7 @@ describe("createSyncState sync on start", () => {
     await vi.waitFor(() => {
       expect(listened).toContain(EVENTS.AUTH_SUCCESS);
     });
-    expect(state.status()).toBe("needs-setup");
+    expect(state.status()).toBe("signed-out");
     expect(syncStarts()).toBe(0);
     dispose();
   });

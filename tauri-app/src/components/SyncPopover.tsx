@@ -1,4 +1,4 @@
-import { createMemo, Show } from "solid-js";
+import { createMemo, Match, Show, Switch } from "solid-js";
 import type { JSX } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import Icon from "./Icon";
@@ -13,13 +13,18 @@ interface SyncPopoverProps {
   onClose: () => void;
 }
 
-/** The four states that decide the look and wording. The detailed sync breakdown stays out. */
-type Face = "synced" | "syncing" | "offline" | "failed";
+/**
+ * The five states that decide the look and wording. The detailed sync breakdown stays out.
+ * `offline` is a device never set up (quiet, local only); `signed-out` is one that was set
+ * up and lost its login, which is a stop the user asked not to have.
+ */
+type Face = "synced" | "syncing" | "offline" | "signed-out" | "failed";
 
 const FACE_ICONS: Record<Face, IconName> = {
   synced: "cloud-check",
   syncing: "cloud-arrow-up",
   offline: "cloud-slash",
+  "signed-out": "cloud-warning",
   failed: "cloud-warning",
 };
 
@@ -29,6 +34,7 @@ function faceTitle(face: Face): string {
     synced: labels.synced,
     syncing: labels.syncing,
     offline: labels.notSyncing,
+    "signed-out": labels.signedOut,
     failed: labels.failed,
   }[face];
 }
@@ -47,11 +53,19 @@ export default function SyncPopover(props: SyncPopoverProps): JSX.Element {
       case "needs-setup": {
         return "offline";
       }
+      case "signed-out": {
+        return "signed-out";
+      }
       default: {
         return "synced";
       }
     }
   });
+
+  const openSyncSettings = (): void => {
+    props.onClose();
+    navigate(settingsPage("sync"));
+  };
 
   return (
     <div class="popover sync-popover" data-face={face()}>
@@ -62,6 +76,9 @@ export default function SyncPopover(props: SyncPopoverProps): JSX.Element {
 
       <Show when={face() === "offline"}>
         <p class="sync-popover-body">{t().sync.localOnly}</p>
+      </Show>
+      <Show when={face() === "signed-out"}>
+        <p class="sync-popover-body">{t().sync.signedOutBody}</p>
       </Show>
 
       {/* The reason for the failure is not reworded: the returned text is shown as it is */}
@@ -103,8 +120,7 @@ export default function SyncPopover(props: SyncPopoverProps): JSX.Element {
       </Show>
 
       <div class="sync-popover-actions">
-        <Show
-          when={face() === "offline"}
+        <Switch
           fallback={
             <button
               type="button"
@@ -118,17 +134,17 @@ export default function SyncPopover(props: SyncPopoverProps): JSX.Element {
             </button>
           }
         >
-          <button
-            type="button"
-            class="link-button"
-            onClick={() => {
-              props.onClose();
-              navigate(settingsPage("sync"));
-            }}
-          >
-            {t().sync.openSettings}
-          </button>
-        </Show>
+          <Match when={face() === "offline"}>
+            <button type="button" class="link-button" onClick={openSyncSettings}>
+              {t().sync.openSettings}
+            </button>
+          </Match>
+          <Match when={face() === "signed-out"}>
+            <button type="button" class="button-secondary" onClick={openSyncSettings}>
+              {t().sync.signIn}
+            </button>
+          </Match>
+        </Switch>
       </div>
     </div>
   );

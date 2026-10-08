@@ -31,7 +31,7 @@ interface SyncErrorInfo {
 }
 
 export interface SyncUiState {
-  status: "idle" | "success" | "error" | "needs-setup";
+  status: "idle" | "success" | "error" | "needs-setup" | "signed-out";
   message: string;
 }
 
@@ -91,8 +91,13 @@ export function describeSyncError(err: unknown): SyncUiState {
   if (info.kind === "busy") {
     return { status: "idle", message: "" };
   }
-  if (info.kind === "notConfigured" || info.kind === "notAuthenticated") {
+  if (info.kind === "notConfigured") {
     return { status: "needs-setup", message: info.message };
+  }
+  // Set up, but the login is gone (expired, or the server refused it). Not the quiet
+  // "local only" of a device that was never set up: the user asked for sync and is not getting it
+  if (info.kind === "notAuthenticated") {
+    return { status: "signed-out", message: info.message };
   }
   return { status: "error", message: info.message };
 }
