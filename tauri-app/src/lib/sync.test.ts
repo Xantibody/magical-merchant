@@ -58,6 +58,17 @@ function mount(): {
   return { state, dispose };
 }
 
+/** The round that is running ends with nothing to report. Only with `shouldMockEvents` */
+const finishRound = (): Promise<void> =>
+  emit(EVENTS.SYNC_COMPLETE, {
+    uploaded: 0,
+    downloaded: 0,
+    deleted_remote: 0,
+    deleted_local: 0,
+    conflicts: 0,
+    errors: [],
+  });
+
 describe("createSyncState readiness", () => {
   beforeEach(() => {
     calls = [];
@@ -391,6 +402,66 @@ describe("createSyncState a login lost while away", () => {
       expect(state.status()).toBe("signed-out");
     });
     expect(state.alertVersion()).toBe(0);
+    dispose();
+  });
+});
+
+describe("createSyncState a sync asked for during a sync", () => {
+  beforeEach(() => {
+    calls = [];
+    handlers = {
+      get_sync_config: () => ({
+        workers_url: "https://sync.example",
+        auto_sync: true,
+        // The start-up round is the running round here. Waiting for it is also how the
+        // test knows the listeners are in place
+        sync_on_start: true,
+      }),
+      auth_status: () => true,
+      sync_start: () => null,
+    };
+    mockWindows("main");
+    mockIPC(
+      (cmd) => {
+        const handler = handlers[cmd];
+        if (!handler) {
+          throw new Error(`unexpected command ${cmd}`);
+        }
+        calls.push(cmd);
+        return handler();
+      },
+      { shouldMockEvents: true },
+    );
+  });
+
+  afterEach(() => {
+    clearMocks();
+  });
+
+  const syncStarts = (): number => calls.filter((c) => c === "sync_start").length;
+
+  // A save that lands while a round is running used to be dropped: `syncNow` returned
+  // and nothing came back for it until the next save or return. Leaving the app is the
+  // case that hurts, since there is no next save
+  it("runs one more round after the running one, for what came in meanwhile", async () => {
+    const { state, dispose } = mount();
+    await vi.waitFor(() => {
+      expect(syncStarts()).toBe(1);
+    });
+    expect(state.status()).toBe("syncing");
+
+    void state.syncNow();
+    void state.syncNow();
+    expect(syncStarts()).toBe(1);
+
+    await finishRound();
+
+    // Several asks fold into one rerun
+    await vi.waitFor(() => {
+      expect(syncStarts()).toBe(2);
+    });
+    await finishRound();
+    expect(syncStarts()).toBe(2);
     dispose();
   });
 });

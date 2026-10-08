@@ -164,8 +164,23 @@ export function createSyncState(onSynced: () => void): SyncState {
   // When the last round started, whatever started it. `resume` counts its interval from here
   let lastStartedAt = Number.NEGATIVE_INFINITY;
 
+  // A sync asked for while one is running. Dropping it lost whatever was saved during the
+  // round until the next save or return, and leaving the app has no next save. Several
+  // asks fold into one more round, run when the current one ends
+  let rerunRequested = false;
+
+  const roundEnded = (): void => {
+    if (rerunRequested) {
+      rerunRequested = false;
+      // syncNow and roundEnded call each other, so one is named before it is defined
+      // oxlint-disable-next-line no-use-before-define
+      void syncNow();
+    }
+  };
+
   const syncNow = async (): Promise<void> => {
     if (status() === "syncing") {
+      rerunRequested = true;
       return;
     }
     lastStartedAt = Date.now();
@@ -176,6 +191,7 @@ export function createSyncState(onSynced: () => void): SyncState {
       // The result is applied through the sync-complete / sync-error events
     } catch (error) {
       applyError(error);
+      roundEnded();
     }
   };
 
@@ -232,8 +248,12 @@ export function createSyncState(onSynced: () => void): SyncState {
         } else {
           setAlertVersion((v) => v + 1);
         }
+        roundEnded();
       }),
-      await listen<unknown>(EVENTS.SYNC_ERROR, (e) => applyError(e.payload)),
+      await listen<unknown>(EVENTS.SYNC_ERROR, (e) => {
+        applyError(e.payload);
+        roundEnded();
+      }),
       await listen(EVENTS.AUTH_SUCCESS, () => {
         void checkReadiness();
       }),
