@@ -9,7 +9,7 @@ import { describeSyncError, describeSyncResult, syncErrorKind } from "./sync-sta
 import type { SyncResultPayload } from "./sync-status";
 import type { IconName } from "../components/Icon";
 
-export type SyncStatus = "idle" | "syncing" | "success" | "error" | "needs-setup";
+export type SyncStatus = "idle" | "syncing" | "success" | "error" | "needs-setup" | "signed-out";
 
 /** Gather up a burst of autosaves (1s debounce) before syncing. */
 export const AUTO_SYNC_DEBOUNCE_MS = 5000;
@@ -40,7 +40,8 @@ export function syncIconName(status: SyncStatus): IconName {
     case "syncing": {
       return "cloud-arrow-up";
     }
-    case "error": {
+    case "error":
+    case "signed-out": {
       return "cloud-warning";
     }
     case "needs-setup": {
@@ -78,6 +79,24 @@ export function createSyncState(onSynced: () => void): SyncState {
 
   const unlisteners: UnlistenFn[] = [];
 
+  /** Not set up, or set up without a login: a round could only fail. */
+  const cannotSync = (): boolean => status() === "needs-setup" || status() === "signed-out";
+
+  /**
+   * The login is gone: found out at launch, on a return, or from a round the server refused.
+   * The popover opens once per episode, on the way in. Every return on desktop is a focus
+   * change, and reopening on each would be nagging; the icon carries the warning in between.
+   * A device with both switches off syncs by hand and meets the refusal there, so it is not told
+   */
+  const enterSignedOut = (text: string): void => {
+    const fresh = status() !== "signed-out";
+    setStatus("signed-out");
+    setMessage(text);
+    if (fresh && (autoSync() || syncOnStart())) {
+      setAlertVersion((v) => v + 1);
+    }
+  };
+
   const checkReadiness = async (): Promise<void> => {
     try {
       const config = await typedInvoke("get_sync_config");
@@ -89,12 +108,14 @@ export function createSyncState(onSynced: () => void): SyncState {
         return;
       }
       if (!(await typedInvoke("auth_status"))) {
-        setStatus("needs-setup");
-        setMessage(t().sync.notSignedIn);
+        enterSignedOut(t().sync.notSignedIn);
         return;
       }
-      setStatus("idle");
-      setMessage("");
+      // Ready. What the last round said (success, error) stays on show; only a block is lifted
+      if (cannotSync()) {
+        setStatus("idle");
+        setMessage("");
+      }
     } catch (error) {
       // Showing a corrupt config as "not configured" would make the settings screen ask for
       // it again, and that save would overwrite the file that could not be read
@@ -114,6 +135,10 @@ export function createSyncState(onSynced: () => void): SyncState {
 
   const applyError = (err: unknown): void => {
     const ui = describeSyncError(err);
+    if (ui.status === "signed-out") {
+      enterSignedOut(ui.message);
+      return;
+    }
     setStatus(ui.status);
     setMessage(ui.message);
 
@@ -156,7 +181,7 @@ export function createSyncState(onSynced: () => void): SyncState {
 
   let autoSyncTimer: ReturnType<typeof setTimeout> | undefined;
   const scheduleAutoSync = (): void => {
-    if (!autoSync() || status() === "needs-setup") {
+    if (!autoSync() || cannotSync()) {
       return;
     }
     if (autoSyncTimer) {
@@ -167,14 +192,27 @@ export function createSyncState(onSynced: () => void): SyncState {
     }, AUTO_SYNC_DEBOUNCE_MS);
   };
 
-  const resume = (): void => {
-    if (!syncOnStart() || status() === "needs-setup") {
+  /** The sync a start or a return brings, when the setting asks for it and not too soon. */
+  const syncIfAsked = (): void => {
+    if (!syncOnStart() || cannotSync()) {
       return;
     }
     if (Date.now() - lastStartedAt < RESUME_SYNC_INTERVAL_MS) {
       return;
     }
     void syncNow();
+  };
+
+  const resume = (): void => {
+    void (async () => {
+      // The login lasts days and runs out while the app is away. Nothing else looks at it
+      // until a round fails, so the return is where it is looked at: two local calls, no
+      // network, and no interval, unlike the sync. A round in flight proved it a moment ago
+      if (status() !== "syncing") {
+        await checkReadiness();
+      }
+      syncIfAsked();
+    })();
   };
 
   onMount(async () => {
@@ -201,7 +239,7 @@ export function createSyncState(onSynced: () => void): SyncState {
       }),
     );
     // Only now: a round started before the listeners are in place could end unheard
-    resume();
+    syncIfAsked();
   });
 
   onCleanup(() => {

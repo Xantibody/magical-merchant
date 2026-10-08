@@ -1,6 +1,6 @@
 import { env, createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import { describe, it, expect, beforeAll, afterEach, vi } from "vitest";
-import { SignJWT } from "jose";
+import { decodeJwt, SignJWT } from "jose";
 import worker, { deepLinkPage } from "./index";
 
 interface JwtOptions {
@@ -10,11 +10,17 @@ interface JwtOptions {
   alg?: string;
   issuer?: string;
   audience?: string;
+  /** When the Google sign-in happened. Left out, the token is one from before renewal existed */
+  authTime?: number;
 }
 
 function makeJwt(payload: JwtOptions, secret = env.JWT_SECRET): Promise<string> {
   const key = new TextEncoder().encode(secret);
-  return new SignJWT({ email: payload.email })
+  const claims =
+    payload.authTime === undefined
+      ? { email: payload.email }
+      : { email: payload.email, auth_time: payload.authTime };
+  return new SignJWT(claims)
     .setProtectedHeader({ alg: payload.alg ?? "HS256" })
     .setIssuer(payload.issuer ?? "magical-merchant-sync")
     .setAudience(payload.audience ?? "magical-merchant-app")
@@ -24,6 +30,8 @@ function makeJwt(payload: JwtOptions, secret = env.JWT_SECRET): Promise<string> 
 }
 
 let validToken: string;
+
+const now = (): number => Math.floor(Date.now() / 1000);
 
 function authHeader(): Record<string, string> {
   return { Authorization: `Bearer ${validToken}` };
@@ -620,6 +628,115 @@ describe("Workers Sync API", () => {
 
   // R2 keys are not split per user. Let a second person in and they fight over the same
   // `notes/<id>.md`, with the two states shoving each other forever
+  // The login is the Worker's own JWT, so it can be renewed here without Google: a valid
+  // token buys a fresh one with the same identity. A device that syncs within the lifetime
+  // never signs out; one that was away longer meets the usual 401 and signs in again
+  describe("pOST /auth/renew", () => {
+    interface RenewBody {
+      token: string;
+      exp: number;
+    }
+
+    function renew(token: string, overrides: Partial<typeof env> = {}): Promise<Response> {
+      return send(
+        new Request("http://localhost/auth/renew", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        overrides,
+      );
+    }
+
+    it("hands back a fresh token for the same person", async () => {
+      const soon = now() + 600;
+      const token = await makeJwt({
+        sub: "user-123",
+        email: "test@example.com",
+        exp: soon,
+        authTime: now() - 86_400,
+      });
+
+      const res = await renew(token);
+
+      expect(res.status).toBe(200);
+      const body = await jsonBody<RenewBody>(res);
+      const claims = decodeJwt(body.token);
+      expect(claims.sub).toBe("user-123");
+      expect(claims.email).toBe("test@example.com");
+      expect(claims.exp).toBeGreaterThan(soon);
+      expect(body.exp).toBe(claims.exp);
+      // The new token is accepted where the old one was
+      const synced = await send(
+        new Request("http://localhost/sync-state", {
+          headers: { Authorization: `Bearer ${body.token}` },
+        }),
+      );
+      expect(synced.status).toBe(200);
+    });
+
+    it("carries the sign-in time forward, so renewals cannot stretch it", async () => {
+      const signedInAt = now() - 86_400;
+      const token = await makeJwt({
+        sub: "user-123",
+        email: "test@example.com",
+        exp: now() + 600,
+        authTime: signedInAt,
+      });
+
+      const body = await jsonBody<RenewBody>(await renew(token));
+
+      expect(decodeJwt(body.token).auth_time).toBe(signedInAt);
+    });
+
+    // Renewal sits behind the bearer check like everything else. Letting a dead token in
+    // here would make the lifetime meaningless
+    it("refuses a token that has already run out", async () => {
+      const token = await makeJwt({
+        sub: "user-123",
+        email: "test@example.com",
+        exp: now() - 100,
+        authTime: now() - 86_400,
+      });
+
+      const res = await renew(token);
+
+      expect(res.status).toBe(401);
+    });
+
+    it("refuses once the sign-in is older than the session bound", async () => {
+      const token = await makeJwt({
+        sub: "user-123",
+        email: "test@example.com",
+        exp: now() + 600,
+        authTime: now() - 1000,
+      });
+
+      const bounded = await renew(token, { JWT_MAX_SESSION_SECONDS: "900" });
+      // 0 lifts the bound
+      const unbounded = await renew(token, { JWT_MAX_SESSION_SECONDS: "0" });
+
+      expect(bounded.status).toBe(401);
+      expect(unbounded.status).toBe(200);
+    });
+
+    // Tokens issued before renewal existed carry no sign-in time. They are days from
+    // running out anyway, so the session starts counting from the first renewal
+    it("starts the session clock at the first renewal of an older token", async () => {
+      const token = await makeJwt({
+        sub: "user-123",
+        email: "test@example.com",
+        exp: now() + 600,
+      });
+
+      const before = now();
+      const body = await jsonBody<RenewBody>(await renew(token));
+
+      const authTime = decodeJwt(body.token).auth_time as number;
+      expect(authTime).toBeGreaterThanOrEqual(before);
+      expect(authTime).toBeLessThanOrEqual(now());
+    });
+  });
+
   describe("the ALLOWED_SUBS allowlist", () => {
     it("lets anyone in while it is unset", async () => {
       const res = await send(request("/sync-state"), { ALLOWED_SUBS: undefined });

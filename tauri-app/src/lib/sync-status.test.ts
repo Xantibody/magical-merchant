@@ -86,9 +86,12 @@ describe("describeSyncError", () => {
     expect(ui.message).toContain("Sync is not set up.");
   });
 
-  it("maps notAuthenticated to needs-setup", () => {
+  // A device that was set up and lost its login is not a device that was never set up.
+  // Folding both into needs-setup gave the expired login the quiet look meant for "local only"
+  it("maps notAuthenticated to signed-out, not to needs-setup", () => {
     const ui = describeSyncError({ kind: "notAuthenticated", message: "Not logged in." });
-    expect(ui.status).toBe("needs-setup");
+    expect(ui.status).toBe("signed-out");
+    expect(ui.message).toBe("Not logged in.");
   });
 
   it("maps network errors to error with message", () => {

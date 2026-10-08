@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { HIT_ICONS, MODE_ICONS, MODE_LABELS, ROUTES } from "./routes";
+import { HIT_ICONS, MODE_ICONS, MODE_LABELS, ROUTES, settingsPage } from "./routes";
 
 // The three surfaces are named in the order a record ripens: Scrawl (scribbled down) ->
 // Note (one document) -> Codex (a document that keeps being added to). They are proper
@@ -26,5 +26,13 @@ describe("surface names", () => {
     expect(HIT_ICONS.scrawl).toBe("scribble-loop");
     expect(HIT_ICONS.note).toBe("note-pencil");
     expect(HIT_ICONS.codex).toBe("book");
+  });
+});
+
+// The sync popover's "open Settings" used to land on the general page, one tap short of
+// the sync page it was talking about. The page rides on the URL so a link can name it
+describe("settingsPage", () => {
+  it("names the page in the query so Settings opens on it", () => {
+    expect(settingsPage("sync")).toBe("/settings?page=sync");
   });
 });

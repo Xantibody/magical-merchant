@@ -8,6 +8,7 @@ export interface Env {
   GOOGLE_CLIENT_SECRET: string;
   JWT_SECRET: string;
   JWT_EXPIRY_SECONDS?: string;
+  JWT_MAX_SESSION_SECONDS?: string;
   ALLOWED_SUBS?: string;
 }
 
@@ -15,6 +16,11 @@ interface JwtPayload {
   sub: string;
   email: string;
   exp: number;
+  /**
+   * When the Google sign-in happened. A renewal carries it forward, so it bounds how
+   * long a token can be kept alive without Google. Absent on tokens from before renewal
+   */
+  auth_time?: number;
 }
 
 interface GoogleTokenResponse {
@@ -27,6 +33,8 @@ interface GoogleUserInfo {
 }
 
 const DEFAULT_JWT_EXPIRY_SECONDS = 259_200; // 3 days
+/** How long renewals can stretch one sign-in before Google is asked again. 0 lifts the bound */
+const DEFAULT_JWT_MAX_SESSION_SECONDS = 15_552_000; // 180 days
 
 function jsonResponse(data: unknown, status = 200): Response {
   return Response.json(data, { status });
@@ -181,11 +189,14 @@ const JWT_AUDIENCE = "magical-merchant-app";
 
 function signJwt(payload: JwtPayload, secret: string): Promise<string> {
   const key = new TextEncoder().encode(secret);
-  return new SignJWT({ email: payload.email })
+  // `iat` lets the client read the lifetime off the token (`exp - iat`) and renew at
+  // the halfway mark without being told the Worker's setting
+  return new SignJWT({ email: payload.email, auth_time: payload.auth_time })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuer(JWT_ISSUER)
     .setAudience(JWT_AUDIENCE)
     .setSubject(payload.sub)
+    .setIssuedAt()
     .setExpirationTime(payload.exp)
     .sign(key);
 }
@@ -206,7 +217,12 @@ async function verifyJwt(token: string, secret: string): Promise<JwtPayload | nu
     ) {
       return null;
     }
-    return { sub: payload.sub, email: payload.email, exp: payload.exp };
+    return {
+      sub: payload.sub,
+      email: payload.email,
+      exp: payload.exp,
+      auth_time: typeof payload.auth_time === "number" ? payload.auth_time : undefined,
+    };
   } catch {
     return null;
   }
@@ -336,14 +352,47 @@ p { margin: 0; opacity: .75; }
 </html>`;
 }
 
-function getJwtExpiry(env: Env): number {
-  if (env.JWT_EXPIRY_SECONDS) {
-    const parsed = parseInt(env.JWT_EXPIRY_SECONDS, 10);
-    if (!isNaN(parsed) && parsed > 0) {
+/** A positive number of seconds, or the default when the variable is unset or unreadable. */
+function secondsSetting(value: string | undefined, fallback: number): number {
+  if (value) {
+    const parsed = parseInt(value, 10);
+    if (!isNaN(parsed) && parsed >= 0) {
       return parsed;
     }
   }
-  return DEFAULT_JWT_EXPIRY_SECONDS;
+  return fallback;
+}
+
+function getJwtExpiry(env: Env): number {
+  const expiry = secondsSetting(env.JWT_EXPIRY_SECONDS, DEFAULT_JWT_EXPIRY_SECONDS);
+  // A zero lifetime would issue tokens already dead
+  return expiry > 0 ? expiry : DEFAULT_JWT_EXPIRY_SECONDS;
+}
+
+function getJwtMaxSession(env: Env): number {
+  return secondsSetting(env.JWT_MAX_SESSION_SECONDS, DEFAULT_JWT_MAX_SESSION_SECONDS);
+}
+
+/**
+ * A valid token buys a fresh one for the same person. The login is this Worker's own JWT,
+ * so Google is not involved; what bounds it is `auth_time`, the one Google sign-in every
+ * renewal descends from. Past the session bound the usual 401 sends the user back to Google.
+ * Renewal is reached only through the bearer check, so an expired token cannot renew itself.
+ */
+async function handleAuthRenew(claims: JwtPayload, env: Env): Promise<Response> {
+  const now = Math.floor(Date.now() / 1000);
+  // A token from before renewal existed has no `auth_time`. It counts from here
+  const authTime = claims.auth_time ?? now;
+  const maxSession = getJwtMaxSession(env);
+  if (maxSession > 0 && now - authTime > maxSession) {
+    return errorResponse("Unauthorized", 401);
+  }
+  const exp = now + getJwtExpiry(env);
+  const token = await signJwt(
+    { sub: claims.sub, email: claims.email, exp, auth_time: authTime },
+    env.JWT_SECRET,
+  );
+  return jsonResponse({ token, exp });
 }
 
 /** The OAuth entrance: sends the user on to Google's consent screen with a 302. */
@@ -502,6 +551,10 @@ export default {
 
     if (!isAllowedSub(env.ALLOWED_SUBS, claims.sub)) {
       return errorResponse("This bucket belongs to somebody else", 403);
+    }
+
+    if (pathname === "/auth/renew" && method === "POST") {
+      return handleAuthRenew(claims, env);
     }
 
     if (pathname === "/sync-state" && method === "GET") {

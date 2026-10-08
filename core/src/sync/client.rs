@@ -72,6 +72,12 @@ pub(crate) struct DownloadedFile {
     pub(crate) content_base64: String,
 }
 
+/// `POST /auth/renew`: the fresh token. The Worker also sends `exp`, which the token carries
+#[derive(Debug, Deserialize)]
+struct RenewResponse {
+    token: String,
+}
+
 // ──────────── HTTP client ────────────
 
 #[derive(Debug)]
@@ -91,8 +97,39 @@ impl HttpClient {
         }
     }
 
+    /// The same server through a renewed login. `reqwest::Client` is a handle, so the
+    /// connection pool and the TLS setup are shared, not rebuilt
+    #[must_use]
+    pub fn with_token(&self, token: &str) -> Self {
+        Self {
+            http: self.http.clone(),
+            base_url: self.base_url.clone(),
+            token: token.to_string(),
+        }
+    }
+
     fn auth(&self) -> String {
         format!("Bearer {}", self.token)
+    }
+}
+
+impl super::token::TokenRenewer for HttpClient {
+    async fn renew(&self) -> Result<String, SyncError> {
+        let resp = self
+            .http
+            .post(format!("{}/auth/renew", self.base_url))
+            .header("Authorization", self.auth())
+            .send()
+            .await
+            .map_err(|e| network_error(&e))?;
+
+        let resp = check_status(resp, "renew").await?;
+
+        let body: RenewResponse = resp
+            .json()
+            .await
+            .map_err(|e| SyncError::other(format!("Failed to parse renew response: {e}")))?;
+        Ok(body.token)
     }
 }
 

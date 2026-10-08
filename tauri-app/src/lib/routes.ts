@@ -13,6 +13,18 @@ export const ROUTES = {
 
 export type RoutePath = (typeof ROUTES)[keyof typeof ROUTES];
 
+/** The three pages of Settings. The order is the nav order. */
+export type SettingsPage = "general" | "records" | "sync";
+export const SETTINGS_PAGES: readonly SettingsPage[] = ["general", "records", "sync"] as const;
+
+/** The query key Settings reads to open on a page. One place, so the link and the reader agree */
+export const SETTINGS_PAGE_PARAM = "page";
+
+/** The route to Settings opened on one page, e.g. `/settings?page=sync`. */
+export function settingsPage(id: SettingsPage): string {
+  return `${ROUTES.SETTINGS}?${SETTINGS_PAGE_PARAM}=${id}`;
+}
+
 export const MODE_ICONS: Record<RoutePath, IconName> = {
   [ROUTES.SCRAWL]: "scribble-loop",
   [ROUTES.NOTES]: "note-pencil",

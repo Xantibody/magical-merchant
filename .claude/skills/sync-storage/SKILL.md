@@ -99,6 +99,18 @@ local scan → diff → `POST /sync/bulk`, repeated until nothing is left over.
 - Sync on start (`sync_on_start`) runs one round at start-up, after the event
   listeners are in place, and on each return to the foreground at most once
   a minute (`resume` in `lib/sync.ts`, called from `AppLayout`'s return hook)
+- Every return also re-reads the login first (two local calls, no interval).
+  `needs-setup` is a device never set up (quiet, "local only"); `signed-out`
+  is one that was set up and lost its login: warning cloud, and the popover
+  opens once on the way in when either sync switch is on. Its "Sign in" goes to
+  `settingsPage("sync")` (`/settings?page=sync`), which Settings reads at open
+- The login renews itself: past half its lifetime (`exp - iat`, read off the
+  token by `renewal_due`) the sync entry of the app and the CLI trades it at
+  `POST /auth/renew` and stores the fresh one (`renew_if_due` in
+  `core/src/sync/token.rs`). Unreachable server → keep the token in hand;
+  401 → `notAuthenticated`. `auth_time` is carried forward and the Worker
+  refuses past `JWT_MAX_SESSION_SECONDS` (180 days). Only a device away for
+  the whole lifetime (30 days in `wrangler.toml`) signs out
 - `data/codex/` syncs like everything else under `data/`: the Codex file and
   its `codex/<stem>/*.md` versions are ordinary keys. A build that predates
   Codex simply never lists that directory. The sync engine runs

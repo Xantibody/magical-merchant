@@ -82,6 +82,22 @@ describe("createSyncState readiness", () => {
     dispose();
   });
 
+  // The login lasts days, not forever. A device that was set up and lost it is not "local
+  // only": the user asked for sync, and needs-setup's quiet face would hide that it stopped
+  it("treats a set-up device without a login as signed out", async () => {
+    handlers.get_sync_config = () => ({ workers_url: "https://sync.example", auto_sync: true });
+
+    const { state, dispose } = mount();
+
+    await vi.waitFor(() => {
+      expect(state.status()).toBe("signed-out");
+    });
+    expect(state.message()).toBe(t().sync.notSignedIn);
+    // Found out at launch: the popover opens, as it would for a sync that failed
+    expect(state.alertVersion()).toBe(1);
+    dispose();
+  });
+
   // Showing a damaged config as "not set up" makes the user type it again in Settings, and
   // that save overwrites the file that could not be read
   it("reports a damaged config instead of asking for setup", async () => {
@@ -204,7 +220,7 @@ describe("createSyncState sync on start", () => {
     await vi.waitFor(() => {
       expect(listened).toContain(EVENTS.AUTH_SUCCESS);
     });
-    expect(state.status()).toBe("needs-setup");
+    expect(state.status()).toBe("signed-out");
     expect(syncStarts()).toBe(0);
     dispose();
   });
@@ -273,7 +289,9 @@ describe("createSyncState sync on return", () => {
     vi.setSystemTime(Date.now() + RESUME_SYNC_INTERVAL_MS + 1000);
     state.resume();
 
-    expect(syncStarts()).toBe(2);
+    await vi.waitFor(() => {
+      expect(syncStarts()).toBe(2);
+    });
     dispose();
   });
 
@@ -284,7 +302,95 @@ describe("createSyncState sync on return", () => {
     vi.setSystemTime(Date.now() + RESUME_SYNC_INTERVAL_MS / 2);
     state.resume();
 
+    // The return looks at the login first. Only once that is done can "no sync" mean anything
+    await vi.waitFor(() => {
+      expect(calls.filter((c) => c === "auth_status")).toHaveLength(2);
+    });
     expect(syncStarts()).toBe(1);
+    dispose();
+  });
+});
+
+describe("createSyncState a login lost while away", () => {
+  let config: { workers_url: string; auto_sync: boolean; sync_on_start: boolean };
+
+  beforeEach(() => {
+    calls = [];
+    config = { workers_url: "https://sync.example", auto_sync: true, sync_on_start: false };
+    handlers = {
+      get_sync_config: () => config,
+      auth_status: () => true,
+      sync_start: () => null,
+    };
+    mockCommands();
+  });
+
+  afterEach(() => {
+    clearMocks();
+  });
+
+  const authChecks = (): number => calls.filter((c) => c === "auth_status").length;
+
+  async function mountSignedIn(): Promise<ReturnType<typeof mount>> {
+    const mounted = mount();
+    await vi.waitFor(() => {
+      expect(authChecks()).toBe(1);
+    });
+    expect(mounted.state.status()).toBe("idle");
+    return mounted;
+  }
+
+  // The login lasts days. It runs out while the phone is in a pocket, and nothing looks at it
+  // again until a sync fails. Coming back is the moment to look, and the popover is how it tells
+  it("notices on return that the login is gone and opens the popover once", async () => {
+    const { state, dispose } = await mountSignedIn();
+    handlers.auth_status = () => false;
+
+    state.resume();
+
+    await vi.waitFor(() => {
+      expect(state.status()).toBe("signed-out");
+    });
+    expect(state.alertVersion()).toBe(1);
+
+    // Every return on desktop is a focus change. The icon keeps saying it; the popover does not
+    state.resume();
+    await vi.waitFor(() => {
+      expect(authChecks()).toBe(3);
+    });
+    expect(state.alertVersion()).toBe(1);
+    dispose();
+  });
+
+  it("goes back to idle when the login is there again", async () => {
+    const { state, dispose } = await mountSignedIn();
+    handlers.auth_status = () => false;
+    state.resume();
+    await vi.waitFor(() => {
+      expect(state.status()).toBe("signed-out");
+    });
+
+    handlers.auth_status = () => true;
+    state.resume();
+
+    await vi.waitFor(() => {
+      expect(state.status()).toBe("idle");
+    });
+    dispose();
+  });
+
+  // Someone who turned both switches off syncs by hand, and will meet the refusal there
+  it("stays quiet when the user asked for no automatic sync", async () => {
+    config.auto_sync = false;
+    const { state, dispose } = await mountSignedIn();
+    handlers.auth_status = () => false;
+
+    state.resume();
+
+    await vi.waitFor(() => {
+      expect(state.status()).toBe("signed-out");
+    });
+    expect(state.alertVersion()).toBe(0);
     dispose();
   });
 });

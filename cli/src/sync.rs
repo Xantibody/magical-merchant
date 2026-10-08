@@ -2,8 +2,8 @@
 //!
 //! The syncing itself is one engine in core (`engine::run_with_progress`); what this
 //! does is resolve the config and the token, and turn progress into lines. Signing in
-//! is still the app's job: the CLI only reads the stored JWT, and if it has expired it
-//! says to go back to the app.
+//! is still the app's job: the CLI only reads the stored JWT (and renews it past half
+//! its lifetime, as the app does), and if it has expired it says to go back to the app.
 
 use std::path::Path;
 
@@ -96,6 +96,17 @@ pub(crate) async fn run(data_dir: &Path) -> anyhow::Result<()> {
         &credentials.workers_url,
         &credentials.token,
     );
+    // Past half its lifetime the login is traded for a fresh one, as the app does at its
+    // entry. The CLI shares the Keychain with the app, so the renewal reaches both
+    let client = match token::renew_if_due(&credentials.token, &client, |fresh| {
+        token::store_token(data_dir, fresh)
+    })
+    .await
+    .map_err(|e| describe_failure(&e))?
+    {
+        Some(fresh) => client.with_token(&fresh),
+        None => client,
+    };
 
     let result = engine::run_with_progress(&client, data_dir, |progress| {
         eprintln!("{}", round_line(&progress));

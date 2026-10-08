@@ -390,8 +390,11 @@ const ja = {
     syncing: "同期中…",
     notSyncing: "同期していません",
     failed: "同期に失敗しました",
+    signedOut: "ログインが切れています",
     localOnly:
       "書いたものはこの端末の中だけに残ります。他の端末と揃えたいときだけ設定してください。",
+    signedOutBody: "同期が止まっています。ログインし直すと再開します。",
+    signIn: "ログインする",
     lastSync: (when: string) => `最終同期 ${when}`,
     autoSync: "保存時に自動同期",
     syncOnStart: "起動時に同期",
@@ -931,8 +934,11 @@ const en: Messages = {
     syncing: "Syncing…",
     notSyncing: "Not syncing",
     failed: "Sync failed",
+    signedOut: "Signed out",
     localOnly:
       "Everything you write stays on this device. Set this up only when you want other devices to match.",
+    signedOutBody: "Sync has stopped. Sign in again to resume.",
+    signIn: "Sign in",
     lastSync: (when: string) => `Last synced ${when}`,
     autoSync: "Sync automatically on save",
     syncOnStart: "Sync when the app opens",
