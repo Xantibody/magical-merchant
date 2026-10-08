@@ -30,6 +30,9 @@ function memoryStore(broken = false): BackupStore & { items: Map<string, string>
       }
       items.set(key, value);
     },
+    removeItem: (key) => {
+      items.delete(key);
+    },
   };
 }
 
@@ -601,5 +604,82 @@ describe("snapshotFor", () => {
     expect(pending.item).toBe(NOTE);
     expect(pending.body).toBe("いまの本文");
     expect(pending.bodyEpoch).toBe(h.view.bodyEpoch);
+  });
+});
+
+// The second after the last keystroke belongs to the debounce, and the IPC after it to the
+// process. Android keeps neither when it puts the app away. localStorage is synchronous and
+// stays, so the keystrokes live there until the save has landed, and the next open writes them
+describe("閉じる前の下書き", () => {
+  const DRAFT_KEY = `note-draft:${NOTE.filename}`;
+
+  it("keeps the typed body in the draft slot until the save has landed", async () => {
+    const h = harness();
+
+    typed(h, "# 歩いた日\n\n三丁目まで、四丁目");
+
+    expect(JSON.parse(h.store.items.get(DRAFT_KEY) as string)).toStrictEqual({
+      body: "# 歩いた日\n\n三丁目まで、四丁目",
+      revision: "r-read",
+    });
+
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(h.writes).toHaveLength(1);
+    expect(h.store.items.has(DRAFT_KEY)).toBe(false);
+  });
+
+  it("writes the draft on the next open while the disk is still what it was typed over", async () => {
+    const h = harness();
+    h.store.items.set(
+      DRAFT_KEY,
+      JSON.stringify({ body: "# 歩いた日\n\n閉じる前の続き", revision: "r-disk" }),
+    );
+
+    const landed = await h.session.reload(NOTE);
+
+    expect(landed).toBe(true);
+    expect(h.writes).toStrictEqual([
+      { filename: NOTE.filename, body: "# 歩いた日\n\n閉じる前の続き", revision: "r-disk" },
+    ]);
+    expect(h.shown.at(-1)?.body).toBe("閉じる前の続き");
+    // The next save carries the fingerprint of what was just written, not of the stale disk
+    expect(h.session.revisionOf(NOTE.filename)).toBe("r-1");
+    expect(h.store.items.has(DRAFT_KEY)).toBe(false);
+    // One step back is the body the app was put away over
+    expect(h.store.items.get(`note-backup:${NOTE.filename}`)).toBe("# 歩いた日\n\nディスクのぶん");
+    expect(h.toasts).toStrictEqual([]);
+  });
+
+  // Another device, the CLI or MCP wrote the note in between. The draft must not crush that,
+  // so it goes where a refused save goes, and the toast says how to get it back
+  it("sets the draft aside when the disk has moved on, and says so", async () => {
+    const h = harness();
+    h.store.items.set(
+      DRAFT_KEY,
+      JSON.stringify({ body: "# 歩いた日\n\n閉じる前の続き", revision: "r-old" }),
+    );
+
+    await h.session.reload(NOTE);
+
+    expect(h.writes).toStrictEqual([]);
+    expect(h.shown.at(-1)?.body).toBe("ディスクのぶん");
+    expect(h.store.items.get(`note-backup:${NOTE.filename}`)).toBe("# 歩いた日\n\n閉じる前の続き");
+    expect(h.store.items.has(DRAFT_KEY)).toBe(false);
+    expect(h.toasts).toStrictEqual([t().notes.draftParked(NOTE.title)]);
+  });
+
+  it("forgets a draft that says the same as the disk", async () => {
+    const h = harness();
+    h.store.items.set(
+      DRAFT_KEY,
+      JSON.stringify({ body: "# 歩いた日\n\nディスクのぶん", revision: "r-disk" }),
+    );
+
+    await h.session.reload(NOTE);
+
+    expect(h.writes).toStrictEqual([]);
+    expect(h.store.items.has(DRAFT_KEY)).toBe(false);
+    expect(h.toasts).toStrictEqual([]);
   });
 });

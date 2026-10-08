@@ -12,6 +12,7 @@
 export interface BackupStore {
   getItem: (key: string) => string | null;
   setItem: (key: string, value: string) => void;
+  removeItem: (key: string) => void;
 }
 
 export interface EditSession {
@@ -52,6 +53,60 @@ export function tryWriteBackup(store: BackupStore, filename: string, body: strin
 export function writeBackup(store: BackupStore, filename: string, body: string): void {
   // If it could not be written, there is just no new restore point. The save itself succeeded
   tryWriteBackup(store, filename, body);
+}
+
+/**
+ * The keystrokes the save timer is still waiting on, with the fingerprint of the body they
+ * were typed over. A second slot, apart from the restore point: giving that one a fourth
+ * meaning would confuse what "back to before this edit" steps back to.
+ *
+ * localStorage is synchronous and survives the process. The one-second debounce and the
+ * IPC do not when Android puts the app away, so this is the copy that outlives that. The
+ * next open of the note writes it to disk if the disk has not moved (`note-session.ts`).
+ */
+export interface Draft {
+  body: string;
+  /** The revision read before these keystrokes. `undefined` when the note had none yet. */
+  revision: string | undefined;
+}
+
+const DRAFT_PREFIX = "note-draft:";
+
+export function readDraft(store: BackupStore, filename: string): Draft | null {
+  try {
+    const raw = store.getItem(DRAFT_PREFIX + filename);
+    if (raw === null) {
+      return null;
+    }
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null || !("body" in parsed)) {
+      return null;
+    }
+    const { body, revision } = parsed as { body: unknown; revision?: unknown };
+    if (typeof body !== "string") {
+      return null;
+    }
+    return { body, revision: typeof revision === "string" ? revision : undefined };
+  } catch {
+    return null;
+  }
+}
+
+/** Best-effort, like the backup: a draft that could not be kept is just no draft. */
+export function writeDraft(store: BackupStore, filename: string, draft: Draft): void {
+  try {
+    store.setItem(DRAFT_PREFIX + filename, JSON.stringify(draft));
+  } catch {
+    // Quota exceeded, or a device where localStorage is unavailable
+  }
+}
+
+export function clearDraft(store: BackupStore, filename: string): void {
+  try {
+    store.removeItem(DRAFT_PREFIX + filename);
+  } catch {
+    // Nothing to clear on a device where localStorage is unavailable
+  }
 }
 
 export function beginEditSession(body: string): EditSession {

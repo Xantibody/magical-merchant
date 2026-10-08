@@ -19,7 +19,16 @@
  * No dependency on Solid. Everything needed comes in through `NoteSessionDeps`.
  */
 
-import { beginEditSession, recordSaved, shouldSave, tryWriteBackup } from "./edit-backup";
+import {
+  beginEditSession,
+  clearDraft,
+  readDraft,
+  recordSaved,
+  shouldSave,
+  tryWriteBackup,
+  writeBackup,
+  writeDraft,
+} from "./edit-backup";
 import type { BackupStore, EditSession } from "./edit-backup";
 import { isStaleSave } from "./commands";
 import { t } from "./i18n";
@@ -205,6 +214,38 @@ export function createNoteSession(deps: NoteSessionDeps): NoteSession {
     sessionFile = null;
   };
 
+  /**
+   * The keystrokes a put-away app never got to write (`Draft` in edit-backup). Written to
+   * disk now if the disk is still what they were typed over, and the body that goes on
+   * screen is theirs. Set aside as the restore point otherwise: another device, the CLI or
+   * MCP wrote the note in between, and the draft must not crush that. Either way the slot
+   * is emptied; a draft that says the same as the disk is simply forgotten.
+   */
+  const recoverDraft = async (item: SaveTarget, content: NoteContent): Promise<NoteContent> => {
+    const kept = readDraft(deps.store, item.filename);
+    if (!kept) {
+      return content;
+    }
+    clearDraft(deps.store, item.filename);
+    if (kept.body === content.body) {
+      return content;
+    }
+    if (kept.revision === content.revision) {
+      try {
+        const revision = await deps.write(item.filename, kept.body, content.revision);
+        // One step back is the body the app was put away over
+        writeBackup(deps.store, item.filename, content.body);
+        listStale = true;
+        return { ...content, body: kept.body, revision };
+      } catch {
+        // Refused after all (the disk moved between the read and this write). Set aside below
+      }
+    }
+    const parked = tryWriteBackup(deps.store, item.filename, kept.body);
+    deps.showToast(parked ? t().notes.draftParked(item.title) : t().notes.draftLost(item.title));
+    return content;
+  };
+
   const reload = async (item: SaveTarget, force = false): Promise<boolean> => {
     const reading = ++readGeneration;
     const editing = editGeneration;
@@ -224,10 +265,16 @@ export function createNoteSession(deps: NoteSessionDeps): NoteSession {
       ) {
         return false;
       }
-      revisions.set(item.filename, content.revision);
+      const settled = await recoverDraft(item, content);
+      // The recovery may have written, and a step through the list may have moved on
+      // meanwhile. The written body is on disk either way; only the screen is held back
+      if (reading !== readGeneration || deps.selected()?.id !== item.id) {
+        return false;
+      }
+      revisions.set(item.filename, settled.revision);
       // Body and mode go out as a pair. Split, the wrong mode is drawn for a moment
-      const titled = splitTitle(content.body);
-      deps.showBody(item.id, titled.title, titled.body, content.view);
+      const titled = splitTitle(settled.body);
+      deps.showBody(item.id, titled.title, titled.body, settled.view);
       drop();
       draft = undefined;
       return true;
@@ -329,6 +376,9 @@ export function createNoteSession(deps: NoteSessionDeps): NoteSession {
     // Check that the backup actually landed before saying it can be recalled with
     // "restore". A full or disabled localStorage keeps nothing; a promise made there
     // is believed, and the person closes the app on it
+    // The refused keystrokes are set aside here, in full. The draft slot holds an older
+    // copy of them, and left there the reload below would park it over this one
+    clearDraft(deps.store, pending.item.filename);
     const kept = tryWriteBackup(deps.store, pending.item.filename, typedBody(pending));
     saveGenerations.set(pending.item.filename, generationOf(pending.item.filename) + 1);
     if (timerFile === pending.item.filename) {
@@ -375,6 +425,10 @@ export function createNoteSession(deps: NoteSessionDeps): NoteSession {
         const revision = await deps.write(pending.item.filename, pending.body, expected);
         revisions.set(pending.item.filename, revision);
         recordSaved(deps.store, pending.item.filename, pending.session, pending.body);
+        // Keystrokes typed during the write have refilled the slot with a newer body
+        if (readDraft(deps.store, pending.item.filename)?.body === pending.body) {
+          clearDraft(deps.store, pending.item.filename);
+        }
         // The list is not reloaded here. Reloading every note on each 1-second save
         // is heavy on a low-end device, and the list is not even visible while editing.
         // Reload once when the writing hand stops.
@@ -391,6 +445,7 @@ export function createNoteSession(deps: NoteSessionDeps): NoteSession {
         } else {
           // Even a transient I/O failure may be followed by navigation instead
           // of another keystroke. Keep the draft before the screen can leave.
+          clearDraft(deps.store, pending.item.filename);
           const kept = tryWriteBackup(deps.store, pending.item.filename, typedBody(pending));
           // No reload runs here. The screen holds either the continuing keystrokes or another note
           deps.showToast(
@@ -410,6 +465,13 @@ export function createNoteSession(deps: NoteSessionDeps): NoteSession {
     cancelPending();
     timerFile = pending?.item.filename;
     scheduled = pending;
+    // Synchronous, so it is there even if the process is gone before the timer fires
+    if (pending) {
+      writeDraft(deps.store, pending.item.filename, {
+        body: pending.body,
+        revision: revisions.get(pending.item.filename),
+      });
+    }
     saveTimer = setTimeout(() => {
       // A fired timer is a finished timer. Without cleanup "a save is waiting" stays
       // raised, and the reload on focus return never gets through again
