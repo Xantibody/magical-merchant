@@ -1,11 +1,14 @@
 import { describe, it, expect } from "vitest";
 import {
   beginEditSession,
+  clearDraft,
   readBackup,
+  readDraft,
   recordSaved,
   shouldSave,
   tryWriteBackup,
   writeBackup,
+  writeDraft,
 } from "./edit-backup";
 import type { BackupStore } from "./edit-backup";
 
@@ -15,6 +18,9 @@ function memoryStore(): BackupStore {
     getItem: (key) => map.get(key) ?? null,
     setItem: (key, value) => {
       map.set(key, value);
+    },
+    removeItem: (key) => {
+      map.delete(key);
     },
   };
 }
@@ -132,5 +138,48 @@ describe("readBackup / writeBackup", () => {
 
     expect(tryWriteBackup(memoryStore(), FILE, "本文")).toBe(true);
     expect(tryWriteBackup(broken, FILE, "本文")).toBe(false);
+  });
+});
+
+// The keystrokes the save timer is still waiting on. localStorage is synchronous and
+// survives the process, which the one-second debounce and the IPC do not when Android
+// puts the app away
+describe("readDraft / writeDraft / clearDraft", () => {
+  it("keeps the typed body together with the revision it was typed over", () => {
+    const store = memoryStore();
+
+    writeDraft(store, FILE, { body: "# メモ\n\n続き", revision: "r-1" });
+
+    expect(readDraft(store, FILE)).toStrictEqual({ body: "# メモ\n\n続き", revision: "r-1" });
+  });
+
+  it("has nothing for a note never typed into", () => {
+    expect(readDraft(memoryStore(), FILE)).toBeNull();
+  });
+
+  it("is gone once cleared", () => {
+    const store = memoryStore();
+    writeDraft(store, FILE, { body: "# メモ", revision: "r-1" });
+
+    clearDraft(store, FILE);
+
+    expect(readDraft(store, FILE)).toBeNull();
+  });
+
+  it("is a different slot from the restore point", () => {
+    const store = memoryStore();
+    writeBackup(store, FILE, "before");
+
+    writeDraft(store, FILE, { body: "after", revision: "r-1" });
+
+    expect(readBackup(store, FILE)).toBe("before");
+  });
+
+  // A value a past build wrote, or a hand-edited one. Not a crash, just no draft
+  it("treats a slot it cannot read as empty", () => {
+    const store = memoryStore();
+    store.setItem(`note-draft:${FILE}`, "{not json");
+
+    expect(readDraft(store, FILE)).toBeNull();
   });
 });

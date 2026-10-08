@@ -17,6 +17,37 @@ describe("CaptureBar", () => {
   afterEach(() => {
     cleanup();
     document.body.innerHTML = "";
+    localStorage.clear();
+  });
+
+  // An entry is written only on send, so a half-typed capture lived in a signal alone and
+  // went with the process when the phone put the app away. It is not sent on its own: an
+  // entry is a timestamped record and a half-typed one is not what was meant. It waits
+  it("keeps the half-typed text on the device", () => {
+    const { textarea } = renderCaptureBar();
+
+    fireEvent.input(textarea, { target: { value: "買い物の途中で" } });
+
+    expect(localStorage.getItem("scrawl-draft")).toBe("買い物の途中で");
+  });
+
+  it("brings the half-typed text back when the bar is shown again", () => {
+    localStorage.setItem("scrawl-draft", "途中まで");
+
+    const { textarea } = renderCaptureBar();
+
+    expect(textarea.value).toBe("途中まで");
+  });
+
+  it("forgets the text once it has been sent", async () => {
+    const { textarea } = renderCaptureBar();
+    fireEvent.input(textarea, { target: { value: "買い物" } });
+
+    fireEvent.keyDown(textarea, { key: "Enter" });
+    await Promise.resolve();
+
+    expect(textarea.value).toBe("");
+    expect(localStorage.getItem("scrawl-draft")).toBeNull();
   });
 
   it("sends the trimmed text on Enter", () => {

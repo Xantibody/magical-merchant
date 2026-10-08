@@ -95,10 +95,14 @@ local scan → diff → `POST /sync/bulk`, repeated until nothing is left over.
   `<ts>` is precise to the second, so two copies of one key can want the same
   name: a relocation never overwrites, the second takes `<ts>-2.md`
   (`rename_without_clobber` in `core/src/utils/fs.rs`)
-- Auto sync runs a few seconds after any successful write
+- Auto sync runs a few seconds after any successful write, and at once when the
+  user leaves the app with something unsent (`sync.leave()`; the mark is
+  `dirtiedAt > lastStartedAt`). A `syncNow` during a round is kept as one
+  rerun, not dropped
 - Sync on start (`sync_on_start`) runs one round at start-up, after the event
   listeners are in place, and on each return to the foreground at most once
-  a minute (`resume` in `lib/sync.ts`, called from `AppLayout`'s return hook)
+  a minute (`resume` in `lib/sync.ts`, called from `AppLayout`'s return hook).
+  The minute is waived while something is unsent
 - Every return also re-reads the login first (two local calls, no interval).
   `needs-setup` is a device never set up (quiet, "local only"); `signed-out`
   is one that was set up and lost its login: warning cloud, and the popover
@@ -111,6 +115,19 @@ local scan → diff → `POST /sync/bulk`, repeated until nothing is left over.
   401 → `notAuthenticated`. `auth_time` is carried forward and the Worker
   refuses past `JWT_MAX_SESSION_SECONDS` (180 days). Only a device away for
   the whole lifetime (30 days in `wrangler.toml`) signs out
+- **Leaving** is `lib/leave.ts`: `watchLeave` fires once per leave (page hidden,
+  `WINDOW_BLUR`, `pagehide`; reset on visible / `WINDOW_FOCUS`), the shell's
+  `onLeave` registry runs the screens' pending writes (Workspace registers
+  `settleEdit`), then `sync.leave()`. Writes first, sync after
+- **Drafts** outlive the process: every save snapshot goes to
+  `note-draft:<filename>` (`Draft` in `lib/edit-backup.ts`, body + the revision
+  it was typed over) and is cleared when the save lands; `reload` settles it
+  on the next open (write if the revision still matches, else park as the
+  restore point with a toast). The Scrawl capture bar keeps `scrawl-draft`.
+  Neither is the `note-backup:` restore point, which keeps its one meaning
+- A round with no actions sends no bulk (`sync_once`): it records the fetched
+  state and returns. Only a zero budget empties a round that still has work,
+  and that keeps falling through to `stalled`
 - `data/codex/` syncs like everything else under `data/`: the Codex file and
   its `codex/<stem>/*.md` versions are ordinary keys. A build that predates
   Codex simply never lists that directory. The sync engine runs

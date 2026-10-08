@@ -3,6 +3,8 @@ import type { Accessor, JSX } from "solid-js";
 import { NO_FILTER } from "./browse";
 import type { BrowseFilter } from "./browse";
 import type { PaletteScope } from "./search-scope";
+import { createLeaveHandlers } from "./leave";
+import type { LeaveHandlers } from "./leave";
 import type { SaveStatus } from "./note-session";
 
 /** The save state shown in the bottom bar, and the time of the last successful save. */
@@ -107,6 +109,12 @@ export interface Shell {
   /** The signal to reread the data. When it increases, everything is fetched again. */
   dataVersion: Accessor<number>;
   refreshData: () => void;
+  /**
+   * The mirror of `refreshData`: the user is leaving the app (`lib/leave.ts`). A screen with
+   * something pending registers what writes it; AppLayout runs them all, then syncs.
+   */
+  onLeave: LeaveHandlers["register"];
+  leave: LeaveHandlers["run"];
 }
 
 const ShellContext = createContext<Shell>();
@@ -120,6 +128,7 @@ export function useShell(): Shell {
 }
 
 export function ShellProvider(props: { children: JSX.Element }): JSX.Element {
+  const leaveHandlers = createLeaveHandlers();
   const [popover, setPopover] = createSignal<PopoverName>(null);
   const [popoverTrigger, setPopoverTrigger] = createSignal<HTMLElement | undefined>();
   const [paletteOpen, setPaletteOpen] = createSignal(false);
@@ -184,6 +193,8 @@ export function ShellProvider(props: { children: JSX.Element }): JSX.Element {
     },
     dataVersion,
     refreshData: () => setDataVersion((v) => v + 1),
+    onLeave: leaveHandlers.register,
+    leave: leaveHandlers.run,
   };
 
   return <ShellContext.Provider value={shell}>{props.children}</ShellContext.Provider>;

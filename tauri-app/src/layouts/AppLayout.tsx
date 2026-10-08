@@ -14,6 +14,7 @@ import UndoToast from "../components/UndoToast";
 import FirstRunCard from "../components/FirstRunCard";
 import { ShellProvider, useShell } from "../lib/shell";
 import type { NoteBar } from "../lib/shell";
+import { watchLeave } from "../lib/leave";
 import { createSyncState, syncIconName } from "../lib/sync";
 import { applyTheme, theme } from "../lib/theme";
 import { locale, t } from "../lib/i18n";
@@ -394,6 +395,20 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
     };
     document.addEventListener("visibilitychange", onVisible);
     onCleanup(() => document.removeEventListener("visibilitychange", onVisible));
+
+    // Leaving is the mirror image. On Android the process may not come back, so what
+    // is still pending is written now, by the screens that hold it
+    let unwatchLeave: (() => void) | undefined;
+    void (async () => {
+      unwatchLeave = await watchLeave(() => {
+        // The writes first: a sync that ran before them would leave the last words unsent
+        void (async () => {
+          await shell.leave();
+          sync.leave();
+        })();
+      });
+    })();
+    onCleanup(() => unwatchLeave?.());
 
     // On desktop, switching to another app does not hide the window, so no
     // visibilitychange arrives. Only the Tauri side knows that focus returned.

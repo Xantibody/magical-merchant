@@ -642,6 +642,10 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   const toggleMap = (item: NoteItem): Promise<void> =>
     setView(item, mapOpen() ? "editor" : "mindmap");
 
+  // Leaving the app writes the save still waiting on its debounce. On Android the process
+  // may be gone before the timer fires
+  onCleanup(shell.onLeave(() => session.settleEdit()));
+
   onCleanup(() => {
     clearTimeout(savedTimer);
     session.dispose();

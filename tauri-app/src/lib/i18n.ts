@@ -199,6 +199,11 @@ const ja = {
       `「${title}」のファイルは文字として読めないので保存できません。入力した本文はこの端末に控えましたが、読めない Note を開く道が無いので、今は画面に出せません`,
     saveNotKeptAway: (title: string) =>
       `「${title}」は保存できず、この端末にも控えを残せませんでした。入力した本文は失われました`,
+    /** A put-away app left typing that could not be written: the note moved on meanwhile. The copy is the restore point */
+    draftParked: (title: string) =>
+      `「${title}」に閉じる前に打った分がありましたが、その間に別の変更が入ったので控えに残しました。「編集前に戻す」で戻せます`,
+    draftLost: (title: string) =>
+      `「${title}」に閉じる前に打った分がありましたが、その間に別の変更が入り、控えにも残せませんでした`,
     loadFailed: "この Note を読めませんでした。書き換えないよう、本文は開いていません",
   },
   codex: {
@@ -755,6 +760,10 @@ const en: Messages = {
       `"${title}" cannot be saved because its file is not readable text. Your text is kept on this device, but a Note that cannot be read cannot be opened, so it cannot be put on screen yet`,
     saveNotKeptAway: (title: string) =>
       `"${title}" could not be saved, and no copy could be kept on this device either. Your text is gone`,
+    draftParked: (title: string) =>
+      `"${title}" had typing from before the app was put away. It was changed elsewhere since, so that typing is kept on this device: Revert puts it back`,
+    draftLost: (title: string) =>
+      `"${title}" had typing from before the app was put away, but it was changed elsewhere since and no copy could be kept`,
     loadFailed: "This Note could not be read, so its body stays closed rather than be overwritten",
   },
   codex: {

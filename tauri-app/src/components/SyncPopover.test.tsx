@@ -22,6 +22,7 @@ function frozen(status: SyncStatus): SyncState {
     syncOnStart: off,
     setSyncOnStart: async () => {},
     resume: () => {},
+    leave: () => {},
     alertVersion: zero,
   };
 }

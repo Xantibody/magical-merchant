@@ -17,8 +17,37 @@ interface CaptureBarProps {
 const MAX_ROWS = 6;
 const MAX_SUGGESTIONS = 6;
 
+/**
+ * The half-typed capture. An entry is written only on send, so until then the text lived
+ * in a signal alone and went with the process when the phone put the app away.
+ * localStorage is synchronous and stays. It is never sent on its own: an entry is a
+ * timestamped record, and a half-typed one is not what was meant. It waits for the return.
+ */
+const DRAFT_KEY = "scrawl-draft";
+
+function readDraft(): string {
+  try {
+    return localStorage.getItem(DRAFT_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+/** Best-effort: a device without localStorage simply forgets the text with the process. */
+function rememberDraft(value: string): void {
+  try {
+    if (value) {
+      localStorage.setItem(DRAFT_KEY, value);
+    } else {
+      localStorage.removeItem(DRAFT_KEY);
+    }
+  } catch {
+    // Quota exceeded, or no storage
+  }
+}
+
 export default function CaptureBar(props: CaptureBarProps): JSX.Element {
-  const [text, setText] = createSignal("");
+  const [text, setText] = createSignal(readDraft());
   const [sending, setSending] = createSignal(false);
   /** Where the completion is anchored. Measured again whenever the cursor moves. */
   const [caret, setCaret] = createSignal(0);
@@ -101,6 +130,7 @@ export default function CaptureBar(props: CaptureBarProps): JSX.Element {
       await props.onSend(trimmed);
       if (text() === submitted) {
         setText("");
+        rememberDraft("");
         setDismissed(false);
         queueMicrotask(autoGrow);
       }
@@ -200,6 +230,7 @@ export default function CaptureBar(props: CaptureBarProps): JSX.Element {
         value={text()}
         onInput={(e) => {
           setText(e.currentTarget.value);
+          rememberDraft(e.currentTarget.value);
           setDismissed(false);
           trackCaret(e.currentTarget);
           autoGrow();
