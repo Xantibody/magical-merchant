@@ -22,7 +22,8 @@ import { applyLocale, readStoredLocale, t } from "../lib/i18n";
 import type { LocalePreference } from "../lib/i18n";
 import { isMacDesktop } from "../lib/platform";
 import { isImeComposing } from "../lib/ime";
-import { ROUTES } from "../lib/routes";
+import { ROUTES, SETTINGS_PAGES } from "../lib/routes";
+import type { SettingsPage } from "../lib/routes";
 import { useShell } from "../lib/shell";
 import { chooseTheme, theme, THEMES } from "../lib/theme";
 import { syncErrorKind } from "../lib/sync-status";
@@ -34,12 +35,7 @@ import type { JSX } from "solid-js";
 
 const UNDO_MS = 5000;
 
-/** The three pages of Settings. The order is the nav order. */
-type PageId = "general" | "records" | "sync";
-
-const PAGE_IDS: readonly PageId[] = ["general", "records", "sync"] as const;
-
-const PAGE_ICONS: Record<PageId, IconName> = {
+const PAGE_ICONS: Record<SettingsPage, IconName> = {
   general: "circle-half",
   records: "file-text",
   sync: "cloud-check",
@@ -161,7 +157,7 @@ async function readAsBase64(file: File): Promise<string> {
 export default function Settings(): JSX.Element {
   const shell = useShell();
   /** The page shown. Mobile shows only the list until one is opened (`settings--page`). */
-  const [page, setPage] = createSignal<PageId>("general");
+  const [page, setPage] = createSignal<SettingsPage>("general");
   const [pageOpen, setPageOpen] = createSignal(false);
   const [workersUrl, setWorkersUrl] = createSignal("");
   const [authenticated, setAuthenticated] = createSignal(false);
@@ -698,7 +694,7 @@ export default function Settings(): JSX.Element {
     </>
   );
 
-  const rowsOf = (id: PageId): JSX.Element => {
+  const rowsOf = (id: SettingsPage): JSX.Element => {
     switch (id) {
       case "general": {
         return general();
@@ -716,7 +712,7 @@ export default function Settings(): JSX.Element {
     <div class="settings" classList={{ "settings--page": pageOpen() }}>
       <nav class="settings-nav" aria-label={t().settings.title}>
         <h1 class="settings-title">{t().settings.title}</h1>
-        <For each={PAGE_IDS}>
+        <For each={SETTINGS_PAGES}>
           {(id) => (
             <button
               type="button"

@@ -13,6 +13,10 @@ export const ROUTES = {
 
 export type RoutePath = (typeof ROUTES)[keyof typeof ROUTES];
 
+/** The three pages of Settings. The order is the nav order. */
+export type SettingsPage = "general" | "records" | "sync";
+export const SETTINGS_PAGES: readonly SettingsPage[] = ["general", "records", "sync"] as const;
+
 export const MODE_ICONS: Record<RoutePath, IconName> = {
   [ROUTES.SCRAWL]: "scribble-loop",
   [ROUTES.NOTES]: "note-pencil",
