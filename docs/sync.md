@@ -117,12 +117,45 @@ which is about what the list shows rather than about syncing.
 
 Turning on **Auto sync** (sync popover, or `autoSync` in the nix-darwin
 module) runs a sync a few seconds after any successful write, so a note taken
-on the phone reaches the Mac without touching the sync button.
+on the phone reaches the Mac without touching the sync button. Leaving the
+app (the page hidden, the window blurred, the page unloading) is the end of
+the keystrokes: the screens first write what they still hold, the body save
+waiting on its one-second debounce, and then a round starts at once if a
+save landed since the last round began. A leave with nothing unsent does
+nothing, which is what makes every window switch on desktop free. A sync
+asked for while a round is running is not dropped: one more round runs when
+the current one ends.
+
+Before the save reaches disk the keystrokes already sit in `localStorage`
+(`note-draft:<filename>`, with the revision they were typed over), because on
+Android the process can be gone before the debounce or the IPC completes.
+The next open of the note writes them if the disk is still what they were
+typed over, and sets them aside as the restore point, with a toast, if it
+moved on. The half-typed Scrawl capture is kept the same way
+(`scrawl-draft`) and comes back into the bar; it is never sent on its own.
 
 Turning on **Sync when the app opens** (sync popover, or `syncOnStart`) runs one
 when the app starts and again when it comes back to the foreground, so the
 other device's writes are there before you start typing. Coming back counts
-at most once a minute: desktop reports every change of window focus.
+at most once a minute: desktop reports every change of window focus. The
+minute is waived when something is still unsent, since the leave sync can be
+cut short by the OS and the return is its second chance.
+
+A round that finds nothing to transfer sends no bulk: it records what the
+server said and returns, one Worker call and one R2 read instead of two
+calls, two reads and a write. Most returns to the app are such rounds.
+
+### What this costs on the free tiers
+
+Cloudflare's free tiers, as of October 2026: R2 allows 1 million Class A
+operations (writes, lists) and 10 million Class B operations (reads) a
+month, and Workers Free allows 100,000 requests a day. One sync with one
+upload is 2 Worker calls, 2 reads and 2 writes; one with nothing to do is 1
+call and 1 read. Two devices that each sync a hundred times a day use about
+1 % of the Class A allowance and under 1 % of the daily Worker requests.
+What the design guards against is not the quota but a loop: a sync must
+never trigger a write that triggers a sync, and a conflict must not bounce
+between devices.
 
 The login does not run out on a device that syncs. The session JWT carries
 `iat` and `exp`, and once half of that lifetime is behind it, the next sync
