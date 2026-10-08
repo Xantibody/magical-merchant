@@ -156,6 +156,16 @@ async fn do_sync(handle: &AppHandle) -> Result<SyncResult, SyncError> {
     }
 
     let client = HttpClient::new(http_client()?, &config.workers_url, &token);
+    // Past half its lifetime the login is traded for a fresh one, so a device that syncs
+    // never signs out. The CLI does the same at its entry
+    let client = match token::renew_if_due(&token, &client, |fresh| {
+        token::store_token(&base_dir, fresh)
+    })
+    .await?
+    {
+        Some(fresh) => client.with_token(&fresh),
+        None => client,
+    };
 
     engine::run(&client, &base_dir).await
 }
