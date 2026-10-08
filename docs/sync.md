@@ -124,6 +124,20 @@ when the app starts and again when it comes back to the foreground, so the
 other device's writes are there before you start typing. Coming back counts
 at most once a minute: desktop reports every change of window focus.
 
+The login does not run out on a device that syncs. The session JWT carries
+`iat` and `exp`, and once half of that lifetime is behind it, the next sync
+(app or CLI) first trades it for a fresh one at `POST /auth/renew` and stores
+that; a server that cannot be reached leaves the token in hand, since it
+still works, and the next sync asks again. Every renewal carries `auth_time`
+forward, the moment of the one Google sign-in it descends from, and the
+Worker refuses to renew past `JWT_MAX_SESSION_SECONDS` from it, so a stolen
+token cannot be kept alive forever. Only a device that was away for the whole
+lifetime signs out. Coming back to the app looks at the login before anything
+else; a device that is set up and finds itself signed out shows the warning
+cloud and opens the sync popover once, with "Sign in" leading to the sync
+page of Settings. A device that was never set up keeps its quiet "local only"
+face: it did not ask for sync.
+
 The session JWT lives in the macOS Keychain on desktop. Android has no
 Keychain equivalent that `keyring` supports — it silently falls back to an
 in-memory store, which loses the token immediately — so on Android the token
@@ -194,13 +208,14 @@ wrangler secret put ALLOWED_SUBS
 
 ### 5. Configuration
 
-| Variable               | Location           | Description                      | Default           |
-| ---------------------- | ------------------ | -------------------------------- | ----------------- |
-| `GOOGLE_CLIENT_ID`     | Secret             | Google OAuth Client ID           | —                 |
-| `GOOGLE_CLIENT_SECRET` | Secret             | Google OAuth Client Secret       | —                 |
-| `JWT_SECRET`           | Secret             | HMAC-SHA256 signing key for JWTs | —                 |
-| `JWT_EXPIRY_SECONDS`   | Secret or `[vars]` | Token lifetime in seconds        | `259200` (3 days) |
-| `ALLOWED_SUBS`         | Secret or `[vars]` | Google `sub`s allowed to sync    | unset: everyone   |
+| Variable                  | Location           | Description                                                           | Default                                         |
+| ------------------------- | ------------------ | --------------------------------------------------------------------- | ----------------------------------------------- |
+| `GOOGLE_CLIENT_ID`        | Secret             | Google OAuth Client ID                                                | —                                               |
+| `GOOGLE_CLIENT_SECRET`    | Secret             | Google OAuth Client Secret                                            | —                                               |
+| `JWT_SECRET`              | Secret             | HMAC-SHA256 signing key for JWTs                                      | —                                               |
+| `JWT_EXPIRY_SECONDS`      | Secret or `[vars]` | Token lifetime in seconds; a device that syncs renews at half of it   | `259200` (3 days); `wrangler.toml` sets 30 days |
+| `JWT_MAX_SESSION_SECONDS` | Secret or `[vars]` | How long renewals may stretch one Google sign-in; `0` lifts the bound | `15552000` (180 days)                           |
+| `ALLOWED_SUBS`            | Secret or `[vars]` | Google `sub`s allowed to sync                                         | unset: everyone                                 |
 
 > [!IMPORTANT]
 > **One bucket holds one person.** Keys are stored as they arrive —
