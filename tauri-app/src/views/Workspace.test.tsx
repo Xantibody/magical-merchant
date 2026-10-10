@@ -9,6 +9,8 @@ import type { Editor } from "@milkdown/kit/core";
 import { ShellProvider, useShell } from "../lib/shell";
 import type { Shell } from "../lib/shell";
 import { shortcutLabel } from "../lib/shortcuts";
+import { writeVimEnabled } from "../lib/vim-setting";
+import type { VimMode } from "../lib/vim-keys";
 import Workspace from "./Workspace";
 
 // The real Milkdown drags in all of ProseMirror. What matters here is only the decision of
@@ -19,14 +21,21 @@ import Workspace from "./Workspace";
 // at the moment of mount there is no ProseMirror and no `onEditorReady`, and a caret placed
 // without waiting for them lands on nothing
 let typeInEditor: ((markdown: string) => void) | undefined;
+/** What the last editor was built with, and its way to report a Vim mode. */
+let editorVim: boolean | undefined;
+let reportVimMode: ((mode: VimMode) => void) | undefined;
 vi.mock(import("../components/MilkdownEditor"), () => ({
   default: (props: {
     defaultValue?: string;
     onChange?: (markdown: string) => void;
     onEditorReady?: (editor?: Editor) => void;
     noteLinks?: () => { id: string }[];
+    vim?: boolean;
+    onVimMode?: (mode: VimMode) => void;
   }): JSX.Element => {
     typeInEditor = props.onChange;
+    editorVim = props.vim;
+    reportVimMode = props.onVimMode;
     const el = document.createElement("div");
     el.dataset.testid = "editor-body";
     el.textContent = props.defaultValue ?? "";
@@ -770,6 +779,42 @@ describe("Workspace › 常時編集", () => {
 
     await waitFor(() => expect(openedPanel()).not.toBeNull());
     expect(shell?.notePanelPinned()).toBe(true);
+  });
+
+  // A modal editor is opt-in. Off, the editor is built without it and the bar says nothing
+  it("builds the editor without Vim until the setting is on", async () => {
+    await openNoteA();
+    await waitFor(() => expect(editorVim).toBe(false));
+
+    expect(shell?.noteBar()?.vim).toBeUndefined();
+  });
+
+  it("shows the Vim mode in the bottom bar, but not insert", async () => {
+    writeVimEnabled(true);
+    await openNoteA();
+    await waitFor(() => expect(editorVim).toBe(true));
+
+    reportVimMode?.("normal");
+    await waitFor(() => expect(shell?.noteBar()?.vim).toBe("ノーマル"));
+    reportVimMode?.("visual-line");
+    await waitFor(() => expect(shell?.noteBar()?.vim).toBe("ビジュアル行"));
+    reportVimMode?.("insert");
+
+    await waitFor(() => expect(shell?.noteBar()?.vim).toBeUndefined());
+  });
+
+  // Every note opens ready to type into, whatever mode the last one was left in
+  it("forgets the Vim mode when the editor is rebuilt for another note", async () => {
+    writeVimEnabled(true);
+    disk.set(FILE_B, BODY_B);
+    await openNoteA();
+    await waitFor(() => expect(editorVim).toBe(true));
+    reportVimMode?.("normal");
+    await waitFor(() => expect(shell?.noteBar()?.vim).toBe("ノーマル"));
+
+    fireEvent.click(await rowOf(TITLE_B));
+
+    await waitFor(() => expect(shell?.noteBar()?.vim).toBeUndefined());
   });
 
   // Revert has nothing to swap in until this device has held an earlier body. Say why instead

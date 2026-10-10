@@ -37,6 +37,8 @@ import { noteLinkText } from "../lib/note-link-serializer";
 import type { NoteLinkTarget } from "../lib/note-link-plugin";
 import { createGlyphPlugin } from "../lib/glyph-plugin";
 import { createExamplePlugin } from "../lib/example-plugin";
+import { createVimPlugins } from "../lib/vim-plugin";
+import type { VimMode } from "../lib/vim-keys";
 import { getShikiTheme } from "../lib/theme";
 import "../styles/editor.css";
 import type { JSX } from "solid-js";
@@ -61,6 +63,10 @@ interface MilkdownEditorProps {
   glyphs?: () => ReadonlyMap<string, string>;
   /** Heading to template examples. Never enters the document; shown as faint text only. */
   examples?: () => ReadonlyMap<string, string[]>;
+  /** Vim keys (`vim-plugin.ts`). Read once, when the editor is built. */
+  vim?: boolean;
+  /** Told whenever the Vim mode changes. */
+  onVimMode?: (mode: VimMode) => void;
 }
 
 /**
@@ -198,6 +204,8 @@ export default function MilkdownEditor(props: MilkdownEditorProps): JSX.Element 
       highlighter.getLoadedLanguages(),
     );
 
+    const vim = props.vim ? createVimPlugins(props.onVimMode) : undefined;
+
     editor = await Editor.make()
       .config((ctx) => {
         ctx.set(rootCtx, root);
@@ -229,6 +237,7 @@ export default function MilkdownEditor(props: MilkdownEditorProps): JSX.Element 
       .use(history)
       .use(clipboard)
       .use(trailing)
+      .use(vim ? vim.early : [])
       .use(inputRuleUndoPlugin)
       .use(linkTooltipPlugin)
       .use(exitCodeBlockPlugin)
@@ -242,6 +251,8 @@ export default function MilkdownEditor(props: MilkdownEditorProps): JSX.Element 
       .use(props.noteLinks ? createNoteLinkPlugin(props.noteLinks) : [])
       .use(props.glyphs ? createGlyphPlugin(props.glyphs) : [])
       .use(props.examples ? createExamplePlugin(props.examples) : [])
+      // After the link completion, so its Esc closes the list before Vim leaves insert
+      .use(vim ? vim.late : [])
       .create();
 
     // Torn down while create was pending (the list was stepped through quickly, or

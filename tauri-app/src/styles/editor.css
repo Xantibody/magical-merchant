@@ -544,3 +544,21 @@
 .note-link-suggest-item--active {
   background: var(--app-accent-soft);
 }
+
+/* Vim's normal mode: the caret becomes a block over the character under it. The
+   browser's caret is hidden rather than replaced, so the selection stays its own */
+.milkdown-editor .ProseMirror.vim-normal {
+  caret-color: transparent;
+}
+
+.milkdown-editor .vim-cursor {
+  background: var(--app-text);
+  color: var(--app-surface);
+}
+
+.milkdown-editor .vim-cursor--empty {
+  display: inline-block;
+  width: 0.6em;
+  height: 1.2em;
+  vertical-align: text-bottom;
+}

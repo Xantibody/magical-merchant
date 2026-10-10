@@ -286,6 +286,29 @@ the key handling itself all read one table in
 [`tauri-app/src/lib/shortcuts.ts`](../tauri-app/src/lib/shortcuts.ts),
 so a key that is written in two places cannot come to mean two things.
 
+### Vim keys (opt-in)
+
+Settings → 全般 → Vim のキー操作 gives the body a small normal mode. It is
+off until you turn it on, it is not offered on a phone, and every note still
+opens in insert, ready to type. Esc in the body enters normal mode; the
+bottom bar says ノーマル / ビジュアル / ビジュアル行 while you are out of insert.
+
+| Keys                      | What they do                                            |
+| ------------------------- | ------------------------------------------------------- |
+| `h` `l` `0` `$`           | Along the line                                          |
+| `j` `k`                   | Down / up a line as it is drawn (Vim's `gj` / `gk`)     |
+| `w` `b`                   | By words, where the platform breaks them (Japanese too) |
+| `gg` `G`                  | The first / last line                                   |
+| `i` `a` `I` `A` `o` `O`   | Back to insert; `o` in a list makes a new item          |
+| `x` `dd` `yy` `p` `P`     | A character / a line out, a line kept, put back         |
+| `u` `Ctrl-r`              | Undo / redo                                             |
+| `v` `V`, then `d` `y` `c` | Select by character / by line and act on it             |
+
+A line is a paragraph, a heading or a list item, and one line of a code block
+inside one. There are no counts, no operator + motion (`dw`, `ciw`) and no
+`:` commands: for the real Vim, `magical-merchant edit` opens the note in
+`$EDITOR` (see [Terminal](#terminal-cli)).
+
 ## Language
 
 The interface speaks Japanese or English. It follows the system language on
