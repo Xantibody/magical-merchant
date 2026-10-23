@@ -468,7 +468,7 @@ jobs:
           persist-credentials: false
       - uses: raven-actions/actionlint@v2
       # 方針は .github/zizmor.yml
-      - uses: zizmorcore/zizmor-action@v0.6.4
+      - uses: zizmorcore/zizmor-action@v0.8.0
         with:
           advanced-security: false
           min-severity: low
