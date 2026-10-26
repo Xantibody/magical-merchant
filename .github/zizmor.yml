@@ -1,4 +1,4 @@
-# ci.yml の workflows ジョブが読む zizmor の設定。
+# ci.yml の lint ジョブが読む zizmor の設定。
 # https://docs.zizmor.sh/configuration/
 rules:
   unpinned-uses:

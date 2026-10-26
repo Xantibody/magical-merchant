@@ -452,64 +452,49 @@ jobs:
       - name: the CLI (and the MCP entry point) builds and its tests pass
         run: nix build .#cli --no-link
 
-  # ワークフロー自身の検査。ci.yml は 400 行を超えていて、式の書き間違いも
-  # トークンの置き残しも、これまでは誰も見ていなかった。actionlint が構文と式を、
-  # zizmor が持ち出しやすい書き方 (認証情報の置き残し、run への式の直接展開) を見る。
+  # The checks every run makes, in one job. Billing rounds each job up to a
+  # whole minute, so the three 20-second jobs this used to be cost three.
   #
-  # ここだけは nix devshell を通さない。flake.nix に 2 つ足すと paths-filter が
-  # それを rust/frontend/workers/android すべての入力として拾うので、
-  # ワークフローの lint を足す変更が 45 分の APK ビルドを連れてくる
-  workflows:
+  # actionlint reads the syntax and the expressions of the workflows, zizmor
+  # the patterns that leak (credentials left behind, an expression expanded
+  # straight into run). Those two do not go through the nix devshell: adding
+  # them to flake.nix would make paths-filter count it as an input of rust,
+  # frontend, workers and android, and a workflow lint change would bring the
+  # 45-minute APK build with it.
+  #
+  # Source comments are English and spelled right (justfile: comments). Vale
+  # is applied to the lines this run added, not to whole files: the tree still
+  # carries Japanese comments from before the switch, and a one-line fix must
+  # not have to translate the 100 lines around it. typos covers the whole tree
+  lint:
+    needs: changes
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+          # HEAD^1 is the base of the comment check: on a PR the merge
+          # commit's first parent is main, on a push to main it is the
+          # previous main
+          fetch-depth: 2
       - uses: raven-actions/actionlint@v2
-      # 方針は .github/zizmor.yml
+      # The policy is in .github/zizmor.yml
       - uses: zizmorcore/zizmor-action@v0.6.4
         with:
           advanced-security: false
           min-severity: low
           config: .github/zizmor.yml
-
-  format:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
       - uses: ./.github/actions/setup-nix
         with:
-          name: format
-          hash: ${{ hashFiles('flake.lock', 'flake.nix', 'nix/treefmt.nix') }}
+          name: lint
+          hash: ${{ hashFiles('flake.lock', 'flake.nix', 'nix/treefmt.nix', 'nix/devshells.nix') }}
           max-store-size: 2G
-      - run: nix fmt -- --fail-on-change
-
-  # Source comments are English and spelled right (justfile: comments). Vale
-  # is applied to the lines this run added, not to whole files: the tree still
-  # carries Japanese comments from before the switch, and a one-line fix must
-  # not have to translate the 100 lines around it. typos covers the whole tree
-  comments:
-    needs: changes
-    if: needs.changes.outputs.comments == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-          # HEAD^1 is the base: on a PR the merge commit's first parent is
-          # main, on a push to main it is the previous main
-          fetch-depth: 2
-      - uses: ./.github/actions/setup-nix
-        with:
-          name: comments
-          hash: ${{ hashFiles('flake.lock', 'flake.nix', 'nix/devshells.nix') }}
-          max-store-size: 2G
-      - run: nix develop .#comments --command just comments-changed HEAD^1
+      - name: format
+        run: nix fmt -- --fail-on-change
+      - name: comments
+        if: needs.changes.outputs.comments == 'true'
+        run: nix develop .#comments --command just comments-changed HEAD^1
 
   # The one required status check (#282). The ruleset used to list jobs one
   # by one and missed android and nix-mcp, so a broken widget or a leaking
@@ -527,9 +512,7 @@ jobs:
       - nix-package-macos
       - nix-package-linux
       - nix-mcp
-      - workflows
-      - format
-      - comments
+      - lint
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
