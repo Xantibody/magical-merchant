@@ -52,7 +52,10 @@ rustPlatform.buildRustPackage {
       };
 
   cargoBuildFlags = cargoFlags;
-  cargoTestFlags = cargoFlags;
+  # The CI's rust job runs these tests over the whole workspace. Here they
+  # would compile the crate a second time, in release, on every build of the
+  # package, including the CI's and a user's `nix run` that misses Cachix
+  doCheck = false;
 
   meta = {
     description = "Terminal client and MCP server for a Magical Merchant journal";
