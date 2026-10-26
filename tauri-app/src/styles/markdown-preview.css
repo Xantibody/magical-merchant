@@ -2,12 +2,20 @@
 
 .markdown-preview {
   font-family: var(--font-sans);
-  line-height: var(--font-lineheight-4);
+  /* Japanese body text reads best at about 1.7 (Open Props steps from 1.5 to 1.75) */
+  line-height: 1.7;
   color: var(--app-text);
 }
 
 .markdown-preview > * + * {
   margin-top: var(--size-3);
+}
+
+/* Enter starts a new paragraph, so a note written a line at a time is a run of
+   paragraphs. A full blank line between each reads as a double-spaced page; a
+   paragraph after a paragraph steps on almost like a wrapped line */
+.markdown-preview > p + p {
+  margin-top: 0.4em;
 }
 
 .markdown-preview h1 {

@@ -162,6 +162,26 @@ describe("note body: preview and editor draw the same page", () => {
     expect(edited).toStrictEqual(previewed);
   });
 
+  // Enter starts a new paragraph, so a note written a line at a time is a run of
+  // paragraphs. A full blank line between them reads as a double-spaced page; the step
+  // from one to the next stays close to the step of a wrapped line
+  it.each([
+    ["preview", preview],
+    ["editor", editor],
+  ])("steps consecutive paragraphs almost like wrapped lines (%s)", async (_name, surface) => {
+    await page.viewport(1280, 800);
+    const root = blockRoot(mountDetail(surface("<p>一行目</p><p>二行目</p>")));
+    const first = element(":scope > p:nth-of-type(1)", root);
+    const second = element(":scope > p:nth-of-type(2)", root);
+
+    const line = parseFloat(getComputedStyle(first).lineHeight);
+    const step = second.getBoundingClientRect().top - first.getBoundingClientRect().top;
+
+    expect(line / parseFloat(getComputedStyle(first).fontSize)).toBeCloseTo(1.7);
+    expect(step - line).toBeGreaterThan(0);
+    expect(step - line).toBeLessThanOrEqual(line / 3);
+  });
+
   // A `view: preview` note is drawn through MarkdownPreview as read-only.
   // Clicking does not start writing, so it shows no I-beam, the signal that it is editable
   it("gives a read-only note no I-beam", async () => {
