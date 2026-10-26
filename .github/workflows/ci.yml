@@ -40,7 +40,6 @@ jobs:
       nix-package: ${{ steps.filter.outputs.nix-package || 'true' }}
       desktop-package: ${{ steps.filter.outputs.desktop-package || 'true' }}
       nixos-module: ${{ steps.filter.outputs.nixos-module || 'true' }}
-      nix-cli: ${{ steps.filter.outputs.nix-cli || 'true' }}
       android: ${{ steps.filter.outputs.android || 'true' }}
       comments: ${{ steps.filter.outputs.comments || 'true' }}
     steps:
@@ -137,14 +136,6 @@ jobs:
               - 'nix/nixos-test.nix'
               - 'flake.nix'
               - 'flake.lock'
-            nix-cli:
-              - 'nix/cli.nix'
-              - 'cli/**'
-              - 'core/**'
-              - 'Cargo.toml'
-              - 'Cargo.lock'
-              - 'flake.nix'
-              - 'flake.lock'
             # core/** はここに入れない。core が壊れれば rust ジョブが先に落ちるし、
             # 15 分のビルドを core の変更のたびに足すと待ち時間だけが増える。
             # android 限定でコンパイルされる widget_bridge.rs は src-tauri なので拾える
@@ -178,7 +169,10 @@ jobs:
               - 'nix/devshells.nix'
               - 'flake.lock'
 
-  # ---- Stage 1: lint. Cheap, on every run; a failure here stops the rest ----
+  # ---- Stage 1: static analysis. Cheap, on every run; a failure here stops the rest ----
+  # Each part's own analysis (clippy, tsc, oxlint) runs as the first step of
+  # its stage 2 job: a job of its own would restore the same devshell and
+  # caches a second time
 
   # The checks every run makes, in one job. Billing rounds each job up to a
   # whole minute, so the three 20-second jobs this used to be cost three.
@@ -224,7 +218,7 @@ jobs:
         if: needs.changes.outputs.comments == 'true'
         run: nix develop .#comments --command just comments-changed HEAD^1
 
-  # ---- Stage 2: verify. Each part of the tree, gated by its filter ----
+  # ---- Stage 2: test. Each part of the tree, gated by its filter ----
 
   rust:
     needs: [changes, lint]
@@ -338,6 +332,9 @@ jobs:
   # ままマージできてしまっていた。
   #
   # 署名しない debug ビルド。配布物ではなく「組み上がるか」だけを見る。
+  # The one build a PR still runs: the other builds wait for the merge, but
+  # a widget that does not compile cannot be found any other way before a
+  # phone has it.
   # ABI も aarch64 だけ: x86 系はエミュレータ専用で、検証したいのは
   # コンパイルとリソースの解決であって ABI ごとの差ではない。
   android:
@@ -385,46 +382,6 @@ jobs:
           path: target
           key: ${{ steps.cargo-cache.outputs.cache-primary-key }}
 
-  # pnpm-lock.yaml を変えると nix/package.nix の pnpmDeps.hash が黙って腐る。
-  # 気付くのが macOS 配布 (nix build) の時では遅い
-  nix-package:
-    needs: [changes, lint]
-    if: needs.changes.outputs.nix-package == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - uses: nixbuild/nix-quick-install-action@v35
-      # store キャッシュを張らない。FOD の出力パスは入力ではなく宣言した hash から
-      # 決まるので、hash が腐ったままでも前回の出力が復元されれば nix はそれを有効と
-      # 見なし、fetcher を一度も動かさないまま緑になる (実際 a1f8f48 がそうだった)。
-      # 空の store から始めれば取得は必ず走る。取得の検証がこのジョブの全部なので、
-      # ここでキャッシュが節約できるものは無い
-      - name: pnpm deps hash is current
-        run: nix build .#pnpm-deps --no-link
-
-  # nix run github:Xantibody/magical-merchant#mcp is how an AI client starts
-  # the MCP server, and .#cli is what it runs. A file missing from the
-  # fileset fails only under nix, however green cargo is. The fileset is the
-  # same on every platform, so one Linux build checks it for macOS too
-  nix-cli:
-    needs: [changes, lint]
-    if: needs.changes.outputs.nix-cli == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-nix
-        with:
-          name: cli
-          hash: ${{ hashFiles('flake.lock', 'flake.nix', 'nix/cli.nix', 'Cargo.lock') }}
-      - name: the CLI (and the MCP entry point) builds
-        run: nix build .#cli --no-link
-
   # Boots a NixOS VM with the module and checks it installs the apps and
   # sync-config.json. The app it installs comes from Cachix when its sources
   # have not changed since main last published it
@@ -454,13 +411,38 @@ jobs:
       - name: the NixOS module installs the apps and sync-config.json
         run: nix build .#checks.x86_64-linux.nixos-module --no-link -L
 
-  # ---- Stage 3: package. On main only: build the distributions and push them to Cachix ----
+  # ---- Stage 3: build after the merge. On main only: the nix builds, then the push to Cachix ----
+
+  # Changing pnpm-lock.yaml leaves nix/package.nix's pnpmDeps.hash silently
+  # stale. It runs before publish because publish cannot see it: the stale
+  # hash names the previous output, Cachix serves that, and the app builds
+  # green with the old dependencies
+  nix-package:
+    needs: [changes, lint, rust, frontend]
+    if: >-
+      ${{ !cancelled() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') &&
+        needs.changes.outputs.nix-package == 'true' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: nixbuild/nix-quick-install-action@v35
+      # No store cache. A FOD's output path comes from the declared hash, not
+      # from its inputs, so if the previous output is restored nix takes a
+      # stale hash as valid and goes green without running the fetcher once
+      # (a1f8f48 did exactly that). From an empty store the fetch always
+      # runs; checking the fetch is all this job does, so a cache would save
+      # nothing
+      - name: pnpm deps hash is current
+        run: nix build .#pnpm-deps --no-link
 
   # The jobs and the reason they wait for main are in publish.yml
   publish:
     # A job skipped by its filter counts as passed, as it does for the ci
     # gate; any other result upstream (failure, cancelled) stops the package
-    needs: [changes, lint, rust, frontend, nix-package, nix-cli]
+    needs: [changes, lint, rust, frontend, nix-package]
     if: >-
       ${{ !cancelled() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') &&
         needs.changes.outputs.desktop-package == 'true' && github.ref == 'refs/heads/main' }}
@@ -480,9 +462,8 @@ jobs:
       - frontend
       - workers
       - android
-      - nix-package
-      - nix-cli
       - nixos-module
+      - nix-package
       - publish
       - lint
     runs-on: ubuntu-latest

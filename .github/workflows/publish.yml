@@ -1,16 +1,16 @@
 name: Publish
 
-# The nix distributions for macOS and Linux, called from ci.yml's package
+# The nix distributions for macOS and Linux, called from ci.yml's build
 # stage on a push to main only, once the checks the app is made of passed.
 # Each job builds .#default and .#cli and pushes them to Cachix, which takes
 # the 10 minutes of rebuilding the Tauri app off a local
 # `nix profile install`, darwin-rebuild or nixos-rebuild.
 #
-# What a PR can learn from these builds is platform packaging alone (the
-# darwin bundler, the Linux wrappers). The fileset and the NixOS module are
-# checked on every PR by ci.yml's nix-cli and nixos-module, so one run after
-# the merge is enough for the rest; a macOS runner costs 10x an ubuntu one
-# per minute, and one macOS run costs more than every other job together
+# Builds wait for the merge: a PR gets static analysis and tests only. What
+# these builds alone can catch (the darwin bundler, the Linux wrappers, a
+# file missing from a fileset) breaks main, not a PR, and is fixed there.
+# A macOS runner costs 10x an ubuntu one per minute, and one macOS run costs
+# more than every other job together
 #
 # skipPush stops cachix-action's automatic push and the last step pushes the
 # outputs only: pushed automatically, the runs where the store was not
