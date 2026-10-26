@@ -2,8 +2,15 @@
   display: none;
 }
 @media (hover: none) {
+  :root {
+    /* One row of 44px buttons and the 1px rule above it */
+    --markdown-toolbar-h: 45px;
+  }
+
   .markdown-toolbar {
     display: flex;
+    box-sizing: border-box;
+    block-size: var(--markdown-toolbar-h);
     position: fixed;
     /* position: fixed ignores the padding on html, so at 0 it goes behind Android's
        navigation bar. While the keyboard is open JS sets top, so this value is not
@@ -61,5 +68,13 @@
      a row of unpressable buttons under the fixed toolbar, so they give up the space */
   body.md-toolbar-open .bottom-tabs {
     display: none;
+  }
+
+  /* The toolbar floats, so the body would run on underneath it and the last lines,
+     the ones being typed, would sit behind the buttons. The column gives up the
+     toolbar's height instead, so the body's scroll box ends at the toolbar's top edge
+     and the browser's own scroll-to-caret keeps the caret above it */
+  body.md-toolbar-open .app-column {
+    padding-bottom: var(--markdown-toolbar-h);
   }
 }
