@@ -15,6 +15,7 @@ rules:
       # 書き方。zizmor が勧める `$/...` は新しく、動かなかったときに壊れるのが
       # 全 nix ジョブなので、こちらが当たり前になるまで待つ
       - ci.yml
+      - publish.yml
       - release.yml
   cache-poisoning:
     ignore:

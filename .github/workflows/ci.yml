@@ -396,11 +396,7 @@ jobs:
 
   # ---- Stage 3: package. The nix distributions, once what they bundle passed ----
 
-  # nix build .#default が macOS 配布そのもの。バンドラは codesign や xattr を
-  # 外部コマンドとして呼ぶので、ubuntu で緑でも darwin sandbox でだけ落ちる。
-  # 走らせるのは main への push だけ。macOS runner は分単価が ubuntu の 10 倍で、
-  # このジョブ 1 回が他の全ジョブの合計より高い。PR で拾えるのは darwin sandbox
-  # 特有の失敗だけで、それは merge 後の 1 回で足りる
+  # The macOS distribution, on a push to main only (the reason is in publish.yml)
   nix-package-macos:
     # A job skipped by its filter counts as passed, as it does for the ci
     # gate; any other result upstream (failure, cancelled) stops the package
@@ -408,34 +404,9 @@ jobs:
     if: >-
       ${{ !cancelled() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') &&
         needs.changes.outputs.desktop-package == 'true' && github.ref == 'refs/heads/main' }}
-    runs-on: macos-latest
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-nix
-        with:
-          name: package
-          hash: ${{ hashFiles('flake.lock', 'flake.nix', 'nix/package.nix', 'Cargo.lock', 'tauri-app/pnpm-lock.yaml') }}
-          max-store-size: 4G
-      - name: the .app bundle builds
-        run: nix build .#default --no-link
-      # ここで組んだ aarch64-darwin の .app と cli を Cachix に置く。手元の
-      # `nix profile install` / darwin-rebuild が Tauri アプリを建て直す 10 分が消える。
-      # skipPush で自動 push を止め、下で出力だけを明示的に push する。自動 push だと
-      # store に restore されなかった回にだけ Rust toolchain ごと上がり、5 GiB を食う。
-      # 明示 push なら restore で組まなかった回でも出力は必ず上がる (post-build-hook は
-      # 組んだときにしか鳴らない)
-      - uses: cachix/cachix-action@v17
-        if: github.ref == 'refs/heads/main'
-        with:
-          name: magical-merchant
-          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          skipPush: true
-      - name: publish the .app bundle and the CLI
-        if: github.ref == 'refs/heads/main'
-        run: nix build .#default .#cli --no-link --print-out-paths | cachix push magical-merchant
+    uses: ./.github/workflows/publish.yml
+    secrets:
+      CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
   # The Linux distribution (x86_64-linux): cargo-tauri.hook builds the .deb and
   # unpacks its usr/ tree, and wrapGAppsHook3 wraps the binary. The rust job

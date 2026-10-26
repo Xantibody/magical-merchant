@@ -1,0 +1,51 @@
+name: Publish
+
+# The macOS distribution, called from ci.yml's package stage on a push to main
+# only. It lives apart so that ci.yml reads as the checks a PR gets: this is
+# the one job that exists to publish, not to check.
+#
+# nix build .#default is the macOS distribution itself. The bundler calls
+# codesign and xattr as external commands, so it can fail in the darwin
+# sandbox alone while ubuntu is green. A macOS runner costs 10x an ubuntu one
+# per minute and one run of this job costs more than every other job
+# together; the only failures a PR could catch here are the darwin sandbox's,
+# and one run after the merge is enough for those
+on:
+  workflow_call:
+    secrets:
+      CACHIX_AUTH_TOKEN:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-nix
+        with:
+          name: package
+          hash: ${{ hashFiles('flake.lock', 'flake.nix', 'nix/package.nix', 'Cargo.lock', 'tauri-app/pnpm-lock.yaml') }}
+          max-store-size: 4G
+      - name: the .app bundle builds
+        run: nix build .#default --no-link
+      # The aarch64-darwin .app and CLI built here go to Cachix, which takes
+      # the 10 minutes of rebuilding the Tauri app off a local
+      # `nix profile install` or darwin-rebuild. skipPush stops the automatic
+      # push and the step below pushes the outputs only: pushed automatically,
+      # the runs where the store was not restored upload the Rust toolchain
+      # too, 5 GiB. Pushed explicitly, the outputs go up even on a run that
+      # restored them instead of building (the post-build hook fires only on
+      # a build)
+      - uses: cachix/cachix-action@v17
+        with:
+          name: magical-merchant
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          skipPush: true
+      - name: publish the .app bundle and the CLI
+        run: nix build .#default .#cli --no-link --print-out-paths | cachix push magical-merchant
