@@ -525,6 +525,7 @@ jobs:
       - android
       - nix-package
       - nix-package-macos
+      - nix-package-linux
       - nix-mcp
       - workflows
       - format
