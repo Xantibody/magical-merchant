@@ -40,6 +40,7 @@ jobs:
       nix-package: ${{ steps.filter.outputs.nix-package || 'true' }}
       desktop-package: ${{ steps.filter.outputs.desktop-package || 'true' }}
       nixos-module: ${{ steps.filter.outputs.nixos-module || 'true' }}
+      nix-cli: ${{ steps.filter.outputs.nix-cli || 'true' }}
       android: ${{ steps.filter.outputs.android || 'true' }}
       comments: ${{ steps.filter.outputs.comments || 'true' }}
     steps:
@@ -128,12 +129,22 @@ jobs:
               - 'nix/cli.nix'
               - 'flake.nix'
               - 'flake.lock'
-            # Only the Linux job boots the module's VM test, so a module
-            # change must not start the 10x-rate macOS build
+            # The VM test reads the module and nixpkgs; the app it installs is
+            # the package jobs' concern
             nixos-module:
               - 'nix/module-options.nix'
               - 'nix/nixos-module.nix'
               - 'nix/nixos-test.nix'
+              - 'flake.nix'
+              - 'flake.lock'
+            nix-cli:
+              - 'nix/cli.nix'
+              - 'cli/**'
+              - 'core/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'flake.nix'
+              - 'flake.lock'
             # core/** はここに入れない。core が壊れれば rust ジョブが先に落ちるし、
             # 15 分のビルドを core の変更のたびに足すと待ち時間だけが増える。
             # android 限定でコンパイルされる widget_bridge.rs は src-tauri なので拾える
@@ -394,13 +405,62 @@ jobs:
       - name: pnpm deps hash is current
         run: nix build .#pnpm-deps --no-link
 
+  # nix run github:Xantibody/magical-merchant#mcp is how an AI client starts
+  # the MCP server, and .#cli is what it runs. A file missing from the
+  # fileset fails only under nix, however green cargo is. The fileset is the
+  # same on every platform, so one Linux build checks it for macOS too
+  nix-cli:
+    needs: [changes, lint]
+    if: needs.changes.outputs.nix-cli == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-nix
+        with:
+          name: cli
+          hash: ${{ hashFiles('flake.lock', 'flake.nix', 'nix/cli.nix', 'Cargo.lock') }}
+      - name: the CLI (and the MCP entry point) builds
+        run: nix build .#cli --no-link
+
+  # Boots a NixOS VM with the module and checks it installs the apps and
+  # sync-config.json. The app it installs comes from Cachix when its sources
+  # have not changed since main last published it
+  nixos-module:
+    needs: [changes, lint]
+    if: needs.changes.outputs.nixos-module == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Free disk space (background)
+        run: nohup sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache >/dev/null 2>&1 &
+      - uses: nixbuild/nix-quick-install-action@v35
+      - uses: cachix/cachix-action@v17
+        with:
+          name: magical-merchant
+          skipPush: true
+      # The runner has /dev/kvm but only root may open it; nix enables its
+      # kvm system feature, which the VM test requires, once it can
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: the NixOS module installs the apps and sync-config.json
+        run: nix build .#checks.x86_64-linux.nixos-module --no-link -L
+
   # ---- Stage 3: package. The nix distributions, once what they bundle passed ----
 
   # The macOS distribution, on a push to main only (the reason is in publish.yml)
   nix-package-macos:
     # A job skipped by its filter counts as passed, as it does for the ci
     # gate; any other result upstream (failure, cancelled) stops the package
-    needs: [changes, lint, rust, frontend, nix-package]
+    needs: [changes, lint, rust, frontend, nix-package, nix-cli]
     if: >-
       ${{ !cancelled() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') &&
         needs.changes.outputs.desktop-package == 'true' && github.ref == 'refs/heads/main' }}
@@ -414,19 +474,14 @@ jobs:
   # here, so it runs on PRs too; ubuntu minutes are cheap. No store cache: any
   # source change rebuilds the whole app derivation, and everything else comes
   # from cache.nixos.org. Cachix is read on every run so an unchanged output is
-  # never rebuilt, and pushed to from main only.
-  #
-  # .#cli is built here too: `nix run github:Xantibody/magical-merchant#mcp`
-  # is how an AI client starts the MCP server, and a file missing from its
-  # fileset fails only under nix, however green cargo is. desktop-package
-  # covers every input of .#cli, so it needs no filter of its own
+  # never rebuilt, and pushed to from main only
   nix-package-linux:
     # A job skipped by its filter counts as passed, as it does for the ci
     # gate; any other result upstream (failure, cancelled) stops the package
-    needs: [changes, lint, rust, frontend, nix-package]
+    needs: [changes, lint, rust, frontend, nix-package, nix-cli]
     if: >-
       ${{ !cancelled() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') &&
-        (needs.changes.outputs.desktop-package == 'true' || needs.changes.outputs.nixos-module == 'true') }}
+        needs.changes.outputs.desktop-package == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -441,21 +496,11 @@ jobs:
           name: magical-merchant
           authToken: ${{ github.ref == 'refs/heads/main' && secrets.CACHIX_AUTH_TOKEN || '' }}
           skipPush: true
-      - name: the app builds and wraps, and the CLI builds
+      - name: the app builds and wraps
         run: |
           out=$(nix build .#default --no-link --print-out-paths)
-          nix build .#cli --no-link
           test -x "$out/bin/magical-merchant-app"
           grep -q 'x-scheme-handler/magical-merchant' "$out"/share/applications/*.desktop
-      # The runner has /dev/kvm but only root may open it; nix enables its
-      # kvm system feature, which the VM test requires, once it can
-      - name: Enable KVM
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-      - name: the NixOS module installs the apps and sync-config.json
-        run: nix build .#checks.x86_64-linux.nixos-module --no-link -L
       - name: publish the app and the CLI
         if: github.ref == 'refs/heads/main'
         run: nix build .#default .#cli --no-link --print-out-paths | cachix push magical-merchant
@@ -473,6 +518,8 @@ jobs:
       - workers
       - android
       - nix-package
+      - nix-cli
+      - nixos-module
       - nix-package-macos
       - nix-package-linux
       - lint
