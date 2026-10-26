@@ -40,7 +40,6 @@ jobs:
       nix-package: ${{ steps.filter.outputs.nix-package || 'true' }}
       desktop-package: ${{ steps.filter.outputs.desktop-package || 'true' }}
       nixos-module: ${{ steps.filter.outputs.nixos-module || 'true' }}
-      nix-mcp: ${{ steps.filter.outputs.nix-mcp || 'true' }}
       android: ${{ steps.filter.outputs.android || 'true' }}
       comments: ${{ steps.filter.outputs.comments || 'true' }}
     steps:
@@ -135,14 +134,6 @@ jobs:
               - 'nix/module-options.nix'
               - 'nix/nixos-module.nix'
               - 'nix/nixos-test.nix'
-            nix-mcp:
-              - 'nix/cli.nix'
-              - 'cli/**'
-              - 'core/**'
-              - 'Cargo.toml'
-              - 'Cargo.lock'
-              - 'flake.nix'
-              - 'flake.lock'
             # core/** はここに入れない。core が壊れれば rust ジョブが先に落ちるし、
             # 15 分のビルドを core の変更のたびに足すと待ち時間だけが増える。
             # android 限定でコンパイルされる widget_bridge.rs は src-tauri なので拾える
@@ -398,7 +389,12 @@ jobs:
   # here, so it runs on PRs too; ubuntu minutes are cheap. No store cache: any
   # source change rebuilds the whole app derivation, and everything else comes
   # from cache.nixos.org. Cachix is read on every run so an unchanged output is
-  # never rebuilt, and pushed to from main only
+  # never rebuilt, and pushed to from main only.
+  #
+  # .#cli is built here too: `nix run github:Xantibody/magical-merchant#mcp`
+  # is how an AI client starts the MCP server, and a file missing from its
+  # fileset fails only under nix, however green cargo is. desktop-package
+  # covers every input of .#cli, so it needs no filter of its own
   nix-package-linux:
     needs: changes
     if: needs.changes.outputs.desktop-package == 'true' || needs.changes.outputs.nixos-module == 'true'
@@ -416,9 +412,10 @@ jobs:
           name: magical-merchant
           authToken: ${{ github.ref == 'refs/heads/main' && secrets.CACHIX_AUTH_TOKEN || '' }}
           skipPush: true
-      - name: the app builds and wraps
+      - name: the app builds and wraps, and the CLI builds
         run: |
           out=$(nix build .#default --no-link --print-out-paths)
+          nix build .#cli --no-link
           test -x "$out/bin/magical-merchant-app"
           grep -q 'x-scheme-handler/magical-merchant' "$out"/share/applications/*.desktop
       # The runner has /dev/kvm but only root may open it; nix enables its
@@ -433,24 +430,6 @@ jobs:
       - name: publish the app and the CLI
         if: github.ref == 'refs/heads/main'
         run: nix build .#default .#cli --no-link --print-out-paths | cachix push magical-merchant
-
-  # nix run github:Xantibody/magical-merchant#mcp が AI クライアント側の
-  # 起動方法そのもので、.#cli はその中身。cargo で緑でも fileset にファイルが漏れていれば nix だけ落ちる
-  nix-mcp:
-    needs: changes
-    if: needs.changes.outputs.nix-mcp == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-nix
-        with:
-          name: mcp
-          hash: ${{ hashFiles('flake.lock', 'flake.nix', 'nix/cli.nix', 'Cargo.lock') }}
-      - name: the CLI (and the MCP entry point) builds and its tests pass
-        run: nix build .#cli --no-link
 
   # The checks every run makes, in one job. Billing rounds each job up to a
   # whole minute, so the three 20-second jobs this used to be cost three.
@@ -511,7 +490,6 @@ jobs:
       - nix-package
       - nix-package-macos
       - nix-package-linux
-      - nix-mcp
       - lint
     runs-on: ubuntu-latest
     timeout-minutes: 5
