@@ -38,6 +38,7 @@
 }
 
 .status-link {
+  white-space: nowrap;
   padding: 2px 4px;
   border: none;
   border-radius: 4px;

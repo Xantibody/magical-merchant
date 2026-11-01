@@ -36,6 +36,8 @@ export interface SearchFieldCommand {
   label: string;
   icon: IconName;
   shortcut: string;
+  /** Somewhere to go: listed on the empty field, where the rest answer only a word. */
+  place?: boolean;
   run: () => void;
 }
 
@@ -127,6 +129,7 @@ function HitExcerpt(props: { hit: SearchHit; word: string }): JSX.Element {
  *
  * Commands are not results (ADR 0002's open item): they answer only a bare word, sit apart
  * above the records, and Enter stays on the first record unless the arrows move up to them.
+ * The empty field lists the places among them, as the way around that needs no key.
  */
 export default function SearchField(props: SearchFieldProps): JSX.Element {
   // The seed is only the first value; the field owns the condition from there
@@ -157,6 +160,9 @@ export default function SearchField(props: SearchFieldProps): JSX.Element {
 
   const commands = createMemo(() => {
     const needle = text().trim().toLowerCase();
+    if (!listing()) {
+      return props.commands.filter((command) => command.place);
+    }
     if (!needle || tags().length > 0 || kind() !== "all" || period()) {
       return [];
     }
@@ -343,7 +349,9 @@ export default function SearchField(props: SearchFieldProps): JSX.Element {
       <div ref={listRef} class="search-results">
         <div class="search-column">
           <Show when={commands().length > 0}>
-            <div class="palette-section">{t().palette.commands}</div>
+            <div class="palette-section">
+              {listing() ? t().palette.commands : t().search.places}
+            </div>
           </Show>
           <For each={commands()}>
             {(command, i) => (

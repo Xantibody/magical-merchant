@@ -7,6 +7,7 @@ import type { NoteState } from "../lib/shell";
 import type { SaveStatus } from "../lib/note-session";
 import type { SyncStatus } from "../lib/sync";
 import { t } from "../lib/i18n";
+import { MODE_LABELS, ROUTES } from "../lib/routes";
 import { shortcutLabel } from "../lib/shortcuts";
 
 /** What the dot says: everything landed, something is on its way, or something failed. */
@@ -69,14 +70,24 @@ export function StatusDotButton(props: DotProps): JSX.Element {
 }
 
 interface LinksProps {
+  onScrawl: () => void;
+  onSearch: () => void;
   onSettings: () => void;
   onKeys: () => void;
 }
 
-/** The two rare destinations. Beside the dot on hover, inside the details where there is none. */
+/** The way around without a key. Beside the dot on hover, in the details where there is none. */
 export function StatusLinks(props: LinksProps): JSX.Element {
   return (
     <>
+      <button type="button" class="status-link" onClick={() => props.onScrawl()}>
+        {MODE_LABELS[ROUTES.SCRAWL]}
+      </button>
+      <span aria-hidden="true">·</span>
+      <button type="button" class="status-link" onClick={() => props.onSearch()}>
+        {t().header.search}
+      </button>
+      <span aria-hidden="true">·</span>
       <button type="button" class="status-link" onClick={() => props.onSettings()}>
         {t().header.settings}
       </button>
@@ -96,7 +107,12 @@ export default function StatusDot(props: DotProps & LinksProps): JSX.Element {
   return (
     <div class="status-dot-area">
       <div class="status-dot-links">
-        <StatusLinks onSettings={props.onSettings} onKeys={props.onKeys} />
+        <StatusLinks
+          onScrawl={props.onScrawl}
+          onSearch={props.onSearch}
+          onSettings={props.onSettings}
+          onKeys={props.onKeys}
+        />
       </div>
       <StatusDotButton sync={props.sync} onOpen={props.onOpen} />
     </div>
