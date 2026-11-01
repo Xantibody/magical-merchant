@@ -186,6 +186,13 @@ export interface SearchHit {
   match_len?: number | null;
 }
 
+/** What core narrows by before it caps the results. Both ends of the period are included. */
+export interface SearchFilter {
+  kind: HitKind | null;
+  from: string | null;
+  to: string | null;
+}
+
 interface SyncConfig {
   workers_url: string;
   auto_sync: boolean;
@@ -208,6 +215,10 @@ interface CommandMap {
    * query and tags set, every record with those tags is returned.
    */
   search_all: { args: { query: string; tags: string[] }; result: SearchHit[] };
+  search_records: {
+    args: { query: string; tags: string[]; filter: SearchFilter };
+    result: SearchHit[];
+  };
   /**
    * Every record. It does not filter by string, so it has no arguments and the
    * count is not capped: the counts on the chips are taken from here.
