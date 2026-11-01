@@ -163,6 +163,61 @@ describe("Note table editing and inline decorations", () => {
     await page.viewport(1280, 720);
   });
 
+  // WKWebView delivers the Enter that confirms a conversion as a plain keydown with keyCode 229
+  // and key "Enter". ProseMirror's keymap reads only the key, so it would split the paragraph
+  it("leaves the Enter that confirms an IME conversion to the IME", async () => {
+    const h = await mount("first line");
+    h.select("first line");
+    const before = h.view.state.doc;
+
+    fireEvent.keyDown(h.view.dom, { key: "Enter", keyCode: 229 });
+
+    expect(h.view.state.doc.eq(before)).toBe(true);
+
+    // The next Enter is the writer's
+    fireEvent.keyDown(h.view.dom, { key: "Enter", keyCode: 13 });
+
+    expect(h.view.state.doc.childCount).toBe(2);
+  });
+
+  // WebKit answers a composition starting in an empty paragraph with a <br> of its own. It is no
+  // line break the writer asked for: read as one, it adds a line under the unconfirmed letter
+  it("does not read the browser's own <br> in the live editor as a line break", async () => {
+    const h = await mount("first\n\n<br />\n\nlast");
+    const empty = h.view.dom.children[1] as HTMLElement;
+
+    fireEvent.compositionStart(h.view.dom);
+    empty.prepend(document.createElement("br"), "k");
+
+    await expect.poll(() => h.view.state.doc.child(1).textContent).toBe("k");
+
+    fireEvent.compositionEnd(h.view.dom);
+    expect(h.view.state.doc.child(1).childCount).toBe(1);
+  });
+
+  it("still reads a pasted <br> as a line break", async () => {
+    const h = await mount("first");
+    h.select("first", true);
+
+    h.view.pasteHTML("<p>a<br>b</p>");
+
+    expect(h.view.state.doc.textContent).toContain("a\nb");
+  });
+
+  // During a composition on WebKit a paragraph ends in the IME's widget, so ProseMirror adds its
+  // separator image. Under the reset's img { display: block } it pushes the break down a line
+  it("keeps a paragraph one line high while it ends in the IME's widget", async () => {
+    const h = await mount("j");
+    const paragraph = h.view.dom.querySelector("p") as HTMLElement;
+    const oneLine = paragraph.getBoundingClientRect().height;
+
+    paragraph.innerHTML =
+      'j<span contenteditable="false"></span>' +
+      '<img class="ProseMirror-separator" alt=""><br class="ProseMirror-trailingBreak">';
+
+    expect(paragraph.getBoundingClientRect().height).toBe(oneLine);
+  });
+
   it("does not mutate a table while IME composition is active", async () => {
     const h = await mount(TABLE);
     h.select("b");

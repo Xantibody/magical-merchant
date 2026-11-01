@@ -50,6 +50,15 @@
   margin-top: 0.4em;
 }
 
+/* ProseMirror's own stylesheet is not loaded (the editor is headless), and normalize makes every
+   img a block. This one is ProseMirror's marker at the end of a line that finishes in a widget:
+   as a block it splits the line, which on WebKit shows as an empty line under a composition */
+.milkdown-editor img.ProseMirror-separator {
+  display: inline !important;
+  border: none !important;
+  margin: 0 !important;
+}
+
 /* Heading line height stays as normalize sets it (the preview matches) */
 .milkdown-editor h1 {
   font-size: var(--font-size-5);

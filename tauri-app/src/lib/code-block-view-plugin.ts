@@ -4,6 +4,7 @@ import { TextSelection } from "@milkdown/kit/prose/state";
 import copyIcon from "@phosphor-icons/core/assets/regular/copy.svg?raw";
 import checkIcon from "@phosphor-icons/core/assets/regular/check.svg?raw";
 import { t } from "./i18n";
+import { isImeComposing } from "./ime";
 import { extractCaption } from "./diagram-caption";
 import { setDiagramPending } from "./diagram-pending";
 import { renderDiagrams } from "./mermaid";
@@ -173,6 +174,9 @@ class CodeBlockPreviewView implements NodeView {
       this.commitLanguage(input.value);
     });
     input.addEventListener("keydown", (event) => {
+      if (isImeComposing(event)) {
+        return;
+      }
       if (event.key === "Enter") {
         // Fire change (the commit) first, then return to the body so writing can continue
         event.preventDefault();
