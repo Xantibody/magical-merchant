@@ -202,7 +202,7 @@ jobs:
           fetch-depth: 2
       - uses: raven-actions/actionlint@v2
       # The policy is in .github/zizmor.yml
-      - uses: zizmorcore/zizmor-action@v0.6.4
+      - uses: zizmorcore/zizmor-action@v0.8.0
         with:
           advanced-security: false
           min-severity: low
