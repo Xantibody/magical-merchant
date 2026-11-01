@@ -76,7 +76,9 @@ describe("MarkdownPreview", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "大きく" }));
 
-    await expect.element(percent).toHaveTextContent(`${Math.round(fitted * 1.25)}%`);
+    // From the scale itself: the label is rounded, so 1.25 times the label can be off by one
+    const fittedScale = Number(/scale\((?<scale>.+)\)$/u.exec(before)?.groups?.scale);
+    await expect.element(percent).toHaveTextContent(`${Math.round(fittedScale * 125)}%`);
     expect((canvas.element() as HTMLElement).style.transform).not.toBe(before);
   });
 
