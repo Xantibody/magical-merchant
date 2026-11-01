@@ -16,22 +16,19 @@ interface NotePanelProps {
   kind: NoteKind;
   /**
    * Whether it is the phone's own screen, swapped in for the body. Otherwise it is the 320px
-   * panel at the right edge, floating (hover) or docked (pinned).
+   * panel at the right edge.
    */
   screen?: boolean;
   /** The note's title. Only the phone's screen shows it, in its header. */
   title: string;
   /** Whether the panel is on screen. The screen is on screen whenever it is mounted. */
   open: boolean;
-  pinned: boolean;
   tab: NotePanelTab;
   /** The version count beside the history tab. */
   historyCount: number;
   onTab: (tab: NotePanelTab) => void;
   /** The phone's back arrow. */
   onBack?: () => void;
-  onPointerEnter?: () => void;
-  onPointerLeave?: () => void;
 
   readOnly: boolean;
   mapOpen: boolean;
@@ -144,11 +141,10 @@ function CreatedField(props: { time: string; onEdit: (value: string) => void }):
  * actions. It replaced the `…` menu, which hid all of this behind a 29px glyph and showed
  * none of the state.
  *
- * On a wide window it is 320px at the right edge. Resting the pointer on the edge floats it
- * over the body; the toggle in the title row and ⌘. dock it beside the body. A Codex adds the
- * history as a second tab of the same slot, and the history never opens on hover: 320px of
- * comparison must not appear in passing beside a writing hand. On a phone it is a screen of
- * its own that swaps with the body, the way the history screen used to.
+ * On a wide window it is 320px at the right edge, beside the body. The button in the title
+ * row and ⌘. are the only ways in. A Codex adds the history as a second tab of the same slot.
+ * On a phone it is a screen of its own that swaps with the body, the way the history screen
+ * used to.
  */
 export default function NotePanel(props: NotePanelProps): JSX.Element {
   const label = (): string => (props.kind === "codex" ? t().codex.panel : t().notes.panel);
@@ -335,13 +331,10 @@ export default function NotePanel(props: NotePanelProps): JSX.Element {
       class="note-panel"
       classList={{
         "note-panel--open": props.open,
-        "note-panel--pinned": props.pinned,
         "note-panel--screen": props.screen,
       }}
       aria-label={label()}
       aria-hidden={!props.open}
-      onPointerEnter={() => props.onPointerEnter?.()}
-      onPointerLeave={() => props.onPointerLeave?.()}
     >
       <Show
         when={props.screen}
@@ -381,16 +374,8 @@ export default function NotePanel(props: NotePanelProps): JSX.Element {
 
       <Show when={props.tab === "note"}>{actions()}</Show>
 
-      {/* The rule for opening and closing is written inside the thing that is open. A phone
-          swaps the whole screen, and its back arrow says the rest */}
-      <Show when={!props.screen}>
-        <div class="note-panel-foot">
-          <Show when={props.tab === "note"} fallback={t().codex.historyFoot}>
-            {props.pinned
-              ? t().notes.panelFootPinned(shortcutLabel("noteActions"))
-              : t().notes.panelFootHover(shortcutLabel("noteActions"))}
-          </Show>
-        </div>
+      <Show when={!props.screen && props.tab === "history"}>
+        <div class="note-panel-foot">{t().codex.historyFoot}</div>
       </Show>
     </aside>
   );

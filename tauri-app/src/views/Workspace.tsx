@@ -82,13 +82,6 @@ const POP_MS = 350;
 const NO_EXAMPLES: ReadonlyMap<string, string[]> = new Map();
 /** The keys that move to the neighboring row in the list, and their direction. */
 const LIST_STEP_KEYS: Readonly<Record<string, 1 | -1>> = { ArrowUp: -1, ArrowDown: 1 };
-/**
- * How long the pointer rests on the right edge before the panel floats in. Passing over the
- * edge on the way to the scrollbar or another window must not open 320px over the body.
- */
-const EDGE_DWELL_MS = 300;
-/** How long the floating panel waits after the pointer leaves it. A wobble out and back keeps it. */
-const PANEL_LEAVE_MS = 150;
 
 async function loadNotes(): Promise<NoteItem[]> {
   return toNoteItems(await typedInvoke("list_notes"));
@@ -227,11 +220,6 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   /** The version chosen in the history. The newest one the moment it opens. */
   const [selectedVersionId, setSelectedVersionId] = createSignal<string | null>(null);
   /**
-   * Whether the pointer resting on the right edge has floated the panel in. The pinned state
-   * lives in the shell (`notePanelPinned`); this is only the passing one.
-   */
-  const [panelHover, setPanelHover] = createSignal(false);
-  /**
    * Whether the panel screen is up on a phone. There is no width to lay it alongside, so it is
    * one surface that swaps with the body. Pressing a version returns to the body in compare
    * mode, with the compare bar attached below.
@@ -294,11 +282,8 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   /** Whether the panel screen is up on a phone. It swaps with the body. */
   const panelScreenShown = (): boolean => panelScreen() && !twoPane();
 
-  /**
-   * Whether the right panel is on screen in a wide window: docked by the toggle or ⌘., or floated
-   * by the pointer resting on the edge.
-   */
-  const panelOpen = (): boolean => twoPane() && (shell.notePanelPinned() || panelHover());
+  /** Whether the right panel is on screen in a wide window. */
+  const panelOpen = (): boolean => twoPane() && shell.notePanelPinned();
 
   /** Which tab the panel shows. The history tab is compare mode itself. */
   const panelTab = (): NotePanelTab => (historyOpen() ? "history" : "note");
@@ -936,22 +921,13 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     shell.showToast(t().codex.committed(count), undo, summary);
   };
 
-  /** Pending "float the panel in" (resting on the edge) and "let it go" (left it). */
-  let edgeTimer: ReturnType<typeof setTimeout> | undefined;
-  let leaveTimer: ReturnType<typeof setTimeout> | undefined;
-  onCleanup(() => {
-    clearTimeout(edgeTimer);
-    clearTimeout(leaveTimer);
-  });
-
   /**
    * Flush the pending save before the history opens. The history is the screen that compares the
    * body on disk with a version, and "restore" also commits the body on disk as "before the
    * restore": opening while keystrokes exist only on screen loses them into neither. The version
    * chosen the moment it opens is the newest one.
    *
-   * The history always opens docked. Floating in on hover would put 320px of comparison beside a
-   * writing hand in passing; on a phone it is the panel screen's second tab.
+   * On a phone it is the panel screen's second tab.
    */
   const openHistory = async (): Promise<void> => {
     shell.closePopovers();
@@ -987,21 +963,18 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   };
 
   /**
-   * Folds the panel entirely: undocked, not floating, compare mode over. Opening it again always
-   * starts on the settings tab, so a panel that appears never starts by comparing.
+   * Folds the panel entirely, compare mode included. Opening it again always starts on the
+   * settings tab, so a panel that appears never starts by comparing.
    */
   const closePanel = (): void => {
-    clearTimeout(edgeTimer);
-    clearTimeout(leaveTimer);
     batch(() => {
       leaveHistory();
       shell.setNotePanelPinned(false);
-      setPanelHover(false);
       setPanelScreen(false);
     });
   };
 
-  /** ⌘. and the title row's toggle. Docks the panel, or folds it. On a phone, the panel screen. */
+  /** ⌘. and the title row's button. Opens the panel, or folds it. On a phone, the panel screen. */
   const togglePanel = (): void => {
     if (!twoPane()) {
       setPanelScreen((open) => !open);
@@ -1011,7 +984,6 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       closePanel();
       return;
     }
-    setPanelHover(false);
     shell.setNotePanelPinned(true);
   };
 
@@ -1048,22 +1020,6 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       return;
     }
     void openHistory();
-  };
-
-  /**
-   * The pointer resting on the right edge. The dwell restarts on every move, so only a pointer
-   * that has stopped there opens it, not one passing over on its way to the scrollbar.
-   */
-  const armEdge = (): void => {
-    clearTimeout(edgeTimer);
-    edgeTimer = setTimeout(() => setPanelHover(true), EDGE_DWELL_MS);
-  };
-
-  const onPanelLeave = (): void => {
-    clearTimeout(leaveTimer);
-    if (!shell.notePanelPinned()) {
-      leaveTimer = setTimeout(() => setPanelHover(false), PANEL_LEAVE_MS);
-    }
   };
 
   // If the versions have not arrived when it opens, choose the newest one that arrives. It also
@@ -1241,8 +1197,8 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
    */
   /**
    * Esc peels one layer at a time. The tag input and the created-time field take theirs first
-   * (they mark the key as handled), the confirmation is corvu's, then the history, then a panel
-   * that floated in. A docked settings panel stays: it was put there on purpose, like the list.
+   * (they mark the key as handled), the confirmation is corvu's, then the history. The settings
+   * tab stays: the panel was put there on purpose, like the list.
    */
   const onEscape = (e: KeyboardEvent): void => {
     if (confirmOpen()) {
@@ -1254,9 +1210,6 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     } else if (panelScreenShown()) {
       e.preventDefault();
       setPanelScreen(false);
-    } else if (panelHover() && !shell.notePanelPinned()) {
-      e.preventDefault();
-      closePanel();
     }
   };
 
@@ -1470,13 +1423,10 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       screen={screen}
       title={noteTitle()}
       open={screen || panelOpen()}
-      pinned={shell.notePanelPinned()}
       tab={panelTab()}
       historyCount={versionRows().length}
       onTab={selectTab}
       onBack={() => setPanelScreen(false)}
-      onPointerEnter={() => clearTimeout(leaveTimer)}
-      onPointerLeave={onPanelLeave}
       readOnly={readOnly()}
       mapOpen={mapOpen()}
       // While folded the table is empty, so judge by the template it came from
@@ -1762,8 +1712,8 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                       }}
                     />
 
-                    {/* The one visible way into the panel. Everything that acts on this note is
-                      in there, and its state shows in the bottom bar while it is closed */}
+                    {/* The panel's only button; the other way in is ⌘. It moves into the viewer's
+                      top band once that exists (ADR 0012) */}
                     <button
                       type="button"
                       class="icon-button note-panel-toggle"
@@ -1773,7 +1723,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                       data-hint-key={shortcutLabel("noteActions")}
                       onClick={togglePanel}
                     >
-                      <Icon name="sidebar-simple" size={17} />
+                      <Icon name="dots-three" size={17} />
                     </button>
                   </div>
 
@@ -2028,20 +1978,8 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
               <Show when={panelScreenShown()}>{notePanel(item, true)}</Show>
 
               {/* In a wide window, 320px at the right edge. It exists even when folded, so
-                  opening and closing read as a 220ms slide. The 8px strip at the edge floats it
-                  in when the pointer rests there; docked, there is nothing to float */}
-              <Show when={twoPane()}>
-                <Show when={!shell.notePanelPinned()}>
-                  <div
-                    class="note-panel-edge"
-                    aria-hidden="true"
-                    onPointerEnter={armEdge}
-                    onPointerMove={armEdge}
-                    onPointerLeave={() => clearTimeout(edgeTimer)}
-                  />
-                </Show>
-                {notePanel(item, false)}
-              </Show>
+                  opening and closing read as a 220ms slide */}
+              <Show when={twoPane()}>{notePanel(item, false)}</Show>
 
               <PromoteDialog
                 open={confirmOpen()}

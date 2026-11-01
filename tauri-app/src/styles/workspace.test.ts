@@ -467,18 +467,17 @@ describe("the note panel", () => {
     await page.viewport(1280, 800);
   });
 
-  function mountPanel(state: "closed" | "floating" | "docked"): HTMLElement {
+  function mountPanel(state: "closed" | "open"): HTMLElement {
     document.body.innerHTML = `
       <div class="app">
         <nav class="rail"></nav>
         <div class="app-column">
           <main class="app-main">
             <div class="workspace">
-              <div class="detail-pane ${state === "docked" ? "detail-pane--panel" : ""}">
+              <div class="detail-pane ${state === "open" ? "detail-pane--panel" : ""}">
                 <div class="detail-head"></div>
                 <div class="detail-panes"><div class="detail-body"></div></div>
-                ${state === "docked" ? "" : '<div class="note-panel-edge"></div>'}
-                <aside class="note-panel ${state === "closed" ? "" : "note-panel--open"} ${state === "docked" ? "note-panel--pinned" : ""}"></aside>
+                <aside class="note-panel ${state === "open" ? "note-panel--open" : ""}"></aside>
               </div>
             </div>
           </main>
@@ -488,21 +487,9 @@ describe("the note panel", () => {
     return element(".note-panel");
   }
 
-  // Floating, it lies over the body. The body does not move when it comes and goes
-  it("floats 320px over the body without moving it", () => {
-    const panel = mountPanel("floating");
-    const pane = element(".detail-pane").getBoundingClientRect();
-
-    expect(panel.getBoundingClientRect().width).toBeCloseTo(320, 0);
-    expect(panel.getBoundingClientRect().right).toBeCloseTo(pane.right, 0);
-    // Only the 8px hot zone is kept clear of the body
-    expect(element(".detail-panes").getBoundingClientRect().right).toBeCloseTo(pane.right - 8, 0);
-    expect(getComputedStyle(panel).boxShadow).not.toBe("none");
-  });
-
-  // Docked, the body column gives it room, and the shadow goes: it is part of the page
-  it("takes its width from the body once docked", () => {
-    const panel = mountPanel("docked");
+  // Open, the body column gives it room. With no shadow it is part of the page
+  it("takes its width from the body", () => {
+    const panel = mountPanel("open");
 
     expect(element(".detail-panes").getBoundingClientRect().right).toBeCloseTo(
       panel.getBoundingClientRect().left,
@@ -521,19 +508,8 @@ describe("the note panel", () => {
     expect(style.transform).toBe("matrix(1, 0, 0, 1, 24, 0)");
   });
 
-  it("keeps an 8px hot zone at the right edge, under the panel", () => {
-    const panel = mountPanel("floating");
-    const edge = element(".note-panel-edge");
-
-    expect(edge.getBoundingClientRect().width).toBeCloseTo(8, 0);
-    expect(Number(getComputedStyle(edge).zIndex)).toBeLessThan(
-      Number(getComputedStyle(panel).zIndex),
-    );
-  });
-
-  // Its shadow falls under the status line, not over it
-  it("stops above the bottom bar, which stands over its shadow", () => {
-    const panel = mountPanel("floating");
+  it("stops above the bottom bar", () => {
+    const panel = mountPanel("open");
     const bar = element(".bottom-bar");
 
     expect(panel.getBoundingClientRect().bottom).toBeCloseTo(bar.getBoundingClientRect().top, 0);
