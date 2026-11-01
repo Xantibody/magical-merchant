@@ -12,14 +12,14 @@ use magical_merchant_core::{CoreError, Source, parse_scrawl_entry};
 use crate::notes;
 
 /// Appends to today if the body is not empty. Returns `true` when it appended.
-pub(crate) fn add(data_dir: &Path, text: &str) -> Result<bool, CoreError> {
+pub(crate) fn add(data_dir: &Path, text: &str, source: Source) -> Result<bool, CoreError> {
     let text = text.trim();
     if text.is_empty() {
         return Ok(false);
     }
-    // Do not fold the entry point into `notes::context()`. That is shared with MCP and
-    // looks only at the device, so it would record the CLI and MCP as the same thing
-    magical_merchant_core::save_scrawl_entry(data_dir, text, &notes::context(), Source::Cli)?;
+    // The caller names itself. `notes::context()` is shared with MCP and looks only at the
+    // device, so folding the entry point into it would record the CLI and MCP as the same thing
+    magical_merchant_core::save_scrawl_entry(data_dir, text, &notes::context(), source)?;
     Ok(true)
 }
 
@@ -67,8 +67,8 @@ mod tests {
     fn an_entry_is_appended_to_today_and_comes_back_with_its_time() {
         let tmp = TempDir::new().unwrap();
 
-        assert!(add(tmp.path(), "first #memo").unwrap());
-        assert!(add(tmp.path(), "  second  \n").unwrap());
+        assert!(add(tmp.path(), "first #memo", Source::Cli).unwrap());
+        assert!(add(tmp.path(), "  second  \n", Source::Cli).unwrap());
 
         let today = Local::now().date_naive();
         let entries = show(tmp.path(), today).unwrap();
@@ -88,7 +88,7 @@ mod tests {
     fn a_blank_entry_writes_nothing() {
         let tmp = TempDir::new().unwrap();
 
-        assert!(!add(tmp.path(), " \n\t").unwrap());
+        assert!(!add(tmp.path(), " \n\t", Source::Cli).unwrap());
 
         assert!(dates(tmp.path()).unwrap().is_empty());
     }
@@ -97,7 +97,7 @@ mod tests {
     fn a_multi_line_entry_survives_the_round_trip() {
         let tmp = TempDir::new().unwrap();
 
-        add(tmp.path(), "line one\nline two").unwrap();
+        add(tmp.path(), "line one\nline two", Source::Cli).unwrap();
 
         let entries = show(tmp.path(), Local::now().date_naive()).unwrap();
         assert_eq!(entries[0].text, "line one\nline two");

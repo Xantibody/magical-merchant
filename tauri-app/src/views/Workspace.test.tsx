@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, onTestFinished, vi } from "vitest";
 import { render, screen, fireEvent, cleanup, waitFor, within } from "@solidjs/testing-library";
 import { mockIPC, mockWindows, clearMocks } from "@tauri-apps/api/mocks";
-import { page } from "vitest/browser";
+import { page, userEvent } from "vitest/browser";
 import { MemoryRouter, Route, useNavigate } from "@solidjs/router";
 import { createEffect, onCleanup } from "solid-js";
 import type { JSX } from "solid-js";
@@ -2340,15 +2340,58 @@ describe("Workspace › タグ", () => {
     expect(screen.queryByRole("button", { name: "タグ idea を外す" })).toBeNull();
   });
 
-  it("removes the last tag with Backspace in the empty input", async () => {
+  // A held Backspace runs past the end of the text. Removing a tag is the ×'s alone (#331)
+  it("leaves the tags alone on Backspace in the empty input", async () => {
     meta.set(FILE_A, { tags: ["work", "idea"] });
     await openNoteA();
     const input = await startTagEditing();
 
     fireEvent.keyDown(input, { key: "Backspace" });
 
+    await sleep(100);
+    expect(countOf("update_note_meta")).toBe(0);
+    expect(screen.getByRole("button", { name: "タグ idea を外す" })).toBeDefined();
+  });
+
+  // With Backspace gone, Shift+Tab onto the × is the keyboard's only way to remove a tag
+  it("reaches the last tag's × with Shift+Tab and removes it from the keyboard", async () => {
+    meta.set(FILE_A, { tags: ["work", "idea"] });
+    await openNoteA();
+    const input = await startTagEditing();
+    await waitFor(() => expect(document.activeElement).toBe(input));
+
+    await userEvent.keyboard("{Shift>}{Tab}{/Shift}");
+
+    const remove = screen.getByRole("button", { name: "タグ idea を外す" });
+    expect(document.activeElement).toBe(remove);
+
+    await userEvent.keyboard("{Enter}");
+
     await waitFor(() => expect(countOf("update_note_meta")).toBe(1));
     expect(calls.find((c) => c.cmd === "update_note_meta")?.args.tags).toStrictEqual(["work"]);
+    // The pressed × is gone with its chip. The caret goes back to the field, not to the page
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText("タグを追加")));
+  });
+
+  // The toast outlives the selection, so the undo has to find its own note again
+  it("undoes a removed tag on its own note, in its old place, after moving away", async () => {
+    disk.set(FILE_B, BODY_B);
+    meta.set(FILE_A, { tags: ["work", "idea"] });
+    meta.set(FILE_B, { tags: ["shop"] });
+    await openNoteA();
+    await startTagEditing();
+
+    fireEvent.click(screen.getByRole("button", { name: "タグ work を外す" }));
+
+    await waitFor(() => expect(meta.get(FILE_A)?.tags).toStrictEqual(["idea"]));
+    expect(shell?.toast()?.message).toContain("work");
+
+    fireEvent.click(await rowOf(TITLE_B));
+    await waitFor(() => expect(titleInput().value).toBe(TITLE_B));
+    shell?.toast()?.undo?.();
+
+    await waitFor(() => expect(meta.get(FILE_A)?.tags).toStrictEqual(["work", "idea"]));
+    expect(meta.get(FILE_B)?.tags).toStrictEqual(["shop"]);
   });
 
   // Esc peels one layer: the tag input first. The history behind it stays open

@@ -440,15 +440,14 @@ describe("Templates", () => {
     expect(body.value).toBe("前回: {{");
   });
 
-  it("removes the last tag on Backspace in an empty tag field", async () => {
+  // A held Backspace runs past the end of the text. Removing a tag is the ×'s alone (#331)
+  it("leaves the tags alone on Backspace in an empty tag field", async () => {
     const { container } = await openDaily();
     const tagInput = screen.getByLabelText("タグを追加");
 
     fireEvent.keyDown(tagInput, { key: "Backspace" });
 
-    await waitFor(() =>
-      expect(container.querySelectorAll(".templates-tags .tag-badge")).toHaveLength(0),
-    );
+    expect(container.querySelectorAll(".templates-tags .tag-badge")).toHaveLength(1);
   });
 
   it("marks a tag that holds a variable apart from a fixed one", async () => {

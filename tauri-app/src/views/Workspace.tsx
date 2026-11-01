@@ -450,6 +450,25 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     await refetchNotes();
   };
 
+  /**
+   * Puts a removed tag back where it stood. The note is read afresh rather than through
+   * `saveMeta`: the toast outlives the selection, and `currentMeta` may be another note's by now.
+   */
+  const restoreTag = async (filename: string, tag: string, at: number): Promise<void> => {
+    try {
+      const read = await typedInvoke("read_note_meta", { filename });
+      const tags = [...read.tags.slice(0, at), tag, ...read.tags.slice(at)];
+      await typedInvoke("update_note_meta", { filename, time: read.time, tags });
+      if (selected()?.filename === filename) {
+        mutateMeta({ filename, meta: { ...read, tags } });
+      }
+    } catch {
+      shell.showToast(t().meta.saveFailed);
+      return;
+    }
+    await refetchNotes();
+  };
+
   // The version count and "how far it has moved from the newest version". It compares the body
   // against a version, so it reads only the one note that is open (the mark on a list row comes
   // from core using the name fingerprint alone)
@@ -1433,6 +1452,12 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       onEditingChange={setTagEditing}
       onChange={(tags) => {
         void saveMeta(item(), { tags });
+      }}
+      onRemoved={(tag, at) => {
+        const { filename } = item();
+        shell.showToast(t().meta.tagRemoved(tag), () => {
+          void restoreTag(filename, tag, at);
+        });
       }}
       screen={screen}
     />

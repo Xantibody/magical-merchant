@@ -6,6 +6,7 @@ use chrono::{Local, NaiveDate};
 
 use crate::error::CoreError;
 use crate::scrawl::day::DayLog;
+use crate::scrawl::migrate::migrate_scrawl_dir;
 use crate::utils::device::{Context, Source};
 use crate::utils::fs::{ensure_dir, write_atomic};
 use crate::utils::markdown::{split_context_json, split_time_prefix};
@@ -26,6 +27,9 @@ impl Scrawl {
         context: &Context,
         source: Source,
     ) -> Result<(), CoreError> {
+        // Every capture path ends here, so no entry point has to remember this. A failed move
+        // is no reason to lose the entry: the next write tries again
+        let _ = migrate_scrawl_dir(&self.base_dir);
         let now = Local::now();
         let file_path = scrawl_file_path(&self.base_dir, now.date_naive());
         ensure_dir(&file_path)?;

@@ -6,7 +6,7 @@
 
 use magical_merchant_core::utils::device::{Context, NetworkType};
 use magical_merchant_core::{
-    GlyphSummary, NoteSummary, ScrawlEntry, SearchHit, Snapshot, TemplateSummary,
+    GlyphSummary, NoteSummary, ScrawlEntry, SearchHit, Snapshot, TemplateSummary, Version,
 };
 use rmcp::schemars;
 use serde::Serialize;
@@ -33,6 +33,12 @@ pub(crate) struct NoteInfo {
     pub(crate) origin: Option<String>,
     /// Name of the template this note was created from, if any.
     pub(crate) template: Option<String>,
+    /// How many versions a person has committed. Absent on a plain note; a
+    /// Codex with none says 0.
+    pub(crate) version_count: Option<usize>,
+    /// Whether the draft has moved on from the latest version. Absent on a
+    /// plain note; false on a Codex with no version yet.
+    pub(crate) dirty: Option<bool>,
 }
 
 impl From<NoteSummary> for NoteInfo {
@@ -45,6 +51,8 @@ impl From<NoteSummary> for NoteInfo {
             preview: n.preview,
             origin: n.origin,
             template: n.template,
+            version_count: n.version_count,
+            dirty: n.dirty,
         }
     }
 }
@@ -52,6 +60,9 @@ impl From<NoteSummary> for NoteInfo {
 #[derive(Serialize, schemars::JsonSchema)]
 pub(crate) struct NoteOutput {
     pub(crate) filename: String,
+    /// `note` for a single document, `codex` for a document that grows and
+    /// keeps explicitly committed versions.
+    pub(crate) kind: String,
     /// Creation time, RFC 3339 with the device's UTC offset.
     pub(crate) time: Option<String>,
     /// Last body edit, RFC 3339. Absent when the note was never edited.
@@ -365,6 +376,18 @@ pub(crate) struct CreatedNoteOutput {
 }
 
 #[derive(Serialize, schemars::JsonSchema)]
+pub(crate) struct PromotedOutput {
+    /// Unchanged: a note keeps its ID when it becomes a Codex.
+    pub(crate) filename: String,
+}
+
+#[derive(Serialize, schemars::JsonSchema)]
+pub(crate) struct AddedScrawlOutput {
+    /// The day it was appended to, YYYY-MM-DD; the argument to `read_scrawl`.
+    pub(crate) date: String,
+}
+
+#[derive(Serialize, schemars::JsonSchema)]
 pub(crate) struct UpdatedNoteOutput {
     pub(crate) filename: String,
     /// The copy of the note taken before this write. Pass its `id` to
@@ -373,6 +396,57 @@ pub(crate) struct UpdatedNoteOutput {
     /// Fingerprint of the body now on disk; the `revision` for a further
     /// `update_note`.
     pub(crate) revision: Option<String>,
+}
+
+#[derive(Serialize, schemars::JsonSchema)]
+pub(crate) struct CodexVersionsOutput {
+    /// Newest first.
+    pub(crate) versions: Vec<CodexVersionInfo>,
+    /// Whether the draft has moved on from the latest version. False when
+    /// there is no version yet.
+    pub(crate) dirty: bool,
+    /// The draft's size in bytes minus the latest version's. 0 when there is
+    /// no version yet.
+    pub(crate) bytes_delta: i64,
+}
+
+/// One version a person committed. Not a `list_note_history` copy: those are taken by
+/// the machine and stay on the device, these are part of the document.
+#[derive(Serialize, schemars::JsonSchema)]
+pub(crate) struct CodexVersionInfo {
+    /// The argument to pass to `read_codex_version` / `diff_codex_versions`.
+    pub(crate) id: String,
+    /// When it was committed, RFC 3339 with the device's UTC offset.
+    pub(crate) time: String,
+    pub(crate) message: Option<String>,
+    pub(crate) bytes: u64,
+}
+
+impl From<Version> for CodexVersionInfo {
+    fn from(v: Version) -> Self {
+        Self {
+            id: v.id,
+            time: v.time.to_rfc3339(),
+            message: v.message,
+            bytes: v.bytes,
+        }
+    }
+}
+
+#[derive(Serialize, schemars::JsonSchema)]
+pub(crate) struct CodexVersionOutput {
+    pub(crate) id: String,
+    /// Markdown body of that version, without the frontmatter.
+    pub(crate) body: String,
+}
+
+#[derive(Serialize, schemars::JsonSchema)]
+pub(crate) struct CodexDiffOutput {
+    pub(crate) from: String,
+    /// A version id, or `draft` for the current body.
+    pub(crate) to: String,
+    /// Unified diff; empty when the two sides are identical.
+    pub(crate) diff: String,
 }
 
 /// One saved copy of a note, taken before a write replaced it.

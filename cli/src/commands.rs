@@ -5,7 +5,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, FixedOffset, Local};
-use magical_merchant_core::{CoreError, NoteFilename, NoteSummary, Provenance, Revision, Source};
+use magical_merchant_core::{
+    CoreError, NoteFilename, NoteKind, NoteSummary, Provenance, Revision, Source,
+};
 
 use crate::notes::{self, WriteError};
 
@@ -145,6 +147,7 @@ pub(crate) fn edit(
 pub(crate) fn create(data_dir: &Path, body: &str) -> Result<Option<NoteFilename>, CoreError> {
     notes::create(
         data_dir,
+        NoteKind::Note,
         body,
         &[],
         Provenance {

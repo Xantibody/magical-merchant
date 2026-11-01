@@ -30,6 +30,8 @@ interface TagEditorProps {
   onEditingChange: (editing: boolean) => void;
   /** The frontmatter's new tags. */
   onChange: (tags: string[]) => void;
+  /** A tag just left through its ×, and the place it stood in the frontmatter's list. */
+  onRemoved: (tag: string, at: number) => void;
   /** The phone's panel screen: chips a finger can press, always removable. */
   screen?: boolean;
 }
@@ -44,6 +46,7 @@ interface TagEditorProps {
 export default function TagEditor(props: TagEditorProps): JSX.Element {
   const [query, setQuery] = createSignal("");
   const [active, setActive] = createSignal(0);
+  let input: HTMLInputElement | undefined;
 
   const isOwn = (tag: string): boolean => props.own?.some((own) => sameTag(own, tag)) ?? false;
 
@@ -80,7 +83,20 @@ export default function TagEditor(props: TagEditorProps): JSX.Element {
   const remove = (tag: string): void => {
     const { own } = props;
     if (own) {
+      // A pressed × goes with its chip. Focus has to move first: it would otherwise fall to the
+      // page, and the editing with it
+      input?.focus();
+      const at = own.findIndex((kept) => sameTag(kept, tag));
       props.onChange(own.filter((kept) => !sameTag(kept, tag)));
+      props.onRemoved(tag, at);
+    }
+  };
+
+  /** Moving between the input and the chips' × is still editing; anywhere else ends it. */
+  const onBlur = (e: FocusEvent): void => {
+    const next = e.relatedTarget;
+    if (next !== input && !(next instanceof Element && next.matches(".tag-editor-remove"))) {
+      stop();
     }
   };
 
@@ -89,7 +105,7 @@ export default function TagEditor(props: TagEditorProps): JSX.Element {
     add(picked ? picked.tag : normalizeTag(query()));
   };
 
-  const onKeyDown = (e: KeyboardEvent & { currentTarget: HTMLInputElement }): void => {
+  const onKeyDown = (e: KeyboardEvent): void => {
     // The Enter that ends IME conversion is the IME's. It does not add a tag (#102)
     if (isImeComposing(e)) {
       return;
@@ -109,12 +125,6 @@ export default function TagEditor(props: TagEditorProps): JSX.Element {
       // The first Esc belongs to the input. The panel and the history wait for the next one
       e.preventDefault();
       stop();
-    } else if (e.key === "Backspace" && e.currentTarget.value === "") {
-      const last = props.own?.at(-1);
-      if (last !== undefined) {
-        e.preventDefault();
-        remove(last);
-      }
     }
   };
 
@@ -128,6 +138,7 @@ export default function TagEditor(props: TagEditorProps): JSX.Element {
           aria-label={t().meta.removeTag(tag)}
           onMouseDown={keepFocus}
           onClick={() => remove(tag)}
+          onBlur={onBlur}
         >
           <Icon name="x" size={10} />
         </button>
@@ -135,7 +146,6 @@ export default function TagEditor(props: TagEditorProps): JSX.Element {
     </span>
   );
 
-  let input: HTMLInputElement | undefined;
   // The input opens disabled until the frontmatter's tags are read, and a disabled input cannot
   // take the caret. It is handed over the moment it can type
   createEffect(
@@ -166,7 +176,7 @@ export default function TagEditor(props: TagEditorProps): JSX.Element {
           setActive(0);
         }}
         onKeyDown={onKeyDown}
-        onBlur={stop}
+        onBlur={onBlur}
       />
       <Show when={rows() > 0}>
         <div

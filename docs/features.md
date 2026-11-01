@@ -409,26 +409,31 @@ written — local time, GPS coordinates (and the place name the app resolved
 for them), battery, network type, and which device wrote it — so an agent
 can line the journal up with other time- or location-based data.
 
-| Tool                | Description                                                                                        |
-| ------------------- | -------------------------------------------------------------------------------------------------- |
-| `list_notes`        | List all notes with their `kind` (`note` / `codex`), tags, a short preview, and their origin       |
-| `read_note`         | Read a note's metadata (time, tags, context) and Markdown body                                     |
-| `backlinks`         | List the records that link to a note with `[[…]]`                                                  |
-| `search`            | Search notes, codex and Scrawl entries, optionally within a set of tags; each hit says which it is |
-| `list_scrawl_dates` | List the dates that have Scrawl entries                                                            |
-| `read_scrawl`       | Read one day's entries with time, text, tags, location, and device                                 |
-| `read_scrawl_range` | Read entries between two days, optionally filtered by tag                                          |
-| `list_places`       | Places (~1 km cells) records were written at, with names and counts                                |
-| `list_tags`         | Every `#tag` with note and entry counts                                                            |
-| `list_templates`    | List note templates                                                                                |
-| `read_template`     | Read a template's body and tags                                                                    |
-| `list_glyphs`       | Registered glyphs with the `:name:` shortcode that renders each one                                |
+| Tool                  | Description                                                                                        |
+| --------------------- | -------------------------------------------------------------------------------------------------- |
+| `list_notes`          | List all notes with their `kind` (`note` / `codex`), tags, a short preview, and their origin       |
+| `read_note`           | Read a note's metadata (time, tags, context) and Markdown body                                     |
+| `backlinks`           | List the records that link to a note with `[[…]]`                                                  |
+| `search`              | Search notes, codex and Scrawl entries, optionally within a set of tags; each hit says which it is |
+| `list_scrawl_dates`   | List the dates that have Scrawl entries                                                            |
+| `read_scrawl`         | Read one day's entries with time, text, tags, location, and device                                 |
+| `read_scrawl_range`   | Read entries between two days, optionally filtered by tag                                          |
+| `list_places`         | Places (~1 km cells) records were written at, with names and counts                                |
+| `list_tags`           | Every `#tag` with note and entry counts                                                            |
+| `list_templates`      | List note templates                                                                                |
+| `read_template`       | Read a template's body and tags                                                                    |
+| `list_glyphs`         | Registered glyphs with the `:name:` shortcode that renders each one                                |
+| `list_codex_versions` | A Codex's committed versions, newest first, and how far the draft has moved                        |
+| `read_codex_version`  | Read the body of one committed version                                                             |
+| `diff_codex_versions` | Unified diff between two versions, or from a version to the draft                                  |
 
-What an agent cannot do is keep a Codex's history: there is no tool to
-commit, list, diff or restore a version. Committing is a person saying
-"this far", which is not a decision to hand to a model; the versions are
-plain Markdown under `data/codex/<id>/`, so an agent that has been given
-the data directory can still read them with `diff -u`.
+An agent can read a Codex's history but not make it: no launch offers a
+tool to commit, delete or restore a version, `--allow-write` included.
+Committing is a person saying "this far", which is not a decision to hand
+to a model, and restoring commits a version as a side effect. Reading the
+versions needs no flag because they are part of the document; the local
+`history/` copies are the opposite case; their tools sit behind
+`--allow-write` because they exist to undo what those tools wrote.
 
 With `--allow-write` the server also offers writing tools, and its
 instructions say so instead of claiming to be read-only. Notes are
@@ -440,8 +445,10 @@ on updates; the body is all a client sends. A Codex's draft is written the
 same way: `update_note` resolves the ID with `locate_note`, which looks in
 `data/codex/` before `data/notes/`, so an agent edits the body of a
 document that keeps versions without having to know it is one, and
-`list_note_history` / `restore_note` reach it too. Making a Codex is still
-the app's — `create_note` only ever writes into `data/notes/`.
+`list_note_history` / `restore_note` reach it too. `create_note` only ever
+writes into `data/notes/`; `create_codex` makes a Codex, and
+`promote_to_codex` turns a Note into one, for good. A Codex made this way
+starts with no version until a person commits one.
 
 Every overwrite first saves a full copy of the previous version under
 `<data-dir>/history/` (outside the synced `data/`), so any change an
@@ -455,6 +462,9 @@ edit:
 | Tool                | Description                                                                                                         |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | `create_note`       | Create a note from a Markdown body (first line `# Title`)                                                           |
+| `create_codex`      | Create a Codex from a Markdown body                                                                                 |
+| `promote_to_codex`  | Turn a note into a Codex, keeping its ID and body; there is no way back                                             |
+| `add_scrawl`        | Append an entry to today's Scrawl; it cannot be edited or removed from here                                         |
 | `update_note`       | Replace a note's body, optionally only if its `revision` still holds                                                |
 | `list_note_history` | List the saved copies of a note, newest first                                                                       |
 | `read_note_history` | Read one saved copy, with the note's current `revision`                                                             |

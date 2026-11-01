@@ -5,9 +5,14 @@
 //! "`timeline/*` disappeared and `scrawl/*` appeared": the diff becomes `UploadNew` and
 //! `DeleteRemote`, and one sync carries it over in full (`sync/diff.rs`).
 //!
-//! Call it before the scan. Inside the sync lock (`repair_tree` in `sync/engine.rs`), at app
-//! start, at CLI start, in the widget's JNI: every entry point that can write a day file
-//! goes through it. Called later, the scan would see a tree halfway through the rename.
+//! Call it before the scan: inside the sync lock (`repair_tree` in `sync/engine.rs`), at app
+//! start, on the widget's read, and on every capture (`Scrawl::save_entry`). Called later,
+//! the scan would see a tree halfway through the rename.
+//!
+//! It is tied to writes, not to a process starting. A rename from a command that only reads
+//! breaks the promise of a read-only MCP, and lands outside the sync lock for nothing. The
+//! price: a CLI or read-only MCP pointed at a tree nothing has migrated yet sees no Scrawl
+//! until the app, a sync or a capture runs. Nothing is lost.
 
 use std::fs;
 use std::path::Path;
@@ -94,6 +99,7 @@ pub fn migrate_scrawl_dir(base_dir: &Path) -> Result<ScrawlDirMigration, CoreErr
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::utils::device::{Context, Source};
     use tempfile::TempDir;
 
     fn write(path: &Path, body: &str) {
@@ -117,6 +123,22 @@ mod tests {
 
     fn read_scrawl_day(base: &Path, date: &str) -> String {
         fs::read_to_string(data_dir(base).join(SCRAWL_DIR).join(format!("{date}.md"))).unwrap()
+    }
+
+    /// Writing first would create today's file under `scrawl/`, and the old one of the
+    /// same name could then never move: one day in two directories, both riding the sync.
+    #[test]
+    fn saving_an_entry_on_an_old_tree_appends_to_the_day_that_was_there() {
+        let tmp = TempDir::new().unwrap();
+        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+        legacy_day(tmp.path(), &today, "- [09:00:00] 朝\n");
+
+        crate::save_scrawl_entry(tmp.path(), "夜", &Context::default(), Source::Cli).unwrap();
+
+        let day = read_scrawl_day(tmp.path(), &today);
+        assert!(day.contains("朝"), "{day}");
+        assert!(day.contains("夜"), "{day}");
+        assert!(!data_dir(tmp.path()).join(LEGACY_DIR).exists());
     }
 
     #[test]

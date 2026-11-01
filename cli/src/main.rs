@@ -14,6 +14,7 @@ use std::io::{IsTerminal, Read as _, Write as _};
 use std::path::{Path, PathBuf};
 
 use clap::{Parser, Subcommand};
+use magical_merchant_core::Source;
 use rmcp::ServiceExt;
 
 /// The same place as Tauri's `app_data_dir`. Change the app identifier and this changes too.
@@ -144,9 +145,6 @@ async fn main() -> anyhow::Result<()> {
         .or_else(default_data_dir)
         .ok_or_else(|| anyhow::anyhow!("no data directory: pass --data-dir"))?;
     server::exists_or_hint(&data_dir).map_err(|e| anyhow::anyhow!(e))?;
-    // `data/timeline/` from before the rename. Unless this runs before any read, both the
-    // listing and the sync walk straight past the old directory
-    let _ = magical_merchant_core::migrate_scrawl_dir(&data_dir);
 
     match cli.command {
         Command::List => {
@@ -250,7 +248,8 @@ fn run_scrawl(data_dir: &Path, command: ScrawlCommand) -> anyhow::Result<()> {
                     Some(text)
                 }
             };
-            let added = text.is_some_and(|t| scrawl::add(data_dir, &t).is_ok_and(|a| a));
+            let added =
+                text.is_some_and(|t| scrawl::add(data_dir, &t, Source::Cli).is_ok_and(|a| a));
             if added {
                 eprintln!("added to today's scrawl");
             } else {
