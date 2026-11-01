@@ -527,10 +527,10 @@ mod tests {
     fn the_cap_comes_after_the_period() {
         let tmp = TempDir::new().unwrap();
         day_file(&tmp, "2025-11-02", "- [09:00:00] 走った\n");
-        let recent: String = (0..MAX_HITS)
-            .map(|i| format!("- [09:{:02}:{:02}] 走った\n", i / 60, i % 60))
+        let lines: Vec<String> = (0..MAX_HITS)
+            .map(|i| format!("- [09:{:02}:{:02}] 走った", i / 60, i % 60))
             .collect();
-        day_file(&tmp, "2026-11-02", &recent);
+        day_file(&tmp, "2026-11-02", &lines.join("\n"));
         let filter = SearchFilter {
             from: Some(day("2025-11-02")),
             to: Some(day("2025-11-02")),
