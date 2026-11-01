@@ -436,9 +436,10 @@ async function confirmPromote(): Promise<HTMLElement> {
   return within(dialog).getByRole("button", { name: "Codex にする" });
 }
 
-/** Presses the `+ tag` button on the meta line and waits for the input the tags turn into. */
+/** Opens the panel, presses its add-a-tag button and waits for the input. */
 async function startTagEditing(): Promise<HTMLInputElement> {
-  fireEvent.click(screen.getByRole("button", { name: "タグ" }));
+  const panel = await openPanel();
+  fireEvent.click(within(panel).getByRole("button", { name: "追加" }));
   const input = await screen.findByLabelText<HTMLInputElement>("タグを追加");
   // Until the frontmatter is read, an edit could not know the tags it would write back
   await waitFor(() => expect(input.disabled).toBe(false));
@@ -2367,20 +2368,33 @@ describe("Workspace › タグ", () => {
     expect(meta.get(FILE_B)?.tags).toStrictEqual(["shop"]);
   });
 
-  // Esc peels one layer: the tag input first. The history behind it stays open
+  // Esc peels one layer: the tag input first. The panel around it stays open
   it("folds only the tag input on the first Escape", async () => {
-    kinds.set(FILE_A, "codex");
-    renderWorkspace();
-    navigateTo?.("/codex");
-    fireEvent.click(await rowOf(TITLE_A));
-    await waitFor(() => expect(titleInput().value).toBe(TITLE_A));
-    await openHistoryTab();
-    await waitFor(() => expect(historyShown()).toBe(true));
+    await openNoteA();
     const input = await startTagEditing();
 
     fireEvent.keyDown(input, { key: "Escape" });
 
     await waitFor(() => expect(screen.queryByLabelText("タグを追加")).toBeNull());
-    expect(historyShown()).toBe(true);
+    expect(openedPanel()).not.toBeNull();
+  });
+
+  // One part, one role: the line shows the tags, and only the panel changes them
+  it("shows the tags on the meta line with nothing there to press", async () => {
+    meta.set(FILE_A, { tags: ["work"] });
+    await openNoteA();
+
+    const line = document.querySelector(".detail-meta-line") as HTMLElement;
+    await waitFor(() => expect(line.textContent).toContain("#work"));
+    expect(line.querySelector("button")).toBeNull();
+  });
+
+  it("offers a tag's × as soon as the panel is open", async () => {
+    meta.set(FILE_A, { tags: ["work"] });
+    await openNoteA();
+
+    await openPanel();
+
+    await expect(screen.findByRole("button", { name: "タグ work を外す" })).resolves.toBeDefined();
   });
 });

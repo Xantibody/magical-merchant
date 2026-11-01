@@ -73,13 +73,14 @@ ready to record the moment it opens (widgets exist for exactly this).
 - **Note** (`views/Workspace.tsx`): list flyout + detail pane; mobile shows one
   pane at a time (`workspace--detail`); title field above the body
   (it _is_ the body's leading `# heading`), then a meta line of created time and
-  tags, edited in place (`components/TagEditor.tsx`: chips, suggestions counted
-  from `browse_all`, a body `#tag` has no ×). **There is no edit mode** — the
+  tags that only shows them. **There is no edit mode** — the
   Milkdown editor is open from the moment a note is; frontmatter `view` decides
   the exception (`preview` = read-only, `mindmap` = map laid alongside, absent
   = editable). Everything per-note lives in the **note panel**
   (`components/NotePanel.tsx`, `styles/note-panel.css`): 320px at the right
-  edge — the view switches, 詳細 (created time editable, updated, surroundings),
+  edge — the view switches, the tags (`components/TagEditor.tsx`: chips,
+  suggestions counted from `browse_all`, a body `#tag` has no ×), 詳細 (created
+  time editable, updated, surroundings),
   revert / Codex にする (a corvu confirm, `PromoteDialog.tsx`) / delete. The `…`
   beside the title and ⌘. are the only ways in, and the body gives up 320px
   while it is open. Open is the app's state (`shell.notePanelPinned`), not the

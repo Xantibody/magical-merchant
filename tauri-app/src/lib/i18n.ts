@@ -356,7 +356,6 @@ const ja = {
     addNew: (q: string) => `「${q}」を新しく追加`,
     footHint: "本文の #タグ は本文側で編集 · ↑↓ Enter Esc",
     /** The `+ tag` at the end of the meta line. */
-    addShort: "タグ",
     /** The dashed chip in the phone's panel screen. */
     add: "追加",
     /** A tag that comes from the body's `#tag`. It cannot be removed from here. */
@@ -905,7 +904,6 @@ const en: Messages = {
     suggestLabel: "Tags you have used",
     addNew: (q: string) => `Add “${q}” as new`,
     footHint: "Edit #tags in the body itself · ↑↓ Enter Esc",
-    addShort: "Tag",
     add: "Add",
     fromBody: "Edit #tags in the body itself",
   },
