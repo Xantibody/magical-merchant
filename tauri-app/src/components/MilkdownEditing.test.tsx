@@ -180,6 +180,30 @@ describe("Note table editing and inline decorations", () => {
     expect(h.view.state.doc.childCount).toBe(2);
   });
 
+  // WebKit answers a composition starting in an empty paragraph with a <br> of its own. It is no
+  // line break the writer asked for: read as one, it adds a line under the unconfirmed letter
+  it("does not read the browser's own <br> in the live editor as a line break", async () => {
+    const h = await mount("first\n\n<br />\n\nlast");
+    const empty = h.view.dom.children[1] as HTMLElement;
+
+    fireEvent.compositionStart(h.view.dom);
+    empty.prepend(document.createElement("br"), "k");
+
+    await expect.poll(() => h.view.state.doc.child(1).textContent).toBe("k");
+
+    fireEvent.compositionEnd(h.view.dom);
+    expect(h.view.state.doc.child(1).childCount).toBe(1);
+  });
+
+  it("still reads a pasted <br> as a line break", async () => {
+    const h = await mount("first");
+    h.select("first", true);
+
+    h.view.pasteHTML("<p>a<br>b</p>");
+
+    expect(h.view.state.doc.textContent).toContain("a\nb");
+  });
+
   it("does not mutate a table while IME composition is active", async () => {
     const h = await mount(TABLE);
     h.select("b");

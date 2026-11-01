@@ -26,6 +26,7 @@ import { exitCodeBlockPlugin } from "../lib/exit-code-block-plugin";
 import { codeBlockViewPlugin } from "../lib/code-block-view-plugin";
 import { codeBlockActivePlugin } from "../lib/code-block-active-plugin";
 import { taskItemPlugin } from "../lib/task-item-plugin";
+import { hardbreakLiveDomSchema } from "../lib/hardbreak-schema";
 import { imeKeyPlugin } from "../lib/ime-key-plugin";
 import { listKeymapPlugin } from "../lib/list-keymap-plugin";
 import { inputRuleUndoPlugin } from "../lib/input-rule-undo-plugin";
@@ -218,6 +219,7 @@ export default function MilkdownEditor(props: MilkdownEditorProps): JSX.Element 
         }
       })
       .use(commonmark)
+      .use(hardbreakLiveDomSchema)
       // The preview (markdown-it) draws tables and strikethrough by default. Now
       // that the editor is always open, without them here a note collapses into
       // paragraphs of pipes the moment it opens. Column resizing
