@@ -5,6 +5,7 @@ import {
   matchesShortcut,
   modifierLabel,
   shortcutLabel,
+  startsTypedSearch,
 } from "./shortcuts";
 
 const MAC = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15";
@@ -127,5 +128,56 @@ describe("isTypingTarget", () => {
 
   it("is the key the shortcut list answers to", () => {
     expect(SHORTCUT_LIST_KEY).toBe("?");
+  });
+});
+
+function pressed(init: KeyboardEventInit, target: Element = document.body): KeyboardEvent {
+  const event = new KeyboardEvent("keydown", { bubbles: true, ...init });
+  target.dispatchEvent(event);
+  return event;
+}
+
+function element(html: string): Element {
+  const holder = document.createElement("div");
+  holder.innerHTML = html;
+  document.body.append(holder);
+  return holder.firstElementChild as Element;
+}
+
+describe("startsTypedSearch", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it.each(["a", "あ", "1", "/"])("starts on %s from the page", (key) => {
+    expect(startsTypedSearch(pressed({ key }))).toBe(true);
+  });
+
+  it.each(["Enter", "Tab", "ArrowDown", "Shift", "Escape", " "])("leaves %s alone", (key) => {
+    expect(startsTypedSearch(pressed({ key }))).toBe(false);
+  });
+
+  it.each([{ metaKey: true }, { ctrlKey: true }, { altKey: true }])("leaves %o alone", (mods) => {
+    expect(startsTypedSearch(pressed({ key: "a", ...mods }))).toBe(false);
+  });
+
+  it.each([
+    "<input />",
+    "<textarea></textarea>",
+    "<select></select>",
+    '<div contenteditable="true"></div>',
+  ])("never takes a key meant for %s", (html) => {
+    expect(startsTypedSearch(pressed({ key: "a" }, element(html)))).toBe(false);
+  });
+
+  it("leaves the keys of a dialog or a menu to it", () => {
+    const button = element('<div role="dialog"><button></button></div>').querySelector("button");
+
+    expect(startsTypedSearch(pressed({ key: "a" }, button as Element))).toBe(false);
+  });
+
+  it("leaves a key the IME is working on", () => {
+    expect(startsTypedSearch(pressed({ key: "a", isComposing: true }))).toBe(false);
+    expect(startsTypedSearch(pressed({ key: "a", keyCode: 229 }))).toBe(false);
   });
 });

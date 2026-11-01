@@ -886,15 +886,25 @@ const unifiedDiff = (from, to, fromName, toName) => {
       return answers;
     },
     /** @param {{ query: string, tags: string[] }} args */
-    search_all: ({ query, tags }) => {
+    search_all: ({ query, tags }) => commands.search_records({ query, tags, filter: {} }),
+    /** @param {{ query: string, tags: string[], filter: { kind?: string | null, from?: string | null, to?: string | null } }} args */
+    search_records: ({ query, tags, filter }) => {
       const needle = query.trim().toLowerCase();
       // 本流(core)の utils::tags と同じ規則: `#` の有無と ASCII の大小は見ない
       const scope = tags
         .map((tag) => foldTag(tag.trim().replace(/^#/u, "")))
         .filter((tag) => tag.length > 0);
-      if (!needle && scope.length === 0) {
+      const { kind, from, to } = filter;
+      if (!needle && scope.length === 0 && !kind && !from && !to) {
         return [];
       }
+      /**
+       * Same as core: the filter comes before the cap.
+       * @param {string} own
+       * @param {string} date
+       */
+      const inFilter = (own, date) =>
+        (!kind || kind === own) && (!from || from <= date) && (!to || date <= to);
       /** @param {string[]} own */
       const inScope = (own) => scope.every((tag) => own.some((t) => foldTag(t) === tag));
       /**
@@ -922,7 +932,7 @@ const unifiedDiff = (from, to, fromName, toName) => {
         lines.forEach((raw, index) => {
           const text = entryText(raw);
           const own = parseTags(text);
-          if (!text.toLowerCase().includes(needle) || !inScope(own)) {
+          if (!text.toLowerCase().includes(needle) || !inScope(own) || !inFilter("scrawl", iso)) {
             return;
           }
           hits.push({
@@ -938,7 +948,12 @@ const unifiedDiff = (from, to, fromName, toName) => {
       }
       for (const [filename, note] of notes) {
         const own = noteTags(note);
-        if (note.body.toLowerCase().includes(needle) && inScope(own)) {
+        const date = note.time.slice(0, 10);
+        if (
+          note.body.toLowerCase().includes(needle) &&
+          inScope(own) &&
+          inFilter(note.kind ?? "note", date)
+        ) {
           hits.push({
             kind: note.kind ?? "note",
             title: note.body.split("\n")[0].replace(/^#+\s*/u, ""),

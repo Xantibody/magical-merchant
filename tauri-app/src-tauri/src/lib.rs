@@ -34,8 +34,8 @@ use base64::engine::general_purpose::STANDARD as B64;
 use device::ClientContext;
 use magical_merchant_core::{
     CreatedNote, GlyphFormat, GlyphName, GlyphSummary, NoteFilename, NoteKind, NoteMeta,
-    NoteSummary, Provenance, Revision, SearchHit, Source, TemplateDetail, TemplateSummary,
-    VarLocale, Version, VersionStatus,
+    NoteSummary, Provenance, Revision, SearchFilter, SearchHit, Source, TemplateDetail,
+    TemplateSummary, VarLocale, Version, VersionStatus,
 };
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_deep_link::DeepLinkExt as _;
@@ -564,6 +564,23 @@ async fn search_all(
     .await
 }
 
+/// The search field's question: `search_all` narrowed by kind and period. The filter goes down
+/// to core rather than over the results, because the results are capped.
+#[tauri::command]
+async fn search_records(
+    handle: AppHandle,
+    query: String,
+    tags: Vec<String>,
+    filter: SearchFilter,
+) -> Result<Vec<SearchHit>, String> {
+    let base_dir = app_base_dir(&handle)?;
+    off_main_thread(move || {
+        magical_merchant_core::search_records(&base_dir, &query, &tags, &filter)
+            .map_err(|e| e.to_string())
+    })
+    .await
+}
+
 /// Every record.
 ///
 /// It does not filter by text, so it takes no arguments and the count is not
@@ -823,6 +840,7 @@ pub fn run() {
             read_scrawl_by_date,
             delete_scrawl_entry,
             search_all,
+            search_records,
             browse_all,
             resolve_places,
             delete_note,

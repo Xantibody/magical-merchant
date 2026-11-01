@@ -285,16 +285,14 @@ describe("Scrawl › タグのチップ", () => {
   afterEach(teardownScrawl);
 
   // The answer to a filter is not held in two places. Scrawl's list stays the records by
-  // day, and narrowing is the job of Browse, which holds the three axes
-  it("opens the browse screen on Scrawl and that tag instead of filtering here", async () => {
+  // day, and narrowing is the job of search
+  it("opens search with that tag instead of filtering here", async () => {
     await openScrawl();
 
     fireEvent.click(screen.getByRole("button", { name: "#Memo" }));
 
-    await waitFor(() => {
-      expect(location.pathname).toBe("/browse");
-    });
-    expect(location.search).toBe("?kind=scrawl&tag=Memo");
+    expect(shell.searchSeed()).toStrictEqual({ tags: ["Memo"] });
+    expect(location.pathname).toBe("/");
   });
 
   it("leaves the journal unfiltered when a chip is pressed", async () => {

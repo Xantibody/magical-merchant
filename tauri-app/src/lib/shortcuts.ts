@@ -8,6 +8,7 @@
  * an external keyboard or a browser on Android there is no telling which one arrives.
  */
 
+import { isImeComposing } from "./ime";
 import { isMacDesktop } from "./platform";
 
 interface Shortcut {
@@ -94,4 +95,19 @@ export function isTypingTarget(target: EventTarget | null): boolean {
     return true;
   }
   return target.closest('[contenteditable="true"], [contenteditable=""]') !== null;
+}
+
+/**
+ * Whether this key is the first character of a search. Nothing typed is ever stolen: not from
+ * a field or the editor, not from a dialog or a menu that has keys of its own, and not from an
+ * IME. The caller leaves the event alone, so the character lands in the field it just opened.
+ */
+export function startsTypedSearch(e: KeyboardEvent): boolean {
+  if (e.key.length !== 1 || e.key === " " || e.metaKey || e.ctrlKey || e.altKey) {
+    return false;
+  }
+  if (isImeComposing(e) || isTypingTarget(e.target)) {
+    return false;
+  }
+  return !(e.target instanceof Element && e.target.closest('[role="dialog"], [role="menu"]'));
 }

@@ -1,6 +1,7 @@
 use std::path::Path;
 
-use serde::Serialize;
+use chrono::NaiveDate;
+use serde::{Deserialize, Serialize};
 
 use crate::error::CoreError;
 use crate::list_scrawl_dates;
@@ -12,7 +13,7 @@ use crate::utils::tags;
 use crate::utils::text::lowercase;
 
 /// Which store a search hit came from.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum HitKind {
     Scrawl,
@@ -51,6 +52,39 @@ pub struct SearchHit {
     pub match_len: Option<usize>,
 }
 
+/// What a search narrows by besides the words and the tags: one kind, and a period of days
+/// with both ends included. Nothing set lets everything through.
+///
+/// It lives here rather than in the caller, on top of the results, because of the cap: a
+/// filter over the newest 100 hits would find nothing from a year ago.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+pub struct SearchFilter {
+    pub kind: Option<HitKind>,
+    pub from: Option<NaiveDate>,
+    pub to: Option<NaiveDate>,
+}
+
+impl SearchFilter {
+    fn is_empty(&self) -> bool {
+        *self == Self::default()
+    }
+
+    fn takes(&self, kind: HitKind) -> bool {
+        self.kind.is_none_or(|wanted| wanted == kind)
+    }
+
+    /// A note whose frontmatter has no time cannot be placed in a period, so naming one
+    /// drops it. Browse treats it the same way.
+    fn covers(&self, date: Option<NaiveDate>) -> bool {
+        if self.from.is_none() && self.to.is_none() {
+            return true;
+        }
+        date.is_some_and(|date| {
+            self.from.is_none_or(|from| from <= date) && self.to.is_none_or(|to| date <= to)
+        })
+    }
+}
+
 const SNIPPET_CONTEXT: usize = 40;
 const MAX_HITS: usize = 100;
 
@@ -71,9 +105,13 @@ fn scrawl_hits(
     base_dir: &Path,
     needle: &str,
     scope: &[String],
+    filter: &SearchFilter,
     limit: Option<usize>,
 ) -> Result<Vec<SearchHit>, CoreError> {
     let mut hits = Vec::new();
+    if !filter.takes(HitKind::Scrawl) {
+        return Ok(hits);
+    }
     let scrawl = Scrawl::new(base_dir.to_path_buf());
     // Only a needle spanning a newline cannot use the per-day cutoff. In a CRLF file the
     // newlines inside an entry are normalized to "\n", so it is not a substring of the file.
@@ -81,6 +119,9 @@ fn scrawl_hits(
     let day_filter_applies = !needle.is_empty() && !needle.contains('\n');
 
     for date in list_scrawl_dates(base_dir)? {
+        if !filter.covers(Some(date)) {
+            continue;
+        }
         let Some(content) = scrawl.read_raw(date)? else {
             continue;
         };
@@ -143,17 +184,30 @@ pub fn search_all(
     query: &str,
     tags: &[String],
 ) -> Result<Vec<SearchHit>, CoreError> {
+    search_records(base_dir, query, tags, &SearchFilter::default())
+}
+
+/// [`search_all`] narrowed further by kind and period, for the search field.
+///
+/// Any one of the conditions is enough to list records, so a kind alone returns that kind,
+/// newest first. The cap applies after the filter.
+pub fn search_records(
+    base_dir: &Path,
+    query: &str,
+    tags: &[String],
+    filter: &SearchFilter,
+) -> Result<Vec<SearchHit>, CoreError> {
     let needle = lowercase(query.trim());
     let scope: Vec<String> = tags
         .iter()
         .map(|t| tags::normalize(t))
         .filter(|t| !t.is_empty())
         .collect();
-    if needle.is_empty() && scope.is_empty() {
+    if needle.is_empty() && scope.is_empty() && filter.is_empty() {
         return Ok(Vec::new());
     }
 
-    let mut hits = scrawl_hits(base_dir, &needle, &scope, Some(MAX_HITS))?;
+    let mut hits = scrawl_hits(base_dir, &needle, &scope, filter, Some(MAX_HITS))?;
 
     let mut tag_haystack = String::new();
     // The full text, not the list's preview (first 100 characters). The longer a note, the
@@ -162,7 +216,10 @@ pub fn search_all(
     // An unreadable note comes with an empty body, matches neither the needle nor a tag,
     // and just stays out of the results: one note must not fail the whole search
     Notes::new(base_dir.to_path_buf()).scan(|note, body| {
-        if !in_scope(&scope, &note.tags) {
+        if !filter.takes(note.kind.into())
+            || !filter.covers(note.time.map(|time| time.date_naive()))
+            || !in_scope(&scope, &note.tags)
+        {
             return;
         }
         let lowered = lowercase(body);
@@ -213,7 +270,7 @@ pub fn search_all(
 pub fn browse_all(base_dir: &Path) -> Result<Vec<SearchHit>, CoreError> {
     // A scan with no needle and no scope is a "let everything through" scan. It uses the
     // same entry as search
-    let mut hits = scrawl_hits(base_dir, "", &[], None)?;
+    let mut hits = scrawl_hits(base_dir, "", &[], &SearchFilter::default(), None)?;
 
     // An unreadable note comes with an empty body (`scan`). Its title and snippet become
     // an empty row, but one note must not fail the whole list: same policy as `search_all`
@@ -258,7 +315,13 @@ pub fn find_backlinks(
     // same single link, and a backlink must not vanish over the way it is written
     let needle = format!("[[{stem}");
 
-    let mut hits = scrawl_hits(base_dir, &needle, &[], Some(MAX_HITS))?;
+    let mut hits = scrawl_hits(
+        base_dir,
+        &needle,
+        &[],
+        &SearchFilter::default(),
+        Some(MAX_HITS),
+    )?;
 
     // An unreadable note comes with an empty body and just drops out of the backlinks.
     // Better than showing a list that cannot be opened
@@ -398,6 +461,123 @@ mod tests {
     /// A plain note for search to hit. Provenance is not searched, so none is declared.
     fn draft(tmp: &TempDir, body: &str, tags: &[String]) -> Result<std::path::PathBuf, CoreError> {
         create_draft_note(tmp.path(), body, tags, &context(), Provenance::default())
+    }
+
+    fn day(text: &str) -> NaiveDate {
+        NaiveDate::parse_from_str(text, "%Y-%m-%d").unwrap()
+    }
+
+    /// One day file with these lines, laid out the way the app writes them.
+    fn day_file(tmp: &TempDir, date: &str, lines: &str) {
+        let dir = tmp.path().join("data/scrawl");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(format!("{date}.md")), lines).unwrap();
+    }
+
+    fn kinds(hits: &[SearchHit]) -> Vec<HitKind> {
+        hits.iter().map(|hit| hit.kind).collect()
+    }
+
+    /// The chips narrow a word, and the result still carries the excerpt at the match.
+    #[test]
+    fn a_kind_keeps_only_that_kind() {
+        let tmp = TempDir::new().unwrap();
+        save_scrawl_entry(tmp.path(), "買い物", &context(), Source::App).unwrap();
+        draft(&tmp, "買い物リスト", &[]).unwrap();
+        create_draft_codex(
+            tmp.path(),
+            "買い物の記録",
+            &[],
+            &context(),
+            Provenance::default(),
+        )
+        .unwrap();
+
+        for kind in [HitKind::Scrawl, HitKind::Note, HitKind::Codex] {
+            let filter = SearchFilter {
+                kind: Some(kind),
+                ..SearchFilter::default()
+            };
+            let hits = search_records(tmp.path(), "買い物", &[], &filter).unwrap();
+            assert_eq!(kinds(&hits), vec![kind]);
+            assert!(hits[0].match_start.is_some());
+        }
+    }
+
+    #[test]
+    fn a_period_includes_both_of_its_ends() {
+        let tmp = TempDir::new().unwrap();
+        for date in ["2025-10-31", "2025-11-01", "2025-11-02", "2025-11-03"] {
+            day_file(&tmp, date, "- [09:00:00] 走った\n");
+        }
+        let filter = SearchFilter {
+            from: Some(day("2025-11-01")),
+            to: Some(day("2025-11-02")),
+            ..SearchFilter::default()
+        };
+
+        let hits = search_records(tmp.path(), "走った", &[], &filter).unwrap();
+
+        let dates: Vec<&str> = hits.iter().map(|hit| hit.date.as_str()).collect();
+        assert_eq!(dates, vec!["2025-11-02", "2025-11-01"]);
+    }
+
+    /// Filtering the newest 100 afterwards would find nothing from a year ago.
+    #[test]
+    fn the_cap_comes_after_the_period() {
+        let tmp = TempDir::new().unwrap();
+        day_file(&tmp, "2025-11-02", "- [09:00:00] 走った\n");
+        let lines: Vec<String> = (0..MAX_HITS)
+            .map(|i| format!("- [09:{:02}:{:02}] 走った", i / 60, i % 60))
+            .collect();
+        day_file(&tmp, "2026-11-02", &lines.join("\n"));
+        let filter = SearchFilter {
+            from: Some(day("2025-11-02")),
+            to: Some(day("2025-11-02")),
+            ..SearchFilter::default()
+        };
+
+        let hits = search_records(tmp.path(), "走った", &[], &filter).unwrap();
+
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].date, "2025-11-02");
+    }
+
+    /// A chip left on after the word is cleared is still a condition.
+    #[test]
+    fn a_kind_alone_lists_that_kind() {
+        let tmp = TempDir::new().unwrap();
+        draft(&tmp, "一本目", &[]).unwrap();
+        save_scrawl_entry(tmp.path(), "一行", &context(), Source::App).unwrap();
+        let filter = SearchFilter {
+            kind: Some(HitKind::Note),
+            ..SearchFilter::default()
+        };
+
+        let hits = search_records(tmp.path(), "", &[], &filter).unwrap();
+
+        assert_eq!(kinds(&hits), vec![HitKind::Note]);
+    }
+
+    #[test]
+    fn a_note_without_a_time_falls_out_of_any_period() {
+        let filter = SearchFilter {
+            from: Some(day("2025-11-02")),
+            ..SearchFilter::default()
+        };
+
+        assert!(!filter.covers(None));
+        assert!(SearchFilter::default().covers(None));
+    }
+
+    #[test]
+    fn no_condition_at_all_returns_nothing() {
+        let tmp = TempDir::new().unwrap();
+        draft(&tmp, "本文", &[]).unwrap();
+
+        let hits = search_records(tmp.path(), "  ", &[], &SearchFilter::default()).unwrap();
+
+        assert!(hits.is_empty());
     }
 
     /// A hit in a Codex says it is a Codex. It opens on a different surface.
@@ -577,7 +757,7 @@ mod tests {
     }
 
     /// Write one line on a fixed date. `save_scrawl_entry` can only write to today.
-    fn write_day(tmp: &TempDir, date: chrono::NaiveDate, text: &str) {
+    fn write_day(tmp: &TempDir, date: NaiveDate, text: &str) {
         let dir = tmp.path().join("data/scrawl");
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(
@@ -592,7 +772,7 @@ mod tests {
     #[test]
     fn hits_are_capped_at_the_newest_hundred() {
         let tmp = TempDir::new().unwrap();
-        let oldest = chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
+        let oldest = NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
         for offset in 0..=100 {
             let date = oldest + chrono::Duration::days(offset);
             write_day(&tmp, date, &format!("needle {offset}"));
@@ -609,7 +789,7 @@ mod tests {
     #[test]
     fn a_full_search_page_does_not_read_older_scrawl_days() {
         let tmp = TempDir::new().unwrap();
-        let date = chrono::NaiveDate::from_ymd_opt(2025, 1, 2).unwrap();
+        let date = NaiveDate::from_ymd_opt(2025, 1, 2).unwrap();
         let entries = (0..MAX_HITS)
             .map(|index| format!("needle {index}"))
             .collect::<Vec<_>>()
@@ -627,7 +807,7 @@ mod tests {
     #[test]
     fn newer_notes_displace_scrawl_hits_from_a_full_search_page() {
         let tmp = TempDir::new().unwrap();
-        let date = chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
+        let date = NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
         for offset in 0..=MAX_HITS {
             let day = date + chrono::Duration::days(i64::try_from(offset).unwrap());
             write_day(&tmp, day, "needle");
@@ -653,7 +833,7 @@ mod tests {
     #[test]
     fn a_search_page_counts_only_matches_in_the_tag_scope() {
         let tmp = TempDir::new().unwrap();
-        let date = chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
+        let date = NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
         let entries = (0..MAX_HITS)
             .map(|index| format!("needle {index} #other\n- [09:00:00] needle {index} #wanted"))
             .collect::<Vec<_>>()
@@ -1062,7 +1242,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         write_day(
             &tmp,
-            chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+            NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
             "古い記録",
         );
         draft(&tmp, "今日のノート", &[]).unwrap();
@@ -1161,7 +1341,7 @@ mod tests {
     #[test]
     fn browsing_is_not_capped() {
         let tmp = TempDir::new().unwrap();
-        let oldest = chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
+        let oldest = NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
         for offset in 0..=MAX_HITS {
             let date = oldest + chrono::Duration::days(i64::try_from(offset).unwrap());
             write_day(&tmp, date, &format!("記録 {offset}"));

@@ -1,0 +1,135 @@
+/* The search field. It floats over the screen instead of replacing it: a body being written
+   stays mounted below, and opening the field moves nothing (no layout shift either) */
+.search {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  background: var(--app-surface);
+  border-bottom: 1px solid var(--app-hairline);
+  animation: mm-rise 180ms var(--app-ease);
+}
+
+.search--listing {
+  bottom: 0;
+  border-bottom: none;
+}
+
+.search-head,
+.search-column {
+  width: 100%;
+  max-width: 720px;
+  margin-inline: auto;
+  padding-inline: var(--size-3);
+  box-sizing: border-box;
+}
+
+.search-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-block: 10px;
+}
+
+.search-input-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  color: var(--app-text-faint);
+}
+
+.search-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: none;
+  color: var(--app-text);
+  font-family: inherit;
+  font-size: 16px;
+  appearance: none;
+}
+
+/* The browser's own clear button would be a second × beside the field's */
+.search-input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.search-input-row .search-tag {
+  padding: 3px 9px;
+  gap: 4px;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.search-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+.search-chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.search-chip-rule {
+  width: 1px;
+  height: 12px;
+  background: var(--app-border);
+}
+
+.search-chip {
+  padding: 3px 9px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--app-text-muted);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.search-chip:hover {
+  background: var(--app-surface-2);
+}
+
+.search-chip[aria-pressed="true"] {
+  background: var(--app-accent-soft);
+  color: var(--app-text);
+}
+
+.search-results {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-block: 4px var(--size-5);
+}
+
+.search-empty {
+  padding-block: 48px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--app-text-muted);
+}
+
+@media (max-width: 767px) {
+  /* The two groups wrap onto their own lines here, and the rule would hang off the first */
+  .search-chip-rule {
+    display: none;
+  }
+
+  .search-chip {
+    min-height: 36px;
+    padding-inline: 12px;
+  }
+
+  .search .palette-row {
+    min-height: 44px;
+  }
+}

@@ -17,10 +17,28 @@ interface CaptureBarProps {
   onTyping?: (typing: boolean) => void;
   /** The tags used so far, offered as completions. */
   knownTags?: TagCount[];
+  /** The rows of the / menu. */
+  onSearch: () => void;
+  onNewNote: () => void;
+  /** The line hands itself over as the trigger: the calendar is a popover (`Popover.tsx`). */
+  onJumpToDate: (trigger: HTMLElement) => void;
+}
+
+interface MenuRow {
+  id: string;
+  label: string;
+  run: (line: HTMLElement) => void;
 }
 
 const MAX_ROWS = 6;
 const MAX_SUGGESTIONS = 6;
+
+/**
+ * The whole line being one `/word`, the only shape that can call the menu. The full-width
+ * slash is what a Japanese keyboard gives while the IME is on. A space ends it, so a line
+ * that begins with a path stays a record.
+ */
+const SLASH_LINE = /^[/／](?<word>\S*)$/u;
 
 /**
  * The half-typed capture. An entry is written only on send, so until then the text lived
@@ -101,7 +119,36 @@ export default function CaptureBar(props: CaptureBarProps): JSX.Element {
     return typing !== null && typing !== "" && !suggestions().some((s) => sameTag(s.tag, typing));
   });
 
-  const rows = createMemo(() => suggestions().length + (isNew() ? 1 : 0));
+  /**
+   * AIDEV-NOTE: filtered by the row names alone, and a word that matches none closes the menu.
+   * Reading `/tmp` as a search instead would take a line away from the person recording it.
+   */
+  const menu = createMemo<MenuRow[]>(() => {
+    const word = dismissed() ? undefined : SLASH_LINE.exec(text())?.groups?.word;
+    if (word === undefined) {
+      return [];
+    }
+    const rows: MenuRow[] = [
+      { id: "search", label: t().capture.menuSearch, run: () => props.onSearch() },
+      { id: "note", label: t().capture.menuNote, run: () => props.onNewNote() },
+      { id: "date", label: t().capture.menuDate, run: (line) => props.onJumpToDate(line) },
+    ];
+    return rows.filter((row) => row.label.toLowerCase().includes(word.toLowerCase()));
+  });
+
+  const rows = createMemo(() =>
+    menu().length > 0 ? menu().length : suggestions().length + (isNew() ? 1 : 0),
+  );
+
+  /** The line is the command, so choosing it leaves nothing to record. */
+  const pick = (row: MenuRow): void => {
+    setText("");
+    rememberDraft("");
+    queueMicrotask(autoGrow);
+    if (textareaRef) {
+      row.run(textareaRef);
+    }
+  };
 
   const complete = (tag: string): void => {
     const typing = draft();
@@ -122,6 +169,11 @@ export default function CaptureBar(props: CaptureBarProps): JSX.Element {
   };
 
   const commitRow = (): void => {
+    const row = menu()[cursor()];
+    if (row) {
+      pick(row);
+      return;
+    }
     const picked = suggestions()[cursor()];
     if (picked) {
       complete(picked.tag);
@@ -163,8 +215,8 @@ export default function CaptureBar(props: CaptureBarProps): JSX.Element {
   };
 
   const onKeyDown = (e: KeyboardEvent & { currentTarget: HTMLTextAreaElement }): void => {
-    // The Enter that ends IME conversion is the IME's. It neither sends nor picks a tag (#102)
-    if (e.key === "Enter" && isImeComposing(e)) {
+    // During a conversion every key is the IME's: Enter ends it, the arrows choose (#102)
+    if (isImeComposing(e)) {
       return;
     }
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
@@ -183,8 +235,8 @@ export default function CaptureBar(props: CaptureBarProps): JSX.Element {
         setCursor((c) => Math.max(c - 1, 0));
         return;
       }
-      // While the completion is open, Enter picks a tag. Recording waits until it closes
-      if (e.key === "Enter" && !e.shiftKey) {
+      // While a list is open, Enter picks from it. Recording waits until it closes
+      if ((e.key === "Enter" || e.key === "Tab") && !e.shiftKey) {
         e.preventDefault();
         commitRow();
         return;
@@ -204,7 +256,29 @@ export default function CaptureBar(props: CaptureBarProps): JSX.Element {
 
   return (
     <div class="capture-bar">
-      <Show when={rows() > 0}>
+      <Show when={menu().length > 0}>
+        <div class="tag-suggest" role="listbox" aria-label={t().capture.menuLabel}>
+          <For each={menu()}>
+            {(row, i) => (
+              <button
+                type="button"
+                role="option"
+                aria-selected={cursor() === i()}
+                class="tag-suggest-row"
+                classList={{ "tag-suggest-row--active": cursor() === i() }}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  pick(row);
+                }}
+              >
+                {row.label}
+              </button>
+            )}
+          </For>
+        </div>
+      </Show>
+
+      <Show when={menu().length === 0 && rows() > 0}>
         <div class="tag-suggest" role="listbox" aria-label={t().capture.suggestLabel}>
           <span class="tag-suggest-label">{t().common.tags}</span>
           <For each={suggestions()}>
