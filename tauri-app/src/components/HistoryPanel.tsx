@@ -23,7 +23,6 @@ interface HistoryPanelProps {
   /** The version selected in the history. */
   selectedId: string | null;
   /** A read-only note cannot be restored. */
-  readOnly: boolean;
   /** The version just committed. Only its row pops in. */
   freshId?: string | null;
   onSelect: (id: string) => void;
@@ -180,7 +179,6 @@ export default function HistoryPanel(props: HistoryPanelProps): JSX.Element {
                     <button
                       type="button"
                       class="button-secondary"
-                      disabled={props.readOnly}
                       onClick={() => props.onRestore(row.version.id)}
                     >
                       <Icon name="arrow-counter-clockwise" size={13} />
