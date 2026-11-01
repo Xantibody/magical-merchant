@@ -19,7 +19,7 @@ interface OriginChipProps {
  * It normally appears directly under its entry, but Scrawl also lines these up under the day
  * heading as the place a note goes when its originating entry is gone.
  */
-export function OriginChip(props: OriginChipProps): JSX.Element {
+function OriginChip(props: OriginChipProps): JSX.Element {
   // On mobile, a long press unlinks. On desktop the close button shown on hover takes it
   const press = createLongPress(() => props.onUnlink(props.note));
 
