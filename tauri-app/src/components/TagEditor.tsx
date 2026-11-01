@@ -44,6 +44,7 @@ interface TagEditorProps {
 export default function TagEditor(props: TagEditorProps): JSX.Element {
   const [query, setQuery] = createSignal("");
   const [active, setActive] = createSignal(0);
+  let input: HTMLInputElement | undefined;
 
   const isOwn = (tag: string): boolean => props.own?.some((own) => sameTag(own, tag)) ?? false;
 
@@ -80,7 +81,18 @@ export default function TagEditor(props: TagEditorProps): JSX.Element {
   const remove = (tag: string): void => {
     const { own } = props;
     if (own) {
+      // A pressed × goes with its chip. Focus has to move first: it would otherwise fall to the
+      // page, and the editing with it
+      input?.focus();
       props.onChange(own.filter((kept) => !sameTag(kept, tag)));
+    }
+  };
+
+  /** Moving between the input and the chips' × is still editing; anywhere else ends it. */
+  const onBlur = (e: FocusEvent): void => {
+    const next = e.relatedTarget;
+    if (next !== input && !(next instanceof Element && next.matches(".tag-editor-remove"))) {
+      stop();
     }
   };
 
@@ -112,7 +124,7 @@ export default function TagEditor(props: TagEditorProps): JSX.Element {
     }
   };
 
-  const chip = (tag: string): JSX.Element => (
+  const chip =(tag: string): JSX.Element => (
     <span class="tag-editor-chip" title={isOwn(tag) ? undefined : t().tags.fromBody}>
       #{tag}
       <Show when={isOwn(tag)}>
@@ -122,6 +134,7 @@ export default function TagEditor(props: TagEditorProps): JSX.Element {
           aria-label={t().meta.removeTag(tag)}
           onMouseDown={keepFocus}
           onClick={() => remove(tag)}
+          onBlur={onBlur}
         >
           <Icon name="x" size={10} />
         </button>
@@ -129,7 +142,6 @@ export default function TagEditor(props: TagEditorProps): JSX.Element {
     </span>
   );
 
-  let input: HTMLInputElement | undefined;
   // The input opens disabled until the frontmatter's tags are read, and a disabled input cannot
   // take the caret. It is handed over the moment it can type
   createEffect(
@@ -160,7 +172,7 @@ export default function TagEditor(props: TagEditorProps): JSX.Element {
           setActive(0);
         }}
         onKeyDown={onKeyDown}
-        onBlur={stop}
+        onBlur={onBlur}
       />
       <Show when={rows() > 0}>
         <div
