@@ -4,7 +4,7 @@ import type { TagCount } from "../lib/tags";
 
 interface TagFilterProps {
   tags: TagCount[];
-  /** The tag that was pressed. Opening Browse with that tag is the receiver's job. */
+  /** The tag that was pressed. Opening search with that tag is the receiver's job. */
   onPick: (tag: string) => void;
 }
 
@@ -15,9 +15,9 @@ interface TagFilterProps {
  * something else. Being made to recall a spelling while searching means never reaching the
  * record you were after.
  *
- * Pressing one **does not narrow in place**: it opens Browse with Scrawl and that tag.
+ * Pressing one **does not narrow in place**: it opens the search field with that tag.
  * Putting the narrowing in two places would make the same "narrow by #sync" give two
- * answers, a day-grouped list in Scrawl and a three-axis list in Browse.
+ * answers, a day-grouped list in Scrawl and a list in search.
  */
 export default function TagFilter(props: TagFilterProps): JSX.Element {
   return (

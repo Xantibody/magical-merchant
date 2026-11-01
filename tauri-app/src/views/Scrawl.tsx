@@ -32,7 +32,6 @@ import {
 import type { NoteItem, ScrawlItem } from "../lib/items";
 import { places } from "../lib/places";
 import { noteRoute, writeRoute } from "../lib/note-route";
-import { ROUTES } from "../lib/routes";
 import { scrawlDays } from "../lib/scrawl-days";
 import type { ScrawlRow } from "../lib/scrawl-days";
 import { countTags, parseTags } from "../lib/tags";
@@ -467,14 +466,9 @@ export default function Scrawl(): JSX.Element {
               the first paint would be pushed down and cause a layout shift */}
           <div class="scrawl-head">
             <div class="scrawl-head-row">
-              {/* Pressing does not filter here. It opens the Browse screen with Scrawl
-                  and that tag: the filter's answer is not kept in two places */}
-              <TagFilter
-                tags={knownTags()}
-                onPick={(tag) =>
-                  navigate(`${ROUTES.BROWSE}?kind=scrawl&tag=${encodeURIComponent(tag)}`)
-                }
-              />
+              {/* Pressing does not filter here. It opens search with that tag: the
+                  filter's answer is not kept in two places */}
+              <TagFilter tags={knownTags()} onPick={(tag) => shell.openSearch({ tags: [tag] })} />
 
               {/* The only way to go back across days. Not shown on a narrow screen
                   (CSS), where the header has it. So it does not vanish on a day
