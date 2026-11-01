@@ -15,10 +15,9 @@
   max-height: calc(100vh - 128px);
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--app-border);
   border-radius: 12px;
   background: var(--app-surface);
-  box-shadow: 0 30px 60px -20px rgb(0 0 0 / 60%);
+  box-shadow: var(--shadow-pop);
   overflow: hidden;
   /* Everything that floats enters with the same motion (menus, pages and the restore
      button). The backdrop does not move: if what is behind rose and fell, it would be

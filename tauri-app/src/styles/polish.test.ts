@@ -70,3 +70,34 @@ describe("helper text", () => {
     expect(words.map(name)).toEqual([]);
   });
 });
+
+describe("elevation", () => {
+  const shadows = (): Rule[] => rules().filter((rule) => rule.body.includes("box-shadow"));
+  const value = (rule: Rule): string =>
+    /box-shadow:\s*(?<value>[^;]+)/u.exec(rule.body)?.groups?.value.trim() ?? "";
+
+  it("has one shadow; only cancelling it, a focus ring and an inset mark are something else", () => {
+    const other = shadows().filter(
+      (rule) => !/^(?:var\(--shadow-pop\)|none.*|0 0 0 \dpx .*|inset .*)$/u.test(value(rule)),
+    );
+
+    expect(other.map(name)).toEqual([]);
+  });
+
+  it("draws no border round a box that floats", () => {
+    const boxed = shadows().filter(
+      (rule) =>
+        value(rule) === "var(--shadow-pop)" &&
+        /(?:^|[\s;])border(?:-(?:top|right|bottom|left))?:\s*(?!\s|none)/u.test(rule.body),
+    );
+
+    expect(boxed.map(name)).toEqual([]);
+  });
+
+  // Its dark ground already lifts it
+  it("leaves the toast without a shadow", () => {
+    const toast = rules().find((rule) => rule.selector === ".undo-toast");
+
+    expect(toast?.body).not.toContain("box-shadow");
+  });
+});

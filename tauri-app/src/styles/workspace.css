@@ -141,8 +141,8 @@
     bottom: 0;
     z-index: 20;
     width: 280px;
-    border-right: 1px solid var(--app-border);
-    box-shadow: 16px 0 40px -20px rgb(20 20 25 / 50%);
+    border-right: none;
+    box-shadow: var(--shadow-pop);
     transform: translateX(-24px);
     opacity: 0;
     /* If the hit area stayed while closed, the left 280px of the body could not be pressed */

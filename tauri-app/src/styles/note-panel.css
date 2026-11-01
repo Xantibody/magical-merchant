@@ -351,10 +351,9 @@
   width: 380px;
   max-width: calc(100vw - 40px);
   padding: 22px 24px 20px;
-  border: 1px solid var(--app-border);
   border-radius: 14px;
   background: var(--app-surface);
-  box-shadow: 0 24px 56px -16px rgb(20 20 25 / 30%);
+  box-shadow: var(--shadow-pop);
   animation: mm-rise 160ms var(--app-ease);
 }
 

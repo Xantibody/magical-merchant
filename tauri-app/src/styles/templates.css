@@ -845,7 +845,6 @@
   .templates-tab[aria-selected="true"] {
     background: var(--app-input-bg);
     color: var(--app-text);
-    box-shadow: 0 1px 2px rgb(20 20 25 / 12%);
   }
 
   /* One of the two at a time, full width */

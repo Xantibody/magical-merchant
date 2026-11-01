@@ -16,6 +16,8 @@ Open Props, with a dark theme via `:root[data-theme="dark"]`):
 - Lines: `--app-border` (controls), `--app-hairline` (rails, day separators),
   `--app-text-hint` (marks only; never words, despite the name)
 - Accent: `--app-accent`, `--app-accent-soft` (chips, selected rows, focus ring)
+- Elevation: `--shadow-pop` is the only shadow, and a box wearing it has no border.
+  A toast has no shadow; a focus ring is not elevation
 - Status: `--app-ok`, `--app-danger`, `--app-undo`, toast pair
 
 Helper text is 13px, a stamp, count or key 12px, and nothing is smaller

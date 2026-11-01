@@ -386,9 +386,8 @@
   max-width: calc(100% - 48px);
   padding: 10px 10px 10px 16px;
   background: var(--app-surface);
-  border: 1px solid var(--app-border);
   border-radius: 14px;
-  box-shadow: 0 12px 32px -8px rgb(20 20 25 / 18%);
+  box-shadow: var(--shadow-pop);
   pointer-events: auto;
 }
 

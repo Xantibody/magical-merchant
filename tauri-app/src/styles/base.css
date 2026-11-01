@@ -51,6 +51,9 @@
   /* There is exactly one easing. Surface switches, panels and the sliding line
      all move with the same habit */
   --app-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  /* The one shadow. Whatever floats wears this and no border; whatever only sits on the
+     page wears neither */
+  --shadow-pop: 0 1px 2px rgb(20 20 25 / 6%), 0 12px 32px -8px rgb(20 20 25 / 18%);
 }
 
 :root[data-theme="dark"] {
@@ -71,6 +74,10 @@
   --app-undo: var(--blue-3);
   --app-toast-bg: var(--gray-7);
   --app-toast-text: var(--gray-0);
+  /* A dark shadow on a dark page shows nothing, and these boxes have no border to fall back
+     on. The ring is what draws the edge here */
+  --shadow-pop:
+    0 0 0 1px var(--app-border), 0 1px 2px rgb(0 0 0 / 30%), 0 12px 32px -8px rgb(0 0 0 / 60%);
 }
 
 /* The real size of the system bars. Scattering env() directly would leave tests
@@ -98,9 +105,8 @@ body {
   position: absolute;
   z-index: 120;
   background: var(--app-surface);
-  border: 1px solid var(--app-border);
   border-radius: 8px;
-  box-shadow: var(--shadow-3);
+  box-shadow: var(--shadow-pop);
 }
 
 /* How something floating enters. Only transform and opacity move */
@@ -331,8 +337,7 @@ input:checked ~ .switch::after {
   padding: 28px 32px;
   border-radius: 14px;
   background: var(--app-surface);
-  border: 1px solid var(--app-border);
-  box-shadow: 0 24px 56px -16px rgb(20 20 25 / 30%);
+  box-shadow: var(--shadow-pop);
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -364,7 +369,6 @@ input:checked ~ .switch::after {
   font-family: inherit;
   font-size: 14px;
   outline: none;
-  box-shadow: 0 1px 2px rgb(20 20 25 / 4%);
 }
 
 .first-run-input:focus {

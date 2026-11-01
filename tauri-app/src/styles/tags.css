@@ -67,9 +67,8 @@
   flex-direction: column;
   padding: 6px;
   border-radius: 12px;
-  border: 1px solid var(--app-border);
   background: var(--app-surface);
-  box-shadow: 0 16px 40px -12px rgb(20 20 25 / 28%);
+  box-shadow: var(--shadow-pop);
   z-index: 130;
 }
 
