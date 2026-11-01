@@ -56,6 +56,7 @@ interface ShellCommand {
   label: string;
   icon: IconName;
   shortcut: ShortcutName;
+  place?: boolean;
   run: () => void;
 }
 
@@ -179,6 +180,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
       label: t().palette.openScrawl,
       icon: MODE_ICONS[ROUTES.SCRAWL],
       shortcut: "scrawl",
+      place: true,
       run: go(ROUTES.SCRAWL),
     },
     {
@@ -186,6 +188,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
       label: t().palette.openNotes,
       icon: MODE_ICONS[ROUTES.NOTES],
       shortcut: "notes",
+      place: true,
       run: go(ROUTES.NOTES),
     },
     {
@@ -193,6 +196,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
       label: t().palette.openCodex,
       icon: MODE_ICONS[ROUTES.CODEX],
       shortcut: "codex",
+      place: true,
       run: go(ROUTES.CODEX),
     },
     {
@@ -200,6 +204,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
       label: t().palette.openBrowse,
       icon: MODE_ICONS[ROUTES.BROWSE],
       shortcut: "browse",
+      place: true,
       run: go(ROUTES.BROWSE),
     },
     {
@@ -217,6 +222,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
       label: t().palette.openSettings,
       icon: MODE_ICONS[ROUTES.SETTINGS],
       shortcut: "settings",
+      place: true,
       run: go(ROUTES.SETTINGS),
     },
   ]);
@@ -228,6 +234,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
       label: command.label,
       icon: command.icon,
       shortcut: shortcutLabel(command.shortcut),
+      place: command.place,
       run: command.run,
     })),
   );
@@ -460,6 +467,8 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
         <StatusDot
           sync={sync.status()}
           onOpen={openStatus}
+          onScrawl={go(ROUTES.SCRAWL)}
+          onSearch={openSearch}
           onSettings={go(ROUTES.SETTINGS)}
           onKeys={openShortcutList}
         />
@@ -492,7 +501,12 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
             sync={sync}
             onClose={() => shell.closePopovers()}
             foot={
-              <StatusLinks onSettings={closeAnd(go(ROUTES.SETTINGS))} onKeys={openShortcutList} />
+              <StatusLinks
+                onScrawl={closeAnd(go(ROUTES.SCRAWL))}
+                onSearch={closeAnd(openSearch)}
+                onSettings={closeAnd(go(ROUTES.SETTINGS))}
+                onKeys={openShortcutList}
+              />
             }
           >
             <StatusDetails onClose={() => shell.closePopovers()} />

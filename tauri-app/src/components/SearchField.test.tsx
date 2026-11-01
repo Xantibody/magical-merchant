@@ -248,6 +248,24 @@ describe("SearchField", () => {
 
     afterEach(() => vi.mocked(settings.run).mockClear());
 
+    it("offers the places on an empty field, and Enter stays on the first record", async () => {
+      const found = hit("週次の件");
+      const scrawl: SearchFieldCommand = {
+        ...settings,
+        id: "go-scrawl",
+        label: "Scrawl",
+        place: true,
+      };
+      const { input, onOpen } = renderField([found], [], [settings, scrawl]);
+
+      await screen.findByText("週次の件");
+
+      expect(screen.queryByRole("button", { name: /Scrawl/u })).not.toBeNull();
+      expect(screen.queryByText("設定を開く")).toBeNull();
+      fireEvent.keyDown(input, { key: "Enter" });
+      expect(onOpen).toHaveBeenCalledExactlyOnceWith(found);
+    });
+
     it("offers a command whose name matches the word", async () => {
       const { input, onClose } = renderField([], [], [settings]);
       typed(input, "設定");

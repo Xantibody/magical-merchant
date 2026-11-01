@@ -50,8 +50,8 @@ ready to record the moment it opens (widgets exist for exactly this).
 - **Status dot** (`components/StatusDot.tsx`, `styles/status-dot.css`): state lives
   in one 8px dot fixed to the window's lower right, outside the paper — green
   (saved, synced), grey (saving or syncing), red (a failed save or sync, a lost
-  login). A device never set up stays green. Hover shows Settings · キー to its
-  left; pressing it opens the details (`SyncPopover` + `StatusDetails`): the save
+  login). A device never set up stays green. Hover shows Scrawl · 検索 · Settings · キー
+  to its left; pressing it opens the details (`SyncPopover` + `StatusDetails`): the save
   time, and for the open note the version, 比較中, every view state that is **on**
   (pressing one docks the note panel on its switch), 版を刻む and 編集前に戻す
   when they would do something, then the sync. Workspace hands the note's part
@@ -59,7 +59,7 @@ ready to record the moment it opens (widgets exist for exactly this).
   interrupts, with a toast (`syncAlertText`); the popover no longer opens itself.
   On a phone the dot is in the header (the corner has the tabs and the capture
   dock) and a status row under the title keeps the save and the states, as pills.
-  Without hover, Settings · キー are at the foot of the details
+  Without hover, those four are at the foot of the details
 - **Mobile**: a 48px header (back · title · Scrawl's calendar · search · the status dot)
   and four bottom tabs — Scrawl / Note / Codex / Settings
 - **Shortcuts**: one table in `lib/shortcuts.ts` feeds the key handling, the
@@ -128,7 +128,8 @@ ready to record the moment it opens (widgets exist for exactly this).
   opens on the chips and the newest 20 records (`browse_all`), and any condition
   lists on its own through core `search_records`, whose kind and period run before
   the 100 cap. Tags are AND here, OR in Browse (ADR 0015). The only
-  thing a result does is open. Commands answer a bare word, above the records;
+  thing a result does is open. Commands answer a bare word, above the records,
+  and the empty field lists the places (Scrawl · Note · Codex · 絞る · 設定);
   Enter stays on the first record
 - **Command palette** (`?`): the key list, with in-memory commands + debounced
   `search_all`

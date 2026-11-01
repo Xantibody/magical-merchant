@@ -37,6 +37,13 @@ function inShell(what: () => JSX.Element): Shell {
   return captured;
 }
 
+const LINKS = {
+  onScrawl: () => {},
+  onSearch: () => {},
+  onSettings: () => {},
+  onKeys: () => {},
+};
+
 describe("dotTone", () => {
   it("is green when everything landed", () => {
     expect(dotTone("idle", "idle")).toBe("ok");
@@ -78,9 +85,7 @@ describe("StatusDot", () => {
   });
 
   it("wears the tone of the save", () => {
-    const shell = inShell(() => (
-      <StatusDot sync="success" onOpen={() => {}} onSettings={() => {}} onKeys={() => {}} />
-    ));
+    const shell = inShell(() => <StatusDot sync="success" onOpen={() => {}} {...LINKS} />);
     const dot = screen.getByRole("button", { name: /保存と同期/u });
 
     expect(dot.dataset.tone).toBe("ok");
@@ -94,9 +99,7 @@ describe("StatusDot", () => {
 
   it("hands the pressed button over so the popover can fold on it", () => {
     const onOpen = vi.fn<(trigger: HTMLElement) => void>();
-    inShell(() => (
-      <StatusDot sync="success" onOpen={onOpen} onSettings={() => {}} onKeys={() => {}} />
-    ));
+    inShell(() => <StatusDot sync="success" onOpen={onOpen} {...LINKS} />);
     const dot = screen.getByRole("button", { name: /保存と同期/u });
 
     fireEvent.click(dot);
@@ -105,16 +108,29 @@ describe("StatusDot", () => {
   });
 
   it("offers settings and the key list beside the dot", () => {
+    const onScrawl = vi.fn<() => void>();
+    const onSearch = vi.fn<() => void>();
     const onSettings = vi.fn<() => void>();
     const onKeys = vi.fn<() => void>();
     inShell(() => (
-      <StatusDot sync="success" onOpen={() => {}} onSettings={onSettings} onKeys={onKeys} />
+      <StatusDot
+        sync="success"
+        onOpen={() => {}}
+        onScrawl={onScrawl}
+        onSearch={onSearch}
+        onSettings={onSettings}
+        onKeys={onKeys}
+      />
     ));
 
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     fireEvent.click(screen.getByRole("button", { name: "キー" }));
 
     expect(onSettings).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "Scrawl" }));
+    fireEvent.click(screen.getByRole("button", { name: "検索" }));
+    expect(onScrawl).toHaveBeenCalledTimes(1);
+    expect(onSearch).toHaveBeenCalledTimes(1);
     expect(onKeys).toHaveBeenCalledTimes(1);
   });
 });
