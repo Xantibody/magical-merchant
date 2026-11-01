@@ -67,7 +67,7 @@ ready to record the moment it opens (widgets exist for exactly this).
   `data-hint-key`, not `data-key`, because Kobalte writes `data-key` on the
   rows of its own collections
 - **Scrawl** (`views/Scrawl.tsx`): single-column day-grouped journal, time rail,
-  floating capture dock; in-place entry editing; select-mode bulk delete. Notes
+  an input line at the top of today; in-place entry editing; select-mode bulk delete. Notes
   and Codexes sit among the entries (`lib/scrawl-days.ts`) as a filled dot and a
   bold title, unless the chip under their origin entry already leads to them. The
   tag chips at the top do not filter in place — they open Browse with Scrawl
