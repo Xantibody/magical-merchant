@@ -65,6 +65,9 @@ const ja = {
   rail: {
     label: "面の切り替えと全体の操作",
   },
+  status: {
+    saveFailed: "保存できませんでした",
+  },
   theme: {
     system: "システム",
     light: "ライト",
@@ -651,6 +654,9 @@ const en: Messages = {
   },
   rail: {
     label: "Modes and global actions",
+  },
+  status: {
+    saveFailed: "Could not save",
   },
   theme: {
     system: "System",

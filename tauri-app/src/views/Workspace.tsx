@@ -600,7 +600,11 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       }),
     showBody,
     refreshList: () => refetchNotes(),
-    setStatus: setSaveStatus,
+    setStatus: (status) => {
+      // A failure must outlive the 2 seconds of "saved" still counting down from the last save
+      clearTimeout(savedTimer);
+      setSaveStatus(status);
+    },
     onSaved: () => {
       markSaved();
       // "+X B from version N" compares the newest version with the draft. Every write changes it
@@ -1884,6 +1888,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                         {saveStatus() === "saving" ? t().common.saving : null}
                         {saveStatus() === "saved" ? t().common.saved : null}
                         {saveStatus() === "savedAt" ? t().notes.savedAt(savedAt()) : null}
+                        {saveStatus() === "failed" ? t().status.saveFailed : null}
                       </span>
                     </Show>
                     {/* A Codex always shows how far it has moved from the newest version */}
