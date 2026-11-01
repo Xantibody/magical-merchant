@@ -45,16 +45,16 @@ re-insertion, so any number of runs yields the same file.
 
 Two regions go into `build.gradle.kts` and one into `proguard-rules.pro`:
 
-- a `maven { }` repository pointing at the local repository bundled inside the
-  `rustls-platform-verifier-android` crate, located via `cargo metadata`
-- an `implementation` dependency on the artifact found there
+- a `maven { }` repository pointing at upstream's `maven-archive` branch on
+  GitHub, limited to the `org.rustls` group
+- an `implementation` dependency on the artifact found there, at the
+  `rustls-platform-verifier-android` version read from `cargo metadata`
 - a `-keep` rule, because R8 cannot see JNI usage and would otherwise strip the
   classes out of a minified release build — a failure that only shows up in the
   shipped APK
 
 The version is read out of `cargo metadata` rather than written as
-`latest.release`: the bundled repository ships a `maven-metadata-local.xml`,
-not the `maven-metadata.xml` a dynamic version needs.
+`latest.release`: the component must match the crate Cargo resolved.
 
 ## Checking it
 

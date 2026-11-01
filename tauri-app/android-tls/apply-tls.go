@@ -3,9 +3,9 @@
 //
 // reqwest 0.13 verifies certificates through `rustls-platform-verifier`, and on
 // Android that crate reaches the system trust store through a small Kotlin
-// component (`org.rustls.platformverifier`). The component ships inside the
-// crate as a local Maven repository, so the app module has to be told where to
-// find it. Without this the APK builds and then fails every HTTPS request at
+// component (`org.rustls.platformverifier`). The component is published to a
+// Maven repository on upstream's GitHub, so the app module has to be told where
+// to find it. Without this the APK builds and then fails every HTTPS request at
 // runtime with a certificate error.
 //
 // src-tauri/gen/android/ is gitignored and recreated by `tauri android init`,
@@ -37,23 +37,21 @@ type injection struct {
 	body   string
 }
 
-// The component lives inside whichever version of the crate Cargo resolved, so
-// both the repository path and the artifact version are read from
-// `cargo metadata` rather than hardcoded. `--filter-platform` is required: the
-// crate is an Android-only dependency and does not appear in an unfiltered
-// graph. The version is pinned from the same JSON rather than left as
-// `latest.release`, because the bundled repository ships only a
-// `maven-metadata-local.xml` and Gradle cannot resolve a dynamic version
-// without the non-local one.
+// The component must match the crate Cargo resolved, so the artifact version is
+// read from `cargo metadata` rather than hardcoded. `--filter-platform` is
+// required: the crate is an Android-only dependency and does not appear in an
+// unfiltered graph.
 //
-// `metadataSources.artifact()` is what lets Gradle consume the bare .aar
-// without trusting the POM that sits next to it.
+// AIDEV-NOTE: since rustls-platform-verifier-android 0.2.0 the crate no longer
+// bundles the .aar. Pinning 0.7.0 would only postpone this, as Renovate offers
+// the update again every week. `includeGroup` keeps this one artifact from
+// asking upstream's repository about any other dependency.
 var injections = []injection{
 	{
 		id:     "repository",
 		anchor: "android {",
 		after:  false,
-		body: `val rustlsPlatformVerifier: Pair<String, String> by lazy {
+		body: `val rustlsPlatformVerifierVersion: String by lazy {
     val metadata = providers.exec {
         commandLine(
             "cargo", "metadata", "--format-version", "1",
@@ -68,14 +66,13 @@ var injections = []injection{
     val pkg = packages.firstOrNull { it["name"] == "rustls-platform-verifier-android" }
         ?: error("rustls-platform-verifier-android not in cargo metadata")
 
-    val maven = File(File(pkg.getValue("manifest_path") as String).parentFile, "maven")
-    maven.path to (pkg.getValue("version") as String)
+    pkg.getValue("version") as String
 }
 
 repositories {
     maven {
-        url = uri(rustlsPlatformVerifier.first)
-        metadataSources.artifact()
+        url = uri("https://github.com/rustls/rustls-platform-verifier/raw/maven-archive/android-release-support/maven/")
+        content { includeGroup("org.rustls") }
     }
 }
 `,
@@ -86,7 +83,7 @@ repositories {
 		after:  true,
 		body: `    // The Kotlin side of rustls-platform-verifier, without which reqwest cannot
     // reach Android's trust store. Cargo owns the version.
-    implementation("rustls:rustls-platform-verifier:${rustlsPlatformVerifier.second}")
+    implementation("org.rustls:rustls-platform-verifier:${rustlsPlatformVerifierVersion}")
 `,
 	},
 }
