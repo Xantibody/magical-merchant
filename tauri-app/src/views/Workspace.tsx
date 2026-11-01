@@ -973,6 +973,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     if (kind() !== "codex") {
       return;
     }
+    openInViewer();
     if (twoPane()) {
       shell.setNotePanelPinned(true);
     } else {
@@ -1015,6 +1016,9 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
 
   /** ⌘. and the strip's …. Opens the panel, or folds it. On a phone, the panel screen. */
   const togglePanel = (): void => {
+    if (writing()) {
+      return;
+    }
     if (!twoPane()) {
       setPanelScreen((open) => !open);
       return;
@@ -1031,6 +1035,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
    * this way, and ⌘⇧I to the details.
    */
   const openSettings = (details = false): void => {
+    openInViewer();
     batch(() => {
       leaveHistory();
       if (details) {
@@ -1130,6 +1135,15 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     refreshVersions();
     shell.showToast(shown ? t().codex.restored : t().codex.restoredNotShown);
   };
+
+  // Whatever way the writing screen was reached, the panel does not stay beside it
+  createEffect(
+    on(writing, (entered) => {
+      if (entered) {
+        closePanel();
+      }
+    }),
+  );
 
   /** The note the cursor was last handed to. Once per opening, not on every reload. */
   let focusedFor: string | undefined;
@@ -1749,7 +1763,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                 {/* Title, record and actions in one group. They sit on the same level as the body,
                   so what you want to know about a note is not searched for somewhere far away */}
                 {/* The strip over the page. The viewer: back (a phone's) · map · write · tidy.
-                    The writing screen: done · tidy. Keys live in the titles */}
+                    The writing screen: done. Keys live in the titles */}
                 <div class="note-strip">
                   <Show
                     when={writing()}
@@ -1803,18 +1817,21 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                     </button>
                     <span class="note-strip-fill" />
                   </Show>
-                  {/* The one visible way into the panel; ⌘. is the other (ADR 0006) */}
-                  <button
-                    type="button"
-                    class="icon-button note-panel-toggle"
-                    aria-expanded={shell.notePanelPinned()}
-                    title={`${t().viewer.tidy} ${shortcutLabel("noteActions")}`}
-                    aria-label={panelLabel()}
-                    data-hint-key={shortcutLabel("noteActions")}
-                    onClick={togglePanel}
-                  >
-                    <Icon name="dots-three" size={18} />
-                  </button>
+                  {/* The one visible way into the panel; ⌘. is the other. Neither works while
+                    writing: nothing interrupts the writing hand */}
+                  <Show when={!writing()}>
+                    <button
+                      type="button"
+                      class="icon-button note-panel-toggle"
+                      aria-expanded={shell.notePanelPinned()}
+                      title={`${t().viewer.tidy} ${shortcutLabel("noteActions")}`}
+                      aria-label={panelLabel()}
+                      data-hint-key={shortcutLabel("noteActions")}
+                      onClick={togglePanel}
+                    >
+                      <Icon name="dots-three" size={18} />
+                    </button>
+                  </Show>
                 </div>
 
                 <div class="detail-head">
