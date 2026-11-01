@@ -677,6 +677,19 @@ describe("the list flyout", () => {
   });
 });
 
+function mountViewerHead(): void {
+  document.body.innerHTML = `
+    <div class="detail-pane">
+      <div class="detail-head">
+        <h1 class="note-title-view">題</h1>
+        <div class="detail-meta-line"><span>10月9日</span><span class="meta-tag">#a</span></div>
+      </div>
+      <div class="detail-panes">
+        <div class="detail-body"><div class="markdown-preview"><p>本文</p></div></div>
+      </div>
+    </div>`;
+}
+
 describe("viewer head: title, then the date line, then the body", () => {
   beforeAll(async () => {
     await import("../index.css");
@@ -686,19 +699,6 @@ describe("viewer head: title, then the date line, then the body", () => {
   afterEach(() => {
     document.body.innerHTML = "";
   });
-
-  function mountViewerHead(): void {
-    document.body.innerHTML = `
-      <div class="detail-pane">
-        <div class="detail-head">
-          <h1 class="note-title-view">題</h1>
-          <div class="detail-meta-line"><span>10月9日</span><span class="meta-tag">#a</span></div>
-        </div>
-        <div class="detail-panes">
-          <div class="detail-body"><div class="markdown-preview"><p>本文</p></div></div>
-        </div>
-      </div>`;
-  }
 
   it("leaves 12px under the title and 32px over the body", () => {
     mountViewerHead();

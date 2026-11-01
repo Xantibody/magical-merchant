@@ -44,60 +44,74 @@ const SMALL_SIZE_EXCEPTIONS = new Set(["./workspace.css .page-mark-count"]);
 /** Owned by the status line's own change. To go when that lands. */
 const HINT_TEXT_EXCEPTIONS = new Set(["./layout.css .bottom-bar-sep"]);
 
+function shadowOf(rule: Rule): string {
+  return /box-shadow:\s*(?<value>[^;]+)/u.exec(rule.body)?.groups?.value.trim() ?? "";
+}
+
+function isUndersized(rule: Rule): boolean {
+  const size = /font-size:\s*(?<px>[\d.]+)px/u.exec(rule.body)?.groups?.px;
+  return (
+    size !== undefined &&
+    Number(size) < 13 &&
+    Number(size) !== 12 &&
+    !SMALL_SIZE_EXCEPTIONS.has(name(rule))
+  );
+}
+
+function usesLineColourForWords(rule: Rule): boolean {
+  return (
+    /(?:^|[\s;])color:\s*var\(--app-text-hint\)/u.test(rule.body) &&
+    !HINT_TEXT_EXCEPTIONS.has(name(rule))
+  );
+}
+
+function hasOtherShadow(rule: Rule): boolean {
+  return (
+    rule.body.includes("box-shadow") &&
+    !/^(?:var\(--shadow-pop\)|none.*|0 0 0 \dpx .*|inset .*)$/u.test(shadowOf(rule))
+  );
+}
+
+function floatsWithBorder(rule: Rule): boolean {
+  return (
+    shadowOf(rule) === "var(--shadow-pop)" &&
+    /(?:^|[\s;])border(?:-(?:top|right|bottom|left))?:\s*(?!\s|none)/u.test(rule.body)
+  );
+}
+
+function isShadowedToast(rule: Rule): boolean {
+  return rule.selector === ".undo-toast" && rule.body.includes("box-shadow");
+}
+
+/** The rules a predicate catches, by name. */
+function caught(predicate: (rule: Rule) => boolean): string[] {
+  return rules()
+    .filter((rule) => predicate(rule))
+    .map((rule) => name(rule));
+}
+
 describe("helper text", () => {
   it("is 12px or 13px at the smallest, and never between", () => {
-    const small = rules().filter((rule) => {
-      const size = /font-size:\s*(?<px>[\d.]+)px/u.exec(rule.body)?.groups?.px;
-      return (
-        size !== undefined &&
-        Number(size) < 13 &&
-        Number(size) !== 12 &&
-        !SMALL_SIZE_EXCEPTIONS.has(name(rule))
-      );
-    });
-
-    expect(small.map(name)).toEqual([]);
+    expect(caught(isUndersized)).toStrictEqual([]);
   });
 
   // The step that is left for lines reads 1.5:1 as text
   it("does not use the line colour for words", () => {
-    const words = rules().filter(
-      (rule) =>
-        /(?:^|[\s;])color:\s*var\(--app-text-hint\)/u.test(rule.body) &&
-        !HINT_TEXT_EXCEPTIONS.has(name(rule)),
-    );
-
-    expect(words.map(name)).toEqual([]);
+    expect(caught(usesLineColourForWords)).toStrictEqual([]);
   });
 });
 
 describe("elevation", () => {
-  const shadows = (): Rule[] => rules().filter((rule) => rule.body.includes("box-shadow"));
-  const value = (rule: Rule): string =>
-    /box-shadow:\s*(?<value>[^;]+)/u.exec(rule.body)?.groups?.value.trim() ?? "";
-
   it("has one shadow; only cancelling it, a focus ring and an inset mark are something else", () => {
-    const other = shadows().filter(
-      (rule) => !/^(?:var\(--shadow-pop\)|none.*|0 0 0 \dpx .*|inset .*)$/u.test(value(rule)),
-    );
-
-    expect(other.map(name)).toEqual([]);
+    expect(caught(hasOtherShadow)).toStrictEqual([]);
   });
 
   it("draws no border round a box that floats", () => {
-    const boxed = shadows().filter(
-      (rule) =>
-        value(rule) === "var(--shadow-pop)" &&
-        /(?:^|[\s;])border(?:-(?:top|right|bottom|left))?:\s*(?!\s|none)/u.test(rule.body),
-    );
-
-    expect(boxed.map(name)).toEqual([]);
+    expect(caught(floatsWithBorder)).toStrictEqual([]);
   });
 
   // Its dark ground already lifts it
   it("leaves the toast without a shadow", () => {
-    const toast = rules().find((rule) => rule.selector === ".undo-toast");
-
-    expect(toast?.body).not.toContain("box-shadow");
+    expect(caught(isShadowedToast)).toStrictEqual([]);
   });
 });
