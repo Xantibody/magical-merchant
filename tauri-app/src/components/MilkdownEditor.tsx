@@ -26,6 +26,7 @@ import { exitCodeBlockPlugin } from "../lib/exit-code-block-plugin";
 import { codeBlockViewPlugin } from "../lib/code-block-view-plugin";
 import { codeBlockActivePlugin } from "../lib/code-block-active-plugin";
 import { taskItemPlugin } from "../lib/task-item-plugin";
+import { imeKeyPlugin } from "../lib/ime-key-plugin";
 import { listKeymapPlugin } from "../lib/list-keymap-plugin";
 import { inputRuleUndoPlugin } from "../lib/input-rule-undo-plugin";
 import { tabKeymapPlugin } from "../lib/tab-keymap-plugin";
@@ -235,6 +236,7 @@ export default function MilkdownEditor(props: MilkdownEditorProps): JSX.Element 
       .use(codeBlockViewPlugin)
       .use(codeBlockActivePlugin)
       .use(taskItemPlugin)
+      .use(imeKeyPlugin)
       .use(listKeymapPlugin)
       .use(tabKeymapPlugin)
       .use(hrSelectionPlugin)

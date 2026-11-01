@@ -163,6 +163,23 @@ describe("Note table editing and inline decorations", () => {
     await page.viewport(1280, 720);
   });
 
+  // WKWebView delivers the Enter that confirms a conversion as a plain keydown with keyCode 229
+  // and key "Enter". ProseMirror's keymap reads only the key, so it would split the paragraph
+  it("leaves the Enter that confirms an IME conversion to the IME", async () => {
+    const h = await mount("first line");
+    h.select("first line");
+    const before = h.view.state.doc;
+
+    fireEvent.keyDown(h.view.dom, { key: "Enter", keyCode: 229 });
+
+    expect(h.view.state.doc.eq(before)).toBe(true);
+
+    // The next Enter is the writer's
+    fireEvent.keyDown(h.view.dom, { key: "Enter", keyCode: 13 });
+
+    expect(h.view.state.doc.childCount).toBe(2);
+  });
+
   it("does not mutate a table while IME composition is active", async () => {
     const h = await mount(TABLE);
     h.select("b");
