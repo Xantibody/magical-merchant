@@ -21,7 +21,7 @@ const IDLE_SAVE: SaveState = { status: "idle", at: "" };
  * offers at its right end. The note lives in Workspace and the bar in AppLayout, so they meet
  * here the way the save state does. `null` while no note is open.
  */
-export interface NoteBar {
+export interface NoteState {
   /** Codex only. "+312 B from version 4" and the like. */
   version?: string;
   /** While comparing with a version. "comparing with version 2 · 3 lines added". */
@@ -86,8 +86,8 @@ export interface Shell {
    */
   notePanelPinned: Accessor<boolean>;
   setNotePanelPinned: (pinned: boolean) => void;
-  noteBar: Accessor<NoteBar | null>;
-  setNoteBar: (bar: NoteBar | null) => void;
+  noteState: Accessor<NoteState | null>;
+  setNoteState: (bar: NoteState | null) => void;
   /**
    * Where the save landed. `Workspace` writes it and the bottom bar (`AppLayout`) shows it,
    * so they meet here. Leaving the surface resets it to `idle`: carried over, a screen that
@@ -135,7 +135,7 @@ export function ShellProvider(props: { children: JSX.Element }): JSX.Element {
   const [listHover, setListHover] = createSignal(false);
   const [listPinned, setListPinned] = createSignal(false);
   const [notePanelPinned, setNotePanelPinned] = createSignal(false);
-  const [noteBar, setNoteBar] = createSignal<NoteBar | null>(null);
+  const [noteState, setNoteState] = createSignal<NoteState | null>(null);
   const [browseFilter, setBrowseFilter] = createSignal<BrowseFilter>(NO_FILTER);
   const [saveState, setSaveState] = createSignal<SaveState>(IDLE_SAVE);
   const [toast, setToast] = createSignal<Toast | null>(null);
@@ -174,8 +174,8 @@ export function ShellProvider(props: { children: JSX.Element }): JSX.Element {
     listOpen: () => listPinned() || listHover(),
     notePanelPinned,
     setNotePanelPinned,
-    noteBar,
-    setNoteBar,
+    noteState,
+    setNoteState,
     saveState,
     setSaveState,
     browseFilter,

@@ -1213,11 +1213,11 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   createEffect(() => {
     const item = selected();
     if (!item || !loaded()) {
-      shell.setNoteBar(null);
+      shell.setNoteState(null);
       return;
     }
     const status = kind() === "codex" ? versionStatus() : undefined;
-    shell.setNoteBar({
+    shell.setNoteState({
       version: status ? versionStatusLabel(status) : undefined,
       comparing: historyOpen() && compareLine().length > 0 ? compareLine().join(" · ") : undefined,
       map: mapShown(),
@@ -1236,7 +1236,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       },
     });
   });
-  onCleanup(() => shell.setNoteBar(null));
+  onCleanup(() => shell.setNoteState(null));
 
   /**
    * The keys that act on the open note. They are taken here because the target is "the one note

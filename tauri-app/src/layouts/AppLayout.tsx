@@ -13,7 +13,7 @@ import SyncPopover from "../components/SyncPopover";
 import UndoToast from "../components/UndoToast";
 import FirstRunCard from "../components/FirstRunCard";
 import { ShellProvider, useShell } from "../lib/shell";
-import type { NoteBar } from "../lib/shell";
+import type { NoteState } from "../lib/shell";
 import { watchLeave } from "../lib/leave";
 import { createSyncState, syncIconName } from "../lib/sync";
 import { applyTheme, theme } from "../lib/theme";
@@ -67,7 +67,7 @@ function StateChip(props: { icon: IconName; label: string; onOpen: () => void })
  * and at the right end the two actions worth offering right now. Only states that are on
  * appear, so a plain note adds nothing to the line.
  */
-function NoteStatus(props: { bar: NoteBar }): JSX.Element {
+function NoteStatus(props: { bar: NoteState }): JSX.Element {
   return (
     <>
       <Show when={props.bar.version}>
@@ -487,7 +487,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
                 : null}
             </span>
           </Show>
-          <Show when={shell.noteBar()}>{(bar) => <NoteStatus bar={bar()} />}</Show>
+          <Show when={shell.noteState()}>{(bar) => <NoteStatus bar={bar()} />}</Show>
         </div>
 
         <nav class="bottom-tabs">

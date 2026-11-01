@@ -763,9 +763,9 @@ describe("Workspace › ビューアと書く画面", () => {
   // What leads to the panel from outside the strip goes through the viewer
   it("leaves the writing screen when the bottom bar opens the panel", async () => {
     await openNoteA();
-    await waitFor(() => expect(shell?.noteBar()).not.toBeNull());
+    await waitFor(() => expect(shell?.noteState()).not.toBeNull());
 
-    shell?.noteBar()?.openSettings();
+    shell?.noteState()?.openSettings();
 
     await waitFor(() => expect(openedPanel()).not.toBeNull());
     expect(screen.queryByPlaceholderText("タイトル")).toBeNull();
