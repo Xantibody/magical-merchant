@@ -25,7 +25,7 @@ describe("scrawlDays", () => {
     expect(scrawlDays([], [], TODAY)).toStrictEqual([]);
   });
 
-  it("puts the newest day first and a day's newest record first", () => {
+  it("puts the newest day first and a day's oldest record first", () => {
     const entries = [
       ...toScrawlItems("2026-10-19", ["- [08:10:00] water", "- [10:30:00] rail"]),
       ...toScrawlItems("2026-10-18", ["- [07:40:00] walk"]),
@@ -34,7 +34,7 @@ describe("scrawlDays", () => {
     const days = scrawlDays(entries, [], TODAY);
 
     expect(days.map((d) => d.date)).toStrictEqual(["2026-10-19", "2026-10-18"]);
-    expect(days[0].rows.map((r) => r.time)).toStrictEqual(["10:30", "08:10"]);
+    expect(days[0].rows.map((r) => r.time)).toStrictEqual(["08:10", "10:30"]);
   });
 
   it("lays a Note between the entries of its day by time", () => {
@@ -68,7 +68,7 @@ describe("scrawlDays", () => {
 
     const days = scrawlDays(entries, [note({ origin: "2026-10-01T08:10:00" })], TODAY);
 
-    expect(days[0].rows.map((r) => r.kind)).toStrictEqual(["note", "scrawl"]);
+    expect(days[0].rows.map((r) => r.kind)).toStrictEqual(["scrawl", "note"]);
   });
 
   // Notes are all loaded at once; days older than the loaded entries would appear as islands
