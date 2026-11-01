@@ -2452,3 +2452,19 @@ describe("Workspace › タグ", () => {
     await expect(screen.findByRole("button", { name: "タグ work を外す" })).resolves.toBeDefined();
   });
 });
+
+describe("Workspace › 整えるパネルの節", () => {
+  beforeEach(setupWorkspace);
+  afterEach(teardownWorkspace);
+
+  // The headings left the screen for the shapes (ADR 0013); a screen reader still hears the names
+  it("keeps each section's name for the screen reader, without a visible heading", async () => {
+    await openNoteA();
+    const panel = await openPanel();
+
+    expect(within(panel).getByRole("group", { name: "タグ" })).toBeDefined();
+    expect(within(panel).getByRole("group", { name: "表示" })).toBeDefined();
+    expect(within(panel).queryByText("タグ")).toBeNull();
+    expect(within(panel).queryByText("表示")).toBeNull();
+  });
+});

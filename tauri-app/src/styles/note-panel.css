@@ -104,31 +104,13 @@
 .note-panel-settings {
   display: flex;
   flex-direction: column;
-  padding: 0 12px 16px;
+  /* Sections are told apart by this gap and their shape: chips, switches, a table */
+  gap: 28px;
+  padding: 8px 12px 0;
 }
 
-/* "View" and "Details". A heading as quiet as a list group label */
-.note-panel-section {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 8px 6px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  color: var(--app-text-faint);
-}
-
+/* An action row like the others, a step quieter: it opens something rather than doing it */
 .note-panel-disclosure {
-  margin-top: 18px;
-  border: none;
-  background: none;
-  font-family: inherit;
-  text-align: start;
-  cursor: pointer;
-}
-
-.note-panel-disclosure:hover {
   color: var(--app-text-muted);
 }
 
@@ -197,11 +179,11 @@
   display: grid;
   grid-template-columns: 48px 1fr;
   align-items: baseline;
-  gap: 6px 8px;
-  margin: 2px 0 0;
+  gap: 8px;
+  margin: 4px 0 0;
   padding: 0 8px;
   font-size: 13px;
-  color: var(--app-text-muted);
+  color: var(--app-text);
   font-variant-numeric: tabular-nums;
 }
 
@@ -244,8 +226,7 @@
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  padding: 8px 12px;
-  border-top: 1px solid var(--app-hairline);
+  padding: 28px 12px 8px;
 }
 
 .note-panel-action:disabled {
@@ -268,13 +249,6 @@
 
 .note-panel-action--danger:hover {
   background: color-mix(in oklab, var(--app-danger) 8%, var(--app-surface));
-}
-
-.note-panel-divider {
-  height: 1px;
-  margin: 4px 0;
-  border: none;
-  background: var(--app-hairline);
 }
 
 .note-panel-foot {
@@ -340,7 +314,7 @@
   }
 
   .note-panel--screen .note-panel-settings {
-    padding: 0 16px 16px;
+    padding: 8px 16px 0;
   }
 
   .note-panel--screen .note-panel-row {
@@ -351,12 +325,9 @@
   }
 
   .note-panel--screen .note-panel-actions {
-    padding: 8px 16px;
+    padding: 28px 16px 8px;
   }
 
-  .note-panel--screen .note-panel-divider {
-    display: none;
-  }
 }
 
 /* ---- The "Make a Codex" confirmation ---- */
