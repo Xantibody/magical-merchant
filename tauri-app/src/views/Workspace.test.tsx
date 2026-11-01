@@ -430,8 +430,13 @@ function panelToggle(): HTMLElement {
   return screen.getByRole("button", { name: /^この (?:Note|Codex)$/u });
 }
 
-/** Docks the right panel from the toggle in the title row, unless it is already open. */
-function openPanel(): Promise<HTMLElement> {
+/** Opens the right panel from the strip, unless it is already open. The viewer has the way in. */
+async function openPanel(): Promise<HTMLElement> {
+  const done = screen.queryByRole("button", { name: "完了" });
+  if (done) {
+    fireEvent.click(done);
+    await screen.findByRole("button", { name: /^この (?:Note|Codex)$/u });
+  }
   if (!openedPanel()) {
     fireEvent.click(panelToggle());
   }
@@ -690,16 +695,16 @@ describe("Workspace › ビューアと書く画面", () => {
   });
 
   it("docks and folds the panel from the keyboard", async () => {
-    await openNoteA();
+    await viewNoteA();
 
-    fireEvent.keyDown(editorBody(), { key: ".", metaKey: true });
+    fireEvent.keyDown(globalThis, { key: ".", metaKey: true });
     await waitFor(() => expect(openedPanel()).not.toBeNull());
     expect(shell?.notePanelPinned()).toBe(true);
     expect(screen.getByRole("button", { name: "この Note" }).getAttribute("aria-expanded")).toBe(
       "true",
     );
 
-    fireEvent.keyDown(editorBody(), { key: ".", metaKey: true });
+    fireEvent.keyDown(globalThis, { key: ".", metaKey: true });
     await waitFor(() => expect(openedPanel()).toBeNull());
     expect(shell?.notePanelPinned()).toBe(false);
   });
@@ -740,15 +745,30 @@ describe("Workspace › ビューアと書く画面", () => {
     expect(openedPanel()).not.toBeNull();
   });
 
-  // Esc peels one layer: the writing screen gives way to the viewer, and the panel stays
-  it("leaves the writing screen on Escape and keeps the panel", async () => {
-    await openNoteA();
+  // Writing is not interrupted (ADR 0012): the panel folds, and neither its button nor its key
+  // brings it back until the viewer is
+  it("has no way into the panel from the writing screen", async () => {
+    await viewNoteA();
     await openPanel();
 
-    fireEvent.keyDown(editorBody(), { key: "Escape" });
+    await startWriting();
+    await waitFor(() => expect(openedPanel()).toBeNull());
 
-    await waitFor(() => expect(screen.queryByTestId("editor-body")).toBeNull());
-    expect(openedPanel()).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "この Note" })).toBeNull();
+    fireEvent.keyDown(globalThis, { key: ".", metaKey: true });
+    await sleep(50);
+    expect(openedPanel()).toBeNull();
+  });
+
+  // What leads to the panel from outside the strip goes through the viewer
+  it("leaves the writing screen when the bottom bar opens the panel", async () => {
+    await openNoteA();
+    await waitFor(() => expect(shell?.noteBar()).not.toBeNull());
+
+    shell?.noteBar()?.openSettings();
+
+    await waitFor(() => expect(openedPanel()).not.toBeNull());
+    expect(screen.queryByPlaceholderText("タイトル")).toBeNull();
   });
 
   // There is no right edge to float it in on; ⌘. and … are its only ways in (ADR 0006)
@@ -790,7 +810,7 @@ describe("Workspace › ビューアと書く画面", () => {
     await flipSwitch("マップ");
 
     await waitFor(() => expect(screen.getByTestId("mindmap")).toBeDefined());
-    expect(screen.getByTestId("editor-body")).toBeDefined();
+    expect(screen.getByText(TEXT_A)).toBeDefined();
   });
 
   // Rebuilding the map alongside on every keystroke keeps the branches jumping next to the
@@ -1144,10 +1164,9 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     await startEditingBody();
     typeInEditor?.(`${TEXT_A}\n\nもう一行`);
 
-    // Leaving the title field before the next note's body arrives flushes the waiting save
+    // Leaving the writing screen for the panel flushes the waiting save
     blockReads();
     await runPanelAction("削除");
-    fireEvent.change(titleInput(), { target: { value: TITLE_A } });
 
     // What was typed lands on the note being deleted. Nothing is written to the next note
     await waitFor(() => expect(disk.get(FILE_A)).toContain("もう一行"), { timeout: 3000 });
@@ -1675,7 +1694,10 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     await waitFor(() => expect(disk.get(FILE_A)).toBe(bodyOld));
     expect(localStorage.getItem(`note-backup:${FILE_A}`)).toBe(BODY_A);
 
-    fireEvent.input(titleInput(), { target: { value: "別の題" } });
+    await startWriting();
+    fireEvent.input(await screen.findByPlaceholderText("タイトル"), {
+      target: { value: "別の題" },
+    });
     await waitFor(() => expect(countOf("update_draft")).toBe(2), { timeout: 3000 });
     expect(localStorage.getItem(`note-backup:${FILE_A}`)).toBe(BODY_A);
   });
@@ -2033,11 +2055,11 @@ describe("Workspace › Codex の版", () => {
     expect(screen.getByText("最初の一行")).toBeDefined();
     expect(screen.getByText(TEXT_C)).toBeDefined();
 
-    // Esc closes it. The panel folds away and the editor comes back
+    // Esc closes it. The panel folds away and the viewer's body comes back
     fireEvent.keyDown(globalThis, { key: "Escape" });
     await waitFor(() => expect(historyShown()).toBe(false));
     expect(openedPanel()).toBeNull();
-    await waitFor(() => expect(screen.getByTestId("editor-body")).toBeDefined());
+    await screen.findByText(TEXT_C);
   });
 
   // The newest version selected on opening comes from the list reread at that moment. Choosing
@@ -2076,7 +2098,7 @@ describe("Workspace › Codex の版", () => {
     // Back to the first tab leaves compare mode; the panel stays docked
     fireEvent.click(within(panel).getByRole("tab", { name: "この Codex" }));
     await waitFor(() => expect(historyShown()).toBe(false));
-    await waitFor(() => expect(screen.getByTestId("editor-body")).toBeDefined());
+    await screen.findByText(TEXT_C);
     expect(openedPanel()).not.toBeNull();
 
     teardownWorkspace();
@@ -2108,6 +2130,8 @@ describe("Workspace › Codex の版", () => {
   // that has a key which works
   it("wears the keys on the shoulders of the toggle and the history tab", async () => {
     await openCodexC();
+    fireEvent.click(screen.getByRole("button", { name: "完了" }));
+    await screen.findByRole("button", { name: "この Codex" });
 
     expect(screen.getByRole("button", { name: "この Codex" }).dataset.hintKey).toBe(
       shortcutLabel("noteActions"),
@@ -2131,7 +2155,7 @@ describe("Workspace › Codex の版", () => {
 
     await waitFor(() => expect(openedPanel()).toBeNull());
     expect(historyShown()).toBe(false);
-    await waitFor(() => expect(screen.getByTestId("editor-body")).toBeDefined());
+    await screen.findByText(TEXT_C);
   });
 
   it("restores a version with the revision it read and swaps the body in", async () => {
@@ -2182,6 +2206,7 @@ describe("Workspace › Codex の版", () => {
 
     // Even writing more into that body leaves the version just restored intact
     readFails = false;
+    await startWriting();
     await waitFor(() => expect(editorBody().isContentEditable).toBe(true));
     await startEditingBody();
     typeInEditor?.(`${TEXT_C}\n\n足した行`);
@@ -2236,10 +2261,10 @@ describe("Workspace › Codex の版", () => {
     fireEvent.click(screen.getByLabelText("本文に戻る"));
     await waitFor(() => expect(document.querySelector(".compare-bar")).not.toBeNull());
 
-    // The close button ends the comparison. The editor comes back
+    // The close button ends the comparison. The viewer's body comes back
     fireEvent.click(document.querySelector(".compare-bar-close") as HTMLElement);
     await waitFor(() => expect(document.querySelector(".compare-bar")).toBeNull());
-    await waitFor(() => expect(screen.getByTestId("editor-body")).toBeDefined());
+    await screen.findByText(TEXT_C);
   });
 });
 
@@ -2389,6 +2414,22 @@ describe("Workspace › タグ", () => {
       return found;
     });
     expect(outlined[0].textContent).toBe("#idea");
+  });
+
+  // The strip's controls are symbols and keys, like the rail. The name stays for the pointer
+  // and the screen reader
+  it("names the strip's write and done buttons without printing them", async () => {
+    await viewNoteA();
+
+    const write = await screen.findByRole("button", { name: "書く" });
+    expect(write.textContent).toBe("");
+    expect(write.title).toContain("書く");
+
+    fireEvent.click(write);
+
+    const done = await screen.findByRole("button", { name: "完了" });
+    expect(done.textContent).toBe("");
+    expect(done.title).toContain("完了");
   });
 
   // Choosing a record is opening it, wherever the hand was (ADR 0003)

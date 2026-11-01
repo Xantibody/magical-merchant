@@ -573,43 +573,9 @@
   color: var(--app-text);
 }
 
-/* The one filled button on the page: the way from reading to writing */
-.note-strip-write {
-  height: 34px;
-  padding: 0 16px;
-  border: none;
-  border-radius: var(--radius-2);
-  background: var(--app-accent);
-  color: var(--app-surface);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.note-strip-write:disabled {
+.note-strip .icon-button:disabled {
   opacity: 0.4;
   cursor: default;
-}
-
-.note-strip-done {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 8px;
-  border: none;
-  border-radius: var(--radius-2);
-  background: none;
-  color: var(--app-text-muted);
-  font: inherit;
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.note-strip-done:hover {
-  background: var(--app-surface-2);
-  color: var(--app-text);
 }
 
 /* The viewer's title: the same heading the field writes, read rather than typed */

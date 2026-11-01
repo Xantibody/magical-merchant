@@ -74,9 +74,10 @@ ready to record the moment it opens (widgets exist for exactly this).
   pane at a time (`workspace--detail`); a note opens in the
   **viewer** (`MarkdownPreview`, the title as a heading, a meta line of created
   time and tags that only shows them, a body `#tag` outlined, then the records
-  pointing here). Enter, e, a double click or 書く in the strip over the page
+  pointing here). Enter, e, a double click or the pencil in the strip over the page
   open the **writing screen** (the Milkdown editor under a title field that _is_
-  the body's leading `# heading`); Esc or 完了 come back. The URL carries it
+  the body's leading `# heading`); Esc or the check come back. The writing
+  screen shows no meta line and has no way into the note panel. The URL carries it
   (`edit=1`), and what was just made opens there (`writeRoute`). A note chosen
   from the list opens in the viewer. Frontmatter `view: mindmap` lays the map
   alongside; `preview` stays in the file and now means nothing more than the
@@ -86,7 +87,7 @@ ready to record the moment it opens (widgets exist for exactly this).
   suggestions counted from `browse_all`, a body `#tag` has no ×), 詳細 (created
   time editable, updated, surroundings),
   revert / Codex にする (a corvu confirm, `PromoteDialog.tsx`) / delete. The `…`
-  in the strip and ⌘. are the only ways in, and the body gives up 320px
+  in the viewer's strip and ⌘. are the only ways in, and the body gives up 320px
   while it is open. Open is the app's state (`shell.notePanelPinned`), not the
   note's. Esc peels one layer: tag input → confirm → history; the settings tab
   stays. On a phone it opens as its own screen
