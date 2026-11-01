@@ -62,9 +62,6 @@ const ja = {
     sync: "同期",
     settings: "Settings",
   },
-  rail: {
-    label: "面の切り替えと全体の操作",
-  },
   status: {
     label: "保存と同期",
     keys: "キー",
@@ -676,9 +673,6 @@ const en: Messages = {
     jumpToDate: "Jump to a date",
     sync: "Sync",
     settings: "Settings",
-  },
-  rail: {
-    label: "Modes and global actions",
   },
   status: {
     label: "Save and sync",

@@ -1,6 +1,6 @@
-import { createEffect, createMemo, onCleanup, onMount, untrack, For, Show } from "solid-js";
+import { createEffect, createMemo, onCleanup, onMount, untrack, Show } from "solid-js";
 import type { JSX } from "solid-js";
-import { useLocation, useNavigate, A } from "@solidjs/router";
+import { useLocation, useNavigate } from "@solidjs/router";
 import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import { listen, TauriEvent } from "@tauri-apps/api/event";
 import type { UnlistenFn } from "@tauri-apps/api/event";
@@ -8,7 +8,6 @@ import Icon from "../components/Icon";
 import type { IconName } from "../components/Icon";
 import CommandPalette from "../components/CommandPalette";
 import Popover from "../components/Popover";
-import Rail from "../components/Rail";
 import SearchField from "../components/SearchField";
 import StatusDot, { StatusDetails, StatusDotButton, StatusLinks } from "../components/StatusDot";
 import SyncPopover from "../components/SyncPopover";
@@ -40,8 +39,6 @@ import type { WidgetAction } from "../lib/widget-actions";
 import { getDeviceSignals, warmLocation } from "../lib/client-context";
 import { applyStartFullscreen } from "../lib/fullscreen";
 import { loadGlyphs } from "../lib/glyphs";
-
-const BOTTOM_TABS: RoutePath[] = [ROUTES.SCRAWL, ROUTES.NOTES, ROUTES.CODEX, ROUTES.SETTINGS];
 
 /** A screen set to system switches the moment the device setting changes. */
 function onSchemeChange(): void {
@@ -163,8 +160,8 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
   };
 
   /**
-   * Actions callable from a key and from the palette. Without a single table, the
-   * rail's badge would say "Cmd+N" while the key does nothing.
+   * Actions callable from a key and from the palette. Without a single table, a
+   * badge would say "Cmd+N" while the key does nothing.
    * This is also the shortcut list itself that `?` opens
    */
   const shellCommands = createMemo<ShellCommand[]>(() => [
@@ -411,10 +408,8 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
 
   return (
     <div class="app">
-      <Rail onSearch={openSearch} />
-
       <div class="app-column">
-        {/* A narrow screen has no width for the rail. The title and a few entries make a strip */}
+        {/* A narrow screen has no hover and no room in the corner. The title and a few entries make a strip */}
         <header class="mobile-header">
           <span class="mobile-header-title">
             {MODE_LABELS[location.pathname as RoutePath] ?? MODE_LABELS[ROUTES.SCRAWL]}
@@ -472,21 +467,6 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
           onSettings={go(ROUTES.SETTINGS)}
           onKeys={openShortcutList}
         />
-
-        <nav class="bottom-tabs">
-          <For each={BOTTOM_TABS}>
-            {(path) => (
-              <A
-                href={path}
-                class="bottom-tab"
-                classList={{ "bottom-tab--active": isActive(path) }}
-              >
-                <Icon name={MODE_ICONS[path]} size={22} />
-                {MODE_LABELS[path]}
-              </A>
-            )}
-          </For>
-        </nav>
 
         {/* The dot is at the window's corner (wide) or in the strip (narrow), but one
             container opens. CSS decides which one it hangs from */}

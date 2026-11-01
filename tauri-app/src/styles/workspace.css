@@ -3,11 +3,15 @@
   display: flex;
   min-height: 0;
   min-width: 0;
-  /* Positioning base for the flyout. Its left edge is the rail's right, its bottom the window's */
+  /* Positioning base for the flyout. Its left and bottom edges are the window's */
   position: relative;
 }
 
 /* ---------------- list pane ---------------- */
+
+.list-edge {
+  display: none;
+}
 
 .list-pane {
   width: 300px;
@@ -134,6 +138,14 @@
    Workspace.tsx). Templates borrows the same panes but has no rail entry and no pin,
    so nothing could ever open its list; there it stays a permanent column */
 @media (min-width: 768px) and (hover: hover) {
+  .list-edge {
+    display: block;
+    position: absolute;
+    inset: 0 auto 0 0;
+    z-index: 1;
+    width: 12px;
+  }
+
   .workspace--flyout .list-pane {
     position: absolute;
     left: 0;

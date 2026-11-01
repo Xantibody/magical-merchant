@@ -1608,10 +1608,16 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
 
   return (
     <div class="workspace workspace--flyout" classList={{ "workspace--detail": detailOpen() }}>
+      {/* Nothing to see: resting the pointer on the window's left edge opens the list */}
+      <div
+        class="list-edge"
+        aria-hidden="true"
+        onPointerEnter={() => shell.setListHover(true)}
+        onPointerLeave={() => shell.setListHover(false)}
+      />
       <div
         class="list-pane"
         classList={{ "list-pane--open": flyoutOpen() }}
-        // The flyout continues the rail. It opens while the pointer is on the rail or the list
         onPointerEnter={() => shell.setListHover(true)}
         onPointerLeave={() => shell.setListHover(false)}
       >

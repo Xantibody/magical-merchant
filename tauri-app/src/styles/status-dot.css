@@ -157,7 +157,7 @@
 }
 
 @media (max-width: 767px) {
-  /* The corner has the bottom tabs and the capture dock; the dot is in the band */
+  /* The corner has the capture dock; the dot is in the band */
   .status-dot-area {
     display: none;
   }

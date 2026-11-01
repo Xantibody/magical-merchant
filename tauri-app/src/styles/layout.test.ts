@@ -25,7 +25,6 @@ function element(selector: string): HTMLElement {
 function mountApp(): HTMLElement {
   document.body.innerHTML = `
     <div class="app">
-      <nav class="rail"></nav>
       <div class="app-column">
         <header class="mobile-header">header</header>
         <main class="app-main"><div class="view"></div></main>
@@ -33,7 +32,6 @@ function mountApp(): HTMLElement {
           <div class="status-dot-links"></div>
           <button class="status-dot"><span class="status-dot-mark"></span></button>
         </div>
-        <nav class="bottom-tabs"><a class="bottom-tab">Notes</a></nav>
       </div>
     </div>`;
   const app = document.querySelector<HTMLElement>(".app");
@@ -55,7 +53,7 @@ describe("app shell inside the system bars", () => {
   });
 
   // html carries the safe-area padding, so leaving .app at 100dvh pushes its bottom edge
-  // off screen and sends the bottom tabs and the input bar behind the navigation bar
+  // off screen and sends the input bar behind the navigation bar
   it("does not overflow the viewport when the system bars take space", () => {
     setInsets(ANDROID_SAFE_TOP, ANDROID_SAFE_BOTTOM);
     const app = mountApp();
@@ -65,20 +63,6 @@ describe("app shell inside the system bars", () => {
     expect(bottom).toBeLessThanOrEqual(globalThis.innerHeight + 0.5);
   });
 
-  it("keeps the bottom tabs reachable above the navigation bar", () => {
-    setInsets(ANDROID_SAFE_TOP, ANDROID_SAFE_BOTTOM);
-    mountApp();
-    const tabs = element(".bottom-tabs");
-    // The bottom tabs show only at mobile widths. Look at the position alone, whatever
-    // width the test runs at
-    tabs.style.display = "flex";
-
-    const { bottom } = tabs.getBoundingClientRect();
-    const navigationBarTop = globalThis.innerHeight - Number.parseInt(ANDROID_SAFE_BOTTOM, 10);
-
-    expect(bottom).toBeLessThanOrEqual(navigationBarTop + 0.5);
-  });
-
   it("uses the whole viewport when there are no system bars", () => {
     setInsets("0px", "0px");
     const app = mountApp();
@@ -86,21 +70,6 @@ describe("app shell inside the system bars", () => {
     expect(app.getBoundingClientRect().height).toBeCloseTo(globalThis.innerHeight, 0);
   });
 });
-
-/** The rail, and the current-location line sliding down its left edge. The view decides `top` and passes it through style. */
-function mountRail(markerTop: number, off = false): void {
-  document.body.innerHTML = `
-    <div class="app">
-      <nav class="rail">
-        <a class="rail-button rail-button--active"></a>
-        <a class="rail-button"></a>
-        <span class="rail-marker" style="top:${markerTop}px" ${off ? "data-off" : ""}></span>
-        <span class="rail-divider"></span>
-        <button class="rail-button rail-button--plain"></button>
-      </nav>
-      <div class="app-column"><main class="app-main"></main></div>
-    </div>`;
-}
 
 function mountAction(): HTMLElement {
   document.body.innerHTML = `<button class="icon-button" data-hint-key="⌘N"></button>`;
@@ -112,7 +81,7 @@ function badge(target: HTMLElement): string {
   return getComputedStyle(target, "::after").content;
 }
 
-describe("the rail tells you where you are", () => {
+describe("the shell on a wide window", () => {
   beforeAll(async () => {
     await import("../index.css");
     await page.viewport(1280, 800);
@@ -120,52 +89,6 @@ describe("the rail tells you where you are", () => {
 
   afterEach(() => {
     document.body.innerHTML = "";
-  });
-
-  it("is a 48px column with a hairline down its right edge", () => {
-    mountRail(18);
-
-    const rail = element(".rail");
-    const style = getComputedStyle(rail);
-
-    expect(rail.getBoundingClientRect().width).toBeCloseTo(48, 0);
-    expect(style.borderRightWidth).toBe("1px");
-  });
-
-  // There are no words, so the current location is said with a fill. The header tabs showed
-  // it with font weight alone, but a rail entry is only one icon
-  it("fills the button you are on and leaves the others bare", () => {
-    mountRail(18);
-
-    const active = getComputedStyle(element(".rail-button--active"));
-    const idle = getComputedStyle(element(".rail-button:not(.rail-button--active)"));
-
-    expect(active.backgroundColor).not.toBe("rgba(0, 0, 0, 0)");
-    expect(idle.backgroundColor).toBe("rgba(0, 0, 0, 0)");
-  });
-
-  // The line slides between the three surfaces. The surface decides the position; the
-  // smoothness lives here
-  it("slides the marker with a transition on top alone", () => {
-    mountRail(58);
-
-    const marker = element(".rail-marker");
-    const style = getComputedStyle(marker);
-    const rail = element(".rail").getBoundingClientRect();
-
-    expect(marker.getBoundingClientRect().top - rail.top).toBeCloseTo(58, 0);
-    expect(marker.getBoundingClientRect().width).toBeCloseTo(2, 0);
-    expect(marker.getBoundingClientRect().height).toBeCloseTo(20, 0);
-    expect(style.transitionProperty).toContain("top");
-    expect(style.transitionDuration).toContain("0.22s");
-  });
-
-  // While Settings is open the line is not shown. It is not a surface, so there is nowhere
-  // to slide it to
-  it("hides the marker where there is no mode to point at", () => {
-    mountRail(58, true);
-
-    expect(getComputedStyle(element(".rail-marker")).opacity).toBe("0");
   });
 
   it("leaves no header above the body on a wide window", () => {
@@ -207,13 +130,6 @@ describe("the rail tells you where you are", () => {
 
     expect(new Set([color("ok"), color("busy"), color("failed")]).size).toBe(3);
   });
-
-  // The bottom tabs belong to mobile. On a wide window the bands would stack two deep
-  it("keeps the bottom tabs off a wide window", () => {
-    mountApp();
-
-    expect(getComputedStyle(element(".bottom-tabs")).display).toBe("none");
-  });
 });
 
 describe("the shell on a phone", () => {
@@ -226,21 +142,14 @@ describe("the shell on a phone", () => {
     await page.viewport(1280, 800);
   });
 
-  it("swaps the rail for a header and the bottom tabs", async () => {
+  it("keeps a header, and takes the dot into it", async () => {
     await page.viewport(390, 800);
     mountApp();
 
-    expect(getComputedStyle(element(".rail")).display).toBe("none");
     expect(getComputedStyle(element(".mobile-header")).display).toBe("flex");
-    expect(getComputedStyle(element(".bottom-tabs")).display).toBe("flex");
-    // The corner has the bottom tabs and the capture dock. The dot is in the header instead
+    // The corner has the capture dock. The dot is in the header instead
     expect(getComputedStyle(element(".status-dot-area")).display).toBe("none");
   });
-
-  // `body.md-toolbar-open .bottom-tabs`, which folds the bottom tabs away while the
-  // keyboard is up, belongs to the formatting bar's CSS and sits inside
-  // `@media (hover: none)`. Headless Chromium has hover, so it cannot be tried from here:
-  // check it on a real device
 });
 
 describe("what floats over the app", () => {
@@ -319,14 +228,12 @@ describe("the hint layer", () => {
 function mountSyncPopover(): HTMLElement {
   document.body.innerHTML = `
     <div class="app">
-      <nav class="rail"></nav>
       <div class="app-column">
         <header class="mobile-header">header</header>
         <main class="app-main"><div class="view"></div></main>
         <div class="popover-anchor popover-anchor--sync">
           <div class="popover" style="width: 260px; height: 180px;">sync</div>
         </div>
-        <nav class="bottom-tabs"><a class="bottom-tab">Notes</a></nav>
       </div>
     </div>`;
   return element(".popover");

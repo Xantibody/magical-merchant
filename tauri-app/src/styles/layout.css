@@ -1,17 +1,14 @@
 .app {
   display: flex;
-  /* The rail and the body stand side by side. On mobile the rail goes and one column is left */
-  flex-direction: row;
   /* html carries padding for the safe area, so at a plain 100dvh the page runs past the
-     bottom of the screen by that total, and the bottom tabs and the input bar disappear
-     behind Android's navigation bar. dvh also follows the device's own bars in and out */
+     bottom of the screen by that total, and the input bar disappears behind Android's
+     navigation bar. dvh also follows the device's own bars in and out */
   height: calc(100dvh - var(--safe-top) - var(--safe-bottom));
   position: relative;
   overflow: hidden;
 }
 
-/* Right of the rail: the column where the body and (on mobile) the header and the bottom
-   tabs stack vertically */
+/* The one column: the body, under the header on mobile */
 .app-column {
   flex: 1;
   min-width: 0;
@@ -103,38 +100,8 @@
   position: static;
 }
 
-/* ---------------- bottom tabs (mobile only) ---------------- */
-
-.bottom-tabs {
-  display: none;
-  border-top: 1px solid var(--app-border);
-  background: var(--app-surface);
-  padding: var(--size-1) var(--size-2) 6px;
-}
-
-.bottom-tab {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  padding: 6px 0;
-  font-size: 12px;
-  color: var(--app-text-muted);
-  text-decoration: none;
-}
-
-.bottom-tab--active {
-  color: var(--app-accent);
-  font-weight: 600;
-}
-
 @media (max-width: 767px) {
   .mobile-header {
-    display: flex;
-  }
-
-  .bottom-tabs {
     display: flex;
   }
 }

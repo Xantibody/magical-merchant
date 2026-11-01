@@ -101,7 +101,7 @@ export function StatusLinks(props: LinksProps): JSX.Element {
 
 /**
  * State fixed to the window's lower right, outside the paper (ADR 0011). A wide window only:
- * a narrow one has the bottom tabs and the capture dock there, so its dot is in the header.
+ * a narrow one has the capture dock there, so its dot is in the header.
  */
 export default function StatusDot(props: DotProps & LinksProps): JSX.Element {
   return (
