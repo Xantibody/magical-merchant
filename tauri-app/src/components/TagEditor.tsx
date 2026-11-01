@@ -89,7 +89,7 @@ export default function TagEditor(props: TagEditorProps): JSX.Element {
     add(picked ? picked.tag : normalizeTag(query()));
   };
 
-  const onKeyDown = (e: KeyboardEvent & { currentTarget: HTMLInputElement }): void => {
+  const onKeyDown = (e: KeyboardEvent): void => {
     // The Enter that ends IME conversion is the IME's. It does not add a tag (#102)
     if (isImeComposing(e)) {
       return;
@@ -109,12 +109,6 @@ export default function TagEditor(props: TagEditorProps): JSX.Element {
       // The first Esc belongs to the input. The panel and the history wait for the next one
       e.preventDefault();
       stop();
-    } else if (e.key === "Backspace" && e.currentTarget.value === "") {
-      const last = props.own?.at(-1);
-      if (last !== undefined) {
-        e.preventDefault();
-        remove(last);
-      }
     }
   };
 

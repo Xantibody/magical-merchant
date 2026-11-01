@@ -2340,15 +2340,17 @@ describe("Workspace › タグ", () => {
     expect(screen.queryByRole("button", { name: "タグ idea を外す" })).toBeNull();
   });
 
-  it("removes the last tag with Backspace in the empty input", async () => {
+  // A held Backspace runs past the end of the text. Removing a tag is the ×'s alone (#331)
+  it("leaves the tags alone on Backspace in the empty input", async () => {
     meta.set(FILE_A, { tags: ["work", "idea"] });
     await openNoteA();
     const input = await startTagEditing();
 
     fireEvent.keyDown(input, { key: "Backspace" });
 
-    await waitFor(() => expect(countOf("update_note_meta")).toBe(1));
-    expect(calls.find((c) => c.cmd === "update_note_meta")?.args.tags).toStrictEqual(["work"]);
+    await sleep(100);
+    expect(countOf("update_note_meta")).toBe(0);
+    expect(screen.getByRole("button", { name: "タグ idea を外す" })).toBeDefined();
   });
 
   // Esc peels one layer: the tag input first. The history behind it stays open
