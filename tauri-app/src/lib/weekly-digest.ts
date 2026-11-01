@@ -40,8 +40,13 @@ export function summarizeWeek(items: ScrawlItem[], today: Date): WeekSummary {
   };
 }
 
+/** The same date a year back. A 29 February lands on 1 March, which is what Date does with it. */
+export function yearAgoDate(today: Date): string {
+  return toIsoDate(new Date(today.getFullYear() - 1, today.getMonth(), today.getDate()));
+}
+
 /** Today one year ago. null when that day has no record, as there is nowhere to land. */
 export function yearAgoToday(today: Date, recordedDates: string[]): string | null {
-  const target = toIsoDate(new Date(today.getFullYear() - 1, today.getMonth(), today.getDate()));
+  const target = yearAgoDate(today);
   return recordedDates.includes(target) ? target : null;
 }
