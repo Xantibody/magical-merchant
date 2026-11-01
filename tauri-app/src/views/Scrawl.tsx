@@ -14,7 +14,7 @@ import CaptureBar from "../components/CaptureBar";
 import CalendarPopover from "../components/CalendarPopover";
 import Popover from "../components/Popover";
 import TagFilter from "../components/TagFilter";
-import ScrawlEntry, { OriginChip } from "../components/ScrawlEntry";
+import ScrawlEntry from "../components/ScrawlEntry";
 import { useNavigate, useSearchParams } from "@solidjs/router";
 import { typedInvoke } from "../lib/commands";
 import { getClientContext } from "../lib/client-context";
@@ -22,9 +22,7 @@ import { useShell } from "../lib/shell";
 import { formatDayHeading, toIsoDate } from "../lib/day-labels";
 import { t } from "../lib/i18n";
 import {
-  groupScrawlByDay,
   notesByOrigin,
-  orphanNotesByDate,
   originKeyOf,
   planBulkDelete,
   replaceDayItems,
@@ -35,6 +33,8 @@ import type { NoteItem, ScrawlItem } from "../lib/items";
 import { places } from "../lib/places";
 import { noteRoute, writeRoute } from "../lib/note-route";
 import { ROUTES } from "../lib/routes";
+import { scrawlDays } from "../lib/scrawl-days";
+import type { ScrawlRow } from "../lib/scrawl-days";
 import { countTags, parseTags } from "../lib/tags";
 import {
   digestWeekKey,
@@ -72,6 +72,24 @@ async function loadScrawl(extraDates: string[]): Promise<ScrawlData> {
     ),
   );
   return { items: days.flat(), dates };
+}
+
+/** A Note or a Codex among Scrawl's rows: a filled dot and its title, nothing more. */
+function NoteRow(props: { note: NoteItem; onOpen: (note: NoteItem) => void }): JSX.Element {
+  return (
+    <article class="entry entry--note">
+      <span class="entry-time">{props.note.time}</span>
+      <span class="entry-rail" aria-hidden="true">
+        <span class="entry-rail-line" />
+        <span class="entry-rail-dot" />
+      </span>
+      <div class="entry-body">
+        <button type="button" class="entry-note" onClick={() => props.onOpen(props.note)}>
+          {props.note.title}
+        </button>
+      </div>
+    </article>
+  );
 }
 
 function EmptyScrawl(): JSX.Element {
@@ -158,14 +176,11 @@ export default function Scrawl(): JSX.Element {
   });
   const knownTags = createMemo(() => countTags(entries().map((item) => item.text)));
 
-  const days = createMemo(() => groupScrawlByDay(entries()));
+  const days = createMemo(() => scrawlDays(entries(), notes() ?? [], toIsoDate(today)));
 
   // Entry datetime -> notes. A chip sits right under its origin entry
   const originNotes = createMemo(() => notesByOrigin(notes() ?? []));
   const notesFor = (item: ScrawlItem): NoteItem[] => originNotes().get(originKeyOf(item)) ?? [];
-
-  // Only notes whose origin entry is gone still appear right under the day heading, as before
-  const orphanNotes = createMemo(() => orphanNotesByDate(notes() ?? [], entries()));
 
   // ---- Weekly digest (once a week, shown at the top until dismissed) ----
   const [digestDismissed, setDigestDismissed] = createSignal(
@@ -323,6 +338,26 @@ export default function Scrawl(): JSX.Element {
     }
   };
 
+  const renderRow = (row: ScrawlRow): JSX.Element =>
+    row.kind === "scrawl" ? (
+      <ScrawlEntry
+        item={row.item}
+        notes={notesFor(row.item)}
+        selecting={selecting()}
+        selected={selected().has(row.item.id)}
+        onToggle={() => toggleSelected(row.item.id)}
+        onPromote={() => {
+          void promote(row.item);
+        }}
+        onOpenNote={openNote}
+        onUnlinkNote={(note) => {
+          void unlinkNote(note);
+        }}
+      />
+    ) : (
+      <NoteRow note={row.note} onOpen={openNote} />
+    );
+
   // Esc steps back one level at a time: confirm bar -> select mode -> normal
   createEffect(() => {
     if (!selecting()) {
@@ -422,14 +457,13 @@ export default function Scrawl(): JSX.Element {
             <For each={days()}>
               {(day, index) => {
                 const heading = createMemo(() => formatDayHeading(day.date, today));
-                const orphans = createMemo(() => orphanNotes().get(day.date) ?? []);
                 return (
                   <section class="day-group" data-day={day.date}>
                     <header class="day-heading">
                       <h2 class="day-heading-label">{heading().label}</h2>
                       <span class="day-heading-date">{heading().date}</span>
                       <span class="day-heading-count">
-                        {t().scrawl.entryCount(day.items.length)}
+                        {t().scrawl.entryCount(day.rows.length)}
                         {/* The entry into selection is one word beside the count of the
                             day being written. No floating bar of its own is added. Once
                             inside, the bottom bar takes over, so it is hidden meanwhile */}
@@ -446,42 +480,7 @@ export default function Scrawl(): JSX.Element {
                       </span>
                     </header>
 
-                    {/* A shelter only for notes whose origin entry is gone. A normal
-                        chip appears right under its entry */}
-                    <Show when={orphans().length}>
-                      <div class="origin-chips">
-                        <For each={orphans()}>
-                          {(note) => (
-                            <OriginChip
-                              note={note}
-                              onOpen={openNote}
-                              onUnlink={(target) => {
-                                void unlinkNote(target);
-                              }}
-                            />
-                          )}
-                        </For>
-                      </div>
-                    </Show>
-
-                    <For each={day.items}>
-                      {(item) => (
-                        <ScrawlEntry
-                          item={item}
-                          notes={notesFor(item)}
-                          selecting={selecting()}
-                          selected={selected().has(item.id)}
-                          onToggle={() => toggleSelected(item.id)}
-                          onPromote={() => {
-                            void promote(item);
-                          }}
-                          onOpenNote={openNote}
-                          onUnlinkNote={(note) => {
-                            void unlinkNote(note);
-                          }}
-                        />
-                      )}
-                    </For>
+                    <For each={day.rows}>{renderRow}</For>
                   </section>
                 );
               }}

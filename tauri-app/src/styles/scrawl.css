@@ -129,6 +129,30 @@
   border-color: var(--app-accent);
 }
 
+/* A Note or a Codex: the dot filled and the title in bold say it is more than a line */
+.entry--note .entry-rail-dot {
+  background: var(--app-text);
+  border-color: var(--app-text);
+}
+
+.entry-note {
+  max-width: 552px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--app-text);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.75;
+  text-align: left;
+  cursor: pointer;
+}
+
+.entry-note:hover {
+  text-decoration: underline;
+}
+
 /* A promoted entry fills its rail dot, marking that it grew */
 .entry--promoted .entry-rail-dot {
   background: var(--app-accent);

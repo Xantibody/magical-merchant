@@ -29,7 +29,6 @@ export interface NoteItem {
   preview: string;
   /** Datetime of the entry this note was promoted from. Scrawl uses it to show the chip. */
   origin?: string;
-  /** A note made read-only. The list shows a lock for it. */
   /** Name of the template it was born from. Used to look up the examples when it is opened. */
   template?: string;
   /** Number of committed versions. Only a Codex row has it; it shows on the folded-corner page mark. */
@@ -121,30 +120,6 @@ export function notesByOrigin(items: NoteItem[]): Map<string, NoteItem[]> {
   return map;
 }
 
-/**
- * Groups the notes whose source entry can no longer be found, by the calendar day
- * of the origin. Deleting an entry leaves the note, so it is moved right under the
- * day heading to keep its entrance visible. The match runs against all entries
- * before filtering: reading an entry that is merely hidden by a tag as "gone"
- * would make unrelated chips pop up under the heading on every filter.
- */
-export function orphanNotesByDate(notes: NoteItem[], items: ScrawlItem[]): Map<string, NoteItem[]> {
-  const known = new Set(items.map((item) => originKeyOf(item)));
-  const map = new Map<string, NoteItem[]>();
-  for (const note of notes) {
-    const date = note.origin?.slice(0, 10);
-    if (date && !known.has(note.origin ?? "")) {
-      const found = map.get(date);
-      if (found) {
-        found.push(note);
-      } else {
-        map.set(date, [note]);
-      }
-    }
-  }
-  return map;
-}
-
 /** Groups only consecutive items with the same label. The date order is whatever the caller passed. */
 function groupBy(items: Item[], labelOf: (item: Item) => string): ItemGroup[] {
   const groups: ItemGroup[] = [];
@@ -214,29 +189,6 @@ export function neighborOf(items: readonly { id: string }[], id: string): string
     return null;
   }
   return items[at - 1]?.id ?? items[at + 1]?.id ?? null;
-}
-
-export interface ScrawlDay {
-  /** `YYYY-MM-DD`. The heading text is built on the display side. */
-  date: string;
-  items: ScrawlItem[];
-}
-
-/**
- * Groups by calendar day. It groups on the date itself rather than the heading
- * text because several days get a heading built from the date, like `7月29日`.
- */
-export function groupScrawlByDay(items: ScrawlItem[]): ScrawlDay[] {
-  const days: ScrawlDay[] = [];
-  for (const item of items) {
-    const last = days.at(-1);
-    if (last?.date === item.date) {
-      last.items.push(item);
-    } else {
-      days.push({ date: item.date, items: [item] });
-    }
-  }
-  return days;
 }
 
 export function groupNotes(items: NoteItem[], today: Date): ItemGroup[] {

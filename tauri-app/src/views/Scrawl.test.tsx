@@ -52,10 +52,13 @@ const DAYS: Record<string, string[]> = {
 let days: Record<string, string[]>;
 let captureFailure: Error | undefined;
 
+/** What `list_notes` returns. Each test starts with none. */
+let notes: Record<string, unknown>[];
+
 const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
   list_scrawl_dates: () => [...RECENT_DATES, YEAR_AGO],
   read_scrawl_by_date: ({ date }) => days[String(date)] ?? [],
-  list_notes: () => [],
+  list_notes: () => notes,
   // It appends, so it becomes the newest record of that day
   save_quick_capture: ({ text }) => {
     if (captureFailure) {
@@ -92,6 +95,7 @@ async function openScrawl(): Promise<void> {
       <MemoryRouter root={RouterRoot}>
         <Route path="/" component={Scrawl} />
         <Route path="/browse" component={() => <p>BROWSE</p>} />
+        <Route path="/notes" component={() => <p>NOTES</p>} />
       </MemoryRouter>
     </ShellProvider>
   ));
@@ -102,6 +106,7 @@ async function setupScrawl(): Promise<void> {
   await page.viewport(1280, 800);
   localStorage.clear();
   days = structuredClone(DAYS);
+  notes = [];
   captureFailure = undefined;
   mockWindows("main");
   mockIPC((cmd, args) => {
@@ -170,6 +175,30 @@ describe("Scrawl › 週次ダイジェスト", () => {
     fireEvent.click(screen.getByRole("button", { name: "今週は閉じる" }));
 
     expect(screen.queryByRole("region", { name: "今週" })).toBeNull();
+  });
+});
+
+describe("Scrawl › Note among the rows", () => {
+  beforeEach(setupScrawl);
+  afterEach(teardownScrawl);
+
+  it("lists a Note among the day's records and opens it from there", async () => {
+    notes = [
+      {
+        kind: "note",
+        path: "/data/notes/20260903_091200.md",
+        filename: "20260903_091200.md",
+        time: `${TODAY}T09:12:00+09:00`,
+        tags: [],
+        preview: "Weekly review",
+      },
+    ];
+    await openScrawl();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Weekly review" }));
+
+    await waitFor(() => expect(location.pathname).toBe("/notes"));
+    expect(location.search).toBe("?file=20260903_091200.md");
   });
 });
 

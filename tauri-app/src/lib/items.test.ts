@@ -2,12 +2,10 @@ import { describe, it, expect } from "vitest";
 import {
   toScrawlItems,
   toNoteItems,
-  groupScrawlByDay,
   groupNotes,
   itemTitle,
   noteCreatedLabel,
   notesByOrigin,
-  orphanNotesByDate,
   originKeyOf,
   replaceDayItems,
   planBulkDelete,
@@ -143,45 +141,6 @@ describe("notesByOrigin", () => {
     const [item] = toScrawlItems("2026-08-03", ["- [09:00:00] 別の記録"]);
     const map = notesByOrigin(toNoteItems([note({ origin: "2026-08-03T08:30:00" })]));
     expect(map.get(originKeyOf(item))).toBeUndefined();
-  });
-});
-
-describe("orphanNotesByDate", () => {
-  it("returns an empty map when no note has an origin", () => {
-    expect(orphanNotesByDate(toNoteItems([note()]), []).size).toBe(0);
-  });
-
-  it("leaves out notes whose origin entry is still on the scrawl", () => {
-    const items = toScrawlItems("2026-08-03", ["- [08:30:00] 朝の記録"]);
-    const notes = toNoteItems([note({ origin: "2026-08-03T08:30:00" })]);
-    expect(orphanNotesByDate(notes, items).size).toBe(0);
-  });
-
-  it("groups notes whose origin entry is gone under the day of that origin", () => {
-    const items = toScrawlItems("2026-08-03", ["- [08:30:00] 朝の記録"]);
-    const notes = toNoteItems([
-      note({ filename: "a.md", origin: "2026-08-03T21:00:00" }),
-      note({ filename: "b.md", origin: "2026-08-01T07:00:00" }),
-    ]);
-    const map = orphanNotesByDate(notes, items);
-    expect(map.get("2026-08-03")?.map((n) => n.filename)).toStrictEqual(["a.md"]);
-    expect(map.get("2026-08-01")?.map((n) => n.filename)).toStrictEqual(["b.md"]);
-  });
-});
-
-describe("groupScrawlByDay", () => {
-  it("groups consecutive entries from the same day", () => {
-    const items = [
-      ...toScrawlItems("2026-08-04", ["- [09:00:00] a", "- [10:00:00] b"]),
-      ...toScrawlItems("2026-08-03", ["- [11:00:00] c"]),
-    ];
-    const days = groupScrawlByDay(items);
-    expect(days.map((d) => d.date)).toStrictEqual(["2026-08-04", "2026-08-03"]);
-    expect(days[0].items).toHaveLength(2);
-  });
-
-  it("returns nothing for an empty scrawl", () => {
-    expect(groupScrawlByDay([])).toStrictEqual([]);
   });
 });
 
