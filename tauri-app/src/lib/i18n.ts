@@ -133,11 +133,9 @@ const ja = {
     map: "マップ",
     examples: "記入例",
     /** Both live in the one frontmatter key `view`, so turning one on turns the other off. */
-    viewExclusive: "読み取り専用とマップはどちらか一方",
     details: "詳細",
     revert: "編集前に戻す",
     revertNeedsEdit: "この端末で編集するとここから戻せます",
-    revertReadOnly: "読み取り専用のあいだは戻せません",
     savedAt: (time: string) => `${time} に保存`,
     titlePlaceholder: "タイトル",
     bodyPlaceholder: "Note を書く…",
@@ -203,6 +201,12 @@ const ja = {
     draftLost: (title: string) =>
       `「${title}」に閉じる前に打った分がありましたが、その間に別の変更が入り、控えにも残せませんでした`,
     loadFailed: "この Note を読めませんでした。書き換えないよう、本文は開いていません",
+  },
+  viewer: {
+    write: "書く",
+    done: "完了",
+    tidy: "整える",
+    pointedFrom: "ここを指す記録",
   },
   codex: {
     empty: "育てる文書がまだありません",
@@ -356,7 +360,6 @@ const ja = {
     addNew: (q: string) => `「${q}」を新しく追加`,
     footHint: "本文の #タグ は本文側で編集 · ↑↓ Enter Esc",
     /** The `+ tag` at the end of the meta line. */
-    addShort: "タグ",
     /** The dashed chip in the phone's panel screen. */
     add: "追加",
     /** A tag that comes from the body's `#tag`. It cannot be removed from here. */
@@ -716,11 +719,9 @@ const en: Messages = {
     view: "View",
     map: "Map",
     examples: "Examples",
-    viewExclusive: "Read-only and the map take turns",
     details: "Details",
     revert: "Back to before this edit",
     revertNeedsEdit: "Edit on this device and you can step back here",
-    revertReadOnly: "No stepping back while it is read-only",
     savedAt: (time: string) => `Saved at ${time}`,
     titlePlaceholder: "Title",
     bodyPlaceholder: "Write a Note…",
@@ -762,6 +763,12 @@ const en: Messages = {
     draftLost: (title: string) =>
       `"${title}" had typing from before the app was put away, but it was changed elsewhere since and no copy could be kept`,
     loadFailed: "This Note could not be read, so its body stays closed rather than be overwritten",
+  },
+  viewer: {
+    write: "Write",
+    done: "Done",
+    tidy: "Tidy",
+    pointedFrom: "Pointing here",
   },
   codex: {
     empty: "Nothing is growing yet",
@@ -905,7 +912,6 @@ const en: Messages = {
     suggestLabel: "Tags you have used",
     addNew: (q: string) => `Add “${q}” as new`,
     footHint: "Edit #tags in the body itself · ↑↓ Enter Esc",
-    addShort: "Tag",
     add: "Add",
     fromBody: "Edit #tags in the body itself",
   },

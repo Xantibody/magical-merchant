@@ -422,6 +422,21 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* A tag on the meta line. It only shows; the panel edits (ADR 0007) */
+.meta-tag {
+  padding: 1px 6px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: var(--app-surface-2);
+  color: var(--app-text-muted);
+}
+
+/* Written in the body as #tag: told apart by its outline alone */
+.meta-tag--body {
+  border-color: var(--app-border);
+  background: none;
+}
+
 .detail-meta-sep {
   color: var(--app-text-hint);
 }
@@ -529,8 +544,83 @@
   color: var(--app-text-muted);
 }
 
-.note-panel-toggle .icon {
-  transform: scaleX(-1);
+/* The strip over the page (ADR 0003). The viewer: back · map · write · tidy. The writing
+   screen: done · tidy. It narrows with the docked panel like the head row does */
+.note-strip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  width: calc(100% - var(--panel-w));
+  height: 52px;
+  padding: 0 16px;
+  transition: width 220ms var(--app-ease);
+}
+
+.note-strip-fill {
+  flex: 1;
+}
+
+.note-strip .icon-button {
+  padding: 6px;
+  color: var(--app-text-muted);
+}
+
+.note-strip .icon-button:hover,
+.note-strip .icon-button[aria-pressed="true"] {
+  background: var(--app-surface-2);
+  color: var(--app-text);
+}
+
+/* The one filled button on the page: the way from reading to writing */
+.note-strip-write {
+  height: 34px;
+  padding: 0 16px;
+  border: none;
+  border-radius: var(--radius-2);
+  background: var(--app-accent);
+  color: var(--app-surface);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.note-strip-write:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.note-strip-done {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 8px;
+  border: none;
+  border-radius: var(--radius-2);
+  background: none;
+  color: var(--app-text-muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.note-strip-done:hover {
+  background: var(--app-surface-2);
+  color: var(--app-text);
+}
+
+/* The viewer's title: the same heading the field writes, read rather than typed */
+.note-title-view {
+  margin: 10px 0 0;
+  color: var(--app-text);
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
 }
 
 .note-panel-toggle:hover {
@@ -749,6 +839,7 @@
     flex: 0 0 auto;
   }
 
+  .note-strip,
   .detail-head,
   .detail-panes,
   .detail-empty {
@@ -757,6 +848,11 @@
 
   .workspace--detail .list-pane {
     display: none;
+  }
+
+  .workspace--detail .note-strip {
+    display: flex;
+    width: 100%;
   }
 
   /* The list and the body are single pages that swap in the same place. The body rises
@@ -776,11 +872,9 @@
     display: flex;
   }
 
-  /* The only way back to the list. It shares the row with the title, so it adds no extra row */
-  .detail-back {
+  /* The only way back to the list */
+  .note-strip .detail-back {
     display: flex;
-    margin: -8px 0 0 -8px;
-    padding: 10px;
   }
 
   /* A height a finger can press. The text also goes up to about the body's size */
@@ -809,45 +903,6 @@
 
   .detail-head {
     padding: 4px 20px 0;
-  }
-
-  /* No panel beside the body on a phone. The meta line opens the panel's own screen */
-  .note-panel-toggle {
-    display: none;
-  }
-
-  /* The whole line is one press into the panel screen, tall enough for a finger */
-  .detail-meta-button {
-    width: calc(100% + 16px);
-    min-height: 44px;
-    margin: 0 -8px;
-    padding: 6px 8px;
-    border: none;
-    border-radius: var(--radius-2);
-    background: none;
-    font: inherit;
-    font-size: 12px;
-    text-align: start;
-    cursor: pointer;
-  }
-
-  /* One line: long tags are cut, the caret stays at the end */
-  .detail-meta-button {
-    flex-wrap: nowrap;
-    align-items: center;
-  }
-
-  .detail-meta-button .detail-meta-tags {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .detail-meta-button .icon {
-    flex-shrink: 0;
-    margin-left: auto;
-    color: var(--app-text-hint);
   }
 
   .detail-body {
@@ -910,14 +965,16 @@
 
 /* Folded at the end of the body. Not a different enough topic to deserve a rule line */
 .backlinks {
-  margin-top: 40px;
+  margin-top: 48px;
+  padding-top: 20px;
+  border-top: 1px solid var(--app-hairline);
 }
 
 .backlinks-summary {
+  margin: 0;
   font-size: 12px;
+  font-weight: 600;
   color: var(--app-text-faint);
-  cursor: pointer;
-  user-select: none;
 }
 
 .backlinks-list {

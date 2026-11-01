@@ -26,7 +26,6 @@ export interface NoteBar {
   version?: string;
   /** While comparing with a version. "comparing with version 2 · 3 lines added". */
   comparing?: string;
-  readOnly: boolean;
   map: boolean;
   examples: boolean;
   /** Whether "commit a version" is worth offering: a Codex whose draft has moved on. */

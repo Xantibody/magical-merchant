@@ -337,10 +337,19 @@ function editorBody(): HTMLElement {
   return screen.getByTestId("editor-body");
 }
 
+/**
+ * A record opens in the viewer (ADR 0003). Presses its write button once the body has arrived,
+ * which is the one step between opening a note and the editor.
+ */
+async function startWriting(): Promise<void> {
+  fireEvent.click(await screen.findByRole("button", { name: /^書く/u }));
+}
+
 /** Gets as far as note A being open. On a narrow screen the body appears only once it is open. */
 async function openNoteA(): Promise<void> {
   renderWorkspace();
   fireEvent.click(await rowOf(TITLE_A));
+  await startWriting();
   // Until the body arrives and its editor has fully come up. The editor stands up after the
   // body arrives, so wait for the text to be on screen and contenteditable to be set
   await waitFor(() => {
@@ -349,8 +358,29 @@ async function openNoteA(): Promise<void> {
   });
 }
 
+/** The title as the viewer reads it: a heading, not a field. */
+function viewerTitle(): string | null | undefined {
+  return document.querySelector(".note-title-view")?.textContent;
+}
+
+/** Gets as far as note A being open in the viewer, without the editor. */
+async function viewNoteA(): Promise<void> {
+  renderWorkspace();
+  fireEvent.click(await rowOf(TITLE_A));
+  await screen.findByText(TEXT_A);
+}
+
 function titleInput(): HTMLInputElement {
   return screen.getByPlaceholderText<HTMLInputElement>("タイトル");
+}
+
+/** The note's title on either screen: the viewer's heading, or the writing screen's field. */
+function shownTitle(): string {
+  return (
+    document.querySelector(".note-title-view")?.textContent ??
+    document.querySelector<HTMLInputElement>(".note-title-input")?.value ??
+    ""
+  );
 }
 
 /** The version count shown on the Codex meta line. */
@@ -436,9 +466,13 @@ async function confirmPromote(): Promise<HTMLElement> {
   return within(dialog).getByRole("button", { name: "Codex にする" });
 }
 
-/** Presses the `+ tag` button on the meta line and waits for the input the tags turn into. */
+/**
+ * Opens the panel and presses its `+ 追加` chip, then waits for the input. The meta line only
+ * shows tags; they are edited at the top of the panel (ADR 0007).
+ */
 async function startTagEditing(): Promise<HTMLInputElement> {
-  fireEvent.click(screen.getByRole("button", { name: "タグ" }));
+  const panel = await openPanel();
+  fireEvent.click(await within(panel).findByRole("button", { name: "追加" }));
   const input = await screen.findByLabelText<HTMLInputElement>("タグを追加");
   // Until the frontmatter is read, an edit could not know the tags it would write back
   await waitFor(() => expect(input.disabled).toBe(false));
@@ -546,21 +580,6 @@ describe("Workspace › 一覧の行", () => {
     expect(row.textContent).toMatch(new RegExp(`^${TITLE_A}(\\d\\d:\\d\\d|\\d\\d/\\d\\d)$`, "u"));
   });
 
-  // If a note being unwritable only shows once it is open, you find out after trying to write
-  it("marks a read-only note with a lock", async () => {
-    meta.set(FILE_A, { view: "preview" });
-    renderWorkspace();
-
-    await expect(screen.findByTitle("読み取り専用")).resolves.toBeDefined();
-  });
-
-  it("leaves a writable note unmarked", async () => {
-    renderWorkspace();
-    await rowOf(TITLE_A);
-
-    expect(screen.queryByTitle("読み取り専用")).toBeNull();
-  });
-
   /**
    * The badge that floats at the shoulder while `Cmd` is held down. Both buttons at the head
    * of the list have a key, so a badge on only one of them reads as the other having no key.
@@ -626,64 +645,48 @@ describe("Workspace › 触る端末からのテンプレート", () => {
   });
 });
 
-describe("Workspace › 常時編集", () => {
+describe("Workspace › ビューアと書く画面", () => {
   beforeEach(setupWorkspace);
   afterEach(teardownWorkspace);
 
-  // Moving between a reading mode and a writing mode puts one extra step before every write
-  it("opens a note with the editor already in it", async () => {
-    await openNoteA();
-
-    expect(screen.getByTestId("editor-body").textContent).toBe(TEXT_A);
-  });
-
-  // A read-only note gives no sign anywhere that it can be written
-  it("gives a read-only note no editor and no writable title", async () => {
-    meta.set(FILE_A, { view: "preview" });
+  // A record opens to be read (ADR 0003). Nothing can be rewritten by accident, so the editor
+  // and the title field wait for Write
+  it("opens a note in the viewer, with no editor and no title field", async () => {
     renderWorkspace();
     fireEvent.click(await rowOf(TITLE_A));
     await screen.findByText(TEXT_A);
 
     expect(screen.queryByTestId("editor-body")).toBeNull();
-    expect(titleInput().readOnly).toBe(true);
+    expect(screen.queryByPlaceholderText("タイトル")).toBeNull();
+    expect(document.querySelector(".note-title-view")?.textContent).toBe(TITLE_A);
   });
 
-  it("locks a note from the panel", async () => {
+  it("hands the note to the editor on 書く, with the caret in the body", async () => {
     await openNoteA();
 
-    await flipSwitch("読み取り専用");
-
-    await waitFor(() => expect(meta.get(FILE_A)?.view).toBe("preview"));
-    await waitFor(() => expect(screen.queryByTestId("editor-body")).toBeNull());
-    expect(within(await openPanel()).getByRole("switch", { name: "読み取り専用" })).toBeChecked();
+    expect(screen.getByTestId("editor-body").textContent).toBe(TEXT_A);
+    await waitFor(() => expect(document.activeElement).toBe(editorBody()));
   });
 
-  // Locking switches to the reading mode at once. If what appears there is the body as it
-  // was just after loading, the characters just typed look as if they vanished
-  it("keeps what was just typed when the note is locked", async () => {
-    await openNoteA();
-    typeInEditor?.("打ちかけの本文");
-
-    await flipSwitch("読み取り専用");
-
-    await waitFor(() => expect(screen.queryByTestId("editor-body")).toBeNull());
-    expect(screen.getByText("打ちかけの本文")).toBeDefined();
-  });
-
-  // Read-only and the map are one frontmatter key. Turning one on turns the other off, and the
-  // panel says so rather than leaving both switches to disagree with the file
-  it("turns read-only off when the map is laid alongside", async () => {
-    meta.set(FILE_A, { view: "preview" });
+  it("enters the writing screen on Enter or e in the viewer", async () => {
     renderWorkspace();
     fireEvent.click(await rowOf(TITLE_A));
     await screen.findByText(TEXT_A);
 
-    await flipSwitch("マップ");
+    fireEvent.keyDown(document.body, { key: "e" });
 
-    await waitFor(() => expect(meta.get(FILE_A)?.view).toBe("mindmap"));
-    const panel = await openPanel();
-    expect(within(panel).getByRole("switch", { name: "読み取り専用" })).not.toBeChecked();
-    expect(within(panel).getByText("読み取り専用とマップはどちらか一方")).toBeDefined();
+    await waitFor(() => expect(editorBody().isContentEditable).toBe(true));
+  });
+
+  // The save is automatic, so leaving is only a change of screen
+  it("goes back to the viewer on Escape from the body", async () => {
+    await openNoteA();
+    typeInEditor?.("書き足した本文");
+
+    fireEvent.keyDown(editorBody(), { key: "Escape" });
+
+    await waitFor(() => expect(screen.queryByTestId("editor-body")).toBeNull());
+    expect(screen.getByText("書き足した本文")).toBeDefined();
   });
 
   it("docks and folds the panel from the keyboard", async () => {
@@ -701,9 +704,9 @@ describe("Workspace › 常時編集", () => {
     expect(shell?.notePanelPinned()).toBe(false);
   });
 
-  // The toggle beside the title and Cmd+. already dock and fold it, and the foot says so. A
-  // second control for the same thing in the panel's own corner only asked which one to press
-  it("has no pin of its own; the title's toggle folds it", async () => {
+  // The strip's … and Cmd+. already dock and fold it. A second control for the same thing in
+  // the panel's own corner only asked which one to press
+  it("has no pin of its own; the strip's … folds it", async () => {
     await openNoteA();
     const panel = await openPanel();
 
@@ -737,21 +740,22 @@ describe("Workspace › 常時編集", () => {
     expect(openedPanel()).not.toBeNull();
   });
 
-  // A closed panel hides nothing: the bottom bar carries the states that are on, and each one
-  // leads back to its switch
-  it("hands the states that are on to the bottom bar, which opens the panel on them", async () => {
+  // Esc peels one layer: the writing screen gives way to the viewer, and the panel stays
+  it("leaves the writing screen on Escape and keeps the panel", async () => {
     await openNoteA();
-    await waitFor(() => expect(shell?.noteBar()?.readOnly).toBe(false));
+    await openPanel();
 
-    await flipSwitch("読み取り専用");
-    fireEvent.click(panelToggle());
-    await waitFor(() => expect(shell?.noteBar()?.readOnly).toBe(true));
-    await waitFor(() => expect(openedPanel()).toBeNull());
+    fireEvent.keyDown(editorBody(), { key: "Escape" });
 
-    shell?.noteBar()?.openSettings();
+    await waitFor(() => expect(screen.queryByTestId("editor-body")).toBeNull());
+    expect(openedPanel()).not.toBeNull();
+  });
 
-    await waitFor(() => expect(openedPanel()).not.toBeNull());
-    expect(shell?.notePanelPinned()).toBe(true);
+  // There is no right edge to float it in on; ⌘. and … are its only ways in (ADR 0006)
+  it("keeps no hot zone at the right edge", async () => {
+    await openNoteA();
+
+    expect(document.querySelector(".note-panel-edge")).toBeNull();
   });
 
   // Revert has nothing to swap in until this device has held an earlier body. Say why instead
@@ -765,7 +769,6 @@ describe("Workspace › 常時編集", () => {
       within(panel).getByRole<HTMLButtonElement>("button", { name: /^編集前に戻す/u }).disabled,
     ).toBe(true);
     expect(within(panel).getByText("この端末で編集するとここから戻せます")).toBeDefined();
-    expect(shell?.noteBar()?.canRevert).toBe(false);
   });
 
   // A promoted record is handed over ready to type into the moment it opens. At the point
@@ -816,7 +819,7 @@ describe("Workspace › 常時編集", () => {
 
     fireEvent.click(await rowOf(TITLE_B));
 
-    await waitFor(() => expect(titleInput().value).toBe(TITLE_B));
+    await waitFor(() => expect(shownTitle()).toBe(TITLE_B));
     expect(screen.getByTestId("mindmap").textContent).toContain(TITLE_B);
   });
 });
@@ -844,7 +847,7 @@ describe("Workspace › ノートに効くキー", () => {
 
     fireEvent.keyDown(rowA, { key: "ArrowDown" });
 
-    await waitFor(() => expect(titleInput().value).toBe(TITLE_B));
+    await waitFor(() => expect(shownTitle()).toBe(TITLE_B));
     expect(document.activeElement).toBe(await rowOf(TITLE_B));
   });
 
@@ -1011,7 +1014,7 @@ describe("Workspace › 保存の見え方", () => {
     await screen.findByText("保存しました", {}, { timeout: 3000 });
 
     fireEvent.click(await rowOf(TITLE_B));
-    await waitFor(() => expect(titleInput().value).toBe(TITLE_B));
+    await waitFor(() => expect(shownTitle()).toBe(TITLE_B));
 
     await sleep(2500);
     expect(screen.queryByText(/に保存$/u)).toBeNull();
@@ -1027,7 +1030,7 @@ describe("Workspace › 保存の見え方", () => {
     await screen.findByText("保存中…", {}, { timeout: 3000 });
 
     fireEvent.click(await rowOf(TITLE_B));
-    await waitFor(() => expect(titleInput().value).toBe(TITLE_B));
+    await waitFor(() => expect(shownTitle()).toBe(TITLE_B));
     releaseWrites();
 
     await waitFor(() => expect(disk.get(FILE_A)).toContain("会議メモ 改"));
@@ -1040,16 +1043,16 @@ describe("Workspace › 外から書き換わったノートの読み直し", ()
   beforeEach(setupWorkspace);
   afterEach(teardownWorkspace);
 
-  // A change downloaded by sync reaches a note that is still open
+  // A change downloaded by sync reaches a note that is open to be read
   it("reloads the open note when dataVersion increases", async () => {
-    await openNoteA();
-    expect(titleInput().value).toBe(TITLE_A);
+    await viewNoteA();
+    expect(viewerTitle()).toBe(TITLE_A);
 
     disk.set(FILE_A, BODY_A_SYNCED);
     shell?.refreshData();
 
     await waitFor(() => expect(screen.getByText("他の端末で足された行")).toBeDefined());
-    expect(titleInput().value).toBe("会議メモ (同期後)");
+    expect(viewerTitle()).toBe("会議メモ (同期後)");
     expect(countOf("read_note")).toBe(2);
     // A reread only reads. Writing back here would crush the other side's version with ours
     for (const command of WRITE_COMMANDS) {
@@ -1081,6 +1084,9 @@ describe("Workspace › 外から書き換わったノートの読み直し", ()
     await openNoteA();
     fireEvent.input(titleInput(), { target: { value: "会議メモ 改" } });
     await waitFor(() => expect(countOf("update_draft")).toBe(1), { timeout: 3000 });
+    // Entering the writing screen put the caret in the body; with it there the body is never
+    // swapped under the writer. The hand has left it
+    (document.activeElement as HTMLElement | null)?.blur();
     const readsBefore = countOf("read_note");
 
     disk.set(FILE_A, BODY_A_SYNCED);
@@ -1120,8 +1126,9 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     await startEditingBody();
     typeInEditor?.(`${TEXT_A}\n\nもう一行`);
 
+    // A widget row opens it to be read, like every other way in
     navigateTo?.(`/?file=${FILE_B}`);
-    await waitFor(() => expect(titleInput().value).toBe(TITLE_B));
+    await waitFor(() => expect(viewerTitle()).toBe(TITLE_B));
 
     cleanup();
     await waitFor(() => expect(countOf("update_draft")).toBe(1));
@@ -1160,9 +1167,11 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     await openNoteA();
 
     blockReads();
-    fireEvent.click(await rowOf(TITLE_B));
-    // The selection has moved and the meta line shows B's creation time, but the body is still A's
-    await waitFor(() => expect(screen.getByText("2026年9月3日 13:00")).toBeDefined());
+    // A deep link is what moves the selection under a writing hand: the list opens the viewer
+    navigateTo?.(`/?file=${FILE_B}&edit=1`);
+    // The selection has moved, but the body is still A's
+    const rowB = await rowOf(TITLE_B);
+    await waitFor(() => expect(rowB.classList.contains("list-row--selected")).toBe(true));
     typeInEditor?.(`${TEXT_A}\n\n届く前に打った行`);
     fireEvent.input(titleInput(), { target: { value: "届く前に打った題" } });
     releaseReads();
@@ -1346,7 +1355,7 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     await waitFor(() => expect(countOf("update_draft")).toBe(1), { timeout: 3000 });
 
     fireEvent.click(await rowOf(TITLE_B));
-    await waitFor(() => expect(titleInput().value).toBe(TITLE_B));
+    await waitFor(() => expect(shownTitle()).toBe(TITLE_B));
     // Back to A, but the body does not arrive. Only the selection is A; on screen is B's body
     blockReads();
     fireEvent.click(await rowOf(TITLE_A));
@@ -1424,7 +1433,7 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     disk.delete(FILE_A);
 
     fireEvent.click(await rowOf(TITLE_B));
-    await waitFor(() => expect(titleInput().value).toBe(TITLE_B));
+    await waitFor(() => expect(shownTitle()).toBe(TITLE_B));
     releaseWrites();
 
     await waitFor(() => expect(shell?.toast()?.message).toMatch(/もう在りません/u), {
@@ -1458,7 +1467,7 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     disk.set(FILE_A, BODY_A_SYNCED);
 
     fireEvent.click(await rowOf(TITLE_B));
-    await waitFor(() => expect(titleInput().value).toBe(TITLE_B));
+    await waitFor(() => expect(shownTitle()).toBe(TITLE_B));
     releaseWrites();
 
     await waitFor(() => expect(shell?.toast()?.message).toContain(TITLE_A), { timeout: 3000 });
@@ -1471,7 +1480,7 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     expect(message).toMatch(/開き直/u);
     expect(message).toMatch(/戻す/u);
     // The screen stays on B. A is reread only when it is reopened
-    expect(titleInput().value).toBe(TITLE_B);
+    expect(shownTitle()).toBe(TITLE_B);
     expect(localStorage.getItem(`note-backup:${FILE_A}`)).toContain("譲る前に打った行");
   });
 
@@ -1546,7 +1555,7 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     await waitFor(() => expect(countOf("read_note")).toBe(2), { timeout: 3000 });
     fireEvent.click(await rowOf(TITLE_B));
     releaseReads();
-    await waitFor(() => expect(titleInput().value).toBe(TITLE_B));
+    await waitFor(() => expect(shownTitle()).toBe(TITLE_B));
 
     await waitFor(() => expect(shell?.toast()?.message).toContain(TITLE_A), { timeout: 3000 });
     // A's reread never reached the screen. Claiming it did is read as the B on screen having
@@ -1724,7 +1733,7 @@ describe("Workspace › Codex の面", () => {
 
     await rowOf(TITLE_C);
     expect(screen.queryByRole("button", { name: new RegExp(TITLE_A, "u") })).toBeNull();
-    await waitFor(() => expect(titleInput().value).toBe(TITLE_C));
+    await waitFor(() => expect(viewerTitle()).toBe(TITLE_C));
   });
 
   it("makes a codex from the panel after a confirmation and lands on it", async () => {
@@ -1736,10 +1745,12 @@ describe("Workspace › Codex の面", () => {
     fireEvent.click(await confirmPromote());
 
     await waitFor(() => expect(kinds.get(FILE_A)).toBe("codex"));
-    // It landed on the Codex surface, with the same note still open
-    await waitFor(() => expect(screen.getByText("Codex")).toBeDefined());
+    // It landed on the Codex surface, with the same note open to be read
+    await waitFor(() =>
+      expect(document.querySelector(".list-pane-title")?.textContent).toBe("Codex"),
+    );
     await rowOf(TITLE_A);
-    await waitFor(() => expect(titleInput().value).toBe(TITLE_A));
+    await waitFor(() => expect(viewerTitle()).toBe(TITLE_A));
   });
 
   // Someone who reached the confirmation from the keyboard alone must be able to press or
@@ -1793,11 +1804,11 @@ describe("Workspace › Codex の面", () => {
     renderWorkspace();
     navigateTo?.("/codex");
     fireEvent.click(await rowOf(TITLE_C));
-    await waitFor(() => expect(titleInput().value).toBe(TITLE_C));
+    await waitFor(() => expect(viewerTitle()).toBe(TITLE_C));
 
     const panel = await openPanel();
 
-    within(panel).getByRole("switch", { name: "読み取り専用" });
+    within(panel).getByRole("switch", { name: "マップ" });
     expect(within(panel).queryByRole("button", { name: /^Codex にする/u })).toBeNull();
   });
 
@@ -1853,6 +1864,7 @@ describe("Workspace › Codex の版", () => {
     renderWorkspace();
     navigateTo?.("/codex");
     fireEvent.click(await rowOf(TITLE_C));
+    await startWriting();
     await waitFor(() => {
       expect(screen.getByText(TEXT_C)).toBeDefined();
       expect(editorBody().isContentEditable).toBe(true);
@@ -1870,7 +1882,7 @@ describe("Workspace › Codex の版", () => {
     typeInEditor?.(`# ${TITLE_C}\n\n${TEXT_C}\n\n足した行`);
     await waitFor(() => expect(writesTo(FILE_C)).toHaveLength(1), { timeout: 3000 });
     fireEvent.click(await rowOf(TITLE_D));
-    await waitFor(() => expect(titleInput().value).toBe(TITLE_D));
+    await waitFor(() => expect(shownTitle()).toBe(TITLE_D));
 
     expect(countOf("commit_note_version")).toBe(0);
     expect(versions.get(FILE_C)).toBeUndefined();
@@ -1932,6 +1944,7 @@ describe("Workspace › Codex の版", () => {
     kinds.set(FILE_C, "codex");
     renderWorkspace();
     fireEvent.click(await rowOf(TITLE_A));
+    await startWriting();
     await waitFor(() => expect(editorBody().isContentEditable).toBe(true));
 
     expect(editorBody().dataset.noteLinks?.split(",")).toContain(FILE_C.replace(/\.md$/u, ""));
@@ -1943,8 +1956,6 @@ describe("Workspace › Codex の版", () => {
   it("commits at once without a message and can be undone from the toast", async () => {
     await openCodexC();
     await waitFor(() => expect(metaLine()?.textContent).toBe("版なし"));
-    // The bar offers it while there is something to commit
-    await waitFor(() => expect(shell?.noteBar()?.canCommit).toBe(true));
     await openHistoryTab();
     await waitFor(() => expect(historyShown()).toBe(true));
 
@@ -1962,8 +1973,6 @@ describe("Workspace › Codex の版", () => {
     expect(document.querySelectorAll(".history-panel .history-dot")).toHaveLength(2);
     expect(shell?.toast()?.message).toBe("版 1 を刻みました");
     expect(shell?.toast()?.detail).toBe(`${BODY_C.length} B`);
-    // Nothing moved since, so the bar stops offering it
-    await waitFor(() => expect(shell?.noteBar()?.canCommit).toBe(false));
 
     shell?.toast()?.undo?.();
 
@@ -2023,19 +2032,11 @@ describe("Workspace › Codex の版", () => {
     // draft body so it can be read
     expect(screen.getByText("最初の一行")).toBeDefined();
     expect(screen.getByText(TEXT_C)).toBeDefined();
-    // The meta line says what is being compared and how many lines moved. The line counts come
-    // from the diff already read, so not one extra IPC call is made
-    await waitFor(() =>
-      expect(shell?.noteBar()?.comparing).toBe(
-        "版 1 と比較中 · 3 行追加 · 3 行削除 · 読み取り専用",
-      ),
-    );
 
     // Esc closes it. The panel folds away and the editor comes back
     fireEvent.keyDown(globalThis, { key: "Escape" });
     await waitFor(() => expect(historyShown()).toBe(false));
     expect(openedPanel()).toBeNull();
-    expect(shell?.noteBar()?.comparing).toBeUndefined();
     await waitFor(() => expect(screen.getByTestId("editor-body")).toBeDefined());
   });
 
@@ -2086,7 +2087,7 @@ describe("Workspace › Codex の版", () => {
   });
 
   /**
-   * The history never opens on hover, so the tab and this key are the ways in. A badge floats
+   * The tab and this key are the ways into the history. A badge floats
    * at the tab's shoulder when `Cmd` is held, so the key must work, and fold it again.
    */
   it("opens and folds the history from ⌘⇧H", async () => {
@@ -2117,9 +2118,8 @@ describe("Workspace › Codex の版", () => {
     );
   });
 
-  // The toggle beside the title folds the whole panel, history included, and the editor
-  // comes back
-  it("folds the history and the panel from the title's toggle", async () => {
+  // The strip's … folds the whole panel, history included, and the editor comes back
+  it("folds the history and the panel from the strip's toggle", async () => {
     await openCodexC();
     versions.set(FILE_C, [{ id: "v1", message: null, body: BODY_C }]);
 
@@ -2189,19 +2189,6 @@ describe("Workspace › Codex の版", () => {
     expect(disk.get(FILE_C)).toBe(OLD_BODY);
   });
 
-  it("cannot restore into a read-only codex", async () => {
-    await openCodexC();
-    versions.set(FILE_C, [{ id: "v1", message: "最初の骨組み", body: "# x" }]);
-    await flipSwitch("読み取り専用");
-    await waitFor(() => expect(screen.queryByTestId("editor-body")).toBeNull());
-
-    await openHistoryTab();
-    fireEvent.click(await versionRow(1));
-
-    const restore = await screen.findByRole<HTMLButtonElement>("button", { name: "版 1 に戻す" });
-    expect(restore.disabled).toBe(true);
-  });
-
   // A phone has no width to stand a panel in. The history is not a sheet but its own screen
   // that replaces the body, and pressing a version returns to the body in compare mode
   it("gives a phone a panel screen whose history tab swaps with the body", async () => {
@@ -2260,9 +2247,9 @@ describe("Workspace › タグ", () => {
   beforeEach(setupWorkspace);
   afterEach(teardownWorkspace);
 
-  // The tags are edited where they are read. The suggestions come from every record, a tag
-  // that starts with what was typed comes first, and the created time is written back unmoved
-  it("adds a used tag from the meta line's suggestions", async () => {
+  // The suggestions come from every record, a tag that starts with what was typed comes first,
+  // and the created time is written back unmoved
+  it("adds a used tag from the panel's suggestions", async () => {
     meta.set(FILE_A, { tags: ["work"] });
     usedTagLists = [["homework"], ["idea"], ["idea", "work"], ["ideal"]];
     await openNoteA();
@@ -2284,8 +2271,10 @@ describe("Workspace › タグ", () => {
       time: "2026-09-03T12:00:00+09:00",
       tags: ["work", "idea"],
     });
-    // The new tag shows on the meta line, and the input stays for the next one
-    await waitFor(() => expect(screen.getByText("#idea")).toBeDefined());
+    // The new tag joins the panel's chips, and the input stays for the next one
+    await waitFor(() =>
+      expect(within(openedPanel() as HTMLElement).getByText("#idea")).toBeDefined(),
+    );
     expect(document.activeElement).toBe(screen.getByLabelText("タグを追加"));
   });
 
@@ -2360,27 +2349,65 @@ describe("Workspace › タグ", () => {
     expect(shell?.toast()?.message).toContain("work");
 
     fireEvent.click(await rowOf(TITLE_B));
-    await waitFor(() => expect(titleInput().value).toBe(TITLE_B));
+    await waitFor(() => expect(shownTitle()).toBe(TITLE_B));
     shell?.toast()?.undo?.();
 
     await waitFor(() => expect(meta.get(FILE_A)?.tags).toStrictEqual(["work", "idea"]));
     expect(meta.get(FILE_B)?.tags).toStrictEqual(["shop"]);
   });
 
-  // Esc peels one layer: the tag input first. The history behind it stays open
+  // Esc peels one layer: the tag input first. The panel around it stays open
   it("folds only the tag input on the first Escape", async () => {
-    kinds.set(FILE_A, "codex");
-    renderWorkspace();
-    navigateTo?.("/codex");
-    fireEvent.click(await rowOf(TITLE_A));
-    await waitFor(() => expect(titleInput().value).toBe(TITLE_A));
-    await openHistoryTab();
-    await waitFor(() => expect(historyShown()).toBe(true));
+    await viewNoteA();
     const input = await startTagEditing();
 
     fireEvent.keyDown(input, { key: "Escape" });
 
     await waitFor(() => expect(screen.queryByLabelText("タグを追加")).toBeNull());
-    expect(historyShown()).toBe(true);
+    expect(openedPanel()).not.toBeNull();
+  });
+
+  // One part, one role: the line shows the tags, and only the panel changes them
+  it("shows the tags on the meta line with nothing there to press", async () => {
+    meta.set(FILE_A, { tags: ["work"] });
+    await viewNoteA();
+
+    const line = document.querySelector(".detail-meta-line") as HTMLElement;
+    await waitFor(() => expect(line.textContent).toContain("#work"));
+    expect(line.querySelector("button")).toBeNull();
+  });
+
+  // Where a tag is removed differs by where it lives, so the line tells them apart
+  it("outlines a tag written in the body, and only that one", async () => {
+    disk.set(FILE_A, `# ${TITLE_A}\n\n${TEXT_A} #idea`);
+    meta.set(FILE_A, { tags: ["work"], bodyTags: ["idea"] });
+    await viewNoteA();
+
+    const outlined = await waitFor(() => {
+      const found = document.querySelectorAll(".meta-tag--body");
+      expect(found).toHaveLength(1);
+      return found;
+    });
+    expect(outlined[0].textContent).toBe("#idea");
+  });
+
+  // Choosing a record is opening it, wherever the hand was (ADR 0003)
+  it("opens a note chosen from the list in the viewer, even from the writing screen", async () => {
+    disk.set(FILE_B, BODY_B);
+    await openNoteA();
+
+    fireEvent.click(await rowOf(TITLE_B));
+
+    await waitFor(() => expect(shownTitle()).toBe(TITLE_B));
+    expect(screen.queryByPlaceholderText("タイトル")).toBeNull();
+  });
+
+  it("offers a tag's × as soon as the panel is open", async () => {
+    meta.set(FILE_A, { tags: ["work"] });
+    await openNoteA();
+
+    await openPanel();
+
+    await expect(screen.findByRole("button", { name: "タグ work を外す" })).resolves.toBeDefined();
   });
 });

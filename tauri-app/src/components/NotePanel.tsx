@@ -30,12 +30,10 @@ interface NotePanelProps {
   /** The phone's back arrow. */
   onBack?: () => void;
 
-  readOnly: boolean;
   mapOpen: boolean;
   /** Whether the note has template examples. The switch is not shown for one that has none. */
   hasExamples: boolean;
   examplesShown: boolean;
-  onToggleReadOnly: () => void;
   onToggleMap: () => void;
   onToggleExamples: () => void;
 
@@ -47,10 +45,10 @@ interface NotePanelProps {
   /** A new created time, as the datetime-local input gave it. */
   onEditTime: (value: string) => void;
   /**
-   * The phone's tag section. The desktop edits tags on the meta line instead. A function, so
-   * the editor is built once where it is placed rather than on every read of the prop.
+   * The tag section. A function, so the editor is built once where it is placed rather than on
+   * every read of the prop.
    */
-  tags?: () => JSX.Element;
+  tags: () => JSX.Element;
 
   canRevert: boolean;
   /** Why revert cannot be pressed. Absent when there is nothing worth saying. */
@@ -141,10 +139,9 @@ function CreatedField(props: { time: string; onEdit: (value: string) => void }):
  * actions. It replaced the `…` menu, which hid all of this behind a 29px glyph and showed
  * none of the state.
  *
- * On a wide window it is 320px at the right edge, beside the body. The button in the title
- * row and ⌘. are the only ways in. A Codex adds the history as a second tab of the same slot.
- * On a phone it is a screen of its own that swaps with the body, the way the history screen
- * used to.
+ * On a wide window it is 320px at the right edge, beside the body. The strip's … and ⌘. are
+ * the only ways in. A Codex adds the history as a second tab of the same slot. On a phone it is
+ * a screen of its own that swaps with the body, the way the history screen used to.
  */
 export default function NotePanel(props: NotePanelProps): JSX.Element {
   const label = (): string => (props.kind === "codex" ? t().codex.panel : t().notes.panel);
@@ -185,14 +182,15 @@ export default function NotePanel(props: NotePanelProps): JSX.Element {
 
   const settings = (): JSX.Element => (
     <div class="note-panel-settings">
+      <Show when={props.tags}>
+        {(render) => (
+          <>
+            <div class="note-panel-section">{t().common.tags}</div>
+            <div class="note-panel-tags">{render()()}</div>
+          </>
+        )}
+      </Show>
       <div class="note-panel-section">{t().notes.view}</div>
-      <SwitchRow
-        icon="lock-simple"
-        size={iconSize()}
-        label={t().notes.readOnly}
-        checked={props.readOnly}
-        onToggle={props.onToggleReadOnly}
-      />
       <SwitchRow
         icon="tree-structure"
         size={iconSize()}
@@ -211,16 +209,6 @@ export default function NotePanel(props: NotePanelProps): JSX.Element {
           checked={props.examplesShown}
           onToggle={props.onToggleExamples}
         />
-      </Show>
-      <p class="note-panel-hint">{t().notes.viewExclusive}</p>
-
-      <Show when={props.tags}>
-        {(render) => (
-          <>
-            <div class="note-panel-section">{t().common.tags}</div>
-            <div class="note-panel-tags">{render()()}</div>
-          </>
-        )}
       </Show>
 
       <button

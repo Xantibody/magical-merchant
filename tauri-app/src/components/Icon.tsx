@@ -62,7 +62,6 @@ const ICONS = {
   "file-text": () => import("@phosphor-icons/core/assets/regular/file-text.svg?raw"),
   "tree-structure": () => import("@phosphor-icons/core/assets/regular/tree-structure.svg?raw"),
   "caret-left": () => import("@phosphor-icons/core/assets/regular/caret-left.svg?raw"),
-  "lock-simple": () => import("@phosphor-icons/core/assets/regular/lock-simple.svg?raw"),
   "circle-notch": () => import("@phosphor-icons/core/assets/regular/circle-notch.svg?raw"),
   funnel: () => import("@phosphor-icons/core/assets/regular/funnel.svg?raw"),
   "push-pin": () => import("@phosphor-icons/core/assets/regular/push-pin.svg?raw"),

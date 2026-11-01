@@ -1,7 +1,6 @@
 import type { Note, NoteKind } from "./commands";
 import { daysBetween, formatMonthDay, formatNoteGroupLabel, parseIsoDate } from "./day-labels";
 import { t } from "./i18n";
-import { resolveNoteView } from "./note-view";
 import { parseScrawlEntry } from "./parse-scrawl";
 import { isPreservedEmptyLine } from "./preserved-empty-line";
 import type { DeviceContext } from "./parse-scrawl";
@@ -31,7 +30,6 @@ export interface NoteItem {
   /** Datetime of the entry this note was promoted from. Scrawl uses it to show the chip. */
   origin?: string;
   /** A note made read-only. The list shows a lock for it. */
-  readOnly: boolean;
   /** Name of the template it was born from. Used to look up the examples when it is opened. */
   template?: string;
   /** Number of committed versions. Only a Codex row has it; it shows on the folded-corner page mark. */
@@ -91,7 +89,6 @@ export function toNoteItems(notes: Note[]): NoteItem[] {
     tags: note.tags,
     preview: note.preview,
     origin: note.origin,
-    readOnly: resolveNoteView(note.view) === "preview",
     template: note.template,
     versionCount: note.version_count,
     dirty: note.dirty,

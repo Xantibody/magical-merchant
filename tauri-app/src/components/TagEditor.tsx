@@ -32,13 +32,13 @@ interface TagEditorProps {
   onChange: (tags: string[]) => void;
   /** A tag just left through its ×, and the place it stood in the frontmatter's list. */
   onRemoved: (tag: string, at: number) => void;
-  /** The phone's panel screen: chips a finger can press, always removable. */
+  /** The phone's panel screen: chips a finger can press. */
   screen?: boolean;
 }
 
 /**
- * Tags edited where they are read, on the meta line. Pressing a `#tag` or `+ tag` turns the
- * tags into chips and puts an input after them; the dropdown offers the tags already in use.
+ * The note panel's tags: chips, then a button that puts an input after them. The dropdown
+ * offers the tags already in use.
  *
  * A tag written in the body as `#tag` shows too, but it has no ×: it lives in the body, and
  * the only honest way to remove it is there.
@@ -225,36 +225,17 @@ export default function TagEditor(props: TagEditorProps): JSX.Element {
       class="tag-editor"
       classList={{ "tag-editor--editing": props.editing, "tag-editor--screen": props.screen }}
     >
+      <For each={props.tags}>{chip}</For>
       <Show
-        when={props.editing || props.screen}
+        when={props.editing}
         fallback={
-          <>
-            <For each={props.tags}>
-              {(tag) => (
-                <button type="button" class="tag-editor-tag" onClick={start}>
-                  #{tag}
-                </button>
-              )}
-            </For>
-            <button type="button" class="tag-editor-add" onClick={start}>
-              <Icon name="plus" size={10} />
-              {t().tags.addShort}
-            </button>
-          </>
+          <button type="button" class="tag-editor-add" onClick={start}>
+            <Icon name="plus" size={12} />
+            {t().tags.add}
+          </button>
         }
       >
-        <For each={props.tags}>{chip}</For>
-        <Show
-          when={props.editing}
-          fallback={
-            <button type="button" class="tag-editor-add tag-editor-add--chip" onClick={start}>
-              <Icon name="plus" size={12} />
-              {t().tags.add}
-            </button>
-          }
-        >
-          {field()}
-        </Show>
+        {field()}
       </Show>
     </span>
   );

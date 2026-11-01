@@ -49,7 +49,7 @@ ready to record the moment it opens (widgets exist for exactly this).
   ⌘\, keep it out. Below 768px it is the full page it always was
 - **Bottom bar** (30px, desktop only, `layouts/AppLayout.tsx`): the status line —
   where the save landed, a Codex's version (版 3 から +312 B), 比較中, and every
-  view state that is **on** (読み取り専用 / マップ / 記入例; pressing one docks
+  view state that is **on** (マップ / 記入例; pressing one docks
   the note panel on its switch). At its right end 版を刻む (draft moved on) and
   編集前に戻す (a backup exists), only when they would do something. Workspace
   hands it over through the shell (`noteBar`), like the save state. No current
@@ -71,20 +71,25 @@ ready to record the moment it opens (widgets exist for exactly this).
   tag chips at the top do not filter in place — they open Browse with Scrawl
   and that tag already chosen
 - **Note** (`views/Workspace.tsx`): list flyout + detail pane; mobile shows one
-  pane at a time (`workspace--detail`); title field above the body
-  (it _is_ the body's leading `# heading`), then a meta line of created time and
-  tags, edited in place (`components/TagEditor.tsx`: chips, suggestions counted
-  from `browse_all`, a body `#tag` has no ×). **There is no edit mode** — the
-  Milkdown editor is open from the moment a note is; frontmatter `view` decides
-  the exception (`preview` = read-only, `mindmap` = map laid alongside, absent
-  = editable). Everything per-note lives in the **note panel**
+  pane at a time (`workspace--detail`); a note opens in the
+  **viewer** (`MarkdownPreview`, the title as a heading, a meta line of created
+  time and tags that only shows them, a body `#tag` outlined, then the records
+  pointing here). Enter, e, a double click or 書く in the strip over the page
+  open the **writing screen** (the Milkdown editor under a title field that _is_
+  the body's leading `# heading`); Esc or 完了 come back. The URL carries it
+  (`edit=1`), and what was just made opens there (`writeRoute`). A note chosen
+  from the list opens in the viewer. Frontmatter `view: mindmap` lays the map
+  alongside; `preview` stays in the file and now means nothing more than the
+  default. Everything per-note lives in the **note panel**
   (`components/NotePanel.tsx`, `styles/note-panel.css`): 320px at the right
-  edge — the view switches, 詳細 (created time editable, updated, surroundings),
+  edge — the view switches, the tags (`components/TagEditor.tsx`: chips,
+  suggestions counted from `browse_all`, a body `#tag` has no ×), 詳細 (created
+  time editable, updated, surroundings),
   revert / Codex にする (a corvu confirm, `PromoteDialog.tsx`) / delete. The `…`
-  beside the title and ⌘. are the only ways in, and the body gives up 320px
+  in the strip and ⌘. are the only ways in, and the body gives up 320px
   while it is open. Open is the app's state (`shell.notePanelPinned`), not the
   note's. Esc peels one layer: tag input → confirm → history; the settings tab
-  stays. On a phone the meta line opens it as its own screen
+  stays. On a phone it opens as its own screen
 - **Codex** (`views/Workspace.tsx` with `kind="codex"`, route `/codex`): the
   same view over `data/codex/`. Three things tell it from a Note: the list row
   carries a folded-corner page with the version count (frame darkens when the
@@ -95,7 +100,7 @@ ready to record the moment it opens (widgets exist for exactly this).
   (`historyOpen`). 版を刻む is in the panel and the bar (commits **at once**,
   no message — the toast summarises and offers undo, which deletes the file
   just written).
-  Opening the history never replaces the body: it becomes read-only and each
+  Opening the history never replaces the body: it stays read and each
   changed block gets a `+`/`−` and a 10% tint in the gutter
   (`lib/diff-marks.ts` → `lib/line-marks-markdown.ts`; deleted lines are struck
   through where they used to be). On a phone the history is the panel
