@@ -2373,6 +2373,27 @@ describe("Workspace › タグ", () => {
     await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText("タグを追加")));
   });
 
+  // The toast outlives the selection, so the undo has to find its own note again
+  it("undoes a removed tag on its own note, in its old place, after moving away", async () => {
+    disk.set(FILE_B, BODY_B);
+    meta.set(FILE_A, { tags: ["work", "idea"] });
+    meta.set(FILE_B, { tags: ["shop"] });
+    await openNoteA();
+    await startTagEditing();
+
+    fireEvent.click(screen.getByRole("button", { name: "タグ work を外す" }));
+
+    await waitFor(() => expect(meta.get(FILE_A)?.tags).toStrictEqual(["idea"]));
+    expect(shell?.toast()?.message).toContain("work");
+
+    fireEvent.click(await rowOf(TITLE_B));
+    await waitFor(() => expect(titleInput().value).toBe(TITLE_B));
+    shell?.toast()?.undo?.();
+
+    await waitFor(() => expect(meta.get(FILE_A)?.tags).toStrictEqual(["work", "idea"]));
+    expect(meta.get(FILE_B)?.tags).toStrictEqual(["shop"]);
+  });
+
   // Esc peels one layer: the tag input first. The history behind it stays open
   it("folds only the tag input on the first Escape", async () => {
     kinds.set(FILE_A, "codex");

@@ -30,6 +30,8 @@ interface TagEditorProps {
   onEditingChange: (editing: boolean) => void;
   /** The frontmatter's new tags. */
   onChange: (tags: string[]) => void;
+  /** A tag just left through its ×, and the place it stood in the frontmatter's list. */
+  onRemoved: (tag: string, at: number) => void;
   /** The phone's panel screen: chips a finger can press, always removable. */
   screen?: boolean;
 }
@@ -84,7 +86,9 @@ export default function TagEditor(props: TagEditorProps): JSX.Element {
       // A pressed × goes with its chip. Focus has to move first: it would otherwise fall to the
       // page, and the editing with it
       input?.focus();
+      const at = own.findIndex((kept) => sameTag(kept, tag));
       props.onChange(own.filter((kept) => !sameTag(kept, tag)));
+      props.onRemoved(tag, at);
     }
   };
 
@@ -124,7 +128,7 @@ export default function TagEditor(props: TagEditorProps): JSX.Element {
     }
   };
 
-  const chip =(tag: string): JSX.Element => (
+  const chip = (tag: string): JSX.Element => (
     <span class="tag-editor-chip" title={isOwn(tag) ? undefined : t().tags.fromBody}>
       #{tag}
       <Show when={isOwn(tag)}>
