@@ -82,7 +82,7 @@ function NoVersions(props: { onCommit: () => void }): JSX.Element {
  * The tab row names it and the panel decides where it stands, so this holds only a
  * summary line, the draft and version rows, and the next move when there are none.
  *
- * It does not open on hover. Only the panel's history tab, ⌘⇧H and the bottom bar
+ * It does not open on hover. Only the panel's history tab, ⌘⇧H and the dot's details
  * reach it: 320px of comparison must not appear in passing beside a hand that is
  * writing the body.
  *

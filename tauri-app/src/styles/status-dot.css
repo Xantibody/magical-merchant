@@ -1,0 +1,169 @@
+/* ---------------- status dot ---------------- */
+
+/* The one place state lives: the window's lower right, outside the paper. The area itself
+   takes no pointer, or the hidden links' box would swallow presses meant for what is under
+   it; the dot and the links that are showing take it back */
+.status-dot-area {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 110;
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+}
+
+/* The padding, not a flex gap, parts them from the dot: a gap has no box, and the pointer
+   crossing it would leave the area and fold the links away */
+.status-dot-links {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 10px;
+  font-size: 12px;
+  color: var(--app-text-hint);
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateX(4px);
+  transition:
+    opacity 160ms var(--app-ease),
+    transform 160ms var(--app-ease);
+}
+
+.status-dot-area:hover .status-dot-links,
+.status-dot-area:focus-within .status-dot-links {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+.status-link {
+  padding: 2px 4px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--app-text-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.status-link:hover {
+  background: var(--app-surface-2);
+  color: var(--app-text);
+}
+
+/* A 20px target around an 8px mark */
+.status-dot {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.status-dot-mark {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--app-ok);
+  transition: background-color 250ms var(--app-ease);
+}
+
+.status-dot[data-tone="busy"] .status-dot-mark {
+  background-color: var(--app-text-faint);
+}
+
+.status-dot[data-tone="failed"] .status-dot-mark {
+  background-color: var(--app-danger);
+}
+
+/* In the band of a narrow window: a size a finger can press */
+.mobile-header-actions .status-dot {
+  width: 38px;
+  height: 38px;
+}
+
+/* ---------------- details ---------------- */
+
+.status-details {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: var(--size-2);
+  border-bottom: 1px solid var(--app-hairline);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* On a screen with neither a save nor a note, the sync details stand alone */
+.status-details:empty {
+  display: none;
+}
+
+/* The size is set here because the base style for a paragraph outranks the container's */
+.status-details-save,
+.status-details-line {
+  margin: 0;
+  font-size: 13px;
+}
+
+.status-details-line {
+  color: var(--app-text-muted);
+}
+
+/* The two actions and the states that are on read as one quiet list */
+.status-details-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 6px;
+  background: var(--app-surface-2);
+  color: var(--app-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.status-details-row:hover {
+  background: var(--app-hairline);
+}
+
+/* Where there is no hover, the links beside the dot live here. A wide window with a pointer
+   has them on hover and would only say it twice */
+.sync-popover-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--app-text-hint);
+}
+
+@media (min-width: 768px) and (hover: hover) {
+  .sync-popover-foot {
+    display: none;
+  }
+}
+
+@media (max-width: 767px) {
+  /* The corner has the bottom tabs and the capture dock; the dot is in the band */
+  .status-dot-area {
+    display: none;
+  }
+
+  /* Room for a finger */
+  .sync-popover-foot .status-link {
+    min-height: 44px;
+    padding: 0 8px;
+  }
+}

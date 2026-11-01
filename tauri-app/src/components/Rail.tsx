@@ -3,8 +3,6 @@ import type { JSX } from "solid-js";
 import { A, useLocation } from "@solidjs/router";
 import Icon from "./Icon";
 import { useShell } from "../lib/shell";
-import { syncIconName } from "../lib/sync";
-import type { SyncState } from "../lib/sync";
 import { t } from "../lib/i18n";
 import { shortcutLabel } from "../lib/shortcuts";
 import type { ShortcutName } from "../lib/shortcuts";
@@ -34,13 +32,13 @@ const MARKER_TOP: Partial<Record<RoutePath, number>> = {
  *
  * The header was folded away because a band running sideways took height from the
  * "full-screen memo area". Placed vertically, the body keeps its whole height, and
- * switching surfaces sits the same distance away as search, sync and settings. The
+ * switching surfaces sits the same distance away as search and settings. The
  * current place is said by the fill and by a 2px line sliding down the left edge.
  *
  * Browse is an action rather than a surface, so pressing it does not move the line (it is
  * not in `MARKER_TOP`).
  */
-export default function Rail(props: { sync: SyncState; onSearch: () => void }): JSX.Element {
+export default function Rail(props: { onSearch: () => void }): JSX.Element {
   const shell = useShell();
   const location = useLocation();
 
@@ -114,21 +112,9 @@ export default function Rail(props: { sync: SyncState; onSearch: () => void }): 
         <Icon name={MODE_ICONS[ROUTES.BROWSE]} size={16} />
       </A>
 
-      <button
-        type="button"
-        class="rail-button rail-button--plain rail-button--foot"
-        title={t().header.sync}
-        aria-label={t().header.sync}
-        aria-expanded={shell.popover() === "sync"}
-        data-hint-key={shortcutLabel("syncNow")}
-        onClick={(e) => shell.togglePopover("sync", e.currentTarget)}
-      >
-        <Icon name={syncIconName(props.sync.status())} size={17} />
-      </button>
-
       <A
         href={ROUTES.SETTINGS}
-        class="rail-button"
+        class="rail-button rail-button--foot"
         classList={{ "rail-button--active": isActive(ROUTES.SETTINGS) }}
         title={`${t().header.settings} ${shortcutLabel("settings")}`}
         aria-label={t().header.settings}

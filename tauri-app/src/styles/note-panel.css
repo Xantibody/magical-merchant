@@ -8,10 +8,12 @@
   top: 0;
   right: 0;
   bottom: 0;
-  /* Above the body, below the bottom bar (55) */
+  /* Above the body, below the status dot (110) */
   z-index: 50;
   box-sizing: border-box;
   width: 320px;
+  /* The status dot sits on this corner */
+  padding-bottom: 40px;
   display: flex;
   flex-direction: column;
   background: var(--app-sidebar);
