@@ -402,7 +402,7 @@ describe("読み直しでは直らない拒否", () => {
     expect(h.store.items.get(`note-backup:${NOTE.filename}`)).toBe("打った");
     expect(h.shown).toStrictEqual([]);
     expect(h.toasts).toStrictEqual([t().notes.brokenMeta]);
-    expect(h.statuses).toStrictEqual(["saving", "idle"]);
+    expect(h.statuses).toStrictEqual(["saving", "failed"]);
   });
 
   it("backs up and reports an unnamed failure without waiting for another keystroke", async () => {
@@ -413,6 +413,7 @@ describe("読み直しでは直らない拒否", () => {
 
     expect(h.store.items.get(`note-backup:${NOTE.filename}`)).toBe("打った");
     expect(h.toasts).toStrictEqual([t().notes.saveFailedKept(NOTE.title)]);
+    expect(h.statuses).toStrictEqual(["saving", "failed"]);
   });
 });
 

@@ -7,7 +7,6 @@ import { EVENTS } from "./events";
 import { t } from "./i18n";
 import { describeSyncError, describeSyncResult, syncErrorKind } from "./sync-status";
 import type { SyncResultPayload } from "./sync-status";
-import type { IconName } from "../components/Icon";
 
 export type SyncStatus = "idle" | "syncing" | "success" | "error" | "needs-setup" | "signed-out";
 
@@ -33,26 +32,16 @@ export interface SyncState {
   resume: () => void;
   /** The user is leaving the app. Syncs at once if something was saved since the last round. */
   leave: () => void;
-  /** The signal to open automatically on an error. It opens when this goes up. */
+  /** Goes up each time a round stops in a way the user has to hear about. */
   alertVersion: Accessor<number>;
 }
 
-export function syncIconName(status: SyncStatus): IconName {
-  switch (status) {
-    case "syncing": {
-      return "cloud-arrow-up";
-    }
-    case "error":
-    case "signed-out": {
-      return "cloud-warning";
-    }
-    case "needs-setup": {
-      return "cloud-slash";
-    }
-    default: {
-      return "cloud-check";
-    }
+/** What the toast says when a round stops. The reason itself stays in the dot's details. */
+export function syncAlertText(status: SyncStatus): string {
+  if (status === "signed-out") {
+    return t().sync.signedOut;
   }
+  return status === "needs-setup" ? t().sync.notConfigured : t().sync.failed;
 }
 
 /** "2 minutes ago". Seconds only flicker right after a sync, so they are not shown. */
@@ -86,8 +75,8 @@ export function createSyncState(onSynced: () => void): SyncState {
 
   /**
    * The login is gone: found out at launch, on a return, or from a round the server refused.
-   * The popover opens once per episode, on the way in. Every return on desktop is a focus
-   * change, and reopening on each would be nagging; the icon carries the warning in between.
+   * The alert fires once per episode, on the way in. Every return on desktop is a focus
+   * change, and repeating it on each would be nagging; the dot carries the warning in between.
    * A device with both switches off syncs by hand and meets the refusal there, so it is not told
    */
   const enterSignedOut = (text: string): void => {
@@ -157,7 +146,7 @@ export function createSyncState(onSynced: () => void): SyncState {
       return;
     }
 
-    // Do not open the popover for a result that only returns to idle
+    // No alert for a result that only returns to idle
     if (ui.status === "error" || ui.status === "needs-setup") {
       setAlertVersion((v) => v + 1);
     }

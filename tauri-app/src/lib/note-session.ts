@@ -40,8 +40,8 @@ import type { NoteContent, NoteView } from "./note-view";
 /** Delay before the autosave fires. Writes once the typing stops. */
 const SAVE_DEBOUNCE_MS = 1000;
 
-/** Save state shown in the meta line. */
-export type SaveStatus = "idle" | "saving" | "saved" | "savedAt";
+/** Where the last write of the open note stands. `failed` lasts until the next attempt. */
+export type SaveStatus = "idle" | "saving" | "saved" | "savedAt" | "failed";
 
 /** The counterpart of the mediation. Only the part of `NoteItem` in `items.ts` seen here. */
 export interface SaveTarget {
@@ -437,8 +437,9 @@ export function createNoteSession(deps: NoteSessionDeps): NoteSession {
           deps.onSaved();
         }
       } catch (error) {
+        // An outside edit is not a failure: the screen yields to it and nothing is wrong
         if (shown()) {
-          deps.setStatus("idle");
+          deps.setStatus(isStaleSave(error) ? "idle" : "failed");
         }
         if (isStaleSave(error)) {
           await yieldToOutsideEdit(pending, error);

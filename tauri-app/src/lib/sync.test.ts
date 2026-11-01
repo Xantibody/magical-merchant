@@ -4,7 +4,12 @@ import { mockIPC, mockWindows, clearMocks } from "@tauri-apps/api/mocks";
 import { t } from "./i18n";
 import { emit } from "@tauri-apps/api/event";
 import { EVENTS } from "./events";
-import { AUTO_SYNC_DEBOUNCE_MS, RESUME_SYNC_INTERVAL_MS, createSyncState } from "./sync";
+import {
+  AUTO_SYNC_DEBOUNCE_MS,
+  RESUME_SYNC_INTERVAL_MS,
+  createSyncState,
+  syncAlertText,
+} from "./sync";
 import { typedInvoke } from "./commands";
 
 // The reason mockIPC is used instead of vi.mock is written in commands.test.ts
@@ -15,6 +20,15 @@ interface TauriInternals {
   __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener: () => void };
 }
 const tauri = globalThis as unknown as TauriInternals;
+
+describe("syncAlertText", () => {
+  // The toast names what stopped; the reason stays one press away, on the dot
+  it("names each way a sync can stop", () => {
+    expect(syncAlertText("error")).toBe(t().sync.failed);
+    expect(syncAlertText("signed-out")).toBe(t().sync.signedOut);
+    expect(syncAlertText("needs-setup")).toBe(t().sync.notConfigured);
+  });
+});
 
 let handlers: Record<string, () => unknown>;
 let calls: string[];

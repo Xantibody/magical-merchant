@@ -50,8 +50,8 @@ open — what you see is already the thing you type into, so there is no button
 to find and no state to be in the wrong one of. Saving is automatic
 (debounced), and the first content-changing save of a session keeps the
 pre-edit body on the device, so 編集前に戻す (`⌘⇧R`) can undo an accidental
-edit — press it again to swap back. It sits in the note's panel, and at the
-right end of the status bar whenever there is something to go back to.
+edit — press it again to swap back. It sits in the note's panel, and in the
+status dot's details whenever there is something to go back to.
 
 Note-level settings and actions live in a **panel at the right edge**,
 because none of it is used often enough to sit in the way of writing. Rest
@@ -60,8 +60,9 @@ toggle beside the title, or `⌘.`, docks it so the body makes room. It holds
 the view switches (読み取り専用, マップ, and 記入例 for a note from a template),
 the note's details, and the rare actions: revert, Codex にする (behind a
 confirmation, since there is no way back), delete. While it is closed the
-**status bar** at the foot of the window says what the panel would: the save,
-and every state that is on — press one to open the panel on its switch. On a
+**status dot** at the window's lower right wears the save and the sync — green,
+grey, red — and pressing it says what the panel would: the save time, and every
+state that is on — press one to open the panel on its switch. On a
 phone the meta line under the title is the way in, and the panel is a screen
 of its own.
 
@@ -158,13 +159,13 @@ enter:
   history. It needs room to stand beside the body, so it is absent on phones,
   and below 1100px it stays collapsed and the history arrives as a horizontal
   card under the title that you drag or tap to send versions.
-- **The status bar** reads how far the draft has travelled — 版 4 から
+- **The meta line** reads how far the draft has travelled — 版 4 から
   +312 B ("+312 B since v4"), 版 4 when it matches the newest version, 版なし
   before the first — and the history tab opens on how often you commit:
   9 か月で 4 回刻んだ ("4 versions in 9 months").
 
 Nothing is committed for you, and committing asks nothing of you. 版を刻む —
-in the panel, and at the right end of the status bar whenever the draft has
+in the panel, and in the status dot's details whenever the draft has
 moved on (`⌘⇧K`) — flushes whatever save is still in flight and writes the
 version at once — no message prompt, because a version is named by its number
 and its day, and being asked for a sentence is what stops people committing at

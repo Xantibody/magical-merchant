@@ -65,6 +65,14 @@ const ja = {
   rail: {
     label: "面の切り替えと全体の操作",
   },
+  status: {
+    label: "保存と同期",
+    keys: "キー",
+    ok: "保存・同期済み",
+    busy: "保存・同期中…",
+    failed: "失敗しました",
+    saveFailed: "保存できませんでした",
+  },
   theme: {
     system: "システム",
     light: "ライト",
@@ -281,7 +289,7 @@ const ja = {
     restoreShort: "戻す",
     /** The foot of the panel while the history tab is open. */
     historyFoot: "版を押すと本文で比べる · Esc で閉じる",
-    /** What compare mode calls itself. The compare bar and the bottom bar show it. */
+    /** What compare mode calls itself. The compare bar and the dot's details show it. */
     comparing: (n: number) => `版 ${n} と比較中`,
     /** "3 lines added · 1 line removed". The lines moved between the chosen version and the draft. */
     lineDelta: (added: number, removed: number): string =>
@@ -670,6 +678,14 @@ const en: Messages = {
   },
   rail: {
     label: "Modes and global actions",
+  },
+  status: {
+    label: "Save and sync",
+    keys: "Keys",
+    ok: "Saved and synced",
+    busy: "Saving and syncing…",
+    failed: "Something failed",
+    saveFailed: "Could not save",
   },
   theme: {
     system: "System",

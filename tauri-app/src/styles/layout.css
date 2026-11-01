@@ -10,8 +10,8 @@
   overflow: hidden;
 }
 
-/* Right of the rail: the column where the body, the bottom bar and (on mobile) the header
-   and the bottom tabs stack vertically */
+/* Right of the rail: the column where the body and (on mobile) the header and the bottom
+   tabs stack vertically */
 .app-column {
   flex: 1;
   min-width: 0;
@@ -33,106 +33,6 @@
   overflow: auto;
   padding: var(--size-3);
   position: relative;
-}
-
-/* ---------------- bottom bar (desktop only) ---------------- */
-
-/* The status line: where the save landed, the Codex's version, comparing, the states that
-   are on, and at the right end the two actions worth offering now. It gives no current
-   location: the rail's line and the title are enough */
-.bottom-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  box-sizing: border-box;
-  height: 30px;
-  flex-shrink: 0;
-  padding: 0 16px 0 24px;
-  background: var(--app-surface);
-  border-top: 1px solid var(--app-hairline);
-  font-size: 12px;
-  color: var(--app-text-faint);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  /* The flyouts stop at its top edge so they do not overlap, but their shadows fall on it.
-     Above the note panel (50) so the panel's shadow sits under the line */
-  position: relative;
-  z-index: 55;
-}
-
-.bottom-bar-save {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  transition: color 250ms var(--app-ease);
-}
-
-.bottom-bar-sep {
-  color: var(--app-text-hint);
-}
-
-/* The save state is the line's first item; a separator in front of nothing is dropped */
-.bottom-bar > .bottom-bar-sep:first-child {
-  display: none;
-}
-
-/* A state that is on. Pressing it opens the panel on its switch */
-.bottom-bar-state {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin: 0 -4px;
-  padding: 2px 4px;
-  border: none;
-  border-radius: 4px;
-  background: none;
-  color: var(--app-text-muted);
-  font: inherit;
-  cursor: pointer;
-}
-
-.bottom-bar-state:hover {
-  background: var(--app-surface-2);
-}
-
-.bottom-bar-actions {
-  display: flex;
-  gap: 4px;
-  margin-left: auto;
-}
-
-.bottom-bar-action {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 22px;
-  padding: 0 8px;
-  border: none;
-  border-radius: var(--radius-2);
-  background: none;
-  color: var(--app-text-muted);
-  font: inherit;
-  cursor: pointer;
-}
-
-.bottom-bar-action:hover {
-  background: var(--app-surface-2);
-  color: var(--app-text);
-}
-
-/* Green for the 2 seconds right after a save. Left on, the edge of vision keeps glowing */
-.bottom-bar-save[data-status="saved"] {
-  color: var(--app-ok);
-}
-
-.bottom-bar-save .icon {
-  display: flex;
-  transition: transform 250ms var(--app-ease);
-}
-
-.bottom-bar-save[data-status="saved"] .icon {
-  transform: scale(1.25);
 }
 
 /* ---------------- mobile header ---------------- */
@@ -179,8 +79,8 @@
   z-index: 120;
 }
 
-/* Only one sync container hangs off the surface column. There are two entry points, the
-   rail (wide window) and the band (narrow window), but they open the same container. The
+/* Only one status container hangs off the surface column. There are two entry points, the
+   corner dot (wide window) and the band (narrow window), but they open the same container. The
    base rule that hangs from the bottom edge of the header (`top: 100%`) cannot be used
    here: this column is the full height of the window, so straight below it is off screen,
    cropped by `.app`'s overflow, and nothing would be visible */
@@ -190,13 +90,12 @@
 }
 
 @media (min-width: 768px) {
-  /* A wide window has no band, and the entry point is at the foot of the rail. It opens to
-     the right rather than straight below */
+  /* A wide window has no band. The entry point is the dot in the corner, and it opens
+     straight above it */
   .popover-anchor--sync {
     top: auto;
-    right: auto;
-    bottom: 8px;
-    left: 6px;
+    right: 12px;
+    bottom: 40px;
   }
 }
 
@@ -237,10 +136,5 @@
 
   .bottom-tabs {
     display: flex;
-  }
-
-  /* The meta line carries the save signal. A band above the bottom tabs would stack two rows */
-  .bottom-bar {
-    display: none;
   }
 }
