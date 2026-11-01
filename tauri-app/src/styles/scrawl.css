@@ -58,7 +58,7 @@
 
 .day-heading-date {
   font-size: 13px;
-  color: var(--app-text-faint);
+  color: var(--app-text-muted);
 }
 
 .day-heading-count {
@@ -67,7 +67,7 @@
   align-items: baseline;
   gap: 6px;
   font-size: 12px;
-  color: var(--app-text-hint);
+  color: var(--app-text-muted);
   font-variant-numeric: tabular-nums;
 }
 
@@ -96,7 +96,7 @@
 
 .entry-time {
   font-size: 13px;
-  color: var(--app-text-faint);
+  color: var(--app-text-muted);
   text-align: right;
   padding-top: 3px;
   font-variant-numeric: tabular-nums;
@@ -198,8 +198,8 @@
   align-items: center;
   gap: 8px;
   margin-top: 4px;
-  font-size: 11.5px;
-  color: var(--app-text-faint);
+  font-size: 12px;
+  color: var(--app-text-muted);
 }
 
 .entry-meta-part {
@@ -364,7 +364,7 @@
   /* Aligned to the centre of the text on the first line */
   margin-top: 5px;
   flex-shrink: 0;
-  color: var(--app-text-hint);
+  color: var(--app-text-faint);
 }
 
 .entry--selected .entry-select .icon {
@@ -386,9 +386,8 @@
   max-width: calc(100% - 48px);
   padding: 10px 10px 10px 16px;
   background: var(--app-surface);
-  border: 1px solid var(--app-border);
   border-radius: 14px;
-  box-shadow: 0 12px 32px -8px rgb(20 20 25 / 18%);
+  box-shadow: var(--shadow-pop);
   pointer-events: auto;
 }
 
@@ -449,13 +448,13 @@
 .scrawl-empty-title {
   margin: 0;
   font-size: 15px;
-  color: var(--app-text-faint);
+  color: var(--app-text-muted);
 }
 
 .scrawl-empty-hint {
   margin: 4px 0 0;
   font-size: 13px;
-  color: var(--app-text-hint);
+  color: var(--app-text-muted);
 }
 
 /* ---------------- input line ---------------- */
@@ -598,7 +597,7 @@
   }
 
   .entry-time {
-    font-size: 12.5px;
+    font-size: 13px;
   }
 
   .entry-body {
@@ -673,7 +672,7 @@
   /* It wraps on a narrow screen. The content is not worth trimming to fit one line */
   flex-wrap: wrap;
   gap: 8px;
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--app-text-muted);
 }
 
@@ -682,7 +681,7 @@
 }
 
 .digest-sep {
-  color: var(--app-text-hint);
+  color: var(--app-text-faint);
 }
 
 .digest-year-ago {
@@ -706,5 +705,5 @@
 .digest-close {
   margin-left: auto;
   padding: 2px;
-  color: var(--app-text-hint);
+  color: var(--app-text-faint);
 }

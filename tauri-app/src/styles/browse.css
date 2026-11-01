@@ -47,7 +47,7 @@
 
 .browse-group-label {
   padding: 8px 4px 2px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.08em;
   color: var(--app-text-faint);
@@ -65,7 +65,7 @@
   background: none;
   color: var(--app-text-muted);
   font-family: inherit;
-  font-size: 12.5px;
+  font-size: 13px;
   cursor: pointer;
   white-space: nowrap;
   transition:
@@ -88,7 +88,7 @@
    overtakes the name */
 .browse-chip-count {
   margin-left: auto;
-  color: var(--app-text-hint);
+  color: var(--app-text-muted);
   font-variant-numeric: tabular-nums;
 }
 
@@ -136,8 +136,8 @@
   align-items: baseline;
   gap: 8px;
   padding: 6px 12px 8px;
-  font-size: 12px;
-  color: var(--app-text-faint);
+  font-size: 13px;
+  color: var(--app-text-muted);
 }
 
 .browse-list-order {
@@ -168,17 +168,17 @@
   background: var(--app-accent-soft);
 }
 
-.browse-row .icon {
-  display: flex;
-  color: var(--app-text-faint);
+.browse-row .kind-dot {
+  justify-self: center;
 }
 
-.browse-row--active .icon {
-  color: var(--app-text-muted);
+.kind-dot--filled + .browse-row-title {
+  font-weight: 600;
 }
 
 .browse-row-title {
   font-size: 13.5px;
+  font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -189,15 +189,15 @@
 }
 
 .browse-row-date {
-  font-size: 11px;
-  color: var(--app-text-faint);
+  font-size: 12px;
+  color: var(--app-text-muted);
   font-variant-numeric: tabular-nums;
 }
 
 /* The second line is the first 40 characters of the body, aligned directly under the title */
 .browse-row-snippet {
   grid-column: 2;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--app-text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -209,7 +209,7 @@
   padding: 32px 12px;
   text-align: center;
   font-size: 13px;
-  color: var(--app-text-faint);
+  color: var(--app-text-muted);
 }
 
 /* ---------------- Right: the one selected record ---------------- */
@@ -228,8 +228,8 @@
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  font-size: 12px;
-  color: var(--app-text-faint);
+  font-size: 13px;
+  color: var(--app-text-muted);
 }
 
 .browse-preview-meta .icon {
@@ -273,7 +273,7 @@
 .browse-preview-empty {
   margin: 0;
   font-size: 14.5px;
-  color: var(--app-text-faint);
+  color: var(--app-text-muted);
 }
 
 .browse-preview-actions {
@@ -294,7 +294,7 @@
   background: var(--app-accent);
   color: var(--app-surface);
   font-family: inherit;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   transition: transform 120ms var(--app-ease);

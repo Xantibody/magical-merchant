@@ -288,9 +288,8 @@
   gap: 2px;
   padding: var(--size-1);
   background: var(--app-input-bg);
-  border: 1px solid var(--app-border);
   border-radius: var(--radius-2);
-  box-shadow: 0 8px 24px -12px rgb(20 20 25 / 25%);
+  box-shadow: var(--shadow-pop);
   color: var(--app-text-muted);
   cursor: default;
 }
@@ -310,7 +309,7 @@
   bottom: calc(var(--safe-bottom) + var(--size-3));
   margin: 0;
   font-size: var(--font-size-0);
-  color: var(--app-text-faint);
+  color: var(--app-text-muted);
   pointer-events: none;
 }
 
@@ -334,9 +333,8 @@
   gap: var(--size-1);
   padding: 2px var(--size-1);
   background: var(--app-input-bg);
-  border: 1px solid var(--app-border);
   border-radius: var(--radius-2);
-  box-shadow: 0 4px 12px -6px rgb(20 20 25 / 20%);
+  box-shadow: var(--shadow-pop);
   /* It sits inside pre, so it inherits mono and white-space: pre. A tool is not body text */
   font-family: var(--font-sans);
   line-height: 1;

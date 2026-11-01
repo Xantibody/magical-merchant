@@ -75,7 +75,7 @@
   background: none;
   color: var(--app-text-faint);
   font: inherit;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   transition: color 150ms var(--app-ease);
@@ -91,7 +91,7 @@
 }
 
 .note-panel-tab-count {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 400;
   color: var(--app-text-faint);
   font-variant-numeric: tabular-nums;
@@ -106,31 +106,13 @@
 .note-panel-settings {
   display: flex;
   flex-direction: column;
-  padding: 0 12px 16px;
+  /* Sections are told apart by this gap and their shape: chips, switches, a table */
+  gap: 28px;
+  padding: 8px 12px 0;
 }
 
-/* "View" and "Details". A heading as quiet as a list group label */
-.note-panel-section {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 8px 6px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  color: var(--app-text-faint);
-}
-
+/* An action row like the others, a step quieter: it opens something rather than doing it */
 .note-panel-disclosure {
-  margin-top: 18px;
-  border: none;
-  background: none;
-  font-family: inherit;
-  text-align: start;
-  cursor: pointer;
-}
-
-.note-panel-disclosure:hover {
   color: var(--app-text-muted);
 }
 
@@ -167,8 +149,8 @@
 }
 
 .note-panel-row-sub {
-  font-size: 11px;
-  color: var(--app-text-faint);
+  font-size: 13px;
+  color: var(--app-text-muted);
 }
 
 /* The checkbox is hidden; the switch on the right (.switch in base.css) shows the state */
@@ -184,32 +166,32 @@
 }
 
 .note-panel-key {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--app-text-faint);
 }
 
 .note-panel-hint {
   margin: 0;
   padding: 4px 8px 0;
-  font-size: 11px;
-  color: var(--app-text-hint);
+  font-size: 13px;
+  color: var(--app-text-muted);
 }
 
 .note-panel-details {
   display: grid;
   grid-template-columns: 48px 1fr;
   align-items: baseline;
-  gap: 6px 8px;
-  margin: 2px 0 0;
+  gap: 8px;
+  margin: 4px 0 0;
   padding: 0 8px;
-  font-size: 12.5px;
-  color: var(--app-text-muted);
+  font-size: 13px;
+  color: var(--app-text);
   font-variant-numeric: tabular-nums;
 }
 
 .note-panel-details dt {
-  font-size: 12px;
-  color: var(--app-text-faint);
+  font-size: 13px;
+  color: var(--app-text-muted);
 }
 
 .note-panel-details dd {
@@ -246,17 +228,16 @@
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  padding: 8px 12px;
-  border-top: 1px solid var(--app-hairline);
+  padding: 28px 12px 8px;
 }
 
 .note-panel-action:disabled {
-  color: var(--app-text-hint);
+  color: var(--app-text-faint);
   cursor: default;
 }
 
 .note-panel-action:disabled .icon {
-  color: var(--app-text-hint);
+  color: var(--app-text-faint);
 }
 
 .note-panel-action-hint {
@@ -272,19 +253,12 @@
   background: color-mix(in oklab, var(--app-danger) 8%, var(--app-surface));
 }
 
-.note-panel-divider {
-  height: 1px;
-  margin: 4px 0;
-  border: none;
-  background: var(--app-hairline);
-}
-
 .note-panel-foot {
   flex: 0 0 auto;
   padding: 9px 20px;
   border-top: 1px solid var(--app-hairline);
-  font-size: 11px;
-  color: var(--app-text-hint);
+  font-size: 13px;
+  color: var(--app-text-muted);
 }
 
 .note-panel-tags {
@@ -342,7 +316,7 @@
   }
 
   .note-panel--screen .note-panel-settings {
-    padding: 0 16px 16px;
+    padding: 8px 16px 0;
   }
 
   .note-panel--screen .note-panel-row {
@@ -353,11 +327,7 @@
   }
 
   .note-panel--screen .note-panel-actions {
-    padding: 8px 16px;
-  }
-
-  .note-panel--screen .note-panel-divider {
-    display: none;
+    padding: 28px 16px 8px;
   }
 }
 
@@ -382,10 +352,9 @@
   width: 380px;
   max-width: calc(100vw - 40px);
   padding: 22px 24px 20px;
-  border: 1px solid var(--app-border);
   border-radius: 14px;
   background: var(--app-surface);
-  box-shadow: 0 24px 56px -16px rgb(20 20 25 / 30%);
+  box-shadow: var(--shadow-pop);
   animation: mm-rise 160ms var(--app-ease);
 }
 
@@ -402,7 +371,7 @@
   margin: 10px 0 18px;
   font-size: 13px;
   line-height: 1.7;
-  color: var(--app-text-faint);
+  color: var(--app-text-muted);
 }
 
 /* Only the "cannot go back" part, a little darker */

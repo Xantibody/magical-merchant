@@ -21,8 +21,9 @@
   border: 1px dashed var(--app-border);
   border-radius: 999px;
   background: none;
-  color: var(--app-text-hint);
+  color: var(--app-text-muted);
   font: inherit;
+  font-size: 13px;
   cursor: pointer;
 }
 
@@ -94,8 +95,8 @@
   margin-top: 4px;
   padding: 6px 8px 2px;
   border-top: 1px solid var(--app-surface-2);
-  font-size: 11px;
-  color: var(--app-text-faint);
+  font-size: 13px;
+  color: var(--app-text-muted);
 }
 
 /* ---- Phone: chips a finger can press ---- */

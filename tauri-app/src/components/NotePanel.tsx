@@ -184,73 +184,79 @@ export default function NotePanel(props: NotePanelProps): JSX.Element {
     <div class="note-panel-settings">
       <Show when={props.tags}>
         {(render) => (
-          <>
-            <div class="note-panel-section">{t().common.tags}</div>
-            <div class="note-panel-tags">{render()()}</div>
-          </>
+          // The shape says what a section is (ADR 0013). The heading left the screen, not the
+          // screen reader: the groups keep the names it used to give
+          <div class="note-panel-tags" role="group" aria-label={t().common.tags}>
+            {render()()}
+          </div>
         )}
       </Show>
-      <div class="note-panel-section">{t().notes.view}</div>
-      <SwitchRow
-        icon="tree-structure"
-        size={iconSize()}
-        label={t().notes.map}
-        checked={props.mapOpen}
-        shortcut={props.screen ? undefined : "noteMap"}
-        onToggle={props.onToggleMap}
-      />
-      {/* Not shown for a note without examples. A switch that changes nothing when pressed
-          only tells the reader "it did not work" */}
-      <Show when={props.hasExamples}>
+      <div role="group" aria-label={t().notes.view}>
         <SwitchRow
-          icon="file-text"
+          icon="tree-structure"
           size={iconSize()}
-          label={t().notes.examples}
-          checked={props.examplesShown}
-          onToggle={props.onToggleExamples}
+          label={t().notes.map}
+          checked={props.mapOpen}
+          shortcut={props.screen ? undefined : "noteMap"}
+          onToggle={props.onToggleMap}
         />
-      </Show>
+        {/* Not shown for a note without examples. A switch that changes nothing when pressed
+            only tells the reader "it did not work" */}
+        <Show when={props.hasExamples}>
+          <SwitchRow
+            icon="file-text"
+            size={iconSize()}
+            label={t().notes.examples}
+            checked={props.examplesShown}
+            onToggle={props.onToggleExamples}
+          />
+        </Show>
+      </div>
 
-      <button
-        type="button"
-        class="note-panel-section note-panel-disclosure"
-        aria-expanded={props.detailsOpen}
-        onClick={() => props.onToggleDetails()}
-      >
-        <Icon name={props.detailsOpen ? "caret-down" : "caret-right"} size={10} />
-        {t().notes.details}
-      </button>
-      <Show when={props.detailsOpen}>
-        <Show
-          when={!props.metaError}
-          fallback={<p class="note-panel-hint">{t().meta.unreadable}</p>}
+      <div>
+        {/* AIDEV-NOTE: this word stays while the other headings went. It is the control that
+            opens the details, which are read only when asked for, not a label over them */}
+        <button
+          type="button"
+          class="note-panel-row note-panel-disclosure"
+          aria-expanded={props.detailsOpen}
+          onClick={() => props.onToggleDetails()}
         >
-          <Show when={props.meta}>
-            {(meta) => (
-              <dl class="note-panel-details">
-                <dt>{t().meta.created}</dt>
-                <dd>
-                  <CreatedField time={meta().time} onEdit={props.onEditTime} />
-                </dd>
-                {/* The updated time is the record of when it was rewritten. A record that can
-                    be moved by hand is no record, so it is read-only */}
-                <Show when={meta().updated}>
-                  {(updated) => (
-                    <>
-                      <dt>{t().meta.updated}</dt>
-                      <dd>{formatRecordedAt(updated())}</dd>
-                    </>
-                  )}
-                </Show>
-                <Show when={environment()}>
-                  <dt>{t().meta.environment}</dt>
-                  <dd>{environment()}</dd>
-                </Show>
-              </dl>
-            )}
+          <Icon name={props.detailsOpen ? "caret-down" : "caret-right"} size={10} />
+          {t().notes.details}
+        </button>
+        <Show when={props.detailsOpen}>
+          <Show
+            when={!props.metaError}
+            fallback={<p class="note-panel-hint">{t().meta.unreadable}</p>}
+          >
+            <Show when={props.meta}>
+              {(meta) => (
+                <dl class="note-panel-details">
+                  <dt>{t().meta.created}</dt>
+                  <dd>
+                    <CreatedField time={meta().time} onEdit={props.onEditTime} />
+                  </dd>
+                  {/* The updated time is the record of when it was rewritten. A record that can
+                      be moved by hand is no record, so it is read-only */}
+                  <Show when={meta().updated}>
+                    {(updated) => (
+                      <>
+                        <dt>{t().meta.updated}</dt>
+                        <dd>{formatRecordedAt(updated())}</dd>
+                      </>
+                    )}
+                  </Show>
+                  <Show when={environment()}>
+                    <dt>{t().meta.environment}</dt>
+                    <dd>{environment()}</dd>
+                  </Show>
+                </dl>
+              )}
+            </Show>
           </Show>
         </Show>
-      </Show>
+      </div>
     </div>
   );
 
@@ -302,7 +308,6 @@ export default function NotePanel(props: NotePanelProps): JSX.Element {
           </Show>
         </button>
       </Show>
-      <hr class="note-panel-divider" />
       <button
         type="button"
         class="note-panel-row note-panel-action note-panel-action--danger"

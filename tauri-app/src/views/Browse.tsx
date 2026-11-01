@@ -10,6 +10,7 @@ import {
 import type { JSX } from "solid-js";
 import { useNavigate, useSearchParams } from "@solidjs/router";
 import Icon from "../components/Icon";
+import KindDot from "../components/KindDot";
 import MarkdownPreview from "../components/MarkdownPreview";
 import { typedInvoke } from "../lib/commands";
 import type { HitKind, SearchHit } from "../lib/commands";
@@ -298,7 +299,7 @@ export default function Browse(): JSX.Element {
                 classList={{ "browse-row--active": twoPane() && selected() === hit }}
                 onClick={() => (twoPane() ? setSelectedId(hitId(hit)) : open(hit))}
               >
-                <Icon name={HIT_ICONS[hit.kind]} size={15} />
+                <KindDot kind={hit.kind} />
                 <span class="browse-row-title">{hit.title || t().notes.untitled}</span>
                 <span class="browse-row-date">{formatMonthDay(hit.date)}</span>
                 {/* An excerpt that only repeats the title is not shown. One line is enough for the row */}

@@ -16,6 +16,7 @@ import { useNavigate, useSearchParams } from "@solidjs/router";
 import type { Editor } from "@milkdown/kit/core";
 import HistoryPanel from "../components/HistoryPanel";
 import Icon from "../components/Icon";
+import KindDot from "../components/KindDot";
 import MarkdownPreview from "../components/MarkdownPreview";
 import NotePanel from "../components/NotePanel";
 import type { NotePanelTab } from "../components/NotePanel";
@@ -61,7 +62,7 @@ import { readBackup, writeBackup } from "../lib/edit-backup";
 import type { NoteLinkTarget } from "../lib/note-link-plugin";
 import type { NoteKind, NoteMeta, SearchHit, Template, VersionStatus } from "../lib/commands";
 import { noteRoute } from "../lib/note-route";
-import { HIT_ICONS, MODE_LABELS, ROUTES } from "../lib/routes";
+import { MODE_LABELS, ROUTES } from "../lib/routes";
 import "../styles/workspace.css";
 
 // Milkdown + ProseMirror is not needed until the detail opens. A screen that only shows the list
@@ -147,7 +148,7 @@ function Backlinks(props: { hits: SearchHit[]; onOpen: (hit: SearchHit) => void 
           <For each={props.hits}>
             {(hit) => (
               <button type="button" class="backlink-row" onClick={() => props.onOpen(hit)}>
-                <Icon name={HIT_ICONS[hit.kind]} size={14} />
+                <KindDot kind={hit.kind} />
                 <span class="backlink-title">{hit.title || hit.snippet}</span>
                 <span class="backlink-date">{formatMonthDay(hit.date)}</span>
               </button>

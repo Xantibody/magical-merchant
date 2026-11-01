@@ -9,6 +9,7 @@ import {
 } from "solid-js";
 import type { JSX } from "solid-js";
 import Icon from "./Icon";
+import KindDot from "./KindDot";
 import type { IconName } from "./Icon";
 import { hitId, rowSnippet } from "../lib/browse";
 import { typedInvoke } from "../lib/commands";
@@ -17,7 +18,7 @@ import { formatMonthDay } from "../lib/day-labels";
 import { createDebouncedAccessor } from "../lib/debounce";
 import { t } from "../lib/i18n";
 import { isImeComposing } from "../lib/ime";
-import { HIT_ICONS, HIT_ROUTES, MODE_LABELS } from "../lib/routes";
+import { HIT_ROUTES, MODE_LABELS } from "../lib/routes";
 import {
   hasCondition,
   SEARCH_CAP,
@@ -365,7 +366,7 @@ export default function SearchField(props: SearchFieldProps): JSX.Element {
                     data-hit={hitId(hit)}
                     onClick={() => runRow(row())}
                   >
-                    <Icon name={HIT_ICONS[hit.kind]} size={16} />
+                    <KindDot kind={hit.kind} />
                     <HitExcerpt hit={hit} word={searchWord()} />
                     <span class="palette-row-meta">{formatMonthDay(hit.date)}</span>
                     <Show when={active() === row()}>

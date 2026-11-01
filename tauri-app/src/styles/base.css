@@ -35,7 +35,8 @@
   --app-hairline: var(--gray-1);
   /* The list side's backing. This alone makes the step against the body side */
   --app-sidebar: color-mix(in oklab, var(--gray-0) 45%, white);
-  /* Text that accompanies rather than asks to be read: counts and hints */
+  /* Lines and marks only, never words: at 1.5:1 it cannot carry text. Prose that
+     accompanies is --app-text-muted, a label or an icon --app-text-faint (ADR 0013) */
   --app-text-hint: var(--gray-4);
   --app-accent: var(--gray-8);
   /* Backing for chips, the selected row and highlights. Only a trace of accent
@@ -50,6 +51,9 @@
   /* There is exactly one easing. Surface switches, panels and the sliding line
      all move with the same habit */
   --app-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  /* The one shadow. Whatever floats wears this and no border; whatever only sits on the
+     page wears neither */
+  --shadow-pop: 0 1px 2px rgb(20 20 25 / 6%), 0 12px 32px -8px rgb(20 20 25 / 18%);
 }
 
 :root[data-theme="dark"] {
@@ -70,6 +74,10 @@
   --app-undo: var(--blue-3);
   --app-toast-bg: var(--gray-7);
   --app-toast-text: var(--gray-0);
+  /* A dark shadow on a dark page shows nothing, and these boxes have no border to fall back
+     on. The ring is what draws the edge here */
+  --shadow-pop:
+    0 0 0 1px var(--app-border), 0 1px 2px rgb(0 0 0 / 30%), 0 12px 32px -8px rgb(0 0 0 / 60%);
 }
 
 /* The real size of the system bars. Scattering env() directly would leave tests
@@ -97,9 +105,8 @@ body {
   position: absolute;
   z-index: 120;
   background: var(--app-surface);
-  border: 1px solid var(--app-border);
   border-radius: 8px;
-  box-shadow: var(--shadow-3);
+  box-shadow: var(--shadow-pop);
 }
 
 /* How something floating enters. Only transform and opacity move */
@@ -175,11 +182,26 @@ body {
   background: var(--app-surface-2);
 }
 
+/* A record's kind in a row. The ring is a line, so it takes the line colour */
+.kind-dot {
+  flex-shrink: 0;
+  box-sizing: border-box;
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--app-text-hint);
+  border-radius: 50%;
+}
+
+.kind-dot--filled {
+  border-color: var(--app-text);
+  background: var(--app-text);
+}
+
 /* The key spelled out at the right edge of a row or a field. Distinct from the
    badge shown by holding the modifier (below); this one is always visible */
 .key-badge {
   margin-left: auto;
-  font-size: 11px;
+  font-size: 12px;
   border: 1px solid var(--app-border);
   border-radius: var(--radius-1);
   padding: 1px 5px;
@@ -210,7 +232,7 @@ html[data-hints] [data-hint-key]::after {
   border-radius: 4px;
   background: var(--app-toast-bg);
   color: var(--app-toast-text);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   line-height: 1.5;
   white-space: nowrap;
@@ -226,7 +248,7 @@ html[data-hints] [data-hint-key]::after {
   border-radius: 8px;
   background: var(--app-toast-bg);
   color: var(--app-toast-text);
-  font-size: 11.5px;
+  font-size: 12px;
   pointer-events: none;
 }
 
@@ -330,8 +352,7 @@ input:checked ~ .switch::after {
   padding: 28px 32px;
   border-radius: 14px;
   background: var(--app-surface);
-  border: 1px solid var(--app-border);
-  box-shadow: 0 24px 56px -16px rgb(20 20 25 / 30%);
+  box-shadow: var(--shadow-pop);
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -351,7 +372,7 @@ input:checked ~ .switch::after {
   margin: 0;
   font-size: 13.5px;
   line-height: 1.7;
-  color: var(--app-text-faint);
+  color: var(--app-text-muted);
 }
 
 .first-run-input {
@@ -363,7 +384,6 @@ input:checked ~ .switch::after {
   font-family: inherit;
   font-size: 14px;
   outline: none;
-  box-shadow: 0 1px 2px rgb(20 20 25 / 4%);
 }
 
 .first-run-input:focus {
@@ -372,7 +392,7 @@ input:checked ~ .switch::after {
 
 .first-run-error {
   margin: 0;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--app-danger);
 }
 

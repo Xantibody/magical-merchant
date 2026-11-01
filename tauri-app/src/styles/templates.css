@@ -19,7 +19,7 @@
 /* The small caps over every field. The name, the note's title and the body all
    look like a title; the label is what tells them apart */
 .templates-label {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.08em;
   color: var(--app-text-faint);
@@ -163,7 +163,7 @@
 
 .templates-rename-note {
   margin: 0;
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--app-text-muted);
 }
 
@@ -180,7 +180,7 @@
 
 .templates-rename-actions button {
   padding: 6px 14px;
-  font-size: 12.5px;
+  font-size: 13px;
 }
 
 /* ---------------- Picker menu / sheet ---------------- */
@@ -238,7 +238,7 @@
 
 .template-picker-section {
   padding: 8px 8px 4px;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.08em;
   color: var(--app-text-faint);
@@ -297,7 +297,7 @@
   align-items: center;
   gap: 4px;
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--app-text-muted);
 }
 
@@ -313,7 +313,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--app-text-faint);
 }
 
@@ -326,9 +326,9 @@
   margin: 0;
   padding: 10px 14px calc(14px + var(--safe-bottom));
   border-top: 1px solid var(--app-hairline);
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.6;
-  color: var(--app-text-faint);
+  color: var(--app-text-muted);
 }
 
 .templates-name-input {
@@ -362,7 +362,7 @@
 .templates-save:disabled {
   background: var(--app-surface-2);
   border-color: var(--app-border);
-  color: var(--app-text-hint);
+  color: var(--app-text-faint);
   cursor: default;
 }
 
@@ -420,7 +420,7 @@
 }
 
 .templates-tags-label {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.08em;
   color: var(--app-text-faint);
@@ -491,8 +491,8 @@
   max-width: calc(640px + 28px * 2);
   margin: 0 auto;
   padding: 0 28px;
-  font-size: 11.5px;
-  color: var(--app-text-faint);
+  font-size: 12px;
+  color: var(--app-text-muted);
 }
 
 /* Hangs under the insert button, at the body bar's right edge */
@@ -507,7 +507,7 @@
 .templates-vars-menu-head {
   margin: 0;
   padding: 4px 8px 6px;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.08em;
   color: var(--app-text-faint);
@@ -542,12 +542,12 @@
 
 .templates-vars-option-line code {
   font-family: ui-monospace, monospace;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--app-text-faint);
 }
 
 .templates-vars-option-hint {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--app-text-muted);
 }
 
@@ -606,7 +606,7 @@
 /* Drawn by the layer: the textarea's own placeholder would take its
    transparent text colour */
 .templates-body-placeholder {
-  color: var(--app-text-hint);
+  color: var(--app-text-faint);
 }
 
 /* A {{eg}} block: a prompt for the writer, never written into the note. Colour
@@ -680,7 +680,7 @@
 
 .templates-vars-head {
   margin: 0;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--app-text-muted);
 }
 
@@ -816,7 +816,7 @@
   margin-top: 12px;
   padding-top: 10px;
   border-top: 1px solid var(--app-hairline);
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--app-text-muted);
 }
 
@@ -845,7 +845,6 @@
   .templates-tab[aria-selected="true"] {
     background: var(--app-input-bg);
     color: var(--app-text);
-    box-shadow: 0 1px 2px rgb(20 20 25 / 12%);
   }
 
   /* One of the two at a time, full width */
@@ -933,7 +932,7 @@
   .template-picker-title {
     display: block;
     padding: 0 8px 6px;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 700;
     letter-spacing: 0.08em;
     color: var(--app-text-faint);
