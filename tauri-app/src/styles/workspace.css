@@ -3,7 +3,7 @@
   display: flex;
   min-height: 0;
   min-width: 0;
-  /* Positioning base for the flyout. Its left edge is the rail's right, its bottom the bottom bar's top */
+  /* Positioning base for the flyout. Its left edge is the rail's right, its bottom the window's */
   position: relative;
 }
 
@@ -436,7 +436,7 @@
 }
 
 /* The phone's state row: save, version, the states that are on, and the two actions
-   worth offering now. A wide window says all of it in the bottom bar */
+   worth offering now. A wide window says all of it in the dot's details */
 .detail-status-row {
   display: flex;
   align-items: center;

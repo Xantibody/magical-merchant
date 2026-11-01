@@ -7,7 +7,7 @@ import { createLeaveHandlers } from "./leave";
 import type { LeaveHandlers } from "./leave";
 import type { SaveStatus } from "./note-session";
 
-/** The save state shown in the bottom bar, and the time of the last successful save. */
+/** The save state the status dot wears, and the time of the last successful save. */
 interface SaveState {
   status: SaveStatus;
   /** A clock time such as "22:18". It means something only when `status` is `savedAt`. */
@@ -17,11 +17,11 @@ interface SaveState {
 const IDLE_SAVE: SaveState = { status: "idle", at: "" };
 
 /**
- * What the bottom bar says about the open note besides the save, and the two actions it
- * offers at its right end. The note lives in Workspace and the bar in AppLayout, so they meet
- * here the way the save state does. `null` while no note is open.
+ * What the status dot's details say about the open note besides the save, and the two actions
+ * they offer. The note lives in Workspace and the dot in AppLayout, so they meet here the way
+ * the save state does. `null` while no note is open.
  */
-export interface NoteBar {
+export interface NoteState {
   /** Codex only. "+312 B from version 4" and the like. */
   version?: string;
   /** While comparing with a version. "comparing with version 2 · 3 lines added". */
@@ -34,10 +34,15 @@ export interface NoteBar {
   canRevert: boolean;
   commit: () => void;
   revert: () => void;
-  /** Opens the panel pinned on its settings tab. A state in the bar leads to its switch. */
+  /** Opens the panel pinned on its settings tab. A state in the details leads to its switch. */
   openSettings: () => void;
   /** Opens the panel pinned on the history tab. */
   openHistory: () => void;
+}
+
+/** What the search field opens with. */
+interface SearchSeed {
+  tags?: string[];
 }
 
 /** Only one popover can be open at a time. */
@@ -69,6 +74,11 @@ export interface Shell {
   paletteScope: Accessor<PaletteScope | null>;
   openPalette: (scope?: PaletteScope) => void;
   closePalette: () => void;
+  /** Non-null while the search field is open. A new seed starts it over. */
+  searchSeed: Accessor<SearchSeed | null>;
+  /** Without a seed, a field already open keeps what is in it. */
+  openSearch: (seed?: SearchSeed) => void;
+  closeSearch: () => void;
   /**
    * Whether the pointer is on the rail or on the list flyout. The rail lives in AppLayout
    * and the list in Workspace, so the open/close signal meets here.
@@ -86,10 +96,10 @@ export interface Shell {
    */
   notePanelPinned: Accessor<boolean>;
   setNotePanelPinned: (pinned: boolean) => void;
-  noteBar: Accessor<NoteBar | null>;
-  setNoteBar: (bar: NoteBar | null) => void;
+  noteState: Accessor<NoteState | null>;
+  setNoteState: (bar: NoteState | null) => void;
   /**
-   * Where the save landed. `Workspace` writes it and the bottom bar (`AppLayout`) shows it,
+   * Where the save landed. `Workspace` writes it and the status dot (`AppLayout`) shows it,
    * so they meet here. Leaving the surface resets it to `idle`: carried over, a screen that
    * saved nothing would keep saying "saved at 22:18".
    */
@@ -132,10 +142,11 @@ export function ShellProvider(props: { children: JSX.Element }): JSX.Element {
   const [popoverTrigger, setPopoverTrigger] = createSignal<HTMLElement | undefined>();
   const [paletteOpen, setPaletteOpen] = createSignal(false);
   const [paletteScope, setPaletteScope] = createSignal<PaletteScope | null>(null);
+  const [searchSeed, setSearchSeed] = createSignal<SearchSeed | null>(null);
   const [listHover, setListHover] = createSignal(false);
   const [listPinned, setListPinned] = createSignal(false);
   const [notePanelPinned, setNotePanelPinned] = createSignal(false);
-  const [noteBar, setNoteBar] = createSignal<NoteBar | null>(null);
+  const [noteState, setNoteState] = createSignal<NoteState | null>(null);
   const [browseFilter, setBrowseFilter] = createSignal<BrowseFilter>(NO_FILTER);
   const [saveState, setSaveState] = createSignal<SaveState>(IDLE_SAVE);
   const [toast, setToast] = createSignal<Toast | null>(null);
@@ -164,9 +175,17 @@ export function ShellProvider(props: { children: JSX.Element }): JSX.Element {
     openPalette: (scope) => {
       setPopover(null);
       setPaletteScope(scope ?? null);
+      setSearchSeed(null);
       setPaletteOpen(true);
     },
     closePalette: () => setPaletteOpen(false),
+    searchSeed,
+    openSearch: (seed) => {
+      setPopover(null);
+      setPaletteOpen(false);
+      setSearchSeed((open) => seed ?? open ?? {});
+    },
+    closeSearch: () => setSearchSeed(null),
     listHover,
     setListHover,
     listPinned,
@@ -174,8 +193,8 @@ export function ShellProvider(props: { children: JSX.Element }): JSX.Element {
     listOpen: () => listPinned() || listHover(),
     notePanelPinned,
     setNotePanelPinned,
-    noteBar,
-    setNoteBar,
+    noteState,
+    setNoteState,
     saveState,
     setSaveState,
     browseFilter,

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, fireEvent, cleanup } from "@solidjs/testing-library";
+import { render, fireEvent, cleanup, screen } from "@solidjs/testing-library";
 import CaptureBar from "./CaptureBar";
 
 function renderCaptureBar() {
@@ -7,14 +7,26 @@ function renderCaptureBar() {
   const onPromote = vi.fn<(text: string) => Promise<void>>().mockResolvedValue();
   const onError = vi.fn<() => void>();
   const onTyping = vi.fn<(typing: boolean) => void>();
+  const onSearch = vi.fn<() => void>();
+  const onNewNote = vi.fn<() => void>();
+  const onJumpToDate = vi.fn<(trigger: HTMLElement) => void>();
   const { container } = render(() => (
-    <CaptureBar onSend={onSend} onPromote={onPromote} onError={onError} onTyping={onTyping} />
+    <CaptureBar
+      onSend={onSend}
+      onPromote={onPromote}
+      onError={onError}
+      onTyping={onTyping}
+      onSearch={onSearch}
+      onNewNote={onNewNote}
+      onJumpToDate={onJumpToDate}
+      knownTags={[{ tag: "sync", count: 2 }]}
+    />
   ));
   const textarea = container.querySelector<HTMLTextAreaElement>(".capture-input");
   if (!textarea) {
     throw new Error("capture-input not found");
   }
-  return { onSend, onPromote, onError, onTyping, textarea };
+  return { onSend, onPromote, onError, onTyping, onSearch, onNewNote, onJumpToDate, textarea };
 }
 
 describe("CaptureBar", () => {
@@ -138,6 +150,113 @@ describe("CaptureBar", () => {
     await Promise.resolve();
     expect(onSend).toHaveBeenLastCalledWith("送信中に追記した文章");
     expect(textarea.value).toBe("");
+  });
+
+  describe("the / menu", () => {
+    it.each(["/", "／"])("opens on %s at the head of the line", (slash) => {
+      const { textarea } = renderCaptureBar();
+
+      fireEvent.input(textarea, { target: { value: slash } });
+
+      expect(screen.getAllByRole("option").map((row) => row.textContent)).toStrictEqual([
+        "探す",
+        "Note を作る",
+        "日付へ",
+      ]);
+    });
+
+    it("narrows by what follows the slash", () => {
+      const { textarea } = renderCaptureBar();
+
+      fireEvent.input(textarea, { target: { value: "/日" } });
+
+      expect(screen.getAllByRole("option").map((row) => row.textContent)).toStrictEqual(["日付へ"]);
+    });
+
+    // A line may well begin with a path. It is a record unless a row was offered
+    it.each(["/usr/bin を調べた", "/tmp", "a/b"])("records %s as written", (line) => {
+      const { onSend, onSearch, textarea } = renderCaptureBar();
+      fireEvent.input(textarea, { target: { value: line } });
+
+      fireEvent.keyDown(textarea, { key: "Enter" });
+
+      expect(screen.queryByRole("option")).toBeNull();
+      expect(onSend).toHaveBeenCalledExactlyOnceWith(line);
+      expect(onSearch).not.toHaveBeenCalled();
+    });
+
+    it.each(["Enter", "Tab"])("picks the first row with %s, and the line empties", (key) => {
+      const { onSend, onSearch, textarea } = renderCaptureBar();
+      fireEvent.input(textarea, { target: { value: "/" } });
+
+      fireEvent.keyDown(textarea, { key });
+
+      expect(onSearch).toHaveBeenCalledTimes(1);
+      expect(onSend).not.toHaveBeenCalled();
+      expect(textarea.value).toBe("");
+      expect(localStorage.getItem("scrawl-draft")).toBeNull();
+    });
+
+    it("moves with the arrows", () => {
+      const { onNewNote, onJumpToDate, textarea } = renderCaptureBar();
+      fireEvent.input(textarea, { target: { value: "/" } });
+
+      fireEvent.keyDown(textarea, { key: "ArrowDown" });
+      fireEvent.keyDown(textarea, { key: "Enter" });
+      fireEvent.input(textarea, { target: { value: "/" } });
+      fireEvent.keyDown(textarea, { key: "ArrowDown" });
+      fireEvent.keyDown(textarea, { key: "ArrowDown" });
+      fireEvent.keyDown(textarea, { key: "ArrowUp" });
+      fireEvent.keyDown(textarea, { key: "ArrowDown" });
+      fireEvent.keyDown(textarea, { key: "Enter" });
+
+      expect(onNewNote).toHaveBeenCalledTimes(1);
+      expect(onJumpToDate).toHaveBeenCalledExactlyOnceWith(textarea);
+    });
+
+    it("picks with the mouse", () => {
+      const { onNewNote, textarea } = renderCaptureBar();
+      fireEvent.input(textarea, { target: { value: "/" } });
+
+      fireEvent.mouseDown(screen.getByRole("option", { name: "Note を作る" }));
+
+      expect(onNewNote).toHaveBeenCalledTimes(1);
+    });
+
+    it("folds on Esc and leaves the text to record", () => {
+      const { onSend, textarea } = renderCaptureBar();
+      fireEvent.input(textarea, { target: { value: "/" } });
+
+      fireEvent.keyDown(textarea, { key: "Escape" });
+      expect(screen.queryByRole("option")).toBeNull();
+
+      fireEvent.keyDown(textarea, { key: "Enter" });
+      expect(onSend).toHaveBeenCalledExactlyOnceWith("/");
+    });
+
+    // Arrows and Enter during a conversion choose its candidates (#102)
+    it.each([{ isComposing: true }, { keyCode: 229 }])("leaves the keys to the IME: %o", (ime) => {
+      const { onSearch, textarea } = renderCaptureBar();
+      fireEvent.input(textarea, { target: { value: "／" } });
+
+      fireEvent.keyDown(textarea, { key: "ArrowDown", ...ime });
+      fireEvent.keyDown(textarea, { key: "Enter", ...ime });
+      fireEvent.keyDown(textarea, { key: "Tab", ...ime });
+
+      expect(onSearch).not.toHaveBeenCalled();
+      expect(screen.getByRole("option", { name: "探す" }).getAttribute("aria-selected")).toBe(
+        "true",
+      );
+    });
+
+    it("picks a tag with Tab too", () => {
+      const { textarea } = renderCaptureBar();
+      fireEvent.input(textarea, { target: { value: "#sy" } });
+
+      fireEvent.keyDown(textarea, { key: "Tab" });
+
+      expect(textarea.value).toBe("#sync ");
+    });
   });
 
   // In the WKWebView on macOS, the Enter that commits a Japanese IME conversion also

@@ -37,8 +37,8 @@ ready to record the moment it opens (widgets exist for exactly this).
 ## UI Architecture (current)
 
 - **Rail** (`components/Rail.tsx`, desktop only): a 48px column down the left
-  edge — Scrawl / Note / Codex, a divider, then 検索 (⌘K) · 絞る (⌘F) ·
-  (pushed to the foot) 同期 · 設定 (⌘,). It carries no words; the names are in
+  edge — Scrawl / Note / Codex, a divider, then 探す (⌘K) · 絞る (⌘F) ·
+  (pushed to the foot) 設定 (⌘,). It carries no words; the names are in
   `title` and for the screen reader. Where you are is said twice: the button is
   filled (`--app-accent-soft`) and a 2×20px line slides down the left edge
   (`--app-ease`, 220ms) between the three surfaces. 絞る and 設定 are not
@@ -47,22 +47,27 @@ ready to record the moment it opens (widgets exist for exactly this).
   on desktop): 280px that floats **over** the body while the pointer is on the
   rail or on itself — the body column does not move when it opens. A pin, and
   ⌘\, keep it out. Below 768px it is the full page it always was
-- **Bottom bar** (30px, desktop only, `layouts/AppLayout.tsx`): the status line —
-  where the save landed, a Codex's version (版 3 から +312 B), 比較中, and every
-  view state that is **on** (マップ / 記入例; pressing one docks
-  the note panel on its switch). At its right end 版を刻む (draft moved on) and
-  編集前に戻す (a backup exists), only when they would do something. Workspace
-  hands it over through the shell (`noteBar`), like the save state. No current
-  location. A phone gets no bar (it would stack with the tabs); there a status
-  row under the meta line carries the same, as pills
-- **Mobile**: a 48px header (back · title · Scrawl's calendar · search · sync)
+- **Status dot** (`components/StatusDot.tsx`, `styles/status-dot.css`): state lives
+  in one 8px dot fixed to the window's lower right, outside the paper — green
+  (saved, synced), grey (saving or syncing), red (a failed save or sync, a lost
+  login). A device never set up stays green. Hover shows Settings · キー to its
+  left; pressing it opens the details (`SyncPopover` + `StatusDetails`): the save
+  time, and for the open note the version, 比較中, every view state that is **on**
+  (pressing one docks the note panel on its switch), 版を刻む and 編集前に戻す
+  when they would do something, then the sync. Workspace hands the note's part
+  over through the shell (`noteState`), like the save state. Only a failure
+  interrupts, with a toast (`syncAlertText`); the popover no longer opens itself.
+  On a phone the dot is in the header (the corner has the tabs and the capture
+  dock) and a status row under the title keeps the save and the states, as pills.
+  Without hover, Settings · キー are at the foot of the details
+- **Mobile**: a 48px header (back · title · Scrawl's calendar · search · the status dot)
   and four bottom tabs — Scrawl / Note / Codex / Settings
 - **Shortcuts**: one table in `lib/shortcuts.ts` feeds the key handling, the
   palette's command rows and the `data-hint-key` badges. Holding ⌘ (Ctrl) for
   300ms floats those badges (`lib/hints.ts`); `?` opens the palette as the
   list. A badge goes on every **visible** control whose key works right now —
-  the rail's seven, 新規 and the list's pin, the note panel's `…` and its
-  履歴 tab, the bottom bar's two actions. Keys that only exist inside the note
+  the rail's six, the status dot, 新規 and the list's pin, the note panel's `…` and its
+  履歴 tab, the status details' two actions. Keys that only exist inside the note
   panel are spelled on the row instead. The attribute is
   `data-hint-key`, not `data-key`, because Kobalte writes `data-key` on the
   rows of its own collections
@@ -70,8 +75,9 @@ ready to record the moment it opens (widgets exist for exactly this).
   an input line at the top of today; in-place entry editing; select-mode bulk delete. Notes
   and Codexes sit among the entries (`lib/scrawl-days.ts`) as a filled dot and a
   bold title, unless the chip under their origin entry already leads to them. The
-  tag chips at the top do not filter in place — they open Browse with Scrawl
-  and that tag already chosen
+  tag chips at the top do not filter in place — they open the search field
+  with that tag. The input line's `/` menu (探す · Note を作る · 日付へ) is the
+  line's way to search; it answers to row names only, so `/tmp` stays a record
 - **Note** (`views/Workspace.tsx`): list flyout + detail pane; mobile shows one
   pane at a time (`workspace--detail`); a note opens in the
   **viewer** (`MarkdownPreview`, the title as a heading, a meta line of created
@@ -96,11 +102,11 @@ ready to record the moment it opens (widgets exist for exactly this).
 - **Codex** (`views/Workspace.tsx` with `kind="codex"`, route `/codex`): the
   same view over `data/codex/`. Three things tell it from a Note: the list row
   carries a folded-corner page with the version count (frame darkens when the
-  draft has moved on); the bottom bar reads "版 4 から +312 B"; and the note
+  draft has moved on); the viewer's meta line reads "版 4 から +312 B"; and the note
   panel gets a second tab, **履歴** (`components/HistoryPanel.tsx` is its body,
   topped by "9 か月で 4 回刻んだ"). The tab and ⌘⇧H open it; the panel always
   opens on the first tab. The history tab _is_ compare mode
-  (`historyOpen`). 版を刻む is in the panel and the bar (commits **at once**,
+  (`historyOpen`). 版を刻む is in the panel and the status details (commits **at once**,
   no message — the toast summarises and offers undo, which deletes the file
   just written).
   Opening the history never replaces the body: it stays read and each
@@ -113,10 +119,18 @@ ready to record the moment it opens (widgets exist for exactly this).
 - **Browse** (`views/Browse.tsx`, `lib/browse.ts`, ⌘F): kind / tag / period
   chips with counts (240px) → the matching records, newest first → the one
   selected, in full. **It has no text search** — typing to find something is
-  ⌘K's job. It reads every record once through core `browse_all` and counts the
+  the search field's job. It reads every record once through core `browse_all` and counts the
   facets in TS, because a facet's count is taken over the _other_ axes
   (#279). A phone drops the preview column
-- **Command palette** (⌘K): in-memory commands + debounced `search_all`
+- **Search field** (`components/SearchField.tsx`, `lib/search-condition.ts`, ⌘K,
+  `/ 探す`, typing on Scrawl and Browse): hidden until called, floats over the route
+  inside `app-main` so an open note stays mounted, Esc gives the keys back. Any
+  condition lists on its own through core `search_records`, whose kind and period
+  run before the 100 cap. Tags are AND here, OR in Browse (ADR 0015). The only
+  thing a result does is open. Commands answer a bare word, above the records;
+  Enter stays on the first record
+- **Command palette** (`?`): the key list, with in-memory commands + debounced
+  `search_all`
 - **Popovers close themselves** (`components/Popover.tsx`, corvu `Dialog` with
   `modal={false}`). There is no central outside-click handler in `AppLayout`
 - **Motion**: transform and opacity, 120–350ms, one easing (`--app-ease`), and

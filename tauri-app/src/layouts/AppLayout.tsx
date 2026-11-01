@@ -1,4 +1,4 @@
-import { createEffect, createMemo, onCleanup, onMount, For, Show } from "solid-js";
+import { createEffect, createMemo, onCleanup, onMount, untrack, For, Show } from "solid-js";
 import type { JSX } from "solid-js";
 import { useLocation, useNavigate, A } from "@solidjs/router";
 import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
@@ -9,13 +9,14 @@ import type { IconName } from "../components/Icon";
 import CommandPalette from "../components/CommandPalette";
 import Popover from "../components/Popover";
 import Rail from "../components/Rail";
+import SearchField from "../components/SearchField";
+import StatusDot, { StatusDetails, StatusDotButton, StatusLinks } from "../components/StatusDot";
 import SyncPopover from "../components/SyncPopover";
 import UndoToast from "../components/UndoToast";
 import FirstRunCard from "../components/FirstRunCard";
 import { ShellProvider, useShell } from "../lib/shell";
-import type { NoteBar } from "../lib/shell";
 import { watchLeave } from "../lib/leave";
-import { createSyncState, syncIconName } from "../lib/sync";
+import { createSyncState, syncAlertText } from "../lib/sync";
 import { applyTheme, theme } from "../lib/theme";
 import { locale, t } from "../lib/i18n";
 import { createHints } from "../lib/hints";
@@ -25,12 +26,14 @@ import {
   modifierLabel,
   shortcutLabel,
   SHORTCUT_LIST_KEY,
+  startsTypedSearch,
 } from "../lib/shortcuts";
 import type { ShortcutName } from "../lib/shortcuts";
 import { MODE_ICONS, MODE_LABELS, ROUTES } from "../lib/routes";
 import type { RoutePath } from "../lib/routes";
 import { noteRoute, writeRoute } from "../lib/note-route";
 import { typedInvoke } from "../lib/commands";
+import type { SearchHit } from "../lib/commands";
 import { paletteScopeAt } from "../lib/search-scope";
 import { firstWidgetAction } from "../lib/widget-actions";
 import type { WidgetAction } from "../lib/widget-actions";
@@ -45,82 +48,6 @@ function onSchemeChange(): void {
   if (theme() === "system") {
     applyTheme("system");
   }
-}
-
-/** A state that is on. Pressing it opens the panel where its switch is. */
-function StateChip(props: { icon: IconName; label: string; onOpen: () => void }): JSX.Element {
-  return (
-    <>
-      <span class="bottom-bar-sep" aria-hidden="true">
-        ·
-      </span>
-      <button type="button" class="bottom-bar-state" onClick={() => props.onOpen()}>
-        <Icon name={props.icon} size={12} />
-        {props.label}
-      </button>
-    </>
-  );
-}
-
-/**
- * The open note's part of the bottom bar: the version, comparing, the states that are on,
- * and at the right end the two actions worth offering right now. Only states that are on
- * appear, so a plain note adds nothing to the line.
- */
-function NoteStatus(props: { bar: NoteBar }): JSX.Element {
-  return (
-    <>
-      <Show when={props.bar.version}>
-        {(version) => (
-          <>
-            <span class="bottom-bar-sep" aria-hidden="true">
-              ·
-            </span>
-            <span class="bottom-bar-version">{version()}</span>
-          </>
-        )}
-      </Show>
-      <Show when={props.bar.comparing}>
-        {(comparing) => (
-          <StateChip
-            icon="clock-counter-clockwise"
-            label={comparing()}
-            onOpen={props.bar.openHistory}
-          />
-        )}
-      </Show>
-      <Show when={props.bar.map}>
-        <StateChip icon="tree-structure" label={t().notes.map} onOpen={props.bar.openSettings} />
-      </Show>
-      <Show when={props.bar.examples}>
-        <StateChip icon="file-text" label={t().notes.examples} onOpen={props.bar.openSettings} />
-      </Show>
-      <span class="bottom-bar-actions">
-        <Show when={props.bar.canCommit}>
-          <button
-            type="button"
-            class="bottom-bar-action"
-            data-hint-key={shortcutLabel("codexCommit")}
-            onClick={() => props.bar.commit()}
-          >
-            <Icon name="book-bookmark" size={13} />
-            {t().codex.commit}
-          </button>
-        </Show>
-        <Show when={props.bar.canRevert}>
-          <button
-            type="button"
-            class="bottom-bar-action"
-            data-hint-key={shortcutLabel("noteRevert")}
-            onClick={() => props.bar.revert()}
-          >
-            <Icon name="arrow-counter-clockwise" size={13} />
-            {t().notes.revert}
-          </button>
-        </Show>
-      </span>
-    </>
-  );
 }
 
 /** An action callable from both a key and the palette. */
@@ -156,10 +83,11 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
   media.addEventListener("change", onSchemeChange);
   onCleanup(() => media.removeEventListener("change", onSchemeChange));
 
-  // An error is not swallowed silently; the sync popover opens to report it
+  // A failure is the one thing that interrupts (ADR 0011). A toast passes on its own where the
+  // popover stood over the page; the dot stays red. Status is untracked: only an alert speaks
   createEffect(() => {
     if (sync.alertVersion() > 0) {
-      shell.togglePopover("sync");
+      shell.showToast(syncAlertText(untrack(sync.status)));
     }
   });
 
@@ -169,10 +97,36 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
 
   /**
    * If tags are chosen on the Browse screen, search within them. To search everything,
-   * removing the chip in the palette is enough; the reverse (recalling the filter later) is hard
+   * removing the chip is enough; the reverse (recalling the filter later) is hard
    */
   const openSearch = (): void => {
+    const open = shell.searchSeed() !== null;
+    shell.openSearch(
+      open ? undefined : paletteScopeAt(location.pathname, shell.browseFilter().tags),
+    );
+    // Already open with the keys elsewhere: nothing mounts, so nothing would take them back
+    document.querySelector<HTMLInputElement>(".search-input")?.focus();
+  };
+
+  /** The list of shortcuts. It is the palette's command section, and the palette keeps its home. */
+  const openShortcutList = (): void => {
     shell.openPalette(paletteScopeAt(location.pathname, shell.browseFilter().tags));
+  };
+
+  /**
+   * Scrawl and Browse have no keys of their own. A note's viewer does (e and Enter write), and
+   * the window listeners there run in no useful order, so typing does not start a search on it.
+   */
+  const typingSearches = (): boolean => isActive(ROUTES.SCRAWL) || isActive(ROUTES.BROWSE);
+
+  /** Switching the mode alone would mean "found it, now find it again". */
+  const openHit = (hit: SearchHit): void => {
+    // The URL points at that one note, or at that day for Scrawl
+    if (hit.kind !== "scrawl" && hit.filename) {
+      navigate(noteRoute(hit.kind, hit.filename));
+    } else {
+      navigate(`${ROUTES.SCRAWL}?day=${hit.date}`);
+    }
   };
 
   // The glyph registry is read once at startup and again on every signal that
@@ -182,6 +136,12 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
     shell.dataVersion();
     void loadGlyphs();
   });
+
+  const openStatus = (trigger: HTMLElement): void => shell.togglePopover("sync", trigger);
+  const closeAnd = (run: () => void) => (): void => {
+    shell.closePopovers();
+    run();
+  };
 
   const newNote = (): void => {
     shell.closePalette();
@@ -206,7 +166,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
    * rail's badge would say "Cmd+N" while the key does nothing.
    * This is also the shortcut list itself that `?` opens
    */
-  const commands = createMemo<ShellCommand[]>(() => [
+  const shellCommands = createMemo<ShellCommand[]>(() => [
     {
       id: "new-note",
       label: t().palette.newNote,
@@ -260,6 +220,17 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
       run: go(ROUTES.SETTINGS),
     },
   ]);
+
+  /** The same rows for the palette and the search field, with the key spelled out. */
+  const commandRows = createMemo(() =>
+    shellCommands().map((command) => ({
+      id: command.id,
+      label: command.label,
+      icon: command.icon,
+      shortcut: shortcutLabel(command.shortcut),
+      run: command.run,
+    })),
+  );
 
   /**
    * A widget's template button. If today's note from the same template already
@@ -345,7 +316,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
         shell.toggleListPin();
         return;
       }
-      for (const command of commands()) {
+      for (const command of shellCommands()) {
         if (matchesShortcut(e, command.shortcut)) {
           e.preventDefault();
           command.run();
@@ -356,7 +327,17 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
       // The key has no modifier, so while typing it passes through as a character
       if (e.key === SHORTCUT_LIST_KEY && !shell.paletteOpen() && !isTypingTarget(e.target)) {
         e.preventDefault();
-        openSearch();
+        openShortcutList();
+        return;
+      }
+      if (
+        typingSearches() &&
+        startsTypedSearch(e) &&
+        !shell.paletteOpen() &&
+        !shell.searchSeed() &&
+        !shell.popover()
+      ) {
+        shell.openSearch();
         return;
       }
       if (e.key === "Escape") {
@@ -423,7 +404,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
 
   return (
     <div class="app">
-      <Rail sync={sync} onSearch={openSearch} />
+      <Rail onSearch={openSearch} />
 
       <div class="app-column">
         {/* A narrow screen has no width for the rail. The title and a few entries make a strip */}
@@ -455,40 +436,33 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
             >
               <Icon name="magnifying-glass" size={18} />
             </button>
-            <button
-              type="button"
-              class="icon-button"
-              title={t().header.sync}
-              aria-label={t().header.sync}
-              aria-expanded={shell.popover() === "sync"}
-              onClick={(e) => shell.togglePopover("sync", e.currentTarget)}
-            >
-              <Icon name={syncIconName(sync.status())} size={18} />
-            </button>
+            <StatusDotButton sync={sync.status()} onOpen={openStatus} />
           </div>
         </header>
 
-        <main class="app-main">{props.children}</main>
-
-        {/* The status line: where the save landed and what state the open note is in,
-            so a closed panel hides nothing. No current location: the rail's line and
-            the title are enough. Not shown on a narrow screen (CSS), where it would
-            stack with the bottom tabs; there the note's status row carries it */}
-        <div class="bottom-bar">
-          <Show when={shell.saveState().status !== "idle"}>
-            <span class="bottom-bar-save" data-status={shell.saveState().status}>
-              <Show when={shell.saveState().status !== "saving"}>
-                <Icon name="check" size={13} />
-              </Show>
-              {shell.saveState().status === "saving" ? t().common.saving : null}
-              {shell.saveState().status === "saved" ? t().common.saved : null}
-              {shell.saveState().status === "savedAt"
-                ? t().notes.savedAt(shell.saveState().at)
-                : null}
-            </span>
+        <main class="app-main">
+          {props.children}
+          <Show when={shell.searchSeed()} keyed>
+            {(seed) => (
+              <SearchField
+                seed={seed}
+                commands={commandRows()}
+                onOpen={(hit) => {
+                  shell.closeSearch();
+                  openHit(hit);
+                }}
+                onClose={() => shell.closeSearch()}
+              />
+            )}
           </Show>
-          <Show when={shell.noteBar()}>{(bar) => <NoteStatus bar={bar()} />}</Show>
-        </div>
+        </main>
+
+        <StatusDot
+          sync={sync.status()}
+          onOpen={openStatus}
+          onSettings={go(ROUTES.SETTINGS)}
+          onKeys={openShortcutList}
+        />
 
         <nav class="bottom-tabs">
           <For each={BOTTOM_TABS}>
@@ -505,8 +479,8 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
           </For>
         </nav>
 
-        {/* The sync entry is on both the rail (wide window) and the strip (narrow
-            window), but one container opens. CSS decides which one it hangs under */}
+        {/* The dot is at the window's corner (wide) or in the strip (narrow), but one
+            container opens. CSS decides which one it hangs from */}
         <Popover
           open={shell.popover() === "sync"}
           onClose={() => shell.closePopovers()}
@@ -514,7 +488,15 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
           label={t().header.sync}
           class="popover-anchor popover-anchor--sync"
         >
-          <SyncPopover sync={sync} onClose={() => shell.closePopovers()} />
+          <SyncPopover
+            sync={sync}
+            onClose={() => shell.closePopovers()}
+            foot={
+              <StatusLinks onSettings={closeAnd(go(ROUTES.SETTINGS))} onKeys={openShortcutList} />
+            }
+          >
+            <StatusDetails onClose={() => shell.closePopovers()} />
+          </SyncPopover>
         </Popover>
       </div>
 
@@ -535,22 +517,10 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
       <Show when={shell.paletteOpen()}>
         <CommandPalette
           scopeTags={shell.paletteScope()?.tags ?? []}
-          commands={commands().map((command) => ({
-            id: command.id,
-            label: command.label,
-            icon: command.icon,
-            shortcut: shortcutLabel(command.shortcut),
-            run: command.run,
-          }))}
+          commands={commandRows()}
           onSelectHit={(hit) => {
             shell.closePalette();
-            // Switching the mode alone would mean "found it, now find it again".
-            // The URL points at that one note, or at that day for Scrawl
-            if (hit.kind !== "scrawl" && hit.filename) {
-              navigate(noteRoute(hit.kind, hit.filename));
-            } else {
-              navigate(`${ROUTES.SCRAWL}?day=${hit.date}`);
-            }
+            openHit(hit);
           }}
           onClose={() => shell.closePalette()}
         />

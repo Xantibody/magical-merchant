@@ -1,7 +1,7 @@
 /* ---- History: the body of the right panel's history tab ----
    The panel (note-panel.css) decides where it stands and names it with its tab row, so
    this holds only the summary line, the rows and the empty state. It never opens on
-   hover: only the tab, ⌘⇧H and the bottom bar's comparing state reach it. */
+   hover: only the tab, ⌘⇧H and the comparing state in the dot's details reach it. */
 .history-panel {
   display: flex;
   flex-direction: column;

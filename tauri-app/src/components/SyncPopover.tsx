@@ -11,6 +11,10 @@ import { settingsPage } from "../lib/routes";
 interface SyncPopoverProps {
   sync: SyncState;
   onClose: () => void;
+  /** What sits above the sync details: the save and the open note. */
+  children?: JSX.Element;
+  /** Where a device without hover finds what a wide window shows beside the dot. */
+  foot?: JSX.Element;
 }
 
 /**
@@ -69,6 +73,8 @@ export default function SyncPopover(props: SyncPopoverProps): JSX.Element {
 
   return (
     <div class="popover sync-popover" data-face={face()}>
+      {props.children}
+
       <div class="sync-popover-head">
         <Icon name={FACE_ICONS[face()]} size={16} />
         <span class="sync-popover-title">{faceTitle(face())}</span>
@@ -146,6 +152,10 @@ export default function SyncPopover(props: SyncPopoverProps): JSX.Element {
           </Match>
         </Switch>
       </div>
+
+      <Show when={props.foot}>
+        <div class="sync-popover-foot">{props.foot}</div>
+      </Show>
     </div>
   );
 }
