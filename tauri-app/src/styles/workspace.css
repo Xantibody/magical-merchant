@@ -545,6 +545,8 @@
   width: calc(100% - var(--panel-w));
   height: 52px;
   padding: 0 16px;
+  /* Parted from the page by its backing, not a rule (ADR 0013) */
+  background: var(--app-sidebar);
   transition: width 220ms var(--app-ease);
 }
 
@@ -856,15 +858,13 @@
 
 /* Folded at the end of the body. Not a different enough topic to deserve a rule line */
 .backlinks {
-  margin-top: 48px;
-  padding-top: 20px;
-  border-top: 1px solid var(--app-hairline);
+  margin-top: 56px;
 }
 
 .backlinks-summary {
   margin: 0;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 400;
   color: var(--app-text-muted);
 }
 
@@ -872,7 +872,7 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  margin-top: 6px;
+  margin-top: 4px;
 }
 
 .backlink-row {
