@@ -33,6 +33,12 @@ pub(crate) struct NoteInfo {
     pub(crate) origin: Option<String>,
     /// Name of the template this note was created from, if any.
     pub(crate) template: Option<String>,
+    /// How many versions a person has committed. Absent on a plain note; a
+    /// Codex with none says 0.
+    pub(crate) version_count: Option<usize>,
+    /// Whether the draft has moved on from the latest version. Absent on a
+    /// plain note; false on a Codex with no version yet.
+    pub(crate) dirty: Option<bool>,
 }
 
 impl From<NoteSummary> for NoteInfo {
@@ -45,6 +51,8 @@ impl From<NoteSummary> for NoteInfo {
             preview: n.preview,
             origin: n.origin,
             template: n.template,
+            version_count: n.version_count,
+            dirty: n.dirty,
         }
     }
 }
@@ -52,6 +60,9 @@ impl From<NoteSummary> for NoteInfo {
 #[derive(Serialize, schemars::JsonSchema)]
 pub(crate) struct NoteOutput {
     pub(crate) filename: String,
+    /// `note` for a single document, `codex` for a document that grows and
+    /// keeps explicitly committed versions.
+    pub(crate) kind: String,
     /// Creation time, RFC 3339 with the device's UTC offset.
     pub(crate) time: Option<String>,
     /// Last body edit, RFC 3339. Absent when the note was never edited.

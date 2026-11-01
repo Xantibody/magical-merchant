@@ -268,6 +268,8 @@ impl McpServer {
     ) -> Result<Json<NoteOutput>, String> {
         let filename = parse_filename(&param.filename)?;
         let notes::Read { body, revision } = notes::read(&self.data_dir, &filename).map_err(err)?;
+        let (kind, _) =
+            magical_merchant_core::locate_note(&self.data_dir, &filename).map_err(err)?;
         // Broken frontmatter still returns the body. The list does the same: metadata that
         // cannot be read is no reason to hide the body as well.
         let meta = magical_merchant_core::read_note_meta(&self.data_dir, &filename).ok();
@@ -295,6 +297,7 @@ impl McpServer {
         );
         Ok(Json(NoteOutput {
             filename: filename.as_str().to_string(),
+            kind: kind.as_str().to_string(),
             time,
             updated,
             // Merge by the same rule as the list. Showing only the frontmatter tags or only
@@ -1485,5 +1488,79 @@ mod tests {
             .unwrap()
             .0;
         assert!(updated.revision.is_some());
+    }
+
+    fn a_codex(base: &Path, body: &str) -> String {
+        let path = magical_merchant_core::create_draft_codex(
+            base,
+            body,
+            &[],
+            &mac_at_shibuya(),
+            Provenance::default(),
+        )
+        .unwrap();
+        path.file_name().unwrap().to_str().unwrap().to_string()
+    }
+
+    fn a_note(base: &Path, body: &str) -> String {
+        let path = magical_merchant_core::create_draft_note(
+            base,
+            body,
+            &[],
+            &mac_at_shibuya(),
+            Provenance::default(),
+        )
+        .unwrap();
+        path.file_name().unwrap().to_str().unwrap().to_string()
+    }
+
+    fn commit(base: &Path, filename: &str, message: &str) -> String {
+        let name = NoteFilename::parse(filename).unwrap();
+        magical_merchant_core::commit_note_version(base, &name, Some(message))
+            .unwrap()
+            .id
+    }
+
+    /// A row says how far a Codex has come, so an agent need not open the versions of
+    /// every document to find the one whose draft moved. A plain Note has no such thing.
+    #[test]
+    fn a_codex_row_carries_its_versions_and_a_note_row_does_not() {
+        let tmp = TempDir::new().unwrap();
+        let codex = a_codex(tmp.path(), "# 版のある文書\n一");
+        commit(tmp.path(), &codex, "first");
+        writable(tmp.path())
+            .update_note(Parameters(UpdateNoteParam {
+                filename: codex.clone(),
+                body: "# 版のある文書\n二".to_string(),
+                revision: None,
+            }))
+            .unwrap();
+        a_note(tmp.path(), "# ただのノート");
+
+        let rows = server(tmp.path()).list_notes().unwrap().0.notes;
+
+        let codex_row = rows.iter().find(|r| r.filename == codex).unwrap();
+        assert_eq!(codex_row.version_count, Some(1));
+        assert_eq!(codex_row.dirty, Some(true));
+        let note_row = rows.iter().find(|r| r.filename != codex).unwrap();
+        assert_eq!(note_row.version_count, None);
+        assert_eq!(note_row.dirty, None);
+    }
+
+    #[test]
+    fn reading_a_record_says_which_kind_it_is() {
+        let tmp = TempDir::new().unwrap();
+        let codex = a_codex(tmp.path(), "# 版のある文書");
+        let note = a_note(tmp.path(), "# ただのノート");
+        let read = |filename: String| {
+            server(tmp.path())
+                .read_note(Parameters(FilenameParam { filename }))
+                .unwrap()
+                .0
+                .kind
+        };
+
+        assert_eq!(read(codex), "codex");
+        assert_eq!(read(note), "note");
     }
 }
