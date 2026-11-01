@@ -539,13 +539,12 @@ function flyoutConditions(): string[] {
 
 /**
  * The list is no longer a permanent pane. It is a flyout that floats over the body. While
- * it is closed it takes no space and cannot be clicked, and the body starts in full to the
- * right of the 48px rail.
+ * it is closed it takes no space and cannot be clicked, and the body starts in full at the
+ * window's left edge: there is no rail any more (ADR 0001).
  */
 function mountFlyout(open: boolean, detail = false): HTMLElement {
   document.body.innerHTML = `
     <div class="app">
-      <nav class="rail"></nav>
       <div class="app-column">
         <main class="app-main">
           <div class="workspace workspace--flyout ${detail ? "workspace--detail" : ""}">
@@ -557,7 +556,6 @@ function mountFlyout(open: boolean, detail = false): HTMLElement {
             <div class="detail-pane"></div>
           </div>
         </main>
-        <div class="bottom-bar"></div>
       </div>
     </div>`;
   return element(".list-pane");
@@ -574,7 +572,7 @@ describe("the list flyout", () => {
     await page.viewport(1280, 800);
   });
 
-  it("stands 280px wide against the rail, over the body", async () => {
+  it("stands 280px wide against the window's left edge, over the body", async () => {
     await page.viewport(1280, 800);
     const pane = mountFlyout(true);
 
@@ -582,18 +580,18 @@ describe("the list flyout", () => {
     const detail = element(".detail-pane").getBoundingClientRect();
 
     expect(rect.width).toBeCloseTo(280, 0);
-    expect(rect.left).toBeCloseTo(48, 0);
+    expect(rect.left).toBeCloseTo(0, 0);
     // The flyout does not push the body aside. It carries on underneath while it is open
-    expect(detail.left).toBeCloseTo(48, 0);
+    expect(detail.left).toBeCloseTo(0, 0);
   });
 
-  it("stops above the bottom bar", async () => {
+  it("runs down to the bottom of the page", async () => {
     await page.viewport(1280, 800);
     const pane = mountFlyout(true);
 
-    const bar = element(".bottom-bar").getBoundingClientRect();
+    const main = element(".app-main").getBoundingClientRect();
 
-    expect(pane.getBoundingClientRect().bottom).toBeCloseTo(bar.top, 0);
+    expect(pane.getBoundingClientRect().bottom).toBeCloseTo(main.bottom, 0);
   });
 
   // If the hit area stayed while it is closed, the left 280px of the body could not be clicked

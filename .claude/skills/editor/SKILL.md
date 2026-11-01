@@ -18,8 +18,8 @@ Reject any implementation violating these, regardless of feature completeness.
 ## Loading discipline
 
 Milkdown + ProseMirror load **lazily** (`lazy(() => import(...))` in
-Workspace) — not on first edit, because there is no edit mode: the editor
-mounts as soon as a note's body arrives, so the trigger is opening a note.
+Workspace), and the writing screen is what mounts it: a note opens in the
+viewer, so opening one does not pull the editor in.
 `MarkdownToolbar` waits for the editor instance, so merely listing notes does
 not pull the editor bundle in. markmap (d3) and Mermaid load on first use.
 Never import any of these at module top-level from anything on the startup

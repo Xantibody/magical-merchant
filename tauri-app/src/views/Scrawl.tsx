@@ -33,7 +33,7 @@ import {
 } from "../lib/items";
 import type { NoteItem, ScrawlItem } from "../lib/items";
 import { places } from "../lib/places";
-import { noteRoute } from "../lib/note-route";
+import { noteRoute, writeRoute } from "../lib/note-route";
 import { ROUTES } from "../lib/routes";
 import { countTags, parseTags } from "../lib/tags";
 import {
@@ -253,7 +253,7 @@ export default function Scrawl(): JSX.Element {
       return;
     }
     shell.refreshData();
-    navigate(`${noteRoute("note", filename)}&edit=1`);
+    navigate(writeRoute("note", filename));
   };
 
   const openNote = (note: NoteItem): void => {

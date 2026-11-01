@@ -29,7 +29,7 @@ import {
 import type { ShortcutName } from "../lib/shortcuts";
 import { MODE_ICONS, MODE_LABELS, ROUTES } from "../lib/routes";
 import type { RoutePath } from "../lib/routes";
-import { noteRoute } from "../lib/note-route";
+import { noteRoute, writeRoute } from "../lib/note-route";
 import { typedInvoke } from "../lib/commands";
 import { paletteScopeAt } from "../lib/search-scope";
 import { firstWidgetAction } from "../lib/widget-actions";
@@ -88,9 +88,6 @@ function NoteStatus(props: { bar: NoteBar }): JSX.Element {
             onOpen={props.bar.openHistory}
           />
         )}
-      </Show>
-      <Show when={props.bar.readOnly}>
-        <StateChip icon="lock-simple" label={t().notes.readOnly} onOpen={props.bar.openSettings} />
       </Show>
       <Show when={props.bar.map}>
         <StateChip icon="tree-structure" label={t().notes.map} onOpen={props.bar.openSettings} />
@@ -189,13 +186,13 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
   const newNote = (): void => {
     shell.closePalette();
     void (async () => {
-      await typedInvoke("create_draft", {
+      const path = await typedInvoke("create_draft", {
         body: "",
         tags: [],
         client: await getDeviceSignals(),
       });
       shell.refreshData();
-      navigate(ROUTES.NOTES);
+      navigate(writeRoute("note", path.split("/").at(-1)));
     })();
   };
 
@@ -279,7 +276,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
         });
         shell.refreshData();
         const filename = created.path.split("/").at(-1);
-        navigate(noteRoute("note", filename));
+        navigate(writeRoute("note", filename));
       } catch {
         // A widget may still point at a template that was deleted. Rather than
         // nothing happening on tap, open the list and show the reason

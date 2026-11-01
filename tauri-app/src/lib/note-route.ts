@@ -12,3 +12,8 @@ export function noteRoute(kind: NoteKind, filename?: string): string {
   const base = kind === "codex" ? ROUTES.CODEX : ROUTES.NOTES;
   return filename ? `${base}?file=${encodeURIComponent(filename)}` : base;
 }
+
+/** The same note on the writing screen: what is just made is written, not read. */
+export function writeRoute(kind: NoteKind, filename?: string): string {
+  return filename ? `${noteRoute(kind, filename)}&edit=1` : noteRoute(kind);
+}
