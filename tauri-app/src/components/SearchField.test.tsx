@@ -33,7 +33,7 @@ function renderField(hits: SearchHit[], tags: string[] = [], commands: SearchFie
       searches.push(args as unknown as Search);
       return hits;
     }
-    return [];
+    return cmd === "browse_all" ? hits : [];
   });
   const onOpen = vi.fn<(hit: SearchHit) => void>();
   const onClose = vi.fn<() => void>();
@@ -60,12 +60,39 @@ describe("SearchField", () => {
     expect(document.activeElement).toBe(input);
   });
 
-  it("shows neither chips nor a list until there is a condition", () => {
+  it("opens on the newest records and the chips, without searching", async () => {
     const { searches } = renderField([hit("買い物")]);
 
-    expect(screen.queryByRole("group")).toBeNull();
-    expect(screen.queryByText("買い物")).toBeNull();
+    await screen.findByText("買い物");
+    expect(screen.queryByRole("group", { name: "種類" })).not.toBeNull();
     expect(searches).toHaveLength(0);
+  });
+
+  it("stops the newest records at twenty", async () => {
+    const many = Array.from({ length: 25 }, (_, i) => hit(`記録${String(i)}`));
+    renderField(many);
+
+    await screen.findByText("記録19");
+    expect(screen.queryByText("記録20")).toBeNull();
+  });
+
+  it("says nothing is found only when something was asked", async () => {
+    const { input } = renderField([]);
+
+    await waitFor(() => expect(screen.queryByText(/見つかりません/u)).toBeNull());
+    typed(input, "ない");
+
+    await screen.findByText(/見つかりません/u);
+  });
+
+  // WKWebView gives a button no focus on click, so the field would see focus go nowhere and
+  // close under the pointer before the click arrived
+  it("keeps the focus when a chip is pressed with the mouse", () => {
+    renderField([]);
+
+    const notPrevented = fireEvent.mouseDown(screen.getByRole("button", { name: "Note" }));
+
+    expect(notPrevented).toBe(false);
   });
 
   it("lists on its own once a word is typed, and brings the chips", async () => {
@@ -165,7 +192,7 @@ describe("SearchField", () => {
     const second = hit("二つ目");
     const { input, onOpen } = renderField([hit("一つ目"), second]);
     typed(input, "ord");
-    await screen.findByText("二つ目");
+    await waitFor(() => expect(document.querySelector(".palette-count")).not.toBeNull());
 
     fireEvent.keyDown(input, { key: "ArrowDown" });
     fireEvent.keyDown(input, { key: "Enter" });
@@ -236,7 +263,7 @@ describe("SearchField", () => {
       const found = hit("週次の件");
       const { input, onOpen } = renderField([found], [], [settings]);
       typed(input, "設定");
-      await screen.findByText("週次の件");
+      await waitFor(() => expect(document.querySelector(".palette-count")).not.toBeNull());
 
       fireEvent.keyDown(input, { key: "Enter" });
 

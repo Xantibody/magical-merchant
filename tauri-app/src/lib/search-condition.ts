@@ -23,6 +23,9 @@ export const SEARCH_PERIODS: readonly SearchPeriod[] = ["today", "week", "yearAg
 /** core's `MAX_HITS`. A list this long may have stopped short, so the count says so. */
 export const SEARCH_CAP = 100;
 
+/** How many of the newest records the field opens on, before anything is asked. */
+export const RECENT_ROWS = 20;
+
 export interface SearchCondition {
   text: string;
   /** Tags pressed or carried in. A `#tag` typed in `text` counts too (`searchRequest`). */

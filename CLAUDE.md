@@ -124,9 +124,10 @@ ready to record the moment it opens (widgets exist for exactly this).
   (#279). A phone drops the preview column
 - **Search field** (`components/SearchField.tsx`, `lib/search-condition.ts`, ⌘K,
   `/ 探す`, typing on Scrawl and Browse): hidden until called, floats over the route
-  inside `app-main` so an open note stays mounted, Esc gives the keys back. Any
-  condition lists on its own through core `search_records`, whose kind and period
-  run before the 100 cap. Tags are AND here, OR in Browse (ADR 0015). The only
+  inside `app-main` so an open note stays mounted, Esc gives the keys back. It
+  opens on the chips and the newest 20 records (`browse_all`), and any condition
+  lists on its own through core `search_records`, whose kind and period run before
+  the 100 cap. Tags are AND here, OR in Browse (ADR 0015). The only
   thing a result does is open. Commands answer a bare word, above the records;
   Enter stays on the first record
 - **Command palette** (`?`): the key list, with in-memory commands + debounced
