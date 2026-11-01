@@ -13,7 +13,7 @@ const Workspace = lazy(() => import("./views/Workspace"));
 // once open, writing works the same, so there are not two screens
 const Codex = (): JSX.Element => <Workspace kind="codex" />;
 const Settings = lazy(() => import("./views/Settings"));
-// The Browse screen. An entry on the rail, but not something visible at startup
+// The Browse screen. Not something visible at startup
 const Browse = lazy(() => import("./views/Browse"));
 // Template management is a screen under Settings. Even fewer people open it,
 // so it is not prefetched either

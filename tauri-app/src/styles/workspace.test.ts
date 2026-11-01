@@ -470,7 +470,6 @@ describe("the note panel", () => {
   function mountPanel(state: "closed" | "open"): HTMLElement {
     document.body.innerHTML = `
       <div class="app">
-        <nav class="rail"></nav>
         <div class="app-column">
           <main class="app-main">
             <div class="workspace">
@@ -580,6 +579,25 @@ describe("the list flyout", () => {
     expect(rect.left).toBeCloseTo(0, 0);
     // The flyout does not push the body aside. It carries on underneath while it is open
     expect(detail.left).toBeCloseTo(0, 0);
+  });
+
+  // Nothing shows, but the pointer has to be able to bring the list out
+  it("keeps an invisible edge to open the list from", async () => {
+    await page.viewport(1280, 800);
+    document.body.innerHTML = `<div class="workspace"><div class="list-edge"></div></div>`;
+
+    const rect = element(".list-edge").getBoundingClientRect();
+
+    expect(rect.width).toBeCloseTo(12, 0);
+    expect(rect.left).toBeCloseTo(0, 0);
+  });
+
+  // A phone has no pointer to rest on it, and the list is a page of its own there
+  it("has no edge on a phone", async () => {
+    await page.viewport(390, 800);
+    document.body.innerHTML = `<div class="workspace"><div class="list-edge"></div></div>`;
+
+    expect(getComputedStyle(element(".list-edge")).display).toBe("none");
   });
 
   it("runs down to the bottom of the page", async () => {

@@ -29,9 +29,6 @@ const ANIMATABLE = new Set([
   "background-color",
   "border-color",
   "color",
-  // The rail's current-location line. It is absolutely positioned inside the rail, so
-  // moving it does not push its neighbours around
-  "top",
   // The body column. The room a panel frees is taken up by width: transform cannot re-wrap
   "width",
   "padding",

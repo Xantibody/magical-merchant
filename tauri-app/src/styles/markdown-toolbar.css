@@ -64,12 +64,6 @@
     line-height: 1;
   }
 
-  /* While editing, the toolbar uses the bottom edge. Leaving the tabs there would only put
-     a row of unpressable buttons under the fixed toolbar, so they give up the space */
-  body.md-toolbar-open .bottom-tabs {
-    display: none;
-  }
-
   /* The toolbar floats, so the body would run on underneath it and the last lines,
      the ones being typed, would sit behind the buttons. The column gives up the
      toolbar's height instead, so the body's scroll box ends at the toolbar's top edge

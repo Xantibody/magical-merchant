@@ -36,16 +36,11 @@ ready to record the moment it opens (widgets exist for exactly this).
 
 ## UI Architecture (current)
 
-- **Rail** (`components/Rail.tsx`, desktop only): a 48px column down the left
-  edge — Scrawl / Note / Codex, a divider, then 探す (⌘K) · 絞る (⌘F) ·
-  (pushed to the foot) 設定 (⌘,). It carries no words; the names are in
-  `title` and for the screen reader. Where you are is said twice: the button is
-  filled (`--app-accent-soft`) and a 2×20px line slides down the left edge
-  (`--app-ease`, 220ms) between the three surfaces. 絞る and 設定 are not
-  surfaces, so the line goes out rather than sliding to them
+- **No rail**: one column (ADR 0010). The way around is the keys (⌘1/2/3, ⌘K, ⌘F,
+  ⌘,), the status dot's links, and the places on the empty search field
 - **List flyout** (`views/Workspace.tsx` + `styles/workspace.css`, Note / Codex
   on desktop): 280px that floats **over** the body while the pointer is on the
-  rail or on itself — the body column does not move when it opens. A pin, and
+  window's left edge (`.list-edge`, 12px, nothing visible) or on itself — the body column does not move when it opens. A pin, and
   ⌘\, keep it out. Below 768px it is the full page it always was
 - **Status dot** (`components/StatusDot.tsx`, `styles/status-dot.css`): state lives
   in one 8px dot fixed to the window's lower right, outside the paper — green
@@ -57,16 +52,16 @@ ready to record the moment it opens (widgets exist for exactly this).
   when they would do something, then the sync. Workspace hands the note's part
   over through the shell (`noteState`), like the save state. Only a failure
   interrupts, with a toast (`syncAlertText`); the popover no longer opens itself.
-  On a phone the dot is in the header (the corner has the tabs and the capture
+  On a phone the dot is in the header (the corner has the capture
   dock) and a status row under the title keeps the save and the states, as pills.
   Without hover, those four are at the foot of the details
-- **Mobile**: a 48px header (back · title · Scrawl's calendar · search · the status dot)
-  and four bottom tabs — Scrawl / Note / Codex / Settings
+- **Mobile**: a 48px header (back · title · Scrawl's calendar · search · the status dot);
+  the empty search field and the dot's details lead to the other screens
 - **Shortcuts**: one table in `lib/shortcuts.ts` feeds the key handling, the
   palette's command rows and the `data-hint-key` badges. Holding ⌘ (Ctrl) for
   300ms floats those badges (`lib/hints.ts`); `?` opens the palette as the
   list. A badge goes on every **visible** control whose key works right now —
-  the rail's six, the status dot, 新規 and the list's pin, the note panel's `…` and its
+  the status dot, 新規 and the list's pin, the note panel's `…` and its
   履歴 tab, the status details' two actions. Keys that only exist inside the note
   panel are spelled on the row instead. The attribute is
   `data-hint-key`, not `data-key`, because Kobalte writes `data-key` on the
