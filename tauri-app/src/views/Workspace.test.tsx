@@ -2395,6 +2395,6 @@ describe("Workspace › タグ", () => {
 
     await openPanel();
 
-    expect(await screen.findByRole("button", { name: "タグ work を外す" })).toBeDefined();
+    await expect(screen.findByRole("button", { name: "タグ work を外す" })).resolves.toBeDefined();
   });
 });
