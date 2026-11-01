@@ -716,41 +716,23 @@ describe("Workspace › 常時編集", () => {
     expect(shell?.notePanelPinned()).toBe(false);
   });
 
-  // Passing over the edge on the way to the scrollbar must not open 320px over the body. Only
-  // a pointer that has rested there does, and leaving lets it go again
-  it("floats the panel in only after the pointer rests on the right edge", async () => {
+  // The button and Cmd+. are the panel's only way in. An edge that opened it in passing also
+  // needed a sentence at the panel's foot to explain itself
+  it("has no hot zone at the edge and no rule written at its foot", async () => {
     await openNoteA();
-    const edge = document.querySelector(".note-panel-edge") as HTMLElement;
+    const panel = await openPanel();
 
-    fireEvent.pointerEnter(edge);
-    await sleep(100);
-    fireEvent.pointerLeave(edge);
-    await sleep(300);
-    expect(openedPanel()).toBeNull();
-
-    fireEvent.pointerEnter(edge);
-    await waitFor(() => expect(openedPanel()).not.toBeNull());
-    // Floating is not docking. The body keeps its width
-    expect(shell?.notePanelPinned()).toBe(false);
-    expect(document.querySelector(".detail-pane--panel")).toBeNull();
-
-    const panel = openedPanel() as HTMLElement;
-    fireEvent.pointerEnter(panel);
-    fireEvent.pointerLeave(panel);
-    await waitFor(() => expect(openedPanel()).toBeNull());
+    expect(document.querySelector(".note-panel-edge")).toBeNull();
+    expect(panel.querySelector(".note-panel-foot")).toBeNull();
   });
 
-  // Esc folds a panel that floated in. A docked one was put there on purpose, like the list
-  it("folds a floating panel on Escape but keeps a docked one", async () => {
+  // It was opened on purpose, like the list, so Esc leaves it
+  it("keeps the panel on Escape", async () => {
     await openNoteA();
-    fireEvent.pointerEnter(document.querySelector(".note-panel-edge") as HTMLElement);
-    await waitFor(() => expect(openedPanel()).not.toBeNull());
-
-    fireEvent.keyDown(globalThis, { key: "Escape" });
-    await waitFor(() => expect(openedPanel()).toBeNull());
-
     await openPanel();
+
     fireEvent.keyDown(globalThis, { key: "Escape" });
+
     await sleep(50);
     expect(openedPanel()).not.toBeNull();
   });
@@ -2075,18 +2057,11 @@ describe("Workspace › Codex の版", () => {
     await waitFor(() => expect(newest.getAttribute("aria-current")).toBe("true"));
   });
 
-  // The history is the Codex panel's second tab. It never opens on hover: resting on the edge
-  // floats the panel in on its first tab, and 320px of comparison must not appear in passing
-  // beside a writing hand
-  it("opens the history only from its tab, docked, never on hover", async () => {
+  // The history is the Codex panel's second tab. Opening the panel starts on the first one
+  it("opens the history only from its tab", async () => {
     await openCodexC();
 
-    fireEvent.pointerEnter(document.querySelector(".note-panel-edge") as HTMLElement);
-    const panel = await waitFor(() => {
-      const found = openedPanel();
-      expect(found).not.toBeNull();
-      return found as HTMLElement;
-    });
+    const panel = await openPanel();
     expect(
       within(panel).getByRole("tab", { name: "この Codex" }).getAttribute("aria-selected"),
     ).toBe("true");
@@ -2094,8 +2069,6 @@ describe("Workspace › Codex の版", () => {
 
     fireEvent.click(within(panel).getByRole("tab", { name: /^履歴/u }));
     await waitFor(() => expect(historyShown()).toBe(true));
-    // Opening the history docks the panel: it will not slip away when the pointer leaves
-    expect(shell?.notePanelPinned()).toBe(true);
     // With no versions, the next move, committing one, is right there
     expect(screen.getByText("まだ版がありません。いまの本文が最初の版になります。")).toBeDefined();
 

@@ -357,29 +357,15 @@
   min-width: 0;
   min-height: 0;
   position: relative;
-  /* What stands to the right of the body column: the docked panel, the map, and the
-     panel's hot zone at the edge. The head row lines up with the body column in what
-     remains after these widths */
+  /* What stands to the right of the body column: the open panel and the map. The head
+     row lines up with the body column in what remains after these widths */
   --panel-w: 0px;
   --map-w: 0px;
-  /* The hot zone's width while nothing is docked. Docking takes it away (--edge-w), and
-     the column's resting place is worked out from this one */
-  --edge-rest: 0px;
-  --edge-w: var(--edge-rest);
 }
 
-/* Where a pointer can hover, the right edge is the panel's hot zone (8px). The body
-   column ends before it, so its scrollbar never sits in the zone */
-@media (min-width: 768px) and (hover: hover) {
-  .detail-pane {
-    --edge-rest: 8px;
-  }
-}
-
-/* Docked, the panel takes its width from the body. There is no hot zone to keep clear */
+/* Open, the panel takes its width from the body */
 .detail-pane--panel {
   --panel-w: 320px;
-  --edge-w: 0px;
 }
 
 .detail-pane--map {
@@ -393,12 +379,12 @@
    Cutting the width with max-width and using margin auto would drift off the body
    column's left edge */
 .detail-head {
-  --col-room: calc(100% - var(--panel-w) - var(--edge-w) - var(--map-w) - 696px);
-  --col-free: calc(100% - var(--edge-rest) - var(--map-w) - 696px);
+  --col-room: calc(100% - var(--panel-w) - var(--map-w) - 696px);
+  --col-free: calc(100% - var(--map-w) - 696px);
   --col-left: max(0px, min(var(--col-free) / 2, var(--col-room)));
   position: relative;
   flex: 0 0 auto;
-  width: calc(100% - var(--panel-w) - var(--edge-w));
+  width: calc(100% - var(--panel-w));
   padding: 28px var(--head-right, max(28px, calc(var(--col-room) + 28px - var(--col-left)))) 0
     calc(28px + var(--col-left));
   /* Same 220ms as the panel, tightening to the width the panel opens up. Width and
@@ -589,7 +575,7 @@
   display: flex;
   min-height: 0;
   min-width: 0;
-  width: calc(100% - var(--panel-w) - var(--edge-w));
+  width: calc(100% - var(--panel-w));
   transition: width 220ms var(--app-ease);
 }
 
@@ -597,14 +583,14 @@
    out of the margin to the right of the column first; the column moves left only once
    that margin is gone, and then only as far as keeps it 28px short of the panel.
    --col-room is the slack beside the column now, --col-free the slack it had undocked.
-   Percentages here are of .detail-panes, whose width is the pane's less the panel and
-   the edge, so the undocked slack adds those back.
+   Percentages here are of .detail-panes, whose width is the pane's less the panel, so
+   the undocked slack adds it back.
    AIDEV-NOTE: not re-centred in the remaining width. Centring moves the text under
    the reader's eye by half the panel (160px) every time the panel docks or the history
    opens, which is the jump this replaced */
 .detail-body {
   --col-room: calc(100% - var(--map-w) - 696px);
-  --col-free: calc(var(--col-room) + var(--panel-w) + var(--edge-w) - var(--edge-rest));
+  --col-free: calc(var(--col-room) + var(--panel-w));
   --col-left: max(0px, min(var(--col-free) / 2, var(--col-room)));
   flex: 1;
   min-width: 0;

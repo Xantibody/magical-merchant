@@ -61,7 +61,7 @@ ready to record the moment it opens (widgets exist for exactly this).
   palette's command rows and the `data-hint-key` badges. Holding ⌘ (Ctrl) for
   300ms floats those badges (`lib/hints.ts`); `?` opens the palette as the
   list. A badge goes on every **visible** control whose key works right now —
-  the rail's seven, 新規 and the list's pin, the note panel's toggle and its
+  the rail's seven, 新規 and the list's pin, the note panel's `…` and its
   履歴 tab, the bottom bar's two actions. Keys that only exist inside the note
   panel are spelled on the row instead. The attribute is
   `data-hint-key`, not `data-key`, because Kobalte writes `data-key` on the
@@ -80,21 +80,18 @@ ready to record the moment it opens (widgets exist for exactly this).
   = editable). Everything per-note lives in the **note panel**
   (`components/NotePanel.tsx`, `styles/note-panel.css`): 320px at the right
   edge — the view switches, 詳細 (created time editable, updated, surroundings),
-  revert / Codex にする (a corvu confirm, `PromoteDialog.tsx`) / delete. Resting
-  the pointer 300ms on the 8px right edge floats it over the body; the toggle
-  beside the title and ⌘. dock it (the body gives up 320px) — the panel has no
-  pin of its own. Docked is the app's state (`shell.notePanelPinned`), not
-  the note's. Esc peels one layer: tag
-  input → confirm → history → a floating panel; a docked one stays. On a phone
-  the meta line opens it as its own screen
+  revert / Codex にする (a corvu confirm, `PromoteDialog.tsx`) / delete. The `…`
+  beside the title and ⌘. are the only ways in, and the body gives up 320px
+  while it is open. Open is the app's state (`shell.notePanelPinned`), not the
+  note's. Esc peels one layer: tag input → confirm → history; the settings tab
+  stays. On a phone the meta line opens it as its own screen
 - **Codex** (`views/Workspace.tsx` with `kind="codex"`, route `/codex`): the
   same view over `data/codex/`. Three things tell it from a Note: the list row
   carries a folded-corner page with the version count (frame darkens when the
   draft has moved on); the bottom bar reads "版 4 から +312 B"; and the note
   panel gets a second tab, **履歴** (`components/HistoryPanel.tsx` is its body,
-  topped by "9 か月で 4 回刻んだ"). The tab and ⌘⇧H open it **docked**; the
-  hover flyout always opens on the first tab — 320px of comparison must not
-  appear beside a writing hand in passing. The history tab _is_ compare mode
+  topped by "9 か月で 4 回刻んだ"). The tab and ⌘⇧H open it; the panel always
+  opens on the first tab. The history tab _is_ compare mode
   (`historyOpen`). 版を刻む is in the panel and the bar (commits **at once**,
   no message — the toast summarises and offers undo, which deletes the file
   just written).
