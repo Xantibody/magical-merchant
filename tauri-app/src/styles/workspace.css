@@ -62,8 +62,8 @@
   margin-top: auto;
   padding: 10px 16px;
   border-top: 1px solid var(--app-surface-2);
-  font-size: 11px;
-  color: var(--app-text-hint);
+  font-size: 13px;
+  color: var(--app-text-muted);
 }
 
 /* The only pressable thing in the pane, so it is found without a frame around it */
@@ -90,7 +90,7 @@
 /* AIDEV-NOTE: all-caps is CSS's job. Writing the string as "NOTES" splits the surface
    name between MODE_LABELS and one more place, and the screen reader says N-O-T-E-S */
 .list-pane-title {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--app-text-faint);
   letter-spacing: 0.08em;
@@ -173,7 +173,7 @@
   z-index: 1;
   background: var(--app-sidebar);
   padding: 18px 16px 2px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.06em;
   color: var(--app-text-faint);
@@ -220,6 +220,7 @@
   flex: 1;
   min-width: 0;
   font-size: 13.5px;
+  font-weight: 500;
   color: var(--app-text);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -228,13 +229,13 @@
 
 .list-row .icon {
   flex-shrink: 0;
-  color: var(--app-text-hint);
+  color: var(--app-text-faint);
 }
 
 .list-row-stamp {
   flex-shrink: 0;
-  font-size: 11px;
-  color: var(--app-text-faint);
+  font-size: 12px;
+  color: var(--app-text-muted);
   font-variant-numeric: tabular-nums;
 }
 
@@ -325,7 +326,7 @@
 }
 
 .notes-empty .icon {
-  color: var(--app-text-hint);
+  color: var(--app-text-faint);
 }
 
 .notes-empty-title {
@@ -338,7 +339,7 @@
 .notes-empty-body {
   margin: 0;
   font-size: 13px;
-  color: var(--app-text-faint);
+  color: var(--app-text-muted);
 }
 
 .empty-state {
@@ -417,8 +418,8 @@
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 4px;
-  font-size: 12px;
-  color: var(--app-text-faint);
+  font-size: 13px;
+  color: var(--app-text-muted);
   font-variant-numeric: tabular-nums;
 }
 
@@ -438,7 +439,7 @@
 }
 
 .detail-meta-sep {
-  color: var(--app-text-hint);
+  color: var(--app-text-faint);
 }
 
 .detail-meta-tags {
@@ -453,8 +454,8 @@
   flex-wrap: wrap;
   gap: 6px 10px;
   margin-top: 4px;
-  font-size: 12.5px;
-  color: var(--app-text-faint);
+  font-size: 13px;
+  color: var(--app-text-muted);
   font-variant-numeric: tabular-nums;
 }
 
@@ -488,7 +489,7 @@
   padding: 0 12px;
   border-radius: 999px;
   font: inherit;
-  font-size: 12.5px;
+  font-size: 13px;
   cursor: pointer;
 }
 
@@ -616,7 +617,7 @@
 }
 
 .note-title-input::placeholder {
-  color: var(--app-text-hint);
+  color: var(--app-text-faint);
   font-weight: 500;
 }
 
@@ -867,9 +868,9 @@
 
 .backlinks-summary {
   margin: 0;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
-  color: var(--app-text-faint);
+  color: var(--app-text-muted);
 }
 
 .backlinks-list {
@@ -913,7 +914,7 @@
 .backlink-date {
   margin-left: auto;
   flex-shrink: 0;
-  font-size: 11px;
-  color: var(--app-text-hint);
+  font-size: 12px;
+  color: var(--app-text-muted);
   font-variant-numeric: tabular-nums;
 }

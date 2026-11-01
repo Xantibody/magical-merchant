@@ -73,7 +73,7 @@
   background: none;
   color: var(--app-text-faint);
   font: inherit;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   transition: color 150ms var(--app-ease);
@@ -89,7 +89,7 @@
 }
 
 .note-panel-tab-count {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 400;
   color: var(--app-text-faint);
   font-variant-numeric: tabular-nums;
@@ -113,7 +113,7 @@
   align-items: center;
   gap: 6px;
   padding: 10px 8px 6px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.06em;
   color: var(--app-text-faint);
@@ -165,8 +165,8 @@
 }
 
 .note-panel-row-sub {
-  font-size: 11px;
-  color: var(--app-text-faint);
+  font-size: 13px;
+  color: var(--app-text-muted);
 }
 
 /* The checkbox is hidden; the switch on the right (.switch in base.css) shows the state */
@@ -182,15 +182,15 @@
 }
 
 .note-panel-key {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--app-text-faint);
 }
 
 .note-panel-hint {
   margin: 0;
   padding: 4px 8px 0;
-  font-size: 11px;
-  color: var(--app-text-hint);
+  font-size: 13px;
+  color: var(--app-text-muted);
 }
 
 .note-panel-details {
@@ -200,14 +200,14 @@
   gap: 6px 8px;
   margin: 2px 0 0;
   padding: 0 8px;
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--app-text-muted);
   font-variant-numeric: tabular-nums;
 }
 
 .note-panel-details dt {
-  font-size: 12px;
-  color: var(--app-text-faint);
+  font-size: 13px;
+  color: var(--app-text-muted);
 }
 
 .note-panel-details dd {
@@ -249,12 +249,12 @@
 }
 
 .note-panel-action:disabled {
-  color: var(--app-text-hint);
+  color: var(--app-text-faint);
   cursor: default;
 }
 
 .note-panel-action:disabled .icon {
-  color: var(--app-text-hint);
+  color: var(--app-text-faint);
 }
 
 .note-panel-action-hint {
@@ -281,8 +281,8 @@
   flex: 0 0 auto;
   padding: 9px 20px;
   border-top: 1px solid var(--app-hairline);
-  font-size: 11px;
-  color: var(--app-text-hint);
+  font-size: 13px;
+  color: var(--app-text-muted);
 }
 
 .note-panel-tags {
@@ -400,7 +400,7 @@
   margin: 10px 0 18px;
   font-size: 13px;
   line-height: 1.7;
-  color: var(--app-text-faint);
+  color: var(--app-text-muted);
 }
 
 /* Only the "cannot go back" part, a little darker */

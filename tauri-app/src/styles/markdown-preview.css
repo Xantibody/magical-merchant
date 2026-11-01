@@ -310,7 +310,7 @@
   bottom: calc(var(--safe-bottom) + var(--size-3));
   margin: 0;
   font-size: var(--font-size-0);
-  color: var(--app-text-faint);
+  color: var(--app-text-muted);
   pointer-events: none;
 }
 

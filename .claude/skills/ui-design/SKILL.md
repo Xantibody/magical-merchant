@@ -11,10 +11,15 @@ All colors go through the `--app-*` tokens in `styles/base.css` (built on
 Open Props, with a dark theme via `:root[data-theme="dark"]`):
 
 - Surfaces: `--app-surface`, `--app-surface-2`, `--app-sidebar`, `--app-input-bg`
-- Text: `--app-text`, `--app-text-muted`, `--app-text-faint`, `--app-text-hint`
-- Lines: `--app-border` (controls), `--app-hairline` (rails, day separators)
+- Text: `--app-text`, `--app-text-muted` (prose that accompanies, dates),
+  `--app-text-faint` (labels, icons). Two helper steps, no third
+- Lines: `--app-border` (controls), `--app-hairline` (rails, day separators),
+  `--app-text-hint` (marks only; never words, despite the name)
 - Accent: `--app-accent`, `--app-accent-soft` (chips, selected rows, focus ring)
 - Status: `--app-ok`, `--app-danger`, `--app-undo`, toast pair
+
+Helper text is 13px, a stamp, count or key 12px, and nothing is smaller
+(`styles/polish.test.ts`).
 
 Spacing/typography/radius use Open Props (`var(--size-*)`, `var(--radius-*)`,
 `var(--font-*)`). New colors: extend the token block, don't inline hex.

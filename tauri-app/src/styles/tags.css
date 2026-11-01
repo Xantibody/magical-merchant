@@ -22,7 +22,7 @@
 }
 
 .tag-filter-label {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--app-text-faint);
   letter-spacing: 0.08em;
@@ -46,7 +46,7 @@
   /* Nothing is filled here. A chip stands on its border alone */
   background: none;
   color: var(--app-text-muted);
-  font-size: 12.5px;
+  font-size: 13px;
   font-family: inherit;
   cursor: pointer;
   white-space: nowrap;
@@ -75,7 +75,7 @@
 
 .tag-suggest-label {
   padding: 4px 8px;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--app-text-faint);
   letter-spacing: 0.08em;
@@ -104,7 +104,7 @@
 
 .tag-suggest-count {
   margin-left: auto;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--app-text-faint);
   font-variant-numeric: tabular-nums;
 }
@@ -112,7 +112,7 @@
 /* The row that commits a new word as typed. Shown at a different weight from existing tags */
 .tag-suggest-row--new {
   color: var(--app-text-faint);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 /* ---------------- tags in the note list ---------------- */
@@ -124,7 +124,7 @@
   border: 1px solid var(--app-border);
   border-radius: var(--radius-1);
   background: var(--app-input-bg);
-  font-size: 11px;
+  font-size: 12px;
   color: var(--app-text-muted);
 }
 

@@ -59,8 +59,8 @@
 
 /* The number of hits, set at the right of the input */
 .palette-count {
-  font-size: 11px;
-  color: var(--app-text-faint);
+  font-size: 12px;
+  color: var(--app-text-muted);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
@@ -74,7 +74,7 @@
    translated */
 .palette-section {
   padding: 10px 12px 4px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--app-text-faint);
   letter-spacing: 0.08em;
@@ -132,7 +132,7 @@
 
 /* The text around the match, shown only when the hit was deeper in the body */
 .palette-row-snippet {
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--app-text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -150,16 +150,16 @@
 
 .palette-row-meta {
   margin-left: auto;
-  font-size: 11px;
-  color: var(--app-text-hint);
+  font-size: 12px;
+  color: var(--app-text-muted);
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;
 }
 
 /* The `↩` open hint, shown on the selected row only. Right of the date, at the row's edge */
 .palette-row-enter {
-  font-size: 11px;
-  color: var(--app-text-hint);
+  font-size: 12px;
+  color: var(--app-text-muted);
   flex-shrink: 0;
   white-space: nowrap;
 }
@@ -170,8 +170,8 @@
   gap: 14px;
   padding: 8px 16px;
   border-top: 1px solid var(--app-hairline);
-  font-size: 11px;
-  color: var(--app-text-faint);
+  font-size: 13px;
+  color: var(--app-text-muted);
 }
 
 .palette-footer kbd {
