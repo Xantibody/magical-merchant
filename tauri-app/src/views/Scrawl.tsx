@@ -19,7 +19,7 @@ import { useNavigate, useSearchParams } from "@solidjs/router";
 import { typedInvoke } from "../lib/commands";
 import { getClientContext } from "../lib/client-context";
 import { useShell } from "../lib/shell";
-import { formatDayHeading, toIsoDate } from "../lib/day-labels";
+import { formatClock, formatDayHeading, toIsoDate } from "../lib/day-labels";
 import { t } from "../lib/i18n";
 import {
   notesByOrigin,
@@ -36,6 +36,7 @@ import { ROUTES } from "../lib/routes";
 import { scrawlDays } from "../lib/scrawl-days";
 import type { ScrawlRow } from "../lib/scrawl-days";
 import { countTags, parseTags } from "../lib/tags";
+import type { TagCount } from "../lib/tags";
 import {
   digestWeekKey,
   isDigestDismissed,
@@ -49,6 +50,9 @@ const RECENT_DAYS = 14;
 
 /** The week (Monday's date) whose weekly digest was dismissed. Display state local to the device. */
 const DIGEST_DISMISS_KEY = "weekly-digest-dismissed";
+
+/** How long a record just left keeps its dot green. The only save signal on the page. */
+const FRESH_MS = 1500;
 
 interface ScrawlData {
   items: ScrawlItem[];
@@ -92,6 +96,36 @@ function NoteRow(props: { note: NoteItem; onOpen: (note: NoteItem) => void }): J
   );
 }
 
+/**
+ * The input line at the top of today. One rule and nothing else; the time and the dot come
+ * up only once something is typed, so an empty line does not read as a record.
+ */
+function InputLine(props: {
+  knownTags: TagCount[];
+  onSend: (text: string) => Promise<void>;
+  onPromote: (text: string) => Promise<void>;
+  onError: () => void;
+}): JSX.Element {
+  const [typing, setTyping] = createSignal(false);
+  return (
+    <div class="entry entry--input" classList={{ "entry--typing": typing() }}>
+      <span class="entry-time">{typing() ? formatClock(new Date()) : ""}</span>
+      <span class="entry-rail" aria-hidden="true">
+        <span class="entry-rail-dot" />
+      </span>
+      <div class="entry-body">
+        <CaptureBar
+          onSend={props.onSend}
+          onPromote={props.onPromote}
+          onError={props.onError}
+          onTyping={setTyping}
+          knownTags={props.knownTags}
+        />
+      </div>
+    </div>
+  );
+}
+
 function EmptyScrawl(): JSX.Element {
   return (
     <div class="scrawl-empty">
@@ -120,6 +154,8 @@ export default function Scrawl(): JSX.Element {
   const [confirming, setConfirming] = createSignal(false);
   /** A delete in progress. The lock that keeps a double press from deleting the same row twice. */
   const [deleting, setDeleting] = createSignal(false);
+  /** The record just left. Its dot stays green for a moment. */
+  const [freshId, setFreshId] = createSignal<string | null>(null);
   /** Folds the three selection states at once. Leaving works the same from anywhere. */
   const exitSelecting = (): void => {
     setSelecting(false);
@@ -178,6 +214,18 @@ export default function Scrawl(): JSX.Element {
 
   const days = createMemo(() => scrawlDays(entries(), notes() ?? [], toIsoDate(today)));
 
+  // The day holding the input line is drawn apart from the others so the line is not rebuilt
+  // when the rows come back from a save: a rebuilt line reads the draft back before the send
+  // clears it. It follows the newest day, so a capture past midnight still lands under the line
+  const currentDay = createMemo(() => {
+    const newest = days()[0]?.date ?? "";
+    const opened = toIsoDate(today);
+    return newest > opened ? newest : opened;
+  });
+  const currentRows = createMemo(() => days().find((day) => day.date === currentDay())?.rows ?? []);
+  const pastDays = createMemo(() => days().filter((day) => day.date !== currentDay()));
+  const currentHeading = createMemo(() => formatDayHeading(currentDay(), today));
+
   // Entry datetime -> notes. A chip sits right under its origin entry
   const originNotes = createMemo(() => notesByOrigin(notes() ?? []));
   const notesFor = (item: ScrawlItem): NoteItem[] => originNotes().get(originKeyOf(item)) ?? [];
@@ -232,35 +280,39 @@ export default function Scrawl(): JSX.Element {
     document.querySelector(`[data-day="${iso}"]`)?.scrollIntoView({ block: "start" });
     setJumpTo(null);
   });
+
   const recordedDates = createMemo(() => [...new Set((scrawl()?.items ?? []).map((i) => i.date))]);
 
   const contextsFor = (iso: string): (DeviceContext | null)[] =>
     (scrawl()?.items ?? []).filter((i) => i.date === iso).map((i) => i.context);
 
   /** Rereads only the day written to. Rereading every day pays one IPC per day for a single save. */
-  const reloadDay = async (date: string): Promise<void> => {
+  const reloadDay = async (date: string): Promise<ScrawlItem[]> => {
     const items = toScrawlItems(date, await typedInvoke("read_scrawl_by_date", { date }));
     mutate((prev) => ({
       items: replaceDayItems(prev?.items ?? [], date, items),
       dates: prev?.dates ?? [],
     }));
+    return items;
   };
 
   const capture = async (text: string): Promise<void> => {
     await typedInvoke("save_quick_capture", { text, client: await getClientContext() });
-    await reloadDay(toIsoDate(new Date()));
+    const items = await reloadDay(toIsoDate(new Date()));
+    // A capture appends to the day's file, so the one just left has the highest index
+    const [left] = items.toSorted((a, b) => b.index - a.index);
+    if (left) {
+      setFreshId(left.id);
+      setTimeout(() => setFreshId((id) => (id === left.id ? null : id)), FRESH_MS);
+    }
   };
 
-  /**
-   * Promotes an entry into a note and opens it ready to write. Nothing is written
-   * to the entry's file: only the note's frontmatter `origin` links the two, and
-   * the chip is derived from it every time.
-   */
-  const promote = async (item: ScrawlItem): Promise<void> => {
+  /** Creates a note from `body` and opens it to write. */
+  const openNewNote = async (body: string, origin?: string): Promise<void> => {
     const path = await typedInvoke("create_draft", {
-      body: item.text,
-      tags: parseTags(item.text),
-      origin: `${item.date}T${item.time}`,
+      body,
+      tags: parseTags(body),
+      origin,
       client: await getClientContext(),
     });
     const filename = path.split("/").at(-1);
@@ -270,6 +322,16 @@ export default function Scrawl(): JSX.Element {
     shell.refreshData();
     navigate(writeRoute("note", filename));
   };
+
+  /** ⌘Enter on the input line: the line becomes the new Note's title. */
+  const writeNote = (text: string): Promise<void> => openNewNote(`# ${text}\n\n`);
+
+  /**
+   * Promotes an entry into a note. Nothing is written to the entry's file: only the
+   * note's frontmatter `origin` links the two, and the chip is derived from it every time.
+   */
+  const promote = (item: ScrawlItem): Promise<void> =>
+    openNewNote(item.text, `${item.date}T${item.time}`);
 
   const openNote = (note: NoteItem): void => {
     navigate(noteRoute(note.kind, note.filename));
@@ -343,6 +405,7 @@ export default function Scrawl(): JSX.Element {
       <ScrawlEntry
         item={row.item}
         notes={notesFor(row.item)}
+        fresh={freshId() === row.item.id}
         selecting={selecting()}
         selected={selected().has(row.item.id)}
         onToggle={() => toggleSelected(row.item.id)}
@@ -379,7 +442,7 @@ export default function Scrawl(): JSX.Element {
   });
 
   return (
-    <div class="scrawl">
+    <div class="scrawl" classList={{ "scrawl--selecting": selecting() }}>
       <div class="scrawl-scroll">
         <div class="scrawl-column">
           {/* The tag row and the week summary are one continuous heading strip. They
@@ -453,53 +516,67 @@ export default function Scrawl(): JSX.Element {
             </Show>
           </div>
 
-          <Show when={days().length} fallback={<EmptyScrawl />}>
-            <For each={days()}>
-              {(day, index) => {
-                const heading = createMemo(() => formatDayHeading(day.date, today));
-                return (
-                  <section class="day-group" data-day={day.date}>
-                    <header class="day-heading">
-                      <h2 class="day-heading-label">{heading().label}</h2>
-                      <span class="day-heading-date">{heading().date}</span>
-                      <span class="day-heading-count">
-                        {t().scrawl.entryCount(day.rows.length)}
-                        {/* The entry into selection is one word beside the count of the
-                            day being written. No floating bar of its own is added. Once
-                            inside, the bottom bar takes over, so it is hidden meanwhile */}
-                        <Show when={index() === 0 && !selecting()}>
-                          <span aria-hidden="true">·</span>
-                          <button
-                            type="button"
-                            class="day-heading-select"
-                            onClick={() => setSelecting(true)}
-                          >
-                            {t().scrawl.select}
-                          </button>
-                        </Show>
-                      </span>
-                    </header>
+          <section class="day-group" data-day={currentDay()}>
+            <header class="day-heading">
+              <h2 class="day-heading-label">{currentHeading().label}</h2>
+              <span class="day-heading-date">{currentHeading().date}</span>
+              <Show when={currentRows().length > 0}>
+                <span class="day-heading-count">
+                  {t().scrawl.entryCount(currentRows().length)}
+                  {/* The entry into selection is one word beside the count of the
+                      day being written. No floating bar of its own is added. Once
+                      inside, the bottom bar takes over, so it is hidden meanwhile */}
+                  <Show when={!selecting()}>
+                    <span aria-hidden="true">·</span>
+                    <button
+                      type="button"
+                      class="day-heading-select"
+                      onClick={() => setSelecting(true)}
+                    >
+                      {t().scrawl.select}
+                    </button>
+                  </Show>
+                </span>
+              </Show>
+            </header>
 
-                    <For each={day.rows}>{renderRow}</For>
-                  </section>
-                );
-              }}
-            </For>
-          </Show>
+            {/* While selecting, the bottom bar stands in for it, as it did for the floating bar */}
+            <Show when={!selecting()}>
+              <InputLine
+                knownTags={knownTags()}
+                onSend={capture}
+                onPromote={writeNote}
+                onError={() => shell.showToast(t().capture.saveFailed)}
+              />
+            </Show>
+
+            <Show when={days().length === 0}>
+              <EmptyScrawl />
+            </Show>
+            <For each={currentRows()}>{renderRow}</For>
+          </section>
+
+          <For each={pastDays()}>
+            {(day) => {
+              const heading = createMemo(() => formatDayHeading(day.date, today));
+              return (
+                <section class="day-group" data-day={day.date}>
+                  <header class="day-heading">
+                    <h2 class="day-heading-label">{heading().label}</h2>
+                    <span class="day-heading-date">{heading().date}</span>
+                    <span class="day-heading-count">{t().scrawl.entryCount(day.rows.length)}</span>
+                  </header>
+
+                  <For each={day.rows}>{renderRow}</For>
+                </section>
+              );
+            }}
+          </For>
         </div>
       </div>
 
-      <div class="capture-dock">
-        <Show
-          when={selecting()}
-          fallback={
-            <CaptureBar
-              onSend={capture}
-              onError={() => shell.showToast(t().capture.saveFailed)}
-              knownTags={knownTags()}
-            />
-          }
-        >
+      <Show when={selecting()}>
+        <div class="capture-dock">
           <div class="select-bar" role="toolbar" aria-label={t().scrawl.bulkDelete}>
             <Show
               when={confirming()}
@@ -543,8 +620,8 @@ export default function Scrawl(): JSX.Element {
               </button>
             </Show>
           </div>
-        </Show>
-      </div>
+        </div>
+      </Show>
 
       <Popover
         open={shell.popover() === "calendar"}

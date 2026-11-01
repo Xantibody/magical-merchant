@@ -131,7 +131,7 @@ describe("Scrawl capture failures", () => {
   it("keeps the draft after a failed save and lets it be retried", async () => {
     await openScrawl();
     captureFailure = new Error("disk full");
-    const input = screen.getByPlaceholderText<HTMLTextAreaElement>("いま何を記録する？");
+    const input = screen.getByRole<HTMLTextAreaElement>("textbox", { name: "書き留める" });
     fireEvent.input(input, { target: { value: "残しておきたい記録" } });
     fireEvent.keyDown(input, { key: "Enter" });
 
@@ -142,10 +142,88 @@ describe("Scrawl capture failures", () => {
     expect(days[TODAY]).toHaveLength(DAYS[TODAY].length);
 
     captureFailure = undefined;
-    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    fireEvent.keyDown(input, { key: "Enter" });
     await screen.findByText("残しておきたい記録");
     await waitFor(() => expect(input.value).toBe(""));
     expect(days[TODAY]).toHaveLength(DAYS[TODAY].length + 1);
+  });
+});
+
+function lineIn(): HTMLTextAreaElement {
+  return screen.getByRole<HTMLTextAreaElement>("textbox", { name: "書き留める" });
+}
+
+describe("Scrawl › 入力行", () => {
+  beforeEach(setupScrawl);
+  afterEach(teardownScrawl);
+
+  it("sits at the top of today, above the day's newest record", async () => {
+    await openScrawl();
+
+    const times = [...document.querySelectorAll(`[data-day="${TODAY}"] .entry-time`)].map(
+      (el) => el.textContent,
+    );
+
+    expect(times).toStrictEqual(["", "21:34", "08:15"]);
+  });
+
+  it("shows the time and the dot only once something is typed", async () => {
+    await openScrawl();
+    const row = lineIn().closest(".entry");
+    expect(row?.classList.contains("entry--typing")).toBe(false);
+
+    fireEvent.input(lineIn(), { target: { value: "あ" } });
+
+    expect(row?.classList.contains("entry--typing")).toBe(true);
+    expect(row?.querySelector(".entry-time")?.textContent).not.toBe("");
+  });
+
+  it("turns only the record just left green", async () => {
+    await openScrawl();
+
+    fireEvent.input(lineIn(), { target: { value: "今残した記録" } });
+    fireEvent.keyDown(lineIn(), { key: "Enter" });
+
+    const left = await screen.findByText("今残した記録");
+    await waitFor(() => expect(left.closest(".entry--fresh")).not.toBeNull());
+    expect(document.querySelectorAll(".entry--fresh")).toHaveLength(1);
+  });
+
+  it("keeps the line on the same element across a save", async () => {
+    await openScrawl();
+    const before = lineIn();
+
+    fireEvent.input(before, { target: { value: "残す" } });
+    fireEvent.keyDown(before, { key: "Enter" });
+    await screen.findByText("残す");
+
+    expect(lineIn()).toBe(before);
+  });
+
+  it("makes a Note with the line as its title on the modifier and Enter", async () => {
+    let body: unknown;
+    HANDLERS.create_draft = (args) => {
+      ({ body } = args);
+      return "/data/notes/20260903_091200.md";
+    };
+    await openScrawl();
+
+    fireEvent.input(lineIn(), { target: { value: "週次の振り返り" } });
+    fireEvent.keyDown(lineIn(), { key: "Enter", metaKey: true });
+
+    await waitFor(() => expect(location.pathname).toBe("/notes"));
+    expect(body).toBe("# 週次の振り返り\n\n");
+    expect(location.search).toContain("edit=1");
+    delete HANDLERS.create_draft;
+  });
+
+  it("gives way to the delete bar while selecting", async () => {
+    await openScrawl();
+
+    fireEvent.click(screen.getByRole("button", { name: "選択" }));
+
+    expect(screen.queryByRole("textbox", { name: "書き留める" })).toBeNull();
+    expect(screen.getByRole("toolbar")).toBeDefined();
   });
 });
 

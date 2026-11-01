@@ -16,8 +16,9 @@ export interface ScrawlDay {
 }
 
 /**
- * Newest day first, each day's newest record first. Notes reach back only as far as the loaded
- * entries, and a note grown from an entry on screen is left to that entry's chip.
+ * Newest day first, each day's newest record first, so the page reads back in time from the
+ * input line at the top of today. Notes reach back only as far as the loaded entries, and a
+ * note grown from an entry on screen is left to that entry's chip.
  */
 export function scrawlDays(entries: ScrawlItem[], notes: NoteItem[], today: string): ScrawlDay[] {
   const shownOrigins = new Set(entries.map((item) => originKeyOf(item)));

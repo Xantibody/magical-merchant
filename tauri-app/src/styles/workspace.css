@@ -732,55 +732,6 @@
   font-size: var(--font-size-0);
 }
 
-/* ---------------- capture bar ---------------- */
-
-.capture-bar {
-  display: flex;
-  align-items: flex-end;
-  gap: var(--size-2);
-  padding: 12px 20px 16px;
-  border-top: 1px solid var(--app-border);
-  /* Tag completion opens above this bar. Without a positioning base it flies off to a corner of the screen */
-  position: relative;
-}
-
-.capture-input {
-  flex: 1;
-  border: 1px solid var(--app-border);
-  border-radius: var(--radius-2);
-  outline: none;
-  resize: none;
-  font-family: inherit;
-  font-size: 15px;
-  line-height: 1.5;
-  background: var(--app-input-bg);
-  color: var(--app-text);
-  padding: 9px 12px;
-}
-
-.capture-send {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 9px 16px;
-  background: var(--app-accent);
-  color: var(--gray-0);
-  border: none;
-  border-radius: var(--radius-2);
-  cursor: pointer;
-  font-size: 13px;
-  font-family: inherit;
-}
-
-:root[data-theme="dark"] .capture-send {
-  color: var(--gray-9);
-}
-
-.capture-send:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
 /* ---------------- mobile: one pane at a time ---------------- */
 
 @media (max-width: 767px) {
@@ -879,28 +830,6 @@
     /* Keep a height a finger can press. Squeezed, the boundary with the body also becomes hard to see */
     min-height: 44px;
     font-size: 19px;
-  }
-
-  .capture-bar {
-    padding: 8px 12px;
-  }
-
-  .capture-input {
-    border-radius: 20px;
-    padding: 10px 16px;
-  }
-
-  .capture-send {
-    width: 44px;
-    height: 44px;
-    justify-content: center;
-    border-radius: 22px;
-    padding: 0;
-    flex-shrink: 0;
-  }
-
-  .capture-send-label {
-    display: none;
   }
 }
 

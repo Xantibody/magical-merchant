@@ -4,13 +4,17 @@ import CaptureBar from "./CaptureBar";
 
 function renderCaptureBar() {
   const onSend = vi.fn<(text: string) => Promise<void>>().mockResolvedValue();
+  const onPromote = vi.fn<(text: string) => Promise<void>>().mockResolvedValue();
   const onError = vi.fn<() => void>();
-  const { container } = render(() => <CaptureBar onSend={onSend} onError={onError} />);
+  const onTyping = vi.fn<(typing: boolean) => void>();
+  const { container } = render(() => (
+    <CaptureBar onSend={onSend} onPromote={onPromote} onError={onError} onTyping={onTyping} />
+  ));
   const textarea = container.querySelector<HTMLTextAreaElement>(".capture-input");
   if (!textarea) {
     throw new Error("capture-input not found");
   }
-  return { onSend, onError, textarea };
+  return { onSend, onPromote, onError, onTyping, textarea };
 }
 
 describe("CaptureBar", () => {
@@ -57,6 +61,42 @@ describe("CaptureBar", () => {
     fireEvent.keyDown(textarea, { key: "Enter" });
 
     expect(onSend).toHaveBeenCalledExactlyOnceWith("買い物メモ");
+  });
+
+  it.each([{ metaKey: true }, { ctrlKey: true }])(
+    "hands the text to a Note on %o + Enter instead of recording it",
+    async (modifier) => {
+      const { onSend, onPromote, textarea } = renderCaptureBar();
+      fireEvent.input(textarea, { target: { value: "週次の振り返り " } });
+
+      fireEvent.keyDown(textarea, { key: "Enter", ...modifier });
+      await Promise.resolve();
+
+      expect(onPromote).toHaveBeenCalledExactlyOnceWith("週次の振り返り");
+      expect(onSend).not.toHaveBeenCalled();
+      expect(localStorage.getItem("scrawl-draft")).toBeNull();
+    },
+  );
+
+  it("leaves the Enter that ends a conversion to the IME even with the modifier", () => {
+    const { onPromote, textarea } = renderCaptureBar();
+    fireEvent.input(textarea, { target: { value: "かんじへんかん" } });
+
+    fireEvent.keyDown(textarea, { key: "Enter", metaKey: true, isComposing: true });
+
+    expect(onPromote).not.toHaveBeenCalled();
+  });
+
+  // The line shows its time and dot only then, so an empty line does not read as a record
+  it("says whether anything is typed", () => {
+    const { onTyping, textarea } = renderCaptureBar();
+    expect(onTyping).toHaveBeenLastCalledWith(false);
+
+    fireEvent.input(textarea, { target: { value: "あ" } });
+    expect(onTyping).toHaveBeenLastCalledWith(true);
+
+    fireEvent.input(textarea, { target: { value: "  " } });
+    expect(onTyping).toHaveBeenLastCalledWith(false);
   });
 
   it.each(["買い物と明日の予定", "次の記録"])(
