@@ -38,7 +38,7 @@
       description: [
         "@tauri-apps/api と cli は npm 側が先に出る。crate の tauri と minor が",
         "揃っていないと cargo-tauri が「version mismatched Tauri packages」で",
-        "ビルドを止めるので、範囲は ~2.10 に絞り patch だけ流す。crate が 2.11 に",
+        "ビルドを止めるので、範囲は ~2.12 に絞り patch だけ流す。crate が 2.13 に",
         "上がったら手で範囲を動かす",
       ],
       matchManagers: ["npm"],
