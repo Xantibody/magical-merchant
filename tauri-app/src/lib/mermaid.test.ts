@@ -54,6 +54,18 @@ describe("renderDiagrams", () => {
     expect(scoped).not.toContain("foreignObject");
   });
 
+  /**
+   * The ELK chunk outweighs the rest of mermaid. It stays a lazy chunk, so what shows that
+   * an ordinary diagram still takes dagre is that the chunk is never fetched
+   */
+  it("draws a flowchart without fetching the ELK layout", async () => {
+    drawn(await renderDiagrams([FLOWCHART]));
+
+    const fetched = performance.getEntriesByType("resource").map((entry) => entry.name);
+    expect(fetched.some((name) => name.includes("mermaid"))).toBe(true);
+    expect(fetched.filter((name) => /\belk\b/iu.test(name))).toStrictEqual([]);
+  });
+
   it("keeps the label text itself", async () => {
     const [sequence] = drawn(await renderDiagrams([SEQUENCE]));
 

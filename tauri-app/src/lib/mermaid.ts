@@ -100,13 +100,16 @@ export async function renderDiagrams(sources: string[]): Promise<(string | null)
     // Draw labels with SVG text rather than a foreignObject (HTML). A browser does not
     // draw a foreignObject inside an SVG loaded as an <img>, so if one is left the text
     // alone vanishes from the PNG. How <br/> and bold look inside a label does change.
-    // AIDEV-NOTE: per-diagram htmlLabels (flowchart.htmlLabels) is dead in mermaid 11. Only this root one works
+    // AIDEV-NOTE: per-diagram htmlLabels (flowchart.htmlLabels) has been dead since mermaid 11. Only this root one works
     htmlLabels: false,
     // A key listed in `secure` cannot be rewritten by a `%%{init: ...}%%` inside the
     // diagram. mermaid's sanitize descends into nested objects under the same name, so
     // flowchart.htmlLabels falls with it.
     // AIDEV-NOTE: the default secure is an array. initialize merges arrays as a union, not a replacement, so the default keys stay
     secure: ["htmlLabels"],
+    // AIDEV-NOTE: mermaid 12 defaults to ELK and a new look. ELK alone is about 450 KB gzip and re-lays out every existing diagram, so both stay on the old values. A note can still ask for ELK in its own diagram
+    layout: "dagre",
+    look: "classic",
     ...themeConfig(),
   });
 
