@@ -676,3 +676,45 @@ describe("the list flyout", () => {
     expect(getComputedStyle(element(".detail-pane")).animationName).toBe("none");
   });
 });
+
+describe("viewer head: title, then the date line, then the body", () => {
+  beforeAll(async () => {
+    await import("../index.css");
+    await import("./workspace.css");
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  function mountViewerHead(): void {
+    document.body.innerHTML = `
+      <div class="detail-pane">
+        <div class="detail-head">
+          <h1 class="note-title-view">題</h1>
+          <div class="detail-meta-line"><span>10月9日</span><span class="meta-tag">#a</span></div>
+        </div>
+        <div class="detail-panes">
+          <div class="detail-body"><div class="markdown-preview"><p>本文</p></div></div>
+        </div>
+      </div>`;
+  }
+
+  it("leaves 12px under the title and 32px over the body", () => {
+    mountViewerHead();
+    const line = element(".detail-meta-line").getBoundingClientRect();
+
+    expect(round(line.top - element(".note-title-view").getBoundingClientRect().bottom)).toBe(12);
+    expect(round(element(".markdown-preview").getBoundingClientRect().top - line.bottom)).toBe(32);
+  });
+
+  it("sets the title 30px with a 1% tighter spacing, and parts the line by a 10px gap", () => {
+    mountViewerHead();
+    const title = getComputedStyle(element(".note-title-view"));
+
+    expect(title.fontSize).toBe("30px");
+    expect(title.letterSpacing).toBe("-0.3px");
+    expect(getComputedStyle(element(".detail-meta-line")).columnGap).toBe("10px");
+    expect(getComputedStyle(element(".meta-tag")).backgroundColor).toBe("rgba(0, 0, 0, 0)");
+  });
+});
