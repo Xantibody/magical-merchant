@@ -383,8 +383,8 @@ function shownTitle(): string {
   );
 }
 
-/** The version count shown on the Codex meta line. */
-const metaLine = (): HTMLElement | null => document.querySelector(".detail-version-status");
+/** The Codex version label handed to the shell. The writing screen has no meta line to read it from. */
+const versionLabel = (): string | undefined => shell?.noteState()?.version;
 
 /**
  * A version row in the history. Its first line is `版 N` plus a timestamp, so a digit of the
@@ -761,7 +761,7 @@ describe("Workspace › ビューアと書く画面", () => {
   });
 
   // What leads to the panel from outside the strip goes through the viewer
-  it("leaves the writing screen when the bottom bar opens the panel", async () => {
+  it("leaves the writing screen when the status details open the panel", async () => {
     await openNoteA();
     await waitFor(() => expect(shell?.noteState()).not.toBeNull());
 
@@ -1894,11 +1894,26 @@ describe("Workspace › Codex の版", () => {
   }
 
   // A version is a mark a person cuts. Neither a save nor moving to another note triggers one
+  // ADR 0011: the version left the bottom bar for the meta line, which only the viewer has
+  it("says the version on the viewer's meta line", async () => {
+    disk.set(FILE_C, BODY_C);
+    kinds.set(FILE_C, "codex");
+    renderWorkspace();
+    navigateTo?.("/codex");
+    fireEvent.click(await rowOf(TITLE_C));
+
+    await waitFor(() =>
+      expect(document.querySelector(".detail-meta-line .detail-version-status")?.textContent).toBe(
+        "版なし",
+      ),
+    );
+  });
+
   it("never commits a version on its own", async () => {
     disk.set(FILE_D, `# ${TITLE_D}\n\n本文`);
     kinds.set(FILE_D, "codex");
     await openCodexC();
-    await waitFor(() => expect(metaLine()?.textContent).toBe("版なし"));
+    await waitFor(() => expect(versionLabel()).toBe("版なし"));
 
     await startEditingBody();
     typeInEditor?.(`# ${TITLE_C}\n\n${TEXT_C}\n\n足した行`);
@@ -1915,7 +1930,7 @@ describe("Workspace › Codex の版", () => {
   // version nor into the draft
   it("flushes pending edits before showing history", async () => {
     await openCodexC();
-    await waitFor(() => expect(metaLine()?.textContent).toBe("版なし"));
+    await waitFor(() => expect(versionLabel()).toBe("版なし"));
 
     await startEditingBody();
     typeInEditor?.(`# ${TITLE_C}\n\n${TEXT_C}\n\n足した行`);
@@ -1950,12 +1965,12 @@ describe("Workspace › Codex の版", () => {
   // list while only the version count on the meta line stays stale, it cannot be trusted
   it("refreshes the version status when data changes elsewhere", async () => {
     await openCodexC();
-    await waitFor(() => expect(metaLine()?.textContent).toBe("版なし"));
+    await waitFor(() => expect(versionLabel()).toBe("版なし"));
 
     versions.set(FILE_C, [{ id: "v1", message: "別の端末で", body: BODY_C }]);
     shell?.refreshData();
 
-    await waitFor(() => expect(metaLine()?.textContent).toBe("版 1"));
+    await waitFor(() => expect(versionLabel()).toBe("版 1"));
   });
 
   // Moving a Note to Codex keeps `[[ID]]` pointing at the same ID. With a resolution table
@@ -1977,7 +1992,7 @@ describe("Workspace › Codex の版", () => {
   // not touch the body
   it("commits at once without a message and can be undone from the toast", async () => {
     await openCodexC();
-    await waitFor(() => expect(metaLine()?.textContent).toBe("版なし"));
+    await waitFor(() => expect(versionLabel()).toBe("版なし"));
     await openHistoryTab();
     await waitFor(() => expect(historyShown()).toBe(true));
 
@@ -1991,7 +2006,7 @@ describe("Workspace › Codex の版", () => {
     // The history gains one dot as well: the hollow one for the draft plus the filled one for
     // the version. The row just committed enters with a hop, so only that one row is marked
     await waitFor(() => expect(document.querySelector(".history-row--fresh")).not.toBeNull());
-    await waitFor(() => expect(metaLine()?.textContent).toBe("版 1"));
+    await waitFor(() => expect(versionLabel()).toBe("版 1"));
     expect(document.querySelectorAll(".history-panel .history-dot")).toHaveLength(2);
     expect(shell?.toast()?.message).toBe("版 1 を刻みました");
     expect(shell?.toast()?.detail).toBe(`${BODY_C.length} B`);
@@ -2003,7 +2018,7 @@ describe("Workspace › Codex の版", () => {
       filename: FILE_C,
       id: "v1",
     });
-    await waitFor(() => expect(metaLine()?.textContent).toBe("版なし"));
+    await waitFor(() => expect(versionLabel()).toBe("版なし"));
     expect(disk.get(FILE_C)).toBe(BODY_C);
   });
 
@@ -2068,7 +2083,7 @@ describe("Workspace › Codex の版", () => {
   it("selects the version that is newest at the moment the history opens", async () => {
     versions.set(FILE_C, [{ id: "v1", message: null, body: BODY_C }]);
     await openCodexC();
-    await waitFor(() => expect(metaLine()?.textContent).toBe("版 1"));
+    await waitFor(() => expect(versionLabel()).toBe("版 1"));
 
     versions.set(FILE_C, [
       { id: "v2", message: null, body: BODY_C },
@@ -2178,7 +2193,7 @@ describe("Workspace › Codex の版", () => {
     expect(historyShown()).toBe(false);
     // The pre-restore draft becomes the newest version, and the restored body differs from it,
     // so a distance is shown
-    await waitFor(() => expect(metaLine()?.textContent).toMatch(/^版 2 から /u));
+    await waitFor(() => expect(versionLabel()).toMatch(/^版 2 から /u));
   });
 
   // The restore write can go through while the reread that follows never reaches the screen.

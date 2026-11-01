@@ -1871,7 +1871,20 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                     and widgets point at, not something to show a person */}
                   <Show when={!writing()}>
                     <h1 class="note-title-view">{noteTitle() || t().notes.untitled}</h1>
-                    <div class="detail-meta-line">{metaLine(item(), bodyTags())}</div>
+                    <div class="detail-meta-line">
+                      {metaLine(item(), bodyTags())}
+                      {/* A Codex always shows how far it has moved from the newest version */}
+                      <Show when={kind() === "codex" && versionStatus()}>
+                        {(status) => (
+                          <span
+                            class="detail-version-status"
+                            classList={{ "detail-version-status--moved": status().dirty }}
+                          >
+                            {versionStatusLabel(status())}
+                          </span>
+                        )}
+                      </Show>
+                    </div>
                   </Show>
 
                   {/* The phone's state row. A wide window says the same in the bottom bar, so it
@@ -1890,17 +1903,6 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                         {saveStatus() === "savedAt" ? t().notes.savedAt(savedAt()) : null}
                         {saveStatus() === "failed" ? t().status.saveFailed : null}
                       </span>
-                    </Show>
-                    {/* A Codex always shows how far it has moved from the newest version */}
-                    <Show when={kind() === "codex" && versionStatus()}>
-                      {(status) => (
-                        <span
-                          class="detail-version-status"
-                          classList={{ "detail-version-status--moved": status().dirty }}
-                        >
-                          {versionStatusLabel(status())}
-                        </span>
-                      )}
                     </Show>
                     <Show when={mapShown()}>
                       <button
