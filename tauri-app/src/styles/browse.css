@@ -168,13 +168,12 @@
   background: var(--app-accent-soft);
 }
 
-.browse-row .icon {
-  display: flex;
-  color: var(--app-text-faint);
+.browse-row .kind-dot {
+  justify-self: center;
 }
 
-.browse-row--active .icon {
-  color: var(--app-text-muted);
+.kind-dot--filled + .browse-row-title {
+  font-weight: 600;
 }
 
 .browse-row-title {

@@ -116,6 +116,14 @@
   color: var(--app-text-muted);
 }
 
+.palette-row .kind-dot {
+  margin-inline: 4px;
+}
+
+.kind-dot--filled + .palette-row-text .palette-row-label {
+  font-weight: 600;
+}
+
 .palette-row-text {
   display: flex;
   flex-direction: column;

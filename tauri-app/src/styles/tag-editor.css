@@ -23,6 +23,7 @@
   background: none;
   color: var(--app-text-muted);
   font: inherit;
+  font-size: 13px;
   cursor: pointer;
 }
 

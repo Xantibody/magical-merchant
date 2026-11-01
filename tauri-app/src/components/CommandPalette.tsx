@@ -1,6 +1,7 @@
 import { createSignal, createResource, createMemo, For, Show, onMount } from "solid-js";
 import type { JSX } from "solid-js";
 import Icon from "./Icon";
+import KindDot from "./KindDot";
 import type { IconName } from "./Icon";
 import { typedInvoke } from "../lib/commands";
 import type { HitKind, SearchHit } from "../lib/commands";
@@ -11,7 +12,7 @@ import { isImeComposing } from "../lib/ime";
 import { toNoteItems } from "../lib/items";
 import { countNoteTags, dayJumpHits, recentNoteHits } from "../lib/palette-home";
 import { scopeLabel, searchRequest } from "../lib/search-scope";
-import { HIT_ICONS, MODE_LABELS, ROUTES } from "../lib/routes";
+import { MODE_LABELS, ROUTES } from "../lib/routes";
 import { splitSnippet } from "../lib/snippet-highlight";
 import type { SnippetParts } from "../lib/snippet-highlight";
 
@@ -31,9 +32,11 @@ interface CommandPaletteProps {
   onClose: () => void;
 }
 
-interface PaletteRow {
+/** A command has an icon. A record has none; its kind is the dot. */
+type PaletteMark = { icon: IconName; kind?: undefined } | { kind: HitKind; icon?: undefined };
+
+type PaletteRow = PaletteMark & {
   key: string;
-  icon: IconName;
   label: string;
   /** The matched word inside the title. Where the underline goes; absent when nothing matched. */
   labelMatch?: SnippetParts | null;
@@ -41,7 +44,7 @@ interface PaletteRow {
   /** Excerpt with the match position. Not shown when the title already carries the match. */
   highlight?: SnippetParts | null;
   run: () => void;
-}
+};
 
 interface PaletteSection {
   title: string;
@@ -245,7 +248,7 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
           const label = hit.title || hit.snippet;
           return {
             key: `hit:${i}`,
-            icon: HIT_ICONS[hit.kind],
+            kind: hit.kind,
             label,
             labelMatch: matchInLabel(label, searchWord()),
             meta: formatMonthDay(hit.date),
@@ -355,7 +358,7 @@ export default function CommandPalette(props: CommandPaletteProps): JSX.Element 
                       classList={{ "palette-row--active": clampedCursor() === globalIndex(row) }}
                       onClick={() => row.run()}
                     >
-                      <Icon name={row.icon} size={16} />
+                      {row.kind ? <KindDot kind={row.kind} /> : <Icon name={row.icon} size={16} />}
                       <span class="palette-row-text">
                         <span class="palette-row-label">
                           <Show when={row.labelMatch} fallback={row.label}>

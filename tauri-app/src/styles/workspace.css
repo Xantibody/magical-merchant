@@ -895,9 +895,8 @@
   color: var(--app-text);
 }
 
-.backlink-row .icon {
-  flex-shrink: 0;
-  color: var(--app-text-faint);
+.kind-dot--filled + .backlink-title {
+  font-weight: 600;
 }
 
 .backlink-title {

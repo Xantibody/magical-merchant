@@ -182,6 +182,21 @@ body {
   background: var(--app-surface-2);
 }
 
+/* A record's kind in a row. The ring is a line, so it takes the line colour */
+.kind-dot {
+  flex-shrink: 0;
+  box-sizing: border-box;
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--app-text-hint);
+  border-radius: 50%;
+}
+
+.kind-dot--filled {
+  border-color: var(--app-text);
+  background: var(--app-text);
+}
+
 /* The key spelled out at the right edge of a row or a field. Distinct from the
    badge shown by holding the modifier (below); this one is always visible */
 .key-badge {
