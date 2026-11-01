@@ -47,10 +47,10 @@ interface NotePanelProps {
   /** A new created time, as the datetime-local input gave it. */
   onEditTime: (value: string) => void;
   /**
-   * The phone's tag section. The desktop edits tags on the meta line instead. A function, so
-   * the editor is built once where it is placed rather than on every read of the prop.
+   * The tag section. A function, so the editor is built once where it is placed rather than on
+   * every read of the prop.
    */
-  tags?: () => JSX.Element;
+  tags: () => JSX.Element;
 
   canRevert: boolean;
   /** Why revert cannot be pressed. Absent when there is nothing worth saying. */
@@ -214,14 +214,8 @@ export default function NotePanel(props: NotePanelProps): JSX.Element {
       </Show>
       <p class="note-panel-hint">{t().notes.viewExclusive}</p>
 
-      <Show when={props.tags}>
-        {(render) => (
-          <>
-            <div class="note-panel-section">{t().common.tags}</div>
-            <div class="note-panel-tags">{render()()}</div>
-          </>
-        )}
-      </Show>
+      <div class="note-panel-section">{t().common.tags}</div>
+      <div class="note-panel-tags">{props.tags()}</div>
 
       <button
         type="button"

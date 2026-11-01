@@ -179,6 +179,21 @@ interface WorkspaceProps {
   kind?: NoteKind;
 }
 
+/** What the meta line shows. Nothing in it can be pressed or edited. */
+function metaLine(item: NoteItem): JSX.Element {
+  return (
+    <>
+      <span>{noteCreatedLabel(item)}</span>
+      <Show when={item.tags.length > 0}>
+        <span class="detail-meta-sep" aria-hidden="true">
+          ·
+        </span>
+        <span class="detail-meta-tags">{item.tags.map((tag) => `#${tag}`).join(" ")}</span>
+      </Show>
+    </>
+  );
+}
+
 export default function Workspace(props: WorkspaceProps): JSX.Element {
   const kind = (): NoteKind => props.kind ?? "note";
   const shell = useShell();
@@ -364,16 +379,12 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
 
   /**
    * The frontmatter as written. The list carries tags already merged with the body's `#tag`s,
-   * so what can be edited (the frontmatter's own tags, the created time) is read only when
-   * someone is about to edit it: the details unfolded, the tags pressed, or the phone's panel
-   * screen (its tag chips carry an × from the start). It is read again each time, so another
-   * device's edit is not written back over.
+   * so what can be edited (the frontmatter's own tags, the created time) is read only while the
+   * panel that edits it is open. It is read again each time, so another device's edit is not
+   * written back over.
    */
   const [noteMeta, { refetch: refetchMeta, mutate: mutateMeta }] = createResource(
-    () =>
-      tagEditing() || panelScreenShown() || (detailsOpen() && panelOpen())
-        ? selected()?.filename
-        : undefined,
+    () => (panelScreenShown() || panelOpen() ? selected()?.filename : undefined),
     async (filename) => ({ filename, meta: await typedInvoke("read_note_meta", { filename }) }),
   );
   /**
@@ -1395,7 +1406,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   /** The panel's name, which is also what its toggle and the phone's meta line say. */
   const panelLabel = (): string => (kind() === "codex" ? t().codex.panel : t().notes.panel);
 
-  /** The tags, edited where they are read. The phone's copy lives on the panel screen. */
+  /** The panel's tags. The meta line only shows them. */
   const tagEditor = (item: () => NoteItem, screen: boolean): JSX.Element => (
     <TagEditor
       tags={item().tags}
@@ -1450,7 +1461,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
           void saveMeta(item(), { time });
         }
       }}
-      tags={screen ? () => tagEditor(item, true) : undefined}
+      tags={() => tagEditor(item, screen)}
       canRevert={canRevert()}
       revertHint={revertHint()}
       onRevert={() => {
@@ -1740,28 +1751,12 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                         aria-label={panelLabel()}
                         onClick={() => setPanelScreen(true)}
                       >
-                        <span>{noteCreatedLabel(item())}</span>
-                        <Show when={item().tags.length > 0}>
-                          <span class="detail-meta-sep" aria-hidden="true">
-                            ·
-                          </span>
-                          <span class="detail-meta-tags">
-                            {item()
-                              .tags.map((tag) => `#${tag}`)
-                              .join(" ")}
-                          </span>
-                        </Show>
+                        {metaLine(item())}
                         <Icon name="caret-right" size={12} />
                       </button>
                     }
                   >
-                    <div class="detail-meta-line">
-                      <span>{noteCreatedLabel(item())}</span>
-                      <span class="detail-meta-sep" aria-hidden="true">
-                        ·
-                      </span>
-                      {tagEditor(item, false)}
-                    </div>
+                    <div class="detail-meta-line">{metaLine(item())}</div>
                   </Show>
 
                   {/* The phone's state row. A wide window says the same in the bottom bar, so it
