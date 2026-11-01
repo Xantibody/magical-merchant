@@ -1133,11 +1133,6 @@ export default function Templates(): JSX.Element {
                     if (e.key === "Enter" && !isImeComposing(e)) {
                       e.preventDefault();
                       commitTagInput();
-                    } else if (e.key === "Backspace" && tagInput() === "" && tags().length > 0) {
-                      // Nothing left to delete in the field: the tag before it goes, as in a chip input
-                      e.preventDefault();
-                      setTags((tagList) => tagList.slice(0, -1));
-                      edited();
                     }
                   }}
                 />
