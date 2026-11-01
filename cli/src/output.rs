@@ -6,7 +6,7 @@
 
 use magical_merchant_core::utils::device::{Context, NetworkType};
 use magical_merchant_core::{
-    GlyphSummary, NoteSummary, ScrawlEntry, SearchHit, Snapshot, TemplateSummary,
+    GlyphSummary, NoteSummary, ScrawlEntry, SearchHit, Snapshot, TemplateSummary, Version,
 };
 use rmcp::schemars;
 use serde::Serialize;
@@ -384,6 +384,57 @@ pub(crate) struct UpdatedNoteOutput {
     /// Fingerprint of the body now on disk; the `revision` for a further
     /// `update_note`.
     pub(crate) revision: Option<String>,
+}
+
+#[derive(Serialize, schemars::JsonSchema)]
+pub(crate) struct CodexVersionsOutput {
+    /// Newest first.
+    pub(crate) versions: Vec<CodexVersionInfo>,
+    /// Whether the draft has moved on from the latest version. False when
+    /// there is no version yet.
+    pub(crate) dirty: bool,
+    /// The draft's size in bytes minus the latest version's. 0 when there is
+    /// no version yet.
+    pub(crate) bytes_delta: i64,
+}
+
+/// One version a person committed. Not a `note_history` copy: those are taken by
+/// the machine and stay on the device, these are part of the document.
+#[derive(Serialize, schemars::JsonSchema)]
+pub(crate) struct CodexVersionInfo {
+    /// The argument to pass to `read_codex_version` / `diff_codex_versions`.
+    pub(crate) id: String,
+    /// When it was committed, RFC 3339 with the device's UTC offset.
+    pub(crate) time: String,
+    pub(crate) message: Option<String>,
+    pub(crate) bytes: u64,
+}
+
+impl From<Version> for CodexVersionInfo {
+    fn from(v: Version) -> Self {
+        Self {
+            id: v.id,
+            time: v.time.to_rfc3339(),
+            message: v.message,
+            bytes: v.bytes,
+        }
+    }
+}
+
+#[derive(Serialize, schemars::JsonSchema)]
+pub(crate) struct CodexVersionOutput {
+    pub(crate) id: String,
+    /// Markdown body of that version, without the frontmatter.
+    pub(crate) body: String,
+}
+
+#[derive(Serialize, schemars::JsonSchema)]
+pub(crate) struct CodexDiffOutput {
+    pub(crate) from: String,
+    /// A version id, or `draft` for the current body.
+    pub(crate) to: String,
+    /// Unified diff; empty when the two sides are identical.
+    pub(crate) diff: String,
 }
 
 /// One saved copy of a note, taken before a write replaced it.
