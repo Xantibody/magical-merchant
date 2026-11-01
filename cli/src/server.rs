@@ -8,7 +8,8 @@ use magical_merchant_core::utils::frontmatter;
 use magical_merchant_core::utils::paths::place_cache_path;
 use magical_merchant_core::utils::place::{PlaceCache, place_key};
 use magical_merchant_core::{
-    GlyphFormat, GlyphName, NoteFilename, Provenance, Revision, Source, parse_scrawl_entry,
+    GlyphFormat, GlyphName, NoteFilename, NoteKind, Provenance, Revision, Source,
+    parse_scrawl_entry,
 };
 use rmcp::handler::server::tool::ToolRouter;
 use rmcp::handler::server::wrapper::{Json, Parameters};
@@ -529,6 +530,7 @@ impl McpServer {
         let tags = param.tags.unwrap_or_default();
         let created = notes::create(
             &self.data_dir,
+            NoteKind::Note,
             &param.body,
             &tags,
             // This goes through the same `notes::create` as the CLI, so without naming the

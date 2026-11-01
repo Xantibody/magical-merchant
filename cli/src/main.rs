@@ -14,6 +14,7 @@ use std::io::{IsTerminal, Read as _, Write as _};
 use std::path::{Path, PathBuf};
 
 use clap::{Parser, Subcommand};
+use magical_merchant_core::Source;
 use rmcp::ServiceExt;
 
 /// The same place as Tauri's `app_data_dir`. Change the app identifier and this changes too.
@@ -250,7 +251,8 @@ fn run_scrawl(data_dir: &Path, command: ScrawlCommand) -> anyhow::Result<()> {
                     Some(text)
                 }
             };
-            let added = text.is_some_and(|t| scrawl::add(data_dir, &t).is_ok_and(|a| a));
+            let added =
+                text.is_some_and(|t| scrawl::add(data_dir, &t, Source::Cli).is_ok_and(|a| a));
             if added {
                 eprintln!("added to today's scrawl");
             } else {
