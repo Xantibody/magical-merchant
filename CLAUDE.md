@@ -77,7 +77,9 @@ ready to record the moment it opens (widgets exist for exactly this).
   from `browse_all`, a body `#tag` has no ×). **There is no edit mode** — the
   Milkdown editor is open from the moment a note is; frontmatter `view` decides
   the exception (`preview` = read-only, `mindmap` = map laid alongside, absent
-  = editable). Everything per-note lives in the **note panel**
+  = editable). Vim keys are opt-in (Settings, desktop only, `lib/vim-plugin.ts`):
+  a small normal / visual mode, always starting in insert. Everything per-note
+  lives in the **note panel**
   (`components/NotePanel.tsx`, `styles/note-panel.css`): 320px at the right
   edge — the view switches, 詳細 (created time editable, updated, surroundings),
   revert / Codex にする (a corvu confirm, `PromoteDialog.tsx`) / delete. Resting

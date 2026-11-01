@@ -84,7 +84,10 @@ export function matchesShortcut(e: KeyboardEvent, name: ShortcutName): boolean {
   );
 }
 
-/** Whether a `?` pressed there becomes a character. */
+/**
+ * Whether a `?` pressed there becomes a character. The editor in Vim's normal mode is not
+ * editable (`vim-plugin.ts`), but its keys are still the editor's, so it counts too.
+ */
 export function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) {
     return false;
@@ -93,5 +96,5 @@ export function isTypingTarget(target: EventTarget | null): boolean {
   if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") {
     return true;
   }
-  return target.closest('[contenteditable="true"], [contenteditable=""]') !== null;
+  return target.closest('[contenteditable="true"], [contenteditable=""], .vim-normal') !== null;
 }

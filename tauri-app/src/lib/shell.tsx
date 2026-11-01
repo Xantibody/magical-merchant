@@ -26,6 +26,8 @@ export interface NoteBar {
   version?: string;
   /** While comparing with a version. "comparing with version 2 · 3 lines added". */
   comparing?: string;
+  /** The Vim mode, when the editor has one other than insert. "Normal" and the like. */
+  vim?: string;
   readOnly: boolean;
   map: boolean;
   examples: boolean;

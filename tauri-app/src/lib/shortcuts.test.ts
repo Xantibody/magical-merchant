@@ -129,3 +129,15 @@ describe("isTypingTarget", () => {
     expect(SHORTCUT_LIST_KEY).toBe("?");
   });
 });
+
+describe("isTypingTarget in Vim's normal mode", () => {
+  // The body is not editable there, but its keys are still the editor's
+  it("treats the editor as typing while it is in normal mode", () => {
+    const editor = document.createElement("div");
+    editor.className = "ProseMirror vim-normal";
+    editor.setAttribute("contenteditable", "false");
+    const paragraph = document.createElement("p");
+    editor.append(paragraph);
+    expect(isTypingTarget(paragraph)).toBe(true);
+  });
+});

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isMacDesktop } from "./platform";
+import { isDesktop, isMacDesktop } from "./platform";
 
 const MAC_WKWEBVIEW =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)";
@@ -30,5 +30,21 @@ describe("isMacDesktop", () => {
 
   it("is false for an empty user agent", () => {
     expect(isMacDesktop("")).toBe(false);
+  });
+});
+
+describe("isDesktop", () => {
+  it.each([
+    ["the macOS WKWebView", MAC_WKWEBVIEW],
+    ["Windows", WINDOWS_WEBVIEW2],
+  ])("is true on %s", (_name, userAgent) => {
+    expect(isDesktop(userAgent)).toBe(true);
+  });
+
+  it.each([
+    ["Android", ANDROID_WEBVIEW],
+    ["an iPad", IPAD_SAFARI],
+  ])("is false on %s", (_name, userAgent) => {
+    expect(isDesktop(userAgent)).toBe(false);
   });
 });

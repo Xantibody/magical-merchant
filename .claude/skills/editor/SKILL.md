@@ -42,6 +42,7 @@ path — `Workspace` itself is lazy, prefetched during idle time from
 | Custom   | input-rule-undo-plugin                                                             | Backspace right after `- ` / `1. ` gives the marker back despite trailing                  |
 | Custom   | tab-keymap-plugin                                                                  | Tab / Shift-Tab never leave the editor; in code blocks they indent                         |
 | Custom   | hr-selection-plugin                                                                | after the `---` rule the cursor lands below the rule, not on it                            |
+| Custom   | vim-plugin (opt-in)                                                                | normal / visual mode; keys taken at the DOM keydown ahead of every keymap                  |
 
 **Rejected** (do not re-propose): block/tooltip/slash (visible chrome),
 code-block component (CodeMirror ~150KB), indent/upload/image-\*/table-block
