@@ -2391,6 +2391,22 @@ describe("Workspace › タグ", () => {
     expect(outlined[0].textContent).toBe("#idea");
   });
 
+  // The strip's controls are symbols and keys, like the rail. The name stays for the pointer
+  // and the screen reader
+  it("names the strip's write and done buttons without printing them", async () => {
+    await viewNoteA();
+
+    const write = await screen.findByRole("button", { name: "書く" });
+    expect(write.textContent).toBe("");
+    expect(write.title).toContain("書く");
+
+    fireEvent.click(write);
+
+    const done = await screen.findByRole("button", { name: "完了" });
+    expect(done.textContent).toBe("");
+    expect(done.title).toContain("完了");
+  });
+
   // Choosing a record is opening it, wherever the hand was (ADR 0003)
   it("opens a note chosen from the list in the viewer, even from the writing screen", async () => {
     disk.set(FILE_B, BODY_B);

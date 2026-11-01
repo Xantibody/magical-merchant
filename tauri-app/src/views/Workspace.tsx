@@ -1781,24 +1781,25 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                         </button>
                         <button
                           type="button"
-                          class="note-strip-write"
+                          class="icon-button"
                           title={`${t().viewer.write} ↵`}
+                          aria-label={t().viewer.write}
                           disabled={historyOpen()}
                           onClick={startWriting}
                         >
-                          {t().viewer.write}
+                          <Icon name="pencil" size={17} />
                         </button>
                       </>
                     }
                   >
                     <button
                       type="button"
-                      class="note-strip-done"
+                      class="icon-button"
                       title={`${t().viewer.done} Esc`}
+                      aria-label={t().viewer.done}
                       onClick={stopWriting}
                     >
-                      <Icon name="check" size={14} />
-                      {t().viewer.done}
+                      <Icon name="check" size={17} />
                     </button>
                     <span class="note-strip-fill" />
                   </Show>
