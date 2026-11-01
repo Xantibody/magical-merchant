@@ -7,7 +7,6 @@ import { EVENTS } from "./events";
 import { t } from "./i18n";
 import { describeSyncError, describeSyncResult, syncErrorKind } from "./sync-status";
 import type { SyncResultPayload } from "./sync-status";
-import type { IconName } from "../components/Icon";
 
 export type SyncStatus = "idle" | "syncing" | "success" | "error" | "needs-setup" | "signed-out";
 
@@ -35,24 +34,6 @@ export interface SyncState {
   leave: () => void;
   /** Goes up each time a round stops in a way the user has to hear about. */
   alertVersion: Accessor<number>;
-}
-
-export function syncIconName(status: SyncStatus): IconName {
-  switch (status) {
-    case "syncing": {
-      return "cloud-arrow-up";
-    }
-    case "error":
-    case "signed-out": {
-      return "cloud-warning";
-    }
-    case "needs-setup": {
-      return "cloud-slash";
-    }
-    default: {
-      return "cloud-check";
-    }
-  }
 }
 
 /** What the toast says when a round stops. The reason itself stays in the dot's details. */

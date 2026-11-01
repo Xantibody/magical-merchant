@@ -354,7 +354,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
 
   return (
     <div class="app">
-      <Rail sync={sync} onSearch={openSearch} />
+      <Rail onSearch={openSearch} />
 
       <div class="app-column">
         {/* A narrow screen has no width for the rail. The title and a few entries make a strip */}
