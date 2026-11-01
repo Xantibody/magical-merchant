@@ -12,9 +12,11 @@ mod fixture;
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use std::hint::black_box;
 
+use magical_merchant_core::search::{HitKind, SearchFilter};
 use magical_merchant_core::sync::scan::scan_local_files;
 use magical_merchant_core::{
-    find_backlinks, list_notes, list_scrawl_dates, read_scrawl, search_all,
+    browse_all, find_backlinks, list_notes, list_scrawl_dates, read_scrawl, recent_records,
+    search_all, search_records,
 };
 
 fn search(c: &mut Criterion) {
@@ -46,6 +48,46 @@ fn backlinks(c: &mut Criterion) {
 
     c.bench_function("find_backlinks", |b| {
         b.iter(|| find_backlinks(black_box(base), black_box(&target)).unwrap());
+    });
+}
+
+/// What the search field reads the moment it opens (and Browse, and the tag suggestions):
+/// every Scrawl day and every note, with no needle to stop early on. `search_records` with a
+/// kind alone is the other no-needle path, taken when a kind chip is pressed in the field.
+fn browsing(c: &mut Criterion) {
+    let tmp = fixture::build();
+    let base = tmp.path();
+
+    c.bench_function("browse_all", |b| {
+        b.iter(|| browse_all(black_box(base)).unwrap());
+    });
+
+    // The search field opens on `recent_records`. The scan is the same; what differs is the
+    // payload the Tauri command serializes and the webview parses, so that is measured too,
+    // and its size is printed once because criterion has no column for it.
+    c.bench_function("recent_records/20", |b| {
+        b.iter(|| recent_records(black_box(base), 20).unwrap());
+    });
+    let all = browse_all(base).unwrap();
+    let recent = recent_records(base, 20).unwrap();
+    eprintln!(
+        "payload: browse_all {} bytes, recent_records/20 {} bytes",
+        serde_json::to_string(&all).unwrap().len(),
+        serde_json::to_string(&recent).unwrap().len()
+    );
+    c.bench_function("browse_all/to_json", |b| {
+        b.iter(|| serde_json::to_string(black_box(&all)).unwrap());
+    });
+    c.bench_function("recent_records/20/to_json", |b| {
+        b.iter(|| serde_json::to_string(black_box(&recent)).unwrap());
+    });
+
+    let notes_only = SearchFilter {
+        kind: Some(HitKind::Note),
+        ..SearchFilter::default()
+    };
+    c.bench_function("search_records/kind_note", |b| {
+        b.iter(|| search_records(black_box(base), "", &[], black_box(&notes_only)).unwrap());
     });
 }
 
@@ -81,5 +123,5 @@ fn sync_scan(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, search, backlinks, listing, sync_scan);
+criterion_group!(benches, search, backlinks, browsing, listing, sync_scan);
 criterion_main!(benches);
