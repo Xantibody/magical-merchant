@@ -3,12 +3,13 @@ use std::path::{Path, PathBuf};
 
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as B64;
-use chrono::NaiveDate;
+use chrono::{Local, NaiveDate};
 use magical_merchant_core::utils::frontmatter;
 use magical_merchant_core::utils::paths::place_cache_path;
 use magical_merchant_core::utils::place::{PlaceCache, place_key};
 use magical_merchant_core::{
-    GlyphFormat, GlyphName, NoteFilename, Provenance, Revision, Source, parse_scrawl_entry,
+    DRAFT, GlyphFormat, GlyphName, NoteFilename, NoteKind, Provenance, Revision, Source,
+    parse_scrawl_entry,
 };
 use rmcp::handler::server::tool::ToolRouter;
 use rmcp::handler::server::wrapper::{Json, Parameters};
@@ -20,13 +21,14 @@ use rmcp::service::RequestContext;
 use rmcp::{ErrorData, RoleServer, ServerHandler, schemars, tool, tool_router};
 use serde::Deserialize;
 
-use crate::notes;
 use crate::output::{
+    AddedScrawlOutput, CodexDiffOutput, CodexVersionInfo, CodexVersionOutput, CodexVersionsOutput,
     ContextInfo, CreatedNoteOutput, EntryInfo, GlyphListOutput, HistoryOutput,
-    HistoryVersionOutput, NoteListOutput, NoteOutput, PlaceInfo, PlacesOutput, SavedGlyphOutput,
-    ScrawlDatesOutput, ScrawlOutput, SearchOutput, TagInfo, TagsOutput, TemplateListOutput,
-    TemplateOutput, UpdatedNoteOutput,
+    HistoryVersionOutput, NoteListOutput, NoteOutput, PlaceInfo, PlacesOutput, PromotedOutput,
+    SavedGlyphOutput, ScrawlDatesOutput, ScrawlOutput, SearchOutput, TagInfo, TagsOutput,
+    TemplateListOutput, TemplateOutput, UpdatedNoteOutput,
 };
+use crate::{notes, scrawl};
 
 /// Cap on how many entries one range read returns.
 ///
@@ -43,8 +45,9 @@ const READ_ONLY_OPENING: &str = "Read-only access to";
 const WRITABLE_OPENING: &str = "Read and write access to";
 
 const INSTRUCTIONS_BODY: &str = " a Magical Merchant journal: \
-a Scrawl of timestamped entries (one file per day) and Notes (Markdown \
-files). Every record carries the device state at the moment it was written: \
+a Scrawl of timestamped entries (one file per day), Notes (Markdown \
+files) and Codexes (Notes that grow and keep versions; only a person commits \
+a version, so no tool does). Every record carries the device state at the moment it was written: \
 local time, GPS coordinates when available, battery, network, and which \
 device wrote it. Use `read_scrawl_range` to pull entries for a period, \
 `list_places` to see where records were written, and `search` to find text. \
@@ -52,17 +55,30 @@ Scrawl times are the device's local wall-clock time without a UTC offset; \
 note times are RFC 3339 with the offset. Bodies may contain `:name:` \
 shortcodes that the app renders as user-registered images (glyphs); \
 `list_glyphs` gives the vocabulary, and an unregistered `:name:` stays \
-literal text. When write tools are present, every overwrite first saves a \
-copy that `restore_note` can bring back; the newest 20 copies of each note \
-are kept.";
+literal text. A Codex is read with `read_note` like a Note; \
+`list_codex_versions`, `read_codex_version` and `diff_codex_versions` show \
+its committed versions.";
+
+/// The closing of a writable launch. It names write tools, so a read-only launch must not
+/// send it: the instructions are read first, and a client would go looking for them.
+const WRITABLE_CLOSING: &str = " Every overwrite first saves a copy that `restore_note` \
+can bring back; the newest 20 copies of each note are kept.";
 
 /// Write tools are listed only when they are asked for.
 ///
 /// If the public app's MCP could write by default, a setup meant to be read-only would
 /// rewrite the journal.
-const WRITE_TOOLS: [&str; 6] = [
+// AIDEV-NOTE: the two history tools only read, and stay here on purpose. Those copies are a
+// local undo for writes made through this server, so they mean nothing without it. Codex
+// versions are part of the document and are read-only tools. commit_note_version and
+// restore_note_version are not offered at all: committing is a person's decision (see
+// docs/features.md), and a restore commits a version as a side effect.
+const WRITE_TOOLS: [&str; 9] = [
     "create_note",
+    "create_codex",
+    "promote_to_codex",
     "update_note",
+    "add_scrawl",
     "list_note_history",
     "read_note_history",
     "restore_note",
@@ -88,17 +104,41 @@ impl McpServer {
                 tool_router.remove_route(name);
             }
         }
-        let opening = if allow_write {
-            WRITABLE_OPENING
+        let (opening, closing) = if allow_write {
+            (WRITABLE_OPENING, WRITABLE_CLOSING)
         } else {
-            READ_ONLY_OPENING
+            (READ_ONLY_OPENING, "")
         };
         Self {
             data_dir,
             locale,
-            instructions: format!("{opening}{INSTRUCTIONS_BODY}"),
+            instructions: format!("{opening}{INSTRUCTIONS_BODY}{closing}"),
             tool_router,
         }
+    }
+
+    fn create(
+        &self,
+        kind: NoteKind,
+        param: &CreateNoteParam,
+    ) -> Result<Json<CreatedNoteOutput>, String> {
+        let created = notes::create(
+            &self.data_dir,
+            kind,
+            &param.body,
+            param.tags.as_deref().unwrap_or_default(),
+            // This goes through the same `notes::create` as the CLI, so without naming the
+            // source a note written by an agent cannot be told from one written by hand
+            Provenance {
+                source: Some(Source::Mcp),
+                ..Provenance::default()
+            },
+        )
+        .map_err(err)?
+        .ok_or_else(|| "body is empty".to_string())?;
+        Ok(Json(CreatedNoteOutput {
+            filename: created.as_str().to_string(),
+        }))
     }
 
     fn places(&self) -> PlaceCache {
@@ -180,6 +220,14 @@ pub(crate) struct CreateNoteParam {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+pub(crate) struct AddScrawlParam {
+    /// The entry; it is appended to today with the current time. `#tag` and
+    /// `:name:` work as in a note. Entries cannot be edited or removed from
+    /// here, so write it once.
+    text: String,
+}
+
+#[derive(Deserialize, schemars::JsonSchema)]
 pub(crate) struct UpdateNoteParam {
     /// The note filename, e.g. `20260320_143045.md`
     filename: String,
@@ -227,6 +275,25 @@ pub(crate) struct RestoreNoteParam {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+pub(crate) struct VersionParam {
+    /// The Codex filename, e.g. `20260320_143045.md`
+    filename: String,
+    /// A version id from `list_codex_versions`
+    id: String,
+}
+
+#[derive(Deserialize, schemars::JsonSchema)]
+pub(crate) struct DiffParam {
+    /// The Codex filename, e.g. `20260320_143045.md`
+    filename: String,
+    /// The version id on the old side
+    from: String,
+    /// The version id on the new side. Leave it out (or pass `draft`) to compare
+    /// with the current body
+    to: Option<String>,
+}
+
+#[derive(Deserialize, schemars::JsonSchema)]
 pub(crate) struct TemplateParam {
     /// The template filename, e.g. `daily.md`
     filename: String,
@@ -267,6 +334,8 @@ impl McpServer {
     ) -> Result<Json<NoteOutput>, String> {
         let filename = parse_filename(&param.filename)?;
         let notes::Read { body, revision } = notes::read(&self.data_dir, &filename).map_err(err)?;
+        let (kind, _) =
+            magical_merchant_core::locate_note(&self.data_dir, &filename).map_err(err)?;
         // Broken frontmatter still returns the body. The list does the same: metadata that
         // cannot be read is no reason to hide the body as well.
         let meta = magical_merchant_core::read_note_meta(&self.data_dir, &filename).ok();
@@ -294,6 +363,7 @@ impl McpServer {
         );
         Ok(Json(NoteOutput {
             filename: filename.as_str().to_string(),
+            kind: kind.as_str().to_string(),
             time,
             updated,
             // Merge by the same rule as the list. Showing only the frontmatter tags or only
@@ -526,22 +596,48 @@ impl McpServer {
         &self,
         Parameters(param): Parameters<CreateNoteParam>,
     ) -> Result<Json<CreatedNoteOutput>, String> {
-        let tags = param.tags.unwrap_or_default();
-        let created = notes::create(
-            &self.data_dir,
-            &param.body,
-            &tags,
-            // This goes through the same `notes::create` as the CLI, so without naming the
-            // source a note written by an agent cannot be told from one written by hand
-            Provenance {
-                source: Some(Source::Mcp),
-                ..Provenance::default()
-            },
-        )
-        .map_err(err)?
-        .ok_or_else(|| "body is empty".to_string())?;
-        Ok(Json(CreatedNoteOutput {
-            filename: created.as_str().to_string(),
+        self.create(NoteKind::Note, &param)
+    }
+
+    #[tool(
+        name = "create_codex",
+        description = "Create a new Codex, a document that grows and keeps versions, from a Markdown body (first line `# Title`); returns its filename. It starts with no version: only a person commits one"
+    )]
+    fn create_codex(
+        &self,
+        Parameters(param): Parameters<CreateNoteParam>,
+    ) -> Result<Json<CreatedNoteOutput>, String> {
+        self.create(NoteKind::Codex, &param)
+    }
+
+    #[tool(
+        name = "promote_to_codex",
+        description = "Turn a note into a Codex. The filename and body stay as they are. There is no way back to a plain note, so do this only when asked to"
+    )]
+    fn promote_to_codex(
+        &self,
+        Parameters(param): Parameters<FilenameParam>,
+    ) -> Result<Json<PromotedOutput>, String> {
+        let filename = parse_filename(&param.filename)?;
+        magical_merchant_core::promote_note_to_codex(&self.data_dir, &filename).map_err(err)?;
+        Ok(Json(PromotedOutput {
+            filename: filename.as_str().to_string(),
+        }))
+    }
+
+    #[tool(
+        name = "add_scrawl",
+        description = "Append an entry to today's Scrawl; returns the date it landed on"
+    )]
+    fn add_scrawl(
+        &self,
+        Parameters(param): Parameters<AddScrawlParam>,
+    ) -> Result<Json<AddedScrawlOutput>, String> {
+        if !scrawl::add(&self.data_dir, &param.text, Source::Mcp).map_err(err)? {
+            return Err("text is empty".to_string());
+        }
+        Ok(Json(AddedScrawlOutput {
+            date: Local::now().date_naive().format("%Y-%m-%d").to_string(),
         }))
     }
 
@@ -626,6 +722,65 @@ impl McpServer {
             revision: notes::read(&self.data_dir, &filename)
                 .ok()
                 .map(|r| r.revision.to_string()),
+        }))
+    }
+
+    #[tool(
+        name = "list_codex_versions",
+        description = "List the versions a person committed on a Codex, newest first, and how far the draft has moved from the latest one. Refused for a plain note"
+    )]
+    fn list_codex_versions(
+        &self,
+        Parameters(param): Parameters<FilenameParam>,
+    ) -> Result<Json<CodexVersionsOutput>, String> {
+        let filename = parse_filename(&param.filename)?;
+        let versions =
+            magical_merchant_core::list_note_versions(&self.data_dir, &filename).map_err(err)?;
+        let status =
+            magical_merchant_core::note_version_status(&self.data_dir, &filename).map_err(err)?;
+        Ok(Json(CodexVersionsOutput {
+            versions: versions.into_iter().map(CodexVersionInfo::from).collect(),
+            dirty: status.dirty,
+            bytes_delta: status.bytes_delta,
+        }))
+    }
+
+    #[tool(
+        name = "read_codex_version",
+        description = "Read the body of one committed version of a Codex"
+    )]
+    fn read_codex_version(
+        &self,
+        Parameters(param): Parameters<VersionParam>,
+    ) -> Result<Json<CodexVersionOutput>, String> {
+        let filename = parse_filename(&param.filename)?;
+        let body = magical_merchant_core::read_note_version(&self.data_dir, &filename, &param.id)
+            .map_err(err)?;
+        Ok(Json(CodexVersionOutput { id: param.id, body }))
+    }
+
+    #[tool(
+        name = "diff_codex_versions",
+        description = "Unified diff between two committed versions of a Codex, or from a version to the current draft"
+    )]
+    fn diff_codex_versions(
+        &self,
+        Parameters(param): Parameters<DiffParam>,
+    ) -> Result<Json<CodexDiffOutput>, String> {
+        let filename = parse_filename(&param.filename)?;
+        // The output names the draft, so an agent may well pass that name back
+        let to = param.to.filter(|id| id != DRAFT);
+        let diff = magical_merchant_core::diff_note_versions(
+            &self.data_dir,
+            &filename,
+            &param.from,
+            to.as_deref(),
+        )
+        .map_err(err)?;
+        Ok(Json(CodexDiffOutput {
+            from: param.from,
+            to: to.unwrap_or_else(|| DRAFT.to_string()),
+            diff,
         }))
     }
 
@@ -734,7 +889,7 @@ pub(crate) fn exists_or_hint(data_dir: &Path) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::{Local, TimeZone};
+    use chrono::TimeZone;
     use magical_merchant_core::utils::device::{Context, Location};
     use magical_merchant_core::utils::markdown::format_scrawl_line;
     use magical_merchant_core::utils::place::cache_key;
@@ -1177,9 +1332,34 @@ mod tests {
         assert!(read_only.starts_with("Read-only access to"));
         assert!(!with_writes.contains("Read-only"));
         assert!(with_writes.starts_with("Read and write access to"));
-        // Past the opening, the instructions are the same
-        assert!(with_writes.ends_with("the newest 20 copies of each note are kept."));
-        assert!(read_only.ends_with("the newest 20 copies of each note are kept."));
+    }
+
+    /// The instructions are read before the tool list, so a tool named there and missing
+    /// from the list is a tool the client goes looking for.
+    #[test]
+    fn the_read_only_instructions_name_no_write_tool() {
+        let tmp = TempDir::new().unwrap();
+
+        let read_only = server(tmp.path()).get_info().instructions.unwrap();
+        let with_writes = writable(tmp.path()).get_info().instructions.unwrap();
+
+        for name in WRITE_TOOLS {
+            assert!(!read_only.contains(name), "{name} leaked");
+        }
+        assert!(with_writes.contains("restore_note"));
+    }
+
+    /// An agent must not take "keeps versions" as a job it should do after editing.
+    #[test]
+    fn both_launches_say_that_no_tool_commits_a_version() {
+        let tmp = TempDir::new().unwrap();
+
+        for instructions in [
+            server(tmp.path()).get_info().instructions.unwrap(),
+            writable(tmp.path()).get_info().instructions.unwrap(),
+        ] {
+            assert!(instructions.contains("only a person commits"));
+        }
     }
 
     #[test]
@@ -1483,5 +1663,391 @@ mod tests {
             .unwrap()
             .0;
         assert!(updated.revision.is_some());
+    }
+
+    fn a_codex(base: &Path, body: &str) -> String {
+        let path = magical_merchant_core::create_draft_codex(
+            base,
+            body,
+            &[],
+            &mac_at_shibuya(),
+            Provenance::default(),
+        )
+        .unwrap();
+        path.file_name().unwrap().to_str().unwrap().to_string()
+    }
+
+    fn a_note(base: &Path, body: &str) -> String {
+        let path = magical_merchant_core::create_draft_note(
+            base,
+            body,
+            &[],
+            &mac_at_shibuya(),
+            Provenance::default(),
+        )
+        .unwrap();
+        path.file_name().unwrap().to_str().unwrap().to_string()
+    }
+
+    fn commit(base: &Path, filename: &str, message: &str) -> String {
+        let name = NoteFilename::parse(filename).unwrap();
+        magical_merchant_core::commit_note_version(base, &name, Some(message))
+            .unwrap()
+            .id
+    }
+
+    /// A row says how far a Codex has come, so an agent need not open the versions of
+    /// every document to find the one whose draft moved. A plain Note has no such thing.
+    #[test]
+    fn a_codex_row_carries_its_versions_and_a_note_row_does_not() {
+        let tmp = TempDir::new().unwrap();
+        let codex = a_codex(tmp.path(), "# 版のある文書\n一");
+        commit(tmp.path(), &codex, "first");
+        writable(tmp.path())
+            .update_note(Parameters(UpdateNoteParam {
+                filename: codex.clone(),
+                body: "# 版のある文書\n二".to_string(),
+                revision: None,
+            }))
+            .unwrap();
+        a_note(tmp.path(), "# ただのノート");
+
+        let rows = server(tmp.path()).list_notes().unwrap().0.notes;
+
+        let codex_row = rows.iter().find(|r| r.filename == codex).unwrap();
+        assert_eq!(codex_row.version_count, Some(1));
+        assert_eq!(codex_row.dirty, Some(true));
+        let note_row = rows.iter().find(|r| r.filename != codex).unwrap();
+        assert_eq!(note_row.version_count, None);
+        assert_eq!(note_row.dirty, None);
+    }
+
+    #[test]
+    fn reading_a_record_says_which_kind_it_is() {
+        let tmp = TempDir::new().unwrap();
+        let codex = a_codex(tmp.path(), "# 版のある文書");
+        let note = a_note(tmp.path(), "# ただのノート");
+        let read = |filename: String| {
+            server(tmp.path())
+                .read_note(Parameters(FilenameParam { filename }))
+                .unwrap()
+                .0
+                .kind
+        };
+
+        assert_eq!(read(codex), "codex");
+        assert_eq!(read(note), "note");
+    }
+
+    /// Every file under the data directory with its bytes, to compare before and after.
+    fn tree(dir: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
+        let mut files = BTreeMap::new();
+        for entry in fs::read_dir(dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                files.extend(tree(&path));
+            } else {
+                files.insert(path.clone(), fs::read(&path).unwrap());
+            }
+        }
+        files
+    }
+
+    /// The server meant to be read-only lists exactly these. Spelled out rather than
+    /// derived from `WRITE_TOOLS`: a new write tool someone forgot to add there is
+    /// the mistake this has to catch.
+    #[test]
+    fn the_read_only_server_lists_exactly_the_tools_that_only_read() {
+        let tmp = TempDir::new().unwrap();
+
+        let mut names = tool_names(&server(tmp.path()));
+        names.sort();
+
+        assert_eq!(
+            names,
+            [
+                "backlinks",
+                "diff_codex_versions",
+                "list_codex_versions",
+                "list_glyphs",
+                "list_notes",
+                "list_places",
+                "list_scrawl_dates",
+                "list_tags",
+                "list_templates",
+                "read_codex_version",
+                "read_note",
+                "read_scrawl",
+                "read_scrawl_range",
+                "read_template",
+                "search",
+            ]
+        );
+    }
+
+    #[test]
+    fn a_codexs_versions_come_back_newest_first_with_where_the_draft_stands() {
+        let tmp = TempDir::new().unwrap();
+        let filename = a_codex(tmp.path(), "# 題\n一");
+        let first = commit(tmp.path(), &filename, "first");
+        writable(tmp.path())
+            .update_note(Parameters(UpdateNoteParam {
+                filename: filename.clone(),
+                body: "# 題\n一二".to_string(),
+                revision: None,
+            }))
+            .unwrap();
+
+        let out = server(tmp.path())
+            .list_codex_versions(Parameters(FilenameParam { filename }))
+            .unwrap()
+            .0;
+
+        assert_eq!(out.versions.len(), 1);
+        assert_eq!(out.versions[0].id, first);
+        assert_eq!(out.versions[0].message.as_deref(), Some("first"));
+        assert!(out.dirty);
+        assert_eq!(out.bytes_delta, 3, "the draft grew by one kanji");
+    }
+
+    #[test]
+    fn a_version_reads_as_the_body_it_was_committed_with() {
+        let tmp = TempDir::new().unwrap();
+        let filename = a_codex(tmp.path(), "# 題\n当時");
+        let id = commit(tmp.path(), &filename, "first");
+        writable(tmp.path())
+            .update_note(Parameters(UpdateNoteParam {
+                filename: filename.clone(),
+                body: "# 題\n今".to_string(),
+                revision: None,
+            }))
+            .unwrap();
+
+        let out = server(tmp.path())
+            .read_codex_version(Parameters(VersionParam { filename, id }))
+            .unwrap()
+            .0;
+
+        assert_eq!(out.body, "# 題\n当時");
+    }
+
+    /// With no `to`, and with the `draft` the output itself reports, the other side
+    /// is the current body. An agent copying the name back must not get a refusal.
+    #[test]
+    fn a_diff_runs_against_the_draft_unless_told_otherwise() {
+        let tmp = TempDir::new().unwrap();
+        let filename = a_codex(tmp.path(), "# 題\n前");
+        let from = commit(tmp.path(), &filename, "first");
+        writable(tmp.path())
+            .update_note(Parameters(UpdateNoteParam {
+                filename: filename.clone(),
+                body: "# 題\n後".to_string(),
+                revision: None,
+            }))
+            .unwrap();
+        let diff = |to: Option<&str>| {
+            server(tmp.path())
+                .diff_codex_versions(Parameters(DiffParam {
+                    filename: filename.clone(),
+                    from: from.clone(),
+                    to: to.map(str::to_string),
+                }))
+                .unwrap()
+                .0
+        };
+
+        let by_default = diff(None);
+
+        assert!(by_default.diff.contains("-前"));
+        assert!(by_default.diff.contains("+後"));
+        assert_eq!(by_default.to, "draft");
+        assert_eq!(diff(Some("draft")).diff, by_default.diff);
+    }
+
+    #[test]
+    fn the_version_tools_refuse_a_plain_note() {
+        let tmp = TempDir::new().unwrap();
+        let filename = a_note(tmp.path(), "# ただのノート");
+
+        let result = server(tmp.path()).list_codex_versions(Parameters(FilenameParam { filename }));
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn a_version_id_cannot_climb_out_of_the_versions_directory() {
+        let tmp = TempDir::new().unwrap();
+        let filename = a_codex(tmp.path(), "# 題");
+
+        let result = server(tmp.path()).read_codex_version(Parameters(VersionParam {
+            filename,
+            id: "../../notes/secret".to_string(),
+        }));
+
+        assert!(result.is_err());
+    }
+
+    /// "Read-only" is a claim about the disk, not about the list of names. The read tools
+    /// are the ones that run on a launch without `--allow-write`.
+    #[test]
+    fn reading_every_way_a_codex_can_be_read_changes_no_file() {
+        let tmp = TempDir::new().unwrap();
+        let filename = a_codex(tmp.path(), "# 題\n本文");
+        let id = commit(tmp.path(), &filename, "first");
+        let before = tree(tmp.path());
+        let reader = server(tmp.path());
+
+        reader.list_notes().unwrap();
+        reader
+            .read_note(Parameters(FilenameParam {
+                filename: filename.clone(),
+            }))
+            .unwrap();
+        reader
+            .list_codex_versions(Parameters(FilenameParam {
+                filename: filename.clone(),
+            }))
+            .unwrap();
+        reader
+            .read_codex_version(Parameters(VersionParam {
+                filename: filename.clone(),
+                id: id.clone(),
+            }))
+            .unwrap();
+        reader
+            .diff_codex_versions(Parameters(DiffParam {
+                filename,
+                from: id,
+                to: None,
+            }))
+            .unwrap();
+
+        assert_eq!(tree(tmp.path()), before);
+    }
+
+    /// Committing is a person saying "this far", and deleting a version only exists for
+    /// the app's undo toast. Neither is one more write tool waiting for a flag.
+    #[test]
+    fn no_launch_can_commit_or_delete_a_version() {
+        let tmp = TempDir::new().unwrap();
+
+        let names = tool_names(&writable(tmp.path()));
+
+        assert!(
+            names
+                .iter()
+                .all(|n| !n.contains("commit") && !n.starts_with("delete")),
+            "{names:?}"
+        );
+    }
+
+    /// An entry an agent wrote is told from one written by hand by the same field as a
+    /// note: without it the journal cannot say who said what.
+    #[test]
+    fn an_added_entry_lands_on_today_and_says_it_came_through_mcp() {
+        let tmp = TempDir::new().unwrap();
+
+        let out = writable(tmp.path())
+            .add_scrawl(Parameters(AddScrawlParam {
+                text: "  追記 #memo \n".to_string(),
+            }))
+            .unwrap()
+            .0;
+
+        let day = server(tmp.path())
+            .read_scrawl(Parameters(DateParam { date: out.date }))
+            .unwrap()
+            .0;
+        assert_eq!(day.entries.len(), 1);
+        assert_eq!(day.entries[0].text, "追記 #memo");
+        assert_eq!(day.entries[0].source.as_deref(), Some("mcp"));
+    }
+
+    #[test]
+    fn a_blank_entry_is_refused_and_makes_no_day_file() {
+        let tmp = TempDir::new().unwrap();
+
+        let result = writable(tmp.path()).add_scrawl(Parameters(AddScrawlParam {
+            text: " \n\t".to_string(),
+        }));
+
+        assert!(result.is_err());
+        assert!(tree(tmp.path()).is_empty());
+    }
+
+    #[test]
+    fn a_created_codex_is_a_codex_marked_as_written_through_mcp() {
+        let tmp = TempDir::new().unwrap();
+
+        let filename = writable(tmp.path())
+            .create_codex(Parameters(CreateNoteParam {
+                body: "# 育つ文書".to_string(),
+                tags: None,
+            }))
+            .unwrap()
+            .0
+            .filename;
+
+        let out = server(tmp.path())
+            .read_note(Parameters(FilenameParam { filename }))
+            .unwrap()
+            .0;
+        assert_eq!(out.kind, "codex");
+        assert_eq!(out.source.as_deref(), Some("mcp"));
+    }
+
+    #[test]
+    fn an_empty_body_is_not_a_codex() {
+        let tmp = TempDir::new().unwrap();
+
+        let result = writable(tmp.path()).create_codex(Parameters(CreateNoteParam {
+            body: "  \n".to_string(),
+            tags: None,
+        }));
+
+        assert!(result.is_err());
+        assert!(tree(tmp.path()).is_empty());
+    }
+
+    /// The ID and the body survive, and nothing commits a version on the way: a promoted
+    /// note starts with an empty history until a person says otherwise.
+    #[test]
+    fn promoting_keeps_the_id_and_body_and_commits_nothing() {
+        let tmp = TempDir::new().unwrap();
+        let filename = a_note(tmp.path(), "# 育てる");
+
+        let out = writable(tmp.path())
+            .promote_to_codex(Parameters(FilenameParam {
+                filename: filename.clone(),
+            }))
+            .unwrap()
+            .0;
+
+        assert_eq!(out.filename, filename);
+        let reader = server(tmp.path());
+        let read = reader
+            .read_note(Parameters(FilenameParam {
+                filename: filename.clone(),
+            }))
+            .unwrap()
+            .0;
+        assert_eq!(read.kind, "codex");
+        assert_eq!(read.body, "# 育てる");
+        let versions = reader
+            .list_codex_versions(Parameters(FilenameParam { filename }))
+            .unwrap()
+            .0;
+        assert!(versions.versions.is_empty());
+    }
+
+    #[test]
+    fn promoting_a_missing_note_is_refused() {
+        let tmp = TempDir::new().unwrap();
+
+        let result = writable(tmp.path()).promote_to_codex(Parameters(FilenameParam {
+            filename: "20260101_000000.md".to_string(),
+        }));
+
+        assert!(result.is_err());
     }
 }

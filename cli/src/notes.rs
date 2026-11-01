@@ -11,7 +11,7 @@ use std::path::Path;
 use chrono::{DateTime, FixedOffset};
 
 use magical_merchant_core::utils::device::Context;
-use magical_merchant_core::{CoreError, NoteFilename, Provenance, Revision, Snapshot};
+use magical_merchant_core::{CoreError, NoteFilename, NoteKind, Provenance, Revision, Snapshot};
 
 /// The device recorded at write time.
 ///
@@ -64,6 +64,7 @@ pub(crate) enum WriteError {
 /// name them both at once.
 pub(crate) fn create(
     data_dir: &Path,
+    kind: NoteKind,
     body: &str,
     tags: &[String],
     provenance: Provenance<'_>,
@@ -71,13 +72,11 @@ pub(crate) fn create(
     if body.trim().is_empty() {
         return Ok(None);
     }
-    named(&magical_merchant_core::create_draft_note(
-        data_dir,
-        body,
-        tags,
-        &context(),
-        provenance,
-    )?)
+    let create = match kind {
+        NoteKind::Note => magical_merchant_core::create_draft_note,
+        NoteKind::Codex => magical_merchant_core::create_draft_codex,
+    };
+    named(&create(data_dir, body, tags, &context(), provenance)?)
 }
 
 /// The variant that takes the time it was written. For a record that came from outside,
