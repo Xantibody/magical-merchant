@@ -1,4 +1,4 @@
-import { createEffect, createMemo, onCleanup, onMount, For, Show } from "solid-js";
+import { createEffect, createMemo, onCleanup, onMount, untrack, For, Show } from "solid-js";
 import type { JSX } from "solid-js";
 import { useLocation, useNavigate, A } from "@solidjs/router";
 import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
@@ -15,7 +15,7 @@ import UndoToast from "../components/UndoToast";
 import FirstRunCard from "../components/FirstRunCard";
 import { ShellProvider, useShell } from "../lib/shell";
 import { watchLeave } from "../lib/leave";
-import { createSyncState } from "../lib/sync";
+import { createSyncState, syncAlertText } from "../lib/sync";
 import { applyTheme, theme } from "../lib/theme";
 import { locale, t } from "../lib/i18n";
 import { createHints } from "../lib/hints";
@@ -80,10 +80,11 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
   media.addEventListener("change", onSchemeChange);
   onCleanup(() => media.removeEventListener("change", onSchemeChange));
 
-  // An error is not swallowed silently; the sync popover opens to report it
+  // A failure is the one thing that interrupts (ADR 0011). A toast passes on its own where the
+  // popover stood over the page; the dot stays red. Status is untracked: only an alert speaks
   createEffect(() => {
     if (sync.alertVersion() > 0) {
-      shell.togglePopover("sync");
+      shell.showToast(syncAlertText(untrack(sync.status)));
     }
   });
 
