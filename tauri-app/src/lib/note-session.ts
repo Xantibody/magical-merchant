@@ -159,9 +159,7 @@ export function createNoteSession(deps: NoteSessionDeps): NoteSession {
    * because by the time a late save lands another note may be selected.
    */
   const revisions = new Map<string, string>();
-  /**
-   * Debounce only. An expired timer does not mean the write succeeded.
-   */
+  /** Debounce only. An expired timer does not mean the write succeeded. */
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
   let timerFile: string | undefined;
   /**
@@ -345,14 +343,10 @@ export function createNoteSession(deps: NoteSessionDeps): NoteSession {
     deps.bodyEpoch() === pending.bodyEpoch ? deps.body() : pending.body;
 
   /**
-   * What is on screen after a refused save. Not the state before yielding but "now",
-   * after the reload is done: the read may fail and turn back, and the person may move
-   * to a neighbour during the round trip, and either way the screen differs from before.
-   *
-   * Whether the keystrokes are still on screen is read from `bodyEpoch` (same reason as
-   * `typedBody`). The epoch advances when a reload lands, but also when A -> B -> A
-   * brings a different load. Both mean "the typed characters are no longer on screen",
-   * so one treatment fits.
+   * What is on screen after a refused save: "now", after the reload is done, not the state
+   * before yielding. The read may have failed, or the person may have moved to a neighbour
+   * during the round trip. Whether the keystrokes are still on screen is read from
+   * `bodyEpoch`, for the reason given at `typedBody`.
    */
   const refusedScreen = (pending: PendingSave, reloaded: boolean): RefusedScreen => {
     if (deps.selected()?.id !== pending.item.id) {
@@ -373,12 +367,11 @@ export function createNoteSession(deps: NoteSessionDeps): NoteSession {
    * save is decided by `refusalToast` alone.
    */
   const yieldToOutsideEdit = async (pending: PendingSave, error: unknown): Promise<void> => {
-    // Check that the backup actually landed before saying it can be recalled with
-    // "restore". A full or disabled localStorage keeps nothing; a promise made there
-    // is believed, and the person closes the app on it
     // The refused keystrokes are set aside here, in full. The draft slot holds an older
     // copy of them, and left there the reload below would park it over this one
     clearDraft(deps.store, pending.item.filename);
+    // `kept` says whether the backup actually landed. A full or disabled localStorage keeps
+    // nothing, and a "restore" promised on it would be believed until the app is closed on it
     const kept = tryWriteBackup(deps.store, pending.item.filename, typedBody(pending));
     saveGenerations.set(pending.item.filename, generationOf(pending.item.filename) + 1);
     if (timerFile === pending.item.filename) {
@@ -494,18 +487,14 @@ export function createNoteSession(deps: NoteSessionDeps): NoteSession {
   };
 
   /**
-   * Drains the waiting save before leaving. The path every selection change must go
-   * through. Moving without draining makes the body "next note's title + previous
-   * note's body", and the next save writes that mixture into the neighbouring note.
-   * The reload has already updated `revisions`, so Stale does not stop it either.
-   * If nothing was saved the list is not reloaded: the row titles have not changed.
+   * Moving without draining makes the body "next note's title + previous note's body", and
+   * the next save writes that mixture into the neighbouring note. The reload has already
+   * updated `revisions`, so Stale does not stop it either.
    */
   const settleEdit = async (): Promise<void> => {
     // The next write starts a new session. The restore point advances one step at a time
     drop();
     await drainScheduled();
-    // The row title is derived from the body's first line. Without a reload only the
-    // list keeps the old title
     await refreshListIfStale();
   };
 

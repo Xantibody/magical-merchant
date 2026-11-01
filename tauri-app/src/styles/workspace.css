@@ -126,8 +126,8 @@
 
 /* ---------------- list flyout (desktop) ---------------- */
 
-/* The list is no longer a permanent pane; it floats over the body as a continuation
-   of the rail. The body column does not move when the list opens or closes: a line
+/* The list is no longer a permanent pane; it floats over the body from the window's
+   left edge. The body column does not move when the list opens or closes: a line
    you are reading jumping sideways costs more than the list not always being visible.
    It is limited to `hover: hover` because the only ways to open it are hover and the
    pin (and the pin is inside the list). On a wide device without hover, a tap opens
@@ -135,7 +135,7 @@
    out of reach before the pin inside can be touched. There it stays a permanent
    column.
    Only the Note / Codex workspace floats its list (`workspace--flyout`, set by
-   Workspace.tsx). Templates borrows the same panes but has no rail entry and no pin,
+   Workspace.tsx). Templates borrows the same panes but has no edge strip and no pin,
    so nothing could ever open its list; there it stays a permanent column */
 @media (min-width: 768px) and (hover: hover) {
   .list-edge {
