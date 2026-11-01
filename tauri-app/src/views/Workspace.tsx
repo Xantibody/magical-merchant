@@ -210,7 +210,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   /** The time of the last save that succeeded. The number in "saved at 21:40". */
   const [savedAt, setSavedAt] = createSignal("");
 
-  // The save state also shows in the bottom bar (AppLayout). That sits outside this screen, so it
+  // The save state also shows on the status dot (AppLayout). That sits outside this screen, so it
   // is passed through the shell. Leaving resets it to idle: carried over, a screen nobody is
   // writing on would keep saying "saved at 21:40"
   createEffect(() => shell.setSaveState({ status: saveStatus(), at: savedAt() }));
@@ -1035,7 +1035,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   };
 
   /**
-   * Opens the panel on its settings tab, docked. A state in the bottom bar leads to its switch
+   * Opens the panel on its settings tab, docked. A state in the dot's details leads to its switch
    * this way, and ⌘⇧I to the details.
    */
   const openSettings = (details = false): void => {
@@ -1204,7 +1204,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       : [];
   };
 
-  /** Whether "commit a version" is worth offering in the bottom bar: the draft has moved on. */
+  /** Whether "commit a version" is worth offering: the draft has moved on. */
   const canCommit = (): boolean => {
     const status = versionStatus();
     return (
@@ -1212,7 +1212,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     );
   };
 
-  // The bottom bar (AppLayout) says what state the note is in, so a closed panel hides nothing.
+  // The dot's details (AppLayout) say what state the note is in, so a closed panel hides nothing.
   // Leaving the surface clears it, the way the save state is cleared
   createEffect(() => {
     const item = selected();
@@ -1887,7 +1887,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                     </div>
                   </Show>
 
-                  {/* The phone's state row. A wide window says the same in the bottom bar, so it
+                  {/* The phone's state row. A wide window says the same in the dot's details, so it
                     is hidden there (CSS) */}
                   <div class="detail-status-row">
                     <Show when={saveStatus() !== "idle"}>

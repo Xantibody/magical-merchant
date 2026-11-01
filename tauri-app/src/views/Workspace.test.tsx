@@ -1010,11 +1010,11 @@ describe("Workspace › 保存の見え方", () => {
   });
 
   /**
-   * On a wide screen the save state is shown by the bottom bar, which lives outside this
+   * The save state is worn by the status dot, which lives outside this
    * view (`AppLayout`). The hand-off goes through the shell, so this checks the landing
    * reached it.
    */
-  it("hands the landing to the shell for the bar outside this view", async () => {
+  it("hands the landing to the shell for the dot outside this view", async () => {
     await openNoteA();
     expect(shell?.saveState().status).toBe("idle");
 

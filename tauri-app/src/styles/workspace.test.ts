@@ -481,7 +481,7 @@ describe("the note panel", () => {
               </div>
             </div>
           </main>
-          <div class="bottom-bar"></div>
+          <button class="status-dot"></button>
         </div>
       </div>`;
     return element(".note-panel");
@@ -508,14 +508,11 @@ describe("the note panel", () => {
     expect(style.transform).toBe("matrix(1, 0, 0, 1, 24, 0)");
   });
 
-  it("stops above the bottom bar", () => {
+  // The dot floats over the panel's corner, so what the panel ends with must stop short of it
+  it("leaves the corner to the status dot", () => {
     const panel = mountPanel("open");
-    const bar = element(".bottom-bar");
 
-    expect(panel.getBoundingClientRect().bottom).toBeCloseTo(bar.getBoundingClientRect().top, 0);
-    expect(Number(getComputedStyle(bar).zIndex)).toBeGreaterThan(
-      Number(getComputedStyle(panel).zIndex),
-    );
+    expect(Number.parseInt(getComputedStyle(panel).paddingBottom, 10)).toBeGreaterThanOrEqual(36);
   });
 });
 

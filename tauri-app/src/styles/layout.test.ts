@@ -29,7 +29,10 @@ function mountApp(): HTMLElement {
       <div class="app-column">
         <header class="mobile-header">header</header>
         <main class="app-main"><div class="view"></div></main>
-        <div class="bottom-bar"></div>
+        <div class="status-dot-area">
+          <div class="status-dot-links"></div>
+          <button class="status-dot"><span class="status-dot-mark"></span></button>
+        </div>
         <nav class="bottom-tabs"><a class="bottom-tab">Notes</a></nav>
       </div>
     </div>`;
@@ -171,13 +174,38 @@ describe("the rail tells you where you are", () => {
     expect(getComputedStyle(element(".mobile-header")).display).toBe("none");
   });
 
-  it("puts a 30px bar under the body", () => {
+  // The body keeps the whole height: the dot floats, it takes no row (ADR 0011)
+  it("gives the body the window's foot and floats the dot in the corner", () => {
     mountApp();
 
-    const bar = element(".bottom-bar");
+    const dot = element(".status-dot").getBoundingClientRect();
+    const main = element(".app-main").getBoundingClientRect();
 
-    expect(bar.getBoundingClientRect().height).toBeCloseTo(30, 0);
-    expect(getComputedStyle(bar).borderTopWidth).toBe("1px");
+    expect(main.bottom).toBeCloseTo(globalThis.innerHeight, 0);
+    expect(globalThis.innerWidth - dot.right).toBeCloseTo(12, 0);
+    expect(globalThis.innerHeight - dot.bottom).toBeCloseTo(12, 0);
+  });
+
+  // While hidden, the links' box must not steal presses from whatever lies under it
+  it("keeps the hidden links out of reach of the pointer", () => {
+    mountApp();
+
+    expect(getComputedStyle(element(".status-dot-area")).pointerEvents).toBe("none");
+    expect(getComputedStyle(element(".status-dot-links")).opacity).toBe("0");
+    expect(getComputedStyle(element(".status-dot")).pointerEvents).toBe("auto");
+  });
+
+  it("draws the mark in each tone", () => {
+    mountApp();
+    const button = element(".status-dot");
+    // The tone fades in; computed style would still read the one before it
+    element(".status-dot-mark").style.transition = "none";
+    const color = (tone: string): string => {
+      button.dataset.tone = tone;
+      return getComputedStyle(element(".status-dot-mark")).backgroundColor;
+    };
+
+    expect(new Set([color("ok"), color("busy"), color("failed")]).size).toBe(3);
   });
 
   // The bottom tabs belong to mobile. On a wide window the bands would stack two deep
@@ -205,7 +233,8 @@ describe("the shell on a phone", () => {
     expect(getComputedStyle(element(".rail")).display).toBe("none");
     expect(getComputedStyle(element(".mobile-header")).display).toBe("flex");
     expect(getComputedStyle(element(".bottom-tabs")).display).toBe("flex");
-    expect(getComputedStyle(element(".bottom-bar")).display).toBe("none");
+    // The corner has the bottom tabs and the capture dock. The dot is in the header instead
+    expect(getComputedStyle(element(".status-dot-area")).display).toBe("none");
   });
 
   // `body.md-toolbar-open .bottom-tabs`, which folds the bottom tabs away while the
@@ -279,8 +308,8 @@ describe("the hint layer", () => {
 });
 
 /**
- * Only one sync popover hangs off the column of surfaces. There are two entry points, the
- * rail (wide window) and the band (narrow window), but both open the same popover.
+ * Only one status popover hangs off the column of surfaces. There are two entry points, the
+ * corner dot (wide window) and the band (narrow window), but both open the same popover.
  *
  * The base that hangs it under the header (`.popover-anchor { top: 100% }`) cannot be used
  * here. This column is the full height of the window, so straight below it is off screen
@@ -313,14 +342,13 @@ describe("the sync panel", () => {
     await page.viewport(1280, 800);
   });
 
-  it("opens beside the rail's foot on a wide window", async () => {
+  it("opens straight above the corner dot on a wide window", async () => {
     await page.viewport(1280, 800);
     const rect = mountSyncPopover().getBoundingClientRect();
 
     expect(rect.top).toBeGreaterThanOrEqual(0);
-    expect(rect.bottom).toBeLessThanOrEqual(800);
-    expect(rect.left).toBeGreaterThanOrEqual(0);
-    expect(rect.right).toBeLessThanOrEqual(1280);
+    expect(rect.bottom).toBeCloseTo(760, 0);
+    expect(rect.right).toBeCloseTo(1268, 0);
   });
 
   it("opens under the band on a phone", async () => {
