@@ -21,6 +21,7 @@ import { isImeComposing } from "../lib/ime";
 import { HIT_ROUTES, MODE_LABELS } from "../lib/routes";
 import {
   hasCondition,
+  RECENT_ROWS,
   SEARCH_CAP,
   SEARCH_KINDS,
   SEARCH_PERIODS,
@@ -64,9 +65,14 @@ function periodLabel(period: SearchPeriod): string {
   return period === "week" ? t().search.thisWeek : t().search.yearAgo;
 }
 
-function runSearch(condition: SearchCondition): Promise<SearchHit[]> {
+/** With nothing asked yet the field shows the newest records, so it can be browsed by hand. */
+async function runSearch(condition: SearchCondition): Promise<SearchHit[]> {
   const args = searchArgs(condition, new Date());
-  return args ? typedInvoke("search_records", args) : Promise.resolve([]);
+  if (args) {
+    return typedInvoke("search_records", args);
+  }
+  const all = await typedInvoke("browse_all");
+  return all.slice(0, RECENT_ROWS);
 }
 
 /** What a row says under its title: the surroundings of the match, or else the start of the body. */
@@ -112,8 +118,9 @@ function HitExcerpt(props: { hit: SearchHit; word: string }): JSX.Element {
 }
 
 /**
- * The search field: hidden until typing, ⌘K or `/ 探す` calls it, gone again on Esc. A
- * condition brings the list on its own and the only thing a result does is open.
+ * The search field: hidden until typing, ⌘K or `/ 探す` calls it, gone again on Esc. It
+ * opens on the newest records and the chips; a condition changes the list on its own, and the
+ * only thing a result does is open.
  *
  * It floats over the screen rather than replacing the route. A Note being written stays
  * mounted underneath, with its caret and its unsaved text, and Esc returns to it.
@@ -142,7 +149,7 @@ export default function SearchField(props: SearchFieldProps): JSX.Element {
     () => ({ text: word(), tags: tags(), kind: kind(), period: period() }),
     runSearch,
   );
-  const found = (): SearchHit[] => (listing() ? (hits.latest ?? []) : []);
+  const found = (): SearchHit[] => hits.latest ?? [];
   /** Whether what is on screen answers what is in the field. */
   const settled = (): boolean => word() === text() && !hits.loading;
 
@@ -229,6 +236,13 @@ export default function SearchField(props: SearchFieldProps): JSX.Element {
     }
   };
 
+  /** The pointer must not take the focus: an empty field closes when it loses it. */
+  const keepFocus = (e: MouseEvent): void => {
+    if (e.target !== inputRef) {
+      e.preventDefault();
+    }
+  };
+
   /** An empty field left behind would sit over the screen with nothing to say. */
   const onFocusOut = (e: FocusEvent & { currentTarget: HTMLDivElement }): void => {
     const next = e.relatedTarget;
@@ -245,8 +259,8 @@ export default function SearchField(props: SearchFieldProps): JSX.Element {
   return (
     <div
       class="search"
-      classList={{ "search--listing": listing() }}
       role="presentation"
+      onMouseDown={keepFocus}
       onKeyDown={onKeyDown}
       onFocusOut={onFocusOut}
     >
@@ -293,95 +307,91 @@ export default function SearchField(props: SearchFieldProps): JSX.Element {
           </button>
         </div>
 
-        <Show when={listing()}>
-          <div class="search-chips">
-            <div class="search-chip-group" role="group" aria-label={t().browse.kind}>
-              <For each={SEARCH_KINDS}>
-                {(one) => (
-                  <button
-                    type="button"
-                    class="search-chip"
-                    aria-pressed={kind() === one}
-                    onClick={() => narrow(() => setKind(one))}
-                  >
-                    {kindLabel(one)}
-                  </button>
-                )}
-              </For>
-            </div>
-            <span class="search-chip-rule" aria-hidden="true" />
-            <div class="search-chip-group" role="group" aria-label={t().browse.period}>
-              <For each={SEARCH_PERIODS}>
-                {(one) => (
-                  <button
-                    type="button"
-                    class="search-chip"
-                    aria-pressed={period() === one}
-                    onClick={() => narrow(() => setPeriod((own) => (own === one ? null : one)))}
-                  >
-                    {periodLabel(one)}
-                  </button>
-                )}
-              </For>
-            </div>
-          </div>
-        </Show>
-      </div>
-
-      <Show when={listing()}>
-        <div ref={listRef} class="search-results">
-          <div class="search-column">
-            <Show when={commands().length > 0}>
-              <div class="palette-section">{t().palette.commands}</div>
-            </Show>
-            <For each={commands()}>
-              {(command, i) => (
+        <div class="search-chips">
+          <div class="search-chip-group" role="group" aria-label={t().browse.kind}>
+            <For each={SEARCH_KINDS}>
+              {(one) => (
                 <button
                   type="button"
-                  class="palette-row"
-                  classList={{ "palette-row--active": active() === i() }}
-                  data-row={i()}
-                  onClick={() => runRow(i())}
+                  class="search-chip"
+                  aria-pressed={kind() === one}
+                  onClick={() => narrow(() => setKind(one))}
                 >
-                  <Icon name={command.icon} size={16} />
-                  <span class="palette-row-text">
-                    <span class="palette-row-label">{command.label}</span>
-                  </span>
-                  <span class="palette-row-meta">{command.shortcut}</span>
+                  {kindLabel(one)}
                 </button>
               )}
             </For>
-            <Show when={commands().length > 0 && found().length > 0}>
-              <div class="palette-section">{t().search.records}</div>
-            </Show>
-            <For each={found()}>
-              {(hit, i) => {
-                const row = (): number => commands().length + i();
-                return (
-                  <button
-                    type="button"
-                    class="palette-row"
-                    classList={{ "palette-row--active": active() === row() }}
-                    data-row={row()}
-                    data-hit={hitId(hit)}
-                    onClick={() => runRow(row())}
-                  >
-                    <KindDot kind={hit.kind} />
-                    <HitExcerpt hit={hit} word={searchWord()} />
-                    <span class="palette-row-meta">{formatMonthDay(hit.date)}</span>
-                    <Show when={active() === row()}>
-                      <span class="palette-row-enter">↩ {t().palette.hintOpen}</span>
-                    </Show>
-                  </button>
-                );
-              }}
+          </div>
+          <span class="search-chip-rule" aria-hidden="true" />
+          <div class="search-chip-group" role="group" aria-label={t().browse.period}>
+            <For each={SEARCH_PERIODS}>
+              {(one) => (
+                <button
+                  type="button"
+                  class="search-chip"
+                  aria-pressed={period() === one}
+                  onClick={() => narrow(() => setPeriod((own) => (own === one ? null : one)))}
+                >
+                  {periodLabel(one)}
+                </button>
+              )}
             </For>
-            <Show when={settled() && rowCount() === 0}>
-              <p class="search-empty">{t().search.empty}</p>
-            </Show>
           </div>
         </div>
-      </Show>
+      </div>
+
+      <div ref={listRef} class="search-results">
+        <div class="search-column">
+          <Show when={commands().length > 0}>
+            <div class="palette-section">{t().palette.commands}</div>
+          </Show>
+          <For each={commands()}>
+            {(command, i) => (
+              <button
+                type="button"
+                class="palette-row"
+                classList={{ "palette-row--active": active() === i() }}
+                data-row={i()}
+                onClick={() => runRow(i())}
+              >
+                <Icon name={command.icon} size={16} />
+                <span class="palette-row-text">
+                  <span class="palette-row-label">{command.label}</span>
+                </span>
+                <span class="palette-row-meta">{command.shortcut}</span>
+              </button>
+            )}
+          </For>
+          <Show when={commands().length > 0 && found().length > 0}>
+            <div class="palette-section">{t().search.records}</div>
+          </Show>
+          <For each={found()}>
+            {(hit, i) => {
+              const row = (): number => commands().length + i();
+              return (
+                <button
+                  type="button"
+                  class="palette-row"
+                  classList={{ "palette-row--active": active() === row() }}
+                  data-row={row()}
+                  data-hit={hitId(hit)}
+                  onClick={() => runRow(row())}
+                >
+                  <KindDot kind={hit.kind} />
+                  <HitExcerpt hit={hit} word={searchWord()} />
+                  <span class="palette-row-meta">{formatMonthDay(hit.date)}</span>
+                  <Show when={active() === row()}>
+                    <span class="palette-row-enter">↩ {t().palette.hintOpen}</span>
+                  </Show>
+                </button>
+              );
+            }}
+          </For>
+          <Show when={listing() && settled() && rowCount() === 0}>
+            <p class="search-empty">{t().search.empty}</p>
+          </Show>
+        </div>
+      </div>
     </div>
   );
 }

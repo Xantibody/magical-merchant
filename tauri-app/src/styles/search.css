@@ -2,18 +2,12 @@
    stays mounted below, and opening the field moves nothing (no layout shift either) */
 .search {
   position: absolute;
-  inset: 0 0 auto;
+  inset: 0;
   z-index: 100;
   display: flex;
   flex-direction: column;
   background: var(--app-surface);
-  border-bottom: 1px solid var(--app-hairline);
   animation: mm-rise 180ms var(--app-ease);
-}
-
-.search--listing {
-  bottom: 0;
-  border-bottom: none;
 }
 
 .search-head,
