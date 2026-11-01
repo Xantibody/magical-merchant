@@ -115,9 +115,9 @@ the engine because the lock lives on the file descriptor the engine itself
 opens. The app still repairs once per process before its first note list,
 which is about what the list shows rather than about syncing.
 
-Turning on **Auto sync** (sync popover, or `autoSync` in the nix-darwin
+Turning on **Auto sync** (the status dot's details, or `autoSync` in the nix-darwin
 module) runs a sync a few seconds after any successful write, so a note taken
-on the phone reaches the Mac without touching the sync button. Leaving the
+on the phone reaches the Mac without asking for a sync. Leaving the
 app (the page hidden, the window blurred, the page unloading) is the end of
 the keystrokes: the screens first write what they still hold, the body save
 waiting on its one-second debounce, and then a round starts at once if a
@@ -134,7 +134,7 @@ typed over, and sets them aside as the restore point, with a toast, if it
 moved on. The half-typed Scrawl capture is kept the same way
 (`scrawl-draft`) and comes back into the bar; it is never sent on its own.
 
-Turning on **Sync when the app opens** (sync popover, or `syncOnStart`) runs one
+Turning on **Sync when the app opens** (the status dot's details, or `syncOnStart`) runs one
 when the app starts and again when it comes back to the foreground, so the
 other device's writes are there before you start typing. Coming back counts
 at most once a minute: desktop reports every change of window focus. The
@@ -166,9 +166,9 @@ forward, the moment of the one Google sign-in it descends from, and the
 Worker refuses to renew past `JWT_MAX_SESSION_SECONDS` from it, so a stolen
 token cannot be kept alive forever. Only a device that was away for the whole
 lifetime signs out. Coming back to the app looks at the login before anything
-else; a device that is set up and finds itself signed out shows the warning
-cloud and opens the sync popover once, with "Sign in" leading to the sync
-page of Settings. A device that was never set up keeps its quiet "local only"
+else; a device that is set up and finds itself signed out turns the status dot
+red and says so once in a toast, and the dot's details carry "Sign in", leading
+to the sync page of Settings. A device that was never set up keeps its quiet "local only"
 face: it did not ask for sync.
 
 The session JWT lives in the macOS Keychain on desktop. Android has no
