@@ -119,6 +119,11 @@
 }
 
 @media (max-width: 767px) {
+  /* The two groups wrap onto their own lines here, and the rule would hang off the first */
+  .search-chip-rule {
+    display: none;
+  }
+
   .search-chip {
     min-height: 36px;
     padding-inline: 12px;

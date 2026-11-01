@@ -187,9 +187,10 @@ pub fn search_all(
     search_records(base_dir, query, tags, &SearchFilter::default())
 }
 
-/// [`search_all`] narrowed further by kind and period, for the search field. Any one of the
-/// conditions is enough to list records, so a kind alone returns that kind, newest first. The
-/// cap applies after the filter.
+/// [`search_all`] narrowed further by kind and period, for the search field.
+///
+/// Any one of the conditions is enough to list records, so a kind alone returns that kind,
+/// newest first. The cap applies after the filter.
 pub fn search_records(
     base_dir: &Path,
     query: &str,

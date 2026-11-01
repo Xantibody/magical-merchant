@@ -54,7 +54,7 @@ export function periodRange(period: SearchPeriod, today: Date): { from: string; 
   return { from: yearAgo, to: yearAgo };
 }
 
-export interface SearchArgs {
+interface SearchArgs {
   query: string;
   tags: string[];
   filter: SearchFilter;

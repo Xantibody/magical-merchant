@@ -37,7 +37,7 @@ ready to record the moment it opens (widgets exist for exactly this).
 ## UI Architecture (current)
 
 - **Rail** (`components/Rail.tsx`, desktop only): a 48px column down the left
-  edge — Scrawl / Note / Codex, a divider, then 検索 (⌘K) · 絞る (⌘F) ·
+  edge — Scrawl / Note / Codex, a divider, then 探す (⌘K) · 絞る (⌘F) ·
   (pushed to the foot) 同期 · 設定 (⌘,). It carries no words; the names are in
   `title` and for the screen reader. Where you are is said twice: the button is
   filled (`--app-accent-soft`) and a 2×20px line slides down the left edge
@@ -70,8 +70,9 @@ ready to record the moment it opens (widgets exist for exactly this).
   floating capture dock; in-place entry editing; select-mode bulk delete. Notes
   and Codexes sit among the entries (`lib/scrawl-days.ts`) as a filled dot and a
   bold title, unless the chip under their origin entry already leads to them. The
-  tag chips at the top do not filter in place — they open Browse with Scrawl
-  and that tag already chosen
+  tag chips at the top do not filter in place — they open the search field
+  with that tag. The input line's `/` menu (探す · Note を作る · 日付へ) is the
+  line's way to search; it answers to row names only, so `/tmp` stays a record
 - **Note** (`views/Workspace.tsx`): list flyout + detail pane; mobile shows one
   pane at a time (`workspace--detail`); a note opens in the
   **viewer** (`MarkdownPreview`, the title as a heading, a meta line of created
@@ -113,10 +114,18 @@ ready to record the moment it opens (widgets exist for exactly this).
 - **Browse** (`views/Browse.tsx`, `lib/browse.ts`, ⌘F): kind / tag / period
   chips with counts (240px) → the matching records, newest first → the one
   selected, in full. **It has no text search** — typing to find something is
-  ⌘K's job. It reads every record once through core `browse_all` and counts the
+  the search field's job. It reads every record once through core `browse_all` and counts the
   facets in TS, because a facet's count is taken over the _other_ axes
   (#279). A phone drops the preview column
-- **Command palette** (⌘K): in-memory commands + debounced `search_all`
+- **Search field** (`components/SearchField.tsx`, `lib/search-condition.ts`, ⌘K,
+  `/ 探す`, typing on Scrawl and Browse): hidden until called, floats over the route
+  inside `app-main` so an open note stays mounted, Esc gives the keys back. Any
+  condition lists on its own through core `search_records`, whose kind and period
+  run before the 100 cap. Tags are AND here, OR in Browse (ADR 0015). The only
+  thing a result does is open. Commands answer a bare word, above the records;
+  Enter stays on the first record
+- **Command palette** (`?`): the key list, with in-memory commands + debounced
+  `search_all`
 - **Popovers close themselves** (`components/Popover.tsx`, corvu `Dialog` with
   `modal={false}`). There is no central outside-click handler in `AppLayout`
 - **Motion**: transform and opacity, 120–350ms, one easing (`--app-ease`), and

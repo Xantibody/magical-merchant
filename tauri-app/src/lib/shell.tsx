@@ -41,7 +41,7 @@ export interface NoteBar {
 }
 
 /** What the search field opens with. */
-export interface SearchSeed {
+interface SearchSeed {
   tags?: string[];
 }
 
