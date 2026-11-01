@@ -295,6 +295,19 @@ pub fn browse_all(base_dir: &Path) -> Result<Vec<SearchHit>, CoreError> {
     Ok(hits)
 }
 
+/// The newest `limit` records, in [`browse_all`]'s order: what the search field shows before
+/// a word is typed.
+///
+/// It reads everything `browse_all` reads. A note's date is its frontmatter `time`, not its
+/// filename, so the newest cannot be known without opening every note. What it saves is the
+/// trip to the screen: the field shows a few rows, and a year of records is thousands, each
+/// carried as a title, an excerpt and its tags.
+pub fn recent_records(base_dir: &Path, limit: usize) -> Result<Vec<SearchHit>, CoreError> {
+    let mut hits = browse_all(base_dir)?;
+    hits.truncate(limit);
+    Ok(hits)
+}
+
 /// Cut the head of the body as the excerpt. It is [`snippet`] with an empty needle; nothing
 /// is matched, so no lowercased copy is needed (`lowered` is used only to find the match).
 fn head(text: &str) -> String {
@@ -1255,6 +1268,30 @@ mod tests {
         assert_eq!(hits[1].kind, HitKind::Scrawl);
         assert_eq!(hits[1].title, "古い記録");
         assert_eq!(hits[1].index, Some(0));
+    }
+
+    /// The search field shows the newest few. They are the head of what Browse lists, so the
+    /// two screens never disagree about what is newest.
+    #[test]
+    fn recent_records_are_the_head_of_the_browse_list() {
+        let tmp = TempDir::new().unwrap();
+        write_day(
+            &tmp,
+            NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+            "古い記録",
+        );
+        write_day(
+            &tmp,
+            NaiveDate::from_ymd_opt(2025, 1, 2).unwrap(),
+            "次の日の記録",
+        );
+        draft(&tmp, "今日のノート", &[]).unwrap();
+
+        let recent = recent_records(tmp.path(), 2).unwrap();
+
+        let all = browse_all(tmp.path()).unwrap();
+        assert_eq!(all.len(), 3);
+        assert_eq!(recent, all[..2]);
     }
 
     /// A Codex says it is a Codex, because it opens on a different surface.

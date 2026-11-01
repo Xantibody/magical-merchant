@@ -1002,6 +1002,8 @@ const unifiedDiff = (from, to, fromName, toName) => {
       }
       return hits.toSorted((a, b) => b.date.localeCompare(a.date));
     },
+    /** @param {{ limit: number }} args */
+    recent_records: ({ limit }) => commands.browse_all().slice(0, limit),
     list_notes: () => noteList(),
     /** @param {{ filename: string }} args */
     find_backlinks: ({ filename }) => {
