@@ -131,11 +131,11 @@ project needs on top of what `tauri android init` writes is re-applied by a
 Go program each time. There are three, all idempotent (each strips and
 re-inserts its own marked block):
 
-| Patcher                            | What it adds                                                                                 |
-| ---------------------------------- | -------------------------------------------------------------------------------------------- |
-| `android-tls/apply-tls.go`         | The Kotlin half of `rustls-platform-verifier`, which the sync client currently bypasses      |
-| `android-widget/apply-widget.go`   | The widget sources, and the four receivers + capture activity + list service in the manifest |
-| `android-signing/apply-signing.go` | The release signing config, read from the gitignored `keystore.properties`                   |
+| Patcher                            | What it adds                                                                               |
+| ---------------------------------- | ------------------------------------------------------------------------------------------ |
+| `android-tls/apply-tls.go`         | The Kotlin half of `rustls-platform-verifier`, which the sync client currently bypasses    |
+| `android-widget/apply-widget.go`   | The widget sources, and the five receivers + two activities + list service in the manifest |
+| `android-signing/apply-signing.go` | The release signing config, read from the gitignored `keystore.properties`                 |
 
 `android-setup` runs the first two, on its own from `android-init` and from
 both build recipes; `android-sign-setup` runs the third, needs

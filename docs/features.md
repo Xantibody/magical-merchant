@@ -5,12 +5,15 @@ from the browser verification harness with fixture data.
 
 ## Scrawl — a journal that captures first
 
-Scrawl (formerly Timeline) is a single-column, day-grouped journal. The capture bar at the
-bottom is always ready: type, send, and the entry lands on today with a
-timestamp. Entries record the device context they were written in (device,
-network, battery, and a place name resolved from the coordinate), tags typed
-as `#tag` become filter chips, and the calendar button jumps to any recorded
-day.
+Scrawl (formerly Timeline) is a single-column, day-grouped journal. The input
+line at the top of today is always ready: type, send, and the entry lands
+there with a timestamp. Entries record the device context they were written
+in (device, network, battery, and a place name resolved from the coordinate).
+Tags typed as `#tag` gather as chips at the top; pressing one opens the search
+field with that tag, so the journal itself never filters. The calendar jumps
+to any recorded day, and the line's `/` menu (探す · Note を作る · 日付へ)
+reaches the same places without leaving the keyboard — it answers to those
+row names only, so `/tmp` stays a record.
 
 ![Scrawl](images/timeline.png)
 
@@ -22,8 +25,9 @@ it for the rest of the week, per device.
 
 ### Mobile
 
-The same journal on a phone. Bottom tabs switch between Scrawl, Note, Codex
-and Settings; the capture bar floats above the keyboard.
+The same journal on a phone. A 48px header holds the title, the calendar, the
+search and the status dot; the other screens are reached through the empty
+search field and the dot's details, and the input line scrolls with today.
 
 ![Scrawl on a phone](images/mobile-timeline.png)
 
@@ -38,38 +42,41 @@ breaks the link.
 
 ## Note — a Typora-style Markdown workspace
 
-Note (formerly Notes) holds plain Markdown files. The list pane gives each
-note one line, grouped by how recently it was created; the detail pane shows
-the body with a **title field** above it. The title is the note's leading
-`# heading` — there is no separate title in the frontmatter, so the file
-stays readable in any Markdown tool and the heading can never drift from
-the title. Press Enter in the field to drop into the body.
+Note (formerly Notes) holds plain Markdown files. The **list** is a 280px
+flyout: rest the pointer on the window's left edge and it floats in over the
+body, one line per note grouped by how recently it was created; a pin, or
+`⌘\`, keeps it out. The body column never moves when it opens. A note opens
+in the **viewer**: the title as a heading, a meta line of created time and
+tags, the rendered body, then the records pointing here.
 
-**There is no edit mode.** The editor is live from the moment the note is
-open — what you see is already the thing you type into, so there is no button
-to find and no state to be in the wrong one of. Saving is automatic
-(debounced), and the first content-changing save of a session keeps the
-pre-edit body on the device, so 編集前に戻す (`⌘⇧R`) can undo an accidental
-edit — press it again to swap back. It sits in the note's panel, and in the
-status dot's details whenever there is something to go back to.
+Enter, `e`, a double click or the pencil in the strip over the page opens the
+**writing screen**: the Milkdown editor under a **title field** that _is_ the
+body's leading `# heading` — there is no separate title in the frontmatter,
+so the file stays readable in any Markdown tool and the heading can never
+drift from the title. Esc or the check comes back to the viewer, and the URL
+carries which one you are on (`edit=1`), so back and forward move between
+them. Saving is automatic (debounced), and the first content-changing save of
+a session keeps the pre-edit body on the device, so 編集前に戻す (`⌘⇧R`) can
+undo an accidental edit — press it again to swap back. It sits in the note's
+panel, and in the status dot's details whenever there is something to go back
+to.
 
 Note-level settings and actions live in a **panel at the right edge**,
-because none of it is used often enough to sit in the way of writing. Rest
-the pointer on the window's right edge and it floats in over the body; the
-toggle beside the title, or `⌘.`, docks it so the body makes room. It holds
-the view switches (読み取り専用, マップ, and 記入例 for a note from a template),
-the note's details, and the rare actions: revert, Codex にする (behind a
-confirmation, since there is no way back), delete. While it is closed the
-**status dot** at the window's lower right wears the save and the sync — green,
-grey, red — and pressing it says what the panel would: the save time, and every
-state that is on — press one to open the panel on its switch. On a
-phone the meta line under the title is the way in, and the panel is a screen
-of its own.
+because none of it is used often enough to sit in the way of writing. The
+`…` in the viewer's strip, or `⌘.`, docks it so the body makes room; the
+writing screen has no way into it. It holds the view switches (マップ, and
+記入例 for a note from a template), the tags, the note's details, and the
+rare actions: revert, Codex にする (behind a confirmation, since there is no
+way back), delete. While it is closed the **status dot** at the window's
+lower right wears the save and the sync — green, grey, red — and pressing it
+says what the panel would: the save time, and every state that is on — press
+one to open the panel on its switch. On a phone the panel is a screen of its
+own, and a status row under the title keeps the save and the states as pills.
 
-Tags are edited where they are read: press a `#tag` or `+ タグ` on the meta
-line and they turn into chips, with the tags you have used before offered as
-you type. A `#tag` written in the body shows there too, without an ×; it
-lives in the body and is removed there.
+Tags are edited in the panel: chips, with the tags you have used before
+offered as you type. The meta line in the viewer only shows them. A `#tag`
+written in the body shows in both places without an ×; it lives in the body
+and is removed there.
 
 The panel's 詳細 (`⌘⇧I`) is where a note's records live: the creation time
 (editable), the device context it was captured on, and — once the body has
@@ -78,11 +85,10 @@ pinned to the filename order, so the update time is the only place a rewrite
 shows up. Changing metadata or the view mode is not a rewrite and leaves it
 alone.
 
-A note that is done being written can be parked in a **read-only view** —
-the panel's 読み取り専用 switch, frontmatter `view: preview`. The editor is not
-raised at all: the body is a rendered page, the title field is fixed, and the
-list row wears a small padlock so you know before you open it. The choice
-lives in the file, so it follows the note to every device.
+There is no read-only mode to park a note in: every note opens as a rendered
+page and is written only after you ask. A frontmatter `view: preview` left by
+an older release stays in the file and now means nothing more than the
+default.
 
 ![Editor with Note links](images/editor-links.png)
 
@@ -112,8 +118,7 @@ take the body's place:
 
 ![A document with its markmap alongside](images/mindmap.png)
 
-The shot is taken on a Codex, which is why a version spine stands to the left
-of the body; the map itself is the same on either surface.
+The map itself is the same on either surface, Note or Codex.
 
 ## Note links and backlinks
 
@@ -136,14 +141,14 @@ derived by scanning at read time; there is no index to corrupt or sync.
 ## Codex — a Note that keeps growing
 
 Some notes are never finished: a reading log, a project journal, a page you
-keep adding to. Codex is its own tab (Scrawl → Note → Codex) for exactly
+keep adding to. Codex is its own surface (`⌘3`, `/codex`) for exactly
 those. Any Note becomes a Codex from its panel; the file keeps its ID and
 every link to it, it just moves from `data/notes/` to `data/codex/`. The move
 is one-way — a Codex is defined by the history it accumulates, and that
 history has nowhere to go if the document turns back into a plain Note.
 
-A Codex opens in the same editor as a Note — same title field, same
-always-open body, same autosave. What it adds is on purpose: the body is a
+A Codex opens the same way as a Note — the same viewer, the same writing
+screen on Enter, the same autosave. What it adds is on purpose: the body is a
 draft until you commit a version, and the versions travel with the file
 through sync, so the history is the same on every device.
 
@@ -154,15 +159,12 @@ enter:
   in it. Its frame says which of three states the document is in — no
   versions yet, versions and the draft matching the newest one, or the draft
   having moved on since then. The row stays one line.
-- **A spine** stands to the left of the body: a narrow rail of dots, one per
-  version, while you write, widening into the version list when you open the
-  history. It needs room to stand beside the body, so it is absent on phones,
-  and below 1100px it stays collapsed and the history arrives as a horizontal
-  card under the title that you drag or tap to send versions.
 - **The meta line** reads how far the draft has travelled — 版 4 から
   +312 B ("+312 B since v4"), 版 4 when it matches the newest version, 版なし
-  before the first — and the history tab opens on how often you commit:
-  9 か月で 4 回刻んだ ("4 versions in 9 months").
+  before the first.
+- **The panel gets a second tab**, 履歴, topped by how often you commit:
+  9 か月で 4 回刻んだ ("4 versions in 9 months"). The version list is in
+  there, and nowhere else.
 
 Nothing is committed for you, and committing asks nothing of you. 版を刻む —
 in the panel, and in the status dot's details whenever the draft has
@@ -173,17 +175,16 @@ all. The toast that follows does the summarising (版 5 を刻みました · �
 +312 B · 7 日ぶり) and carries an Undo that deletes the file just written.
 
 The panel's second tab, 履歴 (`⌘⇧H`), docks the panel and opens the version
-list beside the body rather than replacing it; resting on the edge never opens
-it, so a comparison does not appear beside a writing hand in passing. The body
-stays where it is and turns read-only, and the difference between the version
-you picked and the draft appears in its margin: a `+` beside every block that
-changed, a `−` beside every block that is gone — struck through and faint, in
-the place it used to occupy. Walk the versions with the spine (`↑`/`↓` once
-a row has focus) or with the card, and the marks move with them; `Esc`
-closes the history and the editor comes back. この版に戻す makes that version
+list beside the body rather than replacing it; the panel always opens on its
+first tab, so a comparison never appears in passing. The body stays where it
+is, read as it was, and the difference between the version you picked and the
+draft appears in its margin: a `+` beside every block that changed, a `−`
+beside every block that is gone — struck through and faint, in the place it
+used to occupy. Walk the versions in the list and the marks move with them;
+`Esc` closes the history. On a phone the history is the panel screen's second
+tab and a compare bar sits under the body. この版に戻す makes that version
 the draft again, and the draft you are leaving is committed first as
-_before restore_, so a restore is itself undoable from the same list. A
-read-only Codex cannot be restored, for the same reason it cannot be edited.
+_before restore_, so a restore is itself undoable from the same list.
 
 On disk a version is
 `data/codex/<id>/<YYYYMMDD_HHMMSS>-<first 8 hex of the body's SHA-256>.md`:
@@ -224,61 +225,82 @@ several files) — each PNG/SVG is named after its file stem, an existing name
 is overwritten, and anything unusable is counted as skipped; files dropped
 straight into `data/glyphs/` are picked up as well.
 
-## Search palette
+## Search field
 
-`⌘K` opens the palette. Before you type anything it offers entry points:
-recent notes, today/yesterday (only when they have entries), and your most
-used tags. Search results highlight the matched text in a context snippet, and
-selecting a hit lands exactly — a note opens that note, a Scrawl hit scrolls
-to that day.
+`⌘K` opens the search field. It is hidden until called and floats over
+whatever you were on, so an open note stays where it was; Esc gives the keys
+back. Before you type anything it shows the kind / tag / period chips and the
+newest records, so it can be browsed by hand. Typing on Scrawl or Browse opens
+it too, as does `/ 探す` on Scrawl's input line. Results highlight the matched
+text in a context snippet, and the only thing a result does is open — a note
+opens that note, a Scrawl hit scrolls to that day; Enter takes the first.
 
-Searches can be scoped to tags, from any screen. Every `#tag` you type in the
-palette counts as scope rather than text: `#SF6 #ベガ #置き攻め` lists every
-note and entry carrying all three tags (AND), and `#sf6 コンボ` looks for
-"コンボ" only inside `#sf6`. Tags are matched the way the Scrawl chips are,
-so `#SF6` and `#sf6` are the same tag. Picking a tag from the entry points adds
-it as a chip in front of the input; a chip is removed by clicking it, or with
-Backspace in an empty field (last chip first). When Scrawl is filtered
-by a tag, `⌘K` opens the palette with that chip already set. Scoped results
-show their count, and the empty message names the tags it looked inside.
+Searches can be scoped to tags, from any screen. Every `#tag` you type counts
+as scope rather than text: `#SF6 #ベガ #置き攻め` lists every note and entry
+carrying all three tags (AND), and `#sf6 コンボ` looks for "コンボ" only
+inside `#sf6`. Tags are matched the way the chips are, so `#SF6` and `#sf6`
+are the same tag. Pressing a tag chip on Scrawl opens the field with that
+chip already set; a chip is removed by clicking it, or with Backspace in an
+empty field (last chip first). A bare word also answers with the app's
+commands above the records, and the empty field lists the places — Scrawl ·
+Note · Codex · 絞る · 設定 — which is how the other screens are reached on a
+phone.
+
+## Browse
+
+絞る (`⌘F`, `/browse`) is one screen that looks _across_ the three surfaces
+by kind, tag and period, for the record whose words you cannot recall. The
+chips on the left carry counts, taken over the other axes, so a chip's number
+is always "how many if I press this"; several kinds or tags can be chosen at
+once (OR, where the search field is AND). The matching records list newest
+first, and the one selected is shown in full on the right. **It has no text
+search** — typing on it opens the search field. Every row leads back to the
+surface the record lives on; a phone drops the preview column.
+
+## Command palette
+
+`?`, pressed anywhere you are not typing, opens the palette on the app's
+**commands** — new note, the three surfaces, Browse, sync now, settings —
+each with its key down the right-hand side, with a full-text search below.
 
 ![Command palette](images/palette.png)
-
-The palette also lists the app's **commands** — new note, the three modes,
-sync now, settings — each with its key down the right-hand side.
 
 ## Keyboard
 
 There is no cheat sheet to look up, because the app can show you the keys in
-the place they belong. Hold ⌘ (Ctrl on anything that is not a Mac) for a
-moment and a badge floats on the shoulder of the buttons in the chrome — the
-three mode tabs, sync, Settings, and the open note's panel toggle — with a pill
-explaining how to make them go away; let go and they are gone. The search
-field carries its `⌘K` printed in the field itself, so it needs no badge, and
-`⌘N` is shown where 新規 Note is, in the palette. And `?`, pressed anywhere
-you are not typing, opens the palette on that command list.
+the place they belong. There is no rail and no tab bar either: the way around
+is the keys, the places the empty search field lists, and the **status dot**
+— hover it and Scrawl · 検索 · Settings · キー appear to its left. Hold ⌘
+(Ctrl on anything that is not a Mac) for a moment and a badge floats on the
+shoulder of every visible control whose key works right now — the status dot,
+新規 and the pin in the list, the `…` over an open note and its 履歴 tab, the
+two actions in the status details — with a pill explaining how to make them go
+away; let go and they are gone. And `?`, pressed anywhere you are not typing,
+opens the palette on the command list.
 
 The ones worth learning first:
 
 | Key                | What it does                  |
 | ------------------ | ----------------------------- |
-| `⌘K`               | The search palette            |
+| `⌘K`               | The search field              |
+| `⌘F`               | Browse                        |
 | `⌘N`               | A new note                    |
 | `⌘1` / `⌘2` / `⌘3` | Scrawl / Note / Codex         |
+| `⌘\`               | Pin the list open             |
 | `⌘.`               | Dock or fold the note's panel |
 | `⌘⇧S`              | Sync now                      |
 
-That list is the palette's command section, so it holds the six global
-commands and nothing else — a new note, the three modes, sync now, and `⌘,`
-for Settings. The keys that need a note open are not in it: they are written
+The palette's command section holds the seven global commands and nothing
+else — a new note, the three surfaces, Browse, sync now, and `⌘,` for
+Settings. The keys that need a note open are not in it: they are written
 beside the rows of the note's own panel, the one `⌘.` docks — `⌘⇧M` for the
 map, `⌘⇧R` to revert, `⌘⇧I` for its details, `⌘⇧K` to commit a Codex version,
-`⌘⇧H` for a Codex's history. `⌘↑` / `⌘↓` walk the list pane and are printed nowhere at
-all; they answer only while the caret is outside every field you can type
-in — not just the title and the body, but the palette's search box and the
-tag field on the meta line and the created time in 詳細 as well — so they step through notes once
-you have clicked away from what you are writing. With the caret in any of
-them they are left alone, and stay the jump to the top or the bottom of
+`⌘⇧H` for a Codex's history. `⌘↑` / `⌘↓` walk the list and are printed nowhere
+at all; they answer only while the caret is outside every field you can type
+in — not just the title and the body, but the search field, the tag input in
+the panel and the created time in 詳細 as well — so they step through notes
+once you have clicked away from what you are writing. With the caret in any
+of them they are left alone, and stay the jump to the top or the bottom of
 what you are typing. Where a Mac reads ⌘⇧, every other platform reads
 Ctrl+Shift.
 
@@ -309,16 +331,17 @@ change-detection protocol.
 
 ## Android widgets
 
-Four home-screen widgets ship with the APK:
+Five home-screen widgets ship with the APK:
 
-| Widget        | Size | What a tap does                                                                                                              |
-| ------------- | ---- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Scrawl に記録 | 4×1  | Opens a sheet over the home screen and appends to today's Scrawl through a JNI call into the core — the app is never started |
-| 新しい Note   | 4×1  | `magical-merchant://widget/new-note`                                                                                         |
-| 最近の Note   | 4×2  | The four newest notes; a row opens that note, the header plus makes a new one                                                |
-| テンプレート  | 4×3  | Three templates; a row creates a new note from it                                                                            |
+| Widget            | Size      | What a tap does                                                                                                              |
+| ----------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Scrawl に記録     | 4×1       | Opens a sheet over the home screen and appends to today's Scrawl through a JNI call into the core — the app is never started |
+| 新しい Note       | 4×1       | `magical-merchant://widget/new-note`                                                                                         |
+| 最近の Note       | 4×2       | The four newest notes; a row opens that note, the header plus makes a new one                                                |
+| テンプレート      | 4×2       | A grid of four templates; a cell creates a new note from it                                                                  |
+| テンプレート 1 つ | 2×1 / 1×1 | One template chosen when the widget is placed; a tap creates today's note from it                                            |
 
-All four are deep links into the app except the capture bar, which is the one
+All five are deep links into the app except the capture bar, which is the one
 that exists so that recording costs nothing — no launch, no wait.
 
 ## Terminal (CLI)

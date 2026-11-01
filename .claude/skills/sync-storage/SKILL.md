@@ -105,8 +105,9 @@ local scan → diff → `POST /sync/bulk`, repeated until nothing is left over.
   The minute is waived while something is unsent
 - Every return also re-reads the login first (two local calls, no interval).
   `needs-setup` is a device never set up (quiet, "local only"); `signed-out`
-  is one that was set up and lost its login: warning cloud, and the popover
-  opens once on the way in when either sync switch is on. Its "Sign in" goes to
+  is one that was set up and lost its login: the status dot turns red and a
+  toast says so once on the way in (`syncAlertText`); the popover never opens
+  itself (ADR 0011). Its "Sign in" goes to
   `settingsPage("sync")` (`/settings?page=sync`), which Settings reads at open
 - The login renews itself: past half its lifetime (`exp - iat`, read off the
   token by `renewal_due`) the sync entry of the app and the CLI trades it at
