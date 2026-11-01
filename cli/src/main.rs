@@ -144,9 +144,6 @@ async fn main() -> anyhow::Result<()> {
         .or_else(default_data_dir)
         .ok_or_else(|| anyhow::anyhow!("no data directory: pass --data-dir"))?;
     server::exists_or_hint(&data_dir).map_err(|e| anyhow::anyhow!(e))?;
-    // `data/timeline/` from before the rename. Unless this runs before any read, both the
-    // listing and the sync walk straight past the old directory
-    let _ = magical_merchant_core::migrate_scrawl_dir(&data_dir);
 
     match cli.command {
         Command::List => {
