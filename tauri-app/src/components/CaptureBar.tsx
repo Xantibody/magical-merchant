@@ -1,15 +1,20 @@
-import { createSignal, createMemo, For, Show } from "solid-js";
+import { createEffect, createSignal, createMemo, For, Show } from "solid-js";
 import type { JSX } from "solid-js";
 import Icon from "./Icon";
 import { t } from "../lib/i18n";
 import { isImeComposing } from "../lib/ime";
+import { modifierLabel } from "../lib/shortcuts";
 import { matchTagPrefix, sameTag, tagDraftAt } from "../lib/tags";
 import type { TagCount } from "../lib/tags";
 
 interface CaptureBarProps {
   /** Records into Scrawl whichever tab is open. */
   onSend: (text: string) => Promise<void>;
+  /** ⌘Enter: the text becomes a Note's title and the Note opens to write. */
+  onPromote: (text: string) => Promise<void>;
   onError: () => void;
+  /** Whether anything is typed. The line shows its time and dot only then. */
+  onTyping?: (typing: boolean) => void;
   /** The tags used so far, offered as completions. */
   knownTags?: TagCount[];
 }
@@ -46,6 +51,13 @@ function rememberDraft(value: string): void {
   }
 }
 
+/** A phone has no ⌘↵ to advertise. */
+function placeholder(): string {
+  return matchMedia("(hover: hover)").matches
+    ? t().capture.linePlaceholder(modifierLabel())
+    : t().capture.placeholder;
+}
+
 export default function CaptureBar(props: CaptureBarProps): JSX.Element {
   const [text, setText] = createSignal(readDraft());
   const [sending, setSending] = createSignal(false);
@@ -55,6 +67,8 @@ export default function CaptureBar(props: CaptureBarProps): JSX.Element {
   const [dismissed, setDismissed] = createSignal(false);
 
   let textareaRef: HTMLTextAreaElement | undefined;
+
+  createEffect(() => props.onTyping?.(text().trim() !== ""));
 
   /** Grows the height with the input. Switches to scrolling once it passes the limit. */
   const autoGrow = (): void => {
@@ -119,7 +133,7 @@ export default function CaptureBar(props: CaptureBarProps): JSX.Element {
     }
   };
 
-  const send = async (): Promise<void> => {
+  const submit = async (handOver: (text: string) => Promise<void>): Promise<void> => {
     const submitted = text();
     const trimmed = submitted.trim();
     if (!trimmed || sending()) {
@@ -127,7 +141,7 @@ export default function CaptureBar(props: CaptureBarProps): JSX.Element {
     }
     setSending(true);
     try {
-      await props.onSend(trimmed);
+      await handOver(trimmed);
       if (text() === submitted) {
         setText("");
         rememberDraft("");
@@ -141,6 +155,8 @@ export default function CaptureBar(props: CaptureBarProps): JSX.Element {
     }
   };
 
+  const send = (): Promise<void> => submit(props.onSend);
+
   const trackCaret = (el: HTMLTextAreaElement): void => {
     setCaret(el.selectionStart);
     setCursor(0);
@@ -149,6 +165,11 @@ export default function CaptureBar(props: CaptureBarProps): JSX.Element {
   const onKeyDown = (e: KeyboardEvent & { currentTarget: HTMLTextAreaElement }): void => {
     // The Enter that ends IME conversion is the IME's. It neither sends nor picks a tag (#102)
     if (e.key === "Enter" && isImeComposing(e)) {
+      return;
+    }
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      void submit(props.onPromote);
       return;
     }
     if (rows() > 0) {
@@ -226,7 +247,8 @@ export default function CaptureBar(props: CaptureBarProps): JSX.Element {
         ref={textareaRef}
         rows={1}
         class="capture-input"
-        placeholder={t().capture.placeholder}
+        aria-label={t().capture.label}
+        placeholder={placeholder()}
         value={text()}
         onInput={(e) => {
           setText(e.currentTarget.value);

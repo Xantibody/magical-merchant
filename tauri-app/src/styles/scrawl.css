@@ -12,8 +12,12 @@
 .scrawl-scroll {
   flex: 1;
   overflow-y: auto;
-  /* The floating capture bar covers the bottom edge. No body text is left under it */
-  padding: 44px 32px 140px;
+  padding: 44px 32px 80px;
+}
+
+/* The floating delete bar covers the bottom edge. No body text is left under it */
+.scrawl--selecting .scrawl-scroll {
+  padding-bottom: 140px;
 }
 
 .scrawl-column {
@@ -127,6 +131,15 @@
 .entry--selected .entry-rail-dot {
   background: var(--app-accent);
   border-color: var(--app-accent);
+}
+
+/* The record just left. The only save signal on the page, and it lasts 1.5s */
+.entry--fresh .entry-rail-dot {
+  background: var(--app-ok);
+  border-color: var(--app-ok);
+  transition:
+    background-color 250ms var(--app-ease),
+    border-color 250ms var(--app-ease);
 }
 
 /* A Note or a Codex: the dot filled and the title in bold say it is more than a line */
@@ -364,8 +377,7 @@
   min-width: 0;
 }
 
-/* The delete bar appears in the same place as the capture bar. It adds no further box
-   floating on screen */
+/* While selecting, the input line steps aside and this bar is the one box on screen */
 .capture-dock .select-bar {
   display: flex;
   align-items: center;
@@ -446,7 +458,7 @@
   color: var(--app-text-hint);
 }
 
-/* ---------------- floating capture bar ---------------- */
+/* ---------------- input line ---------------- */
 
 .capture-dock {
   position: absolute;
@@ -459,34 +471,101 @@
   pointer-events: none;
 }
 
-.capture-dock .capture-bar {
-  width: 640px;
-  max-width: calc(100% - 48px);
-  padding: 10px 10px 10px 16px;
-  background: var(--app-surface);
-  border: 1px solid var(--app-border);
-  border-radius: 14px;
-  box-shadow: 0 12px 32px -8px rgb(20 20 25 / 18%);
-  pointer-events: auto;
+/* Clear of the bottom edge when a long day scrolls the line into view */
+.entry--input {
+  scroll-margin-bottom: 24px;
 }
 
-.capture-dock .capture-input {
+/* The time and the dot come up only once something is typed */
+.entry--input .entry-rail-dot {
+  opacity: 0;
+  transition: opacity 120ms var(--app-ease);
+}
+
+.entry--typing .entry-rail-dot {
+  opacity: 1;
+}
+
+/* One rule and nothing else */
+.capture-bar {
+  /* Tag completion hangs from this bar */
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: var(--size-2);
+  max-width: 552px;
+  border-bottom: 1px solid var(--app-border);
+}
+
+.capture-bar:focus-within {
+  border-bottom-color: var(--app-text);
+}
+
+.capture-input {
+  flex: 1;
+  /* normalize gives a textarea two lines of height */
+  min-height: 0;
+  padding: 0 0 4px;
   border: none;
+  outline: none;
+  resize: none;
   background: none;
-  padding: 8px 0;
+  color: var(--app-text);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.75;
 }
 
-.capture-dock .capture-send {
-  width: 38px;
-  height: 38px;
-  justify-content: center;
-  border-radius: 10px;
-  padding: 0;
-  flex-shrink: 0;
+/* The hint is for whoever is about to write; at rest the line stays one rule */
+.capture-input:not(:focus)::placeholder {
+  color: transparent;
 }
 
-.capture-dock .capture-send-label {
+/* Mid-page, so the completion opens below the line rather than over the day above */
+.capture-bar .tag-suggest {
+  top: calc(100% + 6px);
+  bottom: auto;
+  left: 0;
+}
+
+/* Enter does the sending wherever there is a keyboard to press it on. A phone keeps a button:
+   its keyboards can report Enter as an IME key, and then nothing else would record */
+.capture-send {
   display: none;
+}
+
+.capture-send-label {
+  display: none;
+}
+
+@media (hover: none) {
+  .capture-input:not(:focus)::placeholder {
+    color: var(--app-text-faint);
+  }
+
+  .capture-send {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: none;
+    border-radius: 22px;
+    background: var(--app-accent);
+    color: var(--gray-0);
+    cursor: pointer;
+  }
+
+  :root[data-theme="dark"] .capture-send {
+    color: var(--gray-9);
+  }
+
+  .capture-send:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
 }
 
 /* Hung directly below the header's calendar button */
@@ -556,17 +635,8 @@
     bottom: 12px;
   }
 
-  .capture-dock .capture-bar {
-    width: 100%;
+  .capture-bar {
     max-width: none;
-    border-radius: 16px;
-    padding: 8px 8px 8px 16px;
-  }
-
-  .capture-dock .capture-send {
-    width: 40px;
-    height: 40px;
-    border-radius: 12px;
   }
 }
 

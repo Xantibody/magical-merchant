@@ -1,9 +1,8 @@
 import { describe, it, expect, beforeAll, afterEach } from "vitest";
 
 /**
- * The capture bar floats over Scrawl. If the scroll area's bottom padding is thinner than
- * the bar, the bottom entry stays hidden even when scrolled all the way down. By eye this
- * is usually noticed only when the entry just written cannot be read, which is too late.
+ * The delete bar floats over Scrawl while selecting. If the scroll area's bottom padding is
+ * thinner than the bar, the bottom entry cannot be reached to be selected at all.
  */
 function mountScrawl(entries: number): void {
   const rows = Array.from(
@@ -20,7 +19,7 @@ function mountScrawl(entries: number): void {
     <div class="app">
       <header class="header">header</header>
       <main class="app-main">
-        <div class="scrawl">
+        <div class="scrawl scrawl--selecting">
           <div class="scrawl-scroll">
             <div class="scrawl-column">
               <section class="day-group" data-day="2026-08-05">
@@ -30,10 +29,7 @@ function mountScrawl(entries: number): void {
             </div>
           </div>
           <div class="capture-dock">
-            <div class="capture-bar">
-              <textarea class="capture-input"></textarea>
-              <button class="capture-send" type="button">送信</button>
-            </div>
+            <div class="select-bar"><span class="select-bar-label">2 件</span></div>
           </div>
         </div>
       </main>
@@ -48,7 +44,7 @@ function element(selector: string): HTMLElement {
   return found;
 }
 
-describe("scrawl under the floating capture bar", () => {
+describe("scrawl under the floating delete bar", () => {
   beforeAll(async () => {
     await import("../index.css");
   });
@@ -57,7 +53,7 @@ describe("scrawl under the floating capture bar", () => {
     document.body.innerHTML = "";
   });
 
-  it("lets the last entry scroll clear of the capture bar", () => {
+  it("lets the last entry scroll clear of the delete bar", () => {
     mountScrawl(60);
     const scroll = element(".scrawl-scroll");
     scroll.scrollTop = scroll.scrollHeight;
@@ -68,7 +64,7 @@ describe("scrawl under the floating capture bar", () => {
     expect(lastEntry?.getBoundingClientRect().bottom).toBeLessThanOrEqual(dockTop);
   });
 
-  it("keeps the capture bar inside the scrawl", () => {
+  it("keeps the delete bar inside the scrawl", () => {
     mountScrawl(3);
 
     const scrawl = element(".scrawl").getBoundingClientRect();

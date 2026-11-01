@@ -63,6 +63,8 @@ interface ScrawlEntryProps {
   item: ScrawlItem;
   /** Notes grown from this entry. They appear as chips directly under the body. */
   notes: NoteItem[];
+  /** Just left from the input line. Its dot shows green for a moment. */
+  fresh?: boolean;
   selecting: boolean;
   selected: boolean;
   onToggle: () => void;
@@ -80,6 +82,7 @@ export default function ScrawlEntry(props: ScrawlEntryProps): JSX.Element {
     <article
       class="entry"
       classList={{
+        "entry--fresh": props.fresh === true,
         "entry--selected": props.selected,
         "entry--promoted": props.notes.length > 0,
       }}
