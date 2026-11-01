@@ -1307,7 +1307,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       if (e.defaultPrevented) {
         return;
       }
-      if (e.target instanceof Element && e.target.closest(".palette-overlay")) {
+      if (e.target instanceof Element && e.target.closest(".palette-overlay, .search")) {
         return;
       }
       if (isWriteKey(e)) {

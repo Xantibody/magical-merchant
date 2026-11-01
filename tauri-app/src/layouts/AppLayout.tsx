@@ -9,6 +9,7 @@ import type { IconName } from "../components/Icon";
 import CommandPalette from "../components/CommandPalette";
 import Popover from "../components/Popover";
 import Rail from "../components/Rail";
+import SearchField from "../components/SearchField";
 import SyncPopover from "../components/SyncPopover";
 import UndoToast from "../components/UndoToast";
 import FirstRunCard from "../components/FirstRunCard";
@@ -25,12 +26,14 @@ import {
   modifierLabel,
   shortcutLabel,
   SHORTCUT_LIST_KEY,
+  startsTypedSearch,
 } from "../lib/shortcuts";
 import type { ShortcutName } from "../lib/shortcuts";
 import { MODE_ICONS, MODE_LABELS, ROUTES } from "../lib/routes";
 import type { RoutePath } from "../lib/routes";
 import { noteRoute, writeRoute } from "../lib/note-route";
 import { typedInvoke } from "../lib/commands";
+import type { SearchHit } from "../lib/commands";
 import { paletteScopeAt } from "../lib/search-scope";
 import { firstWidgetAction } from "../lib/widget-actions";
 import type { WidgetAction } from "../lib/widget-actions";
@@ -169,10 +172,36 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
 
   /**
    * If tags are chosen on the Browse screen, search within them. To search everything,
-   * removing the chip in the palette is enough; the reverse (recalling the filter later) is hard
+   * removing the chip is enough; the reverse (recalling the filter later) is hard
    */
   const openSearch = (): void => {
+    const open = shell.searchSeed() !== null;
+    shell.openSearch(
+      open ? undefined : paletteScopeAt(location.pathname, shell.browseFilter().tags),
+    );
+    // Already open with the keys elsewhere: nothing mounts, so nothing would take them back
+    document.querySelector<HTMLInputElement>(".search-input")?.focus();
+  };
+
+  /** The list of shortcuts. It is the palette's command section, and the palette keeps its home. */
+  const openShortcutList = (): void => {
     shell.openPalette(paletteScopeAt(location.pathname, shell.browseFilter().tags));
+  };
+
+  /**
+   * Scrawl and Browse have no keys of their own. A note's viewer does (e and Enter write), and
+   * the window listeners there run in no useful order, so typing does not start a search on it.
+   */
+  const typingSearches = (): boolean => isActive(ROUTES.SCRAWL) || isActive(ROUTES.BROWSE);
+
+  /** Switching the mode alone would mean "found it, now find it again". */
+  const openHit = (hit: SearchHit): void => {
+    // The URL points at that one note, or at that day for Scrawl
+    if (hit.kind !== "scrawl" && hit.filename) {
+      navigate(noteRoute(hit.kind, hit.filename));
+    } else {
+      navigate(`${ROUTES.SCRAWL}?day=${hit.date}`);
+    }
   };
 
   // The glyph registry is read once at startup and again on every signal that
@@ -206,7 +235,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
    * rail's badge would say "Cmd+N" while the key does nothing.
    * This is also the shortcut list itself that `?` opens
    */
-  const commands = createMemo<ShellCommand[]>(() => [
+  const shellCommands = createMemo<ShellCommand[]>(() => [
     {
       id: "new-note",
       label: t().palette.newNote,
@@ -260,6 +289,17 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
       run: go(ROUTES.SETTINGS),
     },
   ]);
+
+  /** The same rows for the palette and the search field, with the key spelled out. */
+  const commandRows = createMemo(() =>
+    shellCommands().map((command) => ({
+      id: command.id,
+      label: command.label,
+      icon: command.icon,
+      shortcut: shortcutLabel(command.shortcut),
+      run: command.run,
+    })),
+  );
 
   /**
    * A widget's template button. If today's note from the same template already
@@ -345,7 +385,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
         shell.toggleListPin();
         return;
       }
-      for (const command of commands()) {
+      for (const command of shellCommands()) {
         if (matchesShortcut(e, command.shortcut)) {
           e.preventDefault();
           command.run();
@@ -356,7 +396,17 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
       // The key has no modifier, so while typing it passes through as a character
       if (e.key === SHORTCUT_LIST_KEY && !shell.paletteOpen() && !isTypingTarget(e.target)) {
         e.preventDefault();
-        openSearch();
+        openShortcutList();
+        return;
+      }
+      if (
+        typingSearches() &&
+        startsTypedSearch(e) &&
+        !shell.paletteOpen() &&
+        !shell.searchSeed() &&
+        !shell.popover()
+      ) {
+        shell.openSearch();
         return;
       }
       if (e.key === "Escape") {
@@ -468,7 +518,22 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
           </div>
         </header>
 
-        <main class="app-main">{props.children}</main>
+        <main class="app-main">
+          {props.children}
+          <Show when={shell.searchSeed()} keyed>
+            {(seed) => (
+              <SearchField
+                seed={seed}
+                commands={commandRows()}
+                onOpen={(hit) => {
+                  shell.closeSearch();
+                  openHit(hit);
+                }}
+                onClose={() => shell.closeSearch()}
+              />
+            )}
+          </Show>
+        </main>
 
         {/* The status line: where the save landed and what state the open note is in,
             so a closed panel hides nothing. No current location: the rail's line and
@@ -535,22 +600,10 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
       <Show when={shell.paletteOpen()}>
         <CommandPalette
           scopeTags={shell.paletteScope()?.tags ?? []}
-          commands={commands().map((command) => ({
-            id: command.id,
-            label: command.label,
-            icon: command.icon,
-            shortcut: shortcutLabel(command.shortcut),
-            run: command.run,
-          }))}
+          commands={commandRows()}
           onSelectHit={(hit) => {
             shell.closePalette();
-            // Switching the mode alone would mean "found it, now find it again".
-            // The URL points at that one note, or at that day for Scrawl
-            if (hit.kind !== "scrawl" && hit.filename) {
-              navigate(noteRoute(hit.kind, hit.filename));
-            } else {
-              navigate(`${ROUTES.SCRAWL}?day=${hit.date}`);
-            }
+            openHit(hit);
           }}
           onClose={() => shell.closePalette()}
         />

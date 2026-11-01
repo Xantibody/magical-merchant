@@ -98,7 +98,7 @@ const ja = {
   capture: {
     label: "書き留める",
     placeholder: "いま何を記録する？",
-    linePlaceholder: (modifier: string) => `書き留める — # タグ · ${modifier}↵ Note`,
+    linePlaceholder: (modifier: string) => `書き留める — # タグ · / 探す · ${modifier}↵ Note`,
     saveFailed: "記録を保存できませんでした。入力は残っています。",
     suggestLabel: "タグ候補",
     newTag: (draft: string) => `+「#${draft}」を新規タグとして確定`,
@@ -519,6 +519,19 @@ const ja = {
     // value `getVersion()` returns, and it matches the release tag
     versionLine: (version: string) => `Magical Merchant ${version}`,
   },
+  search: {
+    placeholder: "探す",
+    close: "閉じる",
+    // AIDEV-NOTE: the handoff's name for the Scrawl kind on this chip. Only the japanese table
+    // has it, and only here; the proper noun stays everywhere else, including the english table
+    kindScrawl: "一行",
+    today: "今日",
+    thisWeek: "今週",
+    yearAgo: "1 年前の今日",
+    records: "記録",
+    empty: "見つかりません。条件を一つ外してみてください。",
+    capped: (count: number) => `${count} 件まで`,
+  },
   palette: {
     dialogLabel: "検索・コマンド",
     commands: "コマンド",
@@ -689,7 +702,7 @@ const en: Messages = {
   capture: {
     label: "Jot down",
     placeholder: "What's on your mind?",
-    linePlaceholder: (modifier: string) => `Jot down — # tag · ${modifier}↵ Note`,
+    linePlaceholder: (modifier: string) => `Jot down — # tag · / search · ${modifier}↵ Note`,
     saveFailed: "Could not save the entry. Your text is still here.",
     suggestLabel: "Tag suggestions",
     newTag: (draft: string) => `+ Use “#${draft}” as a new tag`,
@@ -1064,6 +1077,17 @@ const en: Messages = {
     account: "Account",
     accountDesc: "Sign in with Google",
     versionLine: (version: string) => `Magical Merchant ${version}`,
+  },
+  search: {
+    placeholder: "Search",
+    close: "Close",
+    kindScrawl: "Scrawl",
+    today: "Today",
+    thisWeek: "This week",
+    yearAgo: "A year ago today",
+    records: "Records",
+    empty: "Nothing found. Try removing one condition.",
+    capped: (count: number) => `First ${count}`,
   },
   palette: {
     dialogLabel: "Search and commands",

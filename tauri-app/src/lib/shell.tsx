@@ -40,6 +40,11 @@ export interface NoteBar {
   openHistory: () => void;
 }
 
+/** What the search field opens with. */
+export interface SearchSeed {
+  tags?: string[];
+}
+
 /** Only one popover can be open at a time. */
 type PopoverName = "sync" | "calendar" | "new-note-menu" | null;
 
@@ -69,6 +74,11 @@ export interface Shell {
   paletteScope: Accessor<PaletteScope | null>;
   openPalette: (scope?: PaletteScope) => void;
   closePalette: () => void;
+  /** Non-null while the search field is open. A new seed starts it over. */
+  searchSeed: Accessor<SearchSeed | null>;
+  /** Without a seed, a field already open keeps what is in it. */
+  openSearch: (seed?: SearchSeed) => void;
+  closeSearch: () => void;
   /**
    * Whether the pointer is on the rail or on the list flyout. The rail lives in AppLayout
    * and the list in Workspace, so the open/close signal meets here.
@@ -132,6 +142,7 @@ export function ShellProvider(props: { children: JSX.Element }): JSX.Element {
   const [popoverTrigger, setPopoverTrigger] = createSignal<HTMLElement | undefined>();
   const [paletteOpen, setPaletteOpen] = createSignal(false);
   const [paletteScope, setPaletteScope] = createSignal<PaletteScope | null>(null);
+  const [searchSeed, setSearchSeed] = createSignal<SearchSeed | null>(null);
   const [listHover, setListHover] = createSignal(false);
   const [listPinned, setListPinned] = createSignal(false);
   const [notePanelPinned, setNotePanelPinned] = createSignal(false);
@@ -164,9 +175,17 @@ export function ShellProvider(props: { children: JSX.Element }): JSX.Element {
     openPalette: (scope) => {
       setPopover(null);
       setPaletteScope(scope ?? null);
+      setSearchSeed(null);
       setPaletteOpen(true);
     },
     closePalette: () => setPaletteOpen(false),
+    searchSeed,
+    openSearch: (seed) => {
+      setPopover(null);
+      setPaletteOpen(false);
+      setSearchSeed((open) => seed ?? open ?? {});
+    },
+    closeSearch: () => setSearchSeed(null),
     listHover,
     setListHover,
     listPinned,
