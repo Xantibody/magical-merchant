@@ -471,11 +471,6 @@
   pointer-events: none;
 }
 
-/* Clear of the bottom edge when a long day scrolls the line into view */
-.entry--input {
-  scroll-margin-bottom: 24px;
-}
-
 /* The time and the dot come up only once something is typed */
 .entry--input .entry-rail-dot {
   opacity: 0;
@@ -521,7 +516,7 @@
   color: transparent;
 }
 
-/* Mid-page, so the completion opens below the line rather than over the day above */
+/* Today's heading is right above, so the completion opens below the line */
 .capture-bar .tag-suggest {
   top: calc(100% + 6px);
   bottom: auto;

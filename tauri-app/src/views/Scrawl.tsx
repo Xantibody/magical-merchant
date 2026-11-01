@@ -96,11 +96,10 @@ function NoteRow(props: { note: NoteItem; onOpen: (note: NoteItem) => void }): J
 }
 
 /**
- * The input line at the end of today. One rule and nothing else; the time and the dot come
+ * The input line at the top of today. One rule and nothing else; the time and the dot come
  * up only once something is typed, so an empty line does not read as a record.
  */
 function InputLine(props: {
-  ref: (el: HTMLDivElement) => void;
   knownTags: TagCount[];
   onSend: (text: string) => Promise<void>;
   onPromote: (text: string) => Promise<void>;
@@ -111,7 +110,7 @@ function InputLine(props: {
 }): JSX.Element {
   const [typing, setTyping] = createSignal(false);
   return (
-    <div ref={props.ref} class="entry entry--input" classList={{ "entry--typing": typing() }}>
+    <div class="entry entry--input" classList={{ "entry--typing": typing() }}>
       <span class="entry-time">{typing() ? formatClock(new Date()) : ""}</span>
       <span class="entry-rail" aria-hidden="true">
         <span class="entry-rail-dot" />
@@ -162,9 +161,6 @@ export default function Scrawl(): JSX.Element {
   const [deleting, setDeleting] = createSignal(false);
   /** The record just left. Its dot stays green for a moment. */
   const [freshId, setFreshId] = createSignal<string | null>(null);
-  let inputLine: HTMLDivElement | undefined;
-  /** A long today pushes the line below the fold, and the app must open ready to record. */
-  const revealInputLine = (): void => inputLine?.scrollIntoView({ block: "nearest" });
   /** Folds the three selection states at once. Leaving works the same from anywhere. */
   const exitSelecting = (): void => {
     setSelecting(false);
@@ -225,7 +221,7 @@ export default function Scrawl(): JSX.Element {
 
   // The day holding the input line is drawn apart from the others so the line is not rebuilt
   // when the rows come back from a save: a rebuilt line reads the draft back before the send
-  // clears it. It follows the newest day, so a capture past midnight still lands above the line
+  // clears it. It follows the newest day, so a capture past midnight still lands under the line
   const currentDay = createMemo(() => {
     const newest = days()[0]?.date ?? "";
     const opened = toIsoDate(today);
@@ -290,16 +286,6 @@ export default function Scrawl(): JSX.Element {
     setJumpTo(null);
   });
 
-  // Once, on arrival. A landing on a chosen day (?day=) keeps that day on screen instead
-  let revealed = false;
-  createEffect(() => {
-    if (revealed || !scrawl() || jumpTo() || searchParams.day) {
-      revealed ||= Boolean(scrawl());
-      return;
-    }
-    revealed = true;
-    queueMicrotask(revealInputLine);
-  });
   const recordedDates = createMemo(() => [...new Set((scrawl()?.items ?? []).map((i) => i.date))]);
 
   const contextsFor = (iso: string): (DeviceContext | null)[] =>
@@ -324,7 +310,6 @@ export default function Scrawl(): JSX.Element {
       setFreshId(left.id);
       setTimeout(() => setFreshId((id) => (id === left.id ? null : id)), FRESH_MS);
     }
-    queueMicrotask(revealInputLine);
   };
 
   /** Creates a note from `body` and opens it to write. */
@@ -555,17 +540,9 @@ export default function Scrawl(): JSX.Element {
               </Show>
             </header>
 
-            <Show when={days().length === 0}>
-              <EmptyScrawl />
-            </Show>
-            <For each={currentRows()}>{renderRow}</For>
-
             {/* While selecting, the bottom bar stands in for it, as it did for the floating bar */}
             <Show when={!selecting()}>
               <InputLine
-                ref={(el) => {
-                  inputLine = el;
-                }}
                 knownTags={knownTags()}
                 onSend={capture}
                 onPromote={writeNote}
@@ -577,6 +554,11 @@ export default function Scrawl(): JSX.Element {
                 onJumpToDate={(trigger) => shell.togglePopover("calendar", trigger)}
               />
             </Show>
+
+            <Show when={days().length === 0}>
+              <EmptyScrawl />
+            </Show>
+            <For each={currentRows()}>{renderRow}</For>
           </section>
 
           <For each={pastDays()}>
