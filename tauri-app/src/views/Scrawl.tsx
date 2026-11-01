@@ -105,6 +105,9 @@ function InputLine(props: {
   onSend: (text: string) => Promise<void>;
   onPromote: (text: string) => Promise<void>;
   onError: () => void;
+  onSearch: () => void;
+  onNewNote: () => void;
+  onJumpToDate: (trigger: HTMLElement) => void;
 }): JSX.Element {
   const [typing, setTyping] = createSignal(false);
   return (
@@ -120,6 +123,9 @@ function InputLine(props: {
           onError={props.onError}
           onTyping={setTyping}
           knownTags={props.knownTags}
+          onSearch={props.onSearch}
+          onNewNote={props.onNewNote}
+          onJumpToDate={props.onJumpToDate}
         />
       </div>
     </div>
@@ -564,6 +570,11 @@ export default function Scrawl(): JSX.Element {
                 onSend={capture}
                 onPromote={writeNote}
                 onError={() => shell.showToast(t().capture.saveFailed)}
+                onSearch={() => shell.openSearch()}
+                onNewNote={() => {
+                  void openNewNote("");
+                }}
+                onJumpToDate={(trigger) => shell.togglePopover("calendar", trigger)}
               />
             </Show>
           </section>

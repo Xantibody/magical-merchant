@@ -101,6 +101,10 @@ const ja = {
     linePlaceholder: (modifier: string) => `書き留める — # タグ · / 探す · ${modifier}↵ Note`,
     saveFailed: "記録を保存できませんでした。入力は残っています。",
     suggestLabel: "タグ候補",
+    menuLabel: "メニュー",
+    menuSearch: "探す",
+    menuNote: "Note を作る",
+    menuDate: "日付へ",
     newTag: (draft: string) => `+「#${draft}」を新規タグとして確定`,
   },
   browse: {
@@ -705,6 +709,10 @@ const en: Messages = {
     linePlaceholder: (modifier: string) => `Jot down — # tag · / search · ${modifier}↵ Note`,
     saveFailed: "Could not save the entry. Your text is still here.",
     suggestLabel: "Tag suggestions",
+    menuLabel: "Menu",
+    menuSearch: "Search",
+    menuNote: "New Note",
+    menuDate: "Go to date",
     newTag: (draft: string) => `+ Use “#${draft}” as a new tag`,
   },
   browse: {
