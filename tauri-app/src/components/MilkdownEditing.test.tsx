@@ -204,6 +204,20 @@ describe("Note table editing and inline decorations", () => {
     expect(h.view.state.doc.textContent).toContain("a\nb");
   });
 
+  // During a composition on WebKit a paragraph ends in the IME's widget, so ProseMirror adds its
+  // separator image. Under the reset's img { display: block } it pushes the break down a line
+  it("keeps a paragraph one line high while it ends in the IME's widget", async () => {
+    const h = await mount("j");
+    const paragraph = h.view.dom.querySelector("p") as HTMLElement;
+    const oneLine = paragraph.getBoundingClientRect().height;
+
+    paragraph.innerHTML =
+      'j<span contenteditable="false"></span>' +
+      '<img class="ProseMirror-separator" alt=""><br class="ProseMirror-trailingBreak">';
+
+    expect(paragraph.getBoundingClientRect().height).toBe(oneLine);
+  });
+
   it("does not mutate a table while IME composition is active", async () => {
     const h = await mount(TABLE);
     h.select("b");
