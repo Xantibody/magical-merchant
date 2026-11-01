@@ -157,15 +157,14 @@ describe("Scrawl › 入力行", () => {
   beforeEach(setupScrawl);
   afterEach(teardownScrawl);
 
-  it("sits at the end of today, below the day's last record", async () => {
+  it("sits at the top of today, above the day's newest record", async () => {
     await openScrawl();
 
     const times = [...document.querySelectorAll(`[data-day="${TODAY}"] .entry-time`)].map(
       (el) => el.textContent,
     );
 
-    expect(times).toStrictEqual(["08:15", "21:34", ""]);
-    expect(lineIn().closest("section")?.lastElementChild?.contains(lineIn())).toBe(true);
+    expect(times).toStrictEqual(["", "21:34", "08:15"]);
   });
 
   it("shows the time and the dot only once something is typed", async () => {
