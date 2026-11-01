@@ -41,9 +41,6 @@ function name(rule: Rule): string {
 /** The size that is a glyph drawn inside a 14px mark, not text anyone reads as a line. */
 const SMALL_SIZE_EXCEPTIONS = new Set(["./workspace.css .page-mark-count"]);
 
-/** Owned by the status line's own change. To go when that lands. */
-const HINT_TEXT_EXCEPTIONS = new Set(["./layout.css .bottom-bar-sep"]);
-
 function shadowOf(rule: Rule): string {
   return /box-shadow:\s*(?<value>[^;]+)/u.exec(rule.body)?.groups?.value.trim() ?? "";
 }
