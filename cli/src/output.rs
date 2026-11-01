@@ -376,6 +376,18 @@ pub(crate) struct CreatedNoteOutput {
 }
 
 #[derive(Serialize, schemars::JsonSchema)]
+pub(crate) struct PromotedOutput {
+    /// Unchanged: a note keeps its ID when it becomes a Codex.
+    pub(crate) filename: String,
+}
+
+#[derive(Serialize, schemars::JsonSchema)]
+pub(crate) struct AddedScrawlOutput {
+    /// The day it was appended to, YYYY-MM-DD; the argument to `read_scrawl`.
+    pub(crate) date: String,
+}
+
+#[derive(Serialize, schemars::JsonSchema)]
 pub(crate) struct UpdatedNoteOutput {
     pub(crate) filename: String,
     /// The copy of the note taken before this write. Pass its `id` to
@@ -398,7 +410,7 @@ pub(crate) struct CodexVersionsOutput {
     pub(crate) bytes_delta: i64,
 }
 
-/// One version a person committed. Not a `note_history` copy: those are taken by
+/// One version a person committed. Not a `list_note_history` copy: those are taken by
 /// the machine and stay on the device, these are part of the document.
 #[derive(Serialize, schemars::JsonSchema)]
 pub(crate) struct CodexVersionInfo {
