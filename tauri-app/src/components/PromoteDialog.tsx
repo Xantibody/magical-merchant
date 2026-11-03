@@ -2,19 +2,25 @@ import Dialog from "corvu/dialog";
 import { createSignal } from "solid-js";
 import type { JSX } from "solid-js";
 import Icon from "./Icon";
-import { t } from "../lib/i18n";
-import "../styles/note-panel.css";
+import type { IconName } from "./Icon";
+import "../styles/promote-dialog.css";
 
 interface PromoteDialogProps {
   open: boolean;
+  icon: IconName;
+  title: string;
+  /** What is gained, then what it costs. A `<strong>` in it is drawn a little darker. */
+  body: JSX.Element;
+  yes: string;
+  no: string;
   onClose: () => void;
   onConfirm: () => void;
 }
 
 /**
- * The one confirmation in the note's actions. Every other action is undone from a toast, but
- * a Codex has no way back to Note, so one step is put before it. It is modal: a focus that
- * could wander back into the body would let a stray Enter decide something irreversible.
+ * The step put before a record grows into the next surface (Scrawl -> Note, Note -> Codex).
+ * Every other action is undone from a toast, but these make a new thing and move you to it.
+ * It is modal: a focus that could wander back into the body would let a stray Enter decide it.
  */
 export default function PromoteDialog(props: PromoteDialogProps): JSX.Element {
   const [confirm, setConfirm] = createSignal<HTMLButtonElement>();
@@ -35,25 +41,19 @@ export default function PromoteDialog(props: PromoteDialogProps): JSX.Element {
         <Dialog.Content class="promote-dialog-anchor">
           <div class="promote-dialog">
             <Dialog.Label class="promote-dialog-title">
-              <Icon name="book" size={18} />
-              {t().codex.promote}
+              <Icon name={props.icon} size={18} />
+              {props.title}
             </Dialog.Label>
-            {/* Say what is gained before saying there is no way back. That is what decides
-                whether to press */}
-            <Dialog.Description class="promote-dialog-body">
-              {t().codex.promoteConfirm}
-              <strong>{t().codex.promoteConfirmStrong}</strong>
-              {t().codex.promoteConfirmEnd}
-            </Dialog.Description>
+            <Dialog.Description class="promote-dialog-body">{props.body}</Dialog.Description>
             <div class="promote-dialog-buttons">
-              <Dialog.Close class="button-secondary">{t().codex.promoteNo}</Dialog.Close>
+              <Dialog.Close class="button-secondary">{props.no}</Dialog.Close>
               <button
                 type="button"
                 class="button-primary"
                 ref={setConfirm}
                 onClick={() => props.onConfirm()}
               >
-                {t().codex.promoteYes}
+                {props.yes}
               </button>
             </div>
           </div>

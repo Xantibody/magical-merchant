@@ -83,6 +83,11 @@ describe("reduced motion in the browser", () => {
         </button>
         <PromoteDialog
           open={open()}
+          icon="book"
+          title="Codex にする"
+          body="Codex に移ります。"
+          yes="Codex にする"
+          no="やめる"
           onClose={() => setOpen(false)}
           onConfirm={vi.fn<() => void>()}
         />
