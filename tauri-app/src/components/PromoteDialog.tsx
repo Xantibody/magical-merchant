@@ -46,7 +46,10 @@ export default function PromoteDialog(props: PromoteDialogProps): JSX.Element {
             </Dialog.Label>
             <Dialog.Description class="promote-dialog-body">{props.body}</Dialog.Description>
             <div class="promote-dialog-buttons">
-              <Dialog.Close class="button-secondary">{props.no}</Dialog.Close>
+              {/* corvu labels its close "close" unless told otherwise, which hides the words on it */}
+              <Dialog.Close class="button-secondary" aria-label={props.no}>
+                {props.no}
+              </Dialog.Close>
               <button
                 type="button"
                 class="button-primary"
