@@ -87,9 +87,8 @@ export default function MarkdownToolbar(props: MarkdownToolbarProps): JSX.Elemen
   // Whether to show "exit block". It only means something inside a code block
   const [inCodeBlock, setInCodeBlock] = createSignal(false);
 
-  // Hide the bottom tabs while the toolbar is up (that is, while editing). The
-  // fixed toolbar overlapping the tabs makes Scrawl / Note unpressable and lets a
-  // stray tap switch modes; both are cut off here
+  // Mark the body while the toolbar is up (that is, while editing): the column gives up
+  // the toolbar's height so the lines being typed never sit behind the buttons
   onMount(() => {
     document.body.classList.add("md-toolbar-open");
     onCleanup(() => document.body.classList.remove("md-toolbar-open"));

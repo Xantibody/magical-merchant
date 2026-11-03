@@ -242,7 +242,7 @@ describe("MarkdownToolbar", () => {
     expect(document.activeElement).not.toBe(mock.body);
   });
 
-  it("hides the bottom tabs only while the toolbar is up", () => {
+  it("marks the body only while the toolbar is up", () => {
     const { editor } = createMockEditor();
     const { unmount } = render(() => <MarkdownToolbar editor={editor} />);
 

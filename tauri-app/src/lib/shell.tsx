@@ -80,8 +80,8 @@ export interface Shell {
   openSearch: (seed?: SearchSeed) => void;
   closeSearch: () => void;
   /**
-   * Whether the pointer is on the rail or on the list flyout. The rail lives in AppLayout
-   * and the list in Workspace, so the open/close signal meets here.
+   * Whether the pointer is on the window's left edge (`.list-edge`) or on the list flyout.
+   * Both are Workspace's, but the pin and `listOpen` are the app's, so the signal lives here.
    */
   listHover: Accessor<boolean>;
   setListHover: (on: boolean) => void;

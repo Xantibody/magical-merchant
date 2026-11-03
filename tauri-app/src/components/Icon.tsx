@@ -121,7 +121,7 @@ export default function Icon(props: IconProps): JSX.Element {
       ref={ref}
       class="icon"
       // Reserve the box before the SVG arrives by dynamic import. Left as a 0px empty span,
-      // the header and the tab bar would grow the moment it lands and shake the whole screen
+      // whatever holds it would grow the moment it lands and shake the whole screen
       style={{
         display: "inline-flex",
         "line-height": 0,

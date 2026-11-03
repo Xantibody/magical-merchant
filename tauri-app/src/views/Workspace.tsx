@@ -347,16 +347,16 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   const mapShown = (): boolean => mapOpen() && !historyOpen();
 
   /**
-   * The table that resolves `[[ID]]` to a title. The preview looks it up every time it draws.
-   * It is not narrowed by surface: a note moved from Note to Codex is still pointed at by the same
-   * ID, and opening it sends you to the other surface.
-   */
-  /**
    * The tags written in the body as `#tag`. The meta line tells them from the frontmatter's
    * by an outline alone: they are edited where they are written, not in the panel.
    */
   const bodyTags = createMemo<ReadonlySet<string>>(() => new Set(parseTags(fullBody())));
 
+  /**
+   * The table that resolves `[[ID]]` to a title. The preview looks it up every time it draws.
+   * It is not narrowed by surface: a note moved from Note to Codex is still pointed at by the same
+   * ID, and opening it sends you to the other surface.
+   */
   const noteTitles = createMemo<ReadonlyMap<string, string>>(
     () => new Map(allItems().map((item) => [item.filename.replace(/\.md$/u, ""), item.title])),
   );
@@ -1244,17 +1244,6 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   onCleanup(() => shell.setNoteState(null));
 
   /**
-   * The keys that act on the open note. They are taken here because the target is "the one note
-   * now selected": AppLayout's table holds only what means the same on every screen.
-   *
-   * The keys badged here are chosen not to collide with Milkdown (#211). Even so, the editor is
-   * given precedence (`defaultPrevented`) so that when the editor takes more keys later, this
-   * does not snatch keystrokes away in the middle of writing.
-   *
-   * Cmd-Up and Cmd-Down (to the start and end of the document) are the browser's default behavior,
-   * and nobody calls preventDefault. Here they are told apart by whether the cursor is inside text.
-   */
-  /**
    * Esc peels one layer at a time. The tag input and the created-time field take theirs first
    * (they mark the key as handled), the confirmation is corvu's, then the history. The last
    * layer is the writing screen, which gives way to the viewer. The settings tab stays: the
@@ -1295,6 +1284,17 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     return !isTypingTarget(e.target) && !target?.closest("button, a, [role='dialog']");
   };
 
+  /**
+   * The keys that act on the open note. They are taken here because the target is "the one note
+   * now selected": AppLayout's table holds only what means the same on every screen.
+   *
+   * The keys badged here are chosen not to collide with Milkdown (#211). Even so, the editor is
+   * given precedence (`defaultPrevented`) so that when the editor takes more keys later, this
+   * does not snatch keystrokes away in the middle of writing.
+   *
+   * Cmd-Up and Cmd-Down (to the start and end of the document) are the browser's default behavior,
+   * and nobody calls preventDefault. Here they are told apart by whether the cursor is inside text.
+   */
   onMount(() => {
     const onKeyDown = (e: KeyboardEvent): void => {
       const item = selected();
@@ -1597,7 +1597,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
 
   /**
    * Whether to show the flyout. While not one note is open it stays out: folding with nothing to
-   * hide (the body) would leave a screen with nothing on it until the pointer is on the rail.
+   * hide (the body) would leave a screen with nothing on it until the pointer finds the edge.
    */
   const flyoutOpen = (): boolean => shell.listOpen() || selected() === undefined;
 
