@@ -33,7 +33,7 @@ function renderField(hits: SearchHit[], tags: string[] = [], commands: SearchFie
       searches.push(args as unknown as Search);
       return hits;
     }
-    return cmd === "browse_all" ? hits : [];
+    return cmd === "recent_records" ? hits.slice(0, (args as { limit: number }).limit) : [];
   });
   const onOpen = vi.fn<(hit: SearchHit) => void>();
   const onClose = vi.fn<() => void>();

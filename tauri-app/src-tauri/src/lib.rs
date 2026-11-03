@@ -593,6 +593,17 @@ async fn browse_all(handle: AppHandle) -> Result<Vec<SearchHit>, String> {
         .await
 }
 
+/// The newest records, for the search field before a word is typed. The scan is
+/// `browse_all`'s; only the trip to the screen is cut to `limit` rows.
+#[tauri::command]
+async fn recent_records(handle: AppHandle, limit: usize) -> Result<Vec<SearchHit>, String> {
+    let base_dir = app_base_dir(&handle)?;
+    off_main_thread(move || {
+        magical_merchant_core::recent_records(&base_dir, limit).map_err(|e| e.to_string())
+    })
+    .await
+}
+
 /// Commits the current draft as a version. Called only when a person asks to
 /// commit a version.
 #[tauri::command]
@@ -842,6 +853,7 @@ pub fn run() {
             search_all,
             search_records,
             browse_all,
+            recent_records,
             resolve_places,
             delete_note,
             export::save_export,

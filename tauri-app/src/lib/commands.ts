@@ -225,6 +225,8 @@ interface CommandMap {
    * `match_start` / `match_len` are always `null`.
    */
   browse_all: { args: void; result: SearchHit[] };
+  /** The head of `browse_all`: the newest `limit` records, without carrying the rest over. */
+  recent_records: { args: { limit: number }; result: SearchHit[] };
   /** Records that point at this note with `[[ID]]`. Derived by a scan every time the note is opened. */
   find_backlinks: { args: { filename: string }; result: SearchHit[] };
   /**

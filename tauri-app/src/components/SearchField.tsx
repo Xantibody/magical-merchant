@@ -67,14 +67,15 @@ function periodLabel(period: SearchPeriod): string {
   return period === "week" ? t().search.thisWeek : t().search.yearAgo;
 }
 
-/** With nothing asked yet the field shows the newest records, so it can be browsed by hand. */
-async function runSearch(condition: SearchCondition): Promise<SearchHit[]> {
+/**
+ * With nothing asked yet the field shows the newest records, so it can be browsed by hand.
+ * Only those rows cross the IPC: the whole list is thousands of records on a year of use.
+ */
+function runSearch(condition: SearchCondition): Promise<SearchHit[]> {
   const args = searchArgs(condition, new Date());
-  if (args) {
-    return typedInvoke("search_records", args);
-  }
-  const all = await typedInvoke("browse_all");
-  return all.slice(0, RECENT_ROWS);
+  return args
+    ? typedInvoke("search_records", args)
+    : typedInvoke("recent_records", { limit: RECENT_ROWS });
 }
 
 /** What a row says under its title: the surroundings of the match, or else the start of the body. */

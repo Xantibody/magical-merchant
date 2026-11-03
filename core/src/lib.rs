@@ -32,7 +32,8 @@ pub use scrawl::{
     delete_scrawl_entry, list_scrawl_dates, read_scrawl, save_scrawl_entry, update_scrawl_entry,
 };
 pub use search::{
-    HitKind, SearchFilter, SearchHit, browse_all, find_backlinks, search_all, search_records,
+    HitKind, SearchFilter, SearchHit, browse_all, find_backlinks, recent_records, search_all,
+    search_records,
 };
 pub use template::{
     CreatedNote, TemplateDetail, TemplateSummary, VarLocale, create_note_from_template,
