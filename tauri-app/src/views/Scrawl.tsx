@@ -15,6 +15,7 @@ import CalendarPopover from "../components/CalendarPopover";
 import Popover from "../components/Popover";
 import TagFilter from "../components/TagFilter";
 import ScrawlEntry from "../components/ScrawlEntry";
+import PromoteDialog from "../components/PromoteDialog";
 import { useNavigate, useSearchParams } from "@solidjs/router";
 import { typedInvoke } from "../lib/commands";
 import { getClientContext } from "../lib/client-context";
@@ -161,6 +162,8 @@ export default function Scrawl(): JSX.Element {
   const [deleting, setDeleting] = createSignal(false);
   /** The record just left. Its dot stays green for a moment. */
   const [freshId, setFreshId] = createSignal<string | null>(null);
+  /** The record waiting on "Make a Note"'s confirmation. */
+  const [promoting, setPromoting] = createSignal<ScrawlItem | null>(null);
   /** Folds the three selection states at once. Leaving works the same from anywhere. */
   const exitSelecting = (): void => {
     setSelecting(false);
@@ -414,9 +417,7 @@ export default function Scrawl(): JSX.Element {
         selecting={selecting()}
         selected={selected().has(row.item.id)}
         onToggle={() => toggleSelected(row.item.id)}
-        onPromote={() => {
-          void promote(row.item);
-        }}
+        onPromote={() => setPromoting(row.item)}
         onOpenNote={openNote}
         onUnlinkNote={(note) => {
           void unlinkNote(note);
@@ -627,6 +628,29 @@ export default function Scrawl(): JSX.Element {
           </div>
         </div>
       </Show>
+
+      <PromoteDialog
+        open={promoting() !== null}
+        icon="note-pencil"
+        title={t().scrawl.promote}
+        body={
+          <>
+            {t().scrawl.promoteConfirm}
+            <strong>{t().scrawl.promoteConfirmStrong}</strong>
+            {t().scrawl.promoteConfirmEnd}
+          </>
+        }
+        yes={t().scrawl.promote}
+        no={t().scrawl.promoteNo}
+        onClose={() => setPromoting(null)}
+        onConfirm={() => {
+          const item = promoting();
+          setPromoting(null);
+          if (item) {
+            void promote(item);
+          }
+        }}
+      />
 
       <Popover
         open={shell.popover() === "calendar"}
