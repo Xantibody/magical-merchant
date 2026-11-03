@@ -80,6 +80,10 @@ const ja = {
   },
   scrawl: {
     promote: "Note にする",
+    promoteConfirm: "この記録を本文にした Note を作って開きます。Scrawl の記録は",
+    promoteConfirmStrong: "そのまま残ります",
+    promoteConfirmEnd: "。",
+    promoteNo: "やめる",
     unlink: (title: string) => `「${title}」との関係を解除`,
     unlinked: "Note との関係を解除しました",
     emptyToday: "今日はまだ何も記録していません。",
@@ -692,6 +696,10 @@ const en: Messages = {
   },
   scrawl: {
     promote: "Make a Note",
+    promoteConfirm: "It makes a Note from this record and opens it. The record ",
+    promoteConfirmStrong: "stays in Scrawl",
+    promoteConfirmEnd: ".",
+    promoteNo: "Not now",
     unlink: (title: string) => `Unlink “${title}”`,
     unlinked: "Note unlinked from this day",
     emptyToday: "Nothing recorded today yet.",

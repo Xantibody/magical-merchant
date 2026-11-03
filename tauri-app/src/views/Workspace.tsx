@@ -2095,6 +2095,19 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
 
               <PromoteDialog
                 open={confirmOpen()}
+                icon="book"
+                title={t().codex.promote}
+                // Say what is gained before saying there is no way back. That is what decides
+                // whether to press
+                body={
+                  <>
+                    {t().codex.promoteConfirm}
+                    <strong>{t().codex.promoteConfirmStrong}</strong>
+                    {t().codex.promoteConfirmEnd}
+                  </>
+                }
+                yes={t().codex.promoteYes}
+                no={t().codex.promoteNo}
                 onClose={() => setConfirmOpen(false)}
                 onConfirm={() => {
                   setConfirmOpen(false);

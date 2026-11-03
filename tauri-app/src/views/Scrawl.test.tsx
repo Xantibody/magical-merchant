@@ -256,6 +256,60 @@ describe("Scrawl › 週次ダイジェスト", () => {
   });
 });
 
+/** The hover action of the record that reads `text`. */
+const promoteButtonOf = (text: string): HTMLElement => {
+  const entry = screen.getByText(text).closest("article");
+  if (!entry) {
+    throw new Error(`no entry for ${text}`);
+  }
+  return within(entry).getByRole("button", { name: "Note にする" });
+};
+
+describe("Scrawl › Note にする", () => {
+  beforeEach(setupScrawl);
+  afterEach(() => {
+    delete HANDLERS.create_draft;
+    teardownScrawl();
+  });
+
+  // A stray press (or a long press meant as a scroll) must not leave a file behind and carry
+  // you off the journal, so the promotion asks first, like Note -> Codex
+  it("asks before making a Note from a record", async () => {
+    let body: unknown;
+    HANDLERS.create_draft = (args) => {
+      ({ body } = args);
+      return "/data/notes/20260903_091200.md";
+    };
+    await openScrawl();
+
+    fireEvent.click(promoteButtonOf("朝ラン 5km"));
+    const dialog = await screen.findByRole("dialog");
+    expect(body).toBeUndefined();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Note にする" }));
+
+    await waitFor(() => expect(location.pathname).toBe("/notes"));
+    expect(body).toBe("朝ラン 5km #運動");
+  });
+
+  it("makes nothing and stays on the journal when declined", async () => {
+    let made = false;
+    HANDLERS.create_draft = () => {
+      made = true;
+      return "/data/notes/20260903_091200.md";
+    };
+    await openScrawl();
+
+    fireEvent.click(promoteButtonOf("朝ラン 5km"));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "やめる" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(made).toBe(false);
+    expect(location.pathname).toBe("/");
+  });
+});
+
 describe("Scrawl › Note among the rows", () => {
   beforeEach(setupScrawl);
   afterEach(teardownScrawl);

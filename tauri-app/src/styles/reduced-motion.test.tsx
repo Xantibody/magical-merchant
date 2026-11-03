@@ -83,6 +83,11 @@ describe("reduced motion in the browser", () => {
         </button>
         <PromoteDialog
           open={open()}
+          icon="book"
+          title="Codex にする"
+          body="Codex に移ります。"
+          yes="Codex にする"
+          no="やめる"
           onClose={() => setOpen(false)}
           onConfirm={vi.fn<() => void>()}
         />
@@ -94,6 +99,8 @@ describe("reduced motion in the browser", () => {
     expect(getComputedStyle(element(dialog, ".promote-dialog")).animationDuration).toBe("0s");
     // The press that confirms is offered first
     await waitFor(() => expect(screen.getByRole("button", { name: "Codex にする" })).toHaveFocus());
+    // The way out is read by its own words, not by corvu's default "close"
+    expect(screen.getByRole("button", { name: "やめる" })).toBeDefined();
 
     await userEvent.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("dialog", { hidden: true })).toBeNull());
