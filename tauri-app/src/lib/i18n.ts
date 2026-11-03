@@ -228,7 +228,7 @@ const ja = {
     /** The second line under "Make a Codex" in the panel. What is gained, before any confirmation. */
     promoteSub: "版を刻める文書として育てる",
     /** The confirmation for "make it a Codex". What is gained comes first, no way back last. */
-    promoteConfirm: "版を刻める文書として Codex タブに移ります。Codex から Note には",
+    promoteConfirm: "版を刻める文書として Codex に移ります。Codex から Note には",
     promoteConfirmStrong: "戻せません",
     promoteConfirmEnd: "。",
     promoteYes: "Codex にする",
@@ -812,7 +812,7 @@ const en: Messages = {
     panel: "This Codex",
     promote: "Make a Codex",
     promoteSub: "Grow it as a document you commit versions of",
-    promoteConfirm: "It moves to the Codex tab as a document you commit versions of. It ",
+    promoteConfirm: "It moves to Codex as a document you commit versions of. It ",
     promoteConfirmStrong: "cannot go back to being a Note",
     promoteConfirmEnd: ".",
     promoteYes: "Make a Codex",

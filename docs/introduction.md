@@ -98,26 +98,29 @@ never see the on-disk compression.
 ```mermaid
 flowchart TD
     App["App.tsx (Router)"]
-    Layout["AppLayout<br/>header, tabs, palette, sync state"]
+    Layout["AppLayout<br/>mobile header, search field, status dot, palette, sync state"]
     Scrawl["Scrawl (eager — launch view)"]
     Workspace["Workspace (lazy)<br/>serves /notes and /codex"]
-    Settings["Settings (lazy)"]
+    Browse["Browse (lazy)"]
+    Settings["Settings / Templates (lazy)"]
     Editor["MilkdownEditor + MarkdownToolbar (lazy)<br/>Milkdown / ProseMirror / Shiki"]
     Preview["MarkdownPreview<br/>markdown-it + Shiki + Mermaid"]
 
     App --> Layout
     Layout --> Scrawl
     Layout --> Workspace
+    Layout --> Browse
     Layout --> Settings
-    Workspace --> Editor
-    Workspace -. "read-only note,<br/>or a Codex history" .-> Preview
+    Workspace --> Preview
+    Workspace -. "the writing screen<br/>(edit=1)" .-> Editor
 ```
 
 One view serves both Markdown surfaces: `/codex` is `Workspace` with
-`kind="codex"`, reading a different directory. There is **no edit mode** —
-the editor mounts as soon as a note's body arrives, and the preview is the
-exception rather than the default state (a note parked at `view: preview`,
-or a Codex whose history is open and whose body is showing diff marks).
+`kind="codex"`, reading a different directory. A note opens in the
+**viewer** (`MarkdownPreview`), and the editor mounts only on the **writing
+screen**, which Enter, `e`, a double click or the pencil opens and Esc leaves;
+the URL carries which one is showing (`edit=1`). A Codex whose history is
+open stays in the viewer, with diff marks in the gutter.
 
 Scrawl is the launch view, so everything the editor drags in
 (Milkdown, ProseMirror, Shiki) is split out of the startup bundle and

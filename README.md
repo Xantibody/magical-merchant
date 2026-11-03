@@ -12,26 +12,34 @@
 - **Scrawl** (formerly Timeline) — a day-grouped capture journal with tags, device/place
   context, a calendar jump, and a weekly digest (including _one year ago
   today_)
-- **Note** (formerly Notes) — Markdown files in a Typora-style Milkdown
-  editor with no edit mode: the editor is live from the moment a note is
-  open. A title field that is the body's own `# heading`, autosave with a
+- **Note** (formerly Notes) — Markdown files that open as a rendered page
+  and switch to a Typora-style Milkdown editor on Enter, `e` or a double
+  click. A title field that is the body's own `# heading`, autosave with a
   local one-step revert, Shiki code highlighting, Mermaid diagrams, and a
-  per-note markmap laid alongside the text or a read-only view
+  per-note markmap laid alongside the text
 - **Scrawl grows into Note** — promote a Scrawl entry into a note; the two
   stay linked through the note's `origin` frontmatter
-- **Note grows into Codex** — a document you keep adding to; it lives in its
-  own tab, keeps the versions you commit, and syncs them with everything else
+- **Note grows into Codex** — a document you keep adding to; it has a
+  surface of its own (`⌘3`), keeps the versions you commit, and syncs them
+  with everything else
 - **`[[links]]` and backlinks** — link notes by immutable file ID with
   autocomplete, optionally with `|display text`; every note lists the records
   that point at it
-- **`⌘K` palette** — recent notes / today / tags before you type, full-text
-  search with highlighted matches, exact landing on the note or day
-- **Keys you are shown, not told** — hold ⌘ and a badge floats on the
-  buttons in the chrome: the three mode tabs, sync, Settings, and the open
-  note's panel toggle. `?` opens the palette on its command list — the six
-  global commands, and only those. The note-scoped keys the panel has a row
-  for are printed beside those rows; `⌘↑` / `⌘↓`, which step through the list,
-  are printed nowhere
+- **One column, no chrome** — no rail and no tabs. The way around is the
+  keys (`⌘1` / `⌘2` / `⌘3`, `⌘K`, `⌘F`, `⌘,`), the places the empty search
+  field lists, and a status dot in the window's lower right that carries the
+  save and the sync and opens on the open note's details
+- **`⌘K` search field** — hidden until called; it opens on kind / tag /
+  period chips and the newest records, then searches the full text with
+  highlighted matches and lands exactly on the note or the day. **Browse**
+  (`⌘F`) narrows across the three surfaces by kind, tag and period, for the
+  record whose words you cannot recall
+- **Keys you are shown, not told** — hold ⌘ and a badge floats on every
+  visible control whose key works right now: the status dot, 新規 and the
+  list's pin, the note panel's `…` and its 履歴 tab. `?` opens the palette on
+  its command list — the seven global commands, and only those. The
+  note-scoped keys the panel has a row for are printed beside those rows;
+  `⌘↑` / `⌘↓`, which step through the list, are printed nowhere
 - **Optional sync** — Cloudflare Workers + R2, conflict-safe, with Android
   home-screen widgets and an MCP server for AI assistants — read-only unless
   you start it with `--allow-write`

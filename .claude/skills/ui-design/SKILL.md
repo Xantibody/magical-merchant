@@ -60,8 +60,12 @@ Spacing/typography/radius use Open Props (`var(--size-*)`, `var(--radius-*)`,
 1. Memo/editor area always occupies the full remaining space
 2. Minimal chrome — actions hidden until hover (PC) / revealed on touch
 3. Content columns cap at ~640–680px and center
-4. Bottom docks (`capture-dock`) float; scroll area pads its bottom so content
-   never hides under them
+4. One column, no rail (ADR 0010). What floats over the body opens from an
+   edge or a key and never moves the body: the list flyout (`.list-edge`,
+   `⌘\` to pin), the note panel (`⌘.`), the search field (`⌘K`). State lives
+   in the status dot, fixed to the window's lower right
+5. Bottom docks (`capture-dock`, now only Scrawl's select-mode bar) float; the
+   scroll area pads its bottom so content never hides under them
 
 ## Mobile (max-width: 767px)
 

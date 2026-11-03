@@ -218,11 +218,12 @@ for creating the keystore and for building locally.
 
 ## Android — home screen widgets
 
-Four widgets ship with the APK. The Scrawl capture bar (4×1) opens a sheet
+Five widgets ship with the APK. The Scrawl capture bar (4×1) opens a sheet
 over the home screen and appends straight to today's Scrawl through a JNI
 call into `magical_merchant_core` — the app is never started. The "new note"
-bar (4×1), the recent notes list (4×2) and the templates grid (4×3) open the
-app on `magical-merchant://widget/…` deep links. Sources live in
+bar (4×1), the recent notes list (4×2), the templates grid (4×2) and the
+single-template button (2×1 / 1×1, its template chosen when it is placed)
+open the app on `magical-merchant://widget/…` deep links. Sources live in
 [`tauri-app/android-widget/`](../tauri-app/android-widget/README.md) and are
 injected into the generated Gradle project by
 `just tauri_app::android-setup`, which the build recipes run for you.
