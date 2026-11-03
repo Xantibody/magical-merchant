@@ -1,11 +1,7 @@
 import { createEffect, createMemo, onCleanup, onMount, untrack, Show } from "solid-js";
 import type { JSX } from "solid-js";
 import { useLocation, useNavigate } from "@solidjs/router";
-import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
-import { listen, TauriEvent } from "@tauri-apps/api/event";
-import type { UnlistenFn } from "@tauri-apps/api/event";
 import Icon from "../components/Icon";
-import type { IconName } from "../components/Icon";
 import CommandPalette from "../components/CommandPalette";
 import Popover from "../components/Popover";
 import SearchField from "../components/SearchField";
@@ -15,27 +11,26 @@ import UndoToast from "../components/UndoToast";
 import FirstRunCard from "../components/FirstRunCard";
 import { ShellProvider, useShell } from "../lib/shell";
 import { watchLeave } from "../lib/leave";
+import { watchReturn } from "../lib/return";
 import { createSyncState, syncAlertText } from "../lib/sync";
 import { applyTheme, theme } from "../lib/theme";
-import { locale, t } from "../lib/i18n";
+import { t } from "../lib/i18n";
 import { createHints } from "../lib/hints";
 import {
   isTypingTarget,
   matchesShortcut,
   modifierLabel,
-  shortcutLabel,
   SHORTCUT_LIST_KEY,
   startsTypedSearch,
 } from "../lib/shortcuts";
-import type { ShortcutName } from "../lib/shortcuts";
-import { MODE_ICONS, MODE_LABELS, ROUTES } from "../lib/routes";
+import { MODE_LABELS, ROUTES } from "../lib/routes";
 import type { RoutePath } from "../lib/routes";
 import { noteRoute, writeRoute } from "../lib/note-route";
 import { typedInvoke } from "../lib/commands";
 import type { SearchHit } from "../lib/commands";
 import { paletteScopeAt } from "../lib/search-scope";
-import { firstWidgetAction } from "../lib/widget-actions";
-import type { WidgetAction } from "../lib/widget-actions";
+import { commandRows, shellCommands } from "../lib/shell-commands";
+import { createWidgetLaunch, watchWidgetLaunch } from "../lib/widget-launch";
 import { getDeviceSignals, warmLocation } from "../lib/client-context";
 import { applyStartFullscreen } from "../lib/fullscreen";
 import { loadGlyphs } from "../lib/glyphs";
@@ -47,14 +42,13 @@ function onSchemeChange(): void {
   }
 }
 
-/** An action callable from both a key and the palette. */
-interface ShellCommand {
-  id: string;
-  label: string;
-  icon: IconName;
-  shortcut: ShortcutName;
-  place?: boolean;
-  run: () => void;
+/** Resolves to a stop function later; the cleanup calls whatever has arrived by then. */
+function watchUntilCleanup(watch: () => Promise<() => void>): void {
+  let stop: (() => void) | undefined;
+  void (async () => {
+    stop = await watch();
+  })();
+  onCleanup(() => stop?.());
 }
 
 function Chrome(props: { children?: JSX.Element }): JSX.Element {
@@ -159,128 +153,26 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
     navigate(path);
   };
 
-  /**
-   * Actions callable from a key and from the palette. Without a single table, a
-   * badge would say "Cmd+N" while the key does nothing.
-   * This is also the shortcut list itself that `?` opens
-   */
-  const shellCommands = createMemo<ShellCommand[]>(() => [
-    {
-      id: "new-note",
-      label: t().palette.newNote,
-      icon: "note-pencil",
-      shortcut: "newNote",
-      run: newNote,
-    },
-    {
-      id: "go-scrawl",
-      label: t().palette.openScrawl,
-      icon: MODE_ICONS[ROUTES.SCRAWL],
-      shortcut: "scrawl",
-      place: true,
-      run: go(ROUTES.SCRAWL),
-    },
-    {
-      id: "go-notes",
-      label: t().palette.openNotes,
-      icon: MODE_ICONS[ROUTES.NOTES],
-      shortcut: "notes",
-      place: true,
-      run: go(ROUTES.NOTES),
-    },
-    {
-      id: "go-codex",
-      label: t().palette.openCodex,
-      icon: MODE_ICONS[ROUTES.CODEX],
-      shortcut: "codex",
-      place: true,
-      run: go(ROUTES.CODEX),
-    },
-    {
-      id: "go-browse",
-      label: t().palette.openBrowse,
-      icon: MODE_ICONS[ROUTES.BROWSE],
-      shortcut: "browse",
-      place: true,
-      run: go(ROUTES.BROWSE),
-    },
-    {
-      id: "sync-now",
-      label: t().sync.now,
-      icon: "cloud-arrow-up",
-      shortcut: "syncNow",
-      run: () => {
+  // The table is also the shortcut list `?` opens (lib/shell-commands.ts)
+  const commands = createMemo(() =>
+    shellCommands({
+      newNote,
+      go,
+      syncNow: () => {
         shell.closePalette();
         void sync.syncNow();
       },
-    },
-    {
-      id: "go-settings",
-      label: t().palette.openSettings,
-      icon: MODE_ICONS[ROUTES.SETTINGS],
-      shortcut: "settings",
-      place: true,
-      run: go(ROUTES.SETTINGS),
-    },
-  ]);
-
-  /** The same rows for the palette and the search field, with the key spelled out. */
-  const commandRows = createMemo(() =>
-    shellCommands().map((command) => ({
-      id: command.id,
-      label: command.label,
-      icon: command.icon,
-      shortcut: shortcutLabel(command.shortcut),
-      place: command.place,
-      run: command.run,
-    })),
+    }),
   );
+  const rows = createMemo(() => commandRows(commands()));
 
-  /**
-   * A widget's template button. If today's note from the same template already
-   * exists, core returns it instead of creating one, so this only has to open it.
-   */
-  const openFromTemplate = (name: string): void => {
-    shell.closePalette();
-    void (async () => {
-      try {
-        const created = await typedInvoke("create_from_template", {
-          filename: `${name}.md`,
-          locale: locale(),
-          client: await getDeviceSignals(),
-        });
-        shell.refreshData();
-        const filename = created.path.split("/").at(-1);
-        navigate(writeRoute("note", filename));
-      } catch {
-        // A widget may still point at a template that was deleted. Rather than
-        // nothing happening on tap, open the list and show the reason
-        navigate(ROUTES.NOTES);
-        shell.showToast(t().templates.createFailed);
-      }
-    })();
-  };
-
-  const runWidgetAction = (action: WidgetAction): void => {
-    if (action.name === "new-note") {
-      newNote();
-      return;
-    }
-    if (action.name === "template" && action.template) {
-      openFromTemplate(action.template);
-      return;
-    }
-    // Where a widget with no buttons at all, and its header, lead
-    if (action.name === "templates") {
-      navigate(ROUTES.TEMPLATES);
-      return;
-    }
-    // ?file= is left to the router. Carrying the wanted note in the URL is more
-    // natural than lifting the Workspace selection state out to be touched from outside
-    if (action.name === "note" && action.file) {
-      navigate(noteRoute("note", action.file));
-    }
-  };
+  const runWidgetAction = createWidgetLaunch({
+    navigate,
+    newNote,
+    closePalette: () => shell.closePalette(),
+    refreshData: () => shell.refreshData(),
+    showToast: (text) => shell.showToast(text),
+  });
 
   onMount(() => {
     // So the first record does not wait for a position fix, start measuring now if already permitted
@@ -289,22 +181,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
     // The Settings screen is lazy-loaded, so the window's shape at startup is decided here
     void applyStartFullscreen();
 
-    // A widget tap usually wakes the app from cold. onOpenUrl only delivers what
-    // arrives after subscribing, so the launch URL is picked up with getCurrent.
-    let unlistenWidget: UnlistenFn | undefined;
-    void (async () => {
-      unlistenWidget = await onOpenUrl((urls) => {
-        const action = firstWidgetAction(urls);
-        if (action) {
-          runWidgetAction(action);
-        }
-      });
-      const launched = firstWidgetAction((await getCurrent()) ?? []);
-      if (launched) {
-        runWidgetAction(launched);
-      }
-    })();
-    onCleanup(() => unlistenWidget?.());
+    watchUntilCleanup(() => watchWidgetLaunch(runWidgetAction));
 
     const onKeyDown = (e: KeyboardEvent): void => {
       hints.keyDown(e);
@@ -320,7 +197,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
         shell.toggleListPin();
         return;
       }
-      for (const command of shellCommands()) {
+      for (const command of commands()) {
         if (matchesShortcut(e, command.shortcut)) {
           e.preventDefault();
           command.run();
@@ -362,48 +239,26 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
       globalThis.removeEventListener("blur", onBlur);
     });
 
-    // While nobody is looking, the CLI, MCP or another device rewrites data/.
-    // The app does not watch files, so the moment of coming back is the signal to reread.
-    // On Android it is also the only signal that a frozen process has woken.
-    // It is also when another device's writes should be pulled in, if the user asked
-    const onReturn = (): void => {
-      shell.refreshData();
-      sync.resume();
-    };
-    const onVisible = (): void => {
-      if (document.visibilityState === "visible") {
-        onReturn();
-      }
-    };
-    document.addEventListener("visibilitychange", onVisible);
-    onCleanup(() => document.removeEventListener("visibilitychange", onVisible));
+    // Coming back is the signal to reread what the CLI, MCP or another device wrote
+    // meanwhile, and to pull the other devices' writes in if the user asked (lib/return.ts)
+    watchUntilCleanup(() =>
+      watchReturn(() => {
+        shell.refreshData();
+        sync.resume();
+      }),
+    );
 
     // Leaving is the mirror image. On Android the process may not come back, so what
     // is still pending is written now, by the screens that hold it
-    let unwatchLeave: (() => void) | undefined;
-    void (async () => {
-      unwatchLeave = await watchLeave(() => {
+    watchUntilCleanup(() =>
+      watchLeave(() => {
         // The writes first: a sync that ran before them would leave the last words unsent
         void (async () => {
           await shell.leave();
           sync.leave();
         })();
-      });
-    })();
-    onCleanup(() => unwatchLeave?.());
-
-    // On desktop, switching to another app does not hide the window, so no
-    // visibilitychange arrives. Only the Tauri side knows that focus returned.
-    // AIDEV-NOTE: getCurrentWindow().onFocusChanged is not used. The window module drags in dpi/image and becomes 13% of the startup bundle
-    let unlistenFocus: UnlistenFn | undefined;
-    void (async () => {
-      try {
-        unlistenFocus = await listen(TauriEvent.WINDOW_FOCUS, onReturn);
-      } catch {
-        // No window (browser harness, tests). visibilitychange alone does the job
-      }
-    })();
-    onCleanup(() => unlistenFocus?.());
+      }),
+    );
   });
 
   return (
@@ -448,7 +303,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
             {(seed) => (
               <SearchField
                 seed={seed}
-                commands={commandRows()}
+                commands={rows()}
                 onOpen={(hit) => {
                   shell.closeSearch();
                   openHit(hit);
@@ -511,7 +366,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
       <Show when={shell.paletteOpen()}>
         <CommandPalette
           scopeTags={shell.paletteScope()?.tags ?? []}
-          commands={commandRows()}
+          commands={rows()}
           onSelectHit={(hit) => {
             shell.closePalette();
             openHit(hit);
