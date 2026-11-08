@@ -9,7 +9,6 @@ use crate::scrawl::day::DayLog;
 use crate::scrawl::migrate::migrate_scrawl_dir;
 use crate::utils::device::{Context, Source};
 use crate::utils::fs::{ensure_dir, write_atomic};
-use crate::utils::markdown::{split_context_json, split_time_prefix};
 use crate::utils::paths::{self, scrawl_file_path};
 
 pub(crate) struct Scrawl {
@@ -79,25 +78,6 @@ impl Scrawl {
     }
 
     /// `raw` is the line the writer read. Nothing is written if index does not point at that line.
-    pub(crate) fn update_entry(
-        &self,
-        date: NaiveDate,
-        index: usize,
-        raw: &str,
-        text: &str,
-    ) -> Result<(), CoreError> {
-        self.rewrite(date, |day| {
-            expect_same_entry(day, index, raw)?;
-            let entry = day
-                .entries_mut()
-                .get_mut(index)
-                .ok_or_else(|| CoreError::NotFound(format!("scrawl entry {index}")))?;
-            *entry = replace_entry_text(entry, text);
-            Ok(())
-        })
-    }
-
-    /// `raw` is the same as in `update_entry`: the line as the writer read it.
     pub(crate) fn delete_entry(
         &self,
         date: NaiveDate,
@@ -163,19 +143,6 @@ fn expect_same_entry(day: &DayLog, index: usize, raw: &str) -> Result<(), CoreEr
     Err(CoreError::Stale(format!("scrawl entry {index}")))
 }
 
-/// Replaces only the body; the time prefix and the trailing context JSON stay as they were.
-/// The circumstances at record time must not be rewritten by a later edit.
-fn replace_entry_text(entry: &str, text: &str) -> String {
-    let Some((prefix, rest)) = split_time_prefix(entry) else {
-        return text.to_string();
-    };
-
-    split_context_json(rest).map_or_else(
-        || format!("{prefix}{text}"),
-        |json| format!("{prefix}{text} {json}"),
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -195,81 +162,6 @@ mod tests {
         fs::write(&path, format!("{}\n", lines.join("\n"))).unwrap();
         let scrawl = Scrawl::new(tmp.path().to_path_buf());
         (tmp, scrawl)
-    }
-
-    #[test]
-    fn update_entry_replaces_only_the_text() {
-        let (_tmp, scrawl) = seed(&[
-            "- [09:00:00] first {\"battery\":80}",
-            "- [10:00:00] second {\"battery\":70}",
-        ]);
-
-        scrawl
-            .update_entry(
-                date(),
-                1,
-                "- [10:00:00] second {\"battery\":70}",
-                "rewritten",
-            )
-            .unwrap();
-
-        let entries = scrawl.read(date()).unwrap();
-        assert_eq!(entries[0], "- [09:00:00] first {\"battery\":80}");
-        assert_eq!(entries[1], "- [10:00:00] rewritten {\"battery\":70}");
-    }
-
-    #[test]
-    fn update_entry_keeps_entries_without_context() {
-        let (_tmp, scrawl) = seed(&["- [09:00:00] plain"]);
-
-        scrawl
-            .update_entry(date(), 0, "- [09:00:00] plain", "edited")
-            .unwrap();
-
-        assert_eq!(scrawl.read(date()).unwrap(), vec!["- [09:00:00] edited"]);
-    }
-
-    #[test]
-    fn update_entry_preserves_multiline_text() {
-        let (_tmp, scrawl) = seed(&["- [09:00:00] one {\"battery\":80}"]);
-
-        scrawl
-            .update_entry(
-                date(),
-                0,
-                "- [09:00:00] one {\"battery\":80}",
-                "line1\nline2",
-            )
-            .unwrap();
-
-        assert_eq!(
-            scrawl.read(date()).unwrap(),
-            vec!["- [09:00:00] line1\nline2 {\"battery\":80}"]
-        );
-    }
-
-    #[test]
-    fn update_entry_rejects_an_index_past_the_end() {
-        let (_tmp, scrawl) = seed(&["- [09:00:00] only"]);
-
-        let result = scrawl.update_entry(date(), 1, "- [09:00:00] only", "nope");
-
-        assert!(matches!(result, Err(CoreError::NotFound(_))));
-    }
-
-    /// If a line lands earlier in the same day between read and write, the same index points at
-    /// the next record. If it points at a line other than the one read, refuse without writing.
-    #[test]
-    fn update_entry_refuses_a_line_it_did_not_read() {
-        let (_tmp, scrawl) = seed(&["- [08:00:00] slipped in", "- [09:00:00] the one I read"]);
-
-        let result = scrawl.update_entry(date(), 0, "- [09:00:00] the one I read", "edited");
-
-        assert!(matches!(result, Err(CoreError::Stale(_))));
-        assert_eq!(
-            scrawl.read(date()).unwrap(),
-            vec!["- [08:00:00] slipped in", "- [09:00:00] the one I read"]
-        );
     }
 
     /// A wrong deletion cannot be undone. If the line pointed at is not the one that was read,
@@ -313,6 +205,7 @@ mod tests {
         let entries = scrawl.read(today).unwrap();
         assert_eq!(entries.len(), 1);
         assert!(entries[0].contains("first"));
+        assert!(entries[0].contains("\"hostname\":\"MacBook\""));
     }
 
     #[test]
@@ -386,73 +279,6 @@ mod tests {
     }
 
     #[test]
-    fn editing_a_legacy_entry_keeps_its_recorded_context() {
-        let (_tmp, scrawl) =
-            seed(&["- [09:00:00] old {\"battery\":80,\"os\":\"macos\",\"arch\":\"aarch64\"}"]);
-
-        scrawl
-            .update_entry(
-                date(),
-                0,
-                "- [09:00:00] old {\"battery\":80,\"os\":\"macos\",\"arch\":\"aarch64\"}",
-                "edited",
-            )
-            .unwrap();
-
-        assert_eq!(
-            scrawl.read(date()).unwrap(),
-            vec!["- [09:00:00] edited {\"battery\":80,\"os\":\"macos\",\"arch\":\"aarch64\"}"]
-        );
-    }
-
-    /// An edit rewrites only the body. The record of the tool that wrote it stays with the
-    /// trailing JSON: `s` is a record of creation, not "the tool that last edited it".
-    #[test]
-    fn editing_an_entry_keeps_the_source_that_wrote_it() {
-        let (_tmp, scrawl) = seed(&["- [09:00:00] on the phone {\"battery\":80,\"s\":\"widget\"}"]);
-
-        scrawl
-            .update_entry(
-                date(),
-                0,
-                "- [09:00:00] on the phone {\"battery\":80,\"s\":\"widget\"}",
-                "edited",
-            )
-            .unwrap();
-
-        assert_eq!(
-            scrawl.read(date()).unwrap(),
-            vec!["- [09:00:00] edited {\"battery\":80,\"s\":\"widget\"}"]
-        );
-    }
-
-    #[test]
-    fn editing_a_day_that_lists_its_devices_keeps_the_list() {
-        let tmp = TempDir::new().unwrap();
-        let scrawl = Scrawl::new(tmp.path().to_path_buf());
-        let context = Context {
-            battery: Some(56),
-            os: "macos".to_string(),
-            hostname: Some("MacBook".to_string()),
-            ..Context::default()
-        };
-        let path = scrawl_file_path(tmp.path(), Local::now().date_naive());
-        ensure_dir(&path).unwrap();
-        scrawl.save_entry("first", &context, Source::App).unwrap();
-        scrawl.save_entry("second", &context, Source::App).unwrap();
-
-        let today = Local::now().date_naive();
-        let raw = scrawl.read(today).unwrap()[0].clone();
-        scrawl.update_entry(today, 0, &raw, "rewritten").unwrap();
-
-        let entries = scrawl.read(today).unwrap();
-        assert_eq!(entries.len(), 2);
-        assert!(entries[0].contains("rewritten"));
-        assert!(entries[0].contains("\"hostname\":\"MacBook\""));
-        assert!(entries[1].contains("\"hostname\":\"MacBook\""));
-    }
-
-    #[test]
     fn editing_a_missing_day_reports_not_found() {
         let tmp = TempDir::new().unwrap();
         let scrawl = Scrawl::new(tmp.path().to_path_buf());
@@ -461,16 +287,5 @@ mod tests {
             scrawl.delete_entry(date(), 0, "- [09:00:00] gone"),
             Err(CoreError::NotFound(_))
         ));
-    }
-
-    #[test]
-    fn text_that_looks_like_json_is_not_mistaken_for_context() {
-        let (_tmp, scrawl) = seed(&["- [09:00:00] see {not json"]);
-
-        scrawl
-            .update_entry(date(), 0, "- [09:00:00] see {not json", "edited")
-            .unwrap();
-
-        assert_eq!(scrawl.read(date()).unwrap(), vec!["- [09:00:00] edited"]);
     }
 }
