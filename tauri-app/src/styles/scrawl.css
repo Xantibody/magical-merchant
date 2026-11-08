@@ -30,6 +30,8 @@
 
 /* ---------------- day group ---------------- */
 
+/* AIDEV-NOTE: no `contain` on .day-group. Paint clips the tag list under the line; layout alone measured no gain */
+
 .day-heading {
   display: flex;
   align-items: baseline;
@@ -508,6 +510,11 @@
   font: inherit;
   font-size: 15px;
   line-height: 1.75;
+  /* Grows with the text and scrolls past six lines (MAX_ROWS in CaptureBar.tsx). normalize
+     already gives every textarea field-sizing; it is spelled out here because CaptureBar
+     stops measuring the line wherever the browser has it */
+  field-sizing: content;
+  max-height: 6lh;
 }
 
 /* The hint is for whoever is about to write; at rest the line stays one rule */

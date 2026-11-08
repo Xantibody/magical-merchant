@@ -88,10 +88,17 @@ export default function CaptureBar(props: CaptureBarProps): JSX.Element {
 
   createEffect(() => props.onTyping?.(text().trim() !== ""));
 
-  /** Grows the height with the input. Switches to scrolling once it passes the limit. */
+  /**
+   * Whether the stylesheet sizes the line (`field-sizing`, Chrome 123 and Safari 26.2). Where it
+   * does, the line grows within the layout a key causes anyway; measuring it here as well forced
+   * a second, synchronous layout of the day list below on every key, IME composition included.
+   */
+  const sizesItself = CSS.supports("field-sizing", "content");
+
+  /** Grows the height with the input where the browser cannot. Scrolls past the limit. */
   const autoGrow = (): void => {
     const el = textareaRef;
-    if (!el) {
+    if (sizesItself || !el) {
       return;
     }
     el.style.height = "auto";

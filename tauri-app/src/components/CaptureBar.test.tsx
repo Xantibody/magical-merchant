@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, afterEach, beforeAll } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeAll, beforeEach } from "vitest";
+import { cdp } from "vitest/browser";
 import { render, fireEvent, cleanup, screen } from "@solidjs/testing-library";
 import CaptureBar from "./CaptureBar";
 
@@ -287,13 +288,27 @@ const lineHeight = (el: HTMLElement): number => Number.parseFloat(getComputedSty
 const lines = (count: number): string =>
   Array.from({ length: count }, (_, i) => `line ${i}`).join("\n");
 
-/** The line grows with what is typed and scrolls past six lines. */
-describe("CaptureBar sizing", () => {
+/**
+ * The line grows with what is typed and scrolls past six lines. Chrome and a recent WebKit size
+ * it from the stylesheet; an older WKWebView has it measured on each key instead.
+ */
+describe.each([
+  { path: "the browser", sizesItself: true },
+  { path: "the measured fallback", sizesItself: false },
+])("CaptureBar sizing through $path", ({ sizesItself }) => {
   beforeAll(async () => {
     await import("../index.css");
   });
 
+  beforeEach(() => {
+    const supports = CSS.supports.bind(CSS);
+    vi.spyOn(CSS, "supports").mockImplementation((property: string, value?: string) =>
+      property === "field-sizing" ? sizesItself : supports(property, value ?? ""),
+    );
+  });
+
   afterEach(() => {
+    vi.restoreAllMocks();
     cleanup();
     document.body.innerHTML = "";
     localStorage.clear();
@@ -317,5 +332,49 @@ describe("CaptureBar sizing", () => {
 
     expect(height(textarea)).toBeCloseTo(6 * lineHeight(textarea), 0);
     expect(textarea.scrollHeight).toBeGreaterThan(textarea.clientHeight);
+  });
+});
+
+/** How many layouts Chromium has run so far. */
+async function layoutCount(): Promise<number> {
+  const { metrics } = (await cdp().send("Performance.getMetrics")) as {
+    metrics: { name: string; value: number }[];
+  };
+  return metrics.find((metric) => metric.name === "LayoutCount")?.value ?? 0;
+}
+
+/**
+ * Reading the height back on a key made the page lay out twice for it, the day list below
+ * the line included. Where the browser sizes the line itself, a key must not force a layout.
+ */
+describe("CaptureBar sizing cost", () => {
+  beforeAll(async () => {
+    await import("../index.css");
+  });
+
+  afterEach(() => {
+    cleanup();
+    document.body.innerHTML = "";
+    localStorage.clear();
+  });
+
+  it("forces no layout on a key where the browser sizes the line", async () => {
+    expect(CSS.supports("field-sizing", "content")).toBe(true);
+    await cdp().send("Performance.enable");
+    const { textarea } = renderCaptureBar();
+    const typed = "きょうは雨\n午後は晴れた";
+    // The mount's own layout lands before the count starts
+    const painted = Promise.withResolvers<number>();
+    requestAnimationFrame(painted.resolve);
+    await painted.promise;
+
+    const before = await layoutCount();
+    for (let i = 1; i <= typed.length; i++) {
+      fireEvent.input(textarea, { target: { value: typed.slice(0, i) } });
+    }
+    const after = await layoutCount();
+
+    // One layout may still land between the keys and the read: the frame that draws them
+    expect(after - before).toBeLessThanOrEqual(1);
   });
 });
