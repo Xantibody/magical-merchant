@@ -1080,6 +1080,27 @@ describe("Workspace › 外から書き換わったノートの読み直し", ()
     }
   });
 
+  // dataVersion rises on every return to the window, and the list is reread each time. A
+  // title table rebuilt with nothing changed in it would draw the whole body again, diagrams
+  // included, and swap the figure out under the reader
+  it("keeps the drawn diagram when the reread list has the same titles", async () => {
+    disk.set(FILE_A, `${BODY_A}\n\n\`\`\`mermaid\nflowchart TD\n  A --> B\n\`\`\``);
+    await viewNoteA();
+    await waitFor(() => expect(document.querySelector(".mermaid-figure svg")).not.toBeNull(), {
+      timeout: 5000,
+    });
+    const before = document.querySelector(".mermaid-figure svg");
+
+    shell?.refreshData();
+
+    await waitFor(() => {
+      expect(countOf("list_notes")).toBe(2);
+      expect(countOf("read_note")).toBe(2);
+    });
+    await sleep(500);
+    expect(document.querySelector(".mermaid-figure svg")).toBe(before);
+  });
+
   // Swapping the body while the editor is open destroys the caret, the selection and the IME
   it("leaves the body alone while the editor is open", async () => {
     await openNoteA();
