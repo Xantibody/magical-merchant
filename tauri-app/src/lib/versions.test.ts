@@ -6,6 +6,7 @@ import {
   versionClock,
   versionDay,
   versionMessage,
+  versionStatusLabel,
   withDeltas,
 } from "./versions";
 import type { Version } from "./commands";
@@ -91,5 +92,22 @@ describe("version dates", () => {
   it("knows the version core commits before a restore", () => {
     expect(isBeforeRestore(version("a", 1, "before restore"))).toBe(true);
     expect(isBeforeRestore(v)).toBe(false);
+  });
+});
+
+describe("versionStatusLabel", () => {
+  // The meta line and the status dot's details both say where the draft stands
+  it("says there are no versions yet", () => {
+    expect(versionStatusLabel({ count: 0, dirty: true, bytes_delta: 0 })).toBe("版なし");
+  });
+
+  it("names the newest version while the draft has not moved", () => {
+    expect(versionStatusLabel({ count: 4, dirty: false, bytes_delta: 0 })).toBe("版 4");
+  });
+
+  it("measures a moved draft from the newest version", () => {
+    expect(versionStatusLabel({ count: 4, dirty: true, bytes_delta: 312 })).toBe(
+      "版 4 から +312 B",
+    );
   });
 });

@@ -51,9 +51,10 @@ import { formatClock, formatMonthDay } from "../lib/day-labels";
 import { locale, t } from "../lib/i18n";
 import { isImeComposing } from "../lib/ime";
 import { isTypingTarget, matchesShortcut } from "../lib/shortcuts";
+import { versionStatusLabel } from "../lib/versions";
 import { readBackup, writeBackup } from "../lib/edit-backup";
 import type { NoteLinkTarget } from "../lib/note-link-plugin";
-import type { NoteKind, SearchHit, Template, VersionStatus } from "../lib/commands";
+import type { NoteKind, SearchHit, Template } from "../lib/commands";
 import { noteRoute } from "../lib/note-route";
 import { ROUTES } from "../lib/routes";
 import "../styles/workspace.css";
@@ -75,16 +76,6 @@ const NO_EXAMPLES: ReadonlyMap<string, string[]> = new Map();
 
 async function loadNotes(): Promise<NoteItem[]> {
   return toNoteItems(await typedInvoke("list_notes"));
-}
-
-/** The meta line's "+312 B from version 4". If unmoved, "version 4"; if none, "no versions". */
-function versionStatusLabel(status: VersionStatus): string {
-  if (status.count === 0) {
-    return t().codex.noVersions;
-  }
-  return status.dirty
-    ? t().codex.deltaFromLatest(status.count, status.bytes_delta)
-    : t().codex.versionN(status.count);
 }
 
 /** The records that point at this note, under the body in the viewer. */
