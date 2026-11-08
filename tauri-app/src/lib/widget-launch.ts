@@ -5,6 +5,7 @@
  * subscribing, so the launch URL is picked up with `getCurrent` as well.
  */
 
+import type { UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import { getDeviceSignals } from "./client-context";
 import { typedInvoke } from "./commands";
@@ -71,17 +72,38 @@ export function createWidgetLaunch(deps: WidgetLaunchDeps): (action: WidgetActio
   };
 }
 
-/** Runs `run` for the launch URL and for every widget link that arrives later. Resolves to the way to stop. */
+/**
+ * Runs `run` for the launch URL and for every widget link that arrives later. Resolves to the
+ * way to stop, and never rejects: the two halves fail on their own, so neither takes the
+ * other down, and the subscription already taken always reaches the caller to be ended.
+ */
 export async function watchWidgetLaunch(run: (action: WidgetAction) => void): Promise<() => void> {
-  const unlisten = await onOpenUrl((urls) => {
-    const action = firstWidgetAction(urls);
-    if (action) {
-      run(action);
-    }
-  });
-  const launched = firstWidgetAction((await getCurrent()) ?? []);
+  let unlisten: UnlistenFn | undefined;
+  try {
+    unlisten = await onOpenUrl((urls) => {
+      const action = firstWidgetAction(urls);
+      if (action) {
+        run(action);
+      }
+    });
+  } catch {
+    // No deep-link events to listen to (the browser harness, a test without the event mock).
+    // The launch URL below can still be read
+  }
+
+  let launchUrls: string[] | null = null;
+  try {
+    launchUrls = await getCurrent();
+  } catch {
+    // The plugin would not hand the launch URL over. Only that one tap is lost; the later
+    // ones still arrive through the subscription above
+  }
+  const launched = firstWidgetAction(launchUrls ?? []);
   if (launched) {
     run(launched);
   }
-  return unlisten;
+
+  return () => {
+    unlisten?.();
+  };
 }
