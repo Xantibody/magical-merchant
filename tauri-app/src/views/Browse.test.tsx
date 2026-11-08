@@ -136,6 +136,11 @@ const chip = (name: string, starts: string): HTMLElement => {
 const rowTitles = (): string[] =>
   [...document.querySelectorAll(".browse-row-title")].map((node) => node.textContent ?? "");
 
+const activeTitles = (): string[] =>
+  [...document.querySelectorAll(".browse-row--active .browse-row-title")].map(
+    (node) => node.textContent ?? "",
+  );
+
 async function setup(): Promise<void> {
   await page.viewport(1280, 800);
   scans = 0;
@@ -247,6 +252,15 @@ describe("Browse › 選んだ 1 件", () => {
 
     const preview = await screen.findByRole("article");
     expect(preview.textContent).toContain("朝ラン 5km #run");
+  });
+
+  it("marks the row it shows, and only that one", async () => {
+    await openBrowse();
+    expect(activeTitles()).toStrictEqual(["朝ラン 5km #run"]);
+
+    clickRow("レールの設計");
+
+    expect(activeTitles()).toStrictEqual(["レールの設計"]);
   });
 
   it("reads the whole body, the time and the device of the row it is given", async () => {

@@ -2,6 +2,7 @@ import {
   createEffect,
   createMemo,
   createResource,
+  createSelector,
   createSignal,
   onCleanup,
   For,
@@ -180,6 +181,12 @@ export default function Browse(): JSX.Element {
   wideEnough.addEventListener("change", onWidthChange);
   onCleanup(() => wideEnough.removeEventListener("change", onWidthChange));
 
+  /**
+   * Whether a row is the one shown on the right. Each row reading `selected()` itself would
+   * have every row re-run on each choice; through a selector only the two rows that changed do.
+   */
+  const isShown = createSelector(() => (twoPane() ? selected() : null));
+
   /** Opens what was found. A note is pointed at by the route as that one note, a Scrawl entry as its day. */
   const open = (hit: SearchHit): void => {
     if (hit.kind !== "scrawl" && hit.filename) {
@@ -291,7 +298,7 @@ export default function Browse(): JSX.Element {
               <button
                 type="button"
                 class="browse-row"
-                classList={{ "browse-row--active": twoPane() && selected() === hit }}
+                classList={{ "browse-row--active": isShown(hit) }}
                 onClick={() => (twoPane() ? setSelectedId(hitId(hit)) : open(hit))}
               >
                 <KindDot kind={hit.kind} />
