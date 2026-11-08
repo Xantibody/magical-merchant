@@ -452,28 +452,34 @@ struct GlyphAsset {
 /// it draws the body. They are not served over the asset protocol or a custom
 /// scheme because that way no new capability has to be opened, and the browser
 /// harness can imitate it as it is.
+///
+/// It is read again on every return to the window, and each call opens and
+/// encodes every image, so it runs off the main thread like the other sweeps.
 #[tauri::command]
-fn read_glyphs(handle: AppHandle) -> Result<Vec<GlyphAsset>, String> {
+async fn read_glyphs(handle: AppHandle) -> Result<Vec<GlyphAsset>, String> {
     let base_dir = app_base_dir(&handle)?;
-    let mut assets = Vec::new();
-    for summary in magical_merchant_core::list_glyphs(&base_dir).map_err(|e| e.to_string())? {
-        // Do not fail all of them over one glyph deleted right after it was listed
-        let Ok(name) = GlyphName::parse(&summary.name) else {
-            continue;
-        };
-        let Ok(glyph) = magical_merchant_core::read_glyph(&base_dir, &name) else {
-            continue;
-        };
-        assets.push(GlyphAsset {
-            name: summary.name,
-            url: format!(
-                "data:{};base64,{}",
-                glyph.format.mime(),
-                B64.encode(&glyph.bytes)
-            ),
-        });
-    }
-    Ok(assets)
+    off_main_thread(move || {
+        let mut assets = Vec::new();
+        for summary in magical_merchant_core::list_glyphs(&base_dir).map_err(|e| e.to_string())? {
+            // Do not fail all of them over one glyph deleted right after it was listed
+            let Ok(name) = GlyphName::parse(&summary.name) else {
+                continue;
+            };
+            let Ok(glyph) = magical_merchant_core::read_glyph(&base_dir, &name) else {
+                continue;
+            };
+            assets.push(GlyphAsset {
+                name: summary.name,
+                url: format!(
+                    "data:{};base64,{}",
+                    glyph.format.mime(),
+                    B64.encode(&glyph.bytes)
+                ),
+            });
+        }
+        Ok(assets)
+    })
+    .await
 }
 
 #[tauri::command]
