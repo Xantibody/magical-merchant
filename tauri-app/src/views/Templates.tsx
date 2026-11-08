@@ -1103,7 +1103,7 @@ export default function Templates(): JSX.Element {
                       #{tag}
                       <button
                         type="button"
-                        class="note-meta-tag-remove"
+                        class="tag-editor-remove"
                         aria-label={t().templates.removeTag(tag)}
                         onClick={() => {
                           setTags((tagList) => tagList.filter((kept) => kept !== tag));
