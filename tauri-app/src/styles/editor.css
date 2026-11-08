@@ -178,9 +178,10 @@
   opacity: 1;
 }
 
+/* The block under it is already --app-surface-2, so the hover takes the next step out */
 .milkdown-editor .code-copy-button:hover {
   color: var(--app-text);
-  background: var(--app-surface-3);
+  background: var(--app-border);
 }
 
 /* The check shown right after a copy. The smallest change that confirms the
@@ -457,9 +458,10 @@
   align-items: center;
 }
 
+/* On the tooltip's --app-surface-2, as the code copy button is */
 .milkdown-link-preview .button:hover {
   color: var(--app-text);
-  background: var(--app-surface-3);
+  background: var(--app-border);
 }
 
 /* Link tooltip — edit */
@@ -475,7 +477,7 @@
 }
 
 .milkdown-link-edit .input-area {
-  background: var(--app-surface-1);
+  background: var(--app-input-bg);
   border: 1px solid var(--app-border);
   border-radius: var(--radius-1);
   padding: var(--size-1) var(--size-2);

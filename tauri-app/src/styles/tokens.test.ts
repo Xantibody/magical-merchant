@@ -38,6 +38,29 @@ function name(rule: Rule): string {
   return `${rule.file} ${rule.selector}`;
 }
 
+/** Every `--app-*` name the stylesheets match with `pattern`, sorted. */
+function tokenNames(pattern: RegExp): string[] {
+  const names = new Set<string>();
+  for (const css of Object.values(sources)) {
+    for (const match of css.replaceAll(/\/\*.*?\*\//gsu, "").matchAll(pattern)) {
+      names.add(match.groups?.token ?? "");
+    }
+  }
+  return [...names].toSorted();
+}
+
+describe("tokens", () => {
+  // An undefined custom property makes var() empty without a word: the hover that never
+  // shows, the input that is transparent
+  it("defines every --app-* token a stylesheet reads", () => {
+    const defined = new Set(tokenNames(/(?<token>--app-[\w-]+)\s*:/gu));
+
+    expect(
+      tokenNames(/var\(\s*(?<token>--app-[\w-]+)/gu).filter((token) => !defined.has(token)),
+    ).toStrictEqual([]);
+  });
+});
+
 /** The fills that carry words, and the token those words take. */
 const ON_FILL: Record<string, string> = {
   "--app-accent": "--app-on-accent",
