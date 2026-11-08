@@ -4,7 +4,6 @@ import Icon from "../components/Icon";
 import type { IconName } from "../components/Icon";
 import { typedInvoke } from "../lib/commands";
 import type { GlyphSummary } from "../lib/commands";
-import { enterFullscreen, readStartFullscreen, writeStartFullscreen } from "../lib/fullscreen";
 import {
   glyphFormatOf,
   glyphs,
@@ -13,15 +12,13 @@ import {
   planGlyphImport,
   suggestGlyphName,
 } from "../lib/glyphs";
-import { applyLocale, readStoredLocale, t } from "../lib/i18n";
-import type { LocalePreference } from "../lib/i18n";
-import { isMacDesktop } from "../lib/platform";
+import { t } from "../lib/i18n";
 import { isImeComposing } from "../lib/ime";
 import { ROUTES, SETTINGS_PAGE_PARAM, SETTINGS_PAGES } from "../lib/routes";
 import type { SettingsPage } from "../lib/routes";
 import { useShell } from "../lib/shell";
-import { chooseTheme, theme, THEMES } from "../lib/theme";
-import { Row, Seg, SwitchRow } from "./settings/Rows";
+import GeneralPage from "./settings/GeneralPage";
+import { Row } from "./settings/Rows";
 import SyncPage, { createSyncSettings } from "./settings/SyncPage";
 import { getVersion } from "@tauri-apps/api/app";
 import "../styles/settings.css";
@@ -63,8 +60,6 @@ export default function Settings(): JSX.Element {
   const [page, setPage] = createSignal<SettingsPage>(requestedPage ?? "general");
   const [pageOpen, setPageOpen] = createSignal(requestedPage !== undefined);
   const [message, setMessage] = createSignal("");
-  const [localePreference, setLocalePreference] =
-    createSignal<LocalePreference>(readStoredLocale());
   const [templates] = createResource(() => typedInvoke("list_templates"));
   /**
    * Returns the version from tauri.conf.json as is. It matches the release tag, so
@@ -204,65 +199,6 @@ export default function Settings(): JSX.Element {
       setHiddenGlyphs((names) => names.filter((name) => name !== glyph.name));
     });
   };
-
-  const chooseLocale = (preference: LocalePreference): void => {
-    setLocalePreference(preference);
-    applyLocale(preference);
-  };
-
-  const [startFullscreen, setStartFullscreen] = createSignal(readStartFullscreen());
-
-  const chooseStartFullscreen = (on: boolean): void => {
-    setStartFullscreen(on);
-    writeStartFullscreen(on);
-    // Turning it on goes fullscreen right now instead of waiting for next launch.
-    // Turning it off touches nothing: a Settings action has no reason to leave
-    // the fullscreen in use right now
-    if (on) {
-      void enterFullscreen();
-    }
-  };
-
-  const general = (): JSX.Element => (
-    <>
-      <Row label={t().settings.language} desc={t().settings.languageDesc}>
-        {/* Unlike the theme, this cannot be a cycling button. Each press would pass through a language you cannot read */}
-        <Seg
-          label={t().settings.language}
-          value={localePreference()}
-          options={
-            [
-              ["system", t().settings.languageSystem],
-              ["ja", t().settings.languageJa],
-              ["en", t().settings.languageEn],
-            ] as [LocalePreference, string][]
-          }
-          onPick={chooseLocale}
-        />
-      </Row>
-
-      {/* Moved here from the cycling button in the header. Something touched a
-          few times a year was sitting where it was seen every time */}
-      <Row label={t().settings.theme} desc={t().settings.themeDesc}>
-        <Seg
-          label={t().settings.theme}
-          value={theme()}
-          options={THEMES.map((choice) => [choice, t().theme[choice]] as const)}
-          onPick={chooseTheme}
-        />
-      </Row>
-
-      {/* Only macOS has a window that can go fullscreen. On Android the switch would do nothing */}
-      <Show when={isMacDesktop()}>
-        <SwitchRow
-          label={t().settings.startFullscreen}
-          desc={t().settings.startFullscreenHint}
-          checked={startFullscreen()}
-          onChange={chooseStartFullscreen}
-        />
-      </Show>
-    </>
-  );
 
   const records = (): JSX.Element => (
     <>
@@ -431,7 +367,7 @@ export default function Settings(): JSX.Element {
   const rowsOf = (id: SettingsPage): JSX.Element => {
     switch (id) {
       case "general": {
-        return general();
+        return <GeneralPage />;
       }
       case "records": {
         return records();
