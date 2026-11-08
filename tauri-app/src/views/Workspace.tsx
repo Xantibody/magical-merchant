@@ -21,6 +21,8 @@ import MarkdownPreview from "../components/MarkdownPreview";
 import NoteList from "../components/NoteList";
 import NotePanel from "../components/NotePanel";
 import type { NotePanelTab } from "../components/NotePanel";
+import NoteStatusRow from "../components/NoteStatusRow";
+import NoteStrip from "../components/NoteStrip";
 import PromoteDialog from "../components/PromoteDialog";
 import TagEditor from "../components/TagEditor";
 import { createCodexHistory } from "../lib/codex-history";
@@ -48,7 +50,7 @@ import { splitTitle } from "../lib/note-title";
 import { formatClock, formatMonthDay } from "../lib/day-labels";
 import { locale, t } from "../lib/i18n";
 import { isImeComposing } from "../lib/ime";
-import { isTypingTarget, matchesShortcut, shortcutLabel } from "../lib/shortcuts";
+import { isTypingTarget, matchesShortcut } from "../lib/shortcuts";
 import { readBackup, writeBackup } from "../lib/edit-backup";
 import type { NoteLinkTarget } from "../lib/note-link-plugin";
 import type { NoteKind, SearchHit, Template, VersionStatus } from "../lib/commands";
@@ -1129,9 +1131,6 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     });
   };
 
-  /** The panel's name, which is also what its toggle and the phone's meta line say. */
-  const panelLabel = (): string => (kind() === "codex" ? t().codex.panel : t().notes.panel);
-
   /** The panel's tags. The meta line only shows them. */
   const tagEditor = (item: () => NoteItem, screen: boolean): JSX.Element => (
     <TagEditor
@@ -1266,77 +1265,22 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
               <Show when={!panelScreenShown()}>
                 {/* Title, record and actions in one group. They sit on the same level as the body,
                   so what you want to know about a note is not searched for somewhere far away */}
-                {/* The strip over the page. The viewer: back (a phone's) · map · write · tidy.
-                    The writing screen: done. Keys live in the titles */}
-                <div class="note-strip">
-                  <Show
-                    when={writing()}
-                    fallback={
-                      <>
-                        <button
-                          type="button"
-                          class="icon-button detail-back"
-                          aria-label={t().notes.backToList}
-                          onClick={() => {
-                            void session.settleEdit();
-                            setDetailOpen(false);
-                          }}
-                        >
-                          <Icon name="arrow-left" size={18} />
-                        </button>
-                        <span class="note-strip-fill" />
-                        <button
-                          type="button"
-                          class="icon-button"
-                          aria-pressed={mapOpen()}
-                          title={`${t().notes.map} ${shortcutLabel("noteMap")}`}
-                          aria-label={t().notes.map}
-                          onClick={() => {
-                            void toggleMap(item());
-                          }}
-                        >
-                          <Icon name="tree-structure" size={17} />
-                        </button>
-                        <button
-                          type="button"
-                          class="icon-button"
-                          title={`${t().viewer.write} ↵`}
-                          aria-label={t().viewer.write}
-                          disabled={historyOpen()}
-                          onClick={startWriting}
-                        >
-                          <Icon name="pencil" size={17} />
-                        </button>
-                      </>
-                    }
-                  >
-                    <button
-                      type="button"
-                      class="icon-button"
-                      title={`${t().viewer.done} Esc`}
-                      aria-label={t().viewer.done}
-                      onClick={stopWriting}
-                    >
-                      <Icon name="check" size={17} />
-                    </button>
-                    <span class="note-strip-fill" />
-                  </Show>
-                  {/* The one visible way into the panel; ⌘. is the other. Neither works while
-                    writing: nothing interrupts the writing hand */}
-                  <Show when={!writing()}>
-                    <button
-                      type="button"
-                      class="icon-button note-panel-toggle"
-                      aria-expanded={shell.notePanelPinned()}
-                      title={`${t().viewer.tidy} ${shortcutLabel("noteActions")}`}
-                      aria-label={panelLabel()}
-                      data-hint-key={shortcutLabel("noteActions")}
-                      onClick={togglePanel}
-                    >
-                      <Icon name="dots-three" size={18} />
-                    </button>
-                  </Show>
-                </div>
+                <NoteStrip
+                  kind={kind()}
+                  writing={writing()}
+                  mapOpen={mapOpen()}
+                  historyOpen={historyOpen()}
+                  onBack={() => {
+                    void session.settleEdit();
+                    setDetailOpen(false);
+                  }}
+                  onToggleMap={() => {
+                    void toggleMap(item());
+                  }}
+                  onWrite={startWriting}
+                  onDone={stopWriting}
+                  onTogglePanel={togglePanel}
+                />
 
                 <div class="detail-head">
                   {/* The title is the H1 at the top of the body itself. What is typed here is
@@ -1387,70 +1331,21 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                     </div>
                   </Show>
 
-                  {/* The phone's state row. A wide window says the same in the dot's details, so it
-                    is hidden there (CSS) */}
-                  <div class="detail-status-row">
-                    <Show when={saveStatus() !== "idle"}>
-                      <span class="detail-save-status" data-status={saveStatus()}>
-                        <Show when={saveStatus() === "saving"}>
-                          <Icon name="circle-notch" size={11} />
-                        </Show>
-                        <Show when={saveStatus() === "saved"}>
-                          <Icon name="check" size={11} />
-                        </Show>
-                        {saveStatus() === "saving" ? t().common.saving : null}
-                        {saveStatus() === "saved" ? t().common.saved : null}
-                        {saveStatus() === "savedAt" ? t().notes.savedAt(savedAt()) : null}
-                        {saveStatus() === "failed" ? t().status.saveFailed : null}
-                      </span>
-                    </Show>
-                    <Show when={mapShown()}>
-                      <button
-                        type="button"
-                        class="detail-state-pill"
-                        onClick={() => openSettings()}
-                      >
-                        <Icon name="tree-structure" size={12} />
-                        {t().notes.map}
-                      </button>
-                    </Show>
-                    <Show when={examplesShown() && item().template !== undefined}>
-                      <button
-                        type="button"
-                        class="detail-state-pill"
-                        onClick={() => openSettings()}
-                      >
-                        <Icon name="file-text" size={12} />
-                        {t().notes.examples}
-                      </button>
-                    </Show>
-                    <span class="detail-status-actions">
-                      <Show when={canCommit()}>
-                        <button
-                          type="button"
-                          class="detail-action-pill"
-                          onClick={() => {
-                            void commitVersion(item());
-                          }}
-                        >
-                          <Icon name="book-bookmark" size={13} />
-                          {t().codex.commit}
-                        </button>
-                      </Show>
-                      <Show when={canRevert()}>
-                        <button
-                          type="button"
-                          class="detail-action-pill"
-                          onClick={() => {
-                            void revertEdit(item());
-                          }}
-                        >
-                          <Icon name="arrow-counter-clockwise" size={13} />
-                          {t().notes.revert}
-                        </button>
-                      </Show>
-                    </span>
-                  </div>
+                  <NoteStatusRow
+                    saveStatus={saveStatus()}
+                    savedAt={savedAt()}
+                    mapShown={mapShown()}
+                    examplesShown={examplesShown() && item().template !== undefined}
+                    canCommit={canCommit()}
+                    canRevert={canRevert()}
+                    onOpenSettings={() => openSettings()}
+                    onCommit={() => {
+                      void commitVersion(item());
+                    }}
+                    onRevert={() => {
+                      void revertEdit(item());
+                    }}
+                  />
                 </div>
 
                 <div class="detail-panes" classList={{ "detail-panes--map": mapShown() }}>
