@@ -87,7 +87,7 @@ ready to record the moment it opens (widgets exist for exactly this).
   default. Everything per-note lives in the **note panel**
   (`components/NotePanel.tsx`, `styles/note-panel.css`): 320px at the right
   edge — the view switches, the tags (`components/TagEditor.tsx`: chips,
-  suggestions counted from `browse_all`, a body `#tag` has no ×), 詳細 (created
+  suggestions counted in core by `count_tags`, a body `#tag` has no ×), 詳細 (created
   time editable, updated, surroundings),
   revert / Codex にする (a corvu confirm, `PromoteDialog.tsx`) / delete. The `…`
   in the viewer's strip and ⌘. are the only ways in, and the body gives up 320px

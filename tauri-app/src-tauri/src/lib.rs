@@ -34,8 +34,8 @@ use base64::engine::general_purpose::STANDARD as B64;
 use device::ClientContext;
 use magical_merchant_core::{
     CreatedNote, GlyphFormat, GlyphName, GlyphSummary, NoteFilename, NoteKind, NoteMeta,
-    NoteSummary, Provenance, Revision, ScrawlDays, SearchFilter, SearchHit, Source, TemplateDetail,
-    TemplateSummary, VarLocale, Version, VersionStatus,
+    NoteSummary, Provenance, Revision, ScrawlDays, SearchFilter, SearchHit, Source, TagUsage,
+    TemplateDetail, TemplateSummary, VarLocale, Version, VersionStatus,
 };
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_deep_link::DeepLinkExt as _;
@@ -623,6 +623,15 @@ async fn recent_records(handle: AppHandle, limit: usize) -> Result<Vec<SearchHit
     .await
 }
 
+/// How many records carry each tag, most used first, for the tag editor's suggestions. The
+/// scan is `browse_all`'s; what crosses to the screen is one row per tag, not every record.
+#[tauri::command]
+async fn count_tags(handle: AppHandle) -> Result<Vec<TagUsage>, String> {
+    let base_dir = app_base_dir(&handle)?;
+    off_main_thread(move || magical_merchant_core::count_tags(&base_dir).map_err(|e| e.to_string()))
+        .await
+}
+
 /// Commits the current draft as a version. Called only when a person asks to
 /// commit a version.
 #[tauri::command]
@@ -874,6 +883,7 @@ pub fn run() {
             search_records,
             browse_all,
             recent_records,
+            count_tags,
             resolve_places,
             delete_note,
             export::save_export,
