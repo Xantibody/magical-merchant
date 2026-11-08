@@ -290,21 +290,42 @@ async fn sync_once<T: SyncTransport + Sync>(
 /// A live write holds one only for the instant between `fs::write` and `rename`
 const STALE_TMP_AGE: std::time::Duration = std::time::Duration::from_hours(1);
 
-/// The temp file of `write_atomic` remains when the process dies before the rename.
-/// Nobody else cleans up the ones directly under `<base>`, so they are picked up here.
+/// The temp file of `write_atomic` remains when the process dies before the rename. It
+/// sits next to its target: directly under `<base>` for the sync's own files, and in the
+/// directories under `data/` for notes, day files, Codex versions and downloads. The scan
+/// leaves it out of the sync, so nobody else ever removes it; it is picked up here.
 ///
 /// Filtering by age is so a temp file another write is about to rename does not get
 /// deleted, which would make that save fail. A failed cleanup has no bearing on the
 /// sync, so it goes on in silence.
 fn sweep_stale_temp_files(base_dir: &Path) {
-    let Ok(entries) = fs::read_dir(base_dir) else {
+    // Only the top of `<base>`: below it, `history/` and `conflicts/` are not the sync's
+    sweep_temp_files_in(base_dir, false);
+    sweep_temp_files_in(&paths::data_dir(base_dir), true);
+}
+
+/// One directory of [`sweep_stale_temp_files`], and with `nested` every directory below it.
+/// A symbolic link is not followed: what it points at is not this tree's to clean.
+fn sweep_temp_files_in(dir: &Path, nested: bool) {
+    let Ok(entries) = fs::read_dir(dir) else {
         return;
     };
     for entry in entries.flatten() {
-        if !entry
-            .file_name()
-            .to_string_lossy()
-            .starts_with(".sync-tmp-")
+        // The type readdir returns, so walking costs no stat per entry
+        let Ok(file_type) = entry.file_type() else {
+            continue;
+        };
+        if file_type.is_dir() {
+            if nested {
+                sweep_temp_files_in(&entry.path(), true);
+            }
+            continue;
+        }
+        if !file_type.is_file()
+            || !entry
+                .file_name()
+                .to_string_lossy()
+                .starts_with(".sync-tmp-")
         {
             continue;
         }
@@ -1194,6 +1215,37 @@ mod tests {
         // Deleting a file another write is about to rename right now makes that save
         // fail
         assert!(in_flight.exists());
+    }
+
+    /// A note, a day file and a Codex version are written next to themselves, so their
+    /// temp files are left in the directories under `data/`. The same age rule applies there.
+    #[tokio::test]
+    async fn the_run_entry_sweeps_temp_files_left_under_data() {
+        let dir = tempfile::tempdir().unwrap();
+        seed(dir.path(), "notes/20260320_033440.md", "a note");
+        seed(dir.path(), "codex/20260320_033441.md", "a codex");
+        seed(
+            dir.path(),
+            "codex/20260320_033441/20260321_090000-0123abcd.md",
+            "a version",
+        );
+        let data = paths::data_dir(dir.path());
+        let stale_note = data.join("notes/.sync-tmp-999-0");
+        let stale_version = data.join("codex/20260320_033441/.sync-tmp-999-1");
+        let in_flight = data.join("notes/.sync-tmp-1000-0");
+        for path in [&stale_note, &stale_version, &in_flight] {
+            fs::write(path, "half written").unwrap();
+        }
+        set_age(&stale_note, STALE_TMP_AGE * 2);
+        set_age(&stale_version, STALE_TMP_AGE * 2);
+
+        let client = HttpClient::new(reqwest::Client::new(), "http://127.0.0.1:1", "token");
+        let _ = run(&client, dir.path()).await;
+
+        assert!(!stale_note.exists());
+        assert!(!stale_version.exists());
+        assert!(in_flight.exists());
+        assert!(data.join("notes/20260320_033440.md").exists());
     }
 
     fn set_age(path: &Path, age: std::time::Duration) {
