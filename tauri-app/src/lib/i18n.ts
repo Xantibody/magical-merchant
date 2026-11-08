@@ -60,7 +60,7 @@ const ja = {
     search: "検索",
     jumpToDate: "日付ジャンプ",
     sync: "同期",
-    settings: "Settings",
+    settings: "設定",
   },
   status: {
     label: "保存と同期",
