@@ -230,8 +230,16 @@ export default function Scrawl(): JSX.Element {
     const opened = toIsoDate(today);
     return newest > opened ? newest : opened;
   });
-  const currentRows = createMemo(() => days().find((day) => day.date === currentDay())?.rows ?? []);
-  const pastDays = createMemo(() => days().filter((day) => day.date !== currentDay()));
+  const rowsByDate = createMemo(() => new Map(days().map((day) => [day.date, day.rows])));
+  const rowsOf = (date: string): ScrawlRow[] => rowsByDate().get(date) ?? [];
+  const currentRows = createMemo(() => rowsOf(currentDay()));
+  // The past days are listed by date, not by day object: scrawlDays makes new day objects on
+  // every call, and `<For>` matching those by reference rebuilt every section for one capture
+  const pastDates = createMemo(() =>
+    days()
+      .map((day) => day.date)
+      .filter((date) => date !== currentDay()),
+  );
   const currentHeading = createMemo(() => formatDayHeading(currentDay(), today));
 
   // Entry datetime -> notes. A chip sits right under its origin entry
@@ -562,18 +570,19 @@ export default function Scrawl(): JSX.Element {
             <For each={currentRows()}>{renderRow}</For>
           </section>
 
-          <For each={pastDays()}>
-            {(day) => {
-              const heading = createMemo(() => formatDayHeading(day.date, today));
+          <For each={pastDates()}>
+            {(date) => {
+              const heading = createMemo(() => formatDayHeading(date, today));
+              const rows = (): ScrawlRow[] => rowsOf(date);
               return (
-                <section class="day-group" data-day={day.date}>
+                <section class="day-group" data-day={date}>
                   <header class="day-heading">
                     <h2 class="day-heading-label">{heading().label}</h2>
                     <span class="day-heading-date">{heading().date}</span>
-                    <span class="day-heading-count">{t().scrawl.entryCount(day.rows.length)}</span>
+                    <span class="day-heading-count">{t().scrawl.entryCount(rows().length)}</span>
                   </header>
 
-                  <For each={day.rows}>{renderRow}</For>
+                  <For each={rows()}>{renderRow}</For>
                 </section>
               );
             }}
