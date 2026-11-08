@@ -193,6 +193,14 @@ export interface SearchFilter {
   to: string | null;
 }
 
+/** What the Scrawl screen draws when it opens, from one `read_scrawl_days`. */
+interface ScrawlDays {
+  /** Every date that has a record (`YYYY-MM-DD`), newest first. */
+  dates: string[];
+  /** The days asked for, newest first. A day nobody wrote on comes back with no entries. */
+  days: { date: string; entries: string[] }[];
+}
+
 interface SyncConfig {
   workers_url: string;
   auto_sync: boolean;
@@ -208,6 +216,8 @@ interface CommandMap {
   save_quick_capture: { args: { text: string } & ClientArgs; result: void };
   list_scrawl_dates: { args: void; result: string[] };
   read_scrawl_by_date: { args: { date: string }; result: string[] };
+  /** The date list and the newest `recent` days, plus the days in `extra`, in one call. */
+  read_scrawl_days: { args: { recent: number; extra: string[] }; result: ScrawlDays };
   /** `raw` is the line as the screen read it. The index alone drifts when an append lands after the read. */
   delete_scrawl_entry: { args: { date: string; index: number; raw: string }; result: void };
   /**
