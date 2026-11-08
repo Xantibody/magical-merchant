@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterEach } from "vitest";
+import { cdp } from "vitest/browser";
 
 /**
  * The delete bar floats over Scrawl while selecting. If the scroll area's bottom padding is
@@ -174,5 +175,52 @@ describe("scrawl chrome", () => {
 
     expect(style.backgroundColor).toBe(TRANSPARENT);
     expect(style.borderTopWidth).toBe("0px");
+  });
+});
+
+/** One entry with its hidden promote button, as ScrawlEntry draws it. */
+function mountEntry(): void {
+  document.body.innerHTML = `
+    <article class="entry">
+      <div class="entry-body">
+        <p class="entry-text">ベガのラッシュ止まらん</p>
+        <div class="entry-actions">
+          <button class="icon-button entry-action" type="button">Note にする</button>
+        </div>
+      </div>
+    </article>`;
+}
+
+/** A screen without hover, the way a phone reports itself. */
+async function touchScreen(enabled: boolean): Promise<void> {
+  await cdp().send("Emulation.setTouchEmulationEnabled", { enabled, maxTouchPoints: 1 });
+  expect(matchMedia("(hover: none)").matches).toBe(enabled);
+}
+
+describe("the promote button on an entry", () => {
+  beforeAll(async () => {
+    await import("../index.css");
+  });
+
+  afterEach(async () => {
+    document.body.innerHTML = "";
+    await touchScreen(false);
+  });
+
+  // Hidden by opacity alone it still took a tap at the entry's top right and opened the
+  // promote dialog. A long press is the way in on touch
+  it("is not there to tap on a screen without hover", async () => {
+    await touchScreen(true);
+    mountEntry();
+
+    expect(getComputedStyle(element(".entry-actions")).display).toBe("none");
+  });
+
+  // The way in on desktop, shown on hover and on keyboard focus
+  it("stays in the layout where there is hover", async () => {
+    await touchScreen(false);
+    mountEntry();
+
+    expect(getComputedStyle(element(".entry-actions")).display).not.toBe("none");
   });
 });
