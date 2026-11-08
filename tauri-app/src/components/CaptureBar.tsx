@@ -338,7 +338,7 @@ export default function CaptureBar(props: CaptureBarProps): JSX.Element {
       <button
         type="button"
         class="capture-send"
-        aria-label="Send"
+        aria-label={t().capture.send}
         disabled={sending() || !text().trim()}
         onClick={() => {
           void send();

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, fireEvent, cleanup, screen } from "@solidjs/testing-library";
 import CaptureBar from "./CaptureBar";
+import { setLocale } from "../lib/i18n";
 
 function renderCaptureBar() {
   const onSend = vi.fn<(text: string) => Promise<void>>().mockResolvedValue();
@@ -34,6 +35,18 @@ describe("CaptureBar", () => {
     cleanup();
     document.body.innerHTML = "";
     localStorage.clear();
+    setLocale("ja");
+  });
+
+  // The phone's send button is an icon, so this name is all a screen reader has. It was
+  // English on a Japanese screen
+  it("names the send button in the reader's language", () => {
+    renderCaptureBar();
+
+    expect(screen.getByRole("button", { name: "記録する", hidden: true })).toBeDefined();
+
+    setLocale("en");
+    expect(screen.getByRole("button", { name: "Send", hidden: true })).toBeDefined();
   });
 
   // An entry is written only on send, so a half-typed capture lived in a signal alone and

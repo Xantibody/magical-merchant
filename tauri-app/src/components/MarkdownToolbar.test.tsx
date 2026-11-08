@@ -8,6 +8,7 @@ import { EditorState, TextSelection } from "@milkdown/kit/prose/state";
 import type { Editor } from "@milkdown/kit/core";
 import type { Selection, Transaction } from "@milkdown/kit/prose/state";
 import MarkdownToolbar from "./MarkdownToolbar";
+import { setLocale } from "../lib/i18n";
 
 // The real commonmark schema needs the whole editor initialised. All that is
 // needed here is whether the caret is in a paragraph or a code block, so build only the shape.
@@ -128,11 +129,26 @@ describe("MarkdownToolbar", () => {
   afterEach(() => {
     cleanup();
     document.body.innerHTML = "";
+    setLocale("ja");
   });
 
   it("does not render when editor is undefined", () => {
     render(() => <MarkdownToolbar editor={undefined} />);
     expect(screen.queryByRole("toolbar")).toBeNull();
+  });
+
+  // A screen reader announces the bar by this name before any button in it, and it was
+  // English on a Japanese screen. Read off the attribute: on desktop the bar is
+  // display: none, and a hidden element's computed name is empty
+  it("names the bar in the reader's language", () => {
+    const { editor } = createMockEditor();
+    render(() => <MarkdownToolbar editor={editor} />);
+    const bar = screen.getByRole("toolbar", { hidden: true });
+
+    expect(bar.getAttribute("aria-label")).toBe("書式");
+
+    setLocale("en");
+    expect(bar.getAttribute("aria-label")).toBe("Markdown formatting");
   });
 
   it("shows seven formatting buttons and the one that closes the keyboard", () => {
