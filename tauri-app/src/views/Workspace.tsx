@@ -29,6 +29,7 @@ import { resolveEditedTime } from "../lib/note-meta";
 import { countTagLists, parseTags } from "../lib/tags";
 import { refusedForGood } from "../lib/save-refusal";
 import { createNoteBuffer } from "../lib/note-buffer";
+import { isWriteKey, noteKeys } from "../lib/note-keys";
 import { createNoteMetaEditor } from "../lib/note-meta-editor";
 import { createNotePanel } from "../lib/note-panel-state";
 import { createNoteSelection } from "../lib/note-selection";
@@ -953,22 +954,6 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   };
 
   /**
-   * Enter or e in the viewer opens the writing screen. Not when the key belongs to something
-   * else: a field, a focused button or link, or the palette (AppLayout closes it on the same Esc
-   * this handler sees next, so its target is what tells).
-   */
-  const isWriteKey = (e: KeyboardEvent): boolean => {
-    if (writing() || e.metaKey || e.ctrlKey || e.altKey || isImeComposing(e)) {
-      return false;
-    }
-    if (e.key !== "Enter" && e.key !== "e") {
-      return false;
-    }
-    const target = e.target instanceof Element ? e.target : null;
-    return !isTypingTarget(e.target) && !target?.closest("button, a, [role='dialog']");
-  };
-
-  /**
    * The keys that act on the open note. They are taken here because the target is "the one note
    * now selected": AppLayout's table holds only what means the same on every screen.
    *
@@ -980,6 +965,16 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
    * and nobody calls preventDefault. Here they are told apart by whether the cursor is inside text.
    */
   onMount(() => {
+    // The rows tried in order (lib/note-keys.ts)
+    const keys = noteKeys({
+      togglePanel,
+      toggleMap,
+      revertEdit,
+      openDetails: () => openSettings(true),
+      commitVersion,
+      toggleHistory,
+      isCodex: () => kind() === "codex",
+    });
     const onKeyDown = (e: KeyboardEvent): void => {
       const item = selected();
       if (!item) {
@@ -999,7 +994,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       if (e.target instanceof Element && e.target.closest(".palette-overlay, .search")) {
         return;
       }
-      if (isWriteKey(e)) {
+      if (isWriteKey(e, writing())) {
         e.preventDefault();
         startWriting();
         return;
@@ -1017,25 +1012,14 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
         }
         return;
       }
-      if (matchesShortcut(e, "noteActions")) {
-        e.preventDefault();
-        togglePanel();
-      } else if (matchesShortcut(e, "noteMap")) {
-        e.preventDefault();
-        void toggleMap(item);
-      } else if (matchesShortcut(e, "noteRevert")) {
-        e.preventDefault();
-        void revertEdit(item);
-      } else if (matchesShortcut(e, "noteInfo")) {
-        e.preventDefault();
-        openSettings(true);
-      } else if (matchesShortcut(e, "codexCommit")) {
-        e.preventDefault();
-        void commitVersion(item);
-      } else if (matchesShortcut(e, "noteHistory") && kind() === "codex") {
-        e.preventDefault();
-        toggleHistory();
-      } else if (e.key === "Escape") {
+      for (const key of keys) {
+        if (matchesShortcut(e, key.shortcut) && (key.when?.() ?? true)) {
+          e.preventDefault();
+          void key.run(item);
+          return;
+        }
+      }
+      if (e.key === "Escape") {
         onEscape(e);
       }
     };
