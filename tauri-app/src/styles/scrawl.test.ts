@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeAll, afterEach } from "vitest";
-import { cdp } from "vitest/browser";
 
 /**
  * The delete bar floats over Scrawl while selecting. If the scroll area's bottom padding is
@@ -191,10 +190,27 @@ function mountEntry(): void {
     </article>`;
 }
 
-/** A screen without hover, the way a phone reports itself. */
-async function touchScreen(enabled: boolean): Promise<void> {
-  await cdp().send("Emulation.setTouchEmulationEnabled", { enabled, maxTouchPoints: 1 });
-  expect(matchMedia("(hover: none)").matches).toBe(enabled);
+/**
+ * The `display` the stylesheets give `target` inside `@media <condition>`, read off the CSSOM.
+ *
+ * AIDEV-NOTE: not an emulated phone. On the CI's Linux Chromium, turning
+ * Emulation.setTouchEmulationEnabled off left `(hover: none)` matching, so every later test
+ * in the page ran without hover; Emulation.setEmulatedMedia has no `hover` feature at all.
+ */
+function displayUnder(condition: string, target: Element): string | undefined {
+  const rules: CSSRule[] = [];
+  for (const sheet of document.styleSheets) {
+    for (const rule of sheet.cssRules) {
+      if (rule instanceof CSSMediaRule && rule.conditionText === condition) {
+        rules.push(...rule.cssRules);
+      }
+    }
+  }
+  const own = rules.find(
+    (rule): rule is CSSStyleRule =>
+      rule instanceof CSSStyleRule && target.matches(rule.selectorText),
+  );
+  return own?.style.display;
 }
 
 describe("the promote button on an entry", () => {
@@ -202,25 +218,23 @@ describe("the promote button on an entry", () => {
     await import("../index.css");
   });
 
-  afterEach(async () => {
+  afterEach(() => {
     document.body.innerHTML = "";
-    await touchScreen(false);
   });
 
   // Hidden by opacity alone it still took a tap at the entry's top right and opened the
   // promote dialog. A long press is the way in on touch
-  it("is not there to tap on a screen without hover", async () => {
-    await touchScreen(true);
+  it("is not there to tap on a screen without hover", () => {
     mountEntry();
 
-    expect(getComputedStyle(element(".entry-actions")).display).toBe("none");
+    expect(displayUnder("(hover: none)", element(".entry-actions"))).toBe("none");
   });
 
   // The way in on desktop, shown on hover and on keyboard focus
-  it("stays in the layout where there is hover", async () => {
-    await touchScreen(false);
+  it("stays in the layout where there is hover", () => {
     mountEntry();
 
+    expect(matchMedia("(hover: hover)").matches).toBe(true);
     expect(getComputedStyle(element(".entry-actions")).display).not.toBe("none");
   });
 });
