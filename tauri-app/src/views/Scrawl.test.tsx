@@ -248,6 +248,31 @@ describe("Scrawl › rows across a reread", () => {
 
     expect(entryOf("小文字で書いた")).toBe(past);
   });
+
+  it("keeps today's earlier records when a capture rereads today", async () => {
+    await openScrawl();
+    const earlier = entryOf("ベガのラッシュ止まらん");
+
+    fireEvent.input(lineIn(), { target: { value: "新しい記録" } });
+    fireEvent.keyDown(lineIn(), { key: "Enter" });
+    await screen.findByText("新しい記録");
+
+    expect(entryOf("ベガのラッシュ止まらん")).toBe(earlier);
+  });
+
+  // A focus return or a sync rereads every day, and usually brings nothing new
+  it("keeps every row a full reread did not change", async () => {
+    await openScrawl();
+    const today = entryOf("ベガのラッシュ止まらん");
+    const past = entryOf("小文字で書いた");
+
+    days[TAG_DAY]?.push("- [13:00:00] 同期で届いた記録");
+    shell.refreshData();
+    await screen.findByText("同期で届いた記録");
+
+    expect(entryOf("ベガのラッシュ止まらん")).toBe(today);
+    expect(entryOf("小文字で書いた")).toBe(past);
+  });
 });
 
 describe("Scrawl › 週次ダイジェスト", () => {

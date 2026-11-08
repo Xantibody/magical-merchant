@@ -151,6 +151,21 @@ export function replaceDayItems(
   return [...kept.slice(0, insertAt), ...dayItems, ...kept.slice(insertAt)];
 }
 
+/**
+ * Hands back the previous object for every line that reads the same at the same place.
+ * A reread parses every line into a new object, and the list matches rows by reference,
+ * so without this a capture rebuilt each of the day's entries to add one. `id` is the date
+ * and the line's position and the rest is parsed from `raw`, so the two together decide
+ * that nothing about the record changed.
+ */
+export function keepUnchangedItems(previous: ScrawlItem[], next: ScrawlItem[]): ScrawlItem[] {
+  const byId = new Map(previous.map((item) => [item.id, item]));
+  return next.map((item) => {
+    const kept = byId.get(item.id);
+    return kept?.raw === item.raw ? kept : item;
+  });
+}
+
 export interface DeleteTarget {
   date: string;
   index: number;

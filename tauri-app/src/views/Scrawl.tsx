@@ -23,6 +23,7 @@ import { useShell } from "../lib/shell";
 import { formatClock, formatDayHeading, toIsoDate } from "../lib/day-labels";
 import { t } from "../lib/i18n";
 import {
+  keepUnchangedItems,
   notesByOrigin,
   originKeyOf,
   planBulkDelete,
@@ -212,7 +213,12 @@ export default function Scrawl(): JSX.Element {
   // caller cannot leave a gap
   createEffect(on(extraDates, dropSelectionForReload, { defer: true }));
 
-  const entries = createMemo(() => scrawl()?.items ?? []);
+  // Both a one-day reread and a full refetch parse every line anew; the lines that read the
+  // same keep their objects here, so their rows are not rebuilt
+  const entries = createMemo<ScrawlItem[]>(
+    (previous) => keepUnchangedItems(previous, scrawl()?.items ?? []),
+    [],
+  );
   // A place name is not part of the record, so the list does not wait for it. Rows
   // are laid out with coordinates first and swap to names as each one is resolved.
   createEffect(() => {
