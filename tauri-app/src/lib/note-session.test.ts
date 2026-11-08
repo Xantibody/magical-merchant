@@ -59,6 +59,8 @@ interface Harness {
   disk: { content: NoteContent | null };
   /** The reason the next write is refused. null lets it write. */
   refuse: { error: unknown };
+  /** While set, writes wait on it: the save stays in flight until the test lets it land. */
+  gate: { write: Promise<void> | null };
 }
 
 function harness(options: { store?: ReturnType<typeof memoryStore> } = {}): Harness {
@@ -82,6 +84,7 @@ function harness(options: { store?: ReturnType<typeof memoryStore> } = {}): Harn
     content: { body: "# 歩いた日\n\nディスクのぶん", view: "editor", revision: "r-disk" },
   };
   const refuse: Harness["refuse"] = { error: null };
+  const gate: Harness["gate"] = { write: null };
   const counts = { refreshes: 0, saved: 0 };
 
   const session = createNoteSession({
@@ -95,12 +98,15 @@ function harness(options: { store?: ReturnType<typeof memoryStore> } = {}): Harn
       disk.content
         ? Promise.resolve(disk.content)
         : Promise.reject(new Error(`cannot read ${filename}`)),
-    write: (filename, body, revision) => {
+    write: async (filename, body, revision) => {
+      if (gate.write) {
+        await gate.write;
+      }
       if (refuse.error) {
-        return Promise.reject(refuse.error);
+        throw refuse.error;
       }
       writes.push({ filename, body, revision });
-      return Promise.resolve(`r-${writes.length}`);
+      return `r-${writes.length}`;
     },
     showBody: (id, title, body) => {
       shown.push({ id, title, body });
@@ -128,6 +134,7 @@ function harness(options: { store?: ReturnType<typeof memoryStore> } = {}): Harn
     view,
     disk,
     refuse,
+    gate,
     get refreshes() {
       return counts.refreshes;
     },
@@ -668,6 +675,37 @@ describe("閉じる前の下書き", () => {
     expect(h.store.items.get(`note-backup:${NOTE.filename}`)).toBe("# 歩いた日\n\n閉じる前の続き");
     expect(h.store.items.has(DRAFT_KEY)).toBe(false);
     expect(h.toasts).toStrictEqual([t().notes.draftParked(NOTE.title)]);
+  });
+
+  /**
+   * A save waits on the device's signals and the IPC after taking its copy. Keystrokes typed in
+   * that gap refill the slot, and the save landing moves the disk on under them. Read on the next
+   * open as typed over the old revision, they would be parked as if another device had written
+   */
+  it("recovers keystrokes typed during a save that landed before the app was put away", async () => {
+    const h = harness();
+    const landing = Promise.withResolvers<void>();
+    h.gate.write = landing.promise;
+    typed(h, "# 歩いた日\n\n一");
+    await vi.advanceTimersByTimeAsync(1000);
+    keystroke(h, "# 歩いた日\n\n一二");
+    landing.resolve();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(h.writes).toStrictEqual([
+      { filename: NOTE.filename, body: "# 歩いた日\n\n一", revision: "r-read" },
+    ]);
+    // Put away before the second save fires: its timer goes with the process
+    h.session.cancelPending();
+
+    const next = harness({ store: h.store });
+    next.disk.content = { body: "# 歩いた日\n\n一", view: "editor", revision: "r-1" };
+    await next.session.reload(NOTE, true);
+
+    expect(next.writes).toStrictEqual([
+      { filename: NOTE.filename, body: "# 歩いた日\n\n一二", revision: "r-1" },
+    ]);
+    expect(next.shown.at(-1)?.body).toBe("一二");
+    expect(next.toasts).toStrictEqual([]);
   });
 
   it("forgets a draft that says the same as the disk", async () => {
