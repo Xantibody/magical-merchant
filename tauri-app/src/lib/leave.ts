@@ -70,21 +70,23 @@ export async function watchLeave(onLeave: () => void): Promise<() => void> {
   globalThis.addEventListener("pagehide", leave);
 
   // No window (browser harness, tests without the event mock): the page events alone do the job
-  const unlisteners: UnlistenFn[] = [];
+  let unlistenBlur: UnlistenFn | undefined;
+  let unlistenFocus: UnlistenFn | undefined;
   try {
-    unlisteners.push(
-      await listen(TauriEvent.WINDOW_BLUR, leave),
-      await listen(TauriEvent.WINDOW_FOCUS, back),
-    );
+    unlistenBlur = await listen(TauriEvent.WINDOW_BLUR, leave);
+    unlistenFocus = await listen(TauriEvent.WINDOW_FOCUS, back);
   } catch {
-    // Nothing to undo: a listen that failed registered nothing
+    // The listen that failed registered nothing, but a blur taken before it did. It is let go
+    // rather than kept alone: a blur whose focus never arrives marks the app away for good and
+    // swallows every later leave, the hide that writes what is pending included
+    unlistenBlur?.();
+    unlistenBlur = undefined;
   }
 
   return () => {
     document.removeEventListener("visibilitychange", onVisibility);
     globalThis.removeEventListener("pagehide", leave);
-    for (const unlisten of unlisteners) {
-      unlisten();
-    }
+    unlistenBlur?.();
+    unlistenFocus?.();
   };
 }
