@@ -8,6 +8,7 @@ import {
   Show,
 } from "solid-js";
 import type { JSX } from "solid-js";
+import GlyphText from "./GlyphText";
 import Icon from "./Icon";
 import KindDot from "./KindDot";
 import type { IconName } from "./Icon";
@@ -87,13 +88,17 @@ function HitExcerpt(props: { hit: SearchHit; word: string }): JSX.Element {
   );
   return (
     <span class="palette-row-text">
+      {/* A shortcode the word cuts through stays text on both sides of the mark: the word
+          was found in the stored text, and that is what is underlined */}
       <span class="palette-row-label">
-        <Show when={inTitle()} fallback={label()}>
+        <Show when={inTitle()} fallback={<GlyphText text={label()} />}>
           {(parts) => (
             <>
-              {parts().before}
-              <mark>{parts().match}</mark>
-              {parts().after}
+              <GlyphText text={parts().before} />
+              <mark>
+                <GlyphText text={parts().match} />
+              </mark>
+              <GlyphText text={parts().after} />
             </>
           )}
         </Show>
