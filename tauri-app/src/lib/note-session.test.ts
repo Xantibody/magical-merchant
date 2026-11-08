@@ -3,6 +3,7 @@ import { createNoteSession } from "./note-session";
 import type { NoteSession, PendingSave, SaveStatus, SaveTarget } from "./note-session";
 import type { BackupStore } from "./edit-backup";
 import type { NoteContent } from "./note-view";
+import { joinTitle } from "./note-title";
 import { t } from "./i18n";
 
 const NOTE: SaveTarget = {
@@ -104,9 +105,10 @@ function harness(options: { store?: ReturnType<typeof memoryStore> } = {}): Harn
     },
     showBody: (id, title, body) => {
       shown.push({ id, title, body });
-      // As on the real screen, putting a body up advances the epoch by one
+      // As on the real screen, putting a body up advances the epoch by one, and the title
+      // comes back as the body's leading heading
       view.bodyEpoch += 1;
-      view.body = title ? `${title}\n\n${body}` : body;
+      view.body = joinTitle(title, body);
     },
     refreshList: () => {
       counts.refreshes += 1;
