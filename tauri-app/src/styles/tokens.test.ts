@@ -61,6 +61,24 @@ describe("tokens", () => {
   });
 });
 
+describe("the colour scheme", () => {
+  beforeAll(async () => {
+    await import("../index.css");
+  });
+
+  afterEach(() => {
+    delete document.documentElement.dataset.theme;
+  });
+
+  // Open Props' normalize sets it from the OS. A date picker, a scrollbar or a bare button
+  // then draws in the OS's scheme over the app's colours
+  it.each(["light", "dark"])("draws native controls in the %s theme the app is in", (theme) => {
+    document.documentElement.dataset.theme = theme;
+
+    expect(getComputedStyle(document.documentElement).colorScheme).toBe(theme);
+  });
+});
+
 /** The fills that carry words, and the token those words take. */
 const ON_FILL: Record<string, string> = {
   "--app-accent": "--app-on-accent",

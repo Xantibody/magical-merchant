@@ -25,6 +25,10 @@
 }
 
 :root {
+  /* What the browser draws itself (the date picker, scrollbars, a bare button) follows the app's
+     theme. normalize sets this from the OS, so an app in light on a dark OS got dark controls.
+     data-theme always holds the resolved theme, so "system" still follows the OS through it */
+  color-scheme: light;
   --app-surface: var(--gray-0);
   --app-surface-2: var(--gray-1);
   --app-text: var(--gray-9);
@@ -63,6 +67,7 @@
 }
 
 :root[data-theme="dark"] {
+  color-scheme: dark;
   --app-surface: var(--gray-9);
   --app-surface-2: var(--gray-8);
   --app-text: var(--gray-1);
