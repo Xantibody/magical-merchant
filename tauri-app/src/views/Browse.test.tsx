@@ -4,6 +4,7 @@ import { mockIPC, mockWindows, clearMocks } from "@tauri-apps/api/mocks";
 import { page } from "vitest/browser";
 import { MemoryRouter, Route, useLocation, useNavigate } from "@solidjs/router";
 import type { JSX } from "solid-js";
+import { loadGlyphs } from "../lib/glyphs";
 import { ShellProvider } from "../lib/shell";
 import Browse from "./Browse";
 
@@ -345,5 +346,58 @@ describe("Browse › 狭い画面", () => {
     await waitFor(() => {
       expect(location.pathname).toBe("/notes");
     });
+  });
+});
+
+describe("Browse › グリフ", () => {
+  const URL_623K = "data:image/svg+xml;base64,PHN2Zy8+";
+  // The newest record, so it is also the one the right column shows unasked
+  const GLYPH_HIT = {
+    ...HITS[0],
+    title: "対空は :623k: で取る、:foo: は字のまま #fgc",
+    snippet: "対空は :623k: で取る、:foo: は字のまま #fgc",
+    index: 2,
+    tags: ["fgc"],
+  };
+
+  beforeEach(async () => {
+    await setup();
+    mockIPC((cmd, args) => {
+      if (cmd === "read_glyphs") {
+        return [{ name: "623k", url: URL_623K }];
+      }
+      if (cmd === "browse_all") {
+        return [GLYPH_HIT, ...HITS];
+      }
+      return HANDLERS[cmd]?.((args ?? {}) as Record<string, unknown>);
+    });
+    await loadGlyphs();
+  });
+
+  afterEach(async () => {
+    // The table is the app's, not the screen's, so it outlives the render
+    mockIPC(() => []);
+    await loadGlyphs();
+    teardown();
+  });
+
+  it("draws a registered glyph in a row's title, as Scrawl does", async () => {
+    await openBrowse();
+
+    const title = [...document.querySelectorAll(".browse-row-title")].find((node) =>
+      node.textContent?.startsWith("対空は"),
+    );
+    expect(title?.querySelector("img.glyph")?.getAttribute("src")).toBe(URL_623K);
+    // An unregistered name is not a glyph, and a row draws no tag pill: the chips on the left are the tags
+    expect(title?.textContent).toBe("対空は  で取る、:foo: は字のまま #fgc");
+    expect(title?.querySelector(".tag-inline")).toBeNull();
+  });
+
+  it("draws it in the heading of the record shown on the right", async () => {
+    await openBrowse();
+
+    const heading = await screen.findByRole("heading", { level: 2 });
+    expect(heading.querySelector("img.glyph")?.getAttribute("src")).toBe(URL_623K);
+    expect(heading.textContent).not.toContain(":623k:");
   });
 });
