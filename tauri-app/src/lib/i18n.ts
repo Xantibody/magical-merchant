@@ -157,6 +157,9 @@ const ja = {
     backlinks: (count: number) => `リンクされている記録 (${count})`,
     untitled: "(空の Note)",
     deleted: "Note を削除しました",
+    /** The delete runs after the undo grace, maybe on another note by then, so it names which. */
+    deleteFailed: (title: string) => `「${title}」を削除できませんでした`,
+    createFailed: "Note を作れませんでした",
     reverted: "編集前の内容に戻しました",
     revertFailed: "戻せませんでした",
     editedElsewhere:
@@ -238,6 +241,8 @@ const ja = {
     promoteYes: "Codex にする",
     promoteNo: "やめる",
     promoted: "Codex にしました",
+    promoteFailed: "Codex にできませんでした",
+    createFailed: "Codex を作れませんでした",
     commit: "版を刻む",
     committed: (n: number) => `版 ${n} を刻みました`,
     commitFailed: "刻めませんでした",
@@ -772,6 +777,8 @@ const en: Messages = {
     backlinks: (count: number) => `Records linking here (${count})`,
     untitled: "(empty Note)",
     deleted: "Note deleted",
+    deleteFailed: (title: string) => `Could not delete "${title}"`,
+    createFailed: "Could not create a Note",
     reverted: "Restored the body from before the edit",
     revertFailed: "Could not restore it",
     editedElsewhere:
@@ -826,6 +833,8 @@ const en: Messages = {
     promoteYes: "Make a Codex",
     promoteNo: "Not now",
     promoted: "Made a Codex",
+    promoteFailed: "Could not make it a Codex",
+    createFailed: "Could not create a Codex",
     commit: "Commit a version",
     committed: (n: number) => `Committed version ${n}`,
     commitFailed: "Could not commit it",

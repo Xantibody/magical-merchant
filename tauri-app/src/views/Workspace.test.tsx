@@ -109,6 +109,8 @@ let brokenMeta: Set<string>;
 let notText: Set<string>;
 /** Makes `read_note` fail. Reproduces a device whose disk is temporarily unreadable. */
 let readFails: boolean;
+/** Commands that refuse outright, before touching anything. Reproduces one action core says no to. */
+let refused: Set<string>;
 
 /** The body's revision. The test checks "write with the revision you read" the way core does. */
 const revisionOf = (body: string): string => `rev:${body}`;
@@ -539,6 +541,7 @@ async function setupWorkspace(): Promise<void> {
   brokenMeta = new Set();
   notText = new Set();
   readFails = false;
+  refused = new Set();
   calls = [];
   shell = undefined;
   navigateTo = undefined;
@@ -551,6 +554,9 @@ async function setupWorkspace(): Promise<void> {
   mockIPC((cmd, args) => {
     const payload = (args ?? {}) as Record<string, unknown>;
     calls.push({ cmd, args: payload });
+    if (refused.has(cmd)) {
+      throw new Error(`refused: ${cmd}`);
+    }
     const handler = HANDLERS[cmd];
     if (!handler) {
       throw new Error(`unexpected command ${cmd}`);
@@ -2481,5 +2487,71 @@ describe("Workspace › 整えるパネルの節", () => {
     expect(within(panel).getByRole("group", { name: "表示" })).toBeDefined();
     expect(within(panel).queryByText("タグ")).toBeNull();
     expect(within(panel).queryByText("表示")).toBeNull();
+  });
+});
+
+describe("Workspace › 通らなかった操作", () => {
+  beforeEach(setupWorkspace);
+  afterEach(() => {
+    vi.useRealTimers();
+    teardownWorkspace();
+  });
+
+  // The row leaves the list the moment delete is pressed, and core is asked only once the undo
+  // grace has run out. A refusal then leaves the note on disk: kept hidden, it would read as
+  // deleted until the next start
+  it("brings the row back and says so when the delete is refused", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    disk.set(FILE_B, BODY_B);
+    refused.add("delete_note");
+    await viewNoteA();
+
+    await runPanelAction("削除");
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: new RegExp(TITLE_A, "u") })).toBeNull(),
+    );
+    await vi.advanceTimersByTimeAsync(5000);
+
+    await rowOf(TITLE_A);
+    expect(shell?.toast()?.message).toBe(`「${TITLE_A}」を削除できませんでした`);
+    expect(disk.get(FILE_A)).toBe(BODY_A);
+  });
+
+  // The move cannot be undone, so it lands on Codex only once it went through
+  it("stays on the note and says so when the move to Codex is refused", async () => {
+    refused.add("promote_note_to_codex");
+    await viewNoteA();
+
+    await runPanelAction("Codex にする");
+    fireEvent.click(await confirmPromote());
+
+    await waitFor(() => expect(shell?.toast()?.message).toBe("Codex にできませんでした"));
+    expect(kinds.get(FILE_A)).toBeUndefined();
+    expect(document.querySelector(".list-pane-title")?.textContent).toBe("Note");
+    expect(viewerTitle()).toBe(TITLE_A);
+  });
+
+  it("says so when a new note cannot be made", async () => {
+    refused.add("create_draft");
+    renderWorkspace();
+    await rowOf(TITLE_A);
+
+    await createEmptyNote();
+
+    await waitFor(() => expect(shell?.toast()?.message).toBe("Note を作れませんでした"));
+  });
+
+  // Codex is a proper noun of its own, so a new one that fails is not called a Note
+  it("names the surface it is on when a new document cannot be made", async () => {
+    refused.add("create_draft");
+    renderWorkspace();
+    navigateTo?.("/codex");
+    await waitFor(() =>
+      expect(document.querySelector(".list-pane-title")?.textContent).toBe("Codex"),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /新規/u }));
+
+    await waitFor(() => expect(shell?.toast()?.message).toBe("Codex を作れませんでした"));
   });
 });
