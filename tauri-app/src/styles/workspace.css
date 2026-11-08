@@ -101,24 +101,6 @@
   text-transform: uppercase;
 }
 
-.calendar-button {
-  display: flex;
-  align-items: center;
-  gap: var(--size-1);
-  background: none;
-  border: none;
-  color: var(--app-text-muted);
-  cursor: pointer;
-  font-size: 12px;
-  padding: 3px 6px;
-  border-radius: var(--radius-2);
-}
-
-.calendar-button:hover,
-.calendar-button[aria-expanded="true"] {
-  background: var(--app-surface-2);
-}
-
 .list-scroll {
   flex: 1;
   overflow-y: auto;
@@ -710,27 +692,6 @@
 .detail-body > * {
   max-width: 640px;
   margin-inline: auto;
-}
-
-.detail-plain {
-  margin: 0;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.detail-editor {
-  width: 100%;
-  min-height: 240px;
-  border: 1px solid var(--app-border);
-  border-radius: var(--radius-2);
-  background: var(--app-input-bg);
-  color: var(--app-text);
-  font-family: inherit;
-  font-size: 15px;
-  line-height: 1.6;
-  padding: var(--size-2);
-  resize: vertical;
-  outline: none;
 }
 
 .detail-empty {
