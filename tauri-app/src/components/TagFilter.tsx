@@ -1,5 +1,6 @@
 import { For, Show } from "solid-js";
 import type { JSX } from "solid-js";
+import { t } from "../lib/i18n";
 import type { TagCount } from "../lib/tags";
 
 interface TagFilterProps {
@@ -23,7 +24,7 @@ export default function TagFilter(props: TagFilterProps): JSX.Element {
   return (
     <Show when={props.tags.length}>
       <div class="tag-filter">
-        <span class="tag-filter-label">TAGS</span>
+        <span class="tag-filter-label">{t().common.tags}</span>
         <div class="tag-filter-chips">
           <For each={props.tags}>
             {(tag) => (
