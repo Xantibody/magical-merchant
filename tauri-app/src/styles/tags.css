@@ -128,11 +128,15 @@
 }
 
 @media (max-width: 767px) {
-  /* Scroll sideways so wrapping does not push the list down */
+  /* Scroll sideways so wrapping does not push the list down. A scroller clips both ways, so
+     the padding keeps the chips' hit area (layout.css) inside it, and the margin hands the
+     height back */
   .tag-filter-chips {
     flex-wrap: nowrap;
     overflow-x: auto;
     scrollbar-width: none;
+    padding-block: 5px;
+    margin-block: -5px;
   }
 
   .tag-chip {

@@ -69,6 +69,50 @@
   text-decoration: none;
 }
 
+/* ---------------- hit areas on a phone ---------------- */
+
+/* A finger needs 44px (ui-design skill). These controls are drawn smaller than that on
+   purpose: a bigger icon, pill or fill would be more chrome. So the rest is a box that paints
+   nothing, centred on the control: it looks the same, and a tap a little off still lands.
+   Where two of them stand side by side, their sheets keep them far enough apart that the
+   boxes meet without overlapping (hit-area.test.ts) */
+@media (max-width: 767px) {
+  :where(
+    .mobile-header-actions > *,
+    .note-strip .icon-button,
+    .list-pane-head .new-note,
+    .day-heading-select,
+    .digest-year-ago,
+    .digest-close,
+    .tag-filter-chips .tag-chip,
+    .browse-chip,
+    .browse-clear
+  ) {
+    position: relative;
+  }
+
+  :where(
+    .mobile-header-actions > *,
+    .note-strip .icon-button,
+    .list-pane-head .new-note,
+    .day-heading-select,
+    .digest-year-ago,
+    .digest-close,
+    .tag-filter-chips .tag-chip,
+    .browse-chip,
+    .browse-clear
+  )::before {
+    content: "";
+    position: absolute;
+    inset: min(0px, (100% - 44px) / 2);
+  }
+
+  /* 38px controls with 3px of hit area on each side meet across 6px */
+  .mobile-header-actions {
+    gap: 6px;
+  }
+}
+
 /* A popover hangs from the bottom edge of the header */
 .popover-anchor {
   position: absolute;

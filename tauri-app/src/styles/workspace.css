@@ -804,6 +804,18 @@
     display: flex;
   }
 
+  /* The map and the pencil are 29px, so 7.5px of hit area on each side (layout.css): they
+     meet across 15px */
+  .note-strip {
+    gap: 15px;
+  }
+
+  /* The new-note button is 26px tall, so its hit area reaches 9px below it; the list must not
+     start inside that */
+  .list-pane-head {
+    padding-bottom: 9px;
+  }
+
   /* A height a finger can press. The text also goes up to about the body's size */
   .list-row {
     padding: 12px;

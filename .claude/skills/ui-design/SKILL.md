@@ -70,6 +70,9 @@ Spacing/typography/radius use Open Props (`var(--size-*)`, `var(--radius-*)`,
 ## Mobile (max-width: 767px)
 
 - One pane at a time; `.detail-back` appears; hit targets ≥ 44px
+- A control drawn smaller than that keeps its look and takes the rest as a box
+  that paints nothing: add it to the list in `layout.css`, and keep its
+  neighbours far enough apart that the boxes meet (`styles/hit-area.test.ts`)
 - Safe areas come from `--safe-top` / `--safe-bottom` (set once in base.css —
   never use `env()` directly, tests can't fix it)
 - Keyboard: expect the visual viewport to shrink; bottom docks must stay
