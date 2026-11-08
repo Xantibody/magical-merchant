@@ -158,7 +158,7 @@ fn scrawl_hits(
                 index: Some(index),
                 tags: entry_tags,
                 match_start: excerpt.match_start,
-                match_len: excerpt.match_start.map(|_| needle.chars().count()),
+                match_len: excerpt.match_len,
             });
             // Dates are descending; later entries cannot displace these hits.
             // Browsing needs every match to count its filter choices.
@@ -248,7 +248,7 @@ pub fn search_records(
             index: None,
             tags: note.tags,
             match_start: excerpt.match_start,
-            match_len: excerpt.match_start.map(|_| needle.chars().count()),
+            match_len: excerpt.match_len,
         });
     })?;
 
@@ -356,7 +356,7 @@ pub fn find_backlinks(
             index: None,
             tags: note.tags,
             match_start: excerpt.match_start,
-            match_len: excerpt.match_start.map(|_| needle.chars().count()),
+            match_len: excerpt.match_len,
         });
     })?;
 
@@ -405,11 +405,13 @@ fn first_line(text: &str) -> &str {
     rest.trim_start()
 }
 
-/// The cut excerpt and where the query starts matching inside it (in characters).
+/// The cut excerpt and where the query matches inside it (in characters).
 struct Excerpt {
     text: String,
     /// `None` when there is no match in the body (only a tag was hit).
     match_start: Option<usize>,
+    /// How many characters of `text` the match covers. Set together with `match_start`.
+    match_len: Option<usize>,
 }
 
 /// Cut `SNIPPET_CONTEXT` characters on each side of the hit without breaking a character
@@ -425,8 +427,9 @@ fn snippet(text: &str, lowered: &str, needle: &str) -> Excerpt {
             .find(needle)
             .map(|byte| lowered[..byte].chars().count())
     };
+    let needle_len = needle.chars().count();
     let at = found.unwrap_or(0);
-    let end = at + needle.chars().count() + SNIPPET_CONTEXT;
+    let end = at + needle_len + SNIPPET_CONTEXT;
     let start = at.saturating_sub(SNIPPET_CONTEXT);
 
     let mut out = String::new();
@@ -436,6 +439,7 @@ fn snippet(text: &str, lowered: &str, needle: &str) -> Excerpt {
     // The leading ellipsis is one character too. Left out of the position, the highlight
     // is off by one character
     let match_start = found.map(|at| at - start + usize::from(start > 0));
+    let match_len = found.map(|_| needle_len);
     // Walk once instead of building three Vec<char>.
     let mut chars = text.chars().skip(start);
     for _ in start..end {
@@ -446,6 +450,7 @@ fn snippet(text: &str, lowered: &str, needle: &str) -> Excerpt {
                 return Excerpt {
                     text: out,
                     match_start,
+                    match_len,
                 };
             }
         }
@@ -456,6 +461,7 @@ fn snippet(text: &str, lowered: &str, needle: &str) -> Excerpt {
     Excerpt {
         text: out,
         match_start,
+        match_len,
     }
 }
 
