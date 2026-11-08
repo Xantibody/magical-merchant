@@ -601,6 +601,9 @@ const ja = {
     closeKeyboard: "キーボードを閉じる",
     /** The phone's formatting bar above the keyboard, as a screen reader announces it */
     toolbar: "書式",
+    /** The box that edits a link's address (Milkdown's link tooltip) */
+    linkPlaceholder: "リンクを貼り付け…",
+    linkConfirm: "確定 ⏎",
   },
   preview: {
     zoom: "拡大",
@@ -1170,6 +1173,8 @@ const en: Messages = {
     codeBlock: "Code block",
     closeKeyboard: "Close the keyboard",
     toolbar: "Markdown formatting",
+    linkPlaceholder: "Paste link...",
+    linkConfirm: "Confirm ⏎",
   },
   preview: {
     zoom: "Zoom",
