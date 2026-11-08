@@ -481,6 +481,14 @@ fn write_under(data_dir: &Path, key: &str, content: &[u8]) -> Result<(), SyncIss
     })
 }
 
+/// The hash the scan computed for `key`, or `None` when the scan did not see the file.
+fn scanned_hash<'a>(local_files: &'a [LocalFile], key: &str) -> Option<&'a str> {
+    local_files
+        .iter()
+        .find(|f| f.key == key)
+        .map(|f| f.content_hash.as_str())
+}
+
 fn decode(file: &DownloadedFile) -> Result<Vec<u8>, SyncIssue> {
     B64.decode(&file.content_base64)
         .map_err(|e| SyncIssue::DecodeFailed {
@@ -577,11 +585,7 @@ fn delete_local_file(
         }
     };
 
-    let scanned = local_files
-        .iter()
-        .find(|f| f.key == key)
-        .map(|f| f.content_hash.as_str());
-    if scanned != Some(scan::compute_hash(&content).as_str()) {
+    if scanned_hash(local_files, key) != Some(scan::compute_hash(&content).as_str()) {
         result.errors.push(SyncIssue::DeleteSkippedChanged {
             key: key.to_string(),
         });
