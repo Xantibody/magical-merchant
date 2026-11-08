@@ -853,6 +853,13 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     if (!loaded() || historyOpen() || backup === null || backup === current) {
       return;
     }
+    // Same rule as the autosave (`flush`): a write with no revision would land on a body nobody
+    // here has read. Nothing on screen has changed yet, so the pending save is left to run
+    const read = session.revisionOf(item.filename);
+    if (read === undefined) {
+      shell.showToast(t().notes.revertFailed);
+      return;
+    }
     // Drop the pending save. The body now on screen is about to become the backup, so there is no
     // point going to disk to write the same thing again
     session.cancelPending();
@@ -862,7 +869,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
         filename: item.filename,
         body: backup,
         client: await getDeviceSignals(),
-        revision: session.revisionOf(item.filename) ?? null,
+        revision: read,
       });
       session.setRevision(item.filename, revision);
     } catch (error) {
@@ -1096,17 +1103,22 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     if (!loaded()) {
       return;
     }
+    // The revision from when the body on screen was read. Where to fall back if the reread misses.
+    // Without one the restore would write over a draft nobody here has read, so it is not sent
+    const read = session.revisionOf(item.filename);
+    if (read === undefined) {
+      shell.showToast(t().codex.restoreFailed);
+      return;
+    }
     // Drop the pending save. What is restored is the body on disk; keystrokes on screen do not go
     // into the "before the restore" version, but settleEdit already ran when the history opened
     session.cancelPending();
-    // The revision from when the body on screen was read. Where to fall back if the reread misses
-    const read = session.revisionOf(item.filename);
     try {
       const revision = await typedInvoke("restore_note_version", {
         filename: item.filename,
         id,
         client: await getDeviceSignals(),
-        revision: read ?? null,
+        revision: read,
       });
       session.setRevision(item.filename, revision);
     } catch (error) {
@@ -1130,11 +1142,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       // intact. The next save is refused as Stale, what was typed is set aside as a backup, and the
       // reread runs once more (`yieldToOutsideEdit`).
       // AIDEV-NOTE: stopping the edit (dropping `loadedId`) was rejected. Riding the existing Stale path, which sets aside what was typed, loses less
-      if (read === undefined) {
-        session.forgetRevision(item.filename);
-      } else {
-        session.setRevision(item.filename, read);
-      }
+      session.setRevision(item.filename, read);
     }
     await refetchNotes();
     refreshVersions();
