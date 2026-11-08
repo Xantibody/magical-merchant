@@ -54,6 +54,9 @@
   /* The one shadow. Whatever floats wears this and no border; whatever only sits on the
      page wears neither */
   --shadow-pop: 0 1px 2px rgb(20 20 25 / 6%), 0 12px 32px -8px rgb(20 20 25 / 18%);
+  /* The keyboard focus ring. The accent's step, so it stays grey. 3:1 is the floor on every
+     ground it can sit on (focus.test.ts); it reads 7:1 or more, --app-accent-soft included */
+  --app-focus: var(--gray-8);
 }
 
 :root[data-theme="dark"] {
@@ -78,6 +81,7 @@
      on. The ring is what draws the edge here */
   --shadow-pop:
     0 0 0 1px var(--app-border), 0 1px 2px rgb(0 0 0 / 30%), 0 12px 32px -8px rgb(0 0 0 / 60%);
+  --app-focus: var(--gray-4);
 }
 
 /* The real size of the system bars. Scattering env() directly would leave tests
@@ -98,6 +102,28 @@ body {
   color: var(--app-text);
   font-family: var(--font-sans);
   margin: 0;
+}
+
+/* ---------------- Focus ---------------- */
+
+/* One ring wherever the keyboard lands. Left to normalize, the browser drew its own, tinted
+   with normalize's indigo link colour and 5px out: the one chromatic thing on a grey screen.
+   :focus-visible, so a click draws nothing; a text field matches it on a click as well, which
+   is what a field wants. A row that sits flush in a list draws it inside itself (its own sheet
+   says outline-offset: -2px), where a ring 2px out would spill onto the next row */
+:focus-visible {
+  outline: 2px solid var(--app-focus);
+  outline-offset: 2px;
+}
+
+/* A field draws it on its own edge, over the border, instead of a step outside it */
+:is(input, textarea):focus-visible {
+  outline-offset: -2px;
+}
+
+/* normalize slides the ring out on a curve of its own. Late is missing for that long */
+:where(:focus-visible) {
+  transition: none;
 }
 
 /* The base shared by popovers, the palette and toasts */
@@ -383,11 +409,6 @@ input:checked ~ .switch::after {
   color: var(--app-text);
   font-family: inherit;
   font-size: 14px;
-  outline: none;
-}
-
-.first-run-input:focus {
-  box-shadow: 0 0 0 3px var(--app-accent-soft);
 }
 
 .first-run-error {

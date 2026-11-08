@@ -355,11 +355,6 @@
   border-radius: var(--radius-2);
 }
 
-.entry-select:focus-visible {
-  outline: 2px solid var(--app-accent);
-  outline-offset: 2px;
-}
-
 .entry-select .icon {
   /* Aligned to the centre of the text on the first line */
   margin-top: 5px;
@@ -491,8 +486,9 @@
   border-bottom: 1px solid var(--app-border);
 }
 
+/* The input line's whole focus mark, in the ring's colour (base.css) */
 .capture-bar:focus-within {
-  border-bottom-color: var(--app-text);
+  border-bottom-color: var(--app-focus);
 }
 
 .capture-input {

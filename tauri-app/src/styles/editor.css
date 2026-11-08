@@ -481,11 +481,6 @@
   padding: var(--size-1) var(--size-2);
   color: var(--app-text);
   font-size: var(--font-size-0);
-  outline: none;
-}
-
-.milkdown-link-edit .input-area:focus {
-  border-color: var(--app-accent);
 }
 
 .milkdown-link-edit .button.confirm {

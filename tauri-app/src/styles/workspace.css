@@ -220,11 +220,10 @@
   background: var(--app-accent-soft);
 }
 
-/* While stepping with the arrow keys, the current row is visible. The outline is drawn
-   inward because a background painted the full row width would let the line spill
+/* While stepping with the arrow keys, the current row is visible. The ring (base.css) is
+   drawn inward because a background painted the full row width would let the line spill
    over onto the neighbouring row */
 .list-row:focus-visible {
-  outline: 2px solid var(--app-accent);
   outline-offset: -2px;
 }
 

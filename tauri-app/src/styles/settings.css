@@ -48,6 +48,11 @@
   background: var(--app-surface-2);
 }
 
+/* The rows stand 2px apart, so the ring (base.css) goes inside */
+.settings-nav-row:focus-visible {
+  outline-offset: -2px;
+}
+
 /* The current location is said with fill and weight alone. No line or marker is added */
 .settings-nav-row--on {
   background: var(--app-accent-soft);
@@ -276,16 +281,11 @@
   color: var(--app-text);
   font-family: inherit;
   font-size: 13px;
-  outline: none;
 }
 
 /* An address is monospaced. A typo is found by the shape of the characters */
 .settings-input--mono {
   font-family: ui-monospace, monospace;
-}
-
-.settings-input:focus {
-  box-shadow: 0 0 0 3px var(--app-accent-soft);
 }
 
 /* Read-only where the value is pinned by a config file */

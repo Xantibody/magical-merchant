@@ -77,6 +77,12 @@
   background: var(--app-surface-2);
 }
 
+/* A chip spans the column, and the tag group scrolls: a ring outside it would be cut at both
+   sides. Inside, it lies over the chip's own border */
+.browse-chip:focus-visible {
+  outline-offset: -2px;
+}
+
 .browse-chip[aria-pressed="true"] {
   background: var(--app-accent-soft);
   border-color: var(--app-accent);
@@ -162,6 +168,11 @@
 
 .browse-row:hover {
   background: var(--app-surface-2);
+}
+
+/* The rows touch, so the ring (base.css) goes inside */
+.browse-row:focus-visible {
+  outline-offset: -2px;
 }
 
 .browse-row--active {

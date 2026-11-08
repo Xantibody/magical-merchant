@@ -23,6 +23,11 @@ Open Props, with a dark theme via `:root[data-theme="dark"]`):
 Helper text is 13px, a stamp, count or key 12px, and nothing is smaller
 (`styles/polish.test.ts`).
 
+The keyboard focus is one ring: `:focus-visible` in base.css draws 2px of
+`--app-focus` 2px outside the control. A text field, and a row that sits flush
+in a list, take it inside (`outline-offset: -2px`); a surface adds nothing but
+that offset (`styles/focus.test.ts`).
+
 Spacing/typography/radius use Open Props (`var(--size-*)`, `var(--radius-*)`,
 `var(--font-*)`). New colors: extend the token block, don't inline hex.
 
