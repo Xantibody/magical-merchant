@@ -528,10 +528,6 @@
   display: none;
 }
 
-.capture-send-label {
-  display: none;
-}
-
 @media (hover: none) {
   .capture-input:not(:focus)::placeholder {
     color: var(--app-text-faint);
