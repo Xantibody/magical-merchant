@@ -48,6 +48,9 @@
   --app-input-bg: white;
   --app-ok: var(--green-7);
   --app-danger: var(--red-7);
+  /* Words on a filled --app-danger. Even white stops at 3.8:1 on red-7, so both themes write
+     dark on this fill: 5.3:1 here, 6.7:1 on the dark theme's red-4 */
+  --app-on-danger: var(--gray-12);
   --app-undo: var(--blue-3);
   --app-toast-bg: var(--gray-9);
   --app-toast-text: var(--gray-0);
@@ -75,6 +78,7 @@
   --app-input-bg: var(--gray-8);
   --app-ok: var(--green-4);
   --app-danger: var(--red-4);
+  --app-on-danger: var(--gray-9);
   --app-undo: var(--blue-3);
   --app-toast-bg: var(--gray-7);
   --app-toast-text: var(--gray-0);

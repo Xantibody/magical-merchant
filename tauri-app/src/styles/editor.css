@@ -490,7 +490,7 @@
 
 .milkdown-link-edit .button.confirm {
   background: var(--app-accent);
-  color: white;
+  color: var(--app-on-accent);
   border: none;
   border-radius: var(--radius-1);
   padding: var(--size-1) var(--size-2);
