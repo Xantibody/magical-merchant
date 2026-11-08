@@ -15,8 +15,8 @@ use std::hint::black_box;
 use magical_merchant_core::search::{HitKind, SearchFilter};
 use magical_merchant_core::sync::scan::scan_local_files;
 use magical_merchant_core::{
-    browse_all, find_backlinks, list_notes, list_scrawl_dates, read_scrawl, read_scrawl_days,
-    recent_records, search_all, search_records,
+    browse_all, count_tags, find_backlinks, list_notes, list_scrawl_dates, read_scrawl,
+    read_scrawl_days, recent_records, search_all, search_records,
 };
 
 fn search(c: &mut Criterion) {
@@ -81,6 +81,18 @@ fn browsing(c: &mut Criterion) {
     c.bench_function("recent_records/20/to_json", |b| {
         b.iter(|| serde_json::to_string(black_box(&recent)).unwrap());
     });
+
+    // The tag suggestions counted `browse_all`'s rows on the screen. `count_tags` reads the
+    // same store and carries one row per tag.
+    c.bench_function("count_tags", |b| {
+        b.iter(|| count_tags(black_box(base)).unwrap());
+    });
+    let tags = count_tags(base).unwrap();
+    eprintln!(
+        "payload: count_tags {} bytes ({} tags)",
+        serde_json::to_string(&tags).unwrap().len(),
+        tags.len()
+    );
 
     let notes_only = SearchFilter {
         kind: Some(HitKind::Note),
