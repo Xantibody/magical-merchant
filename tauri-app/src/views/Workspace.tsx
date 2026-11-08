@@ -24,6 +24,7 @@ import Popover from "../components/Popover";
 import PromoteDialog from "../components/PromoteDialog";
 import TagEditor from "../components/TagEditor";
 import TemplatePicker from "../components/TemplatePicker";
+import { createCodexHistory } from "../lib/codex-history";
 import { isStaleSave, typedInvoke } from "../lib/commands";
 import { resolveEditedTime } from "../lib/note-meta";
 import { countTagLists, parseTags } from "../lib/tags";
@@ -34,7 +35,6 @@ import { createNoteSession } from "../lib/note-session";
 import type { SaveStatus } from "../lib/note-session";
 import { getDeviceSignals } from "../lib/client-context";
 import { createDebouncedAccessor } from "../lib/debounce";
-import { diffLineCounts, markedBody } from "../lib/diff-marks";
 import { glyphs } from "../lib/glyphs";
 import { examplesShown, extractExamples, setExamplesShown } from "../lib/template-examples";
 import { useShell } from "../lib/shell";
@@ -56,8 +56,6 @@ import { locale, t } from "../lib/i18n";
 import { isImeComposing } from "../lib/ime";
 import { createLongPress } from "../lib/long-press";
 import { isTypingTarget, matchesShortcut, shortcutLabel } from "../lib/shortcuts";
-import { daysSince, spanSince, withDeltas } from "../lib/versions";
-import type { VersionRow } from "../lib/versions";
 import { readBackup, writeBackup } from "../lib/edit-backup";
 import type { NoteLinkTarget } from "../lib/note-link-plugin";
 import type { NoteKind, NoteMeta, SearchHit, Template, VersionStatus } from "../lib/commands";
@@ -77,8 +75,6 @@ const UNDO_MS = 5000;
 const SAVED_MS = 2000;
 /** How long the map alongside takes to catch up with typing. It catches up before the save (1 s). */
 const MAP_DEBOUNCE_MS = 300;
-/** How long a just-committed version pops (`mm-pop`). Past that the row goes back to normal. */
-const POP_MS = 350;
 /** The empty table a note with no examples passes. Recreating it redraws the plugin every time. */
 const NO_EXAMPLES: ReadonlyMap<string, string[]> = new Map();
 /** The keys that move to the neighboring row in the list, and their direction. */
@@ -231,15 +227,6 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     full: fullBody,
   } = buffer;
   /**
-   * Whether the history is open, that is compare mode. Codex only. The body turns read-only and
-   * the difference from the chosen version becomes gutter marks; the body never disappears.
-   * In a wide window it is also which tab the right panel shows: the history tab is open
-   * exactly while this is on, so the two cannot disagree.
-   */
-  const [historyOpen, setHistoryOpen] = createSignal(false);
-  /** The version chosen in the history. The newest one the moment it opens. */
-  const [selectedVersionId, setSelectedVersionId] = createSignal<string | null>(null);
-  /**
    * Whether the panel screen is up on a phone. There is no width to lay it alongside, so it is
    * one surface that swaps with the body. Pressing a version returns to the body in compare
    * mode, with the compare bar attached below.
@@ -251,8 +238,6 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   const [confirmOpen, setConfirmOpen] = createSignal(false);
   /** Whether the tags on the meta line (or the phone's panel) are being edited. */
   const [tagEditing, setTagEditing] = createSignal(false);
-  /** The version just committed. Only that row in the history pops as it enters. */
-  const [freshVersionId, setFreshVersionId] = createSignal<string | null>(null);
   /** What a touch device's toolbar acts on. undefined while no note is open. */
   const [markdownEditor, setMarkdownEditor] = createSignal<Editor | undefined>();
 
@@ -305,9 +290,6 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   /** Whether the right panel is on screen in a wide window. */
   const panelOpen = (): boolean => twoPane() && shell.notePanelPinned();
 
-  /** Which tab the panel shows. The history tab is compare mode itself. */
-  const panelTab = (): NotePanelTab => (historyOpen() ? "history" : "note");
-
   // The list brings both stores in at once. Narrowing by surface happens here: rather than one IPC
   // call per surface, it is better to hold all of them so `?file=` knows where to send you
   const allItems = createMemo<NoteItem[]>(() => {
@@ -332,6 +314,37 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     visibleItems,
     loadedId,
   );
+
+  /** The open Codex's versions and compare mode (`lib/codex-history.ts`). */
+  const codexHistory = createCodexHistory({
+    kind,
+    selected: () => selected(),
+    loaded: () => loaded(),
+    body: () => fullBody(),
+    refreshList: () => refetchNotes(),
+    showToast: (text, undo, detail) => shell.showToast(text, undo, detail),
+  });
+  const {
+    open: historyOpen,
+    setOpen: setHistoryOpen,
+    selectedVersionId,
+    setSelectedVersionId,
+    freshId: freshVersionId,
+    status: versionStatus,
+    rows: versionRows,
+    marked,
+    cadence,
+    selectedRow,
+    compareDetail,
+    compareLine,
+    canCommit,
+    refetchStatus: refetchVersionStatus,
+    refresh: refreshVersions,
+    leave: leaveHistory,
+  } = codexHistory;
+
+  /** Which tab the panel shows. The history tab is compare mode itself. */
+  const panelTab = (): NotePanelTab => (historyOpen() ? "history" : "note");
 
   /**
    * Whether the note is open to write (ADR 0003). A record opens in the viewer and is written
@@ -482,74 +495,6 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       return;
     }
     await refetchNotes();
-  };
-
-  // The version count and "how far it has moved from the newest version". It compares the body
-  // against a version, so it reads only the one note that is open (the mark on a list row comes
-  // from core using the name fingerprint alone)
-  const [versionStatus, { refetch: refetchVersionStatus }] = createResource(
-    () => (kind() === "codex" ? selected()?.filename : undefined),
-    (filename) => typedInvoke("note_version_status", { filename }),
-  );
-  // The versions themselves. Even folded, the spine dots once per version, so a Codex reads them
-  const [versions, { refetch: refetchVersions }] = createResource(
-    () => (kind() === "codex" ? selected()?.filename : undefined),
-    (filename) => typedInvoke("list_note_versions", { filename }),
-  );
-  const versionRows = createMemo<VersionRow[]>(() => withDeltas(versions() ?? []));
-
-  /** When versions are added or removed, reread the count, the spine and the list mark together. */
-  const refreshVersions = (): void => {
-    void refetchVersionStatus();
-    void refetchVersions();
-  };
-
-  // The diff from the chosen version to the draft. Only while the history is open
-  const [diff] = createResource(
-    () => {
-      const id = selectedVersionId();
-      const filename = selected()?.filename;
-      return historyOpen() && id !== null && filename ? { filename, from: id } : undefined;
-    },
-    (args) => typedInvoke("diff_note_versions", args),
-  );
-
-  /**
-   * The body with the gutter marks applied. An empty diff (same content) means no marks and the
-   * body as it is. Saves are flushed when the history opens, so the body on screen equals disk.
-   */
-  const marked = createMemo(() => {
-    const text = diff();
-    return text ? markedBody(fullBody(), text) : undefined;
-  });
-  /**
-   * "committed 4 times in 9 months", the line at the top of the history tab. The span since the
-   * first version comes from the list.
-   */
-  const cadence = (): string | undefined => {
-    const rows = versionRows();
-    const oldest = rows.at(-1);
-    return oldest
-      ? t().codex.cadence(rows.length, spanSince(oldest.version.time, new Date()))
-      : undefined;
-  };
-
-  /** The row chosen in the history. It gives the number and decides what to restore to. */
-  const selectedRow = createMemo<VersionRow | undefined>(() =>
-    versionRows().find((row) => row.version.id === selectedVersionId()),
-  );
-
-  /**
-   * "3 lines added, 1 line removed". It counts from the diff compare mode has already read, so
-   * showing it adds not one IPC call. Identical content reads as "same content".
-   */
-  const compareDetail = (): string => {
-    const text = diff();
-    if (text === undefined) {
-      return "";
-    }
-    const { added, removed } = diffLineCounts(text);
-    return added + removed === 0 ? t().codex.sameShort : t().codex.lineDelta(added, removed);
   };
 
   /**
@@ -894,16 +839,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     shell.showToast(written ? t().notes.reverted : t().notes.shownFromBackup);
   };
 
-  /**
-   * Commits the current draft as a version. This is the only entry, and nothing commits
-   * automatically. It hangs on neither save, leave nor promotion: a version is the mark a person
-   * puts at "this far".
-   *
-   * It commits the moment it is pressed. No message is asked for: "version N, date" is enough for
-   * a version's name, and asking makes committing itself feel like a chore. Instead a toast says
-   * the summary, and during the grace period it can be undone (which only deletes the version's
-   * file).
-   */
+  /** Commits the current draft as a version (`codexHistory.commit`). */
   const commitVersion = async (item: NoteItem): Promise<void> => {
     if (kind() !== "codex" || !loaded()) {
       return;
@@ -911,58 +847,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     shell.closePopovers();
     // The body on disk is committed. Unless the in-flight save lands, the last typing misses it
     await session.settleWrites();
-    const before = versions() ?? [];
-    let version;
-    try {
-      version = await typedInvoke("commit_note_version", {
-        filename: item.filename,
-        message: null,
-      });
-    } catch {
-      shell.showToast(t().codex.commitFailed);
-      return;
-    }
-    // Committing the same body in the same second makes core return the previous version as it is.
-    // What did not grow cannot be undone: deleting it would delete a version that already existed
-    const existed = before.some((v) => v.id === version.id);
-    const [latest] = before;
-    const count = existed ? before.length : before.length + 1;
-    const summary = [
-      latest
-        ? t().codex.deltaFromLatest(before.length, version.bytes - latest.bytes)
-        : t().codex.sizeOf(version.bytes),
-      latest && daysSince(latest.time, new Date()) > 0
-        ? t().codex.sinceDays(daysSince(latest.time, new Date()))
-        : undefined,
-    ]
-      .filter(Boolean)
-      .join(" · ");
-    // If the history is open, only the one added row pops in. When it merely pointed again at a
-    // version that already existed, nothing moves
-    if (!existed) {
-      setFreshVersionId(version.id);
-      setTimeout(() => setFreshVersionId(null), POP_MS);
-    }
-    refreshVersions();
-    // The folded-corner page in the list changes its count and frame too
-    void refetchNotes();
-    const undo = existed
-      ? undefined
-      : (): void => {
-          void (async () => {
-            try {
-              await typedInvoke("delete_note_version", {
-                filename: item.filename,
-                id: version.id,
-              });
-            } catch {
-              return;
-            }
-            refreshVersions();
-            void refetchNotes();
-          })();
-        };
-    shell.showToast(t().codex.committed(count), undo, summary);
+    await codexHistory.commit(item);
   };
 
   /**
@@ -988,23 +873,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       return;
     }
     await session.settleWrites();
-    // Versions are committed on other devices too. Opening the compare screen is a cheap moment to
-    // reread. The newest version is chosen from the reread list: from the local list, an older one
-    // would keep opening as long as it is still in the arriving list, even when a newer one exists
-    void refetchVersionStatus();
-    const rows = (await refetchVersions()) ?? versions();
-    batch(() => {
-      setSelectedVersionId(rows?.[0]?.id ?? null);
-      setHistoryOpen(true);
-    });
-  };
-
-  /** Leaves compare mode. The panel stays where it is, on its settings tab. */
-  const leaveHistory = (): void => {
-    batch(() => {
-      setHistoryOpen(false);
-      setSelectedVersionId(null);
-    });
+    await codexHistory.enter();
   };
 
   /**
@@ -1070,22 +939,6 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     }
     void openHistory();
   };
-
-  // If the versions have not arrived when it opens, choose the newest one that arrives. It also
-  // moves to the newest when an undo removed the version that was chosen
-  createEffect(() => {
-    if (!historyOpen()) {
-      return;
-    }
-    const rows = versions();
-    if (!rows) {
-      return;
-    }
-    const chosen = selectedVersionId();
-    if (chosen === null || !rows.some((v) => v.id === chosen)) {
-      setSelectedVersionId(rows[0]?.id ?? null);
-    }
-  });
 
   /**
    * Makes a version's body the draft. core commits "before the restore" first, so the restore
@@ -1195,22 +1048,6 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       return undefined;
     }
     return revertable() ? undefined : t().notes.revertNeedsEdit;
-  };
-
-  /** What compare mode calls itself: "comparing version 2, 3 added, 1 removed, read-only" */
-  const compareLine = (): string[] => {
-    const row = selectedRow();
-    return row
-      ? [t().codex.comparing(row.number), compareDetail(), t().notes.readOnly].filter(Boolean)
-      : [];
-  };
-
-  /** Whether "commit a version" is worth offering: the draft has moved on. */
-  const canCommit = (): boolean => {
-    const status = versionStatus();
-    return (
-      kind() === "codex" && loaded() && status !== undefined && (status.dirty || status.count === 0)
-    );
   };
 
   // The dot's details (AppLayout) say what state the note is in, so a closed panel hides nothing.
