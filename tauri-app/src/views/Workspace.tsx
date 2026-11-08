@@ -30,6 +30,7 @@ import { resolveEditedTime } from "../lib/note-meta";
 import { countTagLists, parseTags } from "../lib/tags";
 import { refusedForGood } from "../lib/save-refusal";
 import { createNoteBuffer } from "../lib/note-buffer";
+import { createNoteMetaEditor } from "../lib/note-meta-editor";
 import { createNotePanel } from "../lib/note-panel-state";
 import { createNoteSelection } from "../lib/note-selection";
 import { createNoteSession } from "../lib/note-session";
@@ -59,7 +60,7 @@ import { createLongPress } from "../lib/long-press";
 import { isTypingTarget, matchesShortcut, shortcutLabel } from "../lib/shortcuts";
 import { readBackup, writeBackup } from "../lib/edit-backup";
 import type { NoteLinkTarget } from "../lib/note-link-plugin";
-import type { NoteKind, NoteMeta, SearchHit, Template, VersionStatus } from "../lib/commands";
+import type { NoteKind, SearchHit, Template, VersionStatus } from "../lib/commands";
 import { noteRoute } from "../lib/note-route";
 import { MODE_LABELS, ROUTES } from "../lib/routes";
 import "../styles/workspace.css";
@@ -413,28 +414,18 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     toggle: togglePanel,
   } = panel;
 
-  /**
-   * The frontmatter as written. The list carries tags already merged with the body's `#tag`s,
-   * so what can be edited (the frontmatter's own tags, the created time) is read only while the
-   * panel that edits it is open. It is read again each time, so another device's edit is not
-   * written back over.
-   */
-  const [noteMeta, { refetch: refetchMeta, mutate: mutateMeta }] = createResource(
-    () => (panelScreenShown() || panelOpen() ? selected()?.filename : undefined),
-    async (filename) => ({ filename, meta: await typedInvoke("read_note_meta", { filename }) }),
-  );
-  /**
-   * The frontmatter of the note on screen, never the previous one's. The resource keeps its
-   * last value while the next note's is on the way, and tags edited against it would carry
-   * one note's tags into another.
-   */
-  const currentMeta = (): NoteMeta | undefined => {
-    if (noteMeta.error) {
-      return undefined;
-    }
-    const read = noteMeta();
-    return read && read.filename === selected()?.filename ? read.meta : undefined;
-  };
+  /** The frontmatter the panel edits: own tags, created time (`lib/note-meta-editor.ts`). */
+  const {
+    meta: currentMeta,
+    failed: metaFailed,
+    save: saveMeta,
+    restoreTag,
+  } = createNoteMetaEditor({
+    active: () => panelScreenShown() || panelOpen(),
+    selected: () => selected(),
+    refreshList: () => refetchNotes(),
+    showToast: (text) => shell.showToast(text),
+  });
 
   /**
    * Tags used anywhere, most used first: the suggestions under the tag input. Counted from the
@@ -452,54 +443,6 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       }
     },
   );
-
-  /**
-   * Rewrites the frontmatter's tags or created time. The value on screen moves first, so a
-   * second tag added before the first write lands is added to the list that has the first.
-   */
-  const saveMeta = async (
-    item: NoteItem,
-    change: { time?: string; tags?: string[] },
-  ): Promise<void> => {
-    const meta = currentMeta();
-    if (!meta) {
-      return;
-    }
-    const next = { ...meta, ...change };
-    mutateMeta({ filename: item.filename, meta: next });
-    try {
-      await typedInvoke("update_note_meta", {
-        filename: item.filename,
-        time: next.time,
-        tags: next.tags,
-      });
-    } catch {
-      shell.showToast(t().meta.saveFailed);
-      void refetchMeta();
-      return;
-    }
-    // The created time moves the row between date groups, and the tags show on the meta line
-    await refetchNotes();
-  };
-
-  /**
-   * Puts a removed tag back where it stood. The note is read afresh rather than through
-   * `saveMeta`: the toast outlives the selection, and `currentMeta` may be another note's by now.
-   */
-  const restoreTag = async (filename: string, tag: string, at: number): Promise<void> => {
-    try {
-      const read = await typedInvoke("read_note_meta", { filename });
-      const tags = [...read.tags.slice(0, at), tag, ...read.tags.slice(at)];
-      await typedInvoke("update_note_meta", { filename, time: read.time, tags });
-      if (selected()?.filename === filename) {
-        mutateMeta({ filename, meta: { ...read, tags } });
-      }
-    } catch {
-      shell.showToast(t().meta.saveFailed);
-      return;
-    }
-    await refetchNotes();
-  };
 
   /**
    * Whether to show the compare bar. While compare mode is on, on a phone. It shows even when the
@@ -1338,7 +1281,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       detailsOpen={detailsOpen()}
       onToggleDetails={() => setDetailsOpen((open) => !open)}
       meta={currentMeta()}
-      metaError={Boolean(noteMeta.error)}
+      metaError={metaFailed()}
       onEditTime={(value) => {
         const meta = currentMeta();
         const time = meta ? resolveEditedTime(meta.time, value) : undefined;
