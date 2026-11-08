@@ -30,6 +30,7 @@ import { resolveEditedTime } from "../lib/note-meta";
 import { countTagLists, parseTags } from "../lib/tags";
 import { refusedForGood } from "../lib/save-refusal";
 import { createNoteBuffer } from "../lib/note-buffer";
+import { createNotePanel } from "../lib/note-panel-state";
 import { createNoteSelection } from "../lib/note-selection";
 import { createNoteSession } from "../lib/note-session";
 import type { SaveStatus } from "../lib/note-session";
@@ -226,16 +227,6 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     epoch: bodyEpoch,
     full: fullBody,
   } = buffer;
-  /**
-   * Whether the panel screen is up on a phone. There is no width to lay it alongside, so it is
-   * one surface that swaps with the body. Pressing a version returns to the body in compare
-   * mode, with the compare bar attached below.
-   */
-  const [panelScreen, setPanelScreen] = createSignal(false);
-  /** Whether the panel's details (created, updated, surroundings) are unfolded. */
-  const [detailsOpen, setDetailsOpen] = createSignal(false);
-  /** Whether the "Make a Codex" confirmation is up. */
-  const [confirmOpen, setConfirmOpen] = createSignal(false);
   /** Whether the tags on the meta line (or the phone's panel) are being edited. */
   const [tagEditing, setTagEditing] = createSignal(false);
   /** What a touch device's toolbar acts on. undefined while no note is open. */
@@ -283,12 +274,6 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
 
   /** Whether the body is actually on screen. While it is not, no editor is built either. */
   const bodyVisible = createMemo<boolean>(() => twoPane() || detailOpen());
-
-  /** Whether the panel screen is up on a phone. It swaps with the body. */
-  const panelScreenShown = (): boolean => panelScreen() && !twoPane();
-
-  /** Whether the right panel is on screen in a wide window. */
-  const panelOpen = (): boolean => twoPane() && shell.notePanelPinned();
 
   // The list brings both stores in at once. Narrowing by surface happens here: rather than one IPC
   // call per surface, it is better to hold all of them so `?file=` knows where to send you
@@ -342,9 +327,6 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     refresh: refreshVersions,
     leave: leaveHistory,
   } = codexHistory;
-
-  /** Which tab the panel shows. The history tab is compare mode itself. */
-  const panelTab = (): NotePanelTab => (historyOpen() ? "history" : "note");
 
   /**
    * Whether the note is open to write (ADR 0003). A record opens in the viewer and is written
@@ -408,6 +390,28 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     () => selected()?.filename,
     (filename) => typedInvoke("find_backlinks", { filename }),
   );
+
+  /** Where the note panel stands and what is open in it (`lib/note-panel-state.ts`). */
+  const panel = createNotePanel({
+    twoPane,
+    writing,
+    historyOpen,
+    pinned: () => shell.notePanelPinned(),
+    setPinned: (pinned) => shell.setNotePanelPinned(pinned),
+    leaveHistory,
+  });
+  const {
+    setScreen: setPanelScreen,
+    screenShown: panelScreenShown,
+    open: panelOpen,
+    tab: panelTab,
+    detailsOpen,
+    setDetailsOpen,
+    confirmOpen,
+    setConfirmOpen,
+    close: closePanel,
+    toggle: togglePanel,
+  } = panel;
 
   /**
    * The frontmatter as written. The list carries tags already merged with the body's `#tag`s,
@@ -864,44 +868,12 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       return;
     }
     openInViewer();
-    if (twoPane()) {
-      shell.setNotePanelPinned(true);
-    } else {
-      setPanelScreen(true);
-    }
+    panel.show();
     if (historyOpen()) {
       return;
     }
     await session.settleWrites();
     await codexHistory.enter();
-  };
-
-  /**
-   * Folds the panel entirely, compare mode included. Opening it again always starts on the
-   * settings tab, so a panel that appears never starts by comparing.
-   */
-  const closePanel = (): void => {
-    batch(() => {
-      leaveHistory();
-      shell.setNotePanelPinned(false);
-      setPanelScreen(false);
-    });
-  };
-
-  /** ⌘. and the strip's …. Opens the panel, or folds it. On a phone, the panel screen. */
-  const togglePanel = (): void => {
-    if (writing()) {
-      return;
-    }
-    if (!twoPane()) {
-      setPanelScreen((open) => !open);
-      return;
-    }
-    if (shell.notePanelPinned()) {
-      closePanel();
-      return;
-    }
-    shell.setNotePanelPinned(true);
   };
 
   /**
@@ -915,11 +887,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       if (details) {
         setDetailsOpen(true);
       }
-      if (twoPane()) {
-        shell.setNotePanelPinned(true);
-      } else {
-        setPanelScreen(true);
-      }
+      panel.show();
     });
   };
 
@@ -993,15 +961,6 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     refreshVersions();
     shell.showToast(shown ? t().codex.restored : t().codex.restoredNotShown);
   };
-
-  // Whatever way the writing screen was reached, the panel does not stay beside it
-  createEffect(
-    on(writing, (entered) => {
-      if (entered) {
-        closePanel();
-      }
-    }),
-  );
 
   /** The note the cursor was last handed to. Once per opening, not on every reload. */
   let focusedFor: string | undefined;
