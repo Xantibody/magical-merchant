@@ -7,6 +7,20 @@
   position: relative;
 }
 
+/* The controls around a note are not text to take away. The viewer's select-all is the
+   page's own (⌘A, Android's "Select all"), and with these left out it highlights and
+   copies only the note: its title and its body.
+   AIDEV-NOTE: the viewer's ⌘A is not answered with a script-made range from the title to
+   the body. In Chromium such a range is cut short at the first of these it crosses (the
+   meta line), so only the title came out; the page's own select-all skips them instead */
+.list-pane,
+.note-strip,
+.detail-meta-line,
+.detail-status-row,
+.backlinks {
+  user-select: none;
+}
+
 /* ---------------- list pane ---------------- */
 
 .list-edge {

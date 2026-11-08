@@ -683,6 +683,58 @@ describe("Workspace › ビューアと書く画面", () => {
     await waitFor(() => expect(editorBody().isContentEditable).toBe(true));
   });
 
+  // The viewer's ⌘A (and Android's "Select all") is the page's own. It took the list beside
+  // the note, the strip and the meta line too, and a copy was mostly not the note
+  it("leaves the controls around the note out of the page's select-all", async () => {
+    renderWorkspace();
+    fireEvent.click(await rowOf(TITLE_A));
+    await screen.findByText(TEXT_A);
+
+    document.execCommand("selectAll");
+
+    const text = String(getSelection());
+    expect(text).toContain(TITLE_A);
+    expect(text).toContain(TEXT_A);
+    expect(text).not.toContain(TITLE_B);
+    expect(text).not.toContain("新規");
+  });
+
+  // A press on the strip or the margin takes the caret out of the body. ⌘A then brings it
+  // back and selects the body, which is what the writing screen is for
+  it("selects the body on ⌘A in the writing screen when the caret left it", async () => {
+    await openNoteA();
+    await waitFor(() => expect(document.activeElement).toBe(editorBody()));
+    const done = screen.getByRole("button", { name: "完了" });
+    done.focus();
+    const event = new KeyboardEvent("keydown", {
+      key: "a",
+      metaKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+
+    done.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    await waitFor(() => expect(document.activeElement).toBe(editorBody()));
+    expect(String(getSelection())).toBe(TEXT_A);
+  });
+
+  // The title field selects its own text; the key is not taken from it
+  it("leaves ⌘A in the title field to the field", async () => {
+    await openNoteA();
+    const event = new KeyboardEvent("keydown", {
+      key: "a",
+      metaKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+
+    titleInput().dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(false);
+  });
+
   // The save is automatic, so leaving is only a change of screen
   it("goes back to the viewer on Escape from the body", async () => {
     await openNoteA();

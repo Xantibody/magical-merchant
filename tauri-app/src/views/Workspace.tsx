@@ -59,6 +59,7 @@ import { isTypingTarget, matchesShortcut, shortcutLabel } from "../lib/shortcuts
 import { daysSince, spanSince, withDeltas } from "../lib/versions";
 import type { VersionRow } from "../lib/versions";
 import { readBackup, writeBackup } from "../lib/edit-backup";
+import { claimsSelectAll, selectContents } from "../lib/select-all";
 import type { NoteLinkTarget } from "../lib/note-link-plugin";
 import type { NoteKind, NoteMeta, SearchHit, Template, VersionStatus } from "../lib/commands";
 import { noteRoute } from "../lib/note-route";
@@ -1172,6 +1173,24 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     }
     focusedFor = item.id;
     focusBody();
+  });
+
+  // ⌘A in the writing screen selects the body, with the caret brought back if a press on the
+  // strip or the margin took it out (`lib/select-all.ts`). In the editor and the title field
+  // the key never reaches here as ours: those select their own text. The viewer's ⌘A is the
+  // page's own; workspace.css leaves the controls around the note out of it
+  onMount(() => {
+    const onSelectAll = (e: KeyboardEvent): void => {
+      const editor = detailBodyRef?.querySelector<HTMLElement>(".ProseMirror");
+      if (!writing() || !editor || !claimsSelectAll(e)) {
+        return;
+      }
+      e.preventDefault();
+      editor.focus();
+      selectContents(editor);
+    };
+    globalThis.addEventListener("keydown", onSelectAll);
+    onCleanup(() => globalThis.removeEventListener("keydown", onSelectAll));
   });
 
   const revertable = createMemo<boolean>(() => {
