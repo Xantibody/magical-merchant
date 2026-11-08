@@ -481,6 +481,42 @@ fn write_under(data_dir: &Path, key: &str, content: &[u8]) -> Result<(), SyncIss
     })
 }
 
+/// Writes a fetched version over the local file, unless that file moved since the scan.
+///
+/// A round trip to the server sits between the scan's verdict and here, and the app's
+/// saves and captures do not take the sync lock. An edit written in that gap is known
+/// to nobody yet, so overwriting it with the version fetched for the old one loses it.
+/// The same check guards a local delete (`delete_local_file`)
+fn write_download(
+    data_dir: &Path,
+    key: &str,
+    content: &[u8],
+    local_files: &[LocalFile],
+) -> Result<(), SyncIssue> {
+    if !is_safe_key(key) {
+        return Err(SyncIssue::UnsafeKey {
+            key: key.to_string(),
+        });
+    }
+    let scanned = scanned_hash(local_files, key);
+    let on_disk = match fs::read(data_dir.join(key)) {
+        Ok(current) => Some(scan::compute_hash(&current)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) => {
+            return Err(SyncIssue::ReadFailed {
+                key: key.to_string(),
+                detail: e.to_string(),
+            });
+        }
+    };
+    if on_disk.as_deref() != scanned {
+        return Err(SyncIssue::DownloadSkippedChanged {
+            key: key.to_string(),
+        });
+    }
+    write_under(data_dir, key, content)
+}
+
 /// The hash the scan computed for `key`, or `None` when the scan did not see the file.
 fn scanned_hash<'a>(local_files: &'a [LocalFile], key: &str) -> Option<&'a str> {
     local_files
@@ -513,7 +549,8 @@ fn apply_response(
     let mut unwritten = HashSet::new();
 
     for d in &bulk_resp.downloads {
-        match decode(d).and_then(|content| write_under(&data_dir, &d.key, &content)) {
+        match decode(d).and_then(|content| write_download(&data_dir, &d.key, &content, local_files))
+        {
             Ok(()) => result.downloaded += 1,
             Err(e) => {
                 result.errors.push(e);
@@ -1014,6 +1051,144 @@ mod tests {
                 key: "notes/a.md".to_string()
             }]
         );
+    }
+
+    fn download(key: &str, content: &[u8]) -> BulkResponse {
+        BulkResponse {
+            downloads: vec![DownloadedFile {
+                key: key.to_string(),
+                content_base64: B64.encode(content),
+            }],
+            conflict_downloads: Vec::new(),
+            new_state: server_state(&[(key, "hash-remote", "2026-08-05T00:00:00Z")]),
+        }
+    }
+
+    /// The app writes without the sync lock, so a save can land during the round trip.
+    /// The download is checked against the scan the same way a delete is, and an edit
+    /// made in that gap is not overwritten by the version fetched for the old one
+    #[test]
+    fn a_download_does_not_overwrite_a_file_rewritten_after_the_scan() {
+        let dir = tempfile::tempdir().unwrap();
+        seed(
+            dir.path(),
+            "notes/a.md",
+            "autosaved while the sync was in flight",
+        );
+        let locals = vec![local_file("notes/a.md", &scan::compute_hash(b"as scanned"))];
+        let previous = SyncState {
+            files: HashMap::from([(
+                "notes/a.md".to_string(),
+                FileSyncRecord {
+                    last_synced_modified: "2026-08-01T00:00:00Z".parse().unwrap(),
+                    content_hash: scan::compute_hash(b"as scanned"),
+                },
+            )]),
+            last_sync: None,
+        };
+        let resp = download("notes/a.md", b"remote");
+
+        let mut result = SyncResult::default();
+        let unwritten = apply_response(
+            &resp,
+            &[SyncAction::DownloadModified {
+                key: "notes/a.md".to_string(),
+            }],
+            &locals,
+            dir.path(),
+            &mut result,
+        );
+
+        let data = paths::data_dir(dir.path());
+        assert_eq!(
+            fs::read_to_string(data.join("notes/a.md")).unwrap(),
+            "autosaved while the sync was in flight"
+        );
+        assert_eq!(result.downloaded, 0);
+        assert_eq!(
+            result.errors,
+            vec![SyncIssue::DownloadSkippedChanged {
+                key: "notes/a.md".to_string()
+            }]
+        );
+
+        // The record stays at the scanned version, so the next sync sees both sides
+        // moved and keeps the two as a conflict instead of choosing one
+        let state = to_local_state(&resp.new_state, &data, &unwritten, &previous);
+        let next = diff::compute(
+            &[local_file(
+                "notes/a.md",
+                &scan::compute_hash(b"autosaved while the sync was in flight"),
+            )],
+            &[RemoteFile {
+                key: "notes/a.md".to_string(),
+                last_modified: "2026-08-05T00:00:00Z".parse().unwrap(),
+                content_hash: "hash-remote".to_string(),
+            }],
+            &state,
+        );
+        assert_eq!(
+            next,
+            vec![SyncAction::Conflict {
+                key: "notes/a.md".to_string()
+            }]
+        );
+    }
+
+    /// Today's Scrawl day did not exist at the scan, the server has one from another
+    /// device, and a capture wrote the file while the request was out
+    #[test]
+    fn a_new_download_does_not_overwrite_a_file_created_after_the_scan() {
+        let dir = tempfile::tempdir().unwrap();
+        seed(
+            dir.path(),
+            "scrawl/2026-08-05.md",
+            "captured during the round trip",
+        );
+
+        let mut result = SyncResult::default();
+        let unwritten = apply_response(
+            &download("scrawl/2026-08-05.md", b"from the other device"),
+            &[SyncAction::DownloadNew {
+                key: "scrawl/2026-08-05.md".to_string(),
+            }],
+            &[],
+            dir.path(),
+            &mut result,
+        );
+
+        assert_eq!(
+            fs::read_to_string(paths::data_dir(dir.path()).join("scrawl/2026-08-05.md")).unwrap(),
+            "captured during the round trip"
+        );
+        assert_eq!(result.downloaded, 0);
+        assert!(unwritten.contains("scrawl/2026-08-05.md"));
+    }
+
+    /// The guard compares with the scan, not with "exists": an untouched file is replaced
+    #[test]
+    fn a_download_replaces_a_file_still_as_scanned() {
+        let dir = tempfile::tempdir().unwrap();
+        seed(dir.path(), "notes/a.md", "as scanned");
+        let locals = vec![local_file("notes/a.md", &scan::compute_hash(b"as scanned"))];
+
+        let mut result = SyncResult::default();
+        apply_response(
+            &download("notes/a.md", b"remote"),
+            &[SyncAction::DownloadModified {
+                key: "notes/a.md".to_string(),
+            }],
+            &locals,
+            dir.path(),
+            &mut result,
+        );
+
+        assert_eq!(
+            fs::read_to_string(paths::data_dir(dir.path()).join("notes/a.md")).unwrap(),
+            "remote"
+        );
+        assert_eq!(result.downloaded, 1);
+        assert!(result.errors.is_empty(), "errors: {:?}", result.errors);
     }
 
     /// When the server's sync state is corrupt and empty, this keeps it from being read

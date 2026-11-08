@@ -68,6 +68,17 @@ describe("describeSyncResult", () => {
     expect(ui.message).toContain("notes/a.md");
   });
 
+  // A download held back because the file moved during the sync names the file, so the
+  // user knows which one the next sync will keep as two
+  it("says which file a held-back download left alone", () => {
+    const ui = describeSyncResult({
+      ...emptyResult,
+      errors: [{ kind: "download_skipped_changed", key: "scrawl/2026-08-05.md" }],
+    });
+    expect(ui.message).toContain("scrawl/2026-08-05.md");
+    expect(ui.message).toContain("上書きせずに残しました");
+  });
+
   // Dropping the detail would remove the cause of a write failure (disk space, permissions)
   // from the screen
   it("keeps the detail core attached to a failure", () => {
