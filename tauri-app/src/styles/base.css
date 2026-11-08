@@ -42,6 +42,9 @@
   /* Backing for chips, the selected row and highlights. Only a trace of accent
      is mixed in */
   --app-accent-soft: color-mix(in oklab, var(--app-accent) 9%, var(--gray-0));
+  /* Words and icons on a filled --app-accent (a primary button, today in the calendar).
+     The fill turns light in the dark theme, so this turns dark with it */
+  --app-on-accent: var(--gray-0);
   --app-input-bg: white;
   --app-ok: var(--green-7);
   --app-danger: var(--red-7);
@@ -68,6 +71,7 @@
   --app-text-hint: var(--gray-7);
   --app-accent: var(--gray-4);
   --app-accent-soft: color-mix(in oklab, var(--app-accent) 16%, var(--gray-9));
+  --app-on-accent: var(--gray-9);
   --app-input-bg: var(--gray-8);
   --app-ok: var(--green-4);
   --app-danger: var(--red-4);
@@ -269,7 +273,7 @@ html[data-hints] [data-hint-key]::after {
 
 .button-primary {
   background: var(--app-accent);
-  color: var(--app-surface);
+  color: var(--app-on-accent);
   border: 1px solid var(--app-accent);
 }
 

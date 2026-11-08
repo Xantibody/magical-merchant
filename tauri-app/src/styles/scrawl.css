@@ -548,12 +548,8 @@
     border: none;
     border-radius: 22px;
     background: var(--app-accent);
-    color: var(--gray-0);
+    color: var(--app-on-accent);
     cursor: pointer;
-  }
-
-  :root[data-theme="dark"] .capture-send {
-    color: var(--gray-9);
   }
 
   .capture-send:disabled {

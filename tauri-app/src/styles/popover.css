@@ -167,12 +167,8 @@
 
 .calendar-day--today {
   background: var(--app-accent);
-  color: var(--gray-0);
+  color: var(--app-on-accent);
   font-weight: 600;
-}
-
-:root[data-theme="dark"] .calendar-day--today {
-  color: var(--gray-9);
 }
 
 .calendar-summary {
