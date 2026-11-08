@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseScrawlEntry, getBatteryIcon, getNetworkIcon, getOsLabel } from "./parse-scrawl";
+import { parseScrawlEntry, getBatteryIcon, getNetworkIcon } from "./parse-scrawl";
 
 describe("parseScrawlEntry", () => {
   it("parses entry with context JSON", () => {
@@ -105,21 +105,5 @@ describe("getNetworkIcon", () => {
 
   it("returns null when network_type is undefined", () => {
     expect(getNetworkIcon({ os: "", arch: "" })).toBeNull();
-  });
-});
-
-describe("getOsLabel", () => {
-  it("returns full label with all parts", () => {
-    expect(getOsLabel({ os: "macos", os_version: "15.3", arch: "aarch64" })).toBe(
-      "macos 15.3 aarch64",
-    );
-  });
-
-  it("returns os + arch without version", () => {
-    expect(getOsLabel({ os: "linux", arch: "x86_64" })).toBe("linux x86_64");
-  });
-
-  it("returns null when os is empty", () => {
-    expect(getOsLabel({ os: "", arch: "" })).toBeNull();
   });
 });
