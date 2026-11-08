@@ -39,7 +39,7 @@ import {
   toggleKind,
   toggleTag,
 } from "../lib/browse";
-import type { BrowsePeriod } from "../lib/browse";
+import type { BrowseFilter, BrowsePeriod } from "../lib/browse";
 import "../styles/browse.css";
 
 /** Text of a period chip. Three words with no count in them, so it only looks up the table. */
@@ -132,14 +132,19 @@ export default function Browse(): JSX.Element {
   /** The selected record. If a new filter removes it, fall back to the first: no empty column. */
   const [selectedId, setSelectedId] = createSignal<string | null>(null);
 
+  /** Every change of the filter goes through here, so what a new list starts from is said once. */
+  const narrow = (next: BrowseFilter): void => {
+    shell.setBrowseFilter(next);
+    setSelectedId(null);
+  };
+
   // Landing from a Scrawl chip or from Cmd+K. The wanted filter rides on the route (`?kind=&tag=`)
   createEffect(() => {
     const seed = browseSeed({ kind: searchParams.kind, tag: searchParams.tag });
     if (!seed) {
       return;
     }
-    shell.setBrowseFilter(seed);
-    setSelectedId(null);
+    narrow(seed);
     setSearchParams({ kind: undefined, tag: undefined }, { replace: true });
   });
   const selected = createMemo<SearchHit | null>(() => {
@@ -196,16 +201,13 @@ export default function Browse(): JSX.Element {
   };
 
   const chooseKind = (kind: HitKind): void => {
-    shell.setBrowseFilter({ ...filter(), kinds: toggleKind(filter().kinds, kind) });
-    setSelectedId(null);
+    narrow({ ...filter(), kinds: toggleKind(filter().kinds, kind) });
   };
   const chooseTag = (tag: string): void => {
-    shell.setBrowseFilter({ ...filter(), tags: toggleTag(filter().tags, tag) });
-    setSelectedId(null);
+    narrow({ ...filter(), tags: toggleTag(filter().tags, tag) });
   };
   const choosePeriod = (period: BrowsePeriod): void => {
-    shell.setBrowseFilter({ ...filter(), period });
-    setSelectedId(null);
+    narrow({ ...filter(), period });
   };
 
   return (
@@ -271,14 +273,7 @@ export default function Browse(): JSX.Element {
         </div>
 
         <Show when={hasFilter(filter())}>
-          <button
-            type="button"
-            class="browse-clear"
-            onClick={() => {
-              shell.setBrowseFilter(NO_FILTER);
-              setSelectedId(null);
-            }}
-          >
+          <button type="button" class="browse-clear" onClick={() => narrow(NO_FILTER)}>
             {t().browse.clear}
           </button>
         </Show>
