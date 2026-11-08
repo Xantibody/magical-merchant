@@ -78,11 +78,16 @@ enum RoundEnd<'a> {
     Error(&'a SyncError),
 }
 
+/// Starts a round. However it ends, the webview hears it once, as `sync-complete` or
+/// `sync-error`, and the command resolves. It rejects only when no round ran because one was
+/// already running, and that sends no event.
+///
+/// AIDEV-NOTE: a failed round used to be emitted and rejected both, and the webview applied it twice. Dropping the duplicate on the webview's side was rejected: there this guard's rejected `busy` and the engine lock's emitted `busy` look the same
 #[tauri::command]
 pub(crate) async fn sync_start(
     handle: AppHandle,
     state: State<'_, AppSyncState>,
-) -> Result<SyncResult, SyncError> {
+) -> Result<(), SyncError> {
     // `do_sync` is an async fn, so building its future here runs nothing: a start the guard
     // refuses never reads the config or touches the network
     run_round(state.inner(), do_sync(&handle), |end| {
@@ -97,7 +102,7 @@ pub(crate) async fn sync_start(
 
 /// `sync_start` with the round and the events passed in, so it runs in a test with neither a
 /// server nor a webview
-async fn run_round<R, E>(state: &AppSyncState, round: R, emit: E) -> Result<SyncResult, SyncError>
+async fn run_round<R, E>(state: &AppSyncState, round: R, emit: E) -> Result<(), SyncError>
 where
     R: Future<Output = Result<SyncResult, SyncError>>,
     E: Fn(RoundEnd<'_>),
@@ -111,9 +116,7 @@ where
     }
     let _guard = SyncingGuard(&state.is_syncing);
 
-    let result = round.await;
-
-    match &result {
+    match round.await {
         Ok(sync_result) => {
             // Cleaning up duplicate IDs that came down happens inside the engine. Doing it
             // after the lock is released would move notes in the middle of the scan a
@@ -126,18 +129,18 @@ where
                 .last_error
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner) = None;
-            emit(RoundEnd::Complete(sync_result));
+            emit(RoundEnd::Complete(&sync_result));
         }
         Err(err) => {
             *state
                 .last_error
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner) = Some(err.message.clone());
-            emit(RoundEnd::Error(err));
+            emit(RoundEnd::Error(&err));
         }
     }
 
-    result
+    Ok(())
 }
 
 #[tauri::command]
@@ -232,6 +235,34 @@ mod tests {
 
         assert!(result.is_ok());
         assert_eq!(*events.borrow(), [EVENT_SYNC_COMPLETE]);
+        assert!(!state.is_syncing.load(Ordering::SeqCst));
+    }
+
+    /// The webview applies whatever it hears. Told by the event and again by the rejection, it
+    /// raised the alert twice, and a rejection landing after the rerun had started marked that
+    /// rerun as failed
+    #[tokio::test]
+    async fn a_round_that_fails_is_told_once_through_the_event() {
+        let state = AppSyncState::default();
+        let events = RefCell::new(Vec::new());
+
+        let result = run_round(
+            &state,
+            async { Err(SyncError::new("notAuthenticated", "Not logged in.")) },
+            |end| events.borrow_mut().push(event_name(&end)),
+        )
+        .await;
+
+        assert!(result.is_ok());
+        assert_eq!(*events.borrow(), [EVENT_SYNC_ERROR]);
+        assert_eq!(
+            state
+                .last_error
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .as_deref(),
+            Some("Not logged in.")
+        );
         assert!(!state.is_syncing.load(Ordering::SeqCst));
     }
 
