@@ -331,15 +331,27 @@ export default function Scrawl(): JSX.Element {
     navigate(writeRoute("note", filename));
   };
 
-  /** ⌘Enter on the input line: the line becomes the new Note's title. */
+  /**
+   * ⌘Enter on the input line: the line becomes the new Note's title. A refusal is left to
+   * throw: the line keeps what was typed and says so itself (`CaptureBar`'s `onError`).
+   */
   const writeNote = (text: string): Promise<void> => openNewNote(`# ${text}\n\n`);
+
+  /** The ways in with no typed line to keep, so a refusal only needs saying. */
+  const openNewNoteOrToast = async (body: string, origin?: string): Promise<void> => {
+    try {
+      await openNewNote(body, origin);
+    } catch {
+      shell.showToast(t().notes.createFailed);
+    }
+  };
 
   /**
    * Promotes an entry into a note. Nothing is written to the entry's file: only the
    * note's frontmatter `origin` links the two, and the chip is derived from it every time.
    */
   const promote = (item: ScrawlItem): Promise<void> =>
-    openNewNote(item.text, `${item.date}T${item.time}`);
+    openNewNoteOrToast(item.text, `${item.date}T${item.time}`);
 
   const openNote = (note: NoteItem): void => {
     navigate(noteRoute(note.kind, note.filename));
@@ -355,11 +367,21 @@ export default function Scrawl(): JSX.Element {
     if (!origin) {
       return;
     }
-    await typedInvoke("set_note_origin", { filename: note.filename, origin: null });
+    try {
+      await typedInvoke("set_note_origin", { filename: note.filename, origin: null });
+    } catch {
+      shell.showToast(t().scrawl.unlinkFailed);
+      return;
+    }
     await refetchNotes();
     shell.showToast(t().scrawl.unlinked, () => {
       void (async () => {
-        await typedInvoke("set_note_origin", { filename: note.filename, origin });
+        try {
+          await typedInvoke("set_note_origin", { filename: note.filename, origin });
+        } catch {
+          shell.showToast(t().scrawl.relinkFailed);
+          return;
+        }
         await refetchNotes();
       })();
     });
@@ -389,20 +411,34 @@ export default function Scrawl(): JSX.Element {
     try {
       const ids = selected();
       const plan = planBulkDelete(entries().filter((item) => ids.has(item.id)));
-      // An index in the same day changes meaning once an earlier delete shifts the rows up, so delete in order, not in parallel
-      for (const target of plan) {
-        // oxlint-disable-next-line no-await-in-loop
-        await typedInvoke("delete_scrawl_entry", {
-          date: target.date,
-          index: target.index,
-          raw: target.raw,
-        });
+      let deleted = 0;
+      try {
+        // An index in the same day changes meaning once an earlier delete shifts the rows up, so delete in order, not in parallel
+        for (const target of plan) {
+          // oxlint-disable-next-line no-await-in-loop
+          await typedInvoke("delete_scrawl_entry", {
+            date: target.date,
+            index: target.index,
+            raw: target.raw,
+          });
+          deleted += 1;
+        }
+      } catch {
+        // Stop at the first refusal. It says the file moved after the screen read it, and every
+        // later target was planned against those rows
       }
-      await Promise.all(
+      // Reread every day it touched, refused or not: a line already gone has to leave the screen,
+      // and the selection's indices no longer point where they did. A day that cannot be reread
+      // keeps its old rows, and core's `raw` check refuses to delete any of them again
+      await Promise.allSettled(
         [...new Set(plan.map((target) => target.date))].map((date) => reloadDay(date)),
       );
       exitSelecting();
-      shell.showToast(t().scrawl.deleted(plan.length));
+      shell.showToast(
+        deleted === plan.length
+          ? t().scrawl.deleted(deleted)
+          : t().scrawl.deleteFailed(plan.length - deleted),
+      );
     } finally {
       setDeleting(false);
     }
@@ -550,7 +586,7 @@ export default function Scrawl(): JSX.Element {
                 onError={() => shell.showToast(t().capture.saveFailed)}
                 onSearch={() => shell.openSearch()}
                 onNewNote={() => {
-                  void openNewNote("");
+                  void openNewNoteOrToast("");
                 }}
                 onJumpToDate={(trigger) => shell.togglePopover("calendar", trigger)}
               />

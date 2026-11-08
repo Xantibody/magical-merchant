@@ -86,9 +86,13 @@ const ja = {
     promoteNo: "やめる",
     unlink: (title: string) => `「${title}」との関係を解除`,
     unlinked: "Note との関係を解除しました",
+    unlinkFailed: "Note との関係を解除できませんでした",
+    relinkFailed: "Note との関係を戻せませんでした",
     emptyToday: "今日はまだ何も記録していません。",
     emptyHint: "上の線に書くと、時刻とともにここに並びます。",
     deleted: (count: number) => `${count}件のエントリを削除しました`,
+    /** The ones left, not the ones done: the reread list shows what went. */
+    deleteFailed: (count: number) => `${count}件のエントリを削除できませんでした`,
     digestTitle: "今週",
     digestClose: "今週は閉じる",
     digestSummary: (days: number, count: number) => `${days}日で${count}件`,
@@ -707,9 +711,13 @@ const en: Messages = {
     promoteNo: "Not now",
     unlink: (title: string) => `Unlink “${title}”`,
     unlinked: "Note unlinked from this day",
+    unlinkFailed: "Could not unlink the Note",
+    relinkFailed: "Could not link the Note back",
     emptyToday: "Nothing recorded today yet.",
     emptyHint: "Write on the line above and it lands here with the time.",
     deleted: (count: number) => `Deleted ${count} ${count === 1 ? "entry" : "entries"}`,
+    deleteFailed: (count: number) =>
+      `Could not delete ${count} ${count === 1 ? "entry" : "entries"}`,
     digestTitle: "This week",
     digestClose: "Hide until next week",
     digestSummary: (days: number, count: number) =>

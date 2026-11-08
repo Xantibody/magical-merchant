@@ -66,6 +66,14 @@ const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
     }
     days[TODAY]?.push(`- [22:00:00] ${String(text)}`);
   },
+  // The same guard as core: an index that no longer holds the line the screen read is refused
+  delete_scrawl_entry: ({ date, index, raw }) => {
+    const lines = days[String(date)] ?? [];
+    if (lines[Number(index)] !== raw) {
+      throw new Error(`Stale: scrawl entry ${String(index)}`);
+    }
+    lines.splice(Number(index), 1);
+  },
 };
 
 /**
@@ -292,6 +300,20 @@ describe("Scrawl › Note にする", () => {
     expect(body).toBe("朝ラン 5km #運動");
   });
 
+  it("stays on the journal and says so when the Note cannot be made", async () => {
+    HANDLERS.create_draft = () => {
+      throw new Error("disk full");
+    };
+    await openScrawl();
+
+    fireEvent.click(promoteButtonOf("朝ラン 5km"));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Note にする" }));
+
+    await waitFor(() => expect(shell.toast()?.message).toBe("Note を作れませんでした"));
+    expect(location.pathname).toBe("/");
+  });
+
   it("makes nothing and stays on the journal when declined", async () => {
     let made = false;
     HANDLERS.create_draft = () => {
@@ -331,6 +353,105 @@ describe("Scrawl › Note among the rows", () => {
 
     await waitFor(() => expect(location.pathname).toBe("/notes"));
     expect(location.search).toBe("?file=20260903_091200.md");
+  });
+});
+
+/** A Note promoted from this morning's run. Its chip sits under that record. */
+const PROMOTED = {
+  kind: "note",
+  path: "/data/notes/20260903_091200.md",
+  filename: "20260903_091200.md",
+  time: `${TODAY}T09:12:00+09:00`,
+  tags: [],
+  preview: "Weekly review",
+  origin: `${TODAY}T08:15:00`,
+};
+
+describe("Scrawl › Note との関係の解除", () => {
+  beforeEach(setupScrawl);
+  afterEach(() => {
+    delete HANDLERS.set_note_origin;
+    teardownScrawl();
+  });
+
+  it("keeps the chip and says so when the unlink is refused", async () => {
+    notes = [PROMOTED];
+    HANDLERS.set_note_origin = () => {
+      throw new Error("disk full");
+    };
+    await openScrawl();
+
+    fireEvent.click(await screen.findByRole("button", { name: "「Weekly review」との関係を解除" }));
+
+    await waitFor(() => expect(shell.toast()?.message).toBe("Note との関係を解除できませんでした"));
+    // Nothing offers an undo of an unlink that did not happen
+    expect(shell.toast()?.undo).toBeUndefined();
+    expect(screen.getByRole("button", { name: "Weekly review" })).toBeDefined();
+  });
+
+  // The undo is a write of its own. When it is refused the chip stays away, and only words say why
+  it("says so when the undo cannot link the Note back", async () => {
+    notes = [PROMOTED];
+    HANDLERS.set_note_origin = () => {
+      notes = [{ ...PROMOTED, origin: undefined }];
+    };
+    await openScrawl();
+    fireEvent.click(await screen.findByRole("button", { name: "「Weekly review」との関係を解除" }));
+    await waitFor(() => expect(shell.toast()?.undo).toBeInstanceOf(Function));
+    // The disk starts refusing between the unlink and its undo
+    HANDLERS.set_note_origin = () => {
+      throw new Error("disk full");
+    };
+
+    shell.toast()?.undo?.();
+
+    await waitFor(() => expect(shell.toast()?.message).toBe("Note との関係を戻せませんでした"));
+  });
+});
+
+/** Selects the records that read these words, then presses delete and its confirmation. */
+function deleteSelected(...words: string[]): void {
+  fireEvent.click(screen.getByRole("button", { name: "選択" }));
+  for (const word of words) {
+    fireEvent.click(screen.getByRole("button", { name: new RegExp(word, "u") }));
+  }
+  fireEvent.click(screen.getByRole("button", { name: `削除 (${words.length}件)` }));
+  fireEvent.click(screen.getByRole("button", { name: "削除する" }));
+}
+
+describe("Scrawl › まとめて削除", () => {
+  beforeEach(setupScrawl);
+  afterEach(teardownScrawl);
+
+  it("deletes the chosen records and says how many", async () => {
+    await openScrawl();
+
+    deleteSelected("朝ラン", "ベガ");
+
+    await waitFor(() => expect(shell.toast()?.message).toBe("2件のエントリを削除しました"));
+    expect(days[TODAY]).toStrictEqual([]);
+    expect(screen.queryByText("ベガのラッシュ止まらん")).toBeNull();
+    expect(screen.queryByRole("toolbar", { name: "まとめて削除" })).toBeNull();
+  });
+
+  /**
+   * The lines go one at a time, newest first. A line rewritten elsewhere after the screen read
+   * it is refused midway (Stale). The line already deleted has to leave the screen, the
+   * rewritten one shows as it is now, and the selection goes: its indices have shifted.
+   */
+  it("rereads the day, drops the selection and says how many were left when one is refused", async () => {
+    await openScrawl();
+    // Rewritten from another device after the screen read it. Index 0 goes second
+    days[TODAY] = ["- [08:15:00] 別の端末で書き換えた", "- [21:34:00] ベガのラッシュ止まらん #SF6"];
+
+    deleteSelected("朝ラン", "ベガ");
+
+    await waitFor(() => expect(shell.toast()?.message).toBe("1件のエントリを削除できませんでした"));
+    expect(days[TODAY]).toStrictEqual(["- [08:15:00] 別の端末で書き換えた"]);
+    await expect(screen.findByText("別の端末で書き換えた")).resolves.toBeDefined();
+    expect(screen.queryByText("ベガのラッシュ止まらん")).toBeNull();
+    expect(screen.queryByRole("toolbar", { name: "まとめて削除" })).toBeNull();
+    expect(screen.getByRole("button", { name: "選択" })).toBeDefined();
   });
 });
 
