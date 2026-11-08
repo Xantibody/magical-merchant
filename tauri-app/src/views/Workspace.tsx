@@ -600,6 +600,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
         revision,
       }),
     showBody,
+    showView: setNoteView,
     refreshList: () => refetchNotes(),
     setStatus: (status) => {
       // A failure must outlive the 2 seconds of "saved" still counting down from the last save

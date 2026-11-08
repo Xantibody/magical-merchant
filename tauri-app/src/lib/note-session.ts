@@ -34,7 +34,7 @@ import { isStaleSave } from "./commands";
 import { t } from "./i18n";
 import { refusalToast } from "./save-refusal";
 import type { RefusedScreen } from "./save-refusal";
-import { splitTitle } from "./note-title";
+import { joinTitle, splitTitle } from "./note-title";
 import type { NoteContent, NoteView } from "./note-view";
 
 /** Delay before the autosave fires. Writes once the typing stops. */
@@ -90,6 +90,8 @@ export interface NoteSessionDeps {
   write: (filename: string, body: string, revision: string) => Promise<string>;
   /** Puts the read body on screen. The only way to rebuild the editor. */
   showBody: (id: string, title: string, body: string, view: NoteView) => void;
+  /** Switches the mode alone, leaving the body and the editor where they are. */
+  showView: (view: NoteView) => void;
   /** Reloads the list. The title on a row is derived from the body's first line. */
   refreshList: () => unknown;
   setStatus: (status: SaveStatus) => void;
@@ -270,9 +272,20 @@ export function createNoteSession(deps: NoteSessionDeps): NoteSession {
         return false;
       }
       revisions.set(item.filename, settled.revision);
-      // Body and mode go out as a pair. Split, the wrong mode is drawn for a moment
       const titled = splitTitle(settled.body);
-      deps.showBody(item.id, titled.title, titled.body, settled.view);
+      // A window coming back or a sync that touched other notes rereads this one, and mostly
+      // finds what is already up. Rebuilt for the same body, the editor drops its scroll and
+      // selection and the map lays out again, so only the mode goes out: it lives in the
+      // frontmatter, where another device can switch it without touching the body. The test is
+      // the screen itself, not the revision: a revert that could not be written shows a body
+      // the revision does not describe. A forced reload rebuilds whatever it finds, because its
+      // caller wants the screen to start over from the disk
+      if (!force && deps.loaded() && joinTitle(titled.title, titled.body) === deps.body()) {
+        deps.showView(settled.view);
+      } else {
+        // Body and mode go out as a pair. Split, the wrong mode is drawn for a moment
+        deps.showBody(item.id, titled.title, titled.body, settled.view);
+      }
       drop();
       draft = undefined;
       return true;
