@@ -3,6 +3,7 @@ import { page, userEvent } from "vitest/browser";
 import type { Locator } from "vitest/browser";
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
+import { glyphs, loadGlyphs } from "../lib/glyphs";
 import MarkdownPreview from "./MarkdownPreview";
 
 const FLOWCHART = ["```mermaid", "flowchart TD", "  A[Start] --> B[End]", "```"].join("\n");
@@ -22,6 +23,14 @@ function openingTagOf(svg: string): string {
 /** Read the zoom percentage at the bottom right as a number */
 function percentOf(locator: Locator): number {
   return Number.parseInt(locator.element().textContent ?? "", 10);
+}
+
+/** A pause for seeing something not happen. `expect.element` waits until it does, so it is no use. */
+function sleep(ms: number): Promise<void> {
+  // oxlint-disable-next-line promise/avoid-new
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 describe("MarkdownPreview", () => {
@@ -127,6 +136,33 @@ describe("MarkdownPreview", () => {
     await userEvent.click(screen.locator('[data-action="zoom"]'));
 
     await expect.element(screen.locator(".mermaid-zoom-canvas svg")).toBeInTheDocument();
+  });
+
+  describe("glyph registry", () => {
+    const answer = [{ name: "236p", url: "data:image/svg+xml;base64,PHN2Zy8+" }];
+
+    beforeEach(async () => {
+      mockIPC((cmd) => (cmd === "read_glyphs" ? answer : null));
+      await loadGlyphs();
+    });
+
+    afterEach(() => clearMocks());
+
+    // The registry is re-read on every return to the window. Drawing every diagram again for a
+    // table that did not change costs a whole render and swaps the figure under the reader
+    it("keeps the drawn diagram when a re-read brings the same images", async () => {
+      const { baseElement } = render(() => (
+        <MarkdownPreview source={`:236p:\n\n${FLOWCHART}`} glyphs={glyphs()} />
+      ));
+      const screen = page.elementLocator(baseElement);
+      await expect.element(screen.locator(".mermaid-figure svg")).toBeInTheDocument();
+      const before = baseElement.querySelector(".mermaid-figure svg");
+
+      await loadGlyphs();
+      await sleep(500);
+
+      expect(baseElement.querySelector(".mermaid-figure svg")).toBe(before);
+    });
   });
 
   describe("export tools", () => {
