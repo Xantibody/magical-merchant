@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { HIT_ICONS, MODE_ICONS, MODE_LABELS, ROUTES, settingsPage } from "./routes";
+import { describe, it, expect, afterEach } from "vitest";
+import { setLocale } from "./i18n";
+import { HIT_ICONS, MODE_ICONS, MODE_LABELS, ROUTES, routeLabel, settingsPage } from "./routes";
 
 // The three surfaces are named in the order a record ripens: Scrawl (scribbled down) ->
 // Note (one document) -> Codex (a document that keeps being added to). They are proper
@@ -26,6 +27,36 @@ describe("surface names", () => {
     expect(HIT_ICONS.scrawl).toBe("scribble-loop");
     expect(HIT_ICONS.note).toBe("note-pencil");
     expect(HIT_ICONS.codex).toBe("book");
+  });
+});
+
+// The phone header names the page under it. On a Japanese screen it used to say "Settings"
+// and "Browse" in English over pages whose own headings were translated
+describe("routeLabel", () => {
+  afterEach(() => setLocale("ja"));
+
+  it("names every other page by the title it gives itself, in the reader's language", () => {
+    expect(routeLabel(ROUTES.SETTINGS)).toBe("設定");
+    expect(routeLabel(ROUTES.TEMPLATES)).toBe("テンプレート");
+    expect(routeLabel(ROUTES.BROWSE)).toBe("絞る");
+
+    setLocale("en");
+    expect(routeLabel(ROUTES.SETTINGS)).toBe("Settings");
+    expect(routeLabel(ROUTES.TEMPLATES)).toBe("Templates");
+    expect(routeLabel(ROUTES.BROWSE)).toBe("Filter");
+  });
+
+  it("keeps the three surfaces' names in either language", () => {
+    for (const lang of ["ja", "en"] as const) {
+      setLocale(lang);
+      expect(routeLabel(ROUTES.SCRAWL)).toBe("Scrawl");
+      expect(routeLabel(ROUTES.NOTES)).toBe("Note");
+      expect(routeLabel(ROUTES.CODEX)).toBe("Codex");
+    }
+  });
+
+  it("reads a path no route knows as Scrawl, where the app falls back to", () => {
+    expect(routeLabel("/nowhere")).toBe("Scrawl");
   });
 });
 
