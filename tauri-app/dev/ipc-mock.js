@@ -297,6 +297,21 @@ const noteTags = (note) => foldUnique([...(note.tags ?? []), ...bodyTags(note.bo
 const saveError = (kind, message) => Object.assign(new Error(message), { kind });
 
 /**
+ * The two body writes take `revision` as a required argument, and Tauri refuses a call
+ * without it before the command runs. The harness refuses it the same way, so a call
+ * that drops it shows up here instead of writing over the body unchecked.
+ * @param {string} command
+ * @param {unknown} revision
+ */
+const requireRevision = (command, revision) => {
+  if (typeof revision !== "string") {
+    throw new TypeError(
+      `invalid args \`revision\` for command \`${command}\`: command ${command} missing required key revision`,
+    );
+  }
+};
+
+/**
  * Codex の版 1 つ。core は `data/codex/<stem>/<id>.md` に置くが、ここでは本文ごと持つ。
  * @typedef {object} MockVersion
  * @property {string} id
@@ -1146,12 +1161,12 @@ const unifiedDiff = (from, to, fromName, toName) => {
     /** @param {{ filename: string, from: string }} args */
     diff_note_versions: ({ filename, from }) =>
       unifiedDiff(versionOf(filename, from).body, codexOf(filename).body, from, "draft"),
-    /** @param {{ filename: string, id: string, revision?: string | null }} args */
+    /** @param {{ filename: string, id: string, revision: string }} args */
     restore_note_version: ({ filename, id, revision }) => {
+      requireRevision("restore_note_version", revision);
       const note = codexOf(filename);
       const restored = versionOf(filename, id).body;
-      const expected = revision ?? null;
-      if (expected !== null && expected !== revisionOf(note.body)) {
+      if (revision !== revisionOf(note.body)) {
         throw saveError("stale", `Stale: ${filename} changed since it was read`);
       }
       // 戻す前の下書きを先に刻む。戻したことも戻せる
@@ -1187,16 +1202,16 @@ const unifiedDiff = (from, to, fromName, toName) => {
       );
       return null;
     },
-    /** @param {{ filename: string, body: string, revision?: string | null }} args */
+    /** @param {{ filename: string, body: string, revision: string }} args */
     update_draft: ({ filename, body, revision }) => {
+      requireRevision("update_draft", revision);
       const note = notes.get(filename);
       if (!note) {
         // core はノートを作り直さない。消えたノートへの保存は探す段で断られる
         throw saveError("missing", `Not found: ${filename}`);
       }
-      // core と同じ照合。読んでから誰かが書き換えていれば、その上に書かない
-      const expected = revision ?? null;
-      if (expected !== null && expected !== revisionOf(note.body)) {
+      // The same check core makes: if someone rewrote it after the read, nothing goes over it
+      if (revision !== revisionOf(note.body)) {
         throw saveError("stale", `Stale: ${filename} changed since it was read`);
       }
       note.body = body;

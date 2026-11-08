@@ -242,12 +242,13 @@ interface CommandMap {
     result: string;
   };
   /**
-   * `revision` is the fingerprint of the body `read_note` returned. When it is
-   * attached and the CLI or MCP rewrote the same note in between, the call is
-   * refused with `kind: "stale"`. Returns the revision of the body written.
+   * `revision` is the fingerprint of the body `read_note` returned. When the CLI or
+   * MCP rewrote the same note in between, the call is refused with `kind: "stale"`.
+   * It is required: without one core would check nothing and write over a body never
+   * read. Returns the revision of the body written.
    */
   update_draft: {
-    args: { filename: string; body: string; revision?: string | null } & ClientArgs;
+    args: { filename: string; body: string; revision: string } & ClientArgs;
     result: string;
   };
   list_notes: { args: void; result: Note[] };
@@ -277,7 +278,7 @@ interface CommandMap {
    * "before restore". `revision` is checked as in `update_draft`, and the new revision is returned.
    */
   restore_note_version: {
-    args: { filename: string; id: string; revision?: string | null } & ClientArgs;
+    args: { filename: string; id: string; revision: string } & ClientArgs;
     result: string;
   };
   /** Called only by the "undo" right after a commit. Deletes the version file and never touches the body. */

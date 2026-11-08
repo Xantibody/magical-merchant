@@ -173,9 +173,13 @@ impl From<magical_merchant_core::CoreError> for SaveError {
 
 /// `revision` is the fingerprint of the body `read_note` returned.
 ///
-/// Supply it and the write is refused as `stale` if the CLI or MCP rewrote the same
-/// note in between. What comes back is the revision of the body just written:
-/// supply that on the next save.
+/// The write is refused as `stale` if the CLI or MCP rewrote the same note in
+/// between. What comes back is the revision of the body just written: supply that
+/// on the next save.
+///
+/// It is required, unlike core's `expected`. Without one core checks nothing and the
+/// body lands on whatever the disk holds, which nobody on the screen has read; every
+/// body the app shows comes from `read_note`, so it always has one to send.
 ///
 /// It takes the ID (the filename) only and asks core for the directory. Writing an
 /// absolute path handed over from the `WebView` as it is would also allow writes
@@ -188,7 +192,7 @@ fn update_draft(
     filename: String,
     body: String,
     client: ClientContext,
-    revision: Option<String>,
+    revision: String,
 ) -> Result<String, SaveError> {
     let base_dir = app_base_dir(&handle).map_err(SaveError::other)?;
     let filename = parse_filename(&filename).map_err(SaveError::other)?;
@@ -198,8 +202,8 @@ fn update_draft(
     let (_, path) =
         magical_merchant_core::locate_note(&base_dir, &filename).map_err(SaveError::from)?;
     let context = device::get_context(client);
-    let expected = revision.map(Revision::from);
-    magical_merchant_core::update_note(&path, &body, &context, expected.as_ref())
+    let expected = Revision::from(revision);
+    magical_merchant_core::update_note(&path, &body, &context, Some(&expected))
         .map(|r| r.to_string())
         .map_err(SaveError::from)
 }
@@ -643,26 +647,26 @@ fn diff_note_versions(handle: AppHandle, filename: String, from: String) -> Resu
 }
 
 /// Makes a version's body the draft. `revision` means what it means in
-/// `update_draft`; a mismatch is `stale`. Core commits the draft as a version
-/// before writing over it.
+/// `update_draft`, and is required for the same reason; a mismatch is `stale`.
+/// Core commits the draft as a version before writing over it.
 #[tauri::command]
 fn restore_note_version(
     handle: AppHandle,
     filename: String,
     id: String,
     client: ClientContext,
-    revision: Option<String>,
+    revision: String,
 ) -> Result<String, SaveError> {
     let base_dir = app_base_dir(&handle).map_err(SaveError::other)?;
     let filename = parse_filename(&filename).map_err(SaveError::other)?;
     let context = device::get_context(client);
-    let expected = revision.map(Revision::from);
+    let expected = Revision::from(revision);
     magical_merchant_core::restore_note_version(
         &base_dir,
         &filename,
         &id,
         &context,
-        expected.as_ref(),
+        Some(&expected),
     )
     .map(|r| r.to_string())
     .map_err(SaveError::from)
