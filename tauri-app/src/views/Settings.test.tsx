@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, onTestFinished, vi } from "vitest";
 import { page } from "vitest/browser";
 import { render, screen, fireEvent, cleanup, waitFor, within } from "@solidjs/testing-library";
 import { mockIPC, mockWindows, clearMocks } from "@tauri-apps/api/mocks";
@@ -450,6 +450,21 @@ describe("Settings › the three pages", () => {
     expect(screen.getByText("Workers URL")).toBeDefined();
     expect(screen.getByText("未ログイン")).toBeDefined();
     expect(screen.getByRole("button", { name: "Google でログイン" })).toBeDefined();
+  });
+
+  // A page is rebuilt on every switch, but the sync state belongs to Settings. A URL typed
+  // and not saved yet is still there after a look at another page
+  it("keeps a Workers URL typed but not saved across a page switch", async () => {
+    const editable = vi.spyOn(HANDLERS, "is_sync_config_editable").mockReturnValue(true);
+    onTestFinished(() => editable.mockRestore());
+    await renderSettings("同期");
+    const typed = "https://mm.example.workers.dev";
+    fireEvent.input(await screen.findByLabelText("Workers URL"), { target: { value: typed } });
+
+    fireEvent.click(navRow("一般"));
+    fireEvent.click(navRow("同期"));
+
+    expect(screen.getByLabelText<HTMLInputElement>("Workers URL").value).toBe(typed);
   });
 
   // The sync popover's "open Settings" is about the sync page. Landing on the general page left the
