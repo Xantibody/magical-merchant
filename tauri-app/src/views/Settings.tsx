@@ -1,10 +1,9 @@
-import { createResource, createSignal, For, onMount, onCleanup, Show } from "solid-js";
+import { createResource, createSignal, For, Show } from "solid-js";
 import { A, useSearchParams } from "@solidjs/router";
 import Icon from "../components/Icon";
 import type { IconName } from "../components/Icon";
 import { typedInvoke } from "../lib/commands";
 import type { GlyphSummary } from "../lib/commands";
-import { EVENTS } from "../lib/events";
 import { enterFullscreen, readStartFullscreen, writeStartFullscreen } from "../lib/fullscreen";
 import {
   glyphFormatOf,
@@ -22,11 +21,9 @@ import { ROUTES, SETTINGS_PAGE_PARAM, SETTINGS_PAGES } from "../lib/routes";
 import type { SettingsPage } from "../lib/routes";
 import { useShell } from "../lib/shell";
 import { chooseTheme, theme, THEMES } from "../lib/theme";
-import { syncErrorKind } from "../lib/sync-status";
 import { Row, Seg, SwitchRow } from "./settings/Rows";
+import SyncPage, { createSyncSettings } from "./settings/SyncPage";
 import { getVersion } from "@tauri-apps/api/app";
-import { listen } from "@tauri-apps/api/event";
-import type { UnlistenFn } from "@tauri-apps/api/event";
 import "../styles/settings.css";
 import type { JSX } from "solid-js";
 
@@ -37,9 +34,6 @@ const PAGE_ICONS: Record<SettingsPage, IconName> = {
   records: "file-text",
   sync: "cloud-check",
 };
-
-/** The Workers URL field. An ID is needed to tie the row's label to it with `for`. */
-const WORKERS_URL_FIELD = "settings-workers-url";
 
 /** An image chosen but not yet registered. Saved once a name is decided. */
 interface PendingGlyph {
@@ -68,10 +62,6 @@ export default function Settings(): JSX.Element {
   /** The page shown. Mobile shows only the list until one is opened (`settings--page`). */
   const [page, setPage] = createSignal<SettingsPage>(requestedPage ?? "general");
   const [pageOpen, setPageOpen] = createSignal(requestedPage !== undefined);
-  const [workersUrl, setWorkersUrl] = createSignal("");
-  const [authenticated, setAuthenticated] = createSignal(false);
-  const [editable, setEditable] = createSignal(false);
-  const [saving, setSaving] = createSignal(false);
   const [message, setMessage] = createSignal("");
   const [localePreference, setLocalePreference] =
     createSignal<LocalePreference>(readStoredLocale());
@@ -102,6 +92,8 @@ export default function Settings(): JSX.Element {
     setMessage(text);
     setTimeout(() => setMessage(""), 2000);
   };
+
+  const sync = createSyncSettings({ setMessage, flash });
 
   const visibleGlyphs = (): GlyphSummary[] =>
     (glyphList() ?? []).filter((glyph) => !hiddenGlyphs().includes(glyph.name));
@@ -228,94 +220,6 @@ export default function Settings(): JSX.Element {
     // the fullscreen in use right now
     if (on) {
       void enterFullscreen();
-    }
-  };
-
-  const unlisteners: UnlistenFn[] = [];
-
-  onMount(async () => {
-    try {
-      const config = await typedInvoke("get_sync_config");
-      setWorkersUrl(config.workers_url);
-    } catch (error) {
-      // Opened with nothing configured, it starts blank. Only a corrupt config is
-      // reported: if it looked like a blank one, a save meant as a re-entry would overwrite it
-      if (syncErrorKind(error) === "configCorrupt") {
-        setMessage(t().sync.configCorrupt);
-      }
-    }
-
-    try {
-      setEditable(await typedInvoke("is_sync_config_editable"));
-    } catch {
-      setEditable(false);
-    }
-
-    try {
-      setAuthenticated(await typedInvoke("auth_status"));
-    } catch {
-      setAuthenticated(false);
-    }
-
-    // On Android the sign-in completes through a deep link, so the state is updated from events
-    unlisteners.push(
-      await listen(EVENTS.AUTH_SUCCESS, () => {
-        setAuthenticated(true);
-        flash(t().settings.signedInMessage);
-      }),
-      await listen<string>(EVENTS.AUTH_ERROR, (e) => {
-        setAuthenticated(false);
-        setMessage(t().settings.signInFailed(String(e.payload)));
-      }),
-    );
-  });
-
-  onCleanup(() => {
-    for (const unlisten of unlisteners) {
-      unlisten();
-    }
-  });
-
-  const save = async (): Promise<void> => {
-    setSaving(true);
-    setMessage("");
-    try {
-      // auto_sync belongs to the sync popover, so its current value is kept and written back
-      const current = await typedInvoke("get_sync_config");
-      await typedInvoke("save_sync_config", {
-        config: { ...current, workers_url: workersUrl() },
-      });
-      flash(t().common.saved);
-    } catch (error) {
-      setMessage(t().settings.saveFailed(String(error)));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const login = async (): Promise<void> => {
-    setMessage(t().settings.continueSignIn);
-    try {
-      // Desktop finishes the sign-in in an in-app window; the token is saved by the time the command returns.
-      // Android only opens the browser; completion is reported by the auth-success deep link
-      await typedInvoke("auth_login");
-      const status = await typedInvoke("auth_status");
-      setAuthenticated(status);
-      if (status) {
-        flash(t().settings.signedInMessage);
-      }
-    } catch (error) {
-      setMessage(t().settings.signInFailed(String(error)));
-    }
-  };
-
-  const logout = async (): Promise<void> => {
-    try {
-      await typedInvoke("auth_logout");
-      setAuthenticated(false);
-      flash(t().settings.signedOutMessage);
-    } catch (error) {
-      setMessage(t().settings.signOutFailed(String(error)));
     }
   };
 
@@ -524,85 +428,6 @@ export default function Settings(): JSX.Element {
     </>
   );
 
-  const sync = (): JSX.Element => (
-    <>
-      <Row
-        label={t().settings.workersUrl}
-        desc={t().settings.workersUrlDesc}
-        labelFor={editable() ? WORKERS_URL_FIELD : undefined}
-        tall
-      >
-        <Show
-          when={editable()}
-          fallback={
-            // Read-only where the config file fixes it
-            <p class="settings-readonly">{workersUrl() || t().settings.notSet}</p>
-          }
-        >
-          <input
-            id={WORKERS_URL_FIELD}
-            type="url"
-            class="settings-input settings-input--mono"
-            value={workersUrl()}
-            onInput={(e) => setWorkersUrl(e.currentTarget.value)}
-            placeholder="https://....workers.dev"
-          />
-          <div class="settings-actions">
-            <button
-              type="button"
-              class="button-primary"
-              onClick={() => {
-                void save();
-              }}
-              disabled={saving()}
-            >
-              {saving() ? t().common.saving : t().common.save}
-            </button>
-          </div>
-        </Show>
-      </Row>
-
-      <Row label={t().settings.account} desc={t().settings.accountDesc} tall>
-        <p class="settings-status">
-          <span class="settings-dot" classList={{ "settings-dot--on": authenticated() }} />
-          {authenticated() ? t().settings.signedIn : t().settings.notSignedIn}
-        </p>
-
-        <div class="settings-actions">
-          <Show
-            when={authenticated()}
-            fallback={
-              <button
-                type="button"
-                class="button-primary"
-                onClick={() => {
-                  void login();
-                }}
-                disabled={!workersUrl().trim()}
-              >
-                {t().settings.signInGoogle}
-              </button>
-            }
-          >
-            <button
-              type="button"
-              class="button-secondary"
-              onClick={() => {
-                void logout();
-              }}
-            >
-              {t().settings.signOut}
-            </button>
-          </Show>
-        </div>
-
-        <Show when={!authenticated() && !workersUrl().trim()}>
-          <p class="settings-hint">{t().settings.signInHint}</p>
-        </Show>
-      </Row>
-    </>
-  );
-
   const rowsOf = (id: SettingsPage): JSX.Element => {
     switch (id) {
       case "general": {
@@ -612,7 +437,7 @@ export default function Settings(): JSX.Element {
         return records();
       }
       case "sync": {
-        return sync();
+        return <SyncPage sync={sync} />;
       }
     }
   };
