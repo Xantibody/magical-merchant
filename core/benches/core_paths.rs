@@ -15,8 +15,8 @@ use std::hint::black_box;
 use magical_merchant_core::search::{HitKind, SearchFilter};
 use magical_merchant_core::sync::scan::scan_local_files;
 use magical_merchant_core::{
-    browse_all, find_backlinks, list_notes, list_scrawl_dates, read_scrawl, recent_records,
-    search_all, search_records,
+    browse_all, find_backlinks, list_notes, list_scrawl_dates, read_scrawl, read_scrawl_days,
+    recent_records, search_all, search_records,
 };
 
 fn search(c: &mut Criterion) {
@@ -103,7 +103,7 @@ fn listing(c: &mut Criterion) {
         b.iter(|| list_scrawl_dates(black_box(base)).unwrap());
     });
 
-    // What the Scrawl tab reads right after start.
+    // The newest 14 days one at a time, as the Scrawl tab read them before it had one call.
     let dates = fixture::recent_dates();
     c.bench_function("read_scrawl_recent_14", |b| {
         b.iter(|| {
@@ -111,6 +111,11 @@ fn listing(c: &mut Criterion) {
                 black_box(read_scrawl(black_box(base), *date).unwrap());
             }
         });
+    });
+
+    // What the Scrawl tab reads right after start: the date list and the newest 14 days.
+    c.bench_function("read_scrawl_days/14", |b| {
+        b.iter(|| read_scrawl_days(black_box(base), 14, &[]).unwrap());
     });
 }
 
