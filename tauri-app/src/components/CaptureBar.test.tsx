@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeAll } from "vitest";
 import { render, fireEvent, cleanup, screen } from "@solidjs/testing-library";
 import CaptureBar from "./CaptureBar";
 
@@ -279,5 +279,43 @@ describe("CaptureBar", () => {
     fireEvent.keyDown(textarea, { key: "Enter", keyCode: 229 });
 
     expect(onSend).not.toHaveBeenCalled();
+  });
+});
+
+const height = (el: HTMLElement): number => el.getBoundingClientRect().height;
+const lineHeight = (el: HTMLElement): number => Number.parseFloat(getComputedStyle(el).lineHeight);
+const lines = (count: number): string =>
+  Array.from({ length: count }, (_, i) => `line ${i}`).join("\n");
+
+/** The line grows with what is typed and scrolls past six lines. */
+describe("CaptureBar sizing", () => {
+  beforeAll(async () => {
+    await import("../index.css");
+  });
+
+  afterEach(() => {
+    cleanup();
+    document.body.innerHTML = "";
+    localStorage.clear();
+  });
+
+  it("grows with the lines typed and goes back to one after a send", async () => {
+    const { textarea } = renderCaptureBar();
+    const empty = height(textarea);
+
+    fireEvent.input(textarea, { target: { value: lines(3) } });
+    expect(height(textarea)).toBeCloseTo(empty + 2 * lineHeight(textarea), 0);
+
+    fireEvent.keyDown(textarea, { key: "Enter" });
+    await expect.poll(() => height(textarea)).toBeCloseTo(empty, 0);
+  });
+
+  it("stops at six lines and scrolls the rest", () => {
+    const { textarea } = renderCaptureBar();
+
+    fireEvent.input(textarea, { target: { value: lines(10) } });
+
+    expect(height(textarea)).toBeCloseTo(6 * lineHeight(textarea), 0);
+    expect(textarea.scrollHeight).toBeGreaterThan(textarea.clientHeight);
   });
 });
