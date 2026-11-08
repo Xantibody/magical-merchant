@@ -56,13 +56,33 @@ const HITS = [
   },
 ];
 
+/**
+ * `count` records, newest first, alternating Note and Scrawl so a kind chip still leaves more
+ * than a page. Titles are numbered so a row says where in the list it is.
+ */
+function manyHits(count: number): typeof HITS {
+  return Array.from({ length: count }, (_, i) => ({
+    kind: i % 2 === 0 ? "note" : "scrawl",
+    title: `記録 ${i}`,
+    snippet: `記録 ${i}`,
+    date: TODAY,
+    filename: i % 2 === 0 ? `20260101_${String(i).padStart(6, "0")}.md` : null,
+    index: i % 2 === 0 ? null : i,
+    tags: [],
+    match_start: null,
+    match_len: null,
+  }));
+}
+
 /** How many times `browse_all` was called. Checks that pressing chips does not raise it (#280). */
 let scans: number;
+/** What `browse_all` answers. The three records above unless a test needs a long list. */
+let served: typeof HITS;
 
 const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
   browse_all: () => {
     scans += 1;
-    return HITS;
+    return served;
   },
   read_scrawl_by_date: () => [
     '- [08:00:00] 起きた {"os":"macos"}',
@@ -88,21 +108,54 @@ function Root(props: { children?: JSX.Element }): JSX.Element {
   return <>{props.children}</>;
 }
 
-/** Puts the Browse screen at "/". The note destination only says that it was reached. */
-async function openBrowse(path?: string): Promise<void> {
+/**
+ * Puts the Browse screen at "/". The note destination only says that it was reached. The box
+ * bounds the height the way the app's main column does, so the list scrolls inside itself.
+ */
+function mountBrowse(): void {
   render(() => (
-    <ShellProvider>
-      <MemoryRouter root={Root}>
-        <Route path="/" component={Browse} />
-        <Route path="/notes" component={() => <p>NOTES</p>} />
-      </MemoryRouter>
-    </ShellProvider>
+    <div style={{ display: "flex", height: "600px" }}>
+      <ShellProvider>
+        <MemoryRouter root={Root}>
+          <Route path="/" component={Browse} />
+          <Route path="/notes" component={() => <p>NOTES</p>} />
+        </MemoryRouter>
+      </ShellProvider>
+    </div>
   ));
+}
+
+async function openBrowse(path?: string): Promise<void> {
+  mountBrowse();
   await screen.findByText("見取り図");
   if (path) {
     // A filter carried on the route is read by the effect on landing
     navigate(path);
   }
+}
+
+/** Opens the screen over `count` records and waits for the first rows. */
+async function openLong(count: number): Promise<void> {
+  served = manyHits(count);
+  mountBrowse();
+  await screen.findByText("記録 0", { selector: ".browse-row-title" });
+}
+
+/** Scrolls the list to `short` pixels above its end. */
+function scrollToEnd(short = 0): void {
+  const list = document.querySelector(".browse-list");
+  if (!list) {
+    throw new Error("list not mounted");
+  }
+  list.scrollTop = list.scrollHeight - list.clientHeight - short;
+}
+
+/** A frame's wait, for seeing something not happen. `waitFor` waits until it does, so it is no use. */
+function nextFrame(): Promise<number> {
+  // oxlint-disable-next-line promise/avoid-new
+  return new Promise((resolve) => {
+    requestAnimationFrame(resolve);
+  });
 }
 
 /** A list row. The title also appears in the right column, so only the row side is targeted. */
@@ -144,6 +197,7 @@ const activeTitles = (): string[] =>
 async function setup(): Promise<void> {
   await page.viewport(1280, 800);
   scans = 0;
+  served = HITS;
   mockWindows("main");
   mockIPC((cmd, args) => {
     const handler = HANDLERS[cmd];
@@ -341,6 +395,77 @@ describe("Browse › 選んだ 1 件", () => {
     await waitFor(() => {
       expect(location.search).toBe(`?day=${TODAY}`);
     });
+  });
+});
+
+describe("Browse › 長い一覧", () => {
+  beforeEach(setup);
+  afterEach(teardown);
+
+  // The default period is "all", so a tree of thousands of records would otherwise build
+  // thousands of rows on opening, most of them never scrolled to
+  it("draws the first page of a long list, and counts all of it", async () => {
+    await openLong(450);
+
+    expect(rowTitles()).toHaveLength(200);
+    expect(rowTitles().at(-1)).toBe("記録 199");
+    expect(screen.getByText("450件")).toBeDefined();
+  });
+
+  it("draws the next page as the end of the list comes into view", async () => {
+    await openLong(450);
+
+    scrollToEnd();
+
+    await waitFor(() => {
+      expect(rowTitles()).toHaveLength(400);
+    });
+    expect(rowTitles().at(-1)).toBe("記録 399");
+  });
+
+  // Drawn only once the end is in view, a flick would hit the bottom and stop there first
+  it("has the next page drawn before the scroll reaches the end", async () => {
+    await openLong(450);
+
+    scrollToEnd(300);
+
+    await waitFor(() => {
+      expect(rowTitles()).toHaveLength(400);
+    });
+  });
+
+  it("stops at the last record", async () => {
+    await openLong(450);
+
+    scrollToEnd();
+    await waitFor(() => {
+      expect(rowTitles()).toHaveLength(400);
+    });
+    scrollToEnd();
+
+    await waitFor(() => {
+      expect(rowTitles()).toHaveLength(450);
+    });
+    expect(document.querySelector(".browse-more")).toBeNull();
+  });
+
+  it("starts again from the first page when the filter changes", async () => {
+    await openLong(450);
+    scrollToEnd();
+    await waitFor(() => {
+      expect(rowTitles()).toHaveLength(400);
+    });
+
+    // 225 Notes: past one page, short of what was already drawn
+    fireEvent.click(chip("種類", "Note"));
+    // Long enough for the end marker to report, had the list stayed scrolled down
+    await nextFrame();
+    await nextFrame();
+
+    expect(rowTitles()).toHaveLength(200);
+    expect(rowTitles()[0]).toBe("記録 0");
+    // The right column falls back to the first record, so the list shows it too
+    expect(document.querySelector(".browse-list")?.scrollTop).toBe(0);
   });
 });
 

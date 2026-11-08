@@ -51,6 +51,12 @@ function periodLabel(period: BrowsePeriod): string {
   return period === "week" ? t().browse.thisWeek : t().common.all;
 }
 
+/**
+ * Rows the list draws at a time. Two hundred fill even a tall window many times over; the
+ * next two hundred come as the end of the list nears.
+ */
+const PAGE_ROWS = 200;
+
 /** One record for the right column. Body and meta are read after selecting, so kept apart from the row. */
 interface HitDetail {
   /** The body with the title line dropped. A Scrawl line is itself the title, so empty. */
@@ -130,13 +136,55 @@ export default function Browse(): JSX.Element {
   const kinds = createMemo(() => kindFacets(hits(), filter(), today));
   const tags = createMemo(() => tagFacets(hits(), filter(), today));
 
+  /**
+   * How many of the matches the list draws. The default period is "all", so drawing every
+   * match would build thousands of rows on opening, most of them never scrolled to.
+   */
+  const [drawn, setDrawn] = createSignal(PAGE_ROWS);
+  const rows = createMemo(() => shown().slice(0, drawn()));
+
   /** The selected record. If a new filter removes it, fall back to the first: no empty column. */
   const [selectedId, setSelectedId] = createSignal<string | null>(null);
 
-  /** Every change of the filter goes through here, so what a new list starts from is said once. */
+  let list: HTMLDivElement | undefined;
+  let endWatch: IntersectionObserver | undefined;
+  onCleanup(() => endWatch?.disconnect());
+
+  /**
+   * Every change of the filter goes through here, so what a new list starts from is said once:
+   * its first page, from the top. The right column falls back to the first record, and a list
+   * left scrolled down would neither show that row nor stay one page long.
+   */
   const narrow = (next: BrowseFilter): void => {
     shell.setBrowseFilter(next);
     setSelectedId(null);
+    setDrawn(PAGE_ROWS);
+    list?.scrollTo({ top: 0 });
+  };
+
+  /**
+   * Watches the marker after the last drawn row and draws another page when it nears view.
+   * The root is the list, not the window, so the margin counts in the list's own scroll: one
+   * list height ahead, the next page is there before the scroll can hit the end and stop.
+   */
+  const watchEnd = (end: HTMLElement): void => {
+    endWatch ??= new IntersectionObserver(
+      (entries, observer) => {
+        const seen = entries.find((entry) => entry.isIntersecting);
+        if (!seen) {
+          return;
+        }
+        setDrawn((count) => count + PAGE_ROWS);
+        // An observer speaks only when the answer changes. A scroll that reaches the new end
+        // before the next reading leaves it "in view" throughout, and nothing more would be
+        // drawn; observing afresh asks for a reading whatever the last one was
+        observer.unobserve(seen.target);
+        observer.observe(seen.target);
+      },
+      { root: list, rootMargin: "0px 0px 100% 0px" },
+    );
+    endWatch.disconnect();
+    endWatch.observe(end);
   };
 
   // Landing from a Scrawl chip or from Cmd+K. The wanted filter rides on the route (`?kind=&tag=`)
@@ -287,13 +335,13 @@ export default function Browse(): JSX.Element {
       </aside>
 
       <div class="browse-results">
-        <div class="browse-list">
+        <div class="browse-list" ref={list}>
           <div class="browse-list-head">
             <span>{t().browse.count(shown().length)}</span>
             <span class="browse-list-order">{t().browse.newestFirst}</span>
           </div>
 
-          <For each={shown()}>
+          <For each={rows()}>
             {(hit) => (
               <button
                 type="button"
@@ -311,6 +359,10 @@ export default function Browse(): JSX.Element {
               </button>
             )}
           </For>
+
+          <Show when={rows().length < shown().length}>
+            <div class="browse-more" ref={watchEnd} aria-hidden="true" />
+          </Show>
 
           {/* Do not say "nothing" until the read has finished */}
           <Show when={!all.loading && shown().length === 0}>
