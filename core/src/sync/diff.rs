@@ -72,6 +72,10 @@ pub fn compute(
                 let remote_changed = remote.last_modified != record.last_synced_modified;
 
                 match (local_changed, remote_changed) {
+                    // Both moved, but to the same content: nothing to transfer, and
+                    // `save_local_state` adopts the server's record. Same rule as the
+                    // no-state arm below
+                    (true, true) if local.content_hash == remote.content_hash => {}
                     (true, true) => actions.push(SyncAction::Conflict {
                         key: key.to_string(),
                     }),
@@ -338,6 +342,27 @@ mod tests {
                 key: "notes/g.md".into()
             }]
         );
+    }
+
+    /// The round that sent this content reached the Worker, but its reply never came
+    /// back (a dropped connection, the app killed on leave), so the state still holds
+    /// the old record. Both sides now differ from it, yet they agree with each other:
+    /// a conflict copy here would be an identical duplicate on every device
+    #[test]
+    fn both_modified_to_the_same_content_needs_no_transfer() {
+        let local_files = vec![local("notes/g.md", "same_hash")];
+        let remote_files = vec![remote_hashed(
+            "notes/g.md",
+            "2026-04-22T14:00:00Z",
+            "same_hash",
+        )];
+        let mut state = SyncState::default();
+        state.files.insert(
+            "notes/g.md".to_string(),
+            record("old_hash", "2026-04-22T10:00:00Z"),
+        );
+        let actions = compute(&local_files, &remote_files, &state);
+        assert!(actions.is_empty());
     }
 
     #[test]
