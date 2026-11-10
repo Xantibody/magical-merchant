@@ -2,6 +2,7 @@ import {
   createEffect,
   createMemo,
   createResource,
+  createSelector,
   createSignal,
   onCleanup,
   For,
@@ -40,7 +41,7 @@ import {
   toggleKind,
   toggleTag,
 } from "../lib/browse";
-import type { BrowsePeriod } from "../lib/browse";
+import type { BrowseFilter, BrowsePeriod } from "../lib/browse";
 import "../styles/browse.css";
 
 /** Text of a period chip. Three words with no count in them, so it only looks up the table. */
@@ -50,6 +51,16 @@ function periodLabel(period: BrowsePeriod): string {
   }
   return period === "week" ? t().browse.thisWeek : t().common.all;
 }
+
+/**
+ * Rows the list draws at a time. Two hundred fill even a tall window many times over; the
+ * next two hundred come as the end of the list nears.
+ *
+ * AIDEV-NOTE: pages, not a virtual list. Recycling row elements needs rows of one height or a
+ * new dependency, and two hundred at a time is already enough. The cost: the scrollbar spans
+ * only the rows drawn so far, so dragging it to the bottom reaches the next page, not the end
+ */
+const PAGE_ROWS = 200;
 
 /** One record for the right column. Body and meta are read after selecting, so kept apart from the row. */
 interface HitDetail {
@@ -130,8 +141,56 @@ export default function Browse(): JSX.Element {
   const kinds = createMemo(() => kindFacets(hits(), filter(), today));
   const tags = createMemo(() => tagFacets(hits(), filter(), today));
 
+  /**
+   * How many of the matches the list draws. The default period is "all", so drawing every
+   * match would build thousands of rows on opening, most of them never scrolled to.
+   */
+  const [drawn, setDrawn] = createSignal(PAGE_ROWS);
+  const rows = createMemo(() => shown().slice(0, drawn()));
+
   /** The selected record. If a new filter removes it, fall back to the first: no empty column. */
   const [selectedId, setSelectedId] = createSignal<string | null>(null);
+
+  let list: HTMLDivElement | undefined;
+  let endWatch: IntersectionObserver | undefined;
+  onCleanup(() => endWatch?.disconnect());
+
+  /**
+   * Every change of the filter goes through here, so what a new list starts from is said once:
+   * its first page, from the top. The right column falls back to the first record, and a list
+   * left scrolled down would neither show that row nor stay one page long.
+   */
+  const narrow = (next: BrowseFilter): void => {
+    shell.setBrowseFilter(next);
+    setSelectedId(null);
+    setDrawn(PAGE_ROWS);
+    list?.scrollTo({ top: 0 });
+  };
+
+  /**
+   * Watches the marker after the last drawn row and draws another page when it nears view.
+   * The root is the list, not the window, so the margin counts in the list's own scroll: one
+   * list height ahead, the next page is there before the scroll can hit the end and stop.
+   */
+  const watchEnd = (end: HTMLElement): void => {
+    endWatch ??= new IntersectionObserver(
+      (entries, observer) => {
+        const seen = entries.find((entry) => entry.isIntersecting);
+        if (!seen) {
+          return;
+        }
+        setDrawn((count) => count + PAGE_ROWS);
+        // An observer speaks only when the answer changes. A scroll that reaches the new end
+        // before the next reading leaves it "in view" throughout, and nothing more would be
+        // drawn; observing afresh asks for a reading whatever the last one was
+        observer.unobserve(seen.target);
+        observer.observe(seen.target);
+      },
+      { root: list, rootMargin: "0px 0px 100% 0px" },
+    );
+    endWatch.disconnect();
+    endWatch.observe(end);
+  };
 
   // Landing from a Scrawl chip or from Cmd+K. The wanted filter rides on the route (`?kind=&tag=`)
   createEffect(() => {
@@ -139,8 +198,7 @@ export default function Browse(): JSX.Element {
     if (!seed) {
       return;
     }
-    shell.setBrowseFilter(seed);
-    setSelectedId(null);
+    narrow(seed);
     setSearchParams({ kind: undefined, tag: undefined }, { replace: true });
   });
   const selected = createMemo<SearchHit | null>(() => {
@@ -176,6 +234,12 @@ export default function Browse(): JSX.Element {
   wideEnough.addEventListener("change", onWidthChange);
   onCleanup(() => wideEnough.removeEventListener("change", onWidthChange));
 
+  /**
+   * Whether a row is the one shown on the right. Each row reading `selected()` itself would
+   * have every row re-run on each choice; through a selector only the two rows that changed do.
+   */
+  const isShown = createSelector(() => (twoPane() ? selected() : null));
+
   /** Opens what was found. A note is pointed at by the route as that one note, a Scrawl entry as its day. */
   const open = (hit: SearchHit): void => {
     if (hit.kind !== "scrawl" && hit.filename) {
@@ -197,16 +261,13 @@ export default function Browse(): JSX.Element {
   };
 
   const chooseKind = (kind: HitKind): void => {
-    shell.setBrowseFilter({ ...filter(), kinds: toggleKind(filter().kinds, kind) });
-    setSelectedId(null);
+    narrow({ ...filter(), kinds: toggleKind(filter().kinds, kind) });
   };
   const chooseTag = (tag: string): void => {
-    shell.setBrowseFilter({ ...filter(), tags: toggleTag(filter().tags, tag) });
-    setSelectedId(null);
+    narrow({ ...filter(), tags: toggleTag(filter().tags, tag) });
   };
   const choosePeriod = (period: BrowsePeriod): void => {
-    shell.setBrowseFilter({ ...filter(), period });
-    setSelectedId(null);
+    narrow({ ...filter(), period });
   };
 
   return (
@@ -272,32 +333,25 @@ export default function Browse(): JSX.Element {
         </div>
 
         <Show when={hasFilter(filter())}>
-          <button
-            type="button"
-            class="browse-clear"
-            onClick={() => {
-              shell.setBrowseFilter(NO_FILTER);
-              setSelectedId(null);
-            }}
-          >
+          <button type="button" class="browse-clear" onClick={() => narrow(NO_FILTER)}>
             {t().browse.clear}
           </button>
         </Show>
       </aside>
 
       <div class="browse-results">
-        <div class="browse-list">
+        <div class="browse-list" ref={list}>
           <div class="browse-list-head">
             <span>{t().browse.count(shown().length)}</span>
             <span class="browse-list-order">{t().browse.newestFirst}</span>
           </div>
 
-          <For each={shown()}>
+          <For each={rows()}>
             {(hit) => (
               <button
                 type="button"
                 class="browse-row"
-                classList={{ "browse-row--active": twoPane() && selected() === hit }}
+                classList={{ "browse-row--active": isShown(hit) }}
                 onClick={() => (twoPane() ? setSelectedId(hitId(hit)) : open(hit))}
               >
                 <KindDot kind={hit.kind} />
@@ -312,6 +366,10 @@ export default function Browse(): JSX.Element {
               </button>
             )}
           </For>
+
+          <Show when={rows().length < shown().length}>
+            <div class="browse-more" ref={watchEnd} aria-hidden="true" />
+          </Show>
 
           {/* Do not say "nothing" until the read has finished */}
           <Show when={!all.loading && shown().length === 0}>
