@@ -54,6 +54,10 @@ function periodLabel(period: BrowsePeriod): string {
 /**
  * Rows the list draws at a time. Two hundred fill even a tall window many times over; the
  * next two hundred come as the end of the list nears.
+ *
+ * AIDEV-NOTE: pages, not a virtual list. Recycling row elements needs rows of one height or a
+ * new dependency, and two hundred at a time is already enough. The cost: the scrollbar spans
+ * only the rows drawn so far, so dragging it to the bottom reaches the next page, not the end
  */
 const PAGE_ROWS = 200;
 
