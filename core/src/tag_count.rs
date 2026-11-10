@@ -333,7 +333,11 @@ mod tests {
     #[test]
     fn a_day_without_tags_adds_nothing() {
         let tmp = TempDir::new().unwrap();
-        day_file(&tmp, "2026-01-15", "- [09:00:00] 走った {\"battery\":50}\n");
+        day_file(
+            &tmp,
+            "2026-01-15",
+            "- [09:00:00] 走った {\"place\":\"#gym\"}\n",
+        );
         day_file(&tmp, "2026-01-16", "- [09:00:00] C# を読む\n");
 
         assert_eq!(count_tags(tmp.path()).unwrap(), Vec::new());
