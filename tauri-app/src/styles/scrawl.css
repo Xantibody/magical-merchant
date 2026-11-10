@@ -231,6 +231,14 @@
   opacity: 1;
 }
 
+/* Without hover nothing ever shows it, yet opacity alone leaves it pressable: a tap near an
+   entry's top right opened the promote dialog. The long press is the way in there */
+@media (hover: none) {
+  .entry-actions {
+    display: none;
+  }
+}
+
 .entry-action {
   color: var(--app-text-faint);
   padding: 5px;

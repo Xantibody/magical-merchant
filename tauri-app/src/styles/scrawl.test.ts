@@ -197,3 +197,65 @@ describe("scrawl chrome", () => {
     expect(style.borderTopWidth).toBe("0px");
   });
 });
+
+/** One entry with its hidden promote button, as ScrawlEntry draws it. */
+function mountEntry(): void {
+  document.body.innerHTML = `
+    <article class="entry">
+      <div class="entry-body">
+        <p class="entry-text">ベガのラッシュ止まらん</p>
+        <div class="entry-actions">
+          <button class="icon-button entry-action" type="button">Note にする</button>
+        </div>
+      </div>
+    </article>`;
+}
+
+/**
+ * The `display` the stylesheets give `target` inside `@media <condition>`, read off the CSSOM.
+ *
+ * AIDEV-NOTE: not an emulated phone. On the CI's Linux Chromium, turning
+ * Emulation.setTouchEmulationEnabled off left `(hover: none)` matching, so every later test
+ * in the page ran without hover; Emulation.setEmulatedMedia has no `hover` feature at all.
+ */
+function displayUnder(condition: string, target: Element): string | undefined {
+  const rules: CSSRule[] = [];
+  for (const sheet of document.styleSheets) {
+    for (const rule of sheet.cssRules) {
+      if (rule instanceof CSSMediaRule && rule.conditionText === condition) {
+        rules.push(...rule.cssRules);
+      }
+    }
+  }
+  const own = rules.find(
+    (rule): rule is CSSStyleRule =>
+      rule instanceof CSSStyleRule && target.matches(rule.selectorText),
+  );
+  return own?.style.display;
+}
+
+describe("the promote button on an entry", () => {
+  beforeAll(async () => {
+    await import("../index.css");
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  // Hidden by opacity alone it still took a tap at the entry's top right and opened the
+  // promote dialog. A long press is the way in on touch
+  it("is not there to tap on a screen without hover", () => {
+    mountEntry();
+
+    expect(displayUnder("(hover: none)", element(".entry-actions"))).toBe("none");
+  });
+
+  // The way in on desktop, shown on hover and on keyboard focus
+  it("stays in the layout where there is hover", () => {
+    mountEntry();
+
+    expect(matchMedia("(hover: hover)").matches).toBe(true);
+    expect(getComputedStyle(element(".entry-actions")).display).not.toBe("none");
+  });
+});
