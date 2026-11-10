@@ -28,7 +28,7 @@ import TagEditor from "../components/TagEditor";
 import { createCodexHistory } from "../lib/codex-history";
 import { isStaleSave, typedInvoke } from "../lib/commands";
 import { resolveEditedTime } from "../lib/note-meta";
-import { countTagLists, parseTags } from "../lib/tags";
+import { parseTags } from "../lib/tags";
 import { refusedForGood } from "../lib/save-refusal";
 import { createNoteBuffer } from "../lib/note-buffer";
 import { isWriteKey, noteKeys } from "../lib/note-keys";
@@ -375,15 +375,15 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   });
 
   /**
-   * Tags used anywhere, most used first: the suggestions under the tag input. Counted from the
-   * same records Browse reads, and only once the tags are pressed.
+   * Tags used anywhere, most used first: the suggestions under the tag input. Counted in core
+   * over the same records Browse reads, and only once the tags are pressed.
    */
   const [usedTags] = createResource(
     () => tagEditing() || undefined,
     async () => {
       try {
-        const hits = await typedInvoke("browse_all");
-        return countTagLists(hits.map((hit) => hit.tags));
+        const used = await typedInvoke("count_tags");
+        return used.map((usage) => ({ tag: usage.tag, count: usage.notes + usage.entries }));
       } catch {
         // Without suggestions a tag can still be typed in full
         return [];

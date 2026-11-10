@@ -555,36 +555,17 @@ impl McpServer {
         description = "List every #tag used across notes and scrawl entries with usage counts, most-used first"
     )]
     fn list_tags(&self) -> Result<Json<TagsOutput>, String> {
-        use magical_merchant_core::utils::tags;
-
-        // The key is the folded form; the name shown is the first spelling seen. If
-        // `#CognitiveBias` and `#cognitivebias` split into two rows, there is no telling
-        // which one to type. `notes`/`entries` are how many notes and how many entries
-        // carry the tag. One record never claims the same tag twice because `tags::merge`
-        // and `tags::parse` fold before returning; nothing is folded again per record here
-        let mut counts: BTreeMap<String, (String, usize, usize)> = BTreeMap::new();
-        for note in magical_merchant_core::list_notes(&self.data_dir).map_err(err)? {
-            for tag in note.tags {
-                counts.entry(tags::fold_tag(&tag)).or_insert((tag, 0, 0)).1 += 1;
-            }
-        }
-        for date in magical_merchant_core::list_scrawl_dates(&self.data_dir).map_err(err)? {
-            for line in magical_merchant_core::read_scrawl(&self.data_dir, date).map_err(err)? {
-                let entry = parse_scrawl_entry(&line);
-                for tag in tags::parse(&entry.text) {
-                    counts.entry(tags::fold_tag(&tag)).or_insert((tag, 0, 0)).2 += 1;
-                }
-            }
-        }
-        let mut tags: Vec<TagInfo> = counts
-            .into_values()
-            .map(|(tag, notes, entries)| TagInfo {
-                tag,
-                notes,
-                entries,
+        // The same count as the app's tag suggestions: spellings that differ only in case
+        // are one row, named by the newest record carrying it
+        let tags = magical_merchant_core::count_tags(&self.data_dir)
+            .map_err(err)?
+            .into_iter()
+            .map(|usage| TagInfo {
+                tag: usage.tag,
+                notes: usage.notes,
+                entries: usage.entries,
             })
             .collect();
-        tags.sort_by_key(|t| std::cmp::Reverse(t.notes + t.entries));
         Ok(Json(TagsOutput { tags }))
     }
 
@@ -1241,9 +1222,34 @@ mod tests {
         let out = server(tmp.path()).list_tags().unwrap().0;
 
         assert_eq!(out.tags.len(), 1);
-        // Named by the first spelling seen
+        // Named by the newest record carrying it
         assert_eq!(out.tags[0].tag, "CognitiveBias");
         assert_eq!((out.tags[0].notes, out.tags[0].entries), (1, 1));
+    }
+
+    /// A tag spelled two ways is named as the app's tag suggestions name it: by the newest
+    /// record, an entry as much as a note. An agent typing the name it was given then writes
+    /// what the writer writes now.
+    #[test]
+    fn a_tag_is_named_by_the_newest_record_even_when_it_is_an_entry() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path().join("data/notes");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(
+            dir.join("20260115_090000.md"),
+            "---\ntime: 2026-01-15T09:00:00+09:00\n---\n\n歪みを疑う #CognitiveBias\n",
+        )
+        .unwrap();
+        write_day(
+            tmp.path(),
+            "2026-02-01",
+            &[(9, "また #cognitivebias", &Context::default())],
+        );
+
+        let out = server(tmp.path()).list_tags().unwrap().0;
+
+        assert_eq!(out.tags.len(), 1);
+        assert_eq!(out.tags[0].tag, "cognitivebias");
     }
 
     /// `notes` is how many notes carry the tag.

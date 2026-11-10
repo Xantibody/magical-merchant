@@ -186,6 +186,18 @@ export interface SearchHit {
   match_len?: number | null;
 }
 
+/**
+ * One tag and how many records carry it. Spellings that differ only in case are one tag,
+ * named by the newest record carrying it.
+ */
+export interface TagUsage {
+  tag: string;
+  /** Notes and Codexes carrying it. */
+  notes: number;
+  /** Scrawl entries carrying it. */
+  entries: number;
+}
+
 /** What core narrows by before it caps the results. Both ends of the period are included. */
 export interface SearchFilter {
   kind: HitKind | null;
@@ -237,6 +249,8 @@ interface CommandMap {
   browse_all: { args: void; result: SearchHit[] };
   /** The head of `browse_all`: the newest `limit` records, without carrying the rest over. */
   recent_records: { args: { limit: number }; result: SearchHit[] };
+  /** Every tag in use, most used first. Read over what `browse_all` reads, counted in core. */
+  count_tags: { args: void; result: TagUsage[] };
   /** Records that point at this note with `[[ID]]`. Derived by a scan every time the note is opened. */
   find_backlinks: { args: { filename: string }; result: SearchHit[] };
   /**

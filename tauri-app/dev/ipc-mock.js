@@ -1026,6 +1026,30 @@ const unifiedDiff = (from, to, fromName, toName) => {
     },
     /** @param {{ limit: number }} args */
     recent_records: ({ limit }) => commands.browse_all().slice(0, limit),
+    // Core's `count_tags`: one row per folded tag, named by the first spelling met in the
+    // newest-first list, most used first and a tie by the folded name
+    count_tags: () => {
+      /** @type {Map<string, { tag: string, notes: number, entries: number }>} */
+      const rows = new Map();
+      // tsc loses the Scrawl rows `browse_all` pushes inside a callback, so the shape is said here
+      const hits = /** @type {{ kind: string, tags: string[] }[]} */ (commands.browse_all());
+      for (const hit of hits) {
+        for (const tag of hit.tags) {
+          const row = rows.get(foldTag(tag)) ?? { tag, notes: 0, entries: 0 };
+          if (hit.kind === "scrawl") {
+            row.entries += 1;
+          } else {
+            row.notes += 1;
+          }
+          rows.set(foldTag(tag), row);
+        }
+      }
+      return [...rows]
+        .toSorted(
+          ([a, x], [b, y]) => y.notes + y.entries - (x.notes + x.entries) || (a < b ? -1 : 1),
+        )
+        .map(([, row]) => row);
+    },
     list_notes: () => noteList(),
     /** @param {{ filename: string }} args */
     find_backlinks: ({ filename }) => {

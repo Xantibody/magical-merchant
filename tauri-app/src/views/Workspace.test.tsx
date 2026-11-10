@@ -6,6 +6,7 @@ import { MemoryRouter, Route, useNavigate } from "@solidjs/router";
 import { createEffect, onCleanup } from "solid-js";
 import type { JSX } from "solid-js";
 import type { Editor } from "@milkdown/kit/core";
+import type { TagUsage } from "../lib/commands";
 import { ShellProvider, useShell } from "../lib/shell";
 import type { Shell } from "../lib/shell";
 import { shortcutLabel } from "../lib/shortcuts";
@@ -83,8 +84,8 @@ let disk: Map<string, string>;
  * `bodyTags` are the body's `#tag`s: the list merges them in, the frontmatter does not have them.
  */
 let meta: Map<string, { tags?: string[]; bodyTags?: string[]; view?: string }>;
-/** The tags of every record, one list per record. What `browse_all` hands the suggestions. */
-let usedTagLists: string[][];
+/** Every tag in use, as core counts it. What the suggestions read. */
+let usedTags: TagUsage[];
 /** Which directory it lives in. A note with no entry is a Note. */
 let kinds: Map<string, "note" | "codex">;
 /** Codex versions, newest first. Each carries its body, and the diff is made from these. */
@@ -179,8 +180,8 @@ const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
     const name = String(filename);
     meta.set(name, { ...meta.get(name), tags: tags as string[] });
   },
-  // Every record's tags, which the tag suggestions count. Only the tags matter here
-  browse_all: () => usedTagLists.map((tags) => ({ tags })),
+  // The tag suggestions read core's count as it comes
+  count_tags: () => usedTags,
   create_draft: () => {
     disk.set(FILE_B, "");
     return `/data/notes/${FILE_B}`;
@@ -540,7 +541,7 @@ async function setupWorkspace(): Promise<void> {
   await page.viewport(1280, 800);
   disk = new Map([[FILE_A, BODY_A]]);
   meta = new Map();
-  usedTagLists = [];
+  usedTags = [];
   kinds = new Map();
   versions = new Map();
   brokenMeta = new Set();
@@ -2403,11 +2404,16 @@ describe("Workspace › タグ", () => {
   beforeEach(setupWorkspace);
   afterEach(teardownWorkspace);
 
-  // The suggestions come from every record, a tag that starts with what was typed comes first,
-  // and the created time is written back unmoved
+  // The suggestions count notes and entries together, a tag that starts with what was typed
+  // comes first, and the created time is written back unmoved
   it("adds a used tag from the panel's suggestions", async () => {
     meta.set(FILE_A, { tags: ["work"] });
-    usedTagLists = [["homework"], ["idea"], ["idea", "work"], ["ideal"]];
+    usedTags = [
+      { tag: "idea", notes: 1, entries: 1 },
+      { tag: "homework", notes: 1, entries: 0 },
+      { tag: "ideal", notes: 0, entries: 1 },
+      { tag: "work", notes: 1, entries: 0 },
+    ];
     await openNoteA();
 
     const input = await startTagEditing();

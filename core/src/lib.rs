@@ -6,6 +6,7 @@ mod glyph;
 mod note;
 mod scrawl;
 pub mod sync;
+mod tag_count;
 mod template;
 pub mod utils;
 
@@ -36,6 +37,7 @@ pub use search::{
     HitKind, SearchFilter, SearchHit, browse_all, find_backlinks, recent_records, search_all,
     search_records,
 };
+pub use tag_count::{TagUsage, count_tags};
 pub use template::{
     CreatedNote, TemplateDetail, TemplateSummary, VarLocale, create_note_from_template,
     delete_template, discard_template_draft, list_template_drafts, list_templates, read_template,
