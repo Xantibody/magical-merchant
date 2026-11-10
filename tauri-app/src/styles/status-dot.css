@@ -11,6 +11,8 @@
   display: flex;
   align-items: center;
   pointer-events: none;
+  /* Controls, not text: a page-wide select-all leaves the links out (workspace.css) */
+  user-select: none;
 }
 
 /* The padding, not a flex gap, parts them from the dot: a gap has no box, and the pointer

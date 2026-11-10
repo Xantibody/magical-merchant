@@ -45,6 +45,8 @@
   padding: 0 8px 0 16px;
   background: var(--app-surface);
   border-bottom: 1px solid var(--app-border);
+  /* Controls, not text: a page-wide select-all leaves the header out (workspace.css) */
+  user-select: none;
 }
 
 .mobile-header-title {
