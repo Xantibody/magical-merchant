@@ -82,18 +82,27 @@ describe("the colour scheme", () => {
 /** The fills that carry words, and the token those words take. */
 const ON_FILL: Record<string, string> = {
   "--app-accent": "--app-on-accent",
-  "--app-danger": "--app-on-danger",
+  "--app-danger-fill": "--app-on-danger",
 };
+
+/**
+ * Colours made for words and marks, too light to carry words of their own. A button that
+ * writes on one takes the fill beside it instead.
+ */
+const MARK_ONLY = new Set(["--app-danger"]);
 
 /** A rule that fills with accent or danger and writes its own text colour, but not the token. */
 function writesByHand(rule: Rule): boolean {
   const fill = /background(?:-color)?:\s*var\((?<token>--app-[\w-]+)\)/u.exec(rule.body)?.groups
     ?.token;
   const colour = /(?:^|[\s;])color:\s*(?<value>[^;]+)/u.exec(rule.body)?.groups?.value.trim();
-  if (fill === undefined || colour === undefined || !(fill in ON_FILL)) {
+  if (fill === undefined || colour === undefined) {
     return false;
   }
-  return colour !== `var(${ON_FILL[fill]})`;
+  if (MARK_ONLY.has(fill)) {
+    return true;
+  }
+  return fill in ON_FILL && colour !== `var(${ON_FILL[fill]})`;
 }
 
 /** WCAG relative luminance of a computed `rgb(r, g, b)`. */

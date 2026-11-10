@@ -19,7 +19,8 @@ Open Props, with a dark theme via `:root[data-theme="dark"]`):
   `--app-on-accent` (words and icons on a filled accent)
 - Elevation: `--shadow-pop` is the only shadow, and a box wearing it has no border.
   A toast has no shadow; a focus ring is not elevation
-- Status: `--app-ok`, `--app-danger` (`--app-on-danger` on its fill), `--app-undo`, toast pair
+- Status: `--app-ok`, `--app-danger` (words and marks; a button fills with
+  `--app-danger-fill` and writes `--app-on-danger`), `--app-undo`, toast pair
 
 Helper text is 13px, a stamp, count or key 12px, and nothing is smaller
 (`styles/polish.test.ts`).

@@ -404,7 +404,7 @@
   padding: 8px 14px;
   border: none;
   border-radius: 10px;
-  background: var(--app-danger);
+  background: var(--app-danger-fill);
   color: var(--app-on-danger);
   font-size: 13px;
   cursor: pointer;
