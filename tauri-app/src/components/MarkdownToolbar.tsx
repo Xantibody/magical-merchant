@@ -172,7 +172,7 @@ export default function MarkdownToolbar(props: MarkdownToolbarProps): JSX.Elemen
         <div
           class="markdown-toolbar"
           role="toolbar"
-          aria-label="Markdown formatting"
+          aria-label={t().editor.toolbar}
           style={keyboardTopStyle(toolbarTop())}
         >
           {buttons.map((button) => (

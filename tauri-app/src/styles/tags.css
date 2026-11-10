@@ -21,11 +21,13 @@
   flex-wrap: wrap;
 }
 
+/* All-caps is drawn here, as on the list's heading: the word comes from the string table */
 .tag-filter-label {
   font-size: 12px;
   font-weight: 700;
   color: var(--app-text-faint);
   letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .tag-filter-chips {

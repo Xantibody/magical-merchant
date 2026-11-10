@@ -1,5 +1,6 @@
 import type { IconName } from "../components/Icon";
 import type { HitKind } from "./commands";
+import { t } from "./i18n";
 
 export const ROUTES = {
   SCRAWL: "/",
@@ -34,20 +35,48 @@ export const MODE_ICONS: Record<RoutePath, IconName> = {
   [ROUTES.BROWSE]: "funnel",
 };
 
-// Template management and Browse do not appear in the tabs. Only the header title reads
-// these. The three surfaces are proper nouns, so they are not translated (#255). The
-// rail's Browse is the entry to an action, not a tab, so it reads i18n's `browse.title`
-export const MODE_LABELS: Record<RoutePath, string> = {
+/** The three surfaces, the only screens whose name is a proper noun. */
+type SurfaceRoute = typeof ROUTES.SCRAWL | typeof ROUTES.NOTES | typeof ROUTES.CODEX;
+
+// The three surfaces are proper nouns, so they are not translated (#255). Every other
+// screen is a page with a title in the string table; `routeLabel` names those
+export const MODE_LABELS: Record<SurfaceRoute, string> = {
   [ROUTES.SCRAWL]: "Scrawl",
   [ROUTES.NOTES]: "Note",
   [ROUTES.CODEX]: "Codex",
-  [ROUTES.SETTINGS]: "Settings",
-  [ROUTES.TEMPLATES]: "Templates",
-  [ROUTES.BROWSE]: "Browse",
 };
 
+/**
+ * The name of the screen at `path`, for the phone header. A surface keeps its proper noun;
+ * any other page takes the title its own heading reads, so the header and the page under it
+ * say the same word. Call it inside JSX so switching the language redraws. A path no route
+ * knows reads as Scrawl, as the header always has.
+ */
+export function routeLabel(path: string): string {
+  switch (path) {
+    case ROUTES.SETTINGS: {
+      return t().settings.title;
+    }
+    case ROUTES.TEMPLATES: {
+      return t().templates.title;
+    }
+    case ROUTES.BROWSE: {
+      return t().browse.title;
+    }
+    case ROUTES.NOTES: {
+      return MODE_LABELS[ROUTES.NOTES];
+    }
+    case ROUTES.CODEX: {
+      return MODE_LABELS[ROUTES.CODEX];
+    }
+    default: {
+      return MODE_LABELS[ROUTES.SCRAWL];
+    }
+  }
+}
+
 /** The surface a record kind lives on. Both the mark and the name are read through here. */
-export const HIT_ROUTES: Record<HitKind, RoutePath> = {
+export const HIT_ROUTES: Record<HitKind, SurfaceRoute> = {
   scrawl: ROUTES.SCRAWL,
   note: ROUTES.NOTES,
   codex: ROUTES.CODEX,

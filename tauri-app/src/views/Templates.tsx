@@ -21,7 +21,7 @@ import { locale, t } from "../lib/i18n";
 import { isImeComposing } from "../lib/ime";
 import { createKeyboardTop, keyboardTopStyle } from "../lib/keyboard";
 import { joinTitle, splitTitle } from "../lib/note-title";
-import { MODE_LABELS, ROUTES } from "../lib/routes";
+import { ROUTES, routeLabel } from "../lib/routes";
 import { classifyLines } from "../lib/template-examples";
 import { previewBlocks } from "../lib/template-preview";
 import type { PreviewBlock } from "../lib/template-preview";
@@ -809,7 +809,7 @@ export default function Templates(): JSX.Element {
           >
             <Icon name="arrow-left" size={16} />
           </button>
-          <span class="list-pane-title">{MODE_LABELS[ROUTES.TEMPLATES]}</span>
+          <span class="list-pane-title">{routeLabel(ROUTES.TEMPLATES)}</span>
           <button type="button" class="new-note" onClick={startNew}>
             <Icon name="plus" size={12} />
             {t().templates.new}

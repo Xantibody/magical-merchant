@@ -60,7 +60,7 @@ const ja = {
     search: "検索",
     jumpToDate: "日付ジャンプ",
     sync: "同期",
-    settings: "Settings",
+    settings: "設定",
   },
   status: {
     label: "保存と同期",
@@ -106,6 +106,7 @@ const ja = {
   },
   capture: {
     label: "書き留める",
+    send: "記録する",
     placeholder: "いま何を記録する？",
     linePlaceholder: (modifier: string) => `書き留める — # タグ · / 探す · ${modifier}↵ Note`,
     saveFailed: "記録を保存できませんでした。入力は残っています。",
@@ -598,6 +599,11 @@ const ja = {
     noteLink: "記録へのリンク",
     codeBlock: "コードブロック",
     closeKeyboard: "キーボードを閉じる",
+    /** The phone's formatting bar above the keyboard, as a screen reader announces it */
+    toolbar: "書式",
+    /** The box that edits a link's address (Milkdown's link tooltip) */
+    linkPlaceholder: "リンクを貼り付け…",
+    linkConfirm: "確定 ⏎",
   },
   preview: {
     zoom: "拡大",
@@ -724,6 +730,7 @@ const en: Messages = {
   },
   capture: {
     label: "Jot down",
+    send: "Send",
     placeholder: "What's on your mind?",
     linePlaceholder: (modifier: string) => `Jot down — # tag · / search · ${modifier}↵ Note`,
     saveFailed: "Could not save the entry. Your text is still here.",
@@ -1165,6 +1172,9 @@ const en: Messages = {
     noteLink: "Link to a record",
     codeBlock: "Code block",
     closeKeyboard: "Close the keyboard",
+    toolbar: "Markdown formatting",
+    linkPlaceholder: "Paste link...",
+    linkConfirm: "Confirm ⏎",
   },
   preview: {
     zoom: "Zoom",

@@ -16,7 +16,7 @@ import { cursor } from "@milkdown/kit/plugin/cursor";
 import { history } from "@milkdown/kit/plugin/history";
 import { clipboard } from "@milkdown/kit/plugin/clipboard";
 import { trailing } from "@milkdown/kit/plugin/trailing";
-import { linkTooltipPlugin } from "@milkdown/kit/component/link-tooltip";
+import { linkTooltipConfig, linkTooltipPlugin } from "@milkdown/kit/component/link-tooltip";
 import { highlight, highlightPluginConfig } from "@milkdown/plugin-highlight";
 import { createParser } from "@milkdown/plugin-highlight/shiki";
 import { getHighlighter } from "../lib/highlighter";
@@ -40,6 +40,7 @@ import type { NoteLinkTarget } from "../lib/note-link-plugin";
 import { createGlyphPlugin } from "../lib/glyph-plugin";
 import { createExamplePlugin } from "../lib/example-plugin";
 import { getShikiTheme } from "../lib/theme";
+import { t } from "../lib/i18n";
 import "../styles/editor.css";
 import type { JSX } from "solid-js";
 
@@ -207,6 +208,13 @@ export default function MilkdownEditor(props: MilkdownEditorProps): JSX.Element 
           ctx.set(defaultValueCtx, props.defaultValue);
         }
         ctx.set(highlightPluginConfig.key, { parser });
+        // Read once, as the editor is made. Only the Settings page switches the language, and
+        // it is a route of its own, so no editor is open across a switch
+        ctx.update(linkTooltipConfig.key, (config) => ({
+          ...config,
+          inputPlaceholder: t().editor.linkPlaceholder,
+          confirmButton: t().editor.linkConfirm,
+        }));
         ctx.update(remarkStringifyOptionsCtx, (options) => ({
           ...options,
           handlers: { ...options.handlers, text: noteLinkText(options.handlers?.text) },

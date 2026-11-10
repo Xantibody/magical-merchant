@@ -3,7 +3,9 @@ import { describe, it, expect, afterEach } from "vitest";
 import { editorViewCtx } from "@milkdown/kit/core";
 import type { Editor } from "@milkdown/kit/core";
 import { Selection } from "@milkdown/kit/prose/state";
+import { linkTooltipConfig } from "@milkdown/kit/component/link-tooltip";
 import MilkdownEditor from "./MilkdownEditor";
+import { setLocale } from "../lib/i18n";
 import type { CaretPoint } from "./MilkdownEditor";
 
 /**
@@ -273,5 +275,27 @@ describe("MilkdownEditor task list", () => {
     await sleep(100);
     expect(taskItem(container).dataset.checked).toBe("false");
     expect(changes).toHaveLength(0);
+  });
+});
+
+describe("MilkdownEditor link tooltip", () => {
+  afterEach(() => {
+    cleanup();
+    setLocale("ja");
+  });
+
+  // The box that edits a link showed Milkdown's English defaults on a Japanese screen
+  it.each([
+    { lang: "ja", confirm: "確定 ⏎", placeholder: "リンクを貼り付け…" },
+    { lang: "en", confirm: "Confirm ⏎", placeholder: "Paste link..." },
+  ] as const)("words the link editor in $lang", async ({ lang, confirm, placeholder }) => {
+    setLocale(lang);
+    const { editor } = await mountPlain("[site](https://example.com)");
+    await expect.poll(() => editor() !== undefined).toBe(true);
+
+    const config = editor()?.action((ctx) => ctx.get(linkTooltipConfig.key));
+
+    expect(config?.confirmButton).toBe(confirm);
+    expect(config?.inputPlaceholder).toBe(placeholder);
   });
 });

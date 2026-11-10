@@ -114,7 +114,7 @@ function mountChrome(): void {
         <div class="scrawl-column">
           <div class="scrawl-head">
             <div class="tag-filter">
-              <span class="tag-filter-label">TAGS</span>
+              <span class="tag-filter-label">タグ</span>
               <div class="tag-filter-chips"><button class="tag-chip" type="button">#SF6</button></div>
             </div>
             <section class="digest-line">

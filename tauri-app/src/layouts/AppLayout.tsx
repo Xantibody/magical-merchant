@@ -23,7 +23,7 @@ import {
   SHORTCUT_LIST_KEY,
   startsTypedSearch,
 } from "../lib/shortcuts";
-import { MODE_LABELS, ROUTES } from "../lib/routes";
+import { ROUTES, routeLabel } from "../lib/routes";
 import type { RoutePath } from "../lib/routes";
 import { noteRoute, writeRoute } from "../lib/note-route";
 import { typedInvoke } from "../lib/commands";
@@ -266,9 +266,7 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
       <div class="app-column">
         {/* A narrow screen has no hover and no room in the corner. The title and a few entries make a strip */}
         <header class="mobile-header">
-          <span class="mobile-header-title">
-            {MODE_LABELS[location.pathname as RoutePath] ?? MODE_LABELS[ROUTES.SCRAWL]}
-          </span>
+          <span class="mobile-header-title">{routeLabel(location.pathname)}</span>
 
           <div class="mobile-header-actions">
             {/* The popover itself belongs to Scrawl. That side is what knows the recorded days */}

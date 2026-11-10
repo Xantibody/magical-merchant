@@ -123,7 +123,8 @@ describe("StatusDot", () => {
       />
     ));
 
-    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    // Settings is not one of the three proper nouns, so it is translated like the palette's row
+    fireEvent.click(screen.getByRole("button", { name: "設定" }));
     fireEvent.click(screen.getByRole("button", { name: "キー" }));
 
     expect(onSettings).toHaveBeenCalledTimes(1);
