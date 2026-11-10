@@ -1,4 +1,4 @@
-import { createEffect, onCleanup } from "solid-js";
+import { createEffect, createSignal, onCleanup, onMount } from "solid-js";
 import type { JSX } from "solid-js";
 import { Markmap } from "markmap-view";
 import { outlineToTree } from "../lib/mindmap";
@@ -26,10 +26,20 @@ function disableDoubleClickZoom(mm: Markmap): void {
 export default function MindmapView(props: MindmapViewProps): JSX.Element {
   let svgRef: SVGSVGElement | undefined;
   let markmap: Markmap | undefined;
+  /**
+   * Whether the svg has a box to draw in. On a phone the list picks a note while the detail
+   * pane is display: none; drawn then, fit() measures 0 × 0 and writes scale(0), and nothing
+   * fits again when the pane opens. So nothing is drawn until there is room.
+   *
+   * AIDEV-NOTE: not "draw anyway, fit once the box appears". The labels were measured at 0 as
+   * well, and markmap lays them out again on its own 100ms later without fitting, so that fit
+   * would size the map from the collapsed layout
+   */
+  const [hasRoom, setHasRoom] = createSignal(false);
 
   createEffect(() => {
     const root = outlineToTree(props.source);
-    if (!svgRef) {
+    if (!svgRef || !hasRoom()) {
       return;
     }
     // duration: 0. The whole map should be visible the moment it opens. The
@@ -51,6 +61,24 @@ export default function MindmapView(props: MindmapViewProps): JSX.Element {
         await current.fit();
       }
     })();
+  });
+
+  onMount(() => {
+    if (!svgRef) {
+      return;
+    }
+    const observer = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      const room = width > 0 && height > 0;
+      // Only the box changed (a rotated phone, the note panel docking): the labels keep their
+      // size, so fitting again is enough. Gaining room at all goes through the effect above
+      if (room && hasRoom()) {
+        void markmap?.fit();
+      }
+      setHasRoom(room);
+    });
+    observer.observe(svgRef);
+    onCleanup(() => observer.disconnect());
   });
 
   onCleanup(() => {

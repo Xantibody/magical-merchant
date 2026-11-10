@@ -13,6 +13,12 @@ function query<T extends Element>(root: ParentNode, selector: string): T {
   return el;
 }
 
+/** The scale d3-zoom wrote on markmap's drawing root; 0 before it wrote one. */
+function scaleOf(svg: SVGSVGElement): number {
+  const transform = svg.querySelector(":scope > g:not([class])")?.getAttribute("transform");
+  return Number(/scale\((?<k>[\d.]+)\)/u.exec(transform ?? "")?.groups?.k ?? 0);
+}
+
 function sleep(ms: number): Promise<void> {
   // oxlint-disable-next-line promise/avoid-new
   return new Promise((resolve) => {
@@ -44,6 +50,39 @@ describe("MindmapView", () => {
     setSource("# 後の本文");
 
     await expect.element(screen.locator(".mindmap-view svg")).toHaveTextContent("後の本文");
+  });
+
+  describe("描く場所の大きさに合わせる", () => {
+    // On a phone the list picks a note while the detail pane is display: none. Fitted at
+    // 0 × 0, the map was scale(0) and stayed empty once the pane opened
+    it("隠れたまま開かれても、見えたときに全体が収まる", async () => {
+      const { baseElement } = render(() => (
+        <div class="hidden-pane" style={{ display: "none" }}>
+          <MindmapView source={OUTLINE} />
+        </div>
+      ));
+      const svg = query<SVGSVGElement>(baseElement, ".mindmap-view svg");
+      await sleep(200);
+
+      query<HTMLDivElement>(baseElement, ".hidden-pane").style.display = "block";
+
+      await expect.poll(() => scaleOf(svg)).toBeGreaterThan(0);
+      await expect.element(page.elementLocator(svg)).toHaveTextContent("買い出し");
+    });
+
+    it("描く場所の大きさが変わったら収め直す", async () => {
+      const { baseElement } = render(() => <MindmapView source={OUTLINE} />);
+      const svg = query<SVGSVGElement>(baseElement, ".mindmap-view svg");
+      svg.style.width = "200px";
+      svg.style.height = "100px";
+      await expect.poll(() => scaleOf(svg)).toBeGreaterThan(0);
+      const small = scaleOf(svg);
+
+      svg.style.width = "800px";
+      svg.style.height = "400px";
+
+      await expect.poll(() => scaleOf(svg)).not.toBe(small);
+    });
   });
 
   describe("ダブルクリックで拡大しない", () => {
