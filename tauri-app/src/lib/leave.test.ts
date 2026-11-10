@@ -133,3 +133,42 @@ describe("watchLeave", () => {
     expect(leaves).toBe(0);
   });
 });
+
+/** Answers `listen` for every window event but the focus, and keeps what is still taken. */
+function refuseFocus(): Map<number, string> {
+  const taken = new Map<number, string>();
+  let nextId = 0;
+  mockIPC((cmd, payload) => {
+    const args = payload as { event: string; eventId?: number };
+    if (cmd === "plugin:event|listen") {
+      if (args.event === TauriEvent.WINDOW_FOCUS) {
+        throw new Error("no focus event");
+      }
+      nextId += 1;
+      taken.set(nextId, args.event);
+      return nextId;
+    }
+    if (cmd === "plugin:event|unlisten" && args.eventId !== undefined) {
+      taken.delete(args.eventId);
+    }
+    return null;
+  });
+  return taken;
+}
+
+describe("watchLeave when only the blur can be taken", () => {
+  afterEach(() => {
+    clearMocks();
+  });
+
+  // The blur's handle used to go with the focus's error, so its listener outlived the screen.
+  // Kept alone it would swallow later leaves (see `watchLeave`); the page events carry on
+  it("lets go of the blur when the focus cannot be taken", async () => {
+    const taken = refuseFocus();
+
+    const stop = await watchLeave(() => {});
+
+    expect([...taken.values()]).toStrictEqual([]);
+    stop();
+  });
+});
