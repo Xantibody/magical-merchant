@@ -292,7 +292,7 @@
   border: none;
   border-radius: 7px;
   background: var(--app-accent);
-  color: var(--app-surface);
+  color: var(--app-on-accent);
   font-family: inherit;
   font-size: 13px;
   font-weight: 600;

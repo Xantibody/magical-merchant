@@ -25,6 +25,11 @@
 }
 
 :root {
+  /* What the browser draws itself (the date picker, a bare button) follows the app's theme.
+     normalize sets this from the OS, so an app in light on a dark OS got dark controls.
+     data-theme always holds the resolved theme, so "system" still follows the OS through it.
+     The scrollbar thumb and the caret do not: normalize colours them from the OS directly */
+  color-scheme: light;
   --app-surface: var(--gray-0);
   --app-surface-2: var(--gray-1);
   --app-text: var(--gray-9);
@@ -42,9 +47,16 @@
   /* Backing for chips, the selected row and highlights. Only a trace of accent
      is mixed in */
   --app-accent-soft: color-mix(in oklab, var(--app-accent) 9%, var(--gray-0));
+  /* Words and icons on a filled --app-accent (a primary button, today in the calendar).
+     The fill turns light in the dark theme, so this turns dark with it */
+  --app-on-accent: var(--gray-0);
   --app-input-bg: white;
   --app-ok: var(--green-7);
   --app-danger: var(--red-7);
+  /* A danger button's fill. Even white stops at 3.8:1 on red-7, so the fill goes deeper than
+     the colour of danger words: white reads at 5.5:1 on red-9 */
+  --app-danger-fill: var(--red-9);
+  --app-on-danger: white;
   --app-undo: var(--blue-3);
   --app-toast-bg: var(--gray-9);
   --app-toast-text: var(--gray-0);
@@ -57,6 +69,7 @@
 }
 
 :root[data-theme="dark"] {
+  color-scheme: dark;
   --app-surface: var(--gray-9);
   --app-surface-2: var(--gray-8);
   --app-text: var(--gray-1);
@@ -68,9 +81,13 @@
   --app-text-hint: var(--gray-7);
   --app-accent: var(--gray-4);
   --app-accent-soft: color-mix(in oklab, var(--app-accent) 16%, var(--gray-9));
+  --app-on-accent: var(--gray-9);
   --app-input-bg: var(--gray-8);
   --app-ok: var(--green-4);
   --app-danger: var(--red-4);
+  /* The light fill stays: dark words read at 6.7:1 on red-4 */
+  --app-danger-fill: var(--red-4);
+  --app-on-danger: var(--gray-9);
   --app-undo: var(--blue-3);
   --app-toast-bg: var(--gray-7);
   --app-toast-text: var(--gray-0);
@@ -269,7 +286,7 @@ html[data-hints] [data-hint-key]::after {
 
 .button-primary {
   background: var(--app-accent);
-  color: var(--app-surface);
+  color: var(--app-on-accent);
   border: 1px solid var(--app-accent);
 }
 

@@ -129,6 +129,22 @@
   color: var(--app-text-muted);
 }
 
+/* The × that takes a tag off a chip: the note panel's (tag-editor.css) and Templates' auto
+   tags. It lives here because tag-editor.css only loads with the note panel */
+.tag-editor-remove {
+  display: inline-flex;
+  padding: 2px;
+  border: none;
+  border-radius: 999px;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.tag-editor-remove:hover {
+  background: var(--app-surface-2);
+}
+
 @media (max-width: 767px) {
   /* Scroll sideways so wrapping does not push the list down. A scroller clips both ways, so
      the padding keeps the chips' hit area (layout.css) inside it, and the margin hands the

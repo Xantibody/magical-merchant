@@ -48,19 +48,7 @@
   padding-right: 7px;
 }
 
-.tag-editor-remove {
-  display: inline-flex;
-  padding: 2px;
-  border: none;
-  border-radius: 999px;
-  background: none;
-  color: inherit;
-  cursor: pointer;
-}
-
-.tag-editor-remove:hover {
-  background: var(--app-surface-2);
-}
+/* Its × (`.tag-editor-remove`) is in tags.css, shared with Templates' auto tags */
 
 .tag-editor-field {
   position: relative;

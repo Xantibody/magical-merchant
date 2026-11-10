@@ -421,8 +421,8 @@
   padding: 8px 14px;
   border: none;
   border-radius: 10px;
-  background: var(--app-danger);
-  color: var(--gray-0);
+  background: var(--app-danger-fill);
+  color: var(--app-on-danger);
   font-size: 13px;
   cursor: pointer;
 }
@@ -561,12 +561,8 @@
     border: none;
     border-radius: 22px;
     background: var(--app-accent);
-    color: var(--gray-0);
+    color: var(--app-on-accent);
     cursor: pointer;
-  }
-
-  :root[data-theme="dark"] .capture-send {
-    color: var(--gray-9);
   }
 
   .capture-send:disabled {
