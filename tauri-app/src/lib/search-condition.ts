@@ -34,8 +34,6 @@ export interface SearchCondition {
   period: SearchPeriod | null;
 }
 
-export const NO_CONDITION: SearchCondition = { text: "", tags: [], kind: "all", period: null };
-
 export function hasCondition(condition: SearchCondition): boolean {
   return (
     condition.text.trim() !== "" ||

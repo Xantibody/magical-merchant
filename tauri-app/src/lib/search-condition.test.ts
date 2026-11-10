@@ -1,8 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { hasCondition, NO_CONDITION, periodRange, searchArgs } from "./search-condition";
+import { hasCondition, periodRange, searchArgs } from "./search-condition";
+import type { SearchCondition } from "./search-condition";
 
 // A Monday would hide a week counted from the wrong day, so this is a Wednesday
 const TODAY = new Date(2026, 10, 4);
+
+const NO_CONDITION: SearchCondition = { text: "", tags: [], kind: "all", period: null };
 
 describe("hasCondition", () => {
   it("does not count an empty field or stray spaces", () => {

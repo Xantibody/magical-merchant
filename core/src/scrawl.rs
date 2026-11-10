@@ -81,17 +81,6 @@ pub fn read_scrawl_days(
 
 /// `raw` is the line as the writer read it (exactly the form `read_scrawl` returned).
 /// An index alone drifts with any append or sync that lands between the read and the write.
-pub fn update_scrawl_entry(
-    base_dir: &Path,
-    date: NaiveDate,
-    index: usize,
-    raw: &str,
-    text: &str,
-) -> Result<(), CoreError> {
-    Scrawl::new(base_dir.to_path_buf()).update_entry(date, index, raw, text)
-}
-
-/// `raw` is the same as in `update_scrawl_entry`: the line as the writer read it.
 pub fn delete_scrawl_entry(
     base_dir: &Path,
     date: NaiveDate,

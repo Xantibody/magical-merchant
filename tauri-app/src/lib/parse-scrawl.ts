@@ -152,17 +152,3 @@ export function sourceLabel(source: string): string {
     }
   }
 }
-
-export function getOsLabel(ctx: DeviceContext): string | null {
-  if (!ctx.os) {
-    return null;
-  }
-  const parts: string[] = [ctx.os];
-  if (ctx.os_version) {
-    parts.push(ctx.os_version);
-  }
-  if (ctx.arch) {
-    parts.push(ctx.arch);
-  }
-  return parts.join(" ");
-}

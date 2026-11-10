@@ -30,7 +30,7 @@ pub use scrawl::error::ScrawlError;
 pub use scrawl::migrate::{ScrawlDirMigration, migrate_scrawl_dir};
 pub use scrawl::{
     ScrawlDay, ScrawlDays, delete_scrawl_entry, list_scrawl_dates, read_scrawl, read_scrawl_days,
-    save_scrawl_entry, update_scrawl_entry,
+    save_scrawl_entry,
 };
 pub use search::{
     HitKind, SearchFilter, SearchHit, browse_all, find_backlinks, recent_records, search_all,
