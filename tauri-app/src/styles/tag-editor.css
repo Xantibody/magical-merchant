@@ -64,11 +64,6 @@
   color: var(--app-text);
   font: inherit;
   font-size: 12px;
-  outline: none;
-}
-
-.tag-editor-input:focus {
-  box-shadow: 0 0 0 3px var(--app-accent-soft);
 }
 
 /* The capture bar's suggestions open upwards; the panel's hang below the input */

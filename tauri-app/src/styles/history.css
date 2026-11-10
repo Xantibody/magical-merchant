@@ -56,8 +56,8 @@
   font-weight: 600;
 }
 
+/* The rows touch, so the ring (base.css) goes inside */
 .history-row:focus-visible {
-  outline: 2px solid var(--app-accent);
   outline-offset: -2px;
 }
 

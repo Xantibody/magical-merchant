@@ -137,6 +137,11 @@
   background: var(--app-surface-2);
 }
 
+/* The rows touch, so the ring (base.css) goes inside */
+.note-panel-row:focus-visible {
+  outline-offset: -2px;
+}
+
 .note-panel-row .icon {
   flex-shrink: 0;
   color: var(--app-text-muted);
@@ -160,8 +165,9 @@
   pointer-events: none;
 }
 
+/* The focus is on the hidden input, so the row draws base.css's ring for it */
 .note-panel-switch:has(input:focus-visible) {
-  outline: 2px solid var(--app-accent);
+  outline: 2px solid var(--app-focus);
   outline-offset: -2px;
 }
 
