@@ -15,8 +15,9 @@ Open Props, with a dark theme via `:root[data-theme="dark"]`):
   `--app-text-faint` (labels, icons). Two helper steps, no third
 - Lines: `--app-border` (controls), `--app-hairline` (rails, day separators),
   `--app-text-hint` (marks only; never words, despite the name)
-- Accent: `--app-accent`, `--app-accent-soft` (chips, selected rows, focus ring),
-  `--app-on-accent` (words and icons on a filled accent)
+- Accent: `--app-accent`, `--app-accent-soft` (chips, selected rows),
+  `--app-on-accent` (words and icons on a filled accent), `--app-focus` (the
+  keyboard focus ring, below)
 - Elevation: `--shadow-pop` is the only shadow, and a box wearing it has no border.
   A toast has no shadow; a focus ring is not elevation
 - Status: `--app-ok`, `--app-danger` (words and marks; a button fills with
