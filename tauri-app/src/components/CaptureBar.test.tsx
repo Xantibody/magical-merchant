@@ -314,8 +314,20 @@ describe.each([
     localStorage.clear();
   });
 
+  /**
+   * Chromium keeps applying the stylesheet's `field-sizing` whatever `CSS.supports` answers, so
+   * the fallback is mounted with it turned off; only the script can size the line then.
+   */
+  const mount = (): ReturnType<typeof renderCaptureBar> => {
+    const bar = renderCaptureBar();
+    if (!sizesItself) {
+      bar.textarea.style.setProperty("field-sizing", "fixed");
+    }
+    return bar;
+  };
+
   it("grows with the lines typed and goes back to one after a send", async () => {
-    const { textarea } = renderCaptureBar();
+    const { textarea } = mount();
     const empty = height(textarea);
 
     fireEvent.input(textarea, { target: { value: lines(3) } });
@@ -326,7 +338,7 @@ describe.each([
   });
 
   it("stops at six lines and scrolls the rest", () => {
-    const { textarea } = renderCaptureBar();
+    const { textarea } = mount();
 
     fireEvent.input(textarea, { target: { value: lines(10) } });
 
