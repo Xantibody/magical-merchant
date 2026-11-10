@@ -70,6 +70,15 @@ export function describeSyncResult(result: SyncResultPayload): SyncUiState {
   return { status: "success", message };
 }
 
+/**
+ * Whether the round wrote to this device's `data/`: a file came down, or one went away.
+ * Uploads and remote deletes leave it as it was, and so does a conflict, where the local copy
+ * wins and the other side's goes to `conflicts/`, outside `data/`.
+ */
+export function wroteHere(result: SyncResultPayload): boolean {
+  return result.downloaded + result.deleted_local > 0;
+}
+
 function toErrorInfo(err: unknown): SyncErrorInfo {
   return typeof err === "object" && err !== null && "message" in err
     ? (err as SyncErrorInfo)

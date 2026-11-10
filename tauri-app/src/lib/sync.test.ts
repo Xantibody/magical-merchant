@@ -11,6 +11,7 @@ import {
   syncAlertText,
 } from "./sync";
 import { typedInvoke } from "./commands";
+import type { SyncResultPayload } from "./sync-status";
 
 // The reason mockIPC is used instead of vi.mock is written in commands.test.ts
 
@@ -61,13 +62,13 @@ function mockCommands(): void {
  * `onMount` runs after the createRoot callback has returned, and its body is asynchronous.
  * How many turns it takes to settle is not counted; the caller waits with `vi.waitFor`.
  */
-function mount(): {
+function mount(onSynced: () => void = () => {}): {
   state: ReturnType<typeof createSyncState>;
   dispose: () => void;
 } {
   let state!: ReturnType<typeof createSyncState>;
   const dispose = createRoot((d) => {
-    state = createSyncState(() => {});
+    state = createSyncState(onSynced);
     return d;
   });
   return { state, dispose };
@@ -591,5 +592,84 @@ describe("createSyncState leaving the app", () => {
       expect(syncStarts()).toBe(2);
     });
     dispose();
+  });
+});
+
+describe("createSyncState refreshing the screens after a round", () => {
+  beforeEach(() => {
+    calls = [];
+    handlers = {
+      get_sync_config: () => ({
+        workers_url: "https://sync.example",
+        auto_sync: false,
+        // The start-up round is the one whose result is looked at
+        sync_on_start: true,
+      }),
+      auth_status: () => true,
+      sync_start: () => null,
+    };
+    mockWindows("main");
+    mockIPC(
+      (cmd) => {
+        const handler = handlers[cmd];
+        if (!handler) {
+          throw new Error(`unexpected command ${cmd}`);
+        }
+        calls.push(cmd);
+        return handler();
+      },
+      { shouldMockEvents: true },
+    );
+  });
+
+  afterEach(() => {
+    clearMocks();
+  });
+
+  /** Mounts, lets the start-up round end with `result`, and counts the refreshes it asked for */
+  async function refreshesAfter(result: Partial<SyncResultPayload>): Promise<number> {
+    calls = [];
+    let refreshes = 0;
+    const { dispose } = mount(() => {
+      refreshes += 1;
+    });
+    await vi.waitFor(() => {
+      expect(calls).toContain("sync_start");
+    });
+    await emit(EVENTS.SYNC_COMPLETE, {
+      uploaded: 0,
+      downloaded: 0,
+      deleted_remote: 0,
+      deleted_local: 0,
+      conflicts: 0,
+      errors: [],
+      ...result,
+    });
+    dispose();
+    return refreshes;
+  }
+
+  it("refreshes after a round that wrote here", async () => {
+    await expect(refreshesAfter({ downloaded: 1 })).resolves.toBe(1);
+    await expect(refreshesAfter({ deleted_local: 1 })).resolves.toBe(1);
+  });
+
+  // With auto sync on, every capture brings a round five seconds later that only sends it. A
+  // refresh rereads every day file and every note, and redraws whatever shows them
+  it("leaves the screens alone after a round that left data/ as it was", async () => {
+    await expect(refreshesAfter({})).resolves.toBe(0);
+    await expect(refreshesAfter({ uploaded: 2, deleted_remote: 1 })).resolves.toBe(0);
+    // Local wins a conflict. The other side's copy goes to conflicts/, which no screen reads
+    await expect(refreshesAfter({ uploaded: 1, conflicts: 1 })).resolves.toBe(0);
+  });
+
+  // One file that could not be written does not undo the ones that were
+  it("refreshes after a round that wrote here and also reported a failure", async () => {
+    const refreshes = await refreshesAfter({
+      downloaded: 3,
+      errors: [{ kind: "write_failed", key: "notes/a.md", detail: "disk full" }],
+    });
+
+    expect(refreshes).toBe(1);
   });
 });
