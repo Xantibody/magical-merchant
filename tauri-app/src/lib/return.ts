@@ -6,6 +6,10 @@ import type { UnlistenFn } from "@tauri-apps/api/event";
  * was looking, the CLI, MCP or another device may have rewritten `data/`. The app does not
  * watch files, so coming back is the signal to reread, and to pull the other devices' writes
  * in if the user asked. On Android it is also the only signal that a frozen process has woken.
+ *
+ * AIDEV-NOTE: every return rereads, however short the absence. Skipping returns under 30 s
+ * was tried and dropped (#376): what the CLI or MCP wrote meanwhile stayed off screen, and
+ * typing on that stale note had its first save refused as stale
  */
 
 /**
