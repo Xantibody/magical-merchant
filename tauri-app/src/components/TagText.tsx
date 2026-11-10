@@ -1,7 +1,7 @@
-import { For, Show } from "solid-js";
+import { For } from "solid-js";
 import type { JSX } from "solid-js";
-import { glyphs, splitGlyphs } from "../lib/glyphs";
 import { splitTagged } from "../lib/tags";
+import GlyphText from "./GlyphText";
 
 /**
  * Print the body as it is, colour only the `#tag` words, and replace `:name:` with the
@@ -15,19 +15,13 @@ import { splitTagged } from "../lib/tags";
  */
 export default function TagText(props: { text: string }): JSX.Element {
   return (
-    <For each={splitGlyphs(props.text, glyphs())}>
-      {(segment) => (
-        <Show
-          when={segment.name !== null && glyphs().get(segment.name)}
-          fallback={
-            <For each={splitTagged(segment.text)}>
-              {(part) => (part.tag ? <span class="tag-inline">{part.text}</span> : part.text)}
-            </For>
-          }
-        >
-          {(url) => <img class="glyph" src={url()} alt={segment.text} draggable={false} />}
-        </Show>
+    <GlyphText
+      text={props.text}
+      plain={(text) => (
+        <For each={splitTagged(text)}>
+          {(part) => (part.tag ? <span class="tag-inline">{part.text}</span> : part.text)}
+        </For>
       )}
-    </For>
+    />
   );
 }

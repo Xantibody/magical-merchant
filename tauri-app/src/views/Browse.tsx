@@ -9,6 +9,7 @@ import {
 } from "solid-js";
 import type { JSX } from "solid-js";
 import { useNavigate, useSearchParams } from "@solidjs/router";
+import GlyphText from "../components/GlyphText";
 import Icon from "../components/Icon";
 import KindDot from "../components/KindDot";
 import MarkdownPreview from "../components/MarkdownPreview";
@@ -300,7 +301,9 @@ export default function Browse(): JSX.Element {
                 onClick={() => (twoPane() ? setSelectedId(hitId(hit)) : open(hit))}
               >
                 <KindDot kind={hit.kind} />
-                <span class="browse-row-title">{hit.title || t().notes.untitled}</span>
+                <span class="browse-row-title">
+                  <GlyphText text={hit.title || t().notes.untitled} />
+                </span>
                 <span class="browse-row-date">{formatMonthDay(hit.date)}</span>
                 {/* An excerpt that only repeats the title is not shown. One line is enough for the row */}
                 <Show when={rowSnippet(hit)}>
@@ -346,7 +349,9 @@ export default function Browse(): JSX.Element {
                 </Show>
               </div>
 
-              <h2 class="browse-preview-title">{hit.title || t().notes.untitled}</h2>
+              <h2 class="browse-preview-title">
+                <GlyphText text={hit.title || t().notes.untitled} />
+              </h2>
               {/* Drawn by the same renderer as a read-only note, so a heading, a list or a
                   diagram looks here as it does there, not as the stored Markdown */}
               <Show

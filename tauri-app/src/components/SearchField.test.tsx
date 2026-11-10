@@ -1,9 +1,10 @@
-import { describe, it, expect, afterEach, vi } from "vitest";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { render, fireEvent, cleanup, screen, waitFor } from "@solidjs/testing-library";
 import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
 import SearchField from "./SearchField";
 import type { SearchFieldCommand } from "./SearchField";
 import type { SearchHit } from "../lib/commands";
+import { loadGlyphs } from "../lib/glyphs";
 
 function hit(title: string, change: Partial<SearchHit> = {}): SearchHit {
   return {
@@ -47,6 +48,9 @@ function renderField(hits: SearchHit[], tags: string[] = [], commands: SearchFie
 function typed(input: HTMLInputElement, value: string): void {
   fireEvent.input(input, { target: { value } });
 }
+
+/** The first result's title. */
+const label = (): Element | null => document.querySelector(".palette-row-label");
 
 describe("SearchField", () => {
   afterEach(() => {
@@ -306,6 +310,43 @@ describe("SearchField", () => {
       await screen.findByText("週次の件");
 
       expect(screen.queryByText("設定を開く")).toBeNull();
+    });
+  });
+
+  describe("glyphs", () => {
+    const URL_623K = "data:image/svg+xml;base64,PHN2Zy8+";
+    const TITLE = "対空は :623k: で取る、:foo: は字のまま";
+
+    beforeEach(async () => {
+      mockIPC((cmd) => (cmd === "read_glyphs" ? [{ name: "623k", url: URL_623K }] : null));
+      await loadGlyphs();
+    });
+
+    afterEach(async () => {
+      // The table is the app's, not the field's, so it outlives the render
+      mockIPC(() => []);
+      await loadGlyphs();
+    });
+
+    it("draws a registered glyph in a result's title, as Scrawl does", async () => {
+      renderField([hit(TITLE)]);
+
+      await waitFor(() => {
+        expect(label()?.querySelector("img.glyph")?.getAttribute("src")).toBe(URL_623K);
+      });
+      // An unregistered name is not a glyph
+      expect(label()?.textContent).toBe("対空は  で取る、:foo: は字のまま");
+    });
+
+    it("still underlines the word typed beside the glyph", async () => {
+      const { input } = renderField([hit(TITLE)]);
+
+      typed(input, "取る");
+
+      await waitFor(() => {
+        expect(label()?.querySelector("mark")?.textContent).toBe("取る");
+      });
+      expect(label()?.querySelector("img.glyph")).not.toBeNull();
     });
   });
 });
