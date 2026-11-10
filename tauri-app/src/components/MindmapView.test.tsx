@@ -36,8 +36,9 @@ describe("MindmapView", () => {
     await expect
       .element(screen.locator(".mindmap-view svg g.markmap-node").first())
       .toBeInTheDocument();
-    await expect.element(screen.locator(".mindmap-view svg")).toHaveTextContent("買い出し");
-    await expect.element(screen.locator(".mindmap-view svg")).toHaveTextContent("当日");
+    // The svg also carries markmap's <style>, so its text is matched in part
+    await expect.element(screen.locator(".mindmap-view svg")).toMatchTextContent("買い出し");
+    await expect.element(screen.locator(".mindmap-view svg")).toMatchTextContent("当日");
   });
 
   it("本文が変わったら描き直す", async () => {
@@ -45,11 +46,11 @@ describe("MindmapView", () => {
     const { baseElement } = render(() => <MindmapView source={source()} />);
     const screen = page.elementLocator(baseElement);
 
-    await expect.element(screen.locator(".mindmap-view svg")).toHaveTextContent("前の本文");
+    await expect.element(screen.locator(".mindmap-view svg")).toMatchTextContent("前の本文");
 
     setSource("# 後の本文");
 
-    await expect.element(screen.locator(".mindmap-view svg")).toHaveTextContent("後の本文");
+    await expect.element(screen.locator(".mindmap-view svg")).toMatchTextContent("後の本文");
   });
 
   describe("描く場所の大きさに合わせる", () => {
@@ -67,7 +68,7 @@ describe("MindmapView", () => {
       query<HTMLDivElement>(baseElement, ".hidden-pane").style.display = "block";
 
       await expect.poll(() => scaleOf(svg)).toBeGreaterThan(0);
-      await expect.element(page.elementLocator(svg)).toHaveTextContent("買い出し");
+      await expect.element(page.elementLocator(svg)).toMatchTextContent("買い出し");
     });
 
     it("描く場所の大きさが変わったら収め直す", async () => {
