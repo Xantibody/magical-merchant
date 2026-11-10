@@ -38,7 +38,7 @@ ready to record the moment it opens (widgets exist for exactly this).
 
 - **No rail**: one column (ADR 0010). The way around is the keys (⌘1/2/3, ⌘K, ⌘F,
   ⌘,), the status dot's links, and the places on the empty search field
-- **List flyout** (`views/Workspace.tsx` + `styles/workspace.css`, Note / Codex
+- **List flyout** (`components/NoteList.tsx` + `styles/workspace.css`, Note / Codex
   on desktop): 280px that floats **over** the body while the pointer is on the
   window's left edge (`.list-edge`, 12px, nothing visible) or on itself — the body column does not move when it opens. A pin, and
   ⌘\, keep it out. Below 768px it is the full page it always was
