@@ -418,9 +418,15 @@ export function createNoteSession(deps: NoteSessionDeps): NoteSession {
         const revision = await deps.write(pending.item.filename, pending.body, expected);
         revisions.set(pending.item.filename, revision);
         recordSaved(deps.store, pending.item.filename, pending.session, pending.body);
-        // Keystrokes typed during the write have refilled the slot with a newer body
-        if (readDraft(deps.store, pending.item.filename)?.body === pending.body) {
+        // Keystrokes typed during the write have refilled the slot with a newer body. They were
+        // typed over `expected` because that was still the revision held, but their own save
+        // will carry the one just returned, so the draft moves with them. Left behind, the next
+        // open would read this device's own save as another's edit and park them
+        const kept = readDraft(deps.store, pending.item.filename);
+        if (kept?.body === pending.body) {
           clearDraft(deps.store, pending.item.filename);
+        } else if (kept?.revision === expected) {
+          writeDraft(deps.store, pending.item.filename, { body: kept.body, revision });
         }
         // The list is not reloaded here. Reloading every note on each 1-second save
         // is heavy on a low-end device, and the list is not even visible while editing.
