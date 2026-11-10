@@ -1,4 +1,5 @@
-import type { Version } from "./commands";
+import type { Version, VersionStatus } from "./commands";
+import { t } from "./i18n";
 
 /**
  * The message of the version core commits just before a restore. It is a fixed spelling
@@ -66,6 +67,19 @@ export function spanSince(time: string, now: Date): Span {
     months -= 1;
   }
   return { months: Math.max(0, months), days: daysSince(time, now) };
+}
+
+/**
+ * The meta line's "+312 B from version 4". If unmoved, "version 4"; if none, "no versions".
+ * The status dot's details get the same words, handed over through `shell.noteState`.
+ */
+export function versionStatusLabel(status: VersionStatus): string {
+  if (status.count === 0) {
+    return t().codex.noVersions;
+  }
+  return status.dirty
+    ? t().codex.deltaFromLatest(status.count, status.bytes_delta)
+    : t().codex.versionN(status.count);
 }
 
 /** The one line shown on the row. Empty if there is none. Only "before restore" is core's fixed spelling, so it is translated. */

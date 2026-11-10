@@ -18,36 +18,32 @@ import HistoryPanel from "../components/HistoryPanel";
 import Icon from "../components/Icon";
 import KindDot from "../components/KindDot";
 import MarkdownPreview from "../components/MarkdownPreview";
+import NoteList from "../components/NoteList";
 import NotePanel from "../components/NotePanel";
 import type { NotePanelTab } from "../components/NotePanel";
-import Popover from "../components/Popover";
+import NoteStatusRow from "../components/NoteStatusRow";
+import NoteStrip from "../components/NoteStrip";
 import PromoteDialog from "../components/PromoteDialog";
 import TagEditor from "../components/TagEditor";
-import TemplatePicker from "../components/TemplatePicker";
+import { createCodexHistory } from "../lib/codex-history";
 import { isStaleSave, typedInvoke } from "../lib/commands";
 import { resolveEditedTime } from "../lib/note-meta";
 import { countTagLists, parseTags } from "../lib/tags";
 import { refusedForGood } from "../lib/save-refusal";
 import { createNoteBuffer } from "../lib/note-buffer";
+import { isWriteKey, noteKeys } from "../lib/note-keys";
+import { createNoteMetaEditor } from "../lib/note-meta-editor";
+import { createNotePanel } from "../lib/note-panel-state";
 import { createNoteSelection } from "../lib/note-selection";
 import { createNoteSession } from "../lib/note-session";
 import type { SaveStatus } from "../lib/note-session";
 import { getDeviceSignals } from "../lib/client-context";
 import { createDebouncedAccessor } from "../lib/debounce";
-import { diffLineCounts, markedBody } from "../lib/diff-marks";
 import { glyphs } from "../lib/glyphs";
 import { sameEntries } from "../lib/same-entries";
 import { examplesShown, extractExamples, setExamplesShown } from "../lib/template-examples";
 import { useShell } from "../lib/shell";
-import {
-  groupNotes,
-  itemTitle,
-  neighborOf,
-  noteCreatedLabel,
-  noteRowStamp,
-  stepNote,
-  toNoteItems,
-} from "../lib/items";
+import { groupNotes, neighborOf, noteCreatedLabel, stepNote, toNoteItems } from "../lib/items";
 import type { ItemGroup, NoteItem } from "../lib/items";
 import { readNoteContent, viewToFrontmatter } from "../lib/note-view";
 import type { NoteView } from "../lib/note-view";
@@ -55,16 +51,14 @@ import { splitTitle } from "../lib/note-title";
 import { formatClock, formatMonthDay } from "../lib/day-labels";
 import { locale, t } from "../lib/i18n";
 import { isImeComposing } from "../lib/ime";
-import { createLongPress } from "../lib/long-press";
-import { isTypingTarget, matchesShortcut, shortcutLabel } from "../lib/shortcuts";
-import { daysSince, spanSince, withDeltas } from "../lib/versions";
-import type { VersionRow } from "../lib/versions";
+import { isTypingTarget, matchesShortcut } from "../lib/shortcuts";
+import { versionStatusLabel } from "../lib/versions";
 import { readBackup, writeBackup } from "../lib/edit-backup";
 import { claimsSelectAll, selectContents } from "../lib/select-all";
 import type { NoteLinkTarget } from "../lib/note-link-plugin";
-import type { NoteKind, NoteMeta, SearchHit, Template, VersionStatus } from "../lib/commands";
+import type { NoteKind, SearchHit, Template } from "../lib/commands";
 import { noteRoute } from "../lib/note-route";
-import { MODE_LABELS, ROUTES } from "../lib/routes";
+import { ROUTES } from "../lib/routes";
 import "../styles/workspace.css";
 
 // Milkdown + ProseMirror is not needed until the detail opens. A screen that only shows the list
@@ -79,65 +73,11 @@ const UNDO_MS = 5000;
 const SAVED_MS = 2000;
 /** How long the map alongside takes to catch up with typing. It catches up before the save (1 s). */
 const MAP_DEBOUNCE_MS = 300;
-/** How long a just-committed version pops (`mm-pop`). Past that the row goes back to normal. */
-const POP_MS = 350;
 /** The empty table a note with no examples passes. Recreating it redraws the plugin every time. */
 const NO_EXAMPLES: ReadonlyMap<string, string[]> = new Map();
-/** The keys that move to the neighboring row in the list, and their direction. */
-const LIST_STEP_KEYS: Readonly<Record<string, 1 | -1>> = { ArrowUp: -1, ArrowDown: 1 };
 
 async function loadNotes(): Promise<NoteItem[]> {
   return toNoteItems(await typedInvoke("list_notes"));
-}
-
-function EmptyNotes(props: { kind: NoteKind }): JSX.Element {
-  const words = (): { empty: string; emptyHint: string } =>
-    props.kind === "codex" ? t().codex : t().notes;
-  return (
-    <div class="notes-empty">
-      <Icon name={props.kind === "codex" ? "book" : "note-pencil"} size={24} />
-      <p class="notes-empty-title">{words().empty}</p>
-      <p class="notes-empty-body">{words().emptyHint}</p>
-    </div>
-  );
-}
-
-/**
- * The folded-corner page at the right end of a list row, left of the date. The version count sits
- * inside. The frame's color says "no versions / has versions / the draft has moved on". No words
- * are added: the row stays one line.
- */
-function PageMark(props: { count: number; dirty: boolean }): JSX.Element {
-  const state = (): "none" | "clean" | "dirty" => {
-    if (props.count === 0) {
-      return "none";
-    }
-    return props.dirty ? "dirty" : "clean";
-  };
-  return (
-    <span
-      class="page-mark"
-      data-state={state()}
-      title={t().codex.pageMark(props.count, props.dirty)}
-      aria-hidden="true"
-    >
-      <span class="page-mark-face" />
-      <Show when={props.count > 0}>
-        <span class="page-mark-fold" />
-        <span class="page-mark-count">{props.count}</span>
-      </Show>
-    </span>
-  );
-}
-
-/** The meta line's "+312 B from version 4". If unmoved, "version 4"; if none, "no versions". */
-function versionStatusLabel(status: VersionStatus): string {
-  if (status.count === 0) {
-    return t().codex.noVersions;
-  }
-  return status.dirty
-    ? t().codex.deltaFromLatest(status.count, status.bytes_delta)
-    : t().codex.versionN(status.count);
 }
 
 /** The records that point at this note, under the body in the viewer. */
@@ -232,29 +172,8 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     epoch: bodyEpoch,
     full: fullBody,
   } = buffer;
-  /**
-   * Whether the history is open, that is compare mode. Codex only. The body turns read-only and
-   * the difference from the chosen version becomes gutter marks; the body never disappears.
-   * In a wide window it is also which tab the right panel shows: the history tab is open
-   * exactly while this is on, so the two cannot disagree.
-   */
-  const [historyOpen, setHistoryOpen] = createSignal(false);
-  /** The version chosen in the history. The newest one the moment it opens. */
-  const [selectedVersionId, setSelectedVersionId] = createSignal<string | null>(null);
-  /**
-   * Whether the panel screen is up on a phone. There is no width to lay it alongside, so it is
-   * one surface that swaps with the body. Pressing a version returns to the body in compare
-   * mode, with the compare bar attached below.
-   */
-  const [panelScreen, setPanelScreen] = createSignal(false);
-  /** Whether the panel's details (created, updated, surroundings) are unfolded. */
-  const [detailsOpen, setDetailsOpen] = createSignal(false);
-  /** Whether the "Make a Codex" confirmation is up. */
-  const [confirmOpen, setConfirmOpen] = createSignal(false);
   /** Whether the tags on the meta line (or the phone's panel) are being edited. */
   const [tagEditing, setTagEditing] = createSignal(false);
-  /** The version just committed. Only that row in the history pops as it enters. */
-  const [freshVersionId, setFreshVersionId] = createSignal<string | null>(null);
   /** What a touch device's toolbar acts on. undefined while no note is open. */
   const [markdownEditor, setMarkdownEditor] = createSignal<Editor | undefined>();
 
@@ -266,9 +185,6 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   );
 
   let detailBodyRef: HTMLDivElement | undefined;
-  let listScrollRef: HTMLDivElement | undefined;
-  /** The "+ new" button. It opened the template sheet, so a press on it does not count as outside */
-  let newNoteButton: HTMLButtonElement | undefined;
   /** The timer that drops "saved" down to showing the save time. */
   let savedTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -301,15 +217,6 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   /** Whether the body is actually on screen. While it is not, no editor is built either. */
   const bodyVisible = createMemo<boolean>(() => twoPane() || detailOpen());
 
-  /** Whether the panel screen is up on a phone. It swaps with the body. */
-  const panelScreenShown = (): boolean => panelScreen() && !twoPane();
-
-  /** Whether the right panel is on screen in a wide window. */
-  const panelOpen = (): boolean => twoPane() && shell.notePanelPinned();
-
-  /** Which tab the panel shows. The history tab is compare mode itself. */
-  const panelTab = (): NotePanelTab => (historyOpen() ? "history" : "note");
-
   // The list brings both stores in at once. Narrowing by surface happens here: rather than one IPC
   // call per surface, it is better to hold all of them so `?file=` knows where to send you
   const allItems = createMemo<NoteItem[]>(() => {
@@ -334,6 +241,34 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     visibleItems,
     loadedId,
   );
+
+  /** The open Codex's versions and compare mode (`lib/codex-history.ts`). */
+  const codexHistory = createCodexHistory({
+    kind,
+    selected: () => selected(),
+    loaded: () => loaded(),
+    body: () => fullBody(),
+    refreshList: () => refetchNotes(),
+    showToast: (text, undo, detail) => shell.showToast(text, undo, detail),
+  });
+  const {
+    open: historyOpen,
+    setOpen: setHistoryOpen,
+    selectedVersionId,
+    setSelectedVersionId,
+    freshId: freshVersionId,
+    status: versionStatus,
+    rows: versionRows,
+    marked,
+    cadence,
+    selectedRow,
+    compareDetail,
+    compareLine,
+    canCommit,
+    refetchStatus: refetchVersionStatus,
+    refresh: refreshVersions,
+    leave: leaveHistory,
+  } = codexHistory;
 
   /**
    * Whether the note is open to write (ADR 0003). A record opens in the viewer and is written
@@ -404,28 +339,40 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     (filename) => typedInvoke("find_backlinks", { filename }),
   );
 
-  /**
-   * The frontmatter as written. The list carries tags already merged with the body's `#tag`s,
-   * so what can be edited (the frontmatter's own tags, the created time) is read only while the
-   * panel that edits it is open. It is read again each time, so another device's edit is not
-   * written back over.
-   */
-  const [noteMeta, { refetch: refetchMeta, mutate: mutateMeta }] = createResource(
-    () => (panelScreenShown() || panelOpen() ? selected()?.filename : undefined),
-    async (filename) => ({ filename, meta: await typedInvoke("read_note_meta", { filename }) }),
-  );
-  /**
-   * The frontmatter of the note on screen, never the previous one's. The resource keeps its
-   * last value while the next note's is on the way, and tags edited against it would carry
-   * one note's tags into another.
-   */
-  const currentMeta = (): NoteMeta | undefined => {
-    if (noteMeta.error) {
-      return undefined;
-    }
-    const read = noteMeta();
-    return read && read.filename === selected()?.filename ? read.meta : undefined;
-  };
+  /** Where the note panel stands and what is open in it (`lib/note-panel-state.ts`). */
+  const panel = createNotePanel({
+    twoPane,
+    writing,
+    historyOpen,
+    pinned: () => shell.notePanelPinned(),
+    setPinned: (pinned) => shell.setNotePanelPinned(pinned),
+    leaveHistory,
+  });
+  const {
+    setScreen: setPanelScreen,
+    screenShown: panelScreenShown,
+    open: panelOpen,
+    tab: panelTab,
+    detailsOpen,
+    setDetailsOpen,
+    confirmOpen,
+    setConfirmOpen,
+    close: closePanel,
+    toggle: togglePanel,
+  } = panel;
+
+  /** The frontmatter the panel edits: own tags, created time (`lib/note-meta-editor.ts`). */
+  const {
+    meta: currentMeta,
+    failed: metaFailed,
+    save: saveMeta,
+    restoreTag,
+  } = createNoteMetaEditor({
+    active: () => panelScreenShown() || panelOpen(),
+    selected: () => selected(),
+    refreshList: () => refetchNotes(),
+    showToast: (text) => shell.showToast(text),
+  });
 
   /**
    * Tags used anywhere, most used first: the suggestions under the tag input. Counted from the
@@ -443,122 +390,6 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       }
     },
   );
-
-  /**
-   * Rewrites the frontmatter's tags or created time. The value on screen moves first, so a
-   * second tag added before the first write lands is added to the list that has the first.
-   */
-  const saveMeta = async (
-    item: NoteItem,
-    change: { time?: string; tags?: string[] },
-  ): Promise<void> => {
-    const meta = currentMeta();
-    if (!meta) {
-      return;
-    }
-    const next = { ...meta, ...change };
-    mutateMeta({ filename: item.filename, meta: next });
-    try {
-      await typedInvoke("update_note_meta", {
-        filename: item.filename,
-        time: next.time,
-        tags: next.tags,
-      });
-    } catch {
-      shell.showToast(t().meta.saveFailed);
-      void refetchMeta();
-      return;
-    }
-    // The created time moves the row between date groups, and the tags show on the meta line
-    await refetchNotes();
-  };
-
-  /**
-   * Puts a removed tag back where it stood. The note is read afresh rather than through
-   * `saveMeta`: the toast outlives the selection, and `currentMeta` may be another note's by now.
-   */
-  const restoreTag = async (filename: string, tag: string, at: number): Promise<void> => {
-    try {
-      const read = await typedInvoke("read_note_meta", { filename });
-      const tags = [...read.tags.slice(0, at), tag, ...read.tags.slice(at)];
-      await typedInvoke("update_note_meta", { filename, time: read.time, tags });
-      if (selected()?.filename === filename) {
-        mutateMeta({ filename, meta: { ...read, tags } });
-      }
-    } catch {
-      shell.showToast(t().meta.saveFailed);
-      return;
-    }
-    await refetchNotes();
-  };
-
-  // The version count and "how far it has moved from the newest version". It compares the body
-  // against a version, so it reads only the one note that is open (the mark on a list row comes
-  // from core using the name fingerprint alone)
-  const [versionStatus, { refetch: refetchVersionStatus }] = createResource(
-    () => (kind() === "codex" ? selected()?.filename : undefined),
-    (filename) => typedInvoke("note_version_status", { filename }),
-  );
-  // The versions themselves. Even folded, the spine dots once per version, so a Codex reads them
-  const [versions, { refetch: refetchVersions }] = createResource(
-    () => (kind() === "codex" ? selected()?.filename : undefined),
-    (filename) => typedInvoke("list_note_versions", { filename }),
-  );
-  const versionRows = createMemo<VersionRow[]>(() => withDeltas(versions() ?? []));
-
-  /** When versions are added or removed, reread the count, the spine and the list mark together. */
-  const refreshVersions = (): void => {
-    void refetchVersionStatus();
-    void refetchVersions();
-  };
-
-  // The diff from the chosen version to the draft. Only while the history is open
-  const [diff] = createResource(
-    () => {
-      const id = selectedVersionId();
-      const filename = selected()?.filename;
-      return historyOpen() && id !== null && filename ? { filename, from: id } : undefined;
-    },
-    (args) => typedInvoke("diff_note_versions", args),
-  );
-
-  /**
-   * The body with the gutter marks applied. An empty diff (same content) means no marks and the
-   * body as it is. Saves are flushed when the history opens, so the body on screen equals disk.
-   */
-  const marked = createMemo(() => {
-    const text = diff();
-    return text ? markedBody(fullBody(), text) : undefined;
-  });
-  /**
-   * "committed 4 times in 9 months", the line at the top of the history tab. The span since the
-   * first version comes from the list.
-   */
-  const cadence = (): string | undefined => {
-    const rows = versionRows();
-    const oldest = rows.at(-1);
-    return oldest
-      ? t().codex.cadence(rows.length, spanSince(oldest.version.time, new Date()))
-      : undefined;
-  };
-
-  /** The row chosen in the history. It gives the number and decides what to restore to. */
-  const selectedRow = createMemo<VersionRow | undefined>(() =>
-    versionRows().find((row) => row.version.id === selectedVersionId()),
-  );
-
-  /**
-   * "3 lines added, 1 line removed". It counts from the diff compare mode has already read, so
-   * showing it adds not one IPC call. Identical content reads as "same content".
-   */
-  const compareDetail = (): string => {
-    const text = diff();
-    if (text === undefined) {
-      return "";
-    }
-    const { added, removed } = diffLineCounts(text);
-    return added + removed === 0 ? t().codex.sameShort : t().codex.lineDelta(added, removed);
-  };
 
   /**
    * Whether to show the compare bar. While compare mode is on, on a phone. It shows even when the
@@ -903,16 +734,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     shell.showToast(written ? t().notes.reverted : t().notes.shownFromBackup);
   };
 
-  /**
-   * Commits the current draft as a version. This is the only entry, and nothing commits
-   * automatically. It hangs on neither save, leave nor promotion: a version is the mark a person
-   * puts at "this far".
-   *
-   * It commits the moment it is pressed. No message is asked for: "version N, date" is enough for
-   * a version's name, and asking makes committing itself feel like a chore. Instead a toast says
-   * the summary, and during the grace period it can be undone (which only deletes the version's
-   * file).
-   */
+  /** Commits the current draft as a version (`codexHistory.commit`). */
   const commitVersion = async (item: NoteItem): Promise<void> => {
     if (kind() !== "codex" || !loaded()) {
       return;
@@ -920,58 +742,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     shell.closePopovers();
     // The body on disk is committed. Unless the in-flight save lands, the last typing misses it
     await session.settleWrites();
-    const before = versions() ?? [];
-    let version;
-    try {
-      version = await typedInvoke("commit_note_version", {
-        filename: item.filename,
-        message: null,
-      });
-    } catch {
-      shell.showToast(t().codex.commitFailed);
-      return;
-    }
-    // Committing the same body in the same second makes core return the previous version as it is.
-    // What did not grow cannot be undone: deleting it would delete a version that already existed
-    const existed = before.some((v) => v.id === version.id);
-    const [latest] = before;
-    const count = existed ? before.length : before.length + 1;
-    const summary = [
-      latest
-        ? t().codex.deltaFromLatest(before.length, version.bytes - latest.bytes)
-        : t().codex.sizeOf(version.bytes),
-      latest && daysSince(latest.time, new Date()) > 0
-        ? t().codex.sinceDays(daysSince(latest.time, new Date()))
-        : undefined,
-    ]
-      .filter(Boolean)
-      .join(" · ");
-    // If the history is open, only the one added row pops in. When it merely pointed again at a
-    // version that already existed, nothing moves
-    if (!existed) {
-      setFreshVersionId(version.id);
-      setTimeout(() => setFreshVersionId(null), POP_MS);
-    }
-    refreshVersions();
-    // The folded-corner page in the list changes its count and frame too
-    void refetchNotes();
-    const undo = existed
-      ? undefined
-      : (): void => {
-          void (async () => {
-            try {
-              await typedInvoke("delete_note_version", {
-                filename: item.filename,
-                id: version.id,
-              });
-            } catch {
-              return;
-            }
-            refreshVersions();
-            void refetchNotes();
-          })();
-        };
-    shell.showToast(t().codex.committed(count), undo, summary);
+    await codexHistory.commit(item);
   };
 
   /**
@@ -988,60 +759,12 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       return;
     }
     openInViewer();
-    if (twoPane()) {
-      shell.setNotePanelPinned(true);
-    } else {
-      setPanelScreen(true);
-    }
+    panel.show();
     if (historyOpen()) {
       return;
     }
     await session.settleWrites();
-    // Versions are committed on other devices too. Opening the compare screen is a cheap moment to
-    // reread. The newest version is chosen from the reread list: from the local list, an older one
-    // would keep opening as long as it is still in the arriving list, even when a newer one exists
-    void refetchVersionStatus();
-    const rows = (await refetchVersions()) ?? versions();
-    batch(() => {
-      setSelectedVersionId(rows?.[0]?.id ?? null);
-      setHistoryOpen(true);
-    });
-  };
-
-  /** Leaves compare mode. The panel stays where it is, on its settings tab. */
-  const leaveHistory = (): void => {
-    batch(() => {
-      setHistoryOpen(false);
-      setSelectedVersionId(null);
-    });
-  };
-
-  /**
-   * Folds the panel entirely, compare mode included. Opening it again always starts on the
-   * settings tab, so a panel that appears never starts by comparing.
-   */
-  const closePanel = (): void => {
-    batch(() => {
-      leaveHistory();
-      shell.setNotePanelPinned(false);
-      setPanelScreen(false);
-    });
-  };
-
-  /** ⌘. and the strip's …. Opens the panel, or folds it. On a phone, the panel screen. */
-  const togglePanel = (): void => {
-    if (writing()) {
-      return;
-    }
-    if (!twoPane()) {
-      setPanelScreen((open) => !open);
-      return;
-    }
-    if (shell.notePanelPinned()) {
-      closePanel();
-      return;
-    }
-    shell.setNotePanelPinned(true);
+    await codexHistory.enter();
   };
 
   /**
@@ -1055,11 +778,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       if (details) {
         setDetailsOpen(true);
       }
-      if (twoPane()) {
-        shell.setNotePanelPinned(true);
-      } else {
-        setPanelScreen(true);
-      }
+      panel.show();
     });
   };
 
@@ -1079,22 +798,6 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     }
     void openHistory();
   };
-
-  // If the versions have not arrived when it opens, choose the newest one that arrives. It also
-  // moves to the newest when an undo removed the version that was chosen
-  createEffect(() => {
-    if (!historyOpen()) {
-      return;
-    }
-    const rows = versions();
-    if (!rows) {
-      return;
-    }
-    const chosen = selectedVersionId();
-    if (chosen === null || !rows.some((v) => v.id === chosen)) {
-      setSelectedVersionId(rows[0]?.id ?? null);
-    }
-  });
 
   /**
    * Makes a version's body the draft. core commits "before the restore" first, so the restore
@@ -1149,15 +852,6 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     refreshVersions();
     shell.showToast(shown ? t().codex.restored : t().codex.restoredNotShown);
   };
-
-  // Whatever way the writing screen was reached, the panel does not stay beside it
-  createEffect(
-    on(writing, (entered) => {
-      if (entered) {
-        closePanel();
-      }
-    }),
-  );
 
   /** The note the cursor was last handed to. Once per opening, not on every reload. */
   let focusedFor: string | undefined;
@@ -1224,22 +918,6 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     return revertable() ? undefined : t().notes.revertNeedsEdit;
   };
 
-  /** What compare mode calls itself: "comparing version 2, 3 added, 1 removed, read-only" */
-  const compareLine = (): string[] => {
-    const row = selectedRow();
-    return row
-      ? [t().codex.comparing(row.number), compareDetail(), t().notes.readOnly].filter(Boolean)
-      : [];
-  };
-
-  /** Whether "commit a version" is worth offering: the draft has moved on. */
-  const canCommit = (): boolean => {
-    const status = versionStatus();
-    return (
-      kind() === "codex" && loaded() && status !== undefined && (status.dirty || status.count === 0)
-    );
-  };
-
   // The dot's details (AppLayout) say what state the note is in, so a closed panel hides nothing.
   // Leaving the surface clears it, the way the save state is cleared
   createEffect(() => {
@@ -1296,22 +974,6 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   };
 
   /**
-   * Enter or e in the viewer opens the writing screen. Not when the key belongs to something
-   * else: a field, a focused button or link, or the palette (AppLayout closes it on the same Esc
-   * this handler sees next, so its target is what tells).
-   */
-  const isWriteKey = (e: KeyboardEvent): boolean => {
-    if (writing() || e.metaKey || e.ctrlKey || e.altKey || isImeComposing(e)) {
-      return false;
-    }
-    if (e.key !== "Enter" && e.key !== "e") {
-      return false;
-    }
-    const target = e.target instanceof Element ? e.target : null;
-    return !isTypingTarget(e.target) && !target?.closest("button, a, [role='dialog']");
-  };
-
-  /**
    * The keys that act on the open note. They are taken here because the target is "the one note
    * now selected": AppLayout's table holds only what means the same on every screen.
    *
@@ -1323,6 +985,16 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
    * and nobody calls preventDefault. Here they are told apart by whether the cursor is inside text.
    */
   onMount(() => {
+    // The rows tried in order (lib/note-keys.ts)
+    const keys = noteKeys({
+      togglePanel,
+      toggleMap,
+      revertEdit,
+      openDetails: () => openSettings(true),
+      commitVersion,
+      toggleHistory,
+      isCodex: () => kind() === "codex",
+    });
     const onKeyDown = (e: KeyboardEvent): void => {
       const item = selected();
       if (!item) {
@@ -1342,7 +1014,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       if (e.target instanceof Element && e.target.closest(".palette-overlay, .search")) {
         return;
       }
-      if (isWriteKey(e)) {
+      if (isWriteKey(e, writing())) {
         e.preventDefault();
         startWriting();
         return;
@@ -1360,25 +1032,14 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
         }
         return;
       }
-      if (matchesShortcut(e, "noteActions")) {
-        e.preventDefault();
-        togglePanel();
-      } else if (matchesShortcut(e, "noteMap")) {
-        e.preventDefault();
-        void toggleMap(item);
-      } else if (matchesShortcut(e, "noteRevert")) {
-        e.preventDefault();
-        void revertEdit(item);
-      } else if (matchesShortcut(e, "noteInfo")) {
-        e.preventDefault();
-        openSettings(true);
-      } else if (matchesShortcut(e, "codexCommit")) {
-        e.preventDefault();
-        void commitVersion(item);
-      } else if (matchesShortcut(e, "noteHistory") && kind() === "codex") {
-        e.preventDefault();
-        toggleHistory();
-      } else if (e.key === "Escape") {
+      for (const key of keys) {
+        if (matchesShortcut(e, key.shortcut) && (key.when?.() ?? true)) {
+          e.preventDefault();
+          void key.run(item);
+          return;
+        }
+      }
+      if (e.key === "Escape") {
         onEscape(e);
       }
     };
@@ -1386,34 +1047,10 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     onCleanup(() => globalThis.removeEventListener("keydown", onKeyDown));
   });
 
-  /**
-   * Up and Down inside the list. It is an action inside the list widget, so it is not on the Cmd
-   * table (`SHORTCUTS`) and is taken only inside `.list-scroll`: Up and Down pressed outside the
-   * body with nothing selected scroll the page, and that is not taken away.
-   * The list has no input field, so no `isTypingTarget` check is needed either.
-   *
-   * The focus moves first, without awaiting `switchTo`. The feel of the press is not delayed until
-   * the save finishes. The row's background catches up when `selectedId` changes.
-   */
-  const onListKeyDown = (e: KeyboardEvent): void => {
-    if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) {
-      return;
-    }
-    const step = LIST_STEP_KEYS[e.key];
-    if (step === undefined) {
-      return;
-    }
-    // At an end, do nothing. preventDefault is not called either, so it falls to the list scroll
-    const next = stepNote(visibleItems(), selected()?.id, step);
-    if (!next) {
-      return;
-    }
-    e.preventDefault();
-    const row = listScrollRef?.querySelector<HTMLElement>(`[data-id="${CSS.escape(next)}"]`);
-    row?.focus();
-    row?.scrollIntoView({ block: "nearest" });
+  /** Up or Down in the list already moved the focus to `id`; the viewer follows it there. */
+  const stepTo = (id: string): void => {
     openInViewer();
-    void switchTo(next);
+    void switchTo(id);
   };
 
   const createNote = async (): Promise<void> => {
@@ -1461,17 +1098,6 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       shell.showToast(t().templates.createFailed);
     }
   };
-
-  /**
-   * On a touch device a long press is the entry to templates. A tap still makes an empty note, so
-   * "open and write at once" does not cost one more step.
-   */
-  const newNoteLongPress = createLongPress(() => {
-    if (kind() === "note") {
-      shell.togglePopover("new-note-menu", newNoteButton);
-    }
-  });
-  let newNotePointer = "mouse";
 
   /**
    * Moves a Note into Codex's store. Neither the ID nor the body changes, only the surface.
@@ -1546,9 +1172,6 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     });
   };
 
-  /** The panel's name, which is also what its toggle and the phone's meta line say. */
-  const panelLabel = (): string => (kind() === "codex" ? t().codex.panel : t().notes.panel);
-
   /** The panel's tags. The meta line only shows them. */
   const tagEditor = (item: () => NoteItem, screen: boolean): JSX.Element => (
     <TagEditor
@@ -1592,7 +1215,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       detailsOpen={detailsOpen()}
       onToggleDetails={() => setDetailsOpen((open) => !open)}
       meta={currentMeta()}
-      metaError={Boolean(noteMeta.error)}
+      metaError={metaFailed()}
       onEditTime={(value) => {
         const meta = currentMeta();
         const time = meta ? resolveEditedTime(meta.time, value) : undefined;
@@ -1645,165 +1268,25 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     />
   );
 
-  /**
-   * Whether to show the flyout. While not one note is open it stays out: folding with nothing to
-   * hide (the body) would leave a screen with nothing on it until the pointer finds the edge.
-   */
-  const flyoutOpen = (): boolean => shell.listOpen() || selected() === undefined;
-
-  const pinLabel = (): string =>
-    shell.listPinned()
-      ? t().notes.unpinList(shortcutLabel("listPin"))
-      : t().notes.pinList(shortcutLabel("listPin"));
-
   return (
     <div class="workspace workspace--flyout" classList={{ "workspace--detail": detailOpen() }}>
-      {/* Nothing to see: resting the pointer on the window's left edge opens the list */}
-      <div
-        class="list-edge"
-        aria-hidden="true"
-        onPointerEnter={() => shell.setListHover(true)}
-        onPointerLeave={() => shell.setListHover(false)}
+      <NoteList
+        kind={kind()}
+        groups={groups()}
+        items={visibleItems()}
+        selectedId={selected()?.id}
+        templates={templates() ?? []}
+        today={today}
+        onSelect={select}
+        onStep={stepTo}
+        onCreate={() => {
+          void createNote();
+        }}
+        onCreateFromTemplate={(template) => {
+          void createFromTemplate(template);
+        }}
+        onManageTemplates={() => navigate(ROUTES.TEMPLATES)}
       />
-      <div
-        class="list-pane"
-        classList={{ "list-pane--open": flyoutOpen() }}
-        onPointerEnter={() => shell.setListHover(true)}
-        onPointerLeave={() => shell.setListHover(false)}
-      >
-        <div class="list-pane-head">
-          <span class="list-pane-title">
-            {MODE_LABELS[kind() === "codex" ? ROUTES.CODEX : ROUTES.NOTES]}
-          </span>
-          <div class="list-pane-actions">
-            {/* No badge on the Codex surface. What Cmd-N makes is a Note, and pressing it moves
-                to Notes. This button makes one on the surface you are on, so typing what the
-                badge says would create a different thing in a different place */}
-            <button
-              type="button"
-              class="new-note long-press"
-              ref={newNoteButton}
-              aria-expanded={shell.popover() === "new-note-menu"}
-              data-hint-key={kind() === "codex" ? undefined : shortcutLabel("newNote")}
-              onPointerDown={(e) => {
-                newNotePointer = e.pointerType;
-                newNoteLongPress.onPointerDown(e);
-              }}
-              onPointerUp={newNoteLongPress.onPointerUp}
-              onPointerMove={newNoteLongPress.onPointerMove}
-              onPointerCancel={newNoteLongPress.onPointerCancel}
-              onContextMenu={newNoteLongPress.onContextMenu}
-              onClick={() => {
-                // Swallow the click right after a long press opened the menu
-                if (!newNoteLongPress.shouldClick()) {
-                  return;
-                }
-                // Templates are a Note entry. On the Codex surface it only makes one empty note:
-                // `create_from_template` cannot choose the store
-                if (newNotePointer === "mouse" && kind() === "note") {
-                  shell.togglePopover("new-note-menu", newNoteButton);
-                } else {
-                  void createNote();
-                }
-              }}
-            >
-              <Icon name="plus" size={12} />
-              {t().notes.new}
-            </button>
-            {/* The pin belongs inside the list, so it can be pressed only while the list is open.
-              The same thing can be done with Cmd-\ */}
-            <button
-              type="button"
-              class="list-pin"
-              aria-pressed={shell.listPinned()}
-              title={pinLabel()}
-              aria-label={pinLabel()}
-              data-hint-key={shortcutLabel("listPin")}
-              onClick={() => shell.toggleListPin()}
-            >
-              <Icon name={shell.listPinned() ? "push-pin-fill" : "push-pin"} size={14} />
-            </button>
-          </div>
-        </div>
-
-        <Popover
-          open={shell.popover() === "new-note-menu"}
-          onClose={() => shell.closePopovers()}
-          trigger={shell.popoverTrigger}
-          label={t().templates.newNote}
-        >
-          {/* The back is darkened only for the sheet that comes up from the bottom (CSS decides
-              which). Closing is taken here: this curtain sits inside the container, so to the
-              component a press on it is an inside press and never "pressed outside". The sheet
-              has no cancel button and the curtain covers the button that opened it as well, so
-              without taking it there is no way out with a finger alone */}
-          <div
-            class="template-picker-backdrop"
-            aria-hidden="true"
-            onClick={() => shell.closePopovers()}
-          />
-          <TemplatePicker
-            templates={templates() ?? []}
-            onPickEmpty={() => {
-              shell.closePopovers();
-              void createNote();
-            }}
-            onPick={(template) => {
-              void createFromTemplate(template);
-            }}
-            onManage={() => {
-              shell.closePopovers();
-              navigate(ROUTES.TEMPLATES);
-            }}
-          />
-        </Popover>
-
-        {/* The keys are taken by the rows inside (button); this only bundles them.
-            Like `.detail-body`, a container that claims no role */}
-        <div class="list-scroll" ref={listScrollRef} role="presentation" onKeyDown={onListKeyDown}>
-          <Show when={groups().length} fallback={<EmptyNotes kind={kind()} />}>
-            <For each={groups()}>
-              {(group) => (
-                <>
-                  <div class="list-group-label">{group.label}</div>
-                  <For each={group.items}>
-                    {(item) => (
-                      <button
-                        type="button"
-                        class="list-row"
-                        data-id={item.id}
-                        classList={{
-                          "list-row--selected": selected()?.id === item.id,
-                          "list-row--codex": kind() === "codex",
-                        }}
-                        onClick={() => select(item as NoteItem)}
-                      >
-                        <span class="list-row-title">{itemTitle(item)}</span>
-                        {/* Only a Codex row puts the version count on a folded-corner page. The
-                            first of the differences from Note */}
-                        <Show when={kind() === "codex"}>
-                          <PageMark
-                            count={(item as NoteItem).versionCount ?? 0}
-                            dirty={(item as NoteItem).dirty ?? false}
-                          />
-                        </Show>
-                        <span class="list-row-stamp">{noteRowStamp(item as NoteItem, today)}</span>
-                      </button>
-                    )}
-                  </For>
-                </>
-              )}
-            </For>
-          </Show>
-        </div>
-
-        {/* The rule for opening and closing is written at the foot, only while it is open */}
-        <div class="list-pane-foot">
-          {shell.listPinned()
-            ? t().notes.listPinnedHint(shortcutLabel("listPin"))
-            : t().notes.listHint(shortcutLabel("listPin"))}
-        </div>
-      </div>
 
       <div
         class="detail-pane"
@@ -1823,77 +1306,22 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
               <Show when={!panelScreenShown()}>
                 {/* Title, record and actions in one group. They sit on the same level as the body,
                   so what you want to know about a note is not searched for somewhere far away */}
-                {/* The strip over the page. The viewer: back (a phone's) · map · write · tidy.
-                    The writing screen: done. Keys live in the titles */}
-                <div class="note-strip">
-                  <Show
-                    when={writing()}
-                    fallback={
-                      <>
-                        <button
-                          type="button"
-                          class="icon-button detail-back"
-                          aria-label={t().notes.backToList}
-                          onClick={() => {
-                            void session.settleEdit();
-                            setDetailOpen(false);
-                          }}
-                        >
-                          <Icon name="arrow-left" size={18} />
-                        </button>
-                        <span class="note-strip-fill" />
-                        <button
-                          type="button"
-                          class="icon-button"
-                          aria-pressed={mapOpen()}
-                          title={`${t().notes.map} ${shortcutLabel("noteMap")}`}
-                          aria-label={t().notes.map}
-                          onClick={() => {
-                            void toggleMap(item());
-                          }}
-                        >
-                          <Icon name="tree-structure" size={17} />
-                        </button>
-                        <button
-                          type="button"
-                          class="icon-button"
-                          title={`${t().viewer.write} ↵`}
-                          aria-label={t().viewer.write}
-                          disabled={historyOpen()}
-                          onClick={startWriting}
-                        >
-                          <Icon name="pencil" size={17} />
-                        </button>
-                      </>
-                    }
-                  >
-                    <button
-                      type="button"
-                      class="icon-button"
-                      title={`${t().viewer.done} Esc`}
-                      aria-label={t().viewer.done}
-                      onClick={stopWriting}
-                    >
-                      <Icon name="check" size={17} />
-                    </button>
-                    <span class="note-strip-fill" />
-                  </Show>
-                  {/* The one visible way into the panel; ⌘. is the other. Neither works while
-                    writing: nothing interrupts the writing hand */}
-                  <Show when={!writing()}>
-                    <button
-                      type="button"
-                      class="icon-button note-panel-toggle"
-                      aria-expanded={shell.notePanelPinned()}
-                      title={`${t().viewer.tidy} ${shortcutLabel("noteActions")}`}
-                      aria-label={panelLabel()}
-                      data-hint-key={shortcutLabel("noteActions")}
-                      onClick={togglePanel}
-                    >
-                      <Icon name="dots-three" size={18} />
-                    </button>
-                  </Show>
-                </div>
+                <NoteStrip
+                  kind={kind()}
+                  writing={writing()}
+                  mapOpen={mapOpen()}
+                  historyOpen={historyOpen()}
+                  onBack={() => {
+                    void session.settleEdit();
+                    setDetailOpen(false);
+                  }}
+                  onToggleMap={() => {
+                    void toggleMap(item());
+                  }}
+                  onWrite={startWriting}
+                  onDone={stopWriting}
+                  onTogglePanel={togglePanel}
+                />
 
                 <div class="detail-head">
                   {/* The title is the H1 at the top of the body itself. What is typed here is
@@ -1944,70 +1372,21 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                     </div>
                   </Show>
 
-                  {/* The phone's state row. A wide window says the same in the dot's details, so it
-                    is hidden there (CSS) */}
-                  <div class="detail-status-row">
-                    <Show when={saveStatus() !== "idle"}>
-                      <span class="detail-save-status" data-status={saveStatus()}>
-                        <Show when={saveStatus() === "saving"}>
-                          <Icon name="circle-notch" size={11} />
-                        </Show>
-                        <Show when={saveStatus() === "saved"}>
-                          <Icon name="check" size={11} />
-                        </Show>
-                        {saveStatus() === "saving" ? t().common.saving : null}
-                        {saveStatus() === "saved" ? t().common.saved : null}
-                        {saveStatus() === "savedAt" ? t().notes.savedAt(savedAt()) : null}
-                        {saveStatus() === "failed" ? t().status.saveFailed : null}
-                      </span>
-                    </Show>
-                    <Show when={mapShown()}>
-                      <button
-                        type="button"
-                        class="detail-state-pill"
-                        onClick={() => openSettings()}
-                      >
-                        <Icon name="tree-structure" size={12} />
-                        {t().notes.map}
-                      </button>
-                    </Show>
-                    <Show when={examplesShown() && item().template !== undefined}>
-                      <button
-                        type="button"
-                        class="detail-state-pill"
-                        onClick={() => openSettings()}
-                      >
-                        <Icon name="file-text" size={12} />
-                        {t().notes.examples}
-                      </button>
-                    </Show>
-                    <span class="detail-status-actions">
-                      <Show when={canCommit()}>
-                        <button
-                          type="button"
-                          class="detail-action-pill"
-                          onClick={() => {
-                            void commitVersion(item());
-                          }}
-                        >
-                          <Icon name="book-bookmark" size={13} />
-                          {t().codex.commit}
-                        </button>
-                      </Show>
-                      <Show when={canRevert()}>
-                        <button
-                          type="button"
-                          class="detail-action-pill"
-                          onClick={() => {
-                            void revertEdit(item());
-                          }}
-                        >
-                          <Icon name="arrow-counter-clockwise" size={13} />
-                          {t().notes.revert}
-                        </button>
-                      </Show>
-                    </span>
-                  </div>
+                  <NoteStatusRow
+                    saveStatus={saveStatus()}
+                    savedAt={savedAt()}
+                    mapShown={mapShown()}
+                    examplesShown={examplesShown() && item().template !== undefined}
+                    canCommit={canCommit()}
+                    canRevert={canRevert()}
+                    onOpenSettings={() => openSettings()}
+                    onCommit={() => {
+                      void commitVersion(item());
+                    }}
+                    onRevert={() => {
+                      void revertEdit(item());
+                    }}
+                  />
                 </div>
 
                 <div class="detail-panes" classList={{ "detail-panes--map": mapShown() }}>
