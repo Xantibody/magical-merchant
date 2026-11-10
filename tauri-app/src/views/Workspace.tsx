@@ -1409,12 +1409,18 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   };
 
   const createNote = async (): Promise<void> => {
-    const path = await typedInvoke("create_draft", {
-      body: "",
-      tags: [],
-      kind: kind(),
-      client: await getDeviceSignals(),
-    });
+    let path;
+    try {
+      path = await typedInvoke("create_draft", {
+        body: "",
+        tags: [],
+        kind: kind(),
+        client: await getDeviceSignals(),
+      });
+    } catch {
+      shell.showToast(kind() === "codex" ? t().codex.createFailed : t().notes.createFailed);
+      return;
+    }
     await refetchNotes();
     // Open the note just created. Leaving the selection where it was would make whoever types a
     // title rewrite the title of the note they had open before
@@ -1468,7 +1474,13 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   const promoteToCodex = async (item: NoteItem): Promise<void> => {
     shell.closePopovers();
     await session.settleWrites();
-    await typedInvoke("promote_note_to_codex", { filename: item.filename });
+    try {
+      await typedInvoke("promote_note_to_codex", { filename: item.filename });
+    } catch {
+      // Nothing moved, so it stays on the note it was pressed on
+      shell.showToast(t().codex.promoteFailed);
+      return;
+    }
     await refetchNotes();
     // Scrawl's origin chips are derived from the list too. The link survives the change of
     // surface, so make that side reread as well
@@ -1494,7 +1506,18 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
 
     const commit = setTimeout(() => {
       void (async () => {
-        await typedInvoke("delete_note", { filename: item.filename });
+        try {
+          await typedInvoke("delete_note", { filename: item.filename });
+        } catch {
+          // Kept hidden, a note still on disk would read as deleted until the next start, so
+          // its row comes back. The list is read again first: a Codex loses its body before its
+          // versions, so the refusal can come with the file already gone. The selection stays
+          // where the person has gone since
+          await refetchNotes();
+          setHidden((ids) => ids.filter((id) => id !== item.id));
+          shell.showToast(t().notes.deleteFailed(item.title));
+          return;
+        }
         await refetchNotes();
         setHidden((ids) => ids.filter((id) => id !== item.id));
         // Scrawl's origin chips are derived from the note list. This refetch does not reach

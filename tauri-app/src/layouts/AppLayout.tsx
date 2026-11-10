@@ -138,11 +138,17 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
   const newNote = (): void => {
     shell.closePalette();
     void (async () => {
-      const path = await typedInvoke("create_draft", {
-        body: "",
-        tags: [],
-        client: await getDeviceSignals(),
-      });
+      let path;
+      try {
+        path = await typedInvoke("create_draft", {
+          body: "",
+          tags: [],
+          client: await getDeviceSignals(),
+        });
+      } catch {
+        shell.showToast(t().notes.createFailed);
+        return;
+      }
       shell.refreshData();
       navigate(writeRoute("note", path.split("/").at(-1)));
     })();
