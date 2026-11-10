@@ -668,6 +668,12 @@
   .scrawl-calendar {
     display: none;
   }
+
+  /* The chips' hit area reaches 5px below them and the digest ×'s 14px above it (layout.css):
+     at 14px apart the two took each other's taps */
+  .scrawl-head {
+    gap: 20px;
+  }
 }
 
 /* One line, not a card. A once-a-week summary does not justify another layer */

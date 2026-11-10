@@ -332,15 +332,19 @@
     flex-direction: row;
     flex-wrap: wrap;
     gap: 10px;
-    padding: 10px 12px 4px;
+    /* The foot leaves room for the last row's hit area (layout.css), which the scroll would cut */
+    padding: 10px 12px 5px;
     border-right: none;
     max-height: 38vh;
     overflow-y: auto;
   }
 
+  /* A 34px chip takes 5px of hit area above and below (layout.css). Rows 10px apart let
+     those meet instead of one chip taking the next one's taps */
   .browse-group {
     flex-direction: row;
     flex-wrap: wrap;
+    row-gap: 10px;
   }
 
   /* The whole band scrolls vertically. No second scroll is made inside the group alone */
