@@ -84,6 +84,10 @@ const finishRound = (): Promise<void> =>
     errors: [],
   });
 
+/** The round that is running ends in a failure. Only with `shouldMockEvents` */
+const failRound = (): Promise<void> =>
+  emit(EVENTS.SYNC_ERROR, { kind: "other", message: "The server did not answer" });
+
 /** Something was written. Any mutating command marks the device as holding something unsent */
 const save = (): Promise<void> =>
   typedInvoke("update_note_meta", { filename: "20260101_000000.md", time: "", tags: [] });
@@ -480,6 +484,77 @@ describe("createSyncState a sync asked for during a sync", () => {
       expect(syncStarts()).toBe(2);
     });
     await finishRound();
+    expect(syncStarts()).toBe(2);
+    dispose();
+  });
+});
+
+describe("createSyncState a round that fails", () => {
+  beforeEach(() => {
+    calls = [];
+    handlers = {
+      get_sync_config: () => ({
+        workers_url: "https://sync.example",
+        auto_sync: true,
+        // The start-up round is the one that fails
+        sync_on_start: true,
+      }),
+      auth_status: () => true,
+      // The command resolves however the round ends. Only the event says how
+      sync_start: () => null,
+    };
+    mockWindows("main");
+    mockIPC(
+      (cmd) => {
+        const handler = handlers[cmd];
+        if (!handler) {
+          throw new Error(`unexpected command ${cmd}`);
+        }
+        calls.push(cmd);
+        return handler();
+      },
+      { shouldMockEvents: true },
+    );
+  });
+
+  afterEach(() => {
+    clearMocks();
+  });
+
+  const syncStarts = (): number => calls.filter((c) => c === "sync_start").length;
+
+  // Told by the event and by the rejection as well, the failure raised two toasts
+  it("raises the alert once", async () => {
+    const { state, dispose } = mount();
+    await vi.waitFor(() => {
+      expect(syncStarts()).toBe(1);
+    });
+
+    await failRound();
+
+    await vi.waitFor(() => {
+      expect(state.status()).toBe("error");
+    });
+    expect(state.alertVersion()).toBe(1);
+    dispose();
+  });
+
+  // A second telling that landed after the rerun had started marked the rerun as failed, and the
+  // next ask then went to Rust while the rerun still held its guard
+  it("leaves the rerun asked for meanwhile running", async () => {
+    const { state, dispose } = mount();
+    await vi.waitFor(() => {
+      expect(syncStarts()).toBe(1);
+    });
+    void state.syncNow();
+
+    await failRound();
+
+    await vi.waitFor(() => {
+      expect(syncStarts()).toBe(2);
+    });
+    expect(state.status()).toBe("syncing");
+    void state.syncNow();
     expect(syncStarts()).toBe(2);
     dispose();
   });

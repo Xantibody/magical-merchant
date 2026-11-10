@@ -320,6 +320,10 @@ interface CommandMap {
   /** `format` is `png` or `svg`. The content is base64. */
   save_glyph: { args: { name: string; format: string; dataBase64: string }; result: void };
   delete_glyph: { args: { name: string }; result: void };
+  /**
+   * Resolves with nothing once a round has run: how it ended arrives as `sync-complete` or
+   * `sync-error`. Rejects only with `busy`, when a round is already running.
+   */
   sync_start: { args: void; result: void };
   sync_status: { args: void; result: unknown };
   auth_login: { args: void; result: void };

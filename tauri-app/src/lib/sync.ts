@@ -184,8 +184,9 @@ export function createSyncState(onSynced: () => void): SyncState {
     setMessage(t().sync.syncing);
     try {
       await typedInvoke("sync_start");
-      // The result is applied through the sync-complete / sync-error events
+      // A round that ran, failed or not, is applied through the sync-complete / sync-error events
     } catch (error) {
+      // No round ran (a round was already running in Rust), so no event will follow
       applyError(error);
       roundEnded();
     }

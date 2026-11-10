@@ -3,6 +3,7 @@
 //! The engine itself is in core (`magical_merchant_core::sync::engine`); what stays here is
 //! only the commands, the in-progress state, the events, and building the HTTP client.
 
+use std::future::Future;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, PoisonError};
 
@@ -70,11 +71,42 @@ impl Drop for SyncingGuard<'_> {
     }
 }
 
+/// How a round that ran ended, on its way to the webview as one of the two events
+#[derive(Debug)]
+enum RoundEnd<'a> {
+    Complete(&'a SyncResult),
+    Error(&'a SyncError),
+}
+
+/// Starts a round. However it ends, the webview hears it once, as `sync-complete` or
+/// `sync-error`, and the command resolves. It rejects only when no round ran because one was
+/// already running, and that sends no event.
+///
+/// AIDEV-NOTE: a failed round used to be emitted and rejected both, and the webview applied it twice. Dropping the duplicate on the webview's side was rejected: there this guard's rejected `busy` and the engine lock's emitted `busy` look the same
 #[tauri::command]
 pub(crate) async fn sync_start(
     handle: AppHandle,
     state: State<'_, AppSyncState>,
-) -> Result<SyncResult, SyncError> {
+) -> Result<(), SyncError> {
+    // `do_sync` is an async fn, so building its future here runs nothing: a start the guard
+    // refuses never reads the config or touches the network
+    run_round(state.inner(), do_sync(&handle), |end| {
+        // A webview that is gone has nobody left to tell
+        let _ = match end {
+            RoundEnd::Complete(result) => handle.emit(EVENT_SYNC_COMPLETE, result),
+            RoundEnd::Error(err) => handle.emit(EVENT_SYNC_ERROR, err),
+        };
+    })
+    .await
+}
+
+/// `sync_start` with the round and the events passed in, so it runs in a test with neither a
+/// server nor a webview
+async fn run_round<R, E>(state: &AppSyncState, round: R, emit: E) -> Result<(), SyncError>
+where
+    R: Future<Output = Result<SyncResult, SyncError>>,
+    E: Fn(RoundEnd<'_>),
+{
     if state
         .is_syncing
         .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
@@ -84,9 +116,7 @@ pub(crate) async fn sync_start(
     }
     let _guard = SyncingGuard(&state.is_syncing);
 
-    let result = do_sync(&handle).await;
-
-    match &result {
+    match round.await {
         Ok(sync_result) => {
             // Cleaning up duplicate IDs that came down happens inside the engine. Doing it
             // after the lock is released would move notes in the middle of the scan a
@@ -99,18 +129,18 @@ pub(crate) async fn sync_start(
                 .last_error
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner) = None;
-            let _ = handle.emit(EVENT_SYNC_COMPLETE, sync_result);
+            emit(RoundEnd::Complete(&sync_result));
         }
         Err(err) => {
             *state
                 .last_error
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner) = Some(err.message.clone());
-            let _ = handle.emit(EVENT_SYNC_ERROR, err);
+            emit(RoundEnd::Error(&err));
         }
     }
 
-    result
+    Ok(())
 }
 
 #[tauri::command]
@@ -172,6 +202,8 @@ async fn do_sync(handle: &AppHandle) -> Result<SyncResult, SyncError> {
 
 #[cfg(test)]
 mod tests {
+    use std::cell::RefCell;
+
     use super::*;
 
     #[test]
@@ -181,5 +213,75 @@ mod tests {
             let _guard = SyncingGuard(&flag);
         }
         assert!(!flag.load(Ordering::SeqCst));
+    }
+
+    /// The event `sync_start` sends for this end
+    const fn event_name(end: &RoundEnd<'_>) -> &'static str {
+        match end {
+            RoundEnd::Complete(_) => EVENT_SYNC_COMPLETE,
+            RoundEnd::Error(_) => EVENT_SYNC_ERROR,
+        }
+    }
+
+    #[tokio::test]
+    async fn a_round_that_succeeds_is_told_as_complete() {
+        let state = AppSyncState::default();
+        let events = RefCell::new(Vec::new());
+
+        let result = run_round(&state, async { Ok(SyncResult::default()) }, |end| {
+            events.borrow_mut().push(event_name(&end));
+        })
+        .await;
+
+        assert!(result.is_ok());
+        assert_eq!(*events.borrow(), [EVENT_SYNC_COMPLETE]);
+        assert!(!state.is_syncing.load(Ordering::SeqCst));
+    }
+
+    /// The webview applies whatever it hears. Told by the event and again by the rejection, it
+    /// raised the alert twice, and a rejection landing after the rerun had started marked that
+    /// rerun as failed
+    #[tokio::test]
+    async fn a_round_that_fails_is_told_once_through_the_event() {
+        let state = AppSyncState::default();
+        let events = RefCell::new(Vec::new());
+
+        let result = run_round(
+            &state,
+            async { Err(SyncError::new("notAuthenticated", "Not logged in.")) },
+            |end| events.borrow_mut().push(event_name(&end)),
+        )
+        .await;
+
+        assert!(result.is_ok());
+        assert_eq!(*events.borrow(), [EVENT_SYNC_ERROR]);
+        assert_eq!(
+            state
+                .last_error
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .as_deref(),
+            Some("Not logged in.")
+        );
+        assert!(!state.is_syncing.load(Ordering::SeqCst));
+    }
+
+    /// The app's own busy guard: no round ran, so there is no event, and the rejection is the
+    /// only answer the webview gets
+    #[tokio::test]
+    async fn a_start_during_a_round_is_refused_without_an_event() {
+        let state = AppSyncState::default();
+        state.is_syncing.store(true, Ordering::SeqCst);
+        let events = RefCell::new(Vec::new());
+
+        let result = run_round(&state, async { Ok(SyncResult::default()) }, |end| {
+            events.borrow_mut().push(event_name(&end));
+        })
+        .await;
+
+        assert_eq!(result.err().map(|e| e.kind), Some("busy"));
+        assert!(events.borrow().is_empty());
+        // The round in flight still owns the flag
+        assert!(state.is_syncing.load(Ordering::SeqCst));
     }
 }
