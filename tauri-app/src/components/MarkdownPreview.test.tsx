@@ -33,6 +33,16 @@ function sleep(ms: number): Promise<void> {
   });
 }
 
+/**
+ * Press one of a block's tools the way a pointer does. They stay transparent and let clicks
+ * through until the block is hovered (markdown-preview.css), and Vitest 5's click no longer
+ * lands on them unhovered
+ */
+async function pressTool(block: Locator, tool: Locator): Promise<void> {
+  await userEvent.hover(block);
+  await userEvent.click(tool);
+}
+
 describe("MarkdownPreview", () => {
   afterEach(() => cleanup());
 
@@ -96,7 +106,7 @@ describe("MarkdownPreview", () => {
     const screen = page.elementLocator(baseElement);
 
     await expect.element(screen.locator(".mermaid-figure svg")).toBeInTheDocument();
-    await userEvent.click(screen.locator('[data-action="zoom"]'));
+    await pressTool(screen.locator(".mermaid-block"), screen.locator('[data-action="zoom"]'));
     const zoom = screen.locator(".mermaid-zoom");
     await expect.element(zoom).toBeInTheDocument();
     const percent = screen.locator(".mermaid-zoom-percent");
@@ -133,7 +143,7 @@ describe("MarkdownPreview", () => {
     const screen = page.elementLocator(baseElement);
 
     await expect.element(screen.locator(".mermaid-figure svg")).toBeInTheDocument();
-    await userEvent.click(screen.locator('[data-action="zoom"]'));
+    await pressTool(screen.locator(".mermaid-block"), screen.locator('[data-action="zoom"]'));
 
     await expect.element(screen.locator(".mermaid-zoom-canvas svg")).toBeInTheDocument();
   });
@@ -185,7 +195,7 @@ describe("MarkdownPreview", () => {
       const screen = page.elementLocator(baseElement);
 
       await expect.element(screen.locator(".mermaid-figure svg")).toBeInTheDocument();
-      await userEvent.click(screen.locator('[data-action="svg"]'));
+      await pressTool(screen.locator(".mermaid-block"), screen.locator('[data-action="svg"]'));
 
       await expect.poll(() => calls.map((call) => call.cmd)).toStrictEqual(["save_export"]);
       expect(calls[0].args.suggestedName).toBe("20260903_101010-1.svg");
@@ -199,7 +209,7 @@ describe("MarkdownPreview", () => {
       const screen = page.elementLocator(baseElement);
 
       await expect.element(screen.locator(".mermaid-figure svg")).toBeInTheDocument();
-      await userEvent.click(screen.locator('[data-action="png"]'));
+      await pressTool(screen.locator(".mermaid-block"), screen.locator('[data-action="png"]'));
 
       await expect.poll(() => calls.map((call) => call.cmd)).toStrictEqual(["save_export"]);
       expect(calls[0].args.suggestedName).toBe("diagram-1.png");
@@ -223,7 +233,7 @@ describe("MarkdownPreview", () => {
       const screen = page.elementLocator(baseElement);
 
       await expect.element(screen.locator(".mermaid-figure svg")).toBeInTheDocument();
-      await userEvent.click(screen.locator('[data-action="png"]'));
+      await pressTool(screen.locator(".mermaid-block"), screen.locator('[data-action="png"]'));
 
       await expect.poll(() => errors).toStrictEqual(["図を保存できませんでした"]);
       expect(calls).toStrictEqual([]);
@@ -241,7 +251,7 @@ describe("MarkdownPreview", () => {
       const screen = page.elementLocator(baseElement);
 
       await expect.element(screen.locator(".mermaid-figure svg")).toBeInTheDocument();
-      await userEvent.click(screen.locator('[data-action="svg"]'));
+      await pressTool(screen.locator(".mermaid-block"), screen.locator('[data-action="svg"]'));
 
       await expect.poll(() => errors).toStrictEqual(["図を保存できませんでした"]);
     });
@@ -282,7 +292,7 @@ describe("MarkdownPreview", () => {
       const screen = page.elementLocator(baseElement);
 
       await expect.element(screen.locator("pre").nth(1)).toBeInTheDocument();
-      await userEvent.click(screen.locator('[data-action="copy"]').nth(1));
+      await pressTool(screen.locator("pre").nth(1), screen.locator('[data-action="copy"]').nth(1));
 
       await expect.poll(() => written).toStrictEqual(["const b = 2;\n"]);
       await expect.element(screen.locator('[data-action="copy"]').nth(1)).toHaveClass("is-copied");
