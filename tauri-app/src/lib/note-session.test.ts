@@ -2,7 +2,8 @@ import { describe, it, expect, onTestFinished, vi } from "vitest";
 import { createNoteSession } from "./note-session";
 import type { NoteSession, PendingSave, SaveStatus, SaveTarget } from "./note-session";
 import type { BackupStore } from "./edit-backup";
-import type { NoteContent } from "./note-view";
+import type { NoteContent, NoteView } from "./note-view";
+import { joinTitle } from "./note-title";
 import { t } from "./i18n";
 
 const NOTE: SaveTarget = {
@@ -54,6 +55,7 @@ interface Harness {
     body: string;
     bodyEpoch: number;
     focus: boolean;
+    mode: NoteView;
   };
   /** The body the next read returns. null makes the read fail. */
   disk: { content: NoteContent | null };
@@ -79,6 +81,7 @@ function harness(options: { store?: ReturnType<typeof memoryStore> } = {}): Harn
     body: "# 歩いた日\n\n三丁目まで",
     bodyEpoch: 1,
     focus: false,
+    mode: "editor",
   };
   const disk: Harness["disk"] = {
     content: { body: "# 歩いた日\n\nディスクのぶん", view: "editor", revision: "r-disk" },
@@ -108,11 +111,16 @@ function harness(options: { store?: ReturnType<typeof memoryStore> } = {}): Harn
       writes.push({ filename, body, revision });
       return `r-${writes.length}`;
     },
-    showBody: (id, title, body) => {
+    showBody: (id, title, body, mode) => {
       shown.push({ id, title, body });
-      // As on the real screen, putting a body up advances the epoch by one
+      // As on the real screen, putting a body up advances the epoch by one, and the title
+      // comes back as the body's leading heading
       view.bodyEpoch += 1;
-      view.body = title ? `${title}\n\n${body}` : body;
+      view.body = joinTitle(title, body);
+      view.mode = mode;
+    },
+    showView: (mode) => {
+      view.mode = mode;
     },
     refreshList: () => {
       counts.refreshes += 1;
@@ -300,6 +308,69 @@ describe("読み直し", () => {
     await expect(reloading).resolves.toBe(false);
     expect(h.shown).toStrictEqual([]);
     expect(h.session.revisionOf(NOTE.filename)).toBeUndefined();
+  });
+
+  /**
+   * A window coming back, or a sync that touched other notes, rereads the open one. Rebuilt for
+   * the same body, the editor loses its scroll and selection and the map lays itself out again
+   */
+  it("leaves the screen standing when the body read is the one already shown", async () => {
+    const h = harness();
+    await h.session.reload(NOTE);
+    const epoch = h.view.bodyEpoch;
+
+    await expect(h.session.reload(NOTE)).resolves.toBe(true);
+
+    expect(h.shown).toHaveLength(1);
+    expect(h.view.bodyEpoch).toBe(epoch);
+  });
+
+  it("puts the body up again once the disk has moved on", async () => {
+    const h = harness();
+    await h.session.reload(NOTE);
+    h.disk.content = {
+      body: "# 歩いた日\n\n別の端末で足した",
+      view: "editor",
+      revision: "r-other",
+    };
+
+    await h.session.reload(NOTE);
+
+    expect(h.shown.at(-1)?.body).toBe("別の端末で足した");
+    expect(h.session.revisionOf(NOTE.filename)).toBe("r-other");
+  });
+
+  // The mode lives in the frontmatter, so another device can switch it without touching the body
+  it("switches only the mode when that is all that moved", async () => {
+    const h = harness();
+    await h.session.reload(NOTE);
+    h.disk.content = { body: "# 歩いた日\n\nディスクのぶん", view: "mindmap", revision: "r-disk" };
+
+    await h.session.reload(NOTE);
+
+    expect(h.shown).toHaveLength(1);
+    expect(h.view.mode).toBe("mindmap");
+  });
+
+  // A revert, a restore and a yield to an outside edit want the disk's body whatever is shown
+  it("rebuilds on a forced reload even when nothing moved", async () => {
+    const h = harness();
+    await h.session.reload(NOTE);
+
+    await h.session.reload(NOTE, true);
+
+    expect(h.shown).toHaveLength(2);
+  });
+
+  // After a failed read the screen still holds the previous note's body, unloaded
+  it("puts the body up when the screen does not hold this note yet", async () => {
+    const h = harness();
+    await h.session.reload(NOTE);
+    h.view.loaded = false;
+
+    await h.session.reload(NOTE);
+
+    expect(h.shown).toHaveLength(2);
   });
 
   // Do not turn a failed read into a body swap. Showing the note as empty does more harm

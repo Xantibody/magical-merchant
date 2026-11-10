@@ -42,6 +42,7 @@ function fixture(brokenStore = false) {
       body = value;
       epoch++;
     },
+    showView: () => {},
     refreshList: () => {},
     setStatus: () => {},
     onSaved: () => {},
