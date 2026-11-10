@@ -25,9 +25,10 @@
 }
 
 :root {
-  /* What the browser draws itself (the date picker, scrollbars, a bare button) follows the app's
-     theme. normalize sets this from the OS, so an app in light on a dark OS got dark controls.
-     data-theme always holds the resolved theme, so "system" still follows the OS through it */
+  /* What the browser draws itself (the date picker, a bare button) follows the app's theme.
+     normalize sets this from the OS, so an app in light on a dark OS got dark controls.
+     data-theme always holds the resolved theme, so "system" still follows the OS through it.
+     The scrollbar thumb and the caret do not: normalize colours them from the OS directly */
   color-scheme: light;
   --app-surface: var(--gray-0);
   --app-surface-2: var(--gray-1);
