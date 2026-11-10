@@ -855,6 +855,13 @@ const unifiedDiff = (from, to, fromName, toName) => {
     list_scrawl_dates: () => [...scrawl.keys()].toSorted().toReversed(),
     /** @param {{ date: string }} args */
     read_scrawl_by_date: ({ date }) => scrawl.get(date) ?? [],
+    /** @param {{ recent: number, extra: string[] }} args */
+    read_scrawl_days: ({ recent, extra }) => {
+      const dates = [...scrawl.keys()].toSorted().toReversed();
+      // The same pick as core: the newest `recent` days and the ones named, newest first, once each
+      const wanted = [...new Set([...dates.slice(0, recent), ...extra])].toSorted().toReversed();
+      return { dates, days: wanted.map((date) => ({ date, entries: scrawl.get(date) ?? [] })) };
+    },
     /** @param {{ text: string }} args */
     save_quick_capture: ({ text }) => {
       const now = new Date();

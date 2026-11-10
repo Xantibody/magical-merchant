@@ -55,9 +55,26 @@ let captureFailure: Error | undefined;
 /** What `list_notes` returns. Each test starts with none. */
 let notes: Record<string, unknown>[];
 
+/** The commands called, in order. This is how the number of trips to the core is counted. */
+let calls: string[];
+
+const countOf = (command: string): number => calls.filter((cmd) => cmd === command).length;
+
+const DATES = [...RECENT_DATES, YEAR_AGO];
+
 const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
-  list_scrawl_dates: () => [...RECENT_DATES, YEAR_AGO],
+  // A capture rereads only the day it wrote to
   read_scrawl_by_date: ({ date }) => days[String(date)] ?? [],
+  // The same pick as core: the newest `recent` days and the ones named, newest first, once each
+  read_scrawl_days: ({ recent, extra }) => {
+    const wanted = [...new Set([...DATES.slice(0, Number(recent)), ...(extra as string[])])];
+    return {
+      dates: DATES,
+      days: wanted
+        .toSorted((a, b) => b.localeCompare(a))
+        .map((date) => ({ date, entries: days[date] ?? [] })),
+    };
+  },
   list_notes: () => notes,
   // It appends, so it becomes the newest record of that day
   save_quick_capture: ({ text }) => {
@@ -116,8 +133,10 @@ async function setupScrawl(): Promise<void> {
   days = structuredClone(DAYS);
   notes = [];
   captureFailure = undefined;
+  calls = [];
   mockWindows("main");
   mockIPC((cmd, args) => {
+    calls.push(cmd);
     const handler = HANDLERS[cmd];
     if (!handler) {
       throw new Error(`unexpected command ${cmd}`);
@@ -131,6 +150,31 @@ function teardownScrawl(): void {
   clearMocks();
   document.body.innerHTML = "";
 }
+
+describe("Scrawl › 読み込み", () => {
+  beforeEach(setupScrawl);
+  afterEach(teardownScrawl);
+
+  // It is the first screen. A trip per day, each run on the main thread, held the window
+  // for every one of them before anything could be typed
+  it("reads the dates and the visible days in one call", async () => {
+    await openScrawl();
+
+    expect(countOf("read_scrawl_days")).toBe(1);
+    expect(countOf("list_scrawl_dates")).toBe(0);
+    expect(countOf("read_scrawl_by_date")).toBe(0);
+  });
+
+  // dataVersion rises on every return to the window, and the journal is reread each time
+  it("rereads them in one call when the data changes", async () => {
+    await openScrawl();
+
+    shell.refreshData();
+
+    await waitFor(() => expect(countOf("read_scrawl_days")).toBe(2));
+    expect(countOf("read_scrawl_by_date")).toBe(0);
+  });
+});
 
 describe("Scrawl capture failures", () => {
   beforeEach(setupScrawl);

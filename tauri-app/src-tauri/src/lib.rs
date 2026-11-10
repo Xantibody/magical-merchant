@@ -34,7 +34,7 @@ use base64::engine::general_purpose::STANDARD as B64;
 use device::ClientContext;
 use magical_merchant_core::{
     CreatedNote, GlyphFormat, GlyphName, GlyphSummary, NoteFilename, NoteKind, NoteMeta,
-    NoteSummary, Provenance, Revision, SearchFilter, SearchHit, Source, TemplateDetail,
+    NoteSummary, Provenance, Revision, ScrawlDays, SearchFilter, SearchHit, Source, TemplateDetail,
     TemplateSummary, VarLocale, Version, VersionStatus,
 };
 use tauri::{AppHandle, Emitter, Manager};
@@ -513,6 +513,25 @@ fn list_scrawl_dates(handle: AppHandle) -> Result<Vec<String>, String> {
         .collect())
 }
 
+/// What the Scrawl screen draws when it opens: the date list and the newest `recent`
+/// days, plus the older days named in `extra`.
+///
+/// One call off the main thread in place of the date list and one call per day, each
+/// of which ran on it. It only reads, like `read_scrawl_by_date`.
+#[tauri::command]
+async fn read_scrawl_days(
+    handle: AppHandle,
+    recent: usize,
+    extra: Vec<chrono::NaiveDate>,
+) -> Result<ScrawlDays, String> {
+    let base_dir = app_base_dir(&handle)?;
+    off_main_thread(move || {
+        magical_merchant_core::read_scrawl_days(&base_dir, recent, &extra)
+            .map_err(|e| e.to_string())
+    })
+    .await
+}
+
 #[tauri::command]
 fn read_scrawl_by_date(handle: AppHandle, date: String) -> Result<Vec<String>, String> {
     let base_dir = app_base_dir(&handle)?;
@@ -855,6 +874,7 @@ pub fn run() {
             delete_glyph,
             list_scrawl_dates,
             read_scrawl_by_date,
+            read_scrawl_days,
             delete_scrawl_entry,
             search_all,
             search_records,

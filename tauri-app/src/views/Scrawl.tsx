@@ -64,18 +64,16 @@ interface ScrawlData {
  * Returns the recent days and the full date list as one value. Split into separate
  * resources, they would render in separate flushes, and the digest would cut into
  * the day list already shown and cause a layout shift.
+ *
+ * One call, not the date list and then a call per day: this is the first screen, and each
+ * of those ran on the main thread one after another.
  */
 async function loadScrawl(extraDates: string[]): Promise<ScrawlData> {
-  const dates = await typedInvoke("list_scrawl_dates");
-  const wanted = [...new Set([...dates.slice(0, RECENT_DAYS), ...extraDates])].toSorted((a, b) =>
-    b.localeCompare(a),
-  );
-  const days = await Promise.all(
-    wanted.map(async (date) =>
-      toScrawlItems(date, await typedInvoke("read_scrawl_by_date", { date })),
-    ),
-  );
-  return { items: days.flat(), dates };
+  const { dates, days } = await typedInvoke("read_scrawl_days", {
+    recent: RECENT_DAYS,
+    extra: extraDates,
+  });
+  return { items: days.flatMap((day) => toScrawlItems(day.date, day.entries)), dates };
 }
 
 /** A Note or a Codex among Scrawl's rows: a filled dot and its title, nothing more. */
