@@ -1,15 +1,9 @@
-import { createResource, createSignal, For, onMount, onCleanup, Show } from "solid-js";
+import { createResource, createSignal, For, Show } from "solid-js";
 import { A, useSearchParams } from "@solidjs/router";
-// Kobalte is imported only from a per-route lazy chunk. This is Settings, so it
-// stays out of the startup bundle (`.claude/skills/ui-design/SKILL.md`)
-import { Switch } from "@kobalte/core/switch";
-import { ToggleGroup } from "@kobalte/core/toggle-group";
 import Icon from "../components/Icon";
 import type { IconName } from "../components/Icon";
 import { typedInvoke } from "../lib/commands";
 import type { GlyphSummary } from "../lib/commands";
-import { EVENTS } from "../lib/events";
-import { enterFullscreen, readStartFullscreen, writeStartFullscreen } from "../lib/fullscreen";
 import {
   glyphFormatOf,
   glyphs,
@@ -18,18 +12,15 @@ import {
   planGlyphImport,
   suggestGlyphName,
 } from "../lib/glyphs";
-import { applyLocale, readStoredLocale, t } from "../lib/i18n";
-import type { LocalePreference } from "../lib/i18n";
-import { isMacDesktop } from "../lib/platform";
+import { t } from "../lib/i18n";
 import { isImeComposing } from "../lib/ime";
 import { ROUTES, SETTINGS_PAGE_PARAM, SETTINGS_PAGES } from "../lib/routes";
 import type { SettingsPage } from "../lib/routes";
 import { useShell } from "../lib/shell";
-import { chooseTheme, theme, THEMES } from "../lib/theme";
-import { syncErrorKind } from "../lib/sync-status";
+import GeneralPage from "./settings/GeneralPage";
+import { Row } from "./settings/Rows";
+import SyncPage, { createSyncSettings } from "./settings/SyncPage";
 import { getVersion } from "@tauri-apps/api/app";
-import { listen } from "@tauri-apps/api/event";
-import type { UnlistenFn } from "@tauri-apps/api/event";
 import "../styles/settings.css";
 import type { JSX } from "solid-js";
 
@@ -41,106 +32,10 @@ const PAGE_ICONS: Record<SettingsPage, IconName> = {
   sync: "cloud-check",
 };
 
-/** The Workers URL field. An ID is needed to tie the row's label to it with `for`. */
-const WORKERS_URL_FIELD = "settings-workers-url";
-
 /** An image chosen but not yet registered. Saved once a name is decided. */
 interface PendingGlyph {
   file: File;
   format: "png" | "svg";
-}
-
-/**
- * A choice of three or fewer. Not enough to justify a menu that opens to pick from.
- *
- * AIDEV-NOTE: do not add `data-key` inside a ToggleGroup. Kobalte looks up the
- * roving focus target by `[data-key]`, so it collides with the Cmd badge marker
- */
-function Seg<T extends string>(props: {
-  label: string;
-  value: T;
-  options: readonly (readonly [T, string])[];
-  onPick: (value: T) => void;
-}): JSX.Element {
-  return (
-    <ToggleGroup
-      class="settings-seg"
-      aria-label={props.label}
-      value={props.value}
-      // Pressing the selected item again makes Kobalte return null. Settings has
-      // no "nothing selected" state, so that report is dropped
-      onChange={(value) => {
-        if (value !== null) {
-          props.onPick(value as T);
-        }
-      }}
-    >
-      <For each={props.options}>
-        {([value, label]) => (
-          <ToggleGroup.Item class="settings-seg-item" value={value}>
-            {label}
-          </ToggleGroup.Item>
-        )}
-      </For>
-    </ToggleGroup>
-  );
-}
-
-/**
- * One Settings row. Label and description on the left, the control on the right.
- * Only a row given `labelFor` gets a real `<label>` as its label: `for` has no
- * effect on a ToggleGroup or a group of switches, so only rows with a field get one.
- */
-function Row(props: {
-  label: string;
-  desc?: string;
-  labelFor?: string;
-  /** A tall control (glyph management, Workers URL) is aligned to the top edge. */
-  tall?: boolean;
-  children: JSX.Element;
-}): JSX.Element {
-  return (
-    <div class="settings-row" classList={{ "settings-row--tall": props.tall }}>
-      <div class="settings-row-head">
-        <Show when={props.labelFor} fallback={<div class="settings-row-label">{props.label}</div>}>
-          {(field) => (
-            <label class="settings-row-label" for={field()}>
-              {props.label}
-            </label>
-          )}
-        </Show>
-        <Show when={props.desc}>{(desc) => <p class="settings-row-desc">{desc()}</p>}</Show>
-      </div>
-      <div class="settings-row-control">{props.children}</div>
-    </div>
-  );
-}
-
-/** An on / off row. The Kobalte Switch is the row itself. */
-function SwitchRow(props: {
-  label: string;
-  desc: string;
-  checked: boolean;
-  onChange: (on: boolean) => void;
-}): JSX.Element {
-  return (
-    <Switch
-      class="settings-row"
-      checked={props.checked}
-      onChange={(checked) => props.onChange(checked)}
-    >
-      <div class="settings-row-head">
-        <Switch.Label class="settings-row-label">{props.label}</Switch.Label>
-        <Switch.Description class="settings-row-desc">{props.desc}</Switch.Description>
-      </div>
-      <Switch.Input />
-      <div class="settings-row-control">
-        <Switch.Control class="settings-switch">
-          <Switch.Thumb class="settings-switch-thumb" />
-        </Switch.Control>
-      </div>
-    </Switch>
-  );
 }
 
 /** An image file as base64. IPC carries only strings. */
@@ -164,13 +59,7 @@ export default function Settings(): JSX.Element {
   /** The page shown. Mobile shows only the list until one is opened (`settings--page`). */
   const [page, setPage] = createSignal<SettingsPage>(requestedPage ?? "general");
   const [pageOpen, setPageOpen] = createSignal(requestedPage !== undefined);
-  const [workersUrl, setWorkersUrl] = createSignal("");
-  const [authenticated, setAuthenticated] = createSignal(false);
-  const [editable, setEditable] = createSignal(false);
-  const [saving, setSaving] = createSignal(false);
   const [message, setMessage] = createSignal("");
-  const [localePreference, setLocalePreference] =
-    createSignal<LocalePreference>(readStoredLocale());
   const [templates] = createResource(() => typedInvoke("list_templates"));
   /**
    * Returns the version from tauri.conf.json as is. It matches the release tag, so
@@ -198,6 +87,8 @@ export default function Settings(): JSX.Element {
     setMessage(text);
     setTimeout(() => setMessage(""), 2000);
   };
+
+  const sync = createSyncSettings({ setMessage, flash });
 
   const visibleGlyphs = (): GlyphSummary[] =>
     (glyphList() ?? []).filter((glyph) => !hiddenGlyphs().includes(glyph.name));
@@ -308,153 +199,6 @@ export default function Settings(): JSX.Element {
       setHiddenGlyphs((names) => names.filter((name) => name !== glyph.name));
     });
   };
-
-  const chooseLocale = (preference: LocalePreference): void => {
-    setLocalePreference(preference);
-    applyLocale(preference);
-  };
-
-  const [startFullscreen, setStartFullscreen] = createSignal(readStartFullscreen());
-
-  const chooseStartFullscreen = (on: boolean): void => {
-    setStartFullscreen(on);
-    writeStartFullscreen(on);
-    // Turning it on goes fullscreen right now instead of waiting for next launch.
-    // Turning it off touches nothing: a Settings action has no reason to leave
-    // the fullscreen in use right now
-    if (on) {
-      void enterFullscreen();
-    }
-  };
-
-  const unlisteners: UnlistenFn[] = [];
-
-  onMount(async () => {
-    try {
-      const config = await typedInvoke("get_sync_config");
-      setWorkersUrl(config.workers_url);
-    } catch (error) {
-      // Opened with nothing configured, it starts blank. Only a corrupt config is
-      // reported: if it looked like a blank one, a save meant as a re-entry would overwrite it
-      if (syncErrorKind(error) === "configCorrupt") {
-        setMessage(t().sync.configCorrupt);
-      }
-    }
-
-    try {
-      setEditable(await typedInvoke("is_sync_config_editable"));
-    } catch {
-      setEditable(false);
-    }
-
-    try {
-      setAuthenticated(await typedInvoke("auth_status"));
-    } catch {
-      setAuthenticated(false);
-    }
-
-    // On Android the sign-in completes through a deep link, so the state is updated from events
-    unlisteners.push(
-      await listen(EVENTS.AUTH_SUCCESS, () => {
-        setAuthenticated(true);
-        flash(t().settings.signedInMessage);
-      }),
-      await listen<string>(EVENTS.AUTH_ERROR, (e) => {
-        setAuthenticated(false);
-        setMessage(t().settings.signInFailed(String(e.payload)));
-      }),
-    );
-  });
-
-  onCleanup(() => {
-    for (const unlisten of unlisteners) {
-      unlisten();
-    }
-  });
-
-  const save = async (): Promise<void> => {
-    setSaving(true);
-    setMessage("");
-    try {
-      // auto_sync belongs to the sync popover, so its current value is kept and written back
-      const current = await typedInvoke("get_sync_config");
-      await typedInvoke("save_sync_config", {
-        config: { ...current, workers_url: workersUrl() },
-      });
-      flash(t().common.saved);
-    } catch (error) {
-      setMessage(t().settings.saveFailed(String(error)));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const login = async (): Promise<void> => {
-    setMessage(t().settings.continueSignIn);
-    try {
-      // Desktop finishes the sign-in in an in-app window; the token is saved by the time the command returns.
-      // Android only opens the browser; completion is reported by the auth-success deep link
-      await typedInvoke("auth_login");
-      const status = await typedInvoke("auth_status");
-      setAuthenticated(status);
-      if (status) {
-        flash(t().settings.signedInMessage);
-      }
-    } catch (error) {
-      setMessage(t().settings.signInFailed(String(error)));
-    }
-  };
-
-  const logout = async (): Promise<void> => {
-    try {
-      await typedInvoke("auth_logout");
-      setAuthenticated(false);
-      flash(t().settings.signedOutMessage);
-    } catch (error) {
-      setMessage(t().settings.signOutFailed(String(error)));
-    }
-  };
-
-  const general = (): JSX.Element => (
-    <>
-      <Row label={t().settings.language} desc={t().settings.languageDesc}>
-        {/* Unlike the theme, this cannot be a cycling button. Each press would pass through a language you cannot read */}
-        <Seg
-          label={t().settings.language}
-          value={localePreference()}
-          options={
-            [
-              ["system", t().settings.languageSystem],
-              ["ja", t().settings.languageJa],
-              ["en", t().settings.languageEn],
-            ] as [LocalePreference, string][]
-          }
-          onPick={chooseLocale}
-        />
-      </Row>
-
-      {/* Moved here from the cycling button in the header. Something touched a
-          few times a year was sitting where it was seen every time */}
-      <Row label={t().settings.theme} desc={t().settings.themeDesc}>
-        <Seg
-          label={t().settings.theme}
-          value={theme()}
-          options={THEMES.map((choice) => [choice, t().theme[choice]] as const)}
-          onPick={chooseTheme}
-        />
-      </Row>
-
-      {/* Only macOS has a window that can go fullscreen. On Android the switch would do nothing */}
-      <Show when={isMacDesktop()}>
-        <SwitchRow
-          label={t().settings.startFullscreen}
-          desc={t().settings.startFullscreenHint}
-          checked={startFullscreen()}
-          onChange={chooseStartFullscreen}
-        />
-      </Show>
-    </>
-  );
 
   const records = (): JSX.Element => (
     <>
@@ -620,95 +364,16 @@ export default function Settings(): JSX.Element {
     </>
   );
 
-  const sync = (): JSX.Element => (
-    <>
-      <Row
-        label={t().settings.workersUrl}
-        desc={t().settings.workersUrlDesc}
-        labelFor={editable() ? WORKERS_URL_FIELD : undefined}
-        tall
-      >
-        <Show
-          when={editable()}
-          fallback={
-            // Read-only where the config file fixes it
-            <p class="settings-readonly">{workersUrl() || t().settings.notSet}</p>
-          }
-        >
-          <input
-            id={WORKERS_URL_FIELD}
-            type="url"
-            class="settings-input settings-input--mono"
-            value={workersUrl()}
-            onInput={(e) => setWorkersUrl(e.currentTarget.value)}
-            placeholder="https://....workers.dev"
-          />
-          <div class="settings-actions">
-            <button
-              type="button"
-              class="button-primary"
-              onClick={() => {
-                void save();
-              }}
-              disabled={saving()}
-            >
-              {saving() ? t().common.saving : t().common.save}
-            </button>
-          </div>
-        </Show>
-      </Row>
-
-      <Row label={t().settings.account} desc={t().settings.accountDesc} tall>
-        <p class="settings-status">
-          <span class="settings-dot" classList={{ "settings-dot--on": authenticated() }} />
-          {authenticated() ? t().settings.signedIn : t().settings.notSignedIn}
-        </p>
-
-        <div class="settings-actions">
-          <Show
-            when={authenticated()}
-            fallback={
-              <button
-                type="button"
-                class="button-primary"
-                onClick={() => {
-                  void login();
-                }}
-                disabled={!workersUrl().trim()}
-              >
-                {t().settings.signInGoogle}
-              </button>
-            }
-          >
-            <button
-              type="button"
-              class="button-secondary"
-              onClick={() => {
-                void logout();
-              }}
-            >
-              {t().settings.signOut}
-            </button>
-          </Show>
-        </div>
-
-        <Show when={!authenticated() && !workersUrl().trim()}>
-          <p class="settings-hint">{t().settings.signInHint}</p>
-        </Show>
-      </Row>
-    </>
-  );
-
   const rowsOf = (id: SettingsPage): JSX.Element => {
     switch (id) {
       case "general": {
-        return general();
+        return <GeneralPage />;
       }
       case "records": {
         return records();
       }
       case "sync": {
-        return sync();
+        return <SyncPage sync={sync} />;
       }
     }
   };
