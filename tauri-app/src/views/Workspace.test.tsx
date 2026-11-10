@@ -111,6 +111,11 @@ let notText: Set<string>;
 let readFails: boolean;
 /** Commands that refuse outright, before touching anything. Reproduces one action core says no to. */
 let refused: Set<string>;
+/**
+ * Makes `read_note` hand back the body without its revision. No path in the app puts a note on
+ * screen without one today; this stands in for whichever path someday would.
+ */
+let readsWithoutRevision: boolean;
 
 /** The body's revision. The test checks "write with the revision you read" the way core does. */
 const revisionOf = (body: string): string => `rev:${body}`;
@@ -163,7 +168,7 @@ const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
     if (body === undefined) {
       throw new Error(`note not found: ${String(filename)}`);
     }
-    return { body, revision: revisionOf(body) };
+    return readsWithoutRevision ? { body } : { body, revision: revisionOf(body) };
   },
   read_note_meta: ({ filename }) => ({
     time: summaryOf(String(filename)).time,
@@ -542,6 +547,7 @@ async function setupWorkspace(): Promise<void> {
   notText = new Set();
   readFails = false;
   refused = new Set();
+  readsWithoutRevision = false;
   calls = [];
   shell = undefined;
   navigateTo = undefined;
@@ -1762,6 +1768,21 @@ describe("Workspace › 編集中に選択が差し替わる", () => {
     expect(disk.get(FILE_A)).toBe(BODY_A_SYNCED);
   });
 
+  // A write with no revision passes core's check untouched and lands on whatever the disk holds
+  // now, a body nobody on this screen has read. The revert sends nothing rather than that
+  it("does not revert a note whose revision it does not hold", async () => {
+    localStorage.setItem(`note-backup:${FILE_A}`, `# ${TITLE_A}\n\n控えの行`);
+    readsWithoutRevision = true;
+    await openNoteA();
+
+    await runPanelAction("編集前に戻す");
+
+    await waitFor(() => expect(shell?.toast()?.message).toBe("戻せませんでした"));
+    expect(countOf("update_draft")).toBe(0);
+    expect(screen.queryByText("控えの行")).toBeNull();
+    expect(disk.get(FILE_A)).toBe(BODY_A);
+  });
+
   // Restoring is a swap. If the next save pushes out the place to go back to that the revert
   // just created, pressing it again cannot go back
   it("keeps the reverted body reachable after the next save", async () => {
@@ -2306,6 +2327,22 @@ describe("Workspace › Codex の版", () => {
     typeInEditor?.(`${TEXT_C}\n\n足した行`);
     await waitFor(() => expect(writesTo(FILE_C)).toHaveLength(1), { timeout: 3000 });
     expect(disk.get(FILE_C)).toBe(OLD_BODY);
+  });
+
+  // Same reason as the revert: without the revision it read, the restore would write the version
+  // over a draft nobody on this screen has seen
+  it("does not restore over a draft whose revision it does not hold", async () => {
+    readsWithoutRevision = true;
+    await openCodexC();
+    versions.set(FILE_C, [{ id: "v1", message: null, body: `# ${TITLE_C}\n\n最初の一行` }]);
+
+    await openHistoryTab();
+    fireEvent.click(await versionRow(1));
+    fireEvent.click(await screen.findByRole("button", { name: "版 1 に戻す" }));
+
+    await waitFor(() => expect(shell?.toast()?.message).toBe("戻せませんでした"));
+    expect(countOf("restore_note_version")).toBe(0);
+    expect(disk.get(FILE_C)).toBe(BODY_C);
   });
 
   // A phone has no width to stand a panel in. The history is not a sheet but its own screen

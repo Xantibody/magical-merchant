@@ -616,15 +616,6 @@ describe("編集セッション", () => {
 });
 
 describe("指紋", () => {
-  it("forgets the fingerprint so the next save is refused instead of overwriting", () => {
-    const h = harness();
-    h.session.setRevision(NOTE.filename, "r-read");
-
-    h.session.forgetRevision(NOTE.filename);
-
-    expect(h.session.revisionOf(NOTE.filename)).toBeUndefined();
-  });
-
   it("carries the revision the write returned into the next save", async () => {
     const h = harness();
     typed(h, "一");

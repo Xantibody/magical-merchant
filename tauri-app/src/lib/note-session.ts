@@ -126,7 +126,6 @@ export interface NoteSession {
   /** Fingerprint from when the body shown on screen was read. */
   revisionOf: (filename: string) => string | undefined;
   setRevision: (filename: string, revision: string) => void;
-  forgetRevision: (filename: string) => void;
   /** A copy for the given note. Used by paths that have already made the `loaded` decision. */
   snapshotFor: (item: SaveTarget) => PendingSave;
   /** Called on every keystroke. What actually runs is the copy from the last keystroke. */
@@ -534,7 +533,6 @@ export function createNoteSession(deps: NoteSessionDeps): NoteSession {
     reopenAt,
     revisionOf: (filename) => revisions.get(filename),
     setRevision: (filename, revision) => revisions.set(filename, revision),
-    forgetRevision: (filename) => revisions.delete(filename),
     snapshotFor,
     schedule,
     flush,
