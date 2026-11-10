@@ -72,6 +72,11 @@ pub enum SyncIssue {
     DeleteSkippedChanged {
         key: String,
     },
+    /// It changed between the scan and the download, so the local version was kept
+    /// instead of overwritten. The next sync sees both sides moved and keeps the two
+    DownloadSkippedChanged {
+        key: String,
+    },
 }
 
 impl std::fmt::Display for SyncIssue {
@@ -85,6 +90,9 @@ impl std::fmt::Display for SyncIssue {
             Self::DeleteFailed { key, detail } => write!(f, "delete_local {key}: {detail}"),
             Self::DeleteSkippedChanged { key } => {
                 write!(f, "delete_local {key}: changed since scan, kept")
+            }
+            Self::DownloadSkippedChanged { key } => {
+                write!(f, "download {key}: changed since scan, local version kept")
             }
         }
     }

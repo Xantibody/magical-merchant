@@ -14,7 +14,8 @@ export type SyncIssue =
   | { kind: "write_failed"; key: string; detail: string }
   | { kind: "decode_failed"; key: string; detail: string }
   | { kind: "delete_failed"; key: string; detail: string }
-  | { kind: "delete_skipped_changed"; key: string };
+  | { kind: "delete_skipped_changed"; key: string }
+  | { kind: "download_skipped_changed"; key: string };
 
 export interface SyncResultPayload {
   uploaded: number;

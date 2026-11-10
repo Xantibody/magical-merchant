@@ -461,6 +461,9 @@ const ja = {
           case "delete_skipped_changed": {
             return `${issue.key}: 同期中に書き換わったので消さずに残しました`;
           }
+          case "download_skipped_changed": {
+            return `${issue.key}: 同期中に書き換わったので上書きせずに残しました`;
+          }
         }
       },
     },
@@ -1043,6 +1046,9 @@ const en: Messages = {
           }
           case "delete_skipped_changed": {
             return `${issue.key}: changed during the sync, so it was kept`;
+          }
+          case "download_skipped_changed": {
+            return `${issue.key}: changed during the sync, so it was kept instead of overwritten`;
           }
         }
       },
