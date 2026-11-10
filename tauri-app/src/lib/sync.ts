@@ -5,7 +5,7 @@ import type { UnlistenFn } from "@tauri-apps/api/event";
 import { onLocalMutation, typedInvoke } from "./commands";
 import { EVENTS } from "./events";
 import { t } from "./i18n";
-import { describeSyncError, describeSyncResult, syncErrorKind } from "./sync-status";
+import { describeSyncError, describeSyncResult, syncErrorKind, wroteHere } from "./sync-status";
 import type { SyncResultPayload } from "./sync-status";
 
 export type SyncStatus = "idle" | "syncing" | "success" | "error" | "needs-setup" | "signed-out";
@@ -273,9 +273,16 @@ export function createSyncState(onSynced: () => void): SyncState {
           if (!dirty()) {
             dirtiedAt = Number.NEGATIVE_INFINITY;
           }
-          onSynced();
         } else {
           setAlertVersion((v) => v + 1);
+        }
+        // A refresh rereads every record on screen, and auto sync brings a send-only round after
+        // every save. A round with a failed file still wrote the others. The engine's repairs
+        // under the lock go uncounted. They run before the rounds, on what was there at start or
+        // what an earlier run brought down, so their result shows at the next refresh. A stale
+        // screen cannot overwrite a body meanwhile, since every write carries the revision it read
+        if (wroteHere(e.payload)) {
+          onSynced();
         }
         roundEnded();
       }),
