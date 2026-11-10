@@ -85,6 +85,27 @@ describe("scrawl under the floating delete bar", () => {
   });
 });
 
+describe("scrawl record text", () => {
+  beforeAll(async () => {
+    await import("../index.css");
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  // The long press that turns selection off is a finger's gesture, and `lib/long-press.ts`
+  // ignores the mouse. With a mouse the record could be neither dragged over nor copied,
+  // and ⌘A skipped every record on the page
+  it("lets a mouse select a record's text", () => {
+    document.body.innerHTML = `<p class="entry-text long-press">ベガのラッシュ止まらん</p>`;
+    const mouse = globalThis.matchMedia("(hover: hover) and (pointer: fine)").matches;
+
+    expect(mouse).toBe(true);
+    expect(getComputedStyle(element(".entry-text")).userSelect).toBe("text");
+  });
+});
+
 /** Lay out the tag row, digest, day heading and promotion link so the separations show. */
 function mountChrome(): void {
   document.body.innerHTML = `

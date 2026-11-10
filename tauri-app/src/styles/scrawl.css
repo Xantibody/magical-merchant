@@ -192,6 +192,15 @@
   overflow-wrap: anywhere;
 }
 
+/* `.long-press` turns selection off so a held finger promotes instead of selecting. A mouse
+   has no long press (`lib/long-press.ts` skips it), so there the record reads as text again:
+   it can be dragged over, copied, and taken in by ⌘A */
+@media (hover: hover) and (pointer: fine) {
+  .entry-text.long-press {
+    user-select: text;
+  }
+}
+
 .entry-meta {
   display: flex;
   flex-wrap: wrap;
