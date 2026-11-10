@@ -71,6 +71,22 @@ describe("scrawlDays", () => {
     expect(days[0].rows.map((r) => r.kind)).toStrictEqual(["note", "scrawl"]);
   });
 
+  // The list matches rows by reference, so a fresh wrapper would rebuild a record that did not change
+  it("hands back the same row for a record that did not change", () => {
+    const yesterday = toScrawlItems("2026-10-18", ["- [07:40:00] walk"]);
+    const weekly = note();
+    const before = scrawlDays(yesterday, [weekly], TODAY);
+
+    const after = scrawlDays(
+      [...toScrawlItems("2026-10-19", ["- [10:30:00] rail"]), ...yesterday],
+      [weekly],
+      TODAY,
+    );
+
+    expect(after[1].rows[0]).toBe(before[1].rows[0]);
+    expect(after[0].rows.find((row) => row.kind === "note")).toBe(before[0].rows[0]);
+  });
+
   // Notes are all loaded at once; days older than the loaded entries would appear as islands
   it("does not reach past the oldest loaded day", () => {
     const entries = toScrawlItems("2026-10-18", ["- [07:40:00] walk"]);

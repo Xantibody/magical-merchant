@@ -5,6 +5,7 @@ import TagText from "./TagText";
 import type { NoteItem, ScrawlItem } from "../lib/items";
 import { createLongPress } from "../lib/long-press";
 import { entryMeta } from "../lib/scrawl-meta";
+import type { MetaSegment } from "../lib/scrawl-meta";
 import { places } from "../lib/places";
 import { t } from "../lib/i18n";
 
@@ -73,8 +74,22 @@ interface ScrawlEntryProps {
   onUnlinkNote: (note: NoteItem) => void;
 }
 
+/**
+ * Two meta rows that say the same thing. A place lookup swaps the whole table of names, so
+ * most entries recompute their row and get an equal one back in new objects; `<For>` would
+ * rebuild each of its parts and icons for a name that belongs to another record.
+ */
+function sameMeta(a: MetaSegment[], b: MetaSegment[]): boolean {
+  return (
+    a.length === b.length &&
+    a.every((segment, i) => segment.icon === b[i]?.icon && segment.label === b[i]?.label)
+  );
+}
+
 export default function ScrawlEntry(props: ScrawlEntryProps): JSX.Element {
-  const meta = createMemo(() => entryMeta(props.item.context, places.nameOf));
+  const meta = createMemo(() => entryMeta(props.item.context, places.nameOf), undefined, {
+    equals: sameMeta,
+  });
   // On mobile the way in is a long press. Nothing is assigned to a tap
   const press = createLongPress(() => props.onPromote());
 

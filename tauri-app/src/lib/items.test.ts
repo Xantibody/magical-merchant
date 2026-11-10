@@ -4,6 +4,7 @@ import {
   toNoteItems,
   groupNotes,
   itemTitle,
+  keepUnchangedItems,
   noteCreatedLabel,
   notesByOrigin,
   originKeyOf,
@@ -217,6 +218,28 @@ describe("replaceDayItems", () => {
     const updated = replaceDayItems(items, "2026-08-04", []);
 
     expect(updated.map((i) => i.date)).toStrictEqual(["2026-08-03"]);
+  });
+});
+
+describe("keepUnchangedItems", () => {
+  it("keeps the object of a line that reads the same", () => {
+    const before = day("2026-08-04", ["one", "two"]);
+
+    const after = keepUnchangedItems(before, day("2026-08-04", ["one", "two", "three"]));
+
+    expect(after.map((i) => i.text)).toStrictEqual(["three", "two", "one"]);
+    expect(after[1]).toBe(before[0]);
+    expect(after[2]).toBe(before[1]);
+  });
+
+  // After a delete the same index names the next line, which must not wear the old one's object
+  it("takes the new object when the line at that position changed", () => {
+    const before = day("2026-08-04", ["one", "two"]);
+
+    const after = keepUnchangedItems(before, day("2026-08-04", ["two"]));
+
+    expect(after[0]).not.toBe(before[1]);
+    expect(after[0].text).toBe("two");
   });
 });
 

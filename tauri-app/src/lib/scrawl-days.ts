@@ -16,6 +16,32 @@ export interface ScrawlDay {
 }
 
 /**
+ * A row is a pure function of its record, so a record that comes back as the same object
+ * gets its row back too. Scrawl's `<For>` matches rows by reference; a fresh wrapper on
+ * every call made each capture rebuild every entry of every day.
+ */
+const scrawlRows = new WeakMap<ScrawlItem, ScrawlRow>();
+const noteRows = new WeakMap<NoteItem, ScrawlRow>();
+
+function scrawlRowOf(item: ScrawlItem): ScrawlRow {
+  let row = scrawlRows.get(item);
+  if (!row) {
+    row = { kind: "scrawl", time: item.time.slice(0, 5), item };
+    scrawlRows.set(item, row);
+  }
+  return row;
+}
+
+function noteRowOf(note: NoteItem): ScrawlRow {
+  let row = noteRows.get(note);
+  if (!row) {
+    row = { kind: "note", time: note.time, note };
+    noteRows.set(note, row);
+  }
+  return row;
+}
+
+/**
  * Newest day first, each day's newest record first, so the page reads back in time from the
  * input line at the top of today. Notes reach back only as far as the loaded entries, and a
  * note grown from an entry on screen is left to that entry's chip.
@@ -32,12 +58,12 @@ export function scrawlDays(entries: ScrawlItem[], notes: NoteItem[], today: stri
   };
 
   for (const item of entries) {
-    push(item.date, { kind: "scrawl", time: item.time.slice(0, 5), item });
+    push(item.date, scrawlRowOf(item));
   }
   const inRange = (note: NoteItem): boolean => note.date >= oldest && note.date <= today;
   const ownRow = (note: NoteItem): boolean => !note.origin || !shownOrigins.has(note.origin);
   for (const note of notes.filter((n) => inRange(n) && ownRow(n))) {
-    push(note.date, { kind: "note", time: note.time, note });
+    push(note.date, noteRowOf(note));
   }
 
   return [...byDate.entries()]
