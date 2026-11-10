@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeAll, beforeEach } from "vitest";
+import { cdp } from "vitest/browser";
 import { render, fireEvent, cleanup, screen } from "@solidjs/testing-library";
 import CaptureBar from "./CaptureBar";
 import { setLocale } from "../lib/i18n";
@@ -292,5 +293,113 @@ describe("CaptureBar", () => {
     fireEvent.keyDown(textarea, { key: "Enter", keyCode: 229 });
 
     expect(onSend).not.toHaveBeenCalled();
+  });
+});
+
+const height = (el: HTMLElement): number => el.getBoundingClientRect().height;
+const lineHeight = (el: HTMLElement): number => Number.parseFloat(getComputedStyle(el).lineHeight);
+const lines = (count: number): string =>
+  Array.from({ length: count }, (_, i) => `line ${i}`).join("\n");
+
+/**
+ * The line grows with what is typed and scrolls past six lines. Chrome and a recent WebKit size
+ * it from the stylesheet; an older WKWebView has it measured on each key instead.
+ */
+describe.each([
+  { path: "the browser", sizesItself: true },
+  { path: "the measured fallback", sizesItself: false },
+])("CaptureBar sizing through $path", ({ sizesItself }) => {
+  beforeAll(async () => {
+    await import("../index.css");
+  });
+
+  beforeEach(() => {
+    const supports = CSS.supports.bind(CSS);
+    vi.spyOn(CSS, "supports").mockImplementation((property: string, value?: string) =>
+      property === "field-sizing" ? sizesItself : supports(property, value ?? ""),
+    );
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    cleanup();
+    document.body.innerHTML = "";
+    localStorage.clear();
+  });
+
+  /**
+   * Chromium keeps applying the stylesheet's `field-sizing` whatever `CSS.supports` answers, so
+   * the fallback is mounted with it turned off; only the script can size the line then.
+   */
+  const mount = (): ReturnType<typeof renderCaptureBar> => {
+    const bar = renderCaptureBar();
+    if (!sizesItself) {
+      bar.textarea.style.setProperty("field-sizing", "fixed");
+    }
+    return bar;
+  };
+
+  it("grows with the lines typed and goes back to one after a send", async () => {
+    const { textarea } = mount();
+    const empty = height(textarea);
+
+    fireEvent.input(textarea, { target: { value: lines(3) } });
+    expect(height(textarea)).toBeCloseTo(empty + 2 * lineHeight(textarea), 0);
+
+    fireEvent.keyDown(textarea, { key: "Enter" });
+    await expect.poll(() => height(textarea)).toBeCloseTo(empty, 0);
+  });
+
+  it("stops at six lines and scrolls the rest", () => {
+    const { textarea } = mount();
+
+    fireEvent.input(textarea, { target: { value: lines(10) } });
+
+    expect(height(textarea)).toBeCloseTo(6 * lineHeight(textarea), 0);
+    expect(textarea.scrollHeight).toBeGreaterThan(textarea.clientHeight);
+  });
+});
+
+/** How many layouts Chromium has run so far. */
+async function layoutCount(): Promise<number> {
+  const { metrics } = (await cdp().send("Performance.getMetrics")) as {
+    metrics: { name: string; value: number }[];
+  };
+  return metrics.find((metric) => metric.name === "LayoutCount")?.value ?? 0;
+}
+
+/**
+ * Reading the height back on a key made the page lay out twice for it, the day list below
+ * the line included. Where the browser sizes the line itself, a key must not force a layout.
+ */
+describe("CaptureBar sizing cost", () => {
+  beforeAll(async () => {
+    await import("../index.css");
+  });
+
+  afterEach(() => {
+    cleanup();
+    document.body.innerHTML = "";
+    localStorage.clear();
+  });
+
+  it("forces no layout on a key where the browser sizes the line", async () => {
+    expect(CSS.supports("field-sizing", "content")).toBe(true);
+    await cdp().send("Performance.enable");
+    const { textarea } = renderCaptureBar();
+    const typed = "きょうは雨\n午後は晴れた";
+    // The mount's own layout lands before the count starts
+    const painted = Promise.withResolvers<number>();
+    requestAnimationFrame(painted.resolve);
+    await painted.promise;
+
+    const before = await layoutCount();
+    for (let i = 1; i <= typed.length; i++) {
+      fireEvent.input(textarea, { target: { value: typed.slice(0, i) } });
+    }
+    const after = await layoutCount();
+
+    // One layout may still land between the keys and the read: the frame that draws them
+    expect(after - before).toBeLessThanOrEqual(1);
   });
 });
