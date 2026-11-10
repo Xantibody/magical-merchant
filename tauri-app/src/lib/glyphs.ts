@@ -12,6 +12,7 @@
 
 import { createSignal } from "solid-js";
 import { typedInvoke } from "./commands";
+import { sameEntries } from "./same-entries";
 
 /**
  * The shape of a name, on the premise that only registered names resolve. So
@@ -153,7 +154,11 @@ export function planGlyphImport<F extends GlyphFileLike>(files: readonly F[]): G
   return plan;
 }
 
-const [registry, setRegistry] = createSignal<ReadonlyMap<string, string>>(new Map());
+// Re-read on every return to the window. A table equal to the one held is dropped, so the
+// previews and the Scrawl entries that look names up here do not draw again for nothing
+const [registry, setRegistry] = createSignal<ReadonlyMap<string, string>>(new Map(), {
+  equals: sameEntries,
+});
 
 /** Name to data URL. The drawing side looks names up here. */
 export const glyphs = registry;

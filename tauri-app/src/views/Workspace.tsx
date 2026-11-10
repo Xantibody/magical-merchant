@@ -36,6 +36,7 @@ import { getDeviceSignals } from "../lib/client-context";
 import { createDebouncedAccessor } from "../lib/debounce";
 import { diffLineCounts, markedBody } from "../lib/diff-marks";
 import { glyphs } from "../lib/glyphs";
+import { sameEntries } from "../lib/same-entries";
 import { examplesShown, extractExamples, setExamplesShown } from "../lib/template-examples";
 import { useShell } from "../lib/shell";
 import {
@@ -357,9 +358,15 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
    * The table that resolves `[[ID]]` to a title. The preview looks it up every time it draws.
    * It is not narrowed by surface: a note moved from Note to Codex is still pointed at by the same
    * ID, and opening it sends you to the other surface.
+   *
+   * The list is reread on every return to the window. A rebuilt table with the same titles is
+   * dropped, so the preview does not draw the whole body again for nothing.
    */
-  const noteTitles = createMemo<ReadonlyMap<string, string>>(
-    () => new Map(allItems().map((item) => [item.filename.replace(/\.md$/u, ""), item.title])),
+  const noteTitles = createMemo(
+    (): ReadonlyMap<string, string> =>
+      new Map(allItems().map((item) => [item.filename.replace(/\.md$/u, ""), item.title])),
+    undefined,
+    { equals: sameEntries },
   );
 
   /** The candidates for `[[` completion. From both surfaces. A link to itself is not offered. */

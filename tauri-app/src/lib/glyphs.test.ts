@@ -172,6 +172,28 @@ describe("loadGlyphs", () => {
 
     expect(glyphs().has("236p")).toBe(true);
   });
+
+  // It is re-read on every return to the window. A new table with nothing changed in it would
+  // redraw every preview and every Scrawl entry that looks names up in it
+  it("keeps the same registry when a re-read brings the same images", async () => {
+    mockIPC(answerReadGlyphs([{ name: "236p", url: "data:image/png;base64,x" }]));
+    await loadGlyphs();
+    const before = glyphs();
+
+    await loadGlyphs();
+
+    expect(glyphs()).toBe(before);
+  });
+
+  it("replaces the registry when an image changed", async () => {
+    mockIPC(answerReadGlyphs([{ name: "236p", url: "data:image/png;base64,x" }]));
+    await loadGlyphs();
+    mockIPC(answerReadGlyphs([{ name: "236p", url: "data:image/png;base64,y" }]));
+
+    await loadGlyphs();
+
+    expect(glyphs().get("236p")).toBe("data:image/png;base64,y");
+  });
 });
 
 /** The plan needs only the name and the size, so no real File is built. */

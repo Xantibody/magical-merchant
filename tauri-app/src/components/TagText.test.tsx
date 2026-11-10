@@ -50,6 +50,17 @@ describe("TagText", () => {
     expect(container.textContent).toBe("12:30:45 に :foo: を確認");
   });
 
+  // The registry is re-read on every return to the window. Every entry in Scrawl drawing its
+  // text again for a table that did not change is work nobody sees
+  it("keeps the drawn image when a re-read brings the same images", async () => {
+    const { container } = render(() => <TagText text="起き攻めは :236p: 重ね" />);
+    const before = container.querySelector("img.glyph");
+
+    await registerGlyphs([{ name: "236p", url: URL_236P }]);
+
+    expect(container.querySelector("img.glyph")).toBe(before);
+  });
+
   it("renders plain text when nothing is registered", async () => {
     await registerGlyphs([]);
     const { container } = render(() => <TagText text=":236p:" />);
