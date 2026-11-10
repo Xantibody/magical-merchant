@@ -424,8 +424,9 @@ export default function Scrawl(): JSX.Element {
           deleted += 1;
         }
       } catch {
-        // Stop at the first refusal. It says the file moved after the screen read it, and every
-        // later target was planned against those rows
+        // Stop at the first refusal. It says the file moved after the screen read it, so the
+        // later targets of that day were planned against rows that are gone. Those of other days
+        // stop too: the toast and the dropped selection ask for one fresh pick over all of them
       }
       // Reread every day it touched, refused or not: a line already gone has to leave the screen,
       // and the selection's indices no longer point where they did. A day that cannot be reread
