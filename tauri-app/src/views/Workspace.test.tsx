@@ -2517,6 +2517,27 @@ describe("Workspace › 通らなかった操作", () => {
     expect(disk.get(FILE_A)).toBe(BODY_A);
   });
 
+  // A Codex loses its body before its versions, so a delete can be refused with the file
+  // already gone. A row brought back from memory would open onto nothing
+  it("leaves the row out when the refused delete took the file anyway", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    disk.set(FILE_B, BODY_B);
+    refused.add("delete_note");
+    await viewNoteA();
+
+    await runPanelAction("削除");
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: new RegExp(TITLE_A, "u") })).toBeNull(),
+    );
+    disk.delete(FILE_A);
+    await vi.advanceTimersByTimeAsync(5000);
+
+    await waitFor(() =>
+      expect(shell?.toast()?.message).toBe(`「${TITLE_A}」を削除できませんでした`),
+    );
+    expect(screen.queryByRole("button", { name: new RegExp(TITLE_A, "u") })).toBeNull();
+  });
+
   // The move cannot be undone, so it lands on Codex only once it went through
   it("stays on the note and says so when the move to Codex is refused", async () => {
     refused.add("promote_note_to_codex");

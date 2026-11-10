@@ -1490,8 +1490,11 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
         try {
           await typedInvoke("delete_note", { filename: item.filename });
         } catch {
-          // The note is still on disk. Kept hidden it would read as deleted until the next
-          // start, so its row comes back. The selection stays where the person has gone since
+          // Kept hidden, a note still on disk would read as deleted until the next start, so
+          // its row comes back. The list is read again first: a Codex loses its body before its
+          // versions, so the refusal can come with the file already gone. The selection stays
+          // where the person has gone since
+          await refetchNotes();
           setHidden((ids) => ids.filter((id) => id !== item.id));
           shell.showToast(t().notes.deleteFailed(item.title));
           return;
