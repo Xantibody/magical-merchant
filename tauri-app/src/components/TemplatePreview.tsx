@@ -66,8 +66,6 @@ function previewDate(): string {
 }
 
 /**
- * "This is what it makes today". Whether a variable is written right shows up here.
- *
  * What pressing "create" makes today, beside what is being written. A variable left
  * unresolved is marked as in the body layer: a misspelling shows here.
  */
