@@ -68,16 +68,29 @@ Spacing/typography/radius use Open Props (`var(--size-*)`, `var(--radius-*)`,
 1. Memo/editor area always occupies the full remaining space
 2. Minimal chrome — actions hidden until hover (PC) / revealed on touch
 3. Content columns cap at ~640–680px and center
-4. One column, no rail (ADR 0010). What floats over the body opens from an
-   edge or a key and never moves the body: the list flyout (`.list-edge`,
-   `⌘\` to pin), the note panel (`⌘.`), the search field (`⌘K`). State lives
-   in the status dot, fixed to the window's lower right
-5. Bottom docks (`capture-dock`, now only Scrawl's select-mode bar) float; the
+4. A wide window is a 64px rail of places, then (Note / Codex) the list, then
+   the page. The rail never folds; the list tucks under the page with its grip
+   or `⌘\`. The note panel (`⌘.`) and the search field (`⌘K`) open from a key
+   or a visible control. State is the status line at the top of the rail
+5. One way to each thing. A place is changed in one spot, a record is made
+   from the ring, search has one field per screen: before adding a control,
+   find the one that already does the job
+6. A control keeps its place from one screen to the next. The place pill, the
+   round button at the lower right and the status dot stand at the same spot
+   on every phone screen (`styles/layout.test.ts`); what a screen adds goes in
+   the room between them
+7. Bottom docks (`capture-dock`, now only Scrawl's select-mode bar) float; the
    scroll area pads its bottom so content never hides under them
 
 ## Mobile (max-width: 767px)
 
-- One pane at a time; `.detail-back` appears; hit targets ≥ 44px
+- No header: the page runs to the top edge, and everything pressed is at the
+  foot — the place pill at the lower left, the page's one round button at the
+  lower right, the status dot alone in the top right corner
+- One pane at a time; a level's way back is the round button after the pill
+  (a stroke to the right and Android's back do the same); hit targets ≥ 44px
+- A popover opens beside the control that opened it (`lib/popover-place.ts`),
+  not at a fixed place: the controls are at the foot, so it opens upward
 - A control drawn smaller than that keeps its look and takes the rest as a box
   that paints nothing: add it to the list in `layout.css`, and keep its
   neighbours far enough apart that the boxes meet (`styles/hit-area.test.ts`)

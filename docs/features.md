@@ -5,29 +5,35 @@ from the browser verification harness with fixture data.
 
 ## Scrawl — a journal that captures first
 
-Scrawl (formerly Timeline) is a single-column, day-grouped journal. The input
-line at the top of today is always ready: type, send, and the entry lands
-there with a timestamp. Entries record the device context they were written
+Scrawl (formerly Timeline) is a single-column, day-grouped journal that reads
+newest first: today at the top, older days below. The input field at the foot
+of the page is always ready: type, send, and the entry lands at the top of
+today with a timestamp. Entries record the device context they were written
 in (device, network, battery, and a place name resolved from the coordinate).
-Tags typed as `#tag` gather as chips at the top; pressing one opens the search
-field with that tag, so the journal itself never filters. The calendar jumps
-to any recorded day, and the line's `/` menu (探す · Note を作る · 日付へ)
+Tags typed as `#tag` gather as chips in a band just over the field; pressing
+one opens the search field with that tag, so the journal itself never filters,
+and while a line is being typed it joins the line instead. The calendar at the
+band's end jumps to any recorded day, the thumb on the right edge scrubs
+through them, and the line's `/` menu (探す · Note を作る · 日付へ)
 reaches the same places without leaving the keyboard — it answers to those
 row names only, so `/tmp` stays a record.
 
 ![Scrawl](images/timeline.png)
 
-At the top, a **weekly digest** appears once per week: one line saying how
-many entries on how many days and — when that day has entries — a jump to
-_one year ago today_. It sits under the tag chips rather than above them, so
-a digest that arrives late never pushes the chips down. Dismissing it hides
-it for the rest of the week, per device.
+In the same band, a **weekly digest** appears once per week: one line saying
+how many entries on how many days and — when that day has entries — a jump to
+_one year ago today_. Dismissing it hides it for the rest of the week, per
+device.
 
 ### Mobile
 
-The same journal on a phone. A 48px header holds the title, the calendar, the
-search and the status dot; the other screens are reached through the empty
-search field and the dot's details, and the input line scrolls with today.
+The same journal on a phone. There is no header: everything pressed is at the
+foot, under the thumb. A pill at the lower left holds the three places —
+Scrawl, Note, Codex — and on Scrawl it stretches to hold the input field; the
+band of tags sits just over it, and the status is one dot in the top right
+corner. The other screens (絞る, 設定, テンプレート) are reached through the empty
+search field. Reading down folds the pill to a single line so the page has the
+screen.
 
 ![Scrawl on a phone](images/mobile-timeline.png)
 
@@ -42,10 +48,11 @@ breaks the link.
 
 ## Note — a Typora-style Markdown workspace
 
-Note (formerly Notes) holds plain Markdown files. The **list** is a 280px
-flyout: rest the pointer on the window's left edge and it floats in over the
-body, one line per note grouped by how recently it was created; a pin, or
-`⌘\`, keeps it out. The body column never moves when it opens. A note opens
+Note (formerly Notes) holds plain Markdown files. The **list** stands beside
+the page, 280px, one line per note grouped by how recently it was created,
+the newest at its foot; the grip on the page's left edge, or `⌘\`, tucks it
+under the page to read wide and brings it back. On a phone the list is the
+page, and a note opens over it. A note opens
 in the **viewer**: the title as a heading, a meta line of created time and
 tags, the rendered body, then the records pointing here.
 
@@ -67,11 +74,12 @@ because none of it is used often enough to sit in the way of writing. The
 writing screen has no way into it. It holds the view switches (マップ, and
 記入例 for a note from a template), the tags, the note's details, and the
 rare actions: revert, Codex にする (behind a confirmation, since there is no
-way back), delete. While it is closed the **status dot** at the window's
-lower right wears the save and the sync — green, grey, red — and pressing it
-says what the panel would: the save time, and every state that is on — press
-one to open the panel on its switch. On a phone the panel is a screen of its
-own, and a status row under the title keeps the save and the states as pills.
+way back), delete. While it is closed the **status** wears the save and the
+sync — green, grey, red — in words at the top of the rail on a wide window,
+as one dot in the top right corner on a phone. Pressing it says what the
+panel would: the save time, and every state that is on — press one to open
+the panel on its switch. On a phone the panel is a sheet that rises from the
+foot.
 
 Tags are edited in the panel: chips, with the tags you have used before
 offered as you type. The meta line in the viewer only shows them. A `#tag`
@@ -260,39 +268,39 @@ surface the record lives on; a phone drops the preview column.
 ## Command palette
 
 `?`, pressed anywhere you are not typing, opens the palette on the app's
-**commands** — new note, the three surfaces, Browse, sync now, settings —
-each with its key down the right-hand side, with a full-text search below.
+**commands** — new note, the three surfaces, Browse, Templates, the list
+beside a note, sync now, settings — each with its key down the right-hand side, with a full-text search below.
 
 ![Command palette](images/palette.png)
 
 ## Keyboard
 
 There is no cheat sheet to look up, because the app can show you the keys in
-the place they belong. There is no rail and no tab bar either: the way around
-is the keys, the places the empty search field lists, and the **status dot**
-— hover it and Scrawl · 検索 · Settings · キー appear to its left. Hold ⌘
+the place they belong. The way around is always in sight as well: the rail of
+places at the left of a wide window, the pill at the foot of a phone, and the
+places the empty search field lists. Hold ⌘
 (Ctrl on anything that is not a Mac) for a moment and a badge floats on the
-shoulder of every visible control whose key works right now — the status dot,
-新規 and the pin in the list, the `…` over an open note and its 履歴 tab, the
+shoulder of every visible control whose key works right now — the rail's
+places and its search, the list's grip, 新規, the `…` over an open note and its 履歴 tab, the
 two actions in the status details — with a pill explaining how to make them go
 away; let go and they are gone. And `?`, pressed anywhere you are not typing,
 opens the palette on the command list.
 
 The ones worth learning first:
 
-| Key                | What it does                  |
-| ------------------ | ----------------------------- |
-| `⌘K`               | The search field              |
-| `⌘F`               | Browse                        |
-| `⌘N`               | A new note                    |
-| `⌘1` / `⌘2` / `⌘3` | Scrawl / Note / Codex         |
-| `⌘\`               | Pin the list open             |
-| `⌘.`               | Dock or fold the note's panel |
-| `⌘⇧S`              | Sync now                      |
+| Key                | What it does                    |
+| ------------------ | ------------------------------- |
+| `⌘K`               | The search field                |
+| `⌘F`               | Browse                          |
+| `⌘N`               | A new note                      |
+| `⌘1` / `⌘2` / `⌘3` | Scrawl / Note / Codex           |
+| `⌘\`               | Tuck the list, or bring it back |
+| `⌘.`               | Dock or fold the note's panel   |
+| `⌘⇧S`              | Sync now                        |
 
-The palette's command section holds the seven global commands and nothing
-else — a new note, the three surfaces, Browse, sync now, and `⌘,` for
-Settings. The keys that need a note open are not in it: they are written
+The palette's command section holds the nine global commands and nothing
+else — a new note, the three surfaces, Browse, Templates, the list beside a
+note, sync now, and `⌘,` for Settings. The keys that need a note open are not in it: they are written
 beside the rows of the note's own panel, the one `⌘.` docks — `⌘⇧M` for the
 map, `⌘⇧R` to revert, `⌘⇧I` for its details, `⌘⇧K` to commit a Codex version,
 `⌘⇧H` for a Codex's history. `⌘↑` / `⌘↓` walk the list and are printed nowhere
