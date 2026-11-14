@@ -163,7 +163,7 @@ jobs:
               - '.vale.ini'
               - '.vale/**'
               - 'typos.toml'
-              - 'scripts/comments-changed/**'
+              - 'scripts/comments-changed.go'
               - 'justfile'
               - 'flake.nix'
               - 'nix/devshells.nix'
