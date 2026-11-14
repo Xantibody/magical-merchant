@@ -246,11 +246,9 @@ jobs:
           key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'flake.lock') }}
           restore-keys: |
             cargo-${{ runner.os }}-
+      # Includes check-rustls (rust/justfile), so the local verify runs it too
       - name: check
         run: nix develop .#rust --command just rust::check
-      # 実機の Android でしか出ない不具合なので、ここで止める。理由は rust/justfile
-      - name: rustls resolves to one version
-        run: nix develop .#rust --command just rust::check-rustls
       - name: test
         run: nix develop .#rust --command just rust::test
       - uses: actions/cache/save@v6

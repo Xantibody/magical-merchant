@@ -4,7 +4,8 @@ set working-directory := ".."
 default:
   @just --list
 
-check:
+# check-rustls rides along so `just verify` stops on it too, not only CI
+check: check-rustls
   cargo clippy --workspace --all-targets -- -D warnings
   cargo machete
   cargo deny check -W rejected -W unlicensed
