@@ -71,7 +71,6 @@ function element(selector: string, root: ParentNode = document): HTMLElement {
 function mountDetail(body: string, view: "editor" | "mindmap" | "preview" = "editor"): HTMLElement {
   document.body.innerHTML = `
     <div class="app">
-      <header class="header">header</header>
       <main class="app-main">
         <div class="workspace workspace--detail">
           <div class="detail-pane">
@@ -182,13 +181,12 @@ describe("note body: preview and editor draw the same page", () => {
     expect(step - line).toBeLessThanOrEqual(line / 3);
   });
 
-  // A `view: preview` note is drawn through MarkdownPreview as read-only.
-  // Clicking does not start writing, so it shows no I-beam, the signal that it is editable
-  it("gives a read-only note no I-beam", async () => {
+  // A tap on the viewer's page writes at that spot (R3), so it shows the I-beam that says so
+  it("gives the viewer's page the I-beam of a place to write", async () => {
     await page.viewport(1280, 800);
     mountDetail(preview(bodyBlocks("preview")), "preview");
 
-    expect(getComputedStyle(element(".markdown-preview")).cursor).toBe("default");
+    expect(getComputedStyle(element(".markdown-preview")).cursor).toBe("text");
   });
 
   // While the cursor is away, mermaid hides the source in the editor too and shows only the
@@ -353,9 +351,8 @@ describe("note head: the title column follows the body", () => {
     const flag = mapOpen ? "--map" : "";
     document.body.innerHTML = `
       <div class="app">
-        <header class="header">header</header>
         <main class="app-main">
-          <div class="workspace workspace--flyout">
+          <div class="workspace">
             <div class="list-pane"></div>
             <div class="detail-pane detail-pane${flag} ${pinned ? "detail-pane--panel" : ""}">
               <div class="detail-head"><div class="detail-title-row"><input class="note-title-input" value="題" /></div></div>
@@ -363,7 +360,7 @@ describe("note head: the title column follows the body", () => {
                 <div class="detail-body"><div class="markdown-preview"><p>本文</p></div></div>
                 ${mapOpen ? '<aside class="detail-map"></aside>' : ""}
               </div>
-              <aside class="note-panel ${pinned ? "note-panel--open note-panel--pinned" : ""}"></aside>
+              <aside class="note-panel ${pinned ? "note-panel--open" : ""}"></aside>
             </div>
           </div>
         </main>
@@ -398,8 +395,8 @@ describe("note head: the title column follows the body", () => {
   // Docking the panel must not throw the text you are reading sideways. Where the room to the
   // right of the column covers the panel's 320px, the column does not move at all
   it.each([
-    ["without the map", 1440, false],
-    ["with the map alongside", 1800, true],
+    ["without the map", 1720, false],
+    ["with the map alongside", 2080, true],
   ])(
     "keeps the body column in place when the panel docks with room to spare (%s)",
     async (_name, width, mapOpen) => {
@@ -515,41 +512,22 @@ describe("the note panel", () => {
   });
 });
 
-/** Whether `.list-pane` floats over the body inside this `@media`. */
-function floatsTheList(rule: CSSMediaRule): boolean {
-  return [...rule.cssRules].some(
-    (inner) =>
-      inner instanceof CSSStyleRule &&
-      inner.selectorText === ".workspace--flyout .list-pane" &&
-      inner.style.position === "absolute",
-  );
-}
-
-/** The conditions of the `@media` rules that float `.list-pane`. Empty if there are none. */
-function flyoutConditions(): string[] {
-  const media = [...document.styleSheets].flatMap((sheet) =>
-    [...sheet.cssRules].filter((rule): rule is CSSMediaRule => rule instanceof CSSMediaRule),
-  );
-  return media.filter((rule) => floatsTheList(rule)).map((rule) => rule.conditionText);
-}
-
 /**
- * The list is no longer a permanent pane. It is a flyout that floats over the body. While
- * it is closed it takes no space and cannot be clicked, and the body starts in full at the
- * window's left edge: there is no rail any more (ADR 0001).
+ * The list is the middle pane of three: a fixed column between the shelf's rail and the
+ * body, out unless the note's grip has tucked it. An invisible edge that opens it on hover
+ * would leave a wide window with no visible way to the other notes (D1, D2).
  */
-function mountFlyout(open: boolean, detail = false): HTMLElement {
+function mountList(detail = false, panel = false): HTMLElement {
   document.body.innerHTML = `
     <div class="app">
       <div class="app-column">
         <main class="app-main">
-          <div class="workspace workspace--flyout ${detail ? "workspace--detail" : ""}">
-            <div class="list-pane ${open ? "list-pane--open" : ""}">
-              <div class="list-pane-head"></div>
-              <div class="list-scroll"></div>
-              <div class="list-pane-foot">⌘\\ で常設</div>
+          <div class="workspace ${detail ? "workspace--detail" : ""}">
+            <div class="list-pane">
+              <div class="list-scroll" data-foot><div class="list-stack"></div></div>
+              <div class="list-pane-head list-pane-foot"></div>
             </div>
-            <div class="detail-pane"></div>
+            <div class="detail-pane ${panel ? "detail-pane--panel" : ""}"></div>
           </div>
         </main>
       </div>
@@ -557,7 +535,7 @@ function mountFlyout(open: boolean, detail = false): HTMLElement {
   return element(".list-pane");
 }
 
-describe("the list flyout", () => {
+describe("the list column", () => {
   beforeAll(async () => {
     await import("../index.css");
     await import("./workspace.css");
@@ -568,103 +546,58 @@ describe("the list flyout", () => {
     await page.viewport(1280, 800);
   });
 
-  it("stands 280px wide against the window's left edge, over the body", async () => {
+  it("stands 280px wide and pushes the body to its right", async () => {
     await page.viewport(1280, 800);
-    const pane = mountFlyout(true);
+    const pane = mountList();
 
     const rect = pane.getBoundingClientRect();
     const detail = element(".detail-pane").getBoundingClientRect();
 
     expect(rect.width).toBeCloseTo(280, 0);
-    expect(rect.left).toBeCloseTo(0, 0);
-    // The flyout does not push the body aside. It carries on underneath while it is open
-    expect(detail.left).toBeCloseTo(0, 0);
-  });
-
-  // Nothing shows, but the pointer has to be able to bring the list out
-  it("keeps an invisible edge to open the list from", async () => {
-    await page.viewport(1280, 800);
-    document.body.innerHTML = `<div class="workspace"><div class="list-edge"></div></div>`;
-
-    const rect = element(".list-edge").getBoundingClientRect();
-
-    expect(rect.width).toBeCloseTo(12, 0);
-    expect(rect.left).toBeCloseTo(0, 0);
-  });
-
-  // A phone has no pointer to rest on it, and the list is a page of its own there
-  it("has no edge on a phone", async () => {
-    await page.viewport(390, 800);
-    document.body.innerHTML = `<div class="workspace"><div class="list-edge"></div></div>`;
-
-    expect(getComputedStyle(element(".list-edge")).display).toBe("none");
+    // Two sheets on the shelf's ground, a strip of it showing between them (palm.css)
+    expect(detail.left - rect.right).toBeCloseTo(12, 0);
   });
 
   it("runs down to the bottom of the page", async () => {
     await page.viewport(1280, 800);
-    const pane = mountFlyout(true);
+    const pane = mountList();
 
     const main = element(".app-main").getBoundingClientRect();
 
     expect(pane.getBoundingClientRect().bottom).toBeCloseTo(main.bottom, 0);
   });
 
-  // If the hit area stayed while it is closed, the left 280px of the body could not be clicked
-  it("is out of the way and out of reach while it is closed", async () => {
+  // A column of the row, not a sheet laid over the body
+  it("stands in the flow", async () => {
     await page.viewport(1280, 800);
-    const pane = mountFlyout(false);
 
-    const style = getComputedStyle(pane);
-
-    expect(style.opacity).toBe("0");
-    expect(style.pointerEvents).toBe("none");
-    expect(style.transform).toBe("matrix(1, 0, 0, 1, -24, 0)");
+    expect(getComputedStyle(mountList()).position).toBe("relative");
   });
 
-  it("slides and fades with nothing else", async () => {
-    await page.viewport(1280, 800);
-    const pane = mountFlyout(true);
+  // Rail + list + docked panel would leave the body too little at 860. While the panel
+  // is docked on a window that narrow, the list steps aside; with room it stays
+  it.each([
+    [860, "none"],
+    [1099, "none"],
+    [1100, "flex"],
+    [1280, "flex"],
+  ])("at %ipx with the panel docked, the list's display is %s", async (width, display) => {
+    await page.viewport(width, 800);
 
-    const style = getComputedStyle(pane);
-
-    expect(style.transform).toBe("none");
-    expect(style.transitionProperty).toBe("transform, opacity");
-    expect(style.transitionDuration).toBe("0.22s, 0.18s");
+    expect(getComputedStyle(mountList(false, true)).display).toBe(display);
   });
 
-  /**
-   * On a narrow screen the list is a page of its own. There is nothing beside it (the body)
-   * to float over.
-   *
-   * What is checked is that it is in the flow, not that it is `static`: the list holds the
-   * template's sheet inside it, so the base rule already carries `relative`. What says
-   * whether it floats is `absolute`.
-   */
-  it("goes back to being a full page on a phone", async () => {
+  it("stays out under 1100px while the panel is closed", async () => {
+    await page.viewport(860, 800);
+
+    expect(getComputedStyle(mountList()).display).toBe("flex");
+  });
+
+  it("is the whole page on a phone", async () => {
     await page.viewport(390, 800);
-    const pane = mountFlyout(false);
+    const pane = mountList();
 
-    const style = getComputedStyle(pane);
-
-    expect(style.position).toBe("relative");
-    expect(style.opacity).toBe("1");
-    expect(style.transform).toBe("none");
-    expect(getComputedStyle(element(".list-pane-foot")).display).toBe("none");
-  });
-
-  /**
-   * On a wide device with no hover, a tablet, a list opened by a tap folds away the moment
-   * the finger leaves. The only ways to open it are hover and the pin, and the pin is inside
-   * the list, so someone with a note open can no longer reach another note.
-   *
-   * headless Chromium always reports `hover: hover`, so that screen cannot be built and
-   * measured. Only check that the floating rule sits inside the condition
-   */
-  it("floats the list only where a pointer can hover", () => {
-    const conditions = flyoutConditions();
-
-    expect(conditions).toHaveLength(1);
-    expect(conditions[0]).toContain("hover: hover");
+    expect(pane.getBoundingClientRect().width).toBeCloseTo(390, 0);
   });
 
   /**
@@ -675,7 +608,7 @@ describe("the list flyout", () => {
    */
   it("rises when the note takes the page on a phone", async () => {
     await page.viewport(390, 800);
-    mountFlyout(false, true);
+    mountList(true);
 
     const style = getComputedStyle(element(".detail-pane"));
 
@@ -686,7 +619,7 @@ describe("the list flyout", () => {
   // In a wide window the list and the body stand side by side and the pages do not swap
   it("does not rise where the list and the body stand side by side", async () => {
     await page.viewport(1280, 800);
-    mountFlyout(false, true);
+    mountList(true);
 
     expect(getComputedStyle(element(".detail-pane")).animationName).toBe("none");
   });

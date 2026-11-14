@@ -3,7 +3,8 @@ import { page } from "vitest/browser";
 import { render, screen, fireEvent, cleanup, waitFor, within } from "@solidjs/testing-library";
 import { mockIPC, mockWindows, clearMocks } from "@tauri-apps/api/mocks";
 import { createMemoryHistory, MemoryRouter, Route } from "@solidjs/router";
-import { ShellProvider } from "../lib/shell";
+import { ShellProvider, useShell } from "../lib/shell";
+import type { Shell } from "../lib/shell";
 import { readStartFullscreen } from "../lib/fullscreen";
 import { chooseTheme } from "../lib/theme";
 import UndoToast from "../components/UndoToast";
@@ -90,6 +91,14 @@ function navRow(title: string): HTMLElement {
   return screen.getByRole("button", { name: new RegExp(`^${title}`, "u") });
 }
 
+/** The shell the screen under test talks to: the round way out at the foot reads its back from here. */
+let shellOf: Shell | undefined;
+
+function ShellProbe(): null {
+  shellOf = useShell();
+  return null;
+}
+
 /**
  * Wait until onMount has finished listening to the two auth events. If a test ends part
  * way, clearMocks removes transformCallback and the later listen fails.
@@ -103,6 +112,7 @@ async function renderSettings(open?: string, url = "/"): Promise<void> {
   history.set({ value: url, replace: true });
   render(() => (
     <ShellProvider>
+      <ShellProbe />
       <MemoryRouter history={history}>
         <Route path="/" component={Settings} />
       </MemoryRouter>
@@ -329,7 +339,7 @@ describe("Settings › start in fullscreen", () => {
   });
 });
 
-// Moved here from the header's cycle button. There is no reason to keep something touched
+// The theme is chosen here and nowhere else. There is no reason to keep something touched
 // a few times a year in a place seen every time
 describe("Settings › THEME", () => {
   beforeEach(() => {
@@ -507,8 +517,12 @@ describe("Settings › on a phone", () => {
     fireEvent.click(navRow("一般"));
     expect(screen.getByRole("group", { name: "言語" })).toBeDefined();
 
-    fireEvent.click(screen.getByRole("button", { name: "設定の一覧に戻る" }));
-    expect(screen.queryByRole("group", { name: "言語" })).toBeNull();
+    // The way back is the round button at the foot (and a stroke to the right), which runs
+    // this. The page hands it over in an effect once the narrow width is known, so it is
+    // waited for rather than assumed
+    await waitFor(() => expect(shellOf?.headerBack()).toBeTypeOf("function"));
+    shellOf?.headerBack()?.();
+    await waitFor(() => expect(screen.queryByRole("group", { name: "言語" })).toBeNull());
     expect(navRow("一般")).toBeDefined();
   });
 
@@ -518,6 +532,6 @@ describe("Settings › on a phone", () => {
     await page.viewport(414, 896);
 
     expect(screen.getByText("Workers URL")).toBeDefined();
-    expect(screen.getByRole("button", { name: "設定の一覧に戻る" })).toBeDefined();
+    await waitFor(() => expect(shellOf?.headerBack()).toBeTypeOf("function"));
   });
 });

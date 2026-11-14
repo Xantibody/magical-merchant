@@ -1,0 +1,172 @@
+/* ---------------- library (the rail of places, a wide window's) ---------------- */
+
+/* The first pane: the state at the top, then at the foot the places, the search and the ring's
+   +. A 64px rail of 44px icons, always: it changes the place and nothing else, so names beside
+   the icons would be mostly empty room. The names are not gone: each shows beside its icon on
+   hover and on keyboard focus, the status line's words included, so the rail asks for no
+   memorising. A phone has no rail: its places are on the pill (layout.css) */
+.library {
+  position: relative;
+  z-index: 40;
+  flex: 0 0 64px;
+  width: 64px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  background: var(--app-sidebar);
+  border-right: 1px solid var(--app-hairline);
+  /* Controls, not text: a page-wide select-all leaves the library out */
+  user-select: none;
+}
+
+/* The state at the top, in the reading half: it is read far more than it is pressed */
+.library-top {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 10px 8px;
+}
+
+/* The places hang at the foot; nothing fills the rail above them */
+.library-foot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  margin-top: auto;
+  padding: 8px 10px;
+}
+
+/* Under the places: the search's icon over the ring's +, lowest of all */
+.library-search-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.library-ring {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--app-accent);
+  color: var(--app-on-accent);
+  cursor: pointer;
+}
+
+.library-row,
+.library .status-line {
+  position: relative;
+  justify-content: center;
+  width: 44px;
+  min-height: 44px;
+  padding: 0;
+}
+
+.library-row {
+  display: flex;
+  flex: none;
+  align-items: center;
+  border: none;
+  border-radius: var(--radius-2);
+  background: none;
+  color: var(--app-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.library-row:hover {
+  background: var(--app-hairline);
+}
+
+/* Where you are, by background alone, like a selected list row */
+.library-row--here {
+  background: var(--app-accent-soft);
+}
+
+.library-row .icon {
+  flex-shrink: 0;
+  color: var(--app-text-faint);
+}
+
+/* The name as a label beside the icon, over the page, shown on hover and focus only */
+.library-row-label,
+.library .status-line-text {
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 12px);
+  z-index: 50;
+  flex: none;
+  padding: 6px 10px;
+  border-radius: var(--radius-2);
+  background: var(--app-surface);
+  box-shadow: var(--shadow-pop);
+  color: var(--app-text);
+  font-size: 13px;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(-50%);
+  pointer-events: none;
+  transition: opacity 120ms var(--app-ease);
+}
+
+.library-row:hover .library-row-label,
+.library-row:focus-visible .library-row-label,
+.library .status-line:hover .status-line-text,
+.library .status-line:focus-visible .status-line-text {
+  opacity: 1;
+}
+
+/* The dot with its words. Two short lines: the save, then the sync */
+.status-line {
+  display: flex;
+  align-items: center;
+  border: none;
+  border-radius: var(--radius-2);
+  background: none;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.status-line:hover {
+  background: var(--app-hairline);
+}
+
+.status-line .status-dot-mark {
+  flex-shrink: 0;
+}
+
+.status-line[data-tone="busy"] .status-dot-mark {
+  background-color: var(--app-text-faint);
+}
+
+.status-line[data-tone="failed"] .status-dot-mark {
+  background-color: var(--app-danger);
+}
+
+.status-line-text {
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--app-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.status-line-save {
+  color: var(--app-text);
+}
+
+.status-line[data-tone="failed"] .status-line-text {
+  color: var(--app-danger);
+}

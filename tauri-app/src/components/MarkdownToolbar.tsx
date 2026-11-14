@@ -8,7 +8,9 @@ import {
   liftListItemCommand,
   createCodeBlockCommand,
 } from "@milkdown/kit/preset/commonmark";
-import type { Command } from "@milkdown/kit/prose/state";
+import { insertTableCommand } from "@milkdown/kit/preset/gfm";
+import { isInTable } from "@milkdown/kit/prose/tables";
+import type { Command, EditorState } from "@milkdown/kit/prose/state";
 import { exitCodeBlock, isInCodeBlock } from "../lib/block-commands";
 import { toggleBulletList, toggleOrderedList, toggleTaskItem } from "../lib/list-commands";
 import { startNoteLink } from "../lib/note-link-plugin";
@@ -21,6 +23,16 @@ import type { JSX } from "solid-js";
 
 interface MarkdownToolbarProps {
   editor: Editor | undefined;
+  /**
+   * Done writing, back to reading: the reach keeps it here at the foot, by the thumb, rather
+   * than in a strip at the top of the page where the writing hand cannot reach.
+   */
+  onDone: () => void;
+  /**
+   * Where a wide window lays the bar: the page being written, at its foot. A phone keeps it on
+   * the body, over the keyboard.
+   */
+  mount?: HTMLElement;
 }
 
 /** One button. label is used for both aria-label and title. */
@@ -33,6 +45,8 @@ interface ToolbarButton {
   run: (editor: Editor) => void;
   /** A button shown only while this is true. Buttons without it always show */
   when?: () => boolean;
+  /** A button that stays in the row but cannot be pressed while this is false */
+  enabled?: () => boolean;
   /** A button whose purpose is to let go of the body's focus. Not restored after it runs */
   releases?: true;
 }
@@ -72,12 +86,14 @@ function closeKeyboard(editor: Editor): void {
 }
 
 /**
- * The formatting bar above the phone keyboard. Same order as the mobile versions
- * of Slack, Notion and Obsidian, hardest syntax to type first: list kinds (`- `,
- * `1. ` and `- [ ]` input rules rarely fire through an IME), indentation, a link
- * to a note, code.
+ * The writing bar: above the phone keyboard, and at the foot of the page on a wide window, so
+ * every tool for writing is in one place by the hand instead of a lone table button at the
+ * page's top. Same order as the mobile versions of Slack, Notion and Obsidian, hardest syntax to
+ * type first: list kinds (`- `, `1. ` and `- [ ]` input rules rarely fire through an IME),
+ * indentation, a link to a note, code, a table. Inside a table its own controls stand beside
+ * the row (TableMenu).
  *
- * Kept to 7 buttons plus close (the exit-block button shows only inside a code
+ * Kept to 8 buttons plus close (the exit-block button shows only inside a code
  * block). One row above the keyboard runs out of width just lining up 44px hit
  * targets, so anything with another way in (a rule via the `---` input rule,
  * block deletion via select and delete) is not placed here.
@@ -86,6 +102,20 @@ export default function MarkdownToolbar(props: MarkdownToolbarProps): JSX.Elemen
   const toolbarTop = createKeyboardTop();
   // Whether to show "exit block". It only means something inside a code block
   const [inCodeBlock, setInCodeBlock] = createSignal(false);
+  // A table goes only on an empty caret in a plain paragraph: never over selected prose, never
+  // into a code fragment, never into another table
+  const [canInsertTable, setCanInsertTable] = createSignal(false);
+  const readCaret = (state: EditorState): void => {
+    const { selection } = state;
+    const { $from, $to } = selection;
+    setInCodeBlock(isInCodeBlock(selection));
+    setCanInsertTable(
+      selection.empty &&
+        $from.sameParent($to) &&
+        $from.parent.type.name === "paragraph" &&
+        !isInTable(state),
+    );
+  };
 
   // Mark the body while the toolbar is up (that is, while editing): the column gives up
   // the toolbar's height so the lines being typed never sit behind the buttons
@@ -101,6 +131,7 @@ export default function MarkdownToolbar(props: MarkdownToolbarProps): JSX.Elemen
     const { editor } = props;
     if (!editor) {
       setInCodeBlock(false);
+      setCanInsertTable(false);
       return;
     }
     let live = true;
@@ -108,10 +139,11 @@ export default function MarkdownToolbar(props: MarkdownToolbarProps): JSX.Elemen
       live = false;
     });
     editor.action((ctx) => {
-      setInCodeBlock(isInCodeBlock(ctx.get(editorViewCtx).state.selection));
-      ctx.get(listenerCtx).selectionUpdated((_ctx, selection) => {
+      const view = ctx.get(editorViewCtx);
+      readCaret(view.state);
+      ctx.get(listenerCtx).selectionUpdated(() => {
         if (live) {
-          setInCodeBlock(isInCodeBlock(selection));
+          readCaret(view.state);
         }
       });
     });
@@ -127,9 +159,7 @@ export default function MarkdownToolbar(props: MarkdownToolbarProps): JSX.Elemen
     // or unmaking a code block changes only the node type and leaves the
     // selection alone, so `selectionUpdated` never fires; waiting on it, "exit"
     // would not appear or disappear until the caret moves
-    editor.action((ctx) => {
-      setInCodeBlock(isInCodeBlock(ctx.get(editorViewCtx).state.selection));
-    });
+    editor.action((ctx) => readCaret(ctx.get(editorViewCtx).state));
     if (!button.releases) {
       bodyElement(editor)?.focus();
     }
@@ -151,6 +181,12 @@ export default function MarkdownToolbar(props: MarkdownToolbarProps): JSX.Elemen
       label: () => t().editor.codeBlock,
       run: milkdown(createCodeBlockCommand.key),
     },
+    {
+      icon: "table",
+      label: () => t().editor.insertTable,
+      run: (editor) => editor.action((ctx) => ctx.get(commandsCtx).call(insertTableCommand.key)),
+      enabled: canInsertTable,
+    },
     // A phone has no Mod-Enter, so inside a code block this is the only way out
     {
       icon: "arrow-line-down",
@@ -168,7 +204,7 @@ export default function MarkdownToolbar(props: MarkdownToolbarProps): JSX.Elemen
 
   return (
     <Show when={props.editor}>
-      <Portal>
+      <Portal mount={props.mount}>
         <div
           class="markdown-toolbar"
           role="toolbar"
@@ -183,6 +219,7 @@ export default function MarkdownToolbar(props: MarkdownToolbarProps): JSX.Elemen
                 // The default pointerdown action takes focus off the body. During an
                 // IME conversion that drops the half-typed characters unconfirmed (#102)
                 onPointerDown={(e) => e.preventDefault()}
+                disabled={!(button.enabled?.() ?? true)}
                 onClick={() => exec(button)}
                 aria-label={button.label()}
                 title={button.label()}
@@ -196,6 +233,15 @@ export default function MarkdownToolbar(props: MarkdownToolbarProps): JSX.Elemen
               </button>
             </Show>
           ))}
+          <button
+            type="button"
+            class="markdown-toolbar-done"
+            aria-label={t().viewer.done}
+            title={t().viewer.done}
+            onClick={() => props.onDone()}
+          >
+            <Icon name="check" size={20} />
+          </button>
         </div>
       </Portal>
     </Show>

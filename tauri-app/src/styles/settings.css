@@ -112,11 +112,6 @@
   margin-bottom: 6px;
 }
 
-/* The back-to-list button only means something on mobile, one page at a time */
-.settings-back {
-  display: none;
-}
-
 .settings-page-title {
   margin: 0;
   font-size: 22px;
@@ -425,11 +420,6 @@
     border-right: none;
   }
 
-  /* The header already shows the title */
-  .settings-title {
-    display: none;
-  }
-
   .settings-nav-row {
     min-height: 44px;
     font-size: 15px;
@@ -459,11 +449,6 @@
     display: block;
   }
 
-  .settings-back {
-    display: flex;
-    margin-left: -8px;
-  }
-
   /* There is no room for the item name's 220px. Put the control under the item name */
   .settings-row {
     grid-template-columns: minmax(0, 1fr);
@@ -473,4 +458,87 @@
   .settings-seg-item {
     min-height: 36px;
   }
+}
+
+@media (max-width: 767px) {
+  /* The page clears the place pill at the foot, and the list of pages too */
+  .settings-nav,
+  .settings-page {
+    padding-bottom: 96px;
+  }
+
+  .settings {
+    position: relative;
+  }
+
+  .settings-page {
+    background: var(--app-surface);
+  }
+
+  /* The list of pages under a page a finger is sliding away (61) */
+  .settings--peek .settings-nav {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+  }
+
+  /* Built from the foot (the reach): the pages hang over the page's own name, which stands by
+     the pill, and the build, read once, goes to the top */
+  .settings-nav {
+    justify-content: flex-end;
+  }
+
+  .settings .settings-title {
+    order: 2;
+    padding: 12px 12px 2px;
+  }
+
+  .settings-version {
+    order: -1;
+    margin: 0 0 auto;
+    padding-top: 8px;
+  }
+}
+
+/* The ways in from outside the app (38, 67, 78): a section of the records page */
+.settings-outside {
+  margin-top: 28px;
+}
+
+.settings-outside-title {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.settings-outside-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-outside-link {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.settings-key {
+  padding: 3px 8px;
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+  background: var(--app-input-bg);
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.settings-link-url {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  color: var(--app-text-muted);
 }

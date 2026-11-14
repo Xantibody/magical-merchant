@@ -42,8 +42,8 @@ function noteRowOf(note: NoteItem): ScrawlRow {
 }
 
 /**
- * Newest day first, each day's newest record first, so the page reads back in time from the
- * input line at the top of today. Notes reach back only as far as the loaded entries, and a
+ * Newest day first, each day's newest record first, so the page reads back in time from
+ * today at its top, as a feed does. Notes reach back only as far as the loaded entries, and a
  * note grown from an entry on screen is left to that entry's chip.
  */
 export function scrawlDays(entries: ScrawlItem[], notes: NoteItem[], today: string): ScrawlDay[] {

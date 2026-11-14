@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { entryMeta } from "./scrawl-meta";
+import { briefMeta, entryMeta } from "./scrawl-meta";
 import type { DeviceContext } from "./parse-scrawl";
 
 function context(overrides: Partial<DeviceContext> = {}): DeviceContext {
@@ -121,5 +121,33 @@ describe("entryMeta", () => {
       icon: "pencil",
       label: "future",
     });
+  });
+});
+
+describe("briefMeta", () => {
+  const full = context({
+    os: "android",
+    os_version: "15",
+    network_type: "Mobile",
+    battery: 49,
+    location: { latitude: 35.6812, longitude: 139.7671 },
+    s: "widget",
+  });
+
+  it("keeps the place and the way in, and leaves the phone's state to the opened record", () => {
+    expect(briefMeta(full, () => "丸の内").map((segment) => segment.icon)).toStrictEqual([
+      "map-pin",
+      "pencil",
+    ]);
+  });
+
+  // Nearly every record comes in through the app; saying so on each line says nothing
+  it("does not name the app itself as the way in", () => {
+    expect(briefMeta(context({ s: "app" }))).toStrictEqual([]);
+  });
+
+  it("says nothing for a record without a place or a way in", () => {
+    expect(briefMeta(context({ network_type: "WiFi", battery: 80 }))).toStrictEqual([]);
+    expect(briefMeta(null)).toStrictEqual([]);
   });
 });

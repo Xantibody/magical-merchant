@@ -23,7 +23,6 @@ async function motion(value: "reduce" | "no-preference"): Promise<void> {
 describe("reduced motion in the browser", () => {
   beforeAll(async () => {
     await import("../index.css");
-    await import("./workspace.css");
     await page.viewport(1280, 800);
   });
 
@@ -38,18 +37,13 @@ describe("reduced motion in the browser", () => {
     const { container } = render(() => (
       <>
         <div class="palette">Search</div>
-        <div class="workspace workspace--flyout">
-          <div class="list-pane list-pane--open">Notes</div>
-        </div>
         <span class="switch" />
       </>
     ));
     const palette = element(container, ".palette");
-    const list = element(container, ".list-pane");
     const toggle = element(container, ".switch");
     const moving = [
       () => getComputedStyle(palette).animationDuration,
-      () => getComputedStyle(list).transitionDuration,
       () => getComputedStyle(toggle, "::after").transitionDuration,
     ];
     for (const duration of moving) {

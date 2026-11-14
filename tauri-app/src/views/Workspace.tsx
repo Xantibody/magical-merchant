@@ -14,16 +14,17 @@ import {
 import type { JSX } from "solid-js";
 import { useNavigate, useSearchParams } from "@solidjs/router";
 import type { Editor } from "@milkdown/kit/core";
+import Drawer from "corvu/drawer";
 import HistoryPanel from "../components/HistoryPanel";
 import Icon from "../components/Icon";
 import KindDot from "../components/KindDot";
+import LinkPeek from "../components/LinkPeek";
 import MarkdownPreview from "../components/MarkdownPreview";
 import NoteList from "../components/NoteList";
 import NotePanel from "../components/NotePanel";
 import type { NotePanelTab } from "../components/NotePanel";
 import NoteStatusRow from "../components/NoteStatusRow";
 import NoteStrip from "../components/NoteStrip";
-import PromoteDialog from "../components/PromoteDialog";
 import TagEditor from "../components/TagEditor";
 import { createCodexHistory } from "../lib/codex-history";
 import { isStaleSave, typedInvoke } from "../lib/commands";
@@ -55,11 +56,41 @@ import { isTypingTarget, matchesShortcut } from "../lib/shortcuts";
 import { versionStatusLabel } from "../lib/versions";
 import { readBackup, writeBackup } from "../lib/edit-backup";
 import { claimsSelectAll, selectContents } from "../lib/select-all";
+import { gapAt, placeCaret, placeCaretAfter, startsWriting, tapSpot } from "../lib/tap-to-write";
+import { settleOpenedLine } from "../lib/opened-line";
+import type { OpenedLine } from "../lib/opened-line";
+import type { DropSpot, TapSpot } from "../lib/tap-to-write";
+import { createRingPress } from "../components/Ring";
+import type { DropTarget } from "../components/Ring";
 import type { NoteLinkTarget } from "../lib/note-link-plugin";
 import type { NoteKind, SearchHit, Template } from "../lib/commands";
-import { noteRoute } from "../lib/note-route";
+import { noteRoute, writeRoute } from "../lib/note-route";
 import { ROUTES } from "../lib/routes";
 import "../styles/workspace.css";
+
+/**
+ * Where a phone's note sheet stops (29): a little (the title, the tags, a Codex's version and
+ * the compare line, over a body still read above it), half (the view switches and the details
+ * too), all of it (the rare actions, the history). Pixels for the first so it holds the same
+ * rows on every phone; fractions of the sheet's height for the rest.
+ */
+type SheetPoint = `${number}px` | number;
+const SHEET_POINTS: SheetPoint[] = [0, "196px", 0.55, 1];
+const SHEET_LITTLE: SheetPoint = "196px";
+const SHEET_HALF = 0.55;
+
+/**
+ * How much of the sheet a stop leaves on screen, as CSS: the sheet's own height is
+ * note-panel.css's `.note-sheet` (88dvh less the top inset), and a fraction stop shows that
+ * share of it. The panel inside takes this height, so its foot row stands at the visible foot
+ * and what does not fit scrolls, at every stop.
+ */
+function sheetStopHeight(point: SheetPoint): string {
+  if (typeof point === "string") {
+    return point;
+  }
+  return `calc((88dvh - var(--safe-top)) * ${point})`;
+}
 
 // Milkdown + ProseMirror is not needed until the detail opens. A screen that only shows the list
 // stays clear of that weight (on a narrow device list and detail swap, so it waits for an open)
@@ -185,6 +216,16 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   );
 
   let detailBodyRef: HTMLDivElement | undefined;
+  let workspaceRef: HTMLDivElement | undefined;
+  let detailPaneRef: HTMLDivElement | undefined;
+  let gripHostRef: HTMLDivElement | undefined;
+  let peekRef: HTMLDivElement | undefined;
+  /** Where the phone's sheet stands (29). */
+  const [sheetPoint, setSheetPoint] = createSignal<SheetPoint>(SHEET_HALF);
+  /** The reading page drawn under the writing one while a finger slides writing away (61). */
+  const [peekReading, setPeekReading] = createSignal(false);
+  /** A note a `[[link]]` points at, lifted over this one (88). */
+  const [peekFile, setPeekFile] = createSignal<string | null>(null);
   /** The timer that drops "saved" down to showing the save time. */
   let savedTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -278,10 +319,18 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
    * and now means what every note does: it opens in the viewer.
    */
   const writing = createMemo<boolean>(() => searchParams.edit === "1");
+
   /** Whether the map is laid alongside. The same `view` key remembers it as `mindmap`. */
   const mapOpen = createMemo<boolean>(() => noteView() === "mindmap");
   /** A version is compared without the map. */
   const mapShown = (): boolean => mapOpen() && !historyOpen();
+
+  /**
+   * Whether a phone is reading: then the title and its lines are the top of the scrolling page
+   * rather than a block pinned over it, and scroll away as the text is read (4). Not with the
+   * map up: a phone swaps the body for the map, and the title would go with it.
+   */
+  const headInBody = (): boolean => !twoPane() && !writing() && !mapShown();
 
   /**
    * The tags written in the body as `#tag`. The meta line tells them from the frontmatter's
@@ -355,8 +404,6 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     tab: panelTab,
     detailsOpen,
     setDetailsOpen,
-    confirmOpen,
-    setConfirmOpen,
     close: closePanel,
     toggle: togglePanel,
   } = panel;
@@ -392,7 +439,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   );
 
   /**
-   * Whether to show the compare bar. While compare mode is on, on a phone. It shows even when the
+   * Whether to show the compare bar. While compare mode is on, on a phone with the sheet put away. It shows even when the
    * chosen version has the same content: without it there is no way back to the history and no way
    * to leave compare mode.
    */
@@ -465,12 +512,11 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       // Moving to another note folds the edit session. If the place to return to stayed the
       // previous note's body, the next save would crush another note's backup
       session.drop();
-      // The history, the half-typed tag and the confirmation belong to the note that was open.
-      // Whether the panel is docked does not: that is the app's, like the list's pin
+      // The history and the half-typed tag belong to the note that was open. Whether the
+      // panel is docked does not: that is the app's, like the list's tuck
       setHistoryOpen(false);
       setSelectedVersionId(null);
       setTagEditing(false);
-      setConfirmOpen(false);
       if (!item) {
         showBody("", "", "", "editor");
         return;
@@ -664,14 +710,96 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   };
 
   /**
-   * A note link is resolved inside this app. It is an `a` with no href, so a press is caught here
-   * and opened, on a read-only note and on the map alike.
+   * Where the tap that opened the writing screen landed. `undefined` when the screen was opened
+   * another way (Enter, e, the pencil, a new note): the caret then goes where the editor puts it.
    */
+  let tapped: TapSpot | null | undefined;
+  /**
+   * Where a drop asked the writing screen about to open to start (7): a new line after that
+   * block or item, or after the body's last for `null`, as Enter there would open it.
+   * `undefined` when the screen was not opened by a drop.
+   */
+  let dropped: DropSpot | null | undefined;
+  /**
+   * The line a drop opened, still empty (`lib/opened-line.ts`). Until the body reads otherwise
+   * nothing is saved; leaving the writing screen drops it with the editor, and the viewer reads
+   * the body as it was.
+   */
+  let openedLine: OpenedLine | undefined;
+
+  /** Writes from a dropped spot, or the body's end for `null`, on a line of its own (7). */
+  const writeAt = (spot: DropSpot | null): void => {
+    dropped = spot;
+    startWriting();
+  };
+
+  /**
+   * Where a carried pencil or + lands on the page being read (7): the gap between the two
+   * blocks it is let go between, drawn as a line across the column. Off the page, or while the
+   * page is not the viewer, nothing takes it.
+   */
+  const pageTargetAt = (x: number, y: number): DropTarget | null => {
+    const body = detailBodyRef;
+    const preview = body?.querySelector<HTMLElement>(":scope > .markdown-preview");
+    if (!body || !preview || writing() || historyOpen() || !selected()) {
+      return null;
+    }
+    const area = body.getBoundingClientRect();
+    if (x < area.left || x > area.right || y < area.top || y > area.bottom) {
+      return null;
+    }
+    const gap = gapAt(preview, y);
+    if (!gap) {
+      return null;
+    }
+    const column = preview.getBoundingClientRect();
+    return {
+      label: t().reach.dropInPage,
+      line: { left: column.left, top: gap.y, width: column.width },
+      drop: () => writeAt(gap.spot),
+    };
+  };
+
+  /** The + let go on a row (7): that note, open to write on a fresh last line. */
+  const appendTo = async (item: NoteItem): Promise<void> => {
+    shell.closePopovers();
+    openInViewer();
+    // Settled first: the line must open in this note's editor, not the one being left
+    await switchTo(item.id);
+    writeAt(null);
+  };
+
+  /**
+   * A phone's pencil (7): tapped it writes, as ever; pressed and slid, it is carried into the
+   * page and let go between two blocks to write from there.
+   */
+  const pencil = createRingPress({
+    choices: () => [],
+    holdMs: 0,
+    carry: () => ({ icon: "pencil", label: t().reach.dragPencil, targetAt: pageTargetAt }),
+  });
+
   const onBodyClick = (e: MouseEvent): void => {
     const target = e.target instanceof Element ? e.target : null;
     const noteLink = target?.closest("a.note-link");
     if (noteLink instanceof HTMLElement && noteLink.dataset.file) {
-      void openFile(noteLink.dataset.file);
+      // Lifted beside this note, not opened in its place (88): read it, then open or put it away
+      setPeekFile(noteLink.dataset.file);
+      return;
+    }
+    // One tap on the page writes, at the spot it landed (R3). What answers a tap itself (links,
+    // checkboxes, code copy, diagrams) keeps it; a drag that selected text stays a selection.
+    // A phone's head scrolls inside the page, but its title and lines are not the text
+    if (
+      !writing() &&
+      !historyOpen() &&
+      target &&
+      !target.closest(".detail-head") &&
+      startsWriting(e)
+    ) {
+      const preview = detailBodyRef?.querySelector(".markdown-preview");
+      tapped = preview ? tapSpot(preview, e.clientX, e.clientY, target) : null;
+      startWriting();
     }
   };
 
@@ -869,6 +997,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
   createEffect(() => {
     if (!writing()) {
       focusedFor = undefined;
+      openedLine = undefined;
       return;
     }
     const item = selected();
@@ -882,7 +1011,29 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       return;
     }
     focusedFor = item.id;
-    focusBody();
+    const editor = detailBodyRef?.querySelector<HTMLElement>(".ProseMirror");
+    const ready = markdownEditor();
+    if (editor && ready && dropped !== undefined) {
+      // A drop asked for a line of its own there (7). The editor's module is already loaded (it
+      // is on screen), so this import costs nothing; static, it would pull ProseMirror into the
+      // list's chunk
+      placeCaretAfter(editor, dropped);
+      void (async () => {
+        const { openLineAtCaret } = await import("../lib/open-line");
+        requestAnimationFrame(() => {
+          // The editor reports the change only after its debounce, so the line is known as
+          // empty before the first report of it arrives
+          const empty = openLineAtCaret(ready);
+          openedLine = empty === undefined ? undefined : { id: item.id, empty };
+        });
+      })();
+    } else if (editor && tapped !== undefined) {
+      placeCaret(editor, tapped);
+    } else {
+      focusBody();
+    }
+    tapped = undefined;
+    dropped = undefined;
   });
 
   // ⌘A in the writing screen selects the body, with the caret brought back if a press on the
@@ -936,6 +1087,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     }
     const status = kind() === "codex" ? versionStatus() : undefined;
     shell.setNoteState({
+      title: noteTitle() || t().notes.untitled,
       version: status ? versionStatusLabel(status) : undefined,
       comparing: historyOpen() && compareLine().length > 0 ? compareLine().join(" · ") : undefined,
       map: mapShown(),
@@ -958,18 +1110,20 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
 
   /**
    * Esc peels one layer at a time. The tag input and the created-time field take theirs first
-   * (they mark the key as handled), the confirmation is corvu's, then the history. The last
-   * layer is the writing screen, which gives way to the viewer. The settings tab stays: the
-   * panel was put there on purpose, like the list.
+   * (they mark the key as handled), then the history. The last layer is the writing screen,
+   * which gives way to the viewer. The settings tab stays: the panel was put there on
+   * purpose, like the list.
    */
   const onEscape = (e: KeyboardEvent): void => {
-    // corvu folds its dialog on the same keydown before this runs, so `confirmOpen` is already
-    // false by then; where the key came from is what still says it was the dialog's
+    // A key pressed inside a corvu dialog (the sheet, a popover) is that dialog's
     const fromDialog = e.target instanceof Element && e.target.closest("[role='dialog']") !== null;
-    if (confirmOpen() || fromDialog) {
+    if (fromDialog) {
       return;
     }
-    if (historyOpen()) {
+    if (peekFile()) {
+      e.preventDefault();
+      setPeekFile(null);
+    } else if (historyOpen()) {
       e.preventDefault();
       closePanel();
     } else if (panelScreenShown()) {
@@ -1028,7 +1182,8 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
         return;
       }
       const typing = isTypingTarget(e.target);
-      const step = matchesShortcut(e, "notePrev") ? -1 : Number(matchesShortcut(e, "noteNext"));
+      // The list grows upward from its foot (NoteList): ⌘↑ is the note drawn above, the older
+      const step = matchesShortcut(e, "notePrev") ? 1 : -Number(matchesShortcut(e, "noteNext"));
       if (step !== 0) {
         if (typing) {
           return;
@@ -1055,6 +1210,125 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     onCleanup(() => globalThis.removeEventListener("keydown", onKeyDown));
   });
 
+  /**
+   * A phone's note is one level in from its list, so one level out (the round back button, the
+   * stroke to the right) goes back there. The panel's sheet is a level further in and peels first.
+   */
+  const backToList = (): void => {
+    if (panelScreenShown()) {
+      setPanelScreen(false);
+      return;
+    }
+    if (peekFile()) {
+      setPeekFile(null);
+      return;
+    }
+    // Writing is a level over reading: one back gives the page back to be read
+    if (writing()) {
+      stopWriting();
+      return;
+    }
+    void session.settleEdit();
+    setDetailOpen(false);
+  };
+  createEffect(() => {
+    shell.setHeaderBack(detailOpen() && !twoPane() ? backToList : null);
+  });
+  onCleanup(() => shell.setHeaderBack(null));
+
+  /**
+   * What a stroke to the right slides on a phone (60, 61): the note, with its list showing
+   * through under it, or the writing page with the same note to be read under it. Let go
+   * short of a third and both spring back; nothing has moved.
+   */
+  createEffect(() => {
+    if (twoPane() || !detailOpen()) {
+      shell.setBackStage(null);
+      return;
+    }
+    shell.setBackStage(() => {
+      const page = detailPaneRef;
+      if (!page || panelScreenShown() || peekFile()) {
+        return null;
+      }
+      if (writing()) {
+        setPeekReading(true);
+        return {
+          page,
+          under: peekRef,
+          done: (commit) => {
+            setPeekReading(false);
+            if (commit) {
+              stopWriting();
+            }
+          },
+        };
+      }
+      workspaceRef?.classList.add("workspace--peek");
+      return {
+        page,
+        under: workspaceRef?.querySelector<HTMLElement>(".list-pane") ?? undefined,
+        done: (commit) => {
+          workspaceRef?.classList.remove("workspace--peek");
+          if (commit) {
+            backToList();
+          }
+        },
+      };
+    });
+  });
+  onCleanup(() => shell.setBackStage(null));
+
+  /**
+   * A wide window's note is a sheet lying over the list: pushed left it covers the list and
+   * takes its room, pulled right it uncovers it. The grip on its edge and two fingers on a
+   * trackpad both do it; the sheet slides from where it stood, so the step is seen.
+   */
+  const tuckList = (tucked: boolean): void => {
+    const pane = detailPaneRef;
+    const before = pane?.getBoundingClientRect().left ?? 0;
+    shell.setListTucked(tucked);
+    if (!pane) {
+      return;
+    }
+    const after = pane.getBoundingClientRect().left;
+    pane.classList.remove("palm-settling");
+    pane.style.transform = `translateX(${before - after}px)`;
+    // Reading the layout commits the starting place before the slide lets it go
+    pane.getBoundingClientRect();
+    pane.classList.add("palm-settling");
+    pane.style.transform = "";
+    setTimeout(() => pane.classList.remove("palm-settling"), 260);
+  };
+
+  // The levels a wide window's two-finger stroke steps through on this page: writing gives
+  // way to reading first, then the list comes back or goes under the note (palm-gestures.ts)
+  createEffect(() => {
+    if (!twoPane() || !gripHostRef) {
+      shell.setPageLevels(null);
+      return;
+    }
+    shell.setPageLevels({
+      out: () => {
+        if (writing()) {
+          return stopWriting;
+        }
+        return shell.listTucked() ? () => tuckList(false) : null;
+      },
+      cover: () => (shell.listTucked() ? null : () => tuckList(true)),
+      beside: { tucked: shell.listTucked, tuck: tuckList, edge: gripHostRef },
+    });
+  });
+  onCleanup(() => shell.setPageLevels(null));
+
+  // The note the place pill's Note / Codex goes straight back to (93): the one last opened here
+  createEffect(() => {
+    const item = selected();
+    if (item && (twoPane() || detailOpen())) {
+      shell.setLastNote(kind(), item.filename);
+    }
+  });
+
   /** Up or Down in the list already moved the focus to `id`; the viewer follows it there. */
   const stepTo = (id: string): void => {
     openInViewer();
@@ -1075,6 +1349,7 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       return;
     }
     await refetchNotes();
+    shell.recordsChanged();
     // Open the note just created. Leaving the selection where it was would make whoever types a
     // title rewrite the title of the note they had open before
     const filename = path.split("/").at(-1);
@@ -1109,13 +1384,15 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
 
   /**
    * Moves a Note into Codex's store. Neither the ID nor the body changes, only the surface.
-   * There is no way back, so it is not an Undo; the menu's confirmation takes that role.
-   * It lands on the surface it moved to: it leaves this surface's list, so staying would fall
-   * back to the first note and look like it vanished.
+   * There is no way back, so it is not an Undo; the held press takes that role (96).
+   * The note it leaves gives its place to the next one (91): it stays on this list, so the
+   * work carries on with the neighbour rather than an empty body. The Codex it became is the
+   * one the place pill's Codex now goes straight to (93).
    */
   const promoteToCodex = async (item: NoteItem): Promise<void> => {
     shell.closePopovers();
     await session.settleWrites();
+    const neighbor = neighborOf(visibleItems(), item.id);
     try {
       await typedInvoke("promote_note_to_codex", { filename: item.filename });
     } catch {
@@ -1123,12 +1400,36 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       shell.showToast(t().codex.promoteFailed);
       return;
     }
+    setPanelScreen(false);
+    if (selected()?.id === item.id) {
+      setSelectedId(neighbor);
+    }
+    shell.setLastNote("codex", item.filename);
     await refetchNotes();
     // Scrawl's origin chips are derived from the list too. The link survives the change of
     // surface, so make that side reread as well
     shell.refreshData();
-    navigate(noteRoute("codex", item.filename));
     shell.showToast(t().codex.promoted);
+  };
+
+  /** A new note of either kind (65): this surface's here, the other's on its own surface. */
+  const createKind = async (wanted: NoteKind): Promise<void> => {
+    if (wanted === kind()) {
+      await createNote();
+      return;
+    }
+    try {
+      const path = await typedInvoke("create_draft", {
+        body: "",
+        tags: [],
+        kind: wanted,
+        client: await getDeviceSignals(),
+      });
+      shell.recordsChanged();
+      navigate(writeRoute(wanted, path.split("/").at(-1)));
+    } catch {
+      shell.showToast(wanted === "codex" ? t().codex.createFailed : t().notes.createFailed);
+    }
   };
 
   // ---- delete + Undo (a tombstone for 5 s, the real delete after that) ----
@@ -1180,6 +1481,73 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     });
   };
 
+  /**
+   * How far the draft has moved since the newest version, for the commit to carry on itself
+   * (92). Nothing before the first version: there is no "since" to measure from.
+   */
+  const commitDelta = (): string | undefined => {
+    const status = versionStatus();
+    return status && status.count > 0 && status.dirty
+      ? t().codex.sizeDelta(status.bytes_delta)
+      : undefined;
+  };
+
+  /**
+   * The line at the top of a phone's sheet, the part still showing at its first stop: a
+   * Codex's distance from its newest version, or, while a version is compared, what is
+   * compared and the two ways out. The commit itself stands in the sheet's foot row, which
+   * every stop shows (NotePanel's footActions).
+   */
+  function sheetSummary(item: () => NoteItem): JSX.Element {
+    return (
+      <Show when={kind() === "codex"}>
+        <Show
+          when={historyOpen() && selectedRow()}
+          fallback={
+            <div class="sheet-summary">
+              <Show when={versionStatus()}>
+                {(status) => <span class="sheet-summary-text">{versionStatusLabel(status())}</span>}
+              </Show>
+            </div>
+          }
+        >
+          <div class="sheet-summary sheet-summary--compare">
+            <span class="sheet-summary-text">
+              <span class="compare-bar-title">
+                {t().codex.comparing(selectedRow()?.number ?? 0)}
+              </span>
+              <span class="compare-bar-detail">
+                {[compareDetail(), t().notes.readOnly].filter(Boolean).join(" · ")}
+              </span>
+            </span>
+            <button
+              type="button"
+              class="detail-action-pill"
+              disabled={selectedVersionId() === null}
+              onClick={() => {
+                const id = selectedVersionId();
+                if (id !== null) {
+                  void restoreVersion(item(), id);
+                }
+              }}
+            >
+              <Icon name="arrow-counter-clockwise" size={13} />
+              {t().codex.restoreShort}
+            </button>
+            <button
+              type="button"
+              class="icon-button"
+              aria-label={t().codex.close}
+              onClick={closePanel}
+            >
+              <Icon name="x" size={16} />
+            </button>
+          </div>
+        </Show>
+      </Show>
+    );
+  }
+
   /** The panel's tags. The meta line only shows them. */
   const tagEditor = (item: () => NoteItem, screen: boolean): JSX.Element => (
     <TagEditor
@@ -1211,7 +1579,6 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       tab={panelTab()}
       historyCount={versionRows().length}
       onTab={selectTab}
-      onBack={() => setPanelScreen(false)}
       mapOpen={mapOpen()}
       // While folded the table is empty, so judge by the template it came from
       hasExamples={item().template !== undefined}
@@ -1237,7 +1604,13 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
       onRevert={() => {
         void revertEdit(item());
       }}
-      onPromote={() => setConfirmOpen(true)}
+      onPromote={() => {
+        void promoteToCodex(item());
+      }}
+      commitDelta={commitDelta()}
+      paper={shell.paper()}
+      onTogglePaper={() => shell.setPaper(!shell.paper())}
+      summary={screen ? sheetSummary(item) : undefined}
       onCommit={() => {
         void commitVersion(item());
       }}
@@ -1259,9 +1632,10 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
           onSelect={(id) => {
             batch(() => {
               setSelectedVersionId(id);
-              // On a phone the body is where a version is compared
+              // On a phone the body is where a version is compared: the sheet sinks to its
+              // first stop, which then reads as the compare line (29)
               if (screen) {
-                setPanelScreen(false);
+                setSheetPoint(SHEET_LITTLE);
               }
             });
           }}
@@ -1276,8 +1650,27 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
     />
   );
 
+  /** The sheet's name: the note's own panel, "this Note" or "this Codex". */
+  const sheetLabel = (): string => (kind() === "codex" ? t().codex.panel : t().notes.panel);
+
+  // A sheet opening starts half way: the history and the body it compares both stay in sight
+  createEffect(
+    on(panelScreenShown, (shown) => {
+      if (shown) {
+        setSheetPoint(SHEET_HALF);
+      }
+    }),
+  );
+
   return (
-    <div class="workspace workspace--flyout" classList={{ "workspace--detail": detailOpen() }}>
+    <div
+      class="workspace"
+      classList={{
+        "workspace--detail": detailOpen(),
+        "workspace--tucked": twoPane() && shell.listTucked(),
+      }}
+      ref={workspaceRef}
+    >
       <NoteList
         kind={kind()}
         groups={groups()}
@@ -1290,28 +1683,131 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
         onCreate={() => {
           void createNote();
         }}
+        onCreateKind={(wanted) => {
+          void createKind(wanted);
+        }}
+        onWriteRow={(row) => {
+          select(row);
+          setSearchParams({ edit: "1" }, { replace: true });
+        }}
+        onPromoteRow={(row) => {
+          void promoteToCodex(row);
+        }}
+        onDeleteRow={(row) => {
+          void remove(row);
+        }}
+        onAppendRow={(row) => {
+          void appendTo(row);
+        }}
+        pageTargetAt={(x, y) => (twoPane() ? pageTargetAt(x, y) : null)}
         onCreateFromTemplate={(template) => {
           void createFromTemplate(template);
         }}
         onManageTemplates={() => navigate(ROUTES.TEMPLATES)}
       />
 
+      {/* The page to be read, under the one being written while a finger slides it away (61) */}
+      <Show when={peekReading() && selected()}>
+        <div class="detail-peek" ref={peekRef} aria-hidden="true">
+          <h1 class="note-title-view">{noteTitle() || t().notes.untitled}</h1>
+          <MarkdownPreview source={noteBody()} noteTitles={noteTitles()} glyphs={glyphs()} />
+        </div>
+      </Show>
+
       <div
         class="detail-pane"
+        ref={detailPaneRef}
         classList={{
           // While the history is open the map is not drawn. Keeping only the width would narrow it
           // by a map that has no title row, so it would stop lining up with the body column
           "detail-pane--map": mapShown(),
           // Docked, the panel takes its 320px from the body; floating, it lies over it
-          "detail-pane--panel": selected() !== undefined && twoPane() && shell.notePanelPinned(),
+          // A linked note lifted on a wide window lies in the panel's place, over the panel if it
+          // is open: the body yields the room either way, so the card covers none of the text
+          "detail-pane--panel":
+            selected() !== undefined &&
+            twoPane() &&
+            (shell.notePanelPinned() || peekFile() !== null),
         }}
       >
+        {/* The note sheet's grip stands on its left edge: AppLayout puts the one grip, the
+            list's, in here (`beside`). A host of its own, since the pane's own children are
+            redrawn whole when the note changes */}
+        <div class="sheet-grip-host" ref={gripHostRef} />
         <Show when={selected()} fallback={<div class="detail-empty">{t().notes.noSelection}</div>}>
-          {(item) => (
-            <>
-              {/* On a phone the panel swaps with the body. In a wide window it only stands to
-                  the right of the body, so the body stays (NotePanel below) */}
-              <Show when={!panelScreenShown()}>
+          {(item) => {
+            /** The title, the meta line and the state row: one block drawn in one of two places. */
+            const head = (): JSX.Element => (
+              <div class="detail-head">
+                {/* The title is the H1 at the top of the body itself. What is typed here is
+                    written back into the body as a `# heading` (`note-title.ts`), so the editor
+                    and the preview do not hold the title line. The viewer reads it as a heading */}
+                <Show when={writing()}>
+                  <div class="detail-title-row">
+                    <input
+                      type="text"
+                      class="note-title-input"
+                      placeholder={t().notes.titlePlaceholder}
+                      aria-label={t().notes.titlePlaceholder}
+                      value={noteTitle()}
+                      // It does not move until the body arrives (the previous note's title is up)
+                      readOnly={!loaded()}
+                      onInput={(e) => editTitle(e.currentTarget.value)}
+                      onChange={() => {
+                        void commitTitle();
+                      }}
+                      onKeyDown={(e) => {
+                        // The Enter that ends IME conversion is the IME's (#102)
+                        if (e.key === "Enter" && !isImeComposing(e)) {
+                          e.preventDefault();
+                          focusBody();
+                        }
+                      }}
+                    />
+                  </div>
+                </Show>
+
+                {/* Created time and tags, in the viewer only. The filename is the ID that sync
+                    and widgets point at, not something to show a person */}
+                <Show when={!writing()}>
+                  <h1 class="note-title-view">{noteTitle() || t().notes.untitled}</h1>
+                  <div class="detail-meta-line">
+                    {metaLine(item(), bodyTags())}
+                    {/* A Codex always shows how far it has moved from the newest version */}
+                    <Show when={kind() === "codex" && versionStatus()}>
+                      {(status) => (
+                        <span
+                          class="detail-version-status"
+                          classList={{ "detail-version-status--moved": status().dirty }}
+                        >
+                          {versionStatusLabel(status())}
+                        </span>
+                      )}
+                    </Show>
+                  </div>
+                </Show>
+
+                <NoteStatusRow
+                  saveStatus={saveStatus()}
+                  savedAt={savedAt()}
+                  mapShown={mapShown()}
+                  examplesShown={examplesShown() && item().template !== undefined}
+                  canCommit={canCommit()}
+                  canRevert={canRevert()}
+                  onOpenSettings={() => openSettings()}
+                  onCommit={() => {
+                    void commitVersion(item());
+                  }}
+                  onRevert={() => {
+                    void revertEdit(item());
+                  }}
+                />
+              </div>
+            );
+            return (
+              <>
+                {/* The body stays under the phone's sheet as it does beside the wide window's
+                  panel: the sheet rises over it and stops part way (29) */}
                 {/* Title, record and actions in one group. They sit on the same level as the body,
                   so what you want to know about a note is not searched for somewhere far away */}
                 <NoteStrip
@@ -1319,84 +1815,20 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                   writing={writing()}
                   mapOpen={mapOpen()}
                   historyOpen={historyOpen()}
-                  onBack={() => {
-                    void session.settleEdit();
-                    setDetailOpen(false);
-                  }}
+                  slim={shell.slim()}
                   onToggleMap={() => {
                     void toggleMap(item());
                   }}
                   onWrite={startWriting}
                   onDone={stopWriting}
                   onTogglePanel={togglePanel}
+                  onPaper={() => shell.setPaper(!shell.paper())}
                 />
 
-                <div class="detail-head">
-                  {/* The title is the H1 at the top of the body itself. What is typed here is
-                    written back into the body as a `# heading` (`note-title.ts`), so the editor
-                    and the preview do not hold the title line. The viewer reads it as a heading */}
-                  <Show when={writing()}>
-                    <div class="detail-title-row">
-                      <input
-                        type="text"
-                        class="note-title-input"
-                        placeholder={t().notes.titlePlaceholder}
-                        aria-label={t().notes.titlePlaceholder}
-                        value={noteTitle()}
-                        // It does not move until the body arrives (the previous note's title is up)
-                        readOnly={!loaded()}
-                        onInput={(e) => editTitle(e.currentTarget.value)}
-                        onChange={() => {
-                          void commitTitle();
-                        }}
-                        onKeyDown={(e) => {
-                          // The Enter that ends IME conversion is the IME's (#102)
-                          if (e.key === "Enter" && !isImeComposing(e)) {
-                            e.preventDefault();
-                            focusBody();
-                          }
-                        }}
-                      />
-                    </div>
-                  </Show>
-
-                  {/* Created time and tags, in the viewer only. The filename is the ID that sync
-                    and widgets point at, not something to show a person */}
-                  <Show when={!writing()}>
-                    <h1 class="note-title-view">{noteTitle() || t().notes.untitled}</h1>
-                    <div class="detail-meta-line">
-                      {metaLine(item(), bodyTags())}
-                      {/* A Codex always shows how far it has moved from the newest version */}
-                      <Show when={kind() === "codex" && versionStatus()}>
-                        {(status) => (
-                          <span
-                            class="detail-version-status"
-                            classList={{ "detail-version-status--moved": status().dirty }}
-                          >
-                            {versionStatusLabel(status())}
-                          </span>
-                        )}
-                      </Show>
-                    </div>
-                  </Show>
-
-                  <NoteStatusRow
-                    saveStatus={saveStatus()}
-                    savedAt={savedAt()}
-                    mapShown={mapShown()}
-                    examplesShown={examplesShown() && item().template !== undefined}
-                    canCommit={canCommit()}
-                    canRevert={canRevert()}
-                    onOpenSettings={() => openSettings()}
-                    onCommit={() => {
-                      void commitVersion(item());
-                    }}
-                    onRevert={() => {
-                      void revertEdit(item());
-                    }}
-                  />
-                </div>
-
+                {/* A phone reading a note scrolls the head away with the body (4): the large
+                    title opens the page and then gives the screen to the text. Writing, or on a
+                    wide window, it stands over the body */}
+                <Show when={!headInBody()}>{head()}</Show>
                 <div class="detail-panes" classList={{ "detail-panes--map": mapShown() }}>
                   {/* For biome-ignore/eslint: what is caught here is only a note link with no
                     href. Writing actions are taken by the editor itself */}
@@ -1406,13 +1838,16 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                     ref={detailBodyRef}
                     role="presentation"
                     onClick={onBodyClick}
-                    // The viewer's third way into writing, beside Enter and e
-                    onDblClick={() => {
+                    // A tap is about to want the editor: start fetching its chunk on the press,
+                    // so the caret lands while the tap still counts as the user's (the phone's
+                    // keyboard opens only for a focus close to a gesture)
+                    onPointerDown={() => {
                       if (!writing()) {
-                        startWriting();
+                        void import("../components/MilkdownEditor");
                       }
                     }}
                   >
+                    <Show when={headInBody()}>{head()}</Show>
                     {/* While the history is open the body turns read-only and the difference from
                       the chosen version becomes gutter marks. The editor is folded away:
                       left open below, the restored body and the old document would both exist */}
@@ -1457,6 +1892,17 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                               if (!loaded()) {
                                 return;
                               }
+                              // A dropped line nothing has been typed on is not an edit yet
+                              // (7): the body and its save wait for the first word
+                              const settled = settleOpenedLine(
+                                openedLine,
+                                selected()?.id,
+                                markdown,
+                              );
+                              openedLine = settled.line;
+                              if (settled.skip) {
+                                return;
+                              }
                               session.ensure();
                               setNoteBody(markdown);
                               session.schedule();
@@ -1477,8 +1923,8 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                   </Show>
                 </div>
 
-                {/* The compare mode strip. What is being compared, and the three ways out of it
-                  (back to the history, restore that version, leave compare). Phones only */}
+                {/* Compare mode on a phone with the sheet put away: the line that says so and
+                  leads back (the sheet's first stop says the same while it is up) */}
                 <Show when={compareBarOpen()}>
                   <div class="compare-bar">
                     <span class="compare-bar-text">
@@ -1498,20 +1944,6 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                     </button>
                     <button
                       type="button"
-                      class="button-secondary"
-                      disabled={selectedVersionId() === null}
-                      onClick={() => {
-                        const id = selectedVersionId();
-                        if (id !== null) {
-                          void restoreVersion(item(), id);
-                        }
-                      }}
-                    >
-                      <Icon name="arrow-counter-clockwise" size={13} />
-                      {t().codex.restoreShort}
-                    </button>
-                    <button
-                      type="button"
                       class="icon-button compare-bar-close"
                       aria-label={t().codex.close}
                       onClick={closePanel}
@@ -1520,46 +1952,119 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
                     </button>
                   </div>
                 </Show>
-              </Show>
 
-              {/* A phone's panel is its own screen, swapped in for the body. Pressing a version
-                  on its history tab returns to the body, with the compare bar attached */}
-              <Show when={panelScreenShown()}>{notePanel(item, true)}</Show>
+                {/* The phone's reading hand (63): the note's sheet and the pencil, low on the
+                  right opposite the place pill. Reading down, the sheet's button steps away and
+                  the pencil stays */}
+                <Show
+                  when={
+                    !twoPane() &&
+                    detailOpen() &&
+                    !writing() &&
+                    !panelScreenShown() &&
+                    !compareBarOpen()
+                  }
+                >
+                  <div class="palm-actions" classList={{ "palm-actions--slim": shell.slim() }}>
+                    <button
+                      type="button"
+                      class="palm-action-more"
+                      title={sheetLabel()}
+                      aria-label={sheetLabel()}
+                      onClick={() => togglePanel()}
+                    >
+                      <Icon name="dots-three" size={20} />
+                    </button>
+                    <button
+                      type="button"
+                      class="compose-fab ring-trigger"
+                      title={`${t().viewer.write} · ${t().reach.dragPencil}`}
+                      aria-label={t().viewer.write}
+                      data-no-gesture
+                      {...pencil.handlers}
+                      onClick={() => {
+                        if (pencil.shouldClick()) {
+                          startWriting();
+                        }
+                      }}
+                    >
+                      <Icon name="pencil" size={22} />
+                    </button>
+                  </div>
+                  {pencil.view()}
+                </Show>
 
-              {/* In a wide window, 320px at the right edge. It exists even when folded, so
+                {/* A phone's panel is a sheet from the foot that stops a little, half way or all
+                  the way up (29). Non-modal: the note above it is still read and scrolled */}
+                <Show when={!twoPane()}>
+                  <Drawer
+                    open={panelScreenShown()}
+                    onOpenChange={(open) => {
+                      if (!open) {
+                        closePanel();
+                      }
+                    }}
+                    snapPoints={SHEET_POINTS}
+                    defaultSnapPoint={SHEET_HALF}
+                    activeSnapPoint={sheetPoint()}
+                    onActiveSnapPointChange={setSheetPoint}
+                    modal={false}
+                    trapFocus={false}
+                    preventScroll={false}
+                    closeOnOutsidePointer={false}
+                    noOutsidePointerEvents={false}
+                    restoreFocus={false}
+                  >
+                    <Drawer.Content
+                      class="note-sheet"
+                      aria-label={sheetLabel()}
+                      style={{ "--sheet-stop": sheetStopHeight(sheetPoint()) }}
+                    >
+                      <div class="note-sheet-grip" title={t().palm.grip} aria-hidden="true" />
+                      {notePanel(item, true)}
+                    </Drawer.Content>
+                  </Drawer>
+                </Show>
+
+                {/* A linked note lifted over this one (88): read it, open it for real, or let it
+                  drop back */}
+                <Show when={peekFile()} keyed>
+                  {(file) => (
+                    <LinkPeek
+                      filename={file}
+                      title={allItems().find((note) => note.filename === file)?.title}
+                      sheet={!twoPane()}
+                      noteTitles={noteTitles()}
+                      onOpen={() => {
+                        setPeekFile(null);
+                        void openFile(file);
+                      }}
+                      onClose={() => setPeekFile(null)}
+                    />
+                  )}
+                </Show>
+
+                {/* In a wide window, 320px at the right edge. It exists even when folded, so
                   opening and closing read as a 220ms slide */}
-              <Show when={twoPane()}>{notePanel(item, false)}</Show>
-
-              <PromoteDialog
-                open={confirmOpen()}
-                icon="book"
-                title={t().codex.promote}
-                // Say what is gained before saying there is no way back. That is what decides
-                // whether to press
-                body={
-                  <>
-                    {t().codex.promoteConfirm}
-                    <strong>{t().codex.promoteConfirmStrong}</strong>
-                    {t().codex.promoteConfirmEnd}
-                  </>
-                }
-                yes={t().codex.promoteYes}
-                no={t().codex.promoteNo}
-                onClose={() => setConfirmOpen(false)}
-                onConfirm={() => {
-                  setConfirmOpen(false);
-                  void promoteToCodex(item());
-                }}
-              />
-            </>
-          )}
+                <Show when={twoPane()}>{notePanel(item, false)}</Show>
+              </>
+            );
+          }}
         </Show>
       </div>
 
-      {/* The entry for notation that is hard to type on a keyboard. It appears on touch devices
-          only. It is lazy, so drawing it unconditionally would load the whole editor just from
-          looking at the list. It is drawn only once the editor is up */}
-      <Show when={markdownEditor()}>{(editor) => <MarkdownToolbar editor={editor()} />}</Show>
+      {/* The writing bar: over the keyboard on a touch device, at the foot of the page where a
+          pointer is. It is lazy, so drawing it unconditionally would load the whole editor just
+          from looking at the list. It is drawn only once the editor is up */}
+      <Show when={markdownEditor()}>
+        {(editor) => (
+          <MarkdownToolbar
+            editor={editor()}
+            onDone={stopWriting}
+            mount={matchMedia("(hover: hover)").matches ? detailPaneRef : undefined}
+          />
+        )}
+      </Show>
     </div>
   );
 }

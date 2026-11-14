@@ -82,3 +82,19 @@ export function entryMeta(context: DeviceContext | null, nameOf?: PlaceLookup): 
     sourceSegment(context),
   ].filter((segment): segment is MetaSegment => segment !== null);
 }
+
+/**
+ * The one quiet line under a record in the list: where it was written, and how it came in when
+ * that was not the app itself. Those two tell records apart when reading back ("on the train",
+ * "from the widget"); the device, network and battery describe the phone rather than the record,
+ * were the long ones that wrapped a row onto a second line, and wait for the record to be opened.
+ */
+export function briefMeta(context: DeviceContext | null, nameOf?: PlaceLookup): MetaSegment[] {
+  if (!context) {
+    return [];
+  }
+  return [
+    locationSegment(context, nameOf),
+    context.s === "app" ? null : sourceSegment(context),
+  ].filter((segment): segment is MetaSegment => segment !== null);
+}

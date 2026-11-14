@@ -27,8 +27,9 @@ const SHORTCUTS = {
   browse: { key: "f" },
   syncNow: { key: "s", shift: true },
   settings: { key: "," },
-  // Make the list flyout permanent. It does not fold away when the pointer leaves
-  listPin: { key: "\\" },
+  // Tucks the list beside a note under it, or brings it back. A wide window only, and only
+  // where a list stands beside the page (Note, Codex)
+  sidebar: { key: "\\" },
   // These work on the open note. Workspace takes them, and they can be pressed only
   // while one note is open. ⌘. docks the right panel beside the body, or folds it
   noteActions: { key: "." },

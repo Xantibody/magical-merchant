@@ -192,13 +192,14 @@ describe("SearchField", () => {
     expect(onOpen).toHaveBeenCalledExactlyOnceWith(found);
   });
 
+  // The results rise from the field at the foot: the next one is drawn above, so ↑ moves to it
   it("opens with Enter, and the arrows move the choice", async () => {
     const second = hit("二つ目");
     const { input, onOpen } = renderField([hit("一つ目"), second]);
     typed(input, "ord");
     await waitFor(() => expect(document.querySelector(".palette-count")).not.toBeNull());
 
-    fireEvent.keyDown(input, { key: "ArrowDown" });
+    fireEvent.keyDown(input, { key: "ArrowUp" });
     fireEvent.keyDown(input, { key: "Enter" });
 
     expect(onOpen).toHaveBeenCalledExactlyOnceWith(second);

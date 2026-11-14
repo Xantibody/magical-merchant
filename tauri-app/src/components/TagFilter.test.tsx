@@ -4,15 +4,12 @@ import TagFilter from "./TagFilter";
 import { setLocale } from "../lib/i18n";
 import "../styles/tags.css";
 
-function label(): HTMLElement {
+/** The row's name. It has no label line of its own any more (S4); a reader gets the name. */
+function rowName(): string | null {
   const { container } = render(() => (
     <TagFilter tags={[{ tag: "sf6", count: 3 }]} onPick={() => {}} />
   ));
-  const found = container.querySelector<HTMLElement>(".tag-filter-label");
-  if (!found) {
-    throw new Error("the tag row has no label");
-  }
-  return found;
+  return container.querySelector<HTMLElement>("[role='group']")?.getAttribute("aria-label") ?? null;
 }
 
 describe("TagFilter", () => {
@@ -22,17 +19,11 @@ describe("TagFilter", () => {
   });
 
   // The row was labelled "TAGS" in both languages, an English word on a Japanese screen
-  it("labels the row in the reader's language", () => {
-    expect(label().textContent).toBe("タグ");
+  it("names the row in the reader's language", () => {
+    expect(rowName()).toBe("タグ");
 
     cleanup();
     setLocale("en");
-    expect(label().textContent).toBe("Tags");
-  });
-
-  // The capitals were typed into the string. They are the stylesheet's to draw, so the
-  // English row still reads TAGS and a screen reader says the word, not four letters
-  it("leaves the capitals to the stylesheet", () => {
-    expect(getComputedStyle(label()).textTransform).toBe("uppercase");
+    expect(rowName()).toBe("Tags");
   });
 });

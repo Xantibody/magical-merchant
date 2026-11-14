@@ -8,7 +8,7 @@
   overflow: hidden;
 }
 
-/* The one column: the body, under the header on mobile */
+/* The one column: the body, beside the rail on a wide window, the whole glass on a phone */
 .app-column {
   flex: 1;
   min-width: 0;
@@ -25,50 +25,17 @@
   display: flex;
 }
 
+/* Holds the route and the phone's controls that float over it; it draws no box, so the
+   route still lays out as app-main's own child */
+.app-route {
+  display: contents;
+}
+
 .view {
   flex: 1;
   overflow: auto;
   padding: var(--size-3);
   position: relative;
-}
-
-/* ---------------- mobile header ---------------- */
-
-/* The desktop header is gone. Only on a narrow screen does a band with the title and a few
-   entry points remain */
-.mobile-header {
-  display: none;
-  align-items: center;
-  gap: 2px;
-  box-sizing: border-box;
-  min-height: 48px;
-  padding: 0 8px 0 16px;
-  background: var(--app-surface);
-  border-bottom: 1px solid var(--app-border);
-  /* Controls, not text: a page-wide select-all leaves the header out (workspace.css) */
-  user-select: none;
-}
-
-.mobile-header-title {
-  flex: 1;
-  font-size: 16px;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.mobile-header-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--size-1);
-  margin-left: auto;
-}
-
-/* Make it a size a finger can press */
-.mobile-header-actions .icon-button {
-  padding: 10px;
-  text-decoration: none;
 }
 
 /* ---------------- hit areas on a phone ---------------- */
@@ -77,77 +44,202 @@
    purpose: a bigger icon, pill or fill would be more chrome. So the rest is a box that paints
    nothing, centred on the control: it looks the same, and a tap a little off still lands.
    Where two of them stand side by side, their sheets keep them far enough apart that the
-   boxes meet without overlapping (hit-area.test.ts) */
+   boxes meet without overlapping (hit-area.test.ts). The place pill's buttons are 44px or more
+   but round, and a round box takes no tap at its corners: the square box keeps all of it. Its
+   send button is drawn smaller so the field keeps the pill's height */
 @media (max-width: 767px) {
   :where(
-    .mobile-header-actions > *,
     .note-strip .icon-button,
-    .list-pane-head .new-note,
     .day-heading-select,
     .digest-year-ago,
     .digest-close,
     .tag-filter-chips .tag-chip,
     .browse-chip,
-    .browse-clear
+    .browse-clear,
+    .place-switch button,
+    .palm-slim,
+    .paper-back,
+    .sheet-summary .detail-action-pill,
+    .palm-action-more,
+    .palm-dot > *
   ) {
     position: relative;
   }
 
   :where(
-    .mobile-header-actions > *,
     .note-strip .icon-button,
-    .list-pane-head .new-note,
     .day-heading-select,
     .digest-year-ago,
     .digest-close,
     .tag-filter-chips .tag-chip,
     .browse-chip,
-    .browse-clear
+    .browse-clear,
+    .place-switch button,
+    .palm-slim,
+    .paper-back,
+    .sheet-summary .detail-action-pill,
+    .palm-action-more,
+    .palm-dot > *
   )::before {
     content: "";
     position: absolute;
     inset: min(0px, (100% - 44px) / 2);
   }
+}
 
-  /* 38px controls with 3px of hit area on each side meet across 6px */
-  .mobile-header-actions {
-    gap: 6px;
+/* ---------------- compose button (phone) ---------------- */
+
+/* The one round button, low on the right where a thumb rests (R2). A list's + blooms the
+   ring, a note's pencil opens it to write, and Scrawl's pencil, shown only while the pill is
+   folded, brings the field back. A wide window has the field and "+ new" instead, so it is a
+   phone's alone. It sits inside .app, which already ends above the system's bottom bar
+   (--safe-bottom is html's padding) */
+.compose-fab {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .compose-fab {
+    position: absolute;
+    right: 16px;
+    bottom: 16px;
+    z-index: 25;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: var(--app-accent);
+    color: var(--app-on-accent);
+    box-shadow: var(--shadow-pop);
+    cursor: pointer;
   }
 }
 
-/* A popover hangs from the bottom edge of the header */
+/* The three surfaces, low on the left opposite the compose button (PlaceSwitch.tsx). Same
+   height and shadow as the button, so the two read as one pair under the thumb. On Scrawl the
+   same pill stretches to the right gutter and holds the field (Scrawl's sheet). A wide window has
+   the library beside it and never mounts this */
+@media (max-width: 767px) {
+  .place-switch {
+    position: absolute;
+    left: 16px;
+    /* Over an on-screen keyboard that leaves the page its height (lib/keyboard-inset.ts) */
+    bottom: calc(16px + var(--keyboard-lift, 0px));
+    z-index: 25;
+    display: flex;
+    align-items: flex-end;
+    box-sizing: border-box;
+    min-height: 56px;
+    padding: 5px;
+  }
+
+  .place-switch--stretched {
+    right: 16px;
+  }
+
+  /* The pill's look, a layer of its own: the pill's width is laid out, and this is what plays
+     the change from the old width by scaleX (PlaceSwitch.tsx), so the motion stays transform.
+     Under the buttons, above nothing: the pill is a stacking context of its own */
+  .place-switch-ground {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: 28px;
+    background: var(--app-surface);
+    box-shadow: var(--shadow-pop);
+    transform-origin: left center;
+    transition: transform 280ms var(--app-ease);
+  }
+
+  .place-switch-places {
+    display: flex;
+    flex-shrink: 0;
+    gap: 2px;
+    transition:
+      opacity 160ms var(--app-ease),
+      transform 160ms var(--app-ease);
+  }
+
+  /* What a surface carries into the pill (Scrawl's field). Empty on a list, so the compact
+     pill is the buttons alone. Fades in after the ground has set off when the pill stretches */
+  .place-switch-slot {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    transition: opacity 180ms var(--app-ease) 100ms;
+  }
+
+  /* While writing, the places step aside and the field has the whole width; they come back
+     once the field lets go of the focus. The field itself, not focus-within: a tapped button in
+     the pill (back to the newest) takes the focus too and must not hide them. The field takes
+     the room at once (a width cannot move by transform); the places fade out over it */
+  .place-switch:has(.capture-input:focus) .place-switch-places {
+    position: absolute;
+    bottom: 5px;
+    left: 5px;
+    z-index: 1;
+    opacity: 0;
+    transform: translateX(-12px);
+    visibility: hidden;
+    pointer-events: none;
+    transition:
+      opacity 160ms var(--app-ease),
+      transform 160ms var(--app-ease),
+      visibility 0s 160ms;
+  }
+
+  .place-switch-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 46px;
+    height: 46px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: none;
+    color: var(--app-text-muted);
+    cursor: pointer;
+  }
+
+  /* Where you are, by background alone, like the library's row */
+  .place-switch-button--here {
+    background: var(--app-accent-soft);
+    color: var(--app-text);
+  }
+}
+
+/* A popover hangs from the bottom edge of its anchor */
 .popover-anchor {
   position: absolute;
   top: 100%;
   z-index: 120;
 }
 
-/* Only one status container hangs off the surface column. There are two entry points, the
-   corner dot (wide window) and the band (narrow window), but they open the same container. The
-   base rule that hangs from the bottom edge of the header (`top: 100%`) cannot be used
-   here: this column is the full height of the window, so straight below it is off screen,
-   cropped by `.app`'s overflow, and nothing would be visible */
+/* Only one status container hangs off the window. There are two entry points, the top of the
+   rail (wide window) and the dot in a phone's top corner, but they open the same container.
+   The base rule that hangs from the bottom edge of its anchor (`top: 100%`) cannot be used
+   here: `.app` is the full height of the window, so straight below it is off screen,
+   cropped by its overflow, and nothing would be visible */
 .popover-anchor--sync {
   top: 48px;
   right: var(--size-2);
 }
 
 @media (min-width: 768px) {
-  /* A wide window has no band. The entry point is the dot in the corner, and it opens
-     straight above it */
+  /* A wide window's entry point is the status line at the top of the rail, and the details
+     hang under it, beside the rail */
   .popover-anchor--sync {
-    top: auto;
-    right: 12px;
-    bottom: 40px;
+    top: 96px;
+    right: auto;
+    left: 8px;
   }
 }
 
 .popover-anchor .popover {
   position: static;
-}
-
-@media (max-width: 767px) {
-  .mobile-header {
-    display: flex;
-  }
 }

@@ -53,8 +53,8 @@ export default function GeneralPage(): JSX.Element {
         />
       </Row>
 
-      {/* Moved here from the cycling button in the header. Something touched a
-          few times a year was sitting where it was seen every time */}
+      {/* The one place the theme is chosen. Something touched a few times a year
+          does not belong where it is seen every time */}
       <Row label={t().settings.theme} desc={t().settings.themeDesc}>
         <Seg
           label={t().settings.theme}

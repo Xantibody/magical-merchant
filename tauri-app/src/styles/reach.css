@@ -1,0 +1,531 @@
+/* The reach: everything at the thumb. Pages are built from the foot (lib/foot.ts), the controls
+   at the foot bloom a ring (Ring.tsx), and what is pressed there can be carried into the page.
+   The palm's skeleton (palm.css) stays under all of it */
+
+/* ---------------- lists built from the foot ---------------- */
+
+/* The scroller is reversed and holds one child in reading order: it opens at its foot, a list
+   shorter than the glass rests on the foot, and rows loaded above never push what is in view */
+.list-scroll[data-foot] {
+  display: flex;
+  flex-direction: column-reverse;
+}
+
+.list-stack {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* A phone's list ends on its own name and search, under the newest row. A wide window says the
+   name in the sheet's foot bar instead */
+.list-foot {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .list-foot {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-top: 6px;
+  }
+
+  .list-foot .list-big-title {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 12px 20px 2px;
+  }
+
+  .list-foot .list-search {
+    margin: 4px 16px 0;
+    min-height: 44px;
+  }
+}
+
+.list-big-count {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--app-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A wide window's list sheet ends on its name and its "+ new": the + that blooms the ring sits
+   where the newest rows end, so the hand that just read them is already beside it */
+@media (min-width: 768px) {
+  .list-pane-foot {
+    padding: 10px 10px 12px 16px;
+    border-top: 1px solid var(--app-hairline);
+  }
+
+  .workspace > .list-pane .list-group-label:first-child {
+    padding-top: 14px;
+  }
+}
+
+/* The phone's round + opposite the pill. Its mark turns to × while the ring stands */
+.list-plus-mark {
+  display: flex;
+  transition: transform 200ms var(--app-ease);
+}
+
+.list-plus-mark--open {
+  transform: rotate(45deg);
+}
+
+/* A control that takes the finger for its own slide: the page must not scroll under it, or the
+   browser would take the stroke and cancel the press */
+.ring-trigger {
+  touch-action: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* The control the ring came out of stays lit over the dimmed page: it is where the thumb is,
+   and pressing it again folds the ring */
+.ring-trigger[aria-expanded="true"],
+.place-switch--ring {
+  z-index: 141;
+}
+
+/* The place a slide along the pill would let go on, lit as a petal under the thumb is */
+.place-switch-button--aimed {
+  background: var(--app-accent);
+  color: var(--app-on-accent);
+}
+
+/* ---------------- the ring (65, 68, 93) ---------------- */
+
+/* Over everything but the toasts. While a press is held it takes no tap of its own but its
+   pills', so a carried + or pencil finds what lies under it (elementFromPoint), and the press
+   itself is the trigger's, captured */
+.ring-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 140;
+  pointer-events: none;
+}
+
+/* The page fades well back under a veil of its own ground, so the fan is the one thing to read
+   and rows under it never compete with its names (a dark scrim left them legible in the dark
+   theme). Standing for a tap, the scrim takes the press: beside the fan a tap only folds it
+   (Ring.tsx), and nothing under it, a row or an entry, hears it */
+.ring-scrim {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  border: none;
+  background: color-mix(in oklab, var(--app-surface) 86%, transparent);
+  cursor: default;
+  pointer-events: none;
+  animation: mm-rise 160ms var(--app-ease);
+}
+
+.ring-layer--standing .ring-scrim {
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.ring-layer--carrying .ring-scrim {
+  opacity: 0.3;
+}
+
+/* One pill per choice: its mark over the thumb's column, its name running into the screen. A
+   name is part of its pill, so it is never read as the next one's */
+.ring-petal {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-sizing: border-box;
+  height: 46px;
+  padding: 0 16px 0 5px;
+  border: none;
+  border-radius: 999px;
+  background: var(--app-surface-2);
+  box-shadow: var(--shadow-pop);
+  color: var(--app-text);
+  font: inherit;
+  font-size: 15px;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+  transform-origin: left center;
+  animation: mm-bloom 200ms var(--app-ease) backwards;
+  transition:
+    transform 140ms var(--app-ease),
+    background-color 140ms var(--app-ease);
+}
+
+/* Opened from the right edge: the mark at the right end, the name running left */
+.ring-petal--left {
+  flex-direction: row-reverse;
+  padding: 0 5px 0 16px;
+  transform-origin: right center;
+}
+
+.ring-petal-mark {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--app-surface);
+  color: var(--app-text-muted);
+}
+
+/* The pill under the sliding thumb, or under a pointer over a fan left standing: it comes
+   forward, the choice before it is let go or clicked */
+.ring-petal--hover {
+  background: var(--app-accent);
+  color: var(--app-on-accent);
+  transform: scale(1.06);
+}
+
+.ring-petal--hover .ring-petal-mark {
+  background: var(--app-accent-soft);
+  color: var(--app-text);
+}
+
+@media (hover: hover) {
+  .ring-petal:hover {
+    background: var(--app-accent);
+    color: var(--app-on-accent);
+  }
+
+  .ring-petal:hover .ring-petal-mark {
+    background: var(--app-accent-soft);
+    color: var(--app-text);
+  }
+}
+
+/* What letting go here will do, said where the eye is: the reading half, over the page */
+.ring-caption {
+  position: fixed;
+  top: calc(var(--safe-top) + 18px);
+  left: 50%;
+  max-width: calc(100% - 32px);
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: var(--app-toast-bg);
+  color: var(--app-toast-text);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transform: translateX(-50%);
+  box-sizing: border-box;
+}
+
+/* What a slide past the ring carries (7): the + or the pencil itself, under the finger */
+.ring-carried {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  margin: -56px 0 0 -24px;
+  border-radius: 50%;
+  background: var(--app-accent);
+  color: var(--app-on-accent);
+  box-shadow: var(--shadow-pop);
+}
+
+/* Where it would land: round the row it is over, or a line between two blocks of the page */
+.ring-drop-box {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px solid var(--app-accent);
+  border-radius: var(--radius-2);
+  background: var(--app-accent-soft);
+  opacity: 0.85;
+}
+
+.ring-drop-line {
+  position: absolute;
+  height: 3px;
+  margin-top: -1px;
+  border-radius: 2px;
+  background: var(--app-accent);
+}
+
+.ring-drop-line::before {
+  content: "";
+  position: absolute;
+  left: -5px;
+  top: -4px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--app-accent);
+}
+
+/* AIDEV-NOTE: a keyframe of its own (motion.test.ts allows it). A pill comes out of the
+   point the thumb holds, and that is the whole point of the fan: mm-rise would bring every pill
+   up from below as if it had always been there, and mm-pop would not say where it came from */
+@keyframes mm-bloom {
+  from {
+    opacity: 0;
+    transform: translate(var(--from-x, 0), var(--from-y, 0)) scale(0.4);
+  }
+}
+
+/* ---------------- Scrawl: the field at the foot ---------------- */
+
+/* The sheet ends on the band and the field, under a list that reads newest first. The list is
+   a feed, not a conversation: built from the foot it ran oldest to newest down the page, and a
+   journal read back in time then started at its far end */
+.scrawl-composer {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+@media (min-width: 768px) {
+  .scrawl-composer {
+    max-width: calc(680px + 64px);
+    margin: 0 auto;
+    padding: 4px 32px 22px;
+  }
+
+  /* Selecting, the delete bar floats where the field was; the band stays clear above it */
+  .scrawl--selecting .scrawl-composer {
+    padding-bottom: 88px;
+  }
+}
+
+/* A phone's field is in the place pill (16px + 56px), which floats: the band stands just over
+   it, and goes up with it over a keyboard that leaves the page its height */
+@media (max-width: 767px) {
+  .scrawl-composer {
+    padding: 6px 16px calc(16px + 56px + 8px + var(--keyboard-lift, 0px));
+  }
+
+  .scrawl-big-title {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+}
+
+/* While a line is typed, a tag is one press to add (71): the chips take the accent's ground */
+.tag-chip--add {
+  border-color: transparent;
+  background: var(--app-accent-soft);
+  color: var(--app-text);
+}
+
+/* ---------------- the search field from the foot ---------------- */
+
+/* The field lies at the bottom, the chips over it, and what it finds rises above: the best
+   answer nearest the thumb. The markup stays in reading order; only the drawing turns over */
+.search {
+  flex-direction: column-reverse;
+  padding-bottom: var(--keyboard-lift, 0px);
+}
+
+.search-head {
+  flex-direction: column-reverse;
+  padding-block: 8px 12px;
+}
+
+/* The field itself looks like one: the pill's own shape, as the list's search row does */
+.search-input-row {
+  min-height: 44px;
+  padding: 0 6px 0 14px;
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  background: var(--app-input-bg);
+}
+
+.search-input-row:focus-within {
+  border-color: var(--app-focus);
+}
+
+/* Rests on the field; a long list scrolls up from it */
+.search-results {
+  display: flex;
+  flex-direction: column-reverse;
+  padding-block: var(--size-5) 4px;
+}
+
+.search-column,
+.search-section {
+  flex: none;
+  display: flex;
+  flex-direction: column-reverse;
+}
+
+/* A section's name stands over its rows, which are drawn upward from it */
+.search-section > .palette-section {
+  order: 1;
+}
+
+/* ---------------- the one-line window in the pill's shape (38, 67, 68) ---------------- */
+
+/* The place pill stretched over Scrawl, taken whole: Scrawl's mark where the places stand,
+   then the same field and send. One quiet line under it says how it sends and closes */
+.capture-pill {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.capture-pill-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px;
+  border-radius: 28px;
+  background: var(--app-surface);
+  box-shadow: var(--shadow-pop);
+}
+
+.capture-pill-mark {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: var(--app-accent-soft);
+  color: var(--app-text);
+}
+
+.capture-pill .capture-bar {
+  flex: 1;
+  min-width: 0;
+  min-height: 46px;
+  gap: 4px;
+  padding: 2px 2px 2px 14px;
+  border-radius: 23px;
+}
+
+.capture-pill .capture-input {
+  font-size: 16px;
+}
+
+.capture-pill .capture-send {
+  width: 40px;
+  height: 40px;
+}
+
+/* The pill's own line says the keys; the field's hint under it would be a second one */
+.capture-pill .capture-bar .capture-hint,
+.capture-pill .capture-bar:focus-within .capture-hint {
+  display: none;
+}
+
+.capture-pill .capture-bar .tag-suggest {
+  bottom: calc(100% + 13px);
+}
+
+.capture-pill-hint {
+  align-self: center;
+  margin: 0;
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: var(--app-surface);
+  color: var(--app-text-muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* A wide window floats it at the page's foot, where the Scrawl sheet's own field is */
+.quick-jot-layer--wide .quick-jot {
+  bottom: 28px;
+  left: 0;
+  right: 0;
+  width: min(640px, calc(100% - 64px));
+  margin: 0 auto;
+}
+
+/* The window over another app: nothing but the pill on a see-through page */
+html.capture-page,
+html.capture-page body {
+  background: transparent;
+}
+
+html.capture-page #root {
+  padding: 10px 14px;
+}
+
+/* The harness's stand-in for it: the page dims as another app would sit under the window,
+   and a label says what this stands in for */
+.capture-stand-in {
+  position: fixed;
+  inset: 0;
+  z-index: 160;
+}
+
+.capture-stand-in-scrim {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  border: none;
+  background: var(--app-scrim);
+  cursor: default;
+}
+
+.capture-stand-in-label {
+  position: absolute;
+  top: calc(var(--safe-top) + 18px);
+  left: 0;
+  right: 0;
+  width: max-content;
+  max-width: calc(100% - 32px);
+  margin: 0 auto;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--app-toast-bg);
+  color: var(--app-toast-text);
+  font-size: 12px;
+}
+
+.capture-stand-in-window {
+  position: absolute;
+  top: 26%;
+  left: 0;
+  right: 0;
+  width: min(640px, calc(100% - 32px));
+  margin: 0 auto;
+  animation: mm-rise 180ms var(--app-ease);
+}
+
+/* ---------------- a template's editor from the foot ---------------- */
+
+/* A template open in its editor is a form: its way back, its name, its save and its menu stand
+   at the form's foot like every page's controls, and the fields read from the top. Android's
+   WebView shrinks the page for the keyboard, so the bar then sits right over the keys, under the
+   row of variables */
+@media (max-width: 767px) {
+  .templates .detail-pane > .detail-meta-bar {
+    order: 1;
+    padding-bottom: calc(8px + var(--safe-bottom));
+    border-top: 1px solid var(--app-hairline);
+  }
+}
+
+/* ---------------- the folded bar names what is read (56) ---------------- */
+
+/* A note's title can be long: it takes the cut, and the state's words beside it stay whole */
+.palm-slim-place {
+  flex: 0 1 auto;
+  min-width: 2em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.palm-slim-words {
+  flex: none;
+}

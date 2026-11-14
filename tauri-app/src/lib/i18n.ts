@@ -78,6 +78,13 @@ const ja = {
   hints: {
     pill: (modifier: string) => `${modifier} を離すと消える · ? で一覧`,
   },
+  library: {
+    title: "ライブラリ",
+    places: "場所",
+    toggle: "一覧をしまう・出す",
+    /** The compose button on a list: what it makes is the surface's own proper noun. */
+    create: (name: string) => `${name} を作る`,
+  },
   scrawl: {
     promote: "Note にする",
     promoteConfirm: "この記録を本文にした Note を作って開きます。Scrawl の記録は",
@@ -89,7 +96,12 @@ const ja = {
     unlinkFailed: "Note との関係を解除できませんでした",
     relinkFailed: "Note との関係を戻せませんでした",
     emptyToday: "今日はまだ何も記録していません。",
-    emptyHint: "上の線に書くと、時刻とともにここに並びます。",
+    emptyHintBelow: "下の欄に書くと、時刻とともにここに並びます。",
+    actions: "この記録の操作",
+    copy: "コピー",
+    copied: "コピーしました",
+    copyFailed: "コピーできませんでした",
+    newest: "最新へ",
     deleted: (count: number) => `${count}件のエントリを削除しました`,
     /** The ones left, not the ones done: the reread list shows what went. */
     deleteFailed: (count: number) => `${count}件のエントリを削除できませんでした`,
@@ -105,14 +117,12 @@ const ja = {
     selectedCount: (count: number) => `${count}件選択中`,
     selectionCleared: "一覧を読み直したので選択を解除しました",
     deleteCount: (count: number) => `削除 (${count}件)`,
-    confirmDelete: (count: number) => `${count}件のエントリを削除します。よろしいですか？`,
-    confirmDeleteYes: "削除する",
   },
   capture: {
     label: "書き留める",
     send: "記録する",
     placeholder: "いま何を記録する？",
-    linePlaceholder: (modifier: string) => `書き留める — # タグ · / 探す · ${modifier}↵ Note`,
+    hint: (modifier: string) => `# タグ · / 探す · ${modifier}↵ Note`,
     saveFailed: "記録を保存できませんでした。入力は残っています。",
     suggestLabel: "タグ候補",
     menuLabel: "メニュー",
@@ -128,7 +138,8 @@ const ja = {
     thisMonth: "今月",
     thisWeek: "今週",
     clear: "絞り込みを外す",
-    newestFirst: "新しい順",
+    /** The list is drawn from the foot, so the newest is the lowest row. */
+    newestFirst: "下ほど新しい",
     count: (count: number) => `${count}件`,
     empty: "この組み合わせの記録はありません",
     open: "開く",
@@ -140,12 +151,7 @@ const ja = {
     empty: "Note がありません",
     emptyHint: "新規から始めると、ここに並びます。",
     new: "新規",
-    pinList: (key: string) => `常設 ${key}`,
-    unpinList: (key: string) => `常設をやめる ${key}`,
-    listHint: (key: string) => `${key} で常設 · 離れると畳む`,
-    listPinnedHint: (key: string) => `${key} で畳む`,
     noSelection: "項目がありません",
-    backToList: "一覧に戻る",
     readOnly: "読み取り専用",
     /** The right panel's name. Upper case is CSS's job (`.list-pane-title`). */
     panel: "この Note",
@@ -159,7 +165,6 @@ const ja = {
     savedAt: (time: string) => `${time} に保存`,
     titlePlaceholder: "タイトル",
     bodyPlaceholder: "Note を書く…",
-    backlinks: (count: number) => `リンクされている記録 (${count})`,
     untitled: "(空の Note)",
     deleted: "Note を削除しました",
     /** The delete runs after the undo grace, maybe on another note by then, so it names which. */
@@ -239,12 +244,6 @@ const ja = {
     promote: "Codex にする",
     /** The second line under "Make a Codex" in the panel. What is gained, before any confirmation. */
     promoteSub: "版を刻める文書として育てる",
-    /** The confirmation for "make it a Codex". What is gained comes first, no way back last. */
-    promoteConfirm: "版を刻める文書として Codex に移ります。Codex から Note には",
-    promoteConfirmStrong: "戻せません",
-    promoteConfirmEnd: "。",
-    promoteYes: "Codex にする",
-    promoteNo: "やめる",
     promoted: "Codex にしました",
     promoteFailed: "Codex にできませんでした",
     createFailed: "Codex を作れませんでした",
@@ -294,8 +293,6 @@ const ja = {
     firstVersion: (bytes: number) => `最初の版 · ${sizeOf(bytes)}`,
     /** The "restore version 3" shown under the selected version. */
     restoreN: (n: number) => `版 ${n} に戻す`,
-    /** From the phone's history screen the way back is the body, not the list. Say so to the reader. */
-    backToBody: "本文に戻る",
     /** Inside the compare bar. It is narrow, so the line above says the version number. */
     restoreShort: "戻す",
     /** The foot of the panel while the history tab is open. */
@@ -375,7 +372,6 @@ const ja = {
     saveFailed: "テンプレートを保存できませんでした",
     createFailed: "テンプレートから Note を作れませんでした",
     count: (count: number) => `${count}件`,
-    backToSettings: "設定に戻る",
     backToList: "一覧に戻る",
   },
   tags: {
@@ -497,7 +493,7 @@ const ja = {
         lead: "Cloudflare Workers + R2。端末は自分の状態を送らず、Worker が正を持つ。",
       },
     },
-    backToPages: "設定の一覧に戻る",
+
     notSet: "未設定",
     signedIn: "ログイン済み",
     notSignedIn: "未ログイン",
@@ -577,6 +573,7 @@ const ja = {
     openCodex: "Codex を開く",
     openBrowse: "タグで絞る",
     openSettings: "設定を開く",
+    openTemplates: "テンプレートを開く",
     scopeTag: (tag: string) => `#${tag} で絞り込み`,
     removeScope: "絞り込みを外す",
     // The argument is the scope text laid out as "#a #b" (scopeLabel). One sentence covers any number of tags
@@ -654,6 +651,97 @@ const ja = {
     /** A Note's creation date. This is the only place that says the year as well. */
     fullDate: (year: number, month: number, day: number) => `${year}年${month}月${day}日`,
   },
+  palm: {
+    /** The way into search: the shelf's row, the foot of a list, the button on Scrawl's field. */
+    search: "探す",
+    /** The thin line the bar folds to while reading. Pressing it brings the bar back. */
+    unfold: "下の操作を戻す",
+    /** The surface's today on the place pill (92). */
+    today: (count: number) => `今日 ${count}件`,
+    /** 68: one line into Scrawl over whatever is open, from a held Scrawl on the pill. */
+    jot: "Scrawl に 1 行",
+    jotSent: "Scrawl に記録しました",
+    /** 36: the line just sent can be taken back for a few seconds. */
+    takeBack: "取り消す",
+    takenBack: "記録を取り消しました",
+    takeBackFailed: "取り消せませんでした",
+    /** 96: what a held button says before it fills. */
+    holdDelete: "押し続けて削除",
+    holdPromote: "押し続けて Codex に",
+    /** The same, behind a row, where half a row has room for one word (25). */
+    holdShort: "長押し",
+    /** A row's hidden actions, a mark and one short word each (25). */
+    rowToNote: "Note に",
+    rowToCodex: "Codex に",
+    /** 85: the page alone. */
+    paper: "紙だけ",
+    paperHint: "2 本指で 2 回たたくと戻ります",
+    paperBack: "操作を戻す",
+    /** 88: a linked note lifted over the one being read. */
+    peekOpen: "開く",
+    peekClose: "閉じる",
+    peekMissing: "このリンク先は見つかりません",
+    /** 22: the thumb at Scrawl's right edge. */
+    scrub: "日付をたどる",
+    fromTemplate: "テンプレートから",
+    emptyCodex: "空の Codex",
+    /** The sheet's grip (29). */
+    grip: "引き上げると広がります",
+    /** A wide window's grip on the note's left edge: the list tucked under it, or brought back. */
+    listTuck: "一覧をしまう",
+    listOut: "一覧を出す",
+  },
+  /** The reach: everything at the thumb, and the app reached from outside it. */
+  reach: {
+    /** The phone sheet's foot row: "back to before this edit" in one word. */
+    revertShort: "戻す",
+    /** The ring a held pill or + blooms into, as a screen reader names it. */
+    ring: "ここから",
+    ringHint: "押したまま滑らせて選ぶ",
+    /** The fan let go where it was pressed: it now waits for a tap. */
+    ringTap: "押して選ぶ · 外を押すと閉じる",
+    newNote: "Note を作る",
+    newCodex: "Codex を作る",
+    /** Slid along the pill onto a place while the ring is up: that place's list (93's hold). */
+    placeList: (place: string) => `${place} の一覧`,
+    /** The line on Scrawl itself: the field is right there. */
+    writeHere: "ここに書く",
+    /** 7: the + carried onto a row, and the page. */
+    dragPlus: "引いて Note の上に置くと、その末尾に書き足す",
+    dropOnNote: (title: string) => `「${title}」の末尾に書く`,
+    dragPencil: "引いて本文に置くと、その場所から書く",
+    dropInPage: "ここから書く",
+    /** The foot of a list: how many there are, said beside its name. */
+    count: (count: number) => `${count}件`,
+    /** 71: the tags beside the field while a line is typed, pressed to add. */
+    addTag: (tag: string) => `#${tag} を足す`,
+    /** 5: send slid up or held. Letting go on send still sends; the pill over it makes a Note. */
+    asNote: "Note にする",
+    sendRelease: "離すと送る · 上へ滑らせると Note に",
+    sendKeep: "ここで離すと送らずに残す",
+    /** 38, 67: the window the OS key floats over any app. */
+    captureHint: (key: string) => `${key} で送る · Esc で閉じる（書きかけは残ります）`,
+    captureStandIn: "OS の入力窓（ブラウザではここに浮かべて見せています）",
+    captureLast: (time: string) => `${time} に送りました`,
+    /** A line that came in from outside the window, said by the window. */
+    capturedWindow: "入力窓から 1 行 記録しました",
+    capturedLink: "リンクから 1 行 記録しました",
+    /** Settings: the ways in from outside the app. */
+    outsideTitle: "アプリの外から",
+    outsideKey: "どこからでも 1 行",
+    outsideKeySub: (key: string) => `${key} で入力窓、もう一度押すと送る`,
+    outsideTry: "試す",
+    outsideLink: "Spotlight・ショートカット",
+    outsideLinkSub: "ショートカットの「URL を開く」に渡すと、開かずに 1 行",
+    copyLink: "リンクをコピー",
+    linkCopied: "リンクをコピーしました",
+    copyFailed: "コピーできませんでした",
+    tryLink: "リンクを開いてみる",
+    tryLinkText: "Spotlight から試しに 1 行",
+    phoneOnly: "Android ではアイコンの長押しと「共有」から",
+    phoneOnlySub: "Scrawl に 1 行・新しい Note、ほかのアプリの文字を Scrawl へ",
+    mock: "ブラウザでは模擬",
+  },
 };
 
 export type Messages = typeof ja;
@@ -711,6 +799,12 @@ const en: Messages = {
   hints: {
     pill: (modifier: string) => `Let go of ${modifier} to hide · ? for the list`,
   },
+  library: {
+    title: "Library",
+    places: "Places",
+    toggle: "Tuck the list away or bring it back",
+    create: (name: string) => `New ${name}`,
+  },
   scrawl: {
     promote: "Make a Note",
     promoteConfirm: "It makes a Note from this record and opens it. The record ",
@@ -722,7 +816,12 @@ const en: Messages = {
     unlinkFailed: "Could not unlink the Note",
     relinkFailed: "Could not link the Note back",
     emptyToday: "Nothing recorded today yet.",
-    emptyHint: "Write on the line above and it lands here with the time.",
+    emptyHintBelow: "Write in the field below and it lands here with the time.",
+    actions: "Actions for this record",
+    copy: "Copy",
+    copied: "Copied",
+    copyFailed: "Could not copy",
+    newest: "Back to the newest",
     deleted: (count: number) => `Deleted ${count} ${count === 1 ? "entry" : "entries"}`,
     deleteFailed: (count: number) =>
       `Could not delete ${count} ${count === 1 ? "entry" : "entries"}`,
@@ -739,15 +838,12 @@ const en: Messages = {
     selectedCount: (count: number) => `${count} selected`,
     selectionCleared: "The list was reloaded, so the selection was cleared",
     deleteCount: (count: number) => `Delete (${count})`,
-    confirmDelete: (count: number) =>
-      `Delete ${count} ${count === 1 ? "entry" : "entries"}. Are you sure?`,
-    confirmDeleteYes: "Delete",
   },
   capture: {
     label: "Jot down",
     send: "Send",
     placeholder: "What's on your mind?",
-    linePlaceholder: (modifier: string) => `Jot down — # tag · / search · ${modifier}↵ Note`,
+    hint: (modifier: string) => `# tag · / search · ${modifier}↵ Note`,
     saveFailed: "Could not save the entry. Your text is still here.",
     suggestLabel: "Tag suggestions",
     menuLabel: "Menu",
@@ -763,7 +859,7 @@ const en: Messages = {
     thisMonth: "This month",
     thisWeek: "This week",
     clear: "Clear the filters",
-    newestFirst: "Newest first",
+    newestFirst: "Newest at the bottom",
     count: (count: number) => `${count} ${count === 1 ? "record" : "records"}`,
     empty: "Nothing recorded with this combination",
     open: "Open",
@@ -774,12 +870,7 @@ const en: Messages = {
     empty: "No Notes yet",
     emptyHint: "Start one with New and it lands here.",
     new: "New",
-    pinList: (key: string) => `Keep it open ${key}`,
-    unpinList: (key: string) => `Let it fold again ${key}`,
-    listHint: (key: string) => `${key} keeps it open · it folds when you leave`,
-    listPinnedHint: (key: string) => `${key} lets it fold again`,
     noSelection: "Nothing to show",
-    backToList: "Back to the list",
     readOnly: "Read-only",
     panel: "This Note",
     view: "View",
@@ -791,7 +882,6 @@ const en: Messages = {
     savedAt: (time: string) => `Saved at ${time}`,
     titlePlaceholder: "Title",
     bodyPlaceholder: "Write a Note…",
-    backlinks: (count: number) => `Records linking here (${count})`,
     untitled: "(empty Note)",
     deleted: "Note deleted",
     deleteFailed: (title: string) => `Could not delete "${title}"`,
@@ -844,11 +934,6 @@ const en: Messages = {
     panel: "This Codex",
     promote: "Make a Codex",
     promoteSub: "Grow it as a document you commit versions of",
-    promoteConfirm: "It moves to Codex as a document you commit versions of. It ",
-    promoteConfirmStrong: "cannot go back to being a Note",
-    promoteConfirmEnd: ".",
-    promoteYes: "Make a Codex",
-    promoteNo: "Not now",
     promoted: "Made a Codex",
     promoteFailed: "Could not make it a Codex",
     createFailed: "Could not create a Codex",
@@ -888,7 +973,6 @@ const en: Messages = {
     sameAsVersion: (n: number) => `same as v${n}`,
     firstVersion: (bytes: number) => `first version · ${sizeOf(bytes)}`,
     restoreN: (n: number) => `Restore v${n}`,
-    backToBody: "Back to the document",
     restoreShort: "Restore",
     historyFoot: "Press a version to compare it in the body · Esc closes",
     comparing: (n: number) => `Comparing with v${n}`,
@@ -974,7 +1058,6 @@ const en: Messages = {
     saveFailed: "Could not save the template",
     createFailed: "Could not create a Note from this template",
     count: (count: number) => `${count}`,
-    backToSettings: "Back to settings",
     backToList: "Back to the list",
   },
   tags: {
@@ -1088,7 +1171,7 @@ const en: Messages = {
         lead: "Cloudflare Workers + R2. A device never uploads its own state; the Worker owns it.",
       },
     },
-    backToPages: "Back to the settings list",
+
     notSet: "Not set",
     signedIn: "Signed in",
     notSignedIn: "Not signed in",
@@ -1162,6 +1245,7 @@ const en: Messages = {
     openCodex: "Open Codex",
     openBrowse: "Filter by tag",
     openSettings: "Open Settings",
+    openTemplates: "Open Templates",
     scopeTag: (tag: string) => `Scoped to #${tag}`,
     removeScope: "Remove the scope",
     emptyScoped: (scope: string) => `Nothing in ${scope} matches`,
@@ -1232,6 +1316,71 @@ const en: Messages = {
     monthDay: (month: number, day: number) => `${SHORT_MONTHS[month - 1] ?? month} ${day}`,
     fullDate: (year: number, month: number, day: number) =>
       `${SHORT_MONTHS[month - 1] ?? month} ${day}, ${year}`,
+  },
+  palm: {
+    search: "Search",
+    unfold: "Bring the controls back",
+    today: (count: number) => `${count} today`,
+    jot: "A line to Scrawl",
+    jotSent: "Written to Scrawl",
+    takeBack: "Take back",
+    takenBack: "Line taken back",
+    takeBackFailed: "Could not take it back",
+    holdDelete: "Hold to delete",
+    holdPromote: "Hold to make a Codex",
+    holdShort: "Hold",
+    rowToNote: "To Note",
+    rowToCodex: "To Codex",
+    paper: "Page only",
+    paperHint: "Tap twice with two fingers to bring the controls back",
+    paperBack: "Bring the controls back",
+    peekOpen: "Open",
+    peekClose: "Close",
+    peekMissing: "This link leads nowhere",
+    scrub: "Travel through the days",
+    fromTemplate: "From a template",
+    emptyCodex: "Empty Codex",
+    grip: "Pull up to see more",
+    listTuck: "Tuck the list away",
+    listOut: "Bring the list back",
+  },
+  reach: {
+    revertShort: "Revert",
+    ring: "From here",
+    ringHint: "Hold and slide to choose",
+    ringTap: "Tap one · tap outside to close",
+    newNote: "New Note",
+    newCodex: "New Codex",
+    placeList: (place: string) => `${place} list`,
+    writeHere: "Write here",
+    dragPlus: "Drag onto a Note to add to its end",
+    dropOnNote: (title: string) => `Add to the end of “${title}”`,
+    dragPencil: "Drag into the page to write from that spot",
+    dropInPage: "Write from here",
+    count: (count: number) => `${count}`,
+    addTag: (tag: string) => `Add #${tag}`,
+    asNote: "Make it a Note",
+    sendRelease: "Let go to send · slide up to make it a Note",
+    sendKeep: "Let go here to keep the line",
+    captureHint: (key: string) => `${key} sends · Esc closes (the draft stays)`,
+    captureStandIn: "The OS window (the browser floats it here instead)",
+    captureLast: (time: string) => `Sent at ${time}`,
+    capturedWindow: "A line came in from the floating window",
+    capturedLink: "A line came in from a link",
+    outsideTitle: "From outside the app",
+    outsideKey: "A line from anywhere",
+    outsideKeySub: (key: string) => `${key} floats the window; press it again to send`,
+    outsideTry: "Try it",
+    outsideLink: "Spotlight and Shortcuts",
+    outsideLinkSub: "Give it to a Shortcut's Open URL to write a line without opening the app",
+    copyLink: "Copy the link",
+    linkCopied: "Link copied",
+    copyFailed: "Could not copy",
+    tryLink: "Open the link",
+    tryLinkText: "A line from Spotlight, to try",
+    phoneOnly: "On Android: hold the icon, or Share",
+    phoneOnlySub: "A line to Scrawl, a new Note, or another app's text into Scrawl",
+    mock: "Simulated in the browser",
   },
 };
 

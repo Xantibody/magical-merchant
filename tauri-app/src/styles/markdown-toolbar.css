@@ -1,6 +1,80 @@
-.markdown-toolbar {
-  display: none;
+/* A wide window: the same bar at the foot of the page being written (Workspace mounts it in the
+   detail pane), a pill the pointer comes down to, like the reach's other controls. The ✓ moves
+   here with it, so the strip at the page's top has nothing left and goes */
+@media (hover: hover) {
+  .markdown-toolbar {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 4px;
+    border-radius: var(--radius-round);
+    background: var(--app-surface-2);
+    box-shadow: var(--shadow-pop);
+    transform: translateX(-50%);
+  }
+
+  .markdown-toolbar button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: 36px;
+    block-size: 36px;
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-round);
+    background: none;
+    color: var(--app-text-muted);
+    cursor: pointer;
+  }
+
+  .markdown-toolbar button:hover:not(:disabled) {
+    background: var(--app-hairline);
+    color: var(--app-text);
+  }
+
+  .markdown-toolbar button:disabled {
+    color: var(--app-text-faint);
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  /* There is no keyboard to fold where a pointer is */
+  .markdown-toolbar .markdown-toolbar-release {
+    display: none;
+  }
+
+  .markdown-toolbar .markdown-toolbar-done {
+    margin-inline-start: 6px;
+    background: var(--app-accent);
+    color: var(--app-on-accent);
+  }
+
+  .markdown-toolbar button.markdown-toolbar-done:hover {
+    background: var(--app-accent);
+    color: var(--app-on-accent);
+  }
+
+  .markdown-toolbar-glyph {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-1);
+    font-weight: var(--font-weight-6);
+    line-height: 1;
+  }
+
+  .detail-pane .note-strip.note-strip--writing {
+    display: none;
+  }
+
+  /* The last lines can scroll up clear of the bar */
+  body.md-toolbar-open .detail-pane .milkdown-editor {
+    padding-bottom: 72px;
+  }
 }
+
 @media (hover: none) {
   :root {
     /* One row of 44px buttons and the 1px rule above it */
@@ -21,8 +95,8 @@
     z-index: 150;
     background: var(--app-surface-2);
     border-top: 1px solid var(--app-border);
-    /* Inside a code block the release button is added, making 9, and 44px times 9 does not
-       fit on a narrow device. Rather than packing them tighter, they scroll */
+    /* Ten 44px buttons do not fit on a narrow device (eleven inside a code block). Rather
+       than packing them tighter, they scroll */
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
   }
@@ -53,6 +127,25 @@
      of notation buttons, at the right edge */
   .markdown-toolbar-release {
     margin-inline-start: auto;
+  }
+
+  /* Done writing, at the foot by the thumb (the reach): the strip at the page's top that held
+     it gives way on a phone. It keeps its place at the right end however the row scrolls */
+  .markdown-toolbar .markdown-toolbar-done {
+    position: sticky;
+    right: 0;
+    background: var(--app-accent);
+    color: var(--app-on-accent);
+    border-radius: 0;
+  }
+
+  .markdown-toolbar .markdown-toolbar-done:active {
+    background: var(--app-accent);
+    color: var(--app-on-accent);
+  }
+
+  .workspace--detail .note-strip.note-strip--writing {
+    display: none;
   }
 
   /* `[[` is shown as the characters themselves, not replaced by an icon, because they are

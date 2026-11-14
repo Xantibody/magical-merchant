@@ -47,10 +47,10 @@ export const MODE_LABELS: Record<SurfaceRoute, string> = {
 };
 
 /**
- * The name of the screen at `path`, for the phone header. A surface keeps its proper noun;
- * any other page takes the title its own heading reads, so the header and the page under it
- * say the same word. Call it inside JSX so switching the language redraws. A path no route
- * knows reads as Scrawl, as the header always has.
+ * The name of the screen at `path`, for a phone's folded bar and the pages' large names. A
+ * surface keeps its proper noun; any other page takes the title its own heading reads, so the
+ * bar and the page say the same word. Call it inside JSX so switching the language redraws. A
+ * path no route knows reads as Scrawl.
  */
 export function routeLabel(path: string): string {
   switch (path) {

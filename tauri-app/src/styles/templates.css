@@ -185,8 +185,8 @@
 
 /* ---------------- Picker menu / sheet ---------------- */
 
-/* On desktop it is a dropdown under the button. .list-pane is the positioning
-   reference */
+/* On a wide window it is a dropdown hung from the top of .list-pane, its positioning
+   reference, opened from the + ring's template choice */
 .template-picker {
   top: 46px;
   right: 14px;
@@ -267,10 +267,6 @@
   gap: 8px;
 }
 
-.templates .list-pane-title {
-  margin-right: auto;
-}
-
 /* Two lines: the name alone, then the title it makes today. Sharing one line with the
    title and the tags is what cut the name short */
 .templates .list-row {
@@ -315,11 +311,6 @@
   white-space: nowrap;
   font-size: 12px;
   color: var(--app-text-faint);
-}
-
-.templates-back {
-  flex-shrink: 0;
-  color: var(--app-text-muted);
 }
 
 .templates-file-hint {
@@ -898,7 +889,7 @@
     padding-inline: 20px;
   }
 
-  /* Only one pane shows at a time. The header appears when the detail is
+  /* Only one pane shows at a time. The editor's bar appears when the detail is
      opened */
   .detail-meta-bar {
     display: none;
@@ -944,9 +935,10 @@
     font-size: 15px;
   }
 
-  /* `⌘N` spells a key that cannot be pressed here. It is not shown on a touch
-     device */
-  .template-picker-key {
+  /* The sheet rises from the +'s template choice, under the two empty kinds it already
+     offered: it does not offer them a second time, nor head the templates with a section */
+  .template-picker-row--empty,
+  .template-picker-section {
     display: none;
   }
 

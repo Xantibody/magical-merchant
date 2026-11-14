@@ -1,0 +1,610 @@
+/* The palm: what a finger does, and the few things that answer it. The rule that decides a
+   stroke is lib/gesture.ts; lib/palm-gestures.ts moves what is drawn here */
+
+/* ---------------- a phone's top: nothing to press ---------------- */
+
+/* A phone has no bar at the top. Each page carries its own large name, pressing nothing up
+   there, and the rows lie where the thumb reaches. Once a list has left its top, the rows fade
+   into the top edge rather than meet one (58) */
+@media (max-width: 767px) {
+  /* The scrollers of a phone: only a vertical stroke is the browser's, so a sideways one is
+     never half taken by a scroll before the gesture rule has decided (palm-gestures.ts) */
+  .scrawl-scroll,
+  .list-scroll,
+  .detail-body {
+    touch-action: pan-y;
+    overscroll-behavior-y: contain;
+  }
+
+  .scrawl-scroll[data-scrolled],
+  .list-scroll[data-scrolled],
+  .detail-body[data-scrolled] {
+    mask-image: linear-gradient(to bottom, transparent 0, #000 14px);
+  }
+}
+
+@media (max-width: 767px) {
+  /* The state's dot alone in the top corner, over the page's faded top edge. Its 44px box is
+     all of it that takes a tap (layout.css); the day headings leave it the corner */
+  .palm-dot {
+    position: absolute;
+    top: 2px;
+    right: 4px;
+    z-index: 30;
+    display: flex;
+  }
+
+  /* The round way out of a level, low on the left, after the pill: the pill keeps the place
+     it has on every other screen, so the thumb that found a place on a list finds it on a note
+     too. 152px is the pill on a list (three 46px places, their gaps and its padding);
+     layout.test.ts holds the two together. Same height and shadow as the pill, so the two read
+     as one row.
+     AIDEV-NOTE: not the pill stepping right to let the way back in at the edge. That moved all
+     three places 64px between a list and its note, and the same thumb then pressed another */
+  .palm-out {
+    position: absolute;
+    left: calc(16px + 152px + 8px);
+    bottom: 16px;
+    z-index: 25;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: var(--app-surface);
+    box-shadow: var(--shadow-pop);
+    color: var(--app-text);
+    cursor: pointer;
+    transition:
+      opacity 200ms var(--app-ease),
+      transform 200ms var(--app-ease);
+  }
+
+  /* Reading down, it folds with the pill into the line of words */
+  .palm-out--slim {
+    opacity: 0;
+    transform: translateY(12px) scale(0.92);
+    pointer-events: none;
+  }
+}
+
+/* ---------------- a page's own large name (a phone's) ---------------- */
+
+/* With no bar above, each page says its name in large type, in the page itself. Scrawl opens
+   on it, over today; a list and Templates end on it at the foot (reach.css `.list-foot`), and
+   Settings stands it at the foot of its pages (settings.css) */
+.list-big-title {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .list-big-title,
+  .settings .settings-title {
+    display: block;
+    margin: 0;
+    padding: 28px 20px 10px;
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: 0;
+    color: var(--app-text);
+  }
+
+  /* Scrawl's column already has its gutter */
+  .scrawl-big-title {
+    padding: 24px 0 14px;
+  }
+
+  /* Templates' wide head (its name, + new) gives way to that name and the round + */
+  .workspace.templates .list-pane-head {
+    display: none;
+  }
+
+  /* The page clears the pill and the + at its foot */
+  .workspace.templates .list-scroll {
+    padding-bottom: 96px;
+  }
+
+  /* Leaving a template closes its level, not the template: it stays chosen, so the editor is
+     still mounted. Out of its level it is not drawn at all, as a note's body is not under its
+     list; workspace.css only folds a note's own parts and would leave the form under the rows */
+  .workspace.templates:not(.workspace--detail) > .detail-pane {
+    display: none;
+  }
+
+  /* A day heading stuck to the top leaves the corner to the state's dot. The band needs no
+     room: the page's large name stands between it and the corner */
+  .day-heading {
+    padding-right: 36px;
+  }
+}
+
+/* A toast stands clear above the pill whatever it holds: a draft of five lines, the keyboard
+   under it (PlaceSwitch measures --dock-top). Without a pill it keeps its own height */
+@media (max-width: 767px) {
+  .undo-toast {
+    bottom: calc(var(--dock-top, 64px) + 12px);
+  }
+}
+
+/* What a level slides away from (61): the list under a note or a template, drawn back into
+   its place for as long as the finger holds the page, dimmed and set back a quarter by the
+   finger's own transform (palm-gestures.ts). The page itself is lifted above it */
+@media (max-width: 767px) {
+  .workspace--detail.workspace--peek .list-pane {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: flex;
+  }
+}
+
+/* ---------------- back from anywhere, with what is below showing (60, 61) ---------------- */
+
+/* The screen a finger slides: lifted off what is below it, which shows through as it goes */
+.palm-lifted {
+  position: relative;
+  z-index: 5;
+  background: var(--app-surface);
+  box-shadow: var(--shadow-pop);
+  will-change: transform;
+}
+
+.palm-under {
+  will-change: transform, opacity;
+}
+
+.palm-settling {
+  transition:
+    transform 240ms var(--app-ease),
+    opacity 240ms var(--app-ease);
+}
+
+/* ---------------- a row's actions behind it (25) ---------------- */
+
+.swipe-row {
+  position: relative;
+  overflow: hidden;
+}
+
+/* The row stays; the stroke draws its actions in over the row's end, 196px of them
+   (ROW_ACTIONS_PX in gesture.ts), so the start of what is acted on (a line's time and first
+   words, a note's title) is still read. They come on the row's own ground, which fades in over
+   the words they cover rather than cutting them. Two pills, each a mark and one word, centred
+   on the row's height. Until a stroke places them they wait off the row's right end */
+.swipe-face {
+  position: relative;
+  z-index: 1;
+  background: var(--app-surface);
+}
+
+.swipe-actions {
+  --swipe-ground: var(--app-surface);
+
+  position: absolute;
+  inset: 0 0 0 auto;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 196px;
+  padding: 0 4px 0 24px;
+  box-sizing: border-box;
+  background: linear-gradient(to right, transparent, var(--swipe-ground) 22px);
+  transform: translateX(100%);
+}
+
+/* One set of actions on a row at a time: the hover icons step aside for the drawn ones */
+.swipe-row:has(> [data-swipe-actions]) .entry-actions {
+  visibility: hidden;
+}
+
+/* Two equal halves, whatever their words: the held one says more after a short press */
+.swipe-actions > * {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.swipe-action,
+.swipe-actions .hold-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 40px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 999px;
+  background: var(--app-surface-2);
+  color: var(--app-text);
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+/* A wide window opens a row the same way with two fingers on a trackpad. Nothing waits behind
+   a row until a stroke picks it (palm-gestures.ts arms it), so no rule has to hide it here */
+
+/* ---------------- hold to confirm (96) ---------------- */
+
+.hold-button {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  background: var(--app-input-bg);
+  color: var(--app-text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.hold-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.hold-button > :not(.hold-button-fill) {
+  position: relative;
+}
+
+/* The gauge of the press. Drawn frame by frame from the elapsed time (HoldButton.tsx), so it
+   carries no transition of its own */
+.hold-button-fill {
+  position: absolute;
+  inset: 0;
+  /* Strong enough to read on the button's own ground in both themes: the accent's soft tint
+     is the selected row's, and on a dark field it all but vanishes */
+  background: color-mix(in oklab, var(--app-text) 24%, transparent);
+  transform-origin: left center;
+}
+
+.hold-button--danger {
+  color: var(--app-danger);
+}
+
+/* The gauge is a tint, not the full danger fill, so the label stays readable as it passes */
+.hold-button--danger .hold-button-fill {
+  background: color-mix(in oklab, var(--app-danger) 28%, transparent);
+}
+
+/* The label in the fill's own colour pair once the fill is under it would need a second
+   layer; the hint instead says itself in the muted tone while it stands */
+.hold-button--told .hold-button-label {
+  color: var(--app-text-muted);
+}
+
+/* ---------------- the bar slimmed while reading (4, 12, 58, 63) ---------------- */
+
+@media (max-width: 767px) {
+  .place-switch {
+    transition:
+      opacity 200ms var(--app-ease),
+      transform 200ms var(--app-ease);
+  }
+
+  .place-switch--slim {
+    opacity: 0;
+    transform: translateY(12px) scale(0.92);
+    pointer-events: none;
+  }
+
+  /* Today's count on Scrawl's own button (92): the number sits on the thing it counts */
+  .place-switch-button {
+    position: relative;
+  }
+
+  .place-switch-count {
+    position: absolute;
+    top: 3px;
+    right: 1px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 999px;
+    background: var(--app-accent);
+    color: var(--app-on-accent);
+    font-size: 12px;
+    line-height: 16px;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    box-sizing: border-box;
+  }
+
+  .place-switch-button--here .place-switch-count {
+    background: var(--app-text);
+    color: var(--app-surface);
+  }
+}
+
+/* The thin line the bar folds to: where you are and the state in words, low on the left where
+   the pill was. Pressing it brings the bar back. One line, 32px, the page under it nearly whole */
+@media (max-width: 767px) {
+  .palm-slim {
+    position: absolute;
+    left: 16px;
+    bottom: calc(16px + 12px);
+    z-index: 25;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    max-width: calc(100% - 32px - 72px);
+    height: 32px;
+    padding: 0 14px 0 12px;
+    border: none;
+    border-radius: 999px;
+    background: var(--app-surface);
+    box-shadow: var(--shadow-pop);
+    color: var(--app-text-muted);
+    font: inherit;
+    font-size: 12px;
+    white-space: nowrap;
+    cursor: pointer;
+    animation: mm-rise 180ms var(--app-ease);
+  }
+
+  .palm-slim .status-dot-mark {
+    flex-shrink: 0;
+  }
+
+  .palm-slim[data-tone="busy"] .status-dot-mark {
+    background-color: var(--app-text-faint);
+  }
+
+  .palm-slim[data-tone="failed"] .status-dot-mark {
+    background-color: var(--app-danger);
+  }
+
+  .palm-slim-place {
+    color: var(--app-text);
+    font-weight: 600;
+  }
+
+  .palm-slim-words {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* ---------------- the page alone (85) ---------------- */
+
+.app--paper .compose-fab,
+.app--paper .palm-actions,
+.app--paper .note-strip,
+.app--paper .library,
+.app--paper .list-pane,
+.app--paper .scrawl-newest {
+  display: none;
+}
+
+/* The way back for a hand with one finger free: small, low and quiet, over the page */
+.paper-back {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 40;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 999px;
+  background: var(--app-surface-2);
+  color: var(--app-text-muted);
+  font: inherit;
+  font-size: 12px;
+  opacity: 0.7;
+  cursor: pointer;
+  animation: mm-rise 180ms var(--app-ease);
+}
+
+/* ---------------- one line from anywhere (68) ---------------- */
+
+.quick-jot-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 70;
+}
+
+.quick-jot-scrim {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  border: none;
+  background: var(--app-scrim);
+  cursor: default;
+}
+
+/* Low, where the thumb that held Scrawl still is, over the keyboard when it is up */
+.quick-jot {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: calc(12px + var(--keyboard-lift, 0px));
+  animation: mm-rise 180ms var(--app-ease);
+}
+
+/* A wide window dims nothing under it, and floats it at the page's foot (reach.css places it) */
+.quick-jot-layer--wide .quick-jot-scrim {
+  background: transparent;
+}
+
+/* ---------------- small parts ---------------- */
+
+/* An action behind a row is a mark and one short word, on one line */
+.swipe-actions .hold-button-label {
+  white-space: nowrap;
+}
+
+.swipe-actions .icon {
+  flex-shrink: 0;
+}
+
+/* ---------------- a wide window: sheets lying on the shelf (20, 60, 25) ---------------- */
+
+/* The same stack a phone holds one sheet of at a time, laid out flat: the shelf is the ground,
+   the list and the page are sheets lying on it, the page on top. A note with its list beside
+   it has one grip on its left edge to push it over the list or pull it back; two fingers on a
+   trackpad do the same (palm-gestures.ts). The gaps between them are the ground showing through */
+@media (min-width: 768px) {
+  .app {
+    background: var(--app-ground);
+  }
+
+  .app > .library {
+    background: transparent;
+    border-right: none;
+  }
+
+  .app-column {
+    box-sizing: border-box;
+    padding: 10px 10px 10px 14px;
+  }
+
+  .app-route > .scrawl,
+  .app-route > .settings,
+  .app-route > .browse,
+  .workspace > .list-pane,
+  .workspace > .detail-pane {
+    background: var(--app-surface);
+    border-radius: 14px;
+  }
+
+  /* Rows and sticky headings carry the sheet's own ground, so its corners stay round */
+  .app-route > .scrawl,
+  .workspace > .list-pane {
+    overflow: hidden;
+  }
+
+  .workspace {
+    gap: 12px;
+  }
+
+  .workspace > .list-pane {
+    border-right: none;
+  }
+
+  .workspace > .list-pane .list-group-label {
+    background: var(--app-surface);
+  }
+
+  /* The page lies on top: the one sheet that wears the shadow */
+  .workspace > .detail-pane {
+    box-shadow: var(--shadow-pop);
+  }
+
+  /* Tucked, the list lies under the note, which takes its room */
+  .workspace--tucked > .list-pane {
+    display: none;
+  }
+}
+
+.sheet-grip {
+  display: none;
+}
+
+/* Where a note's page holds its grip: no box of its own, the grip lies against the pane */
+.sheet-grip-host {
+  display: contents;
+}
+
+@media (min-width: 768px) {
+  /* A handle, not a line: something a pointer takes hold of. Faint at rest, plain on hover */
+  .sheet-grip {
+    position: absolute;
+    top: 50%;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 80px;
+    padding: 0;
+    border: none;
+    border-radius: 7px;
+    background: none;
+    cursor: grab;
+    transform: translateY(-50%);
+  }
+
+  .sheet-grip:active {
+    cursor: grabbing;
+  }
+
+  .sheet-grip-bar {
+    width: 4px;
+    height: 40px;
+    border-radius: 2px;
+    background: var(--app-text-faint);
+  }
+
+  .sheet-grip:hover .sheet-grip-bar,
+  .sheet-grip:focus-visible .sheet-grip-bar {
+    background: var(--app-text-muted);
+  }
+
+  /* On a note's page, in the ground at its left: beside the list while it is out, beside the
+     shelf once the list is under the note. It is the only grip, so it never needs moving clear */
+  .sheet-grip--list {
+    left: -13px;
+  }
+}
+
+@media (min-width: 768px) {
+  /* The strip is the top of the note's sheet: it follows the sheet's rounded corner */
+  .workspace > .detail-pane > .note-strip {
+    border-top-left-radius: 14px;
+  }
+
+  .workspace > .detail-pane:not(.detail-pane--panel) > .note-strip {
+    border-top-right-radius: 14px;
+  }
+}
+
+/* A template open in its editor is a form: its way back stands in the form's own bar, where its
+   save and its menu already are (the pill steps away). The reach lays that bar at the foot */
+@media (max-width: 767px) {
+  .templates .detail-meta-bar .detail-back {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+/* Browse opens on its own large name as every page does on a phone, over its chips */
+@media (max-width: 767px) {
+  .browse .browse-title {
+    /* A line of its own in the wrapping band of chips, so no chip beside it is stretched */
+    flex: 0 0 100%;
+    padding: 20px 4px 12px;
+    font-size: 28px;
+    line-height: 1.2;
+  }
+}
+
+@media (min-width: 768px) {
+  /* The search field lies over the page as one more sheet, the same shape as the one under it */
+  .app-main > .search {
+    border-radius: 14px;
+  }
+}
+
+/* Under 1100px a docked panel already sets the list aside (workspace.css), so its grip has
+   nothing to tuck until the panel goes */
+@media (min-width: 768px) and (max-width: 1099px) {
+  .workspace:has(.detail-pane--panel) .sheet-grip--list {
+    display: none;
+  }
+}

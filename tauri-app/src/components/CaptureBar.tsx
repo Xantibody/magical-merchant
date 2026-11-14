@@ -1,6 +1,7 @@
-import { createEffect, createSignal, createMemo, For, Show } from "solid-js";
+import { createEffect, createSignal, createMemo, For, on, Show } from "solid-js";
 import type { JSX } from "solid-js";
 import Icon from "./Icon";
+import { createRingPress } from "./Ring";
 import { t } from "../lib/i18n";
 import { isImeComposing } from "../lib/ime";
 import { modifierLabel } from "../lib/shortcuts";
@@ -13,8 +14,6 @@ interface CaptureBarProps {
   /** ⌘Enter: the text becomes a Note's title and the Note opens to write. */
   onPromote: (text: string) => Promise<void>;
   onError: () => void;
-  /** Whether anything is typed. The line shows its time and dot only then. */
-  onTyping?: (typing: boolean) => void;
   /** The tags used so far, offered as completions. */
   knownTags?: TagCount[];
   /** The rows of the / menu. */
@@ -22,6 +21,17 @@ interface CaptureBarProps {
   onNewNote: () => void;
   /** The line hands itself over as the trigger: the calendar is a popover (`Popover.tsx`). */
   onJumpToDate: (trigger: HTMLElement) => void;
+  /** A line taken back after sending comes back here, to be fixed and sent again (36). */
+  refill?: { text: string } | null;
+  /**
+   * Empty, the field's round button searches instead of sending nothing: Scrawl's one way into
+   * search, under the thumb. Scrawl's field only.
+   */
+  searchWhenEmpty?: boolean;
+  /** A tag pressed beside the field while a line is typed (71): it joins the line at the caret. */
+  addTag?: { tag: string } | null;
+  /** Said when the field takes or loses the focus: the tags beside it turn into ones to add. */
+  onFocusChange?: (focused: boolean) => void;
 }
 
 interface MenuRow {
@@ -30,7 +40,8 @@ interface MenuRow {
   run: (line: HTMLElement) => void;
 }
 
-const MAX_ROWS = 6;
+/** Past five lines the field scrolls: the list it writes into stays in sight above it. */
+const MAX_ROWS = 5;
 const MAX_SUGGESTIONS = 6;
 
 /**
@@ -69,13 +80,6 @@ function rememberDraft(value: string): void {
   }
 }
 
-/** A phone has no ⌘↵ to advertise. */
-function placeholder(): string {
-  return matchMedia("(hover: hover)").matches
-    ? t().capture.linePlaceholder(modifierLabel())
-    : t().capture.placeholder;
-}
-
 export default function CaptureBar(props: CaptureBarProps): JSX.Element {
   const [text, setText] = createSignal(readDraft());
   const [sending, setSending] = createSignal(false);
@@ -85,8 +89,6 @@ export default function CaptureBar(props: CaptureBarProps): JSX.Element {
   const [dismissed, setDismissed] = createSignal(false);
 
   let textareaRef: HTMLTextAreaElement | undefined;
-
-  createEffect(() => props.onTyping?.(text().trim() !== ""));
 
   /**
    * Whether the stylesheet sizes the line (`field-sizing`, Chrome 123 and Safari 26.2). Where it
@@ -105,6 +107,58 @@ export default function CaptureBar(props: CaptureBarProps): JSX.Element {
     const line = Number.parseFloat(getComputedStyle(el).lineHeight) || 22;
     el.style.height = `${Math.min(el.scrollHeight, line * MAX_ROWS)}px`;
   };
+
+  // A line taken back lands in the field as it was sent, caret at its end
+  createEffect(
+    on(
+      () => props.refill,
+      (refill) => {
+        if (!refill) {
+          return;
+        }
+        setText(refill.text);
+        rememberDraft(refill.text);
+        queueMicrotask(() => {
+          autoGrow();
+          textareaRef?.focus();
+          textareaRef?.setSelectionRange(refill.text.length, refill.text.length);
+        });
+      },
+      { defer: true },
+    ),
+  );
+
+  // A tag pressed beside the field joins the line where the caret is, set apart by spaces, and
+  // the caret goes on after it: the next word or tag follows without a tap
+  createEffect(
+    on(
+      () => props.addTag,
+      (add) => {
+        const el = textareaRef;
+        if (!add || !el) {
+          return;
+        }
+        const value = text();
+        const at = Math.min(el.selectionStart, value.length);
+        const before = value.slice(0, at);
+        const gap = before === "" || /\s$/u.test(before) ? "" : " ";
+        const insert = `${gap}#${add.tag} `;
+        const next = `${before}${insert}${value.slice(at)}`;
+        setText(next);
+        rememberDraft(next);
+        setDismissed(true);
+        queueMicrotask(() => {
+          el.focus();
+          el.setSelectionRange(at + insert.length, at + insert.length);
+          autoGrow();
+        });
+      },
+      { defer: true },
+    ),
+  );
+
+  /** Nothing typed and a search to offer: the round button is the search's (26). */
+  const searching = (): boolean => props.searchWhenEmpty === true && !text().trim();
 
   const draft = createMemo(() => (dismissed() ? null : tagDraftAt(text(), caret())));
 
@@ -214,7 +268,39 @@ export default function CaptureBar(props: CaptureBarProps): JSX.Element {
     }
   };
 
-  const send = (): Promise<void> => submit(props.onSend);
+  /**
+   * Records, then hands the focus back to the field: the next line can follow at once, and on a
+   * phone the keyboard stays up. A promotion leaves the screen instead, so it does not.
+   */
+  const send = async (): Promise<void> => {
+    await submit(props.onSend);
+    textareaRef?.focus();
+  };
+
+  /**
+   * Send slid up (5): the ⌘Enter a phone has no key for, as one pill over the thumb. Letting go
+   * on send always records, however slow the press: it is the app's most frequent act, and a
+   * firm tap must never hold a line back. A slide up, or a press held long enough to show the
+   * pill, offers the Note; letting go off both keeps the line in the field.
+   */
+  const sendRing = createRingPress({
+    holdMs: 320,
+    slideOpens: true,
+    tap: () => {
+      void send();
+    },
+    hint: (onSend) => (onSend ? t().reach.sendRelease : t().reach.sendKeep),
+    choices: () => [
+      {
+        id: "note",
+        icon: "note-pencil",
+        label: t().reach.asNote,
+        run: () => {
+          void submit(props.onPromote);
+        },
+      },
+    ],
+  });
 
   const trackCaret = (el: HTMLTextAreaElement): void => {
     setCaret(el.selectionStart);
@@ -329,7 +415,7 @@ export default function CaptureBar(props: CaptureBarProps): JSX.Element {
         rows={1}
         class="capture-input"
         aria-label={t().capture.label}
-        placeholder={placeholder()}
+        placeholder={t().capture.placeholder}
         value={text()}
         onInput={(e) => {
           setText(e.currentTarget.value);
@@ -341,18 +427,46 @@ export default function CaptureBar(props: CaptureBarProps): JSX.Element {
         onClick={(e) => trackCaret(e.currentTarget)}
         onKeyUp={(e) => setCaret(e.currentTarget.selectionStart)}
         onKeyDown={onKeyDown}
+        onFocus={() => props.onFocusChange?.(true)}
+        onBlur={() => props.onFocusChange?.(false)}
       />
-      <button
-        type="button"
-        class="capture-send"
-        aria-label={t().capture.send}
-        disabled={sending() || !text().trim()}
-        onClick={() => {
-          void send();
-        }}
+      <Show
+        when={!searching()}
+        fallback={
+          <button
+            type="button"
+            class="capture-send capture-send--search"
+            title={t().palm.search}
+            aria-label={t().palm.search}
+            onClick={() => props.onSearch()}
+          >
+            <Icon name="magnifying-glass" size={18} />
+          </button>
+        }
       >
-        <Icon name="paper-plane-tilt" size={16} />
-      </button>
+        <button
+          type="button"
+          class="capture-send ring-trigger"
+          aria-label={t().capture.send}
+          disabled={sending() || !text().trim()}
+          {...sendRing.handlers}
+          // The press must not take the focus: on a phone that drops the keyboard, and the
+          // field the next line goes into would have to be found again
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => {
+            if (sendRing.shouldClick()) {
+              void send();
+            }
+          }}
+        >
+          <Icon name="paper-plane-tilt" size={18} />
+        </button>
+        {sendRing.view()}
+      </Show>
+      {/* What the field also answers to. Only while writing, and only where there are keys */}
+      <span class="capture-hint" aria-hidden="true">
+        {t().capture.hint(modifierLabel())}
+      </span>
     </div>
   );
 }

@@ -3,7 +3,6 @@
   display: flex;
   min-height: 0;
   min-width: 0;
-  /* Positioning base for the flyout. Its left and bottom edges are the window's */
   position: relative;
 }
 
@@ -23,12 +22,10 @@
 
 /* ---------------- list pane ---------------- */
 
-.list-edge {
-  display: none;
-}
-
+/* The middle pane of three, between the shelf's rail and the body, unless the note's grip has
+   tucked it under the page (palm.css). Seeing the list is how you know where you are */
 .list-pane {
-  width: 300px;
+  width: 280px;
   background: var(--app-sidebar);
   flex-shrink: 0;
   display: flex;
@@ -49,39 +46,6 @@
   display: flex;
   align-items: center;
   gap: 2px;
-}
-
-/* The permanent pin. Not filled even while pinned: where two pressable things sit
-   side by side, the fill should stay the stronger signal of "new". The cue is the
-   colour reaching the same darkness as the text */
-.list-pin {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border: none;
-  border-radius: 5px;
-  background: none;
-  color: var(--app-text-faint);
-  cursor: pointer;
-  transition: color 150ms var(--app-ease);
-}
-
-.list-pin:hover,
-.list-pin[aria-pressed="true"] {
-  color: var(--app-text);
-}
-
-/* The open/close rule. A narrow screen has no open/close, so it is not shown there */
-.list-pane-foot {
-  display: none;
-  margin-top: auto;
-  padding: 10px 16px;
-  border-top: 1px solid var(--app-surface-2);
-  font-size: 13px;
-  color: var(--app-text-muted);
 }
 
 /* The only pressable thing in the pane, so it is found without a frame around it */
@@ -120,59 +84,6 @@
   overflow-y: auto;
 }
 
-/* ---------------- list flyout (desktop) ---------------- */
-
-/* The list is no longer a permanent pane; it floats over the body from the window's
-   left edge. The body column does not move when the list opens or closes: a line
-   you are reading jumping sideways costs more than the list not always being visible.
-   It is limited to `hover: hover` because the only ways to open it are hover and the
-   pin (and the pin is inside the list). On a wide device without hover, a tap opens
-   it for a moment and it folds the instant the finger lifts, so the list itself is
-   out of reach before the pin inside can be touched. There it stays a permanent
-   column.
-   Only the Note / Codex workspace floats its list (`workspace--flyout`, set by
-   Workspace.tsx). Templates borrows the same panes but has no edge strip and no pin,
-   so nothing could ever open its list; there it stays a permanent column */
-@media (min-width: 768px) and (hover: hover) {
-  .list-edge {
-    display: block;
-    position: absolute;
-    inset: 0 auto 0 0;
-    z-index: 1;
-    width: 12px;
-  }
-
-  .workspace--flyout .list-pane {
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    z-index: 20;
-    width: 280px;
-    border-right: none;
-    box-shadow: var(--shadow-pop);
-    transform: translateX(-24px);
-    opacity: 0;
-    /* If the hit area stayed while closed, the left 280px of the body could not be pressed */
-    pointer-events: none;
-    /* The fade ending before the slide (180 < 220) is the prototype's value. When
-       folding, it is gone before it stops moving, so no shadow lingers over the body */
-    transition:
-      transform 220ms var(--app-ease),
-      opacity 180ms var(--app-ease);
-  }
-
-  .workspace--flyout .list-pane--open {
-    transform: none;
-    opacity: 1;
-    pointer-events: auto;
-  }
-
-  .workspace--flyout .list-pane-foot {
-    display: block;
-  }
-}
-
 /* A group's name is shown by text alone. A rule line would add one more layer to a
    one-row separation. While scrolling a long group, where you are stays at the top */
 .list-group-label {
@@ -185,10 +96,6 @@
   font-weight: 700;
   letter-spacing: 0.06em;
   color: var(--app-text-faint);
-}
-
-.list-scroll > .list-group-label:first-child {
-  padding-top: 8px;
 }
 
 /* A row is one line. Only the title and the time, aligned on the baseline */
@@ -347,13 +254,6 @@
   margin: 0;
   font-size: 13px;
   color: var(--app-text-muted);
-}
-
-.empty-state {
-  padding: var(--size-4) var(--size-3);
-  color: var(--app-text-muted);
-  font-size: var(--font-size-0);
-  text-align: center;
 }
 
 /* ---------------- detail pane ---------------- */
@@ -541,7 +441,7 @@
   color: var(--app-text-muted);
 }
 
-/* The strip over the page (ADR 0003). The viewer: back · map · write · tidy. The writing
+/* The strip over the page (ADR 0003). The viewer: map · write · tidy. The writing
    screen: done · tidy. It narrows with the docked panel like the head row does */
 .note-strip {
   display: flex;
@@ -659,7 +559,7 @@
 }
 
 /* In the viewer the page starts further down than where you write: the title and its date
-   line are a block of their own. Beats the phone's padding too, which is why the head is named */
+   line are a block of their own */
 .detail-head:has(.note-title-view) + .detail-panes .detail-body {
   padding-top: 32px;
 }
@@ -696,9 +596,13 @@
   }
 }
 
-/* The preview appears only for a read-only `view: preview` note. Pressing it does not
-   start writing, so no I-beam that signals "you can write here" */
+/* A tap on the viewer's page writes, at that spot (lib/tap-to-write.ts), so the pointer says so.
+   While a version is compared the page is read-only and the arrow comes back */
 .detail-body .markdown-preview {
+  cursor: text;
+}
+
+.detail-body[data-view="history"] .markdown-preview {
   cursor: default;
 }
 
@@ -716,6 +620,15 @@
   font-size: var(--font-size-0);
 }
 
+/* Under 1100px the shelf's rail (64) + list (280) + docked panel (320) leave the body too
+   little. While the panel is docked the list steps aside; closing the panel brings it
+   straight back. The rail never folds */
+@media (min-width: 768px) and (max-width: 1099px) {
+  .workspace:has(.detail-pane--panel) .list-pane {
+    display: none;
+  }
+}
+
 /* ---------------- mobile: one pane at a time ---------------- */
 
 @media (max-width: 767px) {
@@ -730,9 +643,17 @@
     flex: 1;
   }
 
-  /* What does not float cannot be pinned */
-  .list-pin {
+  /* The round + low on the right makes the new one here, and the list's own large name at its
+     foot names the surface, so a Note / Codex list has no head of its own on a phone.
+     Templates' head (no actions group) is put away in palm.css */
+  .list-pane-actions .new-note,
+  .list-pane-head:has(.list-pane-actions) {
     display: none;
+  }
+
+  /* So the last row can scroll clear of the compose button */
+  .list-scroll {
+    padding-bottom: 88px;
   }
 
   /* Capture works while looking at the list too. Keep only the capture bar and fold the detail */
@@ -751,11 +672,6 @@
     display: none;
   }
 
-  .workspace--detail .note-strip {
-    display: flex;
-    width: 100%;
-  }
-
   /* The list and the body are single pages that swap in the same place. The body rises
      at the same 180ms as the history page: without motion in the swap, you cannot tell
      whether the row you pressed opened or you jumped somewhere else. Folding does not
@@ -771,23 +687,6 @@
 
   .workspace--detail .detail-panes {
     display: flex;
-  }
-
-  /* The only way back to the list */
-  .note-strip .detail-back {
-    display: flex;
-  }
-
-  /* The map and the pencil are 29px, so 7.5px of hit area on each side (layout.css): they
-     meet across 15px */
-  .note-strip {
-    gap: 15px;
-  }
-
-  /* The new-note button is 26px tall, so its hit area reaches 9px below it; the list must not
-     start inside that */
-  .list-pane-head {
-    padding-bottom: 9px;
   }
 
   /* A height a finger can press. The text also goes up to about the body's size */
@@ -808,10 +707,6 @@
 
   .list-group-label {
     padding: 18px 20px 2px;
-  }
-
-  .list-scroll > .list-group-label:first-child {
-    padding-top: 12px;
   }
 
   .detail-head {
@@ -909,4 +804,224 @@
   font-size: 12px;
   color: var(--app-text-muted);
   font-variant-numeric: tabular-nums;
+}
+
+/* ---------------- the palm's parts of a note ---------------- */
+
+/* Reading down a note on a wide window, the strip steps back until the page turns up or the
+   pointer comes near it (63): the page is what is read */
+@media (min-width: 768px) {
+  .note-strip {
+    transition:
+      width 220ms var(--app-ease),
+      opacity 200ms var(--app-ease);
+  }
+
+  .note-strip--slim {
+    opacity: 0.2;
+  }
+
+  .note-strip--slim:hover,
+  .note-strip--slim:focus-within {
+    opacity: 1;
+  }
+}
+
+/* A phone's reading hand (63): the sheet's button and the pencil, low on the right opposite the
+   place pill. Reading down, the sheet's button steps away and the pencil stays */
+.palm-actions {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  /* Reading, the foot holds the way back, the sheet and the pencil, so a phone's strip has
+     nothing left to carry: the map and the panel are in the sheet, writing is the pencil.
+     Writing, "done" is in the writing bar (markdown-toolbar.css) */
+  .workspace--detail .note-strip {
+    display: none;
+  }
+
+  /* Read on a phone, the head is the top of the scrolling page (Workspace's headInBody) */
+  .detail-body > .detail-head {
+    padding: 0 0 8px;
+  }
+
+  .palm-actions {
+    position: absolute;
+    right: 16px;
+    bottom: 16px;
+    z-index: 25;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .palm-actions .compose-fab {
+    position: static;
+  }
+
+  .palm-action-more {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 46px;
+    height: 46px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: var(--app-surface);
+    box-shadow: var(--shadow-pop);
+    color: var(--app-text);
+    cursor: pointer;
+    transition:
+      opacity 200ms var(--app-ease),
+      transform 200ms var(--app-ease);
+  }
+
+  .palm-actions--slim .palm-action-more {
+    opacity: 0;
+    transform: translateX(12px) scale(0.9);
+    pointer-events: none;
+  }
+}
+
+/* A row of ← · pill · ⋯ · pencil needs 370px with its gaps. Narrower, the ⋯ stands over the
+   pencil instead, still under the thumb, rather than pressed against the pill */
+@media (max-width: 379px) {
+  .palm-actions {
+    flex-direction: column;
+  }
+
+  .palm-actions--slim .palm-action-more {
+    transform: translateY(12px) scale(0.9);
+  }
+}
+
+@media (max-width: 767px) {
+  /* The note's last lines scroll clear of the pill and the pencil */
+  .workspace--detail .detail-body {
+    padding-bottom: 96px;
+  }
+
+  /* The page to be read under the one being written, while writing slides away (61) */
+  .detail-peek {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    overflow: hidden;
+    padding: 4px 20px 0;
+    background: var(--app-surface);
+  }
+
+  .detail-peek .note-title-view {
+    font-size: 26px;
+  }
+
+  .list-swipe {
+    margin: 0 8px;
+    border-radius: var(--radius-2);
+  }
+
+  .list-swipe .list-row {
+    margin: 0;
+    width: 100%;
+  }
+
+  .list-swipe .swipe-actions {
+    align-items: center;
+  }
+}
+
+/* ---------------- a linked note lifted over this one (88) ---------------- */
+
+/* A wide window lays the linked note where the note panel lies, the full height of the page's
+   right edge, and the body yields that room (`detail-pane--panel`): nothing being read is under
+   it. Over the panel when that is open too, since the note just lifted is what was asked for */
+.link-peek-card {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 55;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 320px;
+  border-left: 1px solid var(--app-hairline);
+  border-radius: 0 14px 14px 0;
+  background: var(--app-sidebar);
+  overflow: hidden;
+  animation: mm-rise 180ms var(--app-ease);
+}
+
+.link-peek-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 12px 8px 20px;
+}
+
+.link-peek-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 16px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.link-peek-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.link-peek-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 20px 20px;
+  font-size: 14px;
+  line-height: 1.75;
+}
+
+.link-peek-missing {
+  color: var(--app-text-muted);
+}
+
+.link-peek-sheet .link-peek-body {
+  font-size: 15px;
+}
+
+/* A phone's list is a page like Scrawl's: the page's own ground, so it runs into the veil above
+   it without an edge (58). The rows take that ground on their face, so nothing behind shows */
+@media (max-width: 767px) {
+  .list-pane,
+  .list-group-label,
+  .list-swipe .list-row {
+    background: var(--app-surface);
+  }
+}
+
+/* The list's own search, a phone's alone: the one way into search on a list */
+.list-search {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .list-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: calc(100% - 32px);
+    padding: 0 14px;
+    border: 1px solid var(--app-border);
+    border-radius: 999px;
+    background: var(--app-input-bg);
+    color: var(--app-text-faint);
+    font: inherit;
+    font-size: 15px;
+    cursor: pointer;
+  }
 }

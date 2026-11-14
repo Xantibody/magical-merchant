@@ -157,8 +157,9 @@ export default function Browse(): JSX.Element {
 
   /**
    * Every change of the filter goes through here, so what a new list starts from is said once:
-   * its first page, from the top. The right column falls back to the first record, and a list
-   * left scrolled down would neither show that row nor stay one page long.
+   * its first page, from the foot (the list grows up from it, `data-foot`). The right column
+   * falls back to the first record, and a list left scrolled up would neither show that row nor
+   * stay one page long.
    */
   const narrow = (next: BrowseFilter): void => {
     shell.setBrowseFilter(next);
@@ -170,7 +171,9 @@ export default function Browse(): JSX.Element {
   /**
    * Watches the marker after the last drawn row and draws another page when it nears view.
    * The root is the list, not the window, so the margin counts in the list's own scroll: one
-   * list height ahead, the next page is there before the scroll can hit the end and stop.
+   * list height ahead, the next page is there before the scroll can hit the end and stop. The
+   * list grows up from its foot (browse.css), so its end is above and the margin reaches up;
+   * the same margin below is left in and costs nothing.
    */
   const watchEnd = (end: HTMLElement): void => {
     endWatch ??= new IntersectionObserver(
@@ -186,7 +189,7 @@ export default function Browse(): JSX.Element {
         observer.unobserve(seen.target);
         observer.observe(seen.target);
       },
-      { root: list, rootMargin: "0px 0px 100% 0px" },
+      { root: list, rootMargin: "100% 0px 100% 0px" },
     );
     endWatch.disconnect();
     endWatch.observe(end);
@@ -340,7 +343,7 @@ export default function Browse(): JSX.Element {
       </aside>
 
       <div class="browse-results">
-        <div class="browse-list" ref={list}>
+        <div class="browse-list" ref={list} data-foot>
           <div class="browse-list-head">
             <span>{t().browse.count(shown().length)}</span>
             <span class="browse-list-order">{t().browse.newestFirst}</span>

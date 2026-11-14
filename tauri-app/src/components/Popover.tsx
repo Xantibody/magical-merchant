@@ -18,6 +18,8 @@ interface PopoverProps {
    * positioning reference.
    */
   class?: string;
+  /** Where it hangs when that follows the trigger (`lib/popover-place.ts`), over the class's own. */
+  style?: JSX.CSSProperties;
   children: JSX.Element;
 }
 
@@ -58,7 +60,7 @@ export default function Popover(props: PopoverProps): JSX.Element {
       }}
     >
       {/* AIDEV-NOTE: Do not put an animation directly here: corvu's presence keeps waiting for it to end and never closes. Motion goes on the .popover inside */}
-      <Dialog.Content class={props.class} aria-label={props.label}>
+      <Dialog.Content class={props.class} style={props.style} aria-label={props.label}>
         {props.children}
       </Dialog.Content>
     </Dialog>

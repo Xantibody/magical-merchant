@@ -36,45 +36,64 @@ ready to record the moment it opens (widgets exist for exactly this).
 
 ## UI Architecture (current)
 
-- **No rail**: one column (ADR 0010). The way around is the keys (⌘1/2/3, ⌘K, ⌘F,
-  ⌘,), the status dot's links, and the places on the empty search field
-- **List flyout** (`components/NoteList.tsx` + `styles/workspace.css`, Note / Codex
-  on desktop): 280px that floats **over** the body while the pointer is on the
-  window's left edge (`.list-edge`, 12px, nothing visible) or on itself — the body column does not move when it opens. A pin, and
-  ⌘\, keep it out. Below 768px it is the full page it always was
-- **Status dot** (`components/StatusDot.tsx`, `styles/status-dot.css`): state lives
-  in one 8px dot fixed to the window's lower right, outside the paper — green
-  (saved, synced), grey (saving or syncing), red (a failed save or sync, a lost
-  login). A device never set up stays green. Hover shows Scrawl · 検索 · Settings · キー
-  to its left; pressing it opens the details (`SyncPopover` + `StatusDetails`): the save
+- **One way to each thing**: a place is changed in one spot, a record is made from one
+  control, search has one field per screen. Before adding an entry point, find the one that
+  already does the job
+- **Wide window (≥768px)**: a 64px **rail** of icons at the left edge
+  (`components/Library.tsx`, `styles/library.css`): the status line at its top, and at its
+  foot the four places (Scrawl · Note · Codex · 絞る), the search and the ring's +. It never
+  folds or opens out; a name shows beside its icon on hover and focus. On Note / Codex the
+  **list** (`components/NoteList.tsx`, 280px) stands beside the page, and the one grip on the
+  page's left edge (`components/SheetGrip.tsx`) or ⌘\ tucks it under the page and brings it
+  back (`shell.listTucked`, remembered). A page with no list beside it has no grip
+- **Phone (<768px)**: no header and no shelf; everything pressed is at the foot
+  (`styles/palm.css`, `styles/reach.css`). Bottom-left, the **place pill**
+  (`components/PlaceSwitch.tsx`): Scrawl · Note · Codex, always at the same spot; on Scrawl it
+  stretches to hold the input field. Bottom-right, the page's one round button: + on a list,
+  the pencil (with `…` for the note's sheet) on a note. On a level (a note, a Settings page) a
+  round back button stands after the pill. Browse, Settings and Templates are reached from the
+  empty search field. Reading down folds the bar to one line of words (`lib/slim.ts`)
+- **Built from the foot**: Note / Codex lists and the search field's results rest on their
+  foot (`data-foot`, `lib/foot.ts`), newest nearest the thumb, with the page's name and its
+  探す field under them. Scrawl is the exception: it reads newest first from the top
+- **The ring** (`components/Ring.tsx`, `lib/ring.ts`): pressing a + (or holding the pill) opens a
+  fan of labelled pills out of it — Scrawl に 1 行 · Note を作る · Codex を作る · テンプレートから. Slide
+  onto one and let go, or let go first and tap. It is the one way to make a record from
+  anywhere
+- **Gestures** (`lib/gesture.ts` decides, `lib/palm-gestures.ts` acts): a stroke to the right
+  goes one level back (nothing at the top of a surface), a stroke to the left opens a row's
+  actions, up on the bar raises the note's sheet. Android's back peels the same layers
+  (`lib/system-back.ts`). Every stroke has a visible control that does the same
+- **Status** (`components/StatusDot.tsx`, `styles/status-dot.css`): green (saved, synced), grey
+  (saving or syncing), red (a failed save or sync, a lost login); a device never set up stays
+  green. A wide window says it in words at the top of the rail, a phone as one dot in the top
+  right corner. Pressing either opens the details (`SyncPopover` + `StatusDetails`): the save
   time, and for the open note the version, 比較中, every view state that is **on**
   (pressing one docks the note panel on its switch), 版を刻む and 編集前に戻す
-  when they would do something, then the sync. Workspace hands the note's part
-  over through the shell (`noteState`), like the save state. Only a failure
-  interrupts, with a toast (`syncAlertText`); the popover no longer opens itself.
-  On a phone the dot is in the header (the corner has the capture
-  dock) and a status row under the title keeps the save and the states, as pills.
-  Without hover, those four are at the foot of the details
-- **Mobile**: a 48px header (back · title · Scrawl's calendar · search · the status dot);
-  the empty search field and the dot's details lead to the other screens
+  when they would do something, then the sync, and at the foot Scrawl · 検索 · Settings · キー.
+  Workspace hands the note's part over through the shell (`noteState`), like the save state.
+  Only a failure interrupts, with a toast (`syncAlertText`)
 - **Shortcuts**: one table in `lib/shortcuts.ts` feeds the key handling, the
   palette's command rows and the `data-hint-key` badges. Holding ⌘ (Ctrl) for
   300ms floats those badges (`lib/hints.ts`); `?` opens the palette as the
   list. A badge goes on every **visible** control whose key works right now —
-  the status dot, 新規 and the list's pin, the note panel's `…` and its
+  the rail's places and its search, the list's grip, 新規, the note panel's `…` and its
   履歴 tab, the status details' two actions. Keys that only exist inside the note
   panel are spelled on the row instead. The attribute is
   `data-hint-key`, not `data-key`, because Kobalte writes `data-key` on the
   rows of its own collections
 - **Scrawl** (`views/Scrawl.tsx`): single-column day-grouped journal, time rail,
-  an input line at the top of today; records are read-only, and the one thing a record
+  newest first (today at the top, as a feed reads). The input field is at the foot on both
+  widths: the end of the sheet on a wide window, inside the place pill on a phone. Just over
+  it, a band: the week's line, the tag chips, the calendar. A thumb on the right edge
+  (`components/ScrawlScrubber.tsx`) scrubs through the days; records are read-only, and the one thing a record
   leads to is a Note made from it (asked first); select-mode bulk delete. Notes
   and Codexes sit among the entries (`lib/scrawl-days.ts`) as a filled dot and a
   bold title, unless the chip under their origin entry already leads to them. The
-  tag chips at the top do not filter in place — they open the search field
-  with that tag. The input line's `/` menu (探す · Note を作る · 日付へ) is the
+  band's tag chips do not filter in place — they open the search field
+  with that tag, or, while a line is being typed, join the line. The input line's `/` menu (探す · Note を作る · 日付へ) is the
   line's way to search; it answers to row names only, so `/tmp` stays a record
-- **Note** (`views/Workspace.tsx`): list flyout + detail pane; mobile shows one
+- **Note** (`views/Workspace.tsx`): the list beside the page + detail pane; mobile shows one
   pane at a time (`workspace--detail`); a note opens in the
   **viewer** (`MarkdownPreview`, the title as a heading, a meta line of created
   time and tags that only shows them, a body `#tag` outlined, then the records
@@ -90,11 +109,12 @@ ready to record the moment it opens (widgets exist for exactly this).
   edge — the view switches, the tags (`components/TagEditor.tsx`: chips,
   suggestions counted in core by `count_tags`, a body `#tag` has no ×), 詳細 (created
   time editable, updated, surroundings),
-  revert / Codex にする (a corvu confirm, `PromoteDialog.tsx`) / delete. The `…`
+  revert / Codex にする / delete (the last two are a held press, `HoldButton.tsx`). The `…`
   in the viewer's strip and ⌘. are the only ways in, and the body gives up 320px
   while it is open. Open is the app's state (`shell.notePanelPinned`), not the
-  note's. Esc peels one layer: tag input → confirm → history; the settings tab
-  stays. On a phone it opens as its own screen
+  note's. Esc peels one layer: tag input → history; the settings tab
+  stays. On a phone it is a sheet that rises from the foot (the `…` beside the
+  pencil, or a push up on the bar)
 - **Codex** (`views/Workspace.tsx` with `kind="codex"`, route `/codex`): the
   same view over `data/codex/`. Three things tell it from a Note: the list row
   carries a folded-corner page with the version count (frame darkens when the

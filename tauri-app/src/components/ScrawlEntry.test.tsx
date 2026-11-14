@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { render, cleanup, waitFor } from "@solidjs/testing-library";
+import { render, cleanup, waitFor, fireEvent, screen } from "@solidjs/testing-library";
+import { createSignal } from "solid-js";
 import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
 import ScrawlEntry from "./ScrawlEntry";
 import { toScrawlItems } from "../lib/items";
@@ -19,8 +20,12 @@ function renderEntry(context: DeviceContext): HTMLElement {
       notes={[]}
       selecting={false}
       selected={false}
+      open={false}
+      onOpenChange={vi.fn<(open: boolean) => void>()}
       onToggle={vi.fn<() => void>()}
       onPromote={vi.fn<() => void>()}
+      onCopy={vi.fn<() => void>()}
+      onDelete={vi.fn<() => Promise<void>>().mockResolvedValue()}
       onOpenNote={vi.fn<() => void>()}
       onUnlinkNote={vi.fn<() => void>()}
     />
@@ -74,5 +79,112 @@ describe("ScrawlEntry › meta row", () => {
     await waitFor(() =>
       expect(container.querySelector(".entry-meta")?.textContent).toContain("Harbour"),
     );
+  });
+});
+
+/** A record written on a phone with everything recorded, drawn openable. */
+function renderOpenable(onDelete = vi.fn<() => Promise<void>>().mockResolvedValue()): HTMLElement {
+  const context: DeviceContext = {
+    os: "android",
+    arch: "aarch64",
+    os_version: "15",
+    network_type: "Mobile",
+    battery: 49,
+    s: "widget",
+  };
+  const [item] = toScrawlItems("2026-11-08", [`- [09:00:00] walk ${JSON.stringify(context)}`]);
+  const [open, setOpen] = createSignal(false);
+  const { container } = render(() => (
+    <ScrawlEntry
+      item={item}
+      notes={[]}
+      selecting={false}
+      selected={false}
+      open={open()}
+      onOpenChange={setOpen}
+      onToggle={vi.fn<() => void>()}
+      onPromote={vi.fn<() => void>()}
+      onCopy={vi.fn<() => void>()}
+      onDelete={onDelete}
+      onOpenNote={vi.fn<() => void>()}
+      onUnlinkNote={vi.fn<() => void>()}
+    />
+  ));
+  return container;
+}
+
+describe("ScrawlEntry › opened by a tap", () => {
+  afterEach(() => {
+    cleanup();
+    clearMocks();
+  });
+
+  // S3: one line under the record, the phone's state left for when it is opened
+  it("shows one brief meta line until opened, then all of it", () => {
+    const container = renderOpenable();
+    expect(container.querySelector(".entry-meta")?.textContent).toBe("ウィジェット");
+
+    fireEvent.click(screen.getByText("walk"));
+
+    const full = String(container.querySelector(".entry-meta--full")?.textContent);
+    expect(full).toContain("android 15");
+    expect(full).toContain("49%");
+  });
+
+  it("offers copy, a Note and delete once opened, and folds on a second tap", () => {
+    renderOpenable();
+
+    fireEvent.click(screen.getByText("walk"));
+    const toolbar = screen.getByRole("toolbar", { name: "この記録の操作" });
+    expect([...toolbar.querySelectorAll("button")].map((b) => b.textContent)).toStrictEqual([
+      "コピー",
+      "Note にする",
+      "削除",
+    ]);
+
+    fireEvent.click(screen.getByText("walk"));
+    expect(screen.queryByRole("toolbar")).toBeNull();
+  });
+
+  // 96: no dialog over the journal, and no second bar asking; the press itself has to last
+  it("deletes only once the press has been held", async () => {
+    const onDelete = vi.fn<() => Promise<void>>().mockResolvedValue();
+    renderOpenable(onDelete);
+    fireEvent.click(screen.getByText("walk"));
+    const held = screen.getByRole("button", { name: /^削除 \(/u });
+
+    fireEvent.click(held);
+    expect(onDelete).not.toHaveBeenCalled();
+
+    held.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "mouse", bubbles: true }));
+    await waitFor(() => expect(onDelete).toHaveBeenCalledTimes(1), { timeout: 1500 });
+  });
+
+  it("says how it works when let go too soon", async () => {
+    const onDelete = vi.fn<() => Promise<void>>().mockResolvedValue();
+    renderOpenable(onDelete);
+    fireEvent.click(screen.getByText("walk"));
+    const held = screen.getByRole("button", { name: /^削除 \(/u });
+
+    held.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "mouse", bubbles: true }));
+    // oxlint-disable-next-line promise/avoid-new
+    await new Promise((resolve) => {
+      setTimeout(resolve, 200);
+    });
+    held.dispatchEvent(new PointerEvent("pointerup", { pointerType: "mouse", bubbles: true }));
+
+    expect(onDelete).not.toHaveBeenCalled();
+    expect(held.textContent).toContain("押し続けて削除");
+  });
+
+  // The hover toolbar's trash opens the row onto the held delete; a click alone takes nothing
+  it("opens the row from the hover toolbar's trash instead of deleting", () => {
+    const onDelete = vi.fn<() => Promise<void>>().mockResolvedValue();
+    renderOpenable(onDelete);
+
+    fireEvent.click(screen.getByRole("button", { name: "削除" }));
+
+    expect(onDelete).not.toHaveBeenCalled();
+    expect(screen.queryByRole("toolbar", { name: "この記録の操作" })).not.toBeNull();
   });
 });

@@ -9,13 +9,14 @@ function table() {
     newNote: vi.fn<() => void>(),
     go: (path: string) => () => went.push(path),
     syncNow: vi.fn<() => void>(),
+    toggleSidebar: vi.fn<() => void>(),
   };
   return { commands: shellCommands(deps), deps, went };
 }
 
 describe("shellCommands", () => {
-  // The seven global commands, and only those: what `?` lists and what the docs promise
-  it("lists the seven global commands in the palette's order", () => {
+  // The nine global commands, and only those: what `?` lists and what the docs promise
+  it("lists the nine global commands in the palette's order", () => {
     const { commands } = table();
 
     expect(commands.map((c) => c.id)).toStrictEqual([
@@ -25,10 +26,13 @@ describe("shellCommands", () => {
       "go-codex",
       "go-browse",
       "sync-now",
+      "toggle-sidebar",
       "go-settings",
+      "go-templates",
     ]);
   });
 
+  // Settings and Templates are not on the shelf; the empty search field lists them with the places
   it("marks the rows that go somewhere as places", () => {
     const { commands } = table();
 
@@ -38,7 +42,16 @@ describe("shellCommands", () => {
       "go-codex",
       "go-browse",
       "go-settings",
+      "go-templates",
     ]);
+  });
+
+  it("gives Templates no key of its own", () => {
+    const { commands } = table();
+    const templates = commands.find((c) => c.id === "go-templates");
+
+    expect(templates?.shortcut).toBeUndefined();
+    expect(commandRows(commands).find((r) => r.id === "go-templates")?.shortcut).toBe("");
   });
 
   it("runs the dependency each row stands for", () => {
@@ -50,12 +63,14 @@ describe("shellCommands", () => {
 
     expect(deps.newNote).toHaveBeenCalledTimes(1);
     expect(deps.syncNow).toHaveBeenCalledTimes(1);
+    expect(deps.toggleSidebar).toHaveBeenCalledTimes(1);
     expect(went).toStrictEqual([
       ROUTES.SCRAWL,
       ROUTES.NOTES,
       ROUTES.CODEX,
       ROUTES.BROWSE,
       ROUTES.SETTINGS,
+      ROUTES.TEMPLATES,
     ]);
   });
 });

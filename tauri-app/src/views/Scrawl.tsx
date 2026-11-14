@@ -10,17 +10,21 @@ import {
 } from "solid-js";
 import type { JSX } from "solid-js";
 import Icon from "../components/Icon";
+import { Portal } from "solid-js/web";
 import CaptureBar from "../components/CaptureBar";
+import { createWide } from "../lib/media";
 import CalendarPopover from "../components/CalendarPopover";
 import Popover from "../components/Popover";
 import TagFilter from "../components/TagFilter";
 import ScrawlEntry from "../components/ScrawlEntry";
+import ScrawlScrubber from "../components/ScrawlScrubber";
+import HoldButton from "../components/HoldButton";
 import PromoteDialog from "../components/PromoteDialog";
 import { useNavigate, useSearchParams } from "@solidjs/router";
 import { typedInvoke } from "../lib/commands";
 import { getClientContext } from "../lib/client-context";
 import { useShell } from "../lib/shell";
-import { formatClock, formatDayHeading, toIsoDate } from "../lib/day-labels";
+import { formatDayHeading, toIsoDate } from "../lib/day-labels";
 import { t } from "../lib/i18n";
 import {
   keepUnchangedItems,
@@ -33,11 +37,13 @@ import {
 } from "../lib/items";
 import type { NoteItem, ScrawlItem } from "../lib/items";
 import { places } from "../lib/places";
+import { MODE_LABELS, ROUTES } from "../lib/routes";
 import { noteRoute, writeRoute } from "../lib/note-route";
 import { scrawlDays } from "../lib/scrawl-days";
+import { awayFromNewest } from "../lib/scrawl-scroll";
+import { placeBesideTrigger } from "../lib/popover-place";
 import type { ScrawlRow } from "../lib/scrawl-days";
 import { countTags, parseTags } from "../lib/tags";
-import type { TagCount } from "../lib/tags";
 import {
   digestWeekKey,
   isDigestDismissed,
@@ -54,6 +60,15 @@ const DIGEST_DISMISS_KEY = "weekly-digest-dismissed";
 
 /** How long a record just left keeps its dot green. The only save signal on the page. */
 const FRESH_MS = 1500;
+
+/** How long the line just sent can be taken back (36), like a sent mail's undo. */
+const TAKE_BACK_MS = 5000;
+
+/**
+ * The calendar's height with six weeks and its foot line, the most it draws: what it needs
+ * above a trigger to open there (`lib/popover-place.ts`). It is asked before the calendar mounts.
+ */
+const CALENDAR_HEIGHT_PX = 320;
 
 interface ScrawlData {
   items: ScrawlItem[];
@@ -95,49 +110,14 @@ function NoteRow(props: { note: NoteItem; onOpen: (note: NoteItem) => void }): J
   );
 }
 
-/**
- * The input line at the top of today. One rule and nothing else; the time and the dot come
- * up only once something is typed, so an empty line does not read as a record.
- */
-function InputLine(props: {
-  knownTags: TagCount[];
-  onSend: (text: string) => Promise<void>;
-  onPromote: (text: string) => Promise<void>;
-  onError: () => void;
-  onSearch: () => void;
-  onNewNote: () => void;
-  onJumpToDate: (trigger: HTMLElement) => void;
-}): JSX.Element {
-  const [typing, setTyping] = createSignal(false);
-  return (
-    <div class="entry entry--input" classList={{ "entry--typing": typing() }}>
-      <span class="entry-time">{typing() ? formatClock(new Date()) : ""}</span>
-      <span class="entry-rail" aria-hidden="true">
-        <span class="entry-rail-dot" />
-      </span>
-      <div class="entry-body">
-        <CaptureBar
-          onSend={props.onSend}
-          onPromote={props.onPromote}
-          onError={props.onError}
-          onTyping={setTyping}
-          knownTags={props.knownTags}
-          onSearch={props.onSearch}
-          onNewNote={props.onNewNote}
-          onJumpToDate={props.onJumpToDate}
-        />
-      </div>
-    </div>
-  );
-}
-
+/** The field is below the days on both widths, at the foot under the thumb. */
 function EmptyScrawl(): JSX.Element {
   return (
     <div class="scrawl-empty">
       <span class="scrawl-empty-rail" aria-hidden="true" />
       <div>
         <p class="scrawl-empty-title">{t().scrawl.emptyToday}</p>
-        <p class="scrawl-empty-hint">{t().scrawl.emptyHint}</p>
+        <p class="scrawl-empty-hint">{t().scrawl.emptyHintBelow}</p>
       </div>
     </div>
   );
@@ -155,25 +135,36 @@ export default function Scrawl(): JSX.Element {
   /** Select mode. Only while in it can an entry body be selected by clicking. */
   const [selecting, setSelecting] = createSignal(false);
   const [selected, setSelected] = createSignal<ReadonlySet<string>>(new Set());
-  /** The one step before deleting. True only while the confirm bar is shown. */
-  const [confirming, setConfirming] = createSignal(false);
   /** A delete in progress. The lock that keeps a double press from deleting the same row twice. */
   const [deleting, setDeleting] = createSignal(false);
   /** The record just left. Its dot stays green for a moment. */
   const [freshId, setFreshId] = createSignal<string | null>(null);
+  /** The record opened by a tap: its full meta and its actions show. One at a time. */
+  const [openId, setOpenId] = createSignal<string | null>(null);
   /** The record waiting on "Make a Note"'s confirmation. */
   const [promoting, setPromoting] = createSignal<ScrawlItem | null>(null);
-  /** Folds the three selection states at once. Leaving works the same from anywhere. */
+  /** The line just sent, while it can still be taken back (36). */
+  const [takeBackId, setTakeBackId] = createSignal<string | null>(null);
+  /** A line taken back goes back into the field, to be fixed and sent again. */
+  const [refill, setRefill] = createSignal<{ text: string } | null>(null);
+  const wide = createWide();
+  let scrollRef: HTMLDivElement | undefined;
+  /** Scrolled far enough from the newest records that the way back is offered (S6). */
+  const [away, setAway] = createSignal(false);
+  /** Whether a line is being typed: the tags beside the field then add to it (71). */
+  const [typing, setTyping] = createSignal(false);
+  /** The tag pressed to join the line being typed. A new object each press, so a repeat lands. */
+  const [addTag, setAddTag] = createSignal<{ tag: string } | null>(null);
+  /** Folds the selection states at once. Leaving works the same from anywhere. */
   const exitSelecting = (): void => {
     setSelecting(false);
     setSelected(new Set<string>());
-    setConfirming(false);
   };
   /**
    * Folds the selection before the list is reread. A selection points at a row by
    * `date#index`, so if a reread adds a row earlier in the same day, that index
-   * points at the neighbouring record. Reselecting is one more press on the
-   * confirm bar; a wrong deletion cannot be undone.
+   * points at the neighbouring record. Reselecting is a few more taps; a wrong
+   * deletion cannot be undone.
    */
   const dropSelectionForReload = (): void => {
     if (!selecting()) {
@@ -226,9 +217,21 @@ export default function Scrawl(): JSX.Element {
 
   const days = createMemo(() => scrawlDays(entries(), notes() ?? [], toIsoDate(today)));
 
-  // The day holding the input line is drawn apart from the others so the line is not rebuilt
-  // when the rows come back from a save: a rebuilt line reads the draft back before the send
-  // clears it. It follows the newest day, so a capture past midnight still lands under the line
+  /** The calendar opens beside whichever control asked for it: the band's button, the scrubber. */
+  const calendarPlace = createMemo(() => {
+    if (shell.popover() !== "calendar") {
+      return {};
+    }
+    return placeBesideTrigger(
+      shell.popoverTrigger()?.getBoundingClientRect(),
+      { width: globalThis.innerWidth, height: globalThis.innerHeight },
+      CALENDAR_HEIGHT_PX,
+    );
+  });
+
+  // Today's section is drawn apart from the past days: it is always there, with its heading,
+  // the way into select mode and the empty state, even before it has a row. It follows the
+  // newest day, so a capture past midnight still lands in it
   const currentDay = createMemo(() => {
     const newest = days()[0]?.date ?? "";
     const opened = toIsoDate(today);
@@ -250,7 +253,8 @@ export default function Scrawl(): JSX.Element {
   const originNotes = createMemo(() => notesByOrigin(notes() ?? []));
   const notesFor = (item: ScrawlItem): NoteItem[] => originNotes().get(originKeyOf(item)) ?? [];
 
-  // ---- Weekly digest (once a week, shown at the top until dismissed) ----
+  // ---- Weekly digest (once a week, in the band at the foot until dismissed; a phone says
+  // the count beside the page's name) ----
   const [digestDismissed, setDigestDismissed] = createSignal(
     localStorage.getItem(DIGEST_DISMISS_KEY),
   );
@@ -318,13 +322,43 @@ export default function Scrawl(): JSX.Element {
 
   const capture = async (text: string): Promise<void> => {
     await typedInvoke("save_quick_capture", { text, client: await getClientContext() });
+    shell.recordsChanged();
     const items = await reloadDay(toIsoDate(new Date()));
     // A capture appends to the day's file, so the one just left has the highest index
     const [left] = items.toSorted((a, b) => b.index - a.index);
     if (left) {
       setFreshId(left.id);
       setTimeout(() => setFreshId((id) => (id === left.id ? null : id)), FRESH_MS);
+      setTakeBackId(left.id);
+      setTimeout(() => setTakeBackId((id) => (id === left.id ? null : id)), TAKE_BACK_MS);
+      // Where the eye is: the field stays put, so the list brings the new row to it. On a phone
+      // the newest is at the top while the field is at the foot, a scroll away
+      requestAnimationFrame(() => {
+        document.querySelector(`[data-entry="${left.id}"]`)?.scrollIntoView({ block: "nearest" });
+      });
     }
+  };
+
+  /**
+   * Takes the line just sent back out of the day (36) and puts it into the field again. Core
+   * checks the line is still the one read (`raw`), so a file that moved meanwhile refuses.
+   */
+  const takeBack = async (item: ScrawlItem): Promise<void> => {
+    setTakeBackId(null);
+    try {
+      await typedInvoke("delete_scrawl_entry", {
+        date: item.date,
+        index: item.index,
+        raw: item.raw,
+      });
+    } catch {
+      shell.showToast(t().palm.takeBackFailed);
+      return;
+    }
+    await reloadDay(item.date);
+    shell.recordsChanged();
+    setRefill({ text: item.text });
+    shell.showToast(t().palm.takenBack);
   };
 
   /** Creates a note from `body` and opens it to write. */
@@ -399,10 +433,8 @@ export default function Scrawl(): JSX.Element {
     });
   };
 
-  // ---- Bulk delete (select -> confirm -> run) ----
+  // ---- Bulk delete (select -> hold -> run) ----
   const toggleSelected = (id: string): void => {
-    // Changing the selection restarts the confirmation. A confirmation whose count changed must not run as is
-    setConfirming(false);
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
@@ -414,15 +446,19 @@ export default function Scrawl(): JSX.Element {
     });
   };
 
-  const runDelete = async (): Promise<void> => {
+  /**
+   * Deletes `targets` one line at a time, rereads every day touched and says how it went. The
+   * select bar and a single entry's action row both come here, so the Stale guard and the
+   * reread are one path.
+   */
+  const deleteEntries = async (targets: ScrawlItem[]): Promise<void> => {
     // A double press must not delete the same index twice
     if (deleting()) {
       return;
     }
     setDeleting(true);
     try {
-      const ids = selected();
-      const plan = planBulkDelete(entries().filter((item) => ids.has(item.id)));
+      const plan = planBulkDelete(targets);
       let deleted = 0;
       try {
         // An index in the same day changes meaning once an earlier delete shifts the rows up, so delete in order, not in parallel
@@ -447,6 +483,7 @@ export default function Scrawl(): JSX.Element {
         [...new Set(plan.map((target) => target.date))].map((date) => reloadDay(date)),
       );
       exitSelecting();
+      shell.recordsChanged();
       shell.showToast(
         deleted === plan.length
           ? t().scrawl.deleted(deleted)
@@ -457,6 +494,133 @@ export default function Scrawl(): JSX.Element {
     }
   };
 
+  /** Copies a record's text as written, tags included; the clipboard is the way out of a read-only record. */
+  const copy = async (item: ScrawlItem): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(item.text);
+      shell.showToast(t().scrawl.copied);
+    } catch {
+      shell.showToast(t().scrawl.copyFailed);
+    }
+  };
+
+  const deleteOne = async (item: ScrawlItem): Promise<void> => {
+    await deleteEntries([item]);
+    setOpenId(null);
+  };
+
+  const runDelete = (): Promise<void> => {
+    const ids = selected();
+    return deleteEntries(entries().filter((item) => ids.has(item.id)));
+  };
+
+  /**
+   * The one field new records are written in, at the foot on both widths: a wide window's
+   * Scrawl sheet ends on it, and a phone carries it in the place pill under the thumb (R2). The
+   * list above it reads newest first, so what is sent appears at the top. Both read the same draft, so a window resized across the line keeps
+   * what was typed.
+   */
+  const composer = (): JSX.Element => (
+    <CaptureBar
+      knownTags={knownTags()}
+      refill={refill()}
+      searchWhenEmpty
+      addTag={addTag()}
+      onFocusChange={setTyping}
+      onSend={capture}
+      onPromote={writeNote}
+      onError={() => shell.showToast(t().capture.saveFailed)}
+      onSearch={() => shell.openSearch()}
+      onNewNote={() => {
+        void openNewNoteOrToast("");
+      }}
+      onJumpToDate={(trigger) => shell.togglePopover("calendar", trigger)}
+    />
+  );
+
+  /** Back to the newest, at the top of the list. Without the glide where motion is turned down. */
+  const toNewest = (): void => {
+    const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    scrollRef?.scrollTo({ top: 0, behavior: still ? "auto" : "smooth" });
+  };
+
+  /** The round button back to the newest. Near the field: above the phone's dock, or low on the right. */
+  const newestButton = (): JSX.Element => (
+    <Show when={away() && !selecting()}>
+      <button
+        type="button"
+        class="scrawl-newest"
+        title={t().scrawl.newest}
+        aria-label={t().scrawl.newest}
+        onClick={toNewest}
+      >
+        <Icon name="arrow-up" size={18} />
+      </button>
+    </Show>
+  );
+
+  /**
+   * The week and the tags, at the foot over the field: pressed, a tag searches; while a line is
+   * typed, it joins the line (71). The calendar stays at the row's end, out of its scroll.
+   */
+  const band = (): JSX.Element => (
+    <div class="scrawl-head">
+      <div class="scrawl-band">
+        <Show when={digestVisible() && !typing()}>
+          <section class="digest-line" aria-label={t().scrawl.digestTitle}>
+            {/* A phone says the week beside the page's name; a wide window has no name there */}
+            <Show when={wide() && weekSummary().count > 0}>
+              <span>{t().scrawl.digestSummary(weekSummary().days, weekSummary().count)}</span>
+            </Show>
+            <Show when={yearAgo()}>
+              {(iso) => (
+                <button
+                  type="button"
+                  class="digest-year-ago"
+                  aria-label={t().scrawl.lastYearOpen}
+                  onClick={() => jumpToDay(iso())}
+                >
+                  {t().scrawl.lastYear}
+                  <span aria-hidden="true">→</span>
+                </button>
+              )}
+            </Show>
+            <button
+              type="button"
+              class="icon-button digest-close"
+              title={t().scrawl.digestClose}
+              aria-label={t().scrawl.digestClose}
+              onClick={dismissDigest}
+            >
+              <Icon name="x" size={12} />
+            </button>
+          </section>
+        </Show>
+        <TagFilter
+          tags={knownTags()}
+          adding={typing()}
+          onPick={(tag) => {
+            if (typing()) {
+              setAddTag({ tag });
+            } else {
+              shell.openSearch({ tags: [tag] });
+            }
+          }}
+        />
+      </div>
+      <button
+        type="button"
+        class="icon-button"
+        title={t().header.jumpToDate}
+        aria-label={t().header.jumpToDate}
+        aria-expanded={shell.popover() === "calendar"}
+        onClick={(e) => shell.togglePopover("calendar", e.currentTarget)}
+      >
+        <Icon name="calendar-blank" size={16} />
+      </button>
+    </div>
+  );
+
   const renderRow = (row: ScrawlRow): JSX.Element =>
     row.kind === "scrawl" ? (
       <ScrawlEntry
@@ -465,8 +629,21 @@ export default function Scrawl(): JSX.Element {
         fresh={freshId() === row.item.id}
         selecting={selecting()}
         selected={selected().has(row.item.id)}
+        open={openId() === row.item.id}
+        onOpenChange={(open) => setOpenId(open ? row.item.id : null)}
         onToggle={() => toggleSelected(row.item.id)}
         onPromote={() => setPromoting(row.item)}
+        onCopy={() => {
+          void copy(row.item);
+        }}
+        onDelete={() => deleteOne(row.item)}
+        onTakeBack={
+          takeBackId() === row.item.id
+            ? () => {
+                void takeBack(row.item);
+              }
+            : undefined
+        }
         onOpenNote={openNote}
         onUnlinkNote={(note) => {
           void unlinkNote(note);
@@ -476,7 +653,26 @@ export default function Scrawl(): JSX.Element {
       <NoteRow note={row.note} onOpen={openNote} />
     );
 
-  // Esc steps back one level at a time: confirm bar -> select mode -> normal
+  // An opened record folds on Esc, and when select mode takes over the rows
+  createEffect(on(selecting, () => setOpenId(null), { defer: true }));
+
+  // The select bar stands where the place pill floats, so the pill steps away meanwhile
+  createEffect(() => shell.setPlacesAway(selecting()));
+  onCleanup(() => shell.setPlacesAway(false));
+  createEffect(() => {
+    if (openId() === null) {
+      return;
+    }
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === "Escape") {
+        setOpenId(null);
+      }
+    };
+    globalThis.addEventListener("keydown", onKey);
+    onCleanup(() => globalThis.removeEventListener("keydown", onKey));
+  });
+
+  // Esc leaves select mode
   createEffect(() => {
     if (!selecting()) {
       return;
@@ -486,11 +682,7 @@ export default function Scrawl(): JSX.Element {
         return;
       }
       e.preventDefault();
-      if (confirming()) {
-        setConfirming(false);
-      } else {
-        exitSelecting();
-      }
+      exitSelecting();
     };
     globalThis.addEventListener("keydown", onKey);
     onCleanup(() => globalThis.removeEventListener("keydown", onKey));
@@ -498,75 +690,31 @@ export default function Scrawl(): JSX.Element {
 
   return (
     <div class="scrawl" classList={{ "scrawl--selecting": selecting() }}>
-      <div class="scrawl-scroll">
+      {/* Newest first, as a feed reads: today at the top under the page's name, older days
+          below. The field stays at the foot under the thumb, so a line just sent appears at
+          the top and the list goes up to meet it (capture) */}
+      <div
+        class="scrawl-scroll"
+        ref={scrollRef}
+        onScroll={(e) =>
+          setAway(awayFromNewest(e.currentTarget.scrollTop, e.currentTarget.clientHeight))
+        }
+      >
         <div class="scrawl-column">
-          {/* The tag row and the week summary are one continuous heading strip. They
-              sit at the strip's 14px, not the column's 36px: the summary continues
-              the tags, it is not a layer of its own. The digest is not inserted
-              above TagFilter because when the data arrives late, a row present in
-              the first paint would be pushed down and cause a layout shift */}
-          <div class="scrawl-head">
-            <div class="scrawl-head-row">
-              {/* Pressing does not filter here. It opens search with that tag: the
-                  filter's answer is not kept in two places */}
-              <TagFilter tags={knownTags()} onPick={(tag) => shell.openSearch({ tags: [tag] })} />
+          {/* A phone's page opens on its own large name, as every page there does: no bar
+              above. It scrolls away with the rows */}
+          <Show when={!wide()}>
+            <h1 class="list-big-title scrawl-big-title">
+              {MODE_LABELS[ROUTES.SCRAWL]}
+              <Show when={digestVisible() && weekSummary().count > 0}>
+                <span class="list-big-count">
+                  {t().scrawl.digestSummary(weekSummary().days, weekSummary().count)}
+                </span>
+              </Show>
+            </h1>
+          </Show>
 
-              {/* The only way to go back across days. Not shown on a narrow screen
-                  (CSS), where the header has it. So it does not vanish on a day
-                  with no tags at all, this strip is drawn whether or not it has content */}
-              <button
-                type="button"
-                class="icon-button scrawl-calendar"
-                title={t().header.jumpToDate}
-                aria-label={t().header.jumpToDate}
-                aria-expanded={shell.popover() === "calendar"}
-                onClick={(e) => shell.togglePopover("calendar", e.currentTarget)}
-              >
-                <Icon name="calendar-blank" size={16} />
-              </button>
-            </div>
-
-            <Show when={digestVisible()}>
-              <section class="digest-line" aria-label={t().scrawl.digestTitle}>
-                <span class="digest-label">{t().scrawl.digestTitle}</span>
-                <Show when={weekSummary().count > 0}>
-                  <span>{t().scrawl.digestSummary(weekSummary().days, weekSummary().count)}</span>
-                </Show>
-                <Show when={yearAgo()}>
-                  {(iso) => (
-                    <>
-                      {/* The middle dot only separates the summary from the link. A screen reader does not need it */}
-                      <Show when={weekSummary().count > 0}>
-                        <span class="digest-sep" aria-hidden="true">
-                          ·
-                        </span>
-                      </Show>
-                      <button
-                        type="button"
-                        class="digest-year-ago"
-                        aria-label={t().scrawl.lastYearOpen}
-                        onClick={() => jumpToDay(iso())}
-                      >
-                        {t().scrawl.lastYear}
-                        <span aria-hidden="true">→</span>
-                      </button>
-                    </>
-                  )}
-                </Show>
-                <button
-                  type="button"
-                  class="icon-button digest-close"
-                  title={t().scrawl.digestClose}
-                  aria-label={t().scrawl.digestClose}
-                  onClick={dismissDigest}
-                >
-                  <Icon name="x" size={12} />
-                </button>
-              </section>
-            </Show>
-          </div>
-
-          <section class="day-group" data-day={currentDay()}>
+          <section class="day-group day-group--current" data-day={currentDay()}>
             <header class="day-heading">
               <h2 class="day-heading-label">{currentHeading().label}</h2>
               <span class="day-heading-date">{currentHeading().date}</span>
@@ -589,21 +737,6 @@ export default function Scrawl(): JSX.Element {
                 </span>
               </Show>
             </header>
-
-            {/* While selecting, the bottom bar stands in for it, as it did for the floating bar */}
-            <Show when={!selecting()}>
-              <InputLine
-                knownTags={knownTags()}
-                onSend={capture}
-                onPromote={writeNote}
-                onError={() => shell.showToast(t().capture.saveFailed)}
-                onSearch={() => shell.openSearch()}
-                onNewNote={() => {
-                  void openNewNoteOrToast("");
-                }}
-                onJumpToDate={(trigger) => shell.togglePopover("calendar", trigger)}
-              />
-            </Show>
 
             <Show when={days().length === 0}>
               <EmptyScrawl />
@@ -631,50 +764,95 @@ export default function Scrawl(): JSX.Element {
         </div>
       </div>
 
+      {/* The sheet ends on the band and the field on both widths. A wide window writes in the
+          field here; a phone's field is in the place pill below, so only the band stands here,
+          and it steps away with the pill while reading down (63). While selecting, the bottom
+          bar stands in for the field; the band stays (a jump to a day is still a way through
+          them) */}
+      <Show when={wide() || !shell.slim()}>
+        <div class="scrawl-composer">
+          {band()}
+          <Show when={wide() && !selecting()}>{composer()}</Show>
+        </div>
+      </Show>
+
+      {/* A phone writes in the shell's place pill, stretched here to the right gutter: one
+          thing floating at the foot, not the pill and a bar. The pill is AppLayout's so it can
+          stretch from a list as one element; the field stays this screen's, carried there by a
+          Portal. While the field has the focus the places step aside (layout.css). The way back
+          to the newest rides on the pill, so a field grown to five lines lifts it too */}
+      <Show when={!wide() && !selecting() && shell.placesSlot()} keyed>
+        {(slot) => (
+          <Portal
+            mount={slot}
+            ref={(holder: HTMLDivElement) => {
+              holder.className = "scrawl-dock";
+            }}
+          >
+            {newestButton()}
+            {composer()}
+          </Portal>
+        )}
+      </Show>
+
+      {/* A wide window keeps it low on the right. A phone reading down has folded the pill it
+          rides on, so it stands over the pencil instead: away from the newest, the way back is
+          always in sight (S6) */}
+      <Show when={wide() || (shell.slim() && !selecting())}>
+        <div class="scrawl-newest-stand">{newestButton()}</div>
+      </Show>
+
+      <ScrawlScrubber
+        dates={scrawl()?.dates ?? []}
+        scroller={() => scrollRef}
+        onJump={jumpToDay}
+        onCalendar={(trigger) => shell.togglePopover("calendar", trigger)}
+      />
+
+      {/* Reading down, the bar folds to its line of words and the field to one pencil (63):
+          pressed, the bar comes back with the field in hand */}
+      <Show when={!wide() && shell.slim() && !selecting()}>
+        <button
+          type="button"
+          class="compose-fab compose-fab--write"
+          title={t().capture.label}
+          aria-label={t().capture.label}
+          onClick={() => {
+            shell.setSlim(false);
+            requestAnimationFrame(() =>
+              document.querySelector<HTMLTextAreaElement>(".scrawl-dock .capture-input")?.focus(),
+            );
+          }}
+        >
+          <Icon name="pencil" size={22} />
+        </button>
+      </Show>
+
       <Show when={selecting()}>
         <div class="capture-dock">
           <div class="select-bar" role="toolbar" aria-label={t().scrawl.bulkDelete}>
-            <Show
-              when={confirming()}
-              fallback={
-                <>
-                  {/* Counting means nothing while nothing is selected. The entry
-                      bar is gone, so what to do next is said here instead */}
-                  <span class="select-bar-label">
-                    {selected().size === 0
-                      ? t().scrawl.selectHint
-                      : t().scrawl.selectedCount(selected().size)}
-                  </span>
-                  <button
-                    type="button"
-                    class="select-bar-danger"
-                    disabled={selected().size === 0}
-                    onClick={() => setConfirming(true)}
-                  >
-                    <Icon name="trash" size={14} />
-                    {t().scrawl.deleteCount(selected().size)}
-                  </button>
-                  <button type="button" class="select-bar-plain" onClick={exitSelecting}>
-                    {t().common.cancel}
-                  </button>
-                </>
-              }
-            >
-              <span class="select-bar-label">{t().scrawl.confirmDelete(selected().size)}</span>
-              <button
-                type="button"
-                class="select-bar-danger"
-                disabled={deleting()}
-                onClick={() => {
-                  void runDelete();
-                }}
-              >
-                {t().scrawl.confirmDeleteYes}
-              </button>
-              <button type="button" class="select-bar-plain" onClick={() => setConfirming(false)}>
-                {t().common.back}
-              </button>
-            </Show>
+            {/* Counting means nothing while nothing is selected. The entry bar is gone, so
+                what to do next is said here instead */}
+            <span class="select-bar-label">
+              {selected().size === 0
+                ? t().scrawl.selectHint
+                : t().scrawl.selectedCount(selected().size)}
+            </span>
+            {/* Held, not confirmed (96): a delete of several that cannot be taken back is
+                a press that lasts, in the same spot, not a second bar asking */}
+            <HoldButton
+              label={t().scrawl.deleteCount(selected().size)}
+              hint={t().palm.holdDelete}
+              icon="trash"
+              danger
+              disabled={selected().size === 0 || deleting()}
+              onConfirm={() => {
+                void runDelete();
+              }}
+            />
+            <button type="button" class="select-bar-plain" onClick={exitSelecting}>
+              {t().common.cancel}
+            </button>
           </div>
         </div>
       </Show>
@@ -708,6 +886,7 @@ export default function Scrawl(): JSX.Element {
         trigger={shell.popoverTrigger}
         label={t().header.jumpToDate}
         class="popover-anchor popover-anchor--calendar"
+        style={calendarPlace()}
       >
         <CalendarPopover
           recordedDates={recordedDates()}

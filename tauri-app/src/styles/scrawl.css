@@ -10,9 +10,12 @@
 }
 
 .scrawl-scroll {
+  /* The day heading sticks above this padding, at the top edge itself (.day-heading) */
+  --scroll-pad-top: 28px;
+
   flex: 1;
   overflow-y: auto;
-  padding: 44px 32px 80px;
+  padding: var(--scroll-pad-top) 32px 48px;
 }
 
 /* The floating delete bar covers the bottom edge. No body text is left under it */
@@ -25,23 +28,28 @@
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 36px;
+  gap: 20px;
 }
 
 /* ---------------- day group ---------------- */
 
 /* AIDEV-NOTE: no `contain` on .day-group. Paint clips the tag list under the line; layout alone measured no gain */
 
+/* The day in view stays readable while its records scroll under it (S5): each heading sticks
+   to the top of the scroll area until the next day's pushes it out. The ground hides the rows
+   passing beneath; heading size and spacing still show the break, a rule would say it twice */
 .day-heading {
+  position: sticky;
+  /* A sticky box stops at the scroller's padding; the negative of it takes the heading to the
+     top edge itself, so no sliver of rows shows above it */
+  top: calc(-1 * var(--scroll-pad-top));
+  z-index: 2;
   display: flex;
   align-items: baseline;
   gap: 12px;
-  margin-bottom: 14px;
-}
-
-/* Heading size and spacing show the break between days. A rule would say it twice */
-.day-group + .day-group .day-heading {
-  padding-top: 20px;
+  padding-block: 8px;
+  margin-bottom: 2px;
+  background: var(--app-surface);
 }
 
 .day-heading-label {
@@ -53,7 +61,7 @@
 }
 
 /* The topmost day is the one being written. Only its heading is taken larger */
-.day-group:first-child .day-heading-label {
+.day-group--current .day-heading-label {
   font-size: 22px;
   color: var(--app-text);
 }
@@ -94,6 +102,8 @@
 .entry {
   display: grid;
   grid-template-columns: 56px 28px 1fr;
+  /* A row brought into view lands below the stuck day heading, not under it */
+  scroll-margin-top: 48px;
 }
 
 .entry-time {
@@ -133,6 +143,11 @@
 .entry--selected .entry-rail-dot {
   background: var(--app-accent);
   border-color: var(--app-accent);
+}
+
+/* The record just left rises into its place, so the eye finds where it landed */
+.entry--fresh {
+  animation: mm-rise 180ms var(--app-ease);
 }
 
 /* The record just left. The only save signal on the page, and it lasts 1.5s */
@@ -176,7 +191,7 @@
 
 .entry-body {
   position: relative;
-  padding-bottom: 26px;
+  padding-bottom: 16px;
   min-width: 0;
 }
 
@@ -203,20 +218,74 @@
   }
 }
 
+/* One quiet line that never wraps: a second line of meta under every record was what made a
+   phone's page hold so few of them. What does not fit ends in an ellipsis; the whole of it
+   shows once the record is opened (.entry-meta--full) */
 .entry-meta {
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--app-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.entry-meta-part + .entry-meta-part {
+  margin-left: 10px;
+}
+
+.entry-meta .icon {
+  margin-right: 4px;
+  vertical-align: -2px;
+}
+
+.entry-meta--full {
+  white-space: normal;
+}
+
+.entry-meta--full .entry-meta-part {
+  display: inline-block;
+  margin-right: 10px;
+  white-space: nowrap;
+}
+
+.entry-meta--full .entry-meta-part + .entry-meta-part {
+  margin-left: 0;
+}
+
+/* An opened record: its whole meta, then what it leads to. Records stay read-only, so the row
+   is copy, a Note and delete, nothing that edits */
+.entry-open {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  margin-top: 4px;
-  font-size: 12px;
-  color: var(--app-text-muted);
+  gap: 6px;
+  margin-top: 6px;
+  animation: mm-rise 180ms var(--app-ease);
 }
 
-.entry-meta-part {
+.entry-open-action {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  background: none;
+  color: var(--app-text);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.entry-open-action:hover {
+  background: var(--app-surface-2);
+}
+
+.entry-open-action .icon {
+  color: var(--app-text-faint);
 }
 
 /* Hidden actions for one entry. They appear on hover only (a long press on touch) */
@@ -224,6 +293,11 @@
   position: absolute;
   top: -2px;
   right: 0;
+  display: flex;
+  gap: 2px;
+  border-radius: var(--radius-2);
+  /* Three icons reach over the end of a long first line; the ground keeps them legible */
+  background: var(--app-surface);
   opacity: 0;
   transition: opacity 120ms var(--app-ease);
 }
@@ -381,7 +455,7 @@
   min-width: 0;
 }
 
-/* While selecting, the input line steps aside and this bar is the one box on screen */
+/* While selecting, the field steps aside and this bar stands where it was */
 .capture-dock .select-bar {
   display: flex;
   align-items: center;
@@ -399,24 +473,6 @@
   margin-right: auto;
   font-size: 13px;
   color: var(--app-text);
-}
-
-.select-bar-danger {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  border: none;
-  border-radius: 10px;
-  background: var(--app-danger-fill);
-  color: var(--app-on-danger);
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.select-bar-danger:disabled {
-  opacity: 0.4;
-  cursor: default;
 }
 
 .select-bar-plain {
@@ -461,7 +517,7 @@
   color: var(--app-text-muted);
 }
 
-/* ---------------- input line ---------------- */
+/* ---------------- select bar's dock ---------------- */
 
 .capture-dock {
   position: absolute;
@@ -474,37 +530,37 @@
   pointer-events: none;
 }
 
-/* The time and the dot come up only once something is typed */
-.entry--input .entry-rail-dot {
-  opacity: 0;
-  transition: opacity 120ms var(--app-ease);
-}
+/* ---------------- composer ---------------- */
 
-.entry--typing .entry-rail-dot {
-  opacity: 1;
-}
-
-/* One rule and nothing else */
+/* The field new records are written in. It looks like a field at rest: a rounded box with a
+   short question in it and a send button, a pill while it holds one line and a card as it grows
+   (v0.7.0's shape, which a single rule had lost: D7) */
 .capture-bar {
-  /* Tag completion hangs from this bar */
+  /* Tag completion and the hint hang from this box */
   position: relative;
   display: flex;
   align-items: flex-end;
-  gap: var(--size-2);
-  max-width: 552px;
-  border-bottom: 1px solid var(--app-border);
+  gap: 8px;
+  box-sizing: border-box;
+  padding: 6px 6px 6px 16px;
+  border: 1px solid var(--app-border);
+  border-radius: 22px;
+  background: var(--app-input-bg);
 }
 
-/* The input line's whole focus mark, in the ring's colour (base.css) */
+/* The field's whole focus mark, in the ring's colour (base.css) */
 .capture-bar:focus-within {
-  border-bottom-color: var(--app-focus);
+  border-color: var(--app-focus);
 }
 
 .capture-input {
   flex: 1;
-  /* normalize gives a textarea two lines of height */
+  align-self: center;
+  /* normalize gives a textarea two lines of height, and field-sizing a width of its
+     placeholder that would push the send button out of a narrow dock */
   min-height: 0;
-  padding: 0 0 4px;
+  min-width: 0;
+  padding: 0;
   border: none;
   outline: none;
   resize: none;
@@ -512,59 +568,122 @@
   color: var(--app-text);
   font: inherit;
   font-size: 15px;
-  line-height: 1.75;
-  /* Grows with the text and scrolls past six lines (MAX_ROWS in CaptureBar.tsx). normalize
+  line-height: 1.6;
+  /* Grows with the text and scrolls past five lines (MAX_ROWS in CaptureBar.tsx). normalize
      already gives every textarea field-sizing; it is spelled out here because CaptureBar
-     stops measuring the line wherever the browser has it */
+     stops measuring the field wherever the browser has it */
   field-sizing: content;
-  max-height: 6lh;
+  max-height: 5lh;
 }
 
-/* The hint is for whoever is about to write; at rest the line stays one rule */
-.capture-input:not(:focus)::placeholder {
-  color: transparent;
+/* The question stays one line even where the dock leaves the field narrow: wrapped, it would
+   make the resting field two lines tall */
+.capture-input::placeholder {
+  color: var(--app-text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* Today's heading is right above, so the completion opens below the line */
+/* Always there, on every pointer: a phone's keyboard can report Enter as an IME key, and a
+   field with no button would leave nothing else to record with */
+.capture-send {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--app-accent);
+  color: var(--app-on-accent);
+  cursor: pointer;
+}
+
+.capture-send:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* What else the field answers to (# tags, / menu, ⌘↵ Note). Not in the placeholder, which
+   stays a short question; shown under the field only while writing with keys at hand. It sits
+   in the gap below the card, so showing it moves nothing */
+.capture-hint {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 17px;
+  display: none;
+  font-size: 12px;
+  color: var(--app-text-faint);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .capture-bar:focus-within .capture-hint {
+    display: block;
+  }
+}
+
+/* The wide window's field at the foot of the Scrawl sheet */
+.scrawl-composer .capture-bar {
+  padding: 8px 8px 8px 16px;
+  border-radius: 14px;
+}
+
+.scrawl-composer .capture-send {
+  width: 34px;
+  height: 34px;
+}
+
+/* Aligned to the field's own left edge; it opens above, as every completion does (tags.css) */
 .capture-bar .tag-suggest {
-  top: calc(100% + 6px);
-  bottom: auto;
   left: 0;
 }
 
-/* Enter does the sending wherever there is a keyboard to press it on. A phone keeps a button:
-   its keyboards can report Enter as an IME key, and then nothing else would record */
-.capture-send {
-  display: none;
+/* A phone's field: Scrawl's part of the place pill (Scrawl.tsx carries it into the pill's slot,
+   layout.css draws the pill). It takes the stretched part, beside the places at rest and the
+   whole width while writing, at the places' height so the resting pill is one even row */
+.scrawl-dock {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  margin-left: 6px;
 }
 
-@media (hover: none) {
-  .capture-input:not(:focus)::placeholder {
-    color: var(--app-text-faint);
-  }
-
-  .capture-send {
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-    width: 44px;
-    height: 44px;
-    padding: 0;
-    border: none;
-    border-radius: 22px;
-    background: var(--app-accent);
-    color: var(--app-on-accent);
-    cursor: pointer;
-  }
-
-  .capture-send:disabled {
-    opacity: 0.5;
-    cursor: default;
-  }
+.place-switch:has(.capture-input:focus) .scrawl-dock {
+  margin-left: 0;
 }
 
-/* Hung directly below the header's calendar button */
+.scrawl-dock .capture-bar {
+  flex: 1;
+  min-width: 0;
+  min-height: 46px;
+  gap: 4px;
+  padding: 2px 2px 2px 14px;
+  border-radius: 23px;
+}
+
+/* 16px keeps a phone's browser from zooming into the field */
+.scrawl-dock .capture-input {
+  font-size: 16px;
+}
+
+/* Drawn inside the field's 46px; its hit area reaches 44px (layout.css) */
+.scrawl-dock .capture-send {
+  width: 40px;
+  height: 40px;
+}
+
+/* The keyboard is under the pill, so the completion opens above it, clear of its edge */
+.scrawl-dock .capture-bar .tag-suggest {
+  bottom: calc(100% + 13px);
+}
+
+/* The calendar hangs beside the button that opened it (Scrawl.tsx writes the offsets from
+   lib/popover-place.ts). This is where it stands when no button did */
 .popover-anchor--calendar {
   position: fixed;
   top: calc(var(--safe-top) + 49px);
@@ -575,12 +694,19 @@
 /* ---------------- mobile ---------------- */
 
 @media (max-width: 767px) {
+  /* Reading down, the band steps away and the pencil floats over the foot (16px + 56px), so
+     the last record scrolls clear of it.
+     The right gutter is the scrubber tab's reach (28px, .scrubber-thumb::before), so a line's
+     last letters never lie under the box that opens the calendar */
   .scrawl-scroll {
-    padding: 12px 20px 96px;
+    --scroll-pad-top: 10px;
+
+    padding: var(--scroll-pad-top) 28px 88px 16px;
   }
 
+  /* S8: a 390×844 phone shows clearly more records; the body text keeps its size */
   .scrawl-column {
-    gap: 22px;
+    gap: 12px;
   }
 
   .entry,
@@ -603,14 +729,26 @@
   }
 
   .entry-body {
-    padding-bottom: 22px;
+    padding-bottom: 12px;
   }
 
   .entry-text {
     line-height: 1.65;
   }
 
-  .day-group:first-child .day-heading-label {
+  /* A finger's size: the row is the phone's only way to these actions. Packed so the three
+     stay on one line beside the time rail */
+  .entry-open {
+    gap: 4px;
+  }
+
+  .entry-open-action {
+    gap: 4px;
+    min-height: 44px;
+    padding: 0 11px;
+  }
+
+  .day-group--current .day-heading-label {
     font-size: 20px;
   }
 
@@ -630,74 +768,56 @@
     right: 12px;
     bottom: 12px;
   }
-
-  .capture-bar {
-    max-width: none;
-  }
 }
 
-/* ---------------- Weekly digest ---------------- */
+/* ---------------- the band: week and tags ---------------- */
 
-/* The tag row and the weekly summary are one continuous band. They are drawn together at
-   14px, closer than the column's gap */
+/* One row over the field (S4): the band scrolls sideways, the calendar stays at its end */
 .scrawl-head {
   display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-/* The tag row, with the jump-to-date button pushed to its right edge. The row stays even
-   on a day with no tags at all, because on a wide screen this is the only way across
-   days */
-.scrawl-head-row {
-  display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
 }
 
-.scrawl-head-row .tag-filter {
+/* A scroller clips both ways, so the padding keeps the chips' and the digest's hit areas
+   (layout.css) inside it, and the margin hands the height back: the row is a chip high */
+.scrawl-band {
   flex: 1;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-block: 7px;
+  margin-block: -7px;
 }
 
-/* On a narrow screen the header already has the same entry point. It is not shown twice */
-@media (max-width: 767px) {
-  .scrawl-calendar {
-    display: none;
-  }
-
-  /* The chips' hit area reaches 5px below them and the digest ×'s 14px above it (layout.css):
-     at 14px apart the two took each other's taps */
-  .scrawl-head {
-    gap: 20px;
-  }
+.scrawl-band > * {
+  flex-shrink: 0;
 }
 
-/* One line, not a card. A once-a-week summary does not justify another layer */
+/* The week, as the band's first words. Not a card: a once-a-week summary does not justify
+   another layer. A rule after it parts it from the tags */
 .digest-line {
   display: flex;
-  align-items: baseline;
-  /* It wraps on a narrow screen. The content is not worth trimming to fit one line */
-  flex-wrap: wrap;
-  gap: 8px;
+  align-items: center;
+  gap: 6px;
+  padding-right: 10px;
+  border-right: 1px solid var(--app-hairline);
   font-size: 13px;
   color: var(--app-text-muted);
+  white-space: nowrap;
 }
 
-.digest-label {
-  color: var(--app-text-faint);
-}
-
-.digest-sep {
-  color: var(--app-text-faint);
-}
-
+/* Shaped like the tag chips beside it: it is pressed the same way */
 .digest-year-ago {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   gap: 6px;
-  padding: 0;
-  border: none;
+  padding: 5px 12px;
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
   background: none;
   color: inherit;
   font-family: inherit;
@@ -706,12 +826,230 @@
 }
 
 .digest-year-ago:hover {
+  background: var(--app-surface-2);
   color: var(--app-text);
-  text-decoration: underline;
 }
 
+/* A 32px box around a 12px mark, so the 44px a finger needs fits inside the band */
 .digest-close {
-  margin-left: auto;
-  padding: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
   color: var(--app-text-faint);
+}
+
+@media (max-width: 767px) {
+  .digest-year-ago {
+    padding: 6px 13px;
+  }
+}
+
+/* ---------------- back to the newest ---------------- */
+
+/* Shown once the newest records are out of sight (awayFromNewest), next to where new
+   ones are written: low on the right of a wide window, just above a phone's place pill */
+.scrawl-newest {
+  position: absolute;
+  right: 24px;
+  bottom: 24px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--app-surface);
+  color: var(--app-text);
+  box-shadow: var(--shadow-pop);
+  cursor: pointer;
+  animation: mm-rise 180ms var(--app-ease);
+}
+
+.scrawl-newest:hover {
+  background: var(--app-surface-2);
+}
+
+/* Hung from the pill itself (the nearest positioned box), at its right end: a field grown to
+   five lines, or lifted over the keyboard, carries it up with it */
+.scrawl-dock .scrawl-newest {
+  right: 0;
+  bottom: calc(100% + 12px);
+  width: 44px;
+  height: 44px;
+}
+
+/* Reading down on a phone, the pill it hangs from has folded: it stands over the pencil */
+@media (max-width: 767px) {
+  .scrawl-newest-stand .scrawl-newest {
+    right: 22px;
+    bottom: calc(16px + 56px + 12px);
+    width: 44px;
+    height: 44px;
+  }
+}
+
+/* ---------------- the palm's parts of Scrawl ---------------- */
+
+/* The field's round button while nothing is typed: the search, not a send waiting for words.
+   The same circle, quieter, so the field still reads as a field with its button (S1) */
+.capture-send--search {
+  background: none;
+  color: var(--app-text-muted);
+}
+
+.capture-send--search:hover {
+  color: var(--app-text);
+}
+
+/* The line just sent says on itself how to take it back (36): the first part of its meta line,
+   for five seconds */
+.entry-take-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 10px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--app-undo);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* ---------------- the thumb at the right edge (22) ---------------- */
+
+/* The track: the full height of the list beside the rows, clear of the dot in the top corner
+   and of the pill at the foot. It takes no tap but its thumb's */
+.scrubber {
+  position: absolute;
+  top: 72px;
+  bottom: 96px;
+  right: 0;
+  z-index: 15;
+  width: 0;
+  pointer-events: none;
+}
+
+@media (min-width: 768px) {
+  .scrubber {
+    top: 24px;
+    bottom: 32px;
+  }
+}
+
+/* At rest a tab on the right edge: always there, in the
+   gutter the lines leave, so the days and the calendar (a tap) are one visible press away. A
+   finger on it, or the list moving, draws it out to a thumb a finger can hold */
+.scrubber-thumb {
+  position: absolute;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 52px;
+  padding: 0;
+  border: none;
+  border-radius: 12px 0 0 12px;
+  /* A border's grey: plain on a light page as on a dark one */
+  background: var(--app-border);
+  color: var(--app-text-faint);
+  cursor: grab;
+  touch-action: none;
+  pointer-events: auto;
+  transform: translateY(-50%);
+}
+
+/* A tab on the screen's edge: a finger pressing it has its pad against the edge, so it lands
+   within 28px of it, and that is all the box reaches in. Taller than it is drawn instead, never
+   wider: a 44px box lay 30px over the lines' last letters, whose taps opened the calendar */
+.scrubber-thumb::before {
+  content: "";
+  position: absolute;
+  inset: -8px 0 -8px -16px;
+}
+
+/* The list moving: the tab stands out as a thumb, but its box keeps to the same 28px */
+.scrubber--awake .scrubber-thumb {
+  width: 24px;
+  background: var(--app-surface);
+  box-shadow: var(--shadow-pop);
+  color: var(--app-text-muted);
+}
+
+.scrubber--awake .scrubber-thumb::before {
+  left: -4px;
+}
+
+/* Only under the finger that holds it does it grow, where nothing else can be pressed anyway */
+.scrubber--held .scrubber-thumb {
+  width: 30px;
+}
+
+.scrubber-grip {
+  width: 3px;
+  height: 18px;
+  border-radius: 2px;
+  background: currentcolor;
+}
+
+.scrubber--awake .scrubber-grip {
+  width: 10px;
+  height: 14px;
+  border-radius: 0;
+  border-block: 2px solid currentcolor;
+  background: none;
+  box-sizing: border-box;
+}
+
+/* The month under the finger, read at the top of the list rather than beside the finger, where
+   it would lie over the lines being passed */
+.scrubber-label {
+  position: fixed;
+  top: calc(var(--safe-top) + 14px);
+  left: 50%;
+  z-index: 40;
+  padding: 8px 18px;
+  border-radius: 999px;
+  background: var(--app-toast-bg);
+  color: var(--app-toast-text);
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+/* A wide window has room beside the thumb, and the pointer hides nothing there */
+@media (min-width: 768px) {
+  .scrubber-label {
+    position: absolute;
+    top: var(--at, 0);
+    left: auto;
+    right: 44px;
+    padding: 6px 12px;
+    font-size: 13px;
+    transform: translateY(-50%);
+  }
+}
+
+.scrubber-year {
+  position: absolute;
+  right: 40px;
+  font-size: 12px;
+  color: var(--app-text-muted);
+  font-variant-numeric: tabular-nums;
+  transform: translateY(-50%);
+}
+
+/* The pencil the folded field leaves (63): the list's compose button, in the same spot */
+.compose-fab--write {
+  animation: mm-rise 180ms var(--app-ease);
 }

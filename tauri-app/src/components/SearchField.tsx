@@ -49,6 +49,8 @@ interface SearchFieldProps {
   /** The one thing a result does. */
   onOpen: (hit: SearchHit) => void;
   onClose: () => void;
+  /** How far an on-screen keyboard reaches in: the field rides on it (`lib/keyboard-inset.ts`). */
+  lift?: number;
 }
 
 /** Same as the palette: a search reads every file, so it waits for the fingers to stop. */
@@ -134,8 +136,13 @@ function HitExcerpt(props: { hit: SearchHit; word: string }): JSX.Element {
  * mounted underneath, with its caret and its unsaved text, and Esc returns to it.
  *
  * Commands are not results (ADR 0002's open item): they answer only a bare word, sit apart
- * above the records, and Enter stays on the first record unless the arrows move up to them.
+ * from the records, and Enter stays on the first record unless the arrows move to them.
  * The empty field lists the places among them, as the way around that needs no key.
+ *
+ * Built from the foot (the reach): the field lies at the bottom, over the keyboard where a
+ * phone has one, the chips over it, and what it finds grows upward from it, the best answer
+ * nearest the thumb. The places sit right over the chips; the records rise above them. The
+ * arrows follow the rows as drawn, so up is the next one.
  */
 export default function SearchField(props: SearchFieldProps): JSX.Element {
   // The seed is only the first value; the field owns the condition from there
@@ -235,7 +242,8 @@ export default function SearchField(props: SearchFieldProps): JSX.Element {
       dismiss();
     } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
-      move(e.key === "ArrowDown" ? 1 : -1);
+      // The rows rise from the field: the next one is drawn above
+      move(e.key === "ArrowUp" ? 1 : -1);
     } else if (e.key === "Backspace" && inInput && !text() && last !== undefined) {
       e.preventDefault();
       narrow(() => setTags((own) => own.slice(0, -1)));
@@ -272,6 +280,7 @@ export default function SearchField(props: SearchFieldProps): JSX.Element {
     <div
       class="search"
       role="presentation"
+      style={{ "--keyboard-lift": `${props.lift ?? 0}px` }}
       onMouseDown={keepFocus}
       onKeyDown={onKeyDown}
       onFocusOut={onFocusOut}
@@ -352,55 +361,63 @@ export default function SearchField(props: SearchFieldProps): JSX.Element {
         </div>
       </div>
 
+      {/* Rows in reading order in the markup, drawn from the foot up (reach.css): each section
+          is its rows with its name over them, the first section nearest the field */}
       <div ref={listRef} class="search-results">
         <div class="search-column">
           <Show when={commands().length > 0}>
-            <div class="palette-section">
-              {listing() ? t().palette.commands : t().search.places}
-            </div>
+            <section class="search-section">
+              <div class="palette-section">
+                {listing() ? t().palette.commands : t().search.places}
+              </div>
+              <For each={commands()}>
+                {(command, i) => (
+                  <button
+                    type="button"
+                    class="palette-row"
+                    classList={{ "palette-row--active": active() === i() }}
+                    data-row={i()}
+                    onClick={() => runRow(i())}
+                  >
+                    <Icon name={command.icon} size={16} />
+                    <span class="palette-row-text">
+                      <span class="palette-row-label">{command.label}</span>
+                    </span>
+                    <span class="palette-row-meta">{command.shortcut}</span>
+                  </button>
+                )}
+              </For>
+            </section>
           </Show>
-          <For each={commands()}>
-            {(command, i) => (
-              <button
-                type="button"
-                class="palette-row"
-                classList={{ "palette-row--active": active() === i() }}
-                data-row={i()}
-                onClick={() => runRow(i())}
-              >
-                <Icon name={command.icon} size={16} />
-                <span class="palette-row-text">
-                  <span class="palette-row-label">{command.label}</span>
-                </span>
-                <span class="palette-row-meta">{command.shortcut}</span>
-              </button>
-            )}
-          </For>
-          <Show when={commands().length > 0 && found().length > 0}>
-            <div class="palette-section">{t().search.records}</div>
+          <Show when={found().length > 0}>
+            <section class="search-section">
+              <Show when={commands().length > 0}>
+                <div class="palette-section">{t().search.records}</div>
+              </Show>
+              <For each={found()}>
+                {(hit, i) => {
+                  const row = (): number => commands().length + i();
+                  return (
+                    <button
+                      type="button"
+                      class="palette-row"
+                      classList={{ "palette-row--active": active() === row() }}
+                      data-row={row()}
+                      data-hit={hitId(hit)}
+                      onClick={() => runRow(row())}
+                    >
+                      <KindDot kind={hit.kind} />
+                      <HitExcerpt hit={hit} word={searchWord()} />
+                      <span class="palette-row-meta">{formatMonthDay(hit.date)}</span>
+                      <Show when={active() === row()}>
+                        <span class="palette-row-enter">↩ {t().palette.hintOpen}</span>
+                      </Show>
+                    </button>
+                  );
+                }}
+              </For>
+            </section>
           </Show>
-          <For each={found()}>
-            {(hit, i) => {
-              const row = (): number => commands().length + i();
-              return (
-                <button
-                  type="button"
-                  class="palette-row"
-                  classList={{ "palette-row--active": active() === row() }}
-                  data-row={row()}
-                  data-hit={hitId(hit)}
-                  onClick={() => runRow(row())}
-                >
-                  <KindDot kind={hit.kind} />
-                  <HitExcerpt hit={hit} word={searchWord()} />
-                  <span class="palette-row-meta">{formatMonthDay(hit.date)}</span>
-                  <Show when={active() === row()}>
-                    <span class="palette-row-enter">↩ {t().palette.hintOpen}</span>
-                  </Show>
-                </button>
-              );
-            }}
-          </For>
           <Show when={listing() && settled() && rowCount() === 0}>
             <p class="search-empty">{t().search.empty}</p>
           </Show>

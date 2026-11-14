@@ -14,6 +14,7 @@ const ICONS = {
   "caret-right": () => import("@phosphor-icons/core/assets/regular/caret-right.svg?raw"),
   "caret-down": () => import("@phosphor-icons/core/assets/regular/caret-down.svg?raw"),
   "arrow-left": () => import("@phosphor-icons/core/assets/regular/arrow-left.svg?raw"),
+  "arrow-up": () => import("@phosphor-icons/core/assets/regular/arrow-up.svg?raw"),
   "arrow-line-down": () => import("@phosphor-icons/core/assets/regular/arrow-line-down.svg?raw"),
   "clock-counter-clockwise": () =>
     import("@phosphor-icons/core/assets/regular/clock-counter-clockwise.svg?raw"),
@@ -64,9 +65,11 @@ const ICONS = {
   "caret-left": () => import("@phosphor-icons/core/assets/regular/caret-left.svg?raw"),
   "circle-notch": () => import("@phosphor-icons/core/assets/regular/circle-notch.svg?raw"),
   funnel: () => import("@phosphor-icons/core/assets/regular/funnel.svg?raw"),
-  "push-pin": () => import("@phosphor-icons/core/assets/regular/push-pin.svg?raw"),
-  // AIDEV-NOTE: a fill weight is registered as one entry with -fill on the name. There is no weight argument
-  "push-pin-fill": () => import("@phosphor-icons/core/assets/fill/push-pin-fill.svg?raw"),
+  "sidebar-simple": () => import("@phosphor-icons/core/assets/regular/sidebar-simple.svg?raw"),
+  "corners-out": () => import("@phosphor-icons/core/assets/regular/corners-out.svg?raw"),
+  "arrow-square-out": () => import("@phosphor-icons/core/assets/regular/arrow-square-out.svg?raw"),
+  // AIDEV-NOTE: a fill weight, when one is needed, is registered as one entry with -fill on the
+  // name (from assets/fill/). There is no weight argument
 } as const;
 
 export type IconName = keyof typeof ICONS;

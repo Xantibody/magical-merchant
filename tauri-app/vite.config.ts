@@ -34,6 +34,17 @@ export default defineConfig(async () => ({
   plugins: [solid(), browserMock()],
 
   clearScreen: false,
+  // Two pages: the app, and the one-line window the global key floats over other apps
+  // (src-tauri/src/capture.rs)
+  build: {
+    rollupOptions: {
+      input: {
+        // Named after the page, so the app's entry chunk keeps the name its size is measured by
+        index: new URL("index.html", import.meta.url).pathname,
+        capture: new URL("capture.html", import.meta.url).pathname,
+      },
+    },
+  },
   server: {
     port: 1420,
     strictPort: true,

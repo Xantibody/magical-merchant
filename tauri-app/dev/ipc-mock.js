@@ -884,6 +884,14 @@ const unifiedDiff = (from, to, fromName, toName) => {
       const line = `- [${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}] ${text}`;
       scrawl.set(iso, [...(scrawl.get(iso) ?? []), line]);
     },
+    // The one-line window the OS key floats (capture.rs). A browser tab has no window to show
+    // or hide: the page plays it over itself (lib/capture-window.ts stand-in), and "sent" goes
+    // to the main window the way the real one does
+    capture_window_show: () => null,
+    capture_window_hide: () => null,
+    capture_window_sent: () => {
+      emit("scrawl-captured", { via: "window" });
+    },
     /** @param {{ date: string, index: number, raw: string }} args */
     delete_scrawl_entry: ({ date, index, raw }) => {
       const lines = scrawl.get(date) ?? [];
@@ -1475,6 +1483,25 @@ const unifiedDiff = (from, to, fromName, toName) => {
     convertFileSrc: (path) => path,
     metadata: { currentWindow: { label: "main" }, currentWebview: { label: "main" } },
   };
+
+  // The harness stands in for the OS: `capture-window.ts` reads the flag to let the page play
+  // the one-line window, and `__mockOpenUrl` delivers a link the way Spotlight and a Shortcut
+  // would. `capture.rs` writes a Scrawl link's line before any page is asked, so this does too;
+  // any other link goes to the page's deep-link listeners as the plugin would deliver it
+  Object.assign(globalThis, {
+    __MM_BROWSER_MOCK__: true,
+    /** @param {string} raw */
+    __mockOpenUrl: (raw) => {
+      const url = new URL(raw);
+      const text = url.searchParams.get("text")?.trim() ?? "";
+      if (url.hostname === "scrawl" && text) {
+        commands.save_quick_capture({ text });
+        emit("scrawl-captured", { via: "link" });
+        return;
+      }
+      emit("deep-link://new-url", [raw]);
+    },
+  });
 
   // unlisten はここを直に呼ぶ (invoke を通らない)。置かないと購読を外す
   // たびに TypeError で落ちる

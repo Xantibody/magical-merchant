@@ -1,8 +1,7 @@
 /* ---- The note's right panel ----
    Open (the title row's button, ⌘.) `.detail-pane--panel` takes its 320px from the
    body column. While folded it stays in the DOM, shifted 24px to the right and
-   transparent, so opening and closing read as one slide, the same as the list flyout
-   and the history panel before it. */
+   transparent, so opening and closing read as one slide. */
 .note-panel {
   position: absolute;
   top: 0;
@@ -153,11 +152,6 @@
   flex-direction: column;
 }
 
-.note-panel-row-sub {
-  font-size: 13px;
-  color: var(--app-text-muted);
-}
-
 /* The checkbox is hidden; the switch on the right (.switch in base.css) shows the state */
 .note-panel-switch input {
   position: absolute;
@@ -250,15 +244,6 @@
   padding: 0 8px 4px 33px;
 }
 
-.note-panel-action--danger,
-.note-panel-action--danger .icon {
-  color: var(--app-danger);
-}
-
-.note-panel-action--danger:hover {
-  background: color-mix(in oklab, var(--app-danger) 8%, var(--app-surface));
-}
-
 .note-panel-foot {
   flex: 0 0 auto;
   padding: 9px 20px;
@@ -271,11 +256,10 @@
   padding: 0 8px;
 }
 
-/* ---- Phone: the panel is a screen of its own, swapped in for the body ---- */
+/* ---- Phone: the panel inside its sheet ---- */
 @media (max-width: 767px) {
   .note-panel--screen {
     position: static;
-    flex: 1;
     width: auto;
     min-height: 0;
     border-left: none;
@@ -285,19 +269,14 @@
     opacity: 1;
     visibility: visible;
     pointer-events: auto;
-    animation: mm-rise 180ms var(--app-ease);
   }
 
   .note-panel-screen-head {
     display: flex;
     align-items: center;
     gap: 4px;
-    padding: 4px 16px 4px 8px;
-  }
-
-  .note-panel-back {
-    width: 44px;
-    height: 44px;
+    /* The title alone (the way back is the round button at the foot), on the body's 20px edge */
+    padding: 12px 20px 4px;
   }
 
   .note-panel-screen-title {
@@ -331,8 +310,149 @@
     border-radius: 0;
     border-bottom: 1px solid var(--app-hairline);
   }
+}
 
-  .note-panel--screen .note-panel-actions {
-    padding: 28px 16px 8px;
+/* The two held actions side by side (96): wide enough to hold a thumb, a fill to watch */
+.note-panel-holds {
+  display: flex;
+  gap: 8px;
+  padding: 8px 8px 4px;
+}
+
+.note-panel-hold {
+  flex: 1;
+  min-height: 40px;
+}
+
+/* How far the draft has moved, on the commit itself (92) */
+.note-panel-delta {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--app-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Phone: the panel is a sheet from the foot that stops three times (29) ---- */
+@media (max-width: 767px) {
+  .note-sheet {
+    position: fixed;
+    inset: auto 0 0 0;
+    z-index: 55;
+    display: flex;
+    flex-direction: column;
+    height: calc(88dvh - var(--safe-top));
+    padding-bottom: var(--safe-bottom);
+    border-radius: 20px 20px 0 0;
+    background: var(--app-surface);
+    box-shadow: var(--shadow-pop);
+    box-sizing: border-box;
+    overflow: hidden;
   }
+
+  .note-sheet[data-transitioning] {
+    transition: transform 280ms var(--app-ease);
+  }
+
+  /* The grip: the visible half of "pull this up" */
+  .note-sheet-grip {
+    flex: 0 0 auto;
+    width: 40px;
+    height: 5px;
+    margin: 8px auto 2px;
+    border-radius: 999px;
+    background: var(--app-border);
+  }
+
+  /* The panel is as tall as the stop leaves on screen (--sheet-stop, Workspace), less the grip:
+     its head at the top, its foot row at the screen's foot, and between them what does not fit
+     scrolls. Sized to the whole sheet, the rows under a middle stop lay off screen and nothing
+     brought them up */
+  .note-sheet .note-panel--screen {
+    flex: none;
+    height: calc(var(--sheet-stop, 100%) - 15px);
+    overflow: hidden;
+  }
+
+  .note-sheet .note-panel-screen-head {
+    padding-top: 6px;
+  }
+
+  .note-sheet .note-panel-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+/* A phone's actions: one row at the sheet's visible foot, under the thumb at every stop */
+.note-panel-foot-row {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 8px;
+  padding: 8px 16px calc(10px + var(--safe-bottom));
+  border-top: 1px solid var(--app-hairline);
+  background: var(--app-surface);
+}
+
+.note-panel-foot-row > * {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.note-panel-foot-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  background: var(--app-input-bg);
+  color: var(--app-text);
+  font: inherit;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.note-panel-foot-action:disabled {
+  color: var(--app-text-faint);
+  cursor: default;
+}
+
+/* The commit is the Codex's own act, so it takes the accent's ground */
+.note-panel-foot-action--commit {
+  border-color: transparent;
+  background: var(--app-accent-soft);
+}
+
+.note-panel-foot-action .note-panel-delta {
+  margin-left: 0;
+}
+
+.note-panel-foot-hold {
+  min-height: 44px;
+  white-space: nowrap;
+}
+
+/* The line at the top of the sheet still in sight at its first stop: a Codex's distance from
+   its newest version, or what is compared and the way out */
+.sheet-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  padding: 2px 20px 10px;
+  font-size: 13px;
+  color: var(--app-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.sheet-summary-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin-right: auto;
 }

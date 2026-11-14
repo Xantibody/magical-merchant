@@ -1,5 +1,6 @@
 import { createSignal, Show } from "solid-js";
 import type { JSX } from "solid-js";
+import HoldButton from "./HoldButton";
 import Icon from "./Icon";
 import type { IconName } from "./Icon";
 import type { NoteKind, NoteMeta } from "../lib/commands";
@@ -15,11 +16,11 @@ export type NotePanelTab = "note" | "history";
 interface NotePanelProps {
   kind: NoteKind;
   /**
-   * Whether it is the phone's own screen, swapped in for the body. Otherwise it is the 320px
-   * panel at the right edge.
+   * Whether it is a phone's sheet, rising from the foot over the note. Otherwise it is the
+   * 320px panel at the right edge.
    */
   screen?: boolean;
-  /** The note's title. Only the phone's screen shows it, in its header. */
+  /** The note's title. Only the phone's sheet shows it, at its head. */
   title: string;
   /** Whether the panel is on screen. The screen is on screen whenever it is mounted. */
   open: boolean;
@@ -27,8 +28,6 @@ interface NotePanelProps {
   /** The version count beside the history tab. */
   historyCount: number;
   onTab: (tab: NotePanelTab) => void;
-  /** The phone's back arrow. */
-  onBack?: () => void;
 
   mapOpen: boolean;
   /** Whether the note has template examples. The switch is not shown for one that has none. */
@@ -54,11 +53,22 @@ interface NotePanelProps {
   /** Why revert cannot be pressed. Absent when there is nothing worth saying. */
   revertHint?: string;
   onRevert: () => void;
-  /** Note only. Opens the confirmation; nothing moves yet. */
+  /** Note only. Runs once the press has been held (96): there is no way back from it. */
   onPromote: () => void;
   /** Codex only. */
   onCommit: () => void;
+  /** How far the draft has moved since the newest version, carried on the commit itself (92). */
+  commitDelta?: string;
+  /** Held too: the note goes (an undo stands for 5 s after). */
   onDelete: () => void;
+  /** The page alone (85): the same as two fingers tapped twice, for a hand that wants a switch. */
+  paper: boolean;
+  onTogglePaper: () => void;
+  /**
+   * The phone's sheet only: the line under its title, still in sight at the sheet's first stop
+   * (a Codex's version, or what is being compared).
+   */
+  summary?: JSX.Element;
   /** The history tab's body (`HistoryPanel`). */
   history: JSX.Element;
 }
@@ -141,7 +151,7 @@ function CreatedField(props: { time: string; onEdit: (value: string) => void }):
  *
  * On a wide window it is 320px at the right edge, beside the body. The strip's … and ⌘. are
  * the only ways in. A Codex adds the history as a second tab of the same slot. On a phone it is
- * a screen of its own that swaps with the body, the way the history screen used to.
+ * a sheet that rises from the foot over the body.
  */
 export default function NotePanel(props: NotePanelProps): JSX.Element {
   const label = (): string => (props.kind === "codex" ? t().codex.panel : t().notes.panel);
@@ -211,6 +221,13 @@ export default function NotePanel(props: NotePanelProps): JSX.Element {
             onToggle={props.onToggleExamples}
           />
         </Show>
+        <SwitchRow
+          icon="corners-out"
+          size={iconSize()}
+          label={t().palm.paper}
+          checked={props.paper}
+          onToggle={props.onTogglePaper}
+        />
       </div>
 
       <div>
@@ -271,27 +288,12 @@ export default function NotePanel(props: NotePanelProps): JSX.Element {
       >
         <Icon name="arrow-counter-clockwise" size={iconSize()} />
         <span class="note-panel-row-label">{t().notes.revert}</span>
-        <Show when={!props.screen}>
-          <span class="note-panel-key" aria-hidden="true">
-            {shortcutLabel("noteRevert")}
-          </span>
-        </Show>
+        <span class="note-panel-key" aria-hidden="true">
+          {shortcutLabel("noteRevert")}
+        </span>
       </button>
       <Show when={!props.canRevert && props.revertHint}>
         {(hint) => <p class="note-panel-hint note-panel-action-hint">{hint()}</p>}
-      </Show>
-      <Show when={props.kind === "note"}>
-        <button
-          type="button"
-          class="note-panel-row note-panel-action"
-          onClick={() => props.onPromote()}
-        >
-          <Icon name="book" size={iconSize()} />
-          <span class="note-panel-row-label">
-            {t().codex.promote}
-            <span class="note-panel-row-sub">{t().codex.promoteSub}</span>
-          </span>
-        </button>
       </Show>
       <Show when={props.kind === "codex"}>
         <button
@@ -301,21 +303,92 @@ export default function NotePanel(props: NotePanelProps): JSX.Element {
         >
           <Icon name="book-bookmark" size={iconSize()} />
           <span class="note-panel-row-label">{t().codex.commit}</span>
-          <Show when={!props.screen}>
-            <span class="note-panel-key" aria-hidden="true">
-              {shortcutLabel("codexCommit")}
-            </span>
+          {/* How far the draft has moved, on the button that would commit it (92) */}
+          <Show when={props.commitDelta}>
+            {(delta) => <span class="note-panel-delta">{delta()}</span>}
+          </Show>
+          <span class="note-panel-key" aria-hidden="true">
+            {shortcutLabel("codexCommit")}
+          </span>
+        </button>
+      </Show>
+      {/* The two that cannot be taken back in the same way are held, not confirmed (96): the
+          question and its answer are one press, and nothing opens over the note */}
+      <div class="note-panel-holds">
+        <Show when={props.kind === "note"}>
+          <HoldButton
+            class="note-panel-hold"
+            label={t().codex.promote}
+            hint={t().palm.holdPromote}
+            icon="book"
+            onConfirm={() => props.onPromote()}
+          />
+        </Show>
+        <HoldButton
+          class="note-panel-hold"
+          label={t().common.delete}
+          hint={t().palm.holdDelete}
+          icon="trash"
+          danger
+          onConfirm={() => props.onDelete()}
+        />
+      </div>
+      <Show when={props.kind === "note"}>
+        <p class="note-panel-hint note-panel-action-hint">{t().codex.promoteSub}</p>
+      </Show>
+    </div>
+  );
+
+  /**
+   * A phone's actions, one row standing at the foot of the sheet's visible part whatever stop
+   * it rests at: the thumb finds them where it already is, and the middle stop no longer hides
+   * the commit below the screen. Short words, one row; the full names are the wide panel's.
+   */
+  const footActions = (): JSX.Element => (
+    <div class="note-panel-foot-row">
+      <button
+        type="button"
+        class="note-panel-foot-action"
+        disabled={!props.canRevert}
+        title={props.canRevert ? t().notes.revert : (props.revertHint ?? t().notes.revert)}
+        aria-label={t().notes.revert}
+        onClick={() => props.onRevert()}
+      >
+        <Icon name="arrow-counter-clockwise" size={15} />
+        {t().reach.revertShort}
+      </button>
+      <Show
+        when={props.kind === "codex"}
+        fallback={
+          <HoldButton
+            class="note-panel-foot-hold"
+            label={t().palm.rowToCodex}
+            hint={t().palm.holdPromote}
+            icon="book"
+            onConfirm={() => props.onPromote()}
+          />
+        }
+      >
+        <button
+          type="button"
+          class="note-panel-foot-action note-panel-foot-action--commit"
+          onClick={() => props.onCommit()}
+        >
+          <Icon name="book-bookmark" size={15} />
+          {t().codex.commit}
+          <Show when={props.commitDelta}>
+            {(delta) => <span class="note-panel-delta">{delta()}</span>}
           </Show>
         </button>
       </Show>
-      <button
-        type="button"
-        class="note-panel-row note-panel-action note-panel-action--danger"
-        onClick={() => props.onDelete()}
-      >
-        <Icon name="trash" size={iconSize()} />
-        <span class="note-panel-row-label">{t().common.delete}</span>
-      </button>
+      <HoldButton
+        class="note-panel-foot-hold"
+        label={t().common.delete}
+        hint={t().palm.holdDelete}
+        icon="trash"
+        danger
+        onConfirm={() => props.onDelete()}
+      />
     </div>
   );
 
@@ -345,17 +418,13 @@ export default function NotePanel(props: NotePanelProps): JSX.Element {
           </div>
         }
       >
+        {/* No back arrow of its own: the round back button at the foot already peels this
+            sheet (Workspace's backToList), and two arrows on one screen read as two different
+            ways out */}
         <div class="note-panel-screen-head">
-          <button
-            type="button"
-            class="icon-button note-panel-back"
-            aria-label={t().codex.backToBody}
-            onClick={() => props.onBack?.()}
-          >
-            <Icon name="arrow-left" size={18} />
-          </button>
           <span class="note-panel-screen-title">{props.title || t().notes.untitled}</span>
         </div>
+        {props.summary}
         <Show when={props.kind === "codex"}>{tabs()}</Show>
       </Show>
 
@@ -365,7 +434,7 @@ export default function NotePanel(props: NotePanelProps): JSX.Element {
         </Show>
       </div>
 
-      <Show when={props.tab === "note"}>{actions()}</Show>
+      <Show when={props.tab === "note"}>{props.screen ? footActions() : actions()}</Show>
 
       <Show when={!props.screen && props.tab === "history"}>
         <div class="note-panel-foot">{t().codex.historyFoot}</div>

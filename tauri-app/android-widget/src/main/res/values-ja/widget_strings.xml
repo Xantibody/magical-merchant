@@ -15,6 +15,10 @@
     <string name="quick_capture_send">記録する</string>
     <string name="quick_capture_failed">保存できませんでした</string>
 
+    <string name="shortcut_scrawl_line_short">Scrawl に 1 行</string>
+    <string name="shortcut_scrawl_line_long">Scrawl に 1 行書く</string>
+    <string name="share_to_scrawl_label">Scrawl</string>
+
     <string name="widget_notes_label">NOTE</string>
     <string name="widget_notes_new_title">新しい Note</string>
     <string name="widget_notes_new_placeholder">タップして書き始める</string>

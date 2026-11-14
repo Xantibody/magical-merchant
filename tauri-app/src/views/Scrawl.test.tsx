@@ -1,11 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, fireEvent, cleanup, within, waitFor } from "@solidjs/testing-library";
 import { mockIPC, mockWindows, clearMocks } from "@tauri-apps/api/mocks";
 import { page } from "vitest/browser";
 import { MemoryRouter, Route, useLocation } from "@solidjs/router";
+import { Show } from "solid-js";
 import type { JSX } from "solid-js";
 import { ShellProvider, useShell } from "../lib/shell";
 import type { Shell } from "../lib/shell";
+import PlaceSwitch from "../components/PlaceSwitch";
 import Scrawl from "./Scrawl";
 
 /**
@@ -112,12 +114,26 @@ function RouterRoot(props: { children?: JSX.Element }): JSX.Element {
   return <>{props.children}</>;
 }
 
+/** The shell's place pill, as AppLayout mounts it on a phone; Scrawl's field goes into its slot. */
+function PhonePill(props: { children?: JSX.Element }): JSX.Element {
+  location = useLocation();
+  const pillShell = useShell();
+  return (
+    <>
+      {props.children}
+      <Show when={!pillShell.placesAway()}>
+        <PlaceSwitch stretched slot={pillShell.setPlacesSlot} />
+      </Show>
+    </>
+  );
+}
+
 /** Wait until the list arrives. The time column shows exactly one per entry. */
-async function openScrawl(): Promise<void> {
+async function openScrawl(phone = false): Promise<void> {
   render(() => (
     <ShellProvider>
       <ShellHandle />
-      <MemoryRouter root={RouterRoot}>
+      <MemoryRouter root={phone ? PhonePill : RouterRoot}>
         <Route path="/" component={Scrawl} />
         <Route path="/browse" component={() => <p>BROWSE</p>} />
         <Route path="/notes" component={() => <p>NOTES</p>} />
@@ -209,25 +225,83 @@ describe("Scrawl › 入力行", () => {
   beforeEach(setupScrawl);
   afterEach(teardownScrawl);
 
-  it("sits at the top of today, above the day's newest record", async () => {
+  // The field ends the sheet, under the days: it stays where the hand is while the list above
+  // reads newest first
+  it("stands at the foot of the sheet, after the days, on a wide window", async () => {
     await openScrawl();
+    const today = document.querySelector(`[data-day="${TODAY}"]`);
 
+    expect(lineIn().closest(".scrawl-composer")).not.toBeNull();
+    expect(
+      Boolean(lineIn().compareDocumentPosition(today as Node) & Node.DOCUMENT_POSITION_PRECEDING),
+    ).toBe(true);
+  });
+
+  // A feed, not a conversation: the newest line of the day is the first one read
+  it("runs a day's lines newest first", async () => {
+    await openScrawl();
     const times = [...document.querySelectorAll(`[data-day="${TODAY}"] .entry-time`)].map(
       (el) => el.textContent,
     );
 
-    expect(times).toStrictEqual(["", "21:34", "08:15"]);
+    expect(times.length).toBeGreaterThan(1);
+    expect(times).toStrictEqual(times.toSorted().toReversed());
   });
 
-  it("shows the time and the dot only once something is typed", async () => {
+  // Today is the first day on the page, the older ones below it
+  it("runs the days newest first", async () => {
     await openScrawl();
-    const row = lineIn().closest(".entry");
-    expect(row?.classList.contains("entry--typing")).toBe(false);
+    const order = [...document.querySelectorAll<HTMLElement>("[data-day]")].map(
+      (el) => el.dataset.day,
+    );
 
-    fireEvent.input(lineIn(), { target: { value: "あ" } });
+    expect(order.length).toBeGreaterThan(1);
+    expect(order[0]).toBe(TODAY);
+    expect(order).toStrictEqual(order.toSorted().toReversed());
+  });
 
-    expect(row?.classList.contains("entry--typing")).toBe(true);
-    expect(row?.querySelector(".entry-time")?.textContent).not.toBe("");
+  // A phone writes in the shell's place pill, stretched: one thing at the foot, not a bar
+  it("carries the field into the place pill beside the places on a phone", async () => {
+    await page.viewport(390, 844);
+    await openScrawl(true);
+
+    const pill = lineIn().closest(".place-switch");
+
+    expect(pill).not.toBeNull();
+    expect(pill?.querySelector("nav.place-switch-places")).not.toBeNull();
+    expect(lineIn().closest(".scrawl")).toBeNull();
+    // No round button and sheet on top of it: one floating pill, not two
+    expect(document.querySelector(".compose-fab")).toBeNull();
+  });
+
+  // The field lives in the pill but is still this screen's: a send keeps the same element
+  it("keeps the line in the pill across a save on a phone", async () => {
+    await page.viewport(390, 844);
+    await openScrawl(true);
+    const before = lineIn();
+
+    fireEvent.input(before, { target: { value: "ピルから残す" } });
+    fireEvent.keyDown(before, { key: "Enter" });
+    await screen.findByText("ピルから残す");
+
+    expect(lineIn()).toBe(before);
+    await waitFor(() => expect(before.value).toBe(""));
+  });
+
+  // The select bar stands where the pill floats, so the pill steps away until it is done
+  it("sends the pill away while selecting on a phone", async () => {
+    await page.viewport(390, 844);
+    await openScrawl(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "選択" }));
+
+    expect(shell.placesAway()).toBe(true);
+    expect(document.querySelector(".place-switch")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "キャンセル" }));
+
+    expect(shell.placesAway()).toBe(false);
+    expect(lineIn().closest(".place-switch")).not.toBeNull();
   });
 
   it("turns only the record just left green", async () => {
@@ -501,15 +575,98 @@ describe("Scrawl › Note との関係の解除", () => {
   });
 });
 
-/** Selects the records that read these words, then presses delete and its confirmation. */
-function deleteSelected(...words: string[]): void {
+/** The time a press has to last, and a little over: the fill is drawn from real time. */
+function held(ms: number): Promise<void> {
+  // oxlint-disable-next-line promise/avoid-new
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+/** Holds a held-to-confirm button down until it has gone through (96). */
+async function holdDown(button: HTMLElement): Promise<void> {
+  button.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "mouse", bubbles: true }));
+  await held(950);
+  button.dispatchEvent(new PointerEvent("pointerup", { pointerType: "mouse", bubbles: true }));
+}
+
+/** Selects the records that read these words, then holds delete down until it goes. */
+async function deleteSelected(...words: string[]): Promise<void> {
   fireEvent.click(screen.getByRole("button", { name: "選択" }));
   for (const word of words) {
     fireEvent.click(screen.getByRole("button", { name: new RegExp(word, "u") }));
   }
-  fireEvent.click(screen.getByRole("button", { name: `削除 (${words.length}件)` }));
-  fireEvent.click(screen.getByRole("button", { name: "削除する" }));
+  await holdDown(
+    screen.getByRole("button", { name: new RegExp(`^削除 \\(${words.length}件\\)`, "u") }),
+  );
 }
+
+describe("Scrawl › 最新へ", () => {
+  beforeEach(setupScrawl);
+  afterEach(teardownScrawl);
+
+  // S6: once the newest are out of sight, one press brings them back to the top
+  it("offers the way back once scrolled away, and goes there", async () => {
+    await openScrawl();
+    // No stylesheet here: the scroll area is given its scrolling by hand, a short one
+    const scroll = document.querySelector(".scrawl-scroll") as HTMLElement;
+    scroll.style.overflowY = "auto";
+    scroll.style.height = "100px";
+    expect(screen.queryByRole("button", { name: "最新へ" })).toBeNull();
+
+    scroll.scrollTop = 200;
+    expect(scroll.scrollTop).toBe(200);
+    fireEvent.scroll(scroll);
+    fireEvent.click(await screen.findByRole("button", { name: "最新へ" }));
+
+    await expect.poll(() => scroll.scrollTop).toBe(0);
+    fireEvent.scroll(scroll);
+    await waitFor(() => expect(screen.queryByRole("button", { name: "最新へ" })).toBeNull());
+  });
+});
+
+describe("Scrawl › 記録を開く", () => {
+  beforeEach(setupScrawl);
+  afterEach(() => {
+    vi.restoreAllMocks();
+    teardownScrawl();
+  });
+
+  it("opens one record at a time", async () => {
+    await openScrawl();
+
+    fireEvent.click(screen.getByText("朝ラン 5km"));
+    fireEvent.click(screen.getByText("ベガのラッシュ止まらん"));
+
+    const toolbars = screen.getAllByRole("toolbar", { name: "この記録の操作" });
+    expect(toolbars).toHaveLength(1);
+    expect(entryOf("ベガのラッシュ止まらん")?.contains(toolbars[0])).toBe(true);
+  });
+
+  it("copies the record's text as written", async () => {
+    const write = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue();
+    await openScrawl();
+    fireEvent.click(screen.getByText("朝ラン 5km"));
+
+    fireEvent.click(within(screen.getByRole("toolbar")).getByRole("button", { name: "コピー" }));
+
+    await waitFor(() => expect(shell.toast()?.message).toBe("コピーしました"));
+    expect(write).toHaveBeenCalledWith("朝ラン 5km #運動");
+  });
+
+  // The select bar's path: one line at a time, against the line the screen read
+  it("deletes the one record once its delete has been held", async () => {
+    await openScrawl();
+    fireEvent.click(screen.getByText("朝ラン 5km"));
+    const toolbar = screen.getByRole("toolbar");
+
+    await holdDown(within(toolbar).getByRole("button", { name: /^削除 \(/u }));
+
+    await waitFor(() => expect(shell.toast()?.message).toBe("1件のエントリを削除しました"));
+    expect(days[TODAY]).toStrictEqual(["- [21:34:00] ベガのラッシュ止まらん #SF6"]);
+    expect(screen.queryByText("朝ラン 5km")).toBeNull();
+  });
+});
 
 describe("Scrawl › まとめて削除", () => {
   beforeEach(setupScrawl);
@@ -518,7 +675,7 @@ describe("Scrawl › まとめて削除", () => {
   it("deletes the chosen records and says how many", async () => {
     await openScrawl();
 
-    deleteSelected("朝ラン", "ベガ");
+    await deleteSelected("朝ラン", "ベガ");
 
     await waitFor(() => expect(shell.toast()?.message).toBe("2件のエントリを削除しました"));
     expect(days[TODAY]).toStrictEqual([]);
@@ -536,7 +693,7 @@ describe("Scrawl › まとめて削除", () => {
     // Rewritten from another device after the screen read it. Index 0 goes second
     days[TODAY] = ["- [08:15:00] 別の端末で書き換えた", "- [21:34:00] ベガのラッシュ止まらん #SF6"];
 
-    deleteSelected("朝ラン", "ベガ");
+    await deleteSelected("朝ラン", "ベガ");
 
     await waitFor(() => expect(shell.toast()?.message).toBe("1件のエントリを削除できませんでした"));
     expect(days[TODAY]).toStrictEqual(["- [08:15:00] 別の端末で書き換えた"]);
@@ -619,18 +776,17 @@ describe("Scrawl › 選択中の読み直し", () => {
   afterEach(teardownScrawl);
 
   /**
-   * A selection points at a row by `date#index`. Leave for another app with the confirm bar
-   * up, and if the automatic reload on return has added a row ahead of it on the same day,
-   * the same index points at the neighbouring record. On a reload the selection is dropped:
-   * after the neighbour is deleted it is too late.
+   * A selection points at a row by `date#index`. Leave for another app with records
+   * selected, and if the automatic reload on return has added a row ahead of it on the same
+   * day, the same index points at the neighbouring record. On a reload the selection is
+   * dropped: after the neighbour is deleted it is too late.
    */
   it("drops the selection when the list is reloaded under it", async () => {
     await openScrawl();
     fireEvent.click(screen.getByRole("button", { name: "選択" }));
     fireEvent.click(screen.getByRole("button", { name: /朝ラン/u }));
-    fireEvent.click(screen.getByRole("button", { name: "削除 (1件)" }));
     expect(screen.getByRole("toolbar", { name: "まとめて削除" }).textContent).toContain(
-      "1件のエントリを削除します",
+      "1件選択中",
     );
 
     shell.refreshData();
@@ -651,7 +807,6 @@ describe("Scrawl › 選択中の読み直し", () => {
     await openScrawl();
     fireEvent.click(screen.getByRole("button", { name: "選択" }));
     fireEvent.click(screen.getByRole("button", { name: /朝ラン/u }));
-    fireEvent.click(screen.getByRole("button", { name: "削除 (1件)" }));
     expect(screen.getByRole("toolbar", { name: "まとめて削除" })).toBeDefined();
 
     fireEvent.click(screen.getByRole("button", { name: "1年前の今日の記録を見る" }));

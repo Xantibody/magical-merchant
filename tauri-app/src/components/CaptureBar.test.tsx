@@ -1,14 +1,37 @@
 import { describe, it, expect, vi, afterEach, beforeAll, beforeEach } from "vitest";
 import { cdp } from "vitest/browser";
 import { render, fireEvent, cleanup, screen } from "@solidjs/testing-library";
+import { createSignal } from "solid-js";
 import CaptureBar from "./CaptureBar";
 import { setLocale } from "../lib/i18n";
+
+function pause(ms: number): Promise<void> {
+  // oxlint-disable-next-line promise/avoid-new
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+/**
+ * Where a fan pill's round mark is meant to stand, read from the place the fan gave it: the
+ * test page has no stylesheet to lay the fixed layer out, so its box is not where the slide reads
+ * it. Which side the fan opens on follows where send lands, and unstyled that moves with the
+ * font's width (left of the middle on macOS, right of it on the CI's Linux): the pill is given
+ * its `left` on one side and its `right` on the other (Ring's `pillEdge`).
+ */
+function markOf(pill: HTMLElement): { clientX: number; clientY: number } {
+  const half = 23;
+  const width = document.documentElement.clientWidth || globalThis.innerWidth;
+  const clientX = pill.style.left
+    ? Number.parseFloat(pill.style.left) + half
+    : width - Number.parseFloat(pill.style.right) - half;
+  return { clientX, clientY: Number.parseFloat(pill.style.top) + half };
+}
 
 function renderCaptureBar() {
   const onSend = vi.fn<(text: string) => Promise<void>>().mockResolvedValue();
   const onPromote = vi.fn<(text: string) => Promise<void>>().mockResolvedValue();
   const onError = vi.fn<() => void>();
-  const onTyping = vi.fn<(typing: boolean) => void>();
   const onSearch = vi.fn<() => void>();
   const onNewNote = vi.fn<() => void>();
   const onJumpToDate = vi.fn<(trigger: HTMLElement) => void>();
@@ -17,7 +40,6 @@ function renderCaptureBar() {
       onSend={onSend}
       onPromote={onPromote}
       onError={onError}
-      onTyping={onTyping}
       onSearch={onSearch}
       onNewNote={onNewNote}
       onJumpToDate={onJumpToDate}
@@ -28,7 +50,7 @@ function renderCaptureBar() {
   if (!textarea) {
     throw new Error("capture-input not found");
   }
-  return { onSend, onPromote, onError, onTyping, onSearch, onNewNote, onJumpToDate, textarea };
+  return { onSend, onPromote, onError, onSearch, onNewNote, onJumpToDate, textarea };
 }
 
 describe("CaptureBar", () => {
@@ -69,6 +91,33 @@ describe("CaptureBar", () => {
     expect(textarea.value).toBe("途中まで");
   });
 
+  // 71: a tag pressed beside the field joins the line at the caret, set apart by spaces, and
+  // the caret goes on after it so the next word follows without a tap
+  it("adds a pressed tag at the caret and keeps the caret after it", async () => {
+    localStorage.setItem("scrawl-draft", "牛乳を買う");
+    const [add, setAdd] = createSignal<{ tag: string } | null>(null);
+    const { container } = render(() => (
+      <CaptureBar
+        onSend={vi.fn<(text: string) => Promise<void>>().mockResolvedValue()}
+        onPromote={vi.fn<(text: string) => Promise<void>>().mockResolvedValue()}
+        onError={vi.fn<() => void>()}
+        onSearch={vi.fn<() => void>()}
+        onNewNote={vi.fn<() => void>()}
+        onJumpToDate={vi.fn<(trigger: HTMLElement) => void>()}
+        addTag={add()}
+      />
+    ));
+    const textarea = container.querySelector<HTMLTextAreaElement>(".capture-input");
+    textarea?.setSelectionRange(5, 5);
+
+    setAdd({ tag: "家" });
+    await Promise.resolve();
+
+    expect(textarea?.value).toBe("牛乳を買う #家 ");
+    expect(textarea?.selectionStart).toBe("牛乳を買う #家 ".length);
+    expect(localStorage.getItem("scrawl-draft")).toBe("牛乳を買う #家 ");
+  });
+
   it("forgets the text once it has been sent", async () => {
     const { textarea } = renderCaptureBar();
     fireEvent.input(textarea, { target: { value: "買い物" } });
@@ -104,6 +153,78 @@ describe("CaptureBar", () => {
     },
   );
 
+  // 5: a phone has no ⌘Enter, so the same choice is send slid up (or held) onto a Note pill. A
+  // press let go on send records, however long it was held
+  describe("the slid send", () => {
+    const base = { pointerType: "touch", bubbles: true, pointerId: 5, button: 0 };
+
+    /** Pressed on send at the foot, where the line sits on a phone; the pill opens above it. */
+    function pressSend(): { send: HTMLElement; start: { clientX: number; clientY: number } } {
+      const bar = document.querySelector<HTMLElement>(".capture-bar");
+      bar?.style.setProperty("position", "fixed");
+      bar?.style.setProperty("inset", "auto 16px 16px 16px");
+      bar?.style.setProperty("display", "flex");
+      const send = screen.getByRole("button", { name: "記録する" });
+      const box = send.getBoundingClientRect();
+      const start = { clientX: box.left + box.width / 2, clientY: box.top + box.height / 2 };
+      send.dispatchEvent(new PointerEvent("pointerdown", { ...base, ...start }));
+      return { send, start };
+    }
+
+    /** Lets go at `end`, and the click a real release on the button would follow with. */
+    function release(send: HTMLElement, end: { clientX: number; clientY: number }): void {
+      send.dispatchEvent(new PointerEvent("pointermove", { ...base, ...end }));
+      send.dispatchEvent(new PointerEvent("pointerup", { ...base, ...end }));
+      fireEvent.click(send);
+    }
+
+    it("makes a Note of the line when slid up onto the pill", async () => {
+      const { onSend, onPromote, textarea } = renderCaptureBar();
+      fireEvent.input(textarea, { target: { value: "週次の振り返り" } });
+
+      const { send, start } = pressSend();
+      // A slide up opens it at once, with no hold to wait for
+      send.dispatchEvent(
+        new PointerEvent("pointermove", { ...base, ...start, clientY: start.clientY - 24 }),
+      );
+      release(send, markOf(screen.getByRole("menuitem", { name: "Note にする" })));
+
+      await expect.poll(() => onPromote.mock.calls).toStrictEqual([["週次の振り返り"]]);
+      expect(onSend).not.toHaveBeenCalled();
+    });
+
+    it("records a slow press let go on send, once", async () => {
+      const { onSend, onPromote, textarea } = renderCaptureBar();
+      fireEvent.input(textarea, { target: { value: "牛乳" } });
+
+      const { send, start } = pressSend();
+      await pause(420);
+      // The hold has shown the Note pill, but letting go in place is still a send
+      expect(screen.getByRole("menuitem", { name: "Note にする" })).toBeDefined();
+      release(send, start);
+
+      await expect.poll(() => onSend.mock.calls).toStrictEqual([["牛乳"]]);
+      expect(onPromote).not.toHaveBeenCalled();
+      expect(screen.queryByRole("menuitem")).toBeNull();
+    });
+
+    it("keeps the line when let go off both send and the pill", async () => {
+      const { onSend, onPromote, textarea } = renderCaptureBar();
+      fireEvent.input(textarea, { target: { value: "あとで書く" } });
+
+      const { send, start } = pressSend();
+      send.dispatchEvent(
+        new PointerEvent("pointermove", { ...base, ...start, clientY: start.clientY - 24 }),
+      );
+      release(send, { clientX: 20, clientY: start.clientY - 24 });
+      await pause(20);
+
+      expect(onSend).not.toHaveBeenCalled();
+      expect(onPromote).not.toHaveBeenCalled();
+      expect(textarea.value).toBe("あとで書く");
+    });
+  });
+
   it("leaves the Enter that ends a conversion to the IME even with the modifier", () => {
     const { onPromote, textarea } = renderCaptureBar();
     fireEvent.input(textarea, { target: { value: "かんじへんかん" } });
@@ -113,16 +234,35 @@ describe("CaptureBar", () => {
     expect(onPromote).not.toHaveBeenCalled();
   });
 
-  // The line shows its time and dot only then, so an empty line does not read as a record
-  it("says whether anything is typed", () => {
-    const { onTyping, textarea } = renderCaptureBar();
-    expect(onTyping).toHaveBeenLastCalledWith(false);
+  // The placeholder is a short question; what else the field answers to goes in the hint
+  it("asks a short question and leaves the keys to the hint", () => {
+    const { textarea } = renderCaptureBar();
 
-    fireEvent.input(textarea, { target: { value: "あ" } });
-    expect(onTyping).toHaveBeenLastCalledWith(true);
+    expect(textarea.placeholder).toBe("いま何を記録する？");
+    expect(document.querySelector(".capture-hint")?.textContent).toContain("# タグ");
+  });
 
-    fireEvent.input(textarea, { target: { value: "  " } });
-    expect(onTyping).toHaveBeenLastCalledWith(false);
+  // S2: the next line follows at once. On a phone a lost focus also drops the keyboard
+  it("keeps the focus in the field after a send", async () => {
+    const { onSend, textarea } = renderCaptureBar();
+    textarea.focus();
+    fireEvent.input(textarea, { target: { value: "一行目" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "記録する" }));
+
+    await expect.poll(() => onSend.mock.calls.length).toBe(1);
+    await expect.poll(() => textarea.value).toBe("");
+    expect(document.activeElement).toBe(textarea);
+  });
+
+  // The press itself must not move the focus off the field before the click sends
+  it("does not take the focus when the send button is pressed", () => {
+    const { textarea } = renderCaptureBar();
+    fireEvent.input(textarea, { target: { value: "一行目" } });
+
+    const pressed = fireEvent.mouseDown(screen.getByRole("button", { name: "記録する" }));
+
+    expect(pressed).toBe(false);
   });
 
   it.each(["買い物と明日の予定", "次の記録"])(
@@ -302,7 +442,7 @@ const lines = (count: number): string =>
   Array.from({ length: count }, (_, i) => `line ${i}`).join("\n");
 
 /**
- * The line grows with what is typed and scrolls past six lines. Chrome and a recent WebKit size
+ * The field grows with what is typed and scrolls past five lines. Chrome and a recent WebKit size
  * it from the stylesheet; an older WKWebView has it measured on each key instead.
  */
 describe.each([
@@ -350,12 +490,12 @@ describe.each([
     await expect.poll(() => height(textarea)).toBeCloseTo(empty, 0);
   });
 
-  it("stops at six lines and scrolls the rest", () => {
+  it("stops at five lines and scrolls the rest", () => {
     const { textarea } = mount();
 
     fireEvent.input(textarea, { target: { value: lines(10) } });
 
-    expect(height(textarea)).toBeCloseTo(6 * lineHeight(textarea), 0);
+    expect(height(textarea)).toBeCloseTo(5 * lineHeight(textarea), 0);
     expect(textarea.scrollHeight).toBeGreaterThan(textarea.clientHeight);
   });
 });

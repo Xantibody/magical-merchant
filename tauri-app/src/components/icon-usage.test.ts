@@ -31,7 +31,9 @@ function iconNames(): string[] {
 
 describe("Icon table", () => {
   it("reads the names out of the table", () => {
-    expect(iconNames()).toContain("push-pin-fill");
+    // Both spellings of a key: quoted (with a hyphen) and bare
+    expect(iconNames()).toContain("sidebar-simple");
+    expect(iconNames()).toContain("funnel");
   });
 
   it("has no entry that no source names", () => {

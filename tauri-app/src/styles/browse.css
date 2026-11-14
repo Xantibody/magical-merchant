@@ -131,7 +131,6 @@
 
 .browse-list {
   display: flex;
-  flex-direction: column;
   padding: 10px 6px;
   border-right: 1px solid var(--app-surface-2);
   overflow: auto;
@@ -323,13 +322,7 @@
 /* ---------------- Mobile ---------------- */
 
 @media (max-width: 767px) {
-  .browse {
-    flex-direction: column;
-  }
-
-  /* Neither the title nor the group labels are shown. On a narrow screen the header at the
-     top already carries the title */
-  .browse-title,
+  /* The group labels are not shown: the chips say what they are */
   .browse-group-label {
     display: none;
   }
@@ -386,5 +379,39 @@
 
   .browse-row {
     min-height: 44px;
+  }
+}
+
+/* ---------------- From the foot (the reach) ---------------- */
+
+/* The records rise from the list's foot like every list here (`data-foot`): the newest by the
+   chips, the older above it, and the count and order at the foot of the column */
+.browse-list {
+  flex-direction: column-reverse;
+}
+
+@media (min-width: 768px) {
+  /* The chips sit at the foot of their column, under the hand that presses them. A margin, not
+     justify-content, so a column of many tags still scrolls to its first one */
+  .browse-facets > :first-child {
+    margin-top: auto;
+  }
+}
+
+/* The chips are a phone's controls here, so they go under the thumb with the page's name over
+   them, and the records take the reading half above. The place pill floats over the foot (P8),
+   so the band ends above it */
+@media (max-width: 767px) {
+  .browse {
+    flex-direction: column-reverse;
+    padding-bottom: 76px;
+  }
+
+  .browse-list {
+    padding-bottom: 4px;
+  }
+
+  .browse-facets {
+    border-top: 1px solid var(--app-surface-2);
   }
 }

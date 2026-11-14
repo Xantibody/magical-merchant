@@ -5,7 +5,6 @@
   inset: 0;
   z-index: 100;
   display: flex;
-  flex-direction: column;
   background: var(--app-surface);
   animation: mm-rise 180ms var(--app-ease);
 }
@@ -21,16 +20,13 @@
 
 .search-head {
   display: flex;
-  flex-direction: column;
   gap: 6px;
-  padding-block: 10px;
 }
 
 .search-input-row {
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 36px;
   color: var(--app-text-faint);
 }
 
@@ -102,7 +98,6 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding-block: 4px var(--size-5);
 }
 
 .search-empty {

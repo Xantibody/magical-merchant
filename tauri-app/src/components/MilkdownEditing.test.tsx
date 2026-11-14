@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import { editorViewCtx, parserCtx, serializerCtx } from "@milkdown/kit/core";
 import type { Editor } from "@milkdown/kit/core";
+import { undo } from "@milkdown/kit/prose/history";
 import { TextSelection } from "@milkdown/kit/prose/state";
 import MilkdownEditor from "./MilkdownEditor";
 
@@ -81,10 +82,9 @@ describe("Note table editing and inline decorations", () => {
     expect(h.view.state.doc.eq(before)).toBe(true);
     await userEvent.keyboard("{Escape}");
     expect(h.container.querySelectorAll(".table-menu-target")).toHaveLength(0);
+    // Outside the table the controls go: inserting one is the writing bar's
     h.select("After the table");
-    await expect
-      .poll(() => button.closest(".editor-table-tools")?.classList.contains("is-contextual"))
-      .toBe(false);
+    await expect.poll(() => screen.queryByRole("button", { name: "表", exact: true })).toBeNull();
   });
 
   it.each([
@@ -108,9 +108,6 @@ describe("Note table editing and inline decorations", () => {
       const cell = screen.getByRole("cell", { name: "d", exact: true });
       await userEvent.click(cell);
       const button = screen.getByRole("button", { name: "表", exact: true });
-      await expect
-        .poll(() => button.closest(".editor-table-tools")?.classList.contains("is-contextual"))
-        .toBe(true);
       await expect
         .poll(() =>
           Math.abs(
@@ -158,7 +155,8 @@ describe("Note table editing and inline decorations", () => {
     expect(rect.right).toBeLessThanOrEqual(390);
     await userEvent.click(screen.getByRole("button", { name: "表を削除", exact: true }));
     expect(h.container.querySelectorAll("table")).toHaveLength(0);
-    await tableAction("元に戻す");
+    // The table and its controls are gone; the history still brings it back
+    undo(h.view.state, h.view.dispatch);
     expect(h.roundtrip().child(0).child(1).child(0).textContent).toBe("a");
     await page.viewport(1280, 720);
   });
@@ -256,12 +254,12 @@ describe("Note table editing and inline decorations", () => {
     expect(h.view.state.doc.child(0).childCount).toBe(3);
   });
 
-  it("inserts a table from the menu and supports undo on touch", async () => {
-    const h = await mount("");
-    await tableAction("表を挿入");
-    expect(h.container.querySelectorAll("table")).toHaveLength(1);
-    await tableAction("元に戻す");
-    expect(h.container.querySelectorAll("table")).toHaveLength(0);
+  // No lone button at the page's top: a table is inserted from the writing bar
+  // (MarkdownToolbar.test.tsx), and its controls stand only beside a row of one
+  it("shows no table control outside a table", async () => {
+    const h = await mount("plain");
+    h.select("plain");
+    expect(screen.queryByRole("button", { name: "表", exact: true })).toBeNull();
   });
 
   it("adds and deletes rows and columns while keeping Markdown valid", async () => {

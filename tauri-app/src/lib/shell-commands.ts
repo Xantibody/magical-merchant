@@ -15,7 +15,8 @@ export interface ShellCommand {
   id: string;
   label: string;
   icon: IconName;
-  shortcut: ShortcutName;
+  /** Absent for a row reached only from the list (Templates has no key of its own). */
+  shortcut?: ShortcutName;
   /** A row that goes somewhere, listed by the empty search field as a place. */
   place?: boolean;
   run: () => void;
@@ -36,6 +37,7 @@ export interface ShellCommandDeps {
   /** Closes the palette and navigates. */
   go: (path: RoutePath) => () => void;
   syncNow: () => void;
+  toggleSidebar: () => void;
 }
 
 export function shellCommands(deps: ShellCommandDeps): ShellCommand[] {
@@ -87,12 +89,28 @@ export function shellCommands(deps: ShellCommandDeps): ShellCommand[] {
       run: deps.syncNow,
     },
     {
+      id: "toggle-sidebar",
+      label: t().library.toggle,
+      icon: "sidebar-simple",
+      shortcut: "sidebar",
+      run: deps.toggleSidebar,
+    },
+    {
       id: "go-settings",
       label: t().palette.openSettings,
       icon: MODE_ICONS[ROUTES.SETTINGS],
       shortcut: "settings",
       place: true,
       run: deps.go(ROUTES.SETTINGS),
+    },
+    // The shelf holds only the places, so Templates is found where Settings is: in the
+    // empty search field's places and the palette
+    {
+      id: "go-templates",
+      label: t().palette.openTemplates,
+      icon: MODE_ICONS[ROUTES.TEMPLATES],
+      place: true,
+      run: deps.go(ROUTES.TEMPLATES),
     },
   ];
 }
@@ -102,7 +120,7 @@ export function commandRows(commands: readonly ShellCommand[]): CommandRow[] {
     id: command.id,
     label: command.label,
     icon: command.icon,
-    shortcut: shortcutLabel(command.shortcut),
+    shortcut: command.shortcut ? shortcutLabel(command.shortcut) : "",
     place: command.place,
     run: command.run,
   }));
