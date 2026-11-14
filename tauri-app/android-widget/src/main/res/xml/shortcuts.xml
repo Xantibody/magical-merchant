@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The launcher icon held down (the reach: the app comes to the hand from outside it).
+    A line into Scrawl opens the same capture sheet the Scrawl widget opens, over the home
+    screen, without starting the WebView; a new Note goes through the widget's own deep link,
+    so the app opens straight on its writing screen. apply-widget.go points the launcher
+    activity at this file.
+-->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="scrawl_line"
+        android:enabled="true"
+        android:icon="@drawable/ic_paper_plane_tilt"
+        android:shortcutShortLabel="@string/shortcut_scrawl_line_short"
+        android:shortcutLongLabel="@string/shortcut_scrawl_line_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.magical_merchant.app"
+            android:targetClass="com.magical_merchant.app.widget.QuickCaptureActivity" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="new_note"
+        android:enabled="true"
+        android:icon="@drawable/ic_plus"
+        android:shortcutShortLabel="@string/widget_notes_new_title"
+        android:shortcutLongLabel="@string/widget_notes_new_title">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="magical-merchant://widget/new-note"
+            android:targetPackage="com.magical_merchant.app"
+            android:targetClass="com.magical_merchant.app.MainActivity" />
+    </shortcut>
+</shortcuts>

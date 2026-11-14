@@ -42,6 +42,10 @@ const markerID = "widgets"
 // app's identity. The configuration activity is the exception: a launcher starts
 // it, and not every launcher goes through the system to do so. It refuses a
 // widget id that is not this app's.
+//
+// Share → Scrawl is an exported alias of the sheet, not the sheet itself: only the SEND
+// intent-filter is reachable from other apps, and the sheet only prefills the shared words
+// (QuickCaptureActivity reads EXTRA_TEXT); sending stays the person's press.
 const components = `        <activity
             android:name=".widget.QuickCaptureActivity"
             android:excludeFromRecents="true"
@@ -49,6 +53,18 @@ const components = `        <activity
             android:noHistory="true"
             android:theme="@style/Theme.QuickCapture"
             android:windowSoftInputMode="adjustResize|stateAlwaysVisible" />
+
+        <activity-alias
+            android:name=".widget.ShareToScrawl"
+            android:exported="true"
+            android:label="@string/share_to_scrawl_label"
+            android:targetActivity=".widget.QuickCaptureActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity-alias>
 
         <receiver
             android:name=".widget.CaptureBarWidgetProvider"
@@ -199,6 +215,11 @@ func patchManifest() error {
 	}
 	content = content[:idx] + block + content[idx:]
 
+	content, err = patchLauncherShortcuts(content)
+	if err != nil {
+		return err
+	}
+
 	if string(raw) == content {
 		fmt.Println("apply-widget: manifest unchanged (already up to date)")
 		return nil
@@ -208,6 +229,38 @@ func patchManifest() error {
 	}
 	fmt.Printf("apply-widget: widget components registered in %s\n", manifestPath)
 	return nil
+}
+
+const shortcutsMarkerID = "shortcuts"
+
+// shortcutsMeta points the launcher activity at res/xml/shortcuts.xml: the icon held down
+// offers a line to Scrawl and a new Note. It has to sit inside that activity, so it goes
+// right after the activity's MAIN / LAUNCHER intent-filter.
+const shortcutsMeta = `            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+`
+
+// patchLauncherShortcuts adds (or replaces) the shortcuts meta-data inside the activity that
+// carries the launcher intent-filter.
+func patchLauncherShortcuts(content string) (string, error) {
+	content = removeBlock(content, shortcutsMarkerID)
+	launcher := strings.Index(content, "android.intent.category.LAUNCHER")
+	if launcher < 0 {
+		return "", fmt.Errorf("%s: no launcher activity to hang the shortcuts on", manifestPath)
+	}
+	const closing = "</intent-filter>"
+	end := strings.Index(content[launcher:], closing)
+	if end < 0 {
+		return "", fmt.Errorf("%s: the launcher intent-filter never closes", manifestPath)
+	}
+	at := launcher + end + len(closing)
+	// After the line the closing tag ends
+	if nl := strings.Index(content[at:], "\n"); nl >= 0 {
+		at += nl + 1
+	}
+	block := markerBlock(shortcutsMarkerID, "            ", shortcutsMeta)
+	return content[:at] + block + content[at:], nil
 }
 
 func beginMarker(id string) string {

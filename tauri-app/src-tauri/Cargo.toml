@@ -21,7 +21,9 @@ magical-merchant-core = { path = "../../core", features = [
   "device-probe",
   "sync-client",
 ] }
-tauri = { version = "2", features = [] }
+# macos-private-api: the one-line window the global key floats (src/capture.rs) is transparent,
+# so what shows over another app is the pill itself rather than a box around it
+tauri = { version = "2", features = ["macos-private-api"] }
 tauri-plugin-deep-link = "2"
 tauri-plugin-geolocation = "2"
 chrono = { version = "0.4", features = ["serde"] }
@@ -52,6 +54,11 @@ uuid = { version = "1", features = ["v4"] }
 base64 = "0.23"
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
+
+# The one key that floats the one-line window over any app (src/capture.rs). Desktop only: a
+# phone has the pill held down, the launcher shortcut and Share instead
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-global-shortcut = "2"
 
 [target.'cfg(target_os = "android")'.dependencies]
 # The home screen widget's capture sheet calls into the core through JNI.

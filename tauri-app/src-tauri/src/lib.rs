@@ -11,6 +11,7 @@ mod android_context;
 #[cfg(target_os = "android")]
 mod android_tls;
 mod auth;
+mod capture;
 mod device;
 mod export;
 #[cfg(target_os = "macos")]
@@ -777,6 +778,13 @@ fn store_token_from_urls(handle: &AppHandle, urls: &[url::Url]) {
     });
 }
 
+/// Every link the app is opened with: the login's callback, and a Scrawl line from Spotlight or
+/// a Shortcut (78), which is written before any page could be asked.
+fn on_links(handle: &AppHandle, urls: &[url::Url]) {
+    store_token_from_urls(handle, urls);
+    capture::handle_links(handle, urls);
+}
+
 // `mobile_entry_point` fixes the signature to `fn run()`, so a failed startup
 // has nowhere to be returned to — panicking is the only way to report it.
 // `generate_context!` embeds every plugin's permission tables in one value;
@@ -820,15 +828,17 @@ pub fn run() {
             let launch_handle = app.handle().clone();
             std::thread::spawn(move || {
                 if let Ok(Some(urls)) = launch_handle.deep_link().get_current() {
-                    store_token_from_urls(&launch_handle, &urls);
+                    on_links(&launch_handle, &urls);
                 }
             });
 
             let handle = app.handle().clone();
-            app.deep_link().on_open_url(move |event| {
-                let urls = event.urls();
-                store_token_from_urls(&handle, &urls);
-            });
+            app.deep_link()
+                .on_open_url(move |event| on_links(&handle, &event.urls()));
+
+            // One key, registered with the OS, floats the one-line window over any app (38)
+            #[cfg(desktop)]
+            capture::register(app.handle())?;
 
             // There is a gap between starting to locate and the first fix coming
             // back. Asking on every save is too late, so start receiving at launch.
@@ -854,6 +864,9 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             save_quick_capture,
+            capture::capture_window_show,
+            capture::capture_window_hide,
+            capture::capture_window_sent,
             create_draft,
             promote_note_to_codex,
             commit_note_version,

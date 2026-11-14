@@ -1,0 +1,8 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicegram/nicegram-app-schemas/refs/heads/main/tauri/capability.json",
+  "identifier": "capture",
+  "description": "The one-line window the global key floats over any app (src/capture.rs): it hears the key and writes one Scrawl line",
+  "windows": ["capture"],
+  "platforms": ["macOS", "windows", "linux"],
+  "permissions": ["core:default"]
+}

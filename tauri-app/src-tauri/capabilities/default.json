@@ -6,6 +6,7 @@
   "permissions": [
     "core:default",
     "core:app:allow-version",
+    "core:app:allow-exit",
     "core:window:allow-set-fullscreen",
     "opener:default",
     "deep-link:default",

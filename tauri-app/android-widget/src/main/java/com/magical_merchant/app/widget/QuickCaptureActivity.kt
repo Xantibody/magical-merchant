@@ -1,6 +1,7 @@
 package com.magical_merchant.app.widget
 
 import android.app.Activity
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
@@ -33,6 +34,12 @@ class QuickCaptureActivity : Activity() {
         setContentView(R.layout.activity_quick_capture)
 
         val input = findViewById<EditText>(R.id.quick_capture_input)
+        // Shared from another app ("Share → Scrawl", the activity-alias apply-widget.go adds):
+        // the shared words wait in the field to be read and sent, never sent on their own
+        intent?.getStringExtra(Intent.EXTRA_TEXT)?.let { shared ->
+            input.setText(shared)
+            input.setSelection(shared.length)
+        }
         input.requestFocus()
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
 

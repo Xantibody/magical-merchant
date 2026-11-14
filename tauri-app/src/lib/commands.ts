@@ -226,6 +226,12 @@ interface ClientArgs {
 
 interface CommandMap {
   save_quick_capture: { args: { text: string } & ClientArgs; result: void };
+  /** Floats the one-line window the OS key shows (`capture.rs`), from Settings' "try it". */
+  capture_window_show: { args: void; result: void };
+  /** Hides the one-line window; its page keeps the draft. */
+  capture_window_hide: { args: void; result: void };
+  /** Tells the main window a line was written from the one-line window. */
+  capture_window_sent: { args: void; result: void };
   list_scrawl_dates: { args: void; result: string[] };
   read_scrawl_by_date: { args: { date: string }; result: string[] };
   /** The date list and the newest `recent` days, plus the days in `extra`, in one call. */
