@@ -76,12 +76,10 @@ let
     just
   ];
   # Source comments: Vale (English style + no Japanese) and typos (spelling)
-  # read .vale.ini / typos.toml at the repo root; go runs the script that
-  # narrows Vale to the lines a change added. See `just comments`
+  # read .vale.ini / typos.toml at the repo root. See `just comments`
   commentLint = with pkgs; [
     vale
     typos
-    go
   ];
 
   # Dependency audits and the test runner, shared by the local shell and CI's

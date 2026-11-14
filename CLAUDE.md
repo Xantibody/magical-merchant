@@ -193,9 +193,8 @@ ready to record the moment it opens (widgets exist for exactly this).
 - **Source comments are English.** Their reader is an AI session, and one
   language keeps the terms greppable; Japanese belongs in string tables, never
   in a comment. `just comments` runs Vale (`.vale.ini`: no Japanese, the proper
-  nouns, proselint) and typos over the tree; CI runs it on the files a PR
-  touches, so editing a file that still carries Japanese comments means
-  translating them in the same change
+  nouns, proselint) and typos over the tree, locally in `just check` and the
+  same recipe in CI
 
 ## Skills (read before touching the area)
 

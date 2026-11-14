@@ -69,7 +69,7 @@ fetch what they need:
 | Command       | Description                                                    | CI  |
 | ------------- | -------------------------------------------------------------- | --- |
 | `just fmt`    | Format all files (`nix fmt`)                                   | ✓   |
-| `just check`  | `rust::check` + `tauri_app::check` + `workers::check`          | ✓   |
+| `just check`  | The three module checks + `comments` (Vale and typos)          | ✓   |
 | `just test`   | `rust::test` + `tauri_app::test` + `workers::test`             | ✓   |
 | `just verify` | `fmt` → `check` → `test`. Run it before calling something done |     |
 | `just dev`    | `tauri_app::dev` — the one recipe worth a short name           |     |
