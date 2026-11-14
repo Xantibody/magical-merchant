@@ -13,7 +13,7 @@ interface SyncPopoverProps {
   onClose: () => void;
   /** What sits above the sync details: the save and the open note. */
   children?: JSX.Element;
-  /** Where a device without hover finds what a wide window shows beside the dot. */
+  /** The last row of the details: the way around without a key (`StatusLinks`). */
   foot?: JSX.Element;
 }
 

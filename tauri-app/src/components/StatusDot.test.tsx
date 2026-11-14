@@ -1,7 +1,15 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import type { JSX } from "solid-js";
 import { render, screen, fireEvent, cleanup } from "@solidjs/testing-library";
-import StatusDot, { StatusDetails, dotLabel, dotTone } from "./StatusDot";
+import {
+  StatusDetails,
+  StatusDotButton,
+  StatusLine,
+  StatusLinks,
+  dotLabel,
+  dotTone,
+  syncLine,
+} from "./StatusDot";
 import { ShellProvider, useShell } from "../lib/shell";
 import type { NoteState, Shell } from "../lib/shell";
 
@@ -36,13 +44,6 @@ function inShell(what: () => JSX.Element): Shell {
   }
   return captured;
 }
-
-const LINKS = {
-  onScrawl: () => {},
-  onSearch: () => {},
-  onSettings: () => {},
-  onKeys: () => {},
-};
 
 describe("dotTone", () => {
   it("is green when everything landed", () => {
@@ -79,13 +80,28 @@ describe("dotLabel", () => {
   });
 });
 
-describe("StatusDot", () => {
+describe("syncLine", () => {
+  it("names the sync in words, as the details do", () => {
+    expect(syncLine("success")).toBe("すべて同期済み");
+    expect(syncLine("idle")).toBe("すべて同期済み");
+    expect(syncLine("syncing")).toBe("同期中…");
+    expect(syncLine("error")).toBe("同期に失敗しました");
+    expect(syncLine("signed-out")).toBe("ログインが切れています");
+  });
+
+  // This device keeps everything to itself: no line to show
+  it("says nothing on a device never set up", () => {
+    expect(syncLine("needs-setup")).toBe("");
+  });
+});
+
+describe("StatusDotButton", () => {
   afterEach(() => {
     cleanup();
   });
 
   it("wears the tone of the save", () => {
-    const shell = inShell(() => <StatusDot sync="success" onOpen={() => {}} {...LINKS} />);
+    const shell = inShell(() => <StatusDotButton sync="success" onOpen={() => {}} />);
     const dot = screen.getByRole("button", { name: /保存と同期/u });
 
     expect(dot.dataset.tone).toBe("ok");
@@ -99,23 +115,60 @@ describe("StatusDot", () => {
 
   it("hands the pressed button over so the popover can fold on it", () => {
     const onOpen = vi.fn<(trigger: HTMLElement) => void>();
-    inShell(() => <StatusDot sync="success" onOpen={onOpen} {...LINKS} />);
+    inShell(() => <StatusDotButton sync="success" onOpen={onOpen} />);
     const dot = screen.getByRole("button", { name: /保存と同期/u });
 
     fireEvent.click(dot);
 
     expect(onOpen).toHaveBeenCalledWith(dot);
   });
+});
 
-  it("offers settings and the key list beside the dot", () => {
+// R5: the state can be read without pressing anything
+describe("StatusLine", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("says the save time and the sync in words beside the dot", () => {
+    const shell = inShell(() => <StatusLine sync="success" onOpen={() => {}} />);
+
+    shell.setSaveState({ status: "savedAt", at: "14:02" });
+
+    expect(screen.getByText("14:02 に保存")).toBeDefined();
+    expect(screen.getByText("すべて同期済み")).toBeDefined();
+  });
+
+  it("falls back to the dot's own word where nothing was saved on this screen", () => {
+    inShell(() => <StatusLine sync="needs-setup" onOpen={() => {}} />);
+
+    expect(screen.getByText("保存しました")).toBeDefined();
+  });
+
+  it("turns red with the failure and opens the details", () => {
+    const onOpen = vi.fn<(trigger: HTMLElement) => void>();
+    inShell(() => <StatusLine sync="error" onOpen={onOpen} />);
+    const line = screen.getByRole("button", { name: /保存と同期/u });
+
+    expect(line.dataset.tone).toBe("failed");
+    expect(screen.getByText("同期に失敗しました")).toBeDefined();
+    fireEvent.click(line);
+    expect(onOpen).toHaveBeenCalledWith(line);
+  });
+});
+
+describe("StatusLinks", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("offers the way around at the foot of the details", () => {
     const onScrawl = vi.fn<() => void>();
     const onSearch = vi.fn<() => void>();
     const onSettings = vi.fn<() => void>();
     const onKeys = vi.fn<() => void>();
     inShell(() => (
-      <StatusDot
-        sync="success"
-        onOpen={() => {}}
+      <StatusLinks
         onScrawl={onScrawl}
         onSearch={onSearch}
         onSettings={onSettings}
@@ -126,13 +179,13 @@ describe("StatusDot", () => {
     // Settings is not one of the three proper nouns, so it is translated like the palette's row
     fireEvent.click(screen.getByRole("button", { name: "設定" }));
     fireEvent.click(screen.getByRole("button", { name: "キー" }));
-
-    expect(onSettings).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole("button", { name: "Scrawl" }));
     fireEvent.click(screen.getByRole("button", { name: "検索" }));
+
+    expect(onSettings).toHaveBeenCalledTimes(1);
+    expect(onKeys).toHaveBeenCalledTimes(1);
     expect(onScrawl).toHaveBeenCalledTimes(1);
     expect(onSearch).toHaveBeenCalledTimes(1);
-    expect(onKeys).toHaveBeenCalledTimes(1);
   });
 });
 

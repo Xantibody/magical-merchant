@@ -14,28 +14,13 @@
    Pressing one opens Browse with that tag. Nothing is filtered here, so there is no
    selected state */
 
-.tag-filter {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-/* All-caps is drawn here, as on the list's heading: the word comes from the string table */
-.tag-filter-label {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--app-text-faint);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
+/* One line in Scrawl's band; the band is what scrolls sideways */
+.tag-filter,
 .tag-filter-chips {
   display: flex;
   align-items: center;
   gap: 6px;
-  flex-wrap: wrap;
-  min-width: 0;
+  flex-wrap: nowrap;
 }
 
 .tag-chip {
@@ -146,17 +131,6 @@
 }
 
 @media (max-width: 767px) {
-  /* Scroll sideways so wrapping does not push the list down. A scroller clips both ways, so
-     the padding keeps the chips' hit area (layout.css) inside it, and the margin hands the
-     height back */
-  .tag-filter-chips {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    scrollbar-width: none;
-    padding-block: 5px;
-    margin-block: -5px;
-  }
-
   .tag-chip {
     padding: 6px 13px;
   }

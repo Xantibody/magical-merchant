@@ -1,5 +1,6 @@
 import {
   batch,
+  createEffect,
   createMemo,
   createResource,
   createSignal,
@@ -9,7 +10,6 @@ import {
   Show,
 } from "solid-js";
 import type { JSX } from "solid-js";
-import { useNavigate } from "@solidjs/router";
 import Icon from "../components/Icon";
 import Popover from "../components/Popover";
 import TemplatePreview from "../components/TemplatePreview";
@@ -19,6 +19,7 @@ import { useShell } from "../lib/shell";
 import { locale, t } from "../lib/i18n";
 import { isImeComposing } from "../lib/ime";
 import { createKeyboardTop, keyboardTopStyle } from "../lib/keyboard";
+import { createWide } from "../lib/media";
 import { joinTitle, splitTitle } from "../lib/note-title";
 import { ROUTES, routeLabel } from "../lib/routes";
 import { classifyLines } from "../lib/template-examples";
@@ -103,7 +104,6 @@ const DRAFT_DELAY_MS = 300;
  */
 export default function Templates(): JSX.Element {
   const shell = useShell();
-  const navigate = useNavigate();
 
   const [templates, { refetch }] = createResource(() => typedInvoke("list_templates"));
   const [drafts, { refetch: refetchDrafts }] = createResource(() =>
@@ -631,18 +631,114 @@ export default function Templates(): JSX.Element {
     },
   });
 
+  /**
+   * On a phone a template open in the editor is a level over the list, as a note is: the round
+   * way out at the foot and a stroke to the right go back to it, with the list showing through
+   * (60, 61).
+   */
+  const wide = createWide();
+  let rootRef: HTMLDivElement | undefined;
+  let detailRef: HTMLDivElement | undefined;
+  const backToList = (): void => leaveEditor(() => setDetailOpen(false));
+  createEffect(() => {
+    if (wide() || !detailOpen()) {
+      shell.setHeaderBack(null);
+      shell.setBackStage(null);
+      return;
+    }
+    shell.setHeaderBack(backToList);
+    shell.setBackStage(() => {
+      if (!detailRef) {
+        return null;
+      }
+      rootRef?.classList.add("workspace--peek");
+      return {
+        page: detailRef,
+        under: rootRef?.querySelector<HTMLElement>(".list-pane") ?? undefined,
+        done: (commit) => {
+          rootRef?.classList.remove("workspace--peek");
+          if (commit) {
+            backToList();
+          }
+        },
+      };
+    });
+  });
+  onCleanup(() => {
+    shell.setHeaderBack(null);
+    shell.setBackStage(null);
+  });
+
   return (
-    <div class="workspace templates" classList={{ "workspace--detail": detailOpen() }}>
+    <div
+      class="workspace templates"
+      classList={{ "workspace--detail": detailOpen() }}
+      ref={rootRef}
+    >
       <div class="list-pane">
-        <div class="list-pane-head">
-          <button
-            type="button"
-            class="icon-button templates-back"
-            aria-label={t().templates.backToSettings}
-            onClick={() => navigate(ROUTES.SETTINGS)}
-          >
-            <Icon name="arrow-left" size={16} />
-          </button>
+        {/* Built from the foot, as the Note and Codex lists are (lib/foot.ts): the rows rest on
+            the page's own large name, which stands by the pill */}
+        <div class="list-scroll" data-foot>
+          <div class="list-stack">
+            <Show
+              when={rows().length > 0}
+              fallback={
+                <div class="notes-empty">
+                  <Icon name="file-text" size={24} />
+                  <p class="notes-empty-title">{t().templates.empty}</p>
+                  <p class="notes-empty-body">{t().templates.emptyHint}</p>
+                </div>
+              }
+            >
+              <For each={rows()}>
+                {(row) => {
+                  const open = (): boolean => openRow()?.filename === row.filename;
+                  // The open row follows the typing; the others what core last reported
+                  const unsaved = (): boolean => (open() ? dirty() || !row.saved : row.draft);
+                  return (
+                    <button
+                      type="button"
+                      class="list-row"
+                      classList={{ "list-row--selected": open() }}
+                      onClick={() => select(row)}
+                    >
+                      <span class="templates-row-head">
+                        <span class="list-row-title">{row.name}</span>
+                        <Show when={unsaved()}>
+                          <span class="templates-row-unsaved">{t().templates.unsaved}</span>
+                        </Show>
+                      </span>
+                      {/* Resolved: the row answers "what does this make today". How the
+                        definition is spelled, `{{date}}` and all, is read once it is open.
+                        A template never saved makes nothing yet */}
+                      <span class="list-row-meta">
+                        {row.saved
+                          ? [
+                              resolveLine(row.preview, new Date(), locale()),
+                              noteCount(row.name) > 0
+                                ? t().templates.noteCount(noteCount(row.name))
+                                : "",
+                            ]
+                              .filter((part) => part !== "")
+                              .join(" · ")
+                          : t().templates.new}
+                      </span>
+                    </button>
+                  );
+                }}
+              </For>
+            </Show>
+            {/* A phone's one name for the page: its own large name, at the foot under the rows. The
+              foot bar below (its name, + new) is a wide window's */}
+            <div class="list-foot">
+              <h1 class="list-big-title">{routeLabel(ROUTES.TEMPLATES)}</h1>
+            </div>
+          </div>
+        </div>
+
+        {/* No way back to Settings here: Templates is reached from the empty search field and
+            the palette on both widths, and the places stand beside it (the shelf, the pill) */}
+        <div class="list-pane-head list-pane-foot">
           <span class="list-pane-title">{routeLabel(ROUTES.TEMPLATES)}</span>
           <button type="button" class="new-note" onClick={startNew}>
             <Icon name="plus" size={12} />
@@ -650,61 +746,22 @@ export default function Templates(): JSX.Element {
           </button>
         </div>
 
-        <div class="list-scroll">
-          <Show
-            when={rows().length > 0}
-            fallback={
-              <div class="notes-empty">
-                <Icon name="file-text" size={24} />
-                <p class="notes-empty-title">{t().templates.empty}</p>
-                <p class="notes-empty-body">{t().templates.emptyHint}</p>
-              </div>
-            }
-          >
-            <For each={rows()}>
-              {(row) => {
-                const open = (): boolean => openRow()?.filename === row.filename;
-                // The open row follows the typing; the others what core last reported
-                const unsaved = (): boolean => (open() ? dirty() || !row.saved : row.draft);
-                return (
-                  <button
-                    type="button"
-                    class="list-row"
-                    classList={{ "list-row--selected": open() }}
-                    onClick={() => select(row)}
-                  >
-                    <span class="templates-row-head">
-                      <span class="list-row-title">{row.name}</span>
-                      <Show when={unsaved()}>
-                        <span class="templates-row-unsaved">{t().templates.unsaved}</span>
-                      </Show>
-                    </span>
-                    {/* Resolved: the row answers "what does this make today". How the
-                        definition is spelled, `{{date}}` and all, is read once it is open.
-                        A template never saved makes nothing yet */}
-                    <span class="list-row-meta">
-                      {row.saved
-                        ? [
-                            resolveLine(row.preview, new Date(), locale()),
-                            noteCount(row.name) > 0
-                              ? t().templates.noteCount(noteCount(row.name))
-                              : "",
-                          ]
-                            .filter((part) => part !== "")
-                            .join(" · ")
-                        : t().templates.new}
-                    </span>
-                  </button>
-                );
-              }}
-            </For>
-          </Show>
-        </div>
-
         <p class="templates-file-hint">{t().templates.fileHint}</p>
+
+        {/* A new template is made where the lists make theirs: low on the right, beside the
+            pill, in the thumb's reach (R2) */}
+        <button
+          type="button"
+          class="compose-fab templates-fab"
+          title={t().templates.new}
+          aria-label={t().templates.new}
+          onClick={startNew}
+        >
+          <Icon name="plus" size={24} />
+        </button>
       </div>
 
-      <div class="detail-pane">
+      <div class="detail-pane" ref={detailRef}>
         <Show
           when={editing()}
           fallback={<div class="detail-empty">{t().templates.noSelection}</div>}

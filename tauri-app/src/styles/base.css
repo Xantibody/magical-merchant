@@ -60,6 +60,11 @@
   --app-undo: var(--blue-3);
   --app-toast-bg: var(--gray-9);
   --app-toast-text: var(--gray-0);
+  /* What dims the page under a window floated over it (the one-line window, its stand-in) */
+  --app-scrim: rgb(20 20 25 / 28%);
+  /* What a wide window's sheets lie on: the shelf's ground, a step below the page so each
+     sheet's edge reads as an edge to take hold of (palm.css) */
+  --app-ground: var(--gray-2);
   /* There is exactly one easing. Surface switches, panels and the sliding line
      all move with the same habit */
   --app-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -94,6 +99,8 @@
   --app-undo: var(--blue-3);
   --app-toast-bg: var(--gray-7);
   --app-toast-text: var(--gray-0);
+  --app-scrim: rgb(0 0 0 / 50%);
+  --app-ground: color-mix(in oklab, var(--gray-9) 55%, black);
   /* A dark shadow on a dark page shows nothing, and these boxes have no border to fall back
      on. The ring is what draws the edge here */
   --shadow-pop:

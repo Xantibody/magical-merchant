@@ -188,9 +188,12 @@ describe("the motion rules", () => {
     );
   });
 
-  it("has only the two keyframes, and the two it made an exception for", () => {
+  // mm-bloom (reach.css): a ring's petal comes out of the point the thumb holds. Rising from
+  // below (mm-rise) or popping in place (mm-pop) would not say where it came from
+  it("has only the two keyframes, the ring's bloom, and the two it made an exception for", () => {
     expect(keyframeNames()).toStrictEqual([
       "ProseMirror-cursor-blink",
+      "mm-bloom",
       "mm-pop",
       "mm-rise",
       "spin",

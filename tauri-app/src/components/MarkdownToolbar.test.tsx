@@ -118,7 +118,7 @@ function createMockEditor(
   };
 }
 
-/** hidden elements are included because on desktop (with hover) the bar is display: none. */
+/** hidden elements are included because where a pointer is, the keyboard-closing button is display: none. */
 function labels(): (string | null)[] {
   return screen
     .getAllByRole("button", { hidden: true })
@@ -133,16 +133,15 @@ describe("MarkdownToolbar", () => {
   });
 
   it("does not render when editor is undefined", () => {
-    render(() => <MarkdownToolbar editor={undefined} />);
+    render(() => <MarkdownToolbar editor={undefined} onDone={() => {}} />);
     expect(screen.queryByRole("toolbar")).toBeNull();
   });
 
   // A screen reader announces the bar by this name before any button in it, and it was
-  // English on a Japanese screen. Read off the attribute: on desktop the bar is
-  // display: none, and a hidden element's computed name is empty
+  // English on a Japanese screen
   it("names the bar in the reader's language", () => {
     const { editor } = createMockEditor();
-    render(() => <MarkdownToolbar editor={editor} />);
+    render(() => <MarkdownToolbar editor={editor} onDone={() => {}} />);
     const bar = screen.getByRole("toolbar", { hidden: true });
 
     expect(bar.getAttribute("aria-label")).toBe("書式");
@@ -151,12 +150,13 @@ describe("MarkdownToolbar", () => {
     expect(bar.getAttribute("aria-label")).toBe("Markdown formatting");
   });
 
-  it("shows seven formatting buttons and the one that closes the keyboard", () => {
+  it("shows eight formatting buttons and the one that closes the keyboard", () => {
     const { editor } = createMockEditor();
-    render(() => <MarkdownToolbar editor={editor} />);
+    render(() => <MarkdownToolbar editor={editor} onDone={() => {}} />);
 
     expect(screen.getByRole("toolbar", { hidden: true })).toBeDefined();
-    // Hardest syntax to type first. The last one folds the keyboard once writing is done
+    // Hardest syntax to type first, the table among them rather than alone at the page's top.
+    // The last one folds the keyboard once writing is done
     expect(labels()).toStrictEqual([
       "箇条書き",
       "番号付きリスト",
@@ -165,7 +165,9 @@ describe("MarkdownToolbar", () => {
       "インデント",
       "記録へのリンク",
       "コードブロック",
+      "表を挿入",
       "キーボードを閉じる",
+      "完了",
     ]);
     // Dropped because they compete for width. The `---` input rule and select-and-delete suffice
     expect(screen.queryByLabelText("区切り線")).toBeNull();
@@ -174,7 +176,7 @@ describe("MarkdownToolbar", () => {
 
   it("writes [[ as the character itself, not an icon", () => {
     const mock = createMockEditor();
-    render(() => <MarkdownToolbar editor={mock.editor} />);
+    render(() => <MarkdownToolbar editor={mock.editor} onDone={() => {}} />);
 
     const button = screen.getByLabelText("記録へのリンク");
     expect(button.textContent).toBe("[[");
@@ -188,16 +190,30 @@ describe("MarkdownToolbar", () => {
 
   it("offers the way out of a code block only from inside one", () => {
     const mock = createMockEditor({ cursorIn: "paragraph" });
-    render(() => <MarkdownToolbar editor={mock.editor} />);
+    render(() => <MarkdownToolbar editor={mock.editor} onDone={() => {}} />);
 
     expect(screen.queryByLabelText("ブロックから抜ける")).toBeNull();
 
     mock.moveCursorTo("code_block");
     expect(screen.getByLabelText("ブロックから抜ける")).toBeDefined();
-    expect(labels()).toHaveLength(9);
+    expect(labels()).toHaveLength(11);
 
     mock.moveCursorTo("paragraph");
     expect(screen.queryByLabelText("ブロックから抜ける")).toBeNull();
+  });
+
+  // A table goes on an empty caret in a plain paragraph, never into a code block
+  it("inserts a table only from a paragraph", () => {
+    const mock = createMockEditor({ cursorIn: "paragraph" });
+    render(() => <MarkdownToolbar editor={mock.editor} onDone={() => {}} />);
+    const table = screen.getByLabelText<HTMLButtonElement>("表を挿入");
+
+    expect(table.disabled).toBe(false);
+    fireEvent.click(table);
+    expect(mock.fired).toHaveLength(1);
+
+    mock.moveCursorTo("code_block");
+    expect(table.disabled).toBe(true);
   });
 
   // The moment of a press is the only time the location changes without the
@@ -205,7 +221,7 @@ describe("MarkdownToolbar", () => {
   // disappear until the caret moves
   it("offers the way out as soon as a press makes the block a code block", () => {
     const mock = createMockEditor({ cursorIn: "paragraph", commandRetypesTo: "code_block" });
-    render(() => <MarkdownToolbar editor={mock.editor} />);
+    render(() => <MarkdownToolbar editor={mock.editor} onDone={() => {}} />);
 
     expect(screen.queryByLabelText("ブロックから抜ける")).toBeNull();
 
@@ -216,7 +232,7 @@ describe("MarkdownToolbar", () => {
 
   it("takes it away again when a press turns the code block back into a paragraph", () => {
     const mock = createMockEditor({ cursorIn: "code_block", commandRetypesTo: "paragraph" });
-    render(() => <MarkdownToolbar editor={mock.editor} />);
+    render(() => <MarkdownToolbar editor={mock.editor} onDone={() => {}} />);
 
     expect(screen.getByLabelText("ブロックから抜ける")).toBeDefined();
 
@@ -227,14 +243,14 @@ describe("MarkdownToolbar", () => {
 
   it("offers it from the moment the bar opens inside a code block", () => {
     const mock = createMockEditor({ cursorIn: "code_block" });
-    render(() => <MarkdownToolbar editor={mock.editor} />);
+    render(() => <MarkdownToolbar editor={mock.editor} onDone={() => {}} />);
 
     expect(screen.getByLabelText("ブロックから抜ける")).toBeDefined();
   });
 
   it("never takes the focus off the body", () => {
     const mock = createMockEditor();
-    render(() => <MarkdownToolbar editor={mock.editor} />);
+    render(() => <MarkdownToolbar editor={mock.editor} onDone={() => {}} />);
     mock.body.focus();
 
     const button = screen.getByLabelText("インデント");
@@ -249,7 +265,7 @@ describe("MarkdownToolbar", () => {
 
   it("lets the body go when asked to close the keyboard", () => {
     const mock = createMockEditor();
-    render(() => <MarkdownToolbar editor={mock.editor} />);
+    render(() => <MarkdownToolbar editor={mock.editor} onDone={() => {}} />);
     mock.body.focus();
 
     fireEvent.click(screen.getByLabelText("キーボードを閉じる"));
@@ -258,9 +274,20 @@ describe("MarkdownToolbar", () => {
     expect(document.activeElement).not.toBe(mock.body);
   });
 
+  // The reach: finishing is at the foot by the thumb, not in the strip at the page's top
+  it("ends the writing from the bar when the page gives it the way", () => {
+    const mock = createMockEditor();
+    const done = vi.fn<() => void>();
+    render(() => <MarkdownToolbar editor={mock.editor} onDone={done} />);
+
+    fireEvent.click(screen.getByLabelText("完了"));
+
+    expect(done).toHaveBeenCalledTimes(1);
+  });
+
   it("marks the body only while the toolbar is up", () => {
     const { editor } = createMockEditor();
-    const { unmount } = render(() => <MarkdownToolbar editor={editor} />);
+    const { unmount } = render(() => <MarkdownToolbar editor={editor} onDone={() => {}} />);
 
     expect(document.body.classList.contains("md-toolbar-open")).toBe(true);
     unmount();
@@ -269,7 +296,7 @@ describe("MarkdownToolbar", () => {
 
   it("hides toolbar when editor becomes undefined", () => {
     const [editor, setEditor] = createSignal<Editor | undefined>(createMockEditor().editor);
-    render(() => <MarkdownToolbar editor={editor()} />);
+    render(() => <MarkdownToolbar editor={editor()} onDone={() => {}} />);
 
     expect(screen.getByRole("toolbar", { hidden: true })).toBeDefined();
 

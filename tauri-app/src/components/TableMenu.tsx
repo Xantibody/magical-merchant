@@ -3,7 +3,6 @@ import type { JSX } from "solid-js";
 import { commandsCtx, editorViewCtx } from "@milkdown/kit/core";
 import type { Editor, CmdKey } from "@milkdown/kit/core";
 import {
-  insertTableCommand,
   addRowBeforeCommand,
   addRowAfterCommand,
   addColBeforeCommand,
@@ -24,7 +23,6 @@ import "../styles/table-menu.css";
 export default function TableMenu(props: { editor: Editor }): JSX.Element {
   const [open, setOpen] = createSignal(false);
   const [inTable, setInTable] = createSignal(false);
-  const [canInsert, setCanInsert] = createSignal(false);
   const [canRemoveRow, setCanRemoveRow] = createSignal(false);
   const [canAddBefore, setCanAddBefore] = createSignal(false);
   const [canUndo, setCanUndo] = createSignal(false);
@@ -38,43 +36,41 @@ export default function TableMenu(props: { editor: Editor }): JSX.Element {
       return;
     }
     const view = props.editor.action((ctx) => ctx.get(editorViewCtx));
+    // Outside a table nothing is mounted to place
+    if (!isInTable(view.state)) {
+      return;
+    }
     const viewport = window.visualViewport;
     const left = viewport?.offsetLeft ?? 0;
     const top = viewport?.offsetTop ?? 0;
     const right = left + (viewport?.width ?? window.innerWidth);
     const bottom = top + (viewport?.height ?? window.innerHeight);
     const size = trigger.offsetWidth;
-    let anchor = trigger.getBoundingClientRect();
-    let x = anchor.left;
-    let y = anchor.top;
-    let visible = true;
-    if (isInTable(view.state)) {
-      const rect = selectedRect(view.state);
-      const cell = view.nodeDOM(
-        rect.tableStart + rect.map.map[rect.top * rect.map.width + rect.left],
-      );
-      if (!(cell instanceof HTMLElement)) {
-        return;
-      }
-      const row = cell.getBoundingClientRect();
-      const table = cell.closest("table")?.getBoundingClientRect();
-      if (!table) {
-        return;
-      }
-      x = Math.max(left, table.left - size);
-      y = row.top + (row.height - size) / 2;
-      let clipTop = top;
-      let clipBottom = bottom;
-      for (let parent = view.dom.parentElement; parent; parent = parent.parentElement) {
-        if (["auto", "scroll", "hidden", "clip"].includes(getComputedStyle(parent).overflowY)) {
-          const bounds = parent.getBoundingClientRect();
-          clipTop = Math.max(clipTop, bounds.top);
-          clipBottom = Math.min(clipBottom, bounds.bottom);
-        }
-      }
-      visible = y >= clipTop && y + size <= clipBottom;
-      anchor = new DOMRect(x, y, size, size);
+    const rect = selectedRect(view.state);
+    const cell = view.nodeDOM(
+      rect.tableStart + rect.map.map[rect.top * rect.map.width + rect.left],
+    );
+    if (!(cell instanceof HTMLElement)) {
+      return;
     }
+    const row = cell.getBoundingClientRect();
+    const table = cell.closest("table")?.getBoundingClientRect();
+    if (!table) {
+      return;
+    }
+    const x = Math.max(left, table.left - size);
+    const y = row.top + (row.height - size) / 2;
+    let clipTop = top;
+    let clipBottom = bottom;
+    for (let parent = view.dom.parentElement; parent; parent = parent.parentElement) {
+      if (["auto", "scroll", "hidden", "clip"].includes(getComputedStyle(parent).overflowY)) {
+        const bounds = parent.getBoundingClientRect();
+        clipTop = Math.max(clipTop, bounds.top);
+        clipBottom = Math.min(clipBottom, bounds.bottom);
+      }
+    }
+    const visible = y >= clipTop && y + size <= clipBottom;
+    const anchor = new DOMRect(x, y, size, size);
     const available = Math.max(0, bottom - top - 16);
     const height = Math.min(menu?.scrollHeight ?? 320, available, (bottom - top) / 2);
     const width = menu?.offsetWidth ?? Math.min(288, right - left - 32);
@@ -102,17 +98,12 @@ export default function TableMenu(props: { editor: Editor }): JSX.Element {
       const { state } = ctx.get(editorViewCtx);
       const inside = isInTable(state);
       setInTable(inside);
+      if (!inside) {
+        setOpen(false);
+      }
       setCanRemoveRow(removeTableRow(state));
       setCanAddBefore(inside && selectedRect(state).top > 0);
       setCanUndo(undoDepth(state) > 0);
-      const { $from, $to } = state.selection;
-      // Never replace selected prose or turn a code fragment into a table.
-      setCanInsert(
-        state.selection.empty &&
-          $from.sameParent($to) &&
-          $from.parent.type.name === "paragraph" &&
-          !inside,
-      );
       schedulePlace();
     });
   onMount(() => {
@@ -182,46 +173,37 @@ export default function TableMenu(props: { editor: Editor }): JSX.Element {
         action(view.state, view.dispatch);
       }),
     );
+  // Only inside a table, beside its row: inserting one is the writing bar's job, so no lone
+  // button waits at the page's top
   return (
-    <div class="editor-table-tools" classList={{ "is-contextual": inTable() }} style={position()}>
-      <button
-        ref={trigger}
-        type="button"
-        class="icon-button editor-table-trigger"
-        aria-label={t().editor.table}
-        title={t().editor.table}
-        aria-expanded={open()}
-        onPointerDown={(event) => event.preventDefault()}
-        onClick={() => {
-          refresh();
-          setOpen(!open());
-        }}
-      >
-        <Icon name="table" size={18} />
-      </button>
-      <Popover
-        open={open()}
-        onClose={() => setOpen(false)}
-        trigger={() => trigger}
-        label={t().editor.table}
-        class="editor-table-anchor"
-      >
-        <div
-          ref={menu}
-          class="popover editor-table-menu"
+    <Show when={inTable()}>
+      <div class="editor-table-tools" style={position()}>
+        <button
+          ref={trigger}
+          type="button"
+          class="icon-button editor-table-trigger"
+          aria-label={t().editor.table}
+          title={t().editor.table}
+          aria-expanded={open()}
           onPointerDown={(event) => event.preventDefault()}
+          onClick={() => {
+            refresh();
+            setOpen(!open());
+          }}
         >
-          <Show
-            when={inTable()}
-            fallback={
-              <button
-                type="button"
-                disabled={!canInsert()}
-                onClick={() => command(insertTableCommand.key)}
-              >
-                {t().editor.insertTable}
-              </button>
-            }
+          <Icon name="table" size={18} />
+        </button>
+        <Popover
+          open={open()}
+          onClose={() => setOpen(false)}
+          trigger={() => trigger}
+          label={t().editor.table}
+          class="editor-table-anchor"
+        >
+          <div
+            ref={menu}
+            class="popover editor-table-menu"
+            onPointerDown={(event) => event.preventDefault()}
           >
             <button
               type="button"
@@ -267,12 +249,12 @@ export default function TableMenu(props: { editor: Editor }): JSX.Element {
             <button type="button" onClick={() => prose(deleteTable)}>
               {t().editor.deleteTable}
             </button>
-          </Show>
-          <button type="button" disabled={!canUndo()} onClick={() => prose(undo)}>
-            {t().editor.undo}
-          </button>
-        </div>
-      </Popover>
-    </div>
+            <button type="button" disabled={!canUndo()} onClick={() => prose(undo)}>
+              {t().editor.undo}
+            </button>
+          </div>
+        </Popover>
+      </div>
+    </Show>
   );
 }

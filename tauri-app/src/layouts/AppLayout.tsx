@@ -1,14 +1,36 @@
-import { createEffect, createMemo, onCleanup, onMount, untrack, Show } from "solid-js";
+import { createEffect, createMemo, on, onCleanup, onMount, untrack, Show } from "solid-js";
 import type { JSX } from "solid-js";
+import { Portal } from "solid-js/web";
 import { useLocation, useNavigate } from "@solidjs/router";
 import Icon from "../components/Icon";
 import CommandPalette from "../components/CommandPalette";
 import Popover from "../components/Popover";
 import SearchField from "../components/SearchField";
-import StatusDot, { StatusDetails, StatusDotButton, StatusLinks } from "../components/StatusDot";
+import Library from "../components/Library";
+import QuickJot from "../components/QuickJot";
+import CaptureStandIn from "../components/CaptureStandIn";
+import {
+  isBrowserMock,
+  isCaptureKey,
+  setStandIn,
+  standIn,
+  watchCaptured,
+} from "../lib/capture-window";
+import SheetGrip from "../components/SheetGrip";
+import {
+  StatusDetails,
+  StatusDotButton,
+  StatusLinks,
+  saveWords,
+  statusWords,
+  dotTone,
+} from "../components/StatusDot";
 import SyncPopover from "../components/SyncPopover";
 import UndoToast from "../components/UndoToast";
 import FirstRunCard from "../components/FirstRunCard";
+import PlaceSwitch from "../components/PlaceSwitch";
+import { foldRing, ringStanding } from "../components/Ring";
+import { createKeyboardInset } from "../lib/keyboard-inset";
 import { ShellProvider, useShell } from "../lib/shell";
 import { watchLeave } from "../lib/leave";
 import { watchReturn } from "../lib/return";
@@ -24,16 +46,21 @@ import {
   startsTypedSearch,
 } from "../lib/shortcuts";
 import { ROUTES, routeLabel } from "../lib/routes";
+import { ringChoices } from "../lib/ring";
 import type { RoutePath } from "../lib/routes";
 import { noteRoute, writeRoute } from "../lib/note-route";
 import { typedInvoke } from "../lib/commands";
-import type { SearchHit } from "../lib/commands";
+import type { NoteKind, SearchHit } from "../lib/commands";
 import { paletteScopeAt } from "../lib/search-scope";
 import { commandRows, shellCommands } from "../lib/shell-commands";
 import { createWidgetLaunch, watchWidgetLaunch } from "../lib/widget-launch";
 import { getDeviceSignals, warmLocation } from "../lib/client-context";
 import { applyStartFullscreen } from "../lib/fullscreen";
 import { loadGlyphs } from "../lib/glyphs";
+import { createWide } from "../lib/media";
+import { attachGestures } from "../lib/palm-gestures";
+import { watchSlim } from "../lib/slim";
+import { systemBackStep } from "../lib/system-back";
 
 /** A screen set to system switches the moment the device setting changes. */
 function onSchemeChange(): void {
@@ -84,8 +111,28 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
   });
 
   const isActive = (path: RoutePath): boolean => location.pathname === path;
-  /** Whether the current surface has a list flyout. */
-  const hasList = (): boolean => isActive(ROUTES.NOTES) || isActive(ROUTES.CODEX);
+  /** The writing screen is up (the URL carries it): nothing floats over the writing hand. */
+  const writing = (): boolean => new URLSearchParams(location.search).get("edit") === "1";
+  const wide = createWide();
+  /**
+   * Lifts what is typed into at the foot over the keyboard: the pill holding Scrawl's field, the
+   * one-line window, and the search field, which lies at the foot too (reach.css).
+   */
+  const keyboard = createKeyboardInset(
+    () => !wide() && (isActive(ROUTES.SCRAWL) || shell.quickJot() || shell.searchSeed() !== null),
+  );
+
+  // A move brings the bar back whole: the new screen has not been read yet
+  createEffect(
+    on(
+      () => location.pathname,
+      () => {
+        shell.setSlim(false);
+        shell.setQuickJot(false);
+      },
+      { defer: true },
+    ),
+  );
 
   /**
    * If tags are chosen on the Browse screen, search within them. To search everything,
@@ -154,8 +201,71 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
     })();
   };
 
+  /** An empty record of `kind`, opened to write: a petal of the ring, from wherever it bloomed. */
+  const newOf = (kind: NoteKind): void => {
+    shell.closePalette();
+    void (async () => {
+      let path;
+      try {
+        path = await typedInvoke("create_draft", {
+          body: "",
+          tags: [],
+          kind,
+          client: await getDeviceSignals(),
+        });
+      } catch {
+        shell.showToast(kind === "codex" ? t().codex.createFailed : t().notes.createFailed);
+        return;
+      }
+      shell.refreshData();
+      navigate(writeRoute(kind, path.split("/").at(-1)));
+    })();
+  };
+
+  /**
+   * The template sheet: it hangs from a list's own "new", so from anywhere else the Note list is
+   * where it opens. Arriving there mounts the list first, and the sheet opens over it.
+   */
+  const openTemplates = (): void => {
+    if (!isActive(ROUTES.NOTES) && !isActive(ROUTES.CODEX)) {
+      navigate(ROUTES.NOTES);
+    }
+    shell.closePopovers();
+    requestAnimationFrame(() => shell.togglePopover("new-note-menu"));
+  };
+
+  /** Scrawl's own field, under the thumb: the pill brought back whole if reading had folded it. */
+  const focusScrawlField = (): void => {
+    shell.setSlim(false);
+    requestAnimationFrame(() =>
+      document
+        .querySelector<HTMLTextAreaElement>(".scrawl .capture-input, .scrawl-dock .capture-input")
+        ?.focus(),
+    );
+  };
+
+  // The ring's petals from the pill and a wide window's shelf (lib/ring.ts keeps their one
+  // order). On Scrawl the line is the field right there
+  const ring = createMemo(() => {
+    const onScrawl = isActive(ROUTES.SCRAWL);
+    return ringChoices({
+      onScrawl,
+      jot: () => (onScrawl ? focusScrawlField() : shell.setQuickJot(true)),
+      note: () => newOf("note"),
+      codex: () => newOf("codex"),
+      template: openTemplates,
+    });
+  });
+
   const go = (path: RoutePath) => (): void => {
     shell.closePalette();
+    // The place you are on, pressed again with its list tucked under the note: the list is
+    // what was asked for, and navigating to the same path would show nothing new
+    const sheet = shell.pageLevels()?.beside;
+    if (location.pathname === path && sheet?.tucked()) {
+      sheet.tuck(false);
+      return;
+    }
     navigate(path);
   };
 
@@ -167,6 +277,12 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
       syncNow: () => {
         shell.closePalette();
         void sync.syncNow();
+      },
+      // The grip's key: the sheet beside the page (a note's list). Without one it does nothing
+      toggleSidebar: () => {
+        shell.closePalette();
+        const sheet = shell.pageLevels()?.beside;
+        sheet?.tuck(!sheet.tucked());
       },
     }),
   );
@@ -180,6 +296,94 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
     showToast: (text) => shell.showToast(text),
   });
 
+  // ---- the palm: what a finger does on a phone (lib/palm-gestures.ts) ----
+
+  /** A screen with a level below it: a note over its list, writing over reading. */
+  const canGoBack = (): boolean => shell.headerBack() !== null;
+  /**
+   * A level that is a form being filled in (a template open in its editor), like writing: the
+   * keyboard and the form's own bar have the foot, so the pill and the round way out step away
+   * and the form's own back at its top stands in.
+   */
+  const editingLevel = (): boolean => writing() || (isActive(ROUTES.TEMPLATES) && canGoBack());
+  /**
+   * Whether the place pill stands. It does on every screen, Settings, Templates and Browse
+   * included: those are reached from the empty search field, and without the pill under them
+   * the only way out would be through that field again (P8). Not while writing: the keyboard
+   * has the foot then.
+   */
+  const placesShown = (): boolean =>
+    !wide() && !editingLevel() && !shell.placesAway() && !shell.paper() && !shell.quickJot();
+  /**
+   * A phone's round way out, low on the left where the thumb already is: shown on a level that
+   * is read (a note, a Settings page), after the pill, which keeps its place (palm.css). It is
+   * what a stroke to the right does there, so the stroke always has a button to match (60).
+   */
+  const outShown = (): boolean =>
+    !wide() && canGoBack() && !editingLevel() && !shell.paper() && !shell.quickJot();
+  /** The bar folded to its line of words (4, 12, 63). Never while something is being typed. */
+  const slimShown = (): boolean => placesShown() && shell.slim();
+  const words = (): string => statusWords(shell.saveState(), sync.status());
+  /** The note being read, named on the folded bar once its own title has scrolled away (56). */
+  const slimTitle = (): string | undefined => (canGoBack() ? shell.noteState()?.title : undefined);
+  /**
+   * The folded bar's words. Beside a title there is room for one half at 390px: while all is
+   * well the dot says the sync and the words say the save, whole, and the title takes the cut.
+   * Anything not well is said in full.
+   */
+  const slimWords = (): string =>
+    slimTitle() && dotTone(shell.saveState().status, sync.status()) === "ok"
+      ? saveWords(shell.saveState(), sync.status())
+      : words();
+
+  /** One press of the system's back: the topmost layer goes, as a stroke to the right does. */
+  const runSystemBack = (historyLeft: boolean, leave: () => void): void => {
+    const step = systemBackStep({
+      ringOpen: ringStanding(),
+      jotOpen: shell.quickJot(),
+      searchOpen: shell.searchSeed() !== null,
+      paletteOpen: shell.paletteOpen(),
+      paper: shell.paper(),
+      level: shell.headerBack() !== null,
+      canGoBack: historyLeft,
+    });
+    switch (step) {
+      case "ring": {
+        foldRing();
+        break;
+      }
+      case "jot": {
+        shell.setQuickJot(false);
+        break;
+      }
+      case "search": {
+        shell.closeSearch();
+        break;
+      }
+      case "palette": {
+        shell.closePalette();
+        break;
+      }
+      case "paper": {
+        shell.setPaper(false);
+        break;
+      }
+      case "level": {
+        shell.headerBack()?.();
+        break;
+      }
+      case "history": {
+        globalThis.history.back();
+        break;
+      }
+      default: {
+        leave();
+      }
+    }
+  };
+
+  let appRef: HTMLDivElement | undefined;
+
   onMount(() => {
     // So the first record does not wait for a position fix, start measuring now if already permitted
     warmLocation();
@@ -189,22 +393,94 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
 
     watchUntilCleanup(() => watchWidgetLaunch(runWidgetAction));
 
+    // A line written from outside the app (the OS key's window, a Spotlight link): whatever is
+    // on screen rereads, and the app says where the line came from
+    watchUntilCleanup(() =>
+      watchCaptured((captured) => {
+        shell.refreshData();
+        shell.recordsChanged();
+        shell.showToast(
+          captured.via === "link" ? t().reach.capturedLink : t().reach.capturedWindow,
+        );
+      }),
+    );
+
+    // Android's own back peels the same layers as the stroke to the right, not the browser
+    // history (lib/system-back.ts). The app module loads on demand: it is Android's alone, and
+    // an eager import would carry it into every platform's startup
+    if (navigator.userAgent.includes("Android")) {
+      watchUntilCleanup(async () => {
+        try {
+          const { onBackButtonPress, exit } = await import("@tauri-apps/api/app");
+          const listener = await onBackButtonPress((press) => {
+            runSystemBack(press.canGoBack, () => {
+              void exit(0);
+            });
+          });
+          return () => {
+            void listener.unregister();
+          };
+        } catch {
+          // An older shell without the listener keeps the WebView's own back
+          return () => {
+            // Nothing was registered, so nothing to take off
+          };
+        }
+      });
+    }
+
+    if (appRef) {
+      const root = appRef;
+      onCleanup(
+        attachGestures(root, {
+          screen: () => ({
+            canGoBack: canGoBack(),
+            sheet: shell.noteState() !== null && canGoBack() && !writing(),
+          }),
+          back: () => shell.backStage()?.() ?? null,
+          sheet: () => shell.noteState()?.openSettings(),
+          paper: () => shell.setPaper(!shell.paper()),
+          // The page's own levels (writing, the list). The shelf is a rail that never moves
+          wide: {
+            active: wide,
+            out: () => shell.pageLevels()?.out() ?? null,
+            cover: () => shell.pageLevels()?.cover() ?? null,
+            page: () => root.querySelector<HTMLElement>(".workspace .detail-pane"),
+          },
+        }),
+      );
+      onCleanup(watchSlim(root, (slim) => shell.setSlim(slim)));
+    }
+
     const onKeyDown = (e: KeyboardEvent): void => {
       hints.keyDown(e);
+
+      // The OS key (38, 67) belongs to the OS in the app; the harness has no OS, so the page
+      // answers it itself with the stand-in: up, then the same key sends (or puts it away)
+      if (isBrowserMock() && isCaptureKey(e)) {
+        e.preventDefault();
+        if (!standIn()) {
+          setStandIn(true);
+          return;
+        }
+        const field = document.querySelector<HTMLTextAreaElement>(
+          ".capture-stand-in .capture-input",
+        );
+        if (field?.value.trim()) {
+          document.querySelector<HTMLButtonElement>(".capture-stand-in .capture-send")?.click();
+        } else {
+          setStandIn(false);
+        }
+        return;
+      }
 
       if (matchesShortcut(e, "search")) {
         e.preventDefault();
         openSearch();
         return;
       }
-      // Only Note and Codex have the list flyout. On other surfaces the key passes through
-      if (matchesShortcut(e, "listPin") && hasList()) {
-        e.preventDefault();
-        shell.toggleListPin();
-        return;
-      }
       for (const command of commands()) {
-        if (matchesShortcut(e, command.shortcut)) {
+        if (command.shortcut && matchesShortcut(e, command.shortcut)) {
           e.preventDefault();
           command.run();
           return;
@@ -230,6 +506,8 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
       if (e.key === "Escape") {
         shell.closePopovers();
         shell.closePalette();
+        // The page alone is left by the same key that leaves everything else
+        shell.setPaper(false);
       }
     };
     globalThis.addEventListener("keydown", onKeyDown);
@@ -267,47 +545,123 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
     );
   });
 
-  return (
-    <div class="app">
-      <div class="app-column">
-        {/* A narrow screen has no hover and no room in the corner. The title and a few entries make a strip */}
-        <header class="mobile-header">
-          <span class="mobile-header-title">{routeLabel(location.pathname)}</span>
+  /** The sheet beside a wide window's page (a note's list), which the page's grip moves. */
+  const beside = () => shell.pageLevels()?.beside ?? null;
+  /** One level out, the same as a stroke to the right. Only shown on a level (`outShown`). */
+  const outward = (): void => {
+    shell.closeSearch();
+    shell.headerBack()?.();
+  };
 
-          <div class="mobile-header-actions">
-            {/* The popover itself belongs to Scrawl. That side is what knows the recorded days */}
-            <Show when={isActive(ROUTES.SCRAWL)}>
+  return (
+    <div
+      class="app"
+      ref={appRef}
+      classList={{
+        "app--paper": shell.paper(),
+      }}
+    >
+      {/* The first of the three panes. A phone has none: its places are on the pill */}
+      <Show when={wide()}>
+        <Library
+          sync={sync.status()}
+          onOpenStatus={openStatus}
+          onGo={(path) => go(path)()}
+          onSearch={openSearch}
+          choices={ring()}
+        />
+      </Show>
+
+      <div class="app-column">
+        {/* A note's page lies on its list, and the grip at the note's own edge (Workspace hands
+            it over) tucks that list under the page; the wrapper adds no box of its own there.
+            A page with no list beside it has no grip: there is nothing for one to move */}
+        <Show when={wide()}>
+          <Show when={beside()}>
+            {(sheet) => (
+              <Portal
+                mount={sheet().edge}
+                ref={(el) => {
+                  el.style.display = "contents";
+                }}
+              >
+                <SheetGrip
+                  open={!sheet().tucked()}
+                  label={sheet().tucked() ? t().palm.listOut : t().palm.listTuck}
+                  onToggle={() => sheet().tuck(!sheet().tucked())}
+                  onCover={() => sheet().tuck(true)}
+                  onOut={() => sheet().tuck(false)}
+                />
+              </Portal>
+            )}
+          </Show>
+        </Show>
+        {/* A phone has no bar at the top: nothing up there is pressed, so nothing has to be
+            reached for. The page runs to the top edge and fades there (58); every control is
+            at the foot, where the thumb is (palm.css) */}
+        <main class="app-main">
+          <div class="app-route">
+            {props.children}
+            {/* Here rather than in each surface, so the move between Scrawl and a list keeps
+                the one element and its stretch can be seen */}
+            <Show when={placesShown()}>
+              <PlaceSwitch
+                stretched={isActive(ROUTES.SCRAWL)}
+                lift={keyboard()}
+                slot={shell.setPlacesSlot}
+                slim={slimShown()}
+                choices={ring()}
+              />
+            </Show>
+            {/* On a level that is read, the way out sits after the pill, low on the left */}
+            <Show when={outShown()}>
               <button
                 type="button"
-                class="icon-button"
-                title={t().header.jumpToDate}
-                aria-label={t().header.jumpToDate}
-                aria-expanded={shell.popover() === "calendar"}
-                onClick={(e) => shell.togglePopover("calendar", e.currentTarget)}
+                class="palm-out"
+                classList={{ "palm-out--slim": slimShown() }}
+                title={t().common.back}
+                aria-label={t().common.back}
+                onClick={outward}
               >
-                <Icon name="calendar-blank" size={18} />
+                <Icon name="arrow-left" size={20} />
               </button>
             </Show>
-            <button
-              type="button"
-              class="icon-button"
-              title={t().header.search}
-              aria-label={t().header.search}
-              onClick={openSearch}
-            >
-              <Icon name="magnifying-glass" size={18} />
-            </button>
-            <StatusDotButton sync={sync.status()} onOpen={openStatus} />
+            {/* The state's dot, alone in the top corner: no bar holds it. A press opens the
+                details; reading down, the words stand at the foot as well (12). A template's
+                editor keeps its own bar up there (save, its menu), and says its own state */}
+            <Show when={!wide() && !shell.paper() && !(isActive(ROUTES.TEMPLATES) && canGoBack())}>
+              <div class="palm-dot">
+                <StatusDotButton sync={sync.status()} onOpen={openStatus} />
+              </div>
+            </Show>
+            {/* The bar folded to a line of words while reading (4, 12): the state is read
+                without pressing anything, and pressing the line brings the bar back. On a
+                note being read it names the note, whose title has scrolled away up top (56) */}
+            <Show when={slimShown()}>
+              <button
+                type="button"
+                class="palm-slim"
+                data-tone={dotTone(shell.saveState().status, sync.status())}
+                aria-label={`${words()} · ${t().palm.unfold}`}
+                onClick={() => shell.setSlim(false)}
+              >
+                <span class="status-dot-mark" />
+                <span class="palm-slim-place">{slimTitle() ?? routeLabel(location.pathname)}</span>
+                <span class="palm-slim-words">{slimWords()}</span>
+              </button>
+            </Show>
           </div>
-        </header>
 
-        <main class="app-main">
-          {props.children}
+          <Show when={shell.quickJot() && !wide()}>
+            <QuickJot lift={keyboard()} onClose={() => shell.setQuickJot(false)} />
+          </Show>
+
           <Show when={shell.searchSeed()} keyed>
             {(seed) => (
               <SearchField
                 seed={seed}
                 commands={rows()}
+                lift={keyboard()}
                 onOpen={(hit) => {
                   shell.closeSearch();
                   openHit(hit);
@@ -317,41 +671,45 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
             )}
           </Show>
         </main>
-
-        <StatusDot
-          sync={sync.status()}
-          onOpen={openStatus}
-          onScrawl={go(ROUTES.SCRAWL)}
-          onSearch={openSearch}
-          onSettings={go(ROUTES.SETTINGS)}
-          onKeys={openShortcutList}
-        />
-
-        {/* The dot is at the window's corner (wide) or in the strip (narrow), but one
-            container opens. CSS decides which one it hangs from */}
-        <Popover
-          open={shell.popover() === "sync"}
-          onClose={() => shell.closePopovers()}
-          trigger={shell.popoverTrigger}
-          label={t().header.sync}
-          class="popover-anchor popover-anchor--sync"
-        >
-          <SyncPopover
-            sync={sync}
-            onClose={() => shell.closePopovers()}
-            foot={
-              <StatusLinks
-                onScrawl={closeAnd(go(ROUTES.SCRAWL))}
-                onSearch={closeAnd(openSearch)}
-                onSettings={closeAnd(go(ROUTES.SETTINGS))}
-                onKeys={openShortcutList}
-              />
-            }
-          >
-            <StatusDetails onClose={() => shell.closePopovers()} />
-          </SyncPopover>
-        </Popover>
       </div>
+
+      {/* The page alone (85). The way back is the same two fingers, or this one quiet button
+          for a hand that has only one free */}
+      <Show when={shell.paper()}>
+        <button
+          type="button"
+          class="paper-back"
+          title={t().palm.paperHint}
+          onClick={() => shell.setPaper(false)}
+        >
+          <Icon name="x" size={14} />
+          {t().palm.paperBack}
+        </button>
+      </Show>
+
+      {/* One status container hangs off the window, whichever dot opened it */}
+      <Popover
+        open={shell.popover() === "sync"}
+        onClose={() => shell.closePopovers()}
+        trigger={shell.popoverTrigger}
+        label={t().header.sync}
+        class="popover-anchor popover-anchor--sync"
+      >
+        <SyncPopover
+          sync={sync}
+          onClose={() => shell.closePopovers()}
+          foot={
+            <StatusLinks
+              onScrawl={closeAnd(go(ROUTES.SCRAWL))}
+              onSearch={closeAnd(openSearch)}
+              onSettings={closeAnd(go(ROUTES.SETTINGS))}
+              onKeys={openShortcutList}
+            />
+          }
+        >
+          <StatusDetails onClose={() => shell.closePopovers()} />
+        </SyncPopover>
+      </Popover>
 
       {/* The badges alone do not say why they appeared or how to dismiss them. This is the one explanation */}
       <Show when={hints.visible()}>
@@ -361,6 +719,11 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
       </Show>
 
       <UndoToast />
+
+      {/* The harness's stand-in for the window the OS key floats over other apps */}
+      <Show when={standIn()}>
+        <CaptureStandIn onClose={() => setStandIn(false)} />
+      </Show>
 
       <FirstRunCard
         when={sync.status() === "needs-setup"}
@@ -377,6 +740,11 @@ function Chrome(props: { children?: JSX.Element }): JSX.Element {
           }}
           onClose={() => shell.closePalette()}
         />
+      </Show>
+
+      {/* A wide window's one-line window floats at the page's foot, centred (68's pointer way) */}
+      <Show when={shell.quickJot() && wide()}>
+        <QuickJot wide onClose={() => shell.setQuickJot(false)} />
       </Show>
     </div>
   );

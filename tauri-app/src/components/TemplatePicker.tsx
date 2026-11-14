@@ -9,6 +9,8 @@ import "../styles/templates.css";
 interface TemplatePickerProps {
   templates: Template[];
   onPickEmpty: () => void;
+  /** An empty Codex: the same menu offers both kinds, as the phone's + does (65). */
+  onPickCodex?: () => void;
   onPick: (template: Template) => void;
   onManage: () => void;
 }
@@ -25,8 +27,8 @@ function badge(template: Template): string | undefined {
 }
 
 /**
- * The template picker opened from "new". On desktop it is a dropdown under the button; on a
- * phone it is a sheet rising from the bottom. Only the way it appears differs, the contents
+ * The template picker opened from the + ring's template choice. On a wide window it is a
+ * dropdown hung from the top of the list; on a phone it is a sheet rising from the bottom. Only the way it appears differs, the contents
  * are the same, so one thing is rendered and the presentation is left to CSS.
  */
 export default function TemplatePicker(props: TemplatePickerProps): JSX.Element {
@@ -36,11 +38,31 @@ export default function TemplatePicker(props: TemplatePickerProps): JSX.Element 
       <div class="template-picker-handle" aria-hidden="true" />
       <div class="template-picker-title">{t().templates.newNote}</div>
 
-      <button type="button" class="template-picker-row" role="menuitem" onClick={props.onPickEmpty}>
+      {/* A phone's sheet comes from the + that already offered both empty kinds, so it lists
+          the templates alone (templates.css) */}
+      <button
+        type="button"
+        class="template-picker-row template-picker-row--empty"
+        role="menuitem"
+        onClick={props.onPickEmpty}
+      >
         <Icon name="note-pencil" size={14} />
         <span class="template-picker-name">{t().templates.emptyNote}</span>
         <span class="key-badge template-picker-key">⌘N</span>
       </button>
+      <Show when={props.onPickCodex}>
+        {(pick) => (
+          <button
+            type="button"
+            class="template-picker-row template-picker-row--empty"
+            role="menuitem"
+            onClick={pick()}
+          >
+            <Icon name="book" size={14} />
+            <span class="template-picker-name">{t().palm.emptyCodex}</span>
+          </button>
+        )}
+      </Show>
 
       <Show when={props.templates.length > 0}>
         <div class="template-picker-section">{t().templates.fromTemplate}</div>

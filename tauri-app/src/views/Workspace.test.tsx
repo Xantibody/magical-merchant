@@ -444,6 +444,10 @@ async function openPanel(): Promise<HTMLElement> {
   if (done) {
     fireEvent.click(done);
     await screen.findByRole("button", { name: /^この (?:Note|Codex)$/u });
+  } else if (document.querySelector(".note-title-input")) {
+    // A phone has no strip: the round way out at the foot (the shell's back) ends the writing
+    shell?.headerBack()?.();
+    await screen.findByRole("button", { name: /^この (?:Note|Codex)$/u });
   }
   if (!openedPanel()) {
     fireEvent.click(panelToggle());
@@ -461,22 +465,29 @@ async function flipSwitch(name: string): Promise<void> {
   fireEvent.click(within(panel).getByRole("switch", { name }));
 }
 
-/** Presses one of the panel's actions. Its name may carry a second line, so it is a prefix. */
+/** Holds a held-to-confirm button down until it has gone through. */
+async function holdDown(button: HTMLElement): Promise<void> {
+  button.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "mouse", bubbles: true }));
+  await sleep(950);
+  button.dispatchEvent(new PointerEvent("pointerup", { pointerType: "mouse", bubbles: true }));
+}
+
+/** Presses one of the panel's actions. Its name may carry the hold hint, so it is a prefix. */
 async function runPanelAction(name: string): Promise<void> {
   const panel = await openPanel();
-  fireEvent.click(within(panel).getByRole("button", { name: new RegExp(`^${name}`, "u") }));
+  const button = within(panel).getByRole("button", { name: new RegExp(`^${name}`, "u") });
+  // The two that cannot be taken back are held, not clicked (96)
+  if (button.classList.contains("hold-button")) {
+    await holdDown(button);
+    return;
+  }
+  fireEvent.click(button);
 }
 
 /** Opens the Codex panel's history tab. */
 async function openHistoryTab(): Promise<void> {
   const panel = await openPanel();
   fireEvent.click(within(panel).getByRole("tab", { name: /^履歴/u }));
-}
-
-/** The confirm button of the "Make a Codex" dialog. */
-async function confirmPromote(): Promise<HTMLElement> {
-  const dialog = await screen.findByRole("dialog");
-  return within(dialog).getByRole("button", { name: "Codex にする" });
 }
 
 /**
@@ -504,10 +515,28 @@ function templateBackdrop(): Element {
   return found;
 }
 
-/** `新規`, then `空の Note`. Going through the template sheet is the same order as the real thing. */
+/**
+ * The + pressed and let go where it was: the ring blooms round it and stands for a tapped
+ * choice (`Ring.tsx`), the same order as the real thing.
+ */
+async function openRing(): Promise<HTMLElement> {
+  const plus = screen.getByRole("button", { name: /新規/u });
+  fireEvent.pointerDown(plus, { pointerType: "mouse", button: 0 });
+  fireEvent.pointerUp(plus, { pointerType: "mouse", button: 0 });
+  fireEvent.click(plus);
+  await screen.findByRole("menu", { name: "ここから" });
+  return plus;
+}
+
+/** The ring from the +, then its petal named `name`. */
+async function chooseFromRing(name: RegExp): Promise<void> {
+  await openRing();
+  fireEvent.click(await screen.findByRole("menuitem", { name }));
+}
+
+/** The +, then `Note を作る` from its ring. */
 async function createEmptyNote(): Promise<void> {
-  fireEvent.click(screen.getByRole("button", { name: /新規/u }));
-  fireEvent.click(await screen.findByRole("menuitem", { name: /空の Note/u }));
+  await chooseFromRing(/Note を作る/u);
 }
 
 const blockReads = (): void => {
@@ -599,10 +628,11 @@ describe("Workspace › 一覧の行", () => {
   });
 
   /**
-   * The badge that floats at the shoulder while `Cmd` is held down. Both buttons at the head
-   * of the list have a key, so a badge on only one of them reads as the other having no key.
+   * The badge that floats at the shoulder while `Cmd` is held down. "+ new" is the list
+   * bar's one button. The phone's compose button makes the same note and carries no badge: a
+   * phone has no ⌘ to hold.
    */
-  it("wears its key on the shoulder of both buttons at the head of the list", async () => {
+  it("wears its key on the shoulder of the new-note button", async () => {
     renderWorkspace();
     await rowOf(TITLE_A);
 
@@ -611,9 +641,8 @@ describe("Workspace › 一覧の行", () => {
     expect(screen.getByRole("button", { name: /新規/u }).dataset.hintKey).toBe(
       shortcutLabel("newNote"),
     );
-    expect(document.querySelector<HTMLElement>(".list-pin")?.dataset.hintKey).toBe(
-      shortcutLabel("listPin"),
-    );
+    // The phone's + (hidden on a wide window) has no ⌘ to wear
+    expect(document.querySelector<HTMLElement>(".list-plus")?.dataset.hintKey).toBeUndefined();
   });
 });
 
@@ -621,25 +650,25 @@ describe("Workspace › 触る端末からのテンプレート", () => {
   beforeEach(setupWorkspace);
   afterEach(teardownWorkspace);
 
-  // On a touch device the only way to the template sheet is a long press on the new-note
-  // button. A finger keeps jittering a few px while it presses, and if that jitter cancels
-  // the long press the sheet is never reached and lifting the finger makes an empty note
-  // (#253)
-  it("opens the template sheet on a long press the finger jitters through", async () => {
+  // The + blooms the ring on the press itself, and a finger slid onto a petal and let go
+  // chooses it in one stroke. A finger keeps jittering a few px while it presses; that jitter
+  // must neither cancel the ring nor make an empty note when it lifts (#253)
+  it("opens the template sheet from the ring a finger slides through", async () => {
     renderWorkspace();
-    const newNote = await screen.findByRole("button", { name: /新規/u });
+    const plus = await screen.findByRole("button", { name: /新規/u });
+    const box = plus.getBoundingClientRect();
+    const [x0, y0] = [box.left + box.width / 2, box.top + box.height / 2];
 
-    fireEvent.pointerDown(newNote, { pointerType: "touch", clientX: 100, clientY: 100 });
-    fireEvent.pointerMove(newNote, { pointerType: "touch", clientX: 103, clientY: 102 });
-    fireEvent.pointerMove(newNote, { pointerType: "touch", clientX: 99, clientY: 104 });
+    fireEvent.pointerDown(plus, { pointerType: "touch", button: 0, clientX: x0, clientY: y0 });
+    fireEvent.pointerMove(plus, { pointerType: "touch", clientX: x0 + 3, clientY: y0 + 2 });
+    const petal = await screen.findByRole("menuitem", { name: /テンプレートから/u });
+    const x = Number.parseFloat(petal.style.left);
+    const y = Number.parseFloat(petal.style.top);
+    fireEvent.pointerMove(plus, { pointerType: "touch", clientX: x, clientY: y });
+    fireEvent.pointerUp(plus, { pointerType: "touch", clientX: x, clientY: y });
+    fireEvent.click(plus);
 
-    // The 500ms of the long press is waited out in real time
-    await screen.findByRole("menuitem", { name: /空の Note/u }, { timeout: 2000 });
-
-    // The click from lifting the finger after the sheet appears is swallowed. If an empty
-    // Note were added on top of the sheet opening, the long press would be unusable
-    fireEvent.pointerUp(newNote, { pointerType: "touch", clientX: 99, clientY: 104 });
-    fireEvent.click(newNote);
+    await screen.findByRole("menuitem", { name: /空の Note/u });
     expect(countOf("create_draft")).toBe(0);
   });
 
@@ -649,11 +678,9 @@ describe("Workspace › 触る端末からのテンプレート", () => {
   // something
   it("closes the template sheet when the finger taps the backdrop", async () => {
     renderWorkspace();
-    const newNote = await screen.findByRole("button", { name: /新規/u });
-
-    fireEvent.pointerDown(newNote, { pointerType: "touch", clientX: 100, clientY: 100 });
-    await screen.findByRole("menuitem", { name: /空の Note/u }, { timeout: 2000 });
-    fireEvent.pointerUp(newNote, { pointerType: "touch", clientX: 100, clientY: 100 });
+    await rowOf(TITLE_A);
+    await chooseFromRing(/テンプレートから/u);
+    await screen.findByRole("menuitem", { name: /空の Note/u });
 
     fireEvent.click(templateBackdrop());
 
@@ -694,6 +721,33 @@ describe("Workspace › ビューアと書く画面", () => {
     fireEvent.keyDown(document.body, { key: "e" });
 
     await waitFor(() => expect(editorBody().isContentEditable).toBe(true));
+  });
+
+  // R3: one tap on the page writes, with the caret at the spot the tap landed on
+  it("enters the writing screen on one tap in the page, the caret at the tapped text", async () => {
+    await viewNoteA();
+    const text = screen.getByText(TEXT_A);
+    const box = text.getBoundingClientRect();
+
+    fireEvent.click(text, { clientX: box.right - 1, clientY: box.top + box.height / 2 });
+
+    await waitFor(() => expect(document.activeElement).toBe(editorBody()));
+    const caret = globalThis.getSelection() as Selection;
+    expect(editorBody().contains(caret.anchorNode)).toBe(true);
+    // The right end of the line: the caret goes to the end of that text, not the body's start
+    expect(caret.anchorOffset).toBeGreaterThan(0);
+  });
+
+  // A selection made by dragging is there to be copied, not a tap to write
+  it("stays in the viewer when the click ends a selection", async () => {
+    await viewNoteA();
+    const text = screen.getByText(TEXT_A);
+    globalThis.getSelection()?.selectAllChildren(text);
+
+    fireEvent.click(text);
+
+    expect(screen.queryByTestId("editor-body")).toBeNull();
+    globalThis.getSelection()?.removeAllRanges();
   });
 
   // The viewer's ⌘A (and Android's "Select all") is the page's own. It took the list beside
@@ -913,24 +967,26 @@ describe("Workspace › ノートに効くキー", () => {
   beforeEach(setupWorkspace);
   afterEach(teardownWorkspace);
 
-  it("steps to the next note on ⌘↓ from outside the text", async () => {
+  // The list grows upward from its foot, the newest lowest: the older note is the one above
+  it("steps to the older note above on ⌘↑ from outside the text", async () => {
     disk.set(FILE_B, BODY_B);
     await openNoteA();
 
-    fireEvent.keyDown(globalThis, { key: "ArrowDown", metaKey: true });
+    fireEvent.keyDown(globalThis, { key: "ArrowUp", metaKey: true });
 
     await waitFor(() => expect(titleInput().value).toBe(TITLE_B));
   });
 
-  // While the focus is on a list row, `Up` and `Down` move within that list. The focus moves
-  // to the row they land on: without that, a second `Down` counts again from the first row
-  it("steps to the next note on ↓ inside the list and moves focus with it", async () => {
+  // While the focus is on a list row, `Up` and `Down` move within that list as it is drawn. The
+  // focus moves to the row they land on: without that, a second press counts again from the
+  // first row
+  it("steps to the older note on ↑ inside the list and moves focus with it", async () => {
     disk.set(FILE_B, BODY_B);
     await openNoteA();
     const rowA = await rowOf(TITLE_A);
     rowA.focus();
 
-    fireEvent.keyDown(rowA, { key: "ArrowDown" });
+    fireEvent.keyDown(rowA, { key: "ArrowUp" });
 
     await waitFor(() => expect(shownTitle()).toBe(TITLE_B));
     expect(document.activeElement).toBe(await rowOf(TITLE_B));
@@ -949,15 +1005,15 @@ describe("Workspace › ノートに効くキー", () => {
     expect(titleInput().value).toBe(TITLE_A);
   });
 
-  // `Up` pressed at the end has nowhere to go. It does not preventDefault either, so it falls
-  // through to scrolling the list
-  it("does nothing on ↑ at the top of the list", async () => {
+  // `Down` pressed on the newest, at the foot, has nowhere to go. It does not preventDefault
+  // either, so it falls through to scrolling the list
+  it("does nothing on ↓ at the foot of the list", async () => {
     disk.set(FILE_B, BODY_B);
     await openNoteA();
     const rowA = await rowOf(TITLE_A);
     rowA.focus();
 
-    const consumed = !fireEvent.keyDown(rowA, { key: "ArrowUp" });
+    const consumed = !fireEvent.keyDown(rowA, { key: "ArrowDown" });
 
     await sleep(100);
     expect(titleInput().value).toBe(TITLE_A);
@@ -1859,45 +1915,34 @@ describe("Workspace › Codex の面", () => {
     await waitFor(() => expect(viewerTitle()).toBe(TITLE_C));
   });
 
-  it("makes a codex from the panel after a confirmation and lands on it", async () => {
-    await openNoteA();
+  // 91, 93: the note goes to Codex once the press has been held, the list carries on with the
+  // next note, and the Codex it became is where the place pill's Codex now goes
+  it("makes a codex once held, and goes on with the next note", async () => {
+    disk.set(FILE_B, BODY_B);
+    await viewNoteA();
 
     await runPanelAction("Codex にする");
-    // The action cannot be undone, so nothing moves at the moment it is pressed
-    expect(countOf("promote_note_to_codex")).toBe(0);
-    fireEvent.click(await confirmPromote());
 
     await waitFor(() => expect(kinds.get(FILE_A)).toBe("codex"));
-    // It landed on the Codex surface, with the same note open to be read
-    await waitFor(() =>
-      expect(document.querySelector(".list-pane-title")?.textContent).toBe("Codex"),
-    );
-    await rowOf(TITLE_A);
-    await waitFor(() => expect(viewerTitle()).toBe(TITLE_A));
+    expect(document.querySelector(".list-pane-title")?.textContent).toBe("Note");
+    await waitFor(() => expect(viewerTitle()).toBe(TITLE_B));
+    expect(shell?.lastNote().codex).toBe(FILE_A);
   });
 
-  // Someone who reached the confirmation from the keyboard alone must be able to press or
-  // cancel it without hunting for the focus
-  it("hands the focus to the confirmation", async () => {
-    await openNoteA();
+  // The action cannot be undone, so a press too short to count moves nothing
+  it("moves nothing on a short press", async () => {
+    await viewNoteA();
+    const panel = await openPanel();
+    const button = within(panel).getByRole("button", { name: /^Codex にする/u });
 
-    await runPanelAction("Codex にする");
+    button.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "mouse", bubbles: true }));
+    await sleep(200);
+    button.dispatchEvent(new PointerEvent("pointerup", { pointerType: "mouse", bubbles: true }));
+    fireEvent.click(button);
 
-    const confirm = await confirmPromote();
-    await waitFor(() => expect(document.activeElement).toBe(confirm));
-  });
-
-  // Esc folds the confirmation first. The panel behind it stays where it was
-  it("folds only the confirmation on Escape", async () => {
-    await openNoteA();
-    await runPanelAction("Codex にする");
-    await confirmPromote();
-
-    fireEvent.keyDown(await confirmPromote(), { key: "Escape" });
-
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(openedPanel()).not.toBeNull();
+    await sleep(300);
     expect(countOf("promote_note_to_codex")).toBe(0);
+    expect(button.textContent).toContain("押し続けて Codex に");
   });
 
   // Promoting while the scheduled save has fired and the write is in flight sends that write
@@ -1911,7 +1956,6 @@ describe("Workspace › Codex の面", () => {
     await waitFor(() => expect(countOf("update_draft")).toBe(1), { timeout: 3000 });
 
     await runPanelAction("Codex にする");
-    fireEvent.click(await confirmPromote());
     await sleep(100);
     expect(countOf("promote_note_to_codex")).toBe(0);
 
@@ -1962,7 +2006,7 @@ describe("Workspace › Codex の面", () => {
     navigateTo?.("/codex");
     await rowOf(TITLE_C);
 
-    fireEvent.click(screen.getByRole("button", { name: /新規/u }));
+    await chooseFromRing(/Codex を作る/u);
 
     await waitFor(() => expect(countOf("create_draft")).toBe(1));
     expect(calls.find((c) => c.cmd === "create_draft")?.args.kind).toBe("codex");
@@ -2346,9 +2390,10 @@ describe("Workspace › Codex の版", () => {
     expect(disk.get(FILE_C)).toBe(BODY_C);
   });
 
-  // A phone has no width to stand a panel in. The history is not a sheet but its own screen
-  // that replaces the body, and pressing a version returns to the body in compare mode
-  it("gives a phone a panel screen whose history tab swaps with the body", async () => {
+  // 29: a phone's panel is a sheet over the body, not a screen in its place. The history is
+  // its second tab, the body stays to be compared under it, and pressing a version sinks the
+  // sheet to its first stop, where the compare line and its ways out are
+  it("gives a phone a sheet whose history compares under the body", async () => {
     await page.viewport(390, 844);
     versions.set(FILE_C, [
       { id: "v2", message: null, body: BODY_C },
@@ -2358,44 +2403,31 @@ describe("Workspace › Codex の版", () => {
 
     await openHistoryTab();
 
-    await waitFor(() => expect(document.querySelector(".history-panel--screen")).not.toBeNull());
-    // The whole screen is replaced, so no body remains. Restore is not under the row either;
-    // the compare bar carries it
-    expect(screen.queryByTestId("editor-body")).toBeNull();
-    expect(document.querySelector(".detail-body")).toBeNull();
-    expect(screen.queryByRole("button", { name: "版 2 に戻す" })).toBeNull();
+    await waitFor(() =>
+      expect(document.querySelector(".note-sheet .history-panel--screen")).not.toBeNull(),
+    );
+    expect(document.querySelector(".detail-body")).not.toBeNull();
 
     fireEvent.click(await versionRow(1));
 
-    // Back to the body in compare mode. Gutter marks are raised, and the bar below says what
-    // is being compared
-    const bar = await waitFor(() => {
-      const found = document.querySelector<HTMLElement>(".compare-bar");
+    const line = await waitFor(() => {
+      const found = document.querySelector<HTMLElement>(".sheet-summary--compare");
       expect(found).not.toBeNull();
       return found as HTMLElement;
     });
-    expect(document.querySelector(".history-panel--screen")).toBeNull();
-    expect(bar.querySelector(".compare-bar-title")?.textContent).toBe("版 1 と比較中");
+    expect(line.querySelector(".compare-bar-title")?.textContent).toBe("版 1 と比較中");
     await waitFor(() =>
-      expect(bar.querySelector(".compare-bar-detail")?.textContent).toBe(
+      expect(line.querySelector(".compare-bar-detail")?.textContent).toBe(
         "3 行追加 · 3 行削除 · 読み取り専用",
       ),
     );
     await waitFor(() =>
       expect(document.querySelectorAll(".diff-mark--add").length).toBeGreaterThan(0),
     );
-    // The history button on the bar goes back to the screen
-    fireEvent.click(within(bar).getByRole("button", { name: "履歴" }));
-    await waitFor(() => expect(document.querySelector(".history-panel--screen")).not.toBeNull());
 
-    // The back arrow returns to the body. Compare mode is still on, so the bar stays. Looking
-    // it up by its screen-reader name also checks that the arrow names where it goes back to
-    fireEvent.click(screen.getByLabelText("本文に戻る"));
-    await waitFor(() => expect(document.querySelector(".compare-bar")).not.toBeNull());
-
-    // The close button ends the comparison. The viewer's body comes back
-    fireEvent.click(document.querySelector(".compare-bar-close") as HTMLElement);
-    await waitFor(() => expect(document.querySelector(".compare-bar")).toBeNull());
+    // Its × ends the comparison and puts the sheet away; the body is read again
+    fireEvent.click(line.querySelector(".icon-button") as HTMLElement);
+    await waitFor(() => expect(document.querySelector(".sheet-summary--compare")).toBeNull());
     await screen.findByText(TEXT_C);
   });
 });
@@ -2660,7 +2692,6 @@ describe("Workspace › 通らなかった操作", () => {
     await viewNoteA();
 
     await runPanelAction("Codex にする");
-    fireEvent.click(await confirmPromote());
 
     await waitFor(() => expect(shell?.toast()?.message).toBe("Codex にできませんでした"));
     expect(kinds.get(FILE_A)).toBeUndefined();
@@ -2687,7 +2718,7 @@ describe("Workspace › 通らなかった操作", () => {
       expect(document.querySelector(".list-pane-title")?.textContent).toBe("Codex"),
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /新規/u }));
+    await chooseFromRing(/Codex を作る/u);
 
     await waitFor(() => expect(shell?.toast()?.message).toBe("Codex を作れませんでした"));
   });

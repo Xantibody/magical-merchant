@@ -1,12 +1,12 @@
 /**
- * Where the note panel stands: docked at the right edge of a wide window, swapped in for the body
- * as a phone's own screen, or folded. Also what is open inside it: the details, the "Make a
- * Codex" confirmation, and which tab shows.
+ * Where the note panel stands: docked at the right edge of a wide window, risen from the foot
+ * as a phone's sheet, or folded. Also what is open inside it: the details and which tab
+ * shows.
  *
- * Kept apart from the view because the two presentations follow one rule that was written out at
- * every entry: a wide window docks the panel, a phone puts its screen up (`show`). Whether the
- * panel is docked belongs to the app (`shell.notePanelPinned`, like the list's pin), so it comes
- * in through the deps; the phone's screen and the rest belong to the note on screen.
+ * Kept apart from the view because the two presentations follow one rule that every entry
+ * shares: a wide window docks the panel, a phone raises its sheet (`show`). Whether the
+ * panel is docked belongs to the app (`shell.notePanelPinned`, like `shell.listTucked`), so it
+ * comes in through the deps; the phone's sheet and the rest belong to the note on screen.
  */
 
 import { batch, createEffect, createSignal, on } from "solid-js";
@@ -29,7 +29,7 @@ export interface NotePanelDeps {
 export interface NotePanelState {
   /** Puts the phone's panel screen up or takes it down. */
   setScreen: Setter<boolean>;
-  /** Whether the panel screen is up on a phone. It swaps with the body. */
+  /** Whether the panel's sheet is up on a phone, over the note. */
   screenShown: () => boolean;
   /** Whether the right panel is on screen in a wide window. */
   open: () => boolean;
@@ -38,9 +38,6 @@ export interface NotePanelState {
   /** Whether the panel's details (created, updated, surroundings) are unfolded. */
   detailsOpen: Accessor<boolean>;
   setDetailsOpen: Setter<boolean>;
-  /** Whether the "Make a Codex" confirmation is up. */
-  confirmOpen: Accessor<boolean>;
-  setConfirmOpen: Setter<boolean>;
   /** Puts the panel up: docked in a wide window, as its own screen on a phone. */
   show: () => void;
   /**
@@ -54,13 +51,12 @@ export interface NotePanelState {
 
 export function createNotePanel(deps: NotePanelDeps): NotePanelState {
   /**
-   * Whether the panel screen is up on a phone. There is no width to lay it alongside, so it is
-   * one surface that swaps with the body. Pressing a version returns to the body in compare
-   * mode, with the compare bar attached below.
+   * Whether the panel's sheet is up on a phone. There is no width to lay it alongside, so it
+   * rises from the foot over the note. Pressing a version sinks the sheet to its first stop,
+   * which then reads as the compare line.
    */
   const [screen, setScreen] = createSignal(false);
   const [detailsOpen, setDetailsOpen] = createSignal(false);
-  const [confirmOpen, setConfirmOpen] = createSignal(false);
 
   const show = (): void => {
     if (deps.twoPane()) {
@@ -109,8 +105,6 @@ export function createNotePanel(deps: NotePanelDeps): NotePanelState {
     tab: () => (deps.historyOpen() ? "history" : "note"),
     detailsOpen,
     setDetailsOpen,
-    confirmOpen,
-    setConfirmOpen,
     show,
     close,
     toggle,

@@ -45,7 +45,7 @@ interface DotProps {
 }
 
 /**
- * The button itself. The header of a narrow window uses it alone. The mark is a child, not
+ * The button itself. A phone uses it alone, in its top right corner. The mark is a child, not
  * `::after`, because `::after` is where the hint layer draws its badge.
  */
 export function StatusDotButton(props: DotProps): JSX.Element {
@@ -76,7 +76,7 @@ interface LinksProps {
   onKeys: () => void;
 }
 
-/** The way around without a key. Beside the dot on hover, in the details where there is none. */
+/** The way around without a key, at the foot of the status details. */
 export function StatusLinks(props: LinksProps): JSX.Element {
   return (
     <>
@@ -99,24 +99,27 @@ export function StatusLinks(props: LinksProps): JSX.Element {
   );
 }
 
-/**
- * State fixed to the window's lower right, outside the paper (ADR 0011). A wide window only:
- * a narrow one has the capture dock there, so its dot is in the header.
- */
-export default function StatusDot(props: DotProps & LinksProps): JSX.Element {
-  return (
-    <div class="status-dot-area">
-      <div class="status-dot-links">
-        <StatusLinks
-          onScrawl={props.onScrawl}
-          onSearch={props.onSearch}
-          onSettings={props.onSettings}
-          onKeys={props.onKeys}
-        />
-      </div>
-      <StatusDotButton sync={props.sync} onOpen={props.onOpen} />
-    </div>
-  );
+/** The sync half of the status in words. Empty where there is nothing to say yet. */
+export function syncLine(sync: SyncStatus): string {
+  switch (sync) {
+    case "syncing": {
+      return t().sync.syncing;
+    }
+    case "error": {
+      return t().sync.failed;
+    }
+    case "signed-out": {
+      return t().sync.signedOut;
+    }
+    case "needs-setup": {
+      // This device keeps everything to itself: no sync to speak of
+      return "";
+    }
+    default: {
+      // success, and idle (set up, nothing in flight): the details say the same
+      return t().sync.synced;
+    }
+  }
 }
 
 function saveLine(status: SaveStatus, at: string): string {
@@ -135,6 +138,61 @@ function saveLine(status: SaveStatus, at: string): string {
       return "";
     }
   }
+}
+
+/**
+ * The whole state as one short line, the save's time then the sync: what the phone's bar says
+ * once it has folded while reading (12). The save half falls back the way the status line's does.
+ */
+export function statusWords(save: { status: SaveStatus; at: string }, sync: SyncStatus): string {
+  const tone = dotTone(save.status, sync);
+  const first =
+    saveLine(save.status, save.at) || (tone === "ok" ? t().common.saved : dotLabel(tone, sync));
+  const second = syncLine(sync);
+  return second ? `${first} · ${second}` : first;
+}
+
+/**
+ * The save half alone. Beside a note's title the folded bar has room for one half (56): while
+ * all is well the dot already says the sync, so the save is said whole and the title gives way.
+ */
+export function saveWords(save: { status: SaveStatus; at: string }, sync: SyncStatus): string {
+  return statusWords(save, sync).split(" · ")[0] ?? "";
+}
+
+/**
+ * The dot with its words, at the top of the shelf's rail (R5): the save and the sync are read
+ * without pressing anything. The colour keeps its meaning; the words say which half it is
+ * about. Pressing it opens the same details the bare dot does.
+ */
+export function StatusLine(props: DotProps): JSX.Element {
+  const shell = useShell();
+  const tone = (): DotTone => dotTone(shell.saveState().status, props.sync);
+  // With no save on this screen, a word stands in so the line is never blank. While all is
+  // well that is just "saved": the sync half has a line of its own and is not said twice
+  const save = (): string =>
+    saveLine(shell.saveState().status, shell.saveState().at) ||
+    (tone() === "ok" ? t().common.saved : dotLabel(tone(), props.sync));
+  const label = (): string => `${t().status.label}: ${dotLabel(tone(), props.sync)}`;
+
+  return (
+    <button
+      type="button"
+      class="status-line"
+      data-tone={tone()}
+      title={label()}
+      aria-label={label()}
+      aria-expanded={shell.popover() === "sync"}
+      data-hint-key={shortcutLabel("syncNow")}
+      onClick={(e) => props.onOpen(e.currentTarget)}
+    >
+      <span class="status-dot-mark" />
+      <span class="status-line-text">
+        <span class="status-line-save">{save()}</span>
+        <Show when={syncLine(props.sync)}>{(line) => <span>{line()}</span>}</Show>
+      </span>
+    </button>
+  );
 }
 
 /** A state that is on. Pressing it leads to its switch in the panel. */

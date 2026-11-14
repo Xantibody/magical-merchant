@@ -846,11 +846,7 @@ describe("Templates", () => {
   });
 });
 
-/**
- * The screen borrows Workspace's two panes, but it has no rail entry and no pin, so nothing
- * could ever open a list that floats like the Note list. On a wide screen it stands as a
- * permanent column beside the template being edited.
- */
+/** On a wide screen the list stands as a permanent column beside the template being edited. */
 describe("Templates on a wide screen", () => {
   beforeAll(async () => {
     await import("../index.css");
@@ -866,18 +862,6 @@ describe("Templates on a wide screen", () => {
     clearMocks();
     cleanup();
     document.body.innerHTML = "";
-  });
-
-  it("keeps the list in view and within reach", async () => {
-    const { container } = renderTemplates();
-    await waitFor(() => expect(screen.getByText("daily")).toBeDefined());
-
-    const style = getComputedStyle(listPane(container));
-
-    expect(style.opacity).toBe("1");
-    expect(style.transform).toBe("none");
-    expect(style.pointerEvents).toBe("auto");
-    expect(style.position).not.toBe("absolute");
   });
 
   // The title is one line heading the body's 640px column, not a field that stretches down

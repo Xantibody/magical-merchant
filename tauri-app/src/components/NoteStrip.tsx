@@ -13,8 +13,11 @@ interface NoteStripProps {
   mapOpen: boolean;
   /** Whether a version is being compared. The body is read-only then, so writing is not offered. */
   historyOpen: boolean;
-  /** The phone's way back to the list. */
-  onBack: () => void;
+  /** Reading down: the strip steps back until the page turns up or the pointer comes near (63). */
+  slim?: boolean;
+  /** The page alone (85): every pane and bar but the paper, until Esc or the same button. */
+  onPaper: () => void;
+
   onToggleMap: () => void;
   onWrite: () => void;
   onDone: () => void;
@@ -22,7 +25,7 @@ interface NoteStripProps {
 }
 
 /**
- * The strip over the page. The viewer: back (a phone's) · map · write · tidy.
+ * The strip over the page. The viewer: map · write · tidy.
  * The writing screen: done. Keys live in the titles.
  */
 export default function NoteStrip(props: NoteStripProps): JSX.Element {
@@ -32,20 +35,24 @@ export default function NoteStrip(props: NoteStripProps): JSX.Element {
   const panelLabel = (): string => (props.kind === "codex" ? t().codex.panel : t().notes.panel);
 
   return (
-    <div class="note-strip">
+    <div
+      class="note-strip"
+      classList={{ "note-strip--slim": props.slim === true, "note-strip--writing": props.writing }}
+    >
       <Show
         when={props.writing}
         fallback={
           <>
+            <span class="note-strip-fill" />
             <button
               type="button"
-              class="icon-button detail-back"
-              aria-label={t().notes.backToList}
-              onClick={() => props.onBack()}
+              class="icon-button"
+              title={t().palm.paper}
+              aria-label={t().palm.paper}
+              onClick={() => props.onPaper()}
             >
-              <Icon name="arrow-left" size={18} />
+              <Icon name="corners-out" size={17} />
             </button>
-            <span class="note-strip-fill" />
             <button
               type="button"
               class="icon-button"

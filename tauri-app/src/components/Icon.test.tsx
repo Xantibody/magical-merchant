@@ -41,22 +41,6 @@ describe("Icon", () => {
     expect(span.style.height).toBe("24px");
   });
 
-  it("renders a fill weight icon from the fill asset directory", async () => {
-    // The fill weight is a separate file under `assets/fill/`. An SVG still renders even
-    // if the registration still points at regular, so we check the shape differs from
-    // regular as well.
-    const { baseElement: regular } = render(() => <Icon name="push-pin" />);
-    const regularScreen = page.elementLocator(regular);
-    await expect.element(regularScreen.locator(".icon svg")).toBeInTheDocument();
-    const regularPath = query(regular, ".icon svg path").getAttribute("d");
-    cleanup();
-
-    const { baseElement: filled } = render(() => <Icon name="push-pin-fill" />);
-    const filledScreen = page.elementLocator(filled);
-    await expect.element(filledScreen.locator(".icon svg")).toBeInTheDocument();
-    expect(query(filled, ".icon svg path").getAttribute("d")).not.toBe(regularPath);
-  });
-
   it("renders correctly on second render with the same icon name", async () => {
     const { baseElement: first } = render(() => <Icon name="gear" />);
     const screen1 = page.elementLocator(first);

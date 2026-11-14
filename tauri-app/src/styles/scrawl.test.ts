@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeAll, afterEach } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
+import { page } from "vitest/browser";
 
 /**
  * The delete bar floats over Scrawl while selecting. If the scroll area's bottom padding is
@@ -8,16 +9,15 @@ function mountScrawl(entries: number): void {
   const rows = Array.from(
     { length: entries },
     (_, i) => `
-      <article class="entry">
+      <article class="swipe-row"><div class="entry swipe-face">
         <span class="entry-time">0${i}:00</span>
         <span class="entry-rail"><span class="entry-rail-line"></span><span class="entry-rail-dot"></span></span>
         <div class="entry-body"><p class="entry-text">エントリ ${i}</p></div>
-      </article>`,
+      </div></article>`,
   ).join("");
 
   document.body.innerHTML = `
     <div class="app">
-      <header class="header">header</header>
       <main class="app-main">
         <div class="scrawl scrawl--selecting">
           <div class="scrawl-scroll">
@@ -106,27 +106,18 @@ describe("scrawl record text", () => {
   });
 });
 
-/** Lay out the tag row, digest, day heading and promotion link so the separations show. */
+/**
+ * Lay out the days with a promotion link, and under them the band of digest and tags, so
+ * the separations show.
+ */
 function mountChrome(): void {
   document.body.innerHTML = `
     <div class="scrawl">
       <div class="scrawl-scroll">
         <div class="scrawl-column">
-          <div class="scrawl-head">
-            <div class="tag-filter">
-              <span class="tag-filter-label">タグ</span>
-              <div class="tag-filter-chips"><button class="tag-chip" type="button">#SF6</button></div>
-            </div>
-            <section class="digest-line">
-              <span class="digest-label">今週</span><span>4日で12件</span>
-              <span class="digest-sep">·</span>
-              <button class="digest-year-ago" type="button">1年前の今日</button>
-              <button class="icon-button digest-close" type="button">x</button>
-            </section>
-          </div>
           <section class="day-group">
             <header class="day-heading"><h2 class="day-heading-label">今日</h2></header>
-            <article class="entry">
+            <article class="swipe-row"><div class="entry swipe-face">
               <div class="entry-body">
                 <p class="entry-text">ベガのラッシュ止まらん</p>
                 <div class="entry-notes">
@@ -135,18 +126,40 @@ function mountChrome(): void {
                   </span>
                 </div>
               </div>
-            </article>
+            </div></article>
           </section>
           <section class="day-group">
             <header class="day-heading"><h2 class="day-heading-label">昨日</h2></header>
           </section>
         </div>
       </div>
+      <div class="scrawl-composer">
+        <div class="scrawl-head">
+          <div class="scrawl-band">
+            <section class="digest-line">
+              <span>4日で12件</span>
+              <button class="digest-year-ago" type="button">1年前の今日</button>
+              <button class="icon-button digest-close" type="button">x</button>
+            </section>
+            <div class="tag-filter">
+              <div class="tag-filter-chips">
+                <button class="tag-chip" type="button">#SF6</button>
+                <button class="tag-chip" type="button">#CognitiveBias</button>
+                <button class="tag-chip" type="button">#design</button>
+                <button class="tag-chip" type="button">#perf</button>
+                <button class="tag-chip" type="button">#sync</button>
+                <button class="tag-chip" type="button">#fgc</button>
+              </div>
+            </div>
+          </div>
+          <button class="icon-button" type="button">cal</button>
+        </div>
+      </div>
     </div>`;
 }
 
-/** The height limit for one line. Text at 12.5px on two lines always exceeds it. */
-const ONE_LINE = 24;
+/** S4: the band is one row a chip high; a second line of chips or of digest would exceed it. */
+const ONE_ROW = 44;
 
 const TRANSPARENT = "rgba(0, 0, 0, 0)";
 
@@ -160,15 +173,38 @@ describe("scrawl chrome", () => {
   });
 
   // Giving the weekly summary a border and a ground adds one more box on top of the reading
-  it("prints the weekly digest as a line, not a card", () => {
+  it("prints the weekly digest as words in the band, not a card", () => {
     mountChrome();
-    const digest = element(".digest-line");
-
-    const style = getComputedStyle(digest);
+    const style = getComputedStyle(element(".digest-line"));
 
     expect(style.backgroundColor).toBe(TRANSPARENT);
     expect(style.borderTopWidth).toBe("0px");
-    expect(digest.getBoundingClientRect().height).toBeLessThanOrEqual(ONE_LINE);
+  });
+
+  // The week and the tags share one row and scroll sideways instead of wrapping
+  it("keeps the week and the tags to one sideways-scrolling row", () => {
+    mountChrome();
+    const band = element(".scrawl-band");
+    band.style.maxWidth = "240px";
+
+    expect(element(".scrawl-head").getBoundingClientRect().height).toBeLessThanOrEqual(ONE_ROW);
+    expect(band.scrollWidth).toBeGreaterThan(band.clientWidth);
+    expect(getComputedStyle(band).overflowX).toBe("auto");
+  });
+
+  // S5: the day in view stays readable while its records scroll under it
+  it("sticks the day heading to the top edge of the scroll area", () => {
+    mountChrome();
+    const scroll = element(".scrawl-scroll");
+    scroll.style.flex = "none";
+    scroll.style.height = "120px";
+    const today = element(".day-group .entry");
+    today.style.height = "600px";
+
+    scroll.scrollTop = 300;
+
+    const heading = element(".day-group .day-heading").getBoundingClientRect();
+    expect(heading.top).toBeCloseTo(scroll.getBoundingClientRect().top, 0);
   });
 
   // A rule where heading size and spacing already suffice doubles the signal for a break
@@ -201,14 +237,14 @@ describe("scrawl chrome", () => {
 /** One entry with its hidden promote button, as ScrawlEntry draws it. */
 function mountEntry(): void {
   document.body.innerHTML = `
-    <article class="entry">
+    <article class="swipe-row"><div class="entry swipe-face">
       <div class="entry-body">
         <p class="entry-text">ベガのラッシュ止まらん</p>
         <div class="entry-actions">
           <button class="icon-button entry-action" type="button">Note にする</button>
         </div>
       </div>
-    </article>`;
+    </div></article>`;
 }
 
 /**
@@ -257,5 +293,176 @@ describe("the promote button on an entry", () => {
 
     expect(matchMedia("(hover: hover)").matches).toBe(true);
     expect(getComputedStyle(element(".entry-actions")).display).not.toBe("none");
+  });
+});
+
+/**
+ * A phone's Scrawl: the list, then the shell's place pill stretched over its foot with the
+ * field carried into its slot, as AppLayout and Scrawl draw them together.
+ */
+function mountDock(entries: number, newest = false): void {
+  const rows = Array.from(
+    { length: entries },
+    (_, i) =>
+      `<article class="swipe-row"><div class="entry swipe-face"><div class="entry-body"><p class="entry-text">エントリ ${i}</p></div></div></article>`,
+  ).join("");
+  document.body.innerHTML = `
+    <div class="app">
+      <div class="app-column">
+        <main class="app-main">
+          <div class="app-route">
+            <div class="scrawl">
+              <div class="scrawl-scroll"><div class="scrawl-column">${rows}</div></div>
+            </div>
+            <div class="place-switch place-switch--stretched">
+              <span class="place-switch-ground"></span>
+              <nav class="place-switch-places">
+                <button class="place-switch-button">S</button>
+                <button class="place-switch-button">N</button>
+                <button class="place-switch-button">C</button>
+              </nav>
+              <div class="place-switch-slot">
+                <div class="scrawl-dock">
+                  ${newest ? `<button class="scrawl-newest">↑</button>` : ""}
+                  <div class="capture-bar">
+                    <textarea class="capture-input" rows="1" placeholder="いま何を記録する？"></textarea>
+                    <button class="capture-send">送</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>`;
+}
+
+describe("Scrawl's field in the place pill on a phone", () => {
+  beforeAll(async () => {
+    await import("../index.css");
+    await page.viewport(390, 844);
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  afterAll(async () => {
+    await page.viewport(1280, 800);
+  });
+
+  // The same pill as on a list, the same height: stretching it must not make it a taller bar
+  it("keeps the resting pill at the list's pill height", () => {
+    mountDock(3);
+
+    expect(element(".place-switch").getBoundingClientRect().height).toBe(56);
+  });
+
+  // Floating with a gutter on both sides, not a bar running edge to edge
+  it("stretches between the gutters and floats over the foot", () => {
+    mountDock(3);
+    const pill = element(".place-switch").getBoundingClientRect();
+    const main = element(".app-main").getBoundingClientRect();
+
+    expect(pill.left).toBe(16);
+    expect(pill.right).toBe(390 - 16);
+    expect(main.bottom - pill.bottom).toBe(16);
+    expect(getComputedStyle(element(".place-switch")).borderTopWidth).toBe("0px");
+  });
+
+  it("sits the places and the field side by side without overlap", () => {
+    mountDock(3);
+    const places = element(".place-switch-places").getBoundingClientRect();
+    const field = element(".capture-bar").getBoundingClientRect();
+    const pill = element(".place-switch").getBoundingClientRect();
+
+    expect(places.right).toBeLessThanOrEqual(field.left);
+    expect(field.right).toBeLessThanOrEqual(pill.right);
+    expect(element(".capture-send").getBoundingClientRect().right).toBeLessThanOrEqual(pill.right);
+  });
+
+  // A wrapped question would make the resting field two lines tall beside the places
+  it("keeps the field's question on one line at rest", () => {
+    mountDock(3);
+    const input = element(".capture-input") as HTMLTextAreaElement;
+    input.placeholder = "What's on your mind? And a few more words to be sure";
+
+    expect(input.getBoundingClientRect().height).toBeCloseTo(
+      Number.parseFloat(getComputedStyle(input).lineHeight),
+      0,
+    );
+  });
+
+  // While writing, the field has the whole row; the places come back once it lets go
+  it("gives the field the whole row while it has the focus", () => {
+    mountDock(3);
+
+    element(".capture-input").focus();
+    const places = getComputedStyle(element(".place-switch-places"));
+
+    expect(places.pointerEvents).toBe("none");
+    expect(places.position).toBe("absolute");
+    expect(element(".capture-bar").getBoundingClientRect().width).toBeGreaterThan(340);
+  });
+
+  // They step aside by fading and sliding, the two things the motion rule lets move
+  it("moves the places aside by opacity and transform alone", () => {
+    mountDock(3);
+
+    element(".capture-input").focus();
+    const moved = element(".place-switch-places")
+      .getAnimations()
+      .map((animation) => (animation as CSSTransition).transitionProperty)
+      .toSorted();
+
+    expect(moved).toStrictEqual(["opacity", "transform", "visibility"]);
+  });
+
+  // Only the field: a focused button in the pill leaves the places where they are
+  it("keeps the places when a pill button has the focus", () => {
+    mountDock(3);
+
+    element(".place-switch-button").focus();
+
+    expect(getComputedStyle(element(".place-switch-places")).pointerEvents).not.toBe("none");
+    expect(element(".capture-bar").getBoundingClientRect().width).toBeLessThan(340);
+  });
+
+  // The pill floats, so the list keeps room under its last record for it
+  it("leaves no record under the pill", () => {
+    mountDock(60);
+    const scroll = element(".scrawl-scroll");
+    scroll.scrollTop = scroll.scrollHeight;
+
+    const last = [...document.querySelectorAll<HTMLElement>(".entry")].at(-1);
+
+    expect(last?.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+      element(".place-switch").getBoundingClientRect().top,
+    );
+  });
+
+  // The way back to the newest rides above the pill's right end, and up with a grown field
+  it("hangs the way back to the newest above the pill", () => {
+    mountDock(3, true);
+    const pill = element(".place-switch");
+    const input = element(".capture-input") as HTMLTextAreaElement;
+    input.value = "1\n2\n3\n4";
+
+    const newest = element(".scrawl-newest").getBoundingClientRect();
+
+    expect(newest.bottom).toBeLessThanOrEqual(pill.getBoundingClientRect().top);
+    expect(newest.right).toBe(pill.getBoundingClientRect().right);
+    expect(newest.height).toBeGreaterThanOrEqual(44);
+  });
+
+  // Where the keyboard leaves the page its height, the pill rides on top of it
+  it("lifts the pill over the keyboard by the inset it is handed", () => {
+    mountDock(3);
+    const pill = element(".place-switch");
+    const resting = pill.getBoundingClientRect().bottom;
+
+    pill.style.setProperty("--keyboard-lift", "300px");
+
+    expect(resting - pill.getBoundingClientRect().bottom).toBe(300);
   });
 });

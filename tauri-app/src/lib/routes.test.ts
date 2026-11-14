@@ -30,8 +30,8 @@ describe("surface names", () => {
   });
 });
 
-// The phone header names the page under it. On a Japanese screen it used to say "Settings"
-// and "Browse" in English over pages whose own headings were translated
+// A phone's folded bar names the page it stands on. An English "Settings" or "Browse" on a
+// Japanese screen would disagree with pages whose own headings are translated
 describe("routeLabel", () => {
   afterEach(() => setLocale("ja"));
 

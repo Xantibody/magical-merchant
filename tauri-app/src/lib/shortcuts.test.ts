@@ -49,14 +49,14 @@ describe("shortcutLabel", () => {
     expect(shortcutLabel("noteHistory")).toBe("⌘⇧H");
   });
 
-  // The key that keeps the list flyout out. Both the badge and the wording at the foot of
-  // the list are handed out from here
-  it("prints the key that keeps the list flyout open", () => {
+  // The key that tucks the list beside a note. The grip's badge and the palette's row are
+  // handed out from here
+  it("prints the key that tucks the list", () => {
     setUserAgent(MAC);
-    expect(shortcutLabel("listPin")).toBe("⌘\\");
+    expect(shortcutLabel("sidebar")).toBe("⌘\\");
 
     setUserAgent(WINDOWS);
-    expect(shortcutLabel("listPin")).toBe("Ctrl+\\");
+    expect(shortcutLabel("sidebar")).toBe("Ctrl+\\");
   });
 
   it("spells the modifier out everywhere else", () => {
