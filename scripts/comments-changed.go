@@ -5,7 +5,7 @@
 // the hundred lines around it, so this keeps only the alerts whose line is
 // new since <base>:
 //
-//	go run scripts/comments-changed.go <base>   # git diff <base>, working tree
+//	go run scripts/comments-changed.go <base>   # git diff <base>, working tree, untracked files
 //
 // Exit 1 when an error-level alert survives; warnings and suggestions are
 // printed and let through, as Vale itself does.
@@ -127,12 +127,40 @@ func addedLines(base string) map[string]map[int]bool {
 			}
 		}
 	}
+	// git diff leaves out files git does not track yet. In CI everything is
+	// committed, so a new file only escaped the check on this machine
+	for _, file := range untrackedFiles() {
+		set := map[int]bool{}
+		for i := range fileLines(file) {
+			set[i+1] = true
+		}
+		added[file] = set
+	}
 	for f, set := range added {
 		if len(set) == 0 {
 			delete(added, f)
 		}
 	}
 	return added
+}
+
+// untrackedFiles lists the new files under the globs that .gitignore keeps.
+func untrackedFiles() []string {
+	args := append([]string{"ls-files", "--others", "--exclude-standard", "--"}, globs...)
+	cmd := exec.Command("git", args...)
+	cmd.Stderr = os.Stderr
+	out, err := cmd.Output()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "git ls-files:", err)
+		os.Exit(2)
+	}
+	var files []string
+	for _, l := range strings.Split(string(out), "\n") {
+		if l != "" {
+			files = append(files, l)
+		}
+	}
+	return files
 }
 
 func fileLines(path string) []string {

@@ -23,8 +23,8 @@ comments:
   vale core cli workers/src tauri-app/src tauri-app/src-tauri/src
 
 # What CI runs: typos over the tree, Vale over the lines added since `base`
-# (default: where this branch left main). Uncommitted edits count; new files
-# only once they are tracked
+# (default: where this branch left main). Uncommitted edits and untracked new
+# files count, so a check before `git add` sees what CI will see
 comments-changed base="":
   #!/usr/bin/env bash
   set -euo pipefail
