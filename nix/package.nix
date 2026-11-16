@@ -40,6 +40,7 @@ stdenv.mkDerivation (finalAttrs: {
       ../tauri-app/package.json
       ../tauri-app/pnpm-lock.yaml
       ../tauri-app/index.html
+      ../tauri-app/capture.html
       ../tauri-app/vite.config.ts
       ../tauri-app/tsconfig.json
     ];
