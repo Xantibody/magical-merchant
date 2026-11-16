@@ -39,7 +39,34 @@ browser with deterministic fixtures. Use it for layout/CLS checks and
 e2e-style verification (e.g. with `agent-browser`). The mock never reaches
 production builds; when adding a Tauri command, add a handler to
 `tauri-app/dev/ipc-mock.js` too — unknown commands throw so the gap is
-visible.
+visible. The recipe passes no arguments through, so a fixed port is
+`pnpm run dev:browser --port 5199 --strictPort` from `tauri-app/`.
+
+The [feature tour](features.md)'s screenshots come from this harness: a wide
+window at 1280×800 and a phone at 390×844, with the dark theme and Japanese
+pinned through `localStorage` (`theme` = `dark`, `locale` = `ja`) so two
+takes can be compared. Retake them when a screen changes shape; the fixture
+dates follow today, so every picture of Scrawl moves with the day it is
+taken on.
+
+## Sandbox
+
+`just sandbox` runs the real app over `.sandbox/`, a copy of
+[`fixtures/`](../fixtures/README.md) — the place to try something on real
+files without touching your own notes. The box carries no sync config, so
+nothing written there can reach R2, and the app honours the data directory
+it is pointed at in debug builds only.
+
+| Command                  | Description                                             |
+| ------------------------ | ------------------------------------------------------- |
+| `just sandbox`           | Start the app over the box, creating it if it is absent |
+| `just sandbox-seed`      | Copy `fixtures/` over the box again                     |
+| `just sandbox-seed-mine` | Also add your own templates to the box                  |
+| `just sandbox-reset`     | Throw the box away                                      |
+
+The recipes are one line each because the work is in `cargo xtask sandbox …`,
+where this machine's data directory and the app identifier already have
+answers in Rust.
 
 ## DevShell
 
@@ -66,13 +93,15 @@ fetch what they need:
 
 ### Root recipes
 
-| Command       | Description                                                    | CI  |
-| ------------- | -------------------------------------------------------------- | --- |
-| `just fmt`    | Format all files (`nix fmt`)                                   | ✓   |
-| `just check`  | The three module checks + `comments` (Vale and typos)          | ✓   |
-| `just test`   | `rust::test` + `tauri_app::test` + `workers::test`             | ✓   |
-| `just verify` | `fmt` → `check` → `test`. Run it before calling something done |     |
-| `just dev`    | `tauri_app::dev` — the one recipe worth a short name           |     |
+| Command         | Description                                                    | CI  |
+| --------------- | -------------------------------------------------------------- | --- |
+| `just fmt`      | Format all files (`nix fmt`)                                   | ✓   |
+| `just check`    | The three module checks + `comments`                           | ✓   |
+| `just comments` | Vale (English only, the proper nouns, proselint) and typos     | ✓   |
+| `just test`     | `rust::test` + `tauri_app::test` + `workers::test`             | ✓   |
+| `just verify`   | `fmt` → `check` → `test`. Run it before calling something done |     |
+| `just dev`      | `tauri_app::dev` — the one recipe worth a short name           |     |
+| `just sandbox`  | The app over a copy of `fixtures/` (see [Sandbox](#sandbox))   |     |
 
 Everything else is reached through its module — `just tauri_app::…`,
 `just rust::…`, `just workers::…`. Run `just --list <module>` to see them.
