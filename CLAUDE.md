@@ -53,9 +53,12 @@ ready to record the moment it opens (widgets exist for exactly this).
   the pencil (with `…` for the note's sheet) on a note. On a level (a note, a Settings page) a
   round back button stands after the pill. Browse, Settings and Templates are reached from the
   empty search field. Reading down folds the bar to one line of words (`lib/slim.ts`)
-- **Built from the foot**: Note / Codex lists and the search field's results rest on their
-  foot (`data-foot`, `lib/foot.ts`), newest nearest the thumb, with the page's name and its
-  探す field under them. Scrawl is the exception: it reads newest first from the top
+- **Newest first from the top, everywhere**: Scrawl, the Note / Codex and Templates lists,
+  Browse's records and the search field's results all read the same way, the newest at the
+  top under the page's name; ↓ is the older one. Only what is pressed sits at the foot: a
+  phone list's 探す field (`.list-foot`, over the pill), Scrawl's band, Browse's chips, the
+  search field and its chips. Building a list from the foot (newest nearest the thumb) was
+  tried and dropped: the order turned over between Scrawl and the other surfaces
 - **The ring** (`components/Ring.tsx`, `lib/ring.ts`): pressing a + (or holding the pill) opens a
   fan of labelled pills out of it — Scrawl に 1 行 · Note を作る · Codex を作る · テンプレートから. Slide
   onto one and let go, or let go first and tap. It is the one way to make a record from

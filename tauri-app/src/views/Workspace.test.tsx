@@ -967,12 +967,23 @@ describe("Workspace › ノートに効くキー", () => {
   beforeEach(setupWorkspace);
   afterEach(teardownWorkspace);
 
-  // The list grows upward from its foot, the newest lowest: the older note is the one above
-  it("steps to the older note above on ⌘↑ from outside the text", async () => {
+  // The list reads as Scrawl does, newest first from the top: the next note in list order is
+  // the one below
+  it("draws the rows in list order from the top", async () => {
+    disk.set(FILE_B, BODY_B);
+    renderWorkspace();
+    await rowOf(TITLE_B);
+
+    const titles = [...document.querySelectorAll(".list-row-title")].map((el) => el.textContent);
+
+    expect(titles).toStrictEqual([TITLE_A, TITLE_B]);
+  });
+
+  it("steps to the next note below on ⌘↓ from outside the text", async () => {
     disk.set(FILE_B, BODY_B);
     await openNoteA();
 
-    fireEvent.keyDown(globalThis, { key: "ArrowUp", metaKey: true });
+    fireEvent.keyDown(globalThis, { key: "ArrowDown", metaKey: true });
 
     await waitFor(() => expect(titleInput().value).toBe(TITLE_B));
   });
@@ -980,13 +991,13 @@ describe("Workspace › ノートに効くキー", () => {
   // While the focus is on a list row, `Up` and `Down` move within that list as it is drawn. The
   // focus moves to the row they land on: without that, a second press counts again from the
   // first row
-  it("steps to the older note on ↑ inside the list and moves focus with it", async () => {
+  it("steps to the next note on ↓ inside the list and moves focus with it", async () => {
     disk.set(FILE_B, BODY_B);
     await openNoteA();
     const rowA = await rowOf(TITLE_A);
     rowA.focus();
 
-    fireEvent.keyDown(rowA, { key: "ArrowUp" });
+    fireEvent.keyDown(rowA, { key: "ArrowDown" });
 
     await waitFor(() => expect(shownTitle()).toBe(TITLE_B));
     expect(document.activeElement).toBe(await rowOf(TITLE_B));
@@ -1005,15 +1016,15 @@ describe("Workspace › ノートに効くキー", () => {
     expect(titleInput().value).toBe(TITLE_A);
   });
 
-  // `Down` pressed on the newest, at the foot, has nowhere to go. It does not preventDefault
+  // `Up` pressed on the newest, at the top, has nowhere to go. It does not preventDefault
   // either, so it falls through to scrolling the list
-  it("does nothing on ↓ at the foot of the list", async () => {
+  it("does nothing on ↑ at the top of the list", async () => {
     disk.set(FILE_B, BODY_B);
     await openNoteA();
     const rowA = await rowOf(TITLE_A);
     rowA.focus();
 
-    const consumed = !fireEvent.keyDown(rowA, { key: "ArrowDown" });
+    const consumed = !fireEvent.keyDown(rowA, { key: "ArrowUp" });
 
     await sleep(100);
     expect(titleInput().value).toBe(TITLE_A);

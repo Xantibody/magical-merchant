@@ -1,4 +1,4 @@
-import { createMemo, For, Show } from "solid-js";
+import { For, Show } from "solid-js";
 import type { JSX } from "solid-js";
 import HoldButton from "./HoldButton";
 import Icon from "./Icon";
@@ -8,7 +8,6 @@ import type { DropTarget } from "./Ring";
 import TemplatePicker from "./TemplatePicker";
 import { closeSwipedRows, createArmed } from "../lib/palm-gestures";
 import type { NoteKind, Template } from "../lib/commands";
-import { fromTheFoot } from "../lib/foot";
 import { t } from "../lib/i18n";
 import { itemTitle, noteRowStamp, stepNote } from "../lib/items";
 import { ringChoices } from "../lib/ring";
@@ -19,9 +18,9 @@ import { shortcutLabel } from "../lib/shortcuts";
 
 /**
  * The keys that move to the neighbouring row, and their direction through `items` (newest
- * first). The list is drawn from its foot, so the row above is the older one.
+ * first). The list is drawn in that order from the top, so the row below is the older one.
  */
-const LIST_STEP_KEYS: Readonly<Record<string, 1 | -1>> = { ArrowUp: 1, ArrowDown: -1 };
+const LIST_STEP_KEYS: Readonly<Record<string, 1 | -1>> = { ArrowUp: -1, ArrowDown: 1 };
 
 interface NoteListProps {
   /** Which surface. A Codex row carries its version count; only a Note offers templates. */
@@ -103,8 +102,8 @@ function plusLabel(): string {
 
 /**
  * The list of Note and Codex: the middle pane of three on a wide window, a page of its own on a
- * phone. Built from the foot (lib/foot.ts): the newest row stands nearest the thumb, the list's
- * name, its count and its search under it, then the + that blooms the ring. Which popover is open
+ * phone. It reads as Scrawl does, newest first from the top under the list's name and count;
+ * what is pressed stays at the foot: the search, then the + that blooms the ring. Which popover is open
  * is the app's, so it reads that from the shell; what a press does to the selection is the
  * surface's, so it hands that back.
  */
@@ -115,10 +114,7 @@ export default function NoteList(props: NoteListProps): JSX.Element {
   /** The + that opened the ring: the template sheet hangs from it, and a press on it is not outside. */
   let menuTrigger: HTMLButtonElement | undefined;
 
-  /** The groups turned so the newest is at the foot, each group's label over its own rows. */
-  const footGroups = createMemo(() => fromTheFoot(props.groups));
-
-  /** The surface's own name: the list's foot says it large, a wide window's foot small. */
+  /** The surface's own name: a phone's list opens on it large, a wide window's foot says it small. */
   const name = (): string => MODE_LABELS[props.kind === "codex" ? ROUTES.CODEX : ROUTES.NOTES];
 
   /**
@@ -163,7 +159,7 @@ export default function NoteList(props: NoteListProps): JSX.Element {
    * body with nothing selected scroll the page, and that is not taken away.
    * The list has no input field, so no `isTypingTarget` check is needed either.
    *
-   * The keys follow the rows as drawn: up is older, since the list grows upward from its foot.
+   * The keys follow the rows as drawn: down is older, since the list reads newest first.
    * The focus moves first, without awaiting `switchTo`. The feel of the press is not delayed until
    * the save finishes. The row's background catches up when `selectedId` changes.
    */
@@ -249,110 +245,105 @@ export default function NoteList(props: NoteListProps): JSX.Element {
       </Popover>
 
       {/* The keys are taken by the rows inside (button); this only bundles them. Like
-          `.detail-body`, a container that claims no role. It hangs from its foot (data-foot,
-          lib/foot.ts) */}
-      <div
-        class="list-scroll"
-        data-foot
-        ref={listScrollRef}
-        role="presentation"
-        onKeyDown={onListKeyDown}
-      >
-        <div class="list-stack">
-          <Show when={props.groups.length} fallback={<EmptyNotes kind={props.kind} />}>
-            <For each={footGroups()}>
-              {(group) => (
-                <>
-                  <div class="list-group-label">{group.label}</div>
-                  <For each={group.items}>
-                    {(item) => {
-                      const [armed, armRef] = createArmed();
-                      return (
-                        <div class="swipe-row list-swipe" data-swipe ref={armRef}>
-                          {/* Behind the row (25): write it now, then the two that cannot be
+          `.detail-body`, a container that claims no role */}
+      <div class="list-scroll" ref={listScrollRef} role="presentation" onKeyDown={onListKeyDown}>
+        {/* A phone's list opens on its own large name, as Scrawl does: no bar above. It scrolls
+            away with the rows. A wide window names it in the foot bar below instead */}
+        <h1 class="list-big-title">
+          {name()}
+          <span class="list-big-count">{t().reach.count(props.items.length)}</span>
+        </h1>
+        <Show when={props.groups.length} fallback={<EmptyNotes kind={props.kind} />}>
+          <For each={props.groups}>
+            {(group) => (
+              <>
+                <div class="list-group-label">{group.label}</div>
+                <For each={group.items}>
+                  {(item) => {
+                    const [armed, armRef] = createArmed();
+                    return (
+                      <div class="swipe-row list-swipe" data-swipe ref={armRef}>
+                        {/* Behind the row (25): write it now, then the two that cannot be
                             taken back, each a held press (96). Mounted only for the row a stroke
                             has picked. Hidden from the keys and the reader: the same actions
                             stand in the note's panel, which both can reach */}
-                          <Show when={armed()}>
-                            <div class="swipe-actions" data-swipe-actions aria-hidden="true">
-                              <button
-                                type="button"
-                                class="swipe-action"
-                                tabIndex={-1}
-                                onClick={() => {
-                                  closeSwipedRows();
-                                  props.onWriteRow(item as NoteItem);
-                                }}
-                              >
-                                <Icon name="pencil" size={15} />
-                                {t().viewer.write}
-                              </button>
-                              <HoldButton
-                                label={
-                                  props.kind === "note" ? t().palm.rowToCodex : t().common.delete
+                        <Show when={armed()}>
+                          <div class="swipe-actions" data-swipe-actions aria-hidden="true">
+                            <button
+                              type="button"
+                              class="swipe-action"
+                              tabIndex={-1}
+                              onClick={() => {
+                                closeSwipedRows();
+                                props.onWriteRow(item as NoteItem);
+                              }}
+                            >
+                              <Icon name="pencil" size={15} />
+                              {t().viewer.write}
+                            </button>
+                            <HoldButton
+                              label={
+                                props.kind === "note" ? t().palm.rowToCodex : t().common.delete
+                              }
+                              tabIndex={-1}
+                              hint={t().palm.holdShort}
+                              icon={props.kind === "note" ? "book" : "trash"}
+                              danger={props.kind !== "note"}
+                              onConfirm={() => {
+                                closeSwipedRows();
+                                if (props.kind === "note") {
+                                  props.onPromoteRow(item as NoteItem);
+                                } else {
+                                  props.onDeleteRow(item as NoteItem);
                                 }
-                                tabIndex={-1}
-                                hint={t().palm.holdShort}
-                                icon={props.kind === "note" ? "book" : "trash"}
-                                danger={props.kind !== "note"}
-                                onConfirm={() => {
-                                  closeSwipedRows();
-                                  if (props.kind === "note") {
-                                    props.onPromoteRow(item as NoteItem);
-                                  } else {
-                                    props.onDeleteRow(item as NoteItem);
-                                  }
-                                }}
-                              />
-                            </div>
-                          </Show>
-                          <button
-                            type="button"
-                            class="list-row swipe-face"
-                            data-id={item.id}
-                            classList={{
-                              "list-row--selected": props.selectedId === item.id,
-                              "list-row--codex": props.kind === "codex",
-                            }}
-                            onClick={() => props.onSelect(item as NoteItem)}
-                          >
-                            <span class="list-row-title">{itemTitle(item)}</span>
-                            {/* Only a Codex row puts the version count on a folded-corner page.
+                              }}
+                            />
+                          </div>
+                        </Show>
+                        <button
+                          type="button"
+                          class="list-row swipe-face"
+                          data-id={item.id}
+                          classList={{
+                            "list-row--selected": props.selectedId === item.id,
+                            "list-row--codex": props.kind === "codex",
+                          }}
+                          onClick={() => props.onSelect(item as NoteItem)}
+                        >
+                          <span class="list-row-title">{itemTitle(item)}</span>
+                          {/* Only a Codex row puts the version count on a folded-corner page.
                               The first of the differences from Note */}
-                            <Show when={props.kind === "codex"}>
-                              <PageMark
-                                count={(item as NoteItem).versionCount ?? 0}
-                                dirty={(item as NoteItem).dirty ?? false}
-                              />
-                            </Show>
-                            <span class="list-row-stamp">
-                              {noteRowStamp(item as NoteItem, props.today)}
-                            </span>
-                          </button>
-                        </div>
-                      );
-                    }}
-                  </For>
-                </>
-              )}
-            </For>
-          </Show>
-
-          {/* A phone's list ends on its own name and its search, under the newest row: the
-              page is named where the thumb is, and reading up, both scroll away with the rows.
-              A wide window names it in the foot bar below instead */}
-          <div class="list-foot">
-            <h1 class="list-big-title">
-              {name()}
-              <span class="list-big-count">{t().reach.count(props.items.length)}</span>
-            </h1>
-            <button type="button" class="list-search" onClick={() => shell.openSearch()}>
-              <Icon name="magnifying-glass" size={15} />
-              {t().palm.search}
-            </button>
-          </div>
-        </div>
+                          <Show when={props.kind === "codex"}>
+                            <PageMark
+                              count={(item as NoteItem).versionCount ?? 0}
+                              dirty={(item as NoteItem).dirty ?? false}
+                            />
+                          </Show>
+                          <span class="list-row-stamp">
+                            {noteRowStamp(item as NoteItem, props.today)}
+                          </span>
+                        </button>
+                      </div>
+                    );
+                  }}
+                </For>
+              </>
+            )}
+          </For>
+        </Show>
       </div>
+
+      {/* A phone's search stands at the foot under the rows, where Scrawl keeps its band: in
+          reach of the thumb, over the pill. It steps away with the pill while reading down. A
+          wide window searches from the rail instead */}
+      <Show when={!shell.slim()}>
+        <div class="list-foot">
+          <button type="button" class="list-search" onClick={() => shell.openSearch()}>
+            <Icon name="magnifying-glass" size={15} />
+            {t().palm.search}
+          </button>
+        </div>
+      </Show>
 
       {/* A wide window's foot of the list sheet: its name and the + the ring blooms from. The
           + is "new" on both widths, so ⌘N's badge stands on it (a Note's only: ⌘N makes a

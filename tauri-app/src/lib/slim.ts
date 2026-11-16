@@ -6,12 +6,7 @@
  *
  * The turn is measured from the farthest point reached in the current direction, so a page
  * that settles a pixel or two after a fling (momentum, a re-layout) does not flicker the bar.
- *
- * "Down" and "the top" are a page's; a list built from the foot (lib/foot.ts) is read upward
- * from its foot, and the same steps run on its depth from there.
  */
-
-import { hiddenAbove, scrollDepth } from "./foot";
 
 export interface SlimState {
   slim: boolean;
@@ -61,11 +56,9 @@ export function watchSlim(root: HTMLElement, onSlim: (slim: boolean) => void): (
     if (!(el instanceof HTMLElement) || el.scrollHeight <= el.clientHeight + 1) {
       return;
     }
-    // A list built from the foot is read upward from its foot, a page downward from its top:
-    // either way the depth is how far from where it rests (lib/foot.ts)
-    const next = slimStep(states.get(el) ?? WHOLE, scrollDepth(el));
+    const next = slimStep(states.get(el) ?? WHOLE, el.scrollTop);
     states.set(el, next);
-    el.toggleAttribute("data-scrolled", hiddenAbove(el));
+    el.toggleAttribute("data-scrolled", el.scrollTop > 2);
     // Said on every event, not only on a change: the shell resets it on a move between
     // screens, and a list that kept its own state would never say it again
     onSlim(next.slim);
