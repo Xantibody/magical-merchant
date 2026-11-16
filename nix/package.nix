@@ -27,6 +27,7 @@ stdenv.mkDerivation (finalAttrs: {
 
   src = lib.fileset.toSource {
     root = ../.;
+    # AIDEV-NOTE: the desktop-package filter in .github/workflows/ci.yml copies this list; a page vite reads goes in both
     fileset = lib.fileset.unions [
       ../Cargo.toml
       ../Cargo.lock

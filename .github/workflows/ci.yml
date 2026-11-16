@@ -118,6 +118,7 @@ jobs:
               - 'tauri-app/src/**'
               - 'tauri-app/src-tauri/**'
               - 'tauri-app/index.html'
+              - 'tauri-app/capture.html'
               - 'tauri-app/package.json'
               - 'tauri-app/pnpm-lock.yaml'
               - 'tauri-app/vite.config.ts'
