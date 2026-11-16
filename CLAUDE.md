@@ -60,17 +60,18 @@ ready to record the moment it opens (widgets exist for exactly this).
   search field and its chips. Building a list from the foot (newest nearest the thumb) was
   tried and dropped: the order turned over between Scrawl and the other surfaces
 - **The ring** (`components/Ring.tsx`, `lib/ring.ts`): pressing a + (or holding the pill) opens a
-  fan of labelled pills out of it — Scrawl に 1 行 · Note を作る · Codex を作る · テンプレートから. Slide
-  onto one and let go, or let go first and tap. It is the one way to make a record from
-  anywhere
+  fan of labelled pills out of it — Scrawl に 1 行 · Note を作る · Codex を作る · テンプレートから (the
+  first reads ここに書く on Scrawl itself, where the field is right there). Slide onto one and let
+  go, or let go first and tap. It is the one way to make a record from anywhere
 - **Gestures** (`lib/gesture.ts` decides, `lib/palm-gestures.ts` acts): a stroke to the right
   goes one level back (nothing at the top of a surface), a stroke to the left opens a row's
   actions, up on the bar raises the note's sheet. Android's back peels the same layers
   (`lib/system-back.ts`). Every stroke has a visible control that does the same
 - **Status** (`components/StatusDot.tsx`, `styles/status-dot.css`): green (saved, synced), grey
   (saving or syncing), red (a failed save or sync, a lost login); a device never set up stays
-  green. A wide window says it in words at the top of the rail, a phone as one dot in the top
-  right corner. Pressing either opens the details (`SyncPopover` + `StatusDetails`): the save
+  green. It is one dot on both widths: at the top of the rail on a wide window, where its words
+  (the save, then the sync) show beside it on hover and focus like a place's name, and in the top
+  right corner on a phone. Pressing either opens the details (`SyncPopover` + `StatusDetails`): the save
   time, and for the open note the version, 比較中, every view state that is **on**
   (pressing one docks the note panel on its switch), 版を刻む and 編集前に戻す
   when they would do something, then the sync, and at the foot Scrawl · 検索 · Settings · キー.

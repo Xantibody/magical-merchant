@@ -98,7 +98,7 @@ never see the on-disk compression.
 ```mermaid
 flowchart TD
     App["App.tsx (Router)"]
-    Layout["AppLayout<br/>mobile header, search field, status dot, palette, sync state"]
+    Layout["AppLayout<br/>rail (wide) / place pill (phone), search field, status, ring, palette, sync state"]
     Scrawl["Scrawl (eager — launch view)"]
     Workspace["Workspace (lazy)<br/>serves /notes and /codex"]
     Browse["Browse (lazy)"]

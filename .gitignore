@@ -63,7 +63,10 @@ profiles/
 /plan-*.md
 *.zip
 
-# Vitest browser mode leaves failure screenshots next to the test
+# Vitest's own output: failure screenshots and attachments under `.vitest/attachments/`,
+# and the blob reporter's `.vitest/blob/`. Before 5.0 the directory was
+# `.vitest-attachments/`, which a checkout that ran the older one still holds
+.vitest/
 .vitest-attachments/
 __screenshots__/
 
