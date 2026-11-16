@@ -50,7 +50,7 @@ breaks the link.
 
 Note (formerly Notes) holds plain Markdown files. The **list** stands beside
 the page, 280px, one line per note grouped by how recently it was created,
-the newest at its foot; the grip on the page's left edge, or `⌘\`, tucks it
+the newest at the top as on Scrawl; the grip on the page's left edge, or `⌘\`, tucks it
 under the page to read wide and brings it back. On a phone the list is the
 page, and a note opens over it. A note opens
 in the **viewer**: the title as a heading, a meta line of created time and
