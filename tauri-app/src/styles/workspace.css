@@ -643,8 +643,8 @@
     flex: 1;
   }
 
-  /* The round + low on the right makes the new one here, and the list's own large name at its
-     foot names the surface, so a Note / Codex list has no head of its own on a phone.
+  /* The round + low on the right makes the new one here, and the list's own large name over
+     its rows names the surface, so a Note / Codex list has no head of its own on a phone.
      Templates' head (no actions group) is put away in palm.css */
   .list-pane-actions .new-note,
   .list-pane-head:has(.list-pane-actions) {

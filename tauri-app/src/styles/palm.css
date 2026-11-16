@@ -73,9 +73,9 @@
 
 /* ---------------- a page's own large name (a phone's) ---------------- */
 
-/* With no bar above, each page says its name in large type, in the page itself. Scrawl opens
-   on it, over today; a list and Templates end on it at the foot (reach.css `.list-foot`), and
-   Settings stands it at the foot of its pages (settings.css) */
+/* With no bar above, each page says its name in large type, in the page itself. Scrawl, a list
+   and Templates open on it, over their newest rows, and Settings stands it at the foot of its
+   pages (settings.css) */
 .list-big-title {
   display: none;
 }

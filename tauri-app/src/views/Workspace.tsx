@@ -1182,8 +1182,8 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
         return;
       }
       const typing = isTypingTarget(e.target);
-      // The list grows upward from its foot (NoteList): ⌘↑ is the note drawn above, the older
-      const step = matchesShortcut(e, "notePrev") ? 1 : -Number(matchesShortcut(e, "noteNext"));
+      // The list reads newest first from the top (NoteList): ⌘↓ is the next one, drawn below
+      const step = matchesShortcut(e, "notePrev") ? -1 : Number(matchesShortcut(e, "noteNext"));
       if (step !== 0) {
         if (typing) {
           return;

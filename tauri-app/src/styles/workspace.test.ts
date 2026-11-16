@@ -524,7 +524,7 @@ function mountList(detail = false, panel = false): HTMLElement {
         <main class="app-main">
           <div class="workspace ${detail ? "workspace--detail" : ""}">
             <div class="list-pane">
-              <div class="list-scroll" data-foot><div class="list-stack"></div></div>
+              <div class="list-scroll"></div>
               <div class="list-pane-head list-pane-foot"></div>
             </div>
             <div class="detail-pane ${panel ? "detail-pane--panel" : ""}"></div>
