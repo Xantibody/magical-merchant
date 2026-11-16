@@ -312,8 +312,8 @@
 
 /* ---------------- the search field from the foot ---------------- */
 
-/* The field lies at the bottom, the chips over it, and what it finds rises above: the best
-   answer nearest the thumb. The markup stays in reading order; only the drawing turns over */
+/* The field lies at the bottom with the chips over it, where the thumb is; what it finds reads
+   from the top over them, as Scrawl does */
 .search {
   flex-direction: column-reverse;
   padding-bottom: var(--keyboard-lift, 0px);
@@ -337,23 +337,17 @@
   border-color: var(--app-focus);
 }
 
-/* Rests on the field; a long list scrolls up from it */
+/* A short list rests on the chips, read from its top; a long one scrolls from its top. A margin,
+   not justify-content, so the top of a long list can still be scrolled to */
 .search-results {
   display: flex;
-  flex-direction: column-reverse;
+  flex-direction: column;
   padding-block: var(--size-5) 4px;
 }
 
-.search-column,
-.search-section {
+.search-column {
   flex: none;
-  display: flex;
-  flex-direction: column-reverse;
-}
-
-/* A section's name stands over its rows, which are drawn upward from it */
-.search-section > .palette-section {
-  order: 1;
+  margin-top: auto;
 }
 
 /* ---------------- the one-line window in the pill's shape (38, 67, 68) ---------------- */

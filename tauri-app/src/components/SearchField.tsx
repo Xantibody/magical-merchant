@@ -139,10 +139,9 @@ function HitExcerpt(props: { hit: SearchHit; word: string }): JSX.Element {
  * from the records, and Enter stays on the first record unless the arrows move to them.
  * The empty field lists the places among them, as the way around that needs no key.
  *
- * Built from the foot (the reach): the field lies at the bottom, over the keyboard where a
- * phone has one, the chips over it, and what it finds grows upward from it, the best answer
- * nearest the thumb. The places sit right over the chips; the records rise above them. The
- * arrows follow the rows as drawn, so up is the next one.
+ * The field lies at the bottom (the reach), over the keyboard where a phone has one, with the
+ * chips over it. What it finds reads from the top as Scrawl does: the places, then the records,
+ * newest first. The arrows follow the rows as drawn, so down is the next one.
  */
 export default function SearchField(props: SearchFieldProps): JSX.Element {
   // The seed is only the first value; the field owns the condition from there
@@ -242,8 +241,7 @@ export default function SearchField(props: SearchFieldProps): JSX.Element {
       dismiss();
     } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
-      // The rows rise from the field: the next one is drawn above
-      move(e.key === "ArrowUp" ? 1 : -1);
+      move(e.key === "ArrowDown" ? 1 : -1);
     } else if (e.key === "Backspace" && inInput && !text() && last !== undefined) {
       e.preventDefault();
       narrow(() => setTags((own) => own.slice(0, -1)));
@@ -361,8 +359,7 @@ export default function SearchField(props: SearchFieldProps): JSX.Element {
         </div>
       </div>
 
-      {/* Rows in reading order in the markup, drawn from the foot up (reach.css): each section
-          is its rows with its name over them, the first section nearest the field */}
+      {/* Rows in reading order, drawn from the top: each section is its name over its rows */}
       <div ref={listRef} class="search-results">
         <div class="search-column">
           <Show when={commands().length > 0}>

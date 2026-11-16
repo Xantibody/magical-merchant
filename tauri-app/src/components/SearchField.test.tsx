@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
+import { describe, it, expect, afterEach, beforeAll, beforeEach, vi } from "vitest";
 import { render, fireEvent, cleanup, screen, waitFor } from "@solidjs/testing-library";
 import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
 import SearchField from "./SearchField";
@@ -192,14 +192,14 @@ describe("SearchField", () => {
     expect(onOpen).toHaveBeenCalledExactlyOnceWith(found);
   });
 
-  // The results rise from the field at the foot: the next one is drawn above, so ↑ moves to it
+  // The results read from the top as Scrawl does: the next one is drawn below, so ↓ moves to it
   it("opens with Enter, and the arrows move the choice", async () => {
     const second = hit("二つ目");
     const { input, onOpen } = renderField([hit("一つ目"), second]);
     typed(input, "ord");
     await waitFor(() => expect(document.querySelector(".palette-count")).not.toBeNull());
 
-    fireEvent.keyDown(input, { key: "ArrowUp" });
+    fireEvent.keyDown(input, { key: "ArrowDown" });
     fireEvent.keyDown(input, { key: "Enter" });
 
     expect(onOpen).toHaveBeenCalledExactlyOnceWith(second);
@@ -348,6 +348,34 @@ describe("SearchField", () => {
         expect(label()?.querySelector("mark")?.textContent).toBe("取る");
       });
       expect(label()?.querySelector("img.glyph")).not.toBeNull();
+    });
+  });
+
+  describe("as drawn", () => {
+    beforeAll(async () => {
+      await import("../index.css");
+    });
+
+    // The field stays at the foot, but what it finds reads from the top as Scrawl does: the
+    // places first, then the records, newest first
+    it("draws the rows in their order from the top", async () => {
+      const scrawl: SearchFieldCommand = {
+        id: "go-scrawl",
+        label: "Scrawl",
+        icon: "gear",
+        shortcut: "",
+        place: true,
+        run: vi.fn<() => void>(),
+      };
+      renderField([hit("一つ目"), hit("二つ目")], [], [scrawl]);
+      await screen.findByText("二つ目");
+
+      const tops = [...document.querySelectorAll(".palette-row")].map(
+        (row) => row.getBoundingClientRect().top,
+      );
+
+      expect(tops).toHaveLength(3);
+      expect(tops).toStrictEqual(tops.toSorted((a, b) => a - b));
     });
   });
 });
