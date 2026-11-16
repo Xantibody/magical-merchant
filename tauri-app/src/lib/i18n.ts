@@ -138,8 +138,7 @@ const ja = {
     thisMonth: "今月",
     thisWeek: "今週",
     clear: "絞り込みを外す",
-    /** The list is drawn from the foot, so the newest is the lowest row. */
-    newestFirst: "下ほど新しい",
+    newestFirst: "新しい順",
     count: (count: number) => `${count}件`,
     empty: "この組み合わせの記録はありません",
     open: "開く",
@@ -859,7 +858,7 @@ const en: Messages = {
     thisMonth: "This month",
     thisWeek: "This week",
     clear: "Clear the filters",
-    newestFirst: "Newest at the bottom",
+    newestFirst: "Newest first",
     count: (count: number) => `${count} ${count === 1 ? "record" : "records"}`,
     empty: "Nothing recorded with this combination",
     open: "Open",

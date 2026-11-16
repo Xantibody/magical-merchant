@@ -131,6 +131,7 @@
 
 .browse-list {
   display: flex;
+  flex-direction: column;
   padding: 10px 6px;
   border-right: 1px solid var(--app-surface-2);
   overflow: auto;
@@ -382,14 +383,10 @@
   }
 }
 
-/* ---------------- From the foot (the reach) ---------------- */
+/* ---------------- The chips at the foot (the reach) ---------------- */
 
-/* The records rise from the list's foot like every list here (`data-foot`): the newest by the
-   chips, the older above it, and the count and order at the foot of the column */
-.browse-list {
-  flex-direction: column-reverse;
-}
-
+/* The records read newest first from the top, as Scrawl does; only the chips, which are pressed,
+   go to the foot */
 @media (min-width: 768px) {
   /* The chips sit at the foot of their column, under the hand that presses them. A margin, not
      justify-content, so a column of many tags still scrolls to its first one */
@@ -409,6 +406,12 @@
 
   .browse-list {
     padding-bottom: 4px;
+  }
+
+  /* The count and order head the page, so they leave the corner to the state's dot, as a day
+     heading does (palm.css) */
+  .browse-list-head {
+    padding-right: 36px;
   }
 
   .browse-facets {

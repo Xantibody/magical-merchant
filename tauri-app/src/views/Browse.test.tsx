@@ -142,16 +142,13 @@ async function openLong(count: number): Promise<void> {
   await screen.findByText("記録 0", { selector: ".browse-row-title" });
 }
 
-/**
- * Scrolls the list to `short` pixels short of its end. The list grows up from its foot, so the
- * end (the oldest records) is at the top, where a reversed column's scroll is negative.
- */
+/** Scrolls the list to `short` pixels short of its end, where the oldest records are. */
 function scrollToEnd(short = 0): void {
   const list = document.querySelector(".browse-list");
   if (!list) {
     throw new Error("list not mounted");
   }
-  list.scrollTop = -(list.scrollHeight - list.clientHeight - short);
+  list.scrollTop = list.scrollHeight - list.clientHeight - short;
 }
 
 /** A frame's wait, for seeing something not happen. `waitFor` waits until it does, so it is no use. */
@@ -223,13 +220,18 @@ describe("Browse › 絞り込みと件数", () => {
   beforeEach(setup);
   afterEach(teardown);
 
-  // Drawn from the foot, so the order is said for the way it reads: the newest lowest
-  it("lists everything, newest first in the markup, and says the newest is lowest", async () => {
+  // Read from the top as Scrawl is: the count and the order over the rows, the newest first
+  it("lists everything newest first from the top, with the count above it", async () => {
     await openBrowse();
 
     expect(rowTitles()).toStrictEqual(["朝ラン 5km #run", "レールの設計", "見取り図"]);
+    const tops = [...document.querySelectorAll(".browse-list-head, .browse-row-title")].map(
+      (el) => el.getBoundingClientRect().top,
+    );
+    expect(tops).toHaveLength(4);
+    expect(tops).toStrictEqual(tops.toSorted((a, b) => a - b));
     expect(screen.getByText("3件")).toBeDefined();
-    expect(screen.getByText("下ほど新しい")).toBeDefined();
+    expect(screen.getByText("新しい順")).toBeDefined();
   });
 
   // The scan reads every Scrawl day file and every note body. The one call on
