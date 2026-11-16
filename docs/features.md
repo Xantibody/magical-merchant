@@ -1,7 +1,31 @@
 # Feature Tour
 
 A walkthrough of every surface in Magical Merchant. Screenshots are taken
-from the browser verification harness with fixture data.
+from the browser verification harness with fixture data, in the dark theme
+and in Japanese.
+
+## Getting around
+
+A wide window (768px and up) has a 64px **rail** of icons at its left edge.
+At its top is the status, one dot; at its foot are the four places — Scrawl,
+Note, Codex, 絞る — then the search and a +. The rail never folds or opens
+out: a name shows beside its icon on hover and focus, and the status says
+itself in words the same way. A phone has no rail and no header; its places
+are on a pill at the foot (see [Mobile](#mobile)).
+
+Every list reads the same way, newest first from the top: Scrawl, the Note
+and Codex lists, Browse's records and the search field's results.
+
+### The ring — one way to make a record
+
+Pressing a + — the rail's, or a list's own — or holding the phone's pill
+opens a fan of labelled pills out of it: a line to Scrawl
+(ここに書く on Scrawl itself, where the field is right there, Scrawl に 1 行
+anywhere else), Note を作る, Codex を作る, テンプレートから. Slide onto one and
+let go, or let go first and tap. It is the one way to make a record from
+anywhere, and the choices keep their order whichever control opened it.
+
+![The ring, opened from the rail's +](images/ring.png)
 
 ## Scrawl — a journal that captures first
 
@@ -18,33 +42,61 @@ through them, and the line's `/` menu (探す · Note を作る · 日付へ)
 reaches the same places without leaving the keyboard — it answers to those
 row names only, so `/tmp` stays a record.
 
-![Scrawl](images/timeline.png)
+![Scrawl](images/scrawl.png)
 
 In the same band, a **weekly digest** appears once per week: one line saying
 how many entries on how many days and — when that day has entries — a jump to
 _one year ago today_. Dismissing it hides it for the rest of the week, per
 device.
 
+Records are read-only: an entry can be copied, deleted, or grown into a Note,
+but never rewritten. Notes and Codexes sit among the entries of the day they
+were made, as a filled dot and a bold title — unless the chip under the entry
+they grew from already leads to them.
+
 ### Mobile
 
 The same journal on a phone. There is no header: everything pressed is at the
 foot, under the thumb. A pill at the lower left holds the three places —
-Scrawl, Note, Codex — and on Scrawl it stretches to hold the input field; the
-band of tags sits just over it, and the status is one dot in the top right
-corner. The other screens (絞る, 設定, テンプレート) are reached through the empty
-search field. Reading down folds the pill to a single line so the page has the
-screen.
+Scrawl, Note, Codex — always at the same spot, and on Scrawl it stretches to
+hold the input field; the band of tags sits just over it, and the status is
+one dot in the top right corner. At the lower right is the page's one round
+button: + on a list, the pencil on a note with `…` for the note's sheet
+beside it. On a level — an open note, a Settings page — a round back button
+stands after the pill. The other screens (絞る, 設定, テンプレート) are reached
+through the empty search field. Reading down folds the bar to a single line
+so the page has the screen.
 
-![Scrawl on a phone](images/mobile-timeline.png)
+![Scrawl on a phone](images/mobile-scrawl.png)
+![A note on a phone](images/mobile-note.png)
+
+Strokes do what the buttons do: one to the right goes a level back, one to
+the left opens a row's actions, and one up on the bar raises the note's
+sheet; Android's back peels the same layers. Every stroke has a visible
+control that does the same, so none of them has to be found by accident.
 
 ### Promote an entry into a note
 
 When a quick capture grows into something bigger, promote it: hover an entry
-(PC) or long-press it (touch) and choose Note にする. A new note opens ready
-to write, carrying the entry text and tags. The note's frontmatter records the
-origin entry, and Scrawl shows a chip (📄 title →) on that day linking
-to the note — derived on every render, so reordering or deleting entries never
-breaks the link.
+(PC), or long-press it or stroke it to the left (touch), and choose
+Note にする. The app asks first, and the record stays in Scrawl as it was. A
+new note opens ready to write, carrying the entry text and tags. The note's
+frontmatter records the origin entry, and Scrawl shows a chip (📄 title →)
+under that entry linking to the note — derived on every render, so reordering
+or deleting entries never breaks the link.
+
+### A line from outside the app
+
+Capture does not need the window. On the desktop, `⌘⇧Space` (Ctrl+Shift+Space
+on anything that is not a Mac) floats a small field over whatever app is in
+front; the same key sends the line, and Esc hides the field and keeps the
+draft. A `magical-merchant://scrawl?text=…` link writes the line with no
+window at all, which is what a Shortcut run from Spotlight opens. On Android
+the launcher icon held down offers Scrawl に 1 行 and 新しい Note, and Share
+hands text from another app to Scrawl; the line and the shared text both go
+through the sheet the capture widget opens, without starting the app. The key
+and the link are shown, and can be tried, in Settings → 記録 under
+アプリの外から.
 
 ## Note — a Typora-style Markdown workspace
 
@@ -71,15 +123,21 @@ to.
 Note-level settings and actions live in a **panel at the right edge**,
 because none of it is used often enough to sit in the way of writing. The
 `…` in the viewer's strip, or `⌘.`, docks it so the body makes room; the
-writing screen has no way into it. It holds the view switches (マップ, and
-記入例 for a note from a template), the tags, the note's details, and the
-rare actions: revert, Codex にする (behind a confirmation, since there is no
-way back), delete. While it is closed the **status** wears the save and the
-sync — green, grey, red — in words at the top of the rail on a wide window,
-as one dot in the top right corner on a phone. Pressing it says what the
-panel would: the save time, and every state that is on — press one to open
-the panel on its switch. On a phone the panel is a sheet that rises from the
-foot.
+writing screen has no way into it. It holds the tags, the view switches
+(マップ, 紙だけ, and 記入例 for a note from a template), the note's details,
+and the rare actions: revert, Codex にする and delete — the last two a held
+press rather than a click, so neither happens by accident. 紙だけ leaves the
+page alone on the screen, without the rail, the list or the strip, until
+操作を戻す brings them back. On a phone the panel is a sheet that rises from
+the foot.
+
+![The note panel docked beside a note](images/note-panel.png)
+
+While the panel is closed the **status** wears the save and the sync — green,
+grey, red — as one dot: at the top of the rail on a wide window, where it
+says itself in words on hover and focus, and in the top right corner on a
+phone. Pressing it says what the panel would: the save time, and every state
+that is on — press one to open the panel on its switch.
 
 Tags are edited in the panel: chips, with the tags you have used before
 offered as you type. The meta line in the viewer only shows them. A `#tag`
@@ -98,10 +156,13 @@ page and is written only after you ask. A frontmatter `view: preview` left by
 an older release stays in the file and now means nothing more than the
 default.
 
-![Editor with Note links](images/editor-links.png)
+![The writing screen, with its format bar at the foot](images/editor-links.png)
 
-The table button above the body inserts a table at the cursor. Selecting a
-cell moves the button beside its row; opening the menu highlights the target
+The writing screen's **format bar** floats at the foot of the page, over the
+keyboard on a phone: lists, a checklist, indent and outdent, a link to a
+record, a code block, a table, and the check that goes back to the viewer.
+Its table button inserts a table at the cursor. Inside a table a button
+stands beside the selected row; opening its menu highlights the target
 row and column, including when inserting in the middle of a table. Inside a
 cell, the same menu adds or deletes rows and columns, aligns a column,
 exits the table, or deletes it. Undo is available in the menu on phones as
@@ -132,19 +193,21 @@ The map itself is the same on either surface, Note or Codex.
 
 Type `[[` in the editor and an autocomplete popup offers your notes. The
 stored form is `[[YYYYMMDD_HHMMSS]]` — the filename is an immutable ID, so
-links survive title changes. The editor and preview render links as the
-target's current title; click one to open the note. Write
+links survive title changes. The editor and the viewer render links as the
+target's current title. Pressing one while reading does not leave the page:
+the record it points to is shown beside it — lifted over it on a phone — with
+開く to go there. Write
 `[[YYYYMMDD_HHMMSS|display text]]` when the title does not fit the sentence —
 the link still points at the same note. A link whose target is gone stays
 visible as its raw stored form rather than pretending to be a note.
 
-![Resolved Note links](images/note-links.png)
+![A pressed link shows the record it points to](images/note-links.png)
 
 Every note shows the records that link to it — other notes and Scrawl
-entries alike — in a collapsible リンクされている記録 footer. Backlinks are
+entries alike — under ここを指す記録 at the end of the page. Backlinks are
 derived by scanning at read time; there is no index to corrupt or sync.
 
-![Backlinks](images/backlinks.png)
+![The records that point at a note](images/backlinks.png)
 
 ## Codex — a Note that keeps growing
 
@@ -190,9 +253,12 @@ draft appears in its margin: a `+` beside every block that changed, a `−`
 beside every block that is gone — struck through and faint, in the place it
 used to occupy. Walk the versions in the list and the marks move with them;
 `Esc` closes the history. On a phone the history is the panel screen's second
-tab and a compare bar sits under the body. この版に戻す makes that version
-the draft again, and the draft you are leaving is committed first as
-_before restore_, so a restore is itself undoable from the same list.
+tab and a compare bar sits under the body. 版 N に戻す, under the version you
+picked, makes that version the draft again, and the draft you are leaving is
+committed first as _before restore_, so a restore is itself undoable from the
+same list.
+
+![A Codex's history: the draft compared with its first version](images/codex-history.png)
 
 On disk a version is
 `data/codex/<id>/<YYYYMMDD_HHMMSS>-<first 8 hex of the body's SHA-256>.md`:
@@ -218,7 +284,7 @@ are part of the document and sync with it.
 
 Some things have no character: fighting-game command notation, a custom
 mark, a logo. Register a small PNG or SVG under a short name in
-Settings → GLYPHS and write `:name:` anywhere — a Note or a Scrawl entry —
+Settings → 記録 → 特殊文字 and write `:name:` anywhere — a Note or a Scrawl entry —
 to show it inline, the way an emoji shortcode works. The preview, the
 editor and Scrawl all render it; the editor shows the source text
 again when the caret touches it, so the stored Markdown stays plain text.
@@ -237,11 +303,15 @@ straight into `data/glyphs/` are picked up as well.
 
 `⌘K` opens the search field. It is hidden until called and floats over
 whatever you were on, so an open note stays where it was; Esc gives the keys
-back. Before you type anything it shows the kind / tag / period chips and the
-newest records, so it can be browsed by hand. Typing on Scrawl or Browse opens
-it too, as does `/ 探す` on Scrawl's input line. Results highlight the matched
-text in a context snippet, and the only thing a result does is open — a note
-opens that note, a Scrawl hit scrolls to that day; Enter takes the first.
+back. The field itself lies at the foot, with its kind and period chips just
+over it. Before you type anything it lists the places and the newest records
+above them, so it can be browsed by hand. Typing on Scrawl or Browse opens
+it too, as does `/ 探す` on Scrawl's input line and the magnifier on the rail.
+Results highlight the matched text in a context snippet, and the only thing a
+result does is open — a note opens that note, a Scrawl hit scrolls to that
+day; Enter takes the first.
+
+![The search field before anything is typed](images/search.png)
 
 Searches can be scoped to tags, from any screen. Every `#tag` you type counts
 as scope rather than text: `#SF6 #ベガ #置き攻め` lists every note and entry
@@ -251,8 +321,8 @@ are the same tag. Pressing a tag chip on Scrawl opens the field with that
 chip already set; a chip is removed by clicking it, or with Backspace in an
 empty field (last chip first). A bare word also answers with the app's
 commands above the records, and the empty field lists the places — Scrawl ·
-Note · Codex · 絞る · 設定 — which is how the other screens are reached on a
-phone.
+Note · Codex · 絞る · 設定 · テンプレート — which is how the other screens are
+reached on a phone.
 
 ## Browse
 
@@ -264,6 +334,8 @@ once (OR, where the search field is AND). The matching records list newest
 first, and the one selected is shown in full on the right. **It has no text
 search** — typing on it opens the search field. Every row leads back to the
 surface the record lives on; a phone drops the preview column.
+
+![Browse, narrowed to Notes and Codexes](images/browse.png)
 
 ## Command palette
 
@@ -320,15 +392,16 @@ so a key that is written in two places cannot come to mean two things.
 ## Language
 
 The interface speaks Japanese or English. It follows the system language on
-first launch and can be pinned either way in Settings → LANGUAGE; the choice
+first launch and can be pinned either way in Settings → 一般 → 言語; the choice
 takes effect immediately, without a restart. Place names follow it too: the
 OS geocoder is asked in the chosen language, and the cache remembers which
 language each answer came from. Only the interface changes — what you wrote
 stays exactly as you wrote it, and so do your tags and the coordinates behind
 those place names.
 
-On macOS, Settings → WINDOW adds _Start in fullscreen_: the app opens in the
-native fullscreen (its own Space, like the green button) from the next launch.
+The same page holds the theme — system, light or dark — and, on macOS,
+起動時に全画面: the app opens in the native fullscreen (its own Space, like
+the green button) from the next launch.
 
 ## Sync (optional)
 
@@ -341,16 +414,19 @@ change-detection protocol.
 
 Five home-screen widgets ship with the APK:
 
-| Widget            | Size      | What a tap does                                                                                                              |
-| ----------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Scrawl に記録     | 4×1       | Opens a sheet over the home screen and appends to today's Scrawl through a JNI call into the core — the app is never started |
-| 新しい Note       | 4×1       | `magical-merchant://widget/new-note`                                                                                         |
-| 最近の Note       | 4×2       | The four newest notes; a row opens that note, the header plus makes a new one                                                |
-| テンプレート      | 4×2       | A grid of four templates; a cell creates a new note from it                                                                  |
-| テンプレート 1 つ | 2×1 / 1×1 | One template chosen when the widget is placed; a tap creates today's note from it                                            |
+| Widget               | Size      | What a tap does                                                                                                              |
+| -------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Scrawl に記録        | 4×1       | Opens a sheet over the home screen and appends to today's Scrawl through a JNI call into the core — the app is never started |
+| 新しい Note          | 4×1       | `magical-merchant://widget/new-note`                                                                                         |
+| 最近の Note          | 4×2       | The four newest notes; a row opens that note, the header plus makes a new one                                                |
+| テンプレート         | 4×2       | A grid of four templates; a cell creates a new note from it                                                                  |
+| テンプレートのボタン | 2×1 / 1×1 | One template chosen when the widget is placed; a tap creates today's note from it                                            |
 
 All five are deep links into the app except the capture bar, which is the one
-that exists so that recording costs nothing — no launch, no wait.
+that exists so that recording costs nothing — no launch, no wait. The same
+sheet answers Scrawl に 1 行 in the launcher icon's long-press menu and Share
+from another app (see
+[A line from outside the app](#a-line-from-outside-the-app)).
 
 ## Terminal (CLI)
 
