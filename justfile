@@ -24,6 +24,12 @@ comments:
 # 毎日叩くのはこれだけなので root に置く。他は `just tauri_app::…` を直接呼ぶ
 dev: tauri_app::dev
 
+# Rewrites pnpmDeps.hash in nix/package.nix once tauri-app/pnpm-lock.yaml has
+# moved; CI's nix-package fails the PR until it is done. nix-update comes from
+# flake.lock's nixpkgs, not whatever the machine's registry points at
+pnpm-hash:
+  nix run --inputs-from . nixpkgs#nix-update -- --flake --version=skip default
+
 # --- サンドボックス ---
 #
 # 見本のデータ(fixtures/)を写した箱で本物のアプリを動かす。自分の記録を
