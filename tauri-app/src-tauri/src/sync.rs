@@ -7,10 +7,10 @@ use std::future::Future;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, PoisonError};
 
-use chrono::{DateTime, Utc};
 use magical_merchant_core::sync::client::HttpClient;
 use magical_merchant_core::sync::config::SyncConfig;
 use magical_merchant_core::sync::{SyncError, SyncResult, engine, token};
+use magical_merchant_core::utils::clock::UtcStamp;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, State};
 
@@ -20,13 +20,13 @@ const EVENT_SYNC_ERROR: &str = "sync-error";
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct SyncStatusInfo {
     pub is_syncing: bool,
-    pub last_synced_at: Option<DateTime<Utc>>,
+    pub last_synced_at: Option<UtcStamp>,
     pub last_error: Option<String>,
 }
 
 pub(crate) struct AppSyncState {
     pub is_syncing: AtomicBool,
-    pub last_synced_at: Mutex<Option<DateTime<Utc>>>,
+    pub last_synced_at: Mutex<Option<UtcStamp>>,
     pub last_error: Mutex<Option<String>>,
 }
 
@@ -124,7 +124,7 @@ where
             *state
                 .last_synced_at
                 .lock()
-                .unwrap_or_else(PoisonError::into_inner) = Some(Utc::now());
+                .unwrap_or_else(PoisonError::into_inner) = Some(UtcStamp::now());
             *state
                 .last_error
                 .lock()
@@ -251,7 +251,7 @@ mod tests {
         ] {
             let info = SyncStatusInfo {
                 is_syncing: false,
-                last_synced_at: at.map(|text| text.parse::<DateTime<Utc>>().unwrap()),
+                last_synced_at: at.map(|text| text.parse::<UtcStamp>().unwrap()),
                 last_error: None,
             };
 

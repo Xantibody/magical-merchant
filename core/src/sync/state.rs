@@ -2,10 +2,10 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::CoreError;
+use crate::utils::clock::UtcStamp;
 use crate::utils::fs::write_atomic;
 
 const STATE_FILENAME: &str = ".sync-state.json";
@@ -13,12 +13,12 @@ const STATE_FILENAME: &str = ".sync-state.json";
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SyncState {
     pub files: HashMap<String, FileSyncRecord>,
-    pub last_sync: Option<DateTime<Utc>>,
+    pub last_sync: Option<UtcStamp>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileSyncRecord {
-    pub last_synced_modified: DateTime<Utc>,
+    pub last_synced_modified: UtcStamp,
     pub content_hash: String,
 }
 
@@ -58,8 +58,8 @@ mod tests {
     #[test]
     fn save_and_load_roundtrip() {
         let dir = tempfile::tempdir().unwrap();
-        let last_sync = Utc::now();
-        let last_synced_modified = Utc::now() - chrono::Duration::seconds(30);
+        let last_sync = UtcStamp::now();
+        let last_synced_modified = UtcStamp::now().plus_seconds(-30);
         let mut state = SyncState {
             last_sync: Some(last_sync),
             ..SyncState::default()
@@ -169,7 +169,7 @@ mod tests {
         let read: Vec<String> = (0..spellings.len())
             .map(|i| {
                 let at = loaded.files[&i.to_string()].last_synced_modified;
-                format!("{} {}", at.timestamp(), at.timestamp_subsec_nanos())
+                format!("{} {}", at.unix_seconds(), at.subsec_nanos())
             })
             .collect();
         // Seconds since the epoch and the nanoseconds past them: 2026-08-05T00:00:00Z
@@ -185,7 +185,7 @@ mod tests {
         );
         let last_sync = loaded.last_sync.unwrap();
         assert_eq!(
-            (last_sync.timestamp(), last_sync.timestamp_subsec_nanos()),
+            (last_sync.unix_seconds(), last_sync.subsec_nanos()),
             (1_785_888_000, 931_000_000)
         );
     }

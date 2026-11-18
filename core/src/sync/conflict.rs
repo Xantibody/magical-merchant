@@ -1,18 +1,18 @@
 use std::path::Path;
 
-use chrono::{DateTime, Utc};
+use crate::utils::clock::UtcStamp;
 
 /// The mark that identifies a conflict copy. Only this file builds the name and reads it
 /// back, so the spelling cannot drift apart in two places.
 const CONFLICT_MARKER: &str = ".sync-conflict-";
 
 #[must_use]
-pub fn conflict_filename(key: &str, timestamp: DateTime<Utc>) -> String {
+pub fn conflict_filename(key: &str, timestamp: UtcStamp) -> String {
     let path = Path::new(key);
     let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("file");
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("md");
     let parent = path.parent().and_then(|p| p.to_str()).unwrap_or("");
-    let ts = timestamp.format("%Y%m%d-%H%M%S");
+    let ts = timestamp.conflict_stamp();
 
     if parent.is_empty() {
         format!("{stem}{CONFLICT_MARKER}{ts}.{ext}")
@@ -57,11 +57,10 @@ pub fn conflict_copy_path(key: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::TimeZone;
 
     #[test]
     fn conflict_filename_with_parent() {
-        let ts = Utc.with_ymd_and_hms(2026, 4, 22, 12, 0, 0).unwrap();
+        let ts = UtcStamp::new(2026, 4, 22, 12, 0, 0).unwrap();
         assert_eq!(
             conflict_filename("notes/test.md", ts),
             "notes/test.sync-conflict-20260422-120000.md"
@@ -70,7 +69,7 @@ mod tests {
 
     #[test]
     fn conflict_filename_without_parent() {
-        let ts = Utc.with_ymd_and_hms(2026, 4, 22, 12, 0, 0).unwrap();
+        let ts = UtcStamp::new(2026, 4, 22, 12, 0, 0).unwrap();
         assert_eq!(
             conflict_filename("test.md", ts),
             "test.sync-conflict-20260422-120000.md"
@@ -79,7 +78,7 @@ mod tests {
 
     #[test]
     fn conflict_filename_nested_path() {
-        let ts = Utc.with_ymd_and_hms(2026, 4, 22, 12, 0, 0).unwrap();
+        let ts = UtcStamp::new(2026, 4, 22, 12, 0, 0).unwrap();
         assert_eq!(
             conflict_filename("notes/archive/2026/note.md", ts),
             "notes/archive/2026/note.sync-conflict-20260422-120000.md"
@@ -90,7 +89,7 @@ mod tests {
     /// A key with a parent comes back with the parent.
     #[test]
     fn a_generated_name_reads_back_to_the_key_it_came_from() {
-        let ts = Utc.with_ymd_and_hms(2026, 5, 11, 3, 13, 36).unwrap();
+        let ts = UtcStamp::new(2026, 5, 11, 3, 13, 36).unwrap();
         for key in [
             "notes/20260320_033440.md",
             "note.md",

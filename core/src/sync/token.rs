@@ -11,6 +11,7 @@ use jsonwebtoken::dangerous::insecure_decode;
 use serde::{Deserialize, Serialize};
 
 use super::SyncError;
+use crate::utils::clock::unix_seconds_now;
 
 #[cfg(target_os = "android")]
 mod token_store {
@@ -108,7 +109,7 @@ pub fn is_token_valid(token: &str) -> bool {
         return false;
     };
 
-    let now = chrono::Utc::now().timestamp();
+    let now = unix_seconds_now();
     // 5 minute buffer
     token_data.claims.exp > now + 300
 }
@@ -127,7 +128,7 @@ pub fn renewal_due(token: &str) -> bool {
     let Some(iat) = iat else {
         return true;
     };
-    let now = chrono::Utc::now().timestamp();
+    let now = unix_seconds_now();
     (exp - now) * 2 <= exp - iat
 }
 
@@ -202,13 +203,13 @@ mod tests {
     // Halfway through the lifetime is the compromise, and the lifetime is read off the token
     #[test]
     fn a_fresh_token_is_not_due_for_renewal() {
-        let now = chrono::Utc::now().timestamp();
+        let now = unix_seconds_now();
         assert!(!renewal_due(&make_jwt_issued(now, now + 100)));
     }
 
     #[test]
     fn a_token_past_half_its_lifetime_is_due() {
-        let now = chrono::Utc::now().timestamp();
+        let now = unix_seconds_now();
         assert!(renewal_due(&make_jwt_issued(now - 60, now + 40)));
     }
 
@@ -216,7 +217,7 @@ mod tests {
     /// the token's own clock would otherwise flip the verdict
     #[test]
     fn a_token_exactly_at_half_is_due() {
-        let now = chrono::Utc::now().timestamp();
+        let now = unix_seconds_now();
         assert!(renewal_due(&make_jwt_issued(now - 50, now + 50)));
     }
 
@@ -224,7 +225,7 @@ mod tests {
     /// on the first sync is how it gets one
     #[test]
     fn a_token_without_an_issue_time_is_due() {
-        let now = chrono::Utc::now().timestamp();
+        let now = unix_seconds_now();
         assert!(renewal_due(&make_jwt(now + 3600)));
     }
 
@@ -271,7 +272,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_token_that_is_not_due_is_left_alone() {
-        let now = chrono::Utc::now().timestamp();
+        let now = unix_seconds_now();
         let token = make_jwt_issued(now, now + 1000);
         let server = ScriptedRenewer::answering(Ok("fresh".to_string()));
         let stored = std::cell::RefCell::new(None);
@@ -287,7 +288,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_due_token_is_traded_and_the_fresh_one_stored() {
-        let now = chrono::Utc::now().timestamp();
+        let now = unix_seconds_now();
         let token = make_jwt_issued(now - 900, now + 100);
         let server = ScriptedRenewer::answering(Ok("fresh".to_string()));
         let stored = std::cell::RefCell::new(None);
@@ -304,7 +305,7 @@ mod tests {
     /// sync goes on with it and the next sync asks again
     #[tokio::test]
     async fn an_unreachable_server_leaves_the_token_in_hand() {
-        let now = chrono::Utc::now().timestamp();
+        let now = unix_seconds_now();
         let token = make_jwt_issued(now - 900, now + 100);
         let server =
             ScriptedRenewer::answering(Err(SyncError::new("network", "Network error: timeout")));
@@ -322,7 +323,7 @@ mod tests {
     /// like any other and the caller reports it as one
     #[tokio::test]
     async fn a_refusal_is_passed_on() {
-        let now = chrono::Utc::now().timestamp();
+        let now = unix_seconds_now();
         let token = make_jwt_issued(now - 900, now + 100);
         let server = ScriptedRenewer::answering(Err(SyncError::new(
             "notAuthenticated",
@@ -340,19 +341,19 @@ mod tests {
 
     #[test]
     fn valid_token_not_expired() {
-        let future = chrono::Utc::now().timestamp() + 3600;
+        let future = unix_seconds_now() + 3600;
         assert!(is_token_valid(&make_jwt(future)));
     }
 
     #[test]
     fn expired_token() {
-        let past = chrono::Utc::now().timestamp() - 100;
+        let past = unix_seconds_now() - 100;
         assert!(!is_token_valid(&make_jwt(past)));
     }
 
     #[test]
     fn token_expiring_within_buffer() {
-        let soon = chrono::Utc::now().timestamp() + 60; // Within 5min buffer
+        let soon = unix_seconds_now() + 60; // Within 5min buffer
         assert!(!is_token_valid(&make_jwt(soon)));
     }
 
@@ -360,7 +361,7 @@ mod tests {
     /// is `>`, so the verdict stays the same even if the check's now is later than the test's now.
     #[test]
     fn a_token_expiring_exactly_at_the_buffer_is_not_valid() {
-        let at_buffer = chrono::Utc::now().timestamp() + 300;
+        let at_buffer = unix_seconds_now() + 300;
         assert!(!is_token_valid(&make_jwt(at_buffer)));
     }
 

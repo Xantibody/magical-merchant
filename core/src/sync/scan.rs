@@ -4,17 +4,17 @@ use std::io::Read as _;
 use std::path::Path;
 use std::time::{Duration, SystemTime};
 
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::CoreError;
+use crate::utils::clock::UtcStamp;
 use crate::utils::paths;
 
 #[derive(Debug, Clone)]
 pub struct LocalFile {
     pub key: String,
-    pub last_modified: DateTime<Utc>,
+    pub last_modified: UtcStamp,
     pub content_hash: String,
 }
 
@@ -137,8 +137,8 @@ fn walk_dir(root: &Path, current: &Path, walk: &mut Walk) -> Result<(), CoreErro
             .to_string();
 
         let modified_at = metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH);
-        let modified: DateTime<Utc> = modified_at.into();
-        let mtime_ms = modified.timestamp_millis();
+        let modified = UtcStamp::from_system_time(modified_at);
+        let mtime_ms = modified.unix_millis();
         let size = metadata.len();
 
         let hash = match walk.cached.files.get(&key) {
@@ -472,7 +472,7 @@ mod tests {
                     "{} {} {}",
                     f.key,
                     cache.files[&f.key].mtime_ms,
-                    f.last_modified.to_rfc3339()
+                    f.last_modified.rfc3339()
                 )
             })
             .collect();

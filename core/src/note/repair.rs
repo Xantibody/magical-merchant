@@ -1,10 +1,11 @@
 use std::fs;
 use std::path::Path;
 
-use chrono::{DateTime, FixedOffset, Local, NaiveDateTime, TimeZone as _, Utc};
+use chrono::{DateTime, FixedOffset, Local, NaiveDateTime, TimeZone as _};
 
 use crate::error::CoreError;
 use crate::sync::conflict::{conflict_copy_path, conflict_filename};
+use crate::utils::clock::UtcStamp;
 use crate::utils::frontmatter::{self, NoteFrontmatter};
 use crate::utils::fs::{ensure_dir, list_md_files, rename_without_clobber, write_atomic};
 use crate::utils::paths::{NOTES_DIR, codex_dir, conflicts_dir, data_dir, notes_dir};
@@ -80,12 +81,12 @@ pub(crate) fn relocate_conflict_copies(base_dir: &Path) -> usize {
 ///
 /// As with `relocate_conflict_copies`, one failure does not stop it.
 pub(crate) fn relocate_duplicate_ids(base_dir: &Path) -> usize {
-    relocate_duplicate_ids_at(base_dir, Utc::now())
+    relocate_duplicate_ids_at(base_dir, UtcStamp::now())
 }
 
 /// The variant that takes the copy's time. Split out only so a test can set up two runs in
 /// the same second: what happens when second-precision names collide is the point here.
-fn relocate_duplicate_ids_at(base_dir: &Path, now: DateTime<Utc>) -> usize {
+fn relocate_duplicate_ids_at(base_dir: &Path, now: UtcStamp) -> usize {
     let codex = codex_dir(base_dir);
     let conflicts = conflicts_dir(base_dir);
     let Ok(entries) = list_md_files(&notes_dir(base_dir)) else {
@@ -524,7 +525,7 @@ mod tests {
     #[test]
     fn a_second_relocation_in_the_same_second_keeps_the_first_copy() {
         let tmp = TempDir::new().unwrap();
-        let now = Utc.with_ymd_and_hms(2026, 5, 11, 3, 13, 36).unwrap();
+        let now = UtcStamp::new(2026, 5, 11, 3, 13, 36).unwrap();
         seed_codex(tmp.path(), "20260320_033440.md", "the codex");
         seed_note(tmp.path(), "20260320_033440.md", "the offline edit");
 

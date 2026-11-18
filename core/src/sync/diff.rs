@@ -1,14 +1,13 @@
 use std::collections::HashSet;
 
-use chrono::{DateTime, Utc};
-
 use super::scan::LocalFile;
 use super::state::SyncState;
+use crate::utils::clock::UtcStamp;
 
 #[derive(Debug, Clone)]
 pub struct RemoteFile {
     pub key: String,
-    pub last_modified: DateTime<Utc>,
+    pub last_modified: UtcStamp,
     pub content_hash: String,
 }
 
@@ -158,12 +157,11 @@ pub fn compute(
 mod tests {
     use super::super::state::FileSyncRecord;
     use super::*;
-    use chrono::{TimeZone, Utc};
 
     fn local(key: &str, hash: &str) -> LocalFile {
         LocalFile {
             key: key.to_string(),
-            last_modified: Utc.with_ymd_and_hms(2026, 4, 22, 12, 0, 0).unwrap(),
+            last_modified: UtcStamp::new(2026, 4, 22, 12, 0, 0).unwrap(),
             content_hash: hash.to_string(),
         }
     }
