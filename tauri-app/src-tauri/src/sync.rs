@@ -215,6 +215,52 @@ mod tests {
         assert!(!flag.load(Ordering::SeqCst));
     }
 
+    /// The webview reads `last_synced_at` as chrono's serde writes it: `Z`, and a fraction
+    /// of exactly 3, 6 or 9 digits or none at all.
+    #[test]
+    fn last_synced_at_crosses_ipc_as_z_with_whole_digit_groups() {
+        for (at, expected) in [
+            (
+                Some("2026-08-05T00:00:00Z"),
+                r#"{"is_syncing":false,"last_synced_at":"2026-08-05T00:00:00Z","last_error":null}"#,
+            ),
+            (
+                Some("2026-08-05T00:00:00.120Z"),
+                r#"{"is_syncing":false,"last_synced_at":"2026-08-05T00:00:00.120Z","last_error":null}"#,
+            ),
+            (
+                Some("2026-08-05T00:00:00.1Z"),
+                r#"{"is_syncing":false,"last_synced_at":"2026-08-05T00:00:00.100Z","last_error":null}"#,
+            ),
+            (
+                Some("2026-08-05T00:00:00.123400Z"),
+                r#"{"is_syncing":false,"last_synced_at":"2026-08-05T00:00:00.123400Z","last_error":null}"#,
+            ),
+            (
+                Some("2026-08-05T00:00:00.544569369Z"),
+                r#"{"is_syncing":false,"last_synced_at":"2026-08-05T00:00:00.544569369Z","last_error":null}"#,
+            ),
+            (
+                Some("2026-08-05T09:00:00.120+09:00"),
+                r#"{"is_syncing":false,"last_synced_at":"2026-08-05T00:00:00.120Z","last_error":null}"#,
+            ),
+            (
+                None,
+                r#"{"is_syncing":false,"last_synced_at":null,"last_error":null}"#,
+            ),
+        ] {
+            let info = SyncStatusInfo {
+                is_syncing: false,
+                last_synced_at: at.map(|text| text.parse::<DateTime<Utc>>().unwrap()),
+                last_error: None,
+            };
+
+            let json = serde_json::to_string(&info).unwrap();
+
+            assert_eq!(json, expected, "{at:?}");
+        }
+    }
+
     /// The event `sync_start` sends for this end
     const fn event_name(end: &RoundEnd<'_>) -> &'static str {
         match end {

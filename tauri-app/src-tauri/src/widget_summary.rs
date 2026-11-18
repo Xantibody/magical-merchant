@@ -296,6 +296,31 @@ mod tests {
         assert_eq!(title_of("\n  \n"), UNTITLED);
     }
 
+    /// A row is dated `MM/DD` in the offset the note was written in. The first two fall on
+    /// another day in UTC and the last on another day east of it, so a date taken in UTC or
+    /// in this machine's zone shows.
+    #[test]
+    fn a_note_row_is_dated_month_slash_day_in_its_own_offset() {
+        for (time, expected) in [
+            ("2026-08-04T00:30:00+09:00", "08/04"),
+            ("2026-08-04T23:30:00-05:00", "08/04"),
+            ("2026-12-31T23:59:59.999Z", "12/31"),
+        ] {
+            let tmp = tempfile::TempDir::new().unwrap();
+            let dir = tmp.path().join("data/notes");
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(
+                dir.join("20260804_003000.md"),
+                format!("---\ntime: {time}\n---\n\n# Dated\n"),
+            )
+            .unwrap();
+
+            let json = serde_json::to_value(collect_notes(tmp.path())).unwrap();
+
+            assert_eq!(json["notes"][0]["date"], expected, "{time}");
+        }
+    }
+
     fn save_template(tmp: &tempfile::TempDir, name: &str, body: &str) {
         let filename = magical_merchant_core::NoteFilename::parse(&format!("{name}.md")).unwrap();
         magical_merchant_core::save_template(tmp.path(), &filename, body, &[]).unwrap();
