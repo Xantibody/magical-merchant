@@ -48,6 +48,13 @@ impl Stamp {
         Self(inner)
     }
 
+    /// The same wall clock with its fraction replaced. `None` past two seconds' worth, or for
+    /// a leap fraction off second 59.
+    #[cfg(test)]
+    pub(super) fn with_nanosecond(self, nanos: u32) -> Option<Self> {
+        chrono::Timelike::with_nanosecond(&self.0, nanos).map(Self)
+    }
+
     /// A file's mtime in the device's offset at that instant.
     ///
     /// AIDEV-NOTE: infallible like chrono's `From<SystemTime>`, which panics outside its

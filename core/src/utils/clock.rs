@@ -11,6 +11,8 @@
 
 mod civil;
 mod error;
+#[cfg(test)]
+mod golden;
 mod stamp;
 mod zone;
 
