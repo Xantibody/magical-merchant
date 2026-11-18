@@ -25,6 +25,8 @@ ignore = [
   # note or anything a sync carries. Drop once tauri's plist moves past it
   { id = "RUSTSEC-2026-0194", reason = "quick-xml via tauri's plist reads only our own Info.plist; no upgrade path yet" },
   { id = "RUSTSEC-2026-0195", reason = "quick-xml via tauri's plist reads only our own Info.plist; no upgrade path yet" },
+  # HACK(https://github.com/Xantibody/magical-merchant/issues/415): drop once core, cli and the app no longer depend on chrono directly
+  { id = "RUSTSEC-2026-0543", reason = "chrono is unmaintained with no fix; moving off it is #415" },
 ]
 
 [licenses]
