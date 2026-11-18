@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as B64;
-use chrono::{Local, NaiveDate};
+use magical_merchant_core::utils::clock::Day;
 use magical_merchant_core::utils::frontmatter;
 use magical_merchant_core::utils::paths::place_cache_path;
 use magical_merchant_core::utils::place::{PlaceCache, place_key};
@@ -151,8 +151,8 @@ impl McpServer {
             .map(str::to_string)
     }
 
-    fn day_entries(&self, cache: &PlaceCache, date: NaiveDate) -> Result<Vec<EntryInfo>, String> {
-        let formatted = date.format("%Y-%m-%d").to_string();
+    fn day_entries(&self, cache: &PlaceCache, date: Day) -> Result<Vec<EntryInfo>, String> {
+        let formatted = date.ymd();
         let lines =
             magical_merchant_core::read_scrawl(&self.data_dir, date).map_err(|e| e.to_string())?;
         Ok(lines
@@ -299,8 +299,8 @@ pub(crate) struct TemplateParam {
     filename: String,
 }
 
-fn parse_date(text: &str) -> Result<NaiveDate, String> {
-    NaiveDate::parse_from_str(text, "%Y-%m-%d").map_err(|e| format!("Invalid date '{text}': {e}"))
+fn parse_date(text: &str) -> Result<Day, String> {
+    Day::parse_ymd(text).map_err(|e| format!("Invalid date '{text}': {e}"))
 }
 
 fn parse_filename(text: &str) -> Result<NoteFilename, String> {
@@ -351,8 +351,8 @@ impl McpServer {
             || (None, None, Vec::new(), None, None, None, None),
             |m| {
                 (
-                    Some(m.time.to_rfc3339()),
-                    m.updated.map(|t| t.to_rfc3339()),
+                    Some(m.time.rfc3339()),
+                    m.updated.map(|t| t.rfc3339()),
                     m.tags,
                     m.origin,
                     m.template,
@@ -416,10 +416,7 @@ impl McpServer {
     fn list_scrawl_dates(&self) -> Result<Json<ScrawlDatesOutput>, String> {
         let dates = magical_merchant_core::list_scrawl_dates(&self.data_dir).map_err(err)?;
         Ok(Json(ScrawlDatesOutput {
-            dates: dates
-                .iter()
-                .map(|d| d.format("%Y-%m-%d").to_string())
-                .collect(),
+            dates: dates.iter().map(Day::ymd).collect(),
         }))
     }
 
@@ -464,7 +461,7 @@ impl McpServer {
         let mut truncated = false;
         // Narrow down from the list of dates. Opening every day in the range piles up a
         // wasted stat for each day that was never written.
-        let mut dates: Vec<NaiveDate> = magical_merchant_core::list_scrawl_dates(&self.data_dir)
+        let mut dates: Vec<Day> = magical_merchant_core::list_scrawl_dates(&self.data_dir)
             .map_err(err)?
             .into_iter()
             .filter(|d| (from..=to).contains(d))
@@ -523,7 +520,7 @@ impl McpServer {
         };
 
         for date in magical_merchant_core::list_scrawl_dates(&self.data_dir).map_err(err)? {
-            let formatted = date.format("%Y-%m-%d").to_string();
+            let formatted = date.ymd();
             for line in magical_merchant_core::read_scrawl(&self.data_dir, date).map_err(err)? {
                 if let Some(l) = parse_scrawl_entry(&line).context.location {
                     visit(l.latitude, l.longitude, &formatted, false);
@@ -540,7 +537,7 @@ impl McpServer {
                 continue;
             };
             if let Some(l) = meta.context.and_then(|c| c.location) {
-                let date = meta.time.format("%Y-%m-%d").to_string();
+                let date = meta.time.day().ymd();
                 visit(l.latitude, l.longitude, &date, true);
             }
         }
@@ -618,7 +615,7 @@ impl McpServer {
             return Err("text is empty".to_string());
         }
         Ok(Json(AddedScrawlOutput {
-            date: Local::now().date_naive().format("%Y-%m-%d").to_string(),
+            date: Day::today_local().ymd(),
         }))
     }
 
@@ -870,7 +867,7 @@ pub(crate) fn exists_or_hint(data_dir: &Path) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::TimeZone;
+    use magical_merchant_core::utils::clock::WallClock;
     use magical_merchant_core::utils::device::{Context, Location};
     use magical_merchant_core::utils::markdown::format_scrawl_line;
     use magical_merchant_core::utils::place::cache_key;
@@ -899,13 +896,11 @@ mod tests {
     fn write_day(base: &Path, date: &str, entries: &[(u32, &str, &Context)]) {
         let dir = base.join("data/scrawl");
         fs::create_dir_all(&dir).unwrap();
-        let day = NaiveDate::parse_from_str(date, "%Y-%m-%d").unwrap();
+        let day = Day::parse_ymd(date).unwrap();
         let lines: Vec<String> = entries
             .iter()
             .map(|(hour, text, ctx)| {
-                let at = Local
-                    .from_local_datetime(&day.and_hms_opt(*hour, 0, 0).unwrap())
-                    .unwrap();
+                let at = WallClock::new(day.year(), day.month(), day.day(), *hour, 0, 0).unwrap();
                 format_scrawl_line(text, at, ctx)
             })
             .collect();

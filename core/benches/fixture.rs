@@ -1,13 +1,13 @@
 //! Dataset generation for the benches. Files are written directly rather than through the
-//! API because the save path depends on `Local::now()` and cannot spread the dates.
+//! API because the save path reads the clock and cannot spread the dates.
 
 use std::fmt::Write as _;
 use std::fs;
 use std::path::Path;
 
-use chrono::{Duration, NaiveDate};
 use magical_merchant_core::NoteFilename;
 use magical_merchant_core::frontmatter::{self, NoteFrontmatter};
+use magical_merchant_core::utils::clock::{Day, Stamp};
 use tempfile::TempDir;
 
 /// One year of a heavy user. The numbers are fixed because changing them breaks before/after
@@ -83,8 +83,8 @@ fn body(rng: &mut Lcg, index: usize) -> String {
 
 const CONTEXT_JSON: &str = r#"{"battery":72,"is_charging":false,"network_type":"WiFi","os":"macos","os_version":"15.5","arch":"aarch64"}"#;
 
-const fn start_date() -> NaiveDate {
-    NaiveDate::from_ymd_opt(2025, 1, 1).expect("literal date")
+const fn start_date() -> Day {
+    Day::new(2025, 1, 1).expect("literal date")
 }
 
 fn write_scrawl(base: &Path, rng: &mut Lcg) {
@@ -92,7 +92,7 @@ fn write_scrawl(base: &Path, rng: &mut Lcg) {
     fs::create_dir_all(&dir).expect("create scrawl dir");
 
     for day in 0..DAYS {
-        let date = start_date() + Duration::days(day);
+        let date = start_date().plus_days(day).expect("in range");
         let mut file = String::new();
         for entry in 0..ENTRIES_PER_DAY {
             let index = usize::try_from(day).expect("day fits") * ENTRIES_PER_DAY + entry;
@@ -101,8 +101,7 @@ fn write_scrawl(base: &Path, rng: &mut Lcg) {
             let text = body(rng, index);
             let _ = writeln!(file, "- [{hour:02}:{minute:02}:00] {text} {CONTEXT_JSON}");
         }
-        fs::write(dir.join(format!("{}.md", date.format("%Y-%m-%d"))), file)
-            .expect("write scrawl day");
+        fs::write(dir.join(format!("{}.md", date.ymd())), file).expect("write scrawl day");
     }
 }
 
@@ -111,13 +110,11 @@ fn write_notes(base: &Path, rng: &mut Lcg) {
     fs::create_dir_all(&dir).expect("create notes dir");
 
     for index in 0..NOTES {
-        let date = start_date() + Duration::days(i64::try_from(index).expect("index fits") % DAYS);
-        let time = date
-            .and_hms_opt(9, 0, 0)
-            .expect("literal time")
-            .and_local_timezone(chrono::FixedOffset::east_opt(9 * 3600).expect("literal offset"))
-            .single()
-            .expect("unambiguous");
+        let date = start_date()
+            .plus_days(i64::try_from(index).expect("index fits") % DAYS)
+            .expect("in range");
+        let time = Stamp::new(date.year(), date.month(), date.day(), 9, 0, 0, 9 * 3600)
+            .expect("literal time");
 
         let fm = NoteFrontmatter {
             tags: vec!["memo".to_string(), rng.pick(SUBJECTS).to_string()],
@@ -159,8 +156,8 @@ pub(crate) fn backlink_target() -> NoteFilename {
 
 /// The dates the UI reads on first display (the newest 14 days).
 #[must_use]
-pub(crate) fn recent_dates() -> Vec<NaiveDate> {
+pub(crate) fn recent_dates() -> Vec<Day> {
     (0..14)
-        .map(|back| start_date() + Duration::days(DAYS - 1 - back))
+        .map(|back| start_date().plus_days(DAYS - 1 - back).expect("in range"))
         .collect()
 }

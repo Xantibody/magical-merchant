@@ -1,5 +1,6 @@
-use chrono::{DateTime, FixedOffset, NaiveDate};
 use std::path::{Path, PathBuf};
+
+use crate::utils::clock::{Day, Stamp};
 
 pub const DATA_DIR: &str = "data";
 pub const SCRAWL_DIR: &str = "scrawl";
@@ -14,22 +15,22 @@ pub fn data_dir(base_dir: &Path) -> PathBuf {
 }
 
 #[must_use]
-pub fn scrawl_file_path(base_dir: &Path, date: NaiveDate) -> PathBuf {
+pub fn scrawl_file_path(base_dir: &Path, date: Day) -> PathBuf {
     data_dir(base_dir)
         .join(SCRAWL_DIR)
-        .join(format!("{}.md", date.format("%Y-%m-%d")))
+        .join(format!("{}.md", date.ymd()))
 }
 
 /// The filename follows the wall clock of the place the timestamp points at.
 ///
-/// It takes a `FixedOffset` so the same type as the frontmatter `time` is carried through as is:
+/// It takes a `Stamp` so the same type as the frontmatter `time` is carried through as is:
 /// converting to the device's timezone here would shift only the date in the ID when a `+09:00`
 /// record is rebuilt in another place.
 #[must_use]
-pub fn note_file_path(base_dir: &Path, timestamp: DateTime<FixedOffset>) -> PathBuf {
+pub fn note_file_path(base_dir: &Path, timestamp: Stamp) -> PathBuf {
     data_dir(base_dir)
         .join(NOTES_DIR)
-        .join(format!("{}.md", timestamp.format("%Y%m%d_%H%M%S")))
+        .join(format!("{}.md", timestamp.id_stem()))
 }
 
 #[must_use]
@@ -110,21 +111,17 @@ pub fn place_cache_path(base_dir: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::TimeZone;
 
     #[test]
     fn test_scrawl_file_path() {
-        let date = NaiveDate::from_ymd_opt(2026, 3, 20).unwrap();
+        let date = Day::new(2026, 3, 20).unwrap();
         let path = scrawl_file_path(Path::new("/app"), date);
         assert_eq!(path, PathBuf::from("/app/data/scrawl/2026-03-20.md"));
     }
 
     #[test]
     fn test_note_file_path() {
-        let ts = FixedOffset::east_opt(9 * 3600)
-            .unwrap()
-            .with_ymd_and_hms(2026, 3, 20, 14, 30, 45)
-            .unwrap();
+        let ts = Stamp::new(2026, 3, 20, 14, 30, 45, 9 * 3600).unwrap();
         let path = note_file_path(Path::new("/app"), ts);
         assert_eq!(path, PathBuf::from("/app/data/notes/20260320_143045.md"));
     }
@@ -134,20 +131,16 @@ mod tests {
     /// the date does not move with the timezone of the device that ran it.
     #[test]
     fn the_filename_follows_the_timestamps_own_offset() {
-        let jst = FixedOffset::east_opt(9 * 3600)
-            .unwrap()
-            .with_ymd_and_hms(2026, 3, 20, 0, 30, 0)
-            .unwrap();
+        let jst = Stamp::new(2026, 3, 20, 0, 30, 0, 9 * 3600).unwrap();
 
         assert_eq!(
             note_file_path(Path::new("/app"), jst),
             PathBuf::from("/app/data/notes/20260320_003000.md")
         );
+        let utc = Stamp::new(2026, 3, 19, 15, 30, 0, 0).unwrap();
+        assert_eq!(utc, jst, "the same instant");
         assert_eq!(
-            note_file_path(
-                Path::new("/app"),
-                jst.with_timezone(&chrono::Utc).fixed_offset()
-            ),
+            note_file_path(Path::new("/app"), utc),
             PathBuf::from("/app/data/notes/20260319_153000.md")
         );
     }

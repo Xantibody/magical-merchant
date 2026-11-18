@@ -1,12 +1,12 @@
-use chrono::{DateTime, FixedOffset};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use crate::error::CoreError;
+use crate::utils::clock::Stamp;
 use crate::utils::device::{Context, Source};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct NoteFrontmatter {
-    pub time: DateTime<FixedOffset>,
+    pub time: Stamp,
     #[serde(default)]
     pub tags: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -28,7 +28,7 @@ pub struct NoteFrontmatter {
     /// Not written for a note that was never edited: writing a default would change
     /// the frontmatter of every untouched note and trigger a full sync.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub updated: Option<DateTime<FixedOffset>>,
+    pub updated: Option<Stamp>,
     /// Name of the template the note was born from (`daily` for `templates/daily.md`).
     /// A creation-time record like `origin`; resolving `{{prev}}` and deciding whether
     /// "today's note from the same template already exists" have no way other than
@@ -50,7 +50,7 @@ impl NoteFrontmatter {
     /// Listing every field at each construction means that one new key rewrites
     /// every unrelated caller and test. New keys are added here only.
     #[must_use]
-    pub const fn new(time: DateTime<FixedOffset>) -> Self {
+    pub const fn new(time: Stamp) -> Self {
         Self {
             time,
             tags: Vec::new(),
@@ -204,16 +204,9 @@ fn next_line(s: &str, pos: usize) -> Option<Line<'_>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::TimeZone;
 
-    fn fixed_offset() -> FixedOffset {
-        FixedOffset::east_opt(9 * 3600).unwrap()
-    }
-
-    fn sample_datetime() -> DateTime<FixedOffset> {
-        fixed_offset()
-            .with_ymd_and_hms(2026, 3, 20, 14, 30, 45)
-            .unwrap()
+    fn sample_datetime() -> Stamp {
+        Stamp::new(2026, 3, 20, 14, 30, 45, 9 * 3600).unwrap()
     }
 
     fn sample_fm() -> NoteFrontmatter {
@@ -608,10 +601,7 @@ mod tests {
     /// Two records of the same instant are equal whatever offset each was written in.
     #[test]
     fn frontmatter_equality_ignores_the_offset() {
-        let utc = FixedOffset::east_opt(0)
-            .unwrap()
-            .with_ymd_and_hms(2026, 3, 20, 5, 30, 45)
-            .unwrap();
+        let utc = Stamp::new(2026, 3, 20, 5, 30, 45, 0).unwrap();
 
         assert_eq!(NoteFrontmatter::new(utc), sample_fm());
     }

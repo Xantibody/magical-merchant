@@ -7,7 +7,7 @@ use super::stamp::Stamp;
 ///
 /// A caller that turns a wall clock into an instant takes one, so a test can name the
 /// zone instead of depending on the machine it runs on.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Zone(Kind);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

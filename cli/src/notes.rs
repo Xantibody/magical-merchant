@@ -8,8 +8,7 @@
 
 use std::path::Path;
 
-use chrono::{DateTime, FixedOffset};
-
+use magical_merchant_core::utils::clock::Stamp;
 use magical_merchant_core::utils::device::Context;
 use magical_merchant_core::{CoreError, NoteFilename, NoteKind, Provenance, Revision, Snapshot};
 
@@ -84,7 +83,7 @@ pub(crate) fn create(
 /// writes `context` from this device as it is now.
 pub(crate) fn create_at(
     data_dir: &Path,
-    time: DateTime<FixedOffset>,
+    time: Stamp,
     body: &str,
     tags: &[String],
     provenance: Provenance<'_>,

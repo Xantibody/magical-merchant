@@ -21,6 +21,7 @@ pub use version::{
 use std::path::{Path, PathBuf};
 
 use crate::error::CoreError;
+use crate::utils::clock::Stamp;
 use crate::utils::device::Context;
 use crate::utils::frontmatter::{self, Provenance};
 use crate::utils::validated::NoteFilename;
@@ -76,7 +77,7 @@ pub fn promote_note_to_codex(base_dir: &Path, filename: &NoteFilename) -> Result
 /// declared: the name is decided by that wall clock too.
 pub fn create_note_at(
     base_dir: &Path,
-    time: chrono::DateTime<chrono::FixedOffset>,
+    time: Stamp,
     body: &str,
     tags: &[String],
     context: &Context,
@@ -150,7 +151,7 @@ pub fn read_note_meta(
 pub fn update_note_meta(
     base_dir: &Path,
     filename: &NoteFilename,
-    time: chrono::DateTime<chrono::FixedOffset>,
+    time: Stamp,
     tags: &[String],
 ) -> Result<(), CoreError> {
     Notes::new(base_dir.to_path_buf()).update_meta(filename, time, tags)
@@ -203,6 +204,7 @@ pub fn relocate_duplicate_ids(base_dir: &Path) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::utils::clock::WallClock;
     use crate::utils::device::Source;
     use crate::utils::frontmatter::NoteFrontmatter;
     use std::fs;
@@ -324,7 +326,7 @@ mod tests {
             read_note_meta(tmp.path(), &filename_of(&second))
                 .unwrap()
                 .time,
-            sample_time() + chrono::Duration::seconds(1)
+            sample_time().plus_seconds(1)
         );
     }
 
@@ -368,10 +370,7 @@ mod tests {
         assert_eq!(read_note(&first).unwrap(), "one");
         assert_eq!(read_note(&second).unwrap(), "two");
         assert_eq!(list_notes(tmp.path()).unwrap().len(), 2);
-        assert_eq!(
-            stamp_of(&second) - stamp_of(&first),
-            chrono::Duration::seconds(1)
-        );
+        assert_eq!(stamp_of(&first).plus_seconds(1), stamp_of(&second));
     }
 
     /// The shifted second is not only about the filename. If the frontmatter `time` drifts
@@ -385,14 +384,14 @@ mod tests {
 
         let meta = read_note_meta(tmp.path(), &filename_of(&second)).unwrap();
         assert_eq!(
-            meta.time.naive_local().format("%Y%m%d_%H%M%S").to_string(),
+            meta.time.id_stem(),
             second.file_stem().unwrap().to_str().unwrap()
         );
     }
 
-    fn stamp_of(path: &Path) -> chrono::NaiveDateTime {
+    fn stamp_of(path: &Path) -> WallClock {
         let stem = path.file_stem().unwrap().to_str().unwrap();
-        chrono::NaiveDateTime::parse_from_str(stem, "%Y%m%d_%H%M%S").unwrap()
+        WallClock::parse_id_stem(stem).unwrap()
     }
 
     /// time is the creation time. The list is ordered by filename (creation time), so if an
@@ -423,13 +422,13 @@ mod tests {
 
         // The creation time is rounded to the second, so the moment of the rewrite is later
         // than it. `>= time` would pass even if the creation time were merely copied
-        let before = chrono::Local::now();
+        let before = Stamp::now_local();
         update_note(&path, "updated", &mock_context(), None).unwrap();
 
         let meta = read_note_meta(tmp.path(), &filename).unwrap();
         let updated = meta.updated.expect("updated is stamped");
-        assert!(updated >= before, "updated {updated} < before {before}");
-        assert!(updated <= chrono::Local::now());
+        assert!(updated >= before, "updated {updated:?} < before {before:?}");
+        assert!(updated <= Stamp::now_local());
     }
 
     /// If another writer changed the body between the read and the write, do not write over
@@ -815,12 +814,8 @@ mod tests {
         NoteFilename::parse(path.file_name().unwrap().to_str().unwrap()).unwrap()
     }
 
-    fn sample_time() -> chrono::DateTime<chrono::FixedOffset> {
-        use chrono::TimeZone as _;
-        chrono::FixedOffset::east_opt(9 * 3600)
-            .unwrap()
-            .with_ymd_and_hms(2026, 5, 3, 15, 39, 0)
-            .unwrap()
+    fn sample_time() -> Stamp {
+        Stamp::new(2026, 5, 3, 15, 39, 0, 9 * 3600).unwrap()
     }
 
     #[test]

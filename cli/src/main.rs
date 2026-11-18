@@ -74,7 +74,7 @@ enum Command {
         /// This becomes the note's filename, so pass the offset it was
         /// written in rather than letting this machine's timezone decide.
         #[arg(long)]
-        time: chrono::DateTime<chrono::FixedOffset>,
+        time: magical_merchant_core::utils::clock::Stamp,
         /// A tag to record in the frontmatter, without the `#`. Repeat for more.
         #[arg(long = "tag")]
         tags: Vec<String>,
@@ -260,9 +260,7 @@ fn run_scrawl(data_dir: &Path, command: ScrawlCommand) -> anyhow::Result<()> {
             let date = scrawl::resolve_date(date.as_deref())?;
             let mut out = std::io::stdout().lock();
             for entry in scrawl::show(data_dir, date)? {
-                let time = entry
-                    .time
-                    .map_or_else(|| "--:--".to_string(), |t| t.format("%H:%M").to_string());
+                let time = entry.time.map_or_else(|| "--:--".to_string(), |t| t.hm());
                 // For a multi-line entry, indent the lines after the first by the width of
                 // the time so it is clear which entry they continue
                 let text = entry.text.replace('\n', "\n       ");
@@ -341,7 +339,7 @@ mod tests {
             Ok(Cli {
                 command: Command::Import { time, .. },
                 ..
-            }) => Ok(time.to_rfc3339()),
+            }) => Ok(time.rfc3339()),
             Ok(_) => Err("not an import".to_string()),
             Err(e) => Err(e.to_string()),
         };

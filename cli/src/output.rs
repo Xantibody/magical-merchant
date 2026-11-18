@@ -46,7 +46,7 @@ impl From<NoteSummary> for NoteInfo {
         Self {
             filename: n.filename,
             kind: n.kind.as_str().to_string(),
-            time: n.time.map(|t| t.to_rfc3339()),
+            time: n.time.map(|t| t.rfc3339()),
             tags: n.tags,
             preview: n.preview,
             origin: n.origin,
@@ -242,7 +242,7 @@ impl ContextInfo {
 
 impl EntryInfo {
     pub(crate) fn new(date: &str, index: usize, entry: ScrawlEntry, place: Option<String>) -> Self {
-        let time = entry.time.map(|t| t.format("%H:%M:%S").to_string());
+        let time = entry.time.map(|t| t.hms());
         let datetime = time.as_ref().map(|t| format!("{date}T{t}"));
         Self {
             date: date.to_string(),
@@ -426,7 +426,7 @@ impl From<Version> for CodexVersionInfo {
     fn from(v: Version) -> Self {
         Self {
             id: v.id,
-            time: v.time.to_rfc3339(),
+            time: v.time.rfc3339(),
             message: v.message,
             bytes: v.bytes,
         }
@@ -464,7 +464,7 @@ impl From<Snapshot> for SnapshotInfo {
     fn from(s: Snapshot) -> Self {
         Self {
             id: s.id,
-            time: s.time.to_rfc3339(),
+            time: s.time.rfc3339(),
             bytes: s.bytes,
         }
     }

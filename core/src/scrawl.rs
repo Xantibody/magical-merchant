@@ -7,10 +7,10 @@ pub(crate) use repository::Scrawl;
 
 use std::path::Path;
 
-use chrono::NaiveDate;
 use serde::Serialize;
 
 use crate::error::CoreError;
+use crate::utils::clock::Day;
 use crate::utils::device::{Context, Source};
 
 /// Adds one line to today's file.
@@ -27,11 +27,11 @@ pub fn save_scrawl_entry(
     Scrawl::new(base_dir.to_path_buf()).save_entry(text, context, source)
 }
 
-pub fn list_scrawl_dates(base_dir: &Path) -> Result<Vec<NaiveDate>, CoreError> {
+pub fn list_scrawl_dates(base_dir: &Path) -> Result<Vec<Day>, CoreError> {
     Scrawl::new(base_dir.to_path_buf()).list_dates()
 }
 
-pub fn read_scrawl(base_dir: &Path, date: NaiveDate) -> Result<Vec<String>, CoreError> {
+pub fn read_scrawl(base_dir: &Path, date: Day) -> Result<Vec<String>, CoreError> {
     Scrawl::new(base_dir.to_path_buf()).read(date)
 }
 
@@ -39,14 +39,14 @@ pub fn read_scrawl(base_dir: &Path, date: NaiveDate) -> Result<Vec<String>, Core
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ScrawlDays {
     /// Every date that has a record, newest first, as `list_scrawl_dates` returns them.
-    pub dates: Vec<NaiveDate>,
+    pub dates: Vec<Day>,
     /// The days that were asked for, newest first.
     pub days: Vec<ScrawlDay>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ScrawlDay {
-    pub date: NaiveDate,
+    pub date: Day,
     /// As `read_scrawl` returns them. Empty for a day nobody wrote on.
     pub entries: Vec<String>,
 }
@@ -60,11 +60,11 @@ pub struct ScrawlDay {
 pub fn read_scrawl_days(
     base_dir: &Path,
     recent: usize,
-    extra: &[NaiveDate],
+    extra: &[Day],
 ) -> Result<ScrawlDays, CoreError> {
     let scrawl = Scrawl::new(base_dir.to_path_buf());
     let dates = scrawl.list_dates()?;
-    let mut wanted: Vec<NaiveDate> = dates.iter().take(recent).chain(extra).copied().collect();
+    let mut wanted: Vec<Day> = dates.iter().take(recent).chain(extra).copied().collect();
     wanted.sort_unstable_by(|a, b| b.cmp(a));
     wanted.dedup();
     let days = wanted
@@ -83,7 +83,7 @@ pub fn read_scrawl_days(
 /// An index alone drifts with any append or sync that lands between the read and the write.
 pub fn delete_scrawl_entry(
     base_dir: &Path,
-    date: NaiveDate,
+    date: Day,
     index: usize,
     raw: &str,
 ) -> Result<(), CoreError> {
@@ -93,7 +93,6 @@ pub fn delete_scrawl_entry(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::Local;
     use std::fs;
     use tempfile::TempDir;
 
@@ -110,7 +109,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         save_scrawl_entry(tmp.path(), "hello", &mock_context(), Source::App).unwrap();
 
-        let today = Local::now().format("%Y-%m-%d").to_string();
+        let today = Day::today_local().ymd();
         let file = tmp.path().join("data/scrawl").join(format!("{today}.md"));
         assert!(file.exists());
 
@@ -126,7 +125,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         save_scrawl_entry(tmp.path(), "hello", &mock_context(), Source::Widget).unwrap();
 
-        let today = Local::now().format("%Y-%m-%d").to_string();
+        let today = Day::today_local().ymd();
         let content =
             fs::read_to_string(tmp.path().join("data/scrawl").join(format!("{today}.md"))).unwrap();
         assert!(content.contains("\"s\":\"widget\""));
@@ -138,7 +137,7 @@ mod tests {
         save_scrawl_entry(tmp.path(), "first", &mock_context(), Source::App).unwrap();
         save_scrawl_entry(tmp.path(), "second", &mock_context(), Source::App).unwrap();
 
-        let today = Local::now().format("%Y-%m-%d").to_string();
+        let today = Day::today_local().ymd();
         let file = tmp.path().join("data/scrawl").join(format!("{today}.md"));
         let content = fs::read_to_string(&file).unwrap();
 
@@ -151,7 +150,7 @@ mod tests {
     #[test]
     fn test_read_scrawl_empty() {
         let tmp = TempDir::new().unwrap();
-        let today = Local::now().date_naive();
+        let today = Day::today_local();
         let lines = read_scrawl(tmp.path(), today).unwrap();
         assert!(lines.is_empty());
     }
@@ -174,9 +173,9 @@ mod tests {
 
         let dates = list_scrawl_dates(tmp.path()).unwrap();
         assert_eq!(dates.len(), 3);
-        assert_eq!(dates[0], NaiveDate::from_ymd_opt(2026, 3, 1).unwrap());
-        assert_eq!(dates[1], NaiveDate::from_ymd_opt(2026, 2, 10).unwrap());
-        assert_eq!(dates[2], NaiveDate::from_ymd_opt(2026, 1, 15).unwrap());
+        assert_eq!(dates[0], Day::new(2026, 3, 1).unwrap());
+        assert_eq!(dates[1], Day::new(2026, 2, 10).unwrap());
+        assert_eq!(dates[2], Day::new(2026, 1, 15).unwrap());
     }
 
     #[test]
@@ -190,7 +189,7 @@ mod tests {
 
         let dates = list_scrawl_dates(tmp.path()).unwrap();
         assert_eq!(dates.len(), 1);
-        assert_eq!(dates[0], NaiveDate::from_ymd_opt(2026, 1, 15).unwrap());
+        assert_eq!(dates[0], Day::new(2026, 1, 15).unwrap());
     }
 
     #[test]
@@ -199,15 +198,15 @@ mod tests {
         save_scrawl_entry(tmp.path(), "line1\nline2", &mock_context(), Source::App).unwrap();
         save_scrawl_entry(tmp.path(), "second", &mock_context(), Source::App).unwrap();
 
-        let today = Local::now().date_naive();
+        let today = Day::today_local();
         let entries = read_scrawl(tmp.path(), today).unwrap();
         assert_eq!(entries.len(), 2);
         assert!(entries[0].contains("line1\nline2"));
         assert!(entries[1].contains("second"));
     }
 
-    fn ymd(text: &str) -> NaiveDate {
-        NaiveDate::parse_from_str(text, "%Y-%m-%d").unwrap()
+    fn ymd(text: &str) -> Day {
+        Day::parse_ymd(text).unwrap()
     }
 
     /// One line per day, so each day's entries say which day they came from.
@@ -223,7 +222,7 @@ mod tests {
         }
     }
 
-    fn entries_of(days: &ScrawlDays) -> Vec<(NaiveDate, Vec<String>)> {
+    fn entries_of(days: &ScrawlDays) -> Vec<(Day, Vec<String>)> {
         days.days
             .iter()
             .map(|day| (day.date, day.entries.clone()))
@@ -301,7 +300,7 @@ mod tests {
         )
         .unwrap();
 
-        let dates: Vec<NaiveDate> = days.days.iter().map(|day| day.date).collect();
+        let dates: Vec<Day> = days.days.iter().map(|day| day.date).collect();
         assert_eq!(
             dates,
             vec![
@@ -342,7 +341,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         save_scrawl_entry(tmp.path(), "line1\nline2", &mock_context(), Source::App).unwrap();
         save_scrawl_entry(tmp.path(), "second", &mock_context(), Source::App).unwrap();
-        let today = Local::now().date_naive();
+        let today = Day::today_local();
 
         let days = read_scrawl_days(tmp.path(), 14, &[]).unwrap();
 
@@ -373,7 +372,7 @@ mod tests {
         save_scrawl_entry(tmp.path(), "first", &mock_context(), Source::App).unwrap();
         save_scrawl_entry(tmp.path(), "second", &mock_context(), Source::App).unwrap();
 
-        let today = Local::now().date_naive();
+        let today = Day::today_local();
         let lines = read_scrawl(tmp.path(), today).unwrap();
         assert_eq!(lines.len(), 2);
         assert!(lines[0].contains("first"));

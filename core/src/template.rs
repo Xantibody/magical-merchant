@@ -15,11 +15,11 @@ pub use vars::VarLocale;
 
 use std::path::{Path, PathBuf};
 
-use chrono::Local;
 use serde::Serialize;
 
 use crate::error::CoreError;
 use crate::note::{NoteSummary, Notes};
+use crate::utils::clock::WallClock;
 use crate::utils::device::Context;
 use crate::utils::frontmatter::Provenance;
 use crate::utils::validated::NoteFilename;
@@ -163,7 +163,7 @@ pub fn create_note_from_template(
 ) -> Result<CreatedNote, CoreError> {
     let (fm, body) = Templates::new(base_dir).read(filename)?;
     let name = template_name(filename);
-    let now = Local::now();
+    let now = WallClock::now_local();
     let notes = crate::note::list_notes(base_dir)?;
 
     let prev = previous_note_link(&notes, name);
@@ -210,6 +210,7 @@ fn previous_note_link(notes: &[NoteSummary], template: &str) -> Option<String> {
 mod tests {
     use super::*;
     use crate::note::{list_notes, read_note};
+    use crate::utils::clock::{Day, Stamp};
     use crate::utils::frontmatter::{self, NoteFrontmatter};
     use crate::utils::paths::notes_dir;
     use std::fs;
@@ -236,7 +237,7 @@ mod tests {
     /// Write a note with a past date directly. `{{prev}}` is decided by date, so `create_note_from_template` (creation time is now)
     /// cannot set up a note from yesterday or earlier.
     fn seed_note(tmp: &TempDir, filename: &str, template: &str, days_ago: i64) {
-        let time = (Local::now() - chrono::Duration::days(days_ago)).fixed_offset();
+        let time = Stamp::now_local().plus_seconds(-days_ago * 86_400);
         let fm = NoteFrontmatter {
             template: Some(template.to_string()),
             ..NoteFrontmatter::new(time)
@@ -459,7 +460,7 @@ mod tests {
         .unwrap();
 
         let body = read_note(&created.path).unwrap();
-        let today = Local::now().format("%Y-%m-%d").to_string();
+        let today = Day::today_local().ymd();
         assert!(body.contains(&format!("# Daily {today}")));
         assert!(!body.contains("{{"));
     }
@@ -539,7 +540,7 @@ mod tests {
         .unwrap();
 
         let listed = list_notes(tmp.path()).unwrap();
-        let month = Local::now().format("%Y-%m").to_string();
+        let month = Day::today_local().ymd()[..7].to_string();
         assert!(listed[0].tags.contains(&"daily".to_string()));
         assert!(listed[0].tags.contains(&month));
     }

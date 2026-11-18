@@ -2,9 +2,8 @@ use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
-use chrono::{DateTime, FixedOffset, Local};
-
 use crate::error::CoreError;
+use crate::utils::clock::Stamp;
 use crate::utils::device::Context;
 use crate::utils::frontmatter::{self, NoteFrontmatter, Provenance};
 use crate::utils::fs::{ensure_dir, list_md_files, write_atomic};
@@ -32,7 +31,7 @@ impl Notes {
         context: &Context,
         provenance: Provenance<'_>,
     ) -> Result<PathBuf, CoreError> {
-        self.create_at(Local::now().fixed_offset(), body, tags, context, provenance)
+        self.create_at(Stamp::now_local(), body, tags, context, provenance)
     }
 
     /// Create one Codex right now. Only the directory differs; the name and the
@@ -46,7 +45,7 @@ impl Notes {
     ) -> Result<PathBuf, CoreError> {
         self.create_kind_at(
             NoteKind::Codex,
-            Local::now().fixed_offset(),
+            Stamp::now_local(),
             body,
             tags,
             context,
@@ -73,7 +72,7 @@ impl Notes {
     /// records are not damaged.
     pub(crate) fn create_at(
         &self,
-        time: DateTime<FixedOffset>,
+        time: Stamp,
         body: &str,
         tags: &[String],
         context: &Context,
@@ -90,7 +89,7 @@ impl Notes {
     fn create_kind_at(
         &self,
         kind: NoteKind,
-        time: DateTime<FixedOffset>,
+        time: Stamp,
         body: &str,
         tags: &[String],
         context: &Context,
@@ -102,7 +101,7 @@ impl Notes {
 
         loop {
             if kind.other().file_path(&self.base_dir, time).exists() {
-                time += chrono::Duration::seconds(1);
+                time = time.plus_seconds(1);
                 file_path = kind.file_path(&self.base_dir, time);
                 continue;
             }
@@ -117,7 +116,7 @@ impl Notes {
                     return Ok(file_path);
                 }
                 Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
-                    time += chrono::Duration::seconds(1);
+                    time = time.plus_seconds(1);
                     file_path = kind.file_path(&self.base_dir, time);
                 }
                 Err(e) => return Err(e.into()),
@@ -278,10 +277,10 @@ impl Notes {
                 return Err(CoreError::Stale(name));
             }
         }
-        let now = Local::now();
+        let now = Stamp::now_local();
         let fm = match frontmatter::parse::<NoteFrontmatter>(&existing) {
             Ok((fm, _)) => NoteFrontmatter {
-                updated: Some(now.into()),
+                updated: Some(now),
                 ..fm
             },
             // A file with no record (plain Markdown dropped in from outside) may be
@@ -289,7 +288,7 @@ impl Notes {
             // delimiter is a record that is broken, and rebuilding it loses the lines below
             Err(_) if frontmatter::is_plain_markdown(&existing) => NoteFrontmatter {
                 context: Some(context.clone()),
-                ..NoteFrontmatter::new(now.into())
+                ..NoteFrontmatter::new(now)
             },
             Err(e) => return Err(e),
         };
@@ -325,7 +324,7 @@ impl Notes {
     pub(crate) fn update_meta(
         &self,
         filename: &NoteFilename,
-        time: DateTime<FixedOffset>,
+        time: Stamp,
         tags: &[String],
     ) -> Result<(), CoreError> {
         self.edit_frontmatter(filename, |existing| NoteFrontmatter {

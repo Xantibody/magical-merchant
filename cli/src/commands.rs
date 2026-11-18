@@ -4,7 +4,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use chrono::{DateTime, FixedOffset, Local};
+use magical_merchant_core::utils::clock::{Stamp, WallClock};
 use magical_merchant_core::{
     CoreError, NoteFilename, NoteKind, NoteSummary, Provenance, Revision, Source,
 };
@@ -46,10 +46,7 @@ pub(crate) fn list(data_dir: &Path) -> Result<Vec<Row>, CoreError> {
         .iter()
         .map(|n| Row {
             filename: n.filename.clone(),
-            time: n
-                .time
-                .map(|t| t.format("%Y-%m-%d %H:%M").to_string())
-                .unwrap_or_default(),
+            time: n.time.map(|t| t.list_minute()).unwrap_or_default(),
             title: title_of(n),
             tags: n.tags.clone(),
         })
@@ -167,7 +164,7 @@ pub(crate) fn create(data_dir: &Path, body: &str) -> Result<Option<NoteFilename>
 /// belongs to the caller, a throwaway script, and does not come in here.
 pub(crate) fn import(
     data_dir: &Path,
-    time: DateTime<FixedOffset>,
+    time: Stamp,
     body: &str,
     tags: &[String],
     template: Option<&str>,
@@ -196,10 +193,7 @@ pub(crate) fn write_in_editor(
     open: impl FnOnce(&Path) -> Result<(), String>,
 ) -> Result<Option<String>, EditError> {
     fs::create_dir_all(scratch).map_err(CoreError::from)?;
-    let scratch_file = scratch.join(format!(
-        "{name}-{}.md",
-        Local::now().format("%Y%m%d_%H%M%S")
-    ));
+    let scratch_file = scratch.join(format!("{name}-{}.md", WallClock::now_local().id_stem()));
     fs::write(&scratch_file, seed).map_err(CoreError::from)?;
 
     if let Err(e) = open(&scratch_file) {
@@ -416,8 +410,8 @@ mod tests {
         assert_eq!(body_of(tmp.path(), &filename), "from stdin");
     }
 
-    fn written_at(text: &str) -> DateTime<FixedOffset> {
-        DateTime::parse_from_rfc3339(text).unwrap()
+    fn written_at(text: &str) -> Stamp {
+        Stamp::parse_strict(text).unwrap()
     }
 
     /// A note moved in keeps the time it was written. Filename = creation time = ID, so

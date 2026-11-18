@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 
 use assert_fs::TempDir;
 use assert_fs::prelude::*;
-use chrono::NaiveDate;
+use magical_merchant_core::utils::clock::Day;
 use magical_merchant_core::{
     DeviceContext, NoteFilename, NoteKind, NoteMeta, Revision, Source, frontmatter,
     list_note_versions, list_notes, list_scrawl_dates, list_templates, note_version_status,
@@ -141,11 +141,7 @@ fn every_scrawl_day_parses_into_entries() {
     }
 
     // A day with folded device records comes back one line at a time on read
-    let busy = read_scrawl(
-        dir.path(),
-        NaiveDate::from_ymd_opt(2026, 8, 1).expect("date"),
-    )
-    .expect("day reads");
+    let busy = read_scrawl(dir.path(), Day::new(2026, 8, 1).expect("date")).expect("day reads");
     assert!(
         busy.iter().any(|line| line.contains("\"os\":\"android\"")),
         "the phone's entries keep their device"
@@ -207,7 +203,7 @@ fn the_fixtures_can_be_written_to() {
     let context = DeviceContext::default();
 
     save_scrawl_entry(dir.path(), "a new entry", &context, Source::Cli).expect("entry saved");
-    let today = chrono::Local::now().date_naive();
+    let today = Day::today_local();
     let entries = read_scrawl(dir.path(), today).expect("today reads");
     assert!(entries.iter().any(|line| line.contains("a new entry")));
 

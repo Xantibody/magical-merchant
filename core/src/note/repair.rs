@@ -1,11 +1,9 @@
 use std::fs;
 use std::path::Path;
 
-use chrono::{DateTime, FixedOffset, Local, NaiveDateTime, TimeZone as _};
-
 use crate::error::CoreError;
 use crate::sync::conflict::{conflict_copy_path, conflict_filename};
-use crate::utils::clock::UtcStamp;
+use crate::utils::clock::{Stamp, UtcStamp, WallClock, Zone};
 use crate::utils::frontmatter::{self, NoteFrontmatter};
 use crate::utils::fs::{ensure_dir, list_md_files, rename_without_clobber, write_atomic};
 use crate::utils::paths::{NOTES_DIR, codex_dir, conflicts_dir, data_dir, notes_dir};
@@ -161,7 +159,7 @@ fn strip_mangled_metadata(body: &str) -> Option<String> {
     }
 
     let time_value = lines.get(i)?.strip_prefix("time: ")?;
-    DateTime::parse_from_rfc3339(time_value.trim()).ok()?;
+    Stamp::parse_strict(time_value.trim()).ok()?;
 
     // What is left of the closing delimiter: a line of three or more dashes only
     let is_dash_line = |l: &str| l.len() >= 3 && l.bytes().all(|b| b == b'-');
@@ -188,11 +186,15 @@ fn strip_mangled_metadata(body: &str) -> Option<String> {
 /// Read the creation time from a filename like `20260503_153910.md`.
 /// The frontmatter time has a history of being overwritten by edits,
 /// but the filename stays as assigned at creation.
-fn filename_time(filename: &str) -> Option<DateTime<FixedOffset>> {
+fn filename_time(filename: &str) -> Option<Stamp> {
+    filename_time_in(filename, &Zone::local())
+}
+
+/// [`filename_time`] read in `zone`. A wall clock a clock change skips over gives `None`
+/// (the caller keeps the time it has), one it repeats gives the earlier instant.
+fn filename_time_in(filename: &str, zone: &Zone) -> Option<Stamp> {
     let stem = filename.get(..15)?;
-    let naive = NaiveDateTime::parse_from_str(stem, "%Y%m%d_%H%M%S").ok()?;
-    let local = Local.from_local_datetime(&naive).earliest()?;
-    Some(local.into())
+    zone.earliest(WallClock::parse_id_stem(stem).ok()?)
 }
 
 #[cfg(test)]
@@ -247,9 +249,8 @@ mod tests {
         assert_eq!(body, "# EVOJについて\n本文はここから");
         assert_eq!(fm.tags, vec!["keep"]);
         assert!(fm.context.is_some());
-        let expected = Local
-            .with_ymd_and_hms(2026, 5, 3, 15, 39, 10)
-            .single()
+        let expected = Zone::local()
+            .earliest(WallClock::new(2026, 5, 3, 15, 39, 10).unwrap())
             .unwrap();
         assert_eq!(fm.time, expected);
     }
@@ -333,9 +334,8 @@ mod tests {
     #[test]
     fn filename_time_reads_conflict_filenames() {
         let time = filename_time("20260320_033440.sync-conflict-20260511-031336..md").unwrap();
-        let expected = Local
-            .with_ymd_and_hms(2026, 3, 20, 3, 34, 40)
-            .single()
+        let expected = Zone::local()
+            .earliest(WallClock::new(2026, 3, 20, 3, 34, 40).unwrap())
             .unwrap();
         assert_eq!(time, expected);
     }

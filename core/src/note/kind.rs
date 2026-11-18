@@ -1,8 +1,8 @@
 use std::path::{Path, PathBuf};
 
-use chrono::{DateTime, FixedOffset};
 use serde::{Deserialize, Serialize};
 
+use crate::utils::clock::Stamp;
 use crate::utils::paths::{codex_dir, notes_dir};
 
 /// The kind of a note. The directory it lives in decides it, not the frontmatter.
@@ -31,9 +31,8 @@ impl NoteKind {
     /// The file location decided by the creation time. The naming is the same for every
     /// kind: IDs share one namespace across kinds, and promotion is only a rename.
     #[must_use]
-    pub fn file_path(self, base_dir: &Path, time: DateTime<FixedOffset>) -> PathBuf {
-        self.dir(base_dir)
-            .join(format!("{}.md", time.format("%Y%m%d_%H%M%S")))
+    pub fn file_path(self, base_dir: &Path, time: Stamp) -> PathBuf {
+        self.dir(base_dir).join(format!("{}.md", time.id_stem()))
     }
 
     /// The same spelling as the JSON output. For exits (MCP) that do not know core's serde.
@@ -58,14 +57,10 @@ impl NoteKind {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::TimeZone;
 
     #[test]
     fn each_kind_has_its_own_directory_but_the_same_naming() {
-        let time = FixedOffset::east_opt(9 * 3600)
-            .unwrap()
-            .with_ymd_and_hms(2026, 3, 20, 14, 30, 45)
-            .unwrap();
+        let time = Stamp::new(2026, 3, 20, 14, 30, 45, 9 * 3600).unwrap();
         assert_eq!(
             NoteKind::Note.file_path(Path::new("/app"), time),
             PathBuf::from("/app/data/notes/20260320_143045.md")

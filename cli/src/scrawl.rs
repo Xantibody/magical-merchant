@@ -6,7 +6,7 @@
 
 use std::path::Path;
 
-use chrono::{Local, NaiveDate, NaiveTime};
+use magical_merchant_core::utils::clock::{Day, Time};
 use magical_merchant_core::{CoreError, Source, parse_scrawl_entry};
 
 use crate::notes;
@@ -25,22 +25,22 @@ pub(crate) fn add(data_dir: &Path, text: &str, source: Source) -> Result<bool, C
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Entry {
-    pub(crate) time: Option<NaiveTime>,
+    pub(crate) time: Option<Time>,
     pub(crate) text: String,
 }
 
 /// `YYYY-MM-DD`. Today when omitted.
-pub(crate) fn resolve_date(arg: Option<&str>) -> Result<NaiveDate, CoreError> {
+pub(crate) fn resolve_date(arg: Option<&str>) -> Result<Day, CoreError> {
     arg.map_or_else(
-        || Ok(Local::now().date_naive()),
+        || Ok(Day::today_local()),
         |text| {
-            NaiveDate::parse_from_str(text, "%Y-%m-%d")
+            Day::parse_ymd(text)
                 .map_err(|e| CoreError::Parse(format!("invalid date '{text}': {e}")))
         },
     )
 }
 
-pub(crate) fn show(data_dir: &Path, date: NaiveDate) -> Result<Vec<Entry>, CoreError> {
+pub(crate) fn show(data_dir: &Path, date: Day) -> Result<Vec<Entry>, CoreError> {
     let lines = magical_merchant_core::read_scrawl(data_dir, date)?;
     Ok(lines
         .iter()
@@ -54,7 +54,7 @@ pub(crate) fn show(data_dir: &Path, date: NaiveDate) -> Result<Vec<Entry>, CoreE
         .collect())
 }
 
-pub(crate) fn dates(data_dir: &Path) -> Result<Vec<NaiveDate>, CoreError> {
+pub(crate) fn dates(data_dir: &Path) -> Result<Vec<Day>, CoreError> {
     magical_merchant_core::list_scrawl_dates(data_dir)
 }
 
@@ -70,7 +70,7 @@ mod tests {
         assert!(add(tmp.path(), "first #memo", Source::Cli).unwrap());
         assert!(add(tmp.path(), "  second  \n", Source::Cli).unwrap());
 
-        let today = Local::now().date_naive();
+        let today = Day::today_local();
         let entries = show(tmp.path(), today).unwrap();
         assert_eq!(entries.len(), 2);
         assert_eq!(entries[0].text, "first #memo");
@@ -99,7 +99,7 @@ mod tests {
 
         add(tmp.path(), "line one\nline two", Source::Cli).unwrap();
 
-        let entries = show(tmp.path(), Local::now().date_naive()).unwrap();
+        let entries = show(tmp.path(), Day::today_local()).unwrap();
         assert_eq!(entries[0].text, "line one\nline two");
     }
 
@@ -107,9 +107,9 @@ mod tests {
     fn a_date_argument_is_iso_and_nothing_means_today() {
         assert_eq!(
             resolve_date(Some("2026-03-20")).unwrap(),
-            NaiveDate::from_ymd_opt(2026, 3, 20).unwrap()
+            Day::new(2026, 3, 20).unwrap()
         );
-        assert_eq!(resolve_date(None).unwrap(), Local::now().date_naive());
+        assert_eq!(resolve_date(None).unwrap(), Day::today_local());
         assert!(resolve_date(Some("20260320")).is_err());
     }
 
@@ -149,7 +149,7 @@ mod tests {
     fn a_day_with_no_file_is_empty_not_an_error() {
         let tmp = TempDir::new().unwrap();
 
-        let entries = show(tmp.path(), NaiveDate::from_ymd_opt(2020, 1, 1).unwrap()).unwrap();
+        let entries = show(tmp.path(), Day::new(2020, 1, 1).unwrap()).unwrap();
 
         assert!(entries.is_empty());
     }

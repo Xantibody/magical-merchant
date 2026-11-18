@@ -24,7 +24,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use chrono::{DateTime, FixedOffset, Local, NaiveDateTime};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use similar::{Algorithm, TextDiff};
@@ -33,6 +32,7 @@ use crate::error::CoreError;
 use crate::note::Revision;
 use crate::note::kind::NoteKind;
 use crate::note::repository::Notes;
+use crate::utils::clock::{Stamp, WallClock};
 use crate::utils::device::Context;
 use crate::utils::frontmatter;
 use crate::utils::fs::{ensure_dir, list_md_files, write_atomic};
@@ -54,7 +54,7 @@ pub struct Version {
     pub id: String,
     /// The time it was committed. Read from the frontmatter: the mtime of a version that
     /// arrived through sync is only the time it arrived.
-    pub time: DateTime<FixedOffset>,
+    pub time: Stamp,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
     /// Byte count of the body. For showing the change from the previous version in the list.
@@ -73,7 +73,7 @@ pub struct VersionStatus {
 
 #[derive(Debug, Serialize, Deserialize)]
 struct VersionFrontmatter {
-    time: DateTime<FixedOffset>,
+    time: Stamp,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     message: Option<String>,
 }
@@ -93,15 +93,15 @@ fn short_hash(body: &str) -> String {
     hex
 }
 
-fn version_id(time: DateTime<FixedOffset>, body: &str) -> String {
-    format!("{}-{}", time.format("%Y%m%d_%H%M%S"), short_hash(body))
+fn version_id(time: Stamp, body: &str) -> String {
+    format!("{}-{}", time.id_stem(), short_hash(body))
 }
 
 /// Only a datetime plus 8 hex digits passes as a version name. An id containing `..` or
 /// `/` must not read or write outside the versions directory.
 fn version_path(dir: &Path, id: &str) -> Result<PathBuf, CoreError> {
     let well_formed = id.split_once('-').is_some_and(|(stamp, hash)| {
-        NaiveDateTime::parse_from_str(stamp, "%Y%m%d_%H%M%S").is_ok()
+        WallClock::parse_id_stem(stamp).is_ok()
             && hash.len() == 8
             && hash.bytes().all(|b| b.is_ascii_hexdigit())
     });
@@ -143,7 +143,7 @@ pub fn commit_note_version(
     message: Option<&str>,
 ) -> Result<Version, CoreError> {
     let body = read_body(base_dir, filename)?;
-    let now = Local::now().fixed_offset();
+    let now = Stamp::now_local();
     let id = version_id(now, &body);
     let dir = versions_dir(base_dir, filename);
     let path = version_path(&dir, &id)?;
@@ -338,7 +338,6 @@ mod tests {
     use super::*;
     use crate::utils::frontmatter::Provenance;
     use crate::{create_draft_codex, create_draft_note, read_note_by_filename, update_note};
-    use chrono::TimeZone;
     use tempfile::TempDir;
 
     /// The note to commit versions on. Only a Codex can commit, so the test default is a Codex.
@@ -480,11 +479,8 @@ mod tests {
     /// same second is another version too.
     #[test]
     fn the_id_is_the_second_and_the_body_together() {
-        let t1 = FixedOffset::east_opt(9 * 3600)
-            .unwrap()
-            .with_ymd_and_hms(2026, 9, 17, 14, 3, 0)
-            .unwrap();
-        let t2 = t1 + chrono::Duration::seconds(1);
+        let t1 = Stamp::new(2026, 9, 17, 14, 3, 0, 9 * 3600).unwrap();
+        let t2 = t1.plus_seconds(1);
 
         assert_ne!(version_id(t1, "a"), version_id(t2, "a"));
         assert_ne!(version_id(t1, "a"), version_id(t1, "b"));
@@ -649,11 +645,7 @@ mod tests {
     /// too. A millisecond fraction keeps all three digits.
     #[test]
     fn a_version_file_is_byte_exact() {
-        let time = FixedOffset::east_opt(9 * 3600)
-            .unwrap()
-            .with_ymd_and_hms(2026, 9, 17, 14, 3, 0)
-            .unwrap()
-            + chrono::Duration::milliseconds(250);
+        let time: Stamp = "2026-09-17T14:03:00.250+09:00".parse().unwrap();
         let fm = VersionFrontmatter {
             time,
             message: Some("m".to_string()),

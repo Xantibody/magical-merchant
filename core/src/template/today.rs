@@ -6,7 +6,6 @@
 
 use std::path::Path;
 
-use chrono::{DateTime, Local};
 use serde::Serialize;
 
 use super::previous_note_link;
@@ -14,6 +13,7 @@ use super::repository::Templates;
 use super::vars::{VarLocale, resolve_vars};
 use crate::error::CoreError;
 use crate::note::list_notes;
+use crate::utils::clock::WallClock;
 use crate::utils::validated::NoteFilename;
 
 /// One template, as it stands today.
@@ -36,13 +36,13 @@ pub fn templates_today(
     base_dir: &Path,
     locale: VarLocale,
 ) -> Result<Vec<TemplateToday>, CoreError> {
-    templates_today_at(base_dir, locale, Local::now())
+    templates_today_at(base_dir, locale, WallClock::now_local())
 }
 
 fn templates_today_at(
     base_dir: &Path,
     locale: VarLocale,
-    now: DateTime<Local>,
+    now: WallClock,
 ) -> Result<Vec<TemplateToday>, CoreError> {
     let templates = Templates::new(base_dir);
     let summaries = templates.list()?;
@@ -88,7 +88,6 @@ fn first_line(body: &str) -> String {
 mod tests {
     use super::*;
     use crate::template::save_template;
-    use chrono::TimeZone;
     use tempfile::TempDir;
 
     fn name(s: &str) -> NoteFilename {
@@ -100,8 +99,8 @@ mod tests {
     }
 
     /// 2026-08-31 (Mon).
-    fn monday() -> DateTime<Local> {
-        Local.with_ymd_and_hms(2026, 8, 31, 9, 0, 0).unwrap()
+    fn monday() -> WallClock {
+        WallClock::new(2026, 8, 31, 9, 0, 0).unwrap()
     }
 
     #[test]
