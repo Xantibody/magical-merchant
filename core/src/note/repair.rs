@@ -190,8 +190,9 @@ fn filename_time(filename: &str) -> Option<Stamp> {
     filename_time_in(filename, &Zone::local())
 }
 
-/// [`filename_time`] read in `zone`. A wall clock a clock change skips over gives `None`
-/// (the caller keeps the time it has), one it repeats gives the earlier instant.
+/// [`filename_time`] read in `zone`, as chrono read it ([`Zone::earliest`]). A wall clock a
+/// clock change skips over gives `None` (the caller keeps the time it has), one it repeats
+/// gives the later instant.
 fn filename_time_in(filename: &str, zone: &Zone) -> Option<Stamp> {
     let stem = filename.get(..15)?;
     zone.earliest(WallClock::parse_id_stem(stem).ok()?)

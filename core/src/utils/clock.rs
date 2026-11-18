@@ -6,13 +6,19 @@
 //! then touches only this module, and the bytes on disk and on the wire are pinned by the
 //! tests of the callers that write them.
 //!
-//! AIDEV-NOTE: backed by chrono for now (#415 replaces it); serde and every printer
-//! delegate to chrono's own so the bytes stay chrono's.
+//! AIDEV-NOTE: the values, printers and parsers are this module's own, ported from chrono
+//! 0.4.45 (#415 replaced it); jiff only says which offset a zone puts on an instant.
+//! jiff's types cannot hold what chrono read and wrote (a leap second, a year past 9999),
+//! and its printers and parsers spell and accept other bytes. Wrapping jiff's `Timestamp`
+//! and refusing what it cannot hold was the plan, but the pinned frontmatter and ID tables
+//! keep `+10000-…` and `:60` readable, so the range stays chrono's instead.
 
 mod civil;
 mod error;
 #[cfg(test)]
 mod golden;
+mod parse;
+mod posix;
 mod stamp;
 mod zone;
 
