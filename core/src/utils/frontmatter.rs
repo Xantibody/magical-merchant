@@ -489,6 +489,133 @@ mod tests {
         assert_eq!(strip("---\ntime: x\n--- \n---\nbody"), "body");
     }
 
+    // ──────────── time bytes ────────────
+    //
+    // Frozen from chrono 0.4.45. A note's `time` / `updated` is part of its content hash,
+    // so a rewrite that spells the same instant differently re-syncs the note.
+
+    /// Reads a note whose `time:` is `value` and renders it back: the rewritten
+    /// value, or the parse error as the IPC sees it.
+    fn rewritten_time(value: &str) -> Result<String, String> {
+        let doc = format!("---\ntime: {value}\ntags: []\n---\nbody");
+        let (fm, _body): (NoteFrontmatter, &str) = parse(&doc).map_err(|e| e.to_string())?;
+        let rendered = render(&fm, "body").unwrap();
+        let line = rendered.lines().nth(1).unwrap();
+        Ok(line.strip_prefix("time: ").unwrap().to_string())
+    }
+
+    /// A fraction is kept as 3, 6 or 9 digits, the fewest of those that hold it; it is
+    /// never trimmed to the last non-zero digit.
+    #[test]
+    fn fractional_seconds_are_rewritten_byte_for_byte() {
+        for (written, rewritten) in [
+            (
+                "2026-03-20T14:30:45.370362+09:00",
+                "2026-03-20T14:30:45.370362+09:00",
+            ),
+            (
+                "2026-03-20T14:30:45.544569369+09:00",
+                "2026-03-20T14:30:45.544569369+09:00",
+            ),
+            (
+                "2026-03-20T14:30:45.123400+09:00",
+                "2026-03-20T14:30:45.123400+09:00",
+            ),
+            (
+                "2026-03-20T14:30:45.120+09:00",
+                "2026-03-20T14:30:45.120+09:00",
+            ),
+            (
+                "2026-03-20T14:30:45.100000+09:00",
+                "2026-03-20T14:30:45.100+09:00",
+            ),
+            ("2026-03-20T14:30:45+09:00", "2026-03-20T14:30:45+09:00"),
+        ] {
+            let doc = format!("---\ntime: {written}\ntags: []\nupdated: {written}\n---\nbody");
+            let (fm, body): (NoteFrontmatter, &str) = parse(&doc).unwrap();
+            assert_eq!(
+                render(&fm, body).unwrap(),
+                format!("---\ntime: {rewritten}\ntags: []\nupdated: {rewritten}\n---\nbody"),
+                "written: {written}"
+            );
+        }
+    }
+
+    /// Every spelling of a zero offset is written back as `Z`, never `+00:00`.
+    #[test]
+    fn a_zero_offset_is_written_as_z() {
+        for written in [
+            "2026-03-20T05:30:45+00:00",
+            "2026-03-20T05:30:45-00:00",
+            "2026-03-20T05:30:45Z",
+            "2026-03-20T05:30:45z",
+        ] {
+            assert_eq!(
+                rewritten_time(written).as_deref(),
+                Ok("2026-03-20T05:30:45Z"),
+                "written: {written}"
+            );
+        }
+    }
+
+    /// A hand-edited `time:` is read by chrono's relaxed RFC 3339 parser. What it
+    /// accepts must keep reading, or `update_note` starts refusing to save that note.
+    #[test]
+    fn hand_written_times_still_parse() {
+        let rows: &[(&str, Result<&str, &str>)] = &[
+            ("2026-03-20 14:30:45+09:00", Ok("2026-03-20T14:30:45+09:00")),
+            ("2026-03-20t14:30:45+09:00", Ok("2026-03-20T14:30:45+09:00")),
+            ("2026-03-20T14:30:45+0900", Ok("2026-03-20T14:30:45+09:00")),
+            ("2026-03-20T05:30:45 UTC", Ok("2026-03-20T05:30:45Z")),
+            ("2026-03-20T05:30:45 utc", Ok("2026-03-20T05:30:45Z")),
+            ("2026-03-20T05:30:45UTC", Ok("2026-03-20T05:30:45Z")),
+            ("2026-03-20T14:30:45+09 00", Ok("2026-03-20T14:30:45+09:00")),
+            (
+                "2026-03-20T09:30:45\u{2212}05:00",
+                Ok("2026-03-20T09:30:45-05:00"),
+            ),
+            ("2026-3-2T4:3:5+09:00", Ok("2026-03-02T04:03:05+09:00")),
+            (
+                "2026-03-20T14:30:45.1234567891+09:00",
+                Ok("2026-03-20T14:30:45.123456789+09:00"),
+            ),
+            (
+                "2026-03-20T14:30:45.+09:00",
+                Err("Parse error: time: input contains invalid characters at line 1 column 7"),
+            ),
+            (
+                "2026-03-20T14:30:45+24:00",
+                Err("Parse error: time: input is out of range at line 1 column 7"),
+            ),
+            ("2026-03-20T14:30:45+23:59", Ok("2026-03-20T14:30:45+23:59")),
+            ("9999-12-31T23:00:00Z", Ok("9999-12-31T23:00:00Z")),
+            ("+10000-01-01T00:00:00Z", Ok("+10000-01-01T00:00:00Z")),
+            ("2026-03-20T14:30:60+09:00", Ok("2026-03-20T14:30:60+09:00")),
+            (
+                "2026-03-20T14:30+09:00",
+                Err("Parse error: time: input contains invalid characters at line 1 column 7"),
+            ),
+        ];
+        for &(written, expected) in rows {
+            assert_eq!(
+                rewritten_time(written).as_deref(),
+                expected.map_err(str::to_string).as_deref(),
+                "written: {written:?}"
+            );
+        }
+    }
+
+    /// Two records of the same instant are equal whatever offset each was written in.
+    #[test]
+    fn frontmatter_equality_ignores_the_offset() {
+        let utc = FixedOffset::east_opt(0)
+            .unwrap()
+            .with_ymd_and_hms(2026, 3, 20, 5, 30, 45)
+            .unwrap();
+
+        assert_eq!(NoteFrontmatter::new(utc), sample_fm());
+    }
+
     #[test]
     fn test_note_frontmatter_old_format_compat() {
         // Old format only had battery and is_charging

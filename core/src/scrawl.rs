@@ -230,6 +230,24 @@ mod tests {
             .collect()
     }
 
+    /// The Scrawl screen reads these dates over IPC and builds its day keys from them, so
+    /// the spelling is a contract: zero-padded `YYYY-MM-DD`.
+    #[test]
+    fn scrawl_days_serialize_dates_as_iso_days() {
+        let days = ScrawlDays {
+            dates: vec![ymd("2026-03-03"), ymd("0999-01-02")],
+            days: vec![ScrawlDay {
+                date: ymd("2026-03-03"),
+                entries: vec![],
+            }],
+        };
+
+        assert_eq!(
+            serde_json::to_string(&days).unwrap(),
+            r#"{"dates":["2026-03-03","0999-01-02"],"days":[{"date":"2026-03-03","entries":[]}]}"#
+        );
+    }
+
     #[test]
     fn read_scrawl_days_is_empty_without_a_scrawl_directory() {
         let tmp = TempDir::new().unwrap();

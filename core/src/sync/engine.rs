@@ -807,6 +807,97 @@ mod tests {
         assert!(req.conflicts[0].conflict_key.contains(".sync-conflict-"));
     }
 
+    /// The Worker stores `last_modified` as it arrives (R2 customMetadata), so these bytes
+    /// are persisted. A zero offset is spelled `+00:00`, never `Z`, and the fraction keeps
+    /// 3, 6 or 9 digits as needed, never trimmed. A conflict sends the same spelling.
+    #[test]
+    fn an_upload_sends_its_mtime_as_rfc3339_with_a_numeric_zero_offset() {
+        let mtimes = [
+            "2026-08-05T00:00:00Z",
+            "2026-08-05T00:00:00.120Z",
+            "2026-08-05T00:00:00.123400Z",
+            "2026-08-05T00:00:00.544569369Z",
+            "2026-08-05T00:00:00.100000000Z",
+        ];
+        let dir = tempfile::tempdir().unwrap();
+        let mut locals = Vec::new();
+        let mut actions = Vec::new();
+        for (i, mtime) in mtimes.iter().enumerate() {
+            let key = format!("notes/{i}.md");
+            seed(dir.path(), &key, "body");
+            locals.push(LocalFile {
+                key: key.clone(),
+                last_modified: mtime.parse().unwrap(),
+                content_hash: "hash".to_string(),
+            });
+            actions.push(SyncAction::UploadNew { key: key.clone() });
+            actions.push(SyncAction::Conflict { key });
+        }
+
+        let mut result = SyncResult::default();
+        let req = build_bulk_request(
+            &actions,
+            &locals,
+            &paths::data_dir(dir.path()),
+            None,
+            &mut result,
+        )
+        .unwrap();
+
+        let uploads: Vec<&str> = req
+            .uploads
+            .iter()
+            .map(|u| u.last_modified.as_str())
+            .collect();
+        let conflicts: Vec<&str> = req
+            .conflicts
+            .iter()
+            .map(|c| c.last_modified.as_str())
+            .collect();
+        let expected = vec![
+            "2026-08-05T00:00:00+00:00",
+            "2026-08-05T00:00:00.120+00:00",
+            "2026-08-05T00:00:00.123400+00:00",
+            "2026-08-05T00:00:00.544569369+00:00",
+            "2026-08-05T00:00:00.100+00:00",
+        ];
+        assert_eq!(uploads, expected);
+        assert_eq!(conflicts, expected);
+    }
+
+    /// The Worker's state has been written by more than one client version, so every
+    /// spelling of an instant it holds must still read; another offset is turned into UTC.
+    /// A value that is not a time drops that record, as it always has.
+    #[test]
+    fn server_times_in_every_spelling_are_read() {
+        let state = server_state(&[
+            ("a.md", "h", "2026-08-05T00:00:00.000Z"),
+            ("b.md", "h", "2026-08-05T00:00:00+00:00"),
+            ("c.md", "h", "2026-08-05T00:00:00.123456789Z"),
+            ("d.md", "h", "2026-08-05T09:00:00.120+09:00"),
+            ("e.md", "h", "2026-08-05T00:00:00.123400+00:00"),
+            ("f.md", "h", "not a time"),
+            ("g.md", "h", ""),
+        ]);
+
+        let mut read: Vec<String> = server_state_to_remote_files(&state)
+            .iter()
+            .map(|f| format!("{} {}", f.key, f.last_modified.to_rfc3339()))
+            .collect();
+        read.sort();
+
+        assert_eq!(
+            read,
+            vec![
+                "a.md 2026-08-05T00:00:00+00:00",
+                "b.md 2026-08-05T00:00:00+00:00",
+                "c.md 2026-08-05T00:00:00.123456789+00:00",
+                "d.md 2026-08-05T00:00:00.120+00:00",
+                "e.md 2026-08-05T00:00:00.123400+00:00",
+            ]
+        );
+    }
+
     #[test]
     fn local_state_mirrors_what_the_server_recorded() {
         let dir = tempfile::tempdir().unwrap();

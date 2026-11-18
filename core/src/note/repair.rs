@@ -295,6 +295,39 @@ mod tests {
         assert_eq!(repair_all(tmp.path()).unwrap(), 0);
     }
 
+    /// What counts as a real `time:` line is chrono's strict RFC 3339 parser: seconds
+    /// required, any number of fraction digits, `T` / `t` / space, `Z` / `z` / `±HH:MM`.
+    /// A wider check would strip a user's own lines as metadata.
+    #[test]
+    fn strict_time_line_check_is_unchanged() {
+        for (value, is_time) in [
+            ("2026-03-20T14:30:45+09:00", true),
+            ("2026-03-20T14:30:45.370362+09:00", true),
+            ("2026-03-20T14:30:45.544569369+09:00", true),
+            ("2026-03-20T14:30:45.1234567891+09:00", true),
+            ("2026-03-20T14:30:60+09:00", true),
+            ("2026-03-20 14:30:45+09:00", true),
+            ("2026-03-20t14:30:45+09:00", true),
+            ("2026-03-20T05:30:45z", true),
+            ("2026-03-20T09:30:45\u{2212}05:00", true),
+            ("2026-03-20T14:30+09:00", false),
+            ("2026-03-20", false),
+            ("2026-03-20T14:30:45+0900", false),
+            ("2026-03-20T05:30:45 UTC", false),
+            ("2026-3-2T4:3:5+09:00", false),
+            ("2026-03-20T14:30:45.+09:00", false),
+            ("2026-03-20T14:30:45+24:00", false),
+            ("+10000-01-01T00:00:00Z", false),
+        ] {
+            let body = format!("***\n\ntime: {value}\n---\nrest");
+            assert_eq!(
+                strip_mangled_metadata(&body).is_some(),
+                is_time,
+                "value: {value:?}"
+            );
+        }
+    }
+
     /// The leading timestamp is readable even from a sync conflict filename.
     #[test]
     fn filename_time_reads_conflict_filenames() {

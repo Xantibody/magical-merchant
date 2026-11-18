@@ -883,6 +883,83 @@ mod tests {
         assert_eq!(hits[MAX_HITS - 1].date, "2025-01-03");
     }
 
+    /// A note is dated by the wall clock of the offset it was written in, not by UTC or by
+    /// the device reading it, both for the date it reports and for a period filter.
+    #[test]
+    fn a_note_is_dated_in_its_own_offset() {
+        let tmp = TempDir::new().unwrap();
+        for (at, body) in [
+            ("2025-04-12T23:30:00-05:00", "needle west"),
+            ("2025-04-12T00:30:00+14:00", "needle east"),
+        ] {
+            crate::create_note_at(
+                tmp.path(),
+                at.parse().unwrap(),
+                body,
+                &[],
+                &context(),
+                Provenance::default(),
+            )
+            .unwrap();
+        }
+        let dated = |filter: &SearchFilter| -> Vec<String> {
+            let mut hits: Vec<String> = search_records(tmp.path(), "needle", &[], filter)
+                .unwrap()
+                .iter()
+                .map(|hit| format!("{} {}", hit.title, hit.date))
+                .collect();
+            hits.sort();
+            hits
+        };
+        let on = |date: &str| SearchFilter {
+            from: Some(day(date)),
+            to: Some(day(date)),
+            ..SearchFilter::default()
+        };
+
+        let both = vec!["needle east 2025-04-12", "needle west 2025-04-12"];
+        assert_eq!(dated(&SearchFilter::default()), both);
+        assert_eq!(dated(&on("2025-04-12")), both);
+        assert_eq!(dated(&on("2025-04-11")), Vec::<String>::new());
+        assert_eq!(dated(&on("2025-04-13")), Vec::<String>::new());
+    }
+
+    /// The period arrives over IPC as JSON and is read by the date type's own parser, which
+    /// is laxer than `%Y-%m-%d` in places. Each row is what that parser makes of the text,
+    /// and the error text is what the screen receives.
+    #[test]
+    fn search_filter_dates_deserialize() {
+        let read = |text: &str| -> String {
+            match serde_json::from_value::<SearchFilter>(serde_json::json!({ "from": text })) {
+                Ok(filter) => format!("ok {}", filter.from.unwrap()),
+                Err(e) => format!("err {e}"),
+            }
+        };
+        let rows = [
+            ("2026-03-01", "ok 2026-03-01"),
+            ("2026-3-1", "ok 2026-03-01"),
+            ("2026 -03-01", "ok 2026-03-01"),
+            ("2026-03-01 ", "ok 2026-03-01"),
+            (" 2026-03-01", "ok 2026-03-01"),
+            ("+02026-03-01", "ok 2026-03-01"),
+            ("2026-02-30", "err input is out of range"),
+            ("2026-13-01", "err input is out of range"),
+            ("abc", "err input contains invalid characters"),
+            ("2026-03-01x", "err trailing input"),
+            ("2026-03", "err premature end of input"),
+            ("", "err premature end of input"),
+        ];
+
+        let outcomes: Vec<(&str, String)> =
+            rows.iter().map(|(text, _)| (*text, read(text))).collect();
+
+        let expected: Vec<(&str, String)> = rows
+            .iter()
+            .map(|(text, outcome)| (*text, (*outcome).to_string()))
+            .collect();
+        assert_eq!(outcomes, expected);
+    }
+
     #[test]
     fn a_search_page_counts_only_matches_in_the_tag_scope() {
         let tmp = TempDir::new().unwrap();

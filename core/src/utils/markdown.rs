@@ -194,6 +194,38 @@ mod tests {
         assert_eq!(split_time_prefix("- [aa:bb:cc] x"), None);
     }
 
+    /// Which bracketed times read back as a time, and how one reads back: MCP prints it with
+    /// `%H:%M:%S`. A line whose time does not read keeps its text all the same.
+    #[test]
+    fn a_scrawl_time_reads_back() {
+        // (line, the time as MCP prints it, the text)
+        let rows = [
+            ("- [09:05:07] x", Some("09:05:07"), "x"),
+            ("- [9:05:07] x", None, "- [9:05:07] x"),
+            ("- [24:00:00] x", None, "x"),
+            ("- [23:59:60] x", Some("23:59:60"), "x"),
+            ("- [23:60:00] x", None, "x"),
+        ];
+
+        let read: Vec<(&str, Option<String>, String)> = rows
+            .iter()
+            .map(|(line, _, _)| {
+                let entry = parse_scrawl_entry(line);
+                (
+                    *line,
+                    entry.time.map(|t| t.format("%H:%M:%S").to_string()),
+                    entry.text,
+                )
+            })
+            .collect();
+
+        let expected: Vec<(&str, Option<String>, String)> = rows
+            .iter()
+            .map(|(line, time, text)| (*line, time.map(str::to_string), (*text).to_string()))
+            .collect();
+        assert_eq!(read, expected);
+    }
+
     #[test]
     fn test_format_note_markdown() {
         let tags = vec!["rust".to_string(), "memo".to_string()];

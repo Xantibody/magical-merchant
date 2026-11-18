@@ -164,6 +164,42 @@ mod tests {
         (tmp, scrawl)
     }
 
+    /// Which file names count as a day. What the date parser lets through decides which
+    /// files the Scrawl screen and search can see.
+    #[test]
+    fn which_day_files_are_listed() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path().join("data").join(paths::SCRAWL_DIR);
+        fs::create_dir_all(&dir).unwrap();
+        for name in [
+            "2026-03-20.md",
+            "2026-3-2.md",
+            "notes.md",
+            "2026-02-30.md",
+            "20260321.md",
+            "2026-03-22x.md",
+            " 2026-03-23.md",
+            "2026-03-24.txt",
+            "+2026-03-25.md",
+        ] {
+            fs::write(dir.join(name), "- [09:00:00] x\n").unwrap();
+        }
+
+        let dates: Vec<String> = Scrawl::new(tmp.path().to_path_buf())
+            .list_dates()
+            .unwrap()
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+
+        // Unpadded fields, a leading space and a `+` sign are let through; `2026-3-2.md` is
+        // listed as 2026-03-02 although no file of that name exists
+        assert_eq!(
+            dates,
+            vec!["2026-03-25", "2026-03-23", "2026-03-20", "2026-03-02"]
+        );
+    }
+
     /// A wrong deletion cannot be undone. If the line pointed at is not the one that was read,
     /// refuse without touching a single byte of the file.
     #[test]

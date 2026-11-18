@@ -531,6 +531,23 @@ mod tests {
         }
     }
 
+    /// The stamp in a snapshot id has to be a real date and time, not only 15 digits in shape.
+    #[test]
+    fn an_impossible_date_is_not_a_snapshot_id() {
+        let dir = Path::new("history");
+        for (id, accepted) in [
+            ("20260917_140300", true),
+            ("20260917_140300-2", true),
+            ("20261317_140300", false),
+            ("20260230_000000", false),
+            ("20260917_240000", false),
+            // A leap second is a time chrono can hold, so it passes
+            ("20260917_235960", true),
+        ] {
+            assert_eq!(snapshot_path(dir, id).is_ok(), accepted, "{id}");
+        }
+    }
+
     /// A restored note's frontmatter is the one from the snapshot. If `updated` advanced on
     /// every restore, "the time of the last rewrite" would be a lie.
     #[test]

@@ -223,6 +223,30 @@ mod tests {
         assert_eq!(summary.preview, "# Title\nbody");
     }
 
+    /// The list's `time` crosses IPC in the note's own offset and fraction; a zero offset
+    /// is spelled `Z`.
+    #[test]
+    fn time_serializes_with_its_own_offset() {
+        for (written, sent) in [
+            (
+                "2026-08-04T00:30:00.120+09:00",
+                "2026-08-04T00:30:00.120+09:00",
+            ),
+            ("2026-08-04T00:30:00+00:00", "2026-08-04T00:30:00Z"),
+        ] {
+            let content = format!("---\ntime: {written}\ntags: []\n---\nbody");
+            let summary = Summary::from_file(
+                NoteKind::Note,
+                PathBuf::from("/test/note.md"),
+                "note.md".to_string(),
+                &content,
+            );
+
+            let json = serde_json::to_value(&summary).unwrap();
+            assert_eq!(json["time"], sent, "written: {written}");
+        }
+    }
+
     #[test]
     fn test_from_file_with_invalid_content() {
         let summary = Summary::from_file(

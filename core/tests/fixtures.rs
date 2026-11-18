@@ -12,15 +12,17 @@
 // error (aligned with the same disclaimer in `core/src/lib.rs`).
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+use std::fs;
 use std::path::{Path, PathBuf};
 
 use assert_fs::TempDir;
 use assert_fs::prelude::*;
 use chrono::NaiveDate;
 use magical_merchant_core::{
-    DeviceContext, NoteFilename, NoteKind, Revision, Source, list_note_versions, list_notes,
-    list_scrawl_dates, list_templates, note_version_status, read_note_by_filename, read_note_meta,
-    read_note_version, read_scrawl, read_template, save_scrawl_entry, update_note,
+    DeviceContext, NoteFilename, NoteKind, NoteMeta, Revision, Source, frontmatter,
+    list_note_versions, list_notes, list_scrawl_dates, list_templates, note_version_status,
+    read_note_by_filename, read_note_meta, read_note_version, read_scrawl, read_template,
+    save_scrawl_entry, update_note,
 };
 
 fn fixtures() -> PathBuf {
@@ -163,6 +165,39 @@ fn every_template_can_be_read() {
         templates.iter().any(|t| t.name == "daily"),
         "the daily template is there to show the variables"
     );
+}
+
+/// A note's frontmatter is part of its content hash: reading one and writing it back must
+/// give the same bytes, `time:` and `updated:` included, or every device re-syncs it.
+#[test]
+fn every_fixture_note_rewrites_to_the_same_bytes() {
+    let dir = sandbox();
+
+    for note in list_notes(dir.path()).expect("list") {
+        let content = fs::read_to_string(&note.path).expect("note reads");
+        let (meta, body) = frontmatter::parse::<NoteMeta>(&content).expect("frontmatter parses");
+        let rendered = frontmatter::render(&meta, body).expect("renders");
+        assert_eq!(rendered, content, "{}", note.filename);
+    }
+}
+
+/// A Codex version's `time:` reads back as the same bytes it was written with.
+#[test]
+fn every_codex_version_time_reads_back_as_written() {
+    let dir = sandbox();
+    let codex = filename("20260701_090000.md");
+    let versions_dir = dir.path().join("data/codex/20260701_090000");
+
+    for version in list_note_versions(dir.path(), &codex).expect("versions") {
+        let content =
+            fs::read_to_string(versions_dir.join(format!("{}.md", version.id))).expect("reads");
+        let written = content
+            .lines()
+            .find_map(|line| line.strip_prefix("time: "))
+            .expect("a time line");
+        let read = serde_json::to_value(&version).expect("serializes");
+        assert_eq!(read["time"], written, "{}", version.id);
+    }
 }
 
 /// Being readable is not enough. It is a data directory only once you can keep writing from it.

@@ -445,6 +445,47 @@ mod tests {
         );
     }
 
+    /// The cache keys a hash on the mtime in whole milliseconds, rounded down (toward the
+    /// past, also before 1970). Rounding another way changes every cached key, and the next
+    /// scan hashes everything again.
+    #[test]
+    fn the_cached_mtime_is_floored_to_the_millisecond() {
+        let dir = tempfile::tempdir().unwrap();
+        let after = seed_note(dir.path(), "after.md", "a");
+        set_mtime(
+            &after,
+            SystemTime::UNIX_EPOCH + Duration::from_nanos(1_234_567_891),
+        );
+        let before = seed_note(dir.path(), "before.md", "b");
+        set_mtime(
+            &before,
+            SystemTime::UNIX_EPOCH - Duration::from_micros(1_500),
+        );
+
+        let files = scan_local_files(dir.path()).unwrap();
+        let cache = ScanCache::load(dir.path());
+
+        let mut seen: Vec<String> = files
+            .iter()
+            .map(|f| {
+                format!(
+                    "{} {} {}",
+                    f.key,
+                    cache.files[&f.key].mtime_ms,
+                    f.last_modified.to_rfc3339()
+                )
+            })
+            .collect();
+        seen.sort();
+        assert_eq!(
+            seen,
+            vec![
+                "notes/after.md 1234 1970-01-01T00:00:01.234567891+00:00",
+                "notes/before.md -2 1969-12-31T23:59:59.998500+00:00",
+            ]
+        );
+    }
+
     /// The cache lives outside data. Under data it would become a sync target itself.
     #[test]
     fn the_cache_file_never_appears_in_scan_results() {

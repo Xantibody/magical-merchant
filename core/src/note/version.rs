@@ -645,6 +645,42 @@ mod tests {
         assert!(matches!(err, CoreError::NotFound(_)), "{err}");
     }
 
+    /// A version file syncs as it is written, so its `time:` bytes are its content hash
+    /// too. A millisecond fraction keeps all three digits.
+    #[test]
+    fn a_version_file_is_byte_exact() {
+        let time = FixedOffset::east_opt(9 * 3600)
+            .unwrap()
+            .with_ymd_and_hms(2026, 9, 17, 14, 3, 0)
+            .unwrap()
+            + chrono::Duration::milliseconds(250);
+        let fm = VersionFrontmatter {
+            time,
+            message: Some("m".to_string()),
+        };
+
+        assert_eq!(
+            frontmatter::render(&fm, "body").unwrap(),
+            "---\ntime: 2026-09-17T14:03:00.250+09:00\nmessage: m\n---\nbody"
+        );
+    }
+
+    /// The stamp in a version id has to be a real date and time, not only 15 digits in shape.
+    #[test]
+    fn an_impossible_date_is_not_a_version_id() {
+        let dir = Path::new("versions");
+        for (id, accepted) in [
+            ("20260917_140300-0123abcd", true),
+            ("20261317_140300-0123abcd", false),
+            ("20260230_000000-0123abcd", false),
+            ("20260917_240000-0123abcd", false),
+            // A leap second is a time chrono can hold, so it passes
+            ("20260917_235960-0123abcd", true),
+        ] {
+            assert_eq!(version_path(dir, id).is_ok(), accepted, "{id}");
+        }
+    }
+
     /// The version count and "has it moved" shown on a list row. Version bodies are not
     /// read; only the hash in the filename is compared.
     #[test]
