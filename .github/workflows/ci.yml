@@ -403,17 +403,16 @@ jobs:
       - name: the NixOS module installs the apps and sync-config.json
         run: nix build .#checks.x86_64-linux.nixos-module --no-link -L
 
-  # ---- Stage 3: build after the merge. On main only: the nix builds, then the push to Cachix ----
-
   # Changing pnpm-lock.yaml leaves nix/package.nix's pnpmDeps.hash silently
-  # stale. It runs before publish because publish cannot see it: the stale
-  # hash names the previous output, Cachix serves that, and the app builds
-  # green with the old dependencies
+  # stale, and only the nix build notices. publish cannot see it either: the
+  # stale hash names the previous output, Cachix serves that, and the app
+  # builds green with the old dependencies. Renovate (the Mend-hosted app,
+  # which cannot run postUpgradeTasks) moves the lockfile every week, so
+  # this has to fail the PR, where `just pnpm-hash` fixes it.
+  # AIDEV-NOTE: runs on PRs, unlike the stage 3 builds; on main only (393f3a2) it let #407 merge green and break main
   nix-package:
-    needs: [changes, lint, rust, frontend]
-    if: >-
-      ${{ !cancelled() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') &&
-        needs.changes.outputs.nix-package == 'true' && github.ref == 'refs/heads/main' }}
+    needs: [changes, lint]
+    if: needs.changes.outputs.nix-package == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -429,6 +428,11 @@ jobs:
       # nothing
       - name: pnpm deps hash is current
         run: nix build .#pnpm-deps --no-link
+      - name: say how to fix it
+        if: failure()
+        run: echo "pnpmDeps.hash in nix/package.nix is stale. Run \`just pnpm-hash\` and push the result." >> "$GITHUB_STEP_SUMMARY"
+
+  # ---- Stage 3: build after the merge. On main only: the nix builds, then the push to Cachix ----
 
   # The jobs and the reason they wait for main are in publish.yml
   publish:
