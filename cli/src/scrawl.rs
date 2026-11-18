@@ -113,6 +113,38 @@ mod tests {
         assert!(resolve_date(Some("20260320")).is_err());
     }
 
+    /// What `scrawl show` accepts and the reason it prints when it refuses, as chrono reads
+    /// `%Y-%m-%d`.
+    #[test]
+    fn a_date_argument_is_read_as_chrono_reads_it() {
+        let cases: &[(&str, Result<&str, &str>)] = &[
+            ("2026-3-2", Ok("2026-03-02")),
+            (
+                "2026-02-30",
+                Err("Parse error: invalid date '2026-02-30': input is out of range"),
+            ),
+            (
+                "2026-03-20x",
+                Err("Parse error: invalid date '2026-03-20x': trailing input"),
+            ),
+            (
+                "2026-03",
+                Err("Parse error: invalid date '2026-03': premature end of input"),
+            ),
+        ];
+        for (text, expected) in cases {
+            let got = resolve_date(Some(text))
+                .map(|d| d.to_string())
+                .map_err(|e| e.to_string());
+
+            assert_eq!(
+                got.as_deref().map_err(String::as_str),
+                *expected,
+                "{text:?}"
+            );
+        }
+    }
+
     #[test]
     fn a_day_with_no_file_is_empty_not_an_error() {
         let tmp = TempDir::new().unwrap();

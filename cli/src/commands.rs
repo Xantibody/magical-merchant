@@ -488,6 +488,50 @@ mod tests {
         assert_eq!(list(tmp.path()).unwrap().len(), 2);
     }
 
+    /// A time given in UTC names the file by the UTC wall clock and is written back as `Z`,
+    /// not `+00:00`: the offset given is the one kept.
+    #[test]
+    fn an_import_at_z_keeps_the_utc_wall_clock() {
+        let tmp = TempDir::new().unwrap();
+
+        let filename = import(
+            tmp.path(),
+            written_at("2019-05-04T03:00:00Z"),
+            "# UTC",
+            &[],
+            None,
+        )
+        .unwrap()
+        .unwrap();
+
+        let content =
+            fs::read_to_string(tmp.path().join("data/notes").join(filename.as_str())).unwrap();
+        assert_eq!(filename.as_str(), "20190504_030000.md");
+        assert!(
+            content.contains("\ntime: 2019-05-04T03:00:00Z\n"),
+            "{content}"
+        );
+    }
+
+    /// The list shows the wall clock of the note's own offset, cut to the minute.
+    #[test]
+    fn the_list_shows_the_wall_clock_to_the_minute() {
+        let tmp = TempDir::new().unwrap();
+        import(
+            tmp.path(),
+            written_at("2019-05-04T12:00:59+09:00"),
+            "# 正午",
+            &[],
+            None,
+        )
+        .unwrap()
+        .unwrap();
+
+        let rows = list(tmp.path()).unwrap();
+
+        assert_eq!(rows[0].time, "2019-05-04 12:00");
+    }
+
     /// An empty file does not become a note. As with `new`, no empty record is left.
     #[test]
     fn importing_an_empty_body_creates_nothing() {

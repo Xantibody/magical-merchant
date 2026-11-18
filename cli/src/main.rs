@@ -328,6 +328,43 @@ mod tests {
         );
     }
 
+    /// `--time` is read the way chrono's `FromStr` reads it: `Z`, a space for the `T` and an
+    /// offset without its colon all pass, and the offset given is the one kept.
+    #[test]
+    fn import_time_accepts_z_a_space_and_a_colonless_offset() {
+        let time_of = |text: &str| match Cli::try_parse_from([
+            "magical-merchant",
+            "import",
+            "--time",
+            text,
+        ]) {
+            Ok(Cli {
+                command: Command::Import { time, .. },
+                ..
+            }) => Ok(time.to_rfc3339()),
+            Ok(_) => Err("not an import".to_string()),
+            Err(e) => Err(e.to_string()),
+        };
+
+        for (text, expected) in [
+            ("2019-05-04T03:00:00Z", Ok("2019-05-04T03:00:00+00:00")),
+            ("2019-05-04 12:00:00+09:00", Ok("2019-05-04T12:00:00+09:00")),
+            ("2019-05-04T12:00:00+0900", Ok("2019-05-04T12:00:00+09:00")),
+            (
+                "2019-05-04",
+                Err(
+                    "error: invalid value '2019-05-04' for '--time <TIME>': premature end of input\n\nFor more information, try '--help'.\n",
+                ),
+            ),
+        ] {
+            assert_eq!(
+                time_of(text),
+                expected.map(str::to_string).map_err(str::to_string),
+                "{text}"
+            );
+        }
+    }
+
     /// `edit` alone does not fall back to the newest when omitted. It is the side that
     /// writes back, so which note it is has to be named every time.
     #[test]

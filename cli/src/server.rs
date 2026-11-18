@@ -2056,4 +2056,176 @@ mod tests {
 
         assert!(result.is_err());
     }
+
+    /// Frontmatter `time` as written on disk, and what MCP hands an agent for it.
+    /// MCP spells a zero offset `+00:00` where the frontmatter says `Z`, and keeps the
+    /// fraction at 3, 6 or 9 digits, never trimmed. Frozen from chrono's `to_rfc3339`.
+    const MCP_TIMES: &[(&str, &str)] = &[
+        ("2026-03-20T05:30:45Z", "2026-03-20T05:30:45+00:00"),
+        ("2026-03-20T05:30:45+00:00", "2026-03-20T05:30:45+00:00"),
+        ("2026-03-20T05:30:45-00:00", "2026-03-20T05:30:45+00:00"),
+        ("2026-03-20T14:30:45+09:00", "2026-03-20T14:30:45+09:00"),
+        (
+            "2026-03-20T14:30:45.544569369+09:00",
+            "2026-03-20T14:30:45.544569369+09:00",
+        ),
+        (
+            "2026-03-20T14:30:45.123400+09:00",
+            "2026-03-20T14:30:45.123400+09:00",
+        ),
+        (
+            "2026-03-20T14:30:45.120+09:00",
+            "2026-03-20T14:30:45.120+09:00",
+        ),
+        (
+            "2026-03-20T14:30:45.1+09:00",
+            "2026-03-20T14:30:45.100+09:00",
+        ),
+        (
+            "2026-03-20T00:00:45.000000001-05:30",
+            "2026-03-20T00:00:45.000000001-05:30",
+        ),
+    ];
+
+    fn a_note_written_at(base: &Path, time: &str) -> String {
+        let dir = base.join("data/notes");
+        fs::create_dir_all(&dir).unwrap();
+        let filename = "20260320_143045.md".to_string();
+        fs::write(
+            dir.join(&filename),
+            format!("---\ntime: {time}\nupdated: {time}\n---\n\n# 時刻\n"),
+        )
+        .unwrap();
+        filename
+    }
+
+    #[test]
+    fn mcp_times_are_rfc3339_with_a_numeric_zero_offset_and_untrimmed_fractions() {
+        for (written, expected) in MCP_TIMES {
+            let tmp = TempDir::new().unwrap();
+            let filename = a_note_written_at(tmp.path(), written);
+            let reader = server(tmp.path());
+
+            let listed = reader.list_notes().unwrap().0;
+            let read = reader
+                .read_note(Parameters(FilenameParam { filename }))
+                .unwrap()
+                .0;
+
+            assert_eq!(
+                listed.notes[0].time.as_deref(),
+                Some(*expected),
+                "{written}"
+            );
+            assert_eq!(read.time.as_deref(), Some(*expected), "{written}");
+            assert_eq!(read.updated.as_deref(), Some(*expected), "{written}");
+        }
+    }
+
+    /// A version's `time` is read from its own frontmatter and handed out the way a note's is.
+    #[test]
+    fn a_codex_version_time_keeps_its_offset_and_its_milliseconds() {
+        for (written, expected) in [
+            (
+                "2026-09-17T14:03:00.250+09:00",
+                "2026-09-17T14:03:00.250+09:00",
+            ),
+            ("2026-09-17T05:03:00.250Z", "2026-09-17T05:03:00.250+00:00"),
+        ] {
+            let tmp = TempDir::new().unwrap();
+            let codex = tmp.path().join("data/codex");
+            fs::create_dir_all(codex.join("20260917_140000")).unwrap();
+            fs::write(
+                codex.join("20260917_140000.md"),
+                "---\ntime: 2026-09-17T14:00:00+09:00\n---\n\nbody",
+            )
+            .unwrap();
+            fs::write(
+                codex.join("20260917_140000/20260917_140300-0123abcd.md"),
+                format!("---\ntime: {written}\nmessage: m\n---\nbody"),
+            )
+            .unwrap();
+
+            let out = server(tmp.path())
+                .list_codex_versions(Parameters(FilenameParam {
+                    filename: "20260917_140000.md".to_string(),
+                }))
+                .unwrap()
+                .0;
+
+            assert_eq!(out.versions[0].time, expected, "{written}");
+        }
+    }
+
+    /// A snapshot's time is its file's mtime in this machine's zone, so only the shape is
+    /// fixed here: the milliseconds padded to three digits and a numeric offset, never `Z`.
+    #[test]
+    fn a_snapshot_time_is_rfc3339_with_milliseconds_and_a_numeric_offset() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path().join("history/20260320_143045");
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("20260320_143046.md");
+        fs::write(&path, "---\ntime: 2026-03-20T14:30:45+09:00\n---\n\nbody").unwrap();
+        let mtime = std::time::UNIX_EPOCH + std::time::Duration::new(1_774_000_000, 250_000_000);
+        fs::File::options()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_modified(mtime)
+            .unwrap();
+
+        let out = writable(tmp.path())
+            .list_note_history(Parameters(FilenameParam {
+                filename: "20260320_143045.md".to_string(),
+            }))
+            .unwrap()
+            .0;
+
+        let time = &out.snapshots[0].time;
+        let (wall, offset) = time.split_at(time.len() - 6);
+        assert!(wall.ends_with(":40.250"), "{time}");
+        assert_eq!(wall.len(), "2026-03-20T00:00:40.250".len(), "{time}");
+        assert!(offset.starts_with(['+', '-']), "{time}");
+        assert_eq!(&offset[3..4], ":", "{time}");
+    }
+
+    /// What a `date` / `from` / `to` argument accepts, and the words an agent gets back
+    /// when it does not. Frozen from chrono's `%Y-%m-%d`.
+    #[test]
+    fn a_date_argument_is_read_or_refused_in_words() {
+        for (text, expected) in [
+            ("2026-03-01", Ok("2026-03-01")),
+            ("2026-3-1", Ok("2026-03-01")),
+            (" 2026-03-01", Ok("2026-03-01")),
+            (
+                "2026-03-01 ",
+                Err("Invalid date '2026-03-01 ': trailing input"),
+            ),
+            (
+                "2026-03-01x",
+                Err("Invalid date '2026-03-01x': trailing input"),
+            ),
+            (
+                "2026-13-01",
+                Err("Invalid date '2026-13-01': input is out of range"),
+            ),
+            (
+                "2026-02-30",
+                Err("Invalid date '2026-02-30': input is out of range"),
+            ),
+            (
+                "abc",
+                Err("Invalid date 'abc': input contains invalid characters"),
+            ),
+            (
+                "2026-03",
+                Err("Invalid date '2026-03': premature end of input"),
+            ),
+            ("", Err("Invalid date '': premature end of input")),
+        ] {
+            let got = parse_date(text).map(|d| d.to_string());
+
+            assert_eq!(got.as_deref().map_err(String::as_str), expected, "{text:?}");
+        }
+    }
 }
