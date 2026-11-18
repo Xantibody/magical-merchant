@@ -13,6 +13,8 @@ description: Rust core crate conventions, Tauri command plumbing, MCP CLI, and t
 - `tauri-app/src-tauri/` wraps core functions as Tauri commands
 - Frontend calls go through `typedInvoke` (`lib/commands.ts`) — add the
   command's types there, never call `invoke` raw
+- Every time string is printed and parsed by `core::utils::clock`, never by
+  jiff's own printers, parsers or serde; cli and the app import only `clock`
 
 ## Adding a Tauri command — checklist
 

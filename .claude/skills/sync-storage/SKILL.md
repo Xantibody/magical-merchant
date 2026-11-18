@@ -17,6 +17,9 @@ description: Note/Scrawl storage invariants, sync protocol, widgets and deep lin
 - **Frontmatter** (`time`/`tags`/`context`) is a record of creation, preserved
   verbatim on every edit. `time` must stay the creation time (list sorts by
   filename = creation order)
+- **Time strings** (filenames, frontmatter, day files, sync state, IPC, MCP)
+  are printed and parsed by `core::utils::clock` only, never by jiff's own
+  printers, parsers or serde: their bytes are chrono's and must not drift
 - **`updated`** (optional frontmatter): when the body was last rewritten.
   Stamped only by `Notes::update` — metadata edits and view toggles are not
   rewrites. Absent until the first edit, like `view`
