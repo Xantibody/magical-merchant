@@ -259,8 +259,8 @@ pub(crate) fn first_line(text: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::device::{Context, Source};
     use crate::domain::note::Provenance;
-    use crate::utils::device::{Context, Source};
     use crate::{create_draft_codex, create_draft_note, save_scrawl_entry};
     use tempfile::TempDir;
 

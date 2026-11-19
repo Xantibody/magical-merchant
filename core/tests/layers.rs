@@ -27,6 +27,7 @@ const OLD_MODULES: &[&str] = &["crate::sync"];
 const RULE_FILES: &[&str] = &[
     "src/domain/codex/version.rs",
     "src/domain/data.rs",
+    "src/domain/device/context.rs",
     "src/domain/glyphs/image.rs",
     "src/domain/note/file.rs",
     "src/domain/note/id.rs",

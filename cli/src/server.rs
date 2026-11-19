@@ -867,9 +867,9 @@ pub(crate) fn exists_or_hint(data_dir: &Path) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use magical_merchant_core::domain::device::{Context, Location};
     use magical_merchant_core::domain::scrawl::entry::format_scrawl_line;
     use magical_merchant_core::utils::clock::WallClock;
-    use magical_merchant_core::utils::device::{Context, Location};
     use magical_merchant_core::utils::place::cache_key;
     use std::fs;
     use tempfile::TempDir;

@@ -16,6 +16,9 @@ pub use domain::codex::{
     diff_note_versions, list_note_versions, note_version_status, promote_note_to_codex,
     read_note_version, restore_note_version,
 };
+pub use domain::device::Context as DeviceContext;
+/// The fixed vocabulary of entry points that wrote a record. Every creation entry takes one.
+pub use domain::device::Source;
 pub use domain::glyphs::{
     GLYPH_MAX_BYTES, GlyphData, GlyphFormat, GlyphName, GlyphSummary, delete_glyph, list_glyphs,
     read_glyph, save_glyph,
@@ -45,7 +48,4 @@ pub use domain::templates::{
 };
 pub use domain::templates::{TemplateToday, templates_today};
 pub use error::{CoreError, SyncError, describe};
-pub use utils::device::Context as DeviceContext;
-/// The fixed vocabulary of entry points that wrote a record. Every creation entry takes one.
-pub use utils::device::Source;
 pub use utils::frontmatter;

@@ -3,10 +3,10 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::domain::data::data_dir;
+use crate::domain::device::{Context, DeviceIdentity, Source};
 use crate::domain::scrawl::entry::{format_scrawl_line, split_context_json, split_time_prefix};
 use crate::error::CoreError;
 use crate::utils::clock::{Day, WallClock};
-use crate::utils::device::{Context, DeviceIdentity, Source};
 use crate::utils::frontmatter;
 
 pub(crate) const SCRAWL_DIR: &str = "scrawl";
@@ -226,7 +226,7 @@ pub(crate) fn expect_same_entry(day: &DayLog, index: usize, raw: &str) -> Result
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::device::NetworkType;
+    use crate::domain::device::NetworkType;
 
     #[test]
     fn test_scrawl_file_path() {

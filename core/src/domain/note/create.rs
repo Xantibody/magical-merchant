@@ -2,12 +2,12 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::domain::device::Context;
 use crate::domain::note::NoteKind;
 use crate::domain::note::file::{Provenance, format_note_markdown};
 use crate::error::CoreError;
 use crate::services::files::{create_new_with, ensure_dir, exists};
 use crate::utils::clock::Stamp;
-use crate::utils::device::Context;
 
 /// Create one note.
 ///
@@ -131,11 +131,11 @@ fn create_kind_at(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::device::Source;
     use crate::domain::note::{
         NoteFilename, list_notes, read_note, read_note_by_filename, read_note_meta,
     };
     use crate::utils::clock::WallClock;
-    use crate::utils::device::Source;
     use std::fs;
     use tempfile::TempDir;
 

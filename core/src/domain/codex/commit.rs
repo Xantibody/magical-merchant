@@ -79,8 +79,8 @@ mod tests {
     use crate::domain::codex::{
         VersionStatus, list_note_versions, note_version_status, read_note_version,
     };
+    use crate::domain::device::Context;
     use crate::domain::note::{Provenance, create_draft_codex, read_note_by_filename, update_note};
-    use crate::utils::device::Context;
     use std::fs;
     use std::path::PathBuf;
     use tempfile::TempDir;

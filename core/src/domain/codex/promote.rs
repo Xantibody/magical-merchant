@@ -28,8 +28,8 @@ pub fn promote_note_to_codex(base_dir: &Path, filename: &NoteFilename) -> Result
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::device::Context;
     use crate::domain::note::{Provenance, create_draft_codex, create_draft_note, list_notes};
-    use crate::utils::device::Context;
     use std::fs;
     use std::path::PathBuf;
     use tempfile::TempDir;

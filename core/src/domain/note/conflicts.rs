@@ -117,9 +117,9 @@ fn relocate_under(root: &Path, conflicts: &Path) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::device::Context;
     use crate::domain::note::{NoteFilename, Provenance, create_draft_codex};
     use crate::domain::scrawl::day::SCRAWL_DIR;
-    use crate::utils::device::Context;
     use std::fs;
     use tempfile::TempDir;
 

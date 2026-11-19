@@ -4,7 +4,7 @@
 //! schemars, and because the outward names and the internal names have to be free
 //! to change separately.
 
-use magical_merchant_core::utils::device::{Context, NetworkType};
+use magical_merchant_core::domain::device::{Context, NetworkType};
 use magical_merchant_core::{
     GlyphSummary, NoteSummary, ScrawlEntry, SearchHit, Snapshot, TemplateSummary, Version,
 };

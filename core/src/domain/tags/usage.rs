@@ -132,10 +132,10 @@ pub fn count_tags(base_dir: &Path) -> Result<Vec<TagUsage>, CoreError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::device::Context;
     use crate::domain::note::NoteFrontmatter;
     use crate::frontmatter;
     use crate::utils::clock::Stamp;
-    use crate::utils::device::Context;
     use crate::{Provenance, browse_all, create_draft_codex, create_draft_note};
     use tempfile::TempDir;
 

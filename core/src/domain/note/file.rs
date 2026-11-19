@@ -5,10 +5,10 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::domain::device::{Context, Source};
 use crate::domain::note::Revision;
 use crate::error::CoreError;
 use crate::utils::clock::Stamp;
-use crate::utils::device::{Context, Source};
 use crate::utils::frontmatter;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

@@ -87,8 +87,8 @@ impl Summary {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::device::Context;
     use crate::domain::note::NoteFrontmatter;
-    use crate::utils::device::Context;
 
     use std::path::PathBuf;
 

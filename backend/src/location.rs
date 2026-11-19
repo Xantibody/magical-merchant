@@ -8,7 +8,7 @@ use std::cell::OnceCell;
 use std::sync::Mutex;
 use std::time::Duration;
 
-use magical_merchant_core::utils::device::Location;
+use magical_merchant_core::domain::device::Location;
 use objc2::rc::Retained;
 use objc2_core_location::{CLLocationManager, kCLLocationAccuracyHundredMeters};
 use tauri::AppHandle;

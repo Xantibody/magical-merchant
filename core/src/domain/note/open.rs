@@ -69,8 +69,8 @@ pub fn read_note_meta(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::device::Context;
     use crate::domain::note::{Provenance, create_draft_note};
-    use crate::utils::device::Context;
     use std::fs;
     use tempfile::TempDir;
 

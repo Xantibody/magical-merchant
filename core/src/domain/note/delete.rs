@@ -23,10 +23,10 @@ pub fn delete_note(base_dir: &Path, filename: &NoteFilename) -> Result<(), CoreE
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::device::Context;
     use crate::domain::note::{
         Provenance, create_draft_codex, create_draft_note, read_note_meta, update_note_view,
     };
-    use crate::utils::device::Context;
     use std::fs;
     use std::path::PathBuf;
     use tempfile::TempDir;

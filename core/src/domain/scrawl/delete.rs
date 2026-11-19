@@ -62,11 +62,11 @@ where
 mod tests {
     use super::*;
     use crate::domain::data;
+    use crate::domain::device::{Context, Source};
     use crate::domain::scrawl::capture::save_scrawl_entry;
     use crate::domain::scrawl::day::SCRAWL_DIR;
     use crate::domain::scrawl::journal::read_scrawl;
     use crate::services::files::ensure_dir;
-    use crate::utils::device::{Context, Source};
     use std::fs;
     use tempfile::TempDir;
 

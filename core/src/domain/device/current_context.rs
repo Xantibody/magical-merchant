@@ -1,7 +1,7 @@
 //! The device state of right now, asked of the OS.
 
+use super::context::{Context, NetworkType};
 use crate::services::os::{self, Link, Reading};
-use crate::utils::device::{Context, NetworkType};
 
 /// A [`Context`] filled with only what the device can be asked about.
 ///

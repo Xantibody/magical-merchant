@@ -82,8 +82,8 @@ pub fn read_scrawl_days(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::device::{Context, Source};
     use crate::domain::scrawl::capture::save_scrawl_entry;
-    use crate::utils::device::{Context, Source};
     use std::fs;
     use tempfile::TempDir;
 

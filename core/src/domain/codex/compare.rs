@@ -104,8 +104,8 @@ pub fn note_version_status(
 mod tests {
     use super::*;
     use crate::domain::codex::commit_note_version;
+    use crate::domain::device::Context;
     use crate::domain::note::{Provenance, create_draft_codex, update_note};
-    use crate::utils::device::Context;
     use std::path::PathBuf;
     use tempfile::TempDir;
 

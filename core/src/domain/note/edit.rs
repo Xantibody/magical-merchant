@@ -2,12 +2,12 @@
 
 use std::path::Path;
 
+use crate::domain::device::Context;
 use crate::domain::note::Revision;
 use crate::domain::note::file;
 use crate::error::CoreError;
 use crate::services::files::{read_existing_text, write_atomic};
 use crate::utils::clock::Stamp;
-use crate::utils::device::Context;
 
 /// Rewrite the body.
 ///
@@ -55,11 +55,11 @@ pub fn update_note(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::device::Source;
     use crate::domain::note::{
         NoteFilename, NoteFrontmatter, Provenance, create_draft_note, delete_note, read_note,
         read_note_meta, update_note_view,
     };
-    use crate::utils::device::Source;
     use crate::utils::frontmatter;
     use std::fs;
     use std::path::PathBuf;

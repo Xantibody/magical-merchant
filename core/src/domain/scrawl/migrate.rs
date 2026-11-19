@@ -99,7 +99,7 @@ pub fn migrate_scrawl_dir(base_dir: &Path) -> Result<ScrawlDirMigration, CoreErr
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::device::{Context, Source};
+    use crate::domain::device::{Context, Source};
     use std::fs;
     use tempfile::TempDir;
 

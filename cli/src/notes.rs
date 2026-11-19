@@ -8,8 +8,8 @@
 
 use std::path::Path;
 
+use magical_merchant_core::domain::device::Context;
 use magical_merchant_core::utils::clock::Stamp;
-use magical_merchant_core::utils::device::Context;
 use magical_merchant_core::{CoreError, NoteFilename, NoteKind, Provenance, Revision, Snapshot};
 
 /// The device recorded at write time.

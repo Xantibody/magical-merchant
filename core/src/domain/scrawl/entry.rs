@@ -3,8 +3,8 @@
 use serde::de::IgnoredAny;
 use serde::{Deserialize, Serialize};
 
+use crate::domain::device::Context;
 use crate::utils::clock::{Time, WallClock};
-use crate::utils::device::Context;
 
 /// What goes at the end of the line is not always `Context` itself. A day file
 /// writes the reduced form with the device information pushed out to the head.
@@ -109,7 +109,7 @@ pub fn parse_scrawl_entry(entry: &str) -> ScrawlEntry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::device::Location;
+    use crate::domain::device::Location;
 
     fn fixed_timestamp() -> WallClock {
         WallClock::new(2026, 3, 20, 14, 30, 45).unwrap()

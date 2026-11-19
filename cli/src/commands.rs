@@ -227,7 +227,7 @@ pub(crate) fn compose(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use magical_merchant_core::utils::device::Context;
+    use magical_merchant_core::domain::device::Context;
     use tempfile::TempDir;
 
     fn seed(base: &Path, body: &str) -> NoteFilename {

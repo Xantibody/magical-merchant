@@ -30,9 +30,9 @@ mod tests {
     use crate::domain::codex::{
         commit_note_version, list_note_versions, note_version_status, read_note_version,
     };
+    use crate::domain::device::Context;
     use crate::domain::note::{NoteFilename, Provenance, create_draft_note};
     use crate::error::CoreError;
-    use crate::utils::device::Context;
     use std::fs;
     use tempfile::TempDir;
 

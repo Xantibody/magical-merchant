@@ -1,6 +1,6 @@
 use magical_merchant_core::DeviceContext;
 use magical_merchant_core::domain::device;
-use magical_merchant_core::utils::device::{Location, NetworkType};
+use magical_merchant_core::domain::device::{Location, NetworkType};
 use serde::Deserialize;
 
 /// The runtime environment collected on the `WebView` side.

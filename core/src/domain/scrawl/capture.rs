@@ -5,10 +5,10 @@ use std::path::Path;
 use super::day::{DayLog, scrawl_file_path};
 use super::journal::read_raw;
 use super::migrate::migrate_scrawl_dir;
+use crate::domain::device::{Context, Source};
 use crate::error::CoreError;
 use crate::services::files::{ensure_dir, write_atomic};
 use crate::utils::clock::WallClock;
-use crate::utils::device::{Context, Source};
 
 /// Adds one line to today's file.
 ///

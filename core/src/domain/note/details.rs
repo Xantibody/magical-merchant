@@ -67,11 +67,11 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::device::{Context, Source};
     use crate::domain::note::{
         Provenance, create_draft_note, read_note, read_note_by_filename, read_note_meta,
         update_note,
     };
-    use crate::utils::device::{Context, Source};
     use std::fs;
     use std::path::PathBuf;
     use tempfile::TempDir;
