@@ -60,6 +60,63 @@ pub const fn location(latitude: Option<f64>, longitude: Option<f64>) -> Option<L
 mod tests {
     use super::*;
 
+    fn reading(link: Option<Link>) -> Reading {
+        Reading {
+            battery: Some(82),
+            is_charging: Some(false),
+            link,
+            os: "macos".to_string(),
+            os_version: Some("26.1".to_string()),
+            arch: "aarch64".to_string(),
+            hostname: Some("MacBook".to_string()),
+            locale: Some("ja_JP".to_string()),
+        }
+    }
+
+    /// The network type is written into the record by name, so each link has to land on
+    /// the type of the same name.
+    #[test]
+    fn each_link_becomes_the_network_type_of_its_name() {
+        for (link, network_type) in [
+            (Link::WiFi, NetworkType::WiFi),
+            (Link::Ethernet, NetworkType::Ethernet),
+            (Link::Mobile, NetworkType::Mobile),
+            (Link::Offline, NetworkType::Offline),
+        ] {
+            assert_eq!(
+                context_from(reading(Some(link))).network_type,
+                Some(network_type),
+                "{link:?}"
+            );
+        }
+    }
+
+    /// A platform that cannot see the route (Android) says nothing rather than "offline":
+    /// the `WebView` fills the gap in.
+    #[test]
+    fn an_unknown_link_stays_unknown() {
+        assert_eq!(context_from(reading(None)).network_type, None);
+    }
+
+    #[test]
+    fn a_reading_never_brings_a_location() {
+        assert_eq!(context_from(reading(Some(Link::WiFi))).location, None);
+        assert_eq!(context_from(reading(None)).location, None);
+    }
+
+    #[test]
+    fn the_rest_of_the_reading_is_kept_as_it_is() {
+        let context = context_from(reading(None));
+
+        assert_eq!(context.battery, Some(82));
+        assert_eq!(context.is_charging, Some(false));
+        assert_eq!(context.os, "macos");
+        assert_eq!(context.os_version.as_deref(), Some("26.1"));
+        assert_eq!(context.arch, "aarch64");
+        assert_eq!(context.hostname.as_deref(), Some("MacBook"));
+        assert_eq!(context.locale.as_deref(), Some("ja_JP"));
+    }
+
     /// The two that every OS can name. If these were empty, the record would say
     /// nothing at all about which device wrote it.
     #[test]
