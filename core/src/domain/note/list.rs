@@ -3,6 +3,7 @@
 
 use std::path::Path;
 
+use crate::domain::note::id::newest_first;
 use crate::domain::note::{NoteKind, NoteSummary};
 use crate::error::CoreError;
 use crate::services::files::{Entry, list_md_files, read_text};
@@ -39,7 +40,7 @@ where
             entries.push((kind, entry));
         }
     }
-    entries.sort_by_cached_key(|(_, e)| std::cmp::Reverse(e.file_name()));
+    newest_first(&mut entries, |(_, e)| e.file_name());
 
     for (kind, entry) in entries {
         let path = entry.path();

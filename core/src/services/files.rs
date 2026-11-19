@@ -370,19 +370,17 @@ fn is_md(entry: &DirEntry) -> bool {
         .is_some_and(|ext| ext == "md")
 }
 
+/// The `.md` files directly under `dir`, in no particular order: a caller that needs an
+/// order sorts them itself. A missing directory is empty rather than an error.
 pub fn list_md_files(dir: &Path) -> Result<Vec<DirEntry>, CoreError> {
     if !dir.exists() {
         return Ok(Vec::new());
     }
 
-    let mut entries: Vec<_> = fs::read_dir(dir)?
+    Ok(fs::read_dir(dir)?
         .filter_map(Result::ok)
         .filter(is_md)
-        .collect();
-
-    // file_name() allocates an OsString each time, so it is not called on every comparison.
-    entries.sort_by_cached_key(|e| std::cmp::Reverse(e.file_name()));
-    Ok(entries)
+        .collect())
 }
 
 #[cfg(test)]
@@ -399,16 +397,17 @@ mod tests {
     }
 
     #[test]
-    fn lists_only_md_files_newest_name_first() {
+    fn lists_only_md_files() {
         let tmp = seed(&["a.md", "b.md", "c.txt", "no-extension"]);
 
-        let names: Vec<_> = list_md_files(tmp.path())
+        let mut names: Vec<_> = list_md_files(tmp.path())
             .unwrap()
             .iter()
             .map(|e| e.file_name().to_string_lossy().to_string())
             .collect();
+        names.sort();
 
-        assert_eq!(names, vec!["b.md", "a.md"]);
+        assert_eq!(names, vec!["a.md", "b.md"]);
     }
 
     /// `.md` is a dotfile, not an extension. The check follows `Path::extension`, so

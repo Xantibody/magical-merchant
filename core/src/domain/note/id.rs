@@ -1,5 +1,6 @@
 //! A note's ID: its filename, `YYYYMMDD_HHMMSS.md`, given at creation and never renamed.
 
+use std::cmp::Reverse;
 use std::fmt;
 
 use crate::error::CoreError;
@@ -36,9 +37,47 @@ impl fmt::Display for NoteFilename {
     }
 }
 
+/// Orders `items` newest first: the descending order of the name `name_of` reads from each.
+///
+/// An ID is the creation time written so that name order is time order, and a Codex
+/// version's name starts with the time it was committed, so the greatest name is the
+/// newest. Every list in the app reads from the newest down.
+pub(crate) fn newest_first<T, K, F>(items: &mut [T], name_of: F)
+where
+    K: Ord,
+    F: FnMut(&T) -> K,
+{
+    let mut name_of = name_of;
+    // The name is read once per item, not on every comparison: reading a directory
+    // entry's name allocates.
+    items.sort_by_cached_key(|item| Reverse(name_of(item)));
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn newest_first_puts_the_greatest_name_on_top() {
+        let mut names = vec![
+            "20260101_120000.md",
+            "20260320_143045.md",
+            "20251231_235959.md",
+            "20260320_143044.md",
+        ];
+
+        newest_first(&mut names, |name| *name);
+
+        assert_eq!(
+            names,
+            vec![
+                "20260320_143045.md",
+                "20260320_143044.md",
+                "20260101_120000.md",
+                "20251231_235959.md",
+            ]
+        );
+    }
 
     #[test]
     fn test_note_filename_parse_valid() {

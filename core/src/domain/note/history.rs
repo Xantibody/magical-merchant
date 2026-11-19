@@ -137,8 +137,8 @@ fn prune(dir: &Path, written: &str) {
     let Ok(entries) = list_md_files(dir) else {
         return;
     };
-    // list_md_files orders by name, so the branch number is still a string. The drop
-    // order is decided again with the same `sort_key` the list uses.
+    // list_md_files comes in no order, and by name the branch number would still be a
+    // string. The drop order is decided with the same `sort_key` the list uses.
     let mut others: Vec<(String, PathBuf)> = entries
         .into_iter()
         .filter_map(|entry| {

@@ -28,13 +28,14 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use similar::{Algorithm, TextDiff};
 
+use crate::domain::note::id::newest_first;
 use crate::domain::note::kind::codex_dir;
 use crate::domain::note::{
     NoteFilename, NoteKind, Revision, locate_note, read_note_by_filename, update_note,
 };
 use crate::error::CoreError;
 
-use crate::services::files::{ensure_dir, list_md_files, write_atomic};
+use crate::services::files::{Entry, ensure_dir, list_md_files, write_atomic};
 use crate::utils::clock::{Stamp, WallClock};
 use crate::utils::device::Context;
 use crate::utils::frontmatter;
@@ -322,8 +323,8 @@ pub fn note_version_status(
 /// `dir` is the note's path minus `.md` (the same as [`versions_dir`]).
 /// The list scan arrives here without a `NoteFilename`.
 pub(crate) fn list_status(dir: &Path, body: &str) -> Result<(usize, bool), CoreError> {
-    // list_md_files is in descending name order. The first is the newest
-    let entries = list_md_files(dir)?;
+    let mut entries = list_md_files(dir)?;
+    newest_first(&mut entries, Entry::file_name);
     let dirty = entries.first().is_some_and(|newest| {
         let name = newest.file_name();
         let stem = Path::new(&name).file_stem().and_then(|s| s.to_str());
