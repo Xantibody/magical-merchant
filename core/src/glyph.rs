@@ -282,6 +282,29 @@ mod tests {
         assert!(matches!(result, Err(CoreError::NotFound(_))));
     }
 
+    #[test]
+    fn deleting_a_missing_glyph_is_not_found() {
+        let tmp = TempDir::new().unwrap();
+
+        let result = delete_glyph(tmp.path(), &name("nope"));
+
+        assert!(matches!(result, Err(CoreError::NotFound(_))));
+    }
+
+    /// A name is not an ID: saving under it again puts the new image in place of the old.
+    #[test]
+    fn saving_again_in_the_same_format_replaces_the_bytes() {
+        let tmp = TempDir::new().unwrap();
+        let mut second = PNG.to_vec();
+        second.extend_from_slice(b"second");
+        save_glyph(tmp.path(), &name("236p"), GlyphFormat::Png, PNG).unwrap();
+
+        save_glyph(tmp.path(), &name("236p"), GlyphFormat::Png, &second).unwrap();
+
+        assert_eq!(read_glyph(tmp.path(), &name("236p")).unwrap().bytes, second);
+        assert_eq!(list_glyphs(tmp.path()).unwrap().len(), 1);
+    }
+
     /// It rides whole on the one POST that sync sends, so the size has a limit.
     #[test]
     fn an_oversized_image_is_refused() {
