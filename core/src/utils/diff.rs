@@ -17,3 +17,31 @@ pub fn unified_diff(old: &str, new: &str, old_name: &str, new_name: &str) -> Str
         .header(old_name, new_name)
         .to_string()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn equal_texts_have_an_empty_diff_without_a_header() {
+        assert_eq!(unified_diff("a\nb\n", "a\nb\n", "old", "new"), "");
+    }
+
+    #[test]
+    fn the_header_carries_both_names() {
+        let diff = unified_diff("x\n", "y\n", "20260917_140300-0123abcd", "draft");
+
+        assert!(
+            diff.starts_with("--- 20260917_140300-0123abcd\n+++ draft\n"),
+            "{diff}"
+        );
+    }
+
+    #[test]
+    fn a_change_and_an_addition_make_one_hunk() {
+        assert_eq!(
+            unified_diff("a\nb\nc\n", "a\nB\nc\nd\n", "old", "new"),
+            "--- old\n+++ new\n@@ -1,3 +1,4 @@\n a\n-b\n+B\n c\n+d\n"
+        );
+    }
+}
