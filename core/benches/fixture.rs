@@ -6,7 +6,8 @@ use std::fs;
 use std::path::Path;
 
 use magical_merchant_core::NoteFilename;
-use magical_merchant_core::frontmatter::{self, NoteFrontmatter};
+use magical_merchant_core::domain::note::NoteFrontmatter;
+use magical_merchant_core::frontmatter;
 use magical_merchant_core::utils::clock::{Day, Stamp};
 use tempfile::TempDir;
 

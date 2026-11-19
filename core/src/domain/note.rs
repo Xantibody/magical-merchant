@@ -4,11 +4,13 @@
 //! after its creation time, which is its ID. The directory is the kind, never a
 //! frontmatter key.
 
+pub(crate) mod file;
 pub(crate) mod id;
 pub(crate) mod kind;
 mod revision;
 mod row;
 
+pub use file::{NoteFrontmatter, Provenance};
 pub use id::NoteFilename;
 pub use kind::NoteKind;
 pub use revision::Revision;

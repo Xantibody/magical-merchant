@@ -14,10 +14,11 @@ pub use version::{
 use std::path::{Path, PathBuf};
 
 use crate::domain::note::{NoteFilename, NoteKind, NoteSummary, Revision};
+use crate::domain::note::{NoteFrontmatter, Provenance};
 use crate::error::CoreError;
 use crate::utils::clock::Stamp;
 use crate::utils::device::Context;
-use crate::utils::frontmatter::{self, Provenance};
+use crate::utils::frontmatter;
 
 /// Create one note.
 ///
@@ -135,7 +136,7 @@ pub fn delete_note(base_dir: &Path, filename: &NoteFilename) -> Result<(), CoreE
 pub fn read_note_meta(
     base_dir: &Path,
     filename: &NoteFilename,
-) -> Result<frontmatter::NoteFrontmatter, CoreError> {
+) -> Result<NoteFrontmatter, CoreError> {
     Notes::new(base_dir.to_path_buf()).read_meta(filename)
 }
 
@@ -197,9 +198,9 @@ pub fn relocate_duplicate_ids(base_dir: &Path) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::note::NoteFrontmatter;
     use crate::utils::clock::WallClock;
     use crate::utils::device::Source;
-    use crate::utils::frontmatter::NoteFrontmatter;
     use std::fs;
     use tempfile::TempDir;
 

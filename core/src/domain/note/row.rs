@@ -2,8 +2,9 @@ use std::path::PathBuf;
 
 use serde::Serialize;
 
+use crate::domain::note::NoteFrontmatter;
 use crate::utils::clock::Stamp;
-use crate::utils::frontmatter::{self, NoteFrontmatter};
+use crate::utils::frontmatter;
 use crate::utils::tags;
 
 use super::kind::NoteKind;
@@ -86,8 +87,8 @@ impl Summary {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::note::NoteFrontmatter;
     use crate::utils::device::Context;
-    use crate::utils::frontmatter::NoteFrontmatter;
 
     use std::path::PathBuf;
 

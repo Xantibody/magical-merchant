@@ -336,7 +336,7 @@ pub(crate) fn list_status(dir: &Path, body: &str) -> Result<(usize, bool), CoreE
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::frontmatter::Provenance;
+    use crate::domain::note::Provenance;
     use crate::{create_draft_codex, create_draft_note, read_note_by_filename, update_note};
     use tempfile::TempDir;
 

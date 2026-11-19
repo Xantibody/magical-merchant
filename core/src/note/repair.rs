@@ -2,12 +2,13 @@ use std::fs;
 use std::path::Path;
 
 use crate::domain::data::data_dir;
+use crate::domain::note::NoteFrontmatter;
 use crate::domain::note::kind::{NOTES_DIR, codex_dir, notes_dir};
 use crate::error::CoreError;
 use crate::services::files::{ensure_dir, list_md_files, rename_without_clobber, write_atomic};
 use crate::sync::conflict::{conflict_copy_path, conflict_filename};
 use crate::utils::clock::{Stamp, UtcStamp, WallClock, Zone};
-use crate::utils::frontmatter::{self, NoteFrontmatter};
+use crate::utils::frontmatter;
 use crate::utils::paths::conflicts_dir;
 
 /// Notes saved while the editor screen passed the frontmatter through Milkdown carry

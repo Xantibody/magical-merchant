@@ -16,6 +16,10 @@ pub use domain::glyphs::{
     GLYPH_MAX_BYTES, GlyphData, GlyphFormat, GlyphName, GlyphSummary, delete_glyph, list_glyphs,
     read_glyph, save_glyph,
 };
+/// The metadata of one note. Its content is the frontmatter itself.
+pub use domain::note::NoteFrontmatter as NoteMeta;
+/// The provenance that can be written only when a note is created. Every creation entry takes one.
+pub use domain::note::Provenance;
 pub use domain::note::{NoteFilename, NoteKind, NoteSummary, Revision};
 pub use domain::scrawl::entry::{ScrawlEntry, parse_scrawl_entry};
 pub use domain::scrawl::{
@@ -47,7 +51,3 @@ pub use utils::device::Context as DeviceContext;
 /// The fixed vocabulary of entry points that wrote a record. Every creation entry takes one.
 pub use utils::device::Source;
 pub use utils::frontmatter;
-/// The metadata of one note. Its content is the frontmatter itself.
-pub use utils::frontmatter::NoteFrontmatter as NoteMeta;
-/// The provenance that can be written only when a note is created. Every creation entry takes one.
-pub use utils::frontmatter::Provenance;

@@ -230,8 +230,9 @@ pub fn restore_note(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::note::{NoteFrontmatter, Provenance};
     use crate::utils::device::Context;
-    use crate::utils::frontmatter::{self, NoteFrontmatter, Provenance};
+    use crate::utils::frontmatter;
     use crate::{create_draft_note, promote_note_to_codex, read_note_by_filename, update_note};
     use tempfile::TempDir;
 

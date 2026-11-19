@@ -32,6 +32,7 @@ const OLD_MODULES: &[&str] = &[
 const RULE_FILES: &[&str] = &[
     "src/domain/data.rs",
     "src/domain/glyphs/image.rs",
+    "src/domain/note/file.rs",
     "src/domain/note/id.rs",
     "src/domain/note/kind.rs",
     "src/domain/note/revision.rs",

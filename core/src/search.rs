@@ -492,8 +492,8 @@ fn span_in_text(text: &str, at: usize, len: usize) -> Option<(usize, usize)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::note::Provenance;
     use crate::utils::device::{Context, Source};
-    use crate::utils::frontmatter::Provenance;
     use crate::{create_draft_codex, create_draft_note, save_scrawl_entry};
     use tempfile::TempDir;
 
