@@ -10,7 +10,7 @@ use crate::domain::scrawl::entry::strip_scrawl_prefix;
 use crate::domain::scrawl::journal::{list_scrawl_dates, read_raw};
 use crate::error::CoreError;
 use crate::utils::tags;
-use crate::utils::text::lowercase;
+use crate::utils::text::{head, lowercase, snippet};
 
 /// Which store a search hit came from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -147,7 +147,7 @@ fn scrawl_hits(
             if !in_scope(scope, &entry_tags) {
                 continue;
             }
-            let excerpt = snippet(text, &lowered, needle);
+            let excerpt = snippet(text, &lowered, needle, SNIPPET_CONTEXT);
             hits.push(SearchHit {
                 kind: HitKind::Scrawl,
                 title: first_line(text).to_string(),
@@ -234,7 +234,7 @@ pub fn search_records(
                 return;
             }
         }
-        let excerpt = snippet(body, &lowered, &needle);
+        let excerpt = snippet(body, &lowered, &needle, SNIPPET_CONTEXT);
         hits.push(SearchHit {
             kind: note.kind.into(),
             title: first_line(&note.preview).to_string(),
@@ -274,7 +274,7 @@ pub fn browse_all(base_dir: &Path) -> Result<Vec<SearchHit>, CoreError> {
         hits.push(SearchHit {
             kind: note.kind.into(),
             title: first_line(&note.preview).to_string(),
-            snippet: head(body),
+            snippet: head(body, SNIPPET_CONTEXT),
             date: note.time.map(|t| t.day().ymd()).unwrap_or_default(),
             filename: Some(note.filename),
             index: None,
@@ -299,12 +299,6 @@ pub fn recent_records(base_dir: &Path, limit: usize) -> Result<Vec<SearchHit>, C
     let mut hits = browse_all(base_dir)?;
     hits.truncate(limit);
     Ok(hits)
-}
-
-/// Cut the head of the body as the excerpt. It is [`snippet`] with an empty needle; nothing
-/// is matched, so no lowercased copy is needed (`lowered` is used only to find the match).
-fn head(text: &str) -> String {
-    snippet(text, text, "").text
 }
 
 /// Collect the records (notes, Scrawl) that mention `target` with `[[ID]]`.
@@ -336,7 +330,7 @@ pub fn find_backlinks(
             return;
         }
         let lowered = lowercase(body);
-        let excerpt = snippet(body, &lowered, &needle);
+        let excerpt = snippet(body, &lowered, &needle, SNIPPET_CONTEXT);
         hits.push(SearchHit {
             kind: note.kind.into(),
             title: first_line(&note.preview).to_string(),
@@ -393,100 +387,6 @@ fn first_line(text: &str) -> &str {
         return line;
     }
     rest.trim_start()
-}
-
-/// The cut excerpt and where the query matches inside it (in characters).
-struct Excerpt {
-    text: String,
-    /// `None` when there is no match in the body (only a tag was hit).
-    match_start: Option<usize>,
-    /// How many characters of `text` the match covers. Set together with `match_start`.
-    match_len: Option<usize>,
-}
-
-/// Cut `SNIPPET_CONTEXT` characters on each side of the hit without breaking a character
-/// boundary. `lowered` is the lowercased `text` used for matching. It is taken rather than
-/// rebuilt because this runs once per hit.
-fn snippet(text: &str, lowered: &str, needle: &str) -> Excerpt {
-    let needle_len = needle.chars().count();
-    // Where the match lies in `text`, as (start, length) in characters. If the hit was
-    // outside the body (a note's tag, for instance), cut from the head. The same with an
-    // empty needle (a list narrowed by tag only): there is nothing to highlight.
-    let found = if needle.is_empty() {
-        None
-    } else {
-        lowered.find(needle).and_then(|byte| {
-            let at = lowered[..byte].chars().count();
-            // Nearly always each character lowercases to one, and a position in `lowered`
-            // is the same position in `text`. Two counts settle that without a lookup per
-            // character, which is what made lowercasing a tenth of a search
-            if lowered.chars().count() == text.chars().count() {
-                Some((at, needle_len))
-            } else {
-                span_in_text(text, at, needle_len)
-            }
-        })
-    };
-    let (at, len) = found.unwrap_or((0, needle_len));
-    let end = at + len + SNIPPET_CONTEXT;
-    let start = at.saturating_sub(SNIPPET_CONTEXT);
-
-    let mut out = String::new();
-    if start > 0 {
-        out.push('…');
-    }
-    // The leading ellipsis is one character too. Left out of the position, the highlight
-    // is off by one character
-    let match_start = found.map(|(at, _)| at - start + usize::from(start > 0));
-    let match_len = found.map(|(_, len)| len);
-    // Walk once instead of building three Vec<char>.
-    let mut chars = text.chars().skip(start);
-    for _ in start..end {
-        match chars.next() {
-            Some('\n') => out.push(' '),
-            Some(c) => out.push(c),
-            None => {
-                return Excerpt {
-                    text: out,
-                    match_start,
-                    match_len,
-                };
-            }
-        }
-    }
-    if chars.next().is_some() {
-        out.push('…');
-    }
-    Excerpt {
-        text: out,
-        match_start,
-        match_len,
-    }
-}
-
-/// Where a match found at character `at` of the lowercased text, `len` characters long,
-/// lies in `text`, as (start, length) in `text`'s characters.
-///
-/// Lowercasing can turn one character into more (`İ` into `i` and a combining dot), so past
-/// the first such character the two texts count differently. A match that starts or ends
-/// inside what one character became takes that whole character. `None` only if the match
-/// runs past the text, which a match in `lowercase(text)` cannot do; there is then no
-/// highlight rather than a wrong one.
-fn span_in_text(text: &str, at: usize, len: usize) -> Option<(usize, usize)> {
-    let last = at + len.checked_sub(1)?;
-    let mut lowered = 0;
-    let mut start = None;
-    for (index, c) in text.chars().enumerate() {
-        let next = lowered + c.to_lowercase().count();
-        if start.is_none() && at < next {
-            start = Some(index);
-        }
-        if last < next {
-            return start.map(|start| (start, index + 1 - start));
-        }
-        lowered = next;
-    }
-    None
 }
 
 #[cfg(test)]
@@ -1162,23 +1062,6 @@ mod tests {
         let hits = search_all(tmp.path(), "İstanbul", &[]).unwrap();
 
         assert_eq!(highlighted(&hits[0]), "İstanbul");
-    }
-
-    /// A match can start or end between the two characters `İ` lowercases to. The highlight
-    /// then takes the whole `İ`, never half of it.
-    #[test]
-    fn a_match_cutting_through_a_dotted_capital_i_takes_the_whole_letter() {
-        let text = "aİb";
-        let ends_inside = snippet(text, &lowercase(text), "ai");
-        assert_eq!(
-            (ends_inside.match_start, ends_inside.match_len),
-            (Some(0), Some(2))
-        );
-        let starts_inside = snippet(text, &lowercase(text), "\u{307}b");
-        assert_eq!(
-            (starts_inside.match_start, starts_inside.match_len),
-            (Some(1), Some(2))
-        );
     }
 
     /// When only a tag matched, there is nothing in the body to highlight.

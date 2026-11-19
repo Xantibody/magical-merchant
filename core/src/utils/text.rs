@@ -1,4 +1,4 @@
-//! Lowercasing used for search matching.
+//! Lowercasing used for search matching, and the excerpt cut around a match.
 
 /// Returns the same result as `str::to_lowercase`. Fast on mostly Japanese text.
 ///
@@ -47,9 +47,126 @@ fn is_caseless(c: char) -> bool {
     CASELESS.iter().any(|range| range.contains(&c))
 }
 
+/// The cut excerpt and where the query matches inside it (in characters).
+pub(crate) struct Excerpt {
+    pub(crate) text: String,
+    /// `None` when there is no match in the body (only a tag was hit).
+    pub(crate) match_start: Option<usize>,
+    /// How many characters of `text` the match covers. Set together with `match_start`.
+    pub(crate) match_len: Option<usize>,
+}
+
+/// Cut the head of the text as the excerpt. It is [`snippet`] with an empty needle; nothing
+/// is matched, so no lowercased copy is needed (`lowered` is used only to find the match).
+pub(crate) fn head(text: &str, context: usize) -> String {
+    snippet(text, text, "", context).text
+}
+
+/// Cut `context` characters on each side of the hit without breaking a character
+/// boundary. `lowered` is the lowercased `text` used for matching. It is taken rather than
+/// rebuilt because this runs once per hit.
+pub(crate) fn snippet(text: &str, lowered: &str, needle: &str, context: usize) -> Excerpt {
+    let needle_len = needle.chars().count();
+    // Where the match lies in `text`, as (start, length) in characters. If the hit was
+    // outside the body (a note's tag, for instance), cut from the head. The same with an
+    // empty needle (a list narrowed by tag only): there is nothing to highlight.
+    let found = if needle.is_empty() {
+        None
+    } else {
+        lowered.find(needle).and_then(|byte| {
+            let at = lowered[..byte].chars().count();
+            // Nearly always each character lowercases to one, and a position in `lowered`
+            // is the same position in `text`. Two counts settle that without a lookup per
+            // character, which is what made lowercasing a tenth of a search
+            if lowered.chars().count() == text.chars().count() {
+                Some((at, needle_len))
+            } else {
+                span_in_text(text, at, needle_len)
+            }
+        })
+    };
+    let (at, len) = found.unwrap_or((0, needle_len));
+    let end = at + len + context;
+    let start = at.saturating_sub(context);
+
+    let mut out = String::new();
+    if start > 0 {
+        out.push('…');
+    }
+    // The leading ellipsis is one character too. Left out of the position, the highlight
+    // is off by one character
+    let match_start = found.map(|(at, _)| at - start + usize::from(start > 0));
+    let match_len = found.map(|(_, len)| len);
+    // Walk once instead of building three Vec<char>.
+    let mut chars = text.chars().skip(start);
+    for _ in start..end {
+        match chars.next() {
+            Some('\n') => out.push(' '),
+            Some(c) => out.push(c),
+            None => {
+                return Excerpt {
+                    text: out,
+                    match_start,
+                    match_len,
+                };
+            }
+        }
+    }
+    if chars.next().is_some() {
+        out.push('…');
+    }
+    Excerpt {
+        text: out,
+        match_start,
+        match_len,
+    }
+}
+
+/// Where a match found at character `at` of the lowercased text, `len` characters long,
+/// lies in `text`, as (start, length) in `text`'s characters.
+///
+/// Lowercasing can turn one character into more (`İ` into `i` and a combining dot), so past
+/// the first such character the two texts count differently. A match that starts or ends
+/// inside what one character became takes that whole character. `None` only if the match
+/// runs past the text, which a match in `lowercase(text)` cannot do; there is then no
+/// highlight rather than a wrong one.
+fn span_in_text(text: &str, at: usize, len: usize) -> Option<(usize, usize)> {
+    let last = at + len.checked_sub(1)?;
+    let mut lowered = 0;
+    let mut start = None;
+    for (index, c) in text.chars().enumerate() {
+        let next = lowered + c.to_lowercase().count();
+        if start.is_none() && at < next {
+            start = Some(index);
+        }
+        if last < next {
+            return start.map(|start| (start, index + 1 - start));
+        }
+        lowered = next;
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A match can start or end between the two characters `İ` lowercases to. The highlight
+    /// then takes the whole `İ`, never half of it.
+    #[test]
+    fn a_match_cutting_through_a_dotted_capital_i_takes_the_whole_letter() {
+        let text = "aİb";
+        let ends_inside = snippet(text, &lowercase(text), "ai", 40);
+        assert_eq!(
+            (ends_inside.match_start, ends_inside.match_len),
+            (Some(0), Some(2))
+        );
+        let starts_inside = snippet(text, &lowercase(text), "\u{307}b", 40);
+        assert_eq!(
+            (starts_inside.match_start, starts_inside.match_len),
+            (Some(1), Some(2))
+        );
+    }
 
     /// The premise of the fast path. If even one character in the ranges had a
     /// lowercase mapping, the result would differ from the standard and search would miss.
