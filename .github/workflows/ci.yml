@@ -72,24 +72,12 @@ jobs:
               - 'flake.lock'
               - 'justfile'
               - 'rust/justfile'
-            # frontend::check が読むものは漏らさず並べる (frontend/justfile:9-14)。
-            # knip.jsonc だけを直した PR でジョブが飛ぶと、落ちるのは merge 後の main
+            # frontend/ は丸ごと 1 行で見る。中のファイルを並べていた頃は、
+            # knip.jsonc のような 1 つを漏らすとジョブが飛び、落ちるのは merge 後の
+            # main だった。外から足すのは共有の入力だけ
             frontend:
-              - 'frontend/src/**'
-              - 'frontend/dev/**'
-              - 'frontend/index.html'
-              - 'frontend/public/**'
+              - 'frontend/**'
               - '.oxlintrc.json'
-              - 'frontend/.oxlintrc.json'
-              - 'frontend/knip.jsonc'
-              - 'frontend/package.json'
-              - 'frontend/pnpm-lock.yaml'
-              - 'frontend/pnpm-workspace.yaml'
-              - 'frontend/tsconfig.json'
-              - 'frontend/tsconfig.dev.json'
-              - 'frontend/vite.config.ts'
-              - 'frontend/vitest.config.ts'
-              - 'frontend/justfile'
               - 'flake.nix'
               - 'nix/devshells.nix'
               - 'flake.lock'
