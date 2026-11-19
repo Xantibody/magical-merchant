@@ -1375,7 +1375,7 @@ mod tests {
 
     /// One broken note's worth. Only the remains of an opening fence, a line that reads
     /// as a time, and a closing line of dashes together count as "garbled metadata"
-    /// (`note/repair.rs`). The reproduction of the file that was actually broken is there.
+    /// (`core/src/domain/note/repair.rs`). The reproduction of the file that was actually broken is there.
     const MANGLED: &str = concat!(
         "---\n",
         "time: 2026-05-03T15:39:10+09:00\n",

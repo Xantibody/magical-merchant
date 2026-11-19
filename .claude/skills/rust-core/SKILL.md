@@ -87,15 +87,18 @@ Write tools (`create_note`, `create_codex`, `promote_to_codex`, `update_note`,
 `--allow-write` and are removed from the router otherwise — never
 listed-but-refused (`WRITE_TOOLS` in `server.rs`; extend it when adding
 one). Every note overwrite goes through `snapshot_note` first
-(`core/src/note/history.rs`, `<base>/history/<stem>/<id>.md`, outside the
+(`core/src/domain/note/history.rs`, `<base>/history/<stem>/<id>.md`, outside the
 synced `data/`), and writes always use core's note functions so the
 frontmatter stays compliant. No delete tool; do not add one without
 discussion. Packaged as `nix run .#cli` (`nix/cli.nix`); `.#mcp` wraps it.
 
-Notes come in two kinds (`core/src/note/kind.rs`, `NoteKind`), decided by
+Notes come in two kinds (`core/src/domain/note/kind.rs`, `NoteKind`), decided by
 directory alone: `data/notes/` is a Note, `data/codex/` is a Codex. The
-repository (`note/repository.rs`) lists both, `Notes::locate` finds an ID in
-either (Codex first), and `promote_note_to_codex` is a bare `rename`. Do not
+list (`domain/note/list.rs`) reads both, `locate_note` (`domain/note/open.rs`)
+finds an ID in either (Codex first), and `promote_note_to_codex` is a bare
+`rename`. Each operation of `domain/note/` is one file named after what a person
+does (`create`, `open`, `list`, `edit`, `details`, `delete`), and the save's
+decisions live in `file.rs` as plain functions (`rewrite`, `edit_record`). Do not
 encode the kind in frontmatter — a build that does not know the key drops it
 on save. `relocate_duplicate_ids` handles the one way an ID can end up in
 both directories (promotion on one device, offline edit on another).

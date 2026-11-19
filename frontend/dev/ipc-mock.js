@@ -855,7 +855,7 @@ const unifiedDiff = (from, to, fromName, toName) => {
 
   // ---- コマンド実装 ----
 
-  // まだ使われていない名前と、その名前が名乗る時刻。core の `Notes::create`
+  // まだ使われていない名前と、その名前が名乗る時刻。core の `create_draft_note`
   // と同じく、同じ秒に 2 本作られたら空いている秒まで 1 秒ずつ進める。
   // ここで潰すと、「+ 新規」を続けて押したときだけモックが実物と違う挙動を見せる
   const freeNoteName = () => {
