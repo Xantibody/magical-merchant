@@ -6,6 +6,8 @@
 //! re-checked at most once a second per thread, so a zone change reached Scrawl, note IDs
 //! and frontmatter offsets within a second. Order: `TZ` (empty is UTC), else the bytes of
 //! `/etc/localtime`, else the zone name the platform reports, else UTC.
+//!
+//! AIDEV-NOTE: asks the OS for the zone here rather than through services; threading a zone through every "now" costs more than it gains.
 
 use std::cell::RefCell;
 use std::env;
