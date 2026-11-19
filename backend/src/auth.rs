@@ -69,7 +69,9 @@ fn open_auth_window<R: Runtime>(
 /// Waiting on after it is closed would hold a user who meant to stop until the
 /// 5-minute timeout.
 #[cfg(not(target_os = "android"))]
-fn closed_signal<R: Runtime>(window: &tauri::WebviewWindow<R>) -> tokio::sync::oneshot::Receiver<()> {
+fn closed_signal<R: Runtime>(
+    window: &tauri::WebviewWindow<R>,
+) -> tokio::sync::oneshot::Receiver<()> {
     let (tx, rx) = tokio::sync::oneshot::channel();
     // `on_window_event` wants an `Fn`, so the one-shot sender is wrapped and taken out
     let tx = std::sync::Mutex::new(Some(tx));
@@ -548,5 +550,28 @@ mod command_tests {
         let refused = get_sync_config(app.handle()).unwrap_err();
 
         assert_eq!(refused.kind, "configCorrupt");
+    }
+
+    /// A device never set up is refused before any window or browser opens, in words
+    #[test]
+    fn auth_login_without_a_workers_url_is_refused_in_words() {
+        let app = test_app();
+
+        let refused = tauri::async_runtime::block_on(auth_login(app.handle()));
+
+        assert_eq!(refused, Err("Sync not configured".to_string()));
+    }
+
+    /// A broken config is refused with the configCorrupt words alone; the kind is dropped
+    #[test]
+    fn auth_login_of_a_broken_config_is_refused_with_its_words() {
+        let app = test_app();
+        std::fs::write(app.base().join("sync-config.json"), "{ not json").unwrap();
+        let corrupt = get_sync_config(app.handle()).unwrap_err().message;
+
+        let refused = tauri::async_runtime::block_on(auth_login(app.handle()));
+
+        assert!(corrupt.contains("sync-config.json"), "{corrupt}");
+        assert_eq!(refused, Err(corrupt));
     }
 }

@@ -308,6 +308,22 @@ mod tests {
         assert!(state.is_syncing.load(Ordering::SeqCst));
     }
 
+    /// The webview reads the busy refusal as a kind and a message, nothing more
+    #[tokio::test]
+    async fn a_busy_refusal_crosses_as_its_kind_and_message() {
+        let state = AppSyncState::default();
+        state.is_syncing.store(true, Ordering::SeqCst);
+
+        let refused = run_round(&state, async { Ok(SyncResult::default()) }, |_| {})
+            .await
+            .unwrap_err();
+
+        assert_eq!(
+            serde_json::to_value(&refused).unwrap(),
+            serde_json::json!({ "kind": "busy", "message": "Sync already in progress" })
+        );
+    }
+
     /// Without a Workers URL the round stops before the token is read, so a device never set
     /// up does not open the OS keychain
     #[test]
