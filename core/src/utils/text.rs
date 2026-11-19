@@ -151,6 +151,71 @@ fn span_in_text(text: &str, at: usize, len: usize) -> Option<(usize, usize)> {
 mod tests {
     use super::*;
 
+    /// The excerpt of `text` around `needle`, matched on the lowercased text as search does.
+    fn cut(text: &str, needle: &str, context: usize) -> (String, Option<usize>, Option<usize>) {
+        let excerpt = snippet(text, &lowercase(text), needle, context);
+        (excerpt.text, excerpt.match_start, excerpt.match_len)
+    }
+
+    /// Exactly `context` characters on each side fit whole; nothing is elided.
+    #[test]
+    fn a_window_exactly_as_wide_as_the_context_is_not_elided() {
+        assert_eq!(
+            cut("前前リトライ後後", "リトライ", 2),
+            ("前前リトライ後後".to_string(), Some(2), Some(4))
+        );
+    }
+
+    /// One character more on a side and that side gets an ellipsis.
+    #[test]
+    fn a_window_past_the_context_is_elided_on_both_sides() {
+        assert_eq!(
+            cut("前前前リトライ後後後", "リトライ", 2).0,
+            "…前前リトライ後後…"
+        );
+        assert_eq!(
+            cut("前前リトライ後後後", "リトライ", 2).0,
+            "前前リトライ後後…"
+        );
+        assert_eq!(
+            cut("前前前リトライ後後", "リトライ", 2).0,
+            "…前前リトライ後後"
+        );
+    }
+
+    /// The leading ellipsis is a character of the excerpt, so the match starts one later.
+    #[test]
+    fn the_leading_ellipsis_counts_in_the_match_position() {
+        let (text, start, len) = cut("abc NEEDLE def", "needle", 2);
+
+        assert_eq!(text, "…c NEEDLE d…");
+        assert_eq!((start, len), (Some(3), Some(6)));
+    }
+
+    #[test]
+    fn a_newline_becomes_a_space() {
+        assert_eq!(
+            cut("一行目\nneedle\n三行目", "needle", 10).0,
+            "一行目 needle 三行目"
+        );
+    }
+
+    /// Japanese is three bytes a character; a byte position would land far past the match.
+    #[test]
+    fn positions_count_characters_not_bytes() {
+        assert_eq!(cut("日本語の本文にリトライ", "リトライ", 40).1, Some(7));
+    }
+
+    /// An empty needle matches nothing, so the excerpt is the head of the text.
+    #[test]
+    fn an_empty_needle_cuts_the_head() {
+        assert_eq!(
+            cut("あいうえお", "", 3),
+            ("あいう…".to_string(), None, None)
+        );
+        assert_eq!(head("あいうえお", 3), "あいう…");
+    }
+
     /// A match can start or end between the two characters `İ` lowercases to. The highlight
     /// then takes the whole `İ`, never half of it.
     #[test]
