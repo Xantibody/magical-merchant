@@ -249,7 +249,7 @@ impl EntryInfo {
             index,
             time,
             datetime,
-            tags: magical_merchant_core::utils::tags::parse(&entry.text),
+            tags: magical_merchant_core::domain::tags::tag::parse(&entry.text),
             text: entry.text,
             source: entry.source,
             context: ContextInfo::from_context(&entry.context, place),

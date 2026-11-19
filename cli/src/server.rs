@@ -368,7 +368,7 @@ impl McpServer {
             updated,
             // Merge by the same rule as the list. Showing only the frontmatter tags or only
             // the body tags makes one note claim different tags in the list and on its own.
-            tags: magical_merchant_core::utils::tags::merge(tags, &body),
+            tags: magical_merchant_core::domain::tags::tag::merge(tags, &body),
             origin,
             template,
             view,
@@ -454,7 +454,7 @@ impl McpServer {
         // are ignored
         let tag = param
             .tag
-            .map(|t| magical_merchant_core::utils::tags::normalize(&t));
+            .map(|t| magical_merchant_core::domain::tags::tag::normalize(&t));
         let cache = self.places();
 
         let mut entries = Vec::new();
@@ -473,7 +473,7 @@ impl McpServer {
                     !entry
                         .tags
                         .iter()
-                        .any(|own| magical_merchant_core::utils::tags::same_tag(own, t))
+                        .any(|own| magical_merchant_core::domain::tags::tag::same_tag(own, t))
                 }) {
                     continue;
                 }

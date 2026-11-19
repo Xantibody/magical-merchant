@@ -3,9 +3,9 @@ use std::path::PathBuf;
 use serde::Serialize;
 
 use crate::domain::note::NoteFrontmatter;
+use crate::domain::tags::tag;
 use crate::utils::clock::Stamp;
 use crate::utils::frontmatter;
-use crate::utils::tags;
 
 use super::kind::NoteKind;
 
@@ -65,7 +65,7 @@ impl Summary {
                 )
             };
 
-        let tags = tags::merge(tags, body);
+        let tags = tag::merge(tags, body);
         let preview: String = body.chars().take(100).collect();
 
         Self {

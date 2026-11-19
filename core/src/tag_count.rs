@@ -12,9 +12,9 @@ use crate::domain::note::list;
 use crate::domain::scrawl::day::DayLog;
 use crate::domain::scrawl::entry::strip_scrawl_prefix;
 use crate::domain::scrawl::journal::{list_scrawl_dates, read_raw};
+use crate::domain::tags::tag;
 use crate::error::CoreError;
 use crate::utils::clock::Day;
-use crate::utils::tags;
 
 /// One tag and how many records carry it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -51,8 +51,8 @@ struct Row {
 
 /// The count itself, fed one record at a time so the store is never held at once.
 ///
-/// Rows are keyed by the folded tag (`tags::fold_tag`), so spellings that differ only in case
-/// are one row. A record's own tags are already folded (`tags::parse`, `tags::merge`), so it
+/// Rows are keyed by the folded tag (`tag::fold_tag`), so spellings that differ only in case
+/// are one row. A record's own tags are already folded (`tag::parse`, `tag::merge`), so it
 /// never adds to one row twice.
 #[derive(Debug, Default)]
 struct Tally {
@@ -67,7 +67,7 @@ impl Tally {
     /// `browse_all`'s newest-first list, which is what the screen counted before.
     fn add(&mut self, record: Record, date: Option<Day>, tags: &[String]) {
         for tag in tags {
-            let row = self.rows.entry(tags::fold_tag(tag)).or_insert_with(|| Row {
+            let row = self.rows.entry(tag::fold_tag(tag)).or_insert_with(|| Row {
                 usage: TagUsage {
                     tag: tag.clone(),
                     notes: 0,
@@ -99,7 +99,7 @@ impl Tally {
 ///
 /// It reads what `browse_all` reads (every day file and every note), but hands back one row
 /// per tag instead of every record. A note's tags are its frontmatter's and its body's
-/// together, an entry's are its text's; code is not read on either side (`tags::parse`).
+/// together, an entry's are its text's; code is not read on either side (`tag::parse`).
 /// It only reads, so a tree still on `data/timeline/` is not migrated here.
 pub fn count_tags(base_dir: &Path) -> Result<Vec<TagUsage>, CoreError> {
     let mut tally = Tally::default();
@@ -116,7 +116,7 @@ pub fn count_tags(base_dir: &Path) -> Result<Vec<TagUsage>, CoreError> {
             tally.add(
                 Record::Entry,
                 Some(date),
-                &tags::parse(strip_scrawl_prefix(&entry)),
+                &tag::parse(strip_scrawl_prefix(&entry)),
             );
         }
     }

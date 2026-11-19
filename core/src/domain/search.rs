@@ -8,8 +8,8 @@ use crate::domain::note::list;
 use crate::domain::scrawl::day::DayLog;
 use crate::domain::scrawl::entry::strip_scrawl_prefix;
 use crate::domain::scrawl::journal::{list_scrawl_dates, read_raw};
+use crate::domain::tags::tag::{self, in_scope};
 use crate::error::CoreError;
-use crate::utils::tags;
 use crate::utils::text::{head, lowercase, snippet};
 
 /// Which store a search hit came from.
@@ -88,17 +88,6 @@ impl SearchFilter {
 const SNIPPET_CONTEXT: usize = 40;
 const MAX_HITS: usize = 100;
 
-/// The tags that scope the search (already `tags::normalize`d). Empty means no scoping.
-/// With several, only records carrying all of them remain.
-///
-/// Both sides keep the spelling as typed, so the comparison ignores case.
-/// This lets a scope chosen by pressing a chip hit `#CognitiveBias` in a body.
-fn in_scope(scope: &[String], own: &[String]) -> bool {
-    scope
-        .iter()
-        .all(|wanted| own.iter().any(|tag| tags::same_tag(tag, wanted)))
-}
-
 /// Scan every Scrawl day and collect the entries that match needle (already lowercased)
 /// and carry every tag in `scope`. With an empty needle the text filters nothing out.
 fn scrawl_hits(
@@ -143,7 +132,7 @@ fn scrawl_hits(
             if !lowered.contains(needle) {
                 continue;
             }
-            let entry_tags = tags::parse(text);
+            let entry_tags = tag::parse(text);
             if !in_scope(scope, &entry_tags) {
                 continue;
             }
@@ -199,7 +188,7 @@ pub fn search_records(
     let needle = lowercase(query.trim());
     let scope: Vec<String> = tags
         .iter()
-        .map(|t| tags::normalize(t))
+        .map(|t| tag::normalize(t))
         .filter(|t| !t.is_empty())
         .collect();
     if needle.is_empty() && scope.is_empty() && filter.is_empty() {

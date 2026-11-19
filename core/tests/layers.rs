@@ -35,6 +35,7 @@ const RULE_FILES: &[&str] = &[
     "src/domain/note/row.rs",
     "src/domain/scrawl/day.rs",
     "src/domain/scrawl/entry.rs",
+    "src/domain/tags/tag.rs",
     "src/domain/templates/file.rs",
     "src/domain/templates/today.rs",
     "src/domain/templates/variables.rs",

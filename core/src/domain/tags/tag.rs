@@ -118,6 +118,17 @@ pub fn normalize(tag: &str) -> String {
     tag.trim().trim_start_matches('#').to_string()
 }
 
+/// The tags that scope the search (already `normalize`d). Empty means no scoping.
+/// With several, only records carrying all of them remain.
+///
+/// Both sides keep the spelling as typed, so the comparison ignores case.
+/// This lets a scope chosen by pressing a chip hit `#CognitiveBias` in a body.
+pub(crate) fn in_scope(scope: &[String], own: &[String]) -> bool {
+    scope
+        .iter()
+        .all(|wanted| own.iter().any(|tag| same_tag(tag, wanted)))
+}
+
 /// If the line is a code fence delimiter, returns its marker and count.
 fn fence_marker(line: &str) -> Option<(char, usize)> {
     let trimmed = line.trim_start();
