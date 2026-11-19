@@ -32,6 +32,7 @@ const OLD_MODULES: &[&str] = &[
 /// so they are tested with plain values and never call a service.
 const RULE_FILES: &[&str] = &[
     "src/domain/glyphs/image.rs",
+    "src/domain/scrawl/entry.rs",
     "src/domain/templates/file.rs",
     "src/domain/templates/today.rs",
     "src/domain/templates/variables.rs",

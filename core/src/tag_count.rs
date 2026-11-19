@@ -8,13 +8,13 @@ use std::path::Path;
 
 use serde::Serialize;
 
+use crate::domain::scrawl::entry::strip_scrawl_prefix;
 use crate::error::CoreError;
 use crate::list_scrawl_dates;
 use crate::note::Notes;
 use crate::scrawl::Scrawl;
 use crate::scrawl::day::DayLog;
 use crate::utils::clock::Day;
-use crate::utils::markdown::strip_scrawl_prefix;
 use crate::utils::tags;
 
 /// One tag and how many records carry it.

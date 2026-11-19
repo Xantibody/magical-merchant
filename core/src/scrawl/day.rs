@@ -1,10 +1,10 @@
 use serde::{Deserialize, Serialize};
 
+use crate::domain::scrawl::entry::{format_scrawl_line, split_context_json, split_time_prefix};
 use crate::error::CoreError;
 use crate::utils::clock::WallClock;
 use crate::utils::device::{Context, DeviceIdentity, Source};
 use crate::utils::frontmatter;
-use crate::utils::markdown::{format_scrawl_line, split_context_json, split_time_prefix};
 
 /// The list of devices used that day, placed at the head of the day file.
 ///

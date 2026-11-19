@@ -3,4 +3,5 @@
 
 pub mod device;
 pub mod glyphs;
+pub mod scrawl;
 pub mod templates;

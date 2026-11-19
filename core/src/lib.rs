@@ -17,6 +17,7 @@ pub use domain::glyphs::{
     GLYPH_MAX_BYTES, GlyphData, GlyphFormat, GlyphName, GlyphSummary, delete_glyph, list_glyphs,
     read_glyph, save_glyph,
 };
+pub use domain::scrawl::entry::{ScrawlEntry, parse_scrawl_entry};
 pub use domain::templates::{
     CreatedNote, TemplateDetail, TemplateSummary, VarLocale, create_note_from_template,
     delete_template, discard_template_draft, list_template_drafts, list_templates, read_template,
@@ -52,5 +53,4 @@ pub use utils::frontmatter;
 pub use utils::frontmatter::NoteFrontmatter as NoteMeta;
 /// The provenance that can be written only when a note is created. Every creation entry takes one.
 pub use utils::frontmatter::Provenance;
-pub use utils::markdown::{ScrawlEntry, parse_scrawl_entry};
 pub use utils::validated::NoteFilename;

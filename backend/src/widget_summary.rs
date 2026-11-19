@@ -12,8 +12,8 @@
 use std::path::Path;
 
 use magical_merchant_core::VarLocale;
+use magical_merchant_core::domain::scrawl::entry::{scrawl_entry_time, strip_scrawl_prefix};
 use magical_merchant_core::utils::clock::Day;
-use magical_merchant_core::utils::markdown::{scrawl_entry_time, strip_scrawl_prefix};
 use magical_merchant_core::utils::tags;
 use serde::Serialize;
 
