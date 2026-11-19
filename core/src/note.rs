@@ -1,35 +1,45 @@
-pub(crate) mod repository;
+//! What is left of the old note module: the Codex versions and the promotion of a Note to
+//! a Codex. Plan 29 moves both into `domain::codex`.
+
 pub(crate) mod version;
 
-pub(crate) use repository::Notes;
 pub use version::{
     BEFORE_RESTORE, DRAFT, Version, VersionStatus, commit_note_version, delete_note_version,
     diff_note_versions, list_note_versions, note_version_status, read_note_version,
     restore_note_version,
 };
 
+use std::fs;
 use std::path::Path;
 
-use crate::domain::note::NoteFilename;
+use crate::domain::note::{NoteFilename, NoteKind, locate_note};
 use crate::error::CoreError;
+use crate::services::files::ensure_dir;
 
 /// Turn a note into a Codex.
 ///
 /// Neither the ID nor the content changes; only the location moves to `data/codex/`. There is no
 /// entry back: turning a document that has started committing versions back into a plain note would
 /// leave its versions belonging to nothing. If it is already a Codex, nothing happens.
+///
+/// It is a rename within one filesystem, so it is atomic and a concurrent reader never sees
+/// a half-way state.
 pub fn promote_note_to_codex(base_dir: &Path, filename: &NoteFilename) -> Result<(), CoreError> {
-    Notes::new(base_dir.to_path_buf()).promote_to_codex(filename)
+    let (kind, path) = locate_note(base_dir, filename)?;
+    if kind == NoteKind::Codex {
+        return Ok(());
+    }
+    let target = NoteKind::Codex.dir(base_dir).join(filename.as_str());
+    ensure_dir(&target)?;
+    fs::rename(path, target)?;
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::note::{
-        NoteKind, Provenance, create_draft_codex, create_draft_note, list_notes,
-    };
+    use crate::domain::note::{Provenance, create_draft_codex, create_draft_note, list_notes};
     use crate::utils::device::Context;
-    use std::fs;
     use std::path::PathBuf;
     use tempfile::TempDir;
 
