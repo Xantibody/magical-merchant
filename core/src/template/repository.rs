@@ -282,6 +282,19 @@ mod tests {
         assert_eq!(listed[0].preview, "Daily {{date}}");
     }
 
+    /// Every leading `#` goes, so a body that opens with a `#tag` loses the tag's mark too.
+    /// Pinned as it stands; the title rule step decides whether it stays.
+    #[test]
+    fn a_preview_drops_every_leading_hash() {
+        let tmp = TempDir::new().unwrap();
+        let t = templates(&tmp);
+        t.save(&name("tagged.md"), "#tag rest\n\nbody", &[]).unwrap();
+
+        let listed = t.list().unwrap();
+
+        assert_eq!(listed[0].preview, "tag rest");
+    }
+
     /// A template can be dropped in by hand. A file without frontmatter is read as plain Markdown.
     #[test]
     fn a_file_without_frontmatter_is_still_a_template() {

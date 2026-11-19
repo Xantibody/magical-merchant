@@ -137,6 +137,18 @@ mod tests {
         assert_eq!(rows[0].today_title, "Chain 2026-08-31");
     }
 
+    /// Every leading `#` goes, so a body that opens with a `#tag` loses the tag's mark too.
+    /// Pinned as it stands; the title rule step decides whether it stays.
+    #[test]
+    fn a_title_drops_every_leading_hash() {
+        let tmp = TempDir::new().unwrap();
+        save(&tmp, "tagged.md", "#tag rest\n\nbody");
+
+        let rows = templates_today_at(tmp.path(), VarLocale::Ja, monday()).unwrap();
+
+        assert_eq!(rows[0].today_title, "tag rest");
+    }
+
     #[test]
     fn an_empty_body_promises_no_title() {
         let tmp = TempDir::new().unwrap();

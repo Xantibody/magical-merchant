@@ -376,6 +376,40 @@ mod tests {
         assert!(list_template_drafts(tmp.path()).unwrap().is_empty());
     }
 
+    /// With neither the template nor a draft, there is nothing to delete.
+    #[test]
+    fn deleting_a_template_that_has_neither_file_is_not_found() {
+        let tmp = TempDir::new().unwrap();
+
+        let result = delete_template(tmp.path(), &name("nope.md"));
+
+        assert!(matches!(result, Err(CoreError::NotFound(_))));
+    }
+
+    /// A rename moves a saved template. One that is only a draft has no file to move, so
+    /// the draft stays under its old name.
+    #[test]
+    fn renaming_a_template_that_is_only_a_draft_is_not_found() {
+        let tmp = TempDir::new().unwrap();
+        save_template_draft(tmp.path(), &name("a.md"), &detail("draft", &[])).unwrap();
+
+        let result = rename_template(tmp.path(), &name("a.md"), &name("b.md"));
+
+        assert!(matches!(result, Err(CoreError::NotFound(_))));
+        assert_eq!(
+            read_template_draft(tmp.path(), &name("a.md"))
+                .unwrap()
+                .unwrap()
+                .body,
+            "draft"
+        );
+        assert!(
+            read_template_draft(tmp.path(), &name("b.md"))
+                .unwrap()
+                .is_none()
+        );
+    }
+
     /// The list marks unsaved rows from this, and shows a draft with no template file yet
     /// as a new row.
     #[test]
