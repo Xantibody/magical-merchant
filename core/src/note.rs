@@ -740,6 +740,36 @@ mod tests {
         assert!(notes[0].preview.contains("Hello"));
     }
 
+    /// A file whose bytes are not text still takes its row in the list: it is read as
+    /// empty, so it has no time and an empty preview, rather than hiding the rest.
+    #[test]
+    fn a_note_that_is_not_text_lists_with_an_empty_summary() {
+        let tmp = TempDir::new().unwrap();
+        let notes_dir = tmp.path().join("data/notes");
+        fs::create_dir_all(&notes_dir).unwrap();
+        fs::write(notes_dir.join("20260101_120000.md"), b"\xff\xfe body").unwrap();
+
+        let listed = list_notes(tmp.path()).unwrap();
+
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].filename, "20260101_120000.md");
+        assert_eq!(listed[0].time, None);
+        assert_eq!(listed[0].preview, "");
+    }
+
+    /// Reading by path does not turn a missing file into `NotFound`: the path came from
+    /// the caller, so the plain I/O failure is what it gets back.
+    #[test]
+    fn read_note_of_a_missing_path_is_an_io_error() {
+        let tmp = TempDir::new().unwrap();
+
+        let result = read_note(&tmp.path().join("data/notes/20260101_120000.md"));
+
+        assert!(
+            matches!(result, Err(CoreError::Io(ref e)) if e.kind() == std::io::ErrorKind::NotFound)
+        );
+    }
+
     /// A read returns only the body. Returning the frontmatter would flow straight into
     /// the preview or the editor and put metadata on screen.
     #[test]
@@ -1149,6 +1179,21 @@ mod tests {
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].kind, NoteKind::Codex);
         assert_eq!(listed[0].path, moved);
+    }
+
+    /// A Codex is already where promotion would put it, so asking again is not a failure
+    /// and does not touch the file.
+    #[test]
+    fn promoting_a_codex_again_changes_nothing() {
+        let tmp = TempDir::new().unwrap();
+        let path = codex(&tmp, "育てる文書");
+        let filename = filename_of(&path);
+        let before = fs::read(&path).unwrap();
+
+        promote_note_to_codex(tmp.path(), &filename).unwrap();
+
+        assert_eq!(fs::read(&path).unwrap(), before);
+        assert!(!tmp.path().join("data/notes").join(filename.as_str()).exists());
     }
 
     #[test]

@@ -305,6 +305,25 @@ mod tests {
         assert!(content.ends_with("after"));
     }
 
+    /// The snapshots outlive the note, and restoring one with nothing read puts the note
+    /// back under `data/notes/`, where a deleted note is recreated.
+    #[test]
+    fn a_deleted_note_is_restored_into_notes() {
+        let tmp = TempDir::new().unwrap();
+        let (path, filename) = note(tmp.path(), "before");
+        let snap = snapshot_note(tmp.path(), &filename).unwrap().unwrap();
+        crate::delete_note(tmp.path(), &filename).unwrap();
+        assert!(!path.exists());
+
+        let undo = restore_note(tmp.path(), &filename, &snap.id, None).unwrap();
+
+        assert_eq!(undo, None, "nothing was there to set aside");
+        assert_eq!(
+            fs::read_to_string(tmp.path().join("data/notes").join(filename.as_str())).unwrap(),
+            read_note_history(tmp.path(), &filename, &snap.id).unwrap()
+        );
+    }
+
     /// Text typed in the app between reading the history and restoring must not be lost.
     /// From MCP's side a restore is also "a write that replaces the whole body"; if only this
     /// path let through what `update_note` refuses, the same writer could clobber the same
