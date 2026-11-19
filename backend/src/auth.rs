@@ -5,7 +5,7 @@
 #[cfg(not(target_os = "android"))]
 use std::path::Path;
 
-use magical_merchant_core::sync::SyncError;
+use magical_merchant_core::SyncError;
 use magical_merchant_core::sync::config::{SyncConfig, normalize_workers_url};
 #[cfg(not(target_os = "android"))]
 use magical_merchant_core::sync::token::store_token;

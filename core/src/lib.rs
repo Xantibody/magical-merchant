@@ -13,7 +13,7 @@ pub mod utils;
 mod error;
 pub mod search;
 
-pub use error::CoreError;
+pub use error::{CoreError, SyncError, describe};
 pub use glyph::{
     GLYPH_MAX_BYTES, GlyphData, GlyphSummary, delete_glyph, list_glyphs, read_glyph, save_glyph,
 };

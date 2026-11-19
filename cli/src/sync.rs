@@ -7,11 +7,12 @@
 
 use std::path::Path;
 
+use magical_merchant_core::SyncError;
+use magical_merchant_core::sync::SyncResult;
 use magical_merchant_core::sync::client::{HttpClient, desktop_http_client};
 use magical_merchant_core::sync::config::SyncConfig;
 use magical_merchant_core::sync::engine::{self, RoundProgress};
 use magical_merchant_core::sync::token;
-use magical_merchant_core::sync::{SyncError, SyncResult};
 
 #[derive(Debug)]
 pub(crate) struct Credentials {

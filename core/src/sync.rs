@@ -98,43 +98,9 @@ impl std::fmt::Display for SyncIssue {
     }
 }
 
-/// Returns the error with a kind, so the frontend can choose between "go to settings",
-/// "retry" and the like.
-///
-/// The `kind` strings are identifiers the TypeScript side branches on, so do not change them.
-#[derive(Debug, Clone, Serialize)]
-pub struct SyncError {
-    pub kind: &'static str,
-    pub message: String,
-}
-
-impl SyncError {
-    #[must_use]
-    pub fn new<M: Into<String>>(kind: &'static str, message: M) -> Self {
-        Self {
-            kind,
-            message: message.into(),
-        }
-    }
-
-    /// For internal errors that fit no category. The UI falls back to the generic error display
-    #[must_use]
-    pub fn other<M: Into<String>>(message: M) -> Self {
-        Self::new("other", message)
-    }
-}
-
-impl std::fmt::Display for SyncError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.message)
-    }
-}
-
-impl std::error::Error for SyncError {}
-
 #[cfg(test)]
 mod tests {
-    use super::{SyncError, SyncIssue};
+    use super::SyncIssue;
 
     /// The TypeScript side branches on `kind` to pick the wording. If this shape changes,
     /// the types still pass and only the wording on screen disappears
@@ -158,12 +124,5 @@ mod tests {
         };
 
         assert_eq!(issue.to_string(), "read notes/a.md: permission denied");
-    }
-
-    #[test]
-    fn other_errors_keep_message() {
-        let info = SyncError::other("boom");
-        assert_eq!(info.kind, "other");
-        assert!(info.message.contains("boom"));
     }
 }

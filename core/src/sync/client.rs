@@ -8,7 +8,7 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use super::SyncError;
+use crate::error::{SyncError, describe};
 
 // ──────────── HTTP wire types ────────────
 
@@ -214,18 +214,6 @@ fn network_error(e: &reqwest::Error) -> SyncError {
     SyncError::new("network", format!("Network error: {}", describe(e)))
 }
 
-#[must_use]
-pub fn describe(e: &dyn std::error::Error) -> String {
-    let mut out = e.to_string();
-    let mut cur = e.source();
-    while let Some(s) = cur {
-        out.push_str(": ");
-        out.push_str(&s.to_string());
-        cur = s.source();
-    }
-    out
-}
-
 /// Turns a non-success status into an error with a kind.
 /// Skipping this would record a failed upload in the sync state as a success, or write
 /// the body of an error response to disk as a note body.
@@ -247,30 +235,4 @@ async fn check_status(
         )));
     }
     Ok(resp)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::describe;
-
-    #[test]
-    fn describe_walks_the_source_chain() {
-        #[derive(Debug)]
-        struct Outer(std::io::Error);
-        impl std::fmt::Display for Outer {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                f.write_str("error sending request")
-            }
-        }
-        impl std::error::Error for Outer {
-            fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-                Some(&self.0)
-            }
-        }
-        let inner = std::io::Error::other("invalid peer certificate: UnknownIssuer");
-        assert_eq!(
-            describe(&Outer(inner)),
-            "error sending request: invalid peer certificate: UnknownIssuer"
-        );
-    }
 }

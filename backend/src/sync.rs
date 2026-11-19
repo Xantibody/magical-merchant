@@ -7,9 +7,10 @@ use std::future::Future;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, PoisonError};
 
+use magical_merchant_core::SyncError;
 use magical_merchant_core::sync::client::HttpClient;
 use magical_merchant_core::sync::config::SyncConfig;
-use magical_merchant_core::sync::{SyncError, SyncResult, engine, token};
+use magical_merchant_core::sync::{SyncResult, engine, token};
 use magical_merchant_core::utils::clock::UtcStamp;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, State};
@@ -50,7 +51,7 @@ use magical_merchant_core::sync::client::desktop_http_client as http_client;
 /// Only Android bypasses the device's verifier. The reason is in `android_tls::sync_tls_config`
 #[cfg(target_os = "android")]
 fn http_client() -> Result<reqwest::Client, SyncError> {
-    use magical_merchant_core::sync::client::describe;
+    use magical_merchant_core::describe;
 
     let tls = crate::android_tls::sync_tls_config()
         .map_err(|e| SyncError::other(format!("TLS setup failed: {e}")))?;

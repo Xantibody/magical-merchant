@@ -7,7 +7,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-use super::SyncError;
+use crate::error::SyncError;
 
 const SYNC_CONFIG_FILENAME: &str = "sync-config.json";
 

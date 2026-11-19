@@ -10,7 +10,7 @@ use std::path::Path;
 use jsonwebtoken::dangerous::insecure_decode;
 use serde::{Deserialize, Serialize};
 
-use super::SyncError;
+use crate::error::SyncError;
 use crate::utils::clock::unix_seconds_now;
 
 #[cfg(target_os = "android")]

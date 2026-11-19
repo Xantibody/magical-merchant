@@ -12,7 +12,7 @@
 use std::fs::{self, File, TryLockError};
 use std::path::Path;
 
-use super::SyncError;
+use crate::error::SyncError;
 
 /// Kept outside `data/`. Inside, the lock file itself would become a sync target.
 const LOCK_FILENAME: &str = ".sync.lock";

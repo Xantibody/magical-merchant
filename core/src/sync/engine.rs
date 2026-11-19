@@ -22,7 +22,8 @@ use super::lock::SyncLock;
 use super::round::{self, BULK_OPERATION_BUDGET};
 use super::scan::{self, LocalFile};
 use super::state::{FileSyncRecord, SyncState};
-use super::{SyncError, SyncIssue, SyncResult};
+use super::{SyncIssue, SyncResult};
+use crate::error::SyncError;
 use crate::utils::clock::UtcStamp;
 use crate::utils::paths;
 
