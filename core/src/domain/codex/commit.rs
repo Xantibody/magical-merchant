@@ -20,8 +20,17 @@ pub fn commit_note_version(
     filename: &NoteFilename,
     message: Option<&str>,
 ) -> Result<Version, CoreError> {
+    commit_at(base_dir, filename, message, Stamp::now_local())
+}
+
+/// [`commit_note_version`] at the time `now`, so a test can name the second.
+fn commit_at(
+    base_dir: &Path,
+    filename: &NoteFilename,
+    message: Option<&str>,
+    now: Stamp,
+) -> Result<Version, CoreError> {
     let body = read_body(base_dir, filename)?;
-    let now = Stamp::now_local();
     let id = version_id(now, &body);
     let dir = versions_dir(base_dir, filename);
     let path = version_path(&dir, &id)?;
