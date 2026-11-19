@@ -31,7 +31,7 @@ ready to record the moment it opens (widgets exist for exactly this).
 | Icons      | Phosphor Icons (SVG files, `components/Icon.tsx`)         |
 | Editor     | Milkdown (headless) + custom plugins                      |
 | Markdown   | markdown-it + Shiki; Mermaid / markmap lazy               |
-| Sync       | Cloudflare Workers + R2 (`workers/`)                      |
+| Sync       | Cloudflare Workers + R2 (`worker/`)                       |
 | CLI / AI   | `cli/`: `$EDITOR` editing + MCP server (`.#cli`, `.#mcp`) |
 
 ## UI Architecture (current)

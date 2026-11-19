@@ -104,7 +104,7 @@ More options (nix-darwin module, manual build, Android APK) are in
 
 Rust core (`core/`) shared by the Tauri 2 app, a CLI + MCP server (`cli/`),
 and benchmarks · SolidJS + Milkdown frontend · Open Props design tokens ·
-Cloudflare Workers + R2 sync (`workers/`) · Nix flake for dev/CI/packaging.
+Cloudflare Workers + R2 sync (`worker/`) · Nix flake for dev/CI/packaging.
 
 ```
 magical-merchant/
@@ -113,7 +113,7 @@ magical-merchant/
 ├── tauri-app/
 │   ├── src/        # SolidJS frontend (TypeScript)
 │   └── src-tauri/  # Tauri 2 backend (Rust)
-├── workers/        # Cloudflare Workers (R2 sync backend)
+├── worker/         # Cloudflare Workers (R2 sync backend)
 ├── fixtures/       # Sample data: one of every surface, read by the core's tests
 ├── xtask/          # `cargo xtask sandbox …`, the app over a copy of fixtures/
 ├── docs/           # Documentation

@@ -58,10 +58,10 @@
       enabled: false,
     },
     {
-      description: "workers は nix ビルドに入らないので tauri-app と分ける",
+      description: "worker は nix ビルドに入らないので tauri-app と分ける",
       matchManagers: ["npm"],
-      matchFileNames: ["workers/package.json"],
-      groupName: "workers dependencies",
+      matchFileNames: ["worker/package.json"],
+      groupName: "worker dependencies",
       minimumReleaseAge: "1 day",
       internalChecksFilter: "strict",
     },

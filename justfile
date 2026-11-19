@@ -1,6 +1,6 @@
 mod rust
 mod tauri_app 'tauri-app'
-mod workers
+mod worker
 
 [private]
 default:
@@ -9,9 +9,9 @@ default:
 fmt:
   nix fmt
 
-check: rust::check tauri_app::check workers::check comments
+check: rust::check tauri_app::check worker::check comments
 
-test: rust::test tauri_app::test workers::test
+test: rust::test tauri_app::test worker::test
 
 verify: fmt check test
 
@@ -19,7 +19,7 @@ verify: fmt check test
 # and spelled right (typos), over the whole tree. CI runs the same recipe
 comments:
   typos
-  vale core cli workers/src tauri-app/src tauri-app/src-tauri/src
+  vale core cli worker/src tauri-app/src tauri-app/src-tauri/src
 
 # 毎日叩くのはこれだけなので root に置く。他は `just tauri_app::…` を直接呼ぶ
 dev: tauri_app::dev

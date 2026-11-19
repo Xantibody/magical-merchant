@@ -178,8 +178,8 @@ in
 
   frontend = pkgs.mkShell (playwrightEnv // { buildInputs = jsToolchain; });
 
-  # wrangler is a devDependency in workers/package.json, so the nix one is not needed
-  workers = pkgs.mkShell {
+  # wrangler is a devDependency in worker/package.json, so the nix one is not needed
+  worker = pkgs.mkShell {
     buildInputs = jsToolchain;
   };
 

@@ -36,7 +36,7 @@ jobs:
       # 手で回すのは「filter を信用したくないとき」なので、そこだけは全部走らせる
       rust: ${{ steps.filter.outputs.rust || 'true' }}
       frontend: ${{ steps.filter.outputs.frontend || 'true' }}
-      workers: ${{ steps.filter.outputs.workers || 'true' }}
+      worker: ${{ steps.filter.outputs.worker || 'true' }}
       nix-package: ${{ steps.filter.outputs.nix-package || 'true' }}
       desktop-package: ${{ steps.filter.outputs.desktop-package || 'true' }}
       nixos-module: ${{ steps.filter.outputs.nixos-module || 'true' }}
@@ -93,8 +93,8 @@ jobs:
               - 'flake.nix'
               - 'nix/devshells.nix'
               - 'flake.lock'
-            workers:
-              - 'workers/**'
+            worker:
+              - 'worker/**'
               - '.oxlintrc.json'
               - 'flake.nix'
               - 'nix/devshells.nix'
@@ -181,7 +181,7 @@ jobs:
   # the patterns that leak (credentials left behind, an expression expanded
   # straight into run). Those two do not go through the nix devshell: adding
   # them to flake.nix would make paths-filter count it as an input of rust,
-  # frontend, workers and android, and a workflow lint change would bring the
+  # frontend, worker and android, and a workflow lint change would bring the
   # 45-minute APK build with it.
   #
   # Source comments are English and spelled right (justfile: comments), over
@@ -284,9 +284,9 @@ jobs:
           path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
           key: ${{ steps.pnpm-store.outputs.cache-primary-key }}
 
-  workers:
+  worker:
     needs: [changes, lint]
-    if: needs.changes.outputs.workers == 'true'
+    if: needs.changes.outputs.worker == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -295,23 +295,23 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup-nix
         with:
-          name: workers
+          name: worker
           hash: ${{ hashFiles('flake.lock', 'flake.nix', 'nix/devshells.nix') }}
           max-store-size: 2G
       - name: Get pnpm store directory
         id: pnpm-cache
-        run: echo "STORE_PATH=$(nix develop .#workers --command pnpm store path)" >> "$GITHUB_OUTPUT"
+        run: echo "STORE_PATH=$(nix develop .#worker --command pnpm store path)" >> "$GITHUB_OUTPUT"
       - uses: actions/cache/restore@v6
         id: pnpm-store
         with:
           path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
-          key: pnpm-workers-${{ runner.os }}-${{ hashFiles('workers/pnpm-lock.yaml') }}
+          key: pnpm-worker-${{ runner.os }}-${{ hashFiles('worker/pnpm-lock.yaml') }}
           restore-keys: |
-            pnpm-workers-${{ runner.os }}-
+            pnpm-worker-${{ runner.os }}-
       - name: check
-        run: nix develop .#workers --command just workers::check
+        run: nix develop .#worker --command just worker::check
       - name: test
-        run: nix develop .#workers --command just workers::test
+        run: nix develop .#worker --command just worker::test
       - uses: actions/cache/save@v6
         if: github.ref == 'refs/heads/main' && steps.pnpm-store.outputs.cache-hit != 'true'
         with:
@@ -456,7 +456,7 @@ jobs:
       - changes
       - rust
       - frontend
-      - workers
+      - worker
       - android
       - nixos-module
       - nix-package

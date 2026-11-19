@@ -86,7 +86,7 @@ fetch what they need:
 | `.#default`  | Everything above                     | Local development |
 | `.#rust`     | Rust + clippy + just                 | CI (`rust`)       |
 | `.#frontend` | Node toolchain + Playwright browsers | CI (`frontend`)   |
-| `.#workers`  | Node toolchain                       | CI (`workers`)    |
+| `.#worker`   | Node toolchain                       | CI (`worker`)     |
 | `.#android`  | `.#default` minus browser automation | Release APK build |
 
 ## Task runner (just)
@@ -98,13 +98,13 @@ fetch what they need:
 | `just fmt`      | Format all files (`nix fmt`)                                   | ✓   |
 | `just check`    | The three module checks + `comments`                           | ✓   |
 | `just comments` | Vale (English only, the proper nouns, proselint) and typos     | ✓   |
-| `just test`     | `rust::test` + `tauri_app::test` + `workers::test`             | ✓   |
+| `just test`     | `rust::test` + `tauri_app::test` + `worker::test`              | ✓   |
 | `just verify`   | `fmt` → `check` → `test`. Run it before calling something done |     |
 | `just dev`      | `tauri_app::dev` — the one recipe worth a short name           |     |
 | `just sandbox`  | The app over a copy of `fixtures/` (see [Sandbox](#sandbox))   |     |
 
 Everything else is reached through its module — `just tauri_app::…`,
-`just rust::…`, `just workers::…`. Run `just --list <module>` to see them.
+`just rust::…`, `just worker::…`. Run `just --list <module>` to see them.
 CI does not call `verify`; it calls the three module recipes directly, in
 jobs that a path filter can skip.
 
@@ -135,12 +135,12 @@ every sync with `UnknownPreconfigured`.
 | `just tauri_app::build`       | Build macOS .app (Apple Silicon)                   |     |
 | `just tauri_app::icons`       | Regenerate icons from the SVG                      |     |
 
-### Worker recipes (`workers::`)
+### Worker recipes (`worker::`)
 
-| Command               | Description         | CI  |
-| --------------------- | ------------------- | --- |
-| `just workers::check` | oxlint + tsc + knip | ✓   |
-| `just workers::test`  | Vitest              | ✓   |
+| Command              | Description         | CI  |
+| -------------------- | ------------------- | --- |
+| `just worker::check` | oxlint + tsc + knip | ✓   |
+| `just worker::test`  | Vitest              | ✓   |
 
 ### Android recipes (`tauri_app::`)
 
