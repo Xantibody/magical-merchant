@@ -106,13 +106,14 @@ Imports between things inside `domain/`:
   and `current_context.rs` (asking the OS, behind the `device-probe`
   feature).
 - `sync/` is one sync with the Worker. Its rule files are `diff.rs` (what to
-  upload, download, delete or keep as a conflict), `rounds.rs` (how many of
+  upload, download, delete or keep as a conflict, and the records it
+  compares: `LocalFile`, `RemoteFile`, `SyncState`), `rounds.rs` (how many of
   those fit one bulk), `conflict_copy.rs` (a conflict copy's name),
   `token.rs` (a login's expiry and when to renew it) and `result.rs` (what
   one sync reports, `SyncResult` and `SyncIssue`). Its operations are
   `run.rs` (one sync: the lock, the rounds, the bulk and applying the reply;
   kept as one file), `scan.rs` (walking `data/` with its hash cache),
-  `state.rs`, `settings.rs` (`sync-config.json`) and `login.rs` (storing,
+  `state.rs` (`SyncState` to and from `.sync-state.json`), `settings.rs` (`sync-config.json`) and `login.rs` (storing,
   reading and renewing the login). Only the parts that speak HTTP sit behind
   the `sync-client` feature; `diff`, `scan`, `state`, `conflict_copy` and
   `result` build without it, for the widget and the MCP-only CLI.
