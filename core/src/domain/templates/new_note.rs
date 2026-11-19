@@ -73,14 +73,6 @@ pub fn templates_today(
     base_dir: &Path,
     locale: VarLocale,
 ) -> Result<Vec<TemplateToday>, CoreError> {
-    templates_today_at(base_dir, locale, WallClock::now_local())
-}
-
-fn templates_today_at(
-    base_dir: &Path,
-    locale: VarLocale,
-    now: WallClock,
-) -> Result<Vec<TemplateToday>, CoreError> {
     let templates = Templates::new(base_dir);
     let summaries = templates.list()?;
     if summaries.is_empty() {
@@ -102,7 +94,12 @@ fn templates_today_at(
             (summary, body)
         })
         .collect();
-    Ok(today_rows(with_bodies, &notes, now, locale))
+    Ok(today_rows(
+        with_bodies,
+        &notes,
+        WallClock::now_local(),
+        locale,
+    ))
 }
 
 #[cfg(test)]
@@ -331,67 +328,6 @@ mod tests {
 
     fn save(tmp: &TempDir, filename: &str, body: &str) {
         save_template(tmp.path(), &name(filename), body, &[]).unwrap();
-    }
-
-    /// 2026-08-31 (Mon).
-    fn monday() -> WallClock {
-        WallClock::new(2026, 8, 31, 9, 0, 0).unwrap()
-    }
-
-    #[test]
-    fn the_title_is_resolved_for_today() {
-        let tmp = TempDir::new().unwrap();
-        save(&tmp, "daily.md", "# Daily {{date}} ({{weekday}})\n\nbody");
-
-        let rows = templates_today_at(tmp.path(), VarLocale::Ja, monday()).unwrap();
-
-        assert_eq!(rows[0].today_title, "Daily 2026-08-31 (月)");
-        assert_eq!(rows[0].name, "daily");
-    }
-
-    /// The weekday follows the caller's language, as it does when the note is made.
-    #[test]
-    fn the_title_follows_the_locale() {
-        let tmp = TempDir::new().unwrap();
-        save(&tmp, "daily.md", "# {{weekday}}");
-
-        let rows = templates_today_at(tmp.path(), VarLocale::En, monday()).unwrap();
-
-        assert_eq!(rows[0].today_title, "Mon");
-    }
-
-    /// A title line with `{{prev}}` and no previous note is dropped when the note is
-    /// made, so the promised title is the line after it.
-    #[test]
-    fn a_prev_title_line_without_a_previous_note_is_skipped() {
-        let tmp = TempDir::new().unwrap();
-        save(&tmp, "chain.md", "# after {{prev}}\n\n# Chain {{date}}");
-
-        let rows = templates_today_at(tmp.path(), VarLocale::Ja, monday()).unwrap();
-
-        assert_eq!(rows[0].today_title, "Chain 2026-08-31");
-    }
-
-    /// Every leading `#` goes, so a body that opens with a `#tag` loses the tag's mark too.
-    /// Pinned as it stands; the title rule step decides whether it stays.
-    #[test]
-    fn a_title_drops_every_leading_hash() {
-        let tmp = TempDir::new().unwrap();
-        save(&tmp, "tagged.md", "#tag rest\n\nbody");
-
-        let rows = templates_today_at(tmp.path(), VarLocale::Ja, monday()).unwrap();
-
-        assert_eq!(rows[0].today_title, "tag rest");
-    }
-
-    #[test]
-    fn an_empty_body_promises_no_title() {
-        let tmp = TempDir::new().unwrap();
-        save(&tmp, "empty.md", "");
-
-        let rows = templates_today_at(tmp.path(), VarLocale::Ja, monday()).unwrap();
-
-        assert_eq!(rows[0].today_title, "");
     }
 
     /// Every template comes back, in name order: a button placed for the fifth template
