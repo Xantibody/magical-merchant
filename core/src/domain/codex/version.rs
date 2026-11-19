@@ -198,4 +198,91 @@ mod tests {
             assert_eq!(version_path(dir, id).is_ok(), accepted, "{id}");
         }
     }
+
+    #[test]
+    fn a_codex_without_versions_has_none_and_has_not_moved() {
+        let none: [&str; 0] = [];
+
+        assert_eq!(version_mark(&none, "a"), (0, false));
+    }
+
+    /// "a" hashes to `ca978112`, so a newest version with that tail is the draft itself.
+    #[test]
+    fn a_draft_matching_the_newest_tail_has_not_moved() {
+        let names = ["20260917_140000-00000000.md", "20260917_140300-ca978112.md"];
+
+        assert_eq!(version_mark(&names, "a"), (2, false));
+    }
+
+    #[test]
+    fn a_draft_differing_from_the_newest_tail_has_moved() {
+        let names = ["20260917_140000-ca978112.md", "20260917_140300-00000000.md"];
+
+        assert_eq!(version_mark(&names, "a"), (2, true));
+    }
+
+    /// The names come in whatever order the directory gives; the greatest one is the newest.
+    #[test]
+    fn the_newest_name_is_found_in_any_order() {
+        let newest_last = ["20260917_140000-00000000.md", "20260917_140300-ca978112.md"];
+        let newest_first = ["20260917_140300-ca978112.md", "20260917_140000-00000000.md"];
+
+        assert_eq!(version_mark(&newest_last, "a"), (2, false));
+        assert_eq!(version_mark(&newest_first, "a"), (2, false));
+    }
+
+    fn version(id: &str, time: &str) -> Version {
+        Version {
+            id: id.to_string(),
+            time: time.parse().unwrap(),
+            message: None,
+            bytes: 0,
+        }
+    }
+
+    #[test]
+    fn versions_are_ordered_newest_instant_first() {
+        let mut versions = [
+            version("20260917_140000-00000000", "2026-09-17T14:00:00+09:00"),
+            // A minute later, committed from another offset: its wall clock reads earlier
+            version("20260917_050100-00000000", "2026-09-17T05:01:00+00:00"),
+        ];
+
+        order(&mut versions);
+
+        let ids: Vec<&str> = versions.iter().map(|v| v.id.as_str()).collect();
+        assert_eq!(
+            ids,
+            vec!["20260917_050100-00000000", "20260917_140000-00000000"]
+        );
+    }
+
+    /// Two versions in the same second keep one order on every device: the id descending.
+    #[test]
+    fn versions_in_the_same_second_are_ordered_by_id_descending() {
+        let mut versions = [
+            version("20260917_140300-0123abcd", "2026-09-17T14:03:00+09:00"),
+            version("20260917_140300-ffff0000", "2026-09-17T14:03:00+09:00"),
+            version("20260917_140300-80000000", "2026-09-17T14:03:00+09:00"),
+        ];
+
+        order(&mut versions);
+
+        let ids: Vec<&str> = versions.iter().map(|v| v.id.as_str()).collect();
+        assert_eq!(
+            ids,
+            vec![
+                "20260917_140300-ffff0000",
+                "20260917_140300-80000000",
+                "20260917_140300-0123abcd",
+            ]
+        );
+    }
+
+    #[test]
+    fn the_byte_delta_is_the_draft_minus_the_latest_version() {
+        assert_eq!(bytes_delta(12, 3), 9);
+        assert_eq!(bytes_delta(1, 3), -2);
+        assert_eq!(bytes_delta(3, 3), 0);
+    }
 }
