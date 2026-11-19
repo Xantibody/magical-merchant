@@ -6,6 +6,12 @@ pub mod domain;
 pub mod services;
 pub mod utils;
 
+// The crate root's names, layer by layer (utils, then domain) and thing by thing. The
+// app, the CLI and the benches use these; `tests/public_api.rs` pins every one.
+
+pub use utils::error::{CoreError, SyncError, describe};
+pub use utils::frontmatter;
+
 pub use domain::backlinks::find_backlinks;
 pub use domain::browse::{browse_all, recent_records};
 pub use domain::codex::{
@@ -39,10 +45,8 @@ pub use domain::scrawl::{
 pub use domain::search::{HitKind, SearchFilter, SearchHit, search_all, search_records};
 pub use domain::tags::{TagUsage, count_tags};
 pub use domain::templates::{
-    CreatedNote, TemplateDetail, TemplateSummary, VarLocale, create_note_from_template,
-    delete_template, discard_template_draft, list_template_drafts, list_templates, read_template,
-    read_template_draft, rename_template, save_template, save_template_draft,
+    CreatedNote, TemplateDetail, TemplateSummary, TemplateToday, VarLocale,
+    create_note_from_template, delete_template, discard_template_draft, list_template_drafts,
+    list_templates, read_template, read_template_draft, rename_template, save_template,
+    save_template_draft, templates_today,
 };
-pub use domain::templates::{TemplateToday, templates_today};
-pub use utils::error::{CoreError, SyncError, describe};
-pub use utils::frontmatter;
