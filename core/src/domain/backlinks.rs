@@ -106,6 +106,66 @@ mod tests {
         path.file_stem().unwrap().to_str().unwrap().to_string()
     }
 
+    /// A hit whose excerpt is `snippet`, matched from its first `[[` over `[[ID`.
+    fn link_hit(snippet: &str) -> SearchHit {
+        let start = snippet
+            .find("[[")
+            .map(|byte| snippet[..byte].chars().count());
+        SearchHit {
+            kind: HitKind::Note,
+            title: String::new(),
+            snippet: snippet.to_string(),
+            date: String::new(),
+            filename: None,
+            index: None,
+            tags: Vec::new(),
+            match_start: start,
+            match_len: start.map(|_| "[[ID".chars().count()),
+        }
+    }
+
+    /// What the highlight covers after the extension.
+    fn extended(snippet: &str) -> String {
+        let mut hit = link_hit(snippet);
+        extend_match_to_link_end(&mut hit);
+        hit.snippet
+            .chars()
+            .skip(hit.match_start.unwrap())
+            .take(hit.match_len.unwrap())
+            .collect()
+    }
+
+    #[test]
+    fn the_highlight_reaches_the_end_of_a_link_with_display_text() {
+        assert_eq!(extended("前に [[ID|前の話]] を見る"), "[[ID|前の話]]");
+        assert_eq!(extended("[[ID]]"), "[[ID]]");
+    }
+
+    #[test]
+    fn the_highlight_stops_before_a_newline() {
+        assert_eq!(extended("[[ID|前の\n話]]"), "[[ID");
+    }
+
+    /// Another link starting before this one closes is not this link's text.
+    #[test]
+    fn the_highlight_stops_before_the_next_link() {
+        assert_eq!(extended("[[ID|前の [[OTHER]]"), "[[ID");
+    }
+
+    /// The excerpt was cut before the link closed, so where it ends is not shown.
+    #[test]
+    fn a_link_cut_off_by_the_excerpt_is_not_extended() {
+        assert_eq!(extended("[[ID|前の話…"), "[[ID");
+    }
+
+    #[test]
+    fn a_hit_without_a_match_is_left_alone() {
+        let mut hit = link_hit("リンクのない抜粋");
+        extend_match_to_link_end(&mut hit);
+
+        assert_eq!((hit.match_start, hit.match_len), (None, None));
+    }
+
     #[test]
     fn a_scrawl_entry_that_links_a_note_is_a_backlink() {
         let tmp = TempDir::new().unwrap();
