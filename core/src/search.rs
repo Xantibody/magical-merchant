@@ -4,11 +4,11 @@ use crate::utils::clock::Day;
 use serde::{Deserialize, Serialize};
 
 use crate::domain::note::NoteKind;
+use crate::domain::note::list;
 use crate::domain::scrawl::day::DayLog;
 use crate::domain::scrawl::entry::strip_scrawl_prefix;
 use crate::domain::scrawl::journal::{list_scrawl_dates, read_raw};
 use crate::error::CoreError;
-use crate::note::Notes;
 use crate::utils::tags;
 use crate::utils::text::lowercase;
 
@@ -214,7 +214,7 @@ pub fn search_records(
     // `time:` and `tags:` lines are never hit.
     // An unreadable note comes with an empty body, matches neither the needle nor a tag,
     // and just stays out of the results: one note must not fail the whole search
-    Notes::new(base_dir.to_path_buf()).scan(|note, body| {
+    list::scan(base_dir, |note, body| {
         if !filter.takes(note.kind.into())
             || !filter.covers(note.time.map(|time| time.day()))
             || !in_scope(&scope, &note.tags)
@@ -270,7 +270,7 @@ pub fn browse_all(base_dir: &Path) -> Result<Vec<SearchHit>, CoreError> {
 
     // An unreadable note comes with an empty body (`scan`). Its title and snippet become
     // an empty row, but one note must not fail the whole list: same policy as `search_all`
-    Notes::new(base_dir.to_path_buf()).scan(|note, body| {
+    list::scan(base_dir, |note, body| {
         hits.push(SearchHit {
             kind: note.kind.into(),
             title: first_line(&note.preview).to_string(),
@@ -331,7 +331,7 @@ pub fn find_backlinks(
 
     // An unreadable note comes with an empty body and just drops out of the backlinks.
     // Better than showing a list that cannot be opened
-    Notes::new(base_dir.to_path_buf()).scan(|note, body| {
+    list::scan(base_dir, |note, body| {
         if note.filename == target.as_str() || !body.contains(&needle) {
             return;
         }

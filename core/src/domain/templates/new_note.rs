@@ -11,8 +11,8 @@ use super::variables::{VarLocale, previous_note_link, resolve_vars};
 use crate::domain::note::NoteFilename;
 use crate::domain::note::NoteSummary;
 use crate::domain::note::Provenance;
+use crate::domain::note::{create_draft_note, list_notes};
 use crate::error::CoreError;
-use crate::note::Notes;
 use crate::utils::clock::WallClock;
 use crate::utils::device::Context;
 
@@ -40,7 +40,7 @@ pub fn create_note_from_template(
     let (fm, body) = Templates::new(base_dir).read(filename)?;
     let name = template_name(filename);
     let now = WallClock::now_local();
-    let notes = crate::note::list_notes(base_dir)?;
+    let notes = list_notes(base_dir)?;
 
     let prev = previous_note_link(&notes, name);
     let resolved = resolve_vars(&body, now, prev.as_deref(), locale);
@@ -53,7 +53,8 @@ pub fn create_note_from_template(
         .filter(|tag| !tag.trim().is_empty())
         .collect();
 
-    let path = Notes::new(base_dir.to_path_buf()).create(
+    let path = create_draft_note(
+        base_dir,
         &resolved,
         &tags,
         context,
@@ -80,7 +81,7 @@ pub fn templates_today(
         // No template, no reason to open every note.
         return Ok(Vec::new());
     }
-    let notes: Vec<NoteSummary> = crate::note::list_notes(base_dir)?;
+    let notes: Vec<NoteSummary> = list_notes(base_dir)?;
 
     let with_bodies = summaries
         .into_iter()
@@ -108,8 +109,8 @@ mod tests {
     use super::*;
     use crate::domain::note::NoteFrontmatter;
     use crate::domain::note::kind::notes_dir;
+    use crate::domain::note::read_note;
     use crate::domain::templates::save_template;
-    use crate::note::{list_notes, read_note};
     use crate::utils::clock::{Day, Stamp};
     use crate::utils::frontmatter;
     use std::fs;

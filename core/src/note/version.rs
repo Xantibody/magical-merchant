@@ -28,10 +28,8 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use similar::{Algorithm, TextDiff};
 
-use crate::domain::note::NoteFilename;
-use crate::domain::note::NoteKind;
-use crate::domain::note::Revision;
 use crate::domain::note::kind::codex_dir;
+use crate::domain::note::{NoteFilename, NoteKind, Revision, locate_note, read_note_by_filename};
 use crate::error::CoreError;
 use crate::note::repository::Notes;
 use crate::services::files::{ensure_dir, list_md_files, write_atomic};
@@ -114,19 +112,19 @@ fn version_path(dir: &Path, id: &str) -> Result<PathBuf, CoreError> {
 /// Only a Codex can hold versions. Readers and writers both go through this first: even
 /// if a plain note still has a versions directory (mid-sync, a missed delete), it is
 /// leftover that belongs to nobody, not history to show in the list.
-fn ensure_codex(base_dir: &Path, filename: &NoteFilename) -> Result<Notes, CoreError> {
-    let notes = Notes::new(base_dir.to_path_buf());
-    let (kind, _) = notes.locate(filename)?;
+fn ensure_codex(base_dir: &Path, filename: &NoteFilename) -> Result<(), CoreError> {
+    let (kind, _) = locate_note(base_dir, filename)?;
     if kind != NoteKind::Codex {
         return Err(CoreError::NotCodex(filename.as_str().to_string()));
     }
-    Ok(notes)
+    Ok(())
 }
 
 /// The current draft. Returning a plain note's body would create versions under
 /// `data/codex/<stem>/` with no note to own them, and sync would keep distributing them.
 fn read_body(base_dir: &Path, filename: &NoteFilename) -> Result<String, CoreError> {
-    ensure_codex(base_dir, filename)?.read(filename)
+    ensure_codex(base_dir, filename)?;
+    read_note_by_filename(base_dir, filename)
 }
 
 fn read_version_file(path: &Path) -> Result<(VersionFrontmatter, String), CoreError> {
@@ -257,7 +255,7 @@ pub fn restore_note_version(
     expected: Option<&Revision>,
 ) -> Result<Revision, CoreError> {
     let restored = read_note_version(base_dir, filename, id)?;
-    let (_, path) = Notes::new(base_dir.to_path_buf()).locate(filename)?;
+    let (_, path) = locate_note(base_dir, filename)?;
     if let Some(expected) = expected {
         let current = Revision::of(&read_body(base_dir, filename)?);
         if current != *expected {

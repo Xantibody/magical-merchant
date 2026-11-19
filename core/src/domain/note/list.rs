@@ -1,0 +1,148 @@
+//! The list of every Note and Codex, and the one read of every note that search, the tag
+//! count and backlinks share.
+
+use std::fs;
+use std::path::Path;
+
+use crate::domain::note::{NoteKind, NoteSummary};
+use crate::error::CoreError;
+use crate::services::files::list_md_files;
+use crate::utils::frontmatter;
+
+pub fn list_notes(base_dir: &Path) -> Result<Vec<NoteSummary>, CoreError> {
+    let mut summaries = Vec::new();
+    scan(base_dir, |summary, _| summaries.push(summary))?;
+    Ok(summaries)
+}
+
+/// Read every note once and hand `visit` the summary and the body with the
+/// frontmatter stripped. If a path that looks at every body (search, backlinks)
+/// re-reads each note after `list_notes`, that is two open(2) calls per note. On macOS
+/// open takes about 60% of the whole path, so the content read to build the
+/// summary is passed on as is.
+///
+/// The body is lent one note at a time; all bodies are never held at once.
+/// Returning summary and body pairs in a Vec makes heap usage the sum of all
+/// bodies in a large store.
+///
+/// A note that cannot be read yields an empty summary and an empty body, as in
+/// `list_notes`.
+///
+/// Both directories are merged into one list, sorted by filename (creation
+/// time), newest first. Filtering per surface is done by the caller via `kind`.
+pub(crate) fn scan<F>(base_dir: &Path, mut visit: F) -> Result<(), CoreError>
+where
+    F: FnMut(NoteSummary, &str),
+{
+    let mut entries: Vec<(NoteKind, fs::DirEntry)> = Vec::new();
+    for kind in [NoteKind::Note, NoteKind::Codex] {
+        for entry in list_md_files(&kind.dir(base_dir))? {
+            entries.push((kind, entry));
+        }
+    }
+    entries.sort_by_cached_key(|(_, e)| std::cmp::Reverse(e.file_name()));
+
+    for (kind, entry) in entries {
+        let path = entry.path();
+        let filename = entry.file_name().to_string_lossy().to_string();
+        let content = fs::read_to_string(&path).unwrap_or_default();
+        let body = frontmatter::strip(&content);
+        // Versions live next to the note, under the name minus `.md`. Version bodies
+        // are not read
+        let versions = path.with_extension("");
+        let mut summary = NoteSummary::from_file(kind, path, filename, &content);
+        if kind == NoteKind::Codex {
+            let (count, dirty) = crate::note::version::list_status(&versions, body)?;
+            summary.version_count = Some(count);
+            summary.dirty = Some(dirty);
+        }
+        visit(summary, body);
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::note::{Provenance, create_draft_note};
+    use crate::utils::device::Context;
+    use std::path::PathBuf;
+    use tempfile::TempDir;
+
+    fn mock_context() -> Context {
+        Context {
+            battery: Some(50),
+            is_charging: Some(false),
+            ..Context::default()
+        }
+    }
+
+    /// A plain new note that declares nothing. Every test except those about creation
+    /// itself goes through this, so adding a provenance kind does not rewrite every test.
+    fn draft(tmp: &TempDir, body: &str, tags: &[String]) -> Result<PathBuf, CoreError> {
+        create_draft_note(
+            tmp.path(),
+            body,
+            tags,
+            &mock_context(),
+            Provenance::default(),
+        )
+    }
+
+    #[test]
+    fn test_list_notes_empty() {
+        let tmp = TempDir::new().unwrap();
+        let notes = list_notes(tmp.path()).unwrap();
+        assert!(notes.is_empty());
+    }
+
+    #[test]
+    fn test_list_notes_returns_summaries() {
+        let tmp = TempDir::new().unwrap();
+        let tags = vec!["rust".to_string(), "test".to_string()];
+        draft(&tmp, "# Hello\nBody text here", &tags).unwrap();
+
+        let notes = list_notes(tmp.path()).unwrap();
+        assert_eq!(notes.len(), 1);
+        assert_eq!(notes[0].tags, vec!["rust", "test"]);
+        assert!(notes[0].time.is_some());
+        assert!(notes[0].preview.contains("Hello"));
+    }
+
+    /// A file whose bytes are not text still takes its row in the list: it is read as
+    /// empty, so it has no time and an empty preview, rather than hiding the rest.
+    #[test]
+    fn a_note_that_is_not_text_lists_with_an_empty_summary() {
+        let tmp = TempDir::new().unwrap();
+        let notes_dir = tmp.path().join("data/notes");
+        fs::create_dir_all(&notes_dir).unwrap();
+        fs::write(notes_dir.join("20260101_120000.md"), b"\xff\xfe body").unwrap();
+
+        let listed = list_notes(tmp.path()).unwrap();
+
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].filename, "20260101_120000.md");
+        assert_eq!(listed[0].time, None);
+        assert_eq!(listed[0].preview, "");
+    }
+
+    /// Search and backlinks read every note's body. Calling `read_note` one by one after
+    /// the list would mean two open(2) calls each, so the summary and body are passed together.
+    #[test]
+    fn scan_visits_each_summary_with_its_body_without_frontmatter() {
+        let tmp = TempDir::new().unwrap();
+        let path = draft(&tmp, "# Title\nbody #memo", &[]).unwrap();
+
+        let mut visited = Vec::new();
+        scan(tmp.path(), |summary, body| {
+            visited.push((summary, body.to_string()));
+        })
+        .unwrap();
+
+        assert_eq!(visited.len(), 1);
+        let (summary, body) = &visited[0];
+        assert_eq!(summary.path, path);
+        assert_eq!(summary.tags, vec!["memo".to_string()]);
+        assert_eq!(body, "# Title\nbody #memo");
+    }
+}

@@ -1,7 +1,7 @@
 mod history;
 mod repair;
 pub(crate) mod repository;
-mod version;
+pub(crate) mod version;
 
 pub use history::{Snapshot, list_note_history, read_note_history, restore_note, snapshot_note};
 pub(crate) use repository::Notes;
@@ -11,45 +11,12 @@ pub use version::{
     restore_note_version,
 };
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use crate::domain::note::{NoteFilename, NoteKind, NoteSummary, Revision};
-use crate::domain::note::{NoteFrontmatter, Provenance};
+use crate::domain::note::{NoteFilename, Revision};
 use crate::error::CoreError;
 use crate::utils::clock::Stamp;
 use crate::utils::device::Context;
-use crate::utils::frontmatter;
-
-/// Create one note.
-///
-/// The provenance ([`Provenance`]) is a record that can be written only at creation;
-/// [`Provenance::default`] when nothing is declared. Promoting a Scrawl entry is the same call with
-/// `origin` attached: growing a function per path would break every signature each time one more
-/// provenance record is added.
-pub fn create_draft_note(
-    base_dir: &Path,
-    body: &str,
-    tags: &[String],
-    context: &Context,
-    provenance: Provenance<'_>,
-) -> Result<PathBuf, CoreError> {
-    Notes::new(base_dir.to_path_buf()).create(body, tags, context, provenance)
-}
-
-/// Create one Codex (a document that keeps growing and commits versions).
-///
-/// Only the location becomes `data/codex/`; the naming and the frontmatter are the same as
-/// [`create_draft_note`]. It is a separate entry rather than a `kind` argument so that no caller
-/// unaware of Codex (CLI, MCP, templates) has to change.
-pub fn create_draft_codex(
-    base_dir: &Path,
-    body: &str,
-    tags: &[String],
-    context: &Context,
-    provenance: Provenance<'_>,
-) -> Result<PathBuf, CoreError> {
-    Notes::new(base_dir.to_path_buf()).create_codex(body, tags, context, provenance)
-}
 
 /// Turn a note into a Codex.
 ///
@@ -58,26 +25,6 @@ pub fn create_draft_codex(
 /// leave its versions belonging to nothing. If it is already a Codex, nothing happens.
 pub fn promote_note_to_codex(base_dir: &Path, filename: &NoteFilename) -> Result<(), CoreError> {
     Notes::new(base_dir.to_path_buf()).promote_to_codex(filename)
-}
-
-/// Create one note with a given creation time.
-///
-/// It is the entry for moving in records that lived elsewhere; otherwise it is the same as
-/// [`create_draft_note`] (the naming, the one-second step when the same second is taken, and the
-/// frontmatter all follow core's rules).
-///
-/// The filename is the creation time itself, that is, the immutable ID, so naming a moved
-/// record after "now" loses its original date for good. Pass the time with its own offset
-/// declared: the name is decided by that wall clock too.
-pub fn create_note_at(
-    base_dir: &Path,
-    time: Stamp,
-    body: &str,
-    tags: &[String],
-    context: &Context,
-    provenance: Provenance<'_>,
-) -> Result<PathBuf, CoreError> {
-    Notes::new(base_dir.to_path_buf()).create_at(time, body, tags, context, provenance)
 }
 
 /// Rewrite the body.
@@ -94,50 +41,8 @@ pub fn update_note(
     Notes::update(file_path, body, context, expected)
 }
 
-/// Look up a note's kind and actual location from its ID.
-///
-/// Entries that rewrite the body (CLI, MCP) pass the path obtained here to [`update_note`]:
-/// hardcoding `notes/` would make a note turned into a Codex "missing", or recreate a plain note
-/// beside it.
-pub fn locate_note(
-    base_dir: &Path,
-    filename: &NoteFilename,
-) -> Result<(NoteKind, PathBuf), CoreError> {
-    Notes::new(base_dir.to_path_buf()).locate(filename)
-}
-
-pub fn list_notes(base_dir: &Path) -> Result<Vec<NoteSummary>, CoreError> {
-    Notes::new(base_dir.to_path_buf()).list()
-}
-
-/// Return the note's body. Frontmatter is a matter of the storage format and is not
-/// something to show the reader (preview, editor, MCP).
-pub fn read_note(file_path: &Path) -> Result<String, CoreError> {
-    let content = std::fs::read_to_string(file_path)?;
-    Ok(frontmatter::strip(&content).to_string())
-}
-
-pub fn read_note_by_filename(
-    base_dir: &Path,
-    filename: &NoteFilename,
-) -> Result<String, CoreError> {
-    Notes::new(base_dir.to_path_buf()).read(filename)
-}
-
 pub fn delete_note(base_dir: &Path, filename: &NoteFilename) -> Result<(), CoreError> {
     Notes::new(base_dir.to_path_buf()).delete(filename)
-}
-
-/// Return one note's frontmatter as it is.
-///
-/// `NoteSummary` is the digest for the list (with a body preview, and tags already merged with the
-/// body's `#` syntax); this is "the record written in the file" itself, which the metadata edit
-/// panel looks at.
-pub fn read_note_meta(
-    base_dir: &Path,
-    filename: &NoteFilename,
-) -> Result<NoteFrontmatter, CoreError> {
-    Notes::new(base_dir.to_path_buf()).read_meta(filename)
 }
 
 /// Replace only time and tags. The body of course, and context too, are not editable:
@@ -198,10 +103,14 @@ pub fn relocate_duplicate_ids(base_dir: &Path) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::note::NoteFrontmatter;
-    use crate::utils::clock::WallClock;
+    use crate::domain::note::{
+        NoteFrontmatter, NoteKind, Provenance, create_draft_codex, create_draft_note, list_notes,
+        read_note, read_note_by_filename, read_note_meta,
+    };
     use crate::utils::device::Source;
+    use crate::utils::frontmatter;
     use std::fs;
+    use std::path::PathBuf;
     use tempfile::TempDir;
 
     fn mock_context() -> Context {
@@ -222,170 +131,6 @@ mod tests {
             &mock_context(),
             Provenance::default(),
         )
-    }
-
-    #[test]
-    fn a_note_promoted_from_an_entry_records_its_origin() {
-        let tmp = TempDir::new().unwrap();
-        let path = create_draft_note(
-            tmp.path(),
-            "エントリ本文 #memo",
-            &["memo".to_string()],
-            &mock_context(),
-            promoted_from("2026-08-13T08:30:00"),
-        )
-        .unwrap();
-
-        let meta = read_note_meta(
-            tmp.path(),
-            &NoteFilename::parse(path.file_name().unwrap().to_str().unwrap()).unwrap(),
-        )
-        .unwrap();
-        assert_eq!(meta.origin, Some("2026-08-13T08:30:00".to_string()));
-
-        // It is on the list too. Scrawl's chips are derived from here
-        let listed = list_notes(tmp.path()).unwrap();
-        assert_eq!(listed[0].origin, Some("2026-08-13T08:30:00".to_string()));
-    }
-
-    #[test]
-    fn test_create_draft_note_returns_path() {
-        let tmp = TempDir::new().unwrap();
-        let path = create_draft_note(
-            tmp.path(),
-            "draft body",
-            &[],
-            &mock_context(),
-            Provenance::default(),
-        )
-        .unwrap();
-        let content = fs::read_to_string(&path).unwrap();
-        // origin is a record only for notes that came from an entry. Writing it on a plain
-        // new note would make every note "come from some entry"
-        assert!(!content.contains("origin"));
-        assert!(path.exists());
-        let content = fs::read_to_string(&path).unwrap();
-        assert!(content.contains("draft body"));
-    }
-
-    /// A note created with a given time is named after that time. The ID is the creation
-    /// time itself, so a record brought in from outside can only copy its original time
-    /// into the name.
-    #[test]
-    fn a_note_created_at_a_given_time_is_named_after_it() {
-        let tmp = TempDir::new().unwrap();
-
-        let path = create_note_at(
-            tmp.path(),
-            sample_time(),
-            "移してきた本文",
-            &["memo".to_string()],
-            &mock_context(),
-            Provenance::default(),
-        )
-        .unwrap();
-
-        assert_eq!(path.file_name().unwrap(), "20260503_153900.md");
-        let meta = read_note_meta(tmp.path(), &filename_of(&path)).unwrap();
-        assert_eq!(meta.time, sample_time());
-        assert_eq!(meta.tags, vec!["memo"]);
-        assert_eq!(read_note(&path).unwrap(), "移してきた本文");
-    }
-
-    /// Collision avoidance is the same with a given time. The first stays, the second takes
-    /// a name one second later, and its `time` matches the later one too.
-    #[test]
-    fn two_notes_given_the_same_time_both_survive_one_second_apart() {
-        let tmp = TempDir::new().unwrap();
-        let at = |body| {
-            create_note_at(
-                tmp.path(),
-                sample_time(),
-                body,
-                &[],
-                &mock_context(),
-                Provenance::default(),
-            )
-            .unwrap()
-        };
-
-        let first = at("one");
-        let second = at("two");
-
-        assert_eq!(first.file_name().unwrap(), "20260503_153900.md");
-        assert_eq!(second.file_name().unwrap(), "20260503_153901.md");
-        assert_eq!(read_note(&first).unwrap(), "one");
-        assert_eq!(read_note(&second).unwrap(), "two");
-        assert_eq!(
-            read_note_meta(tmp.path(), &filename_of(&second))
-                .unwrap()
-                .time,
-            sample_time().plus_seconds(1)
-        );
-    }
-
-    /// An import declares itself by its own name. This record is the only way to find
-    /// "which ones were moved in" later (mixed into `cli`, they cannot be told apart).
-    #[test]
-    fn an_imported_note_names_import_as_its_source() {
-        let tmp = TempDir::new().unwrap();
-
-        let path = create_note_at(
-            tmp.path(),
-            sample_time(),
-            "vault から",
-            &[],
-            &mock_context(),
-            Provenance {
-                source: Some(Source::Import),
-                template: Some("journal"),
-                ..Provenance::default()
-            },
-        )
-        .unwrap();
-
-        let meta = read_note_meta(tmp.path(), &filename_of(&path)).unwrap();
-        assert_eq!(meta.source, Some("import".to_string()));
-        assert_eq!(meta.template, Some("journal".to_string()));
-        assert_eq!(meta.updated, None, "取り込んだ時点ではまだ書き直していない");
-    }
-
-    /// The filename is the time down to the second. Creating two in the same second does
-    /// not clobber the first. The second takes a name one second later: the format
-    /// (`YYYYMMDD_HHMMSS.md`) is immutable.
-    #[test]
-    fn two_notes_created_in_the_same_second_both_survive() {
-        let tmp = TempDir::new().unwrap();
-
-        let first = draft(&tmp, "one", &[]).unwrap();
-        let second = draft(&tmp, "two", &[]).unwrap();
-
-        assert_ne!(first, second);
-        assert_eq!(read_note(&first).unwrap(), "one");
-        assert_eq!(read_note(&second).unwrap(), "two");
-        assert_eq!(list_notes(tmp.path()).unwrap().len(), 2);
-        assert_eq!(stamp_of(&first).plus_seconds(1), stamp_of(&second));
-    }
-
-    /// The shifted second is not only about the filename. If the frontmatter `time` drifts
-    /// from the name, the list (name order) and the display (`time`) disagree on the order.
-    #[test]
-    fn a_shifted_name_carries_the_same_time_in_the_frontmatter() {
-        let tmp = TempDir::new().unwrap();
-        draft(&tmp, "one", &[]).unwrap();
-
-        let second = draft(&tmp, "two", &[]).unwrap();
-
-        let meta = read_note_meta(tmp.path(), &filename_of(&second)).unwrap();
-        assert_eq!(
-            meta.time.id_stem(),
-            second.file_stem().unwrap().to_str().unwrap()
-        );
-    }
-
-    fn stamp_of(path: &Path) -> WallClock {
-        let stem = path.file_stem().unwrap().to_str().unwrap();
-        WallClock::parse_id_stem(stem).unwrap()
     }
 
     /// time is the creation time. The list is ordered by filename (creation time), so if an
@@ -601,37 +346,6 @@ mod tests {
         );
     }
 
-    /// The entry point that wrote it is decided at creation. A note created by the CLI says so.
-    #[test]
-    fn a_note_records_the_tool_that_created_it() {
-        let tmp = TempDir::new().unwrap();
-        let path = create_draft_note(
-            tmp.path(),
-            "CLI から書いた",
-            &[],
-            &mock_context(),
-            Provenance {
-                source: Some(Source::Cli),
-                ..Provenance::default()
-            },
-        )
-        .unwrap();
-
-        assert!(fs::read_to_string(&path).unwrap().contains("source: cli"));
-        let meta = read_note_meta(tmp.path(), &filename_of(&path)).unwrap();
-        assert_eq!(meta.source, Some("cli".to_string()));
-    }
-
-    /// No declaration, no key. The same promise as rewriting an existing note not
-    /// growing a `source`.
-    #[test]
-    fn a_note_that_names_no_source_has_no_source_key() {
-        let tmp = TempDir::new().unwrap();
-        let path = draft(&tmp, "body", &[]).unwrap();
-
-        assert!(!fs::read_to_string(&path).unwrap().contains("source"));
-    }
-
     /// `source` is a record from creation. Rewriting the body with another tool does not
     /// change "who created it" (`updated_by` is a different question).
     #[test]
@@ -715,97 +429,6 @@ mod tests {
     }
 
     #[test]
-    fn test_list_notes_empty() {
-        let tmp = TempDir::new().unwrap();
-        let notes = list_notes(tmp.path()).unwrap();
-        assert!(notes.is_empty());
-    }
-
-    #[test]
-    fn test_list_notes_returns_summaries() {
-        let tmp = TempDir::new().unwrap();
-        let tags = vec!["rust".to_string(), "test".to_string()];
-        draft(&tmp, "# Hello\nBody text here", &tags).unwrap();
-
-        let notes = list_notes(tmp.path()).unwrap();
-        assert_eq!(notes.len(), 1);
-        assert_eq!(notes[0].tags, vec!["rust", "test"]);
-        assert!(notes[0].time.is_some());
-        assert!(notes[0].preview.contains("Hello"));
-    }
-
-    /// A file whose bytes are not text still takes its row in the list: it is read as
-    /// empty, so it has no time and an empty preview, rather than hiding the rest.
-    #[test]
-    fn a_note_that_is_not_text_lists_with_an_empty_summary() {
-        let tmp = TempDir::new().unwrap();
-        let notes_dir = tmp.path().join("data/notes");
-        fs::create_dir_all(&notes_dir).unwrap();
-        fs::write(notes_dir.join("20260101_120000.md"), b"\xff\xfe body").unwrap();
-
-        let listed = list_notes(tmp.path()).unwrap();
-
-        assert_eq!(listed.len(), 1);
-        assert_eq!(listed[0].filename, "20260101_120000.md");
-        assert_eq!(listed[0].time, None);
-        assert_eq!(listed[0].preview, "");
-    }
-
-    /// Reading by path does not turn a missing file into `NotFound`: the path came from
-    /// the caller, so the plain I/O failure is what it gets back.
-    #[test]
-    fn read_note_of_a_missing_path_is_an_io_error() {
-        let tmp = TempDir::new().unwrap();
-
-        let result = read_note(&tmp.path().join("data/notes/20260101_120000.md"));
-
-        assert!(
-            matches!(result, Err(CoreError::Io(ref e)) if e.kind() == std::io::ErrorKind::NotFound)
-        );
-    }
-
-    /// A read returns only the body. Returning the frontmatter would flow straight into
-    /// the preview or the editor and put metadata on screen.
-    #[test]
-    fn read_note_returns_body_without_frontmatter() {
-        let tmp = TempDir::new().unwrap();
-        let path = draft(&tmp, "# Title\nbody", &[]).unwrap();
-
-        assert_eq!(read_note(&path).unwrap(), "# Title\nbody");
-    }
-
-    /// Search and backlinks read every note's body. Calling `read_note` one by one after
-    /// the list would mean two open(2) calls each, so the summary and body are passed together.
-    #[test]
-    fn scan_visits_each_summary_with_its_body_without_frontmatter() {
-        let tmp = TempDir::new().unwrap();
-        let path = draft(&tmp, "# Title\nbody #memo", &[]).unwrap();
-
-        let mut visited = Vec::new();
-        Notes::new(tmp.path().to_path_buf())
-            .scan(|summary, body| visited.push((summary, body.to_string())))
-            .unwrap();
-
-        assert_eq!(visited.len(), 1);
-        let (summary, body) = &visited[0];
-        assert_eq!(summary.path, path);
-        assert_eq!(summary.tags, vec!["memo".to_string()]);
-        assert_eq!(body, "# Title\nbody #memo");
-    }
-
-    #[test]
-    fn read_note_by_filename_returns_body_without_frontmatter() {
-        let tmp = TempDir::new().unwrap();
-        let path = draft(&tmp, "# Title\nbody", &[]).unwrap();
-        let fname = path.file_name().unwrap().to_str().unwrap();
-        let note_filename = NoteFilename::parse(fname).unwrap();
-
-        let content = read_note_by_filename(tmp.path(), &note_filename).unwrap();
-
-        assert_eq!(content, "# Title\nbody");
-    }
-
-    #[test]
     fn test_delete_note_success() {
         let tmp = TempDir::new().unwrap();
         let path = draft(&tmp, "to delete", &[]).unwrap();
@@ -825,43 +448,12 @@ mod tests {
         assert!(matches!(result, Err(CoreError::NotFound(_))));
     }
 
-    #[test]
-    fn test_read_note_by_filename_not_found() {
-        let tmp = TempDir::new().unwrap();
-        fs::create_dir_all(tmp.path().join("data/notes")).unwrap();
-        let note_filename = NoteFilename::parse("nonexistent.md").unwrap();
-        let result = read_note_by_filename(tmp.path(), &note_filename);
-        assert!(matches!(result, Err(CoreError::NotFound(_))));
-    }
-
     fn filename_of(path: &Path) -> NoteFilename {
         NoteFilename::parse(path.file_name().unwrap().to_str().unwrap()).unwrap()
     }
 
     fn sample_time() -> Stamp {
         Stamp::new(2026, 5, 3, 15, 39, 0, 9 * 3600).unwrap()
-    }
-
-    #[test]
-    fn read_note_meta_returns_time_tags_and_context() {
-        let tmp = TempDir::new().unwrap();
-        let path = draft(&tmp, "body", &["sync".to_string()]).unwrap();
-
-        let meta = read_note_meta(tmp.path(), &filename_of(&path)).unwrap();
-
-        assert_eq!(meta.tags, vec!["sync"]);
-        assert_eq!(meta.context.unwrap().battery, Some(50));
-    }
-
-    #[test]
-    fn read_note_meta_not_found() {
-        let tmp = TempDir::new().unwrap();
-        fs::create_dir_all(tmp.path().join("data/notes")).unwrap();
-        let filename = NoteFilename::parse("nonexistent.md").unwrap();
-
-        let result = read_note_meta(tmp.path(), &filename);
-
-        assert!(matches!(result, Err(CoreError::NotFound(_))));
     }
 
     #[test]
@@ -1097,61 +689,6 @@ mod tests {
             Provenance::default(),
         )
         .unwrap()
-    }
-
-    /// A Codex goes in `codex/`, not `notes/`. The kind is decided by the location, and the
-    /// ID (filename) alone finds it in either location.
-    #[test]
-    fn a_codex_lives_in_its_own_directory_and_is_found_by_filename() {
-        let tmp = TempDir::new().unwrap();
-        let path = codex(&tmp, "育てる文書");
-        let filename = filename_of(&path);
-
-        assert!(path.starts_with(tmp.path().join("data/codex")));
-        let listed = list_notes(tmp.path()).unwrap();
-        assert_eq!(listed[0].kind, NoteKind::Codex);
-        assert_eq!(listed[0].path, path);
-        assert_eq!(
-            read_note_by_filename(tmp.path(), &filename).unwrap(),
-            "育てる文書"
-        );
-        assert!(read_note_meta(tmp.path(), &filename).is_ok());
-
-        let note = draft(&tmp, "普通のノート", &[]).unwrap();
-        let listed = list_notes(tmp.path()).unwrap();
-        let of = |p: &Path| listed.iter().find(|s| s.path == p).unwrap().kind;
-        assert_eq!(of(&note), NoteKind::Note);
-        assert_eq!(of(&path), NoteKind::Codex);
-    }
-
-    /// IDs share one namespace across kinds. Creating a Note and a Codex in the same second
-    /// never gives them the same name; the later one steps one second ahead.
-    #[test]
-    fn a_note_and_a_codex_never_share_an_id() {
-        let tmp = TempDir::new().unwrap();
-        let note = create_note_at(
-            tmp.path(),
-            sample_time(),
-            "note",
-            &[],
-            &mock_context(),
-            Provenance::default(),
-        )
-        .unwrap();
-        fs::create_dir_all(tmp.path().join("data/codex")).unwrap();
-        fs::copy(&note, tmp.path().join("data/codex/20260503_153901.md")).unwrap();
-
-        let second = create_note_at(
-            tmp.path(),
-            sample_time(),
-            "another",
-            &[],
-            &mock_context(),
-            Provenance::default(),
-        )
-        .unwrap();
-
-        assert_eq!(second.file_name().unwrap(), "20260503_153902.md");
     }
 
     /// Promotion only changes the location. Neither the ID, the frontmatter nor the body

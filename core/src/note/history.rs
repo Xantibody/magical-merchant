@@ -24,8 +24,8 @@ use serde::Serialize;
 use crate::domain::note::NoteFilename;
 use crate::domain::note::Revision;
 use crate::domain::note::kind::notes_dir;
+use crate::domain::note::{locate_note, read_note_by_filename};
 use crate::error::CoreError;
-use crate::note::repository::Notes;
 use crate::services::files::{ensure_dir, list_md_files, write_atomic};
 use crate::utils::clock::{Stamp, WallClock};
 use crate::utils::paths::history_dir;
@@ -76,7 +76,7 @@ pub fn snapshot_note(
     filename: &NoteFilename,
 ) -> Result<Option<Snapshot>, CoreError> {
     // The location does not matter. A note turned into a Codex is snapshotted under the same ID
-    let path = match Notes::new(base_dir.to_path_buf()).locate(filename) {
+    let path = match locate_note(base_dir, filename) {
         Ok((_, path)) => path,
         Err(CoreError::NotFound(_)) => return Ok(None),
         Err(e) => return Err(e),
@@ -206,8 +206,7 @@ pub fn restore_note(
     if let Some(expected) = expected {
         // An unreadable (deleted) note is refused as a mismatch too. Holding a revision
         // means something that existed was read
-        let current = Notes::new(base_dir.to_path_buf())
-            .read(filename)
+        let current = read_note_by_filename(base_dir, filename)
             .ok()
             .map(|body| Revision::of(&body));
         if current.as_ref() != Some(expected) {
@@ -217,7 +216,7 @@ pub fn restore_note(
     let before = snapshot_note(base_dir, filename)?;
     // Restore to where it is now. Writing a Codex's snapshot into `notes/` would spawn a
     // plain note with the same ID beside it. A deleted note's snapshot goes back to `notes/`
-    let target = match Notes::new(base_dir.to_path_buf()).locate(filename) {
+    let target = match locate_note(base_dir, filename) {
         Ok((_, path)) => path,
         Err(CoreError::NotFound(_)) => notes_dir(base_dir).join(filename.as_str()),
         Err(e) => return Err(e),

@@ -8,11 +8,11 @@ use std::path::Path;
 
 use serde::Serialize;
 
+use crate::domain::note::list;
 use crate::domain::scrawl::day::DayLog;
 use crate::domain::scrawl::entry::strip_scrawl_prefix;
 use crate::domain::scrawl::journal::{list_scrawl_dates, read_raw};
 use crate::error::CoreError;
-use crate::note::Notes;
 use crate::utils::clock::Day;
 use crate::utils::tags;
 
@@ -122,7 +122,7 @@ pub fn count_tags(base_dir: &Path) -> Result<Vec<TagUsage>, CoreError> {
     }
 
     // An unreadable note comes with no tags and adds nothing, as in `browse_all`
-    Notes::new(base_dir.to_path_buf()).scan(|note, _| {
+    list::scan(base_dir, |note, _| {
         tally.add(Record::Note, note.time.map(|time| time.day()), &note.tags);
     })?;
 
