@@ -3,10 +3,9 @@ use std::path::{Path, PathBuf};
 
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as B64;
-use magical_merchant_core::domain::device::{PlaceCache, place_key};
+use magical_merchant_core::domain::device::{PlaceCache, place_key, place_names};
 use magical_merchant_core::utils::clock::Day;
 use magical_merchant_core::utils::frontmatter;
-use magical_merchant_core::utils::paths::place_cache_path;
 use magical_merchant_core::{
     DRAFT, GlyphFormat, GlyphName, NoteFilename, NoteKind, Provenance, Revision, Source,
     parse_scrawl_entry,
@@ -142,7 +141,7 @@ impl McpServer {
     }
 
     fn places(&self) -> PlaceCache {
-        PlaceCache::load(&place_cache_path(&self.data_dir))
+        place_names::load(&self.data_dir)
     }
 
     fn place_name(&self, cache: &PlaceCache, latitude: f64, longitude: f64) -> Option<String> {
@@ -913,7 +912,7 @@ mod tests {
             cache_key(locale, &place_key(35.6762, 139.6503)),
             "渋谷区".to_string(),
         );
-        cache.save(&place_cache_path(base)).unwrap();
+        place_names::save(base, &cache).unwrap();
     }
 
     fn server(base: &Path) -> McpServer {

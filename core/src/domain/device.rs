@@ -4,6 +4,7 @@ mod context;
 #[cfg(feature = "device-probe")]
 mod current_context;
 mod place;
+pub mod place_names;
 
 #[cfg(feature = "device-probe")]
 pub use context::location;
