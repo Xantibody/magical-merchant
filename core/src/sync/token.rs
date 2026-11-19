@@ -16,9 +16,10 @@ use crate::utils::clock::unix_seconds_now;
 
 #[cfg(target_os = "android")]
 mod token_store {
-    use std::fs;
-    use std::os::unix::fs::PermissionsExt as _;
     use std::path::{Path, PathBuf};
+
+    use crate::error::CoreError;
+    use crate::services::files;
 
     const TOKEN_FILENAME: &str = "auth-token";
 
@@ -26,27 +27,30 @@ mod token_store {
         base_dir.join(TOKEN_FILENAME)
     }
 
+    /// The bare OS message, as `std::fs` gave it before these calls went through `files`:
+    /// `CoreError`'s `Display` would put `IO error: ` in front.
+    fn plain(e: CoreError) -> String {
+        match e {
+            CoreError::Io(e) => e.to_string(),
+            other => other.to_string(),
+        }
+    }
+
     pub(super) fn store(base_dir: &Path, token: &str) -> Result<(), String> {
-        fs::create_dir_all(base_dir).map_err(|e| e.to_string())?;
         let path = path(base_dir);
-        crate::services::files::write_atomic(&path, token).map_err(|e| e.to_string())?;
-        fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).map_err(|e| e.to_string())
+        files::ensure_dir(&path).map_err(plain)?;
+        files::write_owner_only(&path, token).map_err(|e| e.to_string())
     }
 
     pub(super) fn get(base_dir: &Path) -> Result<Option<String>, String> {
-        match fs::read_to_string(path(base_dir)) {
-            Ok(token) => Ok(Some(token.trim().to_string()).filter(|t| !t.is_empty())),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(e) => Err(e.to_string()),
-        }
+        let token = files::read_if_present(&path(base_dir)).map_err(plain)?;
+        Ok(token
+            .map(|t| t.trim().to_string())
+            .filter(|t| !t.is_empty()))
     }
 
     pub(super) fn clear(base_dir: &Path) -> Result<(), String> {
-        match fs::remove_file(path(base_dir)) {
-            Ok(()) => Ok(()),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-            Err(e) => Err(e.to_string()),
-        }
+        files::remove_if_present(&path(base_dir)).map_err(plain)
     }
 }
 

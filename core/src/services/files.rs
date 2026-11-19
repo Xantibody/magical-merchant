@@ -61,6 +61,36 @@ pub fn write_atomic<C: AsRef<[u8]>>(path: &Path, contents: C) -> Result<(), Core
     Ok(())
 }
 
+/// The contents of `path` as text, or `None` when there is no such file.
+pub fn read_if_present(path: &Path) -> Result<Option<String>, CoreError> {
+    match fs::read_to_string(path) {
+        Ok(contents) => Ok(Some(contents)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// Removes `path`. A file that is already gone leaves the state asked for, so it is no error.
+pub fn remove_if_present(path: &Path) -> Result<(), CoreError> {
+    match fs::remove_file(path) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.into()),
+        _ => Ok(()),
+    }
+}
+
+/// [`write_atomic`], then leaves the file readable and writable by its owner alone (0o600).
+///
+/// For a secret kept in a file (the Android login token): the OS keeps other apps out of the
+/// app-private directory, and the mode keeps out everyone else on the device.
+#[cfg(all(unix, any(target_os = "android", test)))]
+pub fn write_owner_only<C: AsRef<[u8]>>(path: &Path, contents: C) -> Result<(), CoreError> {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    write_atomic(path, contents)?;
+    fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
+    Ok(())
+}
+
 /// The limit at which suffixes are given up. 100 copies never line up in the same
 /// second, so hitting this means a bug. Rather than hang counting, leave that one
 /// item unmoved and let the next start pick it up.
@@ -299,5 +329,94 @@ mod tests {
             .map(|e| e.file_name().to_string_lossy().to_string())
             .collect();
         assert_eq!(names, vec!["real.md"]);
+    }
+
+    #[test]
+    fn read_if_present_reads_a_file_that_is_there() {
+        let tmp = seed(&["a.md"]);
+
+        assert_eq!(
+            read_if_present(&tmp.path().join("a.md"))
+                .unwrap()
+                .as_deref(),
+            Some("x")
+        );
+    }
+
+    #[test]
+    fn read_if_present_answers_none_for_a_missing_file() {
+        let tmp = TempDir::new().unwrap();
+
+        assert_eq!(read_if_present(&tmp.path().join("nope")).unwrap(), None);
+    }
+
+    /// Only "not there" is an answer. Anything else that stops the read is still an error,
+    /// or a token that cannot be read would look like a device that never logged in.
+    #[test]
+    fn read_if_present_still_fails_on_what_cannot_be_read() {
+        let tmp = TempDir::new().unwrap();
+
+        assert!(read_if_present(tmp.path()).is_err());
+    }
+
+    #[test]
+    fn remove_if_present_removes_the_file() {
+        let tmp = seed(&["a.md"]);
+        let path = tmp.path().join("a.md");
+
+        remove_if_present(&path).unwrap();
+
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn remove_if_present_is_content_when_nothing_is_there() {
+        let tmp = TempDir::new().unwrap();
+
+        remove_if_present(&tmp.path().join("nope")).unwrap();
+    }
+
+    #[test]
+    fn remove_if_present_still_fails_on_what_cannot_be_removed() {
+        let tmp = TempDir::new().unwrap();
+
+        assert!(remove_if_present(tmp.path()).is_err());
+    }
+
+    #[cfg(unix)]
+    fn mode_of(path: &Path) -> u32 {
+        use std::os::unix::fs::PermissionsExt as _;
+
+        fs::metadata(path).unwrap().permissions().mode() & 0o777
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn write_owner_only_leaves_the_file_to_its_owner() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("auth-token");
+
+        write_owner_only(&path, "secret").unwrap();
+
+        assert_eq!(fs::read_to_string(&path).unwrap(), "secret");
+        assert_eq!(mode_of(&path), 0o600);
+    }
+
+    /// The rename puts a fresh file in place, so a file that was open to others before
+    /// does not pass its mode on.
+    #[cfg(unix)]
+    #[test]
+    fn write_owner_only_closes_a_file_that_was_open_to_others() {
+        use std::os::unix::fs::PermissionsExt as _;
+
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("auth-token");
+        fs::write(&path, "old").unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+
+        write_owner_only(&path, "new").unwrap();
+
+        assert_eq!(fs::read_to_string(&path).unwrap(), "new");
+        assert_eq!(mode_of(&path), 0o600);
     }
 }
