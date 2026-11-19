@@ -43,6 +43,20 @@ mod tests {
         assert_eq!(path(Path::new("/app")), PathBuf::from("/app/places.json"));
     }
 
+    /// The sync walks `data/`. Saved there, each device's names in its own language
+    /// would travel back and forth on every run.
+    #[test]
+    fn a_save_lands_beside_data_not_under_it() {
+        let tmp = TempDir::new().unwrap();
+        let mut cache = PlaceCache::default();
+        cache.insert("35.68,139.55".to_string(), "渋谷区".to_string());
+
+        save(tmp.path(), &cache).unwrap();
+
+        assert!(tmp.path().join("places.json").is_file());
+        assert!(!crate::domain::data::data_dir(tmp.path()).exists());
+    }
+
     #[test]
     fn what_was_saved_survives_a_reload() {
         let tmp = TempDir::new().unwrap();
