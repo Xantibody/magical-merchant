@@ -5,7 +5,6 @@
 pub mod domain;
 pub mod services;
 pub mod sync;
-mod tag_count;
 pub mod utils;
 
 mod error;
@@ -39,6 +38,7 @@ pub use domain::search::{
     HitKind, SearchFilter, SearchHit, browse_all, find_backlinks, recent_records, search_all,
     search_records,
 };
+pub use domain::tags::{TagUsage, count_tags};
 pub use domain::templates::{
     CreatedNote, TemplateDetail, TemplateSummary, VarLocale, create_note_from_template,
     delete_template, discard_template_draft, list_template_drafts, list_templates, read_template,
@@ -46,7 +46,6 @@ pub use domain::templates::{
 };
 pub use domain::templates::{TemplateToday, templates_today};
 pub use error::{CoreError, SyncError, describe};
-pub use tag_count::{TagUsage, count_tags};
 pub use utils::device::Context as DeviceContext;
 /// The fixed vocabulary of entry points that wrote a record. Every creation entry takes one.
 pub use utils::device::Source;
