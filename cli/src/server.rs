@@ -2650,4 +2650,158 @@ mod tests {
             assert_eq!(round_to_key(value).to_string(), centre, "{value}");
         }
     }
+
+    /// `list_places` as it reads once core counts the places. The next step makes this the
+    /// tool; until then it runs beside the tool's own count.
+    fn places_through_core(server: &McpServer) -> PlacesOutput {
+        let cache = server.places();
+        let places = magical_merchant_core::domain::device::visited_places(&server.data_dir)
+            .unwrap()
+            .into_iter()
+            .map(|visit| PlaceInfo {
+                place: cache
+                    .lookup(&server.locale, &visit.place_key)
+                    .map(str::to_string),
+                place_key: visit.place_key,
+                latitude: visit.latitude,
+                longitude: visit.longitude,
+                entries: visit.entries,
+                notes: visit.notes,
+                first: visit.first.ymd(),
+                last: visit.last.ymd(),
+            })
+            .collect();
+        PlacesOutput { places }
+    }
+
+    /// A fixed stream of numbers, so a generated tree is the same on every run.
+    struct Numbers(u64);
+
+    impl Numbers {
+        fn next(&mut self) -> usize {
+            self.0 = self
+                .0
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            usize::try_from(self.0 >> 33).unwrap()
+        }
+
+        fn pick<T: Copy>(&mut self, items: &[T]) -> T {
+            items[self.next() % items.len()]
+        }
+    }
+
+    /// Coordinates that share cells, sit on both hemispheres and land on the half-cent
+    /// boundary, where which record seeds a cell's centre shows.
+    const LATITUDES: &[f64] = &[
+        35.6762, 35.6769, 35.665, 35.655, 0.125, -0.125, 43.06, -33.86,
+    ];
+    const LONGITUDES: &[f64] = &[139.6503, 139.6509, 139.645, 139.655, 0.125, -70.66, 141.35];
+
+    /// Some number of Scrawl days and notes at generated places: Codexes among the notes,
+    /// records without a place, and notes whose frontmatter cannot be read.
+    fn generated_tree(base: &Path, seed: u64) {
+        let mut n = Numbers(seed);
+        let place = |n: &mut Numbers| -> Context {
+            if n.next().is_multiple_of(5) {
+                Context::default()
+            } else {
+                Context {
+                    location: Some(Location {
+                        latitude: n.pick(LATITUDES),
+                        longitude: n.pick(LONGITUDES),
+                    }),
+                    ..Context::default()
+                }
+            }
+        };
+        let first = Day::parse_ymd("2025-01-01").unwrap();
+        let mut days: BTreeMap<String, Vec<(u32, Context)>> = BTreeMap::new();
+        for _ in 0..60 {
+            let date = first
+                .plus_days(i64::try_from(n.next() % 500).unwrap())
+                .unwrap();
+            let hour = u32::try_from(n.next() % 24).unwrap();
+            let context = place(&mut n);
+            days.entry(date.ymd()).or_default().push((hour, context));
+        }
+        for (date, lines) in &days {
+            let lines: Vec<(u32, &str, &Context)> = lines
+                .iter()
+                .map(|(hour, ctx)| (*hour, "line", ctx))
+                .collect();
+            write_day(base, date, &lines);
+        }
+        for _ in 0..25 {
+            let date = first
+                .plus_days(i64::try_from(n.next() % 500).unwrap())
+                .unwrap();
+            let time = magical_merchant_core::utils::clock::Stamp::new(
+                date.year(),
+                date.month(),
+                date.day(),
+                u32::try_from(n.next() % 24).unwrap(),
+                0,
+                0,
+                9 * 3600,
+            )
+            .unwrap();
+            magical_merchant_core::create_note_at(
+                base,
+                time,
+                "note",
+                &[],
+                &place(&mut n),
+                Provenance::default(),
+            )
+            .unwrap();
+        }
+        for _ in 0..5 {
+            magical_merchant_core::create_draft(
+                base,
+                NoteKind::Codex,
+                "codex",
+                &[],
+                &place(&mut n),
+                Provenance::default(),
+            )
+            .unwrap();
+        }
+        let notes = base.join("data/notes");
+        fs::write(
+            notes.join("20240101_120000.md"),
+            "---\ntime: [broken\n---\nbody",
+        )
+        .unwrap();
+        fs::write(notes.join("20240102_120000.md"), "plain markdown").unwrap();
+    }
+
+    /// Core's count answers what the tool's own count answers, on generated trees.
+    #[test]
+    fn places_counted_in_core_match_the_tool_on_generated_trees() {
+        for seed in 1..=8 {
+            let tmp = TempDir::new().unwrap();
+            generated_tree(tmp.path(), seed);
+            name_shibuya(tmp.path(), "en");
+            let server = server(tmp.path());
+
+            assert_eq!(
+                json(&places_through_core(&server)),
+                json(&server.list_places().unwrap().0),
+                "seed {seed}"
+            );
+        }
+    }
+
+    /// The same check on the committed fixtures, which only this read touches.
+    #[test]
+    fn places_counted_in_core_match_the_tool_on_the_fixtures() {
+        let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("../fixtures");
+        let server = server(&fixtures);
+
+        let tool = server.list_places().unwrap().0;
+
+        assert!(!tool.places.is_empty());
+        assert_eq!(json(&places_through_core(&server)), json(&tool));
+    }
 }

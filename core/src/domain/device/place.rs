@@ -24,6 +24,19 @@ pub fn place_key(latitude: f64, longitude: f64) -> String {
     format!("{latitude:.digits$},{longitude:.digits$}")
 }
 
+/// The centre of a place's cell on one axis, as the list of places reports it: the
+/// coordinate rounded to the key's two digits, as a number.
+///
+/// It names the same cell as [`place_key`] everywhere but on the half-cent boundary
+/// itself, where the two part: the key formats the binary value (35.665 is a hair under,
+/// so `35.66`; 0.125 is exact and goes to even, `0.12`), while this multiplies by 100
+/// first and rounds half away from zero (`35.67`, `0.13`). A recorded coordinate rarely
+/// ends on the boundary.
+// AIDEV-NOTE: the half-cent mismatch with place_key stays: list_places's output is a join key for an MCP that wraps this one, so aligning the two would break that join
+pub(crate) fn cell_centre(value: f64) -> f64 {
+    (value * 100.0).round() / 100.0
+}
+
 /// Place names asked once. The key is [`place_key`].
 ///
 /// Coordinates that could not be resolved are not remembered. Keeping a coordinate
@@ -105,6 +118,42 @@ mod tests {
     #[test]
     fn the_key_keeps_the_hemisphere() {
         assert_eq!(place_key(-33.86, -70.66), "-33.86,-70.66");
+    }
+
+    /// A place's centre names the same cell as its key, everywhere off the half-cent
+    /// boundary: a grid over both hemispheres, and the values just either side of the
+    /// boundary.
+    #[test]
+    fn a_cell_centre_falls_in_the_cell_its_key_names() {
+        let mut values: Vec<f64> = (-180_000..=180_000)
+            .map(|i| f64::from(i) / 1000.0 + 0.0003)
+            .collect();
+        for cent in -18_000..=18_000 {
+            let boundary = f64::from(cent) / 100.0 + 0.005;
+            values.push(boundary - 1e-7);
+            values.push(boundary + 1e-7);
+        }
+
+        for value in values {
+            assert_eq!(
+                place_key(cell_centre(value), cell_centre(value)),
+                place_key(value, value),
+                "{value}"
+            );
+        }
+    }
+
+    /// On the half-cent boundary itself the two roundings part, as `cell_centre` says.
+    #[test]
+    fn on_the_half_cent_boundary_the_centre_and_the_key_part() {
+        for (value, key, centre) in [
+            (35.665, "35.66", "35.67"),
+            (0.125, "0.12", "0.13"),
+            (-0.125, "-0.12", "-0.13"),
+        ] {
+            assert_eq!(place_key(value, 0.0), format!("{key},0.00"), "{value}");
+            assert_eq!(cell_centre(value).to_string(), centre, "{value}");
+        }
     }
 
     #[test]
