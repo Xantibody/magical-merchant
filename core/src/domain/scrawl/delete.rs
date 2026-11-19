@@ -1,12 +1,11 @@
 //! Taking one line out of a day.
 
-use std::fs;
 use std::path::Path;
 
 use super::day::{DayLog, expect_same_entry, scrawl_file_path};
 use super::journal::read_raw;
 use crate::error::CoreError;
-use crate::services::files::write_atomic;
+use crate::services::files::{remove, write_atomic};
 use crate::utils::clock::Day;
 
 /// `raw` is the line as the writer read it (exactly the form `read_scrawl` returned).
@@ -51,7 +50,7 @@ where
     edit(&mut day)?;
 
     if day.is_empty() {
-        fs::remove_file(&file_path)?;
+        remove(&file_path)?;
         return Ok(());
     }
 
@@ -68,6 +67,7 @@ mod tests {
     use crate::services::files::ensure_dir;
     use crate::utils::device::{Context, Source};
     use crate::utils::paths;
+    use std::fs;
     use tempfile::TempDir;
 
     const DATE: &str = "2026-08-04";

@@ -1,3 +1,4 @@
+use std::ffi::OsString;
 use std::fs::{self, DirEntry};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -64,6 +65,60 @@ pub fn list_entries(dir: &Path) -> Result<Vec<Listed>, CoreError> {
             })
         })
         .collect())
+}
+
+/// The names of what sits directly under `dir`, in no particular order. Directories are
+/// items too.
+///
+/// A missing directory is empty rather than an error, and an item that cannot be read is
+/// skipped silently. Unlike [`list_entries`] it takes no item's size, so an item is never
+/// dropped for want of one.
+pub fn entry_names(dir: &Path) -> Result<Vec<String>, CoreError> {
+    if !dir.exists() {
+        return Ok(Vec::new());
+    }
+    Ok(fs::read_dir(dir)?
+        .filter_map(Result::ok)
+        .map(|entry| entry.file_name().to_string_lossy().to_string())
+        .collect())
+}
+
+/// The names of what sits directly under `dir`, read one at a time as the caller walks them.
+///
+/// A name is kept as the OS gave it, so `dir.join(name)` reaches the item even when the
+/// name is not UTF-8. An item that cannot be read comes through as an error, for the
+/// caller to stop on; a missing directory is an error too.
+pub fn entries(dir: &Path) -> Result<impl Iterator<Item = Result<OsString, CoreError>>, CoreError> {
+    Ok(fs::read_dir(dir)?.map(|entry| Ok(entry?.file_name())))
+}
+
+/// How many items sit directly under `dir`, counting the ones that cannot be read.
+pub fn count_entries(dir: &Path) -> Result<usize, CoreError> {
+    Ok(fs::read_dir(dir)?.count())
+}
+
+/// Whether anything is at `path`. A broken link or an unreadable parent reads as nothing.
+#[must_use]
+pub fn exists(path: &Path) -> bool {
+    path.exists()
+}
+
+/// Whether `path` is a directory, following links.
+#[must_use]
+pub fn is_dir(path: &Path) -> bool {
+    path.is_dir()
+}
+
+/// Moves `from` to `to`. Whatever sits at `to` is replaced where the platform allows it;
+/// see [`rename_no_replace`] and [`rename_without_clobber`] for the moves that keep it.
+pub fn rename(from: &Path, to: &Path) -> Result<(), CoreError> {
+    Ok(fs::rename(from, to)?)
+}
+
+/// Removes the directory at `dir` if it is empty. One that still holds something is an
+/// error and stays as it was.
+pub fn remove_empty_dir(dir: &Path) -> Result<(), CoreError> {
+    Ok(fs::remove_dir(dir)?)
 }
 
 /// The bytes of `path`. A missing file is an error, as any other failure to read.
@@ -595,6 +650,127 @@ mod tests {
         let tmp = seed(&["a.md"]);
 
         assert!(list_entries(&tmp.path().join("a.md")).is_err());
+    }
+
+    #[test]
+    fn entry_names_lists_files_and_directories() {
+        let tmp = seed(&["a.md", "b.txt"]);
+        fs::create_dir(tmp.path().join("sub")).unwrap();
+
+        let mut names = entry_names(tmp.path()).unwrap();
+        names.sort();
+
+        assert_eq!(names, vec!["a.md", "b.txt", "sub"]);
+    }
+
+    #[test]
+    fn entry_names_of_a_missing_directory_is_empty() {
+        let tmp = TempDir::new().unwrap();
+
+        assert!(entry_names(&tmp.path().join("nope")).unwrap().is_empty());
+    }
+
+    #[test]
+    fn entry_names_still_fails_on_what_is_not_a_directory() {
+        let tmp = seed(&["a.md"]);
+
+        assert!(entry_names(&tmp.path().join("a.md")).is_err());
+    }
+
+    #[test]
+    fn entries_yields_the_name_of_each_item() {
+        let tmp = seed(&["a.md", "b.md"]);
+        fs::create_dir(tmp.path().join("sub")).unwrap();
+
+        let mut names: Vec<OsString> = entries(tmp.path())
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        names.sort();
+
+        assert_eq!(names, vec!["a.md", "b.md", "sub"]);
+    }
+
+    #[test]
+    fn entries_of_a_missing_directory_is_an_io_error() {
+        let tmp = TempDir::new().unwrap();
+
+        assert!(matches!(
+            entries(&tmp.path().join("nope")),
+            Err(CoreError::Io(e)) if e.kind() == std::io::ErrorKind::NotFound
+        ));
+    }
+
+    #[test]
+    fn count_entries_counts_files_and_directories() {
+        let tmp = seed(&["a.md", "b.md"]);
+        fs::create_dir(tmp.path().join("sub")).unwrap();
+
+        assert_eq!(count_entries(tmp.path()).unwrap(), 3);
+    }
+
+    #[test]
+    fn count_entries_of_a_missing_directory_is_an_io_error() {
+        let tmp = TempDir::new().unwrap();
+
+        assert!(count_entries(&tmp.path().join("nope")).is_err());
+    }
+
+    #[test]
+    fn exists_and_is_dir_tell_a_file_from_a_directory() {
+        let tmp = seed(&["a.md"]);
+        let file = tmp.path().join("a.md");
+        let missing = tmp.path().join("nope");
+
+        assert!(exists(&file) && !is_dir(&file));
+        assert!(exists(tmp.path()) && is_dir(tmp.path()));
+        assert!(!exists(&missing) && !is_dir(&missing));
+    }
+
+    #[test]
+    fn rename_moves_a_directory_whole() {
+        let tmp = TempDir::new().unwrap();
+        let from = tmp.path().join("old");
+        fs::create_dir(&from).unwrap();
+        fs::write(from.join("a.md"), "x").unwrap();
+        let to = tmp.path().join("new");
+
+        rename(&from, &to).unwrap();
+
+        assert!(!from.exists());
+        assert_eq!(fs::read_to_string(to.join("a.md")).unwrap(), "x");
+    }
+
+    #[test]
+    fn rename_of_a_missing_source_is_an_io_error() {
+        let tmp = TempDir::new().unwrap();
+
+        assert!(matches!(
+            rename(&tmp.path().join("nope"), &tmp.path().join("to")),
+            Err(CoreError::Io(e)) if e.kind() == std::io::ErrorKind::NotFound
+        ));
+    }
+
+    #[test]
+    fn remove_empty_dir_removes_an_empty_directory() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path().join("empty");
+        fs::create_dir(&dir).unwrap();
+
+        remove_empty_dir(&dir).unwrap();
+
+        assert!(!dir.exists());
+    }
+
+    #[test]
+    fn remove_empty_dir_leaves_a_directory_that_holds_something() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path().join("full");
+        fs::create_dir(&dir).unwrap();
+        fs::write(dir.join("a.md"), "x").unwrap();
+
+        assert!(remove_empty_dir(&dir).is_err());
+        assert!(dir.join("a.md").exists());
     }
 
     #[test]

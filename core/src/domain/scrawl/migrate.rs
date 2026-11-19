@@ -14,11 +14,11 @@
 //! price: a CLI or read-only MCP pointed at a tree nothing has migrated yet sees no Scrawl
 //! until the app, a sync or a capture runs. Nothing is lost.
 
-use std::fs;
 use std::path::Path;
 
 use super::day::SCRAWL_DIR;
 use crate::error::CoreError;
+use crate::services::files::{count_entries, entries, exists, is_dir, remove_empty_dir, rename};
 use crate::utils::paths::data_dir;
 
 /// The pre-rename directory. This spelling survives only here, and once the migration is
@@ -62,14 +62,14 @@ impl ScrawlDirMigration {
 /// start simply tries again, and nothing is lost.
 pub fn migrate_scrawl_dir(base_dir: &Path) -> Result<ScrawlDirMigration, CoreError> {
     let legacy = data_dir(base_dir).join(LEGACY_DIR);
-    if !legacy.is_dir() {
+    if !is_dir(&legacy) {
         return Ok(ScrawlDirMigration::default());
     }
     let target = data_dir(base_dir).join(SCRAWL_DIR);
 
-    if !target.exists() {
-        let moved = fs::read_dir(&legacy)?.count();
-        fs::rename(&legacy, &target)?;
+    if !exists(&target) {
+        let moved = count_entries(&legacy)?;
+        rename(&legacy, &target)?;
         return Ok(ScrawlDirMigration {
             moved,
             left_behind: Vec::new(),
@@ -77,22 +77,21 @@ pub fn migrate_scrawl_dir(base_dir: &Path) -> Result<ScrawlDirMigration, CoreErr
     }
 
     let mut result = ScrawlDirMigration::default();
-    for entry in fs::read_dir(&legacy)? {
-        let entry = entry?;
-        let name = entry.file_name();
+    for name in entries(&legacy)? {
+        let name = name?;
         let landing = target.join(&name);
-        if landing.exists() {
+        if exists(&landing) {
             result.left_behind.push(name.to_string_lossy().into_owned());
             continue;
         }
-        fs::rename(entry.path(), &landing)?;
+        rename(&legacy.join(&name), &landing)?;
         result.moved += 1;
     }
     // Remove the old directory once it is empty. Leaving it cannot make the next sync read
     // the directory alone as "not migrated yet", but to a person it looks as if the
     // migration is not done
     if result.left_behind.is_empty() {
-        let _ = fs::remove_dir(&legacy);
+        let _ = remove_empty_dir(&legacy);
     }
     Ok(result)
 }
@@ -101,6 +100,7 @@ pub fn migrate_scrawl_dir(base_dir: &Path) -> Result<ScrawlDirMigration, CoreErr
 mod tests {
     use super::*;
     use crate::utils::device::{Context, Source};
+    use std::fs;
     use tempfile::TempDir;
 
     fn write(path: &Path, body: &str) {

@@ -2,27 +2,21 @@
 //!
 //! It only reads, so a pre-rename `data/timeline/` is left for the writers to move.
 
-use std::fs;
-use std::io;
 use std::path::Path;
 
 use serde::Serialize;
 
 use super::day::{DayLog, SCRAWL_DIR, day_of_filename, scrawl_file_path};
 use crate::error::CoreError;
+use crate::services::files::{entry_names, read_if_present};
 use crate::utils::clock::Day;
 use crate::utils::paths::data_dir;
 
 /// Every date that has a record, newest first.
 pub fn list_scrawl_dates(base_dir: &Path) -> Result<Vec<Day>, CoreError> {
-    let scrawl_dir = data_dir(base_dir).join(SCRAWL_DIR);
-    if !scrawl_dir.exists() {
-        return Ok(Vec::new());
-    }
-
-    let mut dates: Vec<Day> = fs::read_dir(&scrawl_dir)?
-        .filter_map(Result::ok)
-        .filter_map(|e| day_of_filename(&e.file_name().to_string_lossy()))
+    let mut dates: Vec<Day> = entry_names(&data_dir(base_dir).join(SCRAWL_DIR))?
+        .iter()
+        .filter_map(|name| day_of_filename(name))
         .collect();
 
     dates.sort_by(|a, b| b.cmp(a));
@@ -39,11 +33,7 @@ pub fn read_scrawl(base_dir: &Path, date: Day) -> Result<Vec<String>, CoreError>
 /// No `exists()` check first: opening the file tells whether it can be read, and in a
 /// search over every date one stat per day adds up.
 pub(crate) fn read_raw(base_dir: &Path, date: Day) -> Result<Option<String>, CoreError> {
-    match fs::read_to_string(scrawl_file_path(base_dir, date)) {
-        Ok(content) => Ok(Some(content)),
-        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
-        Err(e) => Err(e.into()),
-    }
+    read_if_present(&scrawl_file_path(base_dir, date))
 }
 
 /// What `read_scrawl_days` returns.
@@ -94,6 +84,7 @@ mod tests {
     use super::*;
     use crate::domain::scrawl::capture::save_scrawl_entry;
     use crate::utils::device::{Context, Source};
+    use std::fs;
     use tempfile::TempDir;
 
     fn mock_context() -> Context {
