@@ -104,7 +104,7 @@ mod tests {
         save_template(tmp.path(), &name("a.md"), "saved", &[]).unwrap();
         save_template_draft(tmp.path(), &name("a.md"), &detail("draft", &[])).unwrap();
 
-        let keys: Vec<String> = crate::sync::scan::scan_local_files(tmp.path())
+        let keys: Vec<String> = crate::domain::sync::scan::scan_local_files(tmp.path())
             .unwrap()
             .into_iter()
             .map(|file| file.key)

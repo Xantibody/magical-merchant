@@ -1,6 +1,3 @@
-pub mod scan;
-pub mod state;
-
 // Only the parts that speak HTTP sit behind the feature. The Android JNI build and the
 // MCP-only CLI need neither reqwest nor keyring, so the default does not pull them in.
 #[cfg(feature = "sync-client")]

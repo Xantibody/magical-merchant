@@ -13,14 +13,14 @@ use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as B64;
 
 use super::lock::SyncLock;
-use super::scan::{self, LocalFile};
-use super::state::{FileSyncRecord, SyncState};
 use super::{SyncIssue, SyncResult};
 use crate::domain::data;
 use crate::domain::note::conflicts::conflicts_dir;
 use crate::domain::sync::conflict_copy;
 use crate::domain::sync::diff::{self, RemoteFile, SyncAction};
 use crate::domain::sync::rounds::{self, BULK_OPERATION_BUDGET};
+use crate::domain::sync::scan::{self, LocalFile};
+use crate::domain::sync::state::{FileSyncRecord, SyncState};
 use crate::error::SyncError;
 use crate::services::worker::{
     BulkRequest, BulkResponse, DownloadedFile, HttpClient, ServerSyncState, SyncTransport,

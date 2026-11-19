@@ -136,7 +136,7 @@ mod tests {
         assert!(content.ends_with("---\nbody"), "{content}");
         assert!(!content.contains("message"), "無い message は書かない");
 
-        let keys: Vec<String> = crate::sync::scan::scan_local_files(tmp.path())
+        let keys: Vec<String> = crate::domain::sync::scan::scan_local_files(tmp.path())
             .unwrap()
             .into_iter()
             .map(|f| f.key)

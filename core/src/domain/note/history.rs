@@ -533,7 +533,7 @@ mod tests {
 
         snapshot_note(tmp.path(), &filename).unwrap();
 
-        let synced = crate::sync::scan::scan_local_files(tmp.path()).unwrap();
+        let synced = crate::domain::sync::scan::scan_local_files(tmp.path()).unwrap();
         assert_eq!(synced.len(), 1, "only the note itself is scanned");
         assert!(tmp.path().join("history").is_dir());
     }

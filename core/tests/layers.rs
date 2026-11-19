@@ -49,8 +49,11 @@ const RULE_FILES: &[&str] = &[
 
 /// Violations the tree still has, each with the plan that removes it. A step that clears
 /// one takes its line out; a line that no longer matches anything fails the check.
-const ALLOWED: &[(&str, Rule, u32)] =
-    &[("src/utils/clock.rs", Rule::EntryHoldsOnlyModAndPubUse, 33)];
+const ALLOWED: &[(&str, Rule, u32)] = &[
+    ("src/domain/sync/scan.rs", Rule::DomainUsesStdFs, 32),
+    ("src/domain/sync/state.rs", Rule::DomainUsesStdFs, 32),
+    ("src/utils/clock.rs", Rule::EntryHoldsOnlyModAndPubUse, 33),
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Rule {
