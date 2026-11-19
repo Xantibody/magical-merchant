@@ -98,6 +98,9 @@ fn save_quick_capture<R: Runtime>(
 
 /// `kind` names the directory: `codex` creates a document that keeps committed
 /// versions. Left out, it is an ordinary note.
+///
+/// It answers the new note's ID (its filename), the name every other note command
+/// takes; where the file lives on disk is no business of the screen's.
 #[tauri::command]
 fn create_draft<R: Runtime>(
     handle: AppHandle<R>,
@@ -121,7 +124,10 @@ fn create_draft<R: Runtime>(
         NoteKind::Codex => magical_merchant_core::create_draft_codex,
     };
     let path = create(&base_dir, &body, &tags, &context, provenance).map_err(|e| e.to_string())?;
-    Ok(path.to_string_lossy().to_string())
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .map(str::to_string)
+        .ok_or_else(|| format!("not a note name: {}", path.display()))
 }
 
 /// Turns a Note into a Codex. The ID does not change. There is no way back.
@@ -1049,7 +1055,7 @@ mod tests {
     reason = "a test app holds the data directory until the test ends"
 )]
 mod command_tests {
-    use std::path::Path;
+    use magical_merchant_core::utils::clock::WallClock;
 
     use super::*;
     use crate::test_app::{TestApp, test_app};
@@ -1060,16 +1066,6 @@ mod command_tests {
 
     fn create(app: &TestApp, body: &str, kind: Option<NoteKind>) -> String {
         create_draft(app.handle(), body.to_string(), vec![], client(), None, kind).unwrap()
-    }
-
-    /// The ID of the note `create_draft` answered with.
-    fn id_of(answer: &str) -> String {
-        Path::new(answer)
-            .file_name()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .to_string()
     }
 
     fn read(app: &TestApp, filename: &str) -> NoteRead {
@@ -1091,16 +1087,17 @@ mod command_tests {
         )
     }
 
+    /// The screen opens what it made by the ID alone, as every other note command takes it.
     #[test]
-    fn create_draft_makes_a_note_and_answers_its_absolute_path() {
+    fn create_draft_makes_a_note_and_answers_its_id() {
         let app = test_app();
 
         let answer = create(&app, "body", None);
 
-        let path = Path::new(&answer);
-        assert!(path.is_absolute(), "{answer}");
-        assert_eq!(path.parent().unwrap(), app.base().join("data/notes"));
-        assert!(path.exists());
+        assert!(!answer.contains('/'), "{answer}");
+        let stem = answer.strip_suffix(".md").unwrap();
+        assert!(WallClock::parse_id_stem(stem).is_ok(), "{answer}");
+        assert!(app.base().join("data/notes").join(&answer).exists());
     }
 
     #[test]
@@ -1109,10 +1106,32 @@ mod command_tests {
 
         let answer = create(&app, "body", Some(NoteKind::Codex));
 
-        assert_eq!(
-            Path::new(&answer).parent().unwrap(),
-            app.base().join("data/codex")
-        );
+        assert!(app.base().join("data/codex").join(&answer).exists());
+    }
+
+    #[test]
+    fn create_from_template_answers_the_id_of_the_note_it_made() {
+        let app = test_app();
+        save_template(
+            app.handle(),
+            "daily.md".to_string(),
+            "# Daily".to_string(),
+            vec![],
+        )
+        .unwrap();
+
+        let created = create_from_template(
+            app.handle(),
+            "daily.md".to_string(),
+            client(),
+            "en".to_string(),
+        )
+        .unwrap();
+
+        let json = serde_json::to_value(&created).unwrap();
+        let filename = json["filename"].as_str().unwrap();
+        assert_eq!(json, serde_json::json!({ "filename": filename }));
+        assert_eq!(read(&app, filename).body, "# Daily");
     }
 
     #[test]
@@ -1129,7 +1148,7 @@ mod command_tests {
         )
         .unwrap();
 
-        let filename = NoteFilename::parse(&id_of(&answer)).unwrap();
+        let filename = NoteFilename::parse(&answer).unwrap();
         let meta = magical_merchant_core::read_note_meta(app.base(), &filename).unwrap();
         assert_eq!(meta.origin.as_deref(), Some("2026-08-13T08:30:00"));
         assert_eq!(meta.source.as_deref(), Some("app"));
@@ -1138,7 +1157,7 @@ mod command_tests {
     #[test]
     fn read_note_answers_the_body_and_its_revision() {
         let app = test_app();
-        let filename = id_of(&create(&app, "# Title\nbody", None));
+        let filename = create(&app, "# Title\nbody", None);
 
         let read = read(&app, &filename);
 
@@ -1153,7 +1172,7 @@ mod command_tests {
     #[test]
     fn update_draft_with_the_read_revision_writes_and_answers_the_next_one() {
         let app = test_app();
-        let filename = id_of(&create(&app, "before", None));
+        let filename = create(&app, "before", None);
         let revision = read(&app, &filename).revision;
 
         let next = update(&app, &filename, "after", &revision).unwrap();
@@ -1165,7 +1184,7 @@ mod command_tests {
     #[test]
     fn update_draft_with_an_old_revision_is_refused_as_stale() {
         let app = test_app();
-        let filename = id_of(&create(&app, "before", None));
+        let filename = create(&app, "before", None);
         let old = read(&app, &filename).revision;
         update(&app, &filename, "theirs", &old).unwrap();
 
@@ -1178,7 +1197,7 @@ mod command_tests {
     #[test]
     fn update_draft_of_a_deleted_note_is_refused_as_missing() {
         let app = test_app();
-        let filename = id_of(&create(&app, "before", None));
+        let filename = create(&app, "before", None);
         let revision = read(&app, &filename).revision;
         delete_note(app.handle(), filename.clone()).unwrap();
 
@@ -1191,7 +1210,7 @@ mod command_tests {
     #[test]
     fn update_draft_of_a_promoted_note_writes_where_the_codex_lives() {
         let app = test_app();
-        let filename = id_of(&create(&app, "before", None));
+        let filename = create(&app, "before", None);
         let revision = read(&app, &filename).revision;
         promote_note_to_codex(app.handle(), filename.clone()).unwrap();
 
@@ -1227,7 +1246,7 @@ mod command_tests {
     #[test]
     fn restore_note_version_with_an_old_revision_is_refused_as_stale() {
         let app = test_app();
-        let filename = id_of(&create(&app, "first", Some(NoteKind::Codex)));
+        let filename = create(&app, "first", Some(NoteKind::Codex));
         let version = commit_note_version(app.handle(), filename.clone(), None).unwrap();
         let old = read(&app, &filename).revision;
         update(&app, &filename, "second", &old).unwrap();
@@ -1243,7 +1262,7 @@ mod command_tests {
     #[test]
     fn update_note_meta_takes_a_time_with_an_offset() {
         let app = test_app();
-        let filename = id_of(&create(&app, "body", None));
+        let filename = create(&app, "body", None);
 
         update_note_meta(
             app.handle(),
@@ -1261,7 +1280,7 @@ mod command_tests {
     #[test]
     fn update_note_meta_refuses_a_time_without_an_offset() {
         let app = test_app();
-        let filename = id_of(&create(&app, "body", None));
+        let filename = create(&app, "body", None);
         let before = read_note_meta(app.handle(), filename.clone()).unwrap();
 
         let refused = update_note_meta(

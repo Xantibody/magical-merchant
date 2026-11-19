@@ -1170,7 +1170,7 @@ const unifiedDiff = (from, to, fromName, toName) => {
         body,
         ...(origin ? { origin } : {}),
       });
-      return `/mock/data/${filename}`;
+      return filename;
     },
     // ---- Codex の版。core と同じく Codex にしか効かない ----
     /** @param {{ filename: string, message?: string | null }} args */
@@ -1355,7 +1355,7 @@ const unifiedDiff = (from, to, fromName, toName) => {
         body: resolveVars(template.body, prev, locale),
         template: name,
       });
-      return { path: `/mock/data/${created}` };
+      return { filename: created };
     },
     list_glyphs: () =>
       [...glyphs.entries()]

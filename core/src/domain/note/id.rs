@@ -3,10 +3,15 @@
 use std::cmp::Reverse;
 use std::fmt;
 
+use serde::Serialize;
+
 use crate::utils::error::CoreError;
 
 /// A filename that names one file directly under a note directory and nothing else.
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// It crosses to the screen as the plain filename, the ID the screen opens it by.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(transparent)]
 pub struct NoteFilename(String);
 
 impl NoteFilename {

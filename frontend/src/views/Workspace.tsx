@@ -1372,11 +1372,8 @@ export default function Workspace(props: WorkspaceProps): JSX.Element {
         client: await getDeviceSignals(),
       });
       await refetchNotes();
-      const filename = created.path.split("/").at(-1);
-      if (filename) {
-        await openFile(filename);
-        startWriting();
-      }
+      await openFile(created.filename);
+      startWriting();
     } catch {
       shell.showToast(t().templates.createFailed);
     }
