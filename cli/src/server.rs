@@ -1142,8 +1142,9 @@ mod tests {
             &[(9, "a", &here), (10, "b", &nearby)],
         );
         write_day(tmp.path(), "2026-03-01", &[(9, "c", &far)]);
-        magical_merchant_core::create_draft_note(
+        magical_merchant_core::create_draft(
             tmp.path(),
+            NoteKind::Note,
             "note",
             &[],
             &here,
@@ -1175,8 +1176,9 @@ mod tests {
             "2026-01-15",
             &[(9, "#run 朝", &ctx), (10, "#run 夜 #rest", &ctx)],
         );
-        magical_merchant_core::create_draft_note(
+        magical_merchant_core::create_draft(
             tmp.path(),
+            NoteKind::Note,
             "設計 #rust",
             &[],
             &ctx,
@@ -1204,8 +1206,9 @@ mod tests {
             "2026-01-15",
             &[(9, "また #cognitivebias", &ctx)],
         );
-        magical_merchant_core::create_draft_note(
+        magical_merchant_core::create_draft(
             tmp.path(),
+            NoteKind::Note,
             "歪みを疑う #CognitiveBias",
             &[],
             &ctx,
@@ -1271,8 +1274,9 @@ mod tests {
     #[test]
     fn a_note_comes_back_as_metadata_plus_body() {
         let tmp = TempDir::new().unwrap();
-        let path = magical_merchant_core::create_draft_note(
+        let filename = magical_merchant_core::create_draft(
             tmp.path(),
+            NoteKind::Note,
             "# 題\n本文 #rust",
             &["Memo".to_string()],
             &mac_at_shibuya(),
@@ -1280,7 +1284,7 @@ mod tests {
         )
         .unwrap();
         name_shibuya(tmp.path(), "ja");
-        let filename = path.file_name().unwrap().to_str().unwrap().to_string();
+        let filename = filename.as_str().to_string();
 
         let out = server(tmp.path())
             .read_note(Parameters(FilenameParam { filename }))
@@ -1665,28 +1669,26 @@ mod tests {
         assert!(updated.revision.is_some());
     }
 
-    fn a_codex(base: &Path, body: &str) -> String {
-        let path = magical_merchant_core::create_draft_codex(
+    fn create(base: &Path, kind: NoteKind, body: &str) -> String {
+        magical_merchant_core::create_draft(
             base,
+            kind,
             body,
             &[],
             &mac_at_shibuya(),
             Provenance::default(),
         )
-        .unwrap();
-        path.file_name().unwrap().to_str().unwrap().to_string()
+        .unwrap()
+        .as_str()
+        .to_string()
+    }
+
+    fn a_codex(base: &Path, body: &str) -> String {
+        create(base, NoteKind::Codex, body)
     }
 
     fn a_note(base: &Path, body: &str) -> String {
-        let path = magical_merchant_core::create_draft_note(
-            base,
-            body,
-            &[],
-            &mac_at_shibuya(),
-            Provenance::default(),
-        )
-        .unwrap();
-        path.file_name().unwrap().to_str().unwrap().to_string()
+        create(base, NoteKind::Note, body)
     }
 
     fn commit(base: &Path, filename: &str, message: &str) -> String {
@@ -2549,8 +2551,9 @@ mod tests {
                 (10, "west", &at(-33.86, -70.66)),
             ],
         );
-        magical_merchant_core::create_draft_codex(
+        magical_merchant_core::create_draft(
             tmp.path(),
+            NoteKind::Codex,
             "# Codex",
             &[],
             &at(35.6762, 139.6503),

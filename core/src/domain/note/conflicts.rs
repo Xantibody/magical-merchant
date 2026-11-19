@@ -118,7 +118,7 @@ fn relocate_under(root: &Path, conflicts: &Path) -> usize {
 mod tests {
     use super::*;
     use crate::domain::device::Context;
-    use crate::domain::note::{NoteFilename, Provenance, create_draft_codex};
+    use crate::domain::note::{NoteFilename, NoteKind, Provenance, create_draft};
     use crate::domain::scrawl::day::SCRAWL_DIR;
     use std::fs;
     use tempfile::TempDir;
@@ -356,15 +356,18 @@ mod tests {
         NoteFilename::parse(path.file_name().unwrap().to_str().unwrap()).unwrap()
     }
 
+    /// Where a new Codex was written.
     fn codex(tmp: &TempDir, body: &str) -> PathBuf {
-        create_draft_codex(
+        let filename = create_draft(
             tmp.path(),
+            NoteKind::Codex,
             body,
             &[],
             &mock_context(),
             Provenance::default(),
         )
-        .unwrap()
+        .unwrap();
+        NoteKind::Codex.dir(tmp.path()).join(filename.as_str())
     }
 
     /// When a promotion and an offline edit on another device land on the same ID, sync

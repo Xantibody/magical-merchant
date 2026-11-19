@@ -71,11 +71,8 @@ pub(crate) fn create(
     if body.trim().is_empty() {
         return Ok(None);
     }
-    let create = match kind {
-        NoteKind::Note => magical_merchant_core::create_draft_note,
-        NoteKind::Codex => magical_merchant_core::create_draft_codex,
-    };
-    named(&create(data_dir, body, tags, &context(), provenance)?)
+    magical_merchant_core::create_draft(data_dir, kind, body, tags, &context(), provenance)
+        .map(Some)
 }
 
 /// The variant that takes the time it was written. For a record that came from outside,
@@ -91,23 +88,8 @@ pub(crate) fn create_at(
     if body.trim().is_empty() {
         return Ok(None);
     }
-    named(&magical_merchant_core::create_note_at(
-        data_dir,
-        time,
-        body,
-        tags,
-        &context(),
-        provenance,
-    )?)
-}
-
-/// Reads the written file's path back as an ID. The caller only wants the name.
-fn named(path: &Path) -> Result<Option<NoteFilename>, CoreError> {
-    let name = path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .ok_or_else(|| CoreError::NotFound(path.display().to_string()))?;
-    NoteFilename::parse(name).map(Some)
+    magical_merchant_core::create_note_at(data_dir, time, body, tags, &context(), provenance)
+        .map(Some)
 }
 
 pub(crate) fn read(data_dir: &Path, filename: &NoteFilename) -> Result<Read, CoreError> {
@@ -181,15 +163,15 @@ mod tests {
     }
 
     fn seed(base: &Path, body: &str) -> NoteFilename {
-        let path = magical_merchant_core::create_draft_note(
+        magical_merchant_core::create_draft(
             base,
+            NoteKind::Note,
             body,
             &[],
             &context(),
             Provenance::default(),
         )
-        .unwrap();
-        NoteFilename::parse(path.file_name().unwrap().to_str().unwrap()).unwrap()
+        .unwrap()
     }
 
     fn body_of(base: &Path, filename: &NoteFilename) -> String {

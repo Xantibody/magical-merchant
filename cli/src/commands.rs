@@ -231,15 +231,15 @@ mod tests {
     use tempfile::TempDir;
 
     fn seed(base: &Path, body: &str) -> NoteFilename {
-        let path = magical_merchant_core::create_draft_note(
+        magical_merchant_core::create_draft(
             base,
+            NoteKind::Note,
             body,
             &[],
             &Context::default(),
             Provenance::default(),
         )
-        .unwrap();
-        NoteFilename::parse(path.file_name().unwrap().to_str().unwrap()).unwrap()
+        .unwrap()
     }
 
     fn body_of(base: &Path, filename: &NoteFilename) -> String {

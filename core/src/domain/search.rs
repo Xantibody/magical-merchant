@@ -260,8 +260,8 @@ pub(crate) fn first_line(text: &str) -> &str {
 mod tests {
     use super::*;
     use crate::domain::device::{Context, Source};
-    use crate::domain::note::Provenance;
-    use crate::{create_draft_codex, create_draft_note, save_scrawl_entry};
+    use crate::domain::note::{NoteFilename, NoteKind, Provenance};
+    use crate::{create_draft, save_scrawl_entry};
     use tempfile::TempDir;
 
     fn context() -> Context {
@@ -269,8 +269,15 @@ mod tests {
     }
 
     /// A plain note for search to hit. Provenance is not searched, so none is declared.
-    fn draft(tmp: &TempDir, body: &str, tags: &[String]) -> Result<std::path::PathBuf, CoreError> {
-        create_draft_note(tmp.path(), body, tags, &context(), Provenance::default())
+    fn draft(tmp: &TempDir, body: &str, tags: &[String]) -> Result<NoteFilename, CoreError> {
+        create_draft(
+            tmp.path(),
+            NoteKind::Note,
+            body,
+            tags,
+            &context(),
+            Provenance::default(),
+        )
     }
 
     fn day(text: &str) -> Day {
@@ -294,8 +301,9 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         save_scrawl_entry(tmp.path(), "買い物", &context(), Source::App).unwrap();
         draft(&tmp, "買い物リスト", &[]).unwrap();
-        create_draft_codex(
+        create_draft(
             tmp.path(),
+            NoteKind::Codex,
             "買い物の記録",
             &[],
             &context(),
@@ -394,8 +402,9 @@ mod tests {
     #[test]
     fn a_hit_in_a_codex_says_so() {
         let tmp = TempDir::new().unwrap();
-        create_draft_codex(
+        create_draft(
             tmp.path(),
+            NoteKind::Codex,
             "育てる文書",
             &[],
             &context(),
@@ -515,17 +524,14 @@ mod tests {
     #[test]
     fn finds_a_note_by_body_and_reports_its_filename() {
         let tmp = TempDir::new().unwrap();
-        let path = draft(&tmp, "R2 のリトライ設計", &[]).unwrap();
+        let filename = draft(&tmp, "R2 のリトライ設計", &[]).unwrap();
 
         let hits = search_all(tmp.path(), "リトライ", &[]).unwrap();
 
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].kind, HitKind::Note);
         // It is the name used to open the note, so it must be exactly the created file's name
-        assert_eq!(
-            hits[0].filename.as_deref(),
-            path.file_name().and_then(|n| n.to_str())
-        );
+        assert_eq!(hits[0].filename.as_deref(), Some(filename.as_str()));
         assert_eq!(hits[0].index, None);
     }
 

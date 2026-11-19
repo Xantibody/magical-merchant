@@ -236,7 +236,9 @@ mod tests {
     use crate::domain::device::Context;
     use crate::domain::note::{NoteFrontmatter, Provenance};
     use crate::utils::frontmatter;
-    use crate::{create_draft_note, promote_note_to_codex, read_note_by_filename, update_note};
+    use crate::{
+        NoteKind, create_draft, promote_note_to_codex, read_note_by_filename, update_note,
+    };
     use std::fs;
     use tempfile::TempDir;
 
@@ -262,10 +264,16 @@ mod tests {
     }
 
     fn note(base: &Path, body: &str) -> (PathBuf, NoteFilename) {
-        let path =
-            create_draft_note(base, body, &[], &Context::default(), Provenance::default()).unwrap();
-        let filename = NoteFilename::parse(path.file_name().unwrap().to_str().unwrap()).unwrap();
-        (path, filename)
+        let filename = create_draft(
+            base,
+            NoteKind::Note,
+            body,
+            &[],
+            &Context::default(),
+            Provenance::default(),
+        )
+        .unwrap();
+        (NoteKind::Note.dir(base).join(filename.as_str()), filename)
     }
 
     #[test]

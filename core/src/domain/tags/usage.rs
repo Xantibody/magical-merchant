@@ -136,7 +136,7 @@ mod tests {
     use crate::domain::note::NoteFrontmatter;
     use crate::frontmatter;
     use crate::utils::clock::Stamp;
-    use crate::{Provenance, browse_all, create_draft_codex, create_draft_note};
+    use crate::{NoteKind, Provenance, browse_all, create_draft};
     use tempfile::TempDir;
 
     fn day(text: &str) -> Day {
@@ -270,8 +270,9 @@ mod tests {
     }
 
     fn note(tmp: &TempDir, body: &str, tags: &[String]) {
-        create_draft_note(
+        create_draft(
             tmp.path(),
+            NoteKind::Note,
             body,
             tags,
             &Context::default(),
@@ -298,8 +299,9 @@ mod tests {
             "- [09:00:00] #run 朝 {\"battery\":50}\n- [10:00:00] #run 夜\n",
         );
         note(&tmp, "設計 #run", &[]);
-        create_draft_codex(
+        create_draft(
             tmp.path(),
+            NoteKind::Codex,
             "# 本\n#run の記録",
             &[],
             &Context::default(),

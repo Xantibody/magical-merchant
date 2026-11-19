@@ -14,18 +14,17 @@ use magical_merchant_core::{
     Provenance, Revision, ScrawlDay, ScrawlDays, ScrawlDirMigration, ScrawlEntry, SearchFilter,
     SearchHit, Snapshot, Source, SyncError, TagUsage, TemplateDetail, TemplateSummary,
     TemplateToday, VarLocale, Version, VersionStatus, browse_all, commit_note_version, count_tags,
-    create_draft_codex, create_draft_note, create_note_at, create_note_from_template, delete_glyph,
-    delete_note, delete_note_version, delete_scrawl_entry, delete_template, describe,
-    diff_note_versions, discard_template_draft, find_backlinks, frontmatter, list_glyphs,
-    list_note_history, list_note_versions, list_notes, list_scrawl_dates, list_template_drafts,
-    list_templates, locate_note, migrate_scrawl_dir, note_version_status, parse_scrawl_entry,
-    promote_note_to_codex, read_glyph, read_note, read_note_by_filename, read_note_history,
-    read_note_meta, read_note_version, read_scrawl, read_scrawl_days, read_template,
-    read_template_draft, recent_records, relocate_conflict_copies, relocate_duplicate_ids,
-    rename_template, repair_notes, restore_note, restore_note_version, save_glyph,
-    save_scrawl_entry, save_template, save_template_draft, search_all, search_records,
-    snapshot_note, templates_today, update_note, update_note_meta, update_note_origin,
-    update_note_view,
+    create_draft, create_note_at, create_note_from_template, delete_glyph, delete_note,
+    delete_note_version, delete_scrawl_entry, delete_template, describe, diff_note_versions,
+    discard_template_draft, find_backlinks, frontmatter, list_glyphs, list_note_history,
+    list_note_versions, list_notes, list_scrawl_dates, list_template_drafts, list_templates,
+    locate_note, migrate_scrawl_dir, note_version_status, parse_scrawl_entry,
+    promote_note_to_codex, read_glyph, read_note_by_filename, read_note_history, read_note_meta,
+    read_note_version, read_scrawl, read_scrawl_days, read_template, read_template_draft,
+    recent_records, relocate_conflict_copies, relocate_duplicate_ids, rename_template,
+    repair_notes, restore_note, restore_note_version, save_glyph, save_scrawl_entry, save_template,
+    save_template_draft, search_all, search_records, snapshot_note, templates_today, update_note,
+    update_note_meta, update_note_origin, update_note_view,
 };
 
 #[test]
@@ -78,13 +77,11 @@ fn the_crate_root_keeps_its_functions() {
     let _: fn(_, _) -> _ = read_glyph;
     let _: fn(_, _, _, _) -> _ = save_glyph;
     let _: fn(_, _) -> _ = delete_glyph;
-    let _: fn(_, _, _, _, _) -> _ = create_draft_note;
-    let _: fn(_, _, _, _, _) -> _ = create_draft_codex;
+    let _: fn(_, _, _, _, _, _) -> _ = create_draft;
     let _: fn(_, _, _, _, _, _) -> _ = create_note_at;
     let _: fn(_, _) -> _ = promote_note_to_codex;
     let _: fn(_) -> _ = list_notes;
     let _: fn(_, _) -> _ = locate_note;
-    let _: fn(_) -> _ = read_note;
     let _: fn(_, _) -> _ = read_note_by_filename;
     let _: fn(_, _) -> _ = read_note_meta;
     let _: fn(_, _, _, _) -> _ = update_note;

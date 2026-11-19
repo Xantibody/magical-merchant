@@ -57,13 +57,18 @@ mod tests {
     use super::*;
     use crate::domain::device::Source;
     use crate::domain::note::{
-        NoteFilename, NoteFrontmatter, Provenance, create_draft_note, delete_note, read_note,
+        NoteFilename, NoteFrontmatter, NoteKind, Provenance, create_draft, delete_note,
         read_note_meta, update_note_view,
     };
     use crate::utils::frontmatter;
     use std::fs;
     use std::path::PathBuf;
     use tempfile::TempDir;
+
+    /// The body of the note file at `path`, as a reader sees it.
+    fn body_at(path: &Path) -> String {
+        frontmatter::strip(&fs::read_to_string(path).unwrap()).to_string()
+    }
 
     fn mock_context() -> Context {
         Context {
@@ -73,16 +78,19 @@ mod tests {
         }
     }
 
-    /// A plain new note that declares nothing. Every test except those about creation
-    /// itself goes through this, so adding a provenance kind does not rewrite every test.
+    /// A plain new note that declares nothing, and where it was written. Every test except
+    /// those about creation itself goes through this, so adding a provenance kind does not
+    /// rewrite every test.
     fn draft(tmp: &TempDir, body: &str, tags: &[String]) -> Result<PathBuf, CoreError> {
-        create_draft_note(
+        let filename = create_draft(
             tmp.path(),
+            NoteKind::Note,
             body,
             tags,
             &mock_context(),
             Provenance::default(),
-        )
+        )?;
+        Ok(NoteKind::Note.dir(tmp.path()).join(filename.as_str()))
     }
 
     /// time is the creation time. The list is ordered by filename (creation time), so if an
@@ -129,7 +137,7 @@ mod tests {
     fn update_note_refuses_to_overwrite_a_body_that_moved_since_it_was_read() {
         let tmp = TempDir::new().unwrap();
         let path = draft(&tmp, "original", &[]).unwrap();
-        let read = Revision::of(&read_note(&path).unwrap());
+        let read = Revision::of(&body_at(&path));
         update_note(&path, "someone else", &mock_context(), None).unwrap();
 
         let result = update_note(&path, "mine", &mock_context(), Some(&read));
@@ -137,22 +145,22 @@ mod tests {
         assert!(
             matches!(result, Err(CoreError::Stale(ref name)) if name == filename_of(&path).as_str())
         );
-        assert_eq!(read_note(&path).unwrap(), "someone else");
+        assert_eq!(body_at(&path), "someone else");
     }
 
     #[test]
     fn update_note_with_the_current_revision_writes_and_returns_the_next_one() {
         let tmp = TempDir::new().unwrap();
         let path = draft(&tmp, "original", &[]).unwrap();
-        let read = Revision::of(&read_note(&path).unwrap());
+        let read = Revision::of(&body_at(&path));
 
         let next = update_note(&path, "mine", &mock_context(), Some(&read)).unwrap();
 
-        assert_eq!(read_note(&path).unwrap(), "mine");
+        assert_eq!(body_at(&path), "mine");
         assert_eq!(next, Revision::of("mine"));
         // The returned revision lets the next write go through
         update_note(&path, "again", &mock_context(), Some(&next)).unwrap();
-        assert_eq!(read_note(&path).unwrap(), "again");
+        assert_eq!(body_at(&path), "again");
     }
 
     /// A note whose frontmatter cannot be read gets no body written back. Making up the
@@ -231,7 +239,7 @@ mod tests {
         let filename = NoteFilename::parse("20260101_120000.md").unwrap();
         let meta = read_note_meta(tmp.path(), &filename).unwrap();
         assert_eq!(meta.context.unwrap().battery, Some(50));
-        assert_eq!(read_note(&path).unwrap(), "書き足した");
+        assert_eq!(body_at(&path), "書き足した");
     }
 
     /// Saving to a deleted note is not an entry for recreating it. A late save from a tab
@@ -256,14 +264,14 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let path = draft(&tmp, "original", &[]).unwrap();
         let filename = filename_of(&path);
-        let read = Revision::of(&read_note(&path).unwrap());
+        let read = Revision::of(&body_at(&path));
         update_note_view(tmp.path(), &filename, Some("mindmap")).unwrap();
 
         update_note(&path, "mine", &mock_context(), Some(&read)).unwrap();
 
         let meta = read_note_meta(tmp.path(), &filename).unwrap();
         assert_eq!(meta.view, Some("mindmap".to_string()));
-        assert_eq!(read_note(&path).unwrap(), "mine");
+        assert_eq!(body_at(&path), "mine");
     }
 
     /// `source` is a record from creation. Rewriting the body with another tool does not
@@ -271,8 +279,9 @@ mod tests {
     #[test]
     fn update_note_keeps_the_creation_source() {
         let tmp = TempDir::new().unwrap();
-        let path = create_draft_note(
+        let filename = create_draft(
             tmp.path(),
+            NoteKind::Note,
             "original",
             &[],
             &mock_context(),
@@ -282,6 +291,7 @@ mod tests {
             },
         )
         .unwrap();
+        let path = NoteKind::Note.dir(tmp.path()).join(filename.as_str());
 
         update_note(&path, "アプリで書き直した", &mock_context(), None).unwrap();
 
@@ -347,15 +357,15 @@ mod tests {
     }
 
     fn promoted_note(tmp: &TempDir) -> NoteFilename {
-        let path = create_draft_note(
+        create_draft(
             tmp.path(),
+            NoteKind::Note,
             "エントリ本文",
             &[],
             &mock_context(),
             promoted_from("2026-08-13T08:30:00"),
         )
-        .unwrap();
-        filename_of(&path)
+        .unwrap()
     }
 
     /// If a body save lost the link to the entry it was promoted from, Scrawl's chip

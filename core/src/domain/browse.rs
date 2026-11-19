@@ -59,19 +59,28 @@ pub fn recent_records(base_dir: &Path, limit: usize) -> Result<Vec<SearchHit>, C
 mod tests {
     use super::*;
     use crate::domain::device::{Context, Source};
-    use crate::domain::note::Provenance;
+    use crate::domain::note::{NoteKind, Provenance};
     use crate::domain::search::{HitKind, MAX_HITS};
     use crate::utils::clock::Day;
-    use crate::{create_draft_codex, create_draft_note, save_scrawl_entry};
+    use crate::{create_draft, save_scrawl_entry};
     use tempfile::TempDir;
 
     fn context() -> Context {
         Context::default()
     }
 
-    /// A plain note to browse. Provenance is not listed, so none is declared.
+    /// A plain note to browse, and where it was written. Provenance is not listed, so none
+    /// is declared.
     fn draft(tmp: &TempDir, body: &str, tags: &[String]) -> Result<std::path::PathBuf, CoreError> {
-        create_draft_note(tmp.path(), body, tags, &context(), Provenance::default())
+        let filename = create_draft(
+            tmp.path(),
+            NoteKind::Note,
+            body,
+            tags,
+            &context(),
+            Provenance::default(),
+        )?;
+        Ok(NoteKind::Note.dir(tmp.path()).join(filename.as_str()))
     }
 
     /// Write one line on a fixed date. `save_scrawl_entry` can only write to today.
@@ -130,8 +139,9 @@ mod tests {
     #[test]
     fn a_browsed_codex_says_so() {
         let tmp = TempDir::new().unwrap();
-        create_draft_codex(
+        create_draft(
             tmp.path(),
+            NoteKind::Codex,
             "育てる文書",
             &[],
             &context(),

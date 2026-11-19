@@ -12,7 +12,7 @@ use crate::domain::device::Context;
 use crate::domain::note::NoteFilename;
 use crate::domain::note::NoteSummary;
 use crate::domain::note::Provenance;
-use crate::domain::note::{create_draft_note, list_notes};
+use crate::domain::note::{NoteKind, create_draft, list_notes};
 use crate::utils::clock::WallClock;
 use crate::utils::error::CoreError;
 
@@ -54,8 +54,9 @@ pub fn create_note_from_template(
         .filter(|tag| !tag.trim().is_empty())
         .collect();
 
-    let path = create_draft_note(
+    let filename = create_draft(
         base_dir,
+        NoteKind::Note,
         &resolved,
         &tags,
         context,
@@ -64,14 +65,8 @@ pub fn create_note_from_template(
             ..provenance
         },
     )?;
-    let written = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .ok_or_else(|| CoreError::NotFound(path.display().to_string()))?;
 
-    Ok(CreatedNote {
-        filename: NoteFilename::parse(written)?,
-    })
+    Ok(CreatedNote { filename })
 }
 
 /// Every template in name order, resolved against the notes as they are now.

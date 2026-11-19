@@ -119,15 +119,16 @@ fn create_draft<R: Runtime>(
         source: Some(Source::App),
         ..Provenance::default()
     };
-    let create = match kind.unwrap_or(NoteKind::Note) {
-        NoteKind::Note => magical_merchant_core::create_draft_note,
-        NoteKind::Codex => magical_merchant_core::create_draft_codex,
-    };
-    let path = create(&base_dir, &body, &tags, &context, provenance).map_err(|e| e.to_string())?;
-    path.file_name()
-        .and_then(|name| name.to_str())
-        .map(str::to_string)
-        .ok_or_else(|| format!("not a note name: {}", path.display()))
+    magical_merchant_core::create_draft(
+        &base_dir,
+        kind.unwrap_or(NoteKind::Note),
+        &body,
+        &tags,
+        &context,
+        provenance,
+    )
+    .map(|filename| filename.as_str().to_string())
+    .map_err(|e| e.to_string())
 }
 
 /// Turns a Note into a Codex. The ID does not change. There is no way back.

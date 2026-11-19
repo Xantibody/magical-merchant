@@ -80,17 +80,26 @@ mod tests {
         VersionStatus, list_note_versions, note_version_status, read_note_version,
     };
     use crate::domain::device::Context;
-    use crate::domain::note::{Provenance, create_draft_codex, read_note_by_filename, update_note};
+    use crate::domain::note::{
+        NoteKind, Provenance, create_draft, read_note_by_filename, update_note,
+    };
     use std::fs;
     use std::path::PathBuf;
     use tempfile::TempDir;
 
     /// The note to commit versions on. Only a Codex can commit, so the test default is a Codex.
     fn note(base: &Path, body: &str) -> (PathBuf, NoteFilename) {
-        let path = create_draft_codex(base, body, &[], &Context::default(), Provenance::default())
-            .unwrap();
-        let filename = NoteFilename::parse(path.file_name().unwrap().to_str().unwrap()).unwrap();
-        (path, filename)
+        let kind = NoteKind::Codex;
+        let filename = create_draft(
+            base,
+            kind,
+            body,
+            &[],
+            &Context::default(),
+            Provenance::default(),
+        )
+        .unwrap();
+        (kind.dir(base).join(filename.as_str()), filename)
     }
 
     #[test]

@@ -39,11 +39,6 @@ pub fn locate_note(
 
 /// Return the note's body. Frontmatter is a matter of the storage format and is not
 /// something to show the reader (preview, editor, MCP).
-pub fn read_note(file_path: &Path) -> Result<String, CoreError> {
-    let content = read_text(file_path)?;
-    Ok(frontmatter::strip(&content).to_string())
-}
-
 pub fn read_note_by_filename(
     base_dir: &Path,
     filename: &NoteFilename,
@@ -70,7 +65,7 @@ pub fn read_note_meta(
 mod tests {
     use super::*;
     use crate::domain::device::Context;
-    use crate::domain::note::{Provenance, create_draft_note};
+    use crate::domain::note::{Provenance, create_draft};
     use std::fs;
     use tempfile::TempDir;
 
@@ -84,9 +79,10 @@ mod tests {
 
     /// A plain new note that declares nothing. Every test except those about creation
     /// itself goes through this, so adding a provenance kind does not rewrite every test.
-    fn draft(tmp: &TempDir, body: &str, tags: &[String]) -> Result<PathBuf, CoreError> {
-        create_draft_note(
+    fn draft(tmp: &TempDir, body: &str, tags: &[String]) -> Result<NoteFilename, CoreError> {
+        create_draft(
             tmp.path(),
+            NoteKind::Note,
             body,
             tags,
             &mock_context(),
@@ -94,35 +90,12 @@ mod tests {
         )
     }
 
-    /// Reading by path does not turn a missing file into `NotFound`: the path came from
-    /// the caller, so the plain I/O failure is what it gets back.
-    #[test]
-    fn read_note_of_a_missing_path_is_an_io_error() {
-        let tmp = TempDir::new().unwrap();
-
-        let result = read_note(&tmp.path().join("data/notes/20260101_120000.md"));
-
-        assert!(
-            matches!(result, Err(CoreError::Io(ref e)) if e.kind() == std::io::ErrorKind::NotFound)
-        );
-    }
-
     /// A read returns only the body. Returning the frontmatter would flow straight into
     /// the preview or the editor and put metadata on screen.
     #[test]
-    fn read_note_returns_body_without_frontmatter() {
-        let tmp = TempDir::new().unwrap();
-        let path = draft(&tmp, "# Title\nbody", &[]).unwrap();
-
-        assert_eq!(read_note(&path).unwrap(), "# Title\nbody");
-    }
-
-    #[test]
     fn read_note_by_filename_returns_body_without_frontmatter() {
         let tmp = TempDir::new().unwrap();
-        let path = draft(&tmp, "# Title\nbody", &[]).unwrap();
-        let fname = path.file_name().unwrap().to_str().unwrap();
-        let note_filename = NoteFilename::parse(fname).unwrap();
+        let note_filename = draft(&tmp, "# Title\nbody", &[]).unwrap();
 
         let content = read_note_by_filename(tmp.path(), &note_filename).unwrap();
 
@@ -138,16 +111,12 @@ mod tests {
         assert!(matches!(result, Err(CoreError::NotFound(_))));
     }
 
-    fn filename_of(path: &Path) -> NoteFilename {
-        NoteFilename::parse(path.file_name().unwrap().to_str().unwrap()).unwrap()
-    }
-
     #[test]
     fn read_note_meta_returns_time_tags_and_context() {
         let tmp = TempDir::new().unwrap();
-        let path = draft(&tmp, "body", &["sync".to_string()]).unwrap();
+        let filename = draft(&tmp, "body", &["sync".to_string()]).unwrap();
 
-        let meta = read_note_meta(tmp.path(), &filename_of(&path)).unwrap();
+        let meta = read_note_meta(tmp.path(), &filename).unwrap();
 
         assert_eq!(meta.tags, vec!["sync"]);
         assert_eq!(meta.context.unwrap().battery, Some(50));

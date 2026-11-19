@@ -84,18 +84,27 @@ fn extend_match_to_link_end(hit: &mut SearchHit) {
 mod tests {
     use super::*;
     use crate::domain::device::{Context, Source};
-    use crate::domain::note::Provenance;
+    use crate::domain::note::{NoteKind, Provenance};
     use crate::domain::search::HitKind;
-    use crate::{create_draft_note, save_scrawl_entry};
+    use crate::{create_draft, save_scrawl_entry};
     use tempfile::TempDir;
 
     fn context() -> Context {
         Context::default()
     }
 
-    /// A plain note to link or be linked. Provenance is not read, so none is declared.
+    /// A plain note to link or be linked, and where it was written. Provenance is not read,
+    /// so none is declared.
     fn draft(tmp: &TempDir, body: &str, tags: &[String]) -> Result<std::path::PathBuf, CoreError> {
-        create_draft_note(tmp.path(), body, tags, &context(), Provenance::default())
+        let filename = create_draft(
+            tmp.path(),
+            NoteKind::Note,
+            body,
+            tags,
+            &context(),
+            Provenance::default(),
+        )?;
+        Ok(NoteKind::Note.dir(tmp.path()).join(filename.as_str()))
     }
 
     fn filename_of(path: &Path) -> NoteFilename {

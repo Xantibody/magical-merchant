@@ -31,7 +31,7 @@ mod tests {
         commit_note_version, list_note_versions, note_version_status, read_note_version,
     };
     use crate::domain::device::Context;
-    use crate::domain::note::{NoteFilename, Provenance, create_draft_note};
+    use crate::domain::note::{NoteKind, Provenance, create_draft};
     use crate::utils::error::CoreError;
     use std::fs;
     use tempfile::TempDir;
@@ -40,15 +40,15 @@ mod tests {
     #[test]
     fn a_plain_note_cannot_be_given_versions() {
         let tmp = TempDir::new().unwrap();
-        let path = create_draft_note(
+        let filename = create_draft(
             tmp.path(),
+            NoteKind::Note,
             "ただのノート",
             &[],
             &Context::default(),
             Provenance::default(),
         )
         .unwrap();
-        let filename = NoteFilename::parse(path.file_name().unwrap().to_str().unwrap()).unwrap();
 
         let result = commit_note_version(tmp.path(), &filename, Some("試し"));
 

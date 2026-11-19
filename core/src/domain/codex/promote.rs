@@ -29,7 +29,7 @@ pub fn promote_note_to_codex(base_dir: &Path, filename: &NoteFilename) -> Result
 mod tests {
     use super::*;
     use crate::domain::device::Context;
-    use crate::domain::note::{Provenance, create_draft_codex, create_draft_note, list_notes};
+    use crate::domain::note::{Provenance, create_draft, list_notes};
     use std::fs;
     use std::path::PathBuf;
     use tempfile::TempDir;
@@ -42,31 +42,22 @@ mod tests {
         }
     }
 
-    /// A plain new note that declares nothing. Every test except those about creation
-    /// itself goes through this, so adding a provenance kind does not rewrite every test.
-    fn draft(tmp: &TempDir, body: &str, tags: &[String]) -> Result<PathBuf, CoreError> {
-        create_draft_note(
+    /// Where a new note of `kind` was written.
+    fn create(tmp: &TempDir, kind: NoteKind, body: &str) -> PathBuf {
+        let filename = create_draft(
             tmp.path(),
-            body,
-            tags,
-            &mock_context(),
-            Provenance::default(),
-        )
-    }
-
-    fn filename_of(path: &Path) -> NoteFilename {
-        NoteFilename::parse(path.file_name().unwrap().to_str().unwrap()).unwrap()
-    }
-
-    fn codex(tmp: &TempDir, body: &str) -> PathBuf {
-        create_draft_codex(
-            tmp.path(),
+            kind,
             body,
             &[],
             &mock_context(),
             Provenance::default(),
         )
-        .unwrap()
+        .unwrap();
+        kind.dir(tmp.path()).join(filename.as_str())
+    }
+
+    fn filename_of(path: &Path) -> NoteFilename {
+        NoteFilename::parse(path.file_name().unwrap().to_str().unwrap()).unwrap()
     }
 
     /// Promotion only changes the location. Neither the ID, the frontmatter nor the body
@@ -74,7 +65,7 @@ mod tests {
     #[test]
     fn promoting_moves_the_file_without_touching_its_bytes() {
         let tmp = TempDir::new().unwrap();
-        let path = draft(&tmp, "育てる #memo", &[]).unwrap();
+        let path = create(&tmp, NoteKind::Note, "育てる #memo");
         let filename = filename_of(&path);
         let before = fs::read(&path).unwrap();
 
@@ -95,7 +86,7 @@ mod tests {
     #[test]
     fn promoting_a_codex_again_changes_nothing() {
         let tmp = TempDir::new().unwrap();
-        let path = codex(&tmp, "育てる文書");
+        let path = create(&tmp, NoteKind::Codex, "育てる文書");
         let filename = filename_of(&path);
         let before = fs::read(&path).unwrap();
 

@@ -102,8 +102,9 @@ decisions live in `file.rs` as plain functions (`rewrite`, `edit_record`). Do no
 encode the kind in frontmatter — a build that does not know the key drops it
 on save. `relocate_duplicate_ids` handles the one way an ID can end up in
 both directories (promotion on one device, offline edit on another).
-`create_draft_codex` is a separate entry point so the CLI/MCP/template callers
-of `create_draft_note` stay untouched.
+`create_draft` takes the kind and returns the new note's `NoteFilename`, the ID
+every other note operation takes; the app, the CLI and the MCP server all create
+through it.
 
 Codex versions (`core/src/domain/codex/`: the rules in `version.rs`, the
 operations in `draft.rs`, `commit.rs`, `compare.rs` and `restore.rs`) are not
