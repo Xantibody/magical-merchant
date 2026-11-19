@@ -48,12 +48,15 @@ const RULE_FILES: &[&str] = &[
 /// one takes its line out; a line that no longer matches anything fails the check.
 const ALLOWED: &[(&str, Rule, u32)] = &[
     ("src/note.rs", Rule::EntryHoldsOnlyModAndPubUse, 28),
+    ("src/domain/note/conflicts.rs", Rule::DomainUsesStdFs, 28),
     ("src/domain/note/create.rs", Rule::DomainUsesStdFs, 28),
     ("src/domain/note/delete.rs", Rule::DomainUsesStdFs, 28),
     ("src/domain/note/details.rs", Rule::DomainUsesStdFs, 28),
     ("src/domain/note/edit.rs", Rule::DomainUsesStdFs, 28),
+    ("src/domain/note/history.rs", Rule::DomainUsesStdFs, 28),
     ("src/domain/note/list.rs", Rule::DomainUsesStdFs, 28),
     ("src/domain/note/open.rs", Rule::DomainUsesStdFs, 28),
+    ("src/domain/note/repair.rs", Rule::DomainUsesStdFs, 28),
     ("src/sync.rs", Rule::EntryHoldsOnlyModAndPubUse, 32),
     ("src/utils/clock.rs", Rule::EntryHoldsOnlyModAndPubUse, 33),
     ("src/utils/place.rs", Rule::UtilsImportsServices, 31),

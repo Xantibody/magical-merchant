@@ -20,13 +20,13 @@ use super::scan::{self, LocalFile};
 use super::state::{FileSyncRecord, SyncState};
 use super::{SyncIssue, SyncResult};
 use crate::domain::data;
+use crate::domain::note::conflicts::conflicts_dir;
 use crate::error::SyncError;
 use crate::services::worker::{
     BulkRequest, BulkResponse, DownloadedFile, HttpClient, ServerSyncState, SyncTransport,
     WireConflictOp, WireUpload,
 };
 use crate::utils::clock::UtcStamp;
-use crate::utils::paths;
 
 const MAX_SYNC_ATTEMPTS: usize = 3;
 
@@ -586,7 +586,7 @@ fn apply_response(
     // synced nor listed among the notes.
     // A failure does not go into `unwritten`: a copy's key is not in the state, so
     // adding it would exclude nothing (the server keeps its copy, so no content is lost)
-    let conflicts_dir = paths::conflicts_dir(base_dir);
+    let conflicts_dir = conflicts_dir(base_dir);
     for d in &bulk_resp.conflict_downloads {
         // If the name does not parse, file it under the key as is. An old shape is still a copy
         let key = conflict::conflict_copy_path(&d.key).unwrap_or_else(|| d.key.clone());
@@ -1006,7 +1006,7 @@ mod tests {
                 .exists()
         );
         assert_eq!(
-            fs::read_to_string(paths::conflicts_dir(dir.path()).join("notes/a/20260805-000000.md"))
+            fs::read_to_string(conflicts_dir(dir.path()).join("notes/a/20260805-000000.md"))
                 .unwrap(),
             "other device"
         );
@@ -1411,7 +1411,7 @@ mod tests {
             "競合コピーが data/ に残っている"
         );
         assert!(
-            paths::conflicts_dir(dir.path())
+            conflicts_dir(dir.path())
                 .join("notes/20260320_033440/20260511-031336.md")
                 .exists()
         );
@@ -1444,7 +1444,7 @@ mod tests {
             "Codex 側が本物"
         );
         assert_eq!(
-            fs::read_dir(paths::conflicts_dir(dir.path()).join("notes/20260320_033440"))
+            fs::read_dir(conflicts_dir(dir.path()).join("notes/20260320_033440"))
                 .unwrap()
                 .count(),
             1

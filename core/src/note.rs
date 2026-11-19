@@ -1,9 +1,6 @@
-mod history;
-mod repair;
 pub(crate) mod repository;
 pub(crate) mod version;
 
-pub use history::{Snapshot, list_note_history, read_note_history, restore_note, snapshot_note};
 pub(crate) use repository::Notes;
 pub use version::{
     BEFORE_RESTORE, DRAFT, Version, VersionStatus, commit_note_version, delete_note_version,
@@ -23,30 +20,6 @@ use crate::error::CoreError;
 /// leave its versions belonging to nothing. If it is already a Codex, nothing happens.
 pub fn promote_note_to_codex(base_dir: &Path, filename: &NoteFilename) -> Result<(), CoreError> {
     Notes::new(base_dir.to_path_buf()).promote_to_codex(filename)
-}
-
-/// Repair garbled metadata that past edits mixed into the body. Returns the number of
-/// files repaired.
-pub fn repair_notes(base_dir: &Path) -> Result<usize, CoreError> {
-    repair::repair_all(&crate::domain::note::kind::notes_dir(base_dir))
-}
-
-/// Move conflict copies that an old build put in `data/` to `conflicts/`.
-///
-/// Returns the count moved. The app calls it once per process at start, and the sync engine calls
-/// it under the lock before every scan.
-#[must_use]
-pub fn relocate_conflict_copies(base_dir: &Path) -> usize {
-    repair::relocate_conflict_copies(base_dir)
-}
-
-/// If the same ID is in both `notes/` and `codex/`, move the `notes/` side to `conflicts/`.
-///
-/// Returns the count moved. The sync engine calls it under the lock before the scan and again after
-/// a successful run; the app also calls it once per process at start.
-#[must_use]
-pub fn relocate_duplicate_ids(base_dir: &Path) -> usize {
-    repair::relocate_duplicate_ids(base_dir)
 }
 
 #[cfg(test)]
@@ -144,31 +117,5 @@ mod tests {
         let result = promote_note_to_codex(tmp.path(), &filename);
 
         assert!(matches!(result, Err(CoreError::NotFound(_))));
-    }
-
-    /// When a promotion and an offline edit on another device land on the same ID, sync
-    /// delivers the notes/ side as a new file. The Codex side stays, and the notes/ side is
-    /// set aside in the same place as conflict copies.
-    #[test]
-    fn a_duplicate_id_in_notes_is_moved_to_conflicts() {
-        let tmp = TempDir::new().unwrap();
-        let path = codex(&tmp, "codex 側");
-        let filename = filename_of(&path);
-        let stale = tmp.path().join("data/notes").join(filename.as_str());
-        fs::create_dir_all(stale.parent().unwrap()).unwrap();
-        fs::write(&stale, "notes 側").unwrap();
-
-        assert_eq!(relocate_duplicate_ids(tmp.path()), 1);
-
-        assert!(!stale.exists());
-        assert!(fs::read_to_string(&path).unwrap().contains("codex 側"));
-        let stem = filename.as_str().trim_end_matches(".md");
-        let copies: Vec<_> = fs::read_dir(tmp.path().join("conflicts/notes").join(stem))
-            .unwrap()
-            .filter_map(Result::ok)
-            .collect();
-        assert_eq!(copies.len(), 1);
-        assert_eq!(fs::read_to_string(copies[0].path()).unwrap(), "notes 側");
-        assert_eq!(relocate_duplicate_ids(tmp.path()), 0);
     }
 }

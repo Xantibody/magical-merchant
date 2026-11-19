@@ -12,7 +12,7 @@
 //! The most recent [`KEEP`] per note are kept. The snapshots stay even when the note itself
 //! is deleted: restoring a deleted note from its snapshot is the reason for taking one.
 //!
-//! Codex versions are a different thing and live in [`super::version`]. Those a person
+//! Codex versions are a different thing and live in `note::version`. Those a person
 //! commits, and they sync as part of the document. These a machine sets aside, and they
 //! stay on the device.
 
@@ -21,14 +21,11 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
-use crate::domain::note::NoteFilename;
-use crate::domain::note::Revision;
 use crate::domain::note::kind::notes_dir;
-use crate::domain::note::{locate_note, read_note_by_filename};
+use crate::domain::note::{NoteFilename, Revision, locate_note, read_note_by_filename};
 use crate::error::CoreError;
 use crate::services::files::{ensure_dir, list_md_files, write_atomic};
 use crate::utils::clock::{Stamp, WallClock};
-use crate::utils::paths::history_dir;
 
 /// The number of snapshots kept per note. A branch number within the same second counts
 /// as one too.
@@ -47,6 +44,14 @@ pub struct Snapshot {
     /// `updated` (last edit): it is "the moment this content was last in effect".
     pub time: Stamp,
     pub bytes: u64,
+}
+
+/// Where the copy of a note taken before a rewrite lives.
+///
+/// Outside `data/`. Put on sync, a copy would travel between devices on every
+/// rewrite. A copy is for restoring, not for sharing.
+fn history_dir(base_dir: &Path) -> PathBuf {
+    base_dir.join("history")
 }
 
 fn note_history_dir(base_dir: &Path, filename: &NoteFilename) -> PathBuf {
