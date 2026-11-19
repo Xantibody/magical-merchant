@@ -147,4 +147,36 @@ mod tests {
         assert!(!is_token_valid("a.b"));
         assert!(!is_token_valid(""));
     }
+
+    // ──────────── boundaries, at a fixed now ────────────
+
+    const NOW: i64 = 1_790_000_000;
+
+    /// The 5 minute buffer to the second: 300 left is already too late, 301 is not.
+    #[test]
+    fn a_token_is_valid_only_with_more_than_300_seconds_left() {
+        assert!(!valid_at(&make_jwt(NOW + 300), NOW));
+        assert!(valid_at(&make_jwt(NOW + 301), NOW));
+    }
+
+    /// A lifetime of 1000 seconds: due with exactly 500 left, not with 501.
+    #[test]
+    fn renewal_is_due_from_exactly_half_the_lifetime() {
+        assert!(renewal_due_at(&make_jwt_issued(NOW - 500, NOW + 500), NOW));
+        assert!(!renewal_due_at(&make_jwt_issued(NOW - 499, NOW + 501), NOW));
+    }
+
+    #[test]
+    fn a_token_without_an_issue_time_is_always_due() {
+        assert!(renewal_due_at(&make_jwt(NOW + 1_000_000), NOW));
+        assert!(renewal_due_at(&make_jwt(NOW - 1), NOW));
+    }
+
+    #[test]
+    fn a_broken_token_is_neither_valid_nor_due() {
+        for broken in ["not-a-jwt", "a.b", ""] {
+            assert!(!valid_at(broken, NOW), "{broken:?}");
+            assert!(!renewal_due_at(broken, NOW), "{broken:?}");
+        }
+    }
 }
