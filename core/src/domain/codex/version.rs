@@ -25,7 +25,6 @@ use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
-use similar::{Algorithm, TextDiff};
 
 use crate::domain::note::kind::codex_dir;
 use crate::domain::note::{NoteFilename, Revision};
@@ -98,21 +97,6 @@ pub(crate) fn order(versions: &mut [Version]) {
     // Versions in the same second are ordered deterministically by id (hex). Times are
     // written with each device's offset, so the comparison is of instants, not wall clocks
     versions.sort_by(|a, b| b.time.cmp(&a.time).then_with(|| b.id.cmp(&a.id)));
-}
-
-/// Histogram in 3.x is extremely slow on large input (seconds at 100,000 lines). Myers is
-/// fast enough at note sizes, and has a linear-time path even for two unrelated texts.
-pub(crate) fn unified_diff(old: &str, new: &str, old_name: &str, new_name: &str) -> String {
-    if old == new {
-        return String::new();
-    }
-    TextDiff::configure()
-        .algorithm(Algorithm::Myers)
-        .diff_lines(old, new)
-        .unified_diff()
-        .context_radius(3)
-        .header(old_name, new_name)
-        .to_string()
 }
 
 /// The draft's byte count minus the latest version's: the X in "+X B from version N".

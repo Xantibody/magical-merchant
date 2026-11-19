@@ -6,12 +6,13 @@ use std::path::Path;
 
 use crate::domain::codex::draft::{ensure_codex, read_body};
 use crate::domain::codex::version::{
-    DRAFT, Version, VersionFrontmatter, VersionStatus, bytes_delta, order, unified_diff,
-    version_path, versions_dir,
+    DRAFT, Version, VersionFrontmatter, VersionStatus, bytes_delta, order, version_path,
+    versions_dir,
 };
 use crate::domain::note::NoteFilename;
 use crate::error::CoreError;
 use crate::services::files::{exists, list_md_files, read_text};
+use crate::utils::diff::unified_diff;
 use crate::utils::frontmatter;
 
 pub(super) fn read_version_file(path: &Path) -> Result<(VersionFrontmatter, String), CoreError> {
