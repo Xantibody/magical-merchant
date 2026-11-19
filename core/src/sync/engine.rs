@@ -12,15 +12,15 @@ use std::path::{Component, Path};
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as B64;
 
-use super::conflict;
-use super::diff::{self, RemoteFile, SyncAction};
 use super::lock::SyncLock;
-use super::round::{self, BULK_OPERATION_BUDGET};
 use super::scan::{self, LocalFile};
 use super::state::{FileSyncRecord, SyncState};
 use super::{SyncIssue, SyncResult};
 use crate::domain::data;
 use crate::domain::note::conflicts::conflicts_dir;
+use crate::domain::sync::conflict_copy;
+use crate::domain::sync::diff::{self, RemoteFile, SyncAction};
+use crate::domain::sync::rounds::{self, BULK_OPERATION_BUDGET};
 use crate::error::SyncError;
 use crate::services::worker::{
     BulkRequest, BulkResponse, DownloadedFile, HttpClient, ServerSyncState, SyncTransport,
@@ -212,7 +212,7 @@ async fn sync_once<T: SyncTransport + Sync>(
     // would not work
     refuse_wholesale_local_deletion(&actions, &local_files)?;
 
-    let (actions, deferred) = round::take_round(&actions, budget);
+    let (actions, deferred) = rounds::take_round(&actions, budget);
 
     let data_dir = data::data_dir(base_dir);
 
@@ -465,7 +465,7 @@ fn build_bulk_request(
                 })?;
                 conflicts.push(WireConflictOp {
                     key: key.clone(),
-                    conflict_key: conflict::conflict_filename(key, UtcStamp::now()),
+                    conflict_key: conflict_copy::conflict_filename(key, UtcStamp::now()),
                     content_base64: B64.encode(&content),
                     hash: local.content_hash.clone(),
                     last_modified: local.last_modified.rfc3339(),
@@ -589,7 +589,7 @@ fn apply_response(
     let conflicts_dir = conflicts_dir(base_dir);
     for d in &bulk_resp.conflict_downloads {
         // If the name does not parse, file it under the key as is. An old shape is still a copy
-        let key = conflict::conflict_copy_path(&d.key).unwrap_or_else(|| d.key.clone());
+        let key = conflict_copy::conflict_copy_path(&d.key).unwrap_or_else(|| d.key.clone());
         if let Err(e) = decode(d).and_then(|content| write_under(&conflicts_dir, &key, &content)) {
             result.errors.push(e);
         }

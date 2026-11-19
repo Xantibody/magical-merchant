@@ -1,5 +1,3 @@
-pub mod conflict;
-pub mod diff;
 pub mod scan;
 pub mod state;
 
@@ -11,8 +9,6 @@ pub mod config;
 pub mod engine;
 #[cfg(feature = "sync-client")]
 pub mod lock;
-#[cfg(feature = "sync-client")]
-pub mod round;
 #[cfg(feature = "sync-client")]
 pub mod token;
 

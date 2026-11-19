@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
-use super::scan::LocalFile;
-use super::state::SyncState;
+use crate::sync::scan::LocalFile;
+use crate::sync::state::SyncState;
 use crate::utils::clock::UtcStamp;
 
 #[derive(Debug, Clone)]
@@ -155,8 +155,8 @@ pub fn compute(
 
 #[cfg(test)]
 mod tests {
-    use super::super::state::FileSyncRecord;
     use super::*;
+    use crate::sync::state::FileSyncRecord;
 
     fn local(key: &str, hash: &str) -> LocalFile {
         LocalFile {

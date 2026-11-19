@@ -5,10 +5,10 @@ use std::path::{Path, PathBuf};
 
 use crate::domain::data::data_dir;
 use crate::domain::note::kind::{NOTES_DIR, codex_dir, notes_dir};
+use crate::domain::sync::conflict_copy::{conflict_copy_path, conflict_filename};
 use crate::services::files::{
     ensure_dir, is_file, list_md_files, rename_without_clobber, walk_files,
 };
-use crate::sync::conflict::{conflict_copy_path, conflict_filename};
 use crate::utils::clock::UtcStamp;
 
 /// Where the copy of the side that lost a conflict lives.
