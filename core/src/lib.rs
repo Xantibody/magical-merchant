@@ -39,8 +39,9 @@ pub use domain::note::{
 };
 pub use domain::scrawl::entry::{ScrawlEntry, parse_scrawl_entry};
 pub use domain::scrawl::{
-    ScrawlDay, ScrawlDays, ScrawlDirMigration, delete_scrawl_entry, list_scrawl_dates,
-    migrate_scrawl_dir, read_scrawl, read_scrawl_days, save_scrawl_entry,
+    DatedEntry, EntriesBetween, ScrawlDay, ScrawlDays, ScrawlDirMigration, delete_scrawl_entry,
+    entries_between, list_scrawl_dates, migrate_scrawl_dir, read_scrawl, read_scrawl_days,
+    save_scrawl_entry,
 };
 pub use domain::search::{HitKind, SearchFilter, SearchHit, search_all, search_records};
 pub use domain::tags::{TagUsage, count_tags};

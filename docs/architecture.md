@@ -66,7 +66,7 @@ core/src/
     codex/         version
                    + draft, commit, compare, restore, promote
     scrawl/        entry (one line), day (the day file)
-                   + capture (add a line), journal (read days back), delete, migrate (data/timeline/)
+                   + capture (add a line), journal (read days back, or between two), delete, migrate (data/timeline/)
     templates/     file, variables, today
                    + folder, edit, draft, new_note
     glyphs/        image

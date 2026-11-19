@@ -12,5 +12,8 @@ mod migrate;
 
 pub use capture::save_scrawl_entry;
 pub use delete::delete_scrawl_entry;
-pub use journal::{ScrawlDay, ScrawlDays, list_scrawl_dates, read_scrawl, read_scrawl_days};
+pub use journal::{
+    DatedEntry, EntriesBetween, ScrawlDay, ScrawlDays, entries_between, list_scrawl_dates,
+    read_scrawl, read_scrawl_days,
+};
 pub use migrate::{ScrawlDirMigration, migrate_scrawl_dir};

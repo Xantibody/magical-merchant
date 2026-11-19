@@ -7,7 +7,7 @@ use magical_merchant_core::utils::clock::Day;
 use magical_merchant_core::utils::frontmatter;
 use magical_merchant_core::{
     DRAFT, GlyphFormat, GlyphName, NoteFilename, NoteKind, OpenedNote, Provenance, Revision,
-    Source, parse_scrawl_entry,
+    ScrawlEntry, Source, parse_scrawl_entry,
 };
 use rmcp::handler::server::tool::ToolRouter;
 use rmcp::handler::server::wrapper::{Json, Parameters};
@@ -149,6 +149,22 @@ impl McpServer {
             .map(str::to_string)
     }
 
+    /// One entry as an agent reads it, its place named from the cache.
+    fn entry_info(
+        &self,
+        cache: &PlaceCache,
+        date: &str,
+        index: usize,
+        entry: ScrawlEntry,
+    ) -> EntryInfo {
+        let place = entry
+            .context
+            .location
+            .as_ref()
+            .and_then(|l| self.place_name(cache, l.latitude, l.longitude));
+        EntryInfo::new(date, index, entry, place)
+    }
+
     fn day_entries(&self, cache: &PlaceCache, date: Day) -> Result<Vec<EntryInfo>, String> {
         let formatted = date.ymd();
         let lines =
@@ -157,13 +173,7 @@ impl McpServer {
             .iter()
             .enumerate()
             .map(|(index, line)| {
-                let entry = parse_scrawl_entry(line);
-                let place = entry
-                    .context
-                    .location
-                    .as_ref()
-                    .and_then(|l| self.place_name(cache, l.latitude, l.longitude));
-                EntryInfo::new(&formatted, index, entry, place)
+                self.entry_info(cache, &formatted, index, parse_scrawl_entry(line))
             })
             .collect())
     }
@@ -449,42 +459,26 @@ impl McpServer {
         if from > to {
             return Err(format!("'from' ({from}) is after 'to' ({to})"));
         }
-        let limit = param.limit.unwrap_or(DEFAULT_LIMIT);
-        // Callers do not type the exact spelling they saw in the list. The `#` and the case
-        // are ignored
-        let tag = param
-            .tag
-            .map(|t| magical_merchant_core::domain::tags::tag::normalize(&t));
+        // Callers do not type the exact spelling they saw in the list; core ignores the `#`
+        // and the case
+        let read = magical_merchant_core::entries_between(
+            &self.data_dir,
+            from,
+            to,
+            param.tag.as_deref(),
+            param.limit.unwrap_or(DEFAULT_LIMIT),
+        )
+        .map_err(err)?;
         let cache = self.places();
-
-        let mut entries = Vec::new();
-        let mut truncated = false;
-        // Narrow down from the list of dates. Opening every day in the range piles up a
-        // wasted stat for each day that was never written.
-        let mut dates: Vec<Day> = magical_merchant_core::list_scrawl_dates(&self.data_dir)
-            .map_err(err)?
+        let entries = read
+            .entries
             .into_iter()
-            .filter(|d| (from..=to).contains(d))
+            .map(|dated| self.entry_info(&cache, &dated.day.ymd(), dated.index, dated.entry))
             .collect();
-        dates.sort_unstable();
-        'days: for date in dates {
-            for entry in self.day_entries(&cache, date)? {
-                if tag.as_ref().is_some_and(|t| {
-                    !entry
-                        .tags
-                        .iter()
-                        .any(|own| magical_merchant_core::domain::tags::tag::same_tag(own, t))
-                }) {
-                    continue;
-                }
-                if entries.len() >= limit {
-                    truncated = true;
-                    break 'days;
-                }
-                entries.push(entry);
-            }
-        }
-        Ok(Json(ScrawlOutput { entries, truncated }))
+        Ok(Json(ScrawlOutput {
+            entries,
+            truncated: read.truncated,
+        }))
     }
 
     #[tool(
