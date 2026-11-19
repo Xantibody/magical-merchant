@@ -1,7 +1,7 @@
 /**
  * Preview resolution of template variables.
  *
- * The real resolution is done by core (`template/vars.rs`). What lives here is a
+ * The real resolution is done by core (`domain/templates/variables.rs`). What lives here is a
  * copy that shows the title and tags being edited as "this is what today would
  * produce", placed so that each keystroke does not round-trip the IPC. The file that
  * gets saved never passes through these functions.
@@ -76,7 +76,7 @@ export function resolveLine(line: string, now: Date, locale: Locale, prev = ""):
  * "prev: " would remain and nobody could read what it waits for.
  *
  * On actual creation it becomes a link if there is a previous note, and the whole
- * line is dropped if there is none (`template/vars.rs`). A caller that knows there is none
+ * line is dropped if there is none (`domain/templates/variables.rs`). A caller that knows there is none
  * says `dropPrev`, and the lines go here too.
  */
 export function resolveBody(
@@ -178,7 +178,7 @@ export const TEMPLATE_VARS: readonly TemplateVar[] = [
   },
   // The only variable that never becomes a value. It marks the line below it as
   // "an example that is not written into the note"; its job is dropping the line,
-  // not resolving (`core/src/template/vars.rs`)
+  // not resolving (`core/src/domain/templates/variables.rs`)
   {
     token: "{{eg}}",
     label: () => t().templates.varExample,

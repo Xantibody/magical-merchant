@@ -2,7 +2,7 @@
  * Pull the examples written into a template out, heading by heading.
  *
  * An example is never written into a note file: core drops the `{{eg}}` block when it
- * writes (`core/src/template/vars.rs`). So this does not "read from the saved body". It
+ * writes (`core/src/domain/templates/variables.rs`). So this does not "read from the saved body". It
  * re-reads the template the note claims (`template:` in frontmatter) and builds a copy
  * whose only purpose is to show the writer, in faint type. The rules for the delimiters
  * are written twice, the same as in core: a block ends at a blank line or at the next
