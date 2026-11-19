@@ -65,6 +65,18 @@ function saveErrorKind(error: unknown): string | undefined {
     : undefined;
 }
 
+/**
+ * The words of a refused command, to put in front of the person. A command refuses
+ * either with a bare string or with `{ kind, message }`; for the latter the message
+ * is the words, where `String()` would print `[object Object]`.
+ */
+export function errorText(error: unknown): string {
+  if (typeof error === "object" && error !== null && "kind" in error && "message" in error) {
+    return String(error.message);
+  }
+  return String(error);
+}
+
 export function isStaleSave(error: unknown): boolean {
   return saveErrorKind(error) === "stale";
 }

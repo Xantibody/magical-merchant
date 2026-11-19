@@ -2,7 +2,7 @@ import { createEffect, createResource, createSignal, For, onCleanup, Show } from
 import { A, useSearchParams } from "@solidjs/router";
 import Icon from "../components/Icon";
 import type { IconName } from "../components/Icon";
-import { typedInvoke } from "../lib/commands";
+import { errorText, typedInvoke } from "../lib/commands";
 import type { GlyphSummary } from "../lib/commands";
 import {
   glyphFormatOf,
@@ -213,7 +213,7 @@ export default function Settings(): JSX.Element {
       await loadGlyphs();
       flash(t().settings.glyphSaved(name));
     } catch (error) {
-      setMessage(t().settings.glyphSaveFailed(String(error)));
+      setMessage(t().settings.glyphSaveFailed(errorText(error)));
     } finally {
       setSavingGlyph(false);
     }

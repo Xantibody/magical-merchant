@@ -7,7 +7,7 @@ import { createSignal, onCleanup, onMount, Show } from "solid-js";
 import type { Accessor, JSX } from "solid-js";
 import { listen } from "@tauri-apps/api/event";
 import type { UnlistenFn } from "@tauri-apps/api/event";
-import { typedInvoke } from "../../lib/commands";
+import { errorText, typedInvoke } from "../../lib/commands";
 import { EVENTS } from "../../lib/events";
 import { t } from "../../lib/i18n";
 import { syncErrorKind } from "../../lib/sync-status";
@@ -105,7 +105,7 @@ export function createSyncSettings({ setMessage, flash }: SettingsMessage): Sync
       });
       flash(t().common.saved);
     } catch (error) {
-      setMessage(t().settings.saveFailed(String(error)));
+      setMessage(t().settings.saveFailed(errorText(error)));
     } finally {
       setSaving(false);
     }
@@ -123,7 +123,7 @@ export function createSyncSettings({ setMessage, flash }: SettingsMessage): Sync
         flash(t().settings.signedInMessage);
       }
     } catch (error) {
-      setMessage(t().settings.signInFailed(String(error)));
+      setMessage(t().settings.signInFailed(errorText(error)));
     }
   };
 
@@ -133,7 +133,7 @@ export function createSyncSettings({ setMessage, flash }: SettingsMessage): Sync
       setAuthenticated(false);
       flash(t().settings.signedOutMessage);
     } catch (error) {
-      setMessage(t().settings.signOutFailed(String(error)));
+      setMessage(t().settings.signOutFailed(errorText(error)));
     }
   };
 

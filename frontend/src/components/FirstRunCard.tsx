@@ -1,7 +1,7 @@
 import { createSignal, Show } from "solid-js";
 import type { JSX } from "solid-js";
 import Icon from "./Icon";
-import { typedInvoke } from "../lib/commands";
+import { errorText, typedInvoke } from "../lib/commands";
 import { t } from "../lib/i18n";
 import { isImeComposing } from "../lib/ime";
 
@@ -44,7 +44,7 @@ export default function FirstRunCard(props: FirstRunCardProps): JSX.Element {
         close();
         props.onConnected();
       } catch (error) {
-        setFailure(String(error));
+        setFailure(errorText(error));
       } finally {
         setSaving(false);
       }
