@@ -508,4 +508,36 @@ mod tests {
         assert_eq!(second.len(), 1);
         assert_eq!(second[0].key, "notes/a.md");
     }
+
+    // ──────────── the cache rule, on plain values ────────────
+
+    fn recorded(mtime_ms: i64, size: u64) -> CachedHash {
+        CachedHash {
+            mtime_ms,
+            size,
+            hash: "recorded".to_string(),
+        }
+    }
+
+    #[test]
+    fn a_hash_is_reused_only_when_mtime_and_size_both_match() {
+        let cached = recorded(1_000, 5);
+
+        assert_eq!(reuse(Some(&cached), 1_000, 5), Some("recorded"));
+        assert_eq!(reuse(Some(&cached), 1_001, 5), None, "mtime moved");
+        assert_eq!(reuse(Some(&cached), 1_000, 6), None, "size moved");
+        assert_eq!(reuse(None, 1_000, 5), None, "nothing recorded");
+    }
+
+    #[test]
+    fn a_file_is_recorded_once_it_is_two_seconds_old() {
+        let now = SystemTime::UNIX_EPOCH + Duration::from_secs(1_790_000_000);
+
+        assert!(!cacheable(now, now - Duration::from_millis(1_900)));
+        assert!(cacheable(now, now - Duration::from_secs(2)));
+        assert!(
+            !cacheable(now, now + Duration::from_secs(1)),
+            "an mtime in the future"
+        );
+    }
 }
