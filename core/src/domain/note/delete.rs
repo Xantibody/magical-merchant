@@ -1,22 +1,19 @@
 //! Deleting a note, and with a Codex its versions.
 
-use std::fs;
 use std::path::Path;
 
 use crate::domain::note::{NoteFilename, NoteKind, locate_note};
 use crate::error::CoreError;
+use crate::services::files::{remove, remove_dir_all_if_dir};
 
 /// A Codex is deleted together with its versions directory (`codex/<stem>/`).
 /// Deleting only the note leaves versions that belong to nobody, and sync
 /// keeps distributing them.
 pub fn delete_note(base_dir: &Path, filename: &NoteFilename) -> Result<(), CoreError> {
     let (kind, path) = locate_note(base_dir, filename)?;
-    fs::remove_file(path)?;
+    remove(&path)?;
     if kind == NoteKind::Codex {
-        let versions = crate::note::version::versions_dir(base_dir, filename);
-        if versions.is_dir() {
-            fs::remove_dir_all(versions)?;
-        }
+        remove_dir_all_if_dir(&crate::note::version::versions_dir(base_dir, filename))?;
     }
     Ok(())
 }
@@ -28,6 +25,7 @@ mod tests {
         Provenance, create_draft_codex, create_draft_note, read_note_meta, update_note_view,
     };
     use crate::utils::device::Context;
+    use std::fs;
     use std::path::PathBuf;
     use tempfile::TempDir;
 

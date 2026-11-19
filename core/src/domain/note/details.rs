@@ -4,13 +4,12 @@
 //! from. The body is the writing screen's, and the context ("which device wrote it")
 //! and the source are records nobody edits.
 
-use std::fs;
 use std::path::Path;
 
 use crate::domain::note::file;
 use crate::domain::note::{NoteFilename, NoteFrontmatter, locate_note};
 use crate::error::CoreError;
-use crate::services::files::write_atomic;
+use crate::services::files::{read_text, write_atomic};
 use crate::utils::clock::Stamp;
 
 /// Replace only time and tags. The body of course, and context too, are not editable:
@@ -60,7 +59,7 @@ where
     F: FnOnce(NoteFrontmatter) -> NoteFrontmatter,
 {
     let (_, path) = locate_note(base_dir, filename)?;
-    let content = fs::read_to_string(&path)?;
+    let content = read_text(&path)?;
     write_atomic(&path, file::edit_record(&content, edit)?)?;
     Ok(())
 }
@@ -73,6 +72,7 @@ mod tests {
         update_note,
     };
     use crate::utils::device::{Context, Source};
+    use std::fs;
     use std::path::PathBuf;
     use tempfile::TempDir;
 

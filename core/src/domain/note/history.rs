@@ -16,7 +16,6 @@
 //! commits, and they sync as part of the document. These a machine sets aside, and they
 //! stay on the device.
 
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
@@ -24,7 +23,7 @@ use serde::Serialize;
 use crate::domain::note::kind::notes_dir;
 use crate::domain::note::{NoteFilename, Revision, locate_note, read_note_by_filename};
 use crate::error::CoreError;
-use crate::services::files::{ensure_dir, list_md_files, write_atomic};
+use crate::services::files::{ensure_dir, exists, list_md_files, read_text, remove, write_atomic};
 use crate::utils::clock::{Stamp, WallClock};
 
 /// The number of snapshots kept per note. A branch number within the same second counts
@@ -86,7 +85,7 @@ pub fn snapshot_note(
         Err(CoreError::NotFound(_)) => return Ok(None),
         Err(e) => return Err(e),
     };
-    let content = fs::read_to_string(&path)?;
+    let content = read_text(&path)?;
     let dir = note_history_dir(base_dir, filename);
     let now = Stamp::now_local();
     let stamp = now.id_stem();
@@ -95,7 +94,7 @@ pub fn snapshot_note(
     // back is usually the one just before a run of mistakes.
     let mut id = stamp.clone();
     let mut n = 1;
-    while dir.join(format!("{id}.md")).exists() {
+    while exists(&dir.join(format!("{id}.md"))) {
         n += 1;
         id = format!("{stamp}-{n}");
     }
@@ -151,7 +150,7 @@ fn prune(dir: &Path, written: &str) {
         .collect();
     others.sort_by(|a, b| sort_key(&b.0).cmp(&sort_key(&a.0)));
     for (_, path) in others.iter().skip(KEEP - 1) {
-        let _ = fs::remove_file(path);
+        let _ = remove(path);
     }
 }
 
@@ -187,10 +186,10 @@ pub fn read_note_history(
     id: &str,
 ) -> Result<String, CoreError> {
     let path = snapshot_path(&note_history_dir(base_dir, filename), id)?;
-    if !path.exists() {
+    if !exists(&path) {
         return Err(CoreError::NotFound(path.to_string_lossy().to_string()));
     }
-    Ok(fs::read_to_string(path)?)
+    read_text(&path)
 }
 
 /// Write a snapshot's content back into the note. The current whole text is snapshotted
@@ -238,6 +237,7 @@ mod tests {
     use crate::utils::device::Context;
     use crate::utils::frontmatter;
     use crate::{create_draft_note, promote_note_to_codex, read_note_by_filename, update_note};
+    use std::fs;
     use tempfile::TempDir;
 
     /// A note turned into a Codex is snapshotted under the same ID, and restores into the

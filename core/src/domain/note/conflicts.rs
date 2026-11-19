@@ -1,12 +1,13 @@
 //! Copies set aside under `conflicts/`: the conflict copies an older release left in
 //! `data/`, and the `notes/` side of an ID that is also a Codex.
 
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::domain::data::data_dir;
 use crate::domain::note::kind::{NOTES_DIR, codex_dir, notes_dir};
-use crate::services::files::{ensure_dir, list_md_files, rename_without_clobber};
+use crate::services::files::{
+    ensure_dir, is_file, list_md_files, rename_without_clobber, walk_files,
+};
 use crate::sync::conflict::{conflict_copy_path, conflict_filename};
 use crate::utils::clock::UtcStamp;
 
@@ -44,10 +45,7 @@ pub(crate) fn conflicts_dir(base_dir: &Path) -> PathBuf {
 /// next startup, and that is no reason to give up on the rest of the move.
 #[must_use]
 pub fn relocate_conflict_copies(base_dir: &Path) -> usize {
-    let data = data_dir(base_dir);
-    let mut moved = 0;
-    relocate_under(&data, &data, &conflicts_dir(base_dir), &mut moved);
-    moved
+    relocate_under(&data_dir(base_dir), &conflicts_dir(base_dir))
 }
 
 /// If the same ID is in both `notes/` and `codex/`, move the `notes/` side to `conflicts/`.
@@ -78,7 +76,7 @@ fn relocate_duplicate_ids_at(base_dir: &Path, now: UtcStamp) -> usize {
     let mut moved = 0;
     for entry in entries {
         let name = entry.file_name();
-        if !codex.join(&name).is_file() {
+        if !is_file(&codex.join(&name)) {
             continue;
         }
         let key = format!("{NOTES_DIR}/{}", name.to_string_lossy());
@@ -94,16 +92,9 @@ fn relocate_duplicate_ids_at(base_dir: &Path, now: UtcStamp) -> usize {
     moved
 }
 
-fn relocate_under(root: &Path, current: &Path, conflicts: &Path, moved: &mut usize) {
-    let Ok(entries) = fs::read_dir(current) else {
-        return;
-    };
-    for entry in entries.filter_map(Result::ok) {
-        let path = entry.path();
-        if entry.file_type().is_ok_and(|t| t.is_dir()) {
-            relocate_under(root, &path, conflicts, moved);
-            continue;
-        }
+fn relocate_under(root: &Path, conflicts: &Path) -> usize {
+    let mut moved = 0;
+    for path in walk_files(root) {
         // Shape it like a scan key before parsing. The copy lands in the same
         // `conflicts/<key>/` place as the ones that came down through a download
         let Some(relative) = path
@@ -118,8 +109,9 @@ fn relocate_under(root: &Path, current: &Path, conflicts: &Path, moved: &mut usi
         if ensure_dir(&target).is_err() || rename_without_clobber(&path, &target).is_err() {
             continue;
         }
-        *moved += 1;
+        moved += 1;
     }
+    moved
 }
 
 #[cfg(test)]
@@ -128,6 +120,7 @@ mod tests {
     use crate::domain::note::{NoteFilename, Provenance, create_draft_codex};
     use crate::domain::scrawl::day::SCRAWL_DIR;
     use crate::utils::device::Context;
+    use std::fs;
     use tempfile::TempDir;
 
     /// Copies sit outside `data/`, like history. Inside, they would travel back and

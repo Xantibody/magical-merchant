@@ -1,13 +1,11 @@
 //! Saving the body from the writing screen (and from the CLI and MCP).
 
-use std::fs;
-use std::io;
 use std::path::Path;
 
 use crate::domain::note::Revision;
 use crate::domain::note::file;
 use crate::error::CoreError;
-use crate::services::files::write_atomic;
+use crate::services::files::{read_existing_text, write_atomic};
 use crate::utils::clock::Stamp;
 use crate::utils::device::Context;
 
@@ -34,15 +32,10 @@ pub fn update_note(
     context: &Context,
     expected: Option<&Revision>,
 ) -> Result<Revision, CoreError> {
-    let existing = fs::read_to_string(file_path).map_err(|e| match e.kind() {
-        io::ErrorKind::NotFound => CoreError::NotFound(file_path.display().to_string()),
-        // A file that cannot be read as text is refused for the same reason on
-        // every rewrite or re-read. Folded into `Io`, the caller cannot tell it
-        // from a transient fault, and a save that was given up on is treated as
-        // one that "will go through later"
-        io::ErrorKind::InvalidData => CoreError::NotText(file_path.display().to_string()),
-        _ => CoreError::Io(e),
-    })?;
+    // A file that cannot be read as text is refused for the same reason on every
+    // rewrite or re-read. Folded into `Io`, the caller cannot tell it from a transient
+    // fault, and a save that was given up on is treated as one that "will go through later"
+    let existing = read_existing_text(file_path)?;
     let name = file_path.file_name().map_or_else(
         || file_path.display().to_string(),
         |n| n.to_string_lossy().to_string(),
@@ -68,6 +61,7 @@ mod tests {
     };
     use crate::utils::device::Source;
     use crate::utils::frontmatter;
+    use std::fs;
     use std::path::PathBuf;
     use tempfile::TempDir;
 

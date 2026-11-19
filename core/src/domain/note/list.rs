@@ -1,12 +1,11 @@
 //! The list of every Note and Codex, and the one read of every note that search, the tag
 //! count and backlinks share.
 
-use std::fs;
 use std::path::Path;
 
 use crate::domain::note::{NoteKind, NoteSummary};
 use crate::error::CoreError;
-use crate::services::files::list_md_files;
+use crate::services::files::{Entry, list_md_files, read_text};
 use crate::utils::frontmatter;
 
 pub fn list_notes(base_dir: &Path) -> Result<Vec<NoteSummary>, CoreError> {
@@ -34,7 +33,7 @@ pub(crate) fn scan<F>(base_dir: &Path, mut visit: F) -> Result<(), CoreError>
 where
     F: FnMut(NoteSummary, &str),
 {
-    let mut entries: Vec<(NoteKind, fs::DirEntry)> = Vec::new();
+    let mut entries: Vec<(NoteKind, Entry)> = Vec::new();
     for kind in [NoteKind::Note, NoteKind::Codex] {
         for entry in list_md_files(&kind.dir(base_dir))? {
             entries.push((kind, entry));
@@ -45,7 +44,7 @@ where
     for (kind, entry) in entries {
         let path = entry.path();
         let filename = entry.file_name().to_string_lossy().to_string();
-        let content = fs::read_to_string(&path).unwrap_or_default();
+        let content = read_text(&path).unwrap_or_default();
         let body = frontmatter::strip(&content);
         // Versions live next to the note, under the name minus `.md`. Version bodies
         // are not read
@@ -66,6 +65,7 @@ mod tests {
     use super::*;
     use crate::domain::note::{Provenance, create_draft_note};
     use crate::utils::device::Context;
+    use std::fs;
     use std::path::PathBuf;
     use tempfile::TempDir;
 

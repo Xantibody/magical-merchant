@@ -1,13 +1,11 @@
 //! Making a Note or a Codex: the name is taken first, then filled.
 
-use std::fs::OpenOptions;
-use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use crate::domain::note::NoteKind;
 use crate::domain::note::file::{Provenance, format_note_markdown};
 use crate::error::CoreError;
-use crate::services::files::ensure_dir;
+use crate::services::files::{create_new_with, ensure_dir, exists};
 use crate::utils::clock::Stamp;
 use crate::utils::device::Context;
 
@@ -118,27 +116,15 @@ fn create_kind_at(
     ensure_dir(&file_path)?;
 
     loop {
-        if kind.other().file_path(base_dir, time).exists() {
-            time = time.plus_seconds(1);
-            file_path = kind.file_path(base_dir, time);
-            continue;
-        }
-        match OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&file_path)
+        if !exists(&kind.other().file_path(base_dir, time))
+            && create_new_with(&file_path, || {
+                format_note_markdown(body, tags, time, context, provenance)
+            })?
         {
-            Ok(mut file) => {
-                let markdown = format_note_markdown(body, tags, time, context, provenance)?;
-                file.write_all(markdown.as_bytes())?;
-                return Ok(file_path);
-            }
-            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
-                time = time.plus_seconds(1);
-                file_path = kind.file_path(base_dir, time);
-            }
-            Err(e) => return Err(e.into()),
+            return Ok(file_path);
         }
+        time = time.plus_seconds(1);
+        file_path = kind.file_path(base_dir, time);
     }
 }
 

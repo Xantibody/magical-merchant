@@ -1,12 +1,11 @@
 //! A one-time repair of notes an older editor build saved with mangled metadata.
 
-use std::fs;
 use std::path::Path;
 
 use crate::domain::note::NoteFrontmatter;
 use crate::domain::note::kind::notes_dir;
 use crate::error::CoreError;
-use crate::services::files::{list_md_files, write_atomic};
+use crate::services::files::{list_md_files, read_text, write_atomic};
 use crate::utils::clock::{Stamp, WallClock, Zone};
 use crate::utils::frontmatter;
 
@@ -29,7 +28,7 @@ pub(crate) fn repair_all(notes_dir: &Path) -> Result<usize, CoreError> {
     let mut repaired = 0;
     for entry in list_md_files(notes_dir)? {
         let path = entry.path();
-        let Ok(content) = fs::read_to_string(&path) else {
+        let Ok(content) = read_text(&path) else {
             continue;
         };
         let Ok((fm, body)) = frontmatter::parse::<NoteFrontmatter>(&content) else {
@@ -114,6 +113,7 @@ fn filename_time_in(filename: &str, zone: &Zone) -> Option<Stamp> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
     use tempfile::TempDir;
 
     /// A reproduction in the same shape as a file that was actually broken.

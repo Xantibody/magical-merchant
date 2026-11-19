@@ -1,11 +1,10 @@
 //! Opening a note: finding it by ID, and reading its body or its record.
 
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::domain::note::{NoteFilename, NoteFrontmatter, NoteKind};
 use crate::error::CoreError;
-use crate::services::files::resolve_existing;
+use crate::services::files::{read_text, resolve_existing};
 use crate::utils::frontmatter;
 
 /// Look up a note's kind and actual location from its ID.
@@ -41,7 +40,7 @@ pub fn locate_note(
 /// Return the note's body. Frontmatter is a matter of the storage format and is not
 /// something to show the reader (preview, editor, MCP).
 pub fn read_note(file_path: &Path) -> Result<String, CoreError> {
-    let content = fs::read_to_string(file_path)?;
+    let content = read_text(file_path)?;
     Ok(frontmatter::strip(&content).to_string())
 }
 
@@ -49,7 +48,7 @@ pub fn read_note_by_filename(
     base_dir: &Path,
     filename: &NoteFilename,
 ) -> Result<String, CoreError> {
-    let content = fs::read_to_string(locate_note(base_dir, filename)?.1)?;
+    let content = read_text(&locate_note(base_dir, filename)?.1)?;
     Ok(frontmatter::strip(&content).to_string())
 }
 
@@ -62,7 +61,7 @@ pub fn read_note_meta(
     base_dir: &Path,
     filename: &NoteFilename,
 ) -> Result<NoteFrontmatter, CoreError> {
-    let content = fs::read_to_string(locate_note(base_dir, filename)?.1)?;
+    let content = read_text(&locate_note(base_dir, filename)?.1)?;
     let (fm, _body) = frontmatter::parse::<NoteFrontmatter>(&content)?;
     Ok(fm)
 }
@@ -72,6 +71,7 @@ mod tests {
     use super::*;
     use crate::domain::note::{Provenance, create_draft_note};
     use crate::utils::device::Context;
+    use std::fs;
     use tempfile::TempDir;
 
     fn mock_context() -> Context {

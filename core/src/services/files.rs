@@ -132,10 +132,90 @@ pub fn read_text(path: &Path) -> Result<String, CoreError> {
     Ok(fs::read_to_string(path)?)
 }
 
+/// The contents of a file that is expected to be there, as text.
+///
+/// Unlike [`read_text`], the two refusals a caller acts on get their own answers, named
+/// after `path`: a missing file is [`CoreError::NotFound`], and bytes that are not UTF-8
+/// are [`CoreError::NotText`]. Any other failure stays [`CoreError::Io`].
+pub fn read_existing_text(path: &Path) -> Result<String, CoreError> {
+    fs::read_to_string(path).map_err(|e| match e.kind() {
+        std::io::ErrorKind::NotFound => CoreError::NotFound(path.display().to_string()),
+        std::io::ErrorKind::InvalidData => CoreError::NotText(path.display().to_string()),
+        _ => CoreError::Io(e),
+    })
+}
+
+/// Whether a regular file is at `path`, following links.
+#[must_use]
+pub fn is_file(path: &Path) -> bool {
+    path.is_file()
+}
+
 /// Removes the file at `path`. A missing file is an error; see [`remove_if_present`] for
 /// the removal that is content with nothing there.
 pub fn remove(path: &Path) -> Result<(), CoreError> {
     Ok(fs::remove_file(path)?)
+}
+
+/// Removes `dir` with everything under it, if it is a directory. Anything else at `dir`,
+/// or nothing, is left as it is.
+pub fn remove_dir_all_if_dir(dir: &Path) -> Result<(), CoreError> {
+    if dir.is_dir() {
+        fs::remove_dir_all(dir)?;
+    }
+    Ok(())
+}
+
+/// Creates the file at `path` only if nothing is there yet, and fills it with what `render`
+/// returns. `true` when it was created; `false`, with `render` never called, when the name
+/// was already taken.
+///
+/// The name is taken first (`create_new`, `O_EXCL`) and filled after, so two writers never
+/// both get the same name. A `render` that fails leaves the empty file behind.
+pub fn create_new_with<F>(path: &Path, render: F) -> Result<bool, CoreError>
+where
+    F: FnOnce() -> Result<String, CoreError>,
+{
+    use std::io::Write as _;
+
+    match fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+    {
+        Ok(mut file) => {
+            file.write_all(render()?.as_bytes())?;
+            Ok(true)
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Ok(false),
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// Every file under `root`, depth first in the order the directories list them. A
+/// directory is walked into, not listed; a link is listed as it is, not followed.
+///
+/// A directory or an item that cannot be read is skipped silently, `root` included: one
+/// bad corner does not hide the rest.
+#[must_use]
+pub fn walk_files(root: &Path) -> Vec<PathBuf> {
+    let mut found = Vec::new();
+    walk_into(root, &mut found);
+    found
+}
+
+fn walk_into(dir: &Path, found: &mut Vec<PathBuf>) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.filter_map(Result::ok) {
+        let path = entry.path();
+        if entry.file_type().is_ok_and(|t| t.is_dir()) {
+            walk_into(&path, found);
+        } else {
+            found.push(path);
+        }
+    }
 }
 
 /// A running number that keeps temporary file names from colliding within one process.
@@ -278,6 +358,9 @@ fn spare_name(path: &Path, n: u32) -> PathBuf {
         .map_or_else(|| format!("{stem}-{n}"), |ext| format!("{stem}-{n}.{ext}"));
     path.with_file_name(name)
 }
+
+/// One item [`list_md_files`] hands out.
+pub type Entry = DirEntry;
 
 /// `e.path()` allocates a `PathBuf` that includes the directory name. Just checking
 /// the extension needs only the file name, so the per-entry allocation is that much smaller.
@@ -810,6 +893,168 @@ mod tests {
             remove(&tmp.path().join("nope")),
             Err(CoreError::Io(e)) if e.kind() == std::io::ErrorKind::NotFound
         ));
+    }
+
+    #[test]
+    fn read_existing_text_returns_the_contents() {
+        let tmp = seed(&["a.md"]);
+
+        assert_eq!(read_existing_text(&tmp.path().join("a.md")).unwrap(), "x");
+    }
+
+    #[test]
+    fn read_existing_text_names_a_missing_file_not_found() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("nope.md");
+
+        assert!(matches!(
+            read_existing_text(&path),
+            Err(CoreError::NotFound(name)) if name == path.display().to_string()
+        ));
+    }
+
+    #[test]
+    fn read_existing_text_names_bytes_that_are_not_text() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("a.md");
+        fs::write(&path, b"\xff\xfe").unwrap();
+
+        assert!(matches!(
+            read_existing_text(&path),
+            Err(CoreError::NotText(name)) if name == path.display().to_string()
+        ));
+    }
+
+    #[test]
+    fn read_existing_text_leaves_other_failures_as_io() {
+        let tmp = TempDir::new().unwrap();
+
+        assert!(matches!(
+            read_existing_text(tmp.path()),
+            Err(CoreError::Io(_))
+        ));
+    }
+
+    #[test]
+    fn is_file_tells_a_file_from_a_directory_and_nothing() {
+        let tmp = seed(&["a.md"]);
+
+        assert!(is_file(&tmp.path().join("a.md")));
+        assert!(!is_file(tmp.path()));
+        assert!(!is_file(&tmp.path().join("nope")));
+    }
+
+    #[test]
+    fn remove_dir_all_if_dir_removes_a_directory_and_what_it_holds() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path().join("versions");
+        fs::create_dir_all(dir.join("deeper")).unwrap();
+        fs::write(dir.join("deeper/a.md"), "x").unwrap();
+
+        remove_dir_all_if_dir(&dir).unwrap();
+
+        assert!(!dir.exists());
+    }
+
+    #[test]
+    fn remove_dir_all_if_dir_leaves_a_file_and_is_content_with_nothing() {
+        let tmp = seed(&["a.md"]);
+
+        remove_dir_all_if_dir(&tmp.path().join("a.md")).unwrap();
+        remove_dir_all_if_dir(&tmp.path().join("nope")).unwrap();
+
+        assert!(tmp.path().join("a.md").exists());
+    }
+
+    #[test]
+    fn create_new_with_creates_and_fills_a_free_name() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("a.md");
+
+        assert!(create_new_with(&path, || Ok("body".to_string())).unwrap());
+
+        assert_eq!(fs::read_to_string(&path).unwrap(), "body");
+    }
+
+    /// A taken name is reported, not overwritten, and nothing is rendered for it.
+    #[test]
+    fn create_new_with_leaves_a_taken_name_alone() {
+        let tmp = seed(&["a.md"]);
+        let path = tmp.path().join("a.md");
+
+        let created = create_new_with(&path, || panic!("not rendered for a taken name")).unwrap();
+
+        assert!(!created);
+        assert_eq!(fs::read_to_string(&path).unwrap(), "x");
+    }
+
+    /// The name is taken before the content is made, so a render that fails leaves the
+    /// empty file behind.
+    #[test]
+    fn create_new_with_keeps_the_name_when_the_render_fails() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("a.md");
+
+        let result = create_new_with(&path, || Err(CoreError::Parse("boom".to_string())));
+
+        assert!(matches!(result, Err(CoreError::Parse(_))));
+        assert_eq!(fs::read_to_string(&path).unwrap(), "");
+    }
+
+    #[test]
+    fn create_new_with_fails_where_the_directory_is_missing() {
+        let tmp = TempDir::new().unwrap();
+
+        assert!(matches!(
+            create_new_with(&tmp.path().join("nope/a.md"), || Ok(String::new())),
+            Err(CoreError::Io(_))
+        ));
+    }
+
+    #[test]
+    fn walk_files_lists_every_file_and_walks_into_directories() {
+        let tmp = seed(&["a.md"]);
+        fs::create_dir_all(tmp.path().join("sub/deeper")).unwrap();
+        fs::write(tmp.path().join("sub/b.md"), "x").unwrap();
+        fs::write(tmp.path().join("sub/deeper/c.txt"), "x").unwrap();
+        fs::create_dir(tmp.path().join("empty")).unwrap();
+
+        let mut found: Vec<PathBuf> = walk_files(tmp.path())
+            .into_iter()
+            .map(|p| p.strip_prefix(tmp.path()).unwrap().to_path_buf())
+            .collect();
+        found.sort();
+
+        assert_eq!(
+            found,
+            vec![
+                PathBuf::from("a.md"),
+                PathBuf::from("sub/b.md"),
+                PathBuf::from("sub/deeper/c.txt"),
+            ]
+        );
+    }
+
+    #[test]
+    fn walk_files_of_a_missing_root_is_empty() {
+        let tmp = TempDir::new().unwrap();
+
+        assert!(walk_files(&tmp.path().join("nope")).is_empty());
+    }
+
+    /// A link to a directory is an item to the walk, not a way into the directory.
+    #[cfg(unix)]
+    #[test]
+    fn walk_files_lists_a_link_without_following_it() {
+        let tmp = TempDir::new().unwrap();
+        let real = tmp.path().join("real");
+        fs::create_dir(&real).unwrap();
+        fs::write(real.join("a.md"), "x").unwrap();
+        let root = tmp.path().join("root");
+        fs::create_dir(&root).unwrap();
+        std::os::unix::fs::symlink(&real, root.join("linked")).unwrap();
+
+        assert_eq!(walk_files(&root), vec![root.join("linked")]);
     }
 
     #[cfg(unix)]

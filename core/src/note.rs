@@ -9,12 +9,11 @@ pub use version::{
     restore_note_version,
 };
 
-use std::fs;
 use std::path::Path;
 
 use crate::domain::note::{NoteFilename, NoteKind, locate_note};
 use crate::error::CoreError;
-use crate::services::files::ensure_dir;
+use crate::services::files::{ensure_dir, rename};
 
 /// Turn a note into a Codex.
 ///
@@ -31,7 +30,7 @@ pub fn promote_note_to_codex(base_dir: &Path, filename: &NoteFilename) -> Result
     }
     let target = NoteKind::Codex.dir(base_dir).join(filename.as_str());
     ensure_dir(&target)?;
-    fs::rename(path, target)?;
+    rename(&path, &target)?;
     Ok(())
 }
 
@@ -40,6 +39,7 @@ mod tests {
     use super::*;
     use crate::domain::note::{Provenance, create_draft_codex, create_draft_note, list_notes};
     use crate::utils::device::Context;
+    use std::fs;
     use std::path::PathBuf;
     use tempfile::TempDir;
 
