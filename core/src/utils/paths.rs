@@ -1,22 +1,14 @@
 use std::path::{Path, PathBuf};
 
-use crate::utils::clock::{Day, Stamp};
+use crate::utils::clock::Stamp;
 
 pub const DATA_DIR: &str = "data";
-pub const SCRAWL_DIR: &str = "scrawl";
 pub const NOTES_DIR: &str = "notes";
 pub const CODEX_DIR: &str = "codex";
 
 #[must_use]
 pub fn data_dir(base_dir: &Path) -> PathBuf {
     base_dir.join(DATA_DIR)
-}
-
-#[must_use]
-pub fn scrawl_file_path(base_dir: &Path, date: Day) -> PathBuf {
-    data_dir(base_dir)
-        .join(SCRAWL_DIR)
-        .join(format!("{}.md", date.ymd()))
 }
 
 /// The filename follows the wall clock of the place the timestamp points at.
@@ -80,13 +72,6 @@ pub fn place_cache_path(base_dir: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_scrawl_file_path() {
-        let date = Day::new(2026, 3, 20).unwrap();
-        let path = scrawl_file_path(Path::new("/app"), date);
-        assert_eq!(path, PathBuf::from("/app/data/scrawl/2026-03-20.md"));
-    }
 
     #[test]
     fn test_note_file_path() {

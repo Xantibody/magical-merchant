@@ -2,13 +2,15 @@ use std::fs;
 use std::io;
 use std::path::PathBuf;
 
+use crate::domain::scrawl::day::{
+    DayLog, SCRAWL_DIR, day_of_filename, expect_same_entry, scrawl_file_path,
+};
 use crate::error::CoreError;
-use crate::scrawl::day::DayLog;
 use crate::scrawl::migrate::migrate_scrawl_dir;
 use crate::services::files::{ensure_dir, write_atomic};
 use crate::utils::clock::{Day, WallClock};
 use crate::utils::device::{Context, Source};
-use crate::utils::paths::{self, scrawl_file_path};
+use crate::utils::paths;
 
 pub(crate) struct Scrawl {
     base_dir: PathBuf,
@@ -40,18 +42,14 @@ impl Scrawl {
     }
 
     pub(crate) fn list_dates(&self) -> Result<Vec<Day>, CoreError> {
-        let scrawl_dir = paths::data_dir(&self.base_dir).join(paths::SCRAWL_DIR);
+        let scrawl_dir = paths::data_dir(&self.base_dir).join(SCRAWL_DIR);
         if !scrawl_dir.exists() {
             return Ok(Vec::new());
         }
 
         let mut dates: Vec<Day> = fs::read_dir(&scrawl_dir)?
             .filter_map(Result::ok)
-            .filter_map(|e| {
-                let name = e.file_name().to_string_lossy().to_string();
-                let stem = name.strip_suffix(".md")?;
-                Day::parse_ymd(stem).ok()
-            })
+            .filter_map(|e| day_of_filename(&e.file_name().to_string_lossy()))
             .collect();
 
         dates.sort_by(|a, b| b.cmp(a));
@@ -119,24 +117,6 @@ impl Scrawl {
     }
 }
 
-/// Checks that the line `index` points at now is the same `raw` the writer read.
-///
-/// Day files grow by appending, so index is only "the position at read time". If the sync or
-/// the widget adds a line earlier in the day, the same index points at the record next to it.
-///
-/// The comparison is against the expanded line that `read` returned. The line on disk has
-/// its device information folded into the frontmatter, which the writer never saw.
-// AIDEV-NOTE: a mismatch is Stale, not NotFound: the way out is "re-read and retry", unlike a line that is gone
-fn expect_same_entry(day: &DayLog, index: usize, raw: &str) -> Result<(), CoreError> {
-    let Some(entry) = day.expanded_at(index) else {
-        return Err(CoreError::NotFound(format!("scrawl entry {index}")));
-    };
-    if entry == raw {
-        return Ok(());
-    }
-    Err(CoreError::Stale(format!("scrawl entry {index}")))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -163,7 +143,7 @@ mod tests {
     #[test]
     fn which_day_files_are_listed() {
         let tmp = TempDir::new().unwrap();
-        let dir = tmp.path().join("data").join(paths::SCRAWL_DIR);
+        let dir = tmp.path().join("data").join(SCRAWL_DIR);
         fs::create_dir_all(&dir).unwrap();
         for name in [
             "2026-03-20.md",
@@ -337,6 +317,6 @@ mod tests {
             fs::read_to_string(legacy.join(format!("{DATE}.md"))).unwrap(),
             "- [09:00:00] old\n"
         );
-        assert!(!paths::data_dir(tmp.path()).join(paths::SCRAWL_DIR).exists());
+        assert!(!paths::data_dir(tmp.path()).join(SCRAWL_DIR).exists());
     }
 }

@@ -1,4 +1,3 @@
-pub(crate) mod day;
 pub(crate) mod migrate;
 pub(crate) mod repository;
 

@@ -17,8 +17,9 @@
 use std::fs;
 use std::path::Path;
 
+use crate::domain::scrawl::day::SCRAWL_DIR;
 use crate::error::CoreError;
-use crate::utils::paths::{SCRAWL_DIR, data_dir};
+use crate::utils::paths::data_dir;
 
 /// The pre-rename directory. This spelling survives only here, and once the migration is
 /// done nobody reads it.

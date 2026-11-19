@@ -1,10 +1,29 @@
+use std::path::{Path, PathBuf};
+
 use serde::{Deserialize, Serialize};
 
 use crate::domain::scrawl::entry::{format_scrawl_line, split_context_json, split_time_prefix};
 use crate::error::CoreError;
-use crate::utils::clock::WallClock;
+use crate::utils::clock::{Day, WallClock};
 use crate::utils::device::{Context, DeviceIdentity, Source};
 use crate::utils::frontmatter;
+use crate::utils::paths::data_dir;
+
+pub(crate) const SCRAWL_DIR: &str = "scrawl";
+
+#[must_use]
+pub(crate) fn scrawl_file_path(base_dir: &Path, date: Day) -> PathBuf {
+    data_dir(base_dir)
+        .join(SCRAWL_DIR)
+        .join(format!("{}.md", date.ymd()))
+}
+
+/// The day a file under `data/scrawl/` holds, or `None` when the name is not a day file.
+/// What the date parser lets through decides which files the Scrawl screen and search see.
+pub(crate) fn day_of_filename(name: &str) -> Option<Day> {
+    let stem = name.strip_suffix(".md")?;
+    Day::parse_ymd(stem).ok()
+}
 
 /// The list of devices used that day, placed at the head of the day file.
 ///
@@ -186,10 +205,35 @@ pub(crate) fn split_entries(content: &str) -> Vec<String> {
     entries
 }
 
+/// Checks that the line `index` points at now is the same `raw` the writer read.
+///
+/// Day files grow by appending, so index is only "the position at read time". If the sync or
+/// the widget adds a line earlier in the day, the same index points at the record next to it.
+///
+/// The comparison is against the expanded line that `read` returned. The line on disk has
+/// its device information folded into the frontmatter, which the writer never saw.
+// AIDEV-NOTE: a mismatch is Stale, not NotFound: the way out is "re-read and retry", unlike a line that is gone
+pub(crate) fn expect_same_entry(day: &DayLog, index: usize, raw: &str) -> Result<(), CoreError> {
+    let Some(entry) = day.expanded_at(index) else {
+        return Err(CoreError::NotFound(format!("scrawl entry {index}")));
+    };
+    if entry == raw {
+        return Ok(());
+    }
+    Err(CoreError::Stale(format!("scrawl entry {index}")))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::utils::device::NetworkType;
+
+    #[test]
+    fn test_scrawl_file_path() {
+        let date = Day::new(2026, 3, 20).unwrap();
+        let path = scrawl_file_path(Path::new("/app"), date);
+        assert_eq!(path, PathBuf::from("/app/data/scrawl/2026-03-20.md"));
+    }
 
     fn at(hour: u32) -> WallClock {
         WallClock::new(2026, 4, 30, hour, 0, 0).unwrap()

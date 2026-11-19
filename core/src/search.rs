@@ -3,12 +3,12 @@ use std::path::Path;
 use crate::utils::clock::Day;
 use serde::{Deserialize, Serialize};
 
+use crate::domain::scrawl::day::DayLog;
 use crate::domain::scrawl::entry::strip_scrawl_prefix;
 use crate::error::CoreError;
 use crate::list_scrawl_dates;
 use crate::note::{NoteKind, Notes};
 use crate::scrawl::Scrawl;
-use crate::scrawl::day::DayLog;
 use crate::utils::tags;
 use crate::utils::text::lowercase;
 

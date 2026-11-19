@@ -201,7 +201,8 @@ fn filename_time_in(filename: &str, zone: &Zone) -> Option<Stamp> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::paths::{SCRAWL_DIR, notes_dir};
+    use crate::domain::scrawl::day::SCRAWL_DIR;
+    use crate::utils::paths::notes_dir;
     use tempfile::TempDir;
 
     /// A reproduction in the same shape as a file that was actually broken.
