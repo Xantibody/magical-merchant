@@ -2,7 +2,6 @@ use serde::Serialize;
 use thiserror::Error;
 
 use crate::note::error::NoteError;
-use crate::scrawl::error::ScrawlError;
 
 #[derive(Debug, Error)]
 pub enum CoreError {
@@ -52,15 +51,6 @@ impl From<NoteError> for CoreError {
             NoteError::NotFound(s) => Self::NotFound(s),
             NoteError::PathTraversal(s) => Self::PathTraversal(s),
             NoteError::Parse(s) => Self::Parse(s),
-        }
-    }
-}
-
-impl From<ScrawlError> for CoreError {
-    fn from(err: ScrawlError) -> Self {
-        match err {
-            ScrawlError::Io(e) => Self::Io(e),
-            ScrawlError::Parse(s) => Self::Parse(s),
         }
     }
 }

@@ -1,5 +1,4 @@
 pub(crate) mod day;
-pub(crate) mod error;
 pub(crate) mod migrate;
 pub(crate) mod repository;
 

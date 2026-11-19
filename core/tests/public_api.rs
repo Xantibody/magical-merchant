@@ -12,7 +12,7 @@ use magical_merchant_core::{
     BEFORE_RESTORE, CoreError, CreatedNote, DRAFT, DeviceContext, GLYPH_MAX_BYTES, GlyphData,
     GlyphFormat, GlyphName, GlyphSummary, HitKind, NoteError, NoteFilename, NoteKind, NoteMeta,
     NoteSummary, Provenance, Revision, ScrawlDay, ScrawlDays, ScrawlDirMigration, ScrawlEntry,
-    ScrawlError, SearchFilter, SearchHit, Snapshot, Source, SyncError, TagUsage, TemplateDetail,
+    SearchFilter, SearchHit, Snapshot, Source, SyncError, TagUsage, TemplateDetail,
     TemplateSummary, TemplateToday, VarLocale, Version, VersionStatus, browse_all,
     commit_note_version, count_tags, create_draft_codex, create_draft_note, create_note_at,
     create_note_from_template, delete_glyph, delete_note, delete_note_version, delete_scrawl_entry,
@@ -33,7 +33,6 @@ fn the_crate_root_keeps_its_types_and_constants() {
     let _: Option<CoreError> = None;
     let _: Option<SyncError> = None;
     let _: Option<NoteError> = None;
-    let _: Option<ScrawlError> = None;
 
     let _: Option<GlyphData> = None;
     let _: Option<GlyphSummary> = None;
