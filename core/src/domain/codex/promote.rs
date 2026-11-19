@@ -1,13 +1,4 @@
-//! What is left of the old note module: the Codex versions and the promotion of a Note to
-//! a Codex. Plan 29 moves both into `domain::codex`.
-
-pub(crate) mod version;
-
-pub use version::{
-    BEFORE_RESTORE, DRAFT, Version, VersionStatus, commit_note_version, delete_note_version,
-    diff_note_versions, list_note_versions, note_version_status, read_note_version,
-    restore_note_version,
-};
+//! Promotion: the note panel's one-way action that turns a Note into a Codex.
 
 use std::path::Path;
 

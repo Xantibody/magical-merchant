@@ -52,7 +52,7 @@ where
         let versions = path.with_extension("");
         let mut summary = NoteSummary::from_file(kind, path, filename, &content);
         if kind == NoteKind::Codex {
-            let (count, dirty) = crate::note::version::list_status(&versions, body)?;
+            let (count, dirty) = crate::domain::codex::version::list_status(&versions, body)?;
             summary.version_count = Some(count);
             summary.dirty = Some(dirty);
         }

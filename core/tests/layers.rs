@@ -20,12 +20,7 @@ use std::path::{Path, PathBuf};
 
 /// The old top-level modules. Each step moves one of them into `domain/`, and a service
 /// that leaned on one would be leaning on domain code under another name.
-const OLD_MODULES: &[&str] = &[
-    "crate::note",
-    "crate::sync",
-    "crate::search",
-    "crate::tag_count",
-];
+const OLD_MODULES: &[&str] = &["crate::sync", "crate::search", "crate::tag_count"];
 
 /// Rule files inside `domain/` (paths under the crate root). They hold the rules alone,
 /// so they are tested with plain values and never call a service.
@@ -47,7 +42,7 @@ const RULE_FILES: &[&str] = &[
 /// Violations the tree still has, each with the plan that removes it. A step that clears
 /// one takes its line out; a line that no longer matches anything fails the check.
 const ALLOWED: &[(&str, Rule, u32)] = &[
-    ("src/note.rs", Rule::EntryHoldsOnlyModAndPubUse, 29),
+    ("src/domain/codex/version.rs", Rule::DomainUsesStdFs, 29),
     ("src/sync.rs", Rule::EntryHoldsOnlyModAndPubUse, 32),
     ("src/utils/clock.rs", Rule::EntryHoldsOnlyModAndPubUse, 33),
     ("src/utils/place.rs", Rule::UtilsImportsServices, 31),

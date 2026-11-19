@@ -3,7 +3,6 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
 pub mod domain;
-mod note;
 pub mod services;
 pub mod sync;
 mod tag_count;
@@ -12,6 +11,11 @@ pub mod utils;
 mod error;
 pub mod search;
 
+pub use domain::codex::{
+    BEFORE_RESTORE, DRAFT, Version, VersionStatus, commit_note_version, delete_note_version,
+    diff_note_versions, list_note_versions, note_version_status, promote_note_to_codex,
+    read_note_version, restore_note_version,
+};
 pub use domain::glyphs::{
     GLYPH_MAX_BYTES, GlyphData, GlyphFormat, GlyphName, GlyphSummary, delete_glyph, list_glyphs,
     read_glyph, save_glyph,
@@ -39,11 +43,6 @@ pub use domain::templates::{
 };
 pub use domain::templates::{TemplateToday, templates_today};
 pub use error::{CoreError, SyncError, describe};
-pub use note::{
-    BEFORE_RESTORE, DRAFT, Version, VersionStatus, commit_note_version, delete_note_version,
-    diff_note_versions, list_note_versions, note_version_status, promote_note_to_codex,
-    read_note_version, restore_note_version,
-};
 pub use search::{
     HitKind, SearchFilter, SearchHit, browse_all, find_backlinks, recent_records, search_all,
     search_records,

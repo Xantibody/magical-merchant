@@ -13,7 +13,9 @@ pub fn delete_note(base_dir: &Path, filename: &NoteFilename) -> Result<(), CoreE
     let (kind, path) = locate_note(base_dir, filename)?;
     remove(&path)?;
     if kind == NoteKind::Codex {
-        remove_dir_all_if_dir(&crate::note::version::versions_dir(base_dir, filename))?;
+        remove_dir_all_if_dir(&crate::domain::codex::version::versions_dir(
+            base_dir, filename,
+        ))?;
     }
     Ok(())
 }

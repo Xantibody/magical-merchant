@@ -12,7 +12,7 @@
 //! The most recent [`KEEP`] per note are kept. The snapshots stay even when the note itself
 //! is deleted: restoring a deleted note from its snapshot is the reason for taking one.
 //!
-//! Codex versions are a different thing and live in `note::version`. Those a person
+//! Codex versions are a different thing and live in `domain::codex`. Those a person
 //! commits, and they sync as part of the document. These a machine sets aside, and they
 //! stay on the device.
 
