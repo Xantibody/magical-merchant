@@ -8,7 +8,7 @@ use serde::Serialize;
 
 use super::file::Summary;
 use super::variables::{VarLocale, previous_note_link, resolve_vars};
-use crate::note::NoteSummary;
+use crate::domain::note::NoteSummary;
 use crate::utils::clock::WallClock;
 
 /// One template, as it stands today.
@@ -61,7 +61,7 @@ fn first_line(body: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::note::NoteKind;
+    use crate::domain::note::NoteKind;
     use crate::utils::clock::Stamp;
     use std::path::PathBuf;
 

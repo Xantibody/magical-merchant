@@ -8,12 +8,13 @@ use super::file::template_name;
 use super::folder::Templates;
 use super::today::{TemplateToday, today_rows};
 use super::variables::{VarLocale, previous_note_link, resolve_vars};
+use crate::domain::note::NoteFilename;
+use crate::domain::note::NoteSummary;
 use crate::error::CoreError;
-use crate::note::{NoteSummary, Notes};
+use crate::note::Notes;
 use crate::utils::clock::WallClock;
 use crate::utils::device::Context;
 use crate::utils::frontmatter::Provenance;
-use crate::utils::validated::NoteFilename;
 
 /// The result of running a template.
 #[derive(Debug, Clone, Serialize)]
@@ -105,11 +106,11 @@ pub fn templates_today(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::note::kind::notes_dir;
     use crate::domain::templates::save_template;
     use crate::note::{list_notes, read_note};
     use crate::utils::clock::{Day, Stamp};
     use crate::utils::frontmatter::{self, NoteFrontmatter};
-    use crate::utils::paths::notes_dir;
     use std::fs;
     use tempfile::TempDir;
 

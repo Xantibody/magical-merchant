@@ -2,17 +2,17 @@ use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
+use crate::domain::note::NoteFilename;
 use crate::error::CoreError;
 use crate::services::files::{ensure_dir, list_md_files, write_atomic};
 use crate::utils::clock::Stamp;
 use crate::utils::device::Context;
 use crate::utils::frontmatter::{self, NoteFrontmatter, Provenance};
 use crate::utils::markdown::format_note_markdown;
-use crate::utils::validated::NoteFilename;
 
-use super::kind::NoteKind;
-use super::revision::Revision;
-use super::summary::Summary as NoteSummary;
+use crate::domain::note::NoteKind;
+use crate::domain::note::NoteSummary;
+use crate::domain::note::Revision;
 
 pub(crate) struct Notes {
     base_dir: PathBuf,

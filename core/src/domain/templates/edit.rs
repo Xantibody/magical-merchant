@@ -8,8 +8,8 @@ use serde::Serialize;
 use super::draft::discard_template_draft;
 use super::file::Summary as TemplateSummary;
 use super::folder::Templates;
+use crate::domain::note::NoteFilename;
 use crate::error::CoreError;
-use crate::utils::validated::NoteFilename;
 
 pub fn list_templates(base_dir: &Path) -> Result<Vec<TemplateSummary>, CoreError> {
     Templates::new(base_dir).list()

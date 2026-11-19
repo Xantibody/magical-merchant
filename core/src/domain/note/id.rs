@@ -1,7 +1,10 @@
+//! A note's ID: its filename, `YYYYMMDD_HHMMSS.md`, given at creation and never renamed.
+
 use std::fmt;
 
 use crate::error::CoreError;
 
+/// A filename that names one file directly under a note directory and nothing else.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NoteFilename(String);
 

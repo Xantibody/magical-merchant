@@ -1,16 +1,10 @@
 mod history;
-mod kind;
 mod repair;
 pub(crate) mod repository;
-mod revision;
-mod summary;
 mod version;
 
 pub use history::{Snapshot, list_note_history, read_note_history, restore_note, snapshot_note};
-pub use kind::NoteKind;
 pub(crate) use repository::Notes;
-pub use revision::Revision;
-pub use summary::Summary as NoteSummary;
 pub use version::{
     BEFORE_RESTORE, DRAFT, Version, VersionStatus, commit_note_version, delete_note_version,
     diff_note_versions, list_note_versions, note_version_status, read_note_version,
@@ -19,11 +13,11 @@ pub use version::{
 
 use std::path::{Path, PathBuf};
 
+use crate::domain::note::{NoteFilename, NoteKind, NoteSummary, Revision};
 use crate::error::CoreError;
 use crate::utils::clock::Stamp;
 use crate::utils::device::Context;
 use crate::utils::frontmatter::{self, Provenance};
-use crate::utils::validated::NoteFilename;
 
 /// Create one note.
 ///
@@ -179,7 +173,7 @@ pub fn update_note_origin(
 /// Repair garbled metadata that past edits mixed into the body. Returns the number of
 /// files repaired.
 pub fn repair_notes(base_dir: &Path) -> Result<usize, CoreError> {
-    repair::repair_all(&crate::utils::paths::notes_dir(base_dir))
+    repair::repair_all(&crate::domain::note::kind::notes_dir(base_dir))
 }
 
 /// Move conflict copies that an old build put in `data/` to `conflicts/`.

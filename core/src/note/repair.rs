@@ -2,12 +2,13 @@ use std::fs;
 use std::path::Path;
 
 use crate::domain::data::data_dir;
+use crate::domain::note::kind::{NOTES_DIR, codex_dir, notes_dir};
 use crate::error::CoreError;
 use crate::services::files::{ensure_dir, list_md_files, rename_without_clobber, write_atomic};
 use crate::sync::conflict::{conflict_copy_path, conflict_filename};
 use crate::utils::clock::{Stamp, UtcStamp, WallClock, Zone};
 use crate::utils::frontmatter::{self, NoteFrontmatter};
-use crate::utils::paths::{NOTES_DIR, codex_dir, conflicts_dir, notes_dir};
+use crate::utils::paths::conflicts_dir;
 
 /// Notes saved while the editor screen passed the frontmatter through Milkdown carry
 /// "mangled metadata" at the head of the body. The opening `---` became `***`, the YAML
@@ -202,8 +203,8 @@ fn filename_time_in(filename: &str, zone: &Zone) -> Option<Stamp> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::note::kind::notes_dir;
     use crate::domain::scrawl::day::SCRAWL_DIR;
-    use crate::utils::paths::notes_dir;
     use tempfile::TempDir;
 
     /// A reproduction in the same shape as a file that was actually broken.

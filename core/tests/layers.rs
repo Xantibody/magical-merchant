@@ -32,6 +32,10 @@ const OLD_MODULES: &[&str] = &[
 const RULE_FILES: &[&str] = &[
     "src/domain/data.rs",
     "src/domain/glyphs/image.rs",
+    "src/domain/note/id.rs",
+    "src/domain/note/kind.rs",
+    "src/domain/note/revision.rs",
+    "src/domain/note/row.rs",
     "src/domain/scrawl/day.rs",
     "src/domain/scrawl/entry.rs",
     "src/domain/templates/file.rs",
@@ -45,7 +49,6 @@ const ALLOWED: &[(&str, Rule, u32)] = &[
     ("src/note.rs", Rule::EntryHoldsOnlyModAndPubUse, 28),
     ("src/sync.rs", Rule::EntryHoldsOnlyModAndPubUse, 32),
     ("src/utils/clock.rs", Rule::EntryHoldsOnlyModAndPubUse, 33),
-    ("src/utils/paths.rs", Rule::UtilsImportsDomain, 28),
     ("src/utils/place.rs", Rule::UtilsImportsServices, 31),
 ];
 

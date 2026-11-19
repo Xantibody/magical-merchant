@@ -7,12 +7,12 @@ use super::file::{
     Summary, TemplateFrontmatter, parse_file, render_file, summarize, template_drafts_dir,
     templates_dir,
 };
+use crate::domain::note::NoteFilename;
 use crate::error::CoreError;
 use crate::services::files::{
     list_md_files, read_text, remove, rename_no_replace, resolve_existing, resolve_writable,
     write_atomic,
 };
-use crate::utils::validated::NoteFilename;
 
 /// One directory of template files. The same shape serves the templates themselves and
 /// anything else stored as a template file.

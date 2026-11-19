@@ -3,11 +3,12 @@ use std::path::Path;
 use crate::utils::clock::Day;
 use serde::{Deserialize, Serialize};
 
+use crate::domain::note::NoteKind;
 use crate::domain::scrawl::day::DayLog;
 use crate::domain::scrawl::entry::strip_scrawl_prefix;
 use crate::domain::scrawl::journal::{list_scrawl_dates, read_raw};
 use crate::error::CoreError;
-use crate::note::{NoteKind, Notes};
+use crate::note::Notes;
 use crate::utils::tags;
 use crate::utils::text::lowercase;
 
@@ -313,7 +314,7 @@ fn head(text: &str) -> String {
 /// in the body.
 pub fn find_backlinks(
     base_dir: &Path,
-    target: &crate::utils::validated::NoteFilename,
+    target: &crate::domain::note::NoteFilename,
 ) -> Result<Vec<SearchHit>, CoreError> {
     let stem = target.as_str().trim_end_matches(".md");
     // The closing brackets are not included. `[[ID]]` and `[[ID|display text]]` are the
@@ -1328,8 +1329,8 @@ mod tests {
         );
     }
 
-    fn filename_of(path: &Path) -> crate::utils::validated::NoteFilename {
-        crate::utils::validated::NoteFilename::parse(path.file_name().unwrap().to_str().unwrap())
+    fn filename_of(path: &Path) -> crate::domain::note::NoteFilename {
+        crate::domain::note::NoteFilename::parse(path.file_name().unwrap().to_str().unwrap())
             .unwrap()
     }
 

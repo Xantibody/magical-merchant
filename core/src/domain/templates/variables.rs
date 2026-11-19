@@ -4,7 +4,7 @@
 //! creation. No variable remains in the note written out: if one did, the file could not
 //! say "which day's date" when opened later.
 
-use crate::note::NoteSummary;
+use crate::domain::note::NoteSummary;
 use crate::utils::clock::WallClock;
 
 /// Only the weekday names depend on the language. The order of date and time is a record

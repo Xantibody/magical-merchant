@@ -7,9 +7,9 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::domain::data::data_dir;
+use crate::domain::note::NoteFilename;
 use crate::error::CoreError;
 use crate::utils::frontmatter;
-use crate::utils::validated::NoteFilename;
 
 const TEMPLATES_DIR: &str = "templates";
 

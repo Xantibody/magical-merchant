@@ -21,13 +21,14 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
+use crate::domain::note::NoteFilename;
+use crate::domain::note::Revision;
+use crate::domain::note::kind::notes_dir;
 use crate::error::CoreError;
 use crate::note::repository::Notes;
-use crate::note::revision::Revision;
 use crate::services::files::{ensure_dir, list_md_files, write_atomic};
 use crate::utils::clock::{Stamp, WallClock};
-use crate::utils::paths::{history_dir, notes_dir};
-use crate::utils::validated::NoteFilename;
+use crate::utils::paths::history_dir;
 
 /// The number of snapshots kept per note. A branch number within the same second counts
 /// as one too.

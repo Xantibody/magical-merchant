@@ -2,8 +2,28 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+use crate::domain::data::data_dir;
 use crate::utils::clock::Stamp;
-use crate::utils::paths::{codex_dir, notes_dir};
+
+pub(crate) const NOTES_DIR: &str = "notes";
+const CODEX_DIR: &str = "codex";
+
+#[must_use]
+pub(crate) fn notes_dir(base_dir: &Path) -> PathBuf {
+    data_dir(base_dir).join(NOTES_DIR)
+}
+
+/// Where a Codex (a document that keeps growing) and its versions live.
+///
+/// Inside `data/` because it should sync: a history that differs per device does
+/// not accumulate. Separate from `notes/` so that it sits where a `list_notes`
+/// from a version that does not know Codex never reads. Separating by a
+/// frontmatter key instead, the key would drop the moment an unknowing version
+/// saved, and it would turn back into a plain note.
+#[must_use]
+pub(crate) fn codex_dir(base_dir: &Path) -> PathBuf {
+    data_dir(base_dir).join(CODEX_DIR)
+}
 
 /// The kind of a note. The directory it lives in decides it, not the frontmatter.
 ///
@@ -68,6 +88,40 @@ mod tests {
         assert_eq!(
             NoteKind::Codex.file_path(Path::new("/app"), time),
             PathBuf::from("/app/data/codex/20260320_143045.md")
+        );
+    }
+
+    /// For the same instant, the name follows the wall clock of the offset the
+    /// timestamp names. An import passes the original record's `+09:00` as is, so
+    /// the date does not move with the timezone of the device that ran it.
+    #[test]
+    fn the_filename_follows_the_timestamps_own_offset() {
+        let jst = Stamp::new(2026, 3, 20, 0, 30, 0, 9 * 3600).unwrap();
+
+        assert_eq!(
+            NoteKind::Note.file_path(Path::new("/app"), jst),
+            PathBuf::from("/app/data/notes/20260320_003000.md")
+        );
+        let utc = Stamp::new(2026, 3, 19, 15, 30, 0, 0).unwrap();
+        assert_eq!(utc, jst, "the same instant");
+        assert_eq!(
+            NoteKind::Note.file_path(Path::new("/app"), utc),
+            PathBuf::from("/app/data/notes/20260319_153000.md")
+        );
+    }
+
+    #[test]
+    fn test_notes_dir() {
+        let path = notes_dir(Path::new("/app"));
+        assert_eq!(path, PathBuf::from("/app/data/notes"));
+    }
+
+    /// Codex versions are inside `data/`. A person committed them, so they reach the other devices.
+    #[test]
+    fn codex_versions_live_inside_the_synced_tree() {
+        assert_eq!(
+            codex_dir(Path::new("/app")),
+            PathBuf::from("/app/data/codex")
         );
     }
 

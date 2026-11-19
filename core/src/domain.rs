@@ -4,5 +4,6 @@
 pub mod data;
 pub mod device;
 pub mod glyphs;
+pub mod note;
 pub mod scrawl;
 pub mod templates;
