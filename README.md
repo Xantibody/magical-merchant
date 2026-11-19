@@ -120,3 +120,5 @@ magical-merchant/
 ├── rust/           # Shared Rust just recipes
 └── nix/            # Nix configuration helpers
 ```
+
+Where a file goes and which way imports point: [docs/architecture.md](docs/architecture.md).

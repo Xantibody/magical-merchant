@@ -11,6 +11,8 @@ Everything a record can live in is one of those three. **Browse** (`絞る`,
 by kind / tag / period, and every row it lists sends you back to the surface
 the record lives on. Settings and Templates are screens in the same sense.
 
+Where a file goes and which way imports point: `docs/architecture.md`.
+
 ## Design Priorities (in order)
 
 1. **Simple UI** — Minimal chrome, full-screen memo area, hidden actions
