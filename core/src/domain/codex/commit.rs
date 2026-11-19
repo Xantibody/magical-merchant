@@ -151,12 +151,27 @@ mod tests {
     fn the_same_body_in_the_same_second_is_the_same_version() {
         let tmp = TempDir::new().unwrap();
         let (_, filename) = note(tmp.path(), "body");
+        let now = Stamp::new(2026, 9, 17, 14, 3, 0, 9 * 3600).unwrap();
 
-        let first = commit_note_version(tmp.path(), &filename, Some("a")).unwrap();
-        let again = commit_note_version(tmp.path(), &filename, Some("b")).unwrap();
+        let first = commit_at(tmp.path(), &filename, Some("a"), now).unwrap();
+        let again = commit_at(tmp.path(), &filename, Some("b"), now).unwrap();
 
         assert_eq!(first, again, "書き直さないので message も最初のまま");
         assert_eq!(list_note_versions(tmp.path(), &filename).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn the_same_body_a_second_later_is_another_version() {
+        let tmp = TempDir::new().unwrap();
+        let (_, filename) = note(tmp.path(), "body");
+        let now = Stamp::new(2026, 9, 17, 14, 3, 0, 9 * 3600).unwrap();
+
+        let first = commit_at(tmp.path(), &filename, Some("a"), now).unwrap();
+        let later = commit_at(tmp.path(), &filename, Some("b"), now.plus_seconds(1)).unwrap();
+
+        assert_ne!(first.id, later.id);
+        assert_eq!(later.message.as_deref(), Some("b"));
+        assert_eq!(list_note_versions(tmp.path(), &filename).unwrap().len(), 2);
     }
 
     /// The "undo" right after a commit. Only the version file is deleted; the body is not touched.
