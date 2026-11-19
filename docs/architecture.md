@@ -57,7 +57,7 @@ core/src/
   domain/
     data.rs        where data/ is; each kind's directory hangs off it
     note/          file, id, kind, title, row, revision + operations, history, conflicts
-    codex/         version + operations (draft, commit, compare)
+    codex/         version + operations (draft, commit, compare, restore, promote)
     scrawl/        entry (one line), day (the day file) + operations
     templates/     file, variables, today + operations
     glyphs/        image + operations
@@ -81,6 +81,17 @@ Inside `domain/`:
   read or write. The parts that reach the network, the keyring or the OS are
   passed in, so a test never touches them; the file system is used for real
   over a temporary directory.
+
+Imports between things inside `domain/`:
+
+- A rule file imports only rule files, its own thing's or another's.
+- An operation file may import another thing's rule files, and another
+  thing's operations in one direction only. A Codex's operations open and
+  save its draft through `note/`; `note/` uses nothing of `codex/` but the
+  rule file `version.rs` (the list row's version mark, where a Codex keeps
+  its versions).
+- No cycle between files. Two things may still lean on each other, as
+  `note/` and `codex/` do, while every file-level edge points one way.
 
 Names:
 

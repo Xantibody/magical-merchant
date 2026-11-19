@@ -95,8 +95,8 @@ discussion. Packaged as `nix run .#cli` (`nix/cli.nix`); `.#mcp` wraps it.
 Notes come in two kinds (`core/src/domain/note/kind.rs`, `NoteKind`), decided by
 directory alone: `data/notes/` is a Note, `data/codex/` is a Codex. The
 list (`domain/note/list.rs`) reads both, `locate_note` (`domain/note/open.rs`)
-finds an ID in either (Codex first), and `promote_note_to_codex` is a bare
-`rename`. Each operation of `domain/note/` is one file named after what a person
+finds an ID in either (Codex first), and `promote_note_to_codex`
+(`domain/codex/promote.rs`) is a bare `rename`. Each operation of `domain/note/` is one file named after what a person
 does (`create`, `open`, `list`, `edit`, `details`, `delete`), and the save's
 decisions live in `file.rs` as plain functions (`rewrite`, `edit_record`). Do not
 encode the kind in frontmatter — a build that does not know the key drops it
@@ -105,13 +105,15 @@ both directories (promotion on one device, offline edit on another).
 `create_draft_codex` is a separate entry point so the CLI/MCP/template callers
 of `create_draft_note` stay untouched.
 
-Codex versions (`core/src/note/version.rs`) are not `history.rs`: history is
+Codex versions (`core/src/domain/codex/`: the rules in `version.rs`, the
+operations in `draft.rs`, `commit.rs`, `compare.rs` and `restore.rs`) are not
+`history.rs`: history is
 a machine-taken, local-only safety copy before an MCP/CLI overwrite; a version
 is committed by a person, lives at `data/codex/<stem>/<YYYYMMDD_HHMMSS-<8 hex
 of the body's SHA-256>>.md` with `time`/`message` frontmatter and the body
 only, and syncs as part of the document. Nothing commits automatically.
 `commit_note_version` / `list_note_versions` / `read_note_version` /
-`diff_note_versions` (unified diff via `similar`, Myers) /
+`diff_note_versions` (unified diff via `utils/diff.rs`: `similar`, Myers) /
 `restore_note_version` (revision-guarded, commits a `before restore` version
 first) / `note_version_status` (count, dirty, `bytes_delta`) /
 `delete_note_version` (only for the app's undo toast right after a commit)
