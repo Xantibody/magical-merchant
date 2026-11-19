@@ -65,7 +65,7 @@ core/src/
     search.rs      the search field
     browse.rs      Browse
     backlinks.rs   records pointing here
-    device/        context, place, place_names, current_context: where and with what a record was written
+    device/        context, place + operations (place_names, current_context)
     sync/          run, diff, rounds, conflict copy, token, login, settings, scan, state
   services/        files.rs  worker.rs  keyring.rs  os.rs
   utils/           frontmatter.rs  clock/  diff.rs  text.rs  error.rs
@@ -97,6 +97,14 @@ Imports between things inside `domain/`:
   the rule file `tags/tag.rs`, which the note list row uses; the counting in
   `tags/usage.rs` scans every note, which is why `tags/` is a directory
   rather than one file.
+- `device/` is where and with what a record was written. Its rule files are
+  `context.rs` (the device block a record keeps, split into the day file's
+  head and each line's tail, and the entry point that wrote it) and
+  `place.rs` (how coarsely coordinates count as one place, and the
+  per-language lookup of a cached name). Its operations are
+  `place_names.rs` (`places.json`, kept beside `data/` so it never syncs)
+  and `current_context.rs` (asking the OS, behind the `device-probe`
+  feature).
 
 Names:
 
