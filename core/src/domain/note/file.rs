@@ -531,4 +531,163 @@ mod tests {
         assert_eq!(context.battery, Some(100));
         assert_eq!(context.is_charging, Some(true));
     }
+
+    // ──────────── rewrite and edit_record ────────────
+
+    /// The clock reading a rewrite stamps: later than every record below.
+    fn now() -> Stamp {
+        Stamp::new(2026, 9, 1, 10, 0, 0, 9 * 3600).unwrap()
+    }
+
+    /// The device that saves, which is never the one that created the note.
+    fn editing_device() -> Context {
+        Context {
+            battery: Some(7),
+            is_charging: Some(true),
+            ..Context::default()
+        }
+    }
+
+    /// A note carrying every record key, already rewritten once.
+    fn full_record() -> NoteFrontmatter {
+        NoteFrontmatter {
+            tags: vec!["sync".to_string()],
+            context: Some(test_context()),
+            view: Some("mindmap".to_string()),
+            origin: Some("2026-03-20T08:30:00".to_string()),
+            updated: Some(Stamp::new(2026, 4, 1, 9, 0, 0, 9 * 3600).unwrap()),
+            template: Some("daily".to_string()),
+            source: Some(Source::Cli.as_str().to_string()),
+            ..sample_fm()
+        }
+    }
+
+    fn rewrite_now(existing: &str, expected: Option<&Revision>) -> Result<String, CoreError> {
+        rewrite(
+            existing,
+            "new body",
+            &editing_device(),
+            expected,
+            now(),
+            "20260320_143045.md",
+        )
+    }
+
+    #[test]
+    fn rewrite_refuses_a_body_that_moved_since_it_was_read() {
+        let existing = render(&full_record(), "someone else's body").unwrap();
+        let read = Revision::of("the body as it was read");
+
+        let result = rewrite_now(&existing, Some(&read));
+
+        assert!(matches!(result, Err(CoreError::Stale(ref name)) if name == "20260320_143045.md"));
+    }
+
+    #[test]
+    fn rewrite_goes_through_with_the_revision_it_read() {
+        let existing = render(&full_record(), "the body as it was read").unwrap();
+        let read = Revision::of("the body as it was read");
+
+        let written = rewrite_now(&existing, Some(&read)).unwrap();
+
+        let (_, body): (NoteFrontmatter, &str) = parse(&written).unwrap();
+        assert_eq!(body, "new body");
+    }
+
+    /// The revision is taken from the body alone, so a record that moved (a view switch,
+    /// a tag edit) does not make the read stale.
+    #[test]
+    fn rewrite_compares_the_revision_with_the_body_alone() {
+        let read = Revision::of("body");
+        let moved_record = NoteFrontmatter {
+            view: Some("preview".to_string()),
+            ..full_record()
+        };
+
+        assert!(rewrite_now(&render(&moved_record, "body").unwrap(), Some(&read)).is_ok());
+    }
+
+    /// Plain Markdown dropped in from outside has no record to lose, so it gets its first
+    /// one: the clock reading as its time and the saving device as its context.
+    #[test]
+    fn rewrite_gives_plain_markdown_its_first_frontmatter() {
+        let written = rewrite_now("written elsewhere", None).unwrap();
+
+        let (fm, body): (NoteFrontmatter, &str) = parse(&written).unwrap();
+        assert_eq!(
+            fm,
+            NoteFrontmatter {
+                context: Some(editing_device()),
+                ..NoteFrontmatter::new(now())
+            }
+        );
+        assert_eq!(body, "new body");
+    }
+
+    /// A record that cannot be read is refused rather than rebuilt: an unclosed delimiter
+    /// and broken YAML both still hold lines written as a record.
+    #[test]
+    fn rewrite_refuses_a_record_it_cannot_read() {
+        for existing in [
+            "---\ntime: 2026-01-01T12:00:00+09:00\ntags:\n  - work\n",
+            "---\ntime: [broken\ntags: [work]\n---\nbody",
+        ] {
+            assert!(
+                matches!(rewrite_now(existing, None), Err(CoreError::Parse(_))),
+                "{existing:?}"
+            );
+        }
+    }
+
+    /// Every record from creation is kept as it was; `updated` alone moves, to the clock
+    /// reading, and the saving device does not replace the creating one.
+    #[test]
+    fn rewrite_keeps_the_record_and_moves_only_updated() {
+        let existing = render(&full_record(), "old body").unwrap();
+
+        let written = rewrite_now(&existing, None).unwrap();
+
+        let (fm, body): (NoteFrontmatter, &str) = parse(&written).unwrap();
+        assert_eq!(
+            fm,
+            NoteFrontmatter {
+                updated: Some(now()),
+                ..full_record()
+            }
+        );
+        assert_eq!(body, "new body");
+    }
+
+    #[test]
+    fn rewrite_gives_the_same_text_for_the_same_input() {
+        let existing = render(&full_record(), "old body").unwrap();
+        let read = Revision::of("old body");
+
+        assert_eq!(
+            rewrite_now(&existing, Some(&read)).unwrap(),
+            rewrite_now(&existing, Some(&read)).unwrap()
+        );
+    }
+
+    #[test]
+    fn edit_record_refuses_a_record_it_cannot_read() {
+        let result = edit_record("---\ntime: [broken\n---\nbody", |fm| fm);
+
+        assert!(matches!(result, Err(CoreError::Parse(_))));
+    }
+
+    /// The body under the record comes back byte for byte, whitespace and line endings
+    /// included.
+    #[test]
+    fn edit_record_leaves_the_body_byte_for_byte() {
+        let body = "# Title\r\n\n  indented  \n\ttab\nlast line without newline";
+        let content = render(&full_record(), body).unwrap();
+
+        let edited = edit_record(&content, |fm| NoteFrontmatter { view: None, ..fm }).unwrap();
+
+        assert!(edited.ends_with(&format!("---\n{body}")), "{edited:?}");
+        let (fm, _): (NoteFrontmatter, &str) = parse(&edited).unwrap();
+        assert_eq!(fm.view, None);
+        assert_eq!(fm.origin, full_record().origin);
+    }
 }

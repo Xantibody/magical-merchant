@@ -79,6 +79,56 @@ mod tests {
         );
     }
 
+    /// The order reads only the name: whatever else an item carries rides along.
+    #[test]
+    fn newest_first_orders_items_by_the_name_they_carry() {
+        let mut rows = vec![
+            ("codex", "20260101_000000.md"),
+            ("note", "20260102_000000.md"),
+        ];
+
+        newest_first(&mut rows, |(_, name)| *name);
+
+        assert_eq!(
+            rows,
+            vec![
+                ("note", "20260102_000000.md"),
+                ("codex", "20260101_000000.md")
+            ]
+        );
+    }
+
+    /// A Codex version's name starts with the second it was committed, then its hash:
+    /// within one second the hash decides, so the order is the same on every device.
+    #[test]
+    fn newest_first_orders_version_names_by_their_time_then_hash() {
+        let mut names = vec![
+            "20260917_140300-0123abcd.md",
+            "20260917_140301-00000000.md",
+            "20260917_140300-ffff0000.md",
+        ];
+
+        newest_first(&mut names, |name| *name);
+
+        assert_eq!(
+            names,
+            vec![
+                "20260917_140301-00000000.md",
+                "20260917_140300-ffff0000.md",
+                "20260917_140300-0123abcd.md",
+            ]
+        );
+    }
+
+    #[test]
+    fn newest_first_leaves_an_empty_list_empty() {
+        let mut none: Vec<&str> = Vec::new();
+
+        newest_first(&mut none, |name| *name);
+
+        assert!(none.is_empty());
+    }
+
     #[test]
     fn test_note_filename_parse_valid() {
         assert!(NoteFilename::parse("20260101_120000.md").is_ok());
