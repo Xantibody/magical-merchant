@@ -5,8 +5,8 @@ use std::path::{Path, PathBuf};
 use super::image::{
     GlyphData, GlyphFormat, GlyphName, GlyphSummary, filename, glyphs_dir, summarize_filename,
 };
-use crate::error::CoreError;
 use crate::services::files::{self, resolve_existing};
+use crate::utils::error::CoreError;
 
 pub fn list_glyphs(base_dir: &Path) -> Result<Vec<GlyphSummary>, CoreError> {
     let mut glyphs: Vec<GlyphSummary> = files::list_entries(&glyphs_dir(base_dir))?

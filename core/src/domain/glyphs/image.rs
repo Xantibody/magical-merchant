@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 
 use crate::domain::data::data_dir;
-use crate::error::CoreError;
+use crate::utils::error::CoreError;
 
 const GLYPHS_DIR: &str = "glyphs";
 

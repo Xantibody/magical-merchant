@@ -6,8 +6,8 @@ use std::path::Path;
 use crate::domain::codex::version::version_mark;
 use crate::domain::note::id::newest_first;
 use crate::domain::note::{NoteKind, NoteSummary};
-use crate::error::CoreError;
 use crate::services::files::{Entry, list_md_files, read_text};
+use crate::utils::error::CoreError;
 use crate::utils::frontmatter;
 
 pub fn list_notes(base_dir: &Path) -> Result<Vec<NoteSummary>, CoreError> {

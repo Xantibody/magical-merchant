@@ -3,8 +3,8 @@
 use std::path::{Path, PathBuf};
 
 use crate::domain::note::{NoteFilename, NoteFrontmatter, NoteKind};
-use crate::error::CoreError;
 use crate::services::files::{read_text, resolve_existing};
+use crate::utils::error::CoreError;
 use crate::utils::frontmatter;
 
 /// Look up a note's kind and actual location from its ID.

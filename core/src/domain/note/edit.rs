@@ -5,9 +5,9 @@ use std::path::Path;
 use crate::domain::device::Context;
 use crate::domain::note::Revision;
 use crate::domain::note::file;
-use crate::error::CoreError;
 use crate::services::files::{read_existing_text, write_atomic};
 use crate::utils::clock::Stamp;
+use crate::utils::error::CoreError;
 
 /// Rewrite the body.
 ///

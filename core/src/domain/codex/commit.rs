@@ -8,9 +8,9 @@ use crate::domain::codex::version::{
     Version, VersionFrontmatter, version_id, version_path, versions_dir,
 };
 use crate::domain::note::NoteFilename;
-use crate::error::CoreError;
 use crate::services::files::{ensure_dir, exists, remove, write_atomic};
 use crate::utils::clock::Stamp;
+use crate::utils::error::CoreError;
 use crate::utils::frontmatter;
 
 /// Commit the current body as a version. If a version with the same body already exists

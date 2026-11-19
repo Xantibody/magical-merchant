@@ -6,8 +6,6 @@ pub mod domain;
 pub mod services;
 pub mod utils;
 
-mod error;
-
 pub use domain::backlinks::find_backlinks;
 pub use domain::browse::{browse_all, recent_records};
 pub use domain::codex::{
@@ -46,5 +44,5 @@ pub use domain::templates::{
     read_template_draft, rename_template, save_template, save_template_draft,
 };
 pub use domain::templates::{TemplateToday, templates_today};
-pub use error::{CoreError, SyncError, describe};
+pub use utils::error::{CoreError, SyncError, describe};
 pub use utils::frontmatter;

@@ -4,7 +4,7 @@ use std::path::Path;
 
 use crate::domain::note::list;
 use crate::domain::search::{SNIPPET_CONTEXT, SearchFilter, SearchHit, first_line, scrawl_hits};
-use crate::error::CoreError;
+use crate::utils::error::CoreError;
 use crate::utils::text::head;
 
 /// Return every Scrawl entry and every Note / Codex note as one sequence, newest first.

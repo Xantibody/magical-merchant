@@ -4,8 +4,8 @@ use std::path::Path;
 
 use super::image::{GlyphFormat, GlyphName, filename, glyphs_dir, validate};
 use super::lookup::find;
-use crate::error::CoreError;
 use crate::services::files::{remove, remove_if_present, resolve_writable, write_atomic};
+use crate::utils::error::CoreError;
 
 /// Create if missing, overwrite if present. The name is just a name, not an ID, so the
 /// caller is free to put a different image under the same name.

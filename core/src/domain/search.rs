@@ -9,7 +9,7 @@ use crate::domain::scrawl::day::DayLog;
 use crate::domain::scrawl::entry::strip_scrawl_prefix;
 use crate::domain::scrawl::journal::{list_scrawl_dates, read_raw};
 use crate::domain::tags::tag::{self, in_scope};
-use crate::error::CoreError;
+use crate::utils::error::CoreError;
 use crate::utils::text::{lowercase, snippet};
 
 /// Which store a search hit came from.

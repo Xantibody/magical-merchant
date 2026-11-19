@@ -1,3 +1,5 @@
+// AIDEV-NOTE: kept in utils though it names app errors; services and domain both return it, and services may not import domain.
+
 use serde::Serialize;
 use thiserror::Error;
 

@@ -3,7 +3,7 @@
 use std::cmp::Reverse;
 use std::fmt;
 
-use crate::error::CoreError;
+use crate::utils::error::CoreError;
 
 /// A filename that names one file directly under a note directory and nothing else.
 #[derive(Debug, Clone, PartialEq, Eq)]

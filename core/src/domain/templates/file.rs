@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::domain::data::data_dir;
 use crate::domain::note::NoteFilename;
-use crate::error::CoreError;
+use crate::utils::error::CoreError;
 use crate::utils::frontmatter;
 
 const TEMPLATES_DIR: &str = "templates";

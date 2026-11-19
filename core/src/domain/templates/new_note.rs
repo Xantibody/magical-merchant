@@ -13,8 +13,8 @@ use crate::domain::note::NoteFilename;
 use crate::domain::note::NoteSummary;
 use crate::domain::note::Provenance;
 use crate::domain::note::{create_draft_note, list_notes};
-use crate::error::CoreError;
 use crate::utils::clock::WallClock;
+use crate::utils::error::CoreError;
 
 /// The result of running a template.
 #[derive(Debug, Clone, Serialize)]

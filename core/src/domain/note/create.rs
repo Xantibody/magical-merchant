@@ -5,9 +5,9 @@ use std::path::{Path, PathBuf};
 use crate::domain::device::Context;
 use crate::domain::note::NoteKind;
 use crate::domain::note::file::{Provenance, format_note_markdown};
-use crate::error::CoreError;
 use crate::services::files::{create_new_with, ensure_dir, exists};
 use crate::utils::clock::Stamp;
+use crate::utils::error::CoreError;
 
 /// Create one note.
 ///

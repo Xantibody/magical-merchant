@@ -8,9 +8,9 @@ use std::path::Path;
 
 use crate::domain::note::file;
 use crate::domain::note::{NoteFilename, NoteFrontmatter, locate_note};
-use crate::error::CoreError;
 use crate::services::files::{read_text, write_atomic};
 use crate::utils::clock::Stamp;
+use crate::utils::error::CoreError;
 
 /// Replace only time and tags. The body of course, and context too, are not editable:
 /// context is the record of "which device wrote it".

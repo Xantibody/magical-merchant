@@ -13,8 +13,8 @@ use crate::domain::scrawl::day::DayLog;
 use crate::domain::scrawl::entry::strip_scrawl_prefix;
 use crate::domain::scrawl::journal::{list_scrawl_dates, read_raw};
 use crate::domain::tags::tag;
-use crate::error::CoreError;
 use crate::utils::clock::Day;
+use crate::utils::error::CoreError;
 
 /// One tag and how many records carry it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

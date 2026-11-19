@@ -3,8 +3,8 @@
 use std::path::{Path, PathBuf};
 
 use super::place::PlaceCache;
-use crate::error::CoreError;
 use crate::services::files;
+use crate::utils::error::CoreError;
 
 /// Where the place-name cache lives.
 ///

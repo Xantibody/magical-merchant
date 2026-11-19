@@ -3,8 +3,8 @@
 use std::path::Path;
 
 use crate::domain::note::{NoteFilename, NoteKind, locate_note};
-use crate::error::CoreError;
 use crate::services::files::{ensure_dir, rename};
+use crate::utils::error::CoreError;
 
 /// Turn a note into a Codex.
 ///

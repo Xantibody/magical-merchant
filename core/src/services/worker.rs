@@ -8,7 +8,7 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::{SyncError, describe};
+use crate::utils::error::{SyncError, describe};
 
 // ──────────── HTTP wire types ────────────
 

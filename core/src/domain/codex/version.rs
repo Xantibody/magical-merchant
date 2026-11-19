@@ -28,8 +28,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::domain::note::kind::codex_dir;
 use crate::domain::note::{NoteFilename, Revision};
-use crate::error::CoreError;
 use crate::utils::clock::{Stamp, WallClock};
+use crate::utils::error::CoreError;
 
 /// The name for "the current draft" in a diff header. It does not overlap with the shape
 /// of a version ID (digits, `-` and hex), so a reader cannot mistake it for a version.

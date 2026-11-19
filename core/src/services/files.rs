@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime};
 
-use crate::error::CoreError;
+use crate::utils::error::CoreError;
 
 pub fn ensure_dir(path: &Path) -> Result<(), CoreError> {
     if let Some(parent) = path.parent() {

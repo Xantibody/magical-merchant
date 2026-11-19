@@ -22,9 +22,9 @@ use serde::Serialize;
 
 use crate::domain::note::kind::notes_dir;
 use crate::domain::note::{NoteFilename, Revision, locate_note, read_note_by_filename};
-use crate::error::CoreError;
 use crate::services::files::{ensure_dir, exists, list_md_files, read_text, remove, write_atomic};
 use crate::utils::clock::{Stamp, WallClock};
+use crate::utils::error::CoreError;
 
 /// The number of snapshots kept per note. A branch number within the same second counts
 /// as one too.

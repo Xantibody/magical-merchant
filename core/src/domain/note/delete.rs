@@ -3,8 +3,8 @@
 use std::path::Path;
 
 use crate::domain::note::{NoteFilename, NoteKind, locate_note};
-use crate::error::CoreError;
 use crate::services::files::{remove, remove_dir_all_if_dir};
+use crate::utils::error::CoreError;
 
 /// A Codex is deleted together with its versions directory (`codex/<stem>/`).
 /// Deleting only the note leaves versions that belong to nobody, and sync

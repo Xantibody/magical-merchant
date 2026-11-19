@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 use crate::domain::data::data_dir;
 use crate::domain::device::{Context, DeviceIdentity, Source};
 use crate::domain::scrawl::entry::{format_scrawl_line, split_context_json, split_time_prefix};
-use crate::error::CoreError;
 use crate::utils::clock::{Day, WallClock};
+use crate::utils::error::CoreError;
 use crate::utils::frontmatter;
 
 pub(crate) const SCRAWL_DIR: &str = "scrawl";

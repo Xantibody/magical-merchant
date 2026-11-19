@@ -4,9 +4,9 @@ use std::path::Path;
 
 use crate::domain::note::NoteFrontmatter;
 use crate::domain::note::kind::notes_dir;
-use crate::error::CoreError;
 use crate::services::files::{list_md_files, read_text, write_atomic};
 use crate::utils::clock::{Stamp, WallClock, Zone};
+use crate::utils::error::CoreError;
 use crate::utils::frontmatter;
 
 /// Repair garbled metadata that past edits mixed into the body. Returns the number of

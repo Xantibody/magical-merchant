@@ -18,8 +18,8 @@ use std::path::Path;
 
 use super::day::SCRAWL_DIR;
 use crate::domain::data::data_dir;
-use crate::error::CoreError;
 use crate::services::files::{count_entries, entries, exists, is_dir, remove_empty_dir, rename};
+use crate::utils::error::CoreError;
 
 /// The pre-rename directory. This spelling survives only here, and once the migration is
 /// done nobody reads it.

@@ -8,7 +8,7 @@ use crate::domain::codex::draft::read_body;
 use crate::domain::codex::version::BEFORE_RESTORE;
 use crate::domain::device::Context;
 use crate::domain::note::{NoteFilename, Revision, locate_note, update_note};
-use crate::error::CoreError;
+use crate::utils::error::CoreError;
 
 /// Make a version's body the draft.
 ///

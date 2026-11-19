@@ -6,7 +6,7 @@ use super::edit::{TemplateDetail, read_template};
 use super::file::Summary as TemplateSummary;
 use super::folder::Templates;
 use crate::domain::note::NoteFilename;
-use crate::error::CoreError;
+use crate::utils::error::CoreError;
 
 /// Keep the edit in progress without touching the template.
 ///

@@ -18,13 +18,13 @@ use super::scan;
 use super::{SyncIssue, SyncResult};
 use crate::domain::data;
 use crate::domain::note::conflicts::conflicts_dir;
-use crate::error::SyncError;
 use crate::services::files::{self, LockFile};
 use crate::services::worker::{
     BulkRequest, BulkResponse, DownloadedFile, HttpClient, ServerSyncState, SyncTransport,
     WireConflictOp, WireUpload,
 };
 use crate::utils::clock::UtcStamp;
+use crate::utils::error::SyncError;
 
 const MAX_SYNC_ATTEMPTS: usize = 3;
 

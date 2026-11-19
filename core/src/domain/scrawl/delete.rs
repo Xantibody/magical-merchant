@@ -4,9 +4,9 @@ use std::path::Path;
 
 use super::day::{DayLog, expect_same_entry, scrawl_file_path};
 use super::journal::read_raw;
-use crate::error::CoreError;
 use crate::services::files::{remove, write_atomic};
 use crate::utils::clock::Day;
+use crate::utils::error::CoreError;
 
 /// `raw` is the line as the writer read it (exactly the form `read_scrawl` returned).
 /// An index alone drifts with any append or sync that lands between the read and the write.

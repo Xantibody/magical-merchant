@@ -6,8 +6,8 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-use crate::error::SyncError;
 use crate::services::files;
+use crate::utils::error::SyncError;
 
 const SYNC_CONFIG_FILENAME: &str = "sync-config.json";
 

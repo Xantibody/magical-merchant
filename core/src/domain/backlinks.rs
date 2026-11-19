@@ -6,7 +6,7 @@ use crate::domain::note::{NoteFilename, list};
 use crate::domain::search::{
     MAX_HITS, SNIPPET_CONTEXT, SearchFilter, SearchHit, first_line, scrawl_hits,
 };
-use crate::error::CoreError;
+use crate::utils::error::CoreError;
 use crate::utils::text::{lowercase, snippet};
 
 /// Collect the records (notes, Scrawl) that mention `target` with `[[ID]]`.

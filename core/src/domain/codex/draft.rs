@@ -4,7 +4,7 @@
 use std::path::Path;
 
 use crate::domain::note::{NoteFilename, NoteKind, locate_note, read_note_by_filename};
-use crate::error::CoreError;
+use crate::utils::error::CoreError;
 
 /// Only a Codex can hold versions. Readers and writers both go through this first: even
 /// if a plain note still has a versions directory (mid-sync, a missed delete), it is
@@ -32,7 +32,7 @@ mod tests {
     };
     use crate::domain::device::Context;
     use crate::domain::note::{NoteFilename, Provenance, create_draft_note};
-    use crate::error::CoreError;
+    use crate::utils::error::CoreError;
     use std::fs;
     use tempfile::TempDir;
 

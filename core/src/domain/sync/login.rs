@@ -8,8 +8,8 @@
 use std::path::Path;
 
 use super::token::renewal_due;
-use crate::error::SyncError;
 use crate::services::worker::TokenRenewer;
+use crate::utils::error::SyncError;
 
 #[cfg(target_os = "android")]
 mod token_store {

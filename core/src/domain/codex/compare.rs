@@ -10,9 +10,9 @@ use crate::domain::codex::version::{
     versions_dir,
 };
 use crate::domain::note::NoteFilename;
-use crate::error::CoreError;
 use crate::services::files::{exists, list_md_files, read_text};
 use crate::utils::diff::unified_diff;
+use crate::utils::error::CoreError;
 use crate::utils::frontmatter;
 
 pub(super) fn read_version_file(path: &Path) -> Result<(VersionFrontmatter, String), CoreError> {

@@ -1,6 +1,6 @@
 use serde::{Serialize, de::DeserializeOwned};
 
-use crate::error::CoreError;
+use crate::utils::error::CoreError;
 
 pub fn render<T: Serialize>(fm: &T, body: &str) -> Result<String, CoreError> {
     let yaml = serde_yaml::to_string(fm).map_err(|e| CoreError::Parse(e.to_string()))?;
