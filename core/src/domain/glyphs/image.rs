@@ -205,6 +205,108 @@ mod tests {
         assert!(GlyphFormat::parse("PNG").is_err());
     }
 
+    const PNG_MARK: &[u8] = b"\x89PNG\r\n\x1a\n";
+
+    fn png_of(len: usize) -> Vec<u8> {
+        let mut bytes = PNG_MARK.to_vec();
+        bytes.resize(len, 0);
+        bytes
+    }
+
+    fn name(s: &str) -> GlyphName {
+        GlyphName::parse(s).unwrap()
+    }
+
+    /// Exactly the limit passes. Rejecting with `>=` would keep out an image shrunk to hit
+    /// the limit.
+    #[test]
+    fn an_image_of_exactly_the_limit_is_valid() {
+        assert!(validate(GlyphFormat::Png, &png_of(GLYPH_MAX_BYTES)).is_ok());
+    }
+
+    #[test]
+    fn an_image_one_byte_over_the_limit_is_refused() {
+        assert!(matches!(
+            validate(GlyphFormat::Png, &png_of(GLYPH_MAX_BYTES + 1)),
+            Err(CoreError::Parse(_))
+        ));
+    }
+
+    #[test]
+    fn a_png_without_its_mark_is_refused() {
+        assert!(matches!(
+            validate(GlyphFormat::Png, b"GIF89a not a png"),
+            Err(CoreError::Parse(_))
+        ));
+    }
+
+    #[test]
+    fn an_svg_is_text_that_holds_an_svg_tag() {
+        assert!(validate(GlyphFormat::Svg, b"<svg viewBox=\"0 0 1 1\"/>").is_ok());
+        assert!(matches!(
+            validate(GlyphFormat::Svg, b"<html><body></body></html>"),
+            Err(CoreError::Parse(_))
+        ));
+    }
+
+    /// The tag alone is not enough: bytes that are not UTF-8 cannot be an SVG to draw.
+    #[test]
+    fn bytes_that_are_not_utf8_are_not_an_svg() {
+        assert!(matches!(
+            validate(GlyphFormat::Svg, b"<svg \xff\xfe"),
+            Err(CoreError::Parse(_))
+        ));
+    }
+
+    #[test]
+    fn a_glyph_filename_gives_its_name_and_format() {
+        assert_eq!(
+            summarize_filename("ok.png"),
+            Some((name("ok"), GlyphFormat::Png))
+        );
+        assert_eq!(
+            summarize_filename("236p.svg"),
+            Some((name("236p"), GlyphFormat::Svg))
+        );
+    }
+
+    /// A file dropped into the directory by hand is skipped, not reported.
+    #[test]
+    fn a_filename_that_breaks_either_rule_is_not_a_glyph() {
+        for filename in [
+            "Bad Name.png",
+            "readme.txt",
+            ".DS_Store",
+            "noextension",
+            "a.gif",
+        ] {
+            assert_eq!(summarize_filename(filename), None, "{filename}");
+        }
+    }
+
+    #[test]
+    fn a_filename_reads_back_as_the_name_and_format_it_was_made_from() {
+        for format in [GlyphFormat::Png, GlyphFormat::Svg] {
+            assert_eq!(
+                summarize_filename(&filename(&name("236p"), format)),
+                Some((name("236p"), format))
+            );
+        }
+    }
+
+    #[test]
+    fn the_other_format_is_the_one_that_is_not_this_one() {
+        for format in [GlyphFormat::Png, GlyphFormat::Svg] {
+            assert_ne!(format.other(), format);
+            assert_eq!(format.other().other(), format);
+        }
+        assert_eq!(filename(&name("236p"), GlyphFormat::Png), "236p.png");
+        assert_eq!(
+            filename(&name("236p"), GlyphFormat::Png.other()),
+            "236p.svg"
+        );
+    }
+
     /// Glyph images are inside `data/` too. They reach the other devices along with the notes.
     #[test]
     fn glyphs_live_inside_the_synced_tree() {
