@@ -92,6 +92,11 @@ Imports between things inside `domain/`:
   its versions).
 - No cycle between files. Two things may still lean on each other, as
   `note/` and `codex/` do, while every file-level edge points one way.
+- `browse.rs` and `backlinks.rs` walk the Scrawl days and title their rows
+  through `search.rs`; `search.rs` imports neither. The `#tag` rules are
+  the rule file `tags/tag.rs`, which the note list row uses; the counting in
+  `tags/usage.rs` scans every note, which is why `tags/` is a directory
+  rather than one file.
 
 Names:
 

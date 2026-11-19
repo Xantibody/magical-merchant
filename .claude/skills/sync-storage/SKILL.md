@@ -37,7 +37,7 @@ description: Note/Scrawl storage invariants, sync protocol, widgets and deep lin
   No writer watches the filesystem — this guard is the only protection
 - **Tags** come from the body's `#記法`. Identity is the ASCII-lowercased form
   (`#Rust` = `#rust`; Japanese is left alone) and code — fences and spans — is
-  not scanned. The same rule lives twice: `core/src/utils/tags.rs` and
+  not scanned. The same rule lives twice: `core/src/domain/tags/tag.rs` and
   `lib/tags.ts`; fix both
 - **Place names** (`places.json`, outside `data/`): derived geocoder cache,
   display-only. The recorded `location` stays the raw coordinate. Keyed by
