@@ -54,31 +54,21 @@ mod token_store {
 mod token_store {
     use std::path::Path;
 
+    use crate::services::keyring;
+
     const KEYCHAIN_SERVICE: &str = "com.magical-merchant.app";
     const KEYCHAIN_ACCOUNT: &str = "auth-jwt";
 
-    fn entry() -> Result<keyring::Entry, String> {
-        keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT).map_err(|e| e.to_string())
-    }
-
     pub(super) fn store(_base_dir: &Path, token: &str) -> Result<(), String> {
-        entry()?.set_password(token).map_err(|e| e.to_string())
+        keyring::store(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT, token)
     }
 
     pub(super) fn get(_base_dir: &Path) -> Result<Option<String>, String> {
-        match entry()?.get_password() {
-            Ok(token) => Ok(Some(token)),
-            Err(keyring::Error::NoEntry) => Ok(None),
-            Err(e) => Err(e.to_string()),
-        }
+        keyring::get(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT)
     }
 
     pub(super) fn clear(_base_dir: &Path) -> Result<(), String> {
-        match entry()?.delete_credential() {
-            // Deleting a credential that was never stored leaves the desired state.
-            Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
-            Err(e) => Err(e.to_string()),
-        }
+        keyring::clear(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT)
     }
 }
 
