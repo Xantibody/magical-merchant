@@ -8,7 +8,6 @@ mod scrawl;
 pub mod services;
 pub mod sync;
 mod tag_count;
-mod template;
 pub mod utils;
 
 mod error;
@@ -18,6 +17,12 @@ pub use domain::glyphs::{
     GLYPH_MAX_BYTES, GlyphData, GlyphFormat, GlyphName, GlyphSummary, delete_glyph, list_glyphs,
     read_glyph, save_glyph,
 };
+pub use domain::templates::{
+    CreatedNote, TemplateDetail, TemplateSummary, VarLocale, create_note_from_template,
+    delete_template, discard_template_draft, list_template_drafts, list_templates, read_template,
+    read_template_draft, rename_template, save_template, save_template_draft,
+};
+pub use domain::templates::{TemplateToday, templates_today};
 pub use error::{CoreError, SyncError, describe};
 pub use note::error::NoteError;
 pub use note::{
@@ -40,12 +45,6 @@ pub use search::{
     search_records,
 };
 pub use tag_count::{TagUsage, count_tags};
-pub use template::{
-    CreatedNote, TemplateDetail, TemplateSummary, VarLocale, create_note_from_template,
-    delete_template, discard_template_draft, list_template_drafts, list_templates, read_template,
-    read_template_draft, rename_template, save_template, save_template_draft,
-};
-pub use template::{TemplateToday, templates_today};
 pub use utils::device::Context as DeviceContext;
 /// The fixed vocabulary of entry points that wrote a record. Every creation entry takes one.
 pub use utils::device::Source;

@@ -8,9 +8,9 @@ use std::path::Path;
 
 use serde::Serialize;
 
-use super::previous_note_link;
-use super::repository::Templates;
-use super::vars::{VarLocale, resolve_vars};
+use super::folder::Templates;
+use super::new_note::previous_note_link;
+use super::variables::{VarLocale, resolve_vars};
 use crate::error::CoreError;
 use crate::note::list_notes;
 use crate::utils::clock::WallClock;
@@ -87,7 +87,7 @@ fn first_line(body: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::template::save_template;
+    use crate::domain::templates::save_template;
     use tempfile::TempDir;
 
     fn name(s: &str) -> NoteFilename {

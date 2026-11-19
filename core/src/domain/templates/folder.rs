@@ -288,7 +288,8 @@ mod tests {
     fn a_preview_drops_every_leading_hash() {
         let tmp = TempDir::new().unwrap();
         let t = templates(&tmp);
-        t.save(&name("tagged.md"), "#tag rest\n\nbody", &[]).unwrap();
+        t.save(&name("tagged.md"), "#tag rest\n\nbody", &[])
+            .unwrap();
 
         let listed = t.list().unwrap();
 

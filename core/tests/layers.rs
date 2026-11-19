@@ -23,7 +23,6 @@ use std::path::{Path, PathBuf};
 const OLD_MODULES: &[&str] = &[
     "crate::note",
     "crate::scrawl",
-    "crate::template",
     "crate::sync",
     "crate::search",
     "crate::tag_count",
@@ -38,10 +37,10 @@ const RULE_FILES: &[&str] = &["src/domain/glyphs/image.rs"];
 const ALLOWED: &[(&str, Rule, u32)] = &[
     ("src/note.rs", Rule::EntryHoldsOnlyModAndPubUse, 28),
     ("src/scrawl.rs", Rule::EntryHoldsOnlyModAndPubUse, 27),
-    ("src/template.rs", Rule::EntryHoldsOnlyModAndPubUse, 26),
     ("src/sync.rs", Rule::EntryHoldsOnlyModAndPubUse, 32),
     ("src/utils/clock.rs", Rule::EntryHoldsOnlyModAndPubUse, 33),
     ("src/utils/place.rs", Rule::UtilsImportsServices, 31),
+    ("src/domain/templates/folder.rs", Rule::DomainUsesStdFs, 26),
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
