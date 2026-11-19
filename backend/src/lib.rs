@@ -49,8 +49,9 @@ use tauri_plugin_deep_link::DeepLinkExt as _;
 /// Synchronous commands run on the main thread. Listing, searching and backlinks
 /// grow with the number of notes and of days (10 to 30ms for a year's worth,
 /// several times that on a real device), and window input and events stop for that
-/// long. Run them on the blocking pool, as `resolve_places` does, and return only
-/// the result to the main thread.
+/// long. Run them on the blocking pool and return only the result to the main
+/// thread. `resolve_places` goes through here too, for a reason of its own: the
+/// geocoder answers on the main queue.
 async fn off_main_thread<T, F>(work: F) -> Result<T, String>
 where
     T: Send + 'static,
@@ -602,9 +603,7 @@ async fn resolve_places<R: Runtime>(
     locale: String,
 ) -> Result<Vec<(String, String)>, String> {
     let base_dir = app_base_dir(&handle)?;
-    tauri::async_runtime::spawn_blocking(move || place::resolve(&base_dir, &coordinates, &locale))
-        .await
-        .map_err(|e| e.to_string())
+    off_main_thread(move || Ok(place::resolve(&base_dir, &coordinates, &locale))).await
 }
 
 #[tauri::command]
