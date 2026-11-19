@@ -52,7 +52,7 @@ no revision. Entry editing by index is deliberately absent — an index
 shifts under a concurrent append.
 
 `sync.rs` is the `sync` subcommand: resolve `sync-config.json` + the stored
-JWT, then core's `engine::run_with_progress`. It only ever **reads** the
+JWT, then core's `domain::sync::run::run_with_progress`. It only ever **reads** the
 config and the token — setting the server up and logging in stay in the app,
 so there is one place either can be changed. The `kind`s it produces
 (`notConfigured` / `notAuthenticated`) match the app's `do_sync`; keep them

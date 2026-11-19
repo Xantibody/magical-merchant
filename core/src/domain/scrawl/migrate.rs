@@ -5,7 +5,7 @@
 //! "`timeline/*` disappeared and `scrawl/*` appeared": the diff becomes `UploadNew` and
 //! `DeleteRemote`, and one sync carries it over in full (`sync/diff.rs`).
 //!
-//! Call it before the scan: inside the sync lock (`repair_tree` in `sync/engine.rs`), at app
+//! Call it before the scan: inside the sync lock (`repair_tree` in `sync/run.rs`), at app
 //! start, on the widget's read, and on every capture (`save_scrawl_entry`). Called later,
 //! the scan would see a tree halfway through the rename.
 //!
