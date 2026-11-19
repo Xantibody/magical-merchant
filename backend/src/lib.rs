@@ -18,6 +18,8 @@ mod export;
 mod location;
 mod place;
 mod sync;
+#[cfg(test)]
+mod test_app;
 // Public because it is a real external surface: the JNI symbol inside is what
 // the Android widget links against, and `unreachable_pub` is right that a
 // private module cannot hold one honestly.
@@ -1036,5 +1038,278 @@ mod tests {
 
         assert_eq!(token_from_urls(&expired), None);
         assert_eq!(token_from_urls(&garbage), None);
+    }
+}
+
+/// What the webview gets back from the note, Codex and glyph commands, called through a
+/// mock app over a temporary data directory.
+#[cfg(test)]
+#[allow(
+    clippy::significant_drop_tightening,
+    reason = "a test app holds the data directory until the test ends"
+)]
+mod command_tests {
+    use std::path::Path;
+
+    use super::*;
+    use crate::test_app::{TestApp, test_app};
+
+    fn client() -> ClientContext {
+        ClientContext::default()
+    }
+
+    fn create(app: &TestApp, body: &str, kind: Option<NoteKind>) -> String {
+        create_draft(app.handle(), body.to_string(), vec![], client(), None, kind).unwrap()
+    }
+
+    /// The ID of the note `create_draft` answered with.
+    fn id_of(answer: &str) -> String {
+        Path::new(answer)
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string()
+    }
+
+    fn read(app: &TestApp, filename: &str) -> NoteRead {
+        read_note(app.handle(), filename.to_string()).unwrap()
+    }
+
+    fn update(
+        app: &TestApp,
+        filename: &str,
+        body: &str,
+        revision: &str,
+    ) -> Result<String, SaveError> {
+        update_draft(
+            app.handle(),
+            filename.to_string(),
+            body.to_string(),
+            client(),
+            revision.to_string(),
+        )
+    }
+
+    #[test]
+    fn create_draft_makes_a_note_and_answers_its_absolute_path() {
+        let app = test_app();
+
+        let answer = create(&app, "body", None);
+
+        let path = Path::new(&answer);
+        assert!(path.is_absolute(), "{answer}");
+        assert_eq!(path.parent().unwrap(), app.base().join("data/notes"));
+        assert!(path.exists());
+    }
+
+    #[test]
+    fn create_draft_of_a_codex_puts_it_under_codex() {
+        let app = test_app();
+
+        let answer = create(&app, "body", Some(NoteKind::Codex));
+
+        assert_eq!(
+            Path::new(&answer).parent().unwrap(),
+            app.base().join("data/codex")
+        );
+    }
+
+    #[test]
+    fn create_draft_records_the_origin_and_that_the_app_wrote_it() {
+        let app = test_app();
+
+        let answer = create_draft(
+            app.handle(),
+            "from an entry".to_string(),
+            vec![],
+            client(),
+            Some("2026-08-13T08:30:00".to_string()),
+            None,
+        )
+        .unwrap();
+
+        let filename = NoteFilename::parse(&id_of(&answer)).unwrap();
+        let meta = magical_merchant_core::read_note_meta(app.base(), &filename).unwrap();
+        assert_eq!(meta.origin.as_deref(), Some("2026-08-13T08:30:00"));
+        assert_eq!(meta.source.as_deref(), Some("app"));
+    }
+
+    #[test]
+    fn read_note_answers_the_body_and_its_revision() {
+        let app = test_app();
+        let filename = id_of(&create(&app, "# Title\nbody", None));
+
+        let read = read(&app, &filename);
+
+        assert_eq!(read.body, "# Title\nbody");
+        assert_eq!(read.revision, Revision::of("# Title\nbody").to_string());
+        let json = serde_json::to_value(&read).unwrap();
+        let mut keys: Vec<&String> = json.as_object().unwrap().keys().collect();
+        keys.sort();
+        assert_eq!(keys, ["body", "revision"]);
+    }
+
+    #[test]
+    fn update_draft_with_the_read_revision_writes_and_answers_the_next_one() {
+        let app = test_app();
+        let filename = id_of(&create(&app, "before", None));
+        let revision = read(&app, &filename).revision;
+
+        let next = update(&app, &filename, "after", &revision).unwrap();
+
+        assert_eq!(next, Revision::of("after").to_string());
+        assert_eq!(read(&app, &filename).body, "after");
+    }
+
+    #[test]
+    fn update_draft_with_an_old_revision_is_refused_as_stale() {
+        let app = test_app();
+        let filename = id_of(&create(&app, "before", None));
+        let old = read(&app, &filename).revision;
+        update(&app, &filename, "theirs", &old).unwrap();
+
+        let refused = update(&app, &filename, "mine", &old).unwrap_err();
+
+        assert_eq!(refused.kind, "stale");
+        assert_eq!(read(&app, &filename).body, "theirs");
+    }
+
+    #[test]
+    fn update_draft_of_a_deleted_note_is_refused_as_missing() {
+        let app = test_app();
+        let filename = id_of(&create(&app, "before", None));
+        let revision = read(&app, &filename).revision;
+        delete_note(app.handle(), filename.clone()).unwrap();
+
+        let refused = update(&app, &filename, "after", &revision).unwrap_err();
+
+        assert_eq!(refused.kind, "missing");
+        assert!(!app.base().join("data/notes").join(&filename).exists());
+    }
+
+    #[test]
+    fn update_draft_of_a_promoted_note_writes_where_the_codex_lives() {
+        let app = test_app();
+        let filename = id_of(&create(&app, "before", None));
+        let revision = read(&app, &filename).revision;
+        promote_note_to_codex(app.handle(), filename.clone()).unwrap();
+
+        update(&app, &filename, "after", &revision).unwrap();
+
+        assert!(app.base().join("data/codex").join(&filename).exists());
+        assert!(!app.base().join("data/notes").join(&filename).exists());
+        assert_eq!(read(&app, &filename).body, "after");
+    }
+
+    #[test]
+    fn update_draft_of_a_name_that_is_no_note_is_other() {
+        let app = test_app();
+
+        let refused = update(&app, "../escape.md", "body", "rev").unwrap_err();
+
+        assert_eq!(refused.kind, "other");
+    }
+
+    #[test]
+    fn a_save_error_crosses_as_its_kind_and_message() {
+        let app = test_app();
+
+        let refused = update(&app, "../escape.md", "body", "rev").unwrap_err();
+
+        let json = serde_json::to_value(&refused).unwrap();
+        let mut keys: Vec<&String> = json.as_object().unwrap().keys().collect();
+        keys.sort();
+        assert_eq!(keys, ["kind", "message"]);
+        assert_eq!(json["kind"], "other");
+    }
+
+    #[test]
+    fn restore_note_version_with_an_old_revision_is_refused_as_stale() {
+        let app = test_app();
+        let filename = id_of(&create(&app, "first", Some(NoteKind::Codex)));
+        let version = commit_note_version(app.handle(), filename.clone(), None).unwrap();
+        let old = read(&app, &filename).revision;
+        update(&app, &filename, "second", &old).unwrap();
+
+        let refused =
+            restore_note_version(app.handle(), filename.clone(), version.id, client(), old)
+                .unwrap_err();
+
+        assert_eq!(refused.kind, "stale");
+        assert_eq!(read(&app, &filename).body, "second");
+    }
+
+    #[test]
+    fn update_note_meta_takes_a_time_with_an_offset() {
+        let app = test_app();
+        let filename = id_of(&create(&app, "body", None));
+
+        update_note_meta(
+            app.handle(),
+            filename.clone(),
+            "2026-01-01T10:00:00+09:00".to_string(),
+            vec!["tag".to_string()],
+        )
+        .unwrap();
+
+        let meta = read_note_meta(app.handle(), filename).unwrap();
+        assert_eq!(meta.time.rfc3339(), "2026-01-01T10:00:00+09:00");
+        assert_eq!(meta.tags, ["tag"]);
+    }
+
+    #[test]
+    fn update_note_meta_refuses_a_time_without_an_offset() {
+        let app = test_app();
+        let filename = id_of(&create(&app, "body", None));
+        let before = read_note_meta(app.handle(), filename.clone()).unwrap();
+
+        let refused = update_note_meta(
+            app.handle(),
+            filename.clone(),
+            "2026-01-01T10:00:00".to_string(),
+            vec![],
+        );
+
+        assert!(refused.is_err_and(|message| !message.is_empty()));
+        assert_eq!(
+            read_note_meta(app.handle(), filename).unwrap().time,
+            before.time
+        );
+    }
+
+    const PNG: &[u8] = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR";
+    const SVG: &[u8] = b"<svg xmlns=\"http://www.w3.org/2000/svg\"><circle r=\"4\"/></svg>";
+
+    #[test]
+    fn read_glyphs_answers_each_image_as_a_data_url() {
+        let app = test_app();
+        for (name, format, bytes) in [("dot", "png", PNG), ("ring", "svg", SVG)] {
+            save_glyph(
+                app.handle(),
+                name.to_string(),
+                format.to_string(),
+                B64.encode(bytes),
+            )
+            .unwrap();
+        }
+
+        let mut assets = tauri::async_runtime::block_on(read_glyphs(app.handle())).unwrap();
+        assets.sort_by(|a, b| a.name.cmp(&b.name));
+
+        let urls: Vec<(&str, String)> = assets
+            .iter()
+            .map(|asset| (asset.name.as_str(), asset.url.clone()))
+            .collect();
+        assert_eq!(
+            urls,
+            [
+                ("dot", format!("data:image/png;base64,{}", B64.encode(PNG))),
+                (
+                    "ring",
+                    format!("data:image/svg+xml;base64,{}", B64.encode(SVG))
+                ),
+            ]
+        );
     }
 }

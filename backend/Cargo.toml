@@ -101,6 +101,8 @@ block2 = "0.6"
 
 [dev-dependencies]
 tempfile = "3"
+# `tauri::test::mock_app()`, so a test calls a command the way the webview does
+tauri = { version = "2", features = ["test"] }
 
 [lints]
 workspace = true
