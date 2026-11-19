@@ -119,8 +119,9 @@ versions and never makes them: list, read, diff and status are exposed, and
 `commit_note_version` / `restore_note_version` / `delete_note_version` are not,
 `--allow-write` included, because committing is a person's decision.
 
-Glyphs (`core/src/glyph.rs`): user images under `data/glyphs/<name>.<png|svg>`
-that `:name:` renders inline. `GlyphName` (`utils/validated.rs`) fixes the
+Glyphs (`core/src/domain/glyphs/`: rules in `image.rs`, operations in
+`register.rs` and `lookup.rs`): user images under `data/glyphs/<name>.<png|svg>`
+that `:name:` renders inline. `GlyphName` (`image.rs`) fixes the
 charset — the same regex lives in `lib/glyphs.ts`; fix both. Only registered
 names resolve, so the tokenizer never touches `12:30:45`.
 
