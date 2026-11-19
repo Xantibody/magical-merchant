@@ -71,6 +71,12 @@ pub fn read(path: &Path) -> Result<Vec<u8>, CoreError> {
     Ok(fs::read(path)?)
 }
 
+/// The contents of `path` as text. A missing file is an error, as any other failure to
+/// read; see [`read_if_present`] for the read that is content with nothing there.
+pub fn read_text(path: &Path) -> Result<String, CoreError> {
+    Ok(fs::read_to_string(path)?)
+}
+
 /// Removes the file at `path`. A missing file is an error; see [`remove_if_present`] for
 /// the removal that is content with nothing there.
 pub fn remove(path: &Path) -> Result<(), CoreError> {
@@ -184,6 +190,24 @@ pub fn rename_without_clobber(from: &Path, to: &Path) -> Result<PathBuf, CoreErr
         std::io::ErrorKind::AlreadyExists,
         format!("{} and its spare names are all taken", to.display()),
     )))
+}
+
+/// Moves `from` to `to`, and refuses when `to` is taken: the answer is then
+/// `CoreError::Io` with `AlreadyExists`, and both files stay as they were.
+///
+/// Not [`rename_without_clobber`], which escapes to a spare name and always lands: this one
+/// is for a name the user chose, where landing anywhere else would be a surprise. A plain
+/// `fs::rename` would silently replace what is there. The name is reserved first with
+/// `create_new`, and if the move then fails the reserved empty file is removed again.
+pub fn rename_no_replace(from: &Path, to: &Path) -> Result<(), CoreError> {
+    fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(to)?;
+    fs::rename(from, to).map_err(|e| {
+        let _ = fs::remove_file(to);
+        CoreError::from(e)
+    })
 }
 
 /// The second `a/b.md` becomes `a/b-2.md`. The extension stays: unless a copy
@@ -360,6 +384,67 @@ mod tests {
         assert!(rename_without_clobber(&tmp.path().join("nope.md"), &to).is_err());
 
         assert!(!to.exists());
+    }
+
+    #[test]
+    fn rename_no_replace_moves_to_a_free_name() {
+        let tmp = seed(&["a.md"]);
+        let from = tmp.path().join("a.md");
+        let to = tmp.path().join("b.md");
+
+        rename_no_replace(&from, &to).unwrap();
+
+        assert!(!from.exists());
+        assert_eq!(fs::read_to_string(&to).unwrap(), "x");
+    }
+
+    /// A taken name is refused, not replaced and not escaped to a spare name.
+    #[test]
+    fn rename_no_replace_keeps_what_is_already_there() {
+        let tmp = TempDir::new().unwrap();
+        let from = tmp.path().join("a.md");
+        let to = tmp.path().join("b.md");
+        fs::write(&from, "newcomer").unwrap();
+        fs::write(&to, "the one already there").unwrap();
+
+        let result = rename_no_replace(&from, &to);
+
+        assert!(matches!(
+            result,
+            Err(CoreError::Io(e)) if e.kind() == std::io::ErrorKind::AlreadyExists
+        ));
+        assert_eq!(fs::read_to_string(&from).unwrap(), "newcomer");
+        assert_eq!(fs::read_to_string(&to).unwrap(), "the one already there");
+        assert!(!tmp.path().join("b-2.md").exists());
+    }
+
+    /// A failed move leaves no empty file under the new name, or the name would read as
+    /// taken from then on.
+    #[test]
+    fn rename_no_replace_leaves_no_placeholder_when_the_move_fails() {
+        let tmp = TempDir::new().unwrap();
+        let to = tmp.path().join("b.md");
+
+        assert!(rename_no_replace(&tmp.path().join("nope.md"), &to).is_err());
+
+        assert!(!to.exists());
+    }
+
+    #[test]
+    fn read_text_returns_the_contents() {
+        let tmp = seed(&["a.md"]);
+
+        assert_eq!(read_text(&tmp.path().join("a.md")).unwrap(), "x");
+    }
+
+    #[test]
+    fn read_text_of_a_missing_file_is_an_io_error() {
+        let tmp = TempDir::new().unwrap();
+
+        assert!(matches!(
+            read_text(&tmp.path().join("nope")),
+            Err(CoreError::Io(e)) if e.kind() == std::io::ErrorKind::NotFound
+        ));
     }
 
     /// Even if one is left behind by a crash, it is not `.md` so it does not show in

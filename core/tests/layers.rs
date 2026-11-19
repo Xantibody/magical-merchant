@@ -45,7 +45,6 @@ const ALLOWED: &[(&str, Rule, u32)] = &[
     ("src/sync.rs", Rule::EntryHoldsOnlyModAndPubUse, 32),
     ("src/utils/clock.rs", Rule::EntryHoldsOnlyModAndPubUse, 33),
     ("src/utils/place.rs", Rule::UtilsImportsServices, 31),
-    ("src/domain/templates/folder.rs", Rule::DomainUsesStdFs, 26),
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

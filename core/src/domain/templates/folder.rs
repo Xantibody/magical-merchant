@@ -1,7 +1,6 @@
 //! One folder of template files: the templates themselves in `data/templates/`, or their
 //! drafts in `template-drafts/`. The edit and draft operations both reach the disk here.
 
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use super::file::{
@@ -9,7 +8,10 @@ use super::file::{
     templates_dir,
 };
 use crate::error::CoreError;
-use crate::services::files::{ensure_dir, list_md_files, write_atomic};
+use crate::services::files::{
+    list_md_files, read_text, remove, rename_no_replace, resolve_existing, resolve_writable,
+    write_atomic,
+};
 use crate::utils::validated::NoteFilename;
 
 /// One directory of template files. The same shape serves the templates themselves and
@@ -32,29 +34,22 @@ impl Templates {
         }
     }
 
-    fn dir(&self) -> PathBuf {
-        self.dir.clone()
-    }
-
     fn existing_path(&self, filename: &NoteFilename) -> Result<PathBuf, CoreError> {
-        crate::services::files::resolve_existing(&self.dir(), filename.as_str())
+        resolve_existing(&self.dir, filename.as_str())
     }
 
-    /// The write target for a file that does not exist yet. What does not exist cannot be
-    /// canonicalized, so the directory is resolved first and the name joined on.
-    /// `NoteFilename` rejects `/` and `..`, so the result is always directly under this directory.
+    /// The write target for a file that does not exist yet. `NoteFilename` rejects `/`
+    /// and `..`, so the result is always directly under this directory.
     fn writable_path(&self, filename: &NoteFilename) -> Result<PathBuf, CoreError> {
-        let dir = self.dir();
-        fs::create_dir_all(&dir)?;
-        Ok(fs::canonicalize(&dir)?.join(filename.as_str()))
+        resolve_writable(&self.dir, filename.as_str())
     }
 
     pub(crate) fn list(&self) -> Result<Vec<Summary>, CoreError> {
-        let mut summaries: Vec<Summary> = list_md_files(&self.dir())?
+        let mut summaries: Vec<Summary> = list_md_files(&self.dir)?
             .into_iter()
             .map(|entry| {
                 let filename = entry.file_name().to_string_lossy().to_string();
-                let content = fs::read_to_string(entry.path()).unwrap_or_default();
+                let content = read_text(&entry.path()).unwrap_or_default();
                 summarize(filename, &content)
             })
             .collect();
@@ -69,7 +64,7 @@ impl Templates {
         &self,
         filename: &NoteFilename,
     ) -> Result<(TemplateFrontmatter, String), CoreError> {
-        let content = fs::read_to_string(self.existing_path(filename)?)?;
+        let content = read_text(&self.existing_path(filename)?)?;
         Ok(parse_file(&content))
     }
 
@@ -80,36 +75,26 @@ impl Templates {
         tags: &[String],
     ) -> Result<(), CoreError> {
         let path = self.writable_path(filename)?;
-        ensure_dir(&path)?;
-        write_atomic(&path, render_file(body, tags)?)?;
-        Ok(())
+        write_atomic(&path, render_file(body, tags)?)
     }
 
-    /// Move a file to a new name, never over one that exists.
+    /// Move a file to a new name, never over one that exists: a taken name is an error,
+    /// not a silent replace.
     pub(crate) fn rename(&self, from: &NoteFilename, to: &NoteFilename) -> Result<(), CoreError> {
         let source = self.existing_path(from)?;
         let target = self.writable_path(to)?;
-        // Reserving the name first makes "taken" an error rather than a silent replace;
-        // a plain rename overwrites whatever is there
-        fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&target)?;
-        fs::rename(&source, &target).map_err(|e| {
-            let _ = fs::remove_file(&target);
-            CoreError::from(e)
-        })
+        rename_no_replace(&source, &target)
     }
 
     pub(crate) fn delete(&self, filename: &NoteFilename) -> Result<(), CoreError> {
-        fs::remove_file(self.existing_path(filename)?)?;
-        Ok(())
+        remove(&self.existing_path(filename)?)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
     use tempfile::TempDir;
 
     fn templates(tmp: &TempDir) -> Templates {
