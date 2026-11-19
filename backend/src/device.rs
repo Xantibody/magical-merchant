@@ -1,5 +1,6 @@
 use magical_merchant_core::DeviceContext;
-use magical_merchant_core::utils::device::{self, Location, NetworkType};
+use magical_merchant_core::domain::device;
+use magical_merchant_core::utils::device::{Location, NetworkType};
 use serde::Deserialize;
 
 /// The runtime environment collected on the `WebView` side.
@@ -25,7 +26,7 @@ pub(crate) struct ClientContext {
 /// Native can ask the OS directly (the battery crate on macOS, for one), so it is the
 /// more reliable of the two.
 ///
-/// How the values are measured lives in core (`utils::device::probe`). It is not made
+/// How the values are measured lives in core (`domain::device::probe`). It is not made
 /// an app-only implementation, so that writes from the CLI and MCP leave the same
 /// content.
 pub(crate) fn get_context(client: ClientContext) -> DeviceContext {

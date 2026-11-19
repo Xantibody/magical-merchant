@@ -42,7 +42,6 @@ const ALLOWED: &[(&str, Rule, u32)] = &[
     ("src/template.rs", Rule::EntryHoldsOnlyModAndPubUse, 26),
     ("src/sync.rs", Rule::EntryHoldsOnlyModAndPubUse, 32),
     ("src/utils/clock.rs", Rule::EntryHoldsOnlyModAndPubUse, 33),
-    ("src/utils/device.rs", Rule::EntryHoldsOnlyModAndPubUse, 24),
     ("src/utils/place.rs", Rule::UtilsImportsServices, 31),
 ];
 

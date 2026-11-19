@@ -24,7 +24,7 @@ use magical_merchant_core::{CoreError, NoteFilename, NoteKind, Provenance, Revis
 // AIDEV-NOTE: working it out from Wi-Fi is closed off too. SSID/BSSID need the same
 // permission as locating, and come back redacted
 pub(crate) fn context() -> Context {
-    magical_merchant_core::utils::device::probe()
+    magical_merchant_core::domain::device::probe()
 }
 
 /// The body that was read, and the revision to pass along when writing it back.
@@ -163,7 +163,7 @@ mod tests {
     #[test]
     fn the_recorded_context_says_as_much_about_the_machine_as_the_app_does() {
         let context = context();
-        let probed = magical_merchant_core::utils::device::probe();
+        let probed = magical_merchant_core::domain::device::probe();
 
         assert_eq!(context.os, std::env::consts::OS);
         assert_eq!(context.arch, std::env::consts::ARCH);

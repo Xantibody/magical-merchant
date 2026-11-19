@@ -1,12 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-/// The part that measures the device and fills a [`Context`]. It asks the OS for
-/// `hostname` and battery level, so a user who only reads and writes notes does not need it.
-#[cfg(feature = "device-probe")]
-mod probe;
-#[cfg(feature = "device-probe")]
-pub use probe::{location, probe};
-
 /// How the device was connected to the outside.
 ///
 /// The network name (SSID) is not held. From macOS 14 on it is hidden without the

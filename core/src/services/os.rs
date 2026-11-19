@@ -1,4 +1,4 @@
-//! Asks the OS directly what state this device is in and makes a [`Context`] of it.
+//! Asks the OS directly what state this device is in.
 //!
 //! The measuring lives in this one place so that the same content is recorded
 //! whether written from the app, the CLI or MCP. With one implementation per
@@ -9,45 +9,11 @@
 //! and a resident app and a one-shot CLI obtain it differently. The side that
 //! needs it adds it.
 
-use super::{Context, Location, NetworkType};
-
-/// A [`Context`] filled with only what the device can be asked about.
-///
-/// Items that could not be found are returned as `None`. On a platform like
-/// Android, where neither power nor network is visible from native code, this is
-/// the base that the `WebView` side is expected to fill in again.
-#[must_use]
-pub fn probe() -> Context {
-    let (battery, is_charging) = battery();
-
-    Context {
-        battery,
-        is_charging,
-        network_type: network(),
-        location: None,
-        os: std::env::consts::OS.to_string(),
-        os_version: os_version(),
-        arch: std::env::consts::ARCH.to_string(),
-        hostname: hostname(),
-        locale: locale(),
-    }
-}
-
-/// Makes a [`Location`] only when both coordinates are passed together.
-#[must_use]
-pub const fn location(latitude: Option<f64>, longitude: Option<f64>) -> Option<Location> {
-    match (latitude, longitude) {
-        (Some(latitude), Some(longitude)) => Some(Location {
-            latitude,
-            longitude,
-        }),
-        _ => None,
-    }
-}
+use crate::utils::device::NetworkType;
 
 /// On Android the hostname is "localhost" on every device and says nothing about
 /// which device wrote the record. The value is not worth recording, so it is dropped.
-fn hostname() -> Option<String> {
+pub(crate) fn hostname() -> Option<String> {
     hostname::get()
         .ok()
         .and_then(|h| h.into_string().ok())
@@ -55,7 +21,7 @@ fn hostname() -> Option<String> {
 }
 
 #[cfg(target_os = "macos")]
-fn os_version() -> Option<String> {
+pub(crate) fn os_version() -> Option<String> {
     let output = std::process::Command::new("sw_vers")
         .arg("-productVersion")
         .output()
@@ -73,7 +39,7 @@ fn os_version() -> Option<String> {
 
 /// Linux versions differently per distribution, so `/etc/os-release` is asked.
 #[cfg(target_os = "linux")]
-fn os_version() -> Option<String> {
+pub(crate) fn os_version() -> Option<String> {
     parse_os_release(&std::fs::read_to_string("/etc/os-release").ok()?)
 }
 
@@ -100,11 +66,11 @@ fn parse_os_release(contents: &str) -> Option<String> {
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "linux")))]
-const fn os_version() -> Option<String> {
+pub(crate) const fn os_version() -> Option<String> {
     None
 }
 
-fn locale() -> Option<String> {
+pub(crate) fn locale() -> Option<String> {
     std::env::var("LC_ALL")
         .or_else(|_| std::env::var("LANG"))
         .ok()
@@ -112,7 +78,7 @@ fn locale() -> Option<String> {
 }
 
 #[cfg(not(target_os = "android"))]
-fn battery() -> (Option<u8>, Option<bool>) {
+pub(crate) fn battery() -> (Option<u8>, Option<bool>) {
     use battery::State;
 
     let Ok(manager) = battery::Manager::new() else {
@@ -139,7 +105,7 @@ fn battery() -> (Option<u8>, Option<bool>) {
 }
 
 #[cfg(target_os = "android")]
-const fn battery() -> (Option<u8>, Option<bool>) {
+pub(crate) const fn battery() -> (Option<u8>, Option<bool>) {
     (None, None)
 }
 
@@ -150,7 +116,7 @@ const fn battery() -> (Option<u8>, Option<bool>) {
 /// hardware port it is. Unlike reading the SSID, neither command needs the location
 /// permission.
 #[cfg(target_os = "macos")]
-fn network() -> Option<NetworkType> {
+pub(crate) fn network() -> Option<NetworkType> {
     let route = std::process::Command::new("route")
         .args(["-n", "get", "default"])
         .output()
@@ -218,7 +184,7 @@ fn classify_port(port: &str) -> NetworkType {
 /// table as is, so there is no need to launch `ip`. Whether it is wireless is
 /// answered by the marker in `/sys`.
 #[cfg(target_os = "linux")]
-fn network() -> Option<NetworkType> {
+pub(crate) fn network() -> Option<NetworkType> {
     let route = std::fs::read_to_string("/proc/net/route").ok()?;
     let Some(interface) = parse_default_route_interface(&route) else {
         // no default route = no way out.
@@ -266,44 +232,8 @@ fn classify_interface(interface: &str, wireless: bool) -> NetworkType {
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "linux")))]
-const fn network() -> Option<NetworkType> {
+pub(crate) const fn network() -> Option<NetworkType> {
     None
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// The two that every OS can name. If these were empty, the record would say
-    /// nothing at all about which device wrote it.
-    #[test]
-    fn always_names_the_machine_it_ran_on() {
-        let context = probe();
-
-        assert!(!context.os.is_empty());
-        assert!(!context.arch.is_empty());
-    }
-
-    /// No positioning. What needs neither permission nor waiting is the job here;
-    /// an entry point that can get coordinates adds them afterwards.
-    #[test]
-    fn leaves_the_location_to_the_caller() {
-        assert!(probe().location.is_none());
-    }
-
-    #[test]
-    fn makes_a_location_only_from_a_pair() {
-        assert_eq!(
-            location(Some(35.68), Some(139.76)),
-            Some(Location {
-                latitude: 35.68,
-                longitude: 139.76
-            })
-        );
-        assert_eq!(location(Some(35.68), None), None);
-        assert_eq!(location(None, Some(139.76)), None);
-        assert_eq!(location(None, None), None);
-    }
 }
 
 #[cfg(all(test, target_os = "macos"))]
@@ -371,12 +301,6 @@ mod macos_tests {
     #[test]
     fn counts_a_tethered_phone_as_mobile() {
         assert_eq!(classify_port("iPhone USB"), NetworkType::Mobile);
-    }
-
-    /// macOS has `sw_vers`, so it can name the version too.
-    #[test]
-    fn names_the_os_version_on_macos() {
-        assert!(probe().os_version.is_some());
     }
 }
 
@@ -448,14 +372,6 @@ PRETTY_NAME="NixOS 25.05 (Warbler)"
 
         assert_eq!(parse_default_route_interface(only_lan), None);
         assert_eq!(parse_default_route_interface(""), None);
-    }
-
-    /// A parsing test cannot tell whether a readable location on real Linux is being
-    /// looked at. The CI Linux job passing is the only check.
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn names_the_distribution_it_runs_on() {
-        assert!(probe().os_version.is_some());
     }
 
     /// Whether it is wireless is answered by `/sys`, not the name. Only mobile

@@ -5,6 +5,10 @@ pub mod files;
 // The keyring crate has no store on Android; the token lives in a file there.
 #[cfg(all(feature = "sync-client", not(target_os = "android")))]
 pub mod keyring;
+// Asks the OS for `hostname` and battery level, so a user who only reads and writes notes
+// does not need it.
+#[cfg(feature = "device-probe")]
+pub mod os;
 // The Android JNI build and the MCP-only CLI need no HTTP, so reqwest stays behind the feature.
 #[cfg(feature = "sync-client")]
 pub mod worker;
