@@ -38,8 +38,8 @@ verifier verifies the sync host again; everything else here stays as is.
 
 `backend/gen/android/` is gitignored and recreated by `tauri android init`,
 so the Gradle edit cannot simply live there. `apply-tls.go` re-applies it and
-runs as part of `just android-setup`, which `android-init` and the build
-recipes depend on. Like `../android-signing/` and `../android-widget/`, every
+runs as part of `just android::setup`, which `android::init` and the build
+recipes depend on. Like `../signing/` and `../widget/`, every
 inserted region is wrapped in marker comments and stripped before
 re-insertion, so any number of runs yields the same file.
 
@@ -58,12 +58,12 @@ The version is read out of `cargo metadata` rather than written as
 
 ## Checking it
 
-`just android-build-debug` fails at `:app:checkUniversalDebugAarMetadata` if
+`just android::build-debug` fails at `:app:checkUniversalDebugAarMetadata` if
 the repository cannot be located. That the classes actually reached the APK is
 one step further out:
 
 ```sh
-dexdump -f ../backend/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk \
+dexdump -f backend/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk \
   | grep -c platformverifier
 ```
 

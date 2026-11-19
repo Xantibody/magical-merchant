@@ -15,7 +15,7 @@ Why signed release (not the debug APK):
 So the signing setup is **not** stored there. Instead,
 [`apply-signing.go`](apply-signing.go) injects the signing config into
 `app/build.gradle.kts` with idempotent markers. Re-run it (via
-`just android-sign-setup`, which the release recipes depend on) any time the
+`just android::sign-setup`, which the release recipes depend on) any time the
 Gradle project is regenerated. Secrets live only in a local, gitignored
 `keystore.properties`.
 
@@ -36,8 +36,8 @@ keytool -genkey -v -keystore ~/.android-keys/magical-merchant.jks \
 ### 2. Configure `keystore.properties`
 
 ```sh
-cp android-signing/keystore.properties.example \
-   ../backend/gen/android/keystore.properties
+cp android/signing/keystore.properties.example \
+   backend/gen/android/keystore.properties
 ```
 
 Then edit `backend/gen/android/keystore.properties` and fill in `storeFile`
@@ -46,20 +46,20 @@ This file is gitignored — do not commit it.
 
 ## Build & install
 
-From the `tauri-app/` directory:
+From the repository root:
 
 ```sh
-# Build a signed release APK (runs android-sign-setup automatically)
-just android-build-release
+# Build a signed release APK (runs android::sign-setup automatically)
+just android::build-release
 
 # …or build and install onto a USB-connected device in one step
-just android-install release
+just android::install release
 ```
 
 The signed APK is written to:
 
 ```
-../backend/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
+backend/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
 ```
 
 To distribute without USB: copy that APK to your device (cloud, AirDrop-style
@@ -70,7 +70,7 @@ transfer, email to yourself, etc.), then open it on the device and allow
 
 Bump `versionCode` (and `versionName`) in
 `backend/gen/android/app/tauri.properties`, rebuild, and install over the
-existing app with `adb install -r …` (what `android-install release` does). The
+existing app with `adb install -r …` (what `android::install release` does). The
 same signing key lets it install as an update rather than a conflicting app.
 
 ## Verifying the signature (optional)
@@ -79,5 +79,5 @@ same signing key lets it install as an update rather than a conflicting app.
 
 ```sh
 apksigner verify --verbose --print-certs \
-  ../backend/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
+  backend/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
 ```

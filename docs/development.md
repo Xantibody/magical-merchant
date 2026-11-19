@@ -104,7 +104,7 @@ fetch what they need:
 | `just sandbox`  | The app over a copy of `fixtures/` (see [Sandbox](#sandbox))   |     |
 
 Everything else is reached through its module — `just tauri_app::…`,
-`just rust::…`, `just worker::…`. Run `just --list <module>` to see them.
+`just rust::…`, `just android::…`, `just worker::…`. Run `just --list <module>` to see them.
 CI does not call `verify`; it calls the three module recipes directly, in
 jobs that a path filter can skip.
 
@@ -142,17 +142,17 @@ every sync with `UnknownPreconfigured`.
 | `just worker::check` | oxlint + tsc + knip | ✓   |
 | `just worker::test`  | Vitest              | ✓   |
 
-### Android recipes (`tauri_app::`)
+### Android recipes (`android::`)
 
-| Command                                     | Description                                         | CI  |
-| ------------------------------------------- | --------------------------------------------------- | --- |
-| `just tauri_app::android-init`              | Generate `gen/android` (runs `icons` + the patches) |     |
-| `just tauri_app::android-setup`             | Re-apply the TLS + widget patches to `gen/android`  |     |
-| `just tauri_app::android-sign-setup`        | Re-inject the signing config into Gradle            |     |
-| `just tauri_app::android-dev`               | Development on a connected device                   |     |
-| `just tauri_app::android-build-debug`       | Build the debug APK                                 | ✓   |
-| `just tauri_app::android-build-release`     | Build a signed release APK                          |     |
-| `just tauri_app::android-install [variant]` | Build and install over USB (`debug` / `release`)    |     |
+| Command                           | Description                                         | CI  |
+| --------------------------------- | --------------------------------------------------- | --- |
+| `just android::init`              | Generate `gen/android` (runs `icons` + the patches) |     |
+| `just android::setup`             | Re-apply the TLS + widget patches to `gen/android`  |     |
+| `just android::sign-setup`        | Re-inject the signing config into Gradle            |     |
+| `just android::dev`               | Development on a connected device                   |     |
+| `just android::build-debug`       | Build the debug APK                                 | ✓   |
+| `just android::build-release`     | Build a signed release APK                          |     |
+| `just android::install [variant]` | Build and install over USB (`debug` / `release`)    |     |
 
 `backend/gen/android/` is generated and gitignored, so everything the
 project needs on top of what `tauri android init` writes is re-applied by a
@@ -161,13 +161,13 @@ re-inserts its own marked block):
 
 | Patcher                            | What it adds                                                                               |
 | ---------------------------------- | ------------------------------------------------------------------------------------------ |
-| `android-tls/apply-tls.go`         | The Kotlin half of `rustls-platform-verifier`, which the sync client currently bypasses    |
-| `android-widget/apply-widget.go`   | The widget sources, and the five receivers + two activities + list service in the manifest |
-| `android-signing/apply-signing.go` | The release signing config, read from the gitignored `keystore.properties`                 |
+| `android/tls/apply-tls.go`         | The Kotlin half of `rustls-platform-verifier`, which the sync client currently bypasses    |
+| `android/widget/apply-widget.go`   | The widget sources, and the five receivers + two activities + list service in the manifest |
+| `android/signing/apply-signing.go` | The release signing config, read from the gitignored `keystore.properties`                 |
 
-`android-setup` runs the first two, on its own from `android-init` and from
-both build recipes; `android-sign-setup` runs the third, needs
-`keystore.properties`, and so hangs off `android-build-release` only. Call
+`android::setup` runs the first two, on its own from `android::init` and from
+both build recipes; `android::sign-setup` runs the third, needs
+`keystore.properties`, and so hangs off `android::build-release` only. Call
 either by hand after regenerating `gen/android` some other way.
 
 When an Android certificate error turns up, start from the fact that the

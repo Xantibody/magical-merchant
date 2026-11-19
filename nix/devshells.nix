@@ -127,7 +127,7 @@ let
     NDK_HOME = "${androidSdkRoot}/ndk/${androidNdkVersion}";
   };
 
-  # apply-signing.go (`just android-sign-setup`) and cargo-tauri's android subcommand
+  # apply-signing.go (`just android::sign-setup`) and cargo-tauri's android subcommand
   androidToolchain = [
     rustToolchain
     androidSdk

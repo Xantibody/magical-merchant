@@ -1,7 +1,5 @@
 # AIDEV-NOTE: the Tauri CLI looks for tauri.conf.json below the cwd only; the crate is a sibling, so every `pnpm tauri` is told where it is
 export TAURI_APP_PATH := source_directory() / ".." / "backend"
-# AIDEV-NOTE: Gradle's generated BuildTask runs `pnpm tauri android android-studio-script` in the crate directory, which has no package.json; pnpm reads its --dir from here
-export PNPM_CONFIG_DIR := source_directory()
 
 [private]
 default:
@@ -37,58 +35,6 @@ dev-browser: setup
 icons: setup
   pnpm tauri icon ../backend/icons/icons.json
   cp ../backend/icons/icon.svg public/icon.svg
-
-# --- Android ---
-
-# gen/android は Tauri 既定のランチャーアイコンを持って生成される。
-# 入れ直さないと配信 APK が Tauri のロゴのままになるので、init と一続きにする。
-
-# Android プロジェクト (gen/android) を最初に作る
-android-init: setup
-  pnpm tauri android init
-  just icons
-  just android-setup
-
-# gen/android を作り直すたびに当て直す生成物パッチ (どちらも冪等):
-#   - rustls-platform-verifier の Kotlin 側を app モジュールに繋ぐ。reqwest が
-#     Android のトラストストアに届くのに要る (android-tls/README.md)
-#   - ホーム画面ウィジェットのソースを入れ、receiver を manifest に登録する
-#     (android-widget/README.md)
-# 署名だけは keystore.properties を要求して失敗しうるので android-sign-setup に分けてある。
-
-# gen/android に TLS とウィジェットのパッチを当て直す (冪等)
-android-setup:
-  go run android-tls/apply-tls.go
-  go run android-widget/apply-widget.go
-
-# リリース署名の設定を、生成された build.gradle.kts に注入する (冪等)。
-# keystore.properties が無いと失敗するので android-setup とは別建て。
-# キーストアの初回準備は android-signing/README.md を参照。
-
-# リリース署名の設定を build.gradle.kts に注入する (冪等)
-android-sign-setup:
-  go run android-signing/apply-signing.go
-
-android-dev: setup
-  pnpm tauri android dev
-
-# デバッグ APK を建てる
-android-build-debug: android-setup
-  pnpm tauri android build --debug --target aarch64
-
-# arm64 のみ: x86 系はエミュレータ専用で実機には要らず、universal だと
-# 4 ABI ぶんの .so で APK が 52MB まで膨らむ。
-
-# 署名済みリリース APK を建てる (keystore.properties が要る)
-android-build-release: android-setup android-sign-setup
-  pnpm tauri android build --apk --target aarch64
-
-# --target aarch64 でも Tauri は出力名を universal のままにする。
-
-# 建てて USB 接続の Android 端末に入れる (release で署名済み版)
-android-install variant="debug":
-  just android-build-{{variant}}
-  adb install -r ../backend/gen/android/app/build/outputs/apk/universal/{{variant}}/app-universal-{{variant}}.apk
 
 # --- macOS ---
 

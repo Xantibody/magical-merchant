@@ -6,7 +6,7 @@
     WebView (lib/i18n.ts). A widget process never starts the WebView, so that
     setting is unreachable from here and the split has to be the platform's:
     the launcher resolves these against the device locale, which also covers the
-    <receiver> labels in the widget picker (android-widget/apply-widget.go).
+    <receiver> labels in the widget picker (android/widget/apply-widget.go).
     Wording follows the app's own English table where it already has one.
 
     Keep this file and values-ja/ at the same set of names — a name present in

@@ -149,7 +149,7 @@ local scan → diff → `POST /sync/bulk`, repeated until nothing is left over.
 - TLS: desktop verifies through the OS trust store (rustls-platform-verifier);
   Android uses `webpki-roots` for the sync client because the platform
   verifier reports OCSP-less certificates as Revoked
-  (`android_tls::sync_tls_config`, `tauri-app/android-tls/README.md`)
+  (`android_tls::sync_tls_config`, `android/tls/README.md`)
 
 ## Widgets & deep links
 
@@ -159,8 +159,8 @@ local scan → diff → `POST /sync/bulk`, repeated until nothing is left over.
   `magical-merchant://widget/…` deep links; handled in AppLayout (`onOpenUrl`
   and `getCurrent` for cold start); note rows navigate with `?file=<filename>`,
   template rows with `?name=<stem>`
-- Widget sources live in `tauri-app/android-widget/`, injected by
-  `just tauri_app::android-setup` (`apply-widget.go` registers the five
+- Widget sources live in `android/widget/`, injected by
+  `just android::setup` (`apply-widget.go` registers the five
   receivers in the manifest)
 - Template widgets show `todayTitle` from core's
   `templates_today` (same helpers as `create_note_from_template`); Kotlin

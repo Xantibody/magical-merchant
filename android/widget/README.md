@@ -182,7 +182,7 @@ so the sources live here instead. [`apply-widget.go`](apply-widget.go) copies
 `src/main/` into the generated project and registers the five `<receiver>`
 elements, the two `<activity>` elements and the list `<service>` in `AndroidManifest.xml`
 behind idempotent marker comments — the same approach as
-[`../android-signing`](../android-signing/README.md).
+[`../signing`](../signing/README.md).
 
 The copy includes one file that is not a widget:
 [`MainActivity.kt`](src/main/java/com/magical_merchant/app/MainActivity.kt)
@@ -192,18 +192,18 @@ the keyboard-top markdown toolbar falls back to jittery JS positioning). After
 a Tauri upgrade, diff the regenerated stub against ours before re-applying.
 
 ```sh
-just android-setup
+just android::setup
 ```
 
-`android-build-debug` and `android-build-release` depend on it, so
-`just android-install` / `just android-install release` pick the widgets up on
-their own. `just android-dev` does **not** — run the recipe once by hand before
-`android-dev` if you want the widgets in a dev build.
+`android::build-debug` and `android::build-release` depend on it, so
+`just android::install` / `just android::install release` pick the widgets up on
+their own. `just android::dev` does **not** — run the recipe once by hand before
+`android::dev` if you want the widgets in a dev build.
 
 ## Trying it
 
 ```sh
-just android-install
+just android::install
 ```
 
 Then long-press the home screen → ウィジェット → Magical Merchant. Toggle the

@@ -1,5 +1,6 @@
 mod rust
 mod tauri_app 'tauri-app'
+mod android
 mod worker
 
 [private]

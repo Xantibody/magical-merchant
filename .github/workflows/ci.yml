@@ -145,10 +145,12 @@ jobs:
             # ci.yml をここに入れると、フロントのジョブを 1 行直しただけで
             # 12 分の APK ビルドが乗る
             android:
-              - 'tauri-app/android-widget/**'
-              # android-build-debug は android-setup 経由で apply-tls.go も回す
-              - 'tauri-app/android-tls/**'
+              - 'android/widget/**'
+              # android::build-debug は android::setup 経由で apply-tls.go も回す
+              - 'android/tls/**'
               - 'backend/**'
+              - 'android/justfile'
+              # android::init は tauri_app::icons を呼ぶ
               - 'tauri-app/justfile'
               - 'Cargo.lock'
               - 'flake.nix'
@@ -364,10 +366,10 @@ jobs:
       # 上の rm がその実体を消すまでの間だけ起きるので、負けると落ちて勝つと
       # 通るレースになっていた。env を消すほうが待つより確実
       - name: Generate the Android project
-        run: env -u ANDROID_SDK_ROOT nix develop .#android --command just tauri_app::android-init
-      # android-setup を含む。ウィジェットのソースを入れた状態で組む
+        run: env -u ANDROID_SDK_ROOT nix develop .#android --command just android::init
+      # android::setup を含む。ウィジェットのソースを入れた状態で組む
       - name: The debug APK builds
-        run: env -u ANDROID_SDK_ROOT nix develop .#android --command just tauri_app::android-build-debug
+        run: env -u ANDROID_SDK_ROOT nix develop .#android --command just android::build-debug
       - uses: actions/cache/save@v6
         if: github.ref == 'refs/heads/main' && steps.cargo-cache.outputs.cache-hit != 'true'
         with:

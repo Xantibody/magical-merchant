@@ -7,7 +7,7 @@
 //! other direction: the app asks the launcher to place one.
 //!
 //! Both go through `WidgetUpdates` in Kotlin
-//! (`android-widget/…/widget/WidgetUpdates.kt`), looked up by name. Off Android
+//! (`android/widget/…/widget/WidgetUpdates.kt`), looked up by name. Off Android
 //! there are no widgets: refreshing does nothing and pinning is unsupported.
 
 use magical_merchant_core::NoteFilename;
