@@ -21,13 +21,13 @@
     },
     {
       description: [
-        "tauri-app の JS 依存。pnpm-lock.yaml が動くと nix/package.nix の pnpmDeps.hash が必ず腐り、",
+        "frontend の JS 依存。pnpm-lock.yaml が動くと nix/package.nix の pnpmDeps.hash が必ず腐り、",
         "取り直しは手作業になる (postUpgradeTasks は Mend hosted では使えない)。",
         "CI の nix-package が PR で落として知らせる。1 PR にまとめて、その手間を更新ごとではなく週 1 回に閉じ込める",
       ],
       matchManagers: ["npm"],
-      matchFileNames: ["tauri-app/package.json"],
-      groupName: "tauri-app dependencies",
+      matchFileNames: ["frontend/package.json"],
+      groupName: "frontend dependencies",
       minimumReleaseAge: "1 day",
       internalChecksFilter: "strict",
       prBodyNotes: [
@@ -58,7 +58,7 @@
       enabled: false,
     },
     {
-      description: "worker は nix ビルドに入らないので tauri-app と分ける",
+      description: "worker は nix ビルドに入らないので frontend と分ける",
       matchManagers: ["npm"],
       matchFileNames: ["worker/package.json"],
       groupName: "worker dependencies",

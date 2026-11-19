@@ -1,5 +1,5 @@
 {
-  // Shared oxlint baseline. `tauri-app` and `worker` extend this file.
+  // Shared oxlint baseline. `frontend` and `worker` extend this file.
   //
   // Every category oxlint ships is enabled at "error", including `nursery`.
   // `restriction` is the one category left out as a group: its lints exist to

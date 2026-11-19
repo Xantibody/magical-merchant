@@ -183,7 +183,7 @@ on macOS — taking over any copy the app wrote when sync was set up by hand.
 
 ```sh
 # Build the .app bundle
-just tauri_app::build
+just frontend::build
 
 # Copy to Applications
 cp -r "target/release/bundle/macos/Magical Merchant.app" /Applications/

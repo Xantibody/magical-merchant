@@ -26,7 +26,7 @@ ready to record the moment it opens (widgets exist for exactly this).
 | Layer      | Technology                                                |
 | ---------- | --------------------------------------------------------- |
 | Core logic | Rust (`core/` crate, framework-independent)               |
-| App        | Tauri 2 + SolidJS (`tauri-app/`)                          |
+| App        | Tauri 2 + SolidJS (`frontend/`)                           |
 | Styling    | Open Props via `--app-*` tokens (`styles/base.css`)       |
 | Icons      | Phosphor Icons (SVG files, `components/Icon.tsx`)         |
 | Editor     | Milkdown (headless) + custom plugins                      |
@@ -176,7 +176,7 @@ ready to record the moment it opens (widgets exist for exactly this).
 - Sync clients **never upload their own state**; the Worker owns it
 - Every **body write goes through core `update_note` with the revision the
   writer read**; a mismatch is refused (`Stale`), never resolved by overwriting
-- Every new Tauri command gets a handler in `tauri-app/dev/ipc-mock.js`
+- Every new Tauri command gets a handler in `frontend/dev/ipc-mock.js`
 - **Kobalte (`@kobalte/core`) is imported only from a lazy route chunk**
   (`Workspace`, `Settings`). Its first component drags in ~27 KB gzip of shared
   base; one import from `AppLayout` or any eager module puts that in the
@@ -198,10 +198,10 @@ ready to record the moment it opens (widgets exist for exactly this).
 ## Workflow
 
 - `just dev` — Tauri dev; `just verify` = fmt → check → test (run before done)
-- `just tauri_app::dev-browser` — full UI in a plain browser with the IPC mock
+- `just frontend::dev-browser` — full UI in a plain browser with the IPC mock
   (`BROWSER_MOCK=1`); use it for layout/CLS/e2e-style verification. It passes
   no arguments through, so a fixed port means calling
-  `pnpm run dev:browser --port N --strictPort` from `tauri-app/` instead
+  `pnpm run dev:browser --port N --strictPort` from `frontend/` instead
 - `just sandbox` — the real app over `.sandbox/`, a copy of `fixtures/`. Use it
   for anything that has to be tried on real data without touching your own
   notes; `sandbox-seed` re-copies, `sandbox-seed-mine` adds your own templates,

@@ -1,7 +1,7 @@
 # AIDEV-NOTE: the Tauri CLI looks for tauri.conf.json below the cwd only; the crate is a sibling, so every `pnpm tauri` is told where it is
 export TAURI_APP_PATH := source_directory() / ".." / "backend"
 # AIDEV-NOTE: Gradle's generated BuildTask runs `pnpm tauri android android-studio-script` in the crate directory, which has no package.json; pnpm reads its --dir from here
-export PNPM_CONFIG_DIR := source_directory() / ".." / "tauri-app"
+export PNPM_CONFIG_DIR := source_directory() / ".." / "frontend"
 
 [private]
 default:
@@ -10,15 +10,15 @@ default:
 # tauri CLI は package.json のあるフロントエンドに入っている
 [private]
 deps:
-  pnpm --dir ../tauri-app install
+  pnpm --dir ../frontend install
 
 # gen/android は Tauri 既定のランチャーアイコンを持って生成される。
 # 入れ直さないと配信 APK が Tauri のロゴのままになるので、init と一続きにする。
 
 # Android プロジェクト (gen/android) を最初に作る
 init: deps
-  pnpm --dir ../tauri-app tauri android init
-  just --justfile {{source_directory()}}/../justfile tauri_app::icons
+  pnpm --dir ../frontend tauri android init
+  just --justfile {{source_directory()}}/../justfile frontend::icons
   just --justfile {{source_file()}} setup
 
 # gen/android を作り直すたびに当て直す生成物パッチ (どちらも冪等):
@@ -42,18 +42,18 @@ sign-setup:
   go run signing/apply-signing.go
 
 dev: deps
-  pnpm --dir ../tauri-app tauri android dev
+  pnpm --dir ../frontend tauri android dev
 
 # デバッグ APK を建てる
 build-debug: setup
-  pnpm --dir ../tauri-app tauri android build --debug --target aarch64
+  pnpm --dir ../frontend tauri android build --debug --target aarch64
 
 # arm64 のみ: x86 系はエミュレータ専用で実機には要らず、universal だと
 # 4 ABI ぶんの .so で APK が 52MB まで膨らむ。
 
 # 署名済みリリース APK を建てる (keystore.properties が要る)
 build-release: setup sign-setup
-  pnpm --dir ../tauri-app tauri android build --apk --target aarch64
+  pnpm --dir ../frontend tauri android build --apk --target aarch64
 
 # --target aarch64 でも Tauri は出力名を universal のままにする。
 

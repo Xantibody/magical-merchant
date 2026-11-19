@@ -1,5 +1,5 @@
 mod rust
-mod tauri_app 'tauri-app'
+mod frontend
 mod android
 mod worker
 
@@ -10,9 +10,9 @@ default:
 fmt:
   nix fmt
 
-check: rust::check tauri_app::check worker::check comments
+check: rust::check frontend::check worker::check comments
 
-test: rust::test tauri_app::test worker::test
+test: rust::test frontend::test worker::test
 
 verify: fmt check test
 
@@ -20,12 +20,12 @@ verify: fmt check test
 # and spelled right (typos), over the whole tree. CI runs the same recipe
 comments:
   typos
-  vale core cli worker/src tauri-app/src backend/src
+  vale core cli worker/src frontend/src backend/src
 
-# 毎日叩くのはこれだけなので root に置く。他は `just tauri_app::…` を直接呼ぶ
-dev: tauri_app::dev
+# 毎日叩くのはこれだけなので root に置く。他は `just frontend::…` を直接呼ぶ
+dev: frontend::dev
 
-# Rewrites pnpmDeps.hash in nix/package.nix once tauri-app/pnpm-lock.yaml has
+# Rewrites pnpmDeps.hash in nix/package.nix once frontend/pnpm-lock.yaml has
 # moved; CI's nix-package fails the PR until it is done. nix-update comes from
 # flake.lock's nixpkgs, not whatever the machine's registry points at
 pnpm-hash:
@@ -43,7 +43,7 @@ pnpm-hash:
 # 見本のデータでアプリを起動する(箱が無ければ作る)
 sandbox:
   cargo xtask sandbox ensure
-  MAGICAL_MERCHANT_DATA_DIR="$(cargo xtask sandbox path)" just tauri_app::dev
+  MAGICAL_MERCHANT_DATA_DIR="$(cargo xtask sandbox path)" just frontend::dev
 
 # fixtures/ から箱を作り直す。箱に書き足したものは消える
 sandbox-seed:

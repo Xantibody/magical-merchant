@@ -72,24 +72,24 @@ jobs:
               - 'flake.lock'
               - 'justfile'
               - 'rust/justfile'
-            # tauri_app::check が読むものは漏らさず並べる (tauri-app/justfile:9-14)。
+            # frontend::check が読むものは漏らさず並べる (frontend/justfile:9-14)。
             # knip.jsonc だけを直した PR でジョブが飛ぶと、落ちるのは merge 後の main
             frontend:
-              - 'tauri-app/src/**'
-              - 'tauri-app/dev/**'
-              - 'tauri-app/index.html'
-              - 'tauri-app/public/**'
+              - 'frontend/src/**'
+              - 'frontend/dev/**'
+              - 'frontend/index.html'
+              - 'frontend/public/**'
               - '.oxlintrc.json'
-              - 'tauri-app/.oxlintrc.json'
-              - 'tauri-app/knip.jsonc'
-              - 'tauri-app/package.json'
-              - 'tauri-app/pnpm-lock.yaml'
-              - 'tauri-app/pnpm-workspace.yaml'
-              - 'tauri-app/tsconfig.json'
-              - 'tauri-app/tsconfig.dev.json'
-              - 'tauri-app/vite.config.ts'
-              - 'tauri-app/vitest.config.ts'
-              - 'tauri-app/justfile'
+              - 'frontend/.oxlintrc.json'
+              - 'frontend/knip.jsonc'
+              - 'frontend/package.json'
+              - 'frontend/pnpm-lock.yaml'
+              - 'frontend/pnpm-workspace.yaml'
+              - 'frontend/tsconfig.json'
+              - 'frontend/tsconfig.dev.json'
+              - 'frontend/vite.config.ts'
+              - 'frontend/vitest.config.ts'
+              - 'frontend/justfile'
               - 'flake.nix'
               - 'nix/devshells.nix'
               - 'flake.lock'
@@ -100,8 +100,8 @@ jobs:
               - 'nix/devshells.nix'
               - 'flake.lock'
             nix-package:
-              - 'tauri-app/pnpm-lock.yaml'
-              - 'tauri-app/package.json'
+              - 'frontend/pnpm-lock.yaml'
+              - 'frontend/package.json'
               - 'nix/package.nix'
               - 'flake.nix'
               - 'flake.lock'
@@ -115,14 +115,14 @@ jobs:
               - 'core/**'
               - 'cli/**'
               - 'xtask/**'
-              - 'tauri-app/src/**'
+              - 'frontend/src/**'
               - 'backend/**'
-              - 'tauri-app/index.html'
-              - 'tauri-app/capture.html'
-              - 'tauri-app/package.json'
-              - 'tauri-app/pnpm-lock.yaml'
-              - 'tauri-app/vite.config.ts'
-              - 'tauri-app/tsconfig.json'
+              - 'frontend/index.html'
+              - 'frontend/capture.html'
+              - 'frontend/package.json'
+              - 'frontend/pnpm-lock.yaml'
+              - 'frontend/vite.config.ts'
+              - 'frontend/tsconfig.json'
               - 'Cargo.toml'
               - 'Cargo.lock'
               - 'nix/package.nix'
@@ -150,8 +150,8 @@ jobs:
               - 'android/tls/**'
               - 'backend/**'
               - 'android/justfile'
-              # android::init は tauri_app::icons を呼ぶ
-              - 'tauri-app/justfile'
+              # android::init は frontend::icons を呼ぶ
+              - 'frontend/justfile'
               - 'Cargo.lock'
               - 'flake.nix'
               - 'nix/devshells.nix'
@@ -273,13 +273,13 @@ jobs:
         id: pnpm-store
         with:
           path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
-          key: pnpm-${{ runner.os }}-${{ hashFiles('tauri-app/pnpm-lock.yaml') }}
+          key: pnpm-${{ runner.os }}-${{ hashFiles('frontend/pnpm-lock.yaml') }}
           restore-keys: |
             pnpm-${{ runner.os }}-
       - name: check
-        run: nix develop .#frontend --command just tauri_app::check
+        run: nix develop .#frontend --command just frontend::check
       - name: test
-        run: nix develop .#frontend --command just tauri_app::test
+        run: nix develop .#frontend --command just frontend::test
       - uses: actions/cache/save@v6
         if: github.ref == 'refs/heads/main' && steps.pnpm-store.outputs.cache-hit != 'true'
         with:

@@ -19,10 +19,10 @@ cd magical-merchant
 direnv allow
 
 # 3. Install frontend dependencies
-cd tauri-app && pnpm install && cd ..
+cd frontend && pnpm install && cd ..
 
 # 4. (macOS only) Install Playwright browsers for browser tests
-cd tauri-app && pnpm exec playwright install chromium && cd ..
+cd frontend && pnpm exec playwright install chromium && cd ..
 
 # 5. Start development
 just dev
@@ -33,14 +33,14 @@ just dev
 
 ## Browser verification harness
 
-`just tauri_app::dev-browser` (or `pnpm run dev:browser`) starts Vite with a
+`just frontend::dev-browser` (or `pnpm run dev:browser`) starts Vite with a
 Tauri IPC mock injected into `index.html`, so the full UI runs in a plain
 browser with deterministic fixtures. Use it for layout/CLS checks and
 e2e-style verification (e.g. with `agent-browser`). The mock never reaches
 production builds; when adding a Tauri command, add a handler to
-`tauri-app/dev/ipc-mock.js` too — unknown commands throw so the gap is
+`frontend/dev/ipc-mock.js` too — unknown commands throw so the gap is
 visible. The recipe passes no arguments through, so a fixed port is
-`pnpm run dev:browser --port 5199 --strictPort` from `tauri-app/`.
+`pnpm run dev:browser --port 5199 --strictPort` from `frontend/`.
 
 The [feature tour](features.md)'s screenshots come from this harness: a wide
 window at 1280×800 and a phone at 390×844, with the dark theme and Japanese
@@ -98,12 +98,12 @@ fetch what they need:
 | `just fmt`      | Format all files (`nix fmt`)                                   | ✓   |
 | `just check`    | The three module checks + `comments`                           | ✓   |
 | `just comments` | Vale (English only, the proper nouns, proselint) and typos     | ✓   |
-| `just test`     | `rust::test` + `tauri_app::test` + `worker::test`              | ✓   |
+| `just test`     | `rust::test` + `frontend::test` + `worker::test`               | ✓   |
 | `just verify`   | `fmt` → `check` → `test`. Run it before calling something done |     |
-| `just dev`      | `tauri_app::dev` — the one recipe worth a short name           |     |
+| `just dev`      | `frontend::dev` — the one recipe worth a short name            |     |
 | `just sandbox`  | The app over a copy of `fixtures/` (see [Sandbox](#sandbox))   |     |
 
-Everything else is reached through its module — `just tauri_app::…`,
+Everything else is reached through its module — `just frontend::…`,
 `just rust::…`, `just android::…`, `just worker::…`. Run `just --list <module>` to see them.
 CI does not call `verify`; it calls the three module recipes directly, in
 jobs that a path filter can skip.
@@ -124,16 +124,16 @@ crate's type from reqwest's. That compiles, and clippy and the test run stay
 green on it. Without this recipe the first sign would be a device that fails
 every sync with `UnknownPreconfigured`.
 
-### Frontend recipes (`tauri_app::`)
+### Frontend recipes (`frontend::`)
 
-| Command                       | Description                                        | CI  |
-| ----------------------------- | -------------------------------------------------- | --- |
-| `just tauri_app::check`       | oxlint, `tsc -b`, `tsc -p tsconfig.dev.json`, knip | ✓   |
-| `just tauri_app::test`        | Vitest (unit + browser tests)                      | ✓   |
-| `just tauri_app::dev`         | Start Tauri development server                     |     |
-| `just tauri_app::dev-browser` | Vite + IPC mock in a plain browser                 |     |
-| `just tauri_app::build`       | Build macOS .app (Apple Silicon)                   |     |
-| `just tauri_app::icons`       | Regenerate icons from the SVG                      |     |
+| Command                      | Description                                        | CI  |
+| ---------------------------- | -------------------------------------------------- | --- |
+| `just frontend::check`       | oxlint, `tsc -b`, `tsc -p tsconfig.dev.json`, knip | ✓   |
+| `just frontend::test`        | Vitest (unit + browser tests)                      | ✓   |
+| `just frontend::dev`         | Start Tauri development server                     |     |
+| `just frontend::dev-browser` | Vite + IPC mock in a plain browser                 |     |
+| `just frontend::build`       | Build macOS .app (Apple Silicon)                   |     |
+| `just frontend::icons`       | Regenerate icons from the SVG                      |     |
 
 ### Worker recipes (`worker::`)
 

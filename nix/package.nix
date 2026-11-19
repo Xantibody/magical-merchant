@@ -37,13 +37,13 @@ stdenv.mkDerivation (finalAttrs: {
       ../cli/src
       ../xtask
       ../backend
-      ../tauri-app/src
-      ../tauri-app/package.json
-      ../tauri-app/pnpm-lock.yaml
-      ../tauri-app/index.html
-      ../tauri-app/capture.html
-      ../tauri-app/vite.config.ts
-      ../tauri-app/tsconfig.json
+      ../frontend/src
+      ../frontend/package.json
+      ../frontend/pnpm-lock.yaml
+      ../frontend/index.html
+      ../frontend/capture.html
+      ../frontend/vite.config.ts
+      ../frontend/tsconfig.json
     ];
   };
 
@@ -73,7 +73,7 @@ stdenv.mkDerivation (finalAttrs: {
   pnpmDeps = fetchPnpmDeps {
     inherit (finalAttrs) pname version src;
     pnpm = pnpm_10;
-    sourceRoot = "${finalAttrs.src.name}/tauri-app";
+    sourceRoot = "${finalAttrs.src.name}/frontend";
     fetcherVersion = 3;
     hash = "sha256-wJW6I5dEdGEG9tLgq6hhtXrQti3qKSpAe28taRdHbkU=";
   };
@@ -99,7 +99,7 @@ stdenv.mkDerivation (finalAttrs: {
   ];
 
   buildAndTestSubdir = "backend";
-  pnpmRoot = "tauri-app";
+  pnpmRoot = "frontend";
 
   # The bundle type is the hook's per-platform default: an .app on macOS, and on
   # Linux a .deb whose usr/ tree (binary, .desktop with the deep-link scheme,

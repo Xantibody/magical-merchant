@@ -83,7 +83,7 @@ nix profile install github:Xantibody/magical-merchant
 git clone https://github.com/Xantibody/magical-merchant.git
 cd magical-merchant
 direnv allow                       # or: nix develop
-cd tauri-app && pnpm install && cd ..
+cd frontend && pnpm install && cd ..
 just dev
 ```
 
@@ -110,9 +110,9 @@ Cloudflare Workers + R2 sync (`worker/`) · Nix flake for dev/CI/packaging.
 magical-merchant/
 ├── core/           # Rust core library (framework-independent business logic)
 ├── cli/            # Terminal client ($EDITOR editing) + MCP server
-├── tauri-app/
-│   └── src/        # SolidJS frontend (TypeScript)
+├── frontend/       # SolidJS frontend (TypeScript)
 ├── backend/        # Tauri 2 backend (Rust)
+├── android/        # Patchers for the generated Android project (widgets, TLS, signing)
 ├── worker/         # Cloudflare Workers (R2 sync backend)
 ├── fixtures/       # Sample data: one of every surface, read by the core's tests
 ├── xtask/          # `cargo xtask sandbox …`, the app over a copy of fixtures/

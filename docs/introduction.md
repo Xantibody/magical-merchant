@@ -14,7 +14,7 @@ Other guides: [Feature tour](features.md) ·
 ```mermaid
 flowchart LR
     subgraph Device["Device (macOS / Android)"]
-        UI["SolidJS WebView<br/>tauri-app/src"]
+        UI["SolidJS WebView<br/>frontend/src"]
         Shell["Tauri shell (Rust)<br/>backend"]
         Core["magical-merchant-core<br/>core/"]
         Files[("Markdown files<br/>app data dir")]
@@ -171,7 +171,7 @@ the entry is already on disk.
 | [`core/src/search.rs`](../core/src/search.rs)               | Substring search across Scrawl, notes and codex                                                                                                  |
 | [`core/src/sync/`](../core/src/sync)                        | Local scan + hashing, diff against server state, conflict naming                                                                                 |
 | [`backend/`](../backend/src)                                | Tauri commands, sync HTTP client, OAuth deep-link handling, device context                                                                       |
-| [`tauri-app/src/`](../tauri-app/src)                        | SolidJS views, Milkdown editor integration, client-side device signals                                                                           |
+| [`frontend/src/`](../frontend/src)                          | SolidJS views, Milkdown editor integration, client-side device signals                                                                           |
 | [`worker/`](../worker/src)                                  | Cloudflare Worker: Google OAuth, JWT, R2-backed bulk sync with ETag CAS                                                                          |
 | [`cli/`](../cli/src)                                        | Terminal client (`list` / `show` / `edit` / `new` / `import` / `scrawl` / `sync`) and the MCP server (`mcp`)                                     |
 

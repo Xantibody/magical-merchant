@@ -21,7 +21,7 @@ description: Rust core crate conventions, Tauri command plumbing, MCP CLI, and t
 1. Core logic + unit tests in `core/`
 2. Command in `backend`
 3. Types in `lib/commands.ts` (`typedInvoke`)
-4. **Handler in `tauri-app/dev/ipc-mock.js`** — unknown commands throw in the
+4. **Handler in `frontend/dev/ipc-mock.js`** — unknown commands throw in the
    browser harness so the gap is visible
 5. If it reads/writes notes: respect storage invariants (sync-storage skill)
 
@@ -129,8 +129,8 @@ names resolve, so the tokenizer never touches `12:30:45`.
 - `just verify` = fmt → check → test; CI mirrors `just fmt/check/test` with
   path filters
 - Rust: `just rust::check` (clippy) / `just rust::test`
-- Frontend: `just tauri_app::check` (oxlint + tsc) / `just tauri_app::test` (Vitest)
-- Browser harness: `just tauri_app::dev-browser` (Vite + IPC mock,
+- Frontend: `just frontend::check` (oxlint + tsc) / `just frontend::test` (Vitest)
+- Browser harness: `just frontend::dev-browser` (Vite + IPC mock,
   `BROWSER_MOCK=1`); fixtures are deterministic — extend them when adding
   commands. The mock never reaches production builds
 - CSS conventions have tests (`styles/*.test.ts`) — update them when changing
