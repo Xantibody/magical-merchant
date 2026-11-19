@@ -5,6 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::domain::note::Revision;
 use crate::error::CoreError;
 use crate::utils::clock::Stamp;
 use crate::utils::device::{Context, Source};
@@ -100,6 +101,76 @@ pub(crate) fn format_note_markdown(
         ..NoteFrontmatter::new(time)
     };
     frontmatter::render(&fm, body)
+}
+
+/// The whole text of a note after its body is rewritten to `body`. The frontmatter is a
+/// record from creation, so it is left alone.
+///
+/// - time: creation time. The list is ordered by filename (creation time), so
+///   moving it on edit makes the date group and the order disagree
+/// - tags: already migrated to `#` notation in the body, but overwriting the
+///   ones set from the tag field back then with an empty list strips old
+///   notes of their classification
+/// - context: a record of which device wrote it. Not overwritten with the editing device
+///
+/// A file whose frontmatter cannot be parsed is refused ([`CoreError::Parse`]).
+/// Rebuilding it with the current time and device would drop `time` / `tags` /
+/// `origin` / `view` / `template` / `source` on a one-character edit, and disagree
+/// with the filename (= creation time). Refusing beats writing a fabricated
+/// record: the same call as [`edit_record`]. Only a file with no delimiter
+/// at all is written as before, since there is no record to lose. A file whose
+/// opening delimiter is never closed is not "no record" but "broken": the lines
+/// under `---` were written as a record, and overwriting them with the body loses them.
+///
+/// The only thing added here is `updated`, set to `now`. This path is the only one that
+/// rewrites the body; replacing metadata or the view mode is not a "rewrite".
+///
+/// `expected` is the fingerprint of the body as read. If it differs from the
+/// current body, someone wrote first; writing over it silently loses their edit, so
+/// the rewrite is refused as [`CoreError::Stale`] under `name`.
+pub(crate) fn rewrite(
+    existing: &str,
+    body: &str,
+    context: &Context,
+    expected: Option<&Revision>,
+    now: Stamp,
+    name: &str,
+) -> Result<String, CoreError> {
+    if let Some(expected) = expected {
+        let current = Revision::of(frontmatter::strip(existing));
+        if current != *expected {
+            return Err(CoreError::Stale(name.to_string()));
+        }
+    }
+    let fm = match frontmatter::parse::<NoteFrontmatter>(existing) {
+        Ok((fm, _)) => NoteFrontmatter {
+            updated: Some(now),
+            ..fm
+        },
+        // A file with no record (plain Markdown dropped in from outside) may be
+        // written. Only a file with no delimiter at all gets here: an unclosed
+        // delimiter is a record that is broken, and rebuilding it loses the lines below
+        Err(_) if frontmatter::is_plain_markdown(existing) => NoteFrontmatter {
+            context: Some(context.clone()),
+            ..NoteFrontmatter::new(now)
+        },
+        Err(e) => return Err(e),
+    };
+    frontmatter::render(&fm, body)
+}
+
+/// The whole text of a note after `edit` replaces part of its frontmatter. The body is
+/// not touched.
+///
+/// Unlike [`rewrite`], a file whose frontmatter cannot be parsed is not rebuilt.
+/// A body save must not be allowed to fail, but a metadata edit is better
+/// refused than written as a fabricated record.
+pub(crate) fn edit_record<F>(content: &str, edit: F) -> Result<String, CoreError>
+where
+    F: FnOnce(NoteFrontmatter) -> NoteFrontmatter,
+{
+    let (existing, body) = frontmatter::parse::<NoteFrontmatter>(content)?;
+    frontmatter::render(&edit(existing), body)
 }
 
 #[cfg(test)]

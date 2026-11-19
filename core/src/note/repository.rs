@@ -3,7 +3,7 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use crate::domain::note::NoteFilename;
-use crate::domain::note::file::format_note_markdown;
+use crate::domain::note::file::{self, format_note_markdown};
 use crate::domain::note::{NoteFrontmatter, Provenance};
 use crate::error::CoreError;
 use crate::services::files::{ensure_dir, list_md_files, write_atomic};
@@ -223,25 +223,10 @@ impl Notes {
         Ok(frontmatter::strip(&content).to_string())
     }
 
-    /// Rewrite the body only. The frontmatter is a record from creation, so it is left alone.
+    /// Rewrite the body only: read the file, let [`file::rewrite`] decide the new text,
+    /// and write it back. Returns the revision of the written body.
     ///
-    /// - time: creation time. The list is ordered by filename (creation time), so
-    ///   moving it on edit makes the date group and the order disagree
-    /// - tags: already migrated to `#` notation in the body, but overwriting the
-    ///   ones set from the tag field back then with an empty list strips old
-    ///   notes of their classification
-    /// - context: a record of which device wrote it. Not overwritten with the editing device
-    ///
-    /// A file whose frontmatter cannot be parsed is refused ([`CoreError::Parse`]).
-    /// Rebuilding it with the current time and device would drop `time` / `tags` /
-    /// `origin` / `view` / `template` / `source` on a one-character edit, and disagree
-    /// with the filename (= creation time). Refusing beats writing a fabricated
-    /// record: the same call as `edit_frontmatter`. Only a file with no delimiter
-    /// at all is written as before, since there is no record to lose. A file whose
-    /// opening delimiter is never closed is not "no record" but "broken": the lines
-    /// under `---` were written as a record, and overwriting them with the body loses them.
-    ///
-    /// A file that cannot be read as text is refused too ([`CoreError::NotText`]).
+    /// A file that cannot be read as text is refused ([`CoreError::NotText`]).
     /// Its content could not be read, so neither the `expected` check nor the
     /// frontmatter carry-over is possible, and writing would overwrite the
     /// unreadable bytes with the body.
@@ -250,12 +235,6 @@ impl Notes {
     /// the body of an existing note; creation happens only in the `create` family.
     /// If it could write, a deleted note or one moved to Codex would come back to
     /// life in its old directory through a late save from a screen still open.
-    ///
-    /// The only thing added here is `updated`. This path is the only one that
-    /// rewrites the body; replacing metadata or the view mode is not a "rewrite".
-    ///
-    /// `expected` is the fingerprint of the body as read. If it differs from the
-    /// current body, someone wrote first; writing over it silently loses their edit.
     pub(crate) fn update(
         path: &Path,
         body: &str,
@@ -271,33 +250,18 @@ impl Notes {
             io::ErrorKind::InvalidData => CoreError::NotText(path.display().to_string()),
             _ => CoreError::Io(e),
         })?;
-        if let Some(expected) = expected {
-            let current = Revision::of(frontmatter::strip(&existing));
-            if current != *expected {
-                let name = path.file_name().map_or_else(
-                    || path.display().to_string(),
-                    |n| n.to_string_lossy().to_string(),
-                );
-                return Err(CoreError::Stale(name));
-            }
-        }
-        let now = Stamp::now_local();
-        let fm = match frontmatter::parse::<NoteFrontmatter>(&existing) {
-            Ok((fm, _)) => NoteFrontmatter {
-                updated: Some(now),
-                ..fm
-            },
-            // A file with no record (plain Markdown dropped in from outside) may be
-            // written. Only a file with no delimiter at all gets here: an unclosed
-            // delimiter is a record that is broken, and rebuilding it loses the lines below
-            Err(_) if frontmatter::is_plain_markdown(&existing) => NoteFrontmatter {
-                context: Some(context.clone()),
-                ..NoteFrontmatter::new(now)
-            },
-            Err(e) => return Err(e),
-        };
-
-        let markdown = frontmatter::render(&fm, body)?;
+        let name = path.file_name().map_or_else(
+            || path.display().to_string(),
+            |n| n.to_string_lossy().to_string(),
+        );
+        let markdown = file::rewrite(
+            &existing,
+            body,
+            context,
+            expected,
+            Stamp::now_local(),
+            &name,
+        )?;
         write_atomic(path, markdown)?;
         Ok(Revision::of(body))
     }
@@ -308,19 +272,14 @@ impl Notes {
         Ok(fm)
     }
 
-    /// Replace part of the frontmatter and write it back. The body is not touched.
-    ///
-    /// Unlike `update`, a file whose frontmatter cannot be parsed is not rebuilt.
-    /// A body save must not be allowed to fail, but a metadata edit is better
-    /// refused than written as a fabricated record.
+    /// Replace part of the frontmatter ([`file::edit_record`]) and write it back.
     fn edit_frontmatter<F>(&self, filename: &NoteFilename, edit: F) -> Result<(), CoreError>
     where
         F: FnOnce(NoteFrontmatter) -> NoteFrontmatter,
     {
         let path = self.existing_note_path(filename)?;
         let content = fs::read_to_string(&path)?;
-        let (existing, body) = frontmatter::parse::<NoteFrontmatter>(&content)?;
-        write_atomic(&path, frontmatter::render(&edit(existing), body)?)?;
+        write_atomic(&path, file::edit_record(&content, edit)?)?;
         Ok(())
     }
 
