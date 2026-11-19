@@ -4,6 +4,7 @@
 //! creation. No variable remains in the note written out: if one did, the file could not
 //! say "which day's date" when opened later.
 
+use crate::note::NoteSummary;
 use crate::utils::clock::WallClock;
 
 /// Only the weekday names depend on the language. The order of date and time is a record
@@ -87,6 +88,17 @@ pub(crate) fn resolve_vars(
     }
 
     out
+}
+
+/// The value of `{{prev}}`: the `[[ID]]` link to the note last created from the same
+/// template, or `None` when there is none yet.
+pub(crate) fn previous_note_link(notes: &[NoteSummary], template: &str) -> Option<String> {
+    notes
+        .iter()
+        .filter(|note| note.template.as_deref() == Some(template))
+        .filter_map(|note| note.time.map(|time| (time, &note.filename)))
+        .max_by_key(|(time, _)| *time)
+        .map(|(_, filename)| format!("[[{}]]", filename.strip_suffix(".md").unwrap_or(filename)))
 }
 
 /// Whether the whole line is `{{eg}}`. It is the opening marker of an example block, and

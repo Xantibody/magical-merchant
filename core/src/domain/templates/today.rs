@@ -4,17 +4,12 @@
 //! here, with the same rules `create_note_from_template` follows, so a button never
 //! promises a title that the tap then contradicts. The widget never resolves a variable itself.
 
-use std::path::Path;
-
 use serde::Serialize;
 
-use super::folder::Templates;
-use super::new_note::previous_note_link;
-use super::variables::{VarLocale, resolve_vars};
-use crate::error::CoreError;
-use crate::note::list_notes;
+use super::file::Summary;
+use super::variables::{VarLocale, previous_note_link, resolve_vars};
+use crate::note::NoteSummary;
 use crate::utils::clock::WallClock;
-use crate::utils::validated::NoteFilename;
 
 /// One template, as it stands today.
 #[derive(Debug, Clone, Serialize)]
@@ -28,41 +23,20 @@ pub struct TemplateToday {
     pub today_title: String,
 }
 
-/// Every template in name order, resolved against the notes as they are now.
+/// One row per template, in the order given, resolved against `notes` at `now`.
 ///
-/// The notes are listed once for all templates: `{{prev}}` needs them, and listing
-/// per template would read the whole tree once per button.
-pub fn templates_today(
-    base_dir: &Path,
-    locale: VarLocale,
-) -> Result<Vec<TemplateToday>, CoreError> {
-    templates_today_at(base_dir, locale, WallClock::now_local())
-}
-
-fn templates_today_at(
-    base_dir: &Path,
-    locale: VarLocale,
+/// Each template comes with its body as written; one whose body could not be read comes
+/// with an empty body and still gets its row, with no title to promise.
+pub(crate) fn today_rows(
+    templates: Vec<(Summary, String)>,
+    notes: &[NoteSummary],
     now: WallClock,
-) -> Result<Vec<TemplateToday>, CoreError> {
-    let templates = Templates::new(base_dir);
-    let summaries = templates.list()?;
-    if summaries.is_empty() {
-        // No template, no reason to open every note.
-        return Ok(Vec::new());
-    }
-    let notes = list_notes(base_dir)?;
-
-    Ok(summaries
+    locale: VarLocale,
+) -> Vec<TemplateToday> {
+    templates
         .into_iter()
-        .map(|summary| {
-            // A file that vanished or broke between listing and reading still gets its
-            // button; it just has no title to promise.
-            let body = NoteFilename::parse(&summary.filename)
-                .ok()
-                .and_then(|filename| templates.read(&filename).ok())
-                .map(|(_, body)| body)
-                .unwrap_or_default();
-            let prev = previous_note_link(&notes, &summary.name);
+        .map(|(summary, body)| {
+            let prev = previous_note_link(notes, &summary.name);
             let resolved = resolve_vars(&body, now, prev.as_deref(), locale);
             TemplateToday {
                 today_title: first_line(&resolved),
@@ -70,7 +44,7 @@ fn templates_today_at(
                 name: summary.name,
             }
         })
-        .collect())
+        .collect()
 }
 
 /// The same rule as the note list's row title: the first non-empty line, without its
@@ -87,103 +61,6 @@ fn first_line(body: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::templates::save_template;
-    use tempfile::TempDir;
-
-    fn name(s: &str) -> NoteFilename {
-        NoteFilename::parse(s).unwrap()
-    }
-
-    fn save(tmp: &TempDir, filename: &str, body: &str) {
-        save_template(tmp.path(), &name(filename), body, &[]).unwrap();
-    }
-
-    /// 2026-08-31 (Mon).
-    fn monday() -> WallClock {
-        WallClock::new(2026, 8, 31, 9, 0, 0).unwrap()
-    }
-
-    #[test]
-    fn the_title_is_resolved_for_today() {
-        let tmp = TempDir::new().unwrap();
-        save(&tmp, "daily.md", "# Daily {{date}} ({{weekday}})\n\nbody");
-
-        let rows = templates_today_at(tmp.path(), VarLocale::Ja, monday()).unwrap();
-
-        assert_eq!(rows[0].today_title, "Daily 2026-08-31 (月)");
-        assert_eq!(rows[0].name, "daily");
-    }
-
-    /// The weekday follows the caller's language, as it does when the note is made.
-    #[test]
-    fn the_title_follows_the_locale() {
-        let tmp = TempDir::new().unwrap();
-        save(&tmp, "daily.md", "# {{weekday}}");
-
-        let rows = templates_today_at(tmp.path(), VarLocale::En, monday()).unwrap();
-
-        assert_eq!(rows[0].today_title, "Mon");
-    }
-
-    /// A title line with `{{prev}}` and no previous note is dropped when the note is
-    /// made, so the promised title is the line after it.
-    #[test]
-    fn a_prev_title_line_without_a_previous_note_is_skipped() {
-        let tmp = TempDir::new().unwrap();
-        save(&tmp, "chain.md", "# after {{prev}}\n\n# Chain {{date}}");
-
-        let rows = templates_today_at(tmp.path(), VarLocale::Ja, monday()).unwrap();
-
-        assert_eq!(rows[0].today_title, "Chain 2026-08-31");
-    }
-
-    /// Every leading `#` goes, so a body that opens with a `#tag` loses the tag's mark too.
-    /// Pinned as it stands; the title rule step decides whether it stays.
-    #[test]
-    fn a_title_drops_every_leading_hash() {
-        let tmp = TempDir::new().unwrap();
-        save(&tmp, "tagged.md", "#tag rest\n\nbody");
-
-        let rows = templates_today_at(tmp.path(), VarLocale::Ja, monday()).unwrap();
-
-        assert_eq!(rows[0].today_title, "tag rest");
-    }
-
-    #[test]
-    fn an_empty_body_promises_no_title() {
-        let tmp = TempDir::new().unwrap();
-        save(&tmp, "empty.md", "");
-
-        let rows = templates_today_at(tmp.path(), VarLocale::Ja, monday()).unwrap();
-
-        assert_eq!(rows[0].today_title, "");
-    }
-
-    /// Every template comes back, in name order: a button placed for the fifth template
-    /// has to find it too.
-    #[test]
-    fn every_template_comes_back_in_name_order() {
-        let tmp = TempDir::new().unwrap();
-        for stem in ["e", "b", "d", "a", "c"] {
-            save(&tmp, &format!("{stem}.md"), "x");
-        }
-
-        let rows = templates_today(tmp.path(), VarLocale::Ja).unwrap();
-
-        let names: Vec<&str> = rows.iter().map(|row| row.name.as_str()).collect();
-        assert_eq!(names, ["a", "b", "c", "d", "e"]);
-    }
-
-    #[test]
-    fn no_templates_is_an_empty_list() {
-        let tmp = TempDir::new().unwrap();
-
-        assert!(
-            templates_today(tmp.path(), VarLocale::Ja)
-                .unwrap()
-                .is_empty()
-        );
-    }
 
     /// The JSON the widget parses. A renamed field reads as "no title" there, not as an error.
     #[test]
