@@ -1,12 +1,11 @@
 //! Registering a glyph under a name, and taking it away again.
 
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use super::image::{GlyphFormat, GlyphName, filename, glyphs_dir, validate};
 use super::lookup::find;
 use crate::error::CoreError;
-use crate::services::files::write_atomic;
+use crate::services::files::{remove, remove_if_present, resolve_writable, write_atomic};
 
 /// Create if missing, overwrite if present. The name is just a name, not an ID, so the
 /// caller is free to put a different image under the same name.
@@ -17,34 +16,18 @@ pub fn save_glyph(
     bytes: &[u8],
 ) -> Result<(), CoreError> {
     validate(format, bytes)?;
-    let path = writable_path(base_dir, name, format)?;
+    let dir = glyphs_dir(base_dir);
+    let path = resolve_writable(&dir, &filename(name, format))?;
     write_atomic(&path, bytes)?;
 
     // One image per name. When a PNG is replaced by an SVG, the old one is deleted:
     // left in place, the reader would have to decide which one `:name:` means
-    match fs::remove_file(glyphs_dir(base_dir).join(filename(name, format.other()))) {
-        Ok(()) => Ok(()),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(e) => Err(e.into()),
-    }
+    remove_if_present(&dir.join(filename(name, format.other())))
 }
 
 pub fn delete_glyph(base_dir: &Path, name: &GlyphName) -> Result<(), CoreError> {
     let (path, _) = find(base_dir, name)?;
-    fs::remove_file(path)?;
-    Ok(())
-}
-
-/// The write target for a file that does not exist yet. As with templates, the directory
-/// is resolved first and the validated name joined on.
-fn writable_path(
-    base_dir: &Path,
-    name: &GlyphName,
-    format: GlyphFormat,
-) -> Result<PathBuf, CoreError> {
-    let dir = glyphs_dir(base_dir);
-    fs::create_dir_all(&dir)?;
-    Ok(fs::canonicalize(&dir)?.join(filename(name, format)))
+    remove(&path)
 }
 
 #[cfg(test)]

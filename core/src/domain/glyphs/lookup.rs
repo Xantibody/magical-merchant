@@ -1,30 +1,23 @@
 //! Looking glyphs up: the list Settings shows, and the image a `:name:` draws.
 
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use super::image::{
     GlyphData, GlyphFormat, GlyphName, GlyphSummary, filename, glyphs_dir, summarize_filename,
 };
 use crate::error::CoreError;
-use crate::services::files::resolve_existing;
+use crate::services::files::{self, resolve_existing};
 
 pub fn list_glyphs(base_dir: &Path) -> Result<Vec<GlyphSummary>, CoreError> {
-    let dir = glyphs_dir(base_dir);
-    if !dir.exists() {
-        return Ok(Vec::new());
-    }
-    let mut glyphs: Vec<GlyphSummary> = fs::read_dir(dir)?
-        .filter_map(Result::ok)
-        .filter_map(|entry| {
-            let filename = entry.file_name().to_string_lossy().to_string();
-            let (name, format) = summarize_filename(&filename)?;
-            let bytes = entry.metadata().ok()?.len();
+    let mut glyphs: Vec<GlyphSummary> = files::list_entries(&glyphs_dir(base_dir))?
+        .into_iter()
+        .filter_map(|listed| {
+            let (name, format) = summarize_filename(&listed.name)?;
             Some(GlyphSummary {
                 name: name.as_str().to_string(),
-                filename,
+                filename: listed.name,
                 format: format.extension().to_string(),
-                bytes,
+                bytes: listed.bytes,
             })
         })
         .collect();
@@ -37,7 +30,7 @@ pub fn read_glyph(base_dir: &Path, name: &GlyphName) -> Result<GlyphData, CoreEr
     let (path, format) = find(base_dir, name)?;
     Ok(GlyphData {
         format,
-        bytes: fs::read(path)?,
+        bytes: files::read(&path)?,
     })
 }
 

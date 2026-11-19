@@ -30,6 +30,53 @@ pub fn resolve_existing(dir: &Path, filename: &str) -> Result<PathBuf, CoreError
     Ok(canonical_path)
 }
 
+/// The path a validated filename will be written to directly under `dir`, creating `dir` first.
+///
+/// The writing side of [`resolve_existing`], and a security boundary in the same way: the
+/// directory is canonicalized before the name is joined on, so a link in the directory's own
+/// path is resolved here and the name, already validated, cannot climb out of it.
+pub fn resolve_writable(dir: &Path, filename: &str) -> Result<PathBuf, CoreError> {
+    fs::create_dir_all(dir)?;
+    Ok(fs::canonicalize(dir)?.join(filename))
+}
+
+/// One item directly under a directory: its name and its size in bytes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Listed {
+    pub name: String,
+    pub bytes: u64,
+}
+
+/// What sits directly under `dir`, in no particular order. Directories are items too.
+///
+/// A missing directory is empty rather than an error. An item that cannot be read, or whose
+/// size cannot be taken, is skipped silently: one bad entry does not hide the rest.
+pub fn list_entries(dir: &Path) -> Result<Vec<Listed>, CoreError> {
+    if !dir.exists() {
+        return Ok(Vec::new());
+    }
+    Ok(fs::read_dir(dir)?
+        .filter_map(Result::ok)
+        .filter_map(|entry| {
+            Some(Listed {
+                name: entry.file_name().to_string_lossy().to_string(),
+                bytes: entry.metadata().ok()?.len(),
+            })
+        })
+        .collect())
+}
+
+/// The bytes of `path`. A missing file is an error, as any other failure to read.
+pub fn read(path: &Path) -> Result<Vec<u8>, CoreError> {
+    Ok(fs::read(path)?)
+}
+
+/// Removes the file at `path`. A missing file is an error; see [`remove_if_present`] for
+/// the removal that is content with nothing there.
+pub fn remove(path: &Path) -> Result<(), CoreError> {
+    Ok(fs::remove_file(path)?)
+}
+
 /// A running number that keeps temporary file names from colliding within one process.
 static TMP_SEQ: AtomicU64 = AtomicU64::new(0);
 
@@ -381,6 +428,127 @@ mod tests {
         let tmp = TempDir::new().unwrap();
 
         assert!(remove_if_present(tmp.path()).is_err());
+    }
+
+    #[test]
+    fn resolve_writable_creates_the_directory_and_joins_the_name() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path().join("data/glyphs");
+
+        let path = resolve_writable(&dir, "a.png").unwrap();
+
+        assert!(dir.is_dir());
+        assert_eq!(path, fs::canonicalize(&dir).unwrap().join("a.png"));
+        assert!(!path.exists(), "only the directory is made, not the file");
+    }
+
+    /// The directory is resolved before the name is joined, so a link on the way to it
+    /// is already followed in the answer.
+    #[cfg(unix)]
+    #[test]
+    fn resolve_writable_answers_with_the_directory_a_link_points_at() {
+        let tmp = TempDir::new().unwrap();
+        let real = tmp.path().join("real");
+        fs::create_dir(&real).unwrap();
+        std::os::unix::fs::symlink(&real, tmp.path().join("linked")).unwrap();
+
+        let path = resolve_writable(&tmp.path().join("linked"), "a.png").unwrap();
+
+        assert_eq!(path, fs::canonicalize(&real).unwrap().join("a.png"));
+    }
+
+    fn sorted(mut listed: Vec<Listed>) -> Vec<Listed> {
+        listed.sort_by(|a, b| a.name.cmp(&b.name));
+        listed
+    }
+
+    #[test]
+    fn list_entries_names_every_item_with_its_size() {
+        let tmp = TempDir::new().unwrap();
+        fs::write(tmp.path().join("a.png"), "12345").unwrap();
+        fs::write(tmp.path().join(".hidden"), "").unwrap();
+
+        assert_eq!(
+            sorted(list_entries(tmp.path()).unwrap()),
+            vec![
+                Listed {
+                    name: ".hidden".to_string(),
+                    bytes: 0
+                },
+                Listed {
+                    name: "a.png".to_string(),
+                    bytes: 5
+                },
+            ]
+        );
+    }
+
+    /// Choosing what counts is the caller's job, so a directory is listed like a file.
+    #[test]
+    fn list_entries_lists_a_directory_too() {
+        let tmp = TempDir::new().unwrap();
+        fs::create_dir(tmp.path().join("sub.png")).unwrap();
+
+        let names: Vec<String> = list_entries(tmp.path())
+            .unwrap()
+            .into_iter()
+            .map(|listed| listed.name)
+            .collect();
+
+        assert_eq!(names, vec!["sub.png"]);
+    }
+
+    #[test]
+    fn list_entries_of_a_missing_directory_is_empty() {
+        let tmp = TempDir::new().unwrap();
+
+        assert!(list_entries(&tmp.path().join("nope")).unwrap().is_empty());
+    }
+
+    #[test]
+    fn list_entries_still_fails_on_what_is_not_a_directory() {
+        let tmp = seed(&["a.md"]);
+
+        assert!(list_entries(&tmp.path().join("a.md")).is_err());
+    }
+
+    #[test]
+    fn read_returns_the_bytes() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("a.png");
+        fs::write(&path, b"\x89PNG").unwrap();
+
+        assert_eq!(read(&path).unwrap(), b"\x89PNG");
+    }
+
+    #[test]
+    fn read_of_a_missing_file_is_an_io_error() {
+        let tmp = TempDir::new().unwrap();
+
+        assert!(matches!(
+            read(&tmp.path().join("nope")),
+            Err(CoreError::Io(e)) if e.kind() == std::io::ErrorKind::NotFound
+        ));
+    }
+
+    #[test]
+    fn remove_removes_the_file() {
+        let tmp = seed(&["a.md"]);
+        let path = tmp.path().join("a.md");
+
+        remove(&path).unwrap();
+
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn remove_of_a_missing_file_is_an_io_error() {
+        let tmp = TempDir::new().unwrap();
+
+        assert!(matches!(
+            remove(&tmp.path().join("nope")),
+            Err(CoreError::Io(e)) if e.kind() == std::io::ErrorKind::NotFound
+        ));
     }
 
     #[cfg(unix)]
