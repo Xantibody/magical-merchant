@@ -10,5 +10,6 @@ pub(crate) mod markdown;
 pub(crate) mod note;
 pub(crate) mod scrawl;
 pub(crate) mod search;
+pub(crate) mod sync;
 pub(crate) mod tags;
 pub(crate) mod templates;

@@ -6,13 +6,11 @@
 // is not an option this crate has.
 #![allow(clippy::needless_pass_by_value)]
 
-mod auth;
 mod capture;
 mod commands;
 mod device;
 mod place;
 mod services;
-mod sync;
 #[cfg(test)]
 mod test_app;
 // Public because it is a real external surface: the JNI symbol inside is what
@@ -97,7 +95,7 @@ pub fn run() {
         // Diagram export: the save dialog, and writing to content:// on Android
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        .manage(sync::AppSyncState::default())
+        .manage(commands::sync::run::AppSyncState::default())
         .setup(|app| {
             // Android has nothing listening for `log`, and warnings from dependency
             // crates are thrown away. The rustls-platform-verifier that android_tls
@@ -209,14 +207,14 @@ pub fn run() {
             commands::markdown::save_export,
             commands::templates::template_widget_pinnable,
             commands::templates::pin_template_widget,
-            sync::sync_start,
-            sync::sync_status,
-            auth::auth_login,
-            auth::auth_status,
-            auth::auth_logout,
-            auth::get_sync_config,
-            auth::save_sync_config,
-            auth::is_sync_config_editable,
+            commands::sync::run::sync_start,
+            commands::sync::run::sync_status,
+            commands::sync::login::auth_login,
+            commands::sync::login::auth_status,
+            commands::sync::login::auth_logout,
+            commands::sync::settings::get_sync_config,
+            commands::sync::settings::save_sync_config,
+            commands::sync::settings::is_sync_config_editable,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
