@@ -15,16 +15,12 @@ mod services;
 mod shortcut;
 #[cfg(test)]
 mod test_app;
-// Public because it is a real external surface: the JNI symbol inside is what
-// the Android widget links against, and `unreachable_pub` is right that a
-// private module cannot hold one honestly.
-#[cfg(target_os = "android")]
-pub mod widget_bridge;
-// Only the Android JNI bridge reads this, but it is built everywhere so its
-// tests run: CI has no Android target, and the parsing is the part worth
-// testing.
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
-mod widget_summary;
+// Public because it is a real external surface: the JNI symbols in `widget::bridge`
+// are what the Android widget links against, and `unreachable_pub` is right that a
+// private module cannot hold one honestly. Built on every platform, though only the
+// bridge reads `widget::summary`, so its tests run: CI has no Android target, and the
+// parsing is the part worth testing.
+pub mod widget;
 
 use tauri_plugin_deep_link::DeepLinkExt as _;
 
