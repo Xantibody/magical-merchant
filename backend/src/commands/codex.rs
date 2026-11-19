@@ -4,7 +4,7 @@ use magical_merchant_core::domain::device::{ClientContext, probe_with_client};
 use magical_merchant_core::{Revision, Version, VersionStatus};
 use tauri::{AppHandle, Runtime};
 
-use super::error::SaveError;
+use super::error::CommandError;
 use super::note::parse_filename;
 use crate::services::core_location;
 use crate::services::tauri::app_base_dir;
@@ -79,9 +79,9 @@ pub(crate) fn restore_note_version<R: Runtime>(
     id: String,
     client: ClientContext,
     revision: String,
-) -> Result<String, SaveError> {
-    let base_dir = app_base_dir(&handle).map_err(SaveError::other)?;
-    let filename = parse_filename(&filename).map_err(SaveError::other)?;
+) -> Result<String, CommandError> {
+    let base_dir = app_base_dir(&handle).map_err(CommandError::other)?;
+    let filename = parse_filename(&filename).map_err(CommandError::other)?;
     let context = probe_with_client(client, core_location::latest);
     let expected = Revision::from(revision);
     magical_merchant_core::restore_note_version(
@@ -92,7 +92,7 @@ pub(crate) fn restore_note_version<R: Runtime>(
         Some(&expected),
     )
     .map(|r| r.to_string())
-    .map_err(SaveError::from)
+    .map_err(CommandError::from)
 }
 
 /// The "undo" right after a commit. It only deletes the version file and does not
@@ -148,7 +148,7 @@ mod tests {
         filename: &str,
         body: &str,
         revision: &str,
-    ) -> Result<String, SaveError> {
+    ) -> Result<String, CommandError> {
         update_draft(
             app.handle(),
             filename.to_string(),

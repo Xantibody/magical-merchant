@@ -1,10 +1,10 @@
 //! The sync settings screen's commands. The config file lives in core
 //! (`magical_merchant_core::domain::sync::settings`).
 
-use magical_merchant_core::SyncError;
 use magical_merchant_core::domain::sync::settings::{SyncConfig, normalize_workers_url};
 use tauri::{AppHandle, Runtime};
 
+use crate::commands::error::CommandError;
 use crate::services::tauri::app_base_dir;
 
 /// A config that could not be read comes back as `kind: "configCorrupt"`.
@@ -12,8 +12,10 @@ use crate::services::tauri::app_base_dir;
 /// Substituting the default would open the settings screen blank, and the re-entered
 /// URL would then overwrite the broken file
 #[tauri::command]
-pub(crate) fn get_sync_config<R: Runtime>(handle: AppHandle<R>) -> Result<SyncConfig, SyncError> {
-    let base_dir = app_base_dir(&handle).map_err(SyncError::other)?;
+pub(crate) fn get_sync_config<R: Runtime>(
+    handle: AppHandle<R>,
+) -> Result<SyncConfig, CommandError> {
+    let base_dir = app_base_dir(&handle)?;
     Ok(SyncConfig::load(&base_dir)?.unwrap_or_default())
 }
 

@@ -13,6 +13,8 @@ use magical_merchant_core::utils::clock::UtcStamp;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Runtime, State};
 
+use crate::commands::error::CommandError;
+
 const EVENT_SYNC_COMPLETE: &str = "sync-complete";
 const EVENT_SYNC_ERROR: &str = "sync-error";
 
@@ -86,7 +88,7 @@ enum RoundEnd<'a> {
 pub(crate) async fn sync_start(
     handle: AppHandle,
     state: State<'_, AppSyncState>,
-) -> Result<(), SyncError> {
+) -> Result<(), CommandError> {
     // `do_sync` is an async fn, so building its future here runs nothing: a start the guard
     // refuses never reads the config or touches the network
     run_round(state.inner(), do_sync(&handle), |end| {
@@ -97,6 +99,7 @@ pub(crate) async fn sync_start(
         };
     })
     .await
+    .map_err(CommandError::from)
 }
 
 /// `sync_start` with the round and the events passed in, so it runs in a test with neither a

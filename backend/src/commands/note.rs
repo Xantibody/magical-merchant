@@ -7,7 +7,7 @@ use magical_merchant_core::{
 };
 use tauri::{AppHandle, Runtime};
 
-use super::error::SaveError;
+use super::error::CommandError;
 use crate::services::core_location;
 use crate::services::tauri::{app_base_dir, off_main_thread};
 use crate::services::widgets;
@@ -73,14 +73,14 @@ pub(crate) fn update_draft<R: Runtime>(
     body: String,
     client: ClientContext,
     revision: String,
-) -> Result<String, SaveError> {
-    let base_dir = app_base_dir(&handle).map_err(SaveError::other)?;
-    let filename = parse_filename(&filename).map_err(SaveError::other)?;
+) -> Result<String, CommandError> {
+    let base_dir = app_base_dir(&handle).map_err(CommandError::other)?;
+    let filename = parse_filename(&filename).map_err(CommandError::other)?;
     let context = probe_with_client(client, core_location::latest);
     let expected = Revision::from(revision);
     magical_merchant_core::update_note(&base_dir, &filename, &body, &context, Some(&expected))
         .map(|r| r.to_string())
-        .map_err(SaveError::from)
+        .map_err(CommandError::from)
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -241,7 +241,7 @@ mod tests {
         filename: &str,
         body: &str,
         revision: &str,
-    ) -> Result<String, SaveError> {
+    ) -> Result<String, CommandError> {
         update_draft(
             app.handle(),
             filename.to_string(),
