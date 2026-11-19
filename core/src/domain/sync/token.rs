@@ -17,11 +17,15 @@ struct Claims {
 /// needs to know is "is the token still usable". The Worker holds the real decision.
 #[must_use]
 pub fn is_token_valid(token: &str) -> bool {
+    valid_at(token, unix_seconds_now())
+}
+
+/// [`is_token_valid`] at `now` (UNIX seconds).
+fn valid_at(token: &str, now: i64) -> bool {
     let Ok(token_data) = insecure_decode::<Claims>(token) else {
         return false;
     };
 
-    let now = unix_seconds_now();
     // 5 minute buffer
     token_data.claims.exp > now + 300
 }
@@ -33,6 +37,11 @@ pub fn is_token_valid(token: &str) -> bool {
 /// predates renewal and is due at once; garbage is not due, the validity check refuses it.
 #[must_use]
 pub fn renewal_due(token: &str) -> bool {
+    renewal_due_at(token, unix_seconds_now())
+}
+
+/// [`renewal_due`] at `now` (UNIX seconds).
+fn renewal_due_at(token: &str, now: i64) -> bool {
     let Ok(token_data) = insecure_decode::<Claims>(token) else {
         return false;
     };
@@ -40,7 +49,6 @@ pub fn renewal_due(token: &str) -> bool {
     let Some(iat) = iat else {
         return true;
     };
-    let now = unix_seconds_now();
     (exp - now) * 2 <= exp - iat
 }
 
