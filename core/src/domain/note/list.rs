@@ -3,6 +3,7 @@
 
 use std::path::Path;
 
+use crate::domain::codex::version::version_mark;
 use crate::domain::note::id::newest_first;
 use crate::domain::note::{NoteKind, NoteSummary};
 use crate::error::CoreError;
@@ -47,12 +48,17 @@ where
         let filename = entry.file_name().to_string_lossy().to_string();
         let content = read_text(&path).unwrap_or_default();
         let body = frontmatter::strip(&content);
-        // Versions live next to the note, under the name minus `.md`. Version bodies
-        // are not read
+        // Versions live next to the note, under the name minus `.md` (`versions_dir`;
+        // the scan has no `NoteFilename` to ask it with). Only their names are listed,
+        // version bodies are not read
         let versions = path.with_extension("");
         let mut summary = NoteSummary::from_file(kind, path, filename, &content);
         if kind == NoteKind::Codex {
-            let (count, dirty) = crate::domain::codex::version::list_status(&versions, body)?;
+            let names: Vec<_> = list_md_files(&versions)?
+                .iter()
+                .map(Entry::file_name)
+                .collect();
+            let (count, dirty) = version_mark(&names, body);
             summary.version_count = Some(count);
             summary.dirty = Some(dirty);
         }
@@ -64,7 +70,10 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::note::{Provenance, create_draft_note};
+    use crate::domain::codex::commit_note_version;
+    use crate::domain::note::{
+        NoteFilename, Provenance, create_draft_codex, create_draft_note, update_note,
+    };
     use crate::utils::device::Context;
     use std::fs;
     use std::path::PathBuf;
@@ -145,5 +154,62 @@ mod tests {
         assert_eq!(summary.path, path);
         assert_eq!(summary.tags, vec!["memo".to_string()]);
         assert_eq!(body, "# Title\nbody #memo");
+    }
+
+    /// The version count and "has it moved" shown on a list row. Version bodies are not
+    /// read; only the hash in the filename is compared.
+    #[test]
+    fn the_list_carries_the_version_count_and_whether_the_draft_moved() {
+        let tmp = TempDir::new().unwrap();
+        let path = create_draft_codex(
+            tmp.path(),
+            "one",
+            &[],
+            &Context::default(),
+            Provenance::default(),
+        )
+        .unwrap();
+        let filename = NoteFilename::parse(path.file_name().unwrap().to_str().unwrap()).unwrap();
+        let row = |base: &Path| {
+            list_notes(base)
+                .unwrap()
+                .into_iter()
+                .find(|s| s.filename == filename.as_str())
+                .unwrap()
+        };
+
+        let none = row(tmp.path());
+        assert_eq!(none.version_count, Some(0));
+        assert_eq!(none.dirty, Some(false));
+
+        commit_note_version(tmp.path(), &filename, None).unwrap();
+        let clean = row(tmp.path());
+        assert_eq!(clean.version_count, Some(1));
+        assert_eq!(clean.dirty, Some(false));
+
+        update_note(&path, "two", &Context::default(), None).unwrap();
+        let moved = row(tmp.path());
+        assert_eq!(moved.version_count, Some(1));
+        assert_eq!(moved.dirty, Some(true));
+    }
+
+    /// A plain note's row has no version fields at all.
+    #[test]
+    fn a_plain_note_row_has_no_version_fields() {
+        let tmp = TempDir::new().unwrap();
+        create_draft_note(
+            tmp.path(),
+            "plain",
+            &[],
+            &Context::default(),
+            Provenance::default(),
+        )
+        .unwrap();
+
+        let rows = list_notes(tmp.path()).unwrap();
+
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].version_count, None);
+        assert_eq!(rows[0].dirty, None);
     }
 }

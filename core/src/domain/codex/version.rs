@@ -21,20 +21,20 @@
 //! Only a Codex under `data/codex/` can hold versions. A plain note cannot commit one, and
 //! leftover versions are not shown as its history.
 
+use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use similar::{Algorithm, TextDiff};
 
-use crate::domain::note::id::newest_first;
 use crate::domain::note::kind::codex_dir;
 use crate::domain::note::{
     NoteFilename, NoteKind, Revision, locate_note, read_note_by_filename, update_note,
 };
 use crate::error::CoreError;
 
-use crate::services::files::{Entry, ensure_dir, list_md_files, write_atomic};
+use crate::services::files::{ensure_dir, list_md_files, write_atomic};
 use crate::utils::clock::{Stamp, WallClock};
 use crate::utils::device::Context;
 use crate::utils::frontmatter;
@@ -181,10 +181,15 @@ pub fn list_note_versions(
             })
         })
         .collect();
+    order(&mut versions);
+    Ok(versions)
+}
+
+/// Orders versions newest first by the instant each was committed.
+pub(crate) fn order(versions: &mut [Version]) {
     // Versions in the same second are ordered deterministically by id (hex). Times are
     // written with each device's offset, so the comparison is of instants, not wall clocks
     versions.sort_by(|a, b| b.time.cmp(&a.time).then_with(|| b.id.cmp(&a.id)));
-    Ok(versions)
 }
 
 /// The body of a version. The frontmatter is not attached: as with `read_note`, it is not
@@ -285,9 +290,7 @@ pub fn note_version_status(
     let (dirty, bytes_delta) = match versions.first() {
         Some(latest) => (
             read_note_version(base_dir, filename, &latest.id)? != body,
-            // A body never exceeds i64. If it did, that is another problem, not a delta
-            i64::try_from(body.len()).unwrap_or(i64::MAX)
-                - i64::try_from(latest.bytes).unwrap_or(i64::MAX),
+            bytes_delta(body.len(), latest.bytes),
         ),
         None => (false, 0),
     };
@@ -298,28 +301,29 @@ pub fn note_version_status(
     })
 }
 
-/// The "version N" and "has it moved" for a list row. Not one version file is opened:
-/// the tail of a version ID is the first 8 hex of the body's SHA-256, so comparing the
-/// tail of the newest name with the draft's fingerprint is enough.
+/// The draft's byte count minus the latest version's: the X in "+X B from version N".
+pub(crate) fn bytes_delta(draft_len: usize, latest_bytes: u64) -> i64 {
+    // A body never exceeds i64. If it did, that is another problem, not a delta
+    i64::try_from(draft_len).unwrap_or(i64::MAX) - i64::try_from(latest_bytes).unwrap_or(i64::MAX)
+}
+
+/// The "version N" and "has it moved" for a list row, from the names of the version
+/// files and the draft body. Not one version file is opened: the tail of a version ID is
+/// the first 8 hex of the body's SHA-256, so comparing the tail of the newest name with
+/// the draft's fingerprint is enough.
 ///
-/// "Newest" is decided by filename (the wall clock of the device that committed).
-/// [`list_note_versions`] orders by the instant in the frontmatter, so the two can
+/// "Newest" is the greatest filename (the wall clock of the device that committed).
+/// `list_note_versions` orders by the instant in the frontmatter, so the two can
 /// disagree only when two devices in different time zones commit at close times. That
-/// is not worth paying for a row mark: once opened, [`note_version_status`] reads the
+/// is not worth paying for a row mark: once opened, `note_version_status` reads the
 /// body and answers exactly.
-///
-/// `dir` is the note's path minus `.md` (the same as [`versions_dir`]).
-/// The list scan arrives here without a `NoteFilename`.
-pub(crate) fn list_status(dir: &Path, body: &str) -> Result<(usize, bool), CoreError> {
-    let mut entries = list_md_files(dir)?;
-    newest_first(&mut entries, Entry::file_name);
-    let dirty = entries.first().is_some_and(|newest| {
-        let name = newest.file_name();
-        let stem = Path::new(&name).file_stem().and_then(|s| s.to_str());
+pub(crate) fn version_mark<N: AsRef<OsStr>>(names: &[N], body: &str) -> (usize, bool) {
+    let dirty = names.iter().map(AsRef::as_ref).max().is_some_and(|newest| {
+        let stem = Path::new(newest).file_stem().and_then(|s| s.to_str());
         stem.and_then(|s| s.rsplit_once('-'))
             .is_some_and(|(_, hash)| hash != Revision::of(body).short())
     });
-    Ok((entries.len(), dirty))
+    (names.len(), dirty)
 }
 
 #[cfg(test)]
@@ -669,55 +673,6 @@ mod tests {
         ] {
             assert_eq!(version_path(dir, id).is_ok(), accepted, "{id}");
         }
-    }
-
-    /// The version count and "has it moved" shown on a list row. Version bodies are not
-    /// read; only the hash in the filename is compared.
-    #[test]
-    fn the_list_carries_the_version_count_and_whether_the_draft_moved() {
-        let tmp = TempDir::new().unwrap();
-        let (path, filename) = note(tmp.path(), "one");
-        let row = |base: &Path| {
-            crate::list_notes(base)
-                .unwrap()
-                .into_iter()
-                .find(|s| s.filename == filename.as_str())
-                .unwrap()
-        };
-
-        let none = row(tmp.path());
-        assert_eq!(none.version_count, Some(0));
-        assert_eq!(none.dirty, Some(false));
-
-        commit_note_version(tmp.path(), &filename, None).unwrap();
-        let clean = row(tmp.path());
-        assert_eq!(clean.version_count, Some(1));
-        assert_eq!(clean.dirty, Some(false));
-
-        update_note(&path, "two", &Context::default(), None).unwrap();
-        let moved = row(tmp.path());
-        assert_eq!(moved.version_count, Some(1));
-        assert_eq!(moved.dirty, Some(true));
-    }
-
-    /// A plain note's row has no version fields at all.
-    #[test]
-    fn a_plain_note_row_has_no_version_fields() {
-        let tmp = TempDir::new().unwrap();
-        create_draft_note(
-            tmp.path(),
-            "plain",
-            &[],
-            &Context::default(),
-            Provenance::default(),
-        )
-        .unwrap();
-
-        let rows = crate::list_notes(tmp.path()).unwrap();
-
-        assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].version_count, None);
-        assert_eq!(rows[0].dirty, None);
     }
 
     /// The X in "+X B from version N". The byte difference between the latest version and
