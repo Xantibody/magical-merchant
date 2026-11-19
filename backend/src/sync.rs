@@ -13,7 +13,7 @@ use magical_merchant_core::domain::sync::{SyncResult, login, run, token};
 use magical_merchant_core::services::worker::HttpClient;
 use magical_merchant_core::utils::clock::UtcStamp;
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Runtime, State};
 
 const EVENT_SYNC_COMPLETE: &str = "sync-complete";
 const EVENT_SYNC_ERROR: &str = "sync-error";
@@ -162,7 +162,7 @@ pub(crate) fn sync_status(state: State<'_, AppSyncState>) -> SyncStatusInfo {
 
 /// Resolves the config and the token, builds the client, and hands it to core's engine.
 /// `AppHandle` is used only to resolve the base dir and to branch on TLS.
-async fn do_sync(handle: &AppHandle) -> Result<SyncResult, SyncError> {
+async fn do_sync<R: Runtime>(handle: &AppHandle<R>) -> Result<SyncResult, SyncError> {
     let base_dir = crate::app_base_dir(handle).map_err(SyncError::other)?;
     // The repair before the scan is done by the engine inside the lock. That also covers
     // pressing sync after looking only at Scrawl, which never went through the listing's

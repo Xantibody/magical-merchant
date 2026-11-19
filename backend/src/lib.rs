@@ -39,7 +39,7 @@ use magical_merchant_core::{
     NoteSummary, Provenance, Revision, ScrawlDays, SearchFilter, SearchHit, Source, TagUsage,
     TemplateDetail, TemplateSummary, VarLocale, Version, VersionStatus,
 };
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tauri_plugin_deep_link::DeepLinkExt as _;
 
 /// Moves reads that sweep every file off the main thread.
@@ -68,7 +68,9 @@ where
 /// the way in for trying a new feature without touching real records:
 /// `just sandbox` uses it. A shipped app has no need to move its data directory
 /// from an environment variable, so the whole branch is gone in release.
-pub(crate) fn app_base_dir(handle: &AppHandle) -> Result<std::path::PathBuf, String> {
+pub(crate) fn app_base_dir<R: Runtime>(
+    handle: &AppHandle<R>,
+) -> Result<std::path::PathBuf, String> {
     #[cfg(debug_assertions)]
     if let Some(dir) = std::env::var_os("MAGICAL_MERCHANT_DATA_DIR") {
         return Ok(std::path::PathBuf::from(dir));
@@ -81,8 +83,8 @@ fn parse_filename(filename: &str) -> Result<NoteFilename, String> {
 }
 
 #[tauri::command]
-fn save_quick_capture(
-    handle: AppHandle,
+fn save_quick_capture<R: Runtime>(
+    handle: AppHandle<R>,
     text: String,
     client: ClientContext,
 ) -> Result<(), String> {
@@ -95,8 +97,8 @@ fn save_quick_capture(
 /// `kind` names the directory: `codex` creates a document that keeps committed
 /// versions. Left out, it is an ordinary note.
 #[tauri::command]
-fn create_draft(
-    handle: AppHandle,
+fn create_draft<R: Runtime>(
+    handle: AppHandle<R>,
     body: String,
     tags: Vec<String>,
     client: ClientContext,
@@ -122,7 +124,7 @@ fn create_draft(
 
 /// Turns a Note into a Codex. The ID does not change. There is no way back.
 #[tauri::command]
-fn promote_note_to_codex(handle: AppHandle, filename: String) -> Result<(), String> {
+fn promote_note_to_codex<R: Runtime>(handle: AppHandle<R>, filename: String) -> Result<(), String> {
     let base_dir = app_base_dir(&handle)?;
     let filename = parse_filename(&filename)?;
     magical_merchant_core::promote_note_to_codex(&base_dir, &filename).map_err(|e| e.to_string())
@@ -189,8 +191,8 @@ impl From<magical_merchant_core::CoreError> for SaveError {
 /// Codex.
 // AIDEV-NOTE: same parse_filename to locate route as the other note commands. Do not go back to taking a path
 #[tauri::command]
-fn update_draft(
-    handle: AppHandle,
+fn update_draft<R: Runtime>(
+    handle: AppHandle<R>,
     filename: String,
     body: String,
     client: ClientContext,
@@ -246,7 +248,7 @@ pub(crate) fn repair_once(base_dir: &std::path::Path) {
 }
 
 #[tauri::command]
-async fn list_notes(handle: AppHandle) -> Result<Vec<NoteSummary>, String> {
+async fn list_notes<R: Runtime>(handle: AppHandle<R>) -> Result<Vec<NoteSummary>, String> {
     let base_dir = app_base_dir(&handle)?;
     off_main_thread(move || {
         repair_once(&base_dir);
@@ -257,7 +259,7 @@ async fn list_notes(handle: AppHandle) -> Result<Vec<NoteSummary>, String> {
 }
 
 #[tauri::command]
-fn read_note(handle: AppHandle, filename: String) -> Result<NoteRead, String> {
+fn read_note<R: Runtime>(handle: AppHandle<R>, filename: String) -> Result<NoteRead, String> {
     let base_dir = app_base_dir(&handle)?;
     let filename = parse_filename(&filename)?;
     let body = magical_merchant_core::read_note_by_filename(&base_dir, &filename)
@@ -267,7 +269,10 @@ fn read_note(handle: AppHandle, filename: String) -> Result<NoteRead, String> {
 }
 
 #[tauri::command]
-async fn find_backlinks(handle: AppHandle, filename: String) -> Result<Vec<SearchHit>, String> {
+async fn find_backlinks<R: Runtime>(
+    handle: AppHandle<R>,
+    filename: String,
+) -> Result<Vec<SearchHit>, String> {
     let base_dir = app_base_dir(&handle)?;
     let filename = parse_filename(&filename)?;
     off_main_thread(move || {
@@ -277,15 +282,15 @@ async fn find_backlinks(handle: AppHandle, filename: String) -> Result<Vec<Searc
 }
 
 #[tauri::command]
-fn read_note_meta(handle: AppHandle, filename: String) -> Result<NoteMeta, String> {
+fn read_note_meta<R: Runtime>(handle: AppHandle<R>, filename: String) -> Result<NoteMeta, String> {
     let base_dir = app_base_dir(&handle)?;
     let filename = parse_filename(&filename)?;
     magical_merchant_core::read_note_meta(&base_dir, &filename).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn update_note_meta(
-    handle: AppHandle,
+fn update_note_meta<R: Runtime>(
+    handle: AppHandle<R>,
     filename: String,
     time: String,
     tags: Vec<String>,
@@ -301,7 +306,11 @@ fn update_note_meta(
 
 /// Rewrites the view mode only. `None` goes back to the default (the editor).
 #[tauri::command]
-fn set_note_view(handle: AppHandle, filename: String, view: Option<String>) -> Result<(), String> {
+fn set_note_view<R: Runtime>(
+    handle: AppHandle<R>,
+    filename: String,
+    view: Option<String>,
+) -> Result<(), String> {
     let base_dir = app_base_dir(&handle)?;
     let filename = parse_filename(&filename)?;
     magical_merchant_core::update_note_view(&base_dir, &filename, view.as_deref())
@@ -310,8 +319,8 @@ fn set_note_view(handle: AppHandle, filename: String, view: Option<String>) -> R
 
 /// Rewrites only the link to the entry it was promoted from. `None` unties it.
 #[tauri::command]
-fn set_note_origin(
-    handle: AppHandle,
+fn set_note_origin<R: Runtime>(
+    handle: AppHandle<R>,
     filename: String,
     origin: Option<String>,
 ) -> Result<(), String> {
@@ -322,21 +331,24 @@ fn set_note_origin(
 }
 
 #[tauri::command]
-fn list_templates(handle: AppHandle) -> Result<Vec<TemplateSummary>, String> {
+fn list_templates<R: Runtime>(handle: AppHandle<R>) -> Result<Vec<TemplateSummary>, String> {
     let base_dir = app_base_dir(&handle)?;
     magical_merchant_core::list_templates(&base_dir).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn read_template(handle: AppHandle, filename: String) -> Result<TemplateDetail, String> {
+fn read_template<R: Runtime>(
+    handle: AppHandle<R>,
+    filename: String,
+) -> Result<TemplateDetail, String> {
     let base_dir = app_base_dir(&handle)?;
     let filename = parse_filename(&filename)?;
     magical_merchant_core::read_template(&base_dir, &filename).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn save_template(
-    handle: AppHandle,
+fn save_template<R: Runtime>(
+    handle: AppHandle<R>,
     filename: String,
     body: String,
     tags: Vec<String>,
@@ -350,7 +362,7 @@ fn save_template(
 }
 
 #[tauri::command]
-fn delete_template(handle: AppHandle, filename: String) -> Result<(), String> {
+fn delete_template<R: Runtime>(handle: AppHandle<R>, filename: String) -> Result<(), String> {
     let base_dir = app_base_dir(&handle)?;
     let filename = parse_filename(&filename)?;
     magical_merchant_core::delete_template(&base_dir, &filename).map_err(|e| e.to_string())?;
@@ -360,7 +372,11 @@ fn delete_template(handle: AppHandle, filename: String) -> Result<(), String> {
 
 /// Renames a template and its draft. Refused when the new name is taken.
 #[tauri::command]
-fn rename_template(handle: AppHandle, from: String, to: String) -> Result<(), String> {
+fn rename_template<R: Runtime>(
+    handle: AppHandle<R>,
+    from: String,
+    to: String,
+) -> Result<(), String> {
     let base_dir = app_base_dir(&handle)?;
     let from = parse_filename(&from)?;
     let to = parse_filename(&to)?;
@@ -370,8 +386,8 @@ fn rename_template(handle: AppHandle, from: String, to: String) -> Result<(), St
 /// Keeps the edit in progress beside the template. Returns whether a draft is left: one
 /// equal to the saved template is removed instead.
 #[tauri::command]
-fn save_template_draft(
-    handle: AppHandle,
+fn save_template_draft<R: Runtime>(
+    handle: AppHandle<R>,
     filename: String,
     body: String,
     tags: Vec<String>,
@@ -383,8 +399,8 @@ fn save_template_draft(
 }
 
 #[tauri::command]
-fn read_template_draft(
-    handle: AppHandle,
+fn read_template_draft<R: Runtime>(
+    handle: AppHandle<R>,
     filename: String,
 ) -> Result<Option<TemplateDetail>, String> {
     let base_dir = app_base_dir(&handle)?;
@@ -393,14 +409,17 @@ fn read_template_draft(
 }
 
 #[tauri::command]
-fn discard_template_draft(handle: AppHandle, filename: String) -> Result<(), String> {
+fn discard_template_draft<R: Runtime>(
+    handle: AppHandle<R>,
+    filename: String,
+) -> Result<(), String> {
     let base_dir = app_base_dir(&handle)?;
     let filename = parse_filename(&filename)?;
     magical_merchant_core::discard_template_draft(&base_dir, &filename).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn list_template_drafts(handle: AppHandle) -> Result<Vec<TemplateSummary>, String> {
+fn list_template_drafts<R: Runtime>(handle: AppHandle<R>) -> Result<Vec<TemplateSummary>, String> {
     let base_dir = app_base_dir(&handle)?;
     magical_merchant_core::list_template_drafts(&base_dir).map_err(|e| e.to_string())
 }
@@ -410,8 +429,8 @@ fn list_template_drafts(handle: AppHandle) -> Result<Vec<TemplateSummary>, Strin
 /// It takes `locale` for `{{weekday}}`. Only the names of the days should follow
 /// the device language, and the screen is the only side that knows that language.
 #[tauri::command]
-fn create_from_template(
-    handle: AppHandle,
+fn create_from_template<R: Runtime>(
+    handle: AppHandle<R>,
     filename: String,
     client: ClientContext,
     locale: String,
@@ -439,7 +458,7 @@ fn parse_glyph_name(name: &str) -> Result<GlyphName, String> {
 }
 
 #[tauri::command]
-fn list_glyphs(handle: AppHandle) -> Result<Vec<GlyphSummary>, String> {
+fn list_glyphs<R: Runtime>(handle: AppHandle<R>) -> Result<Vec<GlyphSummary>, String> {
     let base_dir = app_base_dir(&handle)?;
     magical_merchant_core::list_glyphs(&base_dir).map_err(|e| e.to_string())
 }
@@ -462,7 +481,7 @@ struct GlyphAsset {
 /// It is read again on every return to the window, and each call opens and
 /// encodes every image, so it runs off the main thread like the other sweeps.
 #[tauri::command]
-async fn read_glyphs(handle: AppHandle) -> Result<Vec<GlyphAsset>, String> {
+async fn read_glyphs<R: Runtime>(handle: AppHandle<R>) -> Result<Vec<GlyphAsset>, String> {
     let base_dir = app_base_dir(&handle)?;
     off_main_thread(move || {
         let mut assets = Vec::new();
@@ -489,8 +508,8 @@ async fn read_glyphs(handle: AppHandle) -> Result<Vec<GlyphAsset>, String> {
 }
 
 #[tauri::command]
-fn save_glyph(
-    handle: AppHandle,
+fn save_glyph<R: Runtime>(
+    handle: AppHandle<R>,
     name: String,
     format: String,
     data_base64: String,
@@ -503,14 +522,14 @@ fn save_glyph(
 }
 
 #[tauri::command]
-fn delete_glyph(handle: AppHandle, name: String) -> Result<(), String> {
+fn delete_glyph<R: Runtime>(handle: AppHandle<R>, name: String) -> Result<(), String> {
     let base_dir = app_base_dir(&handle)?;
     let name = parse_glyph_name(&name)?;
     magical_merchant_core::delete_glyph(&base_dir, &name).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn list_scrawl_dates(handle: AppHandle) -> Result<Vec<String>, String> {
+fn list_scrawl_dates<R: Runtime>(handle: AppHandle<R>) -> Result<Vec<String>, String> {
     let base_dir = app_base_dir(&handle)?;
     let dates = magical_merchant_core::list_scrawl_dates(&base_dir).map_err(|e| e.to_string())?;
     Ok(dates.iter().map(Day::ymd).collect())
@@ -522,8 +541,8 @@ fn list_scrawl_dates(handle: AppHandle) -> Result<Vec<String>, String> {
 /// One call off the main thread in place of the date list and one call per day, each
 /// of which ran on it. It only reads, like `read_scrawl_by_date`.
 #[tauri::command]
-async fn read_scrawl_days(
-    handle: AppHandle,
+async fn read_scrawl_days<R: Runtime>(
+    handle: AppHandle<R>,
     recent: usize,
     extra: Vec<Day>,
 ) -> Result<ScrawlDays, String> {
@@ -536,7 +555,10 @@ async fn read_scrawl_days(
 }
 
 #[tauri::command]
-fn read_scrawl_by_date(handle: AppHandle, date: String) -> Result<Vec<String>, String> {
+fn read_scrawl_by_date<R: Runtime>(
+    handle: AppHandle<R>,
+    date: String,
+) -> Result<Vec<String>, String> {
     let base_dir = app_base_dir(&handle)?;
     let naive = Day::parse_ymd(&date).map_err(|e| e.to_string())?;
     magical_merchant_core::read_scrawl(&base_dir, naive).map_err(|e| e.to_string())
@@ -544,8 +566,8 @@ fn read_scrawl_by_date(handle: AppHandle, date: String) -> Result<Vec<String>, S
 
 /// `raw` is the line as the screen read it. With the index it names which record.
 #[tauri::command]
-fn delete_scrawl_entry(
-    handle: AppHandle,
+fn delete_scrawl_entry<R: Runtime>(
+    handle: AppHandle<R>,
     date: String,
     index: usize,
     raw: String,
@@ -568,8 +590,8 @@ fn delete_scrawl_entry(
 /// run on the main thread, and the geocoder's answer is queued on the main queue as
 /// well. Waiting there blocks its own reply and always times out.
 #[tauri::command]
-async fn resolve_places(
-    handle: AppHandle,
+async fn resolve_places<R: Runtime>(
+    handle: AppHandle<R>,
     coordinates: Vec<(f64, f64)>,
     locale: String,
 ) -> Result<Vec<(String, String)>, String> {
@@ -580,8 +602,8 @@ async fn resolve_places(
 }
 
 #[tauri::command]
-async fn search_all(
-    handle: AppHandle,
+async fn search_all<R: Runtime>(
+    handle: AppHandle<R>,
     query: String,
     tags: Vec<String>,
 ) -> Result<Vec<SearchHit>, String> {
@@ -595,8 +617,8 @@ async fn search_all(
 /// The search field's question: `search_all` narrowed by kind and period. The filter goes down
 /// to core rather than over the results, because the results are capped.
 #[tauri::command]
-async fn search_records(
-    handle: AppHandle,
+async fn search_records<R: Runtime>(
+    handle: AppHandle<R>,
     query: String,
     tags: Vec<String>,
     filter: SearchFilter,
@@ -615,7 +637,7 @@ async fn search_records(
 /// capped: the screen counts kind / tag / period from here. The scan costs the same
 /// as `search_all`, so it is called only when the screen opens.
 #[tauri::command]
-async fn browse_all(handle: AppHandle) -> Result<Vec<SearchHit>, String> {
+async fn browse_all<R: Runtime>(handle: AppHandle<R>) -> Result<Vec<SearchHit>, String> {
     let base_dir = app_base_dir(&handle)?;
     off_main_thread(move || magical_merchant_core::browse_all(&base_dir).map_err(|e| e.to_string()))
         .await
@@ -624,7 +646,10 @@ async fn browse_all(handle: AppHandle) -> Result<Vec<SearchHit>, String> {
 /// The newest records, for the search field before a word is typed. The scan is
 /// `browse_all`'s; only the trip to the screen is cut to `limit` rows.
 #[tauri::command]
-async fn recent_records(handle: AppHandle, limit: usize) -> Result<Vec<SearchHit>, String> {
+async fn recent_records<R: Runtime>(
+    handle: AppHandle<R>,
+    limit: usize,
+) -> Result<Vec<SearchHit>, String> {
     let base_dir = app_base_dir(&handle)?;
     off_main_thread(move || {
         magical_merchant_core::recent_records(&base_dir, limit).map_err(|e| e.to_string())
@@ -635,7 +660,7 @@ async fn recent_records(handle: AppHandle, limit: usize) -> Result<Vec<SearchHit
 /// How many records carry each tag, most used first, for the tag editor's suggestions. The
 /// scan is `browse_all`'s; what crosses to the screen is one row per tag, not every record.
 #[tauri::command]
-async fn count_tags(handle: AppHandle) -> Result<Vec<TagUsage>, String> {
+async fn count_tags<R: Runtime>(handle: AppHandle<R>) -> Result<Vec<TagUsage>, String> {
     let base_dir = app_base_dir(&handle)?;
     off_main_thread(move || magical_merchant_core::count_tags(&base_dir).map_err(|e| e.to_string()))
         .await
@@ -644,8 +669,8 @@ async fn count_tags(handle: AppHandle) -> Result<Vec<TagUsage>, String> {
 /// Commits the current draft as a version. Called only when a person asks to
 /// commit a version.
 #[tauri::command]
-fn commit_note_version(
-    handle: AppHandle,
+fn commit_note_version<R: Runtime>(
+    handle: AppHandle<R>,
     filename: String,
     message: Option<String>,
 ) -> Result<Version, String> {
@@ -656,14 +681,21 @@ fn commit_note_version(
 }
 
 #[tauri::command]
-fn list_note_versions(handle: AppHandle, filename: String) -> Result<Vec<Version>, String> {
+fn list_note_versions<R: Runtime>(
+    handle: AppHandle<R>,
+    filename: String,
+) -> Result<Vec<Version>, String> {
     let base_dir = app_base_dir(&handle)?;
     let filename = parse_filename(&filename)?;
     magical_merchant_core::list_note_versions(&base_dir, &filename).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn read_note_version(handle: AppHandle, filename: String, id: String) -> Result<String, String> {
+fn read_note_version<R: Runtime>(
+    handle: AppHandle<R>,
+    filename: String,
+    id: String,
+) -> Result<String, String> {
     let base_dir = app_base_dir(&handle)?;
     let filename = parse_filename(&filename)?;
     magical_merchant_core::read_note_version(&base_dir, &filename, &id).map_err(|e| e.to_string())
@@ -672,7 +704,11 @@ fn read_note_version(handle: AppHandle, filename: String, id: String) -> Result<
 /// Unified diff from version `from` to the current draft. Two versions are never
 /// compared: the screen only shows what changed since this version.
 #[tauri::command]
-fn diff_note_versions(handle: AppHandle, filename: String, from: String) -> Result<String, String> {
+fn diff_note_versions<R: Runtime>(
+    handle: AppHandle<R>,
+    filename: String,
+    from: String,
+) -> Result<String, String> {
     let base_dir = app_base_dir(&handle)?;
     let filename = parse_filename(&filename)?;
     magical_merchant_core::diff_note_versions(&base_dir, &filename, &from, None)
@@ -683,8 +719,8 @@ fn diff_note_versions(handle: AppHandle, filename: String, from: String) -> Resu
 /// `update_draft`, and is required for the same reason; a mismatch is `stale`.
 /// Core commits the draft as a version before writing over it.
 #[tauri::command]
-fn restore_note_version(
-    handle: AppHandle,
+fn restore_note_version<R: Runtime>(
+    handle: AppHandle<R>,
     filename: String,
     id: String,
     client: ClientContext,
@@ -708,21 +744,28 @@ fn restore_note_version(
 /// The "undo" right after a commit. It only deletes the version file and does not
 /// touch the body.
 #[tauri::command]
-fn delete_note_version(handle: AppHandle, filename: String, id: String) -> Result<(), String> {
+fn delete_note_version<R: Runtime>(
+    handle: AppHandle<R>,
+    filename: String,
+    id: String,
+) -> Result<(), String> {
     let base_dir = app_base_dir(&handle)?;
     let filename = parse_filename(&filename)?;
     magical_merchant_core::delete_note_version(&base_dir, &filename, &id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn note_version_status(handle: AppHandle, filename: String) -> Result<VersionStatus, String> {
+fn note_version_status<R: Runtime>(
+    handle: AppHandle<R>,
+    filename: String,
+) -> Result<VersionStatus, String> {
     let base_dir = app_base_dir(&handle)?;
     let filename = parse_filename(&filename)?;
     magical_merchant_core::note_version_status(&base_dir, &filename).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn delete_note(handle: AppHandle, filename: String) -> Result<(), String> {
+fn delete_note<R: Runtime>(handle: AppHandle<R>, filename: String) -> Result<(), String> {
     let base_dir = app_base_dir(&handle)?;
     let filename = parse_filename(&filename)?;
     magical_merchant_core::delete_note(&base_dir, &filename).map_err(|e| e.to_string())?;

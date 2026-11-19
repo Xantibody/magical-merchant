@@ -11,7 +11,7 @@ use magical_merchant_core::domain::sync::login::store_token;
 use magical_merchant_core::domain::sync::login::{clear_token, get_token};
 use magical_merchant_core::domain::sync::settings::{SyncConfig, normalize_workers_url};
 use magical_merchant_core::domain::sync::token::is_token_valid;
-use tauri::AppHandle;
+use tauri::{AppHandle, Runtime};
 // Only the desktop build looks up or creates a sign-in window. Android hands the URL
 // to the default browser, so nothing there uses this trait
 #[cfg(not(target_os = "android"))]
@@ -472,13 +472,16 @@ pub(crate) fn auth_logout(handle: AppHandle) -> Result<(), String> {
 /// Substituting the default would open the settings screen blank, and the re-entered
 /// URL would then overwrite the broken file
 #[tauri::command]
-pub(crate) fn get_sync_config(handle: AppHandle) -> Result<SyncConfig, SyncError> {
+pub(crate) fn get_sync_config<R: Runtime>(handle: AppHandle<R>) -> Result<SyncConfig, SyncError> {
     let base_dir = crate::app_base_dir(&handle).map_err(SyncError::other)?;
     Ok(SyncConfig::load(&base_dir)?.unwrap_or_default())
 }
 
 #[tauri::command]
-pub(crate) fn save_sync_config(handle: AppHandle, config: SyncConfig) -> Result<(), String> {
+pub(crate) fn save_sync_config<R: Runtime>(
+    handle: AppHandle<R>,
+    config: SyncConfig,
+) -> Result<(), String> {
     let base_dir = crate::app_base_dir(&handle)?;
     let config = SyncConfig {
         workers_url: normalize_workers_url(&config.workers_url)?,
@@ -488,7 +491,7 @@ pub(crate) fn save_sync_config(handle: AppHandle, config: SyncConfig) -> Result<
 }
 
 #[tauri::command]
-pub(crate) fn is_sync_config_editable(handle: AppHandle) -> Result<bool, String> {
+pub(crate) fn is_sync_config_editable<R: Runtime>(handle: AppHandle<R>) -> Result<bool, String> {
     let base_dir = crate::app_base_dir(&handle)?;
     Ok(SyncConfig::is_editable(&base_dir))
 }
