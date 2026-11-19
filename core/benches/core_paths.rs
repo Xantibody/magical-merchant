@@ -12,11 +12,10 @@ mod fixture;
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use std::hint::black_box;
 
-use magical_merchant_core::search::{HitKind, SearchFilter};
 use magical_merchant_core::sync::scan::scan_local_files;
 use magical_merchant_core::{
-    browse_all, count_tags, find_backlinks, list_notes, list_scrawl_dates, read_scrawl,
-    read_scrawl_days, recent_records, search_all, search_records,
+    HitKind, SearchFilter, browse_all, count_tags, find_backlinks, list_notes, list_scrawl_dates,
+    read_scrawl, read_scrawl_days, recent_records, search_all, search_records,
 };
 
 fn search(c: &mut Criterion) {

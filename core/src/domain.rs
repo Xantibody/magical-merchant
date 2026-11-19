@@ -7,4 +7,5 @@ pub mod device;
 pub mod glyphs;
 pub mod note;
 pub mod scrawl;
+pub mod search;
 pub mod templates;

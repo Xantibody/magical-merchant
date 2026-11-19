@@ -9,7 +9,6 @@ mod tag_count;
 pub mod utils;
 
 mod error;
-pub mod search;
 
 pub use domain::codex::{
     BEFORE_RESTORE, DRAFT, Version, VersionStatus, commit_note_version, delete_note_version,
@@ -36,6 +35,10 @@ pub use domain::scrawl::{
     ScrawlDay, ScrawlDays, ScrawlDirMigration, delete_scrawl_entry, list_scrawl_dates,
     migrate_scrawl_dir, read_scrawl, read_scrawl_days, save_scrawl_entry,
 };
+pub use domain::search::{
+    HitKind, SearchFilter, SearchHit, browse_all, find_backlinks, recent_records, search_all,
+    search_records,
+};
 pub use domain::templates::{
     CreatedNote, TemplateDetail, TemplateSummary, VarLocale, create_note_from_template,
     delete_template, discard_template_draft, list_template_drafts, list_templates, read_template,
@@ -43,10 +46,6 @@ pub use domain::templates::{
 };
 pub use domain::templates::{TemplateToday, templates_today};
 pub use error::{CoreError, SyncError, describe};
-pub use search::{
-    HitKind, SearchFilter, SearchHit, browse_all, find_backlinks, recent_records, search_all,
-    search_records,
-};
 pub use tag_count::{TagUsage, count_tags};
 pub use utils::device::Context as DeviceContext;
 /// The fixed vocabulary of entry points that wrote a record. Every creation entry takes one.

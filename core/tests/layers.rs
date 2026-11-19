@@ -20,7 +20,7 @@ use std::path::{Path, PathBuf};
 
 /// The old top-level modules. Each step moves one of them into `domain/`, and a service
 /// that leaned on one would be leaning on domain code under another name.
-const OLD_MODULES: &[&str] = &["crate::sync", "crate::search", "crate::tag_count"];
+const OLD_MODULES: &[&str] = &["crate::sync", "crate::tag_count"];
 
 /// Rule files inside `domain/` (paths under the crate root). They hold the rules alone,
 /// so they are tested with plain values and never call a service.
