@@ -435,7 +435,7 @@ mod tests {
 
 #[tauri::command]
 pub(crate) async fn auth_login<R: Runtime>(handle: AppHandle<R>) -> Result<(), String> {
-    let base_dir = crate::app_base_dir(&handle)?;
+    let base_dir = crate::services::tauri::app_base_dir(&handle)?;
     let config = SyncConfig::load(&base_dir)
         .map_err(|e| e.message)?
         .unwrap_or_default();
@@ -462,13 +462,13 @@ pub(crate) async fn auth_login<R: Runtime>(handle: AppHandle<R>) -> Result<(), S
 
 #[tauri::command]
 pub(crate) fn auth_status(handle: AppHandle) -> Result<bool, String> {
-    let base_dir = crate::app_base_dir(&handle)?;
+    let base_dir = crate::services::tauri::app_base_dir(&handle)?;
     Ok(get_token(&base_dir)?.is_some_and(|token| is_token_valid(&token)))
 }
 
 #[tauri::command]
 pub(crate) fn auth_logout(handle: AppHandle) -> Result<(), String> {
-    let base_dir = crate::app_base_dir(&handle)?;
+    let base_dir = crate::services::tauri::app_base_dir(&handle)?;
     clear_token(&base_dir)
 }
 
@@ -478,7 +478,7 @@ pub(crate) fn auth_logout(handle: AppHandle) -> Result<(), String> {
 /// URL would then overwrite the broken file
 #[tauri::command]
 pub(crate) fn get_sync_config<R: Runtime>(handle: AppHandle<R>) -> Result<SyncConfig, SyncError> {
-    let base_dir = crate::app_base_dir(&handle).map_err(SyncError::other)?;
+    let base_dir = crate::services::tauri::app_base_dir(&handle).map_err(SyncError::other)?;
     Ok(SyncConfig::load(&base_dir)?.unwrap_or_default())
 }
 
@@ -487,7 +487,7 @@ pub(crate) fn save_sync_config<R: Runtime>(
     handle: AppHandle<R>,
     config: SyncConfig,
 ) -> Result<(), String> {
-    let base_dir = crate::app_base_dir(&handle)?;
+    let base_dir = crate::services::tauri::app_base_dir(&handle)?;
     let config = SyncConfig {
         workers_url: normalize_workers_url(&config.workers_url)?,
         ..config
@@ -497,7 +497,7 @@ pub(crate) fn save_sync_config<R: Runtime>(
 
 #[tauri::command]
 pub(crate) fn is_sync_config_editable<R: Runtime>(handle: AppHandle<R>) -> Result<bool, String> {
-    let base_dir = crate::app_base_dir(&handle)?;
+    let base_dir = crate::services::tauri::app_base_dir(&handle)?;
     Ok(SyncConfig::is_editable(&base_dir))
 }
 

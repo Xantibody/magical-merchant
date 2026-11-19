@@ -46,12 +46,12 @@ impl Default for AppSyncState {
 #[cfg(not(target_os = "android"))]
 use magical_merchant_core::services::worker::desktop_http_client as http_client;
 
-/// Only Android bypasses the device's verifier. The reason is in `android_tls::sync_tls_config`
+/// Only Android bypasses the device's verifier. The reason is in `services::android_tls::sync_tls_config`
 #[cfg(target_os = "android")]
 fn http_client() -> Result<reqwest::Client, SyncError> {
     use magical_merchant_core::describe;
 
-    let tls = crate::android_tls::sync_tls_config()
+    let tls = crate::services::android_tls::sync_tls_config()
         .map_err(|e| SyncError::other(format!("TLS setup failed: {e}")))?;
     reqwest::Client::builder()
         .tls_backend_preconfigured(tls)
@@ -161,7 +161,7 @@ pub(crate) fn sync_status(state: State<'_, AppSyncState>) -> SyncStatusInfo {
 /// Has core check the login and build the client, then hands it to core's engine.
 /// `AppHandle` is used only to resolve the base dir; the TLS branch is `http_client`'s.
 async fn do_sync<R: Runtime>(handle: &AppHandle<R>) -> Result<SyncResult, SyncError> {
-    let base_dir = crate::app_base_dir(handle).map_err(SyncError::other)?;
+    let base_dir = crate::services::tauri::app_base_dir(handle).map_err(SyncError::other)?;
     // The repair before the scan is done by the engine inside the lock. That also covers
     // pressing sync after looking only at Scrawl, which never went through the listing's
     // `repair_once`

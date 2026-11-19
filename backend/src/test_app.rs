@@ -39,7 +39,7 @@ pub(crate) fn test_app() -> TestApp {
     let app = mock_app();
 
     assert_eq!(
-        crate::app_base_dir(app.handle()).unwrap(),
+        crate::services::tauri::app_base_dir(app.handle()).unwrap(),
         dir.path(),
         "the commands would not write under the temporary directory"
     );

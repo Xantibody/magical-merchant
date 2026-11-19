@@ -6,17 +6,12 @@
 // is not an option this crate has.
 #![allow(clippy::needless_pass_by_value)]
 
-#[cfg(target_os = "android")]
-mod android_context;
-#[cfg(target_os = "android")]
-mod android_tls;
 mod auth;
 mod capture;
 mod device;
 mod export;
-#[cfg(target_os = "macos")]
-mod location;
 mod place;
+mod services;
 mod sync;
 #[cfg(test)]
 mod test_app;
@@ -41,45 +36,10 @@ use magical_merchant_core::{
     NoteSummary, Provenance, Revision, ScrawlDays, SearchFilter, SearchHit, Source, TagUsage,
     TemplateDetail, TemplateSummary, VarLocale, Version, VersionStatus,
 };
-use tauri::{AppHandle, Emitter, Manager, Runtime};
+use services::tauri::{app_base_dir, off_main_thread};
+use services::widgets;
+use tauri::{AppHandle, Emitter, Runtime};
 use tauri_plugin_deep_link::DeepLinkExt as _;
-
-/// Moves reads that sweep every file off the main thread.
-///
-/// Synchronous commands run on the main thread. Listing, searching and backlinks
-/// grow with the number of notes and of days (10 to 30ms for a year's worth,
-/// several times that on a real device), and window input and events stop for that
-/// long. Run them on the blocking pool and return only the result to the main
-/// thread. `resolve_places` goes through here too, for a reason of its own: the
-/// geocoder answers on the main queue.
-async fn off_main_thread<T, F>(work: F) -> Result<T, String>
-where
-    T: Send + 'static,
-    F: FnOnce() -> Result<T, String> + Send + 'static,
-{
-    tauri::async_runtime::spawn_blocking(work)
-        .await
-        .map_err(|e| e.to_string())?
-}
-
-/// Where this app's data lives.
-///
-/// Notes, the sync settings and the token are all under here and nowhere else.
-///
-/// Debug builds alone can point it elsewhere with `MAGICAL_MERCHANT_DATA_DIR`. It
-/// matches the variable the CLI has had for a while (`cli/src/main.rs`), and it is
-/// the way in for trying a new feature without touching real records:
-/// `just sandbox` uses it. A shipped app has no need to move its data directory
-/// from an environment variable, so the whole branch is gone in release.
-pub(crate) fn app_base_dir<R: Runtime>(
-    handle: &AppHandle<R>,
-) -> Result<std::path::PathBuf, String> {
-    #[cfg(debug_assertions)]
-    if let Some(dir) = std::env::var_os("MAGICAL_MERCHANT_DATA_DIR") {
-        return Ok(std::path::PathBuf::from(dir));
-    }
-    handle.path().app_data_dir().map_err(|e| e.to_string())
-}
 
 fn parse_filename(filename: &str) -> Result<NoteFilename, String> {
     NoteFilename::parse(filename).map_err(|e| e.to_string())
@@ -364,7 +324,7 @@ fn save_template<R: Runtime>(
     let filename = parse_filename(&filename)?;
     magical_merchant_core::save_template(&base_dir, &filename, &body, &tags)
         .map_err(|e| e.to_string())?;
-    widget_updates::refresh_templates();
+    widgets::refresh_templates();
     Ok(())
 }
 
@@ -373,7 +333,7 @@ fn delete_template<R: Runtime>(handle: AppHandle<R>, filename: String) -> Result
     let base_dir = app_base_dir(&handle)?;
     let filename = parse_filename(&filename)?;
     magical_merchant_core::delete_template(&base_dir, &filename).map_err(|e| e.to_string())?;
-    widget_updates::refresh_templates();
+    widgets::refresh_templates();
     Ok(())
 }
 
@@ -456,7 +416,7 @@ fn create_from_template<R: Runtime>(
         },
     )
     .map_err(|e| e.to_string())?;
-    widget_updates::refresh_templates();
+    widgets::refresh_templates();
     Ok(created)
 }
 
@@ -775,7 +735,7 @@ fn delete_note<R: Runtime>(handle: AppHandle<R>, filename: String) -> Result<(),
     let filename = parse_filename(&filename)?;
     magical_merchant_core::delete_note(&base_dir, &filename).map_err(|e| e.to_string())?;
     // A template's {{prev}} may have pointed at the deleted note
-    widget_updates::refresh_templates();
+    widgets::refresh_templates();
     Ok(())
 }
 
@@ -889,22 +849,22 @@ pub fn run() {
             // There is a gap between starting to locate and the first fix coming
             // back. Asking on every save is too late, so start receiving at launch.
             #[cfg(target_os = "macos")]
-            location::start(app.handle());
+            services::core_location::start(app.handle());
 
             // The geocoder and the certificate verifier need a Context. The Activity
             // can be destroyed, so hold an Application Context of our own while one
             // is alive.
             #[cfg(target_os = "android")]
-            if let Err(e) = android_context::init() {
+            if let Err(e) = services::android::init() {
                 log::error!("android context init failed: {e}");
             }
 
             // Android's trust store is reachable only from Java, so the platform
             // verifier has to be initialised before any HTTPS request. Sync itself
-            // goes around it today (`android_tls::sync_tls_config`); the wiring
+            // goes around it today (`services::android_tls::sync_tls_config`); the wiring
             // stays so it works again once upstream #221 is fixed.
             #[cfg(target_os = "android")]
-            android_tls::init();
+            services::android_tls::init();
 
             Ok(())
         })

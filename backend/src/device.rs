@@ -49,7 +49,7 @@ pub(crate) fn get_context(client: ClientContext) -> DeviceContext {
 /// plugin answers on the front-end side, so this is only needed on macOS.
 #[cfg(target_os = "macos")]
 fn get_location() -> Option<Location> {
-    crate::location::latest()
+    crate::services::core_location::latest()
 }
 
 #[cfg(not(target_os = "macos"))]

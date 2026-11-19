@@ -64,7 +64,7 @@ pub(crate) fn sync_tls_config() -> Result<rustls::ClientConfig, rustls::Error> {
 }
 
 fn install() -> Result<(), jni::errors::Error> {
-    crate::android_context::with_context(|env, context| {
+    crate::services::android::with_context(|env, context| {
         rustls_platform_verifier::android::init_with_env(env, context)
     })
     .unwrap_or(Err(jni::errors::Error::NullPtr(

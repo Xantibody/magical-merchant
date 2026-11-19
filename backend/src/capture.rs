@@ -11,7 +11,8 @@
 use tauri::Manager as _;
 use tauri::{AppHandle, Emitter};
 
-use crate::{app_base_dir, device};
+use crate::device;
+use crate::services::tauri::app_base_dir;
 
 /// The floating window's label, and the capability that lets its page talk to the app.
 #[cfg(desktop)]
