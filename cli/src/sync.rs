@@ -1,6 +1,6 @@
 //! `magical-merchant sync`: syncs with Workers/R2 without opening the app.
 //!
-//! The syncing itself is one engine in core (`engine::run_with_progress`); what this
+//! The syncing itself is one engine in core (`run::run_with_progress`); what this
 //! does is resolve the config and the token, and turn progress into lines. Signing in
 //! is still the app's job: the CLI only reads the stored JWT (and renews it past half
 //! its lifetime, as the app does), and if it has expired it says to go back to the app.
@@ -8,10 +8,10 @@
 use std::path::Path;
 
 use magical_merchant_core::SyncError;
+use magical_merchant_core::domain::sync::SyncResult;
+use magical_merchant_core::domain::sync::run::{RoundProgress, run_with_progress};
 use magical_merchant_core::services::worker::{HttpClient, desktop_http_client};
-use magical_merchant_core::sync::SyncResult;
 use magical_merchant_core::sync::config::SyncConfig;
-use magical_merchant_core::sync::engine::{self, RoundProgress};
 use magical_merchant_core::sync::token;
 
 #[derive(Debug)]
@@ -109,7 +109,7 @@ pub(crate) async fn run(data_dir: &Path) -> anyhow::Result<()> {
         None => client,
     };
 
-    let result = engine::run_with_progress(&client, data_dir, |progress| {
+    let result = run_with_progress(&client, data_dir, |progress| {
         eprintln!("{}", round_line(&progress));
     })
     .await

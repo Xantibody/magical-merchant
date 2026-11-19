@@ -3,10 +3,6 @@
 #[cfg(feature = "sync-client")]
 pub mod config;
 #[cfg(feature = "sync-client")]
-pub mod engine;
-#[cfg(feature = "sync-client")]
-pub mod lock;
-#[cfg(feature = "sync-client")]
 pub mod token;
 
 pub use crate::domain::sync::{SyncIssue, SyncResult};

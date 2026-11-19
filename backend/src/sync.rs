@@ -1,6 +1,6 @@
 //! The Tauri side of sync.
 //!
-//! The engine itself is in core (`magical_merchant_core::sync::engine`); what stays here is
+//! The engine itself is in core (`magical_merchant_core::domain::sync::run`); what stays here is
 //! only the commands, the in-progress state, the events, and building the HTTP client.
 
 use std::future::Future;
@@ -8,9 +8,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, PoisonError};
 
 use magical_merchant_core::SyncError;
+use magical_merchant_core::domain::sync::{SyncResult, run};
 use magical_merchant_core::services::worker::HttpClient;
 use magical_merchant_core::sync::config::SyncConfig;
-use magical_merchant_core::sync::{SyncResult, engine, token};
+use magical_merchant_core::sync::token;
 use magical_merchant_core::utils::clock::UtcStamp;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, State};
@@ -198,7 +199,7 @@ async fn do_sync(handle: &AppHandle) -> Result<SyncResult, SyncError> {
         None => client,
     };
 
-    engine::run(&client, &base_dir).await
+    run::run(&client, &base_dir).await
 }
 
 #[cfg(test)]

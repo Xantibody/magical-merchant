@@ -226,7 +226,7 @@ struct NoteRead {
 /// notes unreadable, and the next launch tries again.
 ///
 /// This is not repair for the sake of sync. The engine does that inside
-/// `.sync.lock` (`core/src/sync/engine.rs`). What stays here is so that the listing
+/// `.sync.lock` (`core/src/domain/sync/run.rs`). What stays here is so that the listing
 /// does not show broken notes even for someone who never syncs.
 ///
 /// AIDEV-NOTE: this one at startup is outside the lock. The window where it overlaps the CLI's sync remains. To close it, `try_lock` and skip when it cannot be taken

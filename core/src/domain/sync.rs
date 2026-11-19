@@ -13,5 +13,7 @@ pub mod state;
 // MCP-only CLI need neither reqwest nor keyring, so the default does not pull them in.
 #[cfg(feature = "sync-client")]
 pub mod rounds;
+#[cfg(feature = "sync-client")]
+pub mod run;
 
 pub use result::{SyncIssue, SyncResult};
