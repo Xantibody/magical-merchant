@@ -9,6 +9,9 @@
 //! device the image has not reached, it shows as text.
 
 mod image;
+mod lookup;
+mod register;
 
 pub use image::{GLYPH_MAX_BYTES, GlyphData, GlyphFormat, GlyphName, GlyphSummary};
-pub(crate) use image::{filename, glyphs_dir, summarize_filename, validate};
+pub use lookup::{list_glyphs, read_glyph};
+pub use register::{delete_glyph, save_glyph};

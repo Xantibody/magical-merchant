@@ -3,7 +3,6 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
 pub mod domain;
-mod glyph;
 mod note;
 mod scrawl;
 pub mod services;
@@ -15,9 +14,11 @@ pub mod utils;
 mod error;
 pub mod search;
 
-pub use domain::glyphs::{GLYPH_MAX_BYTES, GlyphData, GlyphFormat, GlyphName, GlyphSummary};
+pub use domain::glyphs::{
+    GLYPH_MAX_BYTES, GlyphData, GlyphFormat, GlyphName, GlyphSummary, delete_glyph, list_glyphs,
+    read_glyph, save_glyph,
+};
 pub use error::{CoreError, SyncError, describe};
-pub use glyph::{delete_glyph, list_glyphs, read_glyph, save_glyph};
 pub use note::error::NoteError;
 pub use note::{
     BEFORE_RESTORE, DRAFT, NoteKind, NoteSummary, Revision, Snapshot, Version, VersionStatus,
