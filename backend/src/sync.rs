@@ -331,4 +331,23 @@ mod tests {
         // The round in flight still owns the flag
         assert!(state.is_syncing.load(Ordering::SeqCst));
     }
+
+    /// Without a Workers URL the round stops before the token is read, so a device never set
+    /// up does not open the OS keychain
+    #[test]
+    #[allow(
+        clippy::significant_drop_tightening,
+        reason = "a test app holds the data directory until the test ends"
+    )]
+    fn a_sync_with_no_workers_url_is_not_configured() {
+        let app = crate::test_app::test_app();
+
+        let refused = tauri::async_runtime::block_on(do_sync(&app.handle())).unwrap_err();
+
+        assert_eq!(refused.kind, "notConfigured");
+        assert_eq!(
+            refused.message,
+            "Sync is not set up. Add your Workers URL in Settings."
+        );
+    }
 }
