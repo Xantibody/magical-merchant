@@ -22,7 +22,6 @@ use std::path::{Path, PathBuf};
 /// that leaned on one would be leaning on domain code under another name.
 const OLD_MODULES: &[&str] = &[
     "crate::note",
-    "crate::scrawl",
     "crate::sync",
     "crate::search",
     "crate::tag_count",
@@ -43,7 +42,9 @@ const RULE_FILES: &[&str] = &[
 /// one takes its line out; a line that no longer matches anything fails the check.
 const ALLOWED: &[(&str, Rule, u32)] = &[
     ("src/note.rs", Rule::EntryHoldsOnlyModAndPubUse, 28),
-    ("src/scrawl.rs", Rule::EntryHoldsOnlyModAndPubUse, 27),
+    ("src/domain/scrawl/delete.rs", Rule::DomainUsesStdFs, 27),
+    ("src/domain/scrawl/journal.rs", Rule::DomainUsesStdFs, 27),
+    ("src/domain/scrawl/migrate.rs", Rule::DomainUsesStdFs, 27),
     ("src/sync.rs", Rule::EntryHoldsOnlyModAndPubUse, 32),
     ("src/utils/clock.rs", Rule::EntryHoldsOnlyModAndPubUse, 33),
     ("src/utils/place.rs", Rule::UtilsImportsServices, 31),

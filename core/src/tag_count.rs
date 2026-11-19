@@ -10,10 +10,9 @@ use serde::Serialize;
 
 use crate::domain::scrawl::day::DayLog;
 use crate::domain::scrawl::entry::strip_scrawl_prefix;
+use crate::domain::scrawl::journal::{list_scrawl_dates, read_raw};
 use crate::error::CoreError;
-use crate::list_scrawl_dates;
 use crate::note::Notes;
-use crate::scrawl::Scrawl;
 use crate::utils::clock::Day;
 use crate::utils::tags;
 
@@ -105,9 +104,8 @@ impl Tally {
 pub fn count_tags(base_dir: &Path) -> Result<Vec<TagUsage>, CoreError> {
     let mut tally = Tally::default();
 
-    let scrawl = Scrawl::new(base_dir.to_path_buf());
     for date in list_scrawl_dates(base_dir)? {
-        let Some(content) = scrawl.read_raw(date)? else {
+        let Some(content) = read_raw(base_dir, date)? else {
             continue;
         };
         // A tag starts with `#`, so a day without one has nothing to split

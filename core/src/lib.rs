@@ -4,7 +4,6 @@
 
 pub mod domain;
 mod note;
-mod scrawl;
 pub mod services;
 pub mod sync;
 mod tag_count;
@@ -18,6 +17,10 @@ pub use domain::glyphs::{
     read_glyph, save_glyph,
 };
 pub use domain::scrawl::entry::{ScrawlEntry, parse_scrawl_entry};
+pub use domain::scrawl::{
+    ScrawlDay, ScrawlDays, ScrawlDirMigration, delete_scrawl_entry, list_scrawl_dates,
+    migrate_scrawl_dir, read_scrawl, read_scrawl_days, save_scrawl_entry,
+};
 pub use domain::templates::{
     CreatedNote, TemplateDetail, TemplateSummary, VarLocale, create_note_from_template,
     delete_template, discard_template_draft, list_template_drafts, list_templates, read_template,
@@ -34,11 +37,6 @@ pub use note::{
     read_note_history, read_note_meta, read_note_version, relocate_conflict_copies,
     relocate_duplicate_ids, repair_notes, restore_note, restore_note_version, snapshot_note,
     update_note, update_note_meta, update_note_origin, update_note_view,
-};
-pub use scrawl::migrate::{ScrawlDirMigration, migrate_scrawl_dir};
-pub use scrawl::{
-    ScrawlDay, ScrawlDays, delete_scrawl_entry, list_scrawl_dates, read_scrawl, read_scrawl_days,
-    save_scrawl_entry,
 };
 pub use search::{
     HitKind, SearchFilter, SearchHit, browse_all, find_backlinks, recent_records, search_all,

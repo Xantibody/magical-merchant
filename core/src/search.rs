@@ -5,10 +5,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::domain::scrawl::day::DayLog;
 use crate::domain::scrawl::entry::strip_scrawl_prefix;
+use crate::domain::scrawl::journal::{list_scrawl_dates, read_raw};
 use crate::error::CoreError;
-use crate::list_scrawl_dates;
 use crate::note::{NoteKind, Notes};
-use crate::scrawl::Scrawl;
 use crate::utils::tags;
 use crate::utils::text::lowercase;
 
@@ -112,7 +111,6 @@ fn scrawl_hits(
     if !filter.takes(HitKind::Scrawl) {
         return Ok(hits);
     }
-    let scrawl = Scrawl::new(base_dir.to_path_buf());
     // Only a needle spanning a newline cannot use the per-day cutoff. In a CRLF file the
     // newlines inside an entry are normalized to "\n", so it is not a substring of the file.
     // With an empty needle the cutoff always passes, so the lowercasing would be wasted.
@@ -122,7 +120,7 @@ fn scrawl_hits(
         if !filter.covers(Some(date)) {
             continue;
         }
-        let Some(content) = scrawl.read_raw(date)? else {
+        let Some(content) = read_raw(base_dir, date)? else {
             continue;
         };
         // An entry's text is a substring of its day file, so if the whole file lacks it, no

@@ -1,36 +1,49 @@
-pub(crate) mod migrate;
-pub(crate) mod repository;
+//! Reading the journal back: which days have records, and what each day holds.
+//!
+//! It only reads, so a pre-rename `data/timeline/` is left for the writers to move.
 
-pub(crate) use repository::Scrawl;
-
+use std::fs;
+use std::io;
 use std::path::Path;
 
 use serde::Serialize;
 
+use super::day::{DayLog, SCRAWL_DIR, day_of_filename, scrawl_file_path};
 use crate::error::CoreError;
 use crate::utils::clock::Day;
-use crate::utils::device::{Context, Source};
+use crate::utils::paths::data_dir;
 
-/// Adds one line to today's file.
-///
-/// `source` is the entry point the writer names itself as; the app, the CLI and the widget all go
-/// through the same core function (the MCP server only reads Scrawl), so unless it is named here
-/// the records cannot tell them apart.
-pub fn save_scrawl_entry(
-    base_dir: &Path,
-    text: &str,
-    context: &Context,
-    source: Source,
-) -> Result<(), CoreError> {
-    Scrawl::new(base_dir.to_path_buf()).save_entry(text, context, source)
-}
-
+/// Every date that has a record, newest first.
 pub fn list_scrawl_dates(base_dir: &Path) -> Result<Vec<Day>, CoreError> {
-    Scrawl::new(base_dir.to_path_buf()).list_dates()
+    let scrawl_dir = data_dir(base_dir).join(SCRAWL_DIR);
+    if !scrawl_dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut dates: Vec<Day> = fs::read_dir(&scrawl_dir)?
+        .filter_map(Result::ok)
+        .filter_map(|e| day_of_filename(&e.file_name().to_string_lossy()))
+        .collect();
+
+    dates.sort_by(|a, b| b.cmp(a));
+    Ok(dates)
 }
 
 pub fn read_scrawl(base_dir: &Path, date: Day) -> Result<Vec<String>, CoreError> {
-    Scrawl::new(base_dir.to_path_buf()).read(date)
+    Ok(read_raw(base_dir, date)?
+        .map(|content| DayLog::parse(&content).expanded())
+        .unwrap_or_default())
+}
+
+/// Returns the day's file as is. `None` if it does not exist.
+/// No `exists()` check first: opening the file tells whether it can be read, and in a
+/// search over every date one stat per day adds up.
+pub(crate) fn read_raw(base_dir: &Path, date: Day) -> Result<Option<String>, CoreError> {
+    match fs::read_to_string(scrawl_file_path(base_dir, date)) {
+        Ok(content) => Ok(Some(content)),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e.into()),
+    }
 }
 
 /// What `read_scrawl_days` returns.
@@ -60,8 +73,7 @@ pub fn read_scrawl_days(
     recent: usize,
     extra: &[Day],
 ) -> Result<ScrawlDays, CoreError> {
-    let scrawl = Scrawl::new(base_dir.to_path_buf());
-    let dates = scrawl.list_dates()?;
+    let dates = list_scrawl_dates(base_dir)?;
     let mut wanted: Vec<Day> = dates.iter().take(recent).chain(extra).copied().collect();
     wanted.sort_unstable_by(|a, b| b.cmp(a));
     wanted.dedup();
@@ -70,28 +82,18 @@ pub fn read_scrawl_days(
         .map(|date| {
             Ok(ScrawlDay {
                 date,
-                entries: scrawl.read(date)?,
+                entries: read_scrawl(base_dir, date)?,
             })
         })
         .collect::<Result<_, CoreError>>()?;
     Ok(ScrawlDays { dates, days })
 }
 
-/// `raw` is the line as the writer read it (exactly the form `read_scrawl` returned).
-/// An index alone drifts with any append or sync that lands between the read and the write.
-pub fn delete_scrawl_entry(
-    base_dir: &Path,
-    date: Day,
-    index: usize,
-    raw: &str,
-) -> Result<(), CoreError> {
-    Scrawl::new(base_dir.to_path_buf()).delete_entry(date, index, raw)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
+    use crate::domain::scrawl::capture::save_scrawl_entry;
+    use crate::utils::device::{Context, Source};
     use tempfile::TempDir;
 
     fn mock_context() -> Context {
@@ -100,49 +102,6 @@ mod tests {
             is_charging: Some(false),
             ..Context::default()
         }
-    }
-
-    #[test]
-    fn test_save_scrawl_entry_creates_file() {
-        let tmp = TempDir::new().unwrap();
-        save_scrawl_entry(tmp.path(), "hello", &mock_context(), Source::App).unwrap();
-
-        let today = Day::today_local().ymd();
-        let file = tmp.path().join("data/scrawl").join(format!("{today}.md"));
-        assert!(file.exists());
-
-        let content = fs::read_to_string(&file).unwrap();
-        assert!(content.contains("hello"));
-        assert!(content.contains("battery"));
-    }
-
-    /// The app, the CLI and the widget all go through this one function (MCP only reads).
-    /// The `s` at the end of the line is the only later clue to which entry point wrote it.
-    #[test]
-    fn a_saved_entry_names_the_tool_that_wrote_it() {
-        let tmp = TempDir::new().unwrap();
-        save_scrawl_entry(tmp.path(), "hello", &mock_context(), Source::Widget).unwrap();
-
-        let today = Day::today_local().ymd();
-        let content =
-            fs::read_to_string(tmp.path().join("data/scrawl").join(format!("{today}.md"))).unwrap();
-        assert!(content.contains("\"s\":\"widget\""));
-    }
-
-    #[test]
-    fn test_save_scrawl_entry_appends() {
-        let tmp = TempDir::new().unwrap();
-        save_scrawl_entry(tmp.path(), "first", &mock_context(), Source::App).unwrap();
-        save_scrawl_entry(tmp.path(), "second", &mock_context(), Source::App).unwrap();
-
-        let today = Day::today_local().ymd();
-        let file = tmp.path().join("data/scrawl").join(format!("{today}.md"));
-        let content = fs::read_to_string(&file).unwrap();
-
-        let lines: Vec<&str> = content.lines().collect();
-        assert_eq!(lines.len(), 2);
-        assert!(lines[0].contains("first"));
-        assert!(lines[1].contains("second"));
     }
 
     #[test]
@@ -188,6 +147,41 @@ mod tests {
         let dates = list_scrawl_dates(tmp.path()).unwrap();
         assert_eq!(dates.len(), 1);
         assert_eq!(dates[0], Day::new(2026, 1, 15).unwrap());
+    }
+
+    /// Which file names count as a day. What the date parser lets through decides which
+    /// files the Scrawl screen and search can see.
+    #[test]
+    fn which_day_files_are_listed() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path().join("data").join(SCRAWL_DIR);
+        fs::create_dir_all(&dir).unwrap();
+        for name in [
+            "2026-03-20.md",
+            "2026-3-2.md",
+            "notes.md",
+            "2026-02-30.md",
+            "20260321.md",
+            "2026-03-22x.md",
+            " 2026-03-23.md",
+            "2026-03-24.txt",
+            "+2026-03-25.md",
+        ] {
+            fs::write(dir.join(name), "- [09:00:00] x\n").unwrap();
+        }
+
+        let dates: Vec<String> = list_scrawl_dates(tmp.path())
+            .unwrap()
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+
+        // Unpadded fields, a leading space and a `+` sign are let through; `2026-3-2.md` is
+        // listed as 2026-03-02 although no file of that name exists
+        assert_eq!(
+            dates,
+            vec!["2026-03-25", "2026-03-23", "2026-03-20", "2026-03-02"]
+        );
     }
 
     #[test]
