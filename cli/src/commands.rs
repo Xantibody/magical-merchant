@@ -54,7 +54,7 @@ pub(crate) fn list(data_dir: &Path) -> Result<Vec<Row>, CoreError> {
 }
 
 pub(crate) fn show(data_dir: &Path, filename: &NoteFilename) -> Result<String, CoreError> {
-    Ok(notes::read(data_dir, filename)?.body)
+    Ok(magical_merchant_core::open_note(data_dir, filename)?.body)
 }
 
 /// Accepts either `20260320_143045` or `20260320_143045.md`. The newest when omitted.
@@ -107,7 +107,7 @@ pub(crate) fn edit(
     scratch: &Path,
     open: impl FnOnce(&Path) -> Result<(), String>,
 ) -> Result<EditOutcome, EditError> {
-    let before = notes::read(data_dir, filename)?;
+    let before = magical_merchant_core::open_note(data_dir, filename)?;
     let scratch_file = scratch.join(filename.as_str());
     fs::create_dir_all(scratch).map_err(CoreError::from)?;
     fs::write(&scratch_file, &before.body).map_err(CoreError::from)?;

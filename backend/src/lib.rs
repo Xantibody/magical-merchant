@@ -271,10 +271,12 @@ async fn list_notes<R: Runtime>(handle: AppHandle<R>) -> Result<Vec<NoteSummary>
 fn read_note<R: Runtime>(handle: AppHandle<R>, filename: String) -> Result<NoteRead, String> {
     let base_dir = app_base_dir(&handle)?;
     let filename = parse_filename(&filename)?;
-    let body = magical_merchant_core::read_note_by_filename(&base_dir, &filename)
-        .map_err(|e| e.to_string())?;
-    let revision = Revision::of(&body).to_string();
-    Ok(NoteRead { body, revision })
+    let opened =
+        magical_merchant_core::open_note(&base_dir, &filename).map_err(|e| e.to_string())?;
+    Ok(NoteRead {
+        body: opened.body,
+        revision: opened.revision.to_string(),
+    })
 }
 
 #[tauri::command]

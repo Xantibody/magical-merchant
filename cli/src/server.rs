@@ -7,8 +7,8 @@ use magical_merchant_core::domain::device::{PlaceCache, place_key, place_names};
 use magical_merchant_core::utils::clock::Day;
 use magical_merchant_core::utils::frontmatter;
 use magical_merchant_core::{
-    DRAFT, GlyphFormat, GlyphName, NoteFilename, NoteKind, Provenance, Revision, Source,
-    parse_scrawl_entry,
+    DRAFT, GlyphFormat, GlyphName, NoteFilename, NoteKind, OpenedNote, Provenance, Revision,
+    Source, parse_scrawl_entry,
 };
 use rmcp::handler::server::tool::ToolRouter;
 use rmcp::handler::server::wrapper::{Json, Parameters};
@@ -332,12 +332,14 @@ impl McpServer {
         Parameters(param): Parameters<FilenameParam>,
     ) -> Result<Json<NoteOutput>, String> {
         let filename = parse_filename(&param.filename)?;
-        let notes::Read { body, revision } = notes::read(&self.data_dir, &filename).map_err(err)?;
-        let (kind, _) =
-            magical_merchant_core::locate_note(&self.data_dir, &filename).map_err(err)?;
-        // Broken frontmatter still returns the body. The list does the same: metadata that
-        // cannot be read is no reason to hide the body as well.
-        let meta = magical_merchant_core::read_note_meta(&self.data_dir, &filename).ok();
+        // Broken frontmatter still returns the body, with `meta` empty. The list does the
+        // same: metadata that cannot be read is no reason to hide the body as well.
+        let OpenedNote {
+            kind,
+            body,
+            revision,
+            meta,
+        } = magical_merchant_core::open_note(&self.data_dir, &filename).map_err(err)?;
         let cache = self.places();
         let context = meta.as_ref().and_then(|m| m.context.as_ref()).map(|ctx| {
             let place = ctx
@@ -670,9 +672,9 @@ impl McpServer {
             body: frontmatter::strip(&content).to_string(),
             // The revision to pass back when restoring. It is of the note's body as it
             // stands now, not of the saved copy's body
-            revision: notes::read(&self.data_dir, &filename)
+            revision: magical_merchant_core::open_note(&self.data_dir, &filename)
                 .ok()
-                .map(|r| r.revision.to_string()),
+                .map(|opened| opened.revision.to_string()),
         }))
     }
 
@@ -696,9 +698,9 @@ impl McpServer {
         Ok(Json(UpdatedNoteOutput {
             filename: filename.as_str().to_string(),
             snapshot: snapshot.map(Into::into),
-            revision: notes::read(&self.data_dir, &filename)
+            revision: magical_merchant_core::open_note(&self.data_dir, &filename)
                 .ok()
-                .map(|r| r.revision.to_string()),
+                .map(|opened| opened.revision.to_string()),
         }))
     }
 

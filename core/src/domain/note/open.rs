@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::domain::note::{NoteFilename, NoteFrontmatter, NoteKind};
+use crate::domain::note::{NoteFilename, NoteFrontmatter, NoteKind, Revision};
 use crate::services::files::{read_text, resolve_existing};
 use crate::utils::error::CoreError;
 use crate::utils::frontmatter;
@@ -35,6 +35,40 @@ pub fn locate_note(
             .to_string_lossy()
             .to_string(),
     ))
+}
+
+/// A note as one read of its file gives it.
+#[derive(Debug, Clone)]
+pub struct OpenedNote {
+    /// The directory it was found in.
+    pub kind: NoteKind,
+    /// The body, without the frontmatter.
+    pub body: String,
+    /// The fingerprint of `body`, to pass back when writing it.
+    pub revision: Revision,
+    /// The record in the frontmatter. `None` when it cannot be read: frontmatter that
+    /// does not parse is no reason to hide the body as well.
+    pub meta: Option<NoteFrontmatter>,
+}
+
+/// Open a note by its ID: where it lives, its body with the revision to write it back
+/// with, and its record, from one read of the file.
+///
+/// Fails as [`read_note_by_filename`] does: `NotFound` when no directory holds the ID,
+/// `Io` (`InvalidData`) when the bytes are not text.
+pub fn open_note(base_dir: &Path, filename: &NoteFilename) -> Result<OpenedNote, CoreError> {
+    let (kind, path) = locate_note(base_dir, filename)?;
+    let content = read_text(&path)?;
+    let body = frontmatter::strip(&content).to_string();
+    let meta = frontmatter::parse::<NoteFrontmatter>(&content)
+        .ok()
+        .map(|(fm, _)| fm);
+    Ok(OpenedNote {
+        kind,
+        revision: Revision::of(&body),
+        body,
+        meta,
+    })
 }
 
 /// Return the note's body. Frontmatter is a matter of the storage format and is not
@@ -120,6 +154,66 @@ mod tests {
 
         assert_eq!(meta.tags, vec!["sync"]);
         assert_eq!(meta.context.unwrap().battery, Some(50));
+    }
+
+    /// One read gives what the app, the CLI and the MCP each read separately before: the
+    /// kind, the body and its revision, and the record.
+    #[test]
+    fn opening_a_note_gives_its_kind_body_revision_and_record() {
+        let tmp = TempDir::new().unwrap();
+        let filename = create_draft(
+            tmp.path(),
+            NoteKind::Codex,
+            "# Title\nbody",
+            &["sync".to_string()],
+            &mock_context(),
+            Provenance::default(),
+        )
+        .unwrap();
+
+        let opened = open_note(tmp.path(), &filename).unwrap();
+
+        assert_eq!(opened.kind, NoteKind::Codex);
+        assert_eq!(opened.body, "# Title\nbody");
+        assert_eq!(opened.revision, Revision::of("# Title\nbody"));
+        assert_eq!(opened.meta.unwrap().tags, vec!["sync"]);
+    }
+
+    #[test]
+    fn a_note_with_a_broken_record_opens_with_its_body_and_no_record() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path().join("data/notes");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(
+            dir.join("20260101_120000.md"),
+            "---\ntime: [broken\n---\nbody",
+        )
+        .unwrap();
+        let filename = NoteFilename::parse("20260101_120000.md").unwrap();
+
+        let opened = open_note(tmp.path(), &filename).unwrap();
+
+        assert_eq!(opened.kind, NoteKind::Note);
+        assert_eq!(opened.body, "body");
+        assert!(opened.meta.is_none());
+    }
+
+    #[test]
+    fn opening_fails_as_reading_the_body_does() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path().join("data/notes");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("20260101_120000.md"), b"\xff\xfe").unwrap();
+        let garbled = NoteFilename::parse("20260101_120000.md").unwrap();
+        let missing = NoteFilename::parse("20260101_130000.md").unwrap();
+
+        let not_text = |e: &CoreError| matches!(e, CoreError::Io(io) if io.kind() == std::io::ErrorKind::InvalidData);
+        assert!(open_note(tmp.path(), &garbled).is_err_and(|e| not_text(&e)));
+        assert!(read_note_by_filename(tmp.path(), &garbled).is_err_and(|e| not_text(&e)));
+        assert!(matches!(
+            open_note(tmp.path(), &missing),
+            Err(CoreError::NotFound(_))
+        ));
     }
 
     #[test]

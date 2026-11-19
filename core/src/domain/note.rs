@@ -29,7 +29,7 @@ pub use history::{Snapshot, list_note_history, read_note_history, restore_note, 
 pub use id::NoteFilename;
 pub use kind::NoteKind;
 pub use list::list_notes;
-pub use open::{locate_note, read_note_by_filename, read_note_meta};
+pub use open::{OpenedNote, locate_note, open_note, read_note_by_filename, read_note_meta};
 pub use repair::repair_notes;
 pub use revision::Revision;
 pub use row::Summary as NoteSummary;
