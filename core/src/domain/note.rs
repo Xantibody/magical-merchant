@@ -5,6 +5,9 @@
 //! frontmatter key.
 
 mod create;
+mod delete;
+mod details;
+mod edit;
 pub(crate) mod file;
 pub(crate) mod id;
 pub(crate) mod kind;
@@ -14,6 +17,9 @@ mod revision;
 mod row;
 
 pub use create::{create_draft_codex, create_draft_note, create_note_at};
+pub use delete::delete_note;
+pub use details::{update_note_meta, update_note_origin, update_note_view};
+pub use edit::update_note;
 pub use file::{NoteFrontmatter, Provenance};
 pub use id::NoteFilename;
 pub use kind::NoteKind;

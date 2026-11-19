@@ -22,7 +22,8 @@ pub use domain::note::NoteFrontmatter as NoteMeta;
 pub use domain::note::Provenance;
 pub use domain::note::{
     NoteFilename, NoteKind, NoteSummary, Revision, create_draft_codex, create_draft_note,
-    create_note_at, list_notes, locate_note, read_note, read_note_by_filename, read_note_meta,
+    create_note_at, delete_note, list_notes, locate_note, read_note, read_note_by_filename,
+    read_note_meta, update_note, update_note_meta, update_note_origin, update_note_view,
 };
 pub use domain::scrawl::entry::{ScrawlEntry, parse_scrawl_entry};
 pub use domain::scrawl::{
@@ -37,12 +38,11 @@ pub use domain::templates::{
 pub use domain::templates::{TemplateToday, templates_today};
 pub use error::{CoreError, SyncError, describe};
 pub use note::{
-    BEFORE_RESTORE, DRAFT, Snapshot, Version, VersionStatus, commit_note_version, delete_note,
+    BEFORE_RESTORE, DRAFT, Snapshot, Version, VersionStatus, commit_note_version,
     delete_note_version, diff_note_versions, list_note_history, list_note_versions,
     note_version_status, promote_note_to_codex, read_note_history, read_note_version,
     relocate_conflict_copies, relocate_duplicate_ids, repair_notes, restore_note,
-    restore_note_version, snapshot_note, update_note, update_note_meta, update_note_origin,
-    update_note_view,
+    restore_note_version, snapshot_note,
 };
 pub use search::{
     HitKind, SearchFilter, SearchHit, browse_all, find_backlinks, recent_records, search_all,

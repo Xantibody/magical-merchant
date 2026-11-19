@@ -49,6 +49,9 @@ const RULE_FILES: &[&str] = &[
 const ALLOWED: &[(&str, Rule, u32)] = &[
     ("src/note.rs", Rule::EntryHoldsOnlyModAndPubUse, 28),
     ("src/domain/note/create.rs", Rule::DomainUsesStdFs, 28),
+    ("src/domain/note/delete.rs", Rule::DomainUsesStdFs, 28),
+    ("src/domain/note/details.rs", Rule::DomainUsesStdFs, 28),
+    ("src/domain/note/edit.rs", Rule::DomainUsesStdFs, 28),
     ("src/domain/note/list.rs", Rule::DomainUsesStdFs, 28),
     ("src/domain/note/open.rs", Rule::DomainUsesStdFs, 28),
     ("src/sync.rs", Rule::EntryHoldsOnlyModAndPubUse, 32),

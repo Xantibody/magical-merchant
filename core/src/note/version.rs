@@ -29,9 +29,11 @@ use sha2::{Digest, Sha256};
 use similar::{Algorithm, TextDiff};
 
 use crate::domain::note::kind::codex_dir;
-use crate::domain::note::{NoteFilename, NoteKind, Revision, locate_note, read_note_by_filename};
+use crate::domain::note::{
+    NoteFilename, NoteKind, Revision, locate_note, read_note_by_filename, update_note,
+};
 use crate::error::CoreError;
-use crate::note::repository::Notes;
+
 use crate::services::files::{ensure_dir, list_md_files, write_atomic};
 use crate::utils::clock::{Stamp, WallClock};
 use crate::utils::device::Context;
@@ -263,7 +265,7 @@ pub fn restore_note_version(
         }
     }
     commit_note_version(base_dir, filename, Some(BEFORE_RESTORE))?;
-    Notes::update(&path, &restored, context, expected)
+    update_note(&path, &restored, context, expected)
 }
 
 /// Delete one version. It exists for the "undo" right after a commit: a version is a mark
