@@ -1,13 +1,14 @@
 //! The commands the Templates screen and the ring call, and the ones that pin a template
 //! button on the Android home screen.
 
+use magical_merchant_core::domain::device::{ClientContext, probe_with_client};
 use magical_merchant_core::{
     CreatedNote, NoteFilename, Provenance, Source, TemplateDetail, TemplateSummary, VarLocale,
 };
 use tauri::{AppHandle, Runtime};
 
 use super::note::parse_filename;
-use crate::device::{self, ClientContext};
+use crate::services::core_location;
 use crate::services::tauri::app_base_dir;
 use crate::services::widgets;
 
@@ -125,7 +126,7 @@ pub(crate) fn create_from_template<R: Runtime>(
 ) -> Result<CreatedNote, String> {
     let base_dir = app_base_dir(&handle)?;
     let filename = parse_filename(&filename)?;
-    let context = device::get_context(client);
+    let context = probe_with_client(client, core_location::latest);
     let created = magical_merchant_core::create_note_from_template(
         &base_dir,
         &filename,

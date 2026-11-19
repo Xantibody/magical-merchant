@@ -1,10 +1,11 @@
 //! The commands the Scrawl screen, its input line and the floating one-line window call.
 
+use magical_merchant_core::domain::device::{ClientContext, probe_with_client};
 use magical_merchant_core::utils::clock::Day;
 use magical_merchant_core::{ScrawlDays, Source};
 use tauri::{AppHandle, Runtime};
 
-use crate::device::{self, ClientContext};
+use crate::services::core_location;
 use crate::services::tauri::{app_base_dir, off_main_thread};
 use crate::services::windows::tell_scrawl_captured;
 #[cfg(desktop)]
@@ -17,7 +18,7 @@ pub(crate) fn save_quick_capture<R: Runtime>(
     client: ClientContext,
 ) -> Result<(), String> {
     let base_dir = app_base_dir(&handle)?;
-    let context = device::get_context(client);
+    let context = probe_with_client(client, core_location::latest);
     magical_merchant_core::save_scrawl_entry(&base_dir, &text, &context, Source::App)
         .map_err(|e| e.to_string())
 }

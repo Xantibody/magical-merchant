@@ -5,9 +5,10 @@
 //! what a Shortcut run from Spotlight opens, and an empty one opens the one-line window
 //! instead. The widget's own links share the scheme and are read by neither.
 
+use magical_merchant_core::domain::device::{ClientContext, probe_with_client};
 use tauri::{AppHandle, Emitter};
 
-use crate::device;
+use crate::services::core_location;
 use crate::services::tauri::app_base_dir;
 #[cfg(desktop)]
 use crate::services::windows::show_capture_window;
@@ -92,7 +93,7 @@ fn scrawl_from_urls(app: &AppHandle, urls: &[url::Url]) {
         let app = app.clone();
         std::thread::spawn(move || {
             let saved = app_base_dir(&app).and_then(|dir| {
-                let context = device::get_context(device::ClientContext::default());
+                let context = probe_with_client(ClientContext::default(), core_location::latest);
                 magical_merchant_core::save_scrawl_entry(
                     &dir,
                     &text,

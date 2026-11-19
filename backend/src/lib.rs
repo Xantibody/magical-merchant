@@ -8,7 +8,6 @@
 
 mod app;
 mod commands;
-mod device;
 mod links;
 mod services;
 #[cfg(desktop)]

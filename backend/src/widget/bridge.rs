@@ -15,11 +15,12 @@ use jni::EnvUnowned;
 use jni::errors::LogErrorAndDefault;
 use jni::objects::{JClass, JString};
 use jni::sys::{JNI_FALSE, JNI_TRUE, jboolean};
+use magical_merchant_core::domain::device::{parse_client_context, probe_with_client};
 use magical_merchant_core::{Source, VarLocale};
 use std::path::Path;
 
 use super::summary;
-use crate::device;
+use crate::services::core_location;
 
 /// Anything arriving through this file was written from the home screen
 /// widget, so the value is fixed here rather than read out of `client_json`.
@@ -62,9 +63,9 @@ pub extern "system" fn Java_com_magical_1merchant_app_widget_WidgetBridge_saveQu
             // saved without the metadata rather than not saved at all.
             let client = client_json
                 .try_to_string(env)
-                .map(|json| device::parse_client_context(&json))
+                .map(|json| parse_client_context(&json))
                 .unwrap_or_default();
-            let context = device::get_context(client);
+            let context = probe_with_client(client, core_location::latest);
             let saved = magical_merchant_core::save_scrawl_entry(
                 Path::new(&base_dir),
                 &text,

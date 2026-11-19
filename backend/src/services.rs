@@ -4,7 +4,6 @@
 pub(crate) mod android;
 #[cfg(target_os = "android")]
 pub(crate) mod android_tls;
-#[cfg(target_os = "macos")]
 pub(crate) mod core_location;
 pub(crate) mod geocoder;
 #[cfg(not(target_os = "android"))]

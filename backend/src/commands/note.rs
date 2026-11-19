@@ -1,5 +1,6 @@
 //! The commands a Note's list, viewer and writing screen call.
 
+use magical_merchant_core::domain::device::{ClientContext, probe_with_client};
 use magical_merchant_core::utils::clock::Stamp;
 use magical_merchant_core::{
     NoteFilename, NoteKind, NoteMeta, NoteSummary, Provenance, Revision, Source,
@@ -7,7 +8,7 @@ use magical_merchant_core::{
 use tauri::{AppHandle, Runtime};
 
 use super::error::SaveError;
-use crate::device::{self, ClientContext};
+use crate::services::core_location;
 use crate::services::tauri::{app_base_dir, off_main_thread};
 use crate::services::widgets;
 
@@ -30,7 +31,7 @@ pub(crate) fn create_draft<R: Runtime>(
     kind: Option<NoteKind>,
 ) -> Result<String, String> {
     let base_dir = app_base_dir(&handle)?;
-    let context = device::get_context(client);
+    let context = probe_with_client(client, core_location::latest);
     // With an origin it is a promotion from a Scrawl entry. Record where it came
     // from in the frontmatter
     let provenance = Provenance {
@@ -75,7 +76,7 @@ pub(crate) fn update_draft<R: Runtime>(
 ) -> Result<String, SaveError> {
     let base_dir = app_base_dir(&handle).map_err(SaveError::other)?;
     let filename = parse_filename(&filename).map_err(SaveError::other)?;
-    let context = device::get_context(client);
+    let context = probe_with_client(client, core_location::latest);
     let expected = Revision::from(revision);
     magical_merchant_core::update_note(&base_dir, &filename, &body, &context, Some(&expected))
         .map(|r| r.to_string())

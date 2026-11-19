@@ -1,11 +1,12 @@
 //! The commands a Codex adds to a Note: turning one into a Codex, and its versions.
 
+use magical_merchant_core::domain::device::{ClientContext, probe_with_client};
 use magical_merchant_core::{Revision, Version, VersionStatus};
 use tauri::{AppHandle, Runtime};
 
 use super::error::SaveError;
 use super::note::parse_filename;
-use crate::device::{self, ClientContext};
+use crate::services::core_location;
 use crate::services::tauri::app_base_dir;
 
 /// Turns a Note into a Codex. The ID does not change. There is no way back.
@@ -81,7 +82,7 @@ pub(crate) fn restore_note_version<R: Runtime>(
 ) -> Result<String, SaveError> {
     let base_dir = app_base_dir(&handle).map_err(SaveError::other)?;
     let filename = parse_filename(&filename).map_err(SaveError::other)?;
-    let context = device::get_context(client);
+    let context = probe_with_client(client, core_location::latest);
     let expected = Revision::from(revision);
     magical_merchant_core::restore_note_version(
         &base_dir,
