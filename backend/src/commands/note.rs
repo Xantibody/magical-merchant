@@ -12,10 +12,6 @@ use crate::services::core_location;
 use crate::services::tauri::{app_base_dir, off_main_thread};
 use crate::services::widgets;
 
-pub(crate) fn parse_filename(filename: &str) -> Result<NoteFilename, String> {
-    NoteFilename::parse(filename).map_err(|e| e.to_string())
-}
-
 /// `kind` names the directory: `codex` creates a document that keeps committed
 /// versions. Left out, it is an ordinary note.
 ///
@@ -29,7 +25,7 @@ pub(crate) fn create_draft<R: Runtime>(
     client: ClientContext,
     origin: Option<String>,
     kind: Option<NoteKind>,
-) -> Result<String, String> {
+) -> Result<String, CommandError> {
     let base_dir = app_base_dir(&handle)?;
     let context = probe_with_client(client, core_location::latest);
     // With an origin it is a promotion from a Scrawl entry. Record where it came
@@ -48,7 +44,7 @@ pub(crate) fn create_draft<R: Runtime>(
         provenance,
     )
     .map(|filename| filename.as_str().to_string())
-    .map_err(|e| e.to_string())
+    .map_err(CommandError::from)
 }
 
 /// `revision` is the fingerprint of the body `read_note` returned.
@@ -74,8 +70,8 @@ pub(crate) fn update_draft<R: Runtime>(
     client: ClientContext,
     revision: String,
 ) -> Result<String, CommandError> {
-    let base_dir = app_base_dir(&handle).map_err(CommandError::other)?;
-    let filename = parse_filename(&filename).map_err(CommandError::other)?;
+    let base_dir = app_base_dir(&handle)?;
+    let filename = NoteFilename::parse(&filename)?;
     let context = probe_with_client(client, core_location::latest);
     let expected = Revision::from(revision);
     magical_merchant_core::update_note(&base_dir, &filename, &body, &context, Some(&expected))
@@ -121,12 +117,12 @@ pub(crate) fn repair_once(base_dir: &std::path::Path) {
 #[tauri::command]
 pub(crate) async fn list_notes<R: Runtime>(
     handle: AppHandle<R>,
-) -> Result<Vec<NoteSummary>, String> {
+) -> Result<Vec<NoteSummary>, CommandError> {
     let base_dir = app_base_dir(&handle)?;
     off_main_thread(move || {
         repair_once(&base_dir);
 
-        magical_merchant_core::list_notes(&base_dir).map_err(|e| e.to_string())
+        magical_merchant_core::list_notes(&base_dir).map_err(CommandError::from)
     })
     .await
 }
@@ -135,11 +131,10 @@ pub(crate) async fn list_notes<R: Runtime>(
 pub(crate) fn read_note<R: Runtime>(
     handle: AppHandle<R>,
     filename: String,
-) -> Result<NoteRead, String> {
+) -> Result<NoteRead, CommandError> {
     let base_dir = app_base_dir(&handle)?;
-    let filename = parse_filename(&filename)?;
-    let opened =
-        magical_merchant_core::open_note(&base_dir, &filename).map_err(|e| e.to_string())?;
+    let filename = NoteFilename::parse(&filename)?;
+    let opened = magical_merchant_core::open_note(&base_dir, &filename)?;
     Ok(NoteRead {
         body: opened.body,
         revision: opened.revision.to_string(),
@@ -150,10 +145,10 @@ pub(crate) fn read_note<R: Runtime>(
 pub(crate) fn read_note_meta<R: Runtime>(
     handle: AppHandle<R>,
     filename: String,
-) -> Result<NoteMeta, String> {
+) -> Result<NoteMeta, CommandError> {
     let base_dir = app_base_dir(&handle)?;
-    let filename = parse_filename(&filename)?;
-    magical_merchant_core::read_note_meta(&base_dir, &filename).map_err(|e| e.to_string())
+    let filename = NoteFilename::parse(&filename)?;
+    magical_merchant_core::read_note_meta(&base_dir, &filename).map_err(CommandError::from)
 }
 
 #[tauri::command]
@@ -162,14 +157,14 @@ pub(crate) fn update_note_meta<R: Runtime>(
     filename: String,
     time: String,
     tags: Vec<String>,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     let base_dir = app_base_dir(&handle)?;
-    let filename = parse_filename(&filename)?;
+    let filename = NoteFilename::parse(&filename)?;
     // Take RFC 3339 with an offset. With a bare date and time, the same input would
     // point at a different instant as soon as the device time zone changed
-    let time = Stamp::parse_strict(&time).map_err(|e| e.to_string())?;
+    let time = Stamp::parse_strict(&time)?;
     magical_merchant_core::update_note_meta(&base_dir, &filename, time, &tags)
-        .map_err(|e| e.to_string())
+        .map_err(CommandError::from)
 }
 
 /// Rewrites the view mode only. `None` goes back to the default (the editor).
@@ -178,11 +173,11 @@ pub(crate) fn set_note_view<R: Runtime>(
     handle: AppHandle<R>,
     filename: String,
     view: Option<String>,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     let base_dir = app_base_dir(&handle)?;
-    let filename = parse_filename(&filename)?;
+    let filename = NoteFilename::parse(&filename)?;
     magical_merchant_core::update_note_view(&base_dir, &filename, view.as_deref())
-        .map_err(|e| e.to_string())
+        .map_err(CommandError::from)
 }
 
 /// Rewrites only the link to the entry it was promoted from. `None` unties it.
@@ -191,21 +186,21 @@ pub(crate) fn set_note_origin<R: Runtime>(
     handle: AppHandle<R>,
     filename: String,
     origin: Option<String>,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     let base_dir = app_base_dir(&handle)?;
-    let filename = parse_filename(&filename)?;
+    let filename = NoteFilename::parse(&filename)?;
     magical_merchant_core::update_note_origin(&base_dir, &filename, origin.as_deref())
-        .map_err(|e| e.to_string())
+        .map_err(CommandError::from)
 }
 
 #[tauri::command]
 pub(crate) fn delete_note<R: Runtime>(
     handle: AppHandle<R>,
     filename: String,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     let base_dir = app_base_dir(&handle)?;
-    let filename = parse_filename(&filename)?;
-    magical_merchant_core::delete_note(&base_dir, &filename).map_err(|e| e.to_string())?;
+    let filename = NoteFilename::parse(&filename)?;
+    magical_merchant_core::delete_note(&base_dir, &filename)?;
     // A template's {{prev}} may have pointed at the deleted note
     widgets::refresh_templates();
     Ok(())
@@ -401,7 +396,7 @@ mod tests {
     }
 
     #[test]
-    fn update_note_meta_refuses_a_time_without_an_offset() {
+    fn update_note_meta_refuses_a_time_without_an_offset_as_other() {
         let app = test_app();
         let filename = create(&app, "body", None);
         let before = read_note_meta(app.handle(), filename.clone()).unwrap();
@@ -411,12 +406,26 @@ mod tests {
             filename.clone(),
             "2026-01-01T10:00:00".to_string(),
             vec![],
-        );
+        )
+        .unwrap_err();
 
-        assert!(refused.is_err_and(|message| !message.is_empty()));
+        assert_eq!(refused.kind, "other");
+        assert!(!refused.message.is_empty());
         assert_eq!(
             read_note_meta(app.handle(), filename).unwrap().time,
             before.time
         );
+    }
+
+    /// Every command now refuses with a kind: reading a note that is gone says so.
+    #[test]
+    fn read_note_of_a_deleted_note_is_refused_as_missing() {
+        let app = test_app();
+        let filename = create(&app, "body", None);
+        delete_note(app.handle(), filename.clone()).unwrap();
+
+        let refused = read_note(app.handle(), filename).unwrap_err();
+
+        assert_eq!(refused.kind, "missing");
     }
 }

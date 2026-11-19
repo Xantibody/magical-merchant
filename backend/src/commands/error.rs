@@ -1,5 +1,6 @@
 //! How a refused command crosses to the webview.
 
+use magical_merchant_core::utils::clock::ClockError;
 use magical_merchant_core::{CoreError, SyncError};
 
 /// A refused command, as `{ kind, message }`. The frontend branches on the kind.
@@ -59,6 +60,13 @@ impl From<SyncError> for CommandError {
             kind: e.kind,
             message: e.message,
         }
+    }
+}
+
+/// A time or a day the command could not read.
+impl From<ClockError> for CommandError {
+    fn from(e: ClockError) -> Self {
+        Self::other(e.to_string())
     }
 }
 

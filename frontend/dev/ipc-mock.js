@@ -288,13 +288,13 @@ const bodyTags = (body) => {
 const noteTags = (note) => foldUnique([...(note.tags ?? []), ...bodyTags(note.body)]);
 
 /**
- * `update_draft` の失敗。本物は Rust 側の JSON がそのまま届くので `kind` を持つ
- * ただのオブジェクトだが、Error に同じキーを生やしても `isStaleSave` の見る形は
- * 変わらない(`typeof` が object で `kind` を持つ)。
- * @param {"stale" | "broken" | "missing" | "notText" | "other"} kind
+ * How every command refuses: `{ kind, message }`, as the Rust side's `CommandError`. The real
+ * one arrives as a plain object; an Error with the same two keys reads the same to the app
+ * (an object with `kind`, and `message` for the words).
+ * @param {string} kind
  * @param {string} message
  */
-const saveError = (kind, message) => Object.assign(new Error(message), { kind });
+const commandError = (kind, message) => Object.assign(new Error(message), { kind });
 
 /**
  * The two body writes take `revision` as a required argument, and Tauri refuses a call
@@ -557,7 +557,7 @@ const unifiedDiff = (from, to, fromName, toName) => {
   const codexOf = (filename) => {
     const note = notes.get(filename);
     if (!note || note.kind !== "codex") {
-      throw saveError("other", `not a codex: ${filename}`);
+      throw commandError("other", `not a codex: ${filename}`);
     }
     return note;
   };
@@ -570,7 +570,7 @@ const unifiedDiff = (from, to, fromName, toName) => {
     codexOf(filename);
     const version = (versions.get(filename) ?? []).find((v) => v.id === id);
     if (!version) {
-      throw saveError("other", `version not found: ${id}`);
+      throw commandError("missing", `version not found: ${id}`);
     }
     return version;
   };
@@ -897,7 +897,7 @@ const unifiedDiff = (from, to, fromName, toName) => {
       const lines = scrawl.get(date) ?? [];
       // core と同じ守り。index が読んだ行を指していなければ消さない
       if (lines[index] !== raw) {
-        throw new Error(`Stale: scrawl entry ${index}`);
+        throw commandError("stale", `Stale: scrawl entry ${index}`);
       }
       lines.splice(index, 1);
     },
@@ -1110,7 +1110,7 @@ const unifiedDiff = (from, to, fromName, toName) => {
       await delay(30);
       const note = notes.get(filename);
       if (!note) {
-        throw new Error("note not found");
+        throw commandError("missing", `Not found: ${filename}`);
       }
       return {
         time: note.time,
@@ -1206,7 +1206,7 @@ const unifiedDiff = (from, to, fromName, toName) => {
       const note = codexOf(filename);
       const restored = versionOf(filename, id).body;
       if (revision !== revisionOf(note.body)) {
-        throw saveError("stale", `Stale: ${filename} changed since it was read`);
+        throw commandError("stale", `Stale: ${filename} changed since it was read`);
       }
       // 戻す前の下書きを先に刻む。戻したことも戻せる
       const time = new Date().toISOString();
@@ -1247,11 +1247,11 @@ const unifiedDiff = (from, to, fromName, toName) => {
       const note = notes.get(filename);
       if (!note) {
         // core はノートを作り直さない。消えたノートへの保存は探す段で断られる
-        throw saveError("missing", `Not found: ${filename}`);
+        throw commandError("missing", `Not found: ${filename}`);
       }
       // The same check core makes: if someone rewrote it after the read, nothing goes over it
       if (revision !== revisionOf(note.body)) {
-        throw saveError("stale", `Stale: ${filename} changed since it was read`);
+        throw commandError("stale", `Stale: ${filename} changed since it was read`);
       }
       note.body = body;
       // core と同じく、本文の保存だけが更新日時を打つ
@@ -1267,7 +1267,7 @@ const unifiedDiff = (from, to, fromName, toName) => {
       await delay(30);
       const template = templates.get(filename);
       if (!template) {
-        throw new Error("template not found");
+        throw commandError("missing", "template not found");
       }
       return { body: template.body, tags: template.tags };
     },
@@ -1286,10 +1286,10 @@ const unifiedDiff = (from, to, fromName, toName) => {
     rename_template: ({ from, to }) => {
       const template = templates.get(from);
       if (!template) {
-        throw new Error("template not found");
+        throw commandError("missing", "template not found");
       }
       if (templates.has(to)) {
-        throw new Error("template already exists");
+        throw commandError("other", "template already exists");
       }
       templates.delete(from);
       templates.set(to, template);
@@ -1327,7 +1327,7 @@ const unifiedDiff = (from, to, fromName, toName) => {
     /** @param {{ filename: string }} args */
     pin_template_widget: ({ filename }) => {
       if (!templates.has(filename)) {
-        throw new Error("template not found");
+        throw commandError("missing", "template not found");
       }
       return false;
     },
@@ -1335,7 +1335,7 @@ const unifiedDiff = (from, to, fromName, toName) => {
     create_from_template: ({ filename, locale }) => {
       const template = templates.get(filename);
       if (!template) {
-        throw new Error("template not found");
+        throw commandError("missing", "template not found");
       }
       const name = filename.replace(/\.md$/u, "");
 
@@ -1375,10 +1375,10 @@ const unifiedDiff = (from, to, fromName, toName) => {
     save_glyph: ({ name, format, dataBase64 }) => {
       // core と同じ規則。通らない名前は本物でも保存できない
       if (!/^[a-z0-9][a-z0-9_+-]{0,31}$/u.test(name)) {
-        throw new Error(`Invalid path: ${name}`);
+        throw commandError("other", `Invalid path: ${name}`);
       }
       if (format !== "png" && format !== "svg") {
-        throw new Error(`Parse error: unsupported glyph format: ${format}`);
+        throw commandError("broken", `Parse error: unsupported glyph format: ${format}`);
       }
       const mime = format === "png" ? "image/png" : "image/svg+xml";
       glyphs.set(name, { format, url: `data:${mime};base64,${dataBase64}` });

@@ -23,17 +23,19 @@ pub(crate) fn get_sync_config<R: Runtime>(
 pub(crate) fn save_sync_config<R: Runtime>(
     handle: AppHandle<R>,
     config: SyncConfig,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     let base_dir = app_base_dir(&handle)?;
     let config = SyncConfig {
         workers_url: normalize_workers_url(&config.workers_url)?,
         ..config
     };
-    config.save(&base_dir)
+    config.save(&base_dir).map_err(CommandError::from)
 }
 
 #[tauri::command]
-pub(crate) fn is_sync_config_editable<R: Runtime>(handle: AppHandle<R>) -> Result<bool, String> {
+pub(crate) fn is_sync_config_editable<R: Runtime>(
+    handle: AppHandle<R>,
+) -> Result<bool, CommandError> {
     let base_dir = app_base_dir(&handle)?;
     Ok(SyncConfig::is_editable(&base_dir))
 }
@@ -70,12 +72,10 @@ mod tests {
     fn save_sync_config_refuses_a_url_that_is_not_http_in_words() {
         let app = test_app();
 
-        let refused = save_sync_config(app.handle(), with_url("ftp://example.com"));
+        let refused = save_sync_config(app.handle(), with_url("ftp://example.com")).unwrap_err();
 
-        assert_eq!(
-            refused,
-            Err("URL must start with https:// or http://".to_string())
-        );
+        assert_eq!(refused.kind, "other");
+        assert_eq!(refused.message, "URL must start with https:// or http://");
         assert!(!app.base().join("sync-config.json").exists());
     }
 

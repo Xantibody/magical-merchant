@@ -1,11 +1,10 @@
 //! The commands a Codex adds to a Note: turning one into a Codex, and its versions.
 
 use magical_merchant_core::domain::device::{ClientContext, probe_with_client};
-use magical_merchant_core::{Revision, Version, VersionStatus};
+use magical_merchant_core::{NoteFilename, Revision, Version, VersionStatus};
 use tauri::{AppHandle, Runtime};
 
 use super::error::CommandError;
-use super::note::parse_filename;
 use crate::services::core_location;
 use crate::services::tauri::app_base_dir;
 
@@ -14,10 +13,10 @@ use crate::services::tauri::app_base_dir;
 pub(crate) fn promote_note_to_codex<R: Runtime>(
     handle: AppHandle<R>,
     filename: String,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     let base_dir = app_base_dir(&handle)?;
-    let filename = parse_filename(&filename)?;
-    magical_merchant_core::promote_note_to_codex(&base_dir, &filename).map_err(|e| e.to_string())
+    let filename = NoteFilename::parse(&filename)?;
+    magical_merchant_core::promote_note_to_codex(&base_dir, &filename).map_err(CommandError::from)
 }
 
 /// Commits the current draft as a version. Called only when a person asks to
@@ -27,21 +26,21 @@ pub(crate) fn commit_note_version<R: Runtime>(
     handle: AppHandle<R>,
     filename: String,
     message: Option<String>,
-) -> Result<Version, String> {
+) -> Result<Version, CommandError> {
     let base_dir = app_base_dir(&handle)?;
-    let filename = parse_filename(&filename)?;
+    let filename = NoteFilename::parse(&filename)?;
     magical_merchant_core::commit_note_version(&base_dir, &filename, message.as_deref())
-        .map_err(|e| e.to_string())
+        .map_err(CommandError::from)
 }
 
 #[tauri::command]
 pub(crate) fn list_note_versions<R: Runtime>(
     handle: AppHandle<R>,
     filename: String,
-) -> Result<Vec<Version>, String> {
+) -> Result<Vec<Version>, CommandError> {
     let base_dir = app_base_dir(&handle)?;
-    let filename = parse_filename(&filename)?;
-    magical_merchant_core::list_note_versions(&base_dir, &filename).map_err(|e| e.to_string())
+    let filename = NoteFilename::parse(&filename)?;
+    magical_merchant_core::list_note_versions(&base_dir, &filename).map_err(CommandError::from)
 }
 
 #[tauri::command]
@@ -49,10 +48,10 @@ pub(crate) fn read_note_version<R: Runtime>(
     handle: AppHandle<R>,
     filename: String,
     id: String,
-) -> Result<String, String> {
+) -> Result<String, CommandError> {
     let base_dir = app_base_dir(&handle)?;
-    let filename = parse_filename(&filename)?;
-    magical_merchant_core::read_note_version(&base_dir, &filename, &id).map_err(|e| e.to_string())
+    let filename = NoteFilename::parse(&filename)?;
+    magical_merchant_core::read_note_version(&base_dir, &filename, &id).map_err(CommandError::from)
 }
 
 /// Unified diff from version `from` to the current draft. Two versions are never
@@ -62,11 +61,11 @@ pub(crate) fn diff_note_versions<R: Runtime>(
     handle: AppHandle<R>,
     filename: String,
     from: String,
-) -> Result<String, String> {
+) -> Result<String, CommandError> {
     let base_dir = app_base_dir(&handle)?;
-    let filename = parse_filename(&filename)?;
+    let filename = NoteFilename::parse(&filename)?;
     magical_merchant_core::diff_note_versions(&base_dir, &filename, &from, None)
-        .map_err(|e| e.to_string())
+        .map_err(CommandError::from)
 }
 
 /// Makes a version's body the draft. `revision` means what it means in
@@ -80,8 +79,8 @@ pub(crate) fn restore_note_version<R: Runtime>(
     client: ClientContext,
     revision: String,
 ) -> Result<String, CommandError> {
-    let base_dir = app_base_dir(&handle).map_err(CommandError::other)?;
-    let filename = parse_filename(&filename).map_err(CommandError::other)?;
+    let base_dir = app_base_dir(&handle)?;
+    let filename = NoteFilename::parse(&filename)?;
     let context = probe_with_client(client, core_location::latest);
     let expected = Revision::from(revision);
     magical_merchant_core::restore_note_version(
@@ -102,20 +101,21 @@ pub(crate) fn delete_note_version<R: Runtime>(
     handle: AppHandle<R>,
     filename: String,
     id: String,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     let base_dir = app_base_dir(&handle)?;
-    let filename = parse_filename(&filename)?;
-    magical_merchant_core::delete_note_version(&base_dir, &filename, &id).map_err(|e| e.to_string())
+    let filename = NoteFilename::parse(&filename)?;
+    magical_merchant_core::delete_note_version(&base_dir, &filename, &id)
+        .map_err(CommandError::from)
 }
 
 #[tauri::command]
 pub(crate) fn note_version_status<R: Runtime>(
     handle: AppHandle<R>,
     filename: String,
-) -> Result<VersionStatus, String> {
+) -> Result<VersionStatus, CommandError> {
     let base_dir = app_base_dir(&handle)?;
-    let filename = parse_filename(&filename)?;
-    magical_merchant_core::note_version_status(&base_dir, &filename).map_err(|e| e.to_string())
+    let filename = NoteFilename::parse(&filename)?;
+    magical_merchant_core::note_version_status(&base_dir, &filename).map_err(CommandError::from)
 }
 
 /// What the webview gets back, called through a mock app over a temporary data directory.

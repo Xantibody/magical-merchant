@@ -7,7 +7,7 @@ use magical_merchant_core::{
 };
 use tauri::{AppHandle, Runtime};
 
-use super::note::parse_filename;
+use super::error::CommandError;
 use crate::services::core_location;
 use crate::services::tauri::app_base_dir;
 use crate::services::widgets;
@@ -15,19 +15,19 @@ use crate::services::widgets;
 #[tauri::command]
 pub(crate) fn list_templates<R: Runtime>(
     handle: AppHandle<R>,
-) -> Result<Vec<TemplateSummary>, String> {
+) -> Result<Vec<TemplateSummary>, CommandError> {
     let base_dir = app_base_dir(&handle)?;
-    magical_merchant_core::list_templates(&base_dir).map_err(|e| e.to_string())
+    magical_merchant_core::list_templates(&base_dir).map_err(CommandError::from)
 }
 
 #[tauri::command]
 pub(crate) fn read_template<R: Runtime>(
     handle: AppHandle<R>,
     filename: String,
-) -> Result<TemplateDetail, String> {
+) -> Result<TemplateDetail, CommandError> {
     let base_dir = app_base_dir(&handle)?;
-    let filename = parse_filename(&filename)?;
-    magical_merchant_core::read_template(&base_dir, &filename).map_err(|e| e.to_string())
+    let filename = NoteFilename::parse(&filename)?;
+    magical_merchant_core::read_template(&base_dir, &filename).map_err(CommandError::from)
 }
 
 #[tauri::command]
@@ -36,11 +36,10 @@ pub(crate) fn save_template<R: Runtime>(
     filename: String,
     body: String,
     tags: Vec<String>,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     let base_dir = app_base_dir(&handle)?;
-    let filename = parse_filename(&filename)?;
-    magical_merchant_core::save_template(&base_dir, &filename, &body, &tags)
-        .map_err(|e| e.to_string())?;
+    let filename = NoteFilename::parse(&filename)?;
+    magical_merchant_core::save_template(&base_dir, &filename, &body, &tags)?;
     widgets::refresh_templates();
     Ok(())
 }
@@ -49,10 +48,10 @@ pub(crate) fn save_template<R: Runtime>(
 pub(crate) fn delete_template<R: Runtime>(
     handle: AppHandle<R>,
     filename: String,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     let base_dir = app_base_dir(&handle)?;
-    let filename = parse_filename(&filename)?;
-    magical_merchant_core::delete_template(&base_dir, &filename).map_err(|e| e.to_string())?;
+    let filename = NoteFilename::parse(&filename)?;
+    magical_merchant_core::delete_template(&base_dir, &filename)?;
     widgets::refresh_templates();
     Ok(())
 }
@@ -63,11 +62,11 @@ pub(crate) fn rename_template<R: Runtime>(
     handle: AppHandle<R>,
     from: String,
     to: String,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     let base_dir = app_base_dir(&handle)?;
-    let from = parse_filename(&from)?;
-    let to = parse_filename(&to)?;
-    magical_merchant_core::rename_template(&base_dir, &from, &to).map_err(|e| e.to_string())
+    let from = NoteFilename::parse(&from)?;
+    let to = NoteFilename::parse(&to)?;
+    magical_merchant_core::rename_template(&base_dir, &from, &to).map_err(CommandError::from)
 }
 
 /// Keeps the edit in progress beside the template. Returns whether a draft is left: one
@@ -78,39 +77,39 @@ pub(crate) fn save_template_draft<R: Runtime>(
     filename: String,
     body: String,
     tags: Vec<String>,
-) -> Result<bool, String> {
+) -> Result<bool, CommandError> {
     let base_dir = app_base_dir(&handle)?;
-    let filename = parse_filename(&filename)?;
+    let filename = NoteFilename::parse(&filename)?;
     magical_merchant_core::save_template_draft(&base_dir, &filename, &TemplateDetail { body, tags })
-        .map_err(|e| e.to_string())
+        .map_err(CommandError::from)
 }
 
 #[tauri::command]
 pub(crate) fn read_template_draft<R: Runtime>(
     handle: AppHandle<R>,
     filename: String,
-) -> Result<Option<TemplateDetail>, String> {
+) -> Result<Option<TemplateDetail>, CommandError> {
     let base_dir = app_base_dir(&handle)?;
-    let filename = parse_filename(&filename)?;
-    magical_merchant_core::read_template_draft(&base_dir, &filename).map_err(|e| e.to_string())
+    let filename = NoteFilename::parse(&filename)?;
+    magical_merchant_core::read_template_draft(&base_dir, &filename).map_err(CommandError::from)
 }
 
 #[tauri::command]
 pub(crate) fn discard_template_draft<R: Runtime>(
     handle: AppHandle<R>,
     filename: String,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     let base_dir = app_base_dir(&handle)?;
-    let filename = parse_filename(&filename)?;
-    magical_merchant_core::discard_template_draft(&base_dir, &filename).map_err(|e| e.to_string())
+    let filename = NoteFilename::parse(&filename)?;
+    magical_merchant_core::discard_template_draft(&base_dir, &filename).map_err(CommandError::from)
 }
 
 #[tauri::command]
 pub(crate) fn list_template_drafts<R: Runtime>(
     handle: AppHandle<R>,
-) -> Result<Vec<TemplateSummary>, String> {
+) -> Result<Vec<TemplateSummary>, CommandError> {
     let base_dir = app_base_dir(&handle)?;
-    magical_merchant_core::list_template_drafts(&base_dir).map_err(|e| e.to_string())
+    magical_merchant_core::list_template_drafts(&base_dir).map_err(CommandError::from)
 }
 
 /// Creates a note from a template. Every call makes a new note.
@@ -123,9 +122,9 @@ pub(crate) fn create_from_template<R: Runtime>(
     filename: String,
     client: ClientContext,
     locale: String,
-) -> Result<CreatedNote, String> {
+) -> Result<CreatedNote, CommandError> {
     let base_dir = app_base_dir(&handle)?;
-    let filename = parse_filename(&filename)?;
+    let filename = NoteFilename::parse(&filename)?;
     let context = probe_with_client(client, core_location::latest);
     let created = magical_merchant_core::create_note_from_template(
         &base_dir,
@@ -136,8 +135,7 @@ pub(crate) fn create_from_template<R: Runtime>(
             source: Some(Source::App),
             ..Provenance::default()
         },
-    )
-    .map_err(|e| e.to_string())?;
+    )?;
     widgets::refresh_templates();
     Ok(created)
 }
@@ -153,8 +151,8 @@ pub(crate) fn template_widget_pinnable() -> bool {
 /// `true` means the request went out; the system shows its own confirmation, and
 /// declining there is not reported back. `false` means this device cannot pin.
 #[tauri::command]
-pub(crate) fn pin_template_widget(filename: String) -> Result<bool, String> {
-    let filename = NoteFilename::parse(&filename).map_err(|e| e.to_string())?;
+pub(crate) fn pin_template_widget(filename: String) -> Result<bool, CommandError> {
+    let filename = NoteFilename::parse(&filename)?;
     Ok(widgets::request_pin(template_name(&filename)))
 }
 
@@ -219,7 +217,7 @@ mod tests {
     #[test]
     fn pinning_is_unsupported_off_android() {
         assert!(!template_widget_pinnable());
-        assert_eq!(pin_template_widget("daily.md".to_string()), Ok(false));
+        assert!(!pin_template_widget("daily.md".to_string()).unwrap());
     }
 
     #[test]

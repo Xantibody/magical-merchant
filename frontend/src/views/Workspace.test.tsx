@@ -264,7 +264,7 @@ const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
     }
     const version = versions.get(name)?.find((v) => v.id === id);
     if (!version) {
-      throw saveError("other", `version not found: ${String(id)}`);
+      throw saveError("missing", `version not found: ${String(id)}`);
     }
     versions.set(name, [
       { id: "before", message: "before restore", body: current },

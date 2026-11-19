@@ -49,26 +49,29 @@ interface NoteRead {
 }
 
 /**
- * Failure of `update_draft`. `stale` means "someone rewrote it after the read",
- * `broken` means "core refused because the record at the head of the note cannot be read",
- * `missing` means "core refused because the note no longer exists",
- * `notText` means "core refused because the file's content cannot be read as text".
+ * How every command refuses: `{ kind, message }` (the Rust side's `CommandError`).
+ * For a body save (`update_draft`, `restore_note_version`), `stale` means "someone rewrote
+ * it after the read", `broken` "core refused because the record at the head of the note
+ * cannot be read", `missing` "the note no longer exists", `notText` "the file's content
+ * cannot be read as text". Sync passes its own kinds (`busy`, `notConfigured`,
+ * `notAuthenticated`, `configCorrupt`, …), and anything else is `other`.
+ * `broken` means something only for a body save: elsewhere it is any record core could not parse.
  */
-interface SaveError {
-  kind: "stale" | "broken" | "missing" | "notText" | "other";
+interface CommandError {
+  kind: string;
   message: string;
 }
 
 function saveErrorKind(error: unknown): string | undefined {
   return typeof error === "object" && error !== null && "kind" in error
-    ? (error as SaveError).kind
+    ? (error as CommandError).kind
     : undefined;
 }
 
 /**
  * The words of a refused command, to put in front of the person. A command refuses
- * either with a bare string or with `{ kind, message }`; for the latter the message
- * is the words, where `String()` would print `[object Object]`.
+ * with `{ kind, message }`, where `String()` would print `[object Object]`; anything
+ * else that was thrown (a string, an Error from the IPC itself) is put in words as it is.
  */
 export function errorText(error: unknown): string {
   if (typeof error === "object" && error !== null && "kind" in error && "message" in error) {

@@ -10,14 +10,15 @@ use tauri::{AppHandle, Manager, Runtime};
 /// long. Run them on the blocking pool and return only the result to the main
 /// thread. `resolve_places` goes through here too, for a reason of its own: the
 /// geocoder answers on the main queue.
-pub(crate) async fn off_main_thread<T, F>(work: F) -> Result<T, String>
+pub(crate) async fn off_main_thread<T, E, F>(work: F) -> Result<T, E>
 where
     T: Send + 'static,
-    F: FnOnce() -> Result<T, String> + Send + 'static,
+    E: From<String> + Send + 'static,
+    F: FnOnce() -> Result<T, E> + Send + 'static,
 {
     tauri::async_runtime::spawn_blocking(work)
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(|e| E::from(e.to_string()))?
 }
 
 /// Where this app's data lives.

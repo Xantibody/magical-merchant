@@ -15,6 +15,7 @@ use tauri::{AppHandle, Runtime};
 #[cfg(target_os = "android")]
 use tauri_plugin_opener::OpenerExt;
 
+use crate::commands::error::CommandError;
 #[cfg(not(target_os = "android"))]
 use crate::services::loopback::{CONNECTION_READ_TIMEOUT, accept_callback_token};
 use crate::services::tauri::app_base_dir;
@@ -72,19 +73,19 @@ async fn login_with_loopback<R: Runtime>(
 }
 
 #[tauri::command]
-pub(crate) async fn auth_login<R: Runtime>(handle: AppHandle<R>) -> Result<(), String> {
+pub(crate) async fn auth_login<R: Runtime>(handle: AppHandle<R>) -> Result<(), CommandError> {
     let base_dir = app_base_dir(&handle)?;
-    let config = SyncConfig::load(&base_dir)
-        .map_err(|e| e.message)?
-        .unwrap_or_default();
+    let config = SyncConfig::load(&base_dir)?.unwrap_or_default();
 
     if !config.is_configured() {
-        return Err("Sync not configured".to_string());
+        return Err(CommandError::other("Sync not configured".to_string()));
     }
 
     #[cfg(not(target_os = "android"))]
     {
-        login_with_loopback(&handle, &base_dir, &config).await
+        login_with_loopback(&handle, &base_dir, &config)
+            .await
+            .map_err(CommandError::from)
     }
 
     #[cfg(target_os = "android")]
@@ -99,15 +100,15 @@ pub(crate) async fn auth_login<R: Runtime>(handle: AppHandle<R>) -> Result<(), S
 }
 
 #[tauri::command]
-pub(crate) fn auth_status(handle: AppHandle) -> Result<bool, String> {
+pub(crate) fn auth_status(handle: AppHandle) -> Result<bool, CommandError> {
     let base_dir = app_base_dir(&handle)?;
     Ok(get_token(&base_dir)?.is_some_and(|token| is_token_valid(&token)))
 }
 
 #[tauri::command]
-pub(crate) fn auth_logout(handle: AppHandle) -> Result<(), String> {
+pub(crate) fn auth_logout(handle: AppHandle) -> Result<(), CommandError> {
     let base_dir = app_base_dir(&handle)?;
-    clear_token(&base_dir)
+    clear_token(&base_dir).map_err(CommandError::from)
 }
 
 /// What the login command refuses with, called through a mock app over a temporary data
@@ -122,26 +123,28 @@ mod tests {
     use crate::commands::sync::settings::get_sync_config;
     use crate::test_app::test_app;
 
-    /// A device never set up is refused before any window or browser opens, in words
+    /// A device never set up is refused before any window or browser opens
     #[test]
-    fn auth_login_without_a_workers_url_is_refused_in_words() {
+    fn auth_login_without_a_workers_url_is_refused_as_other() {
         let app = test_app();
 
-        let refused = tauri::async_runtime::block_on(auth_login(app.handle()));
+        let refused = tauri::async_runtime::block_on(auth_login(app.handle())).unwrap_err();
 
-        assert_eq!(refused, Err("Sync not configured".to_string()));
+        assert_eq!(refused.kind, "other");
+        assert_eq!(refused.message, "Sync not configured");
     }
 
-    /// A broken config is refused with the configCorrupt words alone; the kind is dropped
+    /// A broken config keeps its kind, so the screen can tell it from a config never written
     #[test]
-    fn auth_login_of_a_broken_config_is_refused_with_its_words() {
+    fn auth_login_of_a_broken_config_is_config_corrupt() {
         let app = test_app();
         std::fs::write(app.base().join("sync-config.json"), "{ not json").unwrap();
         let corrupt = get_sync_config(app.handle()).unwrap_err().message;
 
-        let refused = tauri::async_runtime::block_on(auth_login(app.handle()));
+        let refused = tauri::async_runtime::block_on(auth_login(app.handle())).unwrap_err();
 
         assert!(corrupt.contains("sync-config.json"), "{corrupt}");
-        assert_eq!(refused, Err(corrupt));
+        assert_eq!(refused.kind, "configCorrupt");
+        assert_eq!(refused.message, corrupt);
     }
 }

@@ -3,6 +3,7 @@
 use magical_merchant_core::domain::device::place_names;
 use tauri::{AppHandle, Runtime};
 
+use super::error::CommandError;
 use crate::services::geocoder::geocode;
 use crate::services::tauri::{app_base_dir, off_main_thread};
 
@@ -22,7 +23,7 @@ pub(crate) async fn resolve_places<R: Runtime>(
     handle: AppHandle<R>,
     coordinates: Vec<(f64, f64)>,
     locale: String,
-) -> Result<Vec<(String, String)>, String> {
+) -> Result<Vec<(String, String)>, CommandError> {
     let base_dir = app_base_dir(&handle)?;
     off_main_thread(move || {
         Ok(place_names::resolve(

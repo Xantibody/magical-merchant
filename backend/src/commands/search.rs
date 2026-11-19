@@ -3,6 +3,7 @@
 use magical_merchant_core::{SearchFilter, SearchHit};
 use tauri::{AppHandle, Runtime};
 
+use super::error::CommandError;
 use crate::services::tauri::{app_base_dir, off_main_thread};
 
 #[tauri::command]
@@ -10,10 +11,10 @@ pub(crate) async fn search_all<R: Runtime>(
     handle: AppHandle<R>,
     query: String,
     tags: Vec<String>,
-) -> Result<Vec<SearchHit>, String> {
+) -> Result<Vec<SearchHit>, CommandError> {
     let base_dir = app_base_dir(&handle)?;
     off_main_thread(move || {
-        magical_merchant_core::search_all(&base_dir, &query, &tags).map_err(|e| e.to_string())
+        magical_merchant_core::search_all(&base_dir, &query, &tags).map_err(CommandError::from)
     })
     .await
 }
@@ -26,11 +27,11 @@ pub(crate) async fn search_records<R: Runtime>(
     query: String,
     tags: Vec<String>,
     filter: SearchFilter,
-) -> Result<Vec<SearchHit>, String> {
+) -> Result<Vec<SearchHit>, CommandError> {
     let base_dir = app_base_dir(&handle)?;
     off_main_thread(move || {
         magical_merchant_core::search_records(&base_dir, &query, &tags, &filter)
-            .map_err(|e| e.to_string())
+            .map_err(CommandError::from)
     })
     .await
 }

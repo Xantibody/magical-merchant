@@ -5,16 +5,15 @@ use base64::engine::general_purpose::STANDARD as B64;
 use magical_merchant_core::{GlyphFormat, GlyphName, GlyphSummary};
 use tauri::{AppHandle, Runtime};
 
+use super::error::CommandError;
 use crate::services::tauri::{app_base_dir, off_main_thread};
 
-fn parse_glyph_name(name: &str) -> Result<GlyphName, String> {
-    GlyphName::parse(name).map_err(|e| e.to_string())
-}
-
 #[tauri::command]
-pub(crate) fn list_glyphs<R: Runtime>(handle: AppHandle<R>) -> Result<Vec<GlyphSummary>, String> {
+pub(crate) fn list_glyphs<R: Runtime>(
+    handle: AppHandle<R>,
+) -> Result<Vec<GlyphSummary>, CommandError> {
     let base_dir = app_base_dir(&handle)?;
-    magical_merchant_core::list_glyphs(&base_dir).map_err(|e| e.to_string())
+    magical_merchant_core::list_glyphs(&base_dir).map_err(CommandError::from)
 }
 
 /// One entry, looked up when the screen draws `:name:`.
@@ -37,11 +36,11 @@ pub(crate) struct GlyphAsset {
 #[tauri::command]
 pub(crate) async fn read_glyphs<R: Runtime>(
     handle: AppHandle<R>,
-) -> Result<Vec<GlyphAsset>, String> {
+) -> Result<Vec<GlyphAsset>, CommandError> {
     let base_dir = app_base_dir(&handle)?;
     off_main_thread(move || {
         let mut assets = Vec::new();
-        for summary in magical_merchant_core::list_glyphs(&base_dir).map_err(|e| e.to_string())? {
+        for summary in magical_merchant_core::list_glyphs(&base_dir)? {
             // Do not fail all of them over one glyph deleted right after it was listed
             let Ok(name) = GlyphName::parse(&summary.name) else {
                 continue;
@@ -69,19 +68,22 @@ pub(crate) fn save_glyph<R: Runtime>(
     name: String,
     format: String,
     data_base64: String,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     let base_dir = app_base_dir(&handle)?;
-    let name = parse_glyph_name(&name)?;
-    let format = GlyphFormat::parse(&format).map_err(|e| e.to_string())?;
+    let name = GlyphName::parse(&name)?;
+    let format = GlyphFormat::parse(&format)?;
     let bytes = B64.decode(data_base64).map_err(|e| e.to_string())?;
-    magical_merchant_core::save_glyph(&base_dir, &name, format, &bytes).map_err(|e| e.to_string())
+    magical_merchant_core::save_glyph(&base_dir, &name, format, &bytes).map_err(CommandError::from)
 }
 
 #[tauri::command]
-pub(crate) fn delete_glyph<R: Runtime>(handle: AppHandle<R>, name: String) -> Result<(), String> {
+pub(crate) fn delete_glyph<R: Runtime>(
+    handle: AppHandle<R>,
+    name: String,
+) -> Result<(), CommandError> {
     let base_dir = app_base_dir(&handle)?;
-    let name = parse_glyph_name(&name)?;
-    magical_merchant_core::delete_glyph(&base_dir, &name).map_err(|e| e.to_string())
+    let name = GlyphName::parse(&name)?;
+    magical_merchant_core::delete_glyph(&base_dir, &name).map_err(CommandError::from)
 }
 
 /// What the webview gets back, called through a mock app over a temporary data directory.
