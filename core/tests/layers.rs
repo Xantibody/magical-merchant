@@ -1,8 +1,7 @@
 //! Checks the layer rules of `core/src` (docs/architecture.md).
 //!
 //! - `utils` knows no outside party and no app rule: it names neither `services` nor `domain`.
-//! - `services` only talk to the outside: they name neither `domain` nor the old top-level
-//!   modules that still hold app rules.
+//! - `services` only talk to the outside: they do not name `domain`.
 //! - `domain` reaches the file system only through `services::files`.
 //! - A module entry file holds only `mod` lines and re-exports.
 //! - A rule file inside `domain` names no service.
@@ -17,10 +16,6 @@
 use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
-
-/// The old top-level modules. Each step moves one of them into `domain/`, and a service
-/// that leaned on one would be leaning on domain code under another name.
-const OLD_MODULES: &[&str] = &["crate::sync"];
 
 /// Rule files inside `domain/` (paths under the crate root). They hold the rules alone,
 /// so they are tested with plain values and never call a service.
@@ -41,6 +36,7 @@ const RULE_FILES: &[&str] = &[
     "src/domain/sync/diff.rs",
     "src/domain/sync/result.rs",
     "src/domain/sync/rounds.rs",
+    "src/domain/sync/token.rs",
     "src/domain/tags/tag.rs",
     "src/domain/templates/file.rs",
     "src/domain/templates/today.rs",
@@ -61,7 +57,6 @@ enum Rule {
     UtilsImportsServices,
     UtilsImportsDomain,
     ServicesImportsDomain,
-    ServicesImportsOldModule,
     DomainUsesStdFs,
     EntryHoldsOnlyModAndPubUse,
     ServicesInRuleFile,
@@ -73,7 +68,6 @@ impl fmt::Display for Rule {
             Self::UtilsImportsServices => "utils-imports-services",
             Self::UtilsImportsDomain => "utils-imports-domain",
             Self::ServicesImportsDomain => "services-imports-domain",
-            Self::ServicesImportsOldModule => "services-imports-old-module",
             Self::DomainUsesStdFs => "domain-uses-std-fs",
             Self::EntryHoldsOnlyModAndPubUse => "entry-holds-only-mod-and-pub-use",
             Self::ServicesInRuleFile => "rule-file-imports-services",
@@ -175,13 +169,8 @@ fn check_file(path: &str, source: &str, entry: bool) -> Vec<Violation> {
                 push(number, Rule::UtilsImportsDomain);
             }
         }
-        if path.starts_with("src/services/") {
-            if mentions(line, "crate::domain") {
-                push(number, Rule::ServicesImportsDomain);
-            }
-            if OLD_MODULES.iter().any(|old| mentions(line, old)) {
-                push(number, Rule::ServicesImportsOldModule);
-            }
+        if path.starts_with("src/services/") && mentions(line, "crate::domain") {
+            push(number, Rule::ServicesImportsDomain);
         }
         if path.starts_with("src/domain/") && mentions(line, "std::fs") {
             push(number, Rule::DomainUsesStdFs);
@@ -351,15 +340,15 @@ fn a_test_module_is_not_checked_but_a_test_only_submodule_line_is_not_the_cut() 
 }
 
 #[test]
-fn a_service_naming_an_old_module_is_reported_but_not_a_longer_name() {
-    let source =
-        "use crate::sync::SyncError;\nuse crate::sync_state;\n// crate::note in a comment\n";
+fn a_service_naming_domain_is_reported_but_not_a_longer_name() {
+    let source = "use crate::domain::sync::SyncResult;\nuse crate::domain_x;\n\
+        // crate::domain in a comment\n";
 
     let rules: Vec<(usize, Rule)> = check_file("src/services/x.rs", source, false)
         .iter()
         .map(|v| (v.line, v.rule))
         .collect();
-    assert_eq!(rules, vec![(1, Rule::ServicesImportsOldModule)]);
+    assert_eq!(rules, vec![(1, Rule::ServicesImportsDomain)]);
 }
 
 #[test]

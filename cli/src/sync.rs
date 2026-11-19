@@ -11,8 +11,8 @@ use magical_merchant_core::SyncError;
 use magical_merchant_core::domain::sync::SyncResult;
 use magical_merchant_core::domain::sync::run::{RoundProgress, run_with_progress};
 use magical_merchant_core::domain::sync::settings::SyncConfig;
+use magical_merchant_core::domain::sync::{login, token};
 use magical_merchant_core::services::worker::{HttpClient, desktop_http_client};
-use magical_merchant_core::sync::token;
 
 #[derive(Debug)]
 pub(crate) struct Credentials {
@@ -91,7 +91,7 @@ fn summary(result: &SyncResult) -> String {
 pub(crate) async fn run(data_dir: &Path) -> anyhow::Result<()> {
     // The repair that runs before the scan is inside the engine, inside the sync lock.
     // Doing it here first would rewrite the tree while the app is syncing
-    let credentials = credentials(data_dir, token::get_token)?;
+    let credentials = credentials(data_dir, login::get_token)?;
     let client = HttpClient::new(
         desktop_http_client()?,
         &credentials.workers_url,
@@ -99,8 +99,8 @@ pub(crate) async fn run(data_dir: &Path) -> anyhow::Result<()> {
     );
     // Past half its lifetime the login is traded for a fresh one, as the app does at its
     // entry. The CLI shares the Keychain with the app, so the renewal reaches both
-    let client = match token::renew_if_due(&credentials.token, &client, |fresh| {
-        token::store_token(data_dir, fresh)
+    let client = match login::renew_if_due(&credentials.token, &client, |fresh| {
+        login::store_token(data_dir, fresh)
     })
     .await
     .map_err(|e| describe_failure(&e))?
@@ -158,7 +158,7 @@ mod tests {
 
     /// Nobody looks at the signature. `is_token_valid` reads only `exp`, so the three
     /// parts are built directly (the same trick as the tests in
-    /// `core/src/sync/token.rs`).
+    /// `core/src/domain/sync/token.rs`).
     fn jwt(exp: i64) -> String {
         let header = URL_SAFE_NO_PAD.encode(r#"{"alg":"HS256","typ":"JWT"}"#);
         let claims = URL_SAFE_NO_PAD.encode(format!(r#"{{"exp":{exp}}}"#));

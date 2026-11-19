@@ -743,7 +743,7 @@ fn token_from_urls(urls: &[url::Url]) -> Option<String> {
         .flat_map(url::Url::query_pairs)
         .filter(|(key, _)| key == "token")
         .map(|(_, value)| value.into_owned())
-        .find(|token| magical_merchant_core::sync::token::is_token_valid(token))
+        .find(|token| magical_merchant_core::domain::sync::token::is_token_valid(token))
 }
 
 /// Stores the JWT that came back from the OAuth callback.
@@ -763,7 +763,7 @@ fn store_token_from_urls(handle: &AppHandle, urls: &[url::Url]) {
     let handle = handle.clone();
     std::thread::spawn(move || {
         let stored = app_base_dir(&handle)
-            .and_then(|dir| magical_merchant_core::sync::token::store_token(&dir, &token));
+            .and_then(|dir| magical_merchant_core::domain::sync::login::store_token(&dir, &token));
 
         match stored {
             Ok(()) => {
@@ -948,7 +948,7 @@ mod tests {
         assert_eq!(io.kind, "other");
     }
 
-    /// Nobody checks the signature (same reason as `sync::token::is_token_valid`),
+    /// Nobody checks the signature (same reason as `domain::sync::token::is_token_valid`),
     /// so the three parts are assembled directly
     fn jwt(expires_in: i64) -> String {
         let header = URL_SAFE_NO_PAD.encode(r#"{"alg":"HS256","typ":"JWT"}"#);
