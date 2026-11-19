@@ -8,17 +8,28 @@ use std::path::Path;
 
 use crate::services::geocoder::geocode;
 
+/// [`resolve_with`] asking the OS geocoder.
+pub(crate) fn resolve(
+    base_dir: &Path,
+    coordinates: &[(f64, f64)],
+    locale: &str,
+) -> Vec<(String, String)> {
+    resolve_with(base_dir, coordinates, locale, geocode)
+}
+
 /// Returns only the coordinates whose place name is known, each with its [`place_key`].
 ///
 /// A coordinate that could not be resolved does not appear in the result. The caller shows
 /// it as coordinates.
 ///
 /// `locale` is the language the UI uses right now (`ja` / `en`). The OS returns a different
-/// name per language, so the cache is kept per language as well.
-pub(crate) fn resolve(
+/// name per language, so the cache is kept per language as well. `geocode` is what asks for
+/// a name the cache does not have.
+pub(crate) fn resolve_with(
     base_dir: &Path,
     coordinates: &[(f64, f64)],
     locale: &str,
+    mut geocode: impl FnMut(f64, f64, &str) -> Option<String>,
 ) -> Vec<(String, String)> {
     let mut cache = place_names::load(base_dir);
     let mut resolved = Vec::new();
