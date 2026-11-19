@@ -489,6 +489,15 @@ mod tests {
         assert!(version_id(t1, "a").starts_with("20260917_140300-"));
     }
 
+    /// The tail of a version id is the first 8 hex of the body's SHA-256. Version files
+    /// already synced to every device carry this name, so it must not drift.
+    #[test]
+    fn a_version_id_ends_with_the_body_sha256_prefix() {
+        let time = Stamp::new(2026, 9, 17, 14, 3, 0, 9 * 3600).unwrap();
+
+        assert_eq!(version_id(time, "a"), "20260917_140300-ca978112");
+    }
+
     #[test]
     fn a_changed_body_makes_a_second_version_listed_newest_first() {
         let tmp = TempDir::new().unwrap();
