@@ -30,6 +30,7 @@ const OLD_MODULES: &[&str] = &[
 /// Rule files inside `domain/` (paths under the crate root). They hold the rules alone,
 /// so they are tested with plain values and never call a service.
 const RULE_FILES: &[&str] = &[
+    "src/domain/data.rs",
     "src/domain/glyphs/image.rs",
     "src/domain/scrawl/day.rs",
     "src/domain/scrawl/entry.rs",
@@ -44,6 +45,7 @@ const ALLOWED: &[(&str, Rule, u32)] = &[
     ("src/note.rs", Rule::EntryHoldsOnlyModAndPubUse, 28),
     ("src/sync.rs", Rule::EntryHoldsOnlyModAndPubUse, 32),
     ("src/utils/clock.rs", Rule::EntryHoldsOnlyModAndPubUse, 33),
+    ("src/utils/paths.rs", Rule::UtilsImportsDomain, 28),
     ("src/utils/place.rs", Rule::UtilsImportsServices, 31),
 ];
 

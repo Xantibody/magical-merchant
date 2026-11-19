@@ -1,15 +1,10 @@
 use std::path::{Path, PathBuf};
 
+use crate::domain::data::data_dir;
 use crate::utils::clock::Stamp;
 
-pub const DATA_DIR: &str = "data";
 pub const NOTES_DIR: &str = "notes";
 pub const CODEX_DIR: &str = "codex";
-
-#[must_use]
-pub fn data_dir(base_dir: &Path) -> PathBuf {
-    base_dir.join(DATA_DIR)
-}
 
 /// The filename follows the wall clock of the place the timestamp points at.
 ///

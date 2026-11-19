@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::CoreError;
+use crate::domain::data;
 use crate::utils::clock::UtcStamp;
-use crate::utils::paths;
 
 #[derive(Debug, Clone)]
 pub struct LocalFile {
@@ -68,7 +68,7 @@ impl ScanCache {
 }
 
 pub fn scan_local_files(base_dir: &Path) -> Result<Vec<LocalFile>, CoreError> {
-    let data_dir = paths::data_dir(base_dir);
+    let data_dir = data::data_dir(base_dir);
     if !data_dir.exists() {
         return Ok(Vec::new());
     }

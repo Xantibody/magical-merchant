@@ -1,12 +1,13 @@
 use std::fs;
 use std::path::Path;
 
+use crate::domain::data::data_dir;
 use crate::error::CoreError;
 use crate::services::files::{ensure_dir, list_md_files, rename_without_clobber, write_atomic};
 use crate::sync::conflict::{conflict_copy_path, conflict_filename};
 use crate::utils::clock::{Stamp, UtcStamp, WallClock, Zone};
 use crate::utils::frontmatter::{self, NoteFrontmatter};
-use crate::utils::paths::{NOTES_DIR, codex_dir, conflicts_dir, data_dir, notes_dir};
+use crate::utils::paths::{NOTES_DIR, codex_dir, conflicts_dir, notes_dir};
 
 /// Notes saved while the editor screen passed the frontmatter through Milkdown carry
 /// "mangled metadata" at the head of the body. The opening `---` became `***`, the YAML

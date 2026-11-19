@@ -61,12 +61,12 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::data;
     use crate::domain::scrawl::capture::save_scrawl_entry;
     use crate::domain::scrawl::day::SCRAWL_DIR;
     use crate::domain::scrawl::journal::read_scrawl;
     use crate::services::files::ensure_dir;
     use crate::utils::device::{Context, Source};
-    use crate::utils::paths;
     use std::fs;
     use tempfile::TempDir;
 
@@ -178,7 +178,7 @@ mod tests {
     #[test]
     fn deleting_on_a_pre_rename_tree_is_not_found_and_moves_nothing() {
         let tmp = TempDir::new().unwrap();
-        let legacy = paths::data_dir(tmp.path()).join("timeline");
+        let legacy = data::data_dir(tmp.path()).join("timeline");
         fs::create_dir_all(&legacy).unwrap();
         fs::write(legacy.join(format!("{DATE}.md")), "- [09:00:00] old\n").unwrap();
 
@@ -189,6 +189,6 @@ mod tests {
             fs::read_to_string(legacy.join(format!("{DATE}.md"))).unwrap(),
             "- [09:00:00] old\n"
         );
-        assert!(!paths::data_dir(tmp.path()).join(SCRAWL_DIR).exists());
+        assert!(!data::data_dir(tmp.path()).join(SCRAWL_DIR).exists());
     }
 }

@@ -19,6 +19,7 @@ use super::round::{self, BULK_OPERATION_BUDGET};
 use super::scan::{self, LocalFile};
 use super::state::{FileSyncRecord, SyncState};
 use super::{SyncIssue, SyncResult};
+use crate::domain::data;
 use crate::error::SyncError;
 use crate::services::worker::{
     BulkRequest, BulkResponse, DownloadedFile, HttpClient, ServerSyncState, SyncTransport,
@@ -213,7 +214,7 @@ async fn sync_once<T: SyncTransport + Sync>(
 
     let (actions, deferred) = round::take_round(&actions, budget);
 
-    let data_dir = paths::data_dir(base_dir);
+    let data_dir = data::data_dir(base_dir);
 
     // Nothing to transfer. The bulk would only have the Worker read the state again and
     // write it back for a new `last_sync`, a Worker call and two R2 operations on most
@@ -302,7 +303,7 @@ const STALE_TMP_AGE: std::time::Duration = std::time::Duration::from_hours(1);
 fn sweep_stale_temp_files(base_dir: &Path) {
     // Only the top of `<base>`: below it, `history/` and `conflicts/` are not the sync's
     sweep_temp_files_in(base_dir, false);
-    sweep_temp_files_in(&paths::data_dir(base_dir), true);
+    sweep_temp_files_in(&data::data_dir(base_dir), true);
 }
 
 /// One directory of [`sweep_stale_temp_files`], and with `nested` every directory below it.
@@ -567,7 +568,7 @@ fn apply_response(
     base_dir: &Path,
     result: &mut SyncResult,
 ) -> HashSet<String> {
-    let data_dir = paths::data_dir(base_dir);
+    let data_dir = data::data_dir(base_dir);
     let mut unwritten = HashSet::new();
 
     for d in &bulk_resp.downloads {
@@ -753,7 +754,7 @@ mod tests {
     /// Every test passes the same `base_dir` as the app. Sync touches only the `data/`
     /// under it, so that is where files are placed.
     fn seed(base_dir: &Path, key: &str, content: &str) {
-        let path = paths::data_dir(base_dir).join(key);
+        let path = data::data_dir(base_dir).join(key);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, content).unwrap();
     }
@@ -772,7 +773,7 @@ mod tests {
         let req = build_bulk_request(
             &actions,
             &locals,
-            &paths::data_dir(dir.path()),
+            &data::data_dir(dir.path()),
             None,
             &mut result,
         )
@@ -796,7 +797,7 @@ mod tests {
         let req = build_bulk_request(
             &actions,
             &locals,
-            &paths::data_dir(dir.path()),
+            &data::data_dir(dir.path()),
             None,
             &mut result,
         )
@@ -839,7 +840,7 @@ mod tests {
         let req = build_bulk_request(
             &actions,
             &locals,
-            &paths::data_dir(dir.path()),
+            &data::data_dir(dir.path()),
             None,
             &mut result,
         )
@@ -907,7 +908,7 @@ mod tests {
 
         let local = to_local_state(
             &state,
-            &paths::data_dir(dir.path()),
+            &data::data_dir(dir.path()),
             &HashSet::new(),
             &SyncState::default(),
         );
@@ -930,7 +931,7 @@ mod tests {
         assert!(
             to_local_state(
                 &state,
-                &paths::data_dir(dir.path()),
+                &data::data_dir(dir.path()),
                 &HashSet::new(),
                 &SyncState::default()
             )
@@ -947,7 +948,7 @@ mod tests {
         assert!(
             to_local_state(
                 &state,
-                &paths::data_dir(dir.path()),
+                &data::data_dir(dir.path()),
                 &HashSet::new(),
                 &SyncState::default()
             )
@@ -991,7 +992,7 @@ mod tests {
         let mut result = SyncResult::default();
         apply_response(&resp, &[], &[], dir.path(), &mut result);
 
-        let data = paths::data_dir(dir.path());
+        let data = data::data_dir(dir.path());
         assert_eq!(
             fs::read_to_string(data.join("notes/a.md")).unwrap(),
             "remote"
@@ -1053,7 +1054,7 @@ mod tests {
         let mut result = SyncResult::default();
         let unwritten = apply_response(&resp, &[], &[], dir.path(), &mut result);
 
-        let data = paths::data_dir(dir.path());
+        let data = data::data_dir(dir.path());
         assert_eq!(
             fs::read_to_string(data.join("notes/good.md")).unwrap(),
             "remote"
@@ -1125,7 +1126,7 @@ mod tests {
             &mut result,
         );
 
-        assert!(!paths::data_dir(dir.path()).join("notes/a.md").exists());
+        assert!(!data::data_dir(dir.path()).join("notes/a.md").exists());
         assert_eq!(result.deleted_local, 1);
         assert!(result.errors.is_empty(), "errors: {:?}", result.errors);
     }
@@ -1152,7 +1153,7 @@ mod tests {
         );
 
         assert_eq!(
-            fs::read_to_string(paths::data_dir(dir.path()).join("notes/a.md")).unwrap(),
+            fs::read_to_string(data::data_dir(dir.path()).join("notes/a.md")).unwrap(),
             "edited while the sync was in flight"
         );
         assert_eq!(result.deleted_local, 0);
@@ -1212,7 +1213,7 @@ mod tests {
             &mut result,
         );
 
-        let data = paths::data_dir(dir.path());
+        let data = data::data_dir(dir.path());
         assert_eq!(
             fs::read_to_string(data.join("notes/a.md")).unwrap(),
             "autosaved while the sync was in flight"
@@ -1271,7 +1272,7 @@ mod tests {
         );
 
         assert_eq!(
-            fs::read_to_string(paths::data_dir(dir.path()).join("scrawl/2026-08-05.md")).unwrap(),
+            fs::read_to_string(data::data_dir(dir.path()).join("scrawl/2026-08-05.md")).unwrap(),
             "captured during the round trip"
         );
         assert_eq!(result.downloaded, 0);
@@ -1297,7 +1298,7 @@ mod tests {
         );
 
         assert_eq!(
-            fs::read_to_string(paths::data_dir(dir.path()).join("notes/a.md")).unwrap(),
+            fs::read_to_string(data::data_dir(dir.path()).join("notes/a.md")).unwrap(),
             "remote"
         );
         assert_eq!(result.downloaded, 1);
@@ -1404,7 +1405,7 @@ mod tests {
         let client = HttpClient::new(reqwest::Client::new(), "http://127.0.0.1:1", "token");
         let _ = run(&client, dir.path()).await;
 
-        let data = paths::data_dir(dir.path());
+        let data = data::data_dir(dir.path());
         assert!(
             !data.join(leftover).exists(),
             "競合コピーが data/ に残っている"
@@ -1436,7 +1437,7 @@ mod tests {
         let client = HttpClient::new(reqwest::Client::new(), "http://127.0.0.1:1", "token");
         let _ = run(&client, dir.path()).await;
 
-        let data = paths::data_dir(dir.path());
+        let data = data::data_dir(dir.path());
         assert!(!data.join("notes/20260320_033440.md").exists());
         assert!(
             data.join("codex/20260320_033440.md").exists(),
@@ -1463,7 +1464,7 @@ mod tests {
         let err = run(&client, dir.path()).await.unwrap_err();
 
         assert_eq!(err.kind, "busy");
-        assert!(paths::data_dir(dir.path()).join(leftover).exists());
+        assert!(data::data_dir(dir.path()).join(leftover).exists());
         drop(held);
     }
 
@@ -1500,7 +1501,7 @@ mod tests {
             "codex/20260320_033441/20260321_090000-0123abcd.md",
             "a version",
         );
-        let data = paths::data_dir(dir.path());
+        let data = data::data_dir(dir.path());
         let stale_note = data.join("notes/.sync-tmp-999-0");
         let stale_version = data.join("codex/20260320_033441/.sync-tmp-999-1");
         let in_flight = data.join("notes/.sync-tmp-1000-0");
@@ -1824,7 +1825,7 @@ mod tests {
             "持ち越した 5 件が古い版で押し返された: {:?}",
             server.uploaded_keys()
         );
-        let data = paths::data_dir(dir.path());
+        let data = data::data_dir(dir.path());
         for i in 0..45 {
             assert_eq!(
                 fs::read_to_string(data.join(format!("notes/{i:03}.md"))).unwrap(),

@@ -7,10 +7,10 @@ use std::path::Path;
 use serde::Serialize;
 
 use super::day::{DayLog, SCRAWL_DIR, day_of_filename, scrawl_file_path};
+use crate::domain::data::data_dir;
 use crate::error::CoreError;
 use crate::services::files::{entry_names, read_if_present};
 use crate::utils::clock::Day;
-use crate::utils::paths::data_dir;
 
 /// Every date that has a record, newest first.
 pub fn list_scrawl_dates(base_dir: &Path) -> Result<Vec<Day>, CoreError> {
