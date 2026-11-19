@@ -54,9 +54,9 @@ shifts under a concurrent append.
 `sync.rs` is the `sync` subcommand: resolve `sync-config.json` + the stored
 JWT, then core's `domain::sync::run::run_with_progress`. It only ever **reads** the
 config and the token — setting the server up and logging in stay in the app,
-so there is one place either can be changed. The `kind`s it produces
-(`notConfigured` / `notAuthenticated`) match the app's `do_sync`; keep them
-in step. It is the only CLI command needing core's `sync-client` feature,
+so there is one place either can be changed. Its `kind`s
+(`notConfigured` / `notAuthenticated`) come from core's `login::check_login`,
+the same call the app's `do_sync` makes. It is the only CLI command needing core's `sync-client` feature,
 which is why the CLI now pulls in reqwest and keyring.
 
 The MCP server runs only under the `mcp` subcommand (a bare invocation
