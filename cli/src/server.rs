@@ -2222,4 +2222,426 @@ mod tests {
             assert_eq!(got.as_deref().map_err(String::as_str), expected, "{text:?}");
         }
     }
+
+    /// What an agent gets, as the JSON it reads.
+    fn json<T: serde::Serialize>(out: &T) -> serde_json::Value {
+        serde_json::to_value(out).unwrap()
+    }
+
+    fn stem(filename: &str) -> &str {
+        filename.trim_end_matches(".md")
+    }
+
+    /// A note links here by its stem; the note itself, linking to its own stem, is not
+    /// a backlink of itself.
+    #[test]
+    fn backlinks_list_the_notes_and_entries_that_link_here_but_not_the_note_itself() {
+        let tmp = TempDir::new().unwrap();
+        let target = a_note(tmp.path(), "# Target");
+        magical_merchant_core::update_note(
+            &tmp.path().join("data/notes").join(&target),
+            &format!("# Target\nme [[{}]]", stem(&target)),
+            &Context::default(),
+            None,
+        )
+        .unwrap();
+        let linking = a_note(tmp.path(), &format!("# Linking\nsee [[{}]]", stem(&target)));
+        a_note(tmp.path(), "# Unrelated");
+        write_day(
+            tmp.path(),
+            "2026-01-15",
+            &[
+                (
+                    9,
+                    &format!("ref [[{}]]", stem(&target)),
+                    &Context::default(),
+                ),
+                (10, "nothing", &Context::default()),
+            ],
+        );
+
+        let out = server(tmp.path())
+            .backlinks(Parameters(FilenameParam { filename: target }))
+            .unwrap()
+            .0;
+
+        let hits: Vec<(String, Option<String>, Option<usize>)> = out
+            .hits
+            .iter()
+            .map(|h| (h.kind.clone(), h.filename.clone(), h.index))
+            .collect();
+        assert_eq!(
+            hits,
+            [
+                ("note".to_string(), Some(linking), None),
+                ("scrawl".to_string(), None, Some(0)),
+            ]
+        );
+    }
+
+    fn note_at(base: &Path, filename: &str, time: &str, body: &str) {
+        let dir = base.join("data/notes");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(
+            dir.join(filename),
+            format!("---\ntime: {time}\n---\n\n{body}"),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn search_ignores_case_and_lists_the_newest_first() {
+        let tmp = TempDir::new().unwrap();
+        note_at(
+            tmp.path(),
+            "20260101_090000.md",
+            "2026-01-01T09:00:00+09:00",
+            "old Rust note",
+        );
+        note_at(
+            tmp.path(),
+            "20260301_090000.md",
+            "2026-03-01T09:00:00+09:00",
+            "new RUST note",
+        );
+        write_day(
+            tmp.path(),
+            "2026-02-01",
+            &[(9, "rust in between", &Context::default())],
+        );
+        note_at(
+            tmp.path(),
+            "20260401_090000.md",
+            "2026-04-01T09:00:00+09:00",
+            "nothing here",
+        );
+
+        let out = server(tmp.path())
+            .search(Parameters(QueryParam {
+                query: "rust".to_string(),
+                tags: vec![],
+            }))
+            .unwrap()
+            .0;
+
+        let dates: Vec<&str> = out.hits.iter().map(|h| h.date.as_str()).collect();
+        assert_eq!(dates, ["2026-03-01", "2026-02-01", "2026-01-01"]);
+    }
+
+    #[test]
+    fn search_with_only_tags_lists_every_record_carrying_them() {
+        let tmp = TempDir::new().unwrap();
+        note_at(
+            tmp.path(),
+            "20260101_090000.md",
+            "2026-01-01T09:00:00+09:00",
+            "a note #memo",
+        );
+        note_at(
+            tmp.path(),
+            "20260102_090000.md",
+            "2026-01-02T09:00:00+09:00",
+            "a note without",
+        );
+        write_day(
+            tmp.path(),
+            "2026-02-01",
+            &[
+                (9, "an entry #Memo", &Context::default()),
+                (10, "an entry without", &Context::default()),
+            ],
+        );
+
+        let out = server(tmp.path())
+            .search(Parameters(QueryParam {
+                query: String::new(),
+                tags: vec!["memo".to_string()],
+            }))
+            .unwrap()
+            .0;
+
+        let hits: Vec<(&str, &str)> = out
+            .hits
+            .iter()
+            .map(|h| (h.kind.as_str(), h.date.as_str()))
+            .collect();
+        assert_eq!(hits, [("scrawl", "2026-02-01"), ("note", "2026-01-01")]);
+    }
+
+    #[test]
+    fn scrawl_dates_come_newest_first_as_days() {
+        let tmp = TempDir::new().unwrap();
+        let ctx = Context::default();
+        write_day(tmp.path(), "2026-01-15", &[(9, "a", &ctx)]);
+        write_day(tmp.path(), "2026-03-01", &[(9, "b", &ctx)]);
+        write_day(tmp.path(), "2025-12-31", &[(9, "c", &ctx)]);
+
+        let out = server(tmp.path()).list_scrawl_dates().unwrap().0;
+
+        assert_eq!(
+            json(&out),
+            serde_json::json!({"dates": ["2026-03-01", "2026-01-15", "2025-12-31"]})
+        );
+    }
+
+    /// An agent sees a template as written. Resolving `{{date}}` here would hand it one
+    /// day's note instead of the template.
+    #[test]
+    fn templates_are_listed_and_read_with_their_variables_unresolved() {
+        let tmp = TempDir::new().unwrap();
+        magical_merchant_core::save_template(
+            tmp.path(),
+            &NoteFilename::parse("daily.md").unwrap(),
+            "# {{date}}\n- ",
+            &["daily".to_string()],
+        )
+        .unwrap();
+        let reader = server(tmp.path());
+
+        let listed = reader.list_templates().unwrap().0;
+        let read = reader
+            .read_template(Parameters(TemplateParam {
+                filename: "daily.md".to_string(),
+            }))
+            .unwrap()
+            .0;
+
+        assert_eq!(
+            json(&listed),
+            serde_json::json!({"templates": [{
+                "filename": "daily.md",
+                "name": "daily",
+                "tags": ["daily"],
+                "preview": "{{date}}",
+            }]})
+        );
+        assert_eq!(
+            json(&read),
+            serde_json::json!({"body": "# {{date}}\n- ", "tags": ["daily"]})
+        );
+    }
+
+    /// Broken frontmatter is no reason to hide the body: it comes back, and the metadata
+    /// that could not be read is left empty.
+    #[test]
+    fn a_note_with_broken_frontmatter_still_reads_with_empty_metadata() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path().join("data/notes");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(
+            dir.join("20260101_120000.md"),
+            "---\ntime: [broken\n---\nthe body #kept",
+        )
+        .unwrap();
+
+        let out = server(tmp.path())
+            .read_note(Parameters(FilenameParam {
+                filename: "20260101_120000.md".to_string(),
+            }))
+            .unwrap()
+            .0;
+
+        assert_eq!(
+            json(&out),
+            serde_json::json!({
+                "filename": "20260101_120000.md",
+                "kind": "note",
+                "time": null,
+                "updated": null,
+                "tags": ["kept"],
+                "origin": null,
+                "template": null,
+                "view": null,
+                "source": null,
+                "context": null,
+                "revision": Revision::of("the body #kept").to_string(),
+                "body": "the body #kept",
+            })
+        );
+    }
+
+    /// The revision a history read hands back is the note's as it stands now, the one a
+    /// restore is checked against, not the saved copy's.
+    #[test]
+    fn a_history_read_carries_the_revision_of_the_current_body() {
+        let tmp = TempDir::new().unwrap();
+        let server = writable(tmp.path());
+        let created = server
+            .create_note(Parameters(CreateNoteParam {
+                body: "before".to_string(),
+                tags: None,
+            }))
+            .unwrap()
+            .0;
+        let updated = server
+            .update_note(Parameters(UpdateNoteParam {
+                filename: created.filename.clone(),
+                body: "after".to_string(),
+                revision: None,
+            }))
+            .unwrap()
+            .0;
+
+        let out = server
+            .read_note_history(Parameters(HistoryParam {
+                filename: created.filename,
+                id: updated.snapshot.unwrap().id,
+            }))
+            .unwrap()
+            .0;
+
+        assert_eq!(out.body, "before");
+        assert_eq!(out.revision, Some(Revision::of("after").to_string()));
+    }
+
+    #[test]
+    fn a_restore_answers_the_revision_of_the_body_it_brought_back() {
+        let tmp = TempDir::new().unwrap();
+        let server = writable(tmp.path());
+        let created = server
+            .create_note(Parameters(CreateNoteParam {
+                body: "before".to_string(),
+                tags: None,
+            }))
+            .unwrap()
+            .0;
+        let updated = server
+            .update_note(Parameters(UpdateNoteParam {
+                filename: created.filename.clone(),
+                body: "after".to_string(),
+                revision: None,
+            }))
+            .unwrap()
+            .0;
+
+        let out = server
+            .restore_note(Parameters(RestoreNoteParam {
+                filename: created.filename,
+                id: updated.snapshot.unwrap().id,
+                revision: None,
+            }))
+            .unwrap()
+            .0;
+
+        assert_eq!(out.revision, Some(Revision::of("before").to_string()));
+    }
+
+    fn at(latitude: f64, longitude: f64) -> Context {
+        Context {
+            location: Some(Location {
+                latitude,
+                longitude,
+            }),
+            ..Context::default()
+        }
+    }
+
+    /// A Codex counts as a note written there. A note whose metadata cannot be read only
+    /// misses the map; the listing goes on. Places written at as often come in key order.
+    #[test]
+    fn places_count_codexes_skip_unreadable_notes_and_break_ties_by_key() {
+        let tmp = TempDir::new().unwrap();
+        write_day(
+            tmp.path(),
+            "2026-01-15",
+            &[
+                (9, "north", &at(43.06, 141.35)),
+                (10, "west", &at(-33.86, -70.66)),
+            ],
+        );
+        magical_merchant_core::create_draft_codex(
+            tmp.path(),
+            "# Codex",
+            &[],
+            &at(35.6762, 139.6503),
+            Provenance::default(),
+        )
+        .unwrap();
+        let dir = tmp.path().join("data/notes");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(
+            dir.join("20260101_120000.md"),
+            "---\ntime: [broken\n---\n\nbody",
+        )
+        .unwrap();
+
+        let out = server(tmp.path()).list_places().unwrap().0;
+
+        let today = Day::today_local().ymd();
+        assert_eq!(
+            json(&out),
+            serde_json::json!({"places": [
+                {
+                    "place_key": "-33.86,-70.66",
+                    "latitude": -33.86,
+                    "longitude": -70.66,
+                    "place": null,
+                    "entries": 1,
+                    "notes": 0,
+                    "first": "2026-01-15",
+                    "last": "2026-01-15",
+                },
+                {
+                    "place_key": "35.68,139.65",
+                    "latitude": 35.68,
+                    "longitude": 139.65,
+                    "place": null,
+                    "entries": 0,
+                    "notes": 1,
+                    "first": today,
+                    "last": today,
+                },
+                {
+                    "place_key": "43.06,141.35",
+                    "latitude": 43.06,
+                    "longitude": 141.35,
+                    "place": null,
+                    "entries": 1,
+                    "notes": 0,
+                    "first": "2026-01-15",
+                    "last": "2026-01-15",
+                },
+            ]})
+        );
+    }
+
+    /// A place's centre names the same cell as its key, everywhere off the half-cent
+    /// boundary: a grid over both hemispheres, and the values just either side of the
+    /// boundary.
+    #[test]
+    fn a_place_centre_falls_in_the_cell_its_key_names() {
+        let mut values: Vec<f64> = (-180_000..=180_000)
+            .map(|i| f64::from(i) / 1000.0 + 0.0003)
+            .collect();
+        for cent in -18_000..=18_000 {
+            let boundary = f64::from(cent) / 100.0 + 0.005;
+            values.push(boundary - 1e-7);
+            values.push(boundary + 1e-7);
+        }
+
+        for value in values {
+            assert_eq!(
+                place_key(round_to_key(value), round_to_key(value)),
+                place_key(value, value),
+                "{value}"
+            );
+        }
+    }
+
+    /// On the half-cent boundary itself the two roundings part. The key formats the binary
+    /// value (35.665 is a hair under, so `35.66`; 0.125 is exact and goes to even, so
+    /// `0.12`), while the centre multiplies by 100 first and rounds half away from zero.
+    /// Pinned as it stands: a recorded coordinate rarely ends on an exact boundary, and
+    /// changing either side moves an output the upper MCP joins on.
+    #[test]
+    fn on_the_half_cent_boundary_the_centre_and_the_key_part() {
+        for (value, key, centre) in [
+            (35.665, "35.66", "35.67"),
+            (0.125, "0.12", "0.13"),
+            (-0.125, "-0.12", "-0.13"),
+        ] {
+            assert_eq!(place_key(value, 0.0), format!("{key},0.00"), "{value}");
+            assert_eq!(round_to_key(value).to_string(), centre, "{value}");
+        }
+    }
 }

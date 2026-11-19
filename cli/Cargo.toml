@@ -30,6 +30,8 @@ thiserror = "2"
 base64 = "0.23"
 
 [dev-dependencies]
+# The MCP tests compare a tool's output as the JSON an agent reads
+serde_json = "1"
 tempfile = "3"
 
 [lints]
