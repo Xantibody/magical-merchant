@@ -2,7 +2,6 @@
 //! versions, a version's body, the diff between two of them or against the draft, and
 //! "+X B from version N".
 
-use std::fs;
 use std::path::Path;
 
 use crate::domain::codex::draft::{ensure_codex, read_body};
@@ -12,11 +11,11 @@ use crate::domain::codex::version::{
 };
 use crate::domain::note::NoteFilename;
 use crate::error::CoreError;
-use crate::services::files::list_md_files;
+use crate::services::files::{exists, list_md_files, read_text};
 use crate::utils::frontmatter;
 
 pub(super) fn read_version_file(path: &Path) -> Result<(VersionFrontmatter, String), CoreError> {
-    let content = fs::read_to_string(path)?;
+    let content = read_text(path)?;
     let (fm, body) = frontmatter::parse::<VersionFrontmatter>(&content)?;
     Ok((fm, body.to_string()))
 }
@@ -56,7 +55,7 @@ pub fn read_note_version(
 ) -> Result<String, CoreError> {
     ensure_codex(base_dir, filename)?;
     let path = version_path(&versions_dir(base_dir, filename), id)?;
-    if !path.exists() {
+    if !exists(&path) {
         return Err(CoreError::NotFound(path.to_string_lossy().to_string()));
     }
     Ok(read_version_file(&path)?.1)

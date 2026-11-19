@@ -43,8 +43,6 @@ const RULE_FILES: &[&str] = &[
 /// Violations the tree still has, each with the plan that removes it. A step that clears
 /// one takes its line out; a line that no longer matches anything fails the check.
 const ALLOWED: &[(&str, Rule, u32)] = &[
-    ("src/domain/codex/commit.rs", Rule::DomainUsesStdFs, 29),
-    ("src/domain/codex/compare.rs", Rule::DomainUsesStdFs, 29),
     ("src/sync.rs", Rule::EntryHoldsOnlyModAndPubUse, 32),
     ("src/utils/clock.rs", Rule::EntryHoldsOnlyModAndPubUse, 33),
     ("src/utils/place.rs", Rule::UtilsImportsServices, 31),

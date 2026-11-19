@@ -1,6 +1,5 @@
 //! Committing a version of a Codex, and the undo right after it.
 
-use std::fs;
 use std::path::Path;
 
 use crate::domain::codex::compare::read_version_file;
@@ -10,7 +9,7 @@ use crate::domain::codex::version::{
 };
 use crate::domain::note::NoteFilename;
 use crate::error::CoreError;
-use crate::services::files::{ensure_dir, write_atomic};
+use crate::services::files::{ensure_dir, exists, remove, write_atomic};
 use crate::utils::clock::Stamp;
 use crate::utils::frontmatter;
 
@@ -26,7 +25,7 @@ pub fn commit_note_version(
     let id = version_id(now, &body);
     let dir = versions_dir(base_dir, filename);
     let path = version_path(&dir, &id)?;
-    if path.exists() {
+    if exists(&path) {
         let (fm, body) = read_version_file(&path)?;
         return Ok(Version {
             id,
@@ -59,11 +58,10 @@ pub fn delete_note_version(
 ) -> Result<(), CoreError> {
     ensure_codex(base_dir, filename)?;
     let path = version_path(&versions_dir(base_dir, filename), id)?;
-    if !path.exists() {
+    if !exists(&path) {
         return Err(CoreError::NotFound(path.to_string_lossy().to_string()));
     }
-    fs::remove_file(path)?;
-    Ok(())
+    remove(&path)
 }
 
 #[cfg(test)]
@@ -74,6 +72,7 @@ mod tests {
     };
     use crate::domain::note::{Provenance, create_draft_codex, read_note_by_filename, update_note};
     use crate::utils::device::Context;
+    use std::fs;
     use std::path::PathBuf;
     use tempfile::TempDir;
 
