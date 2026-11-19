@@ -35,7 +35,7 @@ export default defineConfig(async () => ({
 
   clearScreen: false,
   // Two pages: the app, and the one-line window the global key floats over other apps
-  // (backend/src/capture.rs)
+  // (backend/src/shortcut.rs)
   build: {
     rollupOptions: {
       input: {

@@ -151,7 +151,7 @@ const summaryOf = (filename: string): Record<string, unknown> => ({
 
 const WRITE_COMMANDS = ["update_draft", "create_draft", "set_note_view", "delete_note"];
 
-/** The shape of the `SaveError` Tauri returns. The frontend reads only `kind`. */
+/** The shape of the `CommandError` Tauri returns. The frontend reads only `kind`. */
 const saveError = (kind: string, message: string): Error =>
   Object.assign(new Error(message), { kind });
 

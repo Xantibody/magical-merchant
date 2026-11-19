@@ -3,8 +3,9 @@
 Where code goes and which way imports point. The
 [architecture overview](introduction.md) describes what the parts do; this
 page is the map to read before adding a file. It records the layout that was
-decided. `core/src` stands that way now; where another part of the tree still
-predates it, the rules here win and the code moves when it is next reworked.
+decided. `core/src` and `backend/src` stand that way now; where another part
+of the tree still predates it, the rules here win and the code moves when it
+is next reworked.
 
 Other guides: [Feature tour](features.md) ·
 [Development](development.md) · [Install](install.md) ·
@@ -112,12 +113,15 @@ Imports between things inside `domain/`:
   rather than one file.
 - `device/` is where and with what a record was written. Its rule files are
   `context.rs` (the device block a record keeps, split into the day file's
-  head and each line's tail, and the entry point that wrote it) and
+  head and each line's tail, the entry point that wrote it, and how the
+  signals a `WebView` or the widget read fill the gaps the native side left:
+  `ClientContext`, `fill_from_client`) and
   `place.rs` (how coarsely coordinates count as one place, and the
   per-language lookup of a cached name). Its operations are
-  `place_names.rs` (`places.json`, kept beside `data/` so it never syncs),
-  `current_context.rs` (asking the OS, behind the `device-probe`
-  feature) and `visits.rs` (every place records were written at, counted
+  `place_names.rs` (`places.json`, kept beside `data/` so it never syncs,
+  and `resolve`, which asks a geocoder passed in for the names it lacks),
+  `current_context.rs` (asking the OS and filling the gaps from the client,
+  behind the `device-probe` feature) and `visits.rs` (every place records were written at, counted
   by cell over the Scrawl days and the notes, which it reads through
   `scrawl/` and `note/`; neither of those uses more of `device/` than its
   rule files).
@@ -167,8 +171,59 @@ re-exports, so a name dropped in a move fails even when no caller uses it.
 
 ## `backend/src`
 
-`backend/` has the Tauri commands as its entries. Its layout is not decided
-yet.
+The Tauri crate is entries and the outside parties they talk to; what two
+entries share is core's.
+
+```
+backend/src/
+  main.rs          calls run()
+  lib.rs           module lines and `pub use app::run`
+  app.rs           run(): the plugins, setup, the managed state, the one generate_handler! list
+  commands/        what the webview calls, one file per thing in core/src/domain's words
+    note.rs  codex.rs  scrawl.rs  templates.rs  glyphs.rs  search.rs  browse.rs
+    tags.rs  backlinks.rs  device.rs  markdown.rs (the diagram export)
+    sync/          run.rs (a round)  login.rs (signing in)  settings.rs (sync-config.json)
+    error.rs       CommandError, the one shape every command refuses with
+  links.rs         entry: the OS opened a magical-merchant:// link (the login token, a Scrawl line)
+  shortcut.rs      entry: the desktop's global key that floats the one-line window
+  widget/          entry: the Android widget, through JNI
+    bridge.rs      the JNI symbols
+    summary.rs     what the widget reads
+  services/        one outside party each, named after it
+    tauri.rs       the data directory and the blocking pool
+    windows.rs     the webview windows: the one-line window, the sign-in window, the captured event
+    loopback.rs    the sign-in callback on 127.0.0.1
+    geocoder.rs    the OS reverse geocoder
+    core_location.rs  macOS CoreLocation (None elsewhere)
+    android.rs     the JavaVM and the application Context
+    android_tls.rs the trust store handed to rustls
+    widgets.rs     Kotlin's WidgetUpdates (refresh, pin)
+```
+
+- **An entry is named after what calls it**: the webview (`commands/`), the
+  OS opening a link (`links.rs`), the global key (`shortcut.rs`), the
+  widget (`widget/`). An entry only reads its input, calls core and the
+  services, and answers.
+- **`services/` talks to one outside party and only communicates**, named
+  after the party (`geocoder.rs`, not `places.rs`). An entry that needs one
+  names it, and a core operation that needs one takes it as a parameter
+  (`place_names::resolve` takes the geocoder, `probe_with_client` the
+  macOS fix), so a test passes a fake.
+- **Code only one entry uses sits beside that entry**: `token_from_urls` in
+  `links.rs`, the widget's rows in `widget/summary.rs`, `CommandError` in
+  `commands/error.rs`. Code two entries use moves to core: how a client's
+  device signals fill the native ones (`domain::device::fill_from_client`),
+  how coordinates become place names (`domain::device::place_names`). There
+  is no third place in the backend: no `utils/`.
+- **One handler list.** Tauri takes a single invoke handler, so `app.rs`
+  keeps every command in one `generate_handler!`, by path and grouped by the
+  file under `commands/`.
+- **Every command refuses with `CommandError`** (`{ kind, message }`). A
+  `CoreError` keeps its kind (`stale`, `broken`, `missing`, `notText`), a
+  `SyncError` passes its own (`busy`, `notConfigured`, `notAuthenticated`,
+  `configCorrupt`, …), anything else is `other`. `broken` means something
+  only for a body save. The frontend writes the shape once in
+  `lib/commands.ts` and reads the words with `errorText`.
 
 ## `frontend/src`
 

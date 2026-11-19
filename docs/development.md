@@ -172,11 +172,11 @@ either by hand after regenerating `gen/android` some other way.
 
 When an Android certificate error turns up, start from the fact that the
 verifier those patches wire in is not the one the sync client uses:
-`android_tls::sync_tls_config` builds a `ClientConfig` over the
-`webpki-roots` bundle and `sync.rs` hands it to reqwest with
+`services::android_tls::sync_tls_config` builds a `ClientConfig` over the
+`webpki-roots` bundle and `commands/sync/run.rs` hands it to reqwest with
 `tls_backend_preconfigured`, so the request is verified against Mozilla's
 roots and never asks the device. The platform verifier is still installed and
-initialised at startup — the Kotlin component, `android_tls::init()` — because
+initialised at startup — the Kotlin component, `services::android_tls::init()` — because
 the bypass exists only until `rustls-platform-verifier` stops reporting
 Android's "no OCSP responder" as a revoked certificate (upstream #221), and
 the wiring has to be there when it does. Anything the device trusts and

@@ -884,7 +884,7 @@ const unifiedDiff = (from, to, fromName, toName) => {
       const line = `- [${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}] ${text}`;
       scrawl.set(iso, [...(scrawl.get(iso) ?? []), line]);
     },
-    // The one-line window the OS key floats (capture.rs). A browser tab has no window to show
+    // The one-line window the OS key floats (backend/src/shortcut.rs). A browser tab has no window to show
     // or hide: the page plays it over itself (lib/capture-window.ts stand-in), and "sent" goes
     // to the main window the way the real one does
     capture_window_show: () => null,
@@ -1486,7 +1486,7 @@ const unifiedDiff = (from, to, fromName, toName) => {
 
   // The harness stands in for the OS: `capture-window.ts` reads the flag to let the page play
   // the one-line window, and `__mockOpenUrl` delivers a link the way Spotlight and a Shortcut
-  // would. `capture.rs` writes a Scrawl link's line before any page is asked, so this does too;
+  // would. `backend/src/links.rs` writes a Scrawl link's line before any page is asked, so this does too;
   // any other link goes to the page's deep-link listeners as the plugin would deliver it
   Object.assign(globalThis, {
     __MM_BROWSER_MOCK__: true,

@@ -1,6 +1,6 @@
 /**
  * Writing into Scrawl from outside the app (38, 67, 78). The desktop app registers one key with
- * the OS (`backend/src/capture.rs`): pressed anywhere it floats a small window holding the
+ * the OS (`backend/src/shortcut.rs`): pressed anywhere it floats a small window holding the
  * place pill's field (`capture.html`), pressed again it sends. A `magical-merchant://scrawl`
  * link (what Spotlight runs through a Shortcut) writes the same line without the window. Both
  * tell the main window by one event, so whatever Scrawl it shows rereads and says what came in.
@@ -23,7 +23,7 @@ export interface Captured {
   via: "window" | "link";
 }
 
-/** The key the OS hands the app (`CommandOrControl+Shift+Space` in capture.rs). */
+/** The key the OS hands the app (`CommandOrControl+Shift+Space` in backend/src/shortcut.rs). */
 export function captureKeyLabel(): string {
   return isMacDesktop() ? "⌘⇧Space" : "Ctrl+Shift+Space";
 }

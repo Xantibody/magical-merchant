@@ -241,7 +241,7 @@ interface ClientArgs {
 
 interface CommandMap {
   save_quick_capture: { args: { text: string } & ClientArgs; result: void };
-  /** Floats the one-line window the OS key shows (`capture.rs`), from Settings' "try it". */
+  /** Floats the one-line window the OS key shows (`backend/src/shortcut.rs`), from Settings' "try it". */
   capture_window_show: { args: void; result: void };
   /** Hides the one-line window; its page keeps the draft. */
   capture_window_hide: { args: void; result: void };
