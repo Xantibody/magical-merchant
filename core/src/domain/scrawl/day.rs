@@ -261,6 +261,75 @@ mod tests {
         }
     }
 
+    /// Which file names count as a day, read off the name alone. The same table as
+    /// `journal`'s `which_day_files_are_listed`, which puts the files on disk.
+    #[test]
+    fn which_file_names_are_days() {
+        let rows = [
+            ("2026-03-20.md", Some("2026-03-20")),
+            // Unpadded fields, a leading space and a `+` sign are let through
+            ("2026-3-2.md", Some("2026-03-02")),
+            ("notes.md", None),
+            ("2026-02-30.md", None),
+            ("20260321.md", None),
+            ("2026-03-22x.md", None),
+            (" 2026-03-23.md", Some("2026-03-23")),
+            ("2026-03-24.txt", None),
+            ("+2026-03-25.md", Some("2026-03-25")),
+        ];
+
+        let read: Vec<(&str, Option<String>)> = rows
+            .iter()
+            .map(|(name, _)| (*name, day_of_filename(name).map(|day| day.to_string())))
+            .collect();
+
+        let expected: Vec<(&str, Option<String>)> = rows
+            .iter()
+            .map(|(name, day)| (*name, day.map(str::to_string)))
+            .collect();
+        assert_eq!(read, expected);
+    }
+
+    #[test]
+    fn a_line_past_the_end_is_not_found() {
+        let day = DayLog::parse("- [09:00:00] only\n");
+
+        assert!(matches!(
+            expect_same_entry(&day, 1, "- [09:00:00] only"),
+            Err(CoreError::NotFound(_))
+        ));
+    }
+
+    /// Another line at the index means the day moved since it was read: re-read, not gone.
+    #[test]
+    fn another_line_at_the_index_is_stale() {
+        let day = DayLog::parse("- [08:00:00] slipped in\n- [09:00:00] the one I read\n");
+
+        assert!(matches!(
+            expect_same_entry(&day, 0, "- [09:00:00] the one I read"),
+            Err(CoreError::Stale(_))
+        ));
+        assert!(expect_same_entry(&day, 1, "- [09:00:00] the one I read").is_ok());
+    }
+
+    /// The reader was given the line with its device information spelled out. That form
+    /// matches; the folded form on disk, which the reader never saw, does not.
+    #[test]
+    fn a_folded_line_matches_in_its_expanded_form() {
+        let mut written = DayLog::default();
+        written.push("hello", at(9), &mac(), None);
+        let day = DayLog::parse(&written.render().unwrap());
+        let expanded = day.expanded()[0].clone();
+        let folded = day.entries[0].clone();
+        assert_ne!(expanded, folded);
+
+        assert!(expect_same_entry(&day, 0, &expanded).is_ok());
+        assert!(matches!(
+            expect_same_entry(&day, 0, &folded),
+            Err(CoreError::Stale(_))
+        ));
+    }
+
     #[test]
     fn a_single_device_day_writes_its_identity_once() {
         let mut day = DayLog::default();
