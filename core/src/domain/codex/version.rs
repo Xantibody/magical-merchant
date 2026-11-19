@@ -25,7 +25,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use similar::{Algorithm, TextDiff};
 
 use crate::domain::note::id::newest_first;
@@ -83,19 +82,8 @@ pub(crate) fn versions_dir(base_dir: &Path, filename: &NoteFilename) -> PathBuf 
     codex_dir(base_dir).join(filename.as_str().trim_end_matches(".md"))
 }
 
-fn short_hash(body: &str) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let digest = Sha256::digest(body.as_bytes());
-    let mut hex = String::with_capacity(8);
-    for byte in &digest[..4] {
-        hex.push(char::from(HEX[usize::from(byte >> 4)]));
-        hex.push(char::from(HEX[usize::from(byte & 0x0f)]));
-    }
-    hex
-}
-
 fn version_id(time: Stamp, body: &str) -> String {
-    format!("{}-{}", time.id_stem(), short_hash(body))
+    format!("{}-{}", time.id_stem(), Revision::of(body).short())
 }
 
 /// Only a datetime plus 8 hex digits passes as a version name. An id containing `..` or
@@ -329,7 +317,7 @@ pub(crate) fn list_status(dir: &Path, body: &str) -> Result<(usize, bool), CoreE
         let name = newest.file_name();
         let stem = Path::new(&name).file_stem().and_then(|s| s.to_str());
         stem.and_then(|s| s.rsplit_once('-'))
-            .is_some_and(|(_, hash)| hash != short_hash(body))
+            .is_some_and(|(_, hash)| hash != Revision::of(body).short())
     });
     Ok((entries.len(), dirty))
 }

@@ -34,6 +34,14 @@ impl Revision {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    /// The first 8 hex digits: the tail of a Codex version id, and what a list row
+    /// compares the draft against. A revision that came from outside ([`From<String>`])
+    /// and is shorter than that is returned whole.
+    #[must_use]
+    pub fn short(&self) -> &str {
+        self.0.get(..8).unwrap_or(&self.0)
+    }
 }
 
 impl std::fmt::Display for Revision {
@@ -64,5 +72,11 @@ mod tests {
         assert_eq!(rev.as_str().len(), 64);
         assert!(rev.as_str().bytes().all(|b| b.is_ascii_hexdigit()));
         assert_eq!(Revision::from(rev.to_string()), rev);
+    }
+
+    #[test]
+    fn the_short_form_is_the_first_eight_hex_digits() {
+        assert_eq!(Revision::of("a").short(), "ca978112");
+        assert_eq!(Revision::from("abc".to_string()).short(), "abc");
     }
 }
