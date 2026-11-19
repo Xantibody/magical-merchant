@@ -179,10 +179,7 @@ fn copy_my_templates(repo: &Path, sandbox: &Path) -> Result<()> {
 /// アプリがこの端末で書いている場所。CLI の `default_data_dir` と同じ解決で、
 /// 識別子だけは `tauri.conf.json` から読む — そこが唯一の出どころ。
 fn my_data_dir(repo: &Path) -> Result<Option<PathBuf>> {
-    let conf = repo
-        .join("tauri-app")
-        .join("src-tauri")
-        .join("tauri.conf.json");
+    let conf = repo.join("backend").join("tauri.conf.json");
     let text = fs::read_to_string(&conf).with_context(|| format!("reading {}", conf.display()))?;
     let value: serde_json::Value = serde_json::from_str(&text)?;
     let identifier = value

@@ -36,7 +36,7 @@ jobs:
           TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           tag="$TAG"
-          version=$(jq -r .version tauri-app/src-tauri/tauri.conf.json)
+          version=$(jq -r .version backend/tauri.conf.json)
           if [ "$tag" != "v$version" ]; then
             echo "::error::tag $tag does not match tauri.conf.json version $version"
             exit 1
@@ -58,7 +58,7 @@ jobs:
       # ci.yml と同じ理由で消す。ここは rm が同期なので今は当たらないが、
       # 消えたパスを指したままの環境変数に配信ビルドを預ける必要はない
       - name: Generate the Android project
-        run: env -u ANDROID_SDK_ROOT nix develop .#android --command just tauri_app::android-init
+        run: env -u ANDROID_SDK_ROOT nix develop .#android --command just android::init
 
       - name: Restore the signing keystore
         env:
@@ -68,37 +68,37 @@ jobs:
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "::error::secret ANDROID_KEYSTORE_BASE64 is not set (see tauri-app/android-signing/README.md)"
+            echo "::error::secret ANDROID_KEYSTORE_BASE64 is not set (see android/signing/README.md)"
             exit 1
           fi
           keystore="$RUNNER_TEMP/release.jks"
           printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$keystore"
           # gen/android は gitignore 済み。パスワードはこのファイルにしか書かない
-          cat > tauri-app/src-tauri/gen/android/keystore.properties <<EOF
+          cat > backend/gen/android/keystore.properties <<EOF
           storeFile=$keystore
           storePassword=$STORE_PASSWORD
           keyAlias=$KEY_ALIAS
           keyPassword=$KEY_PASSWORD
           EOF
 
-      # ウィジェットの注入と署名設定は android-build-release の依存で走る。
-      # keystore.properties を書いた後でないと android-sign-setup が落ちるので、
+      # ウィジェットの注入と署名設定は android::build-release の依存で走る。
+      # keystore.properties を書いた後でないと android::sign-setup が落ちるので、
       # このステップは keystore の復元より後に置くこと
       - name: Build the signed APK
-        run: env -u ANDROID_SDK_ROOT nix develop .#android --command just tauri_app::android-build-release
+        run: env -u ANDROID_SDK_ROOT nix develop .#android --command just android::build-release
 
       - name: Collect the APK
         id: apk
         run: |
           # --target aarch64 でも Tauri は出力名を universal のままにする
-          src=tauri-app/src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
+          src=backend/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
           out="magical-merchant-${{ steps.version.outputs.version }}.apk"
           cp "$src" "$out"
           echo "path=$out" >> "$GITHUB_OUTPUT"
 
       - name: Remove the signing material
         if: always()
-        run: rm -f "$RUNNER_TEMP/release.jks" tauri-app/src-tauri/gen/android/keystore.properties
+        run: rm -f "$RUNNER_TEMP/release.jks" backend/gen/android/keystore.properties
 
       - uses: softprops/action-gh-release@v3
         with:

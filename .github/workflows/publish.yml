@@ -40,7 +40,7 @@ jobs:
       - uses: ./.github/actions/setup-nix
         with:
           name: package
-          hash: ${{ hashFiles('flake.lock', 'flake.nix', 'nix/package.nix', 'Cargo.lock', 'tauri-app/pnpm-lock.yaml') }}
+          hash: ${{ hashFiles('flake.lock', 'flake.nix', 'nix/package.nix', 'Cargo.lock', 'frontend/pnpm-lock.yaml') }}
           max-store-size: 4G
       - name: the .app bundle builds
         run: nix build .#default --no-link

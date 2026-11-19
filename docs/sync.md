@@ -1,6 +1,6 @@
 # Sync Backend (Cloudflare Workers + R2)
 
-The `workers/` directory contains a Cloudflare Workers backend that syncs
+The `worker/` directory contains a Cloudflare Workers backend that syncs
 data via R2. Authentication uses Google OAuth with self-issued JWTs.
 
 ## How sync decides what to do
@@ -62,7 +62,7 @@ Three numbers guard the same limit. The Free plan allows 50 subrequests per
 invocation and the Worker spends two of them on the state, so 48 is all R2 can
 be asked for. The Worker refuses anything above 45 itself, with
 `413 Too many operations for one request` (`MAX_BULK_OPERATIONS` in
-[`workers/src/index.ts`](../workers/src/index.ts)) — that is what a client too
+[`worker/src/index.ts`](../worker/src/index.ts)) — that is what a client too
 old to split gets, in place of Cloudflare's unexplained
 `Too many subrequests`. The client stops at 40, five short of the Worker's
 guard and eight short of the platform's. That margin is per request, not per
@@ -195,7 +195,7 @@ replaced is no better than not keeping one.
 ### 1. Deploy the Worker
 
 ```sh
-cd workers
+cd worker
 pnpm install
 wrangler login
 pnpm run deploy:worker
@@ -226,7 +226,7 @@ URL:
 ### 4. Set secrets
 
 ```sh
-cd workers
+cd worker
 
 # Google OAuth credentials
 wrangler secret put GOOGLE_CLIENT_ID

@@ -28,9 +28,9 @@ rustPlatform.buildRustPackage {
       ../core
       ../cli
       # ワークスペースの解決にだけ要る。ビルドはしない
-      ../tauri-app/src-tauri/Cargo.toml
-      ../tauri-app/src-tauri/src
-      ../tauri-app/src-tauri/build.rs
+      ../backend/Cargo.toml
+      ../backend/src
+      ../backend/build.rs
       ../xtask
     ];
   };

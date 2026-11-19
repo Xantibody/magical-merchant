@@ -1,0 +1,228 @@
+// Command apply-signing injects a release signing configuration into the
+// Tauri-generated Android Gradle build script.
+//
+// The generated file at backend/gen/android/app/build.gradle.kts is NOT
+// tracked by git (the whole gen/android tree is gitignored) and is recreated
+// whenever `tauri android init` runs. To survive regeneration, the signing
+// setup lives here as a repo-tracked patcher: re-run this after any
+// regeneration to restore the configuration.
+//
+// The injection is idempotent. Each inserted region is wrapped in marker
+// comments; on every run the existing markers are stripped first and then the
+// fresh blocks are re-inserted, so running it any number of times yields the
+// same result. The actual keystore secrets stay in a local, gitignored
+// keystore.properties next to the build script and are never committed.
+package main
+
+import (
+	"fmt"
+	"os"
+	"regexp"
+	"strings"
+)
+
+// Paths are relative to android/, the directory the just recipe runs in.
+const gradlePath = "../backend/gen/android/app/build.gradle.kts"
+
+// keystorePath is where the Gradle script looks the file up, and therefore the
+// only place it may live. `rootProject.file` resolves against the Android
+// project root; plain `file` would resolve against the :app module instead, and
+// a keystore.properties one directory up would be silently ignored — the build
+// then runs for minutes before failing with "missing required property
+// storeFile".
+const keystorePath = "../backend/gen/android/keystore.properties"
+
+// injection describes one marker-delimited region to insert into the build
+// script. body holds the Kotlin source (already indented); anchor is a literal
+// substring of the original file used as the insertion point.
+type injection struct {
+	id     string
+	anchor string
+	after  bool // insert after the anchor (true) or before it (false)
+	body   string
+}
+
+// injections are kept minimal: read keystore.properties, declare a release
+// signingConfig from it, and wire that config into the release build type.
+var injections = []injection{
+	{
+		id:     "keystore",
+		anchor: "android {",
+		after:  false,
+		body: `val keystoreProperties = Properties().apply {
+    val propFile = rootProject.file("keystore.properties")
+    if (propFile.exists()) {
+        propFile.inputStream().use { load(it) }
+    }
+}
+`,
+	},
+	{
+		id:     "configs",
+		anchor: "android {\n",
+		after:  true,
+		body: `    signingConfigs {
+        create("release") {
+            keystoreProperties.getProperty("storeFile")?.let { storeFile = file(it) }
+            storePassword = keystoreProperties.getProperty("storePassword")
+            keyAlias = keystoreProperties.getProperty("keyAlias")
+            keyPassword = keystoreProperties.getProperty("keyPassword")
+        }
+    }
+`,
+	},
+	{
+		id:     "release-ref",
+		anchor: "getByName(\"release\") {\n",
+		after:  true,
+		body: `            signingConfig = signingConfigs.getByName("release")
+`,
+	},
+}
+
+func main() {
+	if err := run(); err != nil {
+		fmt.Fprintln(os.Stderr, "apply-signing:", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
+	raw, err := os.ReadFile(gradlePath)
+	if err != nil {
+		return fmt.Errorf("read %s: %w (run `pnpm tauri android init` first)", gradlePath, err)
+	}
+	content := string(raw)
+
+	// Gradle only notices a bad keystore once it signs the APK, which is
+	// minutes of Rust and R8 later. Say so now instead.
+	if err := checkKeystore(); err != nil {
+		return err
+	}
+
+	// Strip any previously injected regions so re-runs are idempotent.
+	for _, inj := range injections {
+		content = removeBlock(content, inj.id)
+	}
+
+	// Re-insert each region at its anchor.
+	for _, inj := range injections {
+		indent := leadingIndent(inj.body)
+		block := markerBlock(inj.id, indent, inj.body)
+		content, err = insert(content, inj.anchor, inj.after, block)
+		if err != nil {
+			return fmt.Errorf("injection %q: %w", inj.id, err)
+		}
+	}
+
+	if string(raw) == content {
+		fmt.Println("apply-signing: no changes (already up to date)")
+		return nil
+	}
+	if err := os.WriteFile(gradlePath, []byte(content), 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", gradlePath, err)
+	}
+	fmt.Printf("apply-signing: signing config injected into %s\n", gradlePath)
+	return nil
+}
+
+// readProperties parses the `key=value` subset of the Java properties format
+// that keystore.properties uses. Values are taken verbatim, so a password
+// containing '=' survives.
+func readProperties(path string) (map[string]string, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	props := map[string]string{}
+	for _, line := range strings.Split(string(raw), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "!") {
+			continue
+		}
+		key, value, found := strings.Cut(line, "=")
+		if !found {
+			continue
+		}
+		props[strings.TrimSpace(key)] = strings.TrimSpace(value)
+	}
+	return props, nil
+}
+
+// checkKeystore rejects the states Gradle would only report at signing time:
+// a missing file, an unfilled template, or a keystore path that does not exist.
+func checkKeystore() error {
+	props, err := readProperties(keystorePath)
+	if err != nil {
+		return fmt.Errorf("no %s: copy signing/keystore.properties.example there "+
+			"and fill it in (see android/signing/README.md)", keystorePath)
+	}
+
+	for _, key := range []string{"storeFile", "storePassword", "keyAlias", "keyPassword"} {
+		if props[key] == "" {
+			return fmt.Errorf("%s: %s is empty", keystorePath, key)
+		}
+	}
+
+	store := props["storeFile"]
+	// Gradle's file() does not expand ~, so it would look for a literal "~" dir.
+	if strings.HasPrefix(store, "~") {
+		return fmt.Errorf("%s: storeFile must be an absolute path, not %q", keystorePath, store)
+	}
+	if _, err := os.Stat(store); err != nil {
+		return fmt.Errorf("%s: storeFile %q does not exist "+
+			"(the example ships a placeholder path — replace it)", keystorePath, store)
+	}
+	return nil
+}
+
+func beginMarker(id string) string {
+	return "// >>> magical-merchant signing:" + id + " (auto-generated by android/signing/apply-signing.go)"
+}
+
+func endMarker(id string) string {
+	return "// <<< magical-merchant signing:" + id
+}
+
+// markerBlock wraps body in begin/end markers indented to match the body.
+func markerBlock(id, indent, body string) string {
+	var b strings.Builder
+	b.WriteString(indent + beginMarker(id) + "\n")
+	b.WriteString(body)
+	b.WriteString(indent + endMarker(id) + "\n")
+	return b.String()
+}
+
+// removeBlock deletes a marker region (including its leading indentation and
+// trailing newline) for the given id, leaving the surrounding text untouched.
+func removeBlock(content, id string) string {
+	re := regexp.MustCompile(`(?s)[ \t]*` +
+		regexp.QuoteMeta(beginMarker(id)) +
+		`.*?` +
+		regexp.QuoteMeta(endMarker(id)) +
+		`[^\n]*\n`)
+	return re.ReplaceAllString(content, "")
+}
+
+func insert(content, anchor string, after bool, block string) (string, error) {
+	idx := strings.Index(content, anchor)
+	if idx < 0 {
+		return "", fmt.Errorf("anchor not found: %q", anchor)
+	}
+	pos := idx
+	if after {
+		pos = idx + len(anchor)
+	}
+	return content[:pos] + block + content[pos:], nil
+}
+
+// leadingIndent returns the whitespace prefix of the first non-empty line of s.
+func leadingIndent(s string) string {
+	for _, line := range strings.Split(s, "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		return line[:len(line)-len(strings.TrimLeft(line, " \t"))]
+	}
+	return ""
+}

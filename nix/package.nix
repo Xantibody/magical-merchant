@@ -23,7 +23,7 @@ in
 stdenv.mkDerivation (finalAttrs: {
   pname = "magical-merchant";
   # tauri.conf.json is the one source; release.yml checks the tag against it too
-  version = (lib.importJSON ../tauri-app/src-tauri/tauri.conf.json).version;
+  version = (lib.importJSON ../backend/tauri.conf.json).version;
 
   src = lib.fileset.toSource {
     root = ../.;
@@ -36,14 +36,14 @@ stdenv.mkDerivation (finalAttrs: {
       ../cli/Cargo.toml
       ../cli/src
       ../xtask
-      ../tauri-app/src-tauri
-      ../tauri-app/src
-      ../tauri-app/package.json
-      ../tauri-app/pnpm-lock.yaml
-      ../tauri-app/index.html
-      ../tauri-app/capture.html
-      ../tauri-app/vite.config.ts
-      ../tauri-app/tsconfig.json
+      ../backend
+      ../frontend/src
+      ../frontend/package.json
+      ../frontend/pnpm-lock.yaml
+      ../frontend/index.html
+      ../frontend/capture.html
+      ../frontend/vite.config.ts
+      ../frontend/tsconfig.json
     ];
   };
 
@@ -73,7 +73,7 @@ stdenv.mkDerivation (finalAttrs: {
   pnpmDeps = fetchPnpmDeps {
     inherit (finalAttrs) pname version src;
     pnpm = pnpm_10;
-    sourceRoot = "${finalAttrs.src.name}/tauri-app";
+    sourceRoot = "${finalAttrs.src.name}/frontend";
     fetcherVersion = 3;
     hash = "sha256-wJW6I5dEdGEG9tLgq6hhtXrQti3qKSpAe28taRdHbkU=";
   };
@@ -98,8 +98,8 @@ stdenv.mkDerivation (finalAttrs: {
     glib-networking
   ];
 
-  buildAndTestSubdir = "tauri-app/src-tauri";
-  pnpmRoot = "tauri-app";
+  buildAndTestSubdir = "backend";
+  pnpmRoot = "frontend";
 
   # The bundle type is the hook's per-platform default: an .app on macOS, and on
   # Linux a .deb whose usr/ tree (binary, .desktop with the deep-link scheme,

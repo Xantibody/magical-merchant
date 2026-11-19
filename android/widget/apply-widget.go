@@ -1,0 +1,292 @@
+// Command apply-widget installs the home screen widget sources into the
+// Tauri-generated Android project.
+//
+// backend/gen/android/ is gitignored and is recreated by `tauri android init`,
+// so widget sources cannot live there. They live in android/widget/src/main/
+// (tracked by git) and this patcher copies them in and registers the
+// <receiver> and <activity> elements in the generated AndroidManifest.xml. Re-run it (via
+// `just android::setup`) after any regeneration.
+//
+// The copy also carries a MainActivity.kt that overwrites the generated stub:
+// it adds IME-inset padding so the window shrinks with the keyboard (#54).
+// After a Tauri upgrade, diff the freshly generated stub against ours before
+// re-running, in case upstream grew more than enableEdgeToEdge().
+//
+// Both halves are idempotent: copies overwrite, and the manifest region is
+// wrapped in marker comments that are stripped before being re-inserted, so any
+// number of runs yields the same file.
+package main
+
+import (
+	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+)
+
+// Paths are relative to android/, the directory the just recipe runs in.
+const (
+	srcRoot      = "widget/src/main"
+	dstRoot      = "../backend/gen/android/app/src/main"
+	manifestPath = dstRoot + "/AndroidManifest.xml"
+)
+
+const markerID = "widgets"
+
+// components is the manifest region: the widget receivers, the capture sheet
+// and the template button's configuration. exported="false" wherever it can be —
+// the system's AppWidgetService is exempt from the export check, and the sheet is
+// only ever started through a PendingIntent this app created, which carries this
+// app's identity. The configuration activity is the exception: a launcher starts
+// it, and not every launcher goes through the system to do so. It refuses a
+// widget id that is not this app's.
+//
+// Share → Scrawl is an exported alias of the sheet, not the sheet itself: only the SEND
+// intent-filter is reachable from other apps, and the sheet only prefills the shared words
+// (QuickCaptureActivity reads EXTRA_TEXT); sending stays the person's press.
+const components = `        <activity
+            android:name=".widget.QuickCaptureActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:noHistory="true"
+            android:theme="@style/Theme.QuickCapture"
+            android:windowSoftInputMode="adjustResize|stateAlwaysVisible" />
+
+        <activity-alias
+            android:name=".widget.ShareToScrawl"
+            android:exported="true"
+            android:label="@string/share_to_scrawl_label"
+            android:targetActivity=".widget.QuickCaptureActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity-alias>
+
+        <receiver
+            android:name=".widget.CaptureBarWidgetProvider"
+            android:exported="false"
+            android:label="@string/widget_capture_bar_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_capture_bar_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.NotesNewWidgetProvider"
+            android:exported="false"
+            android:label="@string/widget_notes_new_widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_notes_new_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.NotesListWidgetProvider"
+            android:exported="false"
+            android:label="@string/widget_notes_list_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_notes_list_info" />
+        </receiver>
+
+        <activity
+            android:name=".widget.TemplateButtonConfigureActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:theme="@style/Theme.TemplateButtonConfigure">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+        <receiver
+            android:name=".widget.TemplateButtonWidgetProvider"
+            android:exported="false"
+            android:label="@string/widget_template_button_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_template_button_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.TemplatesWidgetProvider"
+            android:exported="false"
+            android:label="@string/widget_templates_widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_templates_info" />
+        </receiver>
+
+        <!-- BIND_REMOTEVIEWS is what makes exported="false" safe here: only the
+             system, which holds that permission, can bind the list. -->
+        <service
+            android:name=".widget.NotesRemoteViewsService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
+`
+
+func main() {
+	if err := run(); err != nil {
+		fmt.Fprintln(os.Stderr, "apply-widget:", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
+	if _, err := os.Stat(dstRoot); err != nil {
+		return fmt.Errorf("no %s: run `pnpm tauri android init` first", dstRoot)
+	}
+
+	copied, err := copyTree(srcRoot, dstRoot)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("apply-widget: %d widget source files copied into %s\n", copied, dstRoot)
+
+	return patchManifest()
+}
+
+// copyTree mirrors src onto dst, creating directories as needed, and returns
+// the number of files written.
+func copyTree(src, dst string) (int, error) {
+	count := 0
+	err := filepath.WalkDir(src, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(dst, rel)
+		if entry.IsDir() {
+			return os.MkdirAll(target, 0o755)
+		}
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(target, raw, 0o644); err != nil {
+			return err
+		}
+		count++
+		return nil
+	})
+	if err != nil {
+		return 0, fmt.Errorf("copy %s -> %s: %w", src, dst, err)
+	}
+	return count, nil
+}
+
+func patchManifest() error {
+	raw, err := os.ReadFile(manifestPath)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", manifestPath, err)
+	}
+
+	content := removeBlock(string(raw), markerID)
+	block := markerBlock(markerID, "        ", components)
+
+	// The components belong to the application, so they go just before its
+	// closing tag rather than after the last activity.
+	const anchor = "    </application>"
+	idx := strings.Index(content, anchor)
+	if idx < 0 {
+		return fmt.Errorf("%s: anchor not found: %q", manifestPath, anchor)
+	}
+	content = content[:idx] + block + content[idx:]
+
+	content, err = patchLauncherShortcuts(content)
+	if err != nil {
+		return err
+	}
+
+	if string(raw) == content {
+		fmt.Println("apply-widget: manifest unchanged (already up to date)")
+		return nil
+	}
+	if err := os.WriteFile(manifestPath, []byte(content), 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", manifestPath, err)
+	}
+	fmt.Printf("apply-widget: widget components registered in %s\n", manifestPath)
+	return nil
+}
+
+const shortcutsMarkerID = "shortcuts"
+
+// shortcutsMeta points the launcher activity at res/xml/shortcuts.xml: the icon held down
+// offers a line to Scrawl and a new Note. It has to sit inside that activity, so it goes
+// right after the activity's MAIN / LAUNCHER intent-filter.
+const shortcutsMeta = `            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+`
+
+// patchLauncherShortcuts adds (or replaces) the shortcuts meta-data inside the activity that
+// carries the launcher intent-filter.
+func patchLauncherShortcuts(content string) (string, error) {
+	content = removeBlock(content, shortcutsMarkerID)
+	launcher := strings.Index(content, "android.intent.category.LAUNCHER")
+	if launcher < 0 {
+		return "", fmt.Errorf("%s: no launcher activity to hang the shortcuts on", manifestPath)
+	}
+	const closing = "</intent-filter>"
+	end := strings.Index(content[launcher:], closing)
+	if end < 0 {
+		return "", fmt.Errorf("%s: the launcher intent-filter never closes", manifestPath)
+	}
+	at := launcher + end + len(closing)
+	// After the line the closing tag ends
+	if nl := strings.Index(content[at:], "\n"); nl >= 0 {
+		at += nl + 1
+	}
+	block := markerBlock(shortcutsMarkerID, "            ", shortcutsMeta)
+	return content[:at] + block + content[at:], nil
+}
+
+func beginMarker(id string) string {
+	return "<!-- >>> magical-merchant widget:" + id + " (auto-generated by android/widget/apply-widget.go) -->"
+}
+
+func endMarker(id string) string {
+	return "<!-- <<< magical-merchant widget:" + id + " -->"
+}
+
+// markerBlock wraps body in begin/end markers indented to match the body.
+func markerBlock(id, indent, body string) string {
+	var b strings.Builder
+	b.WriteString(indent + beginMarker(id) + "\n")
+	b.WriteString(body)
+	b.WriteString(indent + endMarker(id) + "\n")
+	return b.String()
+}
+
+// removeBlock deletes a marker region (including its leading indentation and
+// trailing newline) for the given id, leaving the surrounding text untouched.
+func removeBlock(content, id string) string {
+	re := regexp.MustCompile(`(?s)[ \t]*` +
+		regexp.QuoteMeta(beginMarker(id)) +
+		`.*?` +
+		regexp.QuoteMeta(endMarker(id)) +
+		`[^\n]*\n`)
+	return re.ReplaceAllString(content, "")
+}

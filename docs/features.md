@@ -386,7 +386,7 @@ Ctrl+Shift.
 
 The badges, the palette's right-hand column, the keys in the note's panel and
 the key handling itself all read one table in
-[`tauri-app/src/lib/shortcuts.ts`](../tauri-app/src/lib/shortcuts.ts),
+[`frontend/src/lib/shortcuts.ts`](../frontend/src/lib/shortcuts.ts),
 so a key that is written in two places cannot come to mean two things.
 
 ## Language
