@@ -15,7 +15,6 @@ use crate::services::worker::TokenRenewer;
 mod token_store {
     use std::path::{Path, PathBuf};
 
-    use crate::error::CoreError;
     use crate::services::files;
 
     const TOKEN_FILENAME: &str = "auth-token";
@@ -24,30 +23,21 @@ mod token_store {
         base_dir.join(TOKEN_FILENAME)
     }
 
-    /// The bare OS message, as `std::fs` gave it before these calls went through `files`:
-    /// `CoreError`'s `Display` would put `IO error: ` in front.
-    fn plain(e: CoreError) -> String {
-        match e {
-            CoreError::Io(e) => e.to_string(),
-            other => other.to_string(),
-        }
-    }
-
     pub(super) fn store(base_dir: &Path, token: &str) -> Result<(), String> {
         let path = path(base_dir);
-        files::ensure_dir(&path).map_err(plain)?;
+        files::ensure_dir(&path).map_err(|e| e.plain_message())?;
         files::write_owner_only(&path, token).map_err(|e| e.to_string())
     }
 
     pub(super) fn get(base_dir: &Path) -> Result<Option<String>, String> {
-        let token = files::read_if_present(&path(base_dir)).map_err(plain)?;
+        let token = files::read_if_present(&path(base_dir)).map_err(|e| e.plain_message())?;
         Ok(token
             .map(|t| t.trim().to_string())
             .filter(|t| !t.is_empty()))
     }
 
     pub(super) fn clear(base_dir: &Path) -> Result<(), String> {
-        files::remove_if_present(&path(base_dir)).map_err(plain)
+        files::remove_if_present(&path(base_dir)).map_err(|e| e.plain_message())
     }
 }
 

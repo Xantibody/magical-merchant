@@ -6,7 +6,6 @@
 //! comments. A second copy would drift without fail, so do not fork it.
 
 use std::collections::{HashMap, HashSet};
-use std::fs::{self, File, TryLockError};
 use std::path::{Component, Path};
 
 use base64::Engine as _;
@@ -21,6 +20,7 @@ use super::{SyncIssue, SyncResult};
 use crate::domain::data;
 use crate::domain::note::conflicts::conflicts_dir;
 use crate::error::SyncError;
+use crate::services::files::{self, LockFile};
 use crate::services::worker::{
     BulkRequest, BulkResponse, DownloadedFile, HttpClient, ServerSyncState, SyncTransport,
     WireConflictOp, WireUpload,
@@ -301,47 +301,8 @@ const STALE_TMP_AGE: std::time::Duration = std::time::Duration::from_hours(1);
 /// sync, so it goes on in silence.
 fn sweep_stale_temp_files(base_dir: &Path) {
     // Only the top of `<base>`: below it, `history/` and `conflicts/` are not the sync's
-    sweep_temp_files_in(base_dir, false);
-    sweep_temp_files_in(&data::data_dir(base_dir), true);
-}
-
-/// One directory of [`sweep_stale_temp_files`], and with `nested` every directory below it.
-/// A symbolic link is not followed: what it points at is not this tree's to clean.
-fn sweep_temp_files_in(dir: &Path, nested: bool) {
-    let Ok(entries) = fs::read_dir(dir) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        // The type readdir returns, so walking costs no stat per entry
-        let Ok(file_type) = entry.file_type() else {
-            continue;
-        };
-        if file_type.is_dir() {
-            if nested {
-                sweep_temp_files_in(&entry.path(), true);
-            }
-            continue;
-        }
-        if !file_type.is_file()
-            || !entry
-                .file_name()
-                .to_string_lossy()
-                .starts_with(".sync-tmp-")
-        {
-            continue;
-        }
-        let old_enough = entry
-            .metadata()
-            .and_then(|m| m.modified())
-            .is_ok_and(|modified| {
-                modified
-                    .elapsed()
-                    .is_ok_and(|elapsed| elapsed >= STALE_TMP_AGE)
-            });
-        if old_enough {
-            let _ = fs::remove_file(entry.path());
-        }
-    }
+    files::sweep_temp_files(base_dir, false, STALE_TMP_AGE);
+    files::sweep_temp_files(&data::data_dir(base_dir), true, STALE_TMP_AGE);
 }
 
 /// Below this, assume the user really deleted them and let it through.
@@ -432,10 +393,11 @@ fn build_bulk_request(
                 let local = local_map
                     .get(key.as_str())
                     .ok_or_else(|| SyncIssue::MissingLocalFile { key: key.clone() })?;
-                let content = fs::read(data_dir.join(key)).map_err(|e| SyncIssue::ReadFailed {
-                    key: key.clone(),
-                    detail: e.to_string(),
-                })?;
+                let content =
+                    files::read(&data_dir.join(key)).map_err(|e| SyncIssue::ReadFailed {
+                        key: key.clone(),
+                        detail: e.plain_message(),
+                    })?;
                 uploads.push(WireUpload {
                     key: key.clone(),
                     content_base64: B64.encode(&content),
@@ -458,10 +420,11 @@ fn build_bulk_request(
                 let local = local_map
                     .get(key.as_str())
                     .ok_or_else(|| SyncIssue::MissingLocalFile { key: key.clone() })?;
-                let content = fs::read(data_dir.join(key)).map_err(|e| SyncIssue::ReadFailed {
-                    key: key.clone(),
-                    detail: e.to_string(),
-                })?;
+                let content =
+                    files::read(&data_dir.join(key)).map_err(|e| SyncIssue::ReadFailed {
+                        key: key.clone(),
+                        detail: e.plain_message(),
+                    })?;
                 conflicts.push(WireConflictOp {
                     key: key.clone(),
                     conflict_key: conflict_copy::conflict_filename(key, UtcStamp::now()),
@@ -489,15 +452,13 @@ fn write_under(data_dir: &Path, key: &str, content: &[u8]) -> Result<(), SyncIss
         });
     }
     let path = data_dir.join(key);
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| SyncIssue::WriteFailed {
-            key: key.to_string(),
-            detail: format!("mkdir: {e}"),
-        })?;
-    }
+    files::ensure_dir(&path).map_err(|e| SyncIssue::WriteFailed {
+        key: key.to_string(),
+        detail: format!("mkdir: {}", e.plain_message()),
+    })?;
     // Overwriting in place, a crash while writing a download would replace the local
     // note with a half-written file
-    crate::services::files::write_atomic(&path, content).map_err(|e| SyncIssue::WriteFailed {
+    files::write_atomic(&path, content).map_err(|e| SyncIssue::WriteFailed {
         key: key.to_string(),
         detail: e.to_string(),
     })
@@ -521,13 +482,12 @@ fn write_download(
         });
     }
     let scanned = scanned_hash(local_files, key);
-    let on_disk = match fs::read(data_dir.join(key)) {
-        Ok(current) => Some(scan::compute_hash(&current)),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+    let on_disk = match files::read_bytes_if_present(&data_dir.join(key)) {
+        Ok(current) => current.map(|current| scan::compute_hash(&current)),
         Err(e) => {
             return Err(SyncIssue::ReadFailed {
                 key: key.to_string(),
-                detail: e.to_string(),
+                detail: e.plain_message(),
             });
         }
     };
@@ -628,17 +588,17 @@ fn delete_local_file(
     result: &mut SyncResult,
 ) {
     let path = data_dir.join(key);
-    let content = match fs::read(&path) {
-        Ok(content) => content,
+    let content = match files::read_bytes_if_present(&path) {
+        Ok(Some(content)) => content,
         // Already gone: that just saved the trouble of deleting it
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+        Ok(None) => {
             result.deleted_local += 1;
             return;
         }
         Err(e) => {
             result.errors.push(SyncIssue::DeleteFailed {
                 key: key.to_string(),
-                detail: e.to_string(),
+                detail: e.plain_message(),
             });
             return;
         }
@@ -651,10 +611,10 @@ fn delete_local_file(
         return;
     }
 
-    if let Err(e) = fs::remove_file(&path) {
+    if let Err(e) = files::remove(&path) {
         result.errors.push(SyncIssue::DeleteFailed {
             key: key.to_string(),
-            detail: e.to_string(),
+            detail: e.plain_message(),
         });
     } else {
         result.deleted_local += 1;
@@ -683,7 +643,7 @@ fn to_local_state(
         ..Default::default()
     };
     for (key, record) in &server_state.files {
-        if !is_safe_key(key) || !data_dir.join(key).exists() {
+        if !is_safe_key(key) || !files::exists(&data_dir.join(key)) {
             continue;
         }
         if unwritten.contains(key) {
@@ -738,57 +698,46 @@ const LOCK_FILENAME: &str = ".sync.lock";
 /// Nobody has to delete "a lock file left over from the last crash" by hand.
 #[derive(Debug)]
 pub struct SyncLock {
-    file: File,
+    // Held for its drop, which releases the lock
+    _file: LockFile,
 }
 
 impl SyncLock {
     /// Returns `busy` without waiting when the lock cannot be taken.
     /// The next write runs a sync again anyway, so skipping is cheaper than freezing in a queue.
     pub fn acquire(base_dir: &Path) -> Result<Self, SyncError> {
+        let path = base_dir.join(LOCK_FILENAME);
         // Right after the first launch the app data directory itself may not exist yet
-        fs::create_dir_all(base_dir).map_err(|e| {
+        files::ensure_dir(&path).map_err(|e| {
             SyncError::other(format!(
-                "Failed to prepare the sync lock directory ({}): {e}",
-                base_dir.display()
+                "Failed to prepare the sync lock directory ({}): {}",
+                base_dir.display(),
+                e.plain_message()
             ))
         })?;
 
-        let path = base_dir.join(LOCK_FILENAME);
-        // Neither truncate nor delete. The lock itself carries the meaning, not the
-        // content, and deleting or truncating would let the side without the lock touch
-        // the file of the side that holds it
-        let file = File::options()
-            .create(true)
-            .write(true)
-            .truncate(false)
-            .open(&path)
-            .map_err(|e| {
-                SyncError::other(format!(
-                    "Failed to open the sync lock ({}): {e}",
-                    path.display()
-                ))
-            })?;
+        let file = LockFile::open(&path).map_err(|e| {
+            SyncError::other(format!(
+                "Failed to open the sync lock ({}): {}",
+                path.display(),
+                e.plain_message()
+            ))
+        })?;
 
         match file.try_lock() {
-            Ok(()) => Ok(Self { file }),
-            Err(TryLockError::WouldBlock) => Err(SyncError::new(
+            Ok(true) => Ok(Self { _file: file }),
+            Ok(false) => Err(SyncError::new(
                 "busy",
                 "Another sync is already running. Try again in a moment.",
             )),
             // No sync when it is unclear whether the lock was taken.
             // Going ahead without exclusion costs more
-            Err(TryLockError::Error(e)) => Err(SyncError::other(format!(
-                "Failed to lock {}: {e}",
-                path.display()
+            Err(e) => Err(SyncError::other(format!(
+                "Failed to lock {}: {}",
+                path.display(),
+                e.plain_message()
             ))),
         }
-    }
-}
-
-impl Drop for SyncLock {
-    fn drop(&mut self) {
-        // Closing the file releases it too, but this makes explicit that this type owns the release
-        let _ = self.file.unlock();
     }
 }
 
@@ -796,6 +745,7 @@ impl Drop for SyncLock {
 mod tests {
     use super::*;
     use crate::services::worker::ServerFileRecord;
+    use std::fs::{self, File};
     use std::process::Command;
 
     fn local_file(key: &str, hash: &str) -> LocalFile {

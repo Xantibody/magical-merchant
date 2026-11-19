@@ -1,7 +1,9 @@
 use std::ffi::OsString;
-use std::fs::{self, DirEntry};
+use std::fs::{self, DirEntry, File, TryLockError};
+use std::io::Read as _;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{Duration, SystemTime};
 
 use crate::error::CoreError;
 
@@ -128,9 +130,26 @@ pub fn remove_empty_dir(dir: &Path) -> Result<(), CoreError> {
     Ok(fs::remove_dir(dir)?)
 }
 
-/// The bytes of `path`. A missing file is an error, as any other failure to read.
+/// The bytes of `path`. A missing file is an error, as any other failure to read; see
+/// [`read_bytes_if_present`] for the read that is content with nothing there.
 pub fn read(path: &Path) -> Result<Vec<u8>, CoreError> {
     Ok(fs::read(path)?)
+}
+
+/// The bytes of `path`, or `None` when there is no such file.
+pub fn read_bytes_if_present(path: &Path) -> Result<Option<Vec<u8>>, CoreError> {
+    match fs::read(path) {
+        Ok(contents) => Ok(Some(contents)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// Appends the bytes of `path` to `buf`, so a caller reading many files can keep one
+/// buffer instead of allocating per file. A missing file is an error.
+pub fn read_into(path: &Path, buf: &mut Vec<u8>) -> Result<(), CoreError> {
+    File::open(path)?.read_to_end(buf)?;
+    Ok(())
 }
 
 /// The contents of `path` as text. A missing file is an error, as any other failure to
@@ -225,6 +244,139 @@ fn walk_into(dir: &Path, found: &mut Vec<PathBuf>) {
     }
 }
 
+/// One regular file [`walk_regular_files`] found.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Walked {
+    pub path: PathBuf,
+    pub size: u64,
+    /// `None` where the platform keeps no modification time.
+    pub modified: Option<SystemTime>,
+}
+
+/// Every regular file under `root`, depth first in the order the directories list them,
+/// each with its size and last modification time.
+///
+/// Unlike [`walk_files`], a link is followed: one to a file is listed under the link's own
+/// path, one to a directory is walked into, and one that leads nowhere is left out. What
+/// is neither a file nor a directory is left out too. Any other item or directory that
+/// cannot be read stops the walk with the error.
+///
+/// The type the directory listing hands out is used as is, so an item costs one stat (a
+/// link two) rather than three.
+pub fn walk_regular_files(root: &Path) -> Result<Vec<Walked>, CoreError> {
+    let mut found = Vec::new();
+    walk_regular_into(root, &mut found)?;
+    Ok(found)
+}
+
+fn walk_regular_into(dir: &Path, found: &mut Vec<Walked>) -> Result<(), CoreError> {
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        let metadata = if entry.file_type()?.is_symlink() {
+            let Ok(metadata) = fs::metadata(&path) else {
+                continue;
+            };
+            metadata
+        } else {
+            entry.metadata()?
+        };
+
+        if metadata.is_dir() {
+            walk_regular_into(&path, found)?;
+            continue;
+        }
+        if !metadata.is_file() {
+            continue;
+        }
+        found.push(Walked {
+            size: metadata.len(),
+            modified: metadata.modified().ok(),
+            path,
+        });
+    }
+    Ok(())
+}
+
+/// The name every temporary file [`write_atomic`] puts down starts with. The sync scan
+/// leaves such files out and [`sweep_temp_files`] picks up the ones a crash left behind.
+pub const TEMP_PREFIX: &str = ".sync-tmp-";
+
+/// Removes the temporary files of [`write_atomic`] directly under `dir`, and with `nested`
+/// in every directory below it, whose last modification is at least `older_than` ago.
+///
+/// A younger one may be a write about to be renamed into place, so it stays. A link is not
+/// followed: what it points at is not this tree's to clean. Nothing here is worth stopping
+/// for, so an item that cannot be read or removed is passed over in silence.
+pub fn sweep_temp_files(dir: &Path, nested: bool, older_than: Duration) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        // The type readdir returns, so walking costs no stat per entry
+        let Ok(file_type) = entry.file_type() else {
+            continue;
+        };
+        if file_type.is_dir() {
+            if nested {
+                sweep_temp_files(&entry.path(), true, older_than);
+            }
+            continue;
+        }
+        if !file_type.is_file() || !entry.file_name().to_string_lossy().starts_with(TEMP_PREFIX) {
+            continue;
+        }
+        let old_enough = entry
+            .metadata()
+            .and_then(|m| m.modified())
+            .is_ok_and(|modified| {
+                modified
+                    .elapsed()
+                    .is_ok_and(|elapsed| elapsed >= older_than)
+            });
+        if old_enough {
+            let _ = fs::remove_file(entry.path());
+        }
+    }
+}
+
+/// An open file to hold an advisory lock on. The lock belongs to this open file, so the OS
+/// releases it when the file closes, however the process ends; dropping this releases it.
+#[derive(Debug)]
+pub struct LockFile {
+    file: File,
+}
+
+impl LockFile {
+    /// Opens the file at `path` to lock, creating it when missing. It is neither truncated
+    /// nor deleted: the lock carries the meaning, not the content, and either would let a
+    /// side without the lock touch the file of the side that holds it.
+    pub fn open(path: &Path) -> Result<Self, CoreError> {
+        let file = File::options()
+            .create(true)
+            .write(true)
+            .truncate(false)
+            .open(path)?;
+        Ok(Self { file })
+    }
+
+    /// Takes the lock without waiting: `false` when another open file already holds it.
+    pub fn try_lock(&self) -> Result<bool, CoreError> {
+        match self.file.try_lock() {
+            Ok(()) => Ok(true),
+            Err(TryLockError::WouldBlock) => Ok(false),
+            Err(TryLockError::Error(e)) => Err(e.into()),
+        }
+    }
+}
+
+impl Drop for LockFile {
+    fn drop(&mut self) {
+        // Closing the file releases it too, but this makes explicit that this type owns the release
+        let _ = self.file.unlock();
+    }
+}
+
 /// A running number that keeps temporary file names from colliding within one process.
 static TMP_SEQ: AtomicU64 = AtomicU64::new(0);
 
@@ -245,7 +397,7 @@ pub fn write_atomic<C: AsRef<[u8]>>(path: &Path, contents: C) -> Result<(), Core
         _ => Path::new("."),
     };
     let seq = TMP_SEQ.fetch_add(1, Ordering::Relaxed);
-    let tmp = dir.join(format!(".sync-tmp-{}-{seq}", std::process::id()));
+    let tmp = dir.join(format!("{TEMP_PREFIX}{}-{seq}", std::process::id()));
 
     fs::write(&tmp, contents)?;
     fs::rename(&tmp, path).inspect_err(|_| {
@@ -1118,5 +1270,228 @@ mod tests {
 
         assert_eq!(fs::read_to_string(&path).unwrap(), "new");
         assert_eq!(mode_of(&path), 0o600);
+    }
+
+    #[test]
+    fn read_bytes_if_present_reads_a_file_that_is_there() {
+        let tmp = seed(&["a.md"]);
+
+        assert_eq!(
+            read_bytes_if_present(&tmp.path().join("a.md")).unwrap(),
+            Some(b"x".to_vec())
+        );
+    }
+
+    #[test]
+    fn read_bytes_if_present_answers_none_for_a_missing_file() {
+        let tmp = TempDir::new().unwrap();
+
+        assert_eq!(
+            read_bytes_if_present(&tmp.path().join("nope")).unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn read_bytes_if_present_still_fails_on_what_cannot_be_read() {
+        let tmp = TempDir::new().unwrap();
+
+        assert!(read_bytes_if_present(tmp.path()).is_err());
+    }
+
+    #[test]
+    fn read_into_appends_to_what_the_buffer_holds() {
+        let tmp = seed(&["a.md"]);
+        let mut buf = b"kept ".to_vec();
+
+        read_into(&tmp.path().join("a.md"), &mut buf).unwrap();
+
+        assert_eq!(buf, b"kept x");
+    }
+
+    #[test]
+    fn read_into_of_a_missing_file_is_an_io_error() {
+        let tmp = TempDir::new().unwrap();
+
+        assert!(matches!(
+            read_into(&tmp.path().join("nope"), &mut Vec::new()),
+            Err(CoreError::Io(e)) if e.kind() == std::io::ErrorKind::NotFound
+        ));
+    }
+
+    fn walked_names(root: &Path) -> Vec<(String, u64)> {
+        let mut names: Vec<(String, u64)> = walk_regular_files(root)
+            .unwrap()
+            .into_iter()
+            .map(|w| {
+                let name = w
+                    .path
+                    .strip_prefix(root)
+                    .unwrap()
+                    .to_string_lossy()
+                    .to_string();
+                (name, w.size)
+            })
+            .collect();
+        names.sort();
+        names
+    }
+
+    #[test]
+    fn walk_regular_files_lists_every_file_with_its_size() {
+        let tmp = TempDir::new().unwrap();
+        fs::create_dir_all(tmp.path().join("sub/deeper")).unwrap();
+        fs::write(tmp.path().join("a.md"), "12").unwrap();
+        fs::write(tmp.path().join("sub/deeper/b.md"), "12345").unwrap();
+        fs::create_dir(tmp.path().join("empty")).unwrap();
+
+        assert_eq!(
+            walked_names(tmp.path()),
+            vec![("a.md".to_string(), 2), ("sub/deeper/b.md".to_string(), 5)]
+        );
+    }
+
+    #[test]
+    fn walk_regular_files_gives_each_file_its_modification_time() {
+        let tmp = seed(&["a.md"]);
+        let at = SystemTime::UNIX_EPOCH + Duration::from_secs(1_790_000_000);
+        File::options()
+            .write(true)
+            .open(tmp.path().join("a.md"))
+            .unwrap()
+            .set_modified(at)
+            .unwrap();
+
+        let walked = walk_regular_files(tmp.path()).unwrap();
+
+        assert_eq!(walked[0].modified, Some(at));
+    }
+
+    /// Unlike `walk_files`, a link is followed to what it points at, and one that points
+    /// nowhere is left out.
+    #[cfg(unix)]
+    #[test]
+    fn walk_regular_files_follows_links_and_skips_broken_ones() {
+        let tmp = TempDir::new().unwrap();
+        let outside = tmp.path().join("outside");
+        fs::create_dir_all(outside.join("dir")).unwrap();
+        fs::write(outside.join("file.md"), "abc").unwrap();
+        fs::write(outside.join("dir/inner.md"), "x").unwrap();
+        let root = tmp.path().join("root");
+        fs::create_dir(&root).unwrap();
+        std::os::unix::fs::symlink(outside.join("file.md"), root.join("linked.md")).unwrap();
+        std::os::unix::fs::symlink(outside.join("dir"), root.join("linked-dir")).unwrap();
+        std::os::unix::fs::symlink(outside.join("gone.md"), root.join("dangling.md")).unwrap();
+
+        assert_eq!(
+            walked_names(&root),
+            vec![
+                ("linked-dir/inner.md".to_string(), 1),
+                ("linked.md".to_string(), 3)
+            ]
+        );
+    }
+
+    #[test]
+    fn walk_regular_files_of_a_missing_root_is_an_io_error() {
+        let tmp = TempDir::new().unwrap();
+
+        assert!(matches!(
+            walk_regular_files(&tmp.path().join("nope")),
+            Err(CoreError::Io(_))
+        ));
+    }
+
+    fn age_by(path: &Path, age: Duration) {
+        File::options()
+            .write(true)
+            .open(path)
+            .unwrap()
+            .set_modified(SystemTime::now() - age)
+            .unwrap();
+    }
+
+    const HOUR: Duration = Duration::from_secs(3600);
+
+    #[test]
+    fn sweep_temp_files_removes_only_old_temp_files() {
+        let tmp = TempDir::new().unwrap();
+        let old_temp = tmp.path().join(format!("{TEMP_PREFIX}1-0"));
+        let young_temp = tmp.path().join(format!("{TEMP_PREFIX}1-1"));
+        let old_note = tmp.path().join("a.md");
+        for path in [&old_temp, &young_temp, &old_note] {
+            fs::write(path, "x").unwrap();
+        }
+        age_by(&old_temp, HOUR * 2);
+        age_by(&old_note, HOUR * 2);
+
+        sweep_temp_files(tmp.path(), false, HOUR);
+
+        assert!(!old_temp.exists());
+        assert!(young_temp.exists(), "may be a write about to be renamed");
+        assert!(old_note.exists());
+    }
+
+    #[test]
+    fn sweep_temp_files_goes_below_the_directory_only_when_nested() {
+        let tmp = TempDir::new().unwrap();
+        fs::create_dir(tmp.path().join("sub")).unwrap();
+        let below = tmp.path().join(format!("sub/{TEMP_PREFIX}1-0"));
+        fs::write(&below, "x").unwrap();
+        age_by(&below, HOUR * 2);
+
+        sweep_temp_files(tmp.path(), false, HOUR);
+        assert!(below.exists());
+
+        sweep_temp_files(tmp.path(), true, HOUR);
+        assert!(!below.exists());
+    }
+
+    /// What a link points at is not the swept tree's to clean.
+    #[cfg(unix)]
+    #[test]
+    fn sweep_temp_files_does_not_follow_a_link() {
+        let tmp = TempDir::new().unwrap();
+        let outside = tmp.path().join("outside");
+        fs::create_dir(&outside).unwrap();
+        let target = outside.join(format!("{TEMP_PREFIX}1-0"));
+        fs::write(&target, "x").unwrap();
+        age_by(&target, HOUR * 2);
+        let root = tmp.path().join("root");
+        fs::create_dir(&root).unwrap();
+        std::os::unix::fs::symlink(&outside, root.join("linked")).unwrap();
+        std::os::unix::fs::symlink(&target, root.join(format!("{TEMP_PREFIX}9-9"))).unwrap();
+
+        sweep_temp_files(&root, true, HOUR);
+
+        assert!(target.exists());
+    }
+
+    #[test]
+    fn a_held_lock_file_refuses_a_second_open_until_dropped() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join(".lock");
+
+        let first = LockFile::open(&path).unwrap();
+        assert!(first.try_lock().unwrap());
+        let second = LockFile::open(&path).unwrap();
+        assert!(!second.try_lock().unwrap());
+
+        drop(first);
+        assert!(second.try_lock().unwrap());
+    }
+
+    /// The lock is what counts, so opening it leaves what the file holds alone.
+    #[test]
+    fn opening_a_lock_file_neither_truncates_nor_needs_it_there() {
+        let tmp = TempDir::new().unwrap();
+        let kept = tmp.path().join("kept");
+        fs::write(&kept, "content").unwrap();
+
+        let _kept = LockFile::open(&kept).unwrap();
+        let _made = LockFile::open(&tmp.path().join("made")).unwrap();
+
+        assert_eq!(fs::read_to_string(&kept).unwrap(), "content");
+        assert!(tmp.path().join("made").exists());
     }
 }

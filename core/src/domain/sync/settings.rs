@@ -6,7 +6,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-use crate::error::{CoreError, SyncError};
+use crate::error::SyncError;
 use crate::services::files;
 
 const SYNC_CONFIG_FILENAME: &str = "sync-config.json";
@@ -30,18 +30,14 @@ impl SyncConfig {
     /// treated as "not configured", the settings screen opens blank, and the moment the
     /// user re-enters the URL, a config that was merely corrupt gets overwritten.
     pub fn load(base_dir: &Path) -> Result<Option<Self>, SyncError> {
-        let corrupt = |e: &dyn std::error::Error| {
+        let corrupt = |e: &dyn std::fmt::Display| {
             SyncError::new(
                 "configCorrupt",
                 format!("Could not read {SYNC_CONFIG_FILENAME}: {e}"),
             )
         };
-        let content =
-            files::read_if_present(&base_dir.join(SYNC_CONFIG_FILENAME)).map_err(|e| match e {
-                // The OS message alone, as before the read went through `files`
-                CoreError::Io(e) => corrupt(&e),
-                other => corrupt(&other),
-            })?;
+        let content = files::read_if_present(&base_dir.join(SYNC_CONFIG_FILENAME))
+            .map_err(|e| corrupt(&e.plain_message()))?;
         let Some(content) = content else {
             return Ok(None);
         };
@@ -53,10 +49,7 @@ impl SyncConfig {
     pub fn save(&self, base_dir: &Path) -> Result<(), String> {
         let path = base_dir.join(SYNC_CONFIG_FILENAME);
         // On first launch app_data_dir may not exist yet
-        files::ensure_dir(&path).map_err(|e| match e {
-            CoreError::Io(e) => e.to_string(),
-            other => other.to_string(),
-        })?;
+        files::ensure_dir(&path).map_err(|e| e.plain_message())?;
         let content = serde_json::to_string_pretty(self).map_err(|e| e.to_string())?;
         files::write_atomic(&path, content).map_err(|e| e.to_string())?;
         Ok(())

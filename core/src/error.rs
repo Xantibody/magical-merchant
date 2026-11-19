@@ -42,6 +42,19 @@ pub enum CoreError {
     Network(String),
 }
 
+impl CoreError {
+    /// The OS message alone for [`Self::Io`], without the `IO error: ` that `Display` puts
+    /// in front; any other kind as `Display` writes it. For words a caller already showed
+    /// with a bare `std::io::Error` before its disk access went through `services::files`.
+    #[must_use]
+    pub fn plain_message(&self) -> String {
+        match self {
+            Self::Io(e) => e.to_string(),
+            other => other.to_string(),
+        }
+    }
+}
+
 /// Returns the error with a kind, so the frontend can choose between "go to settings",
 /// "retry" and the like.
 ///
@@ -90,7 +103,16 @@ pub fn describe(e: &dyn std::error::Error) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{SyncError, describe};
+    use super::{CoreError, SyncError, describe};
+
+    #[test]
+    fn a_plain_message_drops_only_the_io_prefix() {
+        let io = CoreError::Io(std::io::Error::other("permission denied"));
+        let parse = CoreError::Parse("bad".to_string());
+
+        assert_eq!(io.plain_message(), "permission denied");
+        assert_eq!(parse.plain_message(), "Parse error: bad");
+    }
 
     #[test]
     fn other_errors_keep_message() {

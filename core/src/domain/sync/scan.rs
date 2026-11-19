@@ -1,6 +1,4 @@
 use std::collections::HashMap;
-use std::fs::{self, File};
-use std::io::Read as _;
 use std::path::Path;
 use std::time::{Duration, SystemTime};
 
@@ -9,6 +7,7 @@ use sha2::{Digest, Sha256};
 
 use crate::CoreError;
 use crate::domain::data;
+use crate::services::files;
 use crate::utils::clock::UtcStamp;
 
 #[derive(Debug, Clone)]
@@ -48,7 +47,7 @@ struct CachedHash {
 
 impl ScanCache {
     fn load(base_dir: &Path) -> Self {
-        fs::read_to_string(base_dir.join(CACHE_FILENAME))
+        files::read_text(&base_dir.join(CACHE_FILENAME))
             .ok()
             .and_then(|s| serde_json::from_str(&s).ok())
             .unwrap_or_default()
@@ -62,97 +61,56 @@ impl ScanCache {
     /// the in-between state.
     fn save(&self, base_dir: &Path) {
         if let Ok(content) = serde_json::to_string(self) {
-            let _ = crate::services::files::write_atomic(&base_dir.join(CACHE_FILENAME), content);
+            let _ = files::write_atomic(&base_dir.join(CACHE_FILENAME), content);
         }
     }
 }
 
 pub fn scan_local_files(base_dir: &Path) -> Result<Vec<LocalFile>, CoreError> {
     let data_dir = data::data_dir(base_dir);
-    if !data_dir.exists() {
+    if !files::exists(&data_dir) {
         return Ok(Vec::new());
     }
 
     let cached = ScanCache::load(base_dir);
-    let mut walk = Walk {
-        files: Vec::new(),
-        cached,
-        fresh: ScanCache::default(),
-        now: SystemTime::now(),
-    };
-    walk_dir(&data_dir, &data_dir, &mut walk)?;
-
-    // No write when nothing changed. Sync runs often, so needless writes add up.
-    if walk.fresh.files != walk.cached.files {
-        walk.fresh.save(base_dir);
-    }
-    Ok(walk.files)
-}
-
-struct Walk {
-    files: Vec<LocalFile>,
-    cached: ScanCache,
-    fresh: ScanCache,
-    now: SystemTime,
-}
-
-fn walk_dir(root: &Path, current: &Path, walk: &mut Walk) -> Result<(), CoreError> {
+    let mut fresh = ScanCache::default();
+    let now = SystemTime::now();
+    let mut found = Vec::new();
+    // Reuse the buffer to avoid one allocation per file.
     let mut content = Vec::new();
-    for entry in fs::read_dir(current)? {
-        let entry = entry?;
-        let path = entry.path();
 
-        // Use the d_type readdir returns as is. path.is_dir() and path.is_file() each
-        // issue a stat, so together with metadata this was 3 calls per entry.
-        let file_type = entry.file_type()?;
-        let metadata = if file_type.is_symlink() {
-            // Following the link target is unchanged. A broken link is left out of the scan.
-            let Ok(metadata) = fs::metadata(&path) else {
-                continue;
-            };
-            metadata
-        } else {
-            entry.metadata()?
-        };
-
-        if metadata.is_dir() {
-            walk_dir(root, &path, walk)?;
-            continue;
-        }
-        if !metadata.is_file() {
-            continue;
-        }
-
+    // A link is followed to what it points at; a broken one is left out of the scan.
+    for walked in files::walk_regular_files(&data_dir)? {
+        let path = &walked.path;
         let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
         if is_excluded(file_name) {
             continue;
         }
 
         let relative = path
-            .strip_prefix(root)
+            .strip_prefix(&data_dir)
             .map_err(|e| CoreError::Sync(e.to_string()))?;
         let key = relative
             .to_str()
             .ok_or_else(|| CoreError::Sync("non-UTF8 path".to_string()))?
             .to_string();
 
-        let modified_at = metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH);
+        let modified_at = walked.modified.unwrap_or(SystemTime::UNIX_EPOCH);
         let modified = UtcStamp::from_system_time(modified_at);
         let mtime_ms = modified.unix_millis();
-        let size = metadata.len();
+        let size = walked.size;
 
-        let hash = if let Some(hash) = reuse(walk.cached.files.get(&key), mtime_ms, size) {
+        let hash = if let Some(hash) = reuse(cached.files.get(&key), mtime_ms, size) {
             hash.to_string()
         } else {
-            // Reuse the buffer to avoid one allocation per file.
             content.clear();
             content.reserve(usize::try_from(size).unwrap_or(0));
-            File::open(&path)?.read_to_end(&mut content)?;
+            files::read_into(path, &mut content)?;
             compute_hash(&content)
         };
 
-        if cacheable(walk.now, modified_at) {
-            walk.fresh.files.insert(
+        if cacheable(now, modified_at) {
+            fresh.files.insert(
                 key.clone(),
                 CachedHash {
                     mtime_ms,
@@ -162,13 +120,18 @@ fn walk_dir(root: &Path, current: &Path, walk: &mut Walk) -> Result<(), CoreErro
             );
         }
 
-        walk.files.push(LocalFile {
+        found.push(LocalFile {
             key,
             last_modified: modified,
             content_hash: hash,
         });
     }
-    Ok(())
+
+    // No write when nothing changed. Sync runs often, so needless writes add up.
+    if fresh.files != cached.files {
+        fresh.save(base_dir);
+    }
+    Ok(found)
 }
 
 /// The cached hash of a file whose mtime and size both still match what was recorded;
@@ -191,7 +154,7 @@ fn cacheable(now: SystemTime, modified: SystemTime) -> bool {
 fn is_excluded(file_name: &str) -> bool {
     file_name == ".sync-state.json"
         // The temp file `write_atomic` puts down just before the rename. A crash leaves it behind
-        || file_name.starts_with(".sync-tmp-")
+        || file_name.starts_with(files::TEMP_PREFIX)
 }
 
 /// The sync hash is made only here. What the engine recomputes right before a delete
@@ -215,7 +178,7 @@ pub(crate) fn compute_hash(content: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
+    use std::fs::{self, File};
 
     #[test]
     fn scan_empty_directory() {

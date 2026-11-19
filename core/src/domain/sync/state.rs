@@ -1,11 +1,10 @@
 use std::collections::HashMap;
-use std::fs;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
 use crate::CoreError;
-use crate::services::files::write_atomic;
+use crate::services::files::{exists, read_text, write_atomic};
 use crate::utils::clock::UtcStamp;
 
 const STATE_FILENAME: &str = ".sync-state.json";
@@ -25,10 +24,10 @@ pub struct FileSyncRecord {
 impl SyncState {
     pub fn load(base_dir: &Path) -> Result<Self, CoreError> {
         let path = base_dir.join(STATE_FILENAME);
-        if !path.exists() {
+        if !exists(&path) {
             return Ok(Self::default());
         }
-        let content = fs::read_to_string(&path)?;
+        let content = read_text(&path)?;
         serde_json::from_str(&content).map_err(|e| CoreError::Parse(e.to_string()))
     }
 
@@ -44,6 +43,7 @@ impl SyncState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
 
     #[test]
     fn load_returns_default_when_file_missing() {
