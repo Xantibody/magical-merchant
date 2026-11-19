@@ -8,12 +8,53 @@
 //! Only the location is not here. Positioning involves permission and waiting,
 //! and a resident app and a one-shot CLI obtain it differently. The side that
 //! needs it adds it.
+//!
+//! The answer is in the OS's own terms ([`Reading`], [`Link`]); what a record keeps of it
+//! is decided in `domain::device`.
 
-use crate::utils::device::NetworkType;
+/// What the OS answered. Items it could not tell are `None`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Reading {
+    pub battery: Option<u8>,
+    pub is_charging: Option<bool>,
+    pub link: Option<Link>,
+    pub os: String,
+    pub os_version: Option<String>,
+    pub arch: String,
+    pub hostname: Option<String>,
+    pub locale: Option<String>,
+}
+
+/// How the default route leaves the device.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Link {
+    WiFi,
+    Ethernet,
+    Mobile,
+    /// No default route: no way out.
+    Offline,
+}
+
+/// Asks the OS about everything it can tell without permission or waiting.
+#[must_use]
+pub fn read() -> Reading {
+    let (battery, is_charging) = battery();
+
+    Reading {
+        battery,
+        is_charging,
+        link: network(),
+        os: std::env::consts::OS.to_string(),
+        os_version: os_version(),
+        arch: std::env::consts::ARCH.to_string(),
+        hostname: hostname(),
+        locale: locale(),
+    }
+}
 
 /// On Android the hostname is "localhost" on every device and says nothing about
 /// which device wrote the record. The value is not worth recording, so it is dropped.
-pub(crate) fn hostname() -> Option<String> {
+fn hostname() -> Option<String> {
     hostname::get()
         .ok()
         .and_then(|h| h.into_string().ok())
@@ -21,7 +62,7 @@ pub(crate) fn hostname() -> Option<String> {
 }
 
 #[cfg(target_os = "macos")]
-pub(crate) fn os_version() -> Option<String> {
+fn os_version() -> Option<String> {
     let output = std::process::Command::new("sw_vers")
         .arg("-productVersion")
         .output()
@@ -39,7 +80,7 @@ pub(crate) fn os_version() -> Option<String> {
 
 /// Linux versions differently per distribution, so `/etc/os-release` is asked.
 #[cfg(target_os = "linux")]
-pub(crate) fn os_version() -> Option<String> {
+fn os_version() -> Option<String> {
     parse_os_release(&std::fs::read_to_string("/etc/os-release").ok()?)
 }
 
@@ -66,11 +107,11 @@ fn parse_os_release(contents: &str) -> Option<String> {
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "linux")))]
-pub(crate) const fn os_version() -> Option<String> {
+const fn os_version() -> Option<String> {
     None
 }
 
-pub(crate) fn locale() -> Option<String> {
+fn locale() -> Option<String> {
     std::env::var("LC_ALL")
         .or_else(|_| std::env::var("LANG"))
         .ok()
@@ -78,7 +119,7 @@ pub(crate) fn locale() -> Option<String> {
 }
 
 #[cfg(not(target_os = "android"))]
-pub(crate) fn battery() -> (Option<u8>, Option<bool>) {
+fn battery() -> (Option<u8>, Option<bool>) {
     use battery::State;
 
     let Ok(manager) = battery::Manager::new() else {
@@ -105,7 +146,7 @@ pub(crate) fn battery() -> (Option<u8>, Option<bool>) {
 }
 
 #[cfg(target_os = "android")]
-pub(crate) const fn battery() -> (Option<u8>, Option<bool>) {
+const fn battery() -> (Option<u8>, Option<bool>) {
     (None, None)
 }
 
@@ -116,14 +157,14 @@ pub(crate) const fn battery() -> (Option<u8>, Option<bool>) {
 /// hardware port it is. Unlike reading the SSID, neither command needs the location
 /// permission.
 #[cfg(target_os = "macos")]
-pub(crate) fn network() -> Option<NetworkType> {
+fn network() -> Option<Link> {
     let route = std::process::Command::new("route")
         .args(["-n", "get", "default"])
         .output()
         .ok()?;
     let Some(interface) = parse_default_interface(&String::from_utf8_lossy(&route.stdout)) else {
         // no default route = no way out.
-        return Some(NetworkType::Offline);
+        return Some(Link::Offline);
     };
 
     let ports = std::process::Command::new("networksetup")
@@ -169,14 +210,14 @@ fn parse_hardware_port(stdout: &str, interface: &str) -> Option<String> {
 /// mobile network. Recorded as wired, a record that could only be written where
 /// there was signal would look as if it was written at a desk.
 #[cfg(target_os = "macos")]
-fn classify_port(port: &str) -> NetworkType {
+fn classify_port(port: &str) -> Link {
     let lowered = port.to_lowercase();
     if lowered.contains("wi-fi") || lowered.contains("airport") {
-        NetworkType::WiFi
+        Link::WiFi
     } else if lowered.contains("iphone") || lowered.contains("ipad") {
-        NetworkType::Mobile
+        Link::Mobile
     } else {
-        NetworkType::Ethernet
+        Link::Ethernet
     }
 }
 
@@ -184,11 +225,11 @@ fn classify_port(port: &str) -> NetworkType {
 /// table as is, so there is no need to launch `ip`. Whether it is wireless is
 /// answered by the marker in `/sys`.
 #[cfg(target_os = "linux")]
-pub(crate) fn network() -> Option<NetworkType> {
+fn network() -> Option<Link> {
     let route = std::fs::read_to_string("/proc/net/route").ok()?;
     let Some(interface) = parse_default_route_interface(&route) else {
         // no default route = no way out.
-        return Some(NetworkType::Offline);
+        return Some(Link::Offline);
     };
 
     let device = std::path::Path::new("/sys/class/net").join(&interface);
@@ -216,23 +257,23 @@ fn parse_default_route_interface(contents: &str) -> Option<String> {
 /// up as on macOS, so only interfaces with a dedicated prefix can be called mobile
 /// with certainty.
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
-fn classify_interface(interface: &str, wireless: bool) -> NetworkType {
+fn classify_interface(interface: &str, wireless: bool) -> Link {
     const MOBILE_PREFIXES: [&str; 4] = ["wwan", "wwp", "ppp", "rmnet"];
 
     if wireless {
-        NetworkType::WiFi
+        Link::WiFi
     } else if MOBILE_PREFIXES
         .iter()
         .any(|prefix| interface.starts_with(prefix))
     {
-        NetworkType::Mobile
+        Link::Mobile
     } else {
-        NetworkType::Ethernet
+        Link::Ethernet
     }
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "linux")))]
-pub(crate) const fn network() -> Option<NetworkType> {
+const fn network() -> Option<Link> {
     None
 }
 
@@ -286,13 +327,10 @@ mod macos_tests {
 
     #[test]
     fn tells_wireless_from_wired() {
-        assert_eq!(classify_port("Wi-Fi"), NetworkType::WiFi);
-        assert_eq!(classify_port("AirPort"), NetworkType::WiFi);
-        assert_eq!(
-            classify_port("Ethernet Adapter (en3)"),
-            NetworkType::Ethernet
-        );
-        assert_eq!(classify_port("Thunderbolt Bridge"), NetworkType::Ethernet);
+        assert_eq!(classify_port("Wi-Fi"), Link::WiFi);
+        assert_eq!(classify_port("AirPort"), Link::WiFi);
+        assert_eq!(classify_port("Ethernet Adapter (en3)"), Link::Ethernet);
+        assert_eq!(classify_port("Thunderbolt Bridge"), Link::Ethernet);
     }
 
     /// Even plugged in over USB, the traffic goes out over the mobile network. Recorded
@@ -300,7 +338,7 @@ mod macos_tests {
     /// as if it was written at a desk.
     #[test]
     fn counts_a_tethered_phone_as_mobile() {
-        assert_eq!(classify_port("iPhone USB"), NetworkType::Mobile);
+        assert_eq!(classify_port("iPhone USB"), Link::Mobile);
     }
 }
 
@@ -378,9 +416,9 @@ PRETTY_NAME="NixOS 25.05 (Warbler)"
     /// interfaces are told by name, and for those the conventional prefix is the only clue.
     #[test]
     fn tells_wireless_from_wired() {
-        assert_eq!(classify_interface("wlp2s0", true), NetworkType::WiFi);
-        assert_eq!(classify_interface("enp0s3", false), NetworkType::Ethernet);
-        assert_eq!(classify_interface("wwan0", false), NetworkType::Mobile);
-        assert_eq!(classify_interface("ppp0", false), NetworkType::Mobile);
+        assert_eq!(classify_interface("wlp2s0", true), Link::WiFi);
+        assert_eq!(classify_interface("enp0s3", false), Link::Ethernet);
+        assert_eq!(classify_interface("wwan0", false), Link::Mobile);
+        assert_eq!(classify_interface("ppp0", false), Link::Mobile);
     }
 }

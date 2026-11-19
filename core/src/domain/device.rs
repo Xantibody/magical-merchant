@@ -1,9 +1,9 @@
 //! Where and with what a record was written.
 
 #[cfg(feature = "device-probe")]
-use crate::services::os;
+use crate::services::os::{self, Link, Reading};
 #[cfg(feature = "device-probe")]
-use crate::utils::device::{Context, Location};
+use crate::utils::device::{Context, Location, NetworkType};
 
 /// A [`Context`] filled with only what the device can be asked about.
 ///
@@ -13,18 +13,33 @@ use crate::utils::device::{Context, Location};
 #[cfg(feature = "device-probe")]
 #[must_use]
 pub fn probe() -> Context {
-    let (battery, is_charging) = os::battery();
+    context_from(os::read())
+}
 
+/// What a record keeps of an OS reading. The location is never in it: positioning
+/// needs permission and waiting, and the side that can get coordinates adds them.
+#[cfg(feature = "device-probe")]
+pub(crate) fn context_from(reading: Reading) -> Context {
     Context {
-        battery,
-        is_charging,
-        network_type: os::network(),
+        battery: reading.battery,
+        is_charging: reading.is_charging,
+        network_type: reading.link.map(network_type),
         location: None,
-        os: std::env::consts::OS.to_string(),
-        os_version: os::os_version(),
-        arch: std::env::consts::ARCH.to_string(),
-        hostname: os::hostname(),
-        locale: os::locale(),
+        os: reading.os,
+        os_version: reading.os_version,
+        arch: reading.arch,
+        hostname: reading.hostname,
+        locale: reading.locale,
+    }
+}
+
+#[cfg(feature = "device-probe")]
+const fn network_type(link: Link) -> NetworkType {
+    match link {
+        Link::WiFi => NetworkType::WiFi,
+        Link::Ethernet => NetworkType::Ethernet,
+        Link::Mobile => NetworkType::Mobile,
+        Link::Offline => NetworkType::Offline,
     }
 }
 
