@@ -84,6 +84,22 @@ pub struct Login {
     pub token: String,
 }
 
+/// The settings of a device set up for sync, or `notConfigured`.
+///
+/// The words send the reader to `settings_place`. Signing in needs the Workers URL as
+/// much as a sync does, so the app's login refuses a device never set up with the same
+/// kind and words.
+pub fn check_configured(base_dir: &Path, settings_place: &str) -> Result<SyncConfig, SyncError> {
+    let config = SyncConfig::load(base_dir)?.unwrap_or_default();
+    if !config.is_configured() {
+        return Err(SyncError::new(
+            "notConfigured",
+            format!("Sync is not set up. Add your Workers URL in {settings_place}."),
+        ));
+    }
+    Ok(config)
+}
+
 /// Checks that this device is set up and logged in, before a sync reaches the network.
 ///
 /// The kinds (`notConfigured`, `notAuthenticated`) are decided here once for the app and
@@ -101,13 +117,7 @@ pub fn check_login<F>(
 where
     F: FnOnce() -> Result<Option<String>, String>,
 {
-    let config = SyncConfig::load(base_dir)?.unwrap_or_default();
-    if !config.is_configured() {
-        return Err(SyncError::new(
-            "notConfigured",
-            format!("Sync is not set up. Add your Workers URL in {settings_place}."),
-        ));
-    }
+    let config = check_configured(base_dir, settings_place)?;
     let token = read_token().map_err(SyncError::other)?.ok_or_else(|| {
         SyncError::new(
             "notAuthenticated",

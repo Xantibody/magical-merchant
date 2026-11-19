@@ -8,7 +8,8 @@ use std::path::Path;
 
 #[cfg(not(target_os = "android"))]
 use magical_merchant_core::domain::sync::login::store_token;
-use magical_merchant_core::domain::sync::login::{clear_token, get_token};
+use magical_merchant_core::domain::sync::login::{check_configured, clear_token, get_token};
+#[cfg(not(target_os = "android"))]
 use magical_merchant_core::domain::sync::settings::SyncConfig;
 use magical_merchant_core::domain::sync::token::is_token_valid;
 use tauri::{AppHandle, Runtime};
@@ -75,11 +76,7 @@ async fn login_with_loopback<R: Runtime>(
 #[tauri::command]
 pub(crate) async fn auth_login<R: Runtime>(handle: AppHandle<R>) -> Result<(), CommandError> {
     let base_dir = app_base_dir(&handle)?;
-    let config = SyncConfig::load(&base_dir)?.unwrap_or_default();
-
-    if !config.is_configured() {
-        return Err(CommandError::other("Sync not configured".to_string()));
-    }
+    let config = check_configured(&base_dir, "Settings")?;
 
     #[cfg(not(target_os = "android"))]
     {
@@ -123,15 +120,19 @@ mod tests {
     use crate::commands::sync::settings::get_sync_config;
     use crate::test_app::test_app;
 
-    /// A device never set up is refused before any window or browser opens
+    /// A device never set up is refused before any window or browser opens, with the kind
+    /// and words a sync gets in the same state
     #[test]
-    fn auth_login_without_a_workers_url_is_refused_as_other() {
+    fn auth_login_without_a_workers_url_is_not_configured() {
         let app = test_app();
 
         let refused = tauri::async_runtime::block_on(auth_login(app.handle())).unwrap_err();
 
-        assert_eq!(refused.kind, "other");
-        assert_eq!(refused.message, "Sync not configured");
+        assert_eq!(refused.kind, "notConfigured");
+        assert_eq!(
+            refused.message,
+            "Sync is not set up. Add your Workers URL in Settings."
+        );
     }
 
     /// A broken config keeps its kind, so the screen can tell it from a config never written
