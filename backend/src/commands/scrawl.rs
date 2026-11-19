@@ -1,4 +1,4 @@
-//! The commands the Scrawl screen and its input line call.
+//! The commands the Scrawl screen, its input line and the floating one-line window call.
 
 use magical_merchant_core::utils::clock::Day;
 use magical_merchant_core::{ScrawlDays, Source};
@@ -6,6 +6,9 @@ use tauri::{AppHandle, Runtime};
 
 use crate::device::{self, ClientContext};
 use crate::services::tauri::{app_base_dir, off_main_thread};
+use crate::services::windows::tell_scrawl_captured;
+#[cfg(desktop)]
+use crate::services::windows::{hide_capture_window, show_capture_window};
 
 #[tauri::command]
 pub(crate) fn save_quick_capture<R: Runtime>(
@@ -67,4 +70,29 @@ pub(crate) fn delete_scrawl_entry<R: Runtime>(
     let naive = Day::parse_ymd(&date).map_err(|e| e.to_string())?;
     magical_merchant_core::delete_scrawl_entry(&base_dir, naive, index, &raw)
         .map_err(|e| e.to_string())
+}
+
+/// Floats the one-line window from inside the app (Settings' "try it"): the same window the
+/// global key shows.
+#[tauri::command]
+pub(crate) fn capture_window_show(app: AppHandle) {
+    #[cfg(desktop)]
+    show_capture_window(&app);
+    #[cfg(not(desktop))]
+    let _ = app;
+}
+
+/// Hides the window; its page keeps the half-typed line for the next time (Esc, a send).
+#[tauri::command]
+pub(crate) fn capture_window_hide(app: AppHandle) {
+    #[cfg(desktop)]
+    hide_capture_window(&app);
+    #[cfg(not(desktop))]
+    let _ = app;
+}
+
+/// Tells the main window a line came in from outside it.
+#[tauri::command]
+pub(crate) fn capture_window_sent(app: AppHandle) {
+    tell_scrawl_captured(&app, "window");
 }

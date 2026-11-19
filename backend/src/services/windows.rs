@@ -1,14 +1,26 @@
-//! Tauri's webview windows other than the main one: the floating one-line window and the
-//! in-app sign-in window.
+//! Tauri's webview windows: the floating one-line window, the in-app sign-in window, and
+//! the word every window hears when a Scrawl line came in from outside the main one.
 
+use tauri::{AppHandle, Emitter as _, Runtime};
 // Only the desktop build looks up or creates a window here. Android hands the sign-in URL
 // to the default browser and has no one-line window, so nothing there uses this trait
-#[cfg(desktop)]
-use tauri::Emitter as _;
 #[cfg(not(target_os = "android"))]
 use tauri::Manager as _;
-#[cfg(not(target_os = "android"))]
-use tauri::{AppHandle, Runtime};
+
+/// Told to every window after a line was written from outside the main one.
+const SCRAWL_CAPTURED: &str = "scrawl-captured";
+
+/// What wrote the line, as the main window's toast words it.
+#[derive(Clone, serde::Serialize)]
+struct Captured {
+    via: &'static str,
+}
+
+/// Tells every window a Scrawl line came in from outside the main one, so a Scrawl on screen
+/// rereads and says what came in. `via` is what wrote it: `window` or `link`.
+pub(crate) fn tell_scrawl_captured<R: Runtime>(app: &AppHandle<R>, via: &'static str) {
+    let _ = app.emit(SCRAWL_CAPTURED, Captured { via });
+}
 
 /// The floating window's label, and the capability that lets its page talk to the app.
 #[cfg(desktop)]
