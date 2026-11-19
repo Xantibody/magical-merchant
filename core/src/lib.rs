@@ -15,10 +15,9 @@ pub mod utils;
 mod error;
 pub mod search;
 
+pub use domain::glyphs::{GLYPH_MAX_BYTES, GlyphData, GlyphFormat, GlyphName, GlyphSummary};
 pub use error::{CoreError, SyncError, describe};
-pub use glyph::{
-    GLYPH_MAX_BYTES, GlyphData, GlyphSummary, delete_glyph, list_glyphs, read_glyph, save_glyph,
-};
+pub use glyph::{delete_glyph, list_glyphs, read_glyph, save_glyph};
 pub use note::error::NoteError;
 pub use note::{
     BEFORE_RESTORE, DRAFT, NoteKind, NoteSummary, Revision, Snapshot, Version, VersionStatus,
@@ -55,4 +54,4 @@ pub use utils::frontmatter::NoteFrontmatter as NoteMeta;
 /// The provenance that can be written only when a note is created. Every creation entry takes one.
 pub use utils::frontmatter::Provenance;
 pub use utils::markdown::{ScrawlEntry, parse_scrawl_entry};
-pub use utils::validated::{GlyphFormat, GlyphName, NoteFilename};
+pub use utils::validated::NoteFilename;

@@ -2,3 +2,4 @@
 //! and the widget. Only operation files call `services`; rule files take plain values.
 
 pub mod device;
+pub mod glyphs;

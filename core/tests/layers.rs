@@ -32,7 +32,7 @@ const OLD_MODULES: &[&str] = &[
 
 /// Rule files inside `domain/` (paths under the crate root). They hold the rules alone,
 /// so they are tested with plain values and never call a service.
-const RULE_FILES: &[&str] = &[];
+const RULE_FILES: &[&str] = &["src/domain/glyphs/image.rs"];
 
 /// Violations the tree still has, each with the plan that removes it. A step that clears
 /// one takes its line out; a line that no longer matches anything fails the check.

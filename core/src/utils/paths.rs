@@ -7,7 +7,6 @@ pub const SCRAWL_DIR: &str = "scrawl";
 pub const NOTES_DIR: &str = "notes";
 pub const CODEX_DIR: &str = "codex";
 pub const TEMPLATES_DIR: &str = "templates";
-pub const GLYPHS_DIR: &str = "glyphs";
 
 #[must_use]
 pub fn data_dir(base_dir: &Path) -> PathBuf {
@@ -55,16 +54,6 @@ pub fn templates_dir(base_dir: &Path) -> PathBuf {
 #[must_use]
 pub fn template_drafts_dir(base_dir: &Path) -> PathBuf {
     base_dir.join("template-drafts")
-}
-
-/// Where special-character (glyph) images live.
-///
-/// Inside `data/` because the images should sync too. If a note with `:236p:` showed as plain text
-/// on another device, registering it would be pointless. The sync scan walks everything under data
-/// without selecting by extension.
-#[must_use]
-pub fn glyphs_dir(base_dir: &Path) -> PathBuf {
-    data_dir(base_dir).join(GLYPHS_DIR)
 }
 
 /// Where a Codex (a document that keeps growing) and its versions live.
@@ -158,15 +147,6 @@ mod tests {
         assert_eq!(
             templates_dir(Path::new("/app")),
             PathBuf::from("/app/data/templates")
-        );
-    }
-
-    /// Glyph images are inside `data/` too. They reach the other devices along with the notes.
-    #[test]
-    fn glyphs_live_inside_the_synced_tree() {
-        assert_eq!(
-            glyphs_dir(Path::new("/app")),
-            PathBuf::from("/app/data/glyphs")
         );
     }
 

@@ -1,41 +1,14 @@
-//! Special characters (glyphs). A small image the user registers gets a short name, and
-//! writing `:name:` in the body draws it like an emoji. It is for symbols that cannot be
-//! typed, such as fighting game command notation (`:236p:`).
-//!
-//! Images live at `data/glyphs/<name>.<png|svg>` and sync by the same path as notes. The
-//! body side stays the string `:name:`; the name is only looked up at draw time, so on a
-//! device the image has not reached, it shows as text.
+//! The glyph operations. The rules they apply live in `domain::glyphs`.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use serde::Serialize;
-
+use crate::domain::glyphs::{
+    GlyphData, GlyphFormat, GlyphName, GlyphSummary, filename, glyphs_dir, summarize_filename,
+    validate,
+};
 use crate::error::CoreError;
 use crate::services::files::{resolve_existing, write_atomic};
-use crate::utils::paths::glyphs_dir;
-use crate::utils::validated::{GlyphFormat, GlyphName};
-
-/// The limit for one image. Sync bundles the changes into one POST as base64, so allowing
-/// a large image makes sync heavy by itself. 256 KiB is more than enough for an
-/// emoji-sized symbol.
-pub const GLYPH_MAX_BYTES: usize = 256 * 1024;
-
-/// One entry of the glyph list. It does not hold the image itself.
-#[derive(Debug, Clone, Serialize)]
-pub struct GlyphSummary {
-    pub name: String,
-    pub filename: String,
-    pub format: String,
-    pub bytes: u64,
-}
-
-/// The content of one glyph.
-#[derive(Debug, Clone)]
-pub struct GlyphData {
-    pub format: GlyphFormat,
-    pub bytes: Vec<u8>,
-}
 
 struct Glyphs {
     base_dir: PathBuf,
@@ -50,15 +23,11 @@ impl Glyphs {
         glyphs_dir(&self.base_dir)
     }
 
-    fn filename(name: &GlyphName, format: GlyphFormat) -> String {
-        format!("{name}.{}", format.extension())
-    }
-
     /// Find the actual file from a name. The format exists only in the filename, so both are tried.
     fn find(&self, name: &GlyphName) -> Result<(PathBuf, GlyphFormat), CoreError> {
         let dir = self.dir();
         for format in [GlyphFormat::Png, GlyphFormat::Svg] {
-            match resolve_existing(&dir, &Self::filename(name, format)) {
+            match resolve_existing(&dir, &filename(name, format)) {
                 Ok(path) => return Ok((path, format)),
                 Err(CoreError::NotFound(_)) => {}
                 Err(e) => return Err(e),
@@ -72,7 +41,7 @@ impl Glyphs {
     fn writable_path(&self, name: &GlyphName, format: GlyphFormat) -> Result<PathBuf, CoreError> {
         let dir = self.dir();
         fs::create_dir_all(&dir)?;
-        Ok(fs::canonicalize(&dir)?.join(Self::filename(name, format)))
+        Ok(fs::canonicalize(&dir)?.join(filename(name, format)))
     }
 
     fn list(&self) -> Result<Vec<GlyphSummary>, CoreError> {
@@ -114,11 +83,7 @@ impl Glyphs {
 
         // One image per name. When a PNG is replaced by an SVG, the old one is deleted:
         // left in place, the reader would have to decide which one `:name:` means
-        let other = match format {
-            GlyphFormat::Png => GlyphFormat::Svg,
-            GlyphFormat::Svg => GlyphFormat::Png,
-        };
-        match fs::remove_file(self.dir().join(Self::filename(name, other))) {
+        match fs::remove_file(self.dir().join(filename(name, format.other()))) {
             Ok(()) => Ok(()),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
             Err(e) => Err(e.into()),
@@ -129,39 +94,6 @@ impl Glyphs {
         let (path, _) = self.find(name)?;
         fs::remove_file(path)?;
         Ok(())
-    }
-}
-
-/// Split `<name>.<ext>` into name and format. If either does not fit the rules, it is not
-/// a glyph (an unrelated file dropped in by hand is silently skipped).
-fn summarize_filename(filename: &str) -> Option<(GlyphName, GlyphFormat)> {
-    let path = Path::new(filename);
-    let name = GlyphName::parse(path.file_stem()?.to_str()?).ok()?;
-    let format = GlyphFormat::parse(path.extension()?.to_str()?).ok()?;
-    Some((name, format))
-}
-
-/// Check that the content is the format it claims. No strict parsing: for PNG only the
-/// first 8 bytes, for SVG only that it is UTF-8 and contains `<svg`. Rejecting a file
-/// whose extension and content disagree is enough; an XML parser is not worth carrying.
-fn validate(format: GlyphFormat, bytes: &[u8]) -> Result<(), CoreError> {
-    if bytes.len() > GLYPH_MAX_BYTES {
-        return Err(CoreError::Parse(format!(
-            "glyph is too large: {} bytes (max {GLYPH_MAX_BYTES})",
-            bytes.len()
-        )));
-    }
-    let looks_right = match format {
-        GlyphFormat::Png => bytes.starts_with(b"\x89PNG\r\n\x1a\n"),
-        GlyphFormat::Svg => std::str::from_utf8(bytes).is_ok_and(|text| text.contains("<svg")),
-    };
-    if looks_right {
-        Ok(())
-    } else {
-        Err(CoreError::Parse(format!(
-            "content is not a {} image",
-            format.extension()
-        )))
     }
 }
 
@@ -191,6 +123,7 @@ pub fn delete_glyph(base_dir: &Path, name: &GlyphName) -> Result<(), CoreError> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::glyphs::GLYPH_MAX_BYTES;
     use tempfile::TempDir;
 
     const PNG: &[u8] = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR";
