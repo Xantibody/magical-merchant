@@ -13,10 +13,10 @@ use tauri::{AppHandle, Emitter};
 
 use crate::device;
 use crate::services::tauri::app_base_dir;
-
-/// The floating window's label, and the capability that lets its page talk to the app.
 #[cfg(desktop)]
-const LABEL: &str = "capture";
+use crate::services::windows::{
+    CAPTURE_WINDOW_LABEL, create_capture_window, hide_capture_window, show_capture_window,
+};
 
 /// Told to every window after a line was written from outside the main one.
 const CAPTURED: &str = "scrawl-captured";
@@ -39,26 +39,6 @@ pub(crate) fn link_text(url: &url::Url) -> Option<String> {
             .map(|(_, value)| value.trim().to_string())
             .unwrap_or_default(),
     )
-}
-
-/// Builds the floating window once, hidden. Showing a window already loaded is what lets the
-/// key answer at once, with the caret in the field, instead of waiting for a page to boot.
-/// Transparent and without a frame: what shows is the pill itself, not a box around it.
-#[cfg(desktop)]
-fn create(app: &AppHandle) -> tauri::Result<()> {
-    tauri::WebviewWindowBuilder::new(app, LABEL, tauri::WebviewUrl::App("capture.html".into()))
-        .title("Scrawl")
-        .inner_size(640.0, 132.0)
-        .resizable(false)
-        .decorations(false)
-        .transparent(true)
-        .shadow(false)
-        .always_on_top(true)
-        .skip_taskbar(true)
-        .visible(false)
-        .center()
-        .build()?;
-    Ok(())
 }
 
 /// Registers the key with the OS and builds the window it shows. Pressed again while the window
@@ -86,40 +66,28 @@ pub(crate) fn register(app: &AppHandle) -> tauri::Result<()> {
     if let Err(e) = app.global_shortcut().register(key) {
         eprintln!("the one-line key is taken: {e}");
     }
-    create(app)
+    create_capture_window(app)
 }
 
 /// The key, pressed: up and focused if it was not, and if it was, the same key sends (67).
 #[cfg(desktop)]
 fn toggle(app: &AppHandle) {
-    let Some(window) = app.get_webview_window(LABEL) else {
+    let Some(window) = app.get_webview_window(CAPTURE_WINDOW_LABEL) else {
         return;
     };
     let up = window.is_visible().unwrap_or(false) && window.is_focused().unwrap_or(false);
     if up {
-        let _ = app.emit_to(LABEL, "capture://send", ());
+        let _ = app.emit_to(CAPTURE_WINDOW_LABEL, "capture://send", ());
         return;
     }
-    show(app);
-}
-
-/// Shows the window over whatever is in front and hands it the keys.
-#[cfg(desktop)]
-fn show(app: &AppHandle) {
-    let Some(window) = app.get_webview_window(LABEL) else {
-        return;
-    };
-    let _ = window.center();
-    let _ = window.show();
-    let _ = window.set_focus();
-    let _ = app.emit_to(LABEL, "capture://open", ());
+    show_capture_window(app);
 }
 
 /// Floats the window from inside the app (Settings' "try it"): the same window the key shows.
 #[tauri::command]
 pub(crate) fn capture_window_show(app: AppHandle) {
     #[cfg(desktop)]
-    show(&app);
+    show_capture_window(&app);
     #[cfg(not(desktop))]
     let _ = app;
 }
@@ -128,9 +96,7 @@ pub(crate) fn capture_window_show(app: AppHandle) {
 #[tauri::command]
 pub(crate) fn capture_window_hide(app: AppHandle) {
     #[cfg(desktop)]
-    if let Some(window) = app.get_webview_window(LABEL) {
-        let _ = window.hide();
-    }
+    hide_capture_window(&app);
     #[cfg(not(desktop))]
     let _ = app;
 }
@@ -148,7 +114,7 @@ pub(crate) fn handle_links(app: &AppHandle, urls: &[url::Url]) {
     for text in urls.iter().filter_map(link_text) {
         if text.is_empty() {
             #[cfg(desktop)]
-            show(app);
+            show_capture_window(app);
             continue;
         }
         let app = app.clone();
