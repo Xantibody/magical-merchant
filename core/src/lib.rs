@@ -4,6 +4,7 @@
 
 pub mod domain;
 pub mod services;
+// The modules not yet moved under `domain::sync`; it empties step by step.
 pub mod sync;
 pub mod utils;
 

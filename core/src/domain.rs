@@ -10,5 +10,6 @@ pub mod glyphs;
 pub mod note;
 pub mod scrawl;
 pub mod search;
+pub mod sync;
 pub mod tags;
 pub mod templates;

@@ -37,6 +37,7 @@ const RULE_FILES: &[&str] = &[
     "src/domain/note/row.rs",
     "src/domain/scrawl/day.rs",
     "src/domain/scrawl/entry.rs",
+    "src/domain/sync/result.rs",
     "src/domain/tags/tag.rs",
     "src/domain/templates/file.rs",
     "src/domain/templates/today.rs",
@@ -45,10 +46,8 @@ const RULE_FILES: &[&str] = &[
 
 /// Violations the tree still has, each with the plan that removes it. A step that clears
 /// one takes its line out; a line that no longer matches anything fails the check.
-const ALLOWED: &[(&str, Rule, u32)] = &[
-    ("src/sync.rs", Rule::EntryHoldsOnlyModAndPubUse, 32),
-    ("src/utils/clock.rs", Rule::EntryHoldsOnlyModAndPubUse, 33),
-];
+const ALLOWED: &[(&str, Rule, u32)] =
+    &[("src/utils/clock.rs", Rule::EntryHoldsOnlyModAndPubUse, 33)];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Rule {
