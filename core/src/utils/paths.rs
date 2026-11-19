@@ -6,7 +6,6 @@ pub const DATA_DIR: &str = "data";
 pub const SCRAWL_DIR: &str = "scrawl";
 pub const NOTES_DIR: &str = "notes";
 pub const CODEX_DIR: &str = "codex";
-pub const TEMPLATES_DIR: &str = "templates";
 
 #[must_use]
 pub fn data_dir(base_dir: &Path) -> PathBuf {
@@ -35,25 +34,6 @@ pub fn note_file_path(base_dir: &Path, timestamp: Stamp) -> PathBuf {
 #[must_use]
 pub fn notes_dir(base_dir: &Path) -> PathBuf {
     data_dir(base_dir).join(NOTES_DIR)
-}
-
-/// Where templates live.
-///
-/// Inside `data/` because templates should sync too. With different templates per device, tapping
-/// the same name from the widget would produce a different note depending on the device.
-#[must_use]
-pub fn templates_dir(base_dir: &Path) -> PathBuf {
-    data_dir(base_dir).join(TEMPLATES_DIR)
-}
-
-/// Where the unsaved edits of templates live, one file per template.
-///
-/// Outside `data/`. A draft is one device's unfinished edit: synced, it would reach
-/// another device as a stray file, or fight the same template being edited there. The
-/// template itself syncs once it is saved.
-#[must_use]
-pub fn template_drafts_dir(base_dir: &Path) -> PathBuf {
-    base_dir.join("template-drafts")
 }
 
 /// Where a Codex (a document that keeps growing) and its versions live.
@@ -138,16 +118,6 @@ mod tests {
     fn test_notes_dir() {
         let path = notes_dir(Path::new("/app"));
         assert_eq!(path, PathBuf::from("/app/data/notes"));
-    }
-
-    /// Templates are inside `data/` too. The sync scan walks everything under data,
-    /// so just being here gets them to the other devices.
-    #[test]
-    fn templates_live_inside_the_synced_tree() {
-        assert_eq!(
-            templates_dir(Path::new("/app")),
-            PathBuf::from("/app/data/templates")
-        );
     }
 
     /// Codex versions are inside `data/`. A person committed them, so they reach the other devices.

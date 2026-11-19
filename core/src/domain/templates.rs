@@ -7,6 +7,7 @@
 
 mod draft;
 mod edit;
+mod file;
 mod folder;
 mod new_note;
 mod today;
@@ -18,7 +19,7 @@ pub use draft::{
 pub use edit::{
     TemplateDetail, delete_template, list_templates, read_template, rename_template, save_template,
 };
-pub use folder::Summary as TemplateSummary;
+pub use file::Summary as TemplateSummary;
 pub use new_note::{CreatedNote, create_note_from_template};
 pub use today::{TemplateToday, templates_today};
 pub use variables::VarLocale;

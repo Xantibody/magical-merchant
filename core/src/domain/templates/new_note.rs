@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
+use super::file::template_name;
 use super::folder::Templates;
 use super::variables::{VarLocale, resolve_vars};
 use crate::error::CoreError;
@@ -61,12 +62,6 @@ pub fn create_note_from_template(
     )?;
 
     Ok(CreatedNote { path })
-}
-
-/// The name recorded in the frontmatter. The filename itself minus the extension.
-fn template_name(filename: &NoteFilename) -> &str {
-    let name = filename.as_str();
-    name.strip_suffix(".md").unwrap_or(name)
 }
 
 /// The `[[ID]]` link to the note last created from the same template.

@@ -1,54 +1,16 @@
+//! One folder of template files: the templates themselves in `data/templates/`, or their
+//! drafts in `template-drafts/`. The edit and draft operations both reach the disk here.
+
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use serde::{Deserialize, Serialize};
-
+use super::file::{
+    Summary, TemplateFrontmatter, parse_file, render_file, summarize, template_drafts_dir,
+    templates_dir,
+};
 use crate::error::CoreError;
 use crate::services::files::{ensure_dir, list_md_files, write_atomic};
-use crate::utils::frontmatter;
-use crate::utils::paths::{template_drafts_dir, templates_dir};
 use crate::utils::validated::NoteFilename;
-
-/// The frontmatter of a template file. A separate type from the note's.
-/// A note always has `time`, but a creation time means nothing for a template: a template
-/// is reused, and the thing that has a time is the note born from it.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub(crate) struct TemplateFrontmatter {
-    /// The mark that this is a template. Sitting in `templates/` alone does not tell
-    /// someone who opens this file in another Markdown tool.
-    #[serde(default = "yes")]
-    pub template: bool,
-    /// Tags added automatically to notes created from here. A variable such as
-    /// `{{date:YYYY-MM}}` can be written, and it resolves at the moment a note is created.
-    #[serde(default)]
-    pub tags: Vec<String>,
-}
-
-const fn yes() -> bool {
-    true
-}
-
-impl Default for TemplateFrontmatter {
-    fn default() -> Self {
-        Self {
-            template: true,
-            tags: Vec::new(),
-        }
-    }
-}
-
-/// One entry of the template list.
-#[derive(Debug, Clone, Serialize)]
-pub struct Summary {
-    pub filename: String,
-    /// The name minus the extension (`daily` for `daily.md`). It is the name shown on
-    /// screen, and also the value recorded in the frontmatter of notes created from here.
-    pub name: String,
-    pub tags: Vec<String>,
-    /// The first line of the body, variables unresolved. The list resolves them for today
-    /// on screen, in the locale the screen is in, which core does not know.
-    pub preview: String,
-}
 
 /// One directory of template files. The same shape serves the templates themselves and
 /// anything else stored as a template file.
@@ -102,24 +64,13 @@ impl Templates {
         Ok(summaries)
     }
 
-    /// Return the frontmatter and the body separately. The body is owned: the caller always
-    /// resolves variables and rebuilds it, so returning a borrow gains nothing.
+    /// Return the frontmatter and the body separately.
     pub(crate) fn read(
         &self,
         filename: &NoteFilename,
     ) -> Result<(TemplateFrontmatter, String), CoreError> {
         let content = fs::read_to_string(self.existing_path(filename)?)?;
-        frontmatter::parse::<TemplateFrontmatter>(&content).map_or_else(
-            // A template without frontmatter is treated as plain Markdown, used as the
-            // body as is. A user can also drop a template in by hand
-            |_| {
-                Ok((
-                    TemplateFrontmatter::default(),
-                    frontmatter::strip(&content).to_string(),
-                ))
-            },
-            |(fm, body)| Ok((fm, body.to_string())),
-        )
+        Ok(parse_file(&content))
     }
 
     pub(crate) fn save(
@@ -130,11 +81,7 @@ impl Templates {
     ) -> Result<(), CoreError> {
         let path = self.writable_path(filename)?;
         ensure_dir(&path)?;
-        let fm = TemplateFrontmatter {
-            template: true,
-            tags: tags.to_vec(),
-        };
-        write_atomic(&path, frontmatter::render(&fm, body)?)?;
+        write_atomic(&path, render_file(body, tags)?)?;
         Ok(())
     }
 
@@ -157,34 +104,6 @@ impl Templates {
     pub(crate) fn delete(&self, filename: &NoteFilename) -> Result<(), CoreError> {
         fs::remove_file(self.existing_path(filename)?)?;
         Ok(())
-    }
-}
-
-fn summarize(filename: String, content: &str) -> Summary {
-    let (tags, body) = frontmatter::parse::<TemplateFrontmatter>(content).map_or_else(
-        // Treating broken frontmatter as body puts YAML in the list preview
-        |_| (Vec::new(), frontmatter::strip(content)),
-        |(fm, body)| (fm.tags, body),
-    );
-
-    let name = filename
-        .strip_suffix(".md")
-        .unwrap_or(&filename)
-        .to_string();
-    // Heading marks are dropped. What the list wants to show is the title, not Markdown
-    let preview = body
-        .lines()
-        .find(|line| !line.trim().is_empty())
-        .unwrap_or("")
-        .trim_start_matches('#')
-        .trim()
-        .to_string();
-
-    Summary {
-        filename,
-        name,
-        tags,
-        preview,
     }
 }
 
