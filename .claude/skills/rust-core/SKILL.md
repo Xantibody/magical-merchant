@@ -35,7 +35,7 @@ path turned back into the note's ID) and overwrites (snapshot, revision
 check, core `update_note`) — used by `new` / `import` / `edit` and the MCP
 `create_note` / `update_note` tools; never write a note from the CLI or MCP
 any other way. Each caller names its own `Source`, and the `Context` it
-records comes from core's `utils::device::probe` — the same probe the app
+records comes from core's `domain::device::probe` — the same probe the app
 runs, so the terminal and the app say the same things about the machine.
 Only the coordinate is missing there; see `notes.rs::context`. `import`
 additionally carries the creation time (core `create_note_at`): a note's

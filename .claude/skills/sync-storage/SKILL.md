@@ -97,7 +97,7 @@ local scan → diff → `POST /sync/bulk`, repeated until nothing is left over.
   The name is built and read back in `core/src/sync/conflict.rs` only.
   `<ts>` is precise to the second, so two copies of one key can want the same
   name: a relocation never overwrites, the second takes `<ts>-2.md`
-  (`rename_without_clobber` in `core/src/utils/fs.rs`)
+  (`rename_without_clobber` in `core/src/services/files.rs`)
 - Auto sync runs a few seconds after any successful write, and at once when the
   user leaves the app with something unsent (`sync.leave()`; the mark is
   `dirtiedAt > lastStartedAt`). A `syncNow` during a round is kept as one
