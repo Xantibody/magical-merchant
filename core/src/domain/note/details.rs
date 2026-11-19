@@ -118,7 +118,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let path = draft(&tmp, "body", &[]).unwrap();
         let filename = filename_of(&path);
-        update_note(&path, "edited", &mock_context(), None).unwrap();
+        update_note(tmp.path(), &filename, "edited", &mock_context(), None).unwrap();
         let stamped = read_note_meta(tmp.path(), &filename).unwrap().updated;
 
         update_note_meta(tmp.path(), &filename, sample_time(), &[]).unwrap();

@@ -210,7 +210,14 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let target = draft(&tmp, "後で本文に自分を書く", &[]).unwrap();
         let stem = stem_of(&target);
-        crate::update_note(&target, &format!("自分 [[{stem}]]"), &context(), None).unwrap();
+        crate::update_note(
+            tmp.path(),
+            &filename_of(&target),
+            &format!("自分 [[{stem}]]"),
+            &context(),
+            None,
+        )
+        .unwrap();
 
         assert!(
             find_backlinks(tmp.path(), &filename_of(&target))

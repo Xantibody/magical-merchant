@@ -325,11 +325,16 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let filename = seed(tmp.path(), "before");
         let scratch = tmp.path().join("scratch");
-        let note_path = tmp.path().join("data/notes").join(filename.as_str());
 
         let err = edit(tmp.path(), &filename, &scratch, |path| {
-            magical_merchant_core::update_note(&note_path, "the app", &Context::default(), None)
-                .unwrap();
+            magical_merchant_core::update_note(
+                tmp.path(),
+                &filename,
+                "the app",
+                &Context::default(),
+                None,
+            )
+            .unwrap();
             fs::write(path, "mine").unwrap();
             Ok(())
         })

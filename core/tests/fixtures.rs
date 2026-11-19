@@ -216,7 +216,8 @@ fn the_fixtures_can_be_written_to() {
     // Attach the revision as read. core refuses the write when it does not match
     let revision = Revision::of(&body);
     update_note(
-        &note.path,
+        dir.path(),
+        &filename(&note.filename),
         &format!("{}\n\nAnd a line written later.\n", body.trim_end()),
         &context,
         Some(&revision),

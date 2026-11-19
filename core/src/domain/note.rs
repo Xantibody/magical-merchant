@@ -25,7 +25,9 @@ pub use delete::delete_note;
 pub use details::{update_note_meta, update_note_origin, update_note_view};
 pub use edit::update_note;
 pub use file::{NoteFrontmatter, Provenance};
-pub use history::{Snapshot, list_note_history, read_note_history, restore_note, snapshot_note};
+pub use history::{
+    RestoredNote, Snapshot, list_note_history, read_note_history, restore_note, snapshot_note,
+};
 pub use id::NoteFilename;
 pub use kind::NoteKind;
 pub use list::list_notes;

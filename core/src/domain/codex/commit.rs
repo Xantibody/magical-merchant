@@ -84,28 +84,25 @@ mod tests {
         NoteKind, Provenance, create_draft, read_note_by_filename, update_note,
     };
     use std::fs;
-    use std::path::PathBuf;
     use tempfile::TempDir;
 
     /// The note to commit versions on. Only a Codex can commit, so the test default is a Codex.
-    fn note(base: &Path, body: &str) -> (PathBuf, NoteFilename) {
-        let kind = NoteKind::Codex;
-        let filename = create_draft(
+    fn note(base: &Path, body: &str) -> NoteFilename {
+        create_draft(
             base,
-            kind,
+            NoteKind::Codex,
             body,
             &[],
             &Context::default(),
             Provenance::default(),
         )
-        .unwrap();
-        (kind.dir(base).join(filename.as_str()), filename)
+        .unwrap()
     }
 
     #[test]
     fn the_first_version_keeps_the_body_the_message_and_the_time() {
         let tmp = TempDir::new().unwrap();
-        let (_, filename) = note(tmp.path(), "# 題\n\n本文");
+        let filename = note(tmp.path(), "# 題\n\n本文");
 
         let version = commit_note_version(tmp.path(), &filename, Some("最初の版")).unwrap();
 
@@ -129,7 +126,7 @@ mod tests {
     #[test]
     fn a_version_is_a_markdown_file_under_the_synced_codex_tree() {
         let tmp = TempDir::new().unwrap();
-        let (_, filename) = note(tmp.path(), "body");
+        let filename = note(tmp.path(), "body");
 
         let version = commit_note_version(tmp.path(), &filename, None).unwrap();
 
@@ -159,7 +156,7 @@ mod tests {
     #[test]
     fn the_same_body_in_the_same_second_is_the_same_version() {
         let tmp = TempDir::new().unwrap();
-        let (_, filename) = note(tmp.path(), "body");
+        let filename = note(tmp.path(), "body");
         let now = Stamp::new(2026, 9, 17, 14, 3, 0, 9 * 3600).unwrap();
 
         let first = commit_at(tmp.path(), &filename, Some("a"), now).unwrap();
@@ -172,7 +169,7 @@ mod tests {
     #[test]
     fn the_same_body_a_second_later_is_another_version() {
         let tmp = TempDir::new().unwrap();
-        let (_, filename) = note(tmp.path(), "body");
+        let filename = note(tmp.path(), "body");
         let now = Stamp::new(2026, 9, 17, 14, 3, 0, 9 * 3600).unwrap();
 
         let first = commit_at(tmp.path(), &filename, Some("a"), now).unwrap();
@@ -187,9 +184,9 @@ mod tests {
     #[test]
     fn deleting_a_version_removes_only_that_version() {
         let tmp = TempDir::new().unwrap();
-        let (path, filename) = note(tmp.path(), "one");
+        let filename = note(tmp.path(), "one");
         let first = commit_note_version(tmp.path(), &filename, None).unwrap();
-        update_note(&path, "two", &Context::default(), None).unwrap();
+        update_note(tmp.path(), &filename, "two", &Context::default(), None).unwrap();
         let second = commit_note_version(tmp.path(), &filename, None).unwrap();
 
         delete_note_version(tmp.path(), &filename, &second.id).unwrap();

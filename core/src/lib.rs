@@ -31,9 +31,9 @@ pub use domain::note::NoteFrontmatter as NoteMeta;
 /// The provenance that can be written only when a note is created. Every creation entry takes one.
 pub use domain::note::Provenance;
 pub use domain::note::{
-    NoteFilename, NoteKind, NoteSummary, OpenedNote, Revision, Snapshot, create_draft,
-    create_note_at, delete_note, list_note_history, list_notes, locate_note, open_note,
-    read_note_by_filename, read_note_history, read_note_meta, relocate_conflict_copies,
+    NoteFilename, NoteKind, NoteSummary, OpenedNote, RestoredNote, Revision, Snapshot,
+    create_draft, create_note_at, delete_note, list_note_history, list_notes, locate_note,
+    open_note, read_note_by_filename, read_note_history, read_note_meta, relocate_conflict_copies,
     relocate_duplicate_ids, repair_notes, restore_note, snapshot_note, update_note,
     update_note_meta, update_note_origin, update_note_view,
 };

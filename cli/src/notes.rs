@@ -110,13 +110,13 @@ pub(crate) fn overwrite(
     // core refuses a missing file too, but looking here first lets us say "not found" by name
     let snapshot = magical_merchant_core::snapshot_note(data_dir, filename)?
         .ok_or_else(|| WriteError::NotFound(filename.clone()))?;
-    // Ask core where it lives. A note turned into a Codex is not in `notes/`
-    let (_, path) = magical_merchant_core::locate_note(data_dir, filename)?;
-    let revision = match magical_merchant_core::update_note(&path, body, &context(), expected) {
-        Ok(revision) => revision,
-        Err(CoreError::Stale(_)) => return Err(WriteError::Stale(filename.clone())),
-        Err(e) => return Err(e.into()),
-    };
+    // Core writes it where it lives. A note turned into a Codex is not in `notes/`
+    let revision =
+        match magical_merchant_core::update_note(data_dir, filename, body, &context(), expected) {
+            Ok(revision) => revision,
+            Err(CoreError::Stale(_)) => return Err(WriteError::Stale(filename.clone())),
+            Err(e) => return Err(e.into()),
+        };
     Ok(Written { snapshot, revision })
 }
 

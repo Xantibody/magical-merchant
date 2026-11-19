@@ -171,7 +171,6 @@ mod tests {
             Provenance::default(),
         )
         .unwrap();
-        let path = NoteKind::Codex.dir(tmp.path()).join(filename.as_str());
         let row = |base: &Path| {
             list_notes(base)
                 .unwrap()
@@ -189,7 +188,7 @@ mod tests {
         assert_eq!(clean.version_count, Some(1));
         assert_eq!(clean.dirty, Some(false));
 
-        update_note(&path, "two", &Context::default(), None).unwrap();
+        update_note(tmp.path(), &filename, "two", &Context::default(), None).unwrap();
         let moved = row(tmp.path());
         assert_eq!(moved.version_count, Some(1));
         assert_eq!(moved.dirty, Some(true));

@@ -688,7 +688,7 @@ impl McpServer {
     ) -> Result<Json<UpdatedNoteOutput>, String> {
         let filename = parse_filename(&param.filename)?;
         let expected = param.revision.map(Revision::from);
-        let snapshot = magical_merchant_core::restore_note(
+        let restored = magical_merchant_core::restore_note(
             &self.data_dir,
             &filename,
             &param.id,
@@ -697,10 +697,8 @@ impl McpServer {
         .map_err(err)?;
         Ok(Json(UpdatedNoteOutput {
             filename: filename.as_str().to_string(),
-            snapshot: snapshot.map(Into::into),
-            revision: magical_merchant_core::open_note(&self.data_dir, &filename)
-                .ok()
-                .map(|opened| opened.revision.to_string()),
+            snapshot: restored.snapshot.map(Into::into),
+            revision: Some(restored.revision.to_string()),
         }))
     }
 
@@ -1505,7 +1503,8 @@ mod tests {
             .0;
         // The app typed after the read
         magical_merchant_core::update_note(
-            &tmp.path().join("data/notes").join(&created.filename),
+            tmp.path(),
+            &filename,
             "from the app",
             &Context::default(),
             None,
@@ -1631,7 +1630,8 @@ mod tests {
             .0;
         let filename = NoteFilename::parse(&created.filename).unwrap();
         magical_merchant_core::update_note(
-            &tmp.path().join("data/notes").join(&created.filename),
+            tmp.path(),
+            &filename,
             "from the app",
             &Context::default(),
             None,
@@ -2243,7 +2243,8 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let target = a_note(tmp.path(), "# Target");
         magical_merchant_core::update_note(
-            &tmp.path().join("data/notes").join(&target),
+            tmp.path(),
+            &NoteFilename::parse(&target).unwrap(),
             &format!("# Target\nme [[{}]]", stem(&target)),
             &Context::default(),
             None,

@@ -9,9 +9,9 @@ use crate::utils::frontmatter;
 
 /// Look up a note's kind and actual location from its ID.
 ///
-/// Entries that rewrite the body (CLI, MCP) pass the path obtained here to
-/// [`crate::update_note`]: hardcoding `notes/` would make a note turned into a Codex
-/// "missing", or recreate a plain note beside it.
+/// Every operation that takes an ID finds the file here, [`crate::update_note`] among them:
+/// hardcoding `notes/` would make a note turned into a Codex "missing", or recreate a
+/// plain note beside it.
 ///
 /// The directory it is found in is its kind. Codex is checked first so that, when sync
 /// brings back the old `notes/` copy right after a promotion, the Codex one is opened:

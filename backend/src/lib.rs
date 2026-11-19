@@ -198,7 +198,7 @@ impl From<magical_merchant_core::CoreError> for SaveError {
 /// absolute path handed over from the `WebView` as it is would also allow writes
 /// outside `data/`, and onto the traces of deleted notes and of notes turned into a
 /// Codex.
-// AIDEV-NOTE: same parse_filename to locate route as the other note commands. Do not go back to taking a path
+// AIDEV-NOTE: the ID goes to core, which finds the directory, as for the other note commands. Do not go back to taking a path
 #[tauri::command]
 fn update_draft<R: Runtime>(
     handle: AppHandle<R>,
@@ -209,14 +209,9 @@ fn update_draft<R: Runtime>(
 ) -> Result<String, SaveError> {
     let base_dir = app_base_dir(&handle).map_err(SaveError::other)?;
     let filename = parse_filename(&filename).map_err(SaveError::other)?;
-    // Core's refusal turns into a mark in one place. Flattening it to a string here
-    // would deliver the reason the note was not found under a different mark from
-    // the same reason raised by `update_note`
-    let (_, path) =
-        magical_merchant_core::locate_note(&base_dir, &filename).map_err(SaveError::from)?;
     let context = device::get_context(client);
     let expected = Revision::from(revision);
-    magical_merchant_core::update_note(&path, &body, &context, Some(&expected))
+    magical_merchant_core::update_note(&base_dir, &filename, &body, &context, Some(&expected))
         .map(|r| r.to_string())
         .map_err(SaveError::from)
 }

@@ -11,8 +11,8 @@
 use magical_merchant_core::{
     BEFORE_RESTORE, CoreError, CreatedNote, DRAFT, DeviceContext, GLYPH_MAX_BYTES, GlyphData,
     GlyphFormat, GlyphName, GlyphSummary, HitKind, NoteFilename, NoteKind, NoteMeta, NoteSummary,
-    OpenedNote, Provenance, Revision, ScrawlDay, ScrawlDays, ScrawlDirMigration, ScrawlEntry,
-    SearchFilter, SearchHit, Snapshot, Source, SyncError, TagUsage, TemplateDetail,
+    OpenedNote, Provenance, RestoredNote, Revision, ScrawlDay, ScrawlDays, ScrawlDirMigration,
+    ScrawlEntry, SearchFilter, SearchHit, Snapshot, Source, SyncError, TagUsage, TemplateDetail,
     TemplateSummary, TemplateToday, VarLocale, Version, VersionStatus, browse_all,
     commit_note_version, count_tags, create_draft, create_note_at, create_note_from_template,
     delete_glyph, delete_note, delete_note_version, delete_scrawl_entry, delete_template, describe,
@@ -47,6 +47,7 @@ fn the_crate_root_keeps_its_types_and_constants() {
     let _: Option<Provenance<'_>> = None;
     let _: Option<Revision> = None;
     let _: Option<Snapshot> = None;
+    let _: Option<RestoredNote> = None;
     let _: Option<Version> = None;
     let _: Option<VersionStatus> = None;
     let _: &str = DRAFT;
@@ -87,7 +88,7 @@ fn the_crate_root_keeps_its_functions() {
     let _: fn(_, _) -> _ = open_note;
     let _: fn(_, _) -> _ = read_note_by_filename;
     let _: fn(_, _) -> _ = read_note_meta;
-    let _: fn(_, _, _, _) -> _ = update_note;
+    let _: fn(_, _, _, _, _) -> _ = update_note;
     let _: fn(_, _, _, _) -> _ = update_note_meta;
     let _: fn(_, _, _) -> _ = update_note_view;
     let _: fn(_, _, _) -> _ = update_note_origin;
