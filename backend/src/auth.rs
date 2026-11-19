@@ -42,7 +42,10 @@ const AUTH_WINDOW_LABEL: &str = "auth";
 /// Handing it to an external browser puts the app behind, and after approval the user
 /// has to come back on their own. Authentication ends where it started.
 #[cfg(not(target_os = "android"))]
-fn open_auth_window(handle: &AppHandle, auth_url: &str) -> Result<tauri::WebviewWindow, String> {
+fn open_auth_window<R: Runtime>(
+    handle: &AppHandle<R>,
+    auth_url: &str,
+) -> Result<tauri::WebviewWindow<R>, String> {
     let url = Url::parse(auth_url).map_err(|e| format!("Invalid auth URL: {e}"))?;
 
     if let Some(existing) = handle.get_webview_window(AUTH_WINDOW_LABEL) {
@@ -66,7 +69,7 @@ fn open_auth_window(handle: &AppHandle, auth_url: &str) -> Result<tauri::Webview
 /// Waiting on after it is closed would hold a user who meant to stop until the
 /// 5-minute timeout.
 #[cfg(not(target_os = "android"))]
-fn closed_signal(window: &tauri::WebviewWindow) -> tokio::sync::oneshot::Receiver<()> {
+fn closed_signal<R: Runtime>(window: &tauri::WebviewWindow<R>) -> tokio::sync::oneshot::Receiver<()> {
     let (tx, rx) = tokio::sync::oneshot::channel();
     // `on_window_event` wants an `Fn`, so the one-shot sender is wrapped and taken out
     let tx = std::sync::Mutex::new(Some(tx));
@@ -194,8 +197,8 @@ async fn accept_callback_token(
 }
 
 #[cfg(not(target_os = "android"))]
-async fn login_with_loopback(
-    handle: &AppHandle,
+async fn login_with_loopback<R: Runtime>(
+    handle: &AppHandle<R>,
     base_dir: &Path,
     config: &SyncConfig,
 ) -> Result<(), String> {
@@ -429,7 +432,7 @@ mod tests {
 // Tauri commands
 
 #[tauri::command]
-pub(crate) async fn auth_login(handle: AppHandle) -> Result<(), String> {
+pub(crate) async fn auth_login<R: Runtime>(handle: AppHandle<R>) -> Result<(), String> {
     let base_dir = crate::app_base_dir(&handle)?;
     let config = SyncConfig::load(&base_dir)
         .map_err(|e| e.message)?
