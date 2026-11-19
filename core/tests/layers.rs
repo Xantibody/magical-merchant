@@ -43,8 +43,9 @@ const RULE_FILES: &[&str] = &[
     "src/domain/templates/variables.rs",
 ];
 
-/// Violations the tree still has, each with the plan that removes it. A step that clears
-/// one takes its line out; a line that no longer matches anything fails the check.
+/// Violations the tree may keep, each with the plan that removes it; a line that no longer
+/// matches anything fails the check. Empty since plan 33, and
+/// [`no_layer_exception_is_allowed`] keeps it so.
 const ALLOWED: &[(&str, Rule, u32)] = &[];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -120,6 +121,48 @@ fn the_core_tree_keeps_its_layer_rules() {
         "layer rules broken:\n  {}\nallowed but no longer broken (take them out of ALLOWED):\n  {}",
         unexpected.join("\n  "),
         stale.join("\n  "),
+    );
+}
+
+/// The move (plans 24-33) emptied [`ALLOWED`]. A new exception has to change this test
+/// too, so it shows in review instead of slipping in as one more line.
+#[test]
+fn no_layer_exception_is_allowed() {
+    let allowed: Vec<String> = ALLOWED
+        .iter()
+        .map(|(path, rule, plan)| format!("{path} {rule} (plan {plan})"))
+        .collect();
+
+    assert_eq!(allowed, Vec::<String>::new());
+}
+
+/// `utils` holds the five modules that know nothing of this app. Anything else belongs
+/// in `domain` (an app rule) or `services` (talks to the outside).
+#[test]
+fn utils_holds_only_its_five_modules() {
+    let utils = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/utils");
+    let mut names: Vec<String> = fs::read_dir(utils)
+        .expect("readable directory")
+        .map(|entry| {
+            entry
+                .expect("readable entry")
+                .file_name()
+                .to_string_lossy()
+                .into_owned()
+        })
+        .collect();
+    names.sort();
+
+    assert_eq!(
+        names,
+        [
+            "clock",
+            "clock.rs",
+            "diff.rs",
+            "error.rs",
+            "frontmatter.rs",
+            "text.rs"
+        ]
     );
 }
 
