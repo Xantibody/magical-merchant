@@ -1,4 +1,3 @@
-pub(crate) mod error;
 mod history;
 mod kind;
 mod repair;
@@ -1193,7 +1192,12 @@ mod tests {
         promote_note_to_codex(tmp.path(), &filename).unwrap();
 
         assert_eq!(fs::read(&path).unwrap(), before);
-        assert!(!tmp.path().join("data/notes").join(filename.as_str()).exists());
+        assert!(
+            !tmp.path()
+                .join("data/notes")
+                .join(filename.as_str())
+                .exists()
+        );
     }
 
     #[test]

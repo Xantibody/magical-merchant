@@ -1,8 +1,6 @@
 use serde::Serialize;
 use thiserror::Error;
 
-use crate::note::error::NoteError;
-
 #[derive(Debug, Error)]
 pub enum CoreError {
     #[error("IO error: {0}")]
@@ -42,17 +40,6 @@ pub enum CoreError {
 
     #[error("Network error: {0}")]
     Network(String),
-}
-
-impl From<NoteError> for CoreError {
-    fn from(err: NoteError) -> Self {
-        match err {
-            NoteError::Io(e) => Self::Io(e),
-            NoteError::NotFound(s) => Self::NotFound(s),
-            NoteError::PathTraversal(s) => Self::PathTraversal(s),
-            NoteError::Parse(s) => Self::Parse(s),
-        }
-    }
 }
 
 /// Returns the error with a kind, so the frontend can choose between "go to settings",

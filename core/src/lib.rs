@@ -28,7 +28,6 @@ pub use domain::templates::{
 };
 pub use domain::templates::{TemplateToday, templates_today};
 pub use error::{CoreError, SyncError, describe};
-pub use note::error::NoteError;
 pub use note::{
     BEFORE_RESTORE, DRAFT, NoteKind, NoteSummary, Revision, Snapshot, Version, VersionStatus,
     commit_note_version, create_draft_codex, create_draft_note, create_note_at, delete_note,
