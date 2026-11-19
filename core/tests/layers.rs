@@ -28,6 +28,7 @@ const RULE_FILES: &[&str] = &[
     "src/domain/codex/version.rs",
     "src/domain/data.rs",
     "src/domain/device/context.rs",
+    "src/domain/device/place.rs",
     "src/domain/glyphs/image.rs",
     "src/domain/note/file.rs",
     "src/domain/note/id.rs",
@@ -48,6 +49,7 @@ const ALLOWED: &[(&str, Rule, u32)] = &[
     ("src/sync.rs", Rule::EntryHoldsOnlyModAndPubUse, 32),
     ("src/utils/clock.rs", Rule::EntryHoldsOnlyModAndPubUse, 33),
     ("src/utils/place.rs", Rule::UtilsImportsServices, 31),
+    ("src/utils/place.rs", Rule::UtilsImportsDomain, 31),
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

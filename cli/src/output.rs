@@ -212,7 +212,7 @@ impl ContextInfo {
         let location = ctx.location.as_ref().map(|l| LocationInfo {
             latitude: l.latitude,
             longitude: l.longitude,
-            place_key: magical_merchant_core::utils::place::place_key(l.latitude, l.longitude),
+            place_key: magical_merchant_core::domain::device::place_key(l.latitude, l.longitude),
             place,
         });
         // Do not emit `device: {}` for an entry that carries no device fields at

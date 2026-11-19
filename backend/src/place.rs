@@ -7,8 +7,8 @@
 //! No place-name data of our own ships with the app. A dictionary of a few MB would only be
 //! a worse copy of what the OS already has, and an address is worded differently by country.
 
+use magical_merchant_core::domain::device::{PlaceCache, cache_key, place_key};
 use magical_merchant_core::utils::paths::place_cache_path;
-use magical_merchant_core::utils::place::{PlaceCache, cache_key, place_key};
 use std::path::Path;
 
 /// Returns only the coordinates whose place name is known, each with its [`place_key`].

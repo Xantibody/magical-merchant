@@ -3,10 +3,10 @@ use std::path::{Path, PathBuf};
 
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as B64;
+use magical_merchant_core::domain::device::{PlaceCache, place_key};
 use magical_merchant_core::utils::clock::Day;
 use magical_merchant_core::utils::frontmatter;
 use magical_merchant_core::utils::paths::place_cache_path;
-use magical_merchant_core::utils::place::{PlaceCache, place_key};
 use magical_merchant_core::{
     DRAFT, GlyphFormat, GlyphName, NoteFilename, NoteKind, Provenance, Revision, Source,
     parse_scrawl_entry,
@@ -867,10 +867,10 @@ pub(crate) fn exists_or_hint(data_dir: &Path) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use magical_merchant_core::domain::device::cache_key;
     use magical_merchant_core::domain::device::{Context, Location};
     use magical_merchant_core::domain::scrawl::entry::format_scrawl_line;
     use magical_merchant_core::utils::clock::WallClock;
-    use magical_merchant_core::utils::place::cache_key;
     use std::fs;
     use tempfile::TempDir;
 
