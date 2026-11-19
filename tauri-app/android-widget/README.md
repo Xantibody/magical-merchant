@@ -29,7 +29,7 @@ only one of them falls back silently.
 RemoteViews cannot host an `EditText`, so the bar opens a translucent
 `QuickCaptureActivity` (design 1b: scrim + bottom sheet + IME) over the home
 screen. Sending calls `WidgetBridge.saveQuickCapture`, a JNI function whose Rust
-side lives in [`../src-tauri/src/widget_bridge.rs`](../src-tauri/src/widget_bridge.rs)
+side lives in [`../../backend/src/widget_bridge.rs`](../../backend/src/widget_bridge.rs)
 and calls the same `magical_merchant_core::save_scrawl_entry` the in-app
 capture bar uses.
 
@@ -42,13 +42,13 @@ picks the entry up on its next refetch.
 Two names are load-bearing and fail only at runtime if they drift apart:
 
 - `System.loadLibrary("magical_merchant_app_lib")` must match `[lib] name` in
-  `src-tauri/Cargo.toml`.
+  `backend/Cargo.toml`.
 - `Java_com_magical_1merchant_app_widget_WidgetBridge_saveQuickCapture` (and the
   three read functions) is the JNI mangling of this package + object + method
   (`_` in a package component escapes to `_1`). Renaming the Kotlin side means
   renaming the Rust symbol.
 - `com.magical_merchant.app.widget.WidgetUpdates` and its three methods are
-  looked up by name from `src-tauri/src/widget_updates.rs`, the other way
+  looked up by name from `backend/src/widget_updates.rs`, the other way
   round. Nothing in Kotlin calls them, so `@Keep` is what stops R8 from
   stripping them in a release build.
 
@@ -128,13 +128,13 @@ notes read happens in `RemoteViewsFactory.onDataSetChanged`, which the platform
 calls off the main thread; the other two are cheap enough for `onUpdate`.
 
 Kotlin never takes a scrawl line apart. `- [HH:MM:SS] text {json}` is parsed
-in [`../src-tauri/src/widget_summary.rs`](../src-tauri/src/widget_summary.rs)
+in [`../../backend/src/widget_summary.rs`](../../backend/src/widget_summary.rs)
 with the same core helpers the app uses.
 
 They all set `updatePeriodMillis` to 30 minutes, the platform minimum. A capture
 from the sheet refreshes the bar immediately, and the app redraws the template
 widgets itself when it saves or deletes a template, makes a note from one, or
-deletes a note (`src-tauri/src/widget_updates.rs` → `WidgetUpdates.refreshTemplates`).
+deletes a note (`backend/src/widget_updates.rs` → `WidgetUpdates.refreshTemplates`).
 Other entries and notes written _in the app_, and anything a sync brings in,
 have no way to tell a widget, so the poll is what catches them up — and what
 moves `{{date}}` in the titles on after midnight. It costs a native-library load in our own process per period; the
@@ -177,7 +177,7 @@ the button's initial sits on a 30dp square with a 9dp radius.
 
 ## How regeneration is handled
 
-`src-tauri/gen/android/` is gitignored and is recreated by `tauri android init`,
+`backend/gen/android/` is gitignored and is recreated by `tauri android init`,
 so the sources live here instead. [`apply-widget.go`](apply-widget.go) copies
 `src/main/` into the generated project and registers the five `<receiver>`
 elements, the two `<activity>` elements and the list `<service>` in `AndroidManifest.xml`

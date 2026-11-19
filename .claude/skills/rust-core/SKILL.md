@@ -10,7 +10,7 @@ description: Rust core crate conventions, Tauri command plumbing, MCP CLI, and t
 - `core/` is framework-independent business logic — no Tauri types. It is
   consumed by the Tauri app, the MCP CLI, **and Android JNI** (widget capture),
   so keep entry points free of app-only assumptions
-- `tauri-app/src-tauri/` wraps core functions as Tauri commands
+- `backend/` wraps core functions as Tauri commands
 - Frontend calls go through `typedInvoke` (`lib/commands.ts`) — add the
   command's types there, never call `invoke` raw
 - Every time string is printed and parsed by `core::utils::clock`, never by
@@ -19,7 +19,7 @@ description: Rust core crate conventions, Tauri command plumbing, MCP CLI, and t
 ## Adding a Tauri command — checklist
 
 1. Core logic + unit tests in `core/`
-2. Command in `src-tauri`
+2. Command in `backend`
 3. Types in `lib/commands.ts` (`typedInvoke`)
 4. **Handler in `tauri-app/dev/ipc-mock.js`** — unknown commands throw in the
    browser harness so the gap is visible

@@ -201,7 +201,7 @@ release is signed with the same key, a new APK installs over the previous one
 as an update.
 
 Tagging `vX.Y.Z` (matching `version` in
-`tauri-app/src-tauri/tauri.conf.json`) runs
+`backend/tauri.conf.json`) runs
 `.github/workflows/release.yml`, which builds and attaches the APK. The
 workflow needs these repository secrets:
 

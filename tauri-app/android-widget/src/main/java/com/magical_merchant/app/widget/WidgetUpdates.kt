@@ -11,7 +11,7 @@ import androidx.annotation.Keep
 /**
  * What the app (Rust, through JNI) asks of the widgets while it runs.
  *
- * Called from `src-tauri/src/widget_updates.rs` by class and method name, and
+ * Called from `backend/src/widget_updates.rs` by class and method name, and
  * nothing in Kotlin calls it, so R8 would strip it from a release build; `@Keep`
  * is what the default ProGuard file honours to prevent that. Renaming anything
  * here breaks the Rust side at run time, not at build time.

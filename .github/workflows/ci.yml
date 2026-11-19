@@ -62,7 +62,7 @@ jobs:
             rust:
               - '.github/actions/**'
               - 'core/**'
-              - 'tauri-app/src-tauri/**'
+              - 'backend/**'
               - 'cli/**'
               - 'Cargo.toml'
               - 'Cargo.lock'
@@ -116,7 +116,7 @@ jobs:
               - 'cli/**'
               - 'xtask/**'
               - 'tauri-app/src/**'
-              - 'tauri-app/src-tauri/**'
+              - 'backend/**'
               - 'tauri-app/index.html'
               - 'tauri-app/capture.html'
               - 'tauri-app/package.json'
@@ -139,7 +139,7 @@ jobs:
               - 'flake.lock'
             # core/** はここに入れない。core が壊れれば rust ジョブが先に落ちるし、
             # 15 分のビルドを core の変更のたびに足すと待ち時間だけが増える。
-            # android 限定でコンパイルされる widget_bridge.rs は src-tauri なので拾える
+            # android 限定でコンパイルされる widget_bridge.rs は backend なので拾える
             # このジョブの定義そのものを変えたときは workflow_dispatch で回す。
             # 手動実行だけは filter を通さないので全ジョブが走る。
             # ci.yml をここに入れると、フロントのジョブを 1 行直しただけで
@@ -148,7 +148,7 @@ jobs:
               - 'tauri-app/android-widget/**'
               # android-build-debug は android-setup 経由で apply-tls.go も回す
               - 'tauri-app/android-tls/**'
-              - 'tauri-app/src-tauri/**'
+              - 'backend/**'
               - 'tauri-app/justfile'
               - 'Cargo.lock'
               - 'flake.nix'

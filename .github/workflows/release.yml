@@ -36,7 +36,7 @@ jobs:
           TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           tag="$TAG"
-          version=$(jq -r .version tauri-app/src-tauri/tauri.conf.json)
+          version=$(jq -r .version backend/tauri.conf.json)
           if [ "$tag" != "v$version" ]; then
             echo "::error::tag $tag does not match tauri.conf.json version $version"
             exit 1
@@ -74,7 +74,7 @@ jobs:
           keystore="$RUNNER_TEMP/release.jks"
           printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$keystore"
           # gen/android は gitignore 済み。パスワードはこのファイルにしか書かない
-          cat > tauri-app/src-tauri/gen/android/keystore.properties <<EOF
+          cat > backend/gen/android/keystore.properties <<EOF
           storeFile=$keystore
           storePassword=$STORE_PASSWORD
           keyAlias=$KEY_ALIAS
@@ -91,14 +91,14 @@ jobs:
         id: apk
         run: |
           # --target aarch64 でも Tauri は出力名を universal のままにする
-          src=tauri-app/src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
+          src=backend/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
           out="magical-merchant-${{ steps.version.outputs.version }}.apk"
           cp "$src" "$out"
           echo "path=$out" >> "$GITHUB_OUTPUT"
 
       - name: Remove the signing material
         if: always()
-        run: rm -f "$RUNNER_TEMP/release.jks" tauri-app/src-tauri/gen/android/keystore.properties
+        run: rm -f "$RUNNER_TEMP/release.jks" backend/gen/android/keystore.properties
 
       - uses: softprops/action-gh-release@v3
         with:

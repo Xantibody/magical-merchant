@@ -154,7 +154,7 @@ every sync with `UnknownPreconfigured`.
 | `just tauri_app::android-build-release`     | Build a signed release APK                          |     |
 | `just tauri_app::android-install [variant]` | Build and install over USB (`debug` / `release`)    |     |
 
-`src-tauri/gen/android/` is generated and gitignored, so everything the
+`backend/gen/android/` is generated and gitignored, so everything the
 project needs on top of what `tauri android init` writes is re-applied by a
 Go program each time. There are three, all idempotent (each strips and
 re-inserts its own marked block):

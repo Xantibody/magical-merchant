@@ -28,7 +28,7 @@ dist/
 *.tsbuildinfo
 
 # Tauri
-tauri-app/src-tauri/gen/
+backend/gen/
 
 # Android signing — never commit secrets
 *.jks
@@ -38,7 +38,7 @@ keystore.properties
 # Nix shims
 .nix-shims/
 
-# 素材の受け渡し場所。採用したものは src-tauri/icons/ など置き場所へ移す
+# 素材の受け渡し場所。採用したものは backend/icons/ など置き場所へ移す
 
 # Nix build output symlink
 /result

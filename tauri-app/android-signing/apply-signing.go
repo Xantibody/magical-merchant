@@ -1,7 +1,7 @@
 // Command apply-signing injects a release signing configuration into the
 // Tauri-generated Android Gradle build script.
 //
-// The generated file at src-tauri/gen/android/app/build.gradle.kts is NOT
+// The generated file at backend/gen/android/app/build.gradle.kts is NOT
 // tracked by git (the whole gen/android tree is gitignored) and is recreated
 // whenever `tauri android init` runs. To survive regeneration, the signing
 // setup lives here as a repo-tracked patcher: re-run this after any
@@ -21,7 +21,7 @@ import (
 	"strings"
 )
 
-const gradlePath = "src-tauri/gen/android/app/build.gradle.kts"
+const gradlePath = "../backend/gen/android/app/build.gradle.kts"
 
 // keystorePath is where the Gradle script looks the file up, and therefore the
 // only place it may live. `rootProject.file` resolves against the Android
@@ -29,7 +29,7 @@ const gradlePath = "src-tauri/gen/android/app/build.gradle.kts"
 // a keystore.properties one directory up would be silently ignored — the build
 // then runs for minutes before failing with "missing required property
 // storeFile".
-const keystorePath = "src-tauri/gen/android/keystore.properties"
+const keystorePath = "../backend/gen/android/keystore.properties"
 
 // injection describes one marker-delimited region to insert into the build
 // script. body holds the Kotlin source (already indented); anchor is a literal

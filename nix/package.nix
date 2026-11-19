@@ -23,7 +23,7 @@ in
 stdenv.mkDerivation (finalAttrs: {
   pname = "magical-merchant";
   # tauri.conf.json is the one source; release.yml checks the tag against it too
-  version = (lib.importJSON ../tauri-app/src-tauri/tauri.conf.json).version;
+  version = (lib.importJSON ../backend/tauri.conf.json).version;
 
   src = lib.fileset.toSource {
     root = ../.;
@@ -36,7 +36,7 @@ stdenv.mkDerivation (finalAttrs: {
       ../cli/Cargo.toml
       ../cli/src
       ../xtask
-      ../tauri-app/src-tauri
+      ../backend
       ../tauri-app/src
       ../tauri-app/package.json
       ../tauri-app/pnpm-lock.yaml
@@ -98,7 +98,7 @@ stdenv.mkDerivation (finalAttrs: {
     glib-networking
   ];
 
-  buildAndTestSubdir = "tauri-app/src-tauri";
+  buildAndTestSubdir = "backend";
   pnpmRoot = "tauri-app";
 
   # The bundle type is the hook's per-platform default: an .app on macOS, and on

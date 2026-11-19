@@ -15,7 +15,7 @@ Other guides: [Feature tour](features.md) ·
 flowchart LR
     subgraph Device["Device (macOS / Android)"]
         UI["SolidJS WebView<br/>tauri-app/src"]
-        Shell["Tauri shell (Rust)<br/>tauri-app/src-tauri"]
+        Shell["Tauri shell (Rust)<br/>backend"]
         Core["magical-merchant-core<br/>core/"]
         Files[("Markdown files<br/>app data dir")]
         UI <-- "IPC (typedInvoke)" --> Shell
@@ -170,7 +170,7 @@ the entry is already on disk.
 | [`core/src/note/repair.rs`](../core/src/note/repair.rs)     | Repair passes: notes saved while the editor still saw frontmatter, legacy conflict copies, and an ID that ended up in both `notes/` and `codex/` |
 | [`core/src/search.rs`](../core/src/search.rs)               | Substring search across Scrawl, notes and codex                                                                                                  |
 | [`core/src/sync/`](../core/src/sync)                        | Local scan + hashing, diff against server state, conflict naming                                                                                 |
-| [`tauri-app/src-tauri/`](../tauri-app/src-tauri/src)        | Tauri commands, sync HTTP client, OAuth deep-link handling, device context                                                                       |
+| [`backend/`](../backend/src)                                | Tauri commands, sync HTTP client, OAuth deep-link handling, device context                                                                       |
 | [`tauri-app/src/`](../tauri-app/src)                        | SolidJS views, Milkdown editor integration, client-side device signals                                                                           |
 | [`worker/`](../worker/src)                                  | Cloudflare Worker: Google OAuth, JWT, R2-backed bulk sync with ETag CAS                                                                          |
 | [`cli/`](../cli/src)                                        | Terminal client (`list` / `show` / `edit` / `new` / `import` / `scrawl` / `sync`) and the MCP server (`mcp`)                                     |

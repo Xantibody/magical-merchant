@@ -1,7 +1,7 @@
 // Command apply-widget installs the home screen widget sources into the
 // Tauri-generated Android project.
 //
-// src-tauri/gen/android/ is gitignored and is recreated by `tauri android init`,
+// backend/gen/android/ is gitignored and is recreated by `tauri android init`,
 // so widget sources cannot live there. They live in android-widget/src/main/
 // (tracked by git) and this patcher copies them in and registers the
 // <receiver> and <activity> elements in the generated AndroidManifest.xml. Re-run it (via
@@ -29,7 +29,7 @@ import (
 // Paths are relative to tauri-app/, the directory the just recipe runs in.
 const (
 	srcRoot      = "android-widget/src/main"
-	dstRoot      = "src-tauri/gen/android/app/src/main"
+	dstRoot      = "../backend/gen/android/app/src/main"
 	manifestPath = dstRoot + "/AndroidManifest.xml"
 )
 

@@ -10,7 +10,7 @@ have to be arranged before the first HTTPS request.
 | Half   | Where                                               | What it does                                                     |
 | ------ | --------------------------------------------------- | ---------------------------------------------------------------- |
 | Kotlin | `apply-tls.go` → `gen/android/app/build.gradle.kts` | Puts `org.rustls.platformverifier` on the app's classpath        |
-| Rust   | `../src-tauri/src/android_tls.rs`                   | Hands the crate the process' `JavaVM` and the activity `Context` |
+| Rust   | `backend/src/android_tls.rs`                        | Hands the crate the process' `JavaVM` and the activity `Context` |
 
 Neither half fails the build when it is missing. Without the Kotlin side the
 JNI lookup finds no class; without the Rust side the verifier has no `Context`.
@@ -36,7 +36,7 @@ verifier verifies the sync host again; everything else here stays as is.
 
 ## Why a patcher
 
-`src-tauri/gen/android/` is gitignored and recreated by `tauri android init`,
+`backend/gen/android/` is gitignored and recreated by `tauri android init`,
 so the Gradle edit cannot simply live there. `apply-tls.go` re-applies it and
 runs as part of `just android-setup`, which `android-init` and the build
 recipes depend on. Like `../android-signing/` and `../android-widget/`, every
@@ -63,7 +63,7 @@ the repository cannot be located. That the classes actually reached the APK is
 one step further out:
 
 ```sh
-dexdump -f src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk \
+dexdump -f ../backend/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk \
   | grep -c platformverifier
 ```
 

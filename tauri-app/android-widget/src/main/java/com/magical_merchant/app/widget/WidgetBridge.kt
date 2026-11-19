@@ -31,8 +31,8 @@ internal data class CaptureData(
 /**
  * The Rust side of the widgets.
  *
- * The library name is the `[lib] name` in src-tauri/Cargo.toml, and the symbols
- * behind the `external fun`s are spelled out in src-tauri/src/widget_bridge.rs —
+ * The library name is the `[lib] name` in backend/Cargo.toml, and the symbols
+ * behind the `external fun`s are spelled out in backend/src/widget_bridge.rs —
  * renaming this object or its package breaks the link at the first tap, not at
  * build time.
  *

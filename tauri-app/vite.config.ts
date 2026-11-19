@@ -35,7 +35,7 @@ export default defineConfig(async () => ({
 
   clearScreen: false,
   // Two pages: the app, and the one-line window the global key floats over other apps
-  // (src-tauri/src/capture.rs)
+  // (backend/src/capture.rs)
   build: {
     rollupOptions: {
       input: {
@@ -56,8 +56,5 @@ export default defineConfig(async () => ({
           port: 1421,
         }
       : undefined,
-    watch: {
-      ignored: ["**/src-tauri/**"],
-    },
   },
 }));

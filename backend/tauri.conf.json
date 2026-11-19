@@ -4,10 +4,10 @@
   "version": "0.8.1",
   "identifier": "com.magical-merchant.app",
   "build": {
-    "frontendDist": "../dist",
+    "frontendDist": "../tauri-app/dist",
     "devUrl": "http://localhost:1420",
-    "beforeDevCommand": "pnpm dev",
-    "beforeBuildCommand": "pnpm build"
+    "beforeDevCommand": { "script": "pnpm dev", "cwd": "../tauri-app" },
+    "beforeBuildCommand": { "script": "pnpm build", "cwd": "../tauri-app" }
   },
   "app": {
     "windows": [

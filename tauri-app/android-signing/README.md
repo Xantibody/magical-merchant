@@ -11,7 +11,7 @@ Why signed release (not the debug APK):
 
 ## How regeneration is handled
 
-`src-tauri/gen/android/` is gitignored and is recreated by `tauri android init`.
+`backend/gen/android/` is gitignored and is recreated by `tauri android init`.
 So the signing setup is **not** stored there. Instead,
 [`apply-signing.go`](apply-signing.go) injects the signing config into
 `app/build.gradle.kts` with idempotent markers. Re-run it (via
@@ -37,10 +37,10 @@ keytool -genkey -v -keystore ~/.android-keys/magical-merchant.jks \
 
 ```sh
 cp android-signing/keystore.properties.example \
-   src-tauri/gen/android/keystore.properties
+   ../backend/gen/android/keystore.properties
 ```
 
-Then edit `src-tauri/gen/android/keystore.properties` and fill in `storeFile`
+Then edit `backend/gen/android/keystore.properties` and fill in `storeFile`
 (absolute path to the `.jks`), `storePassword`, `keyAlias`, and `keyPassword`.
 This file is gitignored — do not commit it.
 
@@ -59,7 +59,7 @@ just android-install release
 The signed APK is written to:
 
 ```
-src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
+../backend/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
 ```
 
 To distribute without USB: copy that APK to your device (cloud, AirDrop-style
@@ -69,7 +69,7 @@ transfer, email to yourself, etc.), then open it on the device and allow
 ## Updating the app
 
 Bump `versionCode` (and `versionName`) in
-`src-tauri/gen/android/app/tauri.properties`, rebuild, and install over the
+`backend/gen/android/app/tauri.properties`, rebuild, and install over the
 existing app with `adb install -r …` (what `android-install release` does). The
 same signing key lets it install as an update rather than a conflicting app.
 
@@ -79,5 +79,5 @@ same signing key lets it install as an update rather than a conflicting app.
 
 ```sh
 apksigner verify --verbose --print-certs \
-  src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
+  ../backend/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
 ```

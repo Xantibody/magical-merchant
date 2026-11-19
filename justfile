@@ -19,7 +19,7 @@ verify: fmt check test
 # and spelled right (typos), over the whole tree. CI runs the same recipe
 comments:
   typos
-  vale core cli worker/src tauri-app/src tauri-app/src-tauri/src
+  vale core cli worker/src tauri-app/src backend/src
 
 # 毎日叩くのはこれだけなので root に置く。他は `just tauri_app::…` を直接呼ぶ
 dev: tauri_app::dev

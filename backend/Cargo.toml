@@ -17,7 +17,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-magical-merchant-core = { path = "../../core", features = [
+magical-merchant-core = { path = "../core", features = [
   "device-probe",
   "sync-client",
 ] }

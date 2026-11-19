@@ -8,7 +8,7 @@
 // to find it. Without this the APK builds and then fails every HTTPS request at
 // runtime with a certificate error.
 //
-// src-tauri/gen/android/ is gitignored and recreated by `tauri android init`,
+// backend/gen/android/ is gitignored and recreated by `tauri android init`,
 // so this lives here as a repo-tracked patcher and runs as part of
 // `just android-init`. Like apply-signing.go, every inserted region is wrapped
 // in marker comments and stripped before re-insertion, so re-runs are idempotent.
@@ -23,8 +23,8 @@ import (
 
 // Paths are relative to tauri-app/, the directory the just recipe runs in.
 const (
-	gradlePath   = "src-tauri/gen/android/app/build.gradle.kts"
-	proguardPath = "src-tauri/gen/android/app/proguard-rules.pro"
+	gradlePath   = "../backend/gen/android/app/build.gradle.kts"
+	proguardPath = "../backend/gen/android/app/proguard-rules.pro"
 )
 
 // injection describes one marker-delimited region to insert into the build
