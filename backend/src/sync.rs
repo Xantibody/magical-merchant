@@ -8,9 +8,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, PoisonError};
 
 use magical_merchant_core::SyncError;
+use magical_merchant_core::domain::sync::settings::SyncConfig;
 use magical_merchant_core::domain::sync::{SyncResult, run};
 use magical_merchant_core::services::worker::HttpClient;
-use magical_merchant_core::sync::config::SyncConfig;
 use magical_merchant_core::sync::token;
 use magical_merchant_core::utils::clock::UtcStamp;
 use serde::Serialize;

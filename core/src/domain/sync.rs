@@ -15,5 +15,7 @@ pub mod state;
 pub mod rounds;
 #[cfg(feature = "sync-client")]
 pub mod run;
+#[cfg(feature = "sync-client")]
+pub mod settings;
 
 pub use result::{SyncIssue, SyncResult};

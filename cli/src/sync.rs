@@ -10,8 +10,8 @@ use std::path::Path;
 use magical_merchant_core::SyncError;
 use magical_merchant_core::domain::sync::SyncResult;
 use magical_merchant_core::domain::sync::run::{RoundProgress, run_with_progress};
+use magical_merchant_core::domain::sync::settings::SyncConfig;
 use magical_merchant_core::services::worker::{HttpClient, desktop_http_client};
-use magical_merchant_core::sync::config::SyncConfig;
 use magical_merchant_core::sync::token;
 
 #[derive(Debug)]

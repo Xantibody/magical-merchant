@@ -1,13 +1,13 @@
 //! `sync-config.json`: the sync settings. The app and the CLI's `sync` read it;
 //! only the app's settings screen writes it.
 
-use std::fs;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-use crate::error::SyncError;
+use crate::error::{CoreError, SyncError};
+use crate::services::files;
 
 const SYNC_CONFIG_FILENAME: &str = "sync-config.json";
 
@@ -30,38 +30,43 @@ impl SyncConfig {
     /// treated as "not configured", the settings screen opens blank, and the moment the
     /// user re-enters the URL, a config that was merely corrupt gets overwritten.
     pub fn load(base_dir: &Path) -> Result<Option<Self>, SyncError> {
-        let path = base_dir.join(SYNC_CONFIG_FILENAME);
-        if !path.exists() {
-            return Ok(None);
-        }
         let corrupt = |e: &dyn std::error::Error| {
             SyncError::new(
                 "configCorrupt",
                 format!("Could not read {SYNC_CONFIG_FILENAME}: {e}"),
             )
         };
-        let content = fs::read_to_string(&path).map_err(|e| corrupt(&e))?;
+        let content =
+            files::read_if_present(&base_dir.join(SYNC_CONFIG_FILENAME)).map_err(|e| match e {
+                // The OS message alone, as before the read went through `files`
+                CoreError::Io(e) => corrupt(&e),
+                other => corrupt(&other),
+            })?;
+        let Some(content) = content else {
+            return Ok(None);
+        };
         serde_json::from_str(&content)
             .map(Some)
             .map_err(|e| corrupt(&e))
     }
 
     pub fn save(&self, base_dir: &Path) -> Result<(), String> {
-        // On first launch app_data_dir may not exist yet
-        fs::create_dir_all(base_dir).map_err(|e| e.to_string())?;
         let path = base_dir.join(SYNC_CONFIG_FILENAME);
+        // On first launch app_data_dir may not exist yet
+        files::ensure_dir(&path).map_err(|e| match e {
+            CoreError::Io(e) => e.to_string(),
+            other => other.to_string(),
+        })?;
         let content = serde_json::to_string_pretty(self).map_err(|e| e.to_string())?;
-        crate::services::files::write_atomic(&path, content).map_err(|e| e.to_string())?;
+        files::write_atomic(&path, content).map_err(|e| e.to_string())?;
         Ok(())
     }
 
+    /// Whether the settings screen may write the config: a missing file can be created,
+    /// a read-only one is left as it is.
     #[must_use]
     pub fn is_editable(base_dir: &Path) -> bool {
-        let path = base_dir.join(SYNC_CONFIG_FILENAME);
-        if !path.exists() {
-            return true;
-        }
-        !path.metadata().is_ok_and(|m| m.permissions().readonly())
+        !files::is_read_only(&base_dir.join(SYNC_CONFIG_FILENAME))
     }
 
     #[must_use]
@@ -89,6 +94,7 @@ pub fn normalize_workers_url(input: &str) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
 
     #[test]
     fn sync_config_not_configured_when_empty() {

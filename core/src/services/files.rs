@@ -103,6 +103,13 @@ pub fn exists(path: &Path) -> bool {
     path.exists()
 }
 
+/// Whether the item at `path` is marked read-only, following links. Nothing there, or
+/// nothing that can be looked at, is not read-only.
+#[must_use]
+pub fn is_read_only(path: &Path) -> bool {
+    path.metadata().is_ok_and(|m| m.permissions().readonly())
+}
+
 /// Whether `path` is a directory, following links.
 #[must_use]
 pub fn is_dir(path: &Path) -> bool {
@@ -807,6 +814,26 @@ mod tests {
         assert!(exists(&file) && !is_dir(&file));
         assert!(exists(tmp.path()) && is_dir(tmp.path()));
         assert!(!exists(&missing) && !is_dir(&missing));
+    }
+
+    #[test]
+    fn is_read_only_is_false_for_a_writable_file_and_for_nothing() {
+        let tmp = seed(&["a.md"]);
+
+        assert!(!is_read_only(&tmp.path().join("a.md")));
+        assert!(!is_read_only(&tmp.path().join("nope")));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn is_read_only_is_true_for_a_file_no_one_may_write() {
+        use std::os::unix::fs::PermissionsExt as _;
+
+        let tmp = seed(&["a.md"]);
+        let path = tmp.path().join("a.md");
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o444)).unwrap();
+
+        assert!(is_read_only(&path));
     }
 
     #[test]
