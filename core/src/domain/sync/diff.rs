@@ -1,8 +1,30 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
-use super::scan::LocalFile;
-use super::state::SyncState;
+use serde::{Deserialize, Serialize};
+
 use crate::utils::clock::UtcStamp;
+
+/// A file under `data/` as the scan found it (`scan.rs` walks the tree).
+#[derive(Debug, Clone)]
+pub struct LocalFile {
+    pub key: String,
+    pub last_modified: UtcStamp,
+    pub content_hash: String,
+}
+
+/// What the last sync left behind, the base both sides are compared against.
+/// `state.rs` keeps it in `.sync-state.json`.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct SyncState {
+    pub files: HashMap<String, FileSyncRecord>,
+    pub last_sync: Option<UtcStamp>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileSyncRecord {
+    pub last_synced_modified: UtcStamp,
+    pub content_hash: String,
+}
 
 #[derive(Debug, Clone)]
 pub struct RemoteFile {
@@ -49,9 +71,9 @@ pub fn compute(
     let local_keys: HashSet<&str> = local_files.iter().map(|f| f.key.as_str()).collect();
     let remote_keys: HashSet<&str> = remote_files.iter().map(|f| f.key.as_str()).collect();
 
-    let local_map: std::collections::HashMap<&str, &LocalFile> =
+    let local_map: HashMap<&str, &LocalFile> =
         local_files.iter().map(|f| (f.key.as_str(), f)).collect();
-    let remote_map: std::collections::HashMap<&str, &RemoteFile> =
+    let remote_map: HashMap<&str, &RemoteFile> =
         remote_files.iter().map(|f| (f.key.as_str(), f)).collect();
 
     let all_keys: HashSet<&str> = local_keys.union(&remote_keys).copied().collect();
@@ -155,7 +177,6 @@ pub fn compute(
 
 #[cfg(test)]
 mod tests {
-    use super::super::state::FileSyncRecord;
     use super::*;
 
     fn local(key: &str, hash: &str) -> LocalFile {

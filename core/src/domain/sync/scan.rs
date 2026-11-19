@@ -5,17 +5,11 @@ use std::time::{Duration, SystemTime};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+use super::diff::LocalFile;
 use crate::CoreError;
 use crate::domain::data;
 use crate::services::files;
 use crate::utils::clock::UtcStamp;
-
-#[derive(Debug, Clone)]
-pub struct LocalFile {
-    pub key: String,
-    pub last_modified: UtcStamp,
-    pub content_hash: String,
-}
 
 const CACHE_FILENAME: &str = ".scan-cache.json";
 

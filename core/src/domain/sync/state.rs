@@ -1,25 +1,10 @@
-use std::collections::HashMap;
 use std::path::Path;
 
-use serde::{Deserialize, Serialize};
-
+use super::diff::SyncState;
 use crate::CoreError;
 use crate::services::files::{exists, read_text, write_atomic};
-use crate::utils::clock::UtcStamp;
 
 const STATE_FILENAME: &str = ".sync-state.json";
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct SyncState {
-    pub files: HashMap<String, FileSyncRecord>,
-    pub last_sync: Option<UtcStamp>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FileSyncRecord {
-    pub last_synced_modified: UtcStamp,
-    pub content_hash: String,
-}
 
 impl SyncState {
     pub fn load(base_dir: &Path) -> Result<Self, CoreError> {
@@ -43,6 +28,8 @@ impl SyncState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::sync::diff::FileSyncRecord;
+    use crate::utils::clock::UtcStamp;
     use std::fs;
 
     #[test]

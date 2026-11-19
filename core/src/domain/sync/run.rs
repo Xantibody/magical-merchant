@@ -12,10 +12,9 @@ use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as B64;
 
 use super::conflict_copy;
-use super::diff::{self, RemoteFile, SyncAction};
+use super::diff::{self, FileSyncRecord, LocalFile, RemoteFile, SyncAction, SyncState};
 use super::rounds::{self, BULK_OPERATION_BUDGET};
-use super::scan::{self, LocalFile};
-use super::state::{FileSyncRecord, SyncState};
+use super::scan;
 use super::{SyncIssue, SyncResult};
 use crate::domain::data;
 use crate::domain::note::conflicts::conflicts_dir;
