@@ -1,8 +1,9 @@
 //! Where a record was written, worded for reading.
 
+use magical_merchant_core::domain::device::place_names;
 use tauri::{AppHandle, Runtime};
 
-use crate::place;
+use crate::services::geocoder::geocode;
 use crate::services::tauri::{app_base_dir, off_main_thread};
 
 /// Turns coordinates into place names.
@@ -23,5 +24,13 @@ pub(crate) async fn resolve_places<R: Runtime>(
     locale: String,
 ) -> Result<Vec<(String, String)>, String> {
     let base_dir = app_base_dir(&handle)?;
-    off_main_thread(move || Ok(place::resolve(&base_dir, &coordinates, &locale))).await
+    off_main_thread(move || {
+        Ok(place_names::resolve(
+            &base_dir,
+            &coordinates,
+            &locale,
+            geocode,
+        ))
+    })
+    .await
 }

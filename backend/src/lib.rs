@@ -10,7 +10,6 @@ mod app;
 mod commands;
 mod device;
 mod links;
-mod place;
 mod services;
 #[cfg(desktop)]
 mod shortcut;

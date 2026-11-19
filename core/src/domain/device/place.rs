@@ -67,7 +67,7 @@ impl PlaceCache {
     /// other language; if that has none either, the cache written before languages
     /// were added.
     ///
-    /// The screen (`resolve`) does not use this. It can ask the geocoder again when
+    /// The screen (`place_names::resolve`) does not use this. It can ask the geocoder again when
     /// the preferred language has none, but for a reader with no way to ask again,
     /// such as MCP, a name in another language is more useful than coordinates alone.
     #[must_use]
