@@ -192,7 +192,7 @@ mod tests {
     }
 
     /// The first sync after `data/timeline/` moved to `data/scrawl/`
-    /// (`scrawl/migrate.rs`). Local has only the new keys; remote and state have only
+    /// (`domain/scrawl/migrate.rs`). Local has only the new keys; remote and state have only
     /// the old ones. Sending one side and deleting the other completes the move. If this
     /// turned into a conflict or a re-download, the migration would keep the same day twice.
     #[test]

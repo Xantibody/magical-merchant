@@ -162,7 +162,7 @@ the entry is already on disk.
 
 | Path                                                        | Responsibility                                                                                                                                   |
 | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [`core/src/scrawl/`](../core/src/scrawl)                    | Day-file parsing, appends, edits; device-list frontmatter compression                                                                            |
+| [`core/src/domain/scrawl/`](../core/src/domain/scrawl)      | Day-file parsing, appends, deletes; device-list frontmatter compression; the `data/timeline/` move                                               |
 | [`core/src/note/`](../core/src/note)                        | Note CRUD and list summaries (frontmatter + preview + tags); see the four files below                                                            |
 | [`core/src/note/kind.rs`](../core/src/note/kind.rs)         | `Note` vs `Codex` — decided by the directory, never by a frontmatter key                                                                         |
 | [`core/src/note/version.rs`](../core/src/note/version.rs)   | Codex versions: commit, list, diff, restore, delete; version IDs and the `before restore` marker                                                 |

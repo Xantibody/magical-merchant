@@ -125,6 +125,11 @@ that `:name:` renders inline. `GlyphName` (`image.rs`) fixes the
 charset — the same regex lives in `lib/glyphs.ts`; fix both. Only registered
 names resolve, so the tokenizer never touches `12:30:45`.
 
+Scrawl (`core/src/domain/scrawl/`: rules in `entry.rs` (one line) and `day.rs`
+(the day file, its name, `expect_same_entry`), operations in `capture.rs`,
+`delete.rs`, `journal.rs` and `migrate.rs`). Search and the tag count read
+days through `journal::{list_scrawl_dates, read_raw}`.
+
 ## Verification
 
 - `just verify` = fmt → check → test; CI mirrors `just fmt/check/test` with
