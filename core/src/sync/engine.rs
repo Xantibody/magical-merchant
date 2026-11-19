@@ -11,7 +11,6 @@ use std::path::{Component, Path};
 
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as B64;
-use chrono::{DateTime, Utc};
 
 use super::client::{
     BulkRequest, BulkResponse, DownloadedFile, HttpClient, ServerSyncState, SyncTransport,
@@ -24,6 +23,7 @@ use super::round::{self, BULK_OPERATION_BUDGET};
 use super::scan::{self, LocalFile};
 use super::state::{FileSyncRecord, SyncState};
 use super::{SyncError, SyncIssue, SyncResult};
+use crate::utils::clock::UtcStamp;
 use crate::utils::paths;
 
 const MAX_SYNC_ATTEMPTS: usize = 3;
@@ -377,7 +377,7 @@ fn server_state_to_remote_files(state: &ServerSyncState) -> Vec<RemoteFile> {
         .files
         .iter()
         .filter_map(|(key, rec)| {
-            let last_modified: DateTime<Utc> = rec.last_modified.parse().ok()?;
+            let last_modified: UtcStamp = rec.last_modified.parse().ok()?;
             Some(RemoteFile {
                 key: key.clone(),
                 last_modified,
@@ -438,7 +438,7 @@ fn build_bulk_request(
                 uploads.push(WireUpload {
                     key: key.clone(),
                     content_base64: B64.encode(&content),
-                    last_modified: local.last_modified.to_rfc3339(),
+                    last_modified: local.last_modified.rfc3339(),
                     hash: local.content_hash.clone(),
                 });
             }
@@ -463,10 +463,10 @@ fn build_bulk_request(
                 })?;
                 conflicts.push(WireConflictOp {
                     key: key.clone(),
-                    conflict_key: conflict::conflict_filename(key, Utc::now()),
+                    conflict_key: conflict::conflict_filename(key, UtcStamp::now()),
                     content_base64: B64.encode(&content),
                     hash: local.content_hash.clone(),
-                    last_modified: local.last_modified.to_rfc3339(),
+                    last_modified: local.last_modified.rfc3339(),
                 });
             }
         }
@@ -678,7 +678,7 @@ fn to_local_state(
     previous: &SyncState,
 ) -> SyncState {
     let mut state = SyncState {
-        last_sync: Some(Utc::now()),
+        last_sync: Some(UtcStamp::now()),
         ..Default::default()
     };
     for (key, record) in &server_state.files {
@@ -807,6 +807,97 @@ mod tests {
         assert!(req.conflicts[0].conflict_key.contains(".sync-conflict-"));
     }
 
+    /// The Worker stores `last_modified` as it arrives (R2 customMetadata), so these bytes
+    /// are persisted. A zero offset is spelled `+00:00`, never `Z`, and the fraction keeps
+    /// 3, 6 or 9 digits as needed, never trimmed. A conflict sends the same spelling.
+    #[test]
+    fn an_upload_sends_its_mtime_as_rfc3339_with_a_numeric_zero_offset() {
+        let mtimes = [
+            "2026-08-05T00:00:00Z",
+            "2026-08-05T00:00:00.120Z",
+            "2026-08-05T00:00:00.123400Z",
+            "2026-08-05T00:00:00.544569369Z",
+            "2026-08-05T00:00:00.100000000Z",
+        ];
+        let dir = tempfile::tempdir().unwrap();
+        let mut locals = Vec::new();
+        let mut actions = Vec::new();
+        for (i, mtime) in mtimes.iter().enumerate() {
+            let key = format!("notes/{i}.md");
+            seed(dir.path(), &key, "body");
+            locals.push(LocalFile {
+                key: key.clone(),
+                last_modified: mtime.parse().unwrap(),
+                content_hash: "hash".to_string(),
+            });
+            actions.push(SyncAction::UploadNew { key: key.clone() });
+            actions.push(SyncAction::Conflict { key });
+        }
+
+        let mut result = SyncResult::default();
+        let req = build_bulk_request(
+            &actions,
+            &locals,
+            &paths::data_dir(dir.path()),
+            None,
+            &mut result,
+        )
+        .unwrap();
+
+        let uploads: Vec<&str> = req
+            .uploads
+            .iter()
+            .map(|u| u.last_modified.as_str())
+            .collect();
+        let conflicts: Vec<&str> = req
+            .conflicts
+            .iter()
+            .map(|c| c.last_modified.as_str())
+            .collect();
+        let expected = vec![
+            "2026-08-05T00:00:00+00:00",
+            "2026-08-05T00:00:00.120+00:00",
+            "2026-08-05T00:00:00.123400+00:00",
+            "2026-08-05T00:00:00.544569369+00:00",
+            "2026-08-05T00:00:00.100+00:00",
+        ];
+        assert_eq!(uploads, expected);
+        assert_eq!(conflicts, expected);
+    }
+
+    /// The Worker's state has been written by more than one client version, so every
+    /// spelling of an instant it holds must still read; another offset is turned into UTC.
+    /// A value that is not a time drops that record, as it always has.
+    #[test]
+    fn server_times_in_every_spelling_are_read() {
+        let state = server_state(&[
+            ("a.md", "h", "2026-08-05T00:00:00.000Z"),
+            ("b.md", "h", "2026-08-05T00:00:00+00:00"),
+            ("c.md", "h", "2026-08-05T00:00:00.123456789Z"),
+            ("d.md", "h", "2026-08-05T09:00:00.120+09:00"),
+            ("e.md", "h", "2026-08-05T00:00:00.123400+00:00"),
+            ("f.md", "h", "not a time"),
+            ("g.md", "h", ""),
+        ]);
+
+        let mut read: Vec<String> = server_state_to_remote_files(&state)
+            .iter()
+            .map(|f| format!("{} {}", f.key, f.last_modified.rfc3339()))
+            .collect();
+        read.sort();
+
+        assert_eq!(
+            read,
+            vec![
+                "a.md 2026-08-05T00:00:00+00:00",
+                "b.md 2026-08-05T00:00:00+00:00",
+                "c.md 2026-08-05T00:00:00.123456789+00:00",
+                "d.md 2026-08-05T00:00:00.120+00:00",
+                "e.md 2026-08-05T00:00:00.123400+00:00",
+            ]
+        );
+    }
+
     #[test]
     fn local_state_mirrors_what_the_server_recorded() {
         let dir = tempfile::tempdir().unwrap();
@@ -824,7 +915,7 @@ mod tests {
         assert_eq!(record.content_hash, "hash-a");
         assert_eq!(
             record.last_synced_modified,
-            "2026-08-05T00:00:00Z".parse::<DateTime<Utc>>().unwrap()
+            "2026-08-05T00:00:00Z".parse::<UtcStamp>().unwrap()
         );
     }
 
@@ -981,7 +1072,7 @@ mod tests {
         assert_eq!(kept.content_hash, "hash-stale");
         assert_eq!(
             kept.last_synced_modified,
-            "2026-08-01T00:00:00Z".parse::<DateTime<Utc>>().unwrap()
+            "2026-08-01T00:00:00Z".parse::<UtcStamp>().unwrap()
         );
 
         // Thanks to that record, the next sync lands on "local unchanged, remote
@@ -1668,7 +1759,7 @@ mod tests {
             state
                 .files
                 .get("notes/a.md")
-                .map(|r| r.last_synced_modified.to_rfc3339()),
+                .map(|r| r.last_synced_modified.rfc3339()),
             Some("2026-08-05T00:00:00+00:00".to_string())
         );
     }

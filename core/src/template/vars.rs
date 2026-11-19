@@ -4,7 +4,7 @@
 //! creation. No variable remains in the note written out: if one did, the file could not
 //! say "which day's date" when opened later.
 
-use chrono::{DateTime, Datelike, Local, Timelike};
+use crate::utils::clock::WallClock;
 
 /// Only the weekday names depend on the language. The order of date and time is a record
 /// that stays in the file, not the device's language, so it is fixed to the ISO order.
@@ -31,7 +31,7 @@ const JA_WEEKDAYS: [&str; 7] = ["日", "月", "火", "水", "木", "金", "土"]
 const EN_WEEKDAYS: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 /// One token of a date pattern. A pair of "how it is written" and "how its value is made".
-type Token = (&'static str, fn(DateTime<Local>) -> String);
+type Token = (&'static str, fn(WallClock) -> String);
 
 /// `YYYY` does not need to come before `MM` (the first characters differ, so they do not
 /// collide), but they are listed in reading order.
@@ -57,7 +57,7 @@ const DEFAULT_TIME: &str = "HH:mm";
 #[must_use]
 pub(crate) fn resolve_vars(
     body: &str,
-    now: DateTime<Local>,
+    now: WallClock,
     prev: Option<&str>,
     locale: VarLocale,
 ) -> String {
@@ -130,7 +130,7 @@ fn var_name(inner: &str) -> &str {
     inner.split_once(':').map_or(inner, |(name, _)| name).trim()
 }
 
-fn resolve_line(line: &str, now: DateTime<Local>, prev: &str, locale: VarLocale, out: &mut String) {
+fn resolve_line(line: &str, now: WallClock, prev: &str, locale: VarLocale, out: &mut String) {
     let mut rest = line;
     while let Some(start) = rest.find("{{") {
         out.push_str(&rest[..start]);
@@ -155,7 +155,7 @@ fn resolve_line(line: &str, now: DateTime<Local>, prev: &str, locale: VarLocale,
     out.push_str(rest);
 }
 
-fn resolve_one(inner: &str, now: DateTime<Local>, prev: &str, locale: VarLocale) -> Option<String> {
+fn resolve_one(inner: &str, now: WallClock, prev: &str, locale: VarLocale) -> Option<String> {
     let (name, arg) = match inner.split_once(':') {
         Some((name, arg)) => (name.trim(), Some(arg.trim())),
         None => (inner.trim(), None),
@@ -170,8 +170,8 @@ fn resolve_one(inner: &str, now: DateTime<Local>, prev: &str, locale: VarLocale)
     }
 }
 
-fn weekday(now: DateTime<Local>, locale: VarLocale) -> &'static str {
-    let index = now.weekday().num_days_from_sunday() as usize;
+fn weekday(now: WallClock, locale: VarLocale) -> &'static str {
+    let index = now.weekday_from_sunday() as usize;
     let names = match locale {
         VarLocale::Ja => &JA_WEEKDAYS,
         VarLocale::En => &EN_WEEKDAYS,
@@ -179,9 +179,9 @@ fn weekday(now: DateTime<Local>, locale: VarLocale) -> &'static str {
     names.get(index).copied().unwrap_or("")
 }
 
-/// The pattern is not passed to chrono's strftime. It is the user's string written in the
+/// The pattern is not passed to a strftime. It is the user's string written in the
 /// template, and a stray `%` would expand a format nobody wrote.
-fn format_stamp(now: DateTime<Local>, pattern: &str) -> String {
+fn format_stamp(now: WallClock, pattern: &str) -> String {
     let mut out = String::with_capacity(pattern.len() + 8);
     let mut rest = pattern;
 
@@ -206,11 +206,10 @@ fn format_stamp(now: DateTime<Local>, pattern: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::TimeZone;
 
     /// 2026-08-31 (Mon) 09:12:45
-    fn now() -> DateTime<Local> {
-        Local.with_ymd_and_hms(2026, 8, 31, 9, 12, 45).unwrap()
+    fn now() -> WallClock {
+        WallClock::new(2026, 8, 31, 9, 12, 45).unwrap()
     }
 
     fn ja(body: &str, prev: Option<&str>) -> String {

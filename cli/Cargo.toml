@@ -22,7 +22,6 @@ rmcp = { version = "3", features = [
 ] }
 schemars = "1.0"
 serde = { version = "1", features = ["derive"] }
-chrono = { version = "0.4", features = ["serde"] }
 tokio = { version = "1", features = ["full"] }
 clap = { version = "4", features = ["derive", "env"] }
 anyhow = "1"

@@ -1,7 +1,7 @@
-use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 
 use crate::error::CoreError;
+use crate::utils::clock::WallClock;
 use crate::utils::device::{Context, DeviceIdentity, Source};
 use crate::utils::frontmatter;
 use crate::utils::markdown::{format_scrawl_line, split_context_json, split_time_prefix};
@@ -86,7 +86,7 @@ impl DayLog {
     pub(crate) fn push(
         &mut self,
         text: &str,
-        timestamp: DateTime<Local>,
+        timestamp: WallClock,
         context: &Context,
         source: Option<Source>,
     ) {
@@ -190,10 +190,9 @@ pub(crate) fn split_entries(content: &str) -> Vec<String> {
 mod tests {
     use super::*;
     use crate::utils::device::NetworkType;
-    use chrono::TimeZone;
 
-    fn at(hour: u32) -> DateTime<Local> {
-        Local.with_ymd_and_hms(2026, 4, 30, hour, 0, 0).unwrap()
+    fn at(hour: u32) -> WallClock {
+        WallClock::new(2026, 4, 30, hour, 0, 0).unwrap()
     }
 
     fn mac() -> Context {

@@ -33,6 +33,7 @@ mod widget_updates;
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as B64;
 use device::ClientContext;
+use magical_merchant_core::utils::clock::{Day, Stamp};
 use magical_merchant_core::{
     CreatedNote, GlyphFormat, GlyphName, GlyphSummary, NoteFilename, NoteKind, NoteMeta,
     NoteSummary, Provenance, Revision, ScrawlDays, SearchFilter, SearchHit, Source, TagUsage,
@@ -293,7 +294,7 @@ fn update_note_meta(
     let filename = parse_filename(&filename)?;
     // Take RFC 3339 with an offset. With a bare date and time, the same input would
     // point at a different instant as soon as the device time zone changed
-    let time = chrono::DateTime::parse_from_rfc3339(&time).map_err(|e| e.to_string())?;
+    let time = Stamp::parse_strict(&time).map_err(|e| e.to_string())?;
     magical_merchant_core::update_note_meta(&base_dir, &filename, time, &tags)
         .map_err(|e| e.to_string())
 }
@@ -512,10 +513,7 @@ fn delete_glyph(handle: AppHandle, name: String) -> Result<(), String> {
 fn list_scrawl_dates(handle: AppHandle) -> Result<Vec<String>, String> {
     let base_dir = app_base_dir(&handle)?;
     let dates = magical_merchant_core::list_scrawl_dates(&base_dir).map_err(|e| e.to_string())?;
-    Ok(dates
-        .iter()
-        .map(|d| d.format("%Y-%m-%d").to_string())
-        .collect())
+    Ok(dates.iter().map(Day::ymd).collect())
 }
 
 /// What the Scrawl screen draws when it opens: the date list and the newest `recent`
@@ -527,7 +525,7 @@ fn list_scrawl_dates(handle: AppHandle) -> Result<Vec<String>, String> {
 async fn read_scrawl_days(
     handle: AppHandle,
     recent: usize,
-    extra: Vec<chrono::NaiveDate>,
+    extra: Vec<Day>,
 ) -> Result<ScrawlDays, String> {
     let base_dir = app_base_dir(&handle)?;
     off_main_thread(move || {
@@ -540,7 +538,7 @@ async fn read_scrawl_days(
 #[tauri::command]
 fn read_scrawl_by_date(handle: AppHandle, date: String) -> Result<Vec<String>, String> {
     let base_dir = app_base_dir(&handle)?;
-    let naive = chrono::NaiveDate::parse_from_str(&date, "%Y-%m-%d").map_err(|e| e.to_string())?;
+    let naive = Day::parse_ymd(&date).map_err(|e| e.to_string())?;
     magical_merchant_core::read_scrawl(&base_dir, naive).map_err(|e| e.to_string())
 }
 
@@ -553,7 +551,7 @@ fn delete_scrawl_entry(
     raw: String,
 ) -> Result<(), String> {
     let base_dir = app_base_dir(&handle)?;
-    let naive = chrono::NaiveDate::parse_from_str(&date, "%Y-%m-%d").map_err(|e| e.to_string())?;
+    let naive = Day::parse_ymd(&date).map_err(|e| e.to_string())?;
     magical_merchant_core::delete_scrawl_entry(&base_dir, naive, index, &raw)
         .map_err(|e| e.to_string())
 }
@@ -954,7 +952,7 @@ mod tests {
     /// so the three parts are assembled directly
     fn jwt(expires_in: i64) -> String {
         let header = URL_SAFE_NO_PAD.encode(r#"{"alg":"HS256","typ":"JWT"}"#);
-        let exp = chrono::Utc::now().timestamp() + expires_in;
+        let exp = magical_merchant_core::utils::clock::unix_seconds_now() + expires_in;
         let claims = URL_SAFE_NO_PAD.encode(format!(r#"{{"exp":{exp}}}"#));
         format!("{header}.{claims}.not-a-real-signature")
     }

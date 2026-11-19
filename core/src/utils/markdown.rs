@@ -1,20 +1,16 @@
-use chrono::{DateTime, FixedOffset, Local, NaiveTime};
 use serde::de::IgnoredAny;
 use serde::{Deserialize, Serialize};
 
 use crate::error::CoreError;
+use crate::utils::clock::{Stamp, Time, WallClock};
 use crate::utils::device::Context;
 use crate::utils::frontmatter::{self, NoteFrontmatter, Provenance};
 
 /// What goes at the end of the line is not always `Context` itself. A day file
 /// writes the reduced form with the device information pushed out to the head.
 #[must_use]
-pub fn format_scrawl_line<C: Serialize>(
-    text: &str,
-    timestamp: DateTime<Local>,
-    context: &C,
-) -> String {
-    let time = timestamp.format("%H:%M:%S");
+pub fn format_scrawl_line<C: Serialize>(text: &str, timestamp: WallClock, context: &C) -> String {
+    let time = timestamp.time().hms();
     match serde_json::to_string(context) {
         Ok(json) if json != "{}" => format!("- [{time}] {text} {json}"),
         _ => format!("- [{time}] {text}"),
@@ -69,7 +65,7 @@ pub fn scrawl_entry_time(entry: &str) -> Option<&str> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ScrawlEntry {
     /// The device's local time. `None` for an old line.
-    pub time: Option<NaiveTime>,
+    pub time: Option<Time>,
     /// Only the text the writer typed.
     pub text: String,
     /// The device's state at the time of recording. The default if nothing remains.
@@ -97,7 +93,7 @@ struct StoredEntry {
 /// broken as JSON, or the time brackets are missing, the written characters are not lost.
 #[must_use]
 pub fn parse_scrawl_entry(entry: &str) -> ScrawlEntry {
-    let time = scrawl_entry_time(entry).and_then(|t| NaiveTime::parse_from_str(t, "%H:%M:%S").ok());
+    let time = scrawl_entry_time(entry).and_then(|t| Time::parse_hms(t).ok());
     let rest = split_time_prefix(entry).map_or(entry, |(_, rest)| rest);
     let stored = split_context_json(rest)
         .and_then(|json| serde_json::from_str::<StoredEntry>(json).ok())
@@ -113,7 +109,7 @@ pub fn parse_scrawl_entry(entry: &str) -> ScrawlEntry {
 pub fn format_note_markdown(
     body: &str,
     tags: &[String],
-    time: DateTime<FixedOffset>,
+    time: Stamp,
     context: &Context,
     provenance: Provenance<'_>,
 ) -> Result<String, CoreError> {
@@ -133,10 +129,13 @@ mod tests {
     use super::*;
     use crate::utils::device::Location;
     use crate::utils::frontmatter::NoteFrontmatter;
-    use chrono::TimeZone;
 
-    fn fixed_timestamp() -> DateTime<Local> {
-        Local.with_ymd_and_hms(2026, 3, 20, 14, 30, 45).unwrap()
+    fn fixed_timestamp() -> WallClock {
+        WallClock::new(2026, 3, 20, 14, 30, 45).unwrap()
+    }
+
+    fn fixed_stamp() -> Stamp {
+        Stamp::new(2026, 3, 20, 14, 30, 45, 9 * 3600).unwrap()
     }
 
     fn test_context() -> Context {
@@ -194,13 +193,41 @@ mod tests {
         assert_eq!(split_time_prefix("- [aa:bb:cc] x"), None);
     }
 
+    /// Which bracketed times read back as a time, and how one reads back: MCP prints it with
+    /// `%H:%M:%S`. A line whose time does not read keeps its text all the same.
+    #[test]
+    fn a_scrawl_time_reads_back() {
+        // (line, the time as MCP prints it, the text)
+        let rows = [
+            ("- [09:05:07] x", Some("09:05:07"), "x"),
+            ("- [9:05:07] x", None, "- [9:05:07] x"),
+            ("- [24:00:00] x", None, "x"),
+            ("- [23:59:60] x", Some("23:59:60"), "x"),
+            ("- [23:60:00] x", None, "x"),
+        ];
+
+        let read: Vec<(&str, Option<String>, String)> = rows
+            .iter()
+            .map(|(line, _, _)| {
+                let entry = parse_scrawl_entry(line);
+                (*line, entry.time.map(|t| t.hms()), entry.text)
+            })
+            .collect();
+
+        let expected: Vec<(&str, Option<String>, String)> = rows
+            .iter()
+            .map(|(line, time, text)| (*line, time.map(str::to_string), (*text).to_string()))
+            .collect();
+        assert_eq!(read, expected);
+    }
+
     #[test]
     fn test_format_note_markdown() {
         let tags = vec!["rust".to_string(), "memo".to_string()];
         let result = format_note_markdown(
             "# Hello\nWorld",
             &tags,
-            fixed_timestamp().fixed_offset(),
+            fixed_stamp(),
             &test_context(),
             Provenance::default(),
         )
@@ -220,7 +247,7 @@ mod tests {
         let result = format_note_markdown(
             "body",
             &[],
-            fixed_timestamp().fixed_offset(),
+            fixed_stamp(),
             &test_context(),
             Provenance::default(),
         )
@@ -236,14 +263,8 @@ mod tests {
             is_charging: Some(true),
             ..Context::default()
         };
-        let result = format_note_markdown(
-            "body",
-            &[],
-            fixed_timestamp().fixed_offset(),
-            &ctx,
-            Provenance::default(),
-        )
-        .unwrap();
+        let result =
+            format_note_markdown("body", &[], fixed_stamp(), &ctx, Provenance::default()).unwrap();
         let (fm, _body): (NoteFrontmatter, &str) = frontmatter::parse(&result).unwrap();
         let context = fm.context.unwrap();
         assert_eq!(context.battery, Some(100));
@@ -264,7 +285,7 @@ mod tests {
 
         let entry = parse_scrawl_entry(&line);
 
-        assert_eq!(entry.time, NaiveTime::from_hms_opt(14, 30, 45));
+        assert_eq!(entry.time, Time::new(14, 30, 45));
         assert_eq!(entry.text, "hello world");
         assert_eq!(entry.context, ctx);
     }

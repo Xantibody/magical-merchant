@@ -28,7 +28,19 @@ sync-client = [
 ]
 
 [dependencies]
-chrono = { version = "0.4", features = ["serde"] }
+# The device's zone name, read again each time the zone may have changed (the platform's
+# own call; `persist.sys.timezone` on Android). The crate chrono used for the same job.
+iana-time-zone = "0.1"
+# Only the zone rules: which offset is in force at an instant. Printing and parsing are
+# clock's own, so no serde. The zoneinfo directory is the desktop's database and the
+# concatenated file Android's; the bundled copy (Windows only), the precomputed tables
+# (`tz-fat`), `TimeZone::system()` (clock ports chrono's lookup instead) and
+# `perf-inline` would only add to the Android library.
+jiff = { version = "1.0.1", default-features = false, features = [
+  "std",
+  "tzdb-concatenated",
+  "tzdb-zoneinfo",
+] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml = "0.9"

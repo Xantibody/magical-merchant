@@ -130,7 +130,7 @@ mod tests {
     #[test]
     fn saving_an_entry_on_an_old_tree_appends_to_the_day_that_was_there() {
         let tmp = TempDir::new().unwrap();
-        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+        let today = crate::utils::clock::Day::today_local().ymd();
         legacy_day(tmp.path(), &today, "- [09:00:00] 朝\n");
 
         crate::save_scrawl_entry(tmp.path(), "夜", &Context::default(), Source::Cli).unwrap();

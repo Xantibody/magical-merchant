@@ -74,7 +74,7 @@ enum Command {
         /// This becomes the note's filename, so pass the offset it was
         /// written in rather than letting this machine's timezone decide.
         #[arg(long)]
-        time: chrono::DateTime<chrono::FixedOffset>,
+        time: magical_merchant_core::utils::clock::Stamp,
         /// A tag to record in the frontmatter, without the `#`. Repeat for more.
         #[arg(long = "tag")]
         tags: Vec<String>,
@@ -260,9 +260,7 @@ fn run_scrawl(data_dir: &Path, command: ScrawlCommand) -> anyhow::Result<()> {
             let date = scrawl::resolve_date(date.as_deref())?;
             let mut out = std::io::stdout().lock();
             for entry in scrawl::show(data_dir, date)? {
-                let time = entry
-                    .time
-                    .map_or_else(|| "--:--".to_string(), |t| t.format("%H:%M").to_string());
+                let time = entry.time.map_or_else(|| "--:--".to_string(), |t| t.hm());
                 // For a multi-line entry, indent the lines after the first by the width of
                 // the time so it is clear which entry they continue
                 let text = entry.text.replace('\n', "\n       ");
@@ -326,6 +324,43 @@ mod tests {
             ])
             .is_ok()
         );
+    }
+
+    /// `--time` is read the way chrono's `FromStr` reads it: `Z`, a space for the `T` and an
+    /// offset without its colon all pass, and the offset given is the one kept.
+    #[test]
+    fn import_time_accepts_z_a_space_and_a_colonless_offset() {
+        let time_of = |text: &str| match Cli::try_parse_from([
+            "magical-merchant",
+            "import",
+            "--time",
+            text,
+        ]) {
+            Ok(Cli {
+                command: Command::Import { time, .. },
+                ..
+            }) => Ok(time.rfc3339()),
+            Ok(_) => Err("not an import".to_string()),
+            Err(e) => Err(e.to_string()),
+        };
+
+        for (text, expected) in [
+            ("2019-05-04T03:00:00Z", Ok("2019-05-04T03:00:00+00:00")),
+            ("2019-05-04 12:00:00+09:00", Ok("2019-05-04T12:00:00+09:00")),
+            ("2019-05-04T12:00:00+0900", Ok("2019-05-04T12:00:00+09:00")),
+            (
+                "2019-05-04",
+                Err(
+                    "error: invalid value '2019-05-04' for '--time <TIME>': premature end of input\n\nFor more information, try '--help'.\n",
+                ),
+            ),
+        ] {
+            assert_eq!(
+                time_of(text),
+                expected.map(str::to_string).map_err(str::to_string),
+                "{text}"
+            );
+        }
     }
 
     /// `edit` alone does not fall back to the newest when omitted. It is the side that

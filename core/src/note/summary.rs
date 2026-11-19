@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
-use chrono::{DateTime, FixedOffset};
 use serde::Serialize;
 
+use crate::utils::clock::Stamp;
 use crate::utils::frontmatter::{self, NoteFrontmatter};
 use crate::utils::tags;
 
@@ -14,7 +14,7 @@ pub struct Summary {
     pub kind: NoteKind,
     pub path: PathBuf,
     pub filename: String,
-    pub time: Option<DateTime<FixedOffset>>,
+    pub time: Option<Stamp>,
     pub tags: Vec<String>,
     pub preview: String,
     /// The datetime of the entry it was promoted from. Scrawl derives the per-day chips from it.
@@ -88,16 +88,11 @@ mod tests {
     use super::*;
     use crate::utils::device::Context;
     use crate::utils::frontmatter::NoteFrontmatter;
-    use chrono::{FixedOffset, TimeZone};
+
     use std::path::PathBuf;
 
     fn at(year: i32, month: u32, day: u32, hour: u32, minute: u32) -> NoteFrontmatter {
-        NoteFrontmatter::new(
-            FixedOffset::east_opt(9 * 3600)
-                .unwrap()
-                .with_ymd_and_hms(year, month, day, hour, minute, 0)
-                .unwrap(),
-        )
+        NoteFrontmatter::new(Stamp::new(year, month, day, hour, minute, 0, 9 * 3600).unwrap())
     }
 
     #[test]
@@ -120,12 +115,7 @@ mod tests {
         );
         assert_eq!(
             summary.time,
-            Some(
-                FixedOffset::east_opt(9 * 3600)
-                    .unwrap()
-                    .with_ymd_and_hms(2026, 3, 20, 14, 30, 0)
-                    .unwrap()
-            )
+            Some(Stamp::new(2026, 3, 20, 14, 30, 0, 9 * 3600).unwrap())
         );
         assert_eq!(summary.tags, vec!["a", "b"]);
         assert_eq!(summary.preview, "# Title\nBody");
@@ -221,6 +211,30 @@ mod tests {
         );
         assert!(summary.time.is_none());
         assert_eq!(summary.preview, "# Title\nbody");
+    }
+
+    /// The list's `time` crosses IPC in the note's own offset and fraction; a zero offset
+    /// is spelled `Z`.
+    #[test]
+    fn time_serializes_with_its_own_offset() {
+        for (written, sent) in [
+            (
+                "2026-08-04T00:30:00.120+09:00",
+                "2026-08-04T00:30:00.120+09:00",
+            ),
+            ("2026-08-04T00:30:00+00:00", "2026-08-04T00:30:00Z"),
+        ] {
+            let content = format!("---\ntime: {written}\ntags: []\n---\nbody");
+            let summary = Summary::from_file(
+                NoteKind::Note,
+                PathBuf::from("/test/note.md"),
+                "note.md".to_string(),
+                &content,
+            );
+
+            let json = serde_json::to_value(&summary).unwrap();
+            assert_eq!(json["time"], sent, "written: {written}");
+        }
     }
 
     #[test]

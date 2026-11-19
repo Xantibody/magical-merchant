@@ -246,7 +246,7 @@ mod tests {
     /// the three parts are built directly
     fn jwt(expires_in: i64) -> String {
         let header = URL_SAFE_NO_PAD.encode(r#"{"alg":"HS256","typ":"JWT"}"#);
-        let exp = chrono::Utc::now().timestamp() + expires_in;
+        let exp = magical_merchant_core::utils::clock::unix_seconds_now() + expires_in;
         let claims = URL_SAFE_NO_PAD.encode(format!(r#"{{"exp":{exp}}}"#));
         format!("{header}.{claims}.not-a-real-signature")
     }

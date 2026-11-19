@@ -6,7 +6,6 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use chrono::NaiveDate;
 use serde::Serialize;
 
 use crate::error::CoreError;
@@ -14,6 +13,7 @@ use crate::list_scrawl_dates;
 use crate::note::Notes;
 use crate::scrawl::Scrawl;
 use crate::scrawl::day::DayLog;
+use crate::utils::clock::Day;
 use crate::utils::markdown::strip_scrawl_prefix;
 use crate::utils::tags;
 
@@ -47,7 +47,7 @@ enum Record {
 #[derive(Debug)]
 struct Row {
     usage: TagUsage,
-    named_on: Option<NaiveDate>,
+    named_on: Option<Day>,
 }
 
 /// The count itself, fed one record at a time so the store is never held at once.
@@ -66,7 +66,7 @@ impl Tally {
     /// The row takes the spelling of the newest record, and on the same day keeps the first
     /// one read. Fed in [`count_tags`]' reading order, that is the first spelling met in
     /// `browse_all`'s newest-first list, which is what the screen counted before.
-    fn add(&mut self, record: Record, date: Option<NaiveDate>, tags: &[String]) {
+    fn add(&mut self, record: Record, date: Option<Day>, tags: &[String]) {
         for tag in tags {
             let row = self.rows.entry(tags::fold_tag(tag)).or_insert_with(|| Row {
                 usage: TagUsage {
@@ -125,11 +125,7 @@ pub fn count_tags(base_dir: &Path) -> Result<Vec<TagUsage>, CoreError> {
 
     // An unreadable note comes with no tags and adds nothing, as in `browse_all`
     Notes::new(base_dir.to_path_buf()).scan(|note, _| {
-        tally.add(
-            Record::Note,
-            note.time.map(|time| time.date_naive()),
-            &note.tags,
-        );
+        tally.add(Record::Note, note.time.map(|time| time.day()), &note.tags);
     })?;
 
     Ok(tally.finish())
@@ -139,13 +135,13 @@ pub fn count_tags(base_dir: &Path) -> Result<Vec<TagUsage>, CoreError> {
 mod tests {
     use super::*;
     use crate::frontmatter::{self, NoteFrontmatter};
+    use crate::utils::clock::Stamp;
     use crate::utils::device::Context;
     use crate::{Provenance, browse_all, create_draft_codex, create_draft_note};
-    use chrono::{FixedOffset, TimeZone};
     use tempfile::TempDir;
 
-    fn day(text: &str) -> NaiveDate {
-        NaiveDate::parse_from_str(text, "%Y-%m-%d").unwrap()
+    fn day(text: &str) -> Day {
+        Day::parse_ymd(text).unwrap()
     }
 
     fn tags(names: &[&str]) -> Vec<String> {
@@ -356,10 +352,7 @@ mod tests {
         day_file(&tmp, "2026-03-01", "- [09:00:00] #MEMO\n");
         note(&tmp, "# 題\n本文", &tags(&["設計"]));
         let dir = tmp.path().join("data/notes");
-        let time = FixedOffset::east_opt(9 * 3600)
-            .unwrap()
-            .with_ymd_and_hms(2026, 3, 1, 9, 0, 0)
-            .unwrap();
+        let time = Stamp::new(2026, 3, 1, 9, 0, 0, 9 * 3600).unwrap();
         let old = frontmatter::render(&NoteFrontmatter::new(time), "#Memo #RUN").unwrap();
         std::fs::write(dir.join("20260301_090000.md"), old).unwrap();
 

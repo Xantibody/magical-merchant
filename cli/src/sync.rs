@@ -195,7 +195,7 @@ mod tests {
     #[test]
     fn an_expired_token_is_refused_before_the_network() {
         let dir = configured();
-        let expired = jwt(chrono::Utc::now().timestamp() - 100);
+        let expired = jwt(magical_merchant_core::utils::clock::unix_seconds_now() - 100);
 
         let err = credentials(dir.path(), |_| Ok(Some(expired.clone()))).unwrap_err();
 
@@ -206,7 +206,7 @@ mod tests {
     #[test]
     fn a_live_token_and_a_url_are_what_the_client_needs() {
         let dir = configured();
-        let live = jwt(chrono::Utc::now().timestamp() + 3600);
+        let live = jwt(magical_merchant_core::utils::clock::unix_seconds_now() + 3600);
 
         let ready = credentials(dir.path(), |_| Ok(Some(live.clone()))).unwrap();
 

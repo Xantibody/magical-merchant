@@ -1,3 +1,4 @@
+pub mod clock;
 pub mod device;
 pub mod frontmatter;
 pub mod fs;

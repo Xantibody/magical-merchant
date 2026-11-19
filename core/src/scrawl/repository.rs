@@ -2,11 +2,10 @@ use std::fs;
 use std::io;
 use std::path::PathBuf;
 
-use chrono::{Local, NaiveDate};
-
 use crate::error::CoreError;
 use crate::scrawl::day::DayLog;
 use crate::scrawl::migrate::migrate_scrawl_dir;
+use crate::utils::clock::{Day, WallClock};
 use crate::utils::device::{Context, Source};
 use crate::utils::fs::{ensure_dir, write_atomic};
 use crate::utils::paths::{self, scrawl_file_path};
@@ -29,29 +28,29 @@ impl Scrawl {
         // Every capture path ends here, so no entry point has to remember this. A failed move
         // is no reason to lose the entry: the next write tries again
         let _ = migrate_scrawl_dir(&self.base_dir);
-        let now = Local::now();
-        let file_path = scrawl_file_path(&self.base_dir, now.date_naive());
+        let now = WallClock::now_local();
+        let file_path = scrawl_file_path(&self.base_dir, now.date());
         ensure_dir(&file_path)?;
 
-        let mut day = DayLog::parse(&self.read_raw(now.date_naive())?.unwrap_or_default());
+        let mut day = DayLog::parse(&self.read_raw(now.date())?.unwrap_or_default());
         day.push(text, now, context, Some(source));
 
         write_atomic(&file_path, day.render()?)?;
         Ok(())
     }
 
-    pub(crate) fn list_dates(&self) -> Result<Vec<NaiveDate>, CoreError> {
+    pub(crate) fn list_dates(&self) -> Result<Vec<Day>, CoreError> {
         let scrawl_dir = paths::data_dir(&self.base_dir).join(paths::SCRAWL_DIR);
         if !scrawl_dir.exists() {
             return Ok(Vec::new());
         }
 
-        let mut dates: Vec<NaiveDate> = fs::read_dir(&scrawl_dir)?
+        let mut dates: Vec<Day> = fs::read_dir(&scrawl_dir)?
             .filter_map(Result::ok)
             .filter_map(|e| {
                 let name = e.file_name().to_string_lossy().to_string();
                 let stem = name.strip_suffix(".md")?;
-                NaiveDate::parse_from_str(stem, "%Y-%m-%d").ok()
+                Day::parse_ymd(stem).ok()
             })
             .collect();
 
@@ -59,7 +58,7 @@ impl Scrawl {
         Ok(dates)
     }
 
-    pub(crate) fn read(&self, date: NaiveDate) -> Result<Vec<String>, CoreError> {
+    pub(crate) fn read(&self, date: Day) -> Result<Vec<String>, CoreError> {
         Ok(self
             .read_raw(date)?
             .map(|content| DayLog::parse(&content).expanded())
@@ -69,7 +68,7 @@ impl Scrawl {
     /// Returns the day's file as is. `None` if it does not exist.
     /// No `exists()` check first: opening the file tells whether it can be read, and in a
     /// search over every date one stat per day adds up.
-    pub(crate) fn read_raw(&self, date: NaiveDate) -> Result<Option<String>, CoreError> {
+    pub(crate) fn read_raw(&self, date: Day) -> Result<Option<String>, CoreError> {
         match fs::read_to_string(scrawl_file_path(&self.base_dir, date)) {
             Ok(content) => Ok(Some(content)),
             Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
@@ -78,12 +77,7 @@ impl Scrawl {
     }
 
     /// `raw` is the line the writer read. Nothing is written if index does not point at that line.
-    pub(crate) fn delete_entry(
-        &self,
-        date: NaiveDate,
-        index: usize,
-        raw: &str,
-    ) -> Result<(), CoreError> {
+    pub(crate) fn delete_entry(&self, date: Day, index: usize, raw: &str) -> Result<(), CoreError> {
         self.rewrite(date, |day| {
             // `expect_same_entry` has checked the range too: a missing line cannot
             // match the line that was read
@@ -103,7 +97,7 @@ impl Scrawl {
     /// Closing this needs everyone who writes this day file to take one lock:
     /// `save_entry`, and the sync's `write_under` / `delete_local_file`.
     // AIDEV-NOTE: read -> compare -> write is not atomic. Reusing SyncLock was rejected because capture fails with busy; exclusion is a separate PR
-    fn rewrite<F>(&self, date: NaiveDate, edit: F) -> Result<(), CoreError>
+    fn rewrite<F>(&self, date: Day, edit: F) -> Result<(), CoreError>
     where
         F: FnOnce(&mut DayLog) -> Result<(), CoreError>,
     {
@@ -151,8 +145,8 @@ mod tests {
 
     const DATE: &str = "2026-08-04";
 
-    fn date() -> NaiveDate {
-        NaiveDate::parse_from_str(DATE, "%Y-%m-%d").unwrap()
+    fn date() -> Day {
+        Day::parse_ymd(DATE).unwrap()
     }
 
     fn seed(lines: &[&str]) -> (TempDir, Scrawl) {
@@ -162,6 +156,42 @@ mod tests {
         fs::write(&path, format!("{}\n", lines.join("\n"))).unwrap();
         let scrawl = Scrawl::new(tmp.path().to_path_buf());
         (tmp, scrawl)
+    }
+
+    /// Which file names count as a day. What the date parser lets through decides which
+    /// files the Scrawl screen and search can see.
+    #[test]
+    fn which_day_files_are_listed() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path().join("data").join(paths::SCRAWL_DIR);
+        fs::create_dir_all(&dir).unwrap();
+        for name in [
+            "2026-03-20.md",
+            "2026-3-2.md",
+            "notes.md",
+            "2026-02-30.md",
+            "20260321.md",
+            "2026-03-22x.md",
+            " 2026-03-23.md",
+            "2026-03-24.txt",
+            "+2026-03-25.md",
+        ] {
+            fs::write(dir.join(name), "- [09:00:00] x\n").unwrap();
+        }
+
+        let dates: Vec<String> = Scrawl::new(tmp.path().to_path_buf())
+            .list_dates()
+            .unwrap()
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+
+        // Unpadded fields, a leading space and a `+` sign are let through; `2026-3-2.md` is
+        // listed as 2026-03-02 although no file of that name exists
+        assert_eq!(
+            dates,
+            vec!["2026-03-25", "2026-03-23", "2026-03-20", "2026-03-02"]
+        );
     }
 
     /// A wrong deletion cannot be undone. If the line pointed at is not the one that was read,
@@ -196,7 +226,7 @@ mod tests {
         scrawl.save_entry("first", &context, Source::App).unwrap();
         scrawl.save_entry("second", &context, Source::App).unwrap();
 
-        let today = Local::now().date_naive();
+        let today = Day::today_local();
         let raw = scrawl.read(today).unwrap()[1].clone();
         assert!(raw.contains("\"hostname\":\"MacBook\""));
 
@@ -268,7 +298,7 @@ mod tests {
             )
             .unwrap();
 
-        let today = Local::now().date_naive();
+        let today = Day::today_local();
         let entries = scrawl.read(date()).unwrap();
         assert_eq!(entries, legacy);
         // Today is a separate file, so the day above has not grown.

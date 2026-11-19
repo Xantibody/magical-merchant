@@ -26,7 +26,6 @@ magical-merchant-core = { path = "../../core", features = [
 tauri = { version = "2", features = ["macos-private-api"] }
 tauri-plugin-deep-link = "2"
 tauri-plugin-geolocation = "2"
-chrono = { version = "0.4", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # 同期エンジンは core にあるが、TLS の組み立てだけはここに残る (android_tls)。

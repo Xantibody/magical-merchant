@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use chrono::NaiveDate;
+use crate::utils::clock::Day;
 use serde::{Deserialize, Serialize};
 
 use crate::error::CoreError;
@@ -60,8 +60,8 @@ pub struct SearchHit {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 pub struct SearchFilter {
     pub kind: Option<HitKind>,
-    pub from: Option<NaiveDate>,
-    pub to: Option<NaiveDate>,
+    pub from: Option<Day>,
+    pub to: Option<Day>,
 }
 
 impl SearchFilter {
@@ -75,7 +75,7 @@ impl SearchFilter {
 
     /// A note whose frontmatter has no time cannot be placed in a period, so naming one
     /// drops it. Browse treats it the same way.
-    fn covers(&self, date: Option<NaiveDate>) -> bool {
+    fn covers(&self, date: Option<Day>) -> bool {
         if self.from.is_none() && self.to.is_none() {
             return true;
         }
@@ -131,7 +131,7 @@ fn scrawl_hits(
             continue;
         }
 
-        let formatted = date.format("%Y-%m-%d").to_string();
+        let formatted = date.ymd();
         // Count entries, not raw lines. A day file may carry device info at its head, and
         // counting lines would put index out of step with the caller's ordering.
         for (index, entry) in DayLog::parse(&content)
@@ -217,7 +217,7 @@ pub fn search_records(
     // and just stays out of the results: one note must not fail the whole search
     Notes::new(base_dir.to_path_buf()).scan(|note, body| {
         if !filter.takes(note.kind.into())
-            || !filter.covers(note.time.map(|time| time.date_naive()))
+            || !filter.covers(note.time.map(|time| time.day()))
             || !in_scope(&scope, &note.tags)
         {
             return;
@@ -240,10 +240,7 @@ pub fn search_records(
             kind: note.kind.into(),
             title: first_line(&note.preview).to_string(),
             snippet: excerpt.text,
-            date: note
-                .time
-                .map(|t| t.format("%Y-%m-%d").to_string())
-                .unwrap_or_default(),
+            date: note.time.map(|t| t.day().ymd()).unwrap_or_default(),
             filename: Some(note.filename),
             index: None,
             tags: note.tags,
@@ -279,10 +276,7 @@ pub fn browse_all(base_dir: &Path) -> Result<Vec<SearchHit>, CoreError> {
             kind: note.kind.into(),
             title: first_line(&note.preview).to_string(),
             snippet: head(body),
-            date: note
-                .time
-                .map(|t| t.format("%Y-%m-%d").to_string())
-                .unwrap_or_default(),
+            date: note.time.map(|t| t.day().ymd()).unwrap_or_default(),
             filename: Some(note.filename),
             index: None,
             tags: note.tags,
@@ -348,10 +342,7 @@ pub fn find_backlinks(
             kind: note.kind.into(),
             title: first_line(&note.preview).to_string(),
             snippet: excerpt.text,
-            date: note
-                .time
-                .map(|t| t.format("%Y-%m-%d").to_string())
-                .unwrap_or_default(),
+            date: note.time.map(|t| t.day().ymd()).unwrap_or_default(),
             filename: Some(note.filename),
             index: None,
             tags: note.tags,
@@ -516,8 +507,8 @@ mod tests {
         create_draft_note(tmp.path(), body, tags, &context(), Provenance::default())
     }
 
-    fn day(text: &str) -> NaiveDate {
-        NaiveDate::parse_from_str(text, "%Y-%m-%d").unwrap()
+    fn day(text: &str) -> Day {
+        Day::parse_ymd(text).unwrap()
     }
 
     /// One day file with these lines, laid out the way the app writes them.
@@ -810,11 +801,11 @@ mod tests {
     }
 
     /// Write one line on a fixed date. `save_scrawl_entry` can only write to today.
-    fn write_day(tmp: &TempDir, date: NaiveDate, text: &str) {
+    fn write_day(tmp: &TempDir, date: Day, text: &str) {
         let dir = tmp.path().join("data/scrawl");
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(
-            dir.join(format!("{}.md", date.format("%Y-%m-%d"))),
+            dir.join(format!("{}.md", date.ymd())),
             format!("- [09:00:00] {text}\n"),
         )
         .unwrap();
@@ -825,9 +816,9 @@ mod tests {
     #[test]
     fn hits_are_capped_at_the_newest_hundred() {
         let tmp = TempDir::new().unwrap();
-        let oldest = NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
+        let oldest = Day::new(2025, 1, 1).unwrap();
         for offset in 0..=100 {
-            let date = oldest + chrono::Duration::days(offset);
+            let date = oldest.plus_days(offset).unwrap();
             write_day(&tmp, date, &format!("needle {offset}"));
         }
 
@@ -842,7 +833,7 @@ mod tests {
     #[test]
     fn a_full_search_page_does_not_read_older_scrawl_days() {
         let tmp = TempDir::new().unwrap();
-        let date = NaiveDate::from_ymd_opt(2025, 1, 2).unwrap();
+        let date = Day::new(2025, 1, 2).unwrap();
         let entries = (0..MAX_HITS)
             .map(|index| format!("needle {index}"))
             .collect::<Vec<_>>()
@@ -860,9 +851,9 @@ mod tests {
     #[test]
     fn newer_notes_displace_scrawl_hits_from_a_full_search_page() {
         let tmp = TempDir::new().unwrap();
-        let date = NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
+        let date = Day::new(2025, 1, 1).unwrap();
         for offset in 0..=MAX_HITS {
-            let day = date + chrono::Duration::days(i64::try_from(offset).unwrap());
+            let day = date.plus_days(i64::try_from(offset).unwrap()).unwrap();
             write_day(&tmp, day, "needle");
         }
         crate::create_note_at(
@@ -883,10 +874,87 @@ mod tests {
         assert_eq!(hits[MAX_HITS - 1].date, "2025-01-03");
     }
 
+    /// A note is dated by the wall clock of the offset it was written in, not by UTC or by
+    /// the device reading it, both for the date it reports and for a period filter.
+    #[test]
+    fn a_note_is_dated_in_its_own_offset() {
+        let tmp = TempDir::new().unwrap();
+        for (at, body) in [
+            ("2025-04-12T23:30:00-05:00", "needle west"),
+            ("2025-04-12T00:30:00+14:00", "needle east"),
+        ] {
+            crate::create_note_at(
+                tmp.path(),
+                at.parse().unwrap(),
+                body,
+                &[],
+                &context(),
+                Provenance::default(),
+            )
+            .unwrap();
+        }
+        let dated = |filter: &SearchFilter| -> Vec<String> {
+            let mut hits: Vec<String> = search_records(tmp.path(), "needle", &[], filter)
+                .unwrap()
+                .iter()
+                .map(|hit| format!("{} {}", hit.title, hit.date))
+                .collect();
+            hits.sort();
+            hits
+        };
+        let on = |date: &str| SearchFilter {
+            from: Some(day(date)),
+            to: Some(day(date)),
+            ..SearchFilter::default()
+        };
+
+        let both = vec!["needle east 2025-04-12", "needle west 2025-04-12"];
+        assert_eq!(dated(&SearchFilter::default()), both);
+        assert_eq!(dated(&on("2025-04-12")), both);
+        assert_eq!(dated(&on("2025-04-11")), Vec::<String>::new());
+        assert_eq!(dated(&on("2025-04-13")), Vec::<String>::new());
+    }
+
+    /// The period arrives over IPC as JSON and is read by the date type's own parser, which
+    /// is laxer than `%Y-%m-%d` in places. Each row is what that parser makes of the text,
+    /// and the error text is what the screen receives.
+    #[test]
+    fn search_filter_dates_deserialize() {
+        let read = |text: &str| -> String {
+            match serde_json::from_value::<SearchFilter>(serde_json::json!({ "from": text })) {
+                Ok(filter) => format!("ok {}", filter.from.unwrap()),
+                Err(e) => format!("err {e}"),
+            }
+        };
+        let rows = [
+            ("2026-03-01", "ok 2026-03-01"),
+            ("2026-3-1", "ok 2026-03-01"),
+            ("2026 -03-01", "ok 2026-03-01"),
+            ("2026-03-01 ", "ok 2026-03-01"),
+            (" 2026-03-01", "ok 2026-03-01"),
+            ("+02026-03-01", "ok 2026-03-01"),
+            ("2026-02-30", "err input is out of range"),
+            ("2026-13-01", "err input is out of range"),
+            ("abc", "err input contains invalid characters"),
+            ("2026-03-01x", "err trailing input"),
+            ("2026-03", "err premature end of input"),
+            ("", "err premature end of input"),
+        ];
+
+        let outcomes: Vec<(&str, String)> =
+            rows.iter().map(|(text, _)| (*text, read(text))).collect();
+
+        let expected: Vec<(&str, String)> = rows
+            .iter()
+            .map(|(text, outcome)| (*text, (*outcome).to_string()))
+            .collect();
+        assert_eq!(outcomes, expected);
+    }
+
     #[test]
     fn a_search_page_counts_only_matches_in_the_tag_scope() {
         let tmp = TempDir::new().unwrap();
-        let date = NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
+        let date = Day::new(2025, 1, 1).unwrap();
         let entries = (0..MAX_HITS)
             .map(|index| format!("needle {index} #other\n- [09:00:00] needle {index} #wanted"))
             .collect::<Vec<_>>()
@@ -1361,11 +1429,7 @@ mod tests {
     #[test]
     fn browsing_lists_scrawl_entries_and_notes_newest_first() {
         let tmp = TempDir::new().unwrap();
-        write_day(
-            &tmp,
-            NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
-            "古い記録",
-        );
+        write_day(&tmp, Day::new(2025, 1, 1).unwrap(), "古い記録");
         draft(&tmp, "今日のノート", &[]).unwrap();
 
         let hits = browse_all(tmp.path()).unwrap();
@@ -1383,16 +1447,8 @@ mod tests {
     #[test]
     fn recent_records_are_the_head_of_the_browse_list() {
         let tmp = TempDir::new().unwrap();
-        write_day(
-            &tmp,
-            NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
-            "古い記録",
-        );
-        write_day(
-            &tmp,
-            NaiveDate::from_ymd_opt(2025, 1, 2).unwrap(),
-            "次の日の記録",
-        );
+        write_day(&tmp, Day::new(2025, 1, 1).unwrap(), "古い記録");
+        write_day(&tmp, Day::new(2025, 1, 2).unwrap(), "次の日の記録");
         draft(&tmp, "今日のノート", &[]).unwrap();
 
         let recent = recent_records(tmp.path(), 2).unwrap();
@@ -1486,9 +1542,9 @@ mod tests {
     #[test]
     fn browsing_is_not_capped() {
         let tmp = TempDir::new().unwrap();
-        let oldest = NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
+        let oldest = Day::new(2025, 1, 1).unwrap();
         for offset in 0..=MAX_HITS {
-            let date = oldest + chrono::Duration::days(i64::try_from(offset).unwrap());
+            let date = oldest.plus_days(i64::try_from(offset).unwrap()).unwrap();
             write_day(&tmp, date, &format!("記録 {offset}"));
         }
 

@@ -11,8 +11,8 @@
 
 use std::path::Path;
 
-use chrono::Local;
 use magical_merchant_core::VarLocale;
+use magical_merchant_core::utils::clock::Day;
 use magical_merchant_core::utils::markdown::{scrawl_entry_time, strip_scrawl_prefix};
 use magical_merchant_core::utils::tags;
 use serde::Serialize;
@@ -76,7 +76,7 @@ struct TemplateRow {
 /// data still has to draw something, and "not opened yet" is a normal state.
 pub(crate) fn collect_capture(base_dir: &Path) -> CaptureData {
     let today =
-        magical_merchant_core::read_scrawl(base_dir, Local::now().date_naive()).unwrap_or_default();
+        magical_merchant_core::read_scrawl(base_dir, Day::today_local()).unwrap_or_default();
 
     CaptureData {
         last: last_entry(&today),
@@ -159,10 +159,7 @@ fn recent_notes(mut notes: Vec<magical_merchant_core::NoteSummary>) -> Vec<NoteR
         .map(|note| NoteRow {
             title: title_of(&note.preview),
             filename: note.filename,
-            date: note
-                .time
-                .map(|t| t.format("%m/%d").to_string())
-                .unwrap_or_default(),
+            date: note.time.map(|t| t.month_day()).unwrap_or_default(),
         })
         .collect()
 }
@@ -296,6 +293,31 @@ mod tests {
         assert_eq!(title_of("\n  \n"), UNTITLED);
     }
 
+    /// A row is dated `MM/DD` in the offset the note was written in. The first two fall on
+    /// another day in UTC and the last on another day east of it, so a date taken in UTC or
+    /// in this machine's zone shows.
+    #[test]
+    fn a_note_row_is_dated_month_slash_day_in_its_own_offset() {
+        for (time, expected) in [
+            ("2026-08-04T00:30:00+09:00", "08/04"),
+            ("2026-08-04T23:30:00-05:00", "08/04"),
+            ("2026-12-31T23:59:59.999Z", "12/31"),
+        ] {
+            let tmp = tempfile::TempDir::new().unwrap();
+            let dir = tmp.path().join("data/notes");
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(
+                dir.join("20260804_003000.md"),
+                format!("---\ntime: {time}\n---\n\n# Dated\n"),
+            )
+            .unwrap();
+
+            let json = serde_json::to_value(collect_notes(tmp.path())).unwrap();
+
+            assert_eq!(json["notes"][0]["date"], expected, "{time}");
+        }
+    }
+
     fn save_template(tmp: &tempfile::TempDir, name: &str, body: &str) {
         let filename = magical_merchant_core::NoteFilename::parse(&format!("{name}.md")).unwrap();
         magical_merchant_core::save_template(tmp.path(), &filename, body, &[]).unwrap();
@@ -326,7 +348,7 @@ mod tests {
 
         let json = serde_json::to_value(collect_templates(tmp.path(), VarLocale::Ja)).unwrap();
 
-        let today = Local::now().format("%Y-%m-%d").to_string();
+        let today = Day::today_local().ymd();
         let row = &json["templates"][0];
         assert_eq!(row["todayTitle"], format!("Daily {today}"));
     }

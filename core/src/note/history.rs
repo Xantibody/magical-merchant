@@ -19,12 +19,12 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use chrono::{DateTime, Local, NaiveDateTime};
 use serde::Serialize;
 
 use crate::error::CoreError;
 use crate::note::repository::Notes;
 use crate::note::revision::Revision;
+use crate::utils::clock::{Stamp, WallClock};
 use crate::utils::fs::{ensure_dir, list_md_files, write_atomic};
 use crate::utils::paths::{history_dir, notes_dir};
 use crate::utils::validated::NoteFilename;
@@ -44,7 +44,7 @@ pub struct Snapshot {
     pub id: String,
     /// The time the snapshot was taken. Distinct from the note's `time` (creation) and
     /// `updated` (last edit): it is "the moment this content was last in effect".
-    pub time: DateTime<Local>,
+    pub time: Stamp,
     pub bytes: u64,
 }
 
@@ -56,7 +56,7 @@ fn note_history_dir(base_dir: &Path, filename: &NoteFilename) -> PathBuf {
 /// or `/` must not read or write outside the history.
 fn snapshot_path(dir: &Path, id: &str) -> Result<PathBuf, CoreError> {
     let (stamp, suffix) = id.split_once('-').unwrap_or((id, "1"));
-    let well_formed = NaiveDateTime::parse_from_str(stamp, "%Y%m%d_%H%M%S").is_ok()
+    let well_formed = WallClock::parse_id_stem(stamp).is_ok()
         && !suffix.is_empty()
         && suffix.bytes().all(|b| b.is_ascii_digit());
     if !well_formed {
@@ -82,8 +82,8 @@ pub fn snapshot_note(
     };
     let content = fs::read_to_string(&path)?;
     let dir = note_history_dir(base_dir, filename);
-    let now = Local::now();
-    let stamp = now.format("%Y%m%d_%H%M%S").to_string();
+    let now = Stamp::now_local();
+    let stamp = now.id_stem();
 
     // Two rewrites in the same second do not clobber the earlier snapshot. What one wants
     // back is usually the one just before a run of mistakes.
@@ -163,7 +163,7 @@ pub fn list_note_history(
             let modified = entry.metadata().ok()?.modified().ok()?;
             Some(Snapshot {
                 id,
-                time: modified.into(),
+                time: Stamp::from_system_time_local(modified),
                 bytes: entry.metadata().ok()?.len(),
             })
         })
@@ -528,6 +528,23 @@ mod tests {
                 read_note_history(tmp.path(), &filename, bad).is_err(),
                 "{bad} should be refused"
             );
+        }
+    }
+
+    /// The stamp in a snapshot id has to be a real date and time, not only 15 digits in shape.
+    #[test]
+    fn an_impossible_date_is_not_a_snapshot_id() {
+        let dir = Path::new("history");
+        for (id, accepted) in [
+            ("20260917_140300", true),
+            ("20260917_140300-2", true),
+            ("20261317_140300", false),
+            ("20260230_000000", false),
+            ("20260917_240000", false),
+            // A leap second is a time chrono can hold, so it passes
+            ("20260917_235960", true),
+        ] {
+            assert_eq!(snapshot_path(dir, id).is_ok(), accepted, "{id}");
         }
     }
 

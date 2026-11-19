@@ -7,10 +7,10 @@ use std::future::Future;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, PoisonError};
 
-use chrono::{DateTime, Utc};
 use magical_merchant_core::sync::client::HttpClient;
 use magical_merchant_core::sync::config::SyncConfig;
 use magical_merchant_core::sync::{SyncError, SyncResult, engine, token};
+use magical_merchant_core::utils::clock::UtcStamp;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, State};
 
@@ -20,13 +20,13 @@ const EVENT_SYNC_ERROR: &str = "sync-error";
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct SyncStatusInfo {
     pub is_syncing: bool,
-    pub last_synced_at: Option<DateTime<Utc>>,
+    pub last_synced_at: Option<UtcStamp>,
     pub last_error: Option<String>,
 }
 
 pub(crate) struct AppSyncState {
     pub is_syncing: AtomicBool,
-    pub last_synced_at: Mutex<Option<DateTime<Utc>>>,
+    pub last_synced_at: Mutex<Option<UtcStamp>>,
     pub last_error: Mutex<Option<String>>,
 }
 
@@ -124,7 +124,7 @@ where
             *state
                 .last_synced_at
                 .lock()
-                .unwrap_or_else(PoisonError::into_inner) = Some(Utc::now());
+                .unwrap_or_else(PoisonError::into_inner) = Some(UtcStamp::now());
             *state
                 .last_error
                 .lock()
@@ -213,6 +213,52 @@ mod tests {
             let _guard = SyncingGuard(&flag);
         }
         assert!(!flag.load(Ordering::SeqCst));
+    }
+
+    /// The webview reads `last_synced_at` as chrono's serde writes it: `Z`, and a fraction
+    /// of exactly 3, 6 or 9 digits or none at all.
+    #[test]
+    fn last_synced_at_crosses_ipc_as_z_with_whole_digit_groups() {
+        for (at, expected) in [
+            (
+                Some("2026-08-05T00:00:00Z"),
+                r#"{"is_syncing":false,"last_synced_at":"2026-08-05T00:00:00Z","last_error":null}"#,
+            ),
+            (
+                Some("2026-08-05T00:00:00.120Z"),
+                r#"{"is_syncing":false,"last_synced_at":"2026-08-05T00:00:00.120Z","last_error":null}"#,
+            ),
+            (
+                Some("2026-08-05T00:00:00.1Z"),
+                r#"{"is_syncing":false,"last_synced_at":"2026-08-05T00:00:00.100Z","last_error":null}"#,
+            ),
+            (
+                Some("2026-08-05T00:00:00.123400Z"),
+                r#"{"is_syncing":false,"last_synced_at":"2026-08-05T00:00:00.123400Z","last_error":null}"#,
+            ),
+            (
+                Some("2026-08-05T00:00:00.544569369Z"),
+                r#"{"is_syncing":false,"last_synced_at":"2026-08-05T00:00:00.544569369Z","last_error":null}"#,
+            ),
+            (
+                Some("2026-08-05T09:00:00.120+09:00"),
+                r#"{"is_syncing":false,"last_synced_at":"2026-08-05T00:00:00.120Z","last_error":null}"#,
+            ),
+            (
+                None,
+                r#"{"is_syncing":false,"last_synced_at":null,"last_error":null}"#,
+            ),
+        ] {
+            let info = SyncStatusInfo {
+                is_syncing: false,
+                last_synced_at: at.map(|text| text.parse::<UtcStamp>().unwrap()),
+                last_error: None,
+            };
+
+            let json = serde_json::to_string(&info).unwrap();
+
+            assert_eq!(json, expected, "{at:?}");
+        }
     }
 
     /// The event `sync_start` sends for this end
