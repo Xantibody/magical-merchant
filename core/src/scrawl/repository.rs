@@ -318,4 +318,25 @@ mod tests {
             Err(CoreError::NotFound(_))
         ));
     }
+
+    /// Deleting does not migrate `data/timeline/` first, unlike a capture. On a tree nothing
+    /// has migrated yet the day is not found under `data/scrawl/`, and the old directory
+    /// stays where it is.
+    #[test]
+    fn deleting_on_a_pre_rename_tree_is_not_found_and_moves_nothing() {
+        let tmp = TempDir::new().unwrap();
+        let legacy = paths::data_dir(tmp.path()).join("timeline");
+        fs::create_dir_all(&legacy).unwrap();
+        fs::write(legacy.join(format!("{DATE}.md")), "- [09:00:00] old\n").unwrap();
+        let scrawl = Scrawl::new(tmp.path().to_path_buf());
+
+        let result = scrawl.delete_entry(date(), 0, "- [09:00:00] old");
+
+        assert!(matches!(result, Err(CoreError::NotFound(_))));
+        assert_eq!(
+            fs::read_to_string(legacy.join(format!("{DATE}.md"))).unwrap(),
+            "- [09:00:00] old\n"
+        );
+        assert!(!paths::data_dir(tmp.path()).join(paths::SCRAWL_DIR).exists());
+    }
 }
