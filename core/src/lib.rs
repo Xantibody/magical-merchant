@@ -9,6 +9,7 @@ pub mod utils;
 
 mod error;
 
+pub use domain::browse::{browse_all, recent_records};
 pub use domain::codex::{
     BEFORE_RESTORE, DRAFT, Version, VersionStatus, commit_note_version, delete_note_version,
     diff_note_versions, list_note_versions, note_version_status, promote_note_to_codex,
@@ -35,8 +36,7 @@ pub use domain::scrawl::{
     migrate_scrawl_dir, read_scrawl, read_scrawl_days, save_scrawl_entry,
 };
 pub use domain::search::{
-    HitKind, SearchFilter, SearchHit, browse_all, find_backlinks, recent_records, search_all,
-    search_records,
+    HitKind, SearchFilter, SearchHit, find_backlinks, search_all, search_records,
 };
 pub use domain::tags::{TagUsage, count_tags};
 pub use domain::templates::{
