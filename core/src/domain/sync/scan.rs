@@ -141,22 +141,17 @@ fn walk_dir(root: &Path, current: &Path, walk: &mut Walk) -> Result<(), CoreErro
         let mtime_ms = modified.unix_millis();
         let size = metadata.len();
 
-        let hash = match walk.cached.files.get(&key) {
-            Some(c) if c.mtime_ms == mtime_ms && c.size == size => c.hash.clone(),
-            _ => {
-                // Reuse the buffer to avoid one allocation per file.
-                content.clear();
-                content.reserve(usize::try_from(size).unwrap_or(0));
-                File::open(&path)?.read_to_end(&mut content)?;
-                compute_hash(&content)
-            }
+        let hash = if let Some(hash) = reuse(walk.cached.files.get(&key), mtime_ms, size) {
+            hash.to_string()
+        } else {
+            // Reuse the buffer to avoid one allocation per file.
+            content.clear();
+            content.reserve(usize::try_from(size).unwrap_or(0));
+            File::open(&path)?.read_to_end(&mut content)?;
+            compute_hash(&content)
         };
 
-        let old_enough = walk
-            .now
-            .duration_since(modified_at)
-            .is_ok_and(|elapsed| elapsed >= RACY_MARGIN);
-        if old_enough {
+        if cacheable(walk.now, modified_at) {
             walk.fresh.files.insert(
                 key.clone(),
                 CachedHash {
@@ -174,6 +169,21 @@ fn walk_dir(root: &Path, current: &Path, walk: &mut Walk) -> Result<(), CoreErro
         });
     }
     Ok(())
+}
+
+/// The cached hash of a file whose mtime and size both still match what was recorded;
+/// `None` when either moved, or nothing was recorded, and the file has to be read again.
+fn reuse(cached: Option<&CachedHash>, mtime_ms: i64, size: u64) -> Option<&str> {
+    cached
+        .filter(|c| c.mtime_ms == mtime_ms && c.size == size)
+        .map(|c| c.hash.as_str())
+}
+
+/// Whether a file last modified at `modified` may be recorded in the cache at `now`: only
+/// once [`RACY_MARGIN`] has passed. A modification time in the future never qualifies.
+fn cacheable(now: SystemTime, modified: SystemTime) -> bool {
+    now.duration_since(modified)
+        .is_ok_and(|elapsed| elapsed >= RACY_MARGIN)
 }
 
 /// The sync machinery itself is not synced. Conflict copies do not show up here: they
