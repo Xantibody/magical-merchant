@@ -51,7 +51,7 @@ impl SyncConfig {
         fs::create_dir_all(base_dir).map_err(|e| e.to_string())?;
         let path = base_dir.join(SYNC_CONFIG_FILENAME);
         let content = serde_json::to_string_pretty(self).map_err(|e| e.to_string())?;
-        crate::utils::fs::write_atomic(&path, content).map_err(|e| e.to_string())?;
+        crate::services::files::write_atomic(&path, content).map_err(|e| e.to_string())?;
         Ok(())
     }
 

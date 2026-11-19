@@ -5,6 +5,7 @@
 mod glyph;
 mod note;
 mod scrawl;
+pub mod services;
 pub mod sync;
 mod tag_count;
 mod template;

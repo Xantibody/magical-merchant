@@ -5,8 +5,8 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use crate::CoreError;
+use crate::services::files::write_atomic;
 use crate::utils::clock::UtcStamp;
-use crate::utils::fs::write_atomic;
 
 const STATE_FILENAME: &str = ".sync-state.json";
 

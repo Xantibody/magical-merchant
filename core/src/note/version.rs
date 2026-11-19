@@ -32,10 +32,10 @@ use crate::error::CoreError;
 use crate::note::Revision;
 use crate::note::kind::NoteKind;
 use crate::note::repository::Notes;
+use crate::services::files::{ensure_dir, list_md_files, write_atomic};
 use crate::utils::clock::{Stamp, WallClock};
 use crate::utils::device::Context;
 use crate::utils::frontmatter;
-use crate::utils::fs::{ensure_dir, list_md_files, write_atomic};
 use crate::utils::paths::codex_dir;
 use crate::utils::validated::NoteFilename;
 

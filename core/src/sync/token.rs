@@ -28,7 +28,7 @@ mod token_store {
     pub(super) fn store(base_dir: &Path, token: &str) -> Result<(), String> {
         fs::create_dir_all(base_dir).map_err(|e| e.to_string())?;
         let path = path(base_dir);
-        crate::utils::fs::write_atomic(&path, token).map_err(|e| e.to_string())?;
+        crate::services::files::write_atomic(&path, token).map_err(|e| e.to_string())?;
         fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).map_err(|e| e.to_string())
     }
 

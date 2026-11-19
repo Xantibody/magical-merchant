@@ -5,9 +5,9 @@ use std::path::PathBuf;
 use crate::error::CoreError;
 use crate::scrawl::day::DayLog;
 use crate::scrawl::migrate::migrate_scrawl_dir;
+use crate::services::files::{ensure_dir, write_atomic};
 use crate::utils::clock::{Day, WallClock};
 use crate::utils::device::{Context, Source};
-use crate::utils::fs::{ensure_dir, write_atomic};
 use crate::utils::paths::{self, scrawl_file_path};
 
 pub(crate) struct Scrawl {
@@ -140,7 +140,7 @@ fn expect_same_entry(day: &DayLog, index: usize, raw: &str) -> Result<(), CoreEr
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::fs::ensure_dir;
+    use crate::services::files::ensure_dir;
     use tempfile::TempDir;
 
     const DATE: &str = "2026-08-04";

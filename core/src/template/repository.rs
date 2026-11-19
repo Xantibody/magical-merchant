@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::error::CoreError;
+use crate::services::files::{ensure_dir, list_md_files, write_atomic};
 use crate::utils::frontmatter;
-use crate::utils::fs::{ensure_dir, list_md_files, write_atomic};
 use crate::utils::paths::{template_drafts_dir, templates_dir};
 use crate::utils::validated::NoteFilename;
 
@@ -75,7 +75,7 @@ impl Templates {
     }
 
     fn existing_path(&self, filename: &NoteFilename) -> Result<PathBuf, CoreError> {
-        crate::utils::fs::resolve_existing(&self.dir(), filename.as_str())
+        crate::services::files::resolve_existing(&self.dir(), filename.as_str())
     }
 
     /// The write target for a file that does not exist yet. What does not exist cannot be

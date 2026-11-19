@@ -62,7 +62,7 @@ impl ScanCache {
     /// the in-between state.
     fn save(&self, base_dir: &Path) {
         if let Ok(content) = serde_json::to_string(self) {
-            let _ = crate::utils::fs::write_atomic(&base_dir.join(CACHE_FILENAME), content);
+            let _ = crate::services::files::write_atomic(&base_dir.join(CACHE_FILENAME), content);
         }
     }
 }

@@ -13,7 +13,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use crate::error::CoreError;
-use crate::utils::fs::write_atomic;
+use crate::services::files::write_atomic;
 
 /// Decimal digits the key is rounded to. 2 digits is roughly a 1.1km square.
 ///

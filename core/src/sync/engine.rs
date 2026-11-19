@@ -497,7 +497,7 @@ fn write_under(data_dir: &Path, key: &str, content: &[u8]) -> Result<(), SyncIss
     }
     // Overwriting in place, a crash while writing a download would replace the local
     // note with a half-written file
-    crate::utils::fs::write_atomic(&path, content).map_err(|e| SyncIssue::WriteFailed {
+    crate::services::files::write_atomic(&path, content).map_err(|e| SyncIssue::WriteFailed {
         key: key.to_string(),
         detail: e.to_string(),
     })

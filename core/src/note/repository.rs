@@ -3,10 +3,10 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use crate::error::CoreError;
+use crate::services::files::{ensure_dir, list_md_files, write_atomic};
 use crate::utils::clock::Stamp;
 use crate::utils::device::Context;
 use crate::utils::frontmatter::{self, NoteFrontmatter, Provenance};
-use crate::utils::fs::{ensure_dir, list_md_files, write_atomic};
 use crate::utils::markdown::format_note_markdown;
 use crate::utils::validated::NoteFilename;
 
@@ -180,7 +180,10 @@ impl Notes {
     /// `relocate_duplicate_ids`.
     pub(crate) fn locate(&self, filename: &NoteFilename) -> Result<(NoteKind, PathBuf), CoreError> {
         for kind in [NoteKind::Codex, NoteKind::Note] {
-            match crate::utils::fs::resolve_existing(&kind.dir(&self.base_dir), filename.as_str()) {
+            match crate::services::files::resolve_existing(
+                &kind.dir(&self.base_dir),
+                filename.as_str(),
+            ) {
                 Ok(path) => return Ok((kind, path)),
                 Err(CoreError::NotFound(_)) => {}
                 Err(e) => return Err(e),

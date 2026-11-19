@@ -24,8 +24,8 @@ use serde::Serialize;
 use crate::error::CoreError;
 use crate::note::repository::Notes;
 use crate::note::revision::Revision;
+use crate::services::files::{ensure_dir, list_md_files, write_atomic};
 use crate::utils::clock::{Stamp, WallClock};
-use crate::utils::fs::{ensure_dir, list_md_files, write_atomic};
 use crate::utils::paths::{history_dir, notes_dir};
 use crate::utils::validated::NoteFilename;
 

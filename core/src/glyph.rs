@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 
 use crate::error::CoreError;
-use crate::utils::fs::{resolve_existing, write_atomic};
+use crate::services::files::{resolve_existing, write_atomic};
 use crate::utils::paths::glyphs_dir;
 use crate::utils::validated::{GlyphFormat, GlyphName};
 
