@@ -12,10 +12,6 @@ use std::path::{Component, Path};
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as B64;
 
-use super::client::{
-    BulkRequest, BulkResponse, DownloadedFile, HttpClient, ServerSyncState, SyncTransport,
-    WireConflictOp, WireUpload,
-};
 use super::conflict;
 use super::diff::{self, RemoteFile, SyncAction};
 use super::lock::SyncLock;
@@ -24,6 +20,10 @@ use super::scan::{self, LocalFile};
 use super::state::{FileSyncRecord, SyncState};
 use super::{SyncIssue, SyncResult};
 use crate::error::SyncError;
+use crate::services::worker::{
+    BulkRequest, BulkResponse, DownloadedFile, HttpClient, ServerSyncState, SyncTransport,
+    WireConflictOp, WireUpload,
+};
 use crate::utils::clock::UtcStamp;
 use crate::utils::paths;
 
@@ -721,7 +721,7 @@ fn save_local_state(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sync::client::ServerFileRecord;
+    use crate::services::worker::ServerFileRecord;
 
     fn local_file(key: &str, hash: &str) -> LocalFile {
         LocalFile {

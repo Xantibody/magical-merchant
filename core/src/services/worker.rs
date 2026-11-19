@@ -113,7 +113,16 @@ impl HttpClient {
     }
 }
 
-impl super::token::TokenRenewer for HttpClient {
+/// What a renewal asks of the server: one call, a fresh token back.
+///
+/// `HttpClient` is the only production implementation; the trait is here so the decision
+/// around the call can be tested without a server. Spelled as `impl Future + Send` for the
+/// same reason as `SyncTransport`
+pub trait TokenRenewer {
+    fn renew(&self) -> impl std::future::Future<Output = Result<String, SyncError>> + Send;
+}
+
+impl TokenRenewer for HttpClient {
     async fn renew(&self) -> Result<String, SyncError> {
         let resp = self
             .http

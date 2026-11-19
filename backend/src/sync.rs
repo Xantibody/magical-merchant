@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, PoisonError};
 
 use magical_merchant_core::SyncError;
-use magical_merchant_core::sync::client::HttpClient;
+use magical_merchant_core::services::worker::HttpClient;
 use magical_merchant_core::sync::config::SyncConfig;
 use magical_merchant_core::sync::{SyncResult, engine, token};
 use magical_merchant_core::utils::clock::UtcStamp;
@@ -46,7 +46,7 @@ impl Default for AppSyncState {
 /// The desktop build uses core's as it is. The CLI's `sync` builds from the same entry, so
 /// the TLS defaults do not drift apart between the app and the CLI
 #[cfg(not(target_os = "android"))]
-use magical_merchant_core::sync::client::desktop_http_client as http_client;
+use magical_merchant_core::services::worker::desktop_http_client as http_client;
 
 /// Only Android bypasses the device's verifier. The reason is in `android_tls::sync_tls_config`
 #[cfg(target_os = "android")]

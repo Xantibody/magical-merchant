@@ -11,6 +11,7 @@ use jsonwebtoken::dangerous::insecure_decode;
 use serde::{Deserialize, Serialize};
 
 use crate::error::SyncError;
+use crate::services::worker::TokenRenewer;
 use crate::utils::clock::unix_seconds_now;
 
 #[cfg(target_os = "android")]
@@ -130,15 +131,6 @@ pub fn renewal_due(token: &str) -> bool {
     };
     let now = unix_seconds_now();
     (exp - now) * 2 <= exp - iat
-}
-
-/// What a renewal asks of the server: one call, a fresh token back.
-///
-/// `HttpClient` is the only production implementation; the trait is here so the decision
-/// around the call can be tested without a server. Spelled as `impl Future + Send` for the
-/// same reason as `SyncTransport`
-pub trait TokenRenewer {
-    fn renew(&self) -> impl std::future::Future<Output = Result<String, SyncError>> + Send;
 }
 
 /// Trades a token past half its lifetime for a fresh one, and stores it.
