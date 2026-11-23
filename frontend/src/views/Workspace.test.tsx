@@ -3414,3 +3414,89 @@ describe("Workspace › 記入例のスイッチ", () => {
     expect(shell?.noteState()?.examples).toBe(false);
   });
 });
+
+/** The phone's reading hand: the sheet's … and the pencil, low on the right. */
+const palmActions = (): HTMLElement | null => document.querySelector(".palm-actions");
+
+describe("Workspace › スマホの読む手", () => {
+  beforeEach(setupWorkspace);
+  afterEach(teardownWorkspace);
+
+  // 63: the note's sheet and the pencil, opposite the place pill
+  it("offers the sheet's … and the pencil while a phone reads a note", async () => {
+    await page.viewport(390, 844);
+    await viewNoteA();
+
+    const hand = palmActions() as HTMLElement;
+    expect(hand).not.toBeNull();
+    expect(within(hand).getByRole("button", { name: "この Note" })).toBeDefined();
+    expect(within(hand).getByRole("button", { name: "書く" })).toBeDefined();
+  });
+
+  it("raises the sheet from the …, and steps away while the sheet is up", async () => {
+    await page.viewport(390, 844);
+    await viewNoteA();
+
+    fireEvent.click(
+      within(palmActions() as HTMLElement).getByRole("button", { name: "この Note" }),
+    );
+
+    await waitFor(() => expect(panelSheet()).not.toBeNull());
+    expect(palmActions()).toBeNull();
+
+    shell?.headerBack()?.();
+
+    await waitFor(() => expect(palmActions()).not.toBeNull());
+  });
+
+  it("enters the writing screen from the pencil, and steps away while writing", async () => {
+    await page.viewport(390, 844);
+    await viewNoteA();
+
+    fireEvent.click(within(palmActions() as HTMLElement).getByRole("button", { name: "書く" }));
+
+    await waitFor(() => expect(writingShown()).toBe(true));
+    expect(palmActions()).toBeNull();
+
+    shell?.headerBack()?.();
+
+    await waitFor(() => expect(palmActions()).not.toBeNull());
+  });
+
+  // The compare bar stands at the foot in its place, with its own ways back
+  it("steps away while the compare bar is up", async () => {
+    await page.viewport(390, 844);
+    const FILE_C = "20260903_140000.md";
+    const TEXT_C = "書き足していく";
+    disk.set(FILE_C, `# 育てる文書\n\n${TEXT_C}`);
+    kinds.set(FILE_C, "codex");
+    versions.set(FILE_C, [{ id: "v1", message: null, body: "# 育てる文書\n\n最初の一行" }]);
+    renderWorkspace();
+    navigateTo?.("/codex");
+    fireEvent.click(await rowOf("育てる文書"));
+    await screen.findByText(TEXT_C);
+    await openHistoryTab();
+    await waitFor(() => expect(historyShown()).toBe(true));
+
+    // The sheet goes down, the comparison stays
+    shell?.headerBack()?.();
+
+    await waitFor(() => expect(document.querySelector(".compare-bar")).not.toBeNull());
+    expect(palmActions()).toBeNull();
+  });
+
+  it("slims with the bar while the page is read down", async () => {
+    await page.viewport(390, 844);
+    await viewNoteA();
+
+    shell?.setSlim(true);
+
+    await waitFor(() => expect(palmActions()?.classList).toContain("palm-actions--slim"));
+  });
+
+  it("has no reading hand on a wide window", async () => {
+    await viewNoteA();
+
+    expect(palmActions()).toBeNull();
+  });
+});
