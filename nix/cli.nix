@@ -32,6 +32,7 @@ rustPlatform.buildRustPackage {
       ../backend/src
       ../backend/build.rs
       ../xtask
+      ../tests/screens/app
     ];
   };
 
