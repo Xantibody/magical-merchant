@@ -3500,3 +3500,113 @@ describe("Workspace › スマホの読む手", () => {
     expect(palmActions()).toBeNull();
   });
 });
+
+describe("Workspace › ステータスの詳細に渡す状態", () => {
+  beforeEach(setupWorkspace);
+  afterEach(teardownWorkspace);
+
+  const FILE_C = "20260903_140000.md";
+  const TITLE_C = "育てる文書";
+  const TEXT_C = "書き足していく";
+  const BODY_C = `# ${TITLE_C}\n\n${TEXT_C}`;
+
+  /** A Codex with the given versions, open in the viewer. */
+  async function viewCodexC(own: { id: string; message: null; body: string }[]): Promise<void> {
+    disk.set(FILE_C, BODY_C);
+    kinds.set(FILE_C, "codex");
+    versions.set(FILE_C, own);
+    renderWorkspace();
+    navigateTo?.("/codex");
+    fireEvent.click(await rowOf(TITLE_C));
+    await screen.findByText(TEXT_C);
+  }
+
+  it("hands over a plain Note's state with nothing on", async () => {
+    await viewNoteA();
+
+    await waitFor(() => expect(shell?.noteState()?.title).toBe(TITLE_A));
+    expect(shell?.noteState()).toMatchObject({
+      version: undefined,
+      comparing: undefined,
+      map: false,
+      examples: false,
+      canCommit: false,
+      canRevert: false,
+    });
+  });
+
+  it("names a note with no heading as untitled", async () => {
+    disk.set(FILE_B, "牛乳だけ");
+    renderWorkspace();
+    await rowOf(TITLE_A);
+
+    navigateTo?.(`/?file=${FILE_B}`);
+
+    await waitFor(() => expect(shell?.noteState()?.title).toBe("(空の Note)"));
+  });
+
+  it("says when the map is laid alongside", async () => {
+    await viewNoteA();
+
+    await flipSwitch("マップ");
+
+    await waitFor(() => expect(shell?.noteState()?.map).toBe(true));
+  });
+
+  // The status details' revert is the panel's revert: the same write, the same revision
+  it("offers revert once there is a backup, and reverts as the panel does", async () => {
+    const before = `# ${TITLE_A}\n\n前の本文`;
+    localStorage.setItem(`note-backup:${FILE_A}`, before);
+    await viewNoteA();
+    await waitFor(() => expect(shell?.noteState()?.canRevert).toBe(true));
+
+    shell?.noteState()?.revert();
+
+    await waitFor(() => expect(disk.get(FILE_A)).toBe(before));
+    const write = calls.find((c) => c.cmd === "update_draft")?.args;
+    expect(write?.filename).toBe(FILE_A);
+    expect(write?.body).toBe(before);
+    expect(write?.revision).toBe(revisionOf(BODY_A));
+  });
+
+  // Committing from the details is the panel's commit: at once, with no message
+  it("offers a commit while a Codex has no version, and commits as the panel does", async () => {
+    await viewCodexC([]);
+    await waitFor(() => expect(shell?.noteState()?.canCommit).toBe(true));
+    expect(shell?.noteState()?.version).toBe("版なし");
+
+    shell?.noteState()?.commit();
+
+    await waitFor(() => expect(countOf("commit_note_version")).toBe(1));
+    expect(calls.find((c) => c.cmd === "commit_note_version")?.args).toStrictEqual({
+      filename: FILE_C,
+      message: null,
+    });
+    await waitFor(() => expect(shell?.noteState()?.canCommit).toBe(false));
+    expect(shell?.noteState()?.version).toBe("版 1");
+  });
+
+  it("opens the history from the details and says what is compared", async () => {
+    await viewCodexC([{ id: "v1", message: null, body: `# ${TITLE_C}\n\n最初の一行` }]);
+    await waitFor(() => expect(shell?.noteState()?.comparing).toBeUndefined());
+
+    shell?.noteState()?.openHistory();
+
+    await waitFor(() => expect(historyShown()).toBe(true));
+    expect(openedPanel()).not.toBeNull();
+    await waitFor(() =>
+      expect(shell?.noteState()?.comparing).toBe(
+        "版 1 と比較中 · 3 行追加 · 3 行削除 · 読み取り専用",
+      ),
+    );
+  });
+
+  it("clears the state when the view goes away", async () => {
+    await viewNoteA();
+    await waitFor(() => expect(shell?.noteState()).not.toBeNull());
+
+    cleanup();
+
+    expect(shell?.noteState()).toBeNull();
+  });
+});
