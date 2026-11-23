@@ -37,6 +37,13 @@
   flex-direction: column;
 }
 
+/* AIDEV-NOTE: ProseMirror needs white-space set and its own stylesheet, which sets it, is not
+   loaded. Under normal the browser turns every other typed space into U+00A0 to keep the run
+   visible, and ProseMirror reads that back into the document and the saved file */
+.milkdown-editor .ProseMirror {
+  white-space: break-spaces;
+}
+
 /* Blocks sit directly under .ProseMirror, not under .milkdown. The gap is the
    same value as `.markdown-preview > * + *` in markdown-preview.css */
 .milkdown-editor .ProseMirror > * + * {
