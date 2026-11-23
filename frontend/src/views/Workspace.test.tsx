@@ -3093,3 +3093,186 @@ describe("Workspace › ドロップして書く", () => {
     await waitFor(() => expect(openedLines).toBe(1));
   });
 });
+
+/** The phone's note sheet (the panel), told apart from a link peek's sheet. */
+const panelSheet = (): Element | null =>
+  document.querySelector(".note-sheet:not(.link-peek-sheet)");
+
+const writingShown = (): boolean => document.querySelector(".note-title-input") !== null;
+
+/** Whether a phone shows the note rather than the list. */
+const detailShown = (): boolean => document.querySelector(".workspace--detail") !== null;
+
+describe("Workspace › シェルに渡す段", () => {
+  beforeEach(setupWorkspace);
+  afterEach(teardownWorkspace);
+
+  it("hands a phone's note its way back, and none to the list or a wide window", async () => {
+    await page.viewport(390, 844);
+    renderWorkspace();
+    fireEvent.click(await rowOf(TITLE_A));
+    await screen.findByText(TEXT_A);
+
+    expect(shell?.headerBack()).toBeTypeOf("function");
+
+    shell?.headerBack()?.();
+
+    await waitFor(() => expect(detailShown()).toBe(false));
+    expect(shell?.headerBack()).toBeNull();
+
+    teardownWorkspace();
+    await setupWorkspace();
+    await viewNoteA();
+    expect(shell?.headerBack()).toBeNull();
+  });
+
+  // 60: the stroke to the right slides the note away with its list showing through under it
+  it("slides the read note over its list, and only a full stroke goes back", async () => {
+    await page.viewport(390, 844);
+    await viewNoteA();
+
+    const stage = shell?.backStage()?.();
+
+    expect(stage?.page).toBe(document.querySelector(".detail-pane"));
+    expect(stage?.under).toBe(document.querySelector(".list-pane"));
+    expect(document.querySelector(".workspace--peek")).not.toBeNull();
+
+    stage?.done(false);
+
+    expect(document.querySelector(".workspace--peek")).toBeNull();
+    await sleep(50);
+    expect(detailShown()).toBe(true);
+    expect(viewerTitle()).toBe(TITLE_A);
+
+    shell?.backStage()?.()?.done(true);
+
+    await waitFor(() => expect(detailShown()).toBe(false));
+  });
+
+  // 61: writing slides away with the same note, to be read, under it
+  it("slides the writing page over the same note read, and only a full stroke ends it", async () => {
+    await page.viewport(390, 844);
+    await viewNoteA();
+    fireEvent.keyDown(document.body, { key: "e" });
+    await waitFor(() => expect(writingShown()).toBe(true));
+
+    const stage = shell?.backStage()?.();
+
+    const peek = document.querySelector(".detail-peek");
+    expect(peek).not.toBeNull();
+    expect(stage?.under).toBe(peek);
+    expect(stage?.page).toBe(document.querySelector(".detail-pane"));
+    expect(peek?.querySelector(".note-title-view")?.textContent).toBe(TITLE_A);
+
+    stage?.done(false);
+
+    await waitFor(() => expect(document.querySelector(".detail-peek")).toBeNull());
+    expect(writingShown()).toBe(true);
+
+    shell?.backStage()?.()?.done(true);
+
+    await waitFor(() => expect(writingShown()).toBe(false));
+    expect(detailShown()).toBe(true);
+  });
+
+  // The sheet and a peek are layers over the page: the stroke has nothing to slide under them
+  it("has no stage to slide while the sheet or a peek is up", async () => {
+    await page.viewport(390, 844);
+    disk.set(FILE_A, `${BODY_A}\n\n[[${FILE_B.replace(/\.md$/u, "")}]]`);
+    disk.set(FILE_B, BODY_B);
+    await viewNoteA();
+
+    fireEvent.click(screen.getByRole("button", { name: "この Note" }));
+    await waitFor(() => expect(panelSheet()).not.toBeNull());
+    expect(shell?.backStage()?.()).toBeNull();
+
+    shell?.headerBack()?.();
+    await waitFor(() => expect(panelSheet()).toBeNull());
+    fireEvent.click(document.querySelector("a.note-link") as HTMLElement);
+    await waitFor(() => expect(peekOpen()).not.toBeNull());
+    expect(shell?.backStage()?.()).toBeNull();
+  });
+
+  // One level out at a time: the sheet, then the peek, then the writing, then the list
+  it("peels a phone's levels one back at a time", async () => {
+    await page.viewport(390, 844);
+    disk.set(FILE_A, `${BODY_A}\n\n[[${FILE_B.replace(/\.md$/u, "")}]]`);
+    disk.set(FILE_B, BODY_B);
+    await viewNoteA();
+    fireEvent.click(await waitFor(() => document.querySelector("a.note-link") as HTMLElement));
+    await waitFor(() => expect(peekOpen()).not.toBeNull());
+    fireEvent.click(screen.getByRole("button", { name: "この Note" }));
+    await waitFor(() => expect(panelSheet()).not.toBeNull());
+
+    shell?.headerBack()?.();
+
+    await waitFor(() => expect(panelSheet()).toBeNull());
+    expect(peekOpen()).not.toBeNull();
+
+    shell?.headerBack()?.();
+
+    await waitFor(() => expect(peekOpen()).toBeNull());
+    expect(detailShown()).toBe(true);
+
+    fireEvent.keyDown(document.body, { key: "e" });
+    await waitFor(() => expect(writingShown()).toBe(true));
+
+    shell?.headerBack()?.();
+
+    await waitFor(() => expect(writingShown()).toBe(false));
+    expect(detailShown()).toBe(true);
+
+    shell?.headerBack()?.();
+
+    await waitFor(() => expect(detailShown()).toBe(false));
+  });
+
+  // A wide window's two-finger strokes: out ends the writing first, then brings a tucked list
+  // back; cover tucks the list under the note, and the tuck is remembered on this device
+  it("steps a wide window's levels: writing, then the list beside the note", async () => {
+    await openNoteA();
+    const levels = shell?.pageLevels();
+    expect(levels?.beside?.edge).toBe(document.querySelector(".sheet-grip-host"));
+
+    shell?.pageLevels()?.out()?.();
+
+    await waitFor(() => expect(writingShown()).toBe(false));
+    expect(shell?.pageLevels()?.out()).toBeNull();
+
+    shell?.pageLevels()?.cover()?.();
+
+    expect(shell?.listTucked()).toBe(true);
+    expect(shell?.pageLevels()?.beside?.tucked()).toBe(true);
+    expect(localStorage.getItem("list-tucked")).toBe("tucked");
+    await waitFor(() => expect(document.querySelector(".workspace--tucked")).not.toBeNull());
+    expect(shell?.pageLevels()?.cover()).toBeNull();
+
+    shell?.pageLevels()?.out()?.();
+
+    expect(shell?.listTucked()).toBe(false);
+    expect(localStorage.getItem("list-tucked")).toBeNull();
+    await waitFor(() => expect(document.querySelector(".workspace--tucked")).toBeNull());
+  });
+
+  it("has no levels to hand over on a phone", async () => {
+    await page.viewport(390, 844);
+    await viewNoteA();
+
+    expect(shell?.pageLevels()).toBeNull();
+  });
+
+  // 93: the place pill's Note goes straight back to the note last opened here. A phone's
+  // list is not an opening; the note has to be on screen
+  it("remembers the Note last opened, once it is on screen", async () => {
+    await page.viewport(390, 844);
+    renderWorkspace();
+    await rowOf(TITLE_A);
+    await sleep(50);
+    expect(shell?.lastNote().note).toBeUndefined();
+
+    fireEvent.click(await rowOf(TITLE_A));
+
+    await waitFor(() => expect(shell?.lastNote().note).toBe(FILE_A));
+    expect(shell?.lastNote().codex).toBeUndefined();
+  });
+});
