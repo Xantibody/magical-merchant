@@ -242,7 +242,10 @@
   cursor: pointer;
 }
 
+/* normalize makes a blockquote a grid. Its one column may shrink below the longest word, or a
+   URL in a quote would run past the page instead of wrapping */
 .milkdown-editor blockquote {
+  grid-template-columns: minmax(0, 1fr);
   border-left: 3px solid var(--app-border);
   padding-left: var(--size-3);
   color: var(--app-text-muted);

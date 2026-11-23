@@ -182,6 +182,25 @@ describe("note body: preview and editor draw the same page", () => {
     expect(step - line).toBeLessThanOrEqual(line / 3);
   });
 
+  // A URL ran past the page on a phone instead of wrapping. The editor breaks a long word
+  // because the browser does so in anything contenteditable; the viewer has to ask for it. In a
+  // quote, normalize's grid also kept the line as wide as its longest word
+  it.each([
+    ["preview", "paragraph", preview, (url: string) => `<p>${url}</p>`],
+    ["editor", "paragraph", editor, (url: string) => `<p>${url}</p>`],
+    ["preview", "quote", preview, (url: string) => `<blockquote><p>${url}</p></blockquote>`],
+    ["editor", "quote", editor, (url: string) => `<blockquote><p>${url}</p></blockquote>`],
+  ])("wraps a long unbroken word (%s, %s)", async (_name, _block, surface, block) => {
+    await page.viewport(414, 896);
+    const root = blockRoot(mountDetail(surface(block(`https://example.com/${"1".repeat(80)}`))));
+    const text = document.createRange();
+    text.selectNodeContents(element("p", root));
+
+    expect(text.getBoundingClientRect().right).toBeLessThanOrEqual(
+      root.getBoundingClientRect().right,
+    );
+  });
+
   // A tap on the viewer's page writes at that spot (R3), so it shows the I-beam that says so
   it("gives the viewer's page the I-beam of a place to write", async () => {
     await page.viewport(1280, 800);
