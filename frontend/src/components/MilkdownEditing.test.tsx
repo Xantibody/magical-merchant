@@ -450,3 +450,43 @@ describe("Note list input rules", () => {
     expect(h.container.querySelectorAll("li")).toHaveLength(1);
   });
 });
+
+describe("Note heading keys", () => {
+  afterEach(cleanup);
+
+  // Markdown says the number of `#` is the level. Milkdown added it to the level already there
+  it.each([
+    ["# ", 1],
+    ["## ", 2],
+  ])("makes `%s` at the start of a heading that level", async (marker, level) => {
+    const h = await mount("### Title");
+    h.select("Title");
+    await userEvent.keyboard(marker);
+
+    expect(h.view.state.doc.child(0).type.name).toBe("heading");
+    expect(h.view.state.doc.child(0).attrs.level).toBe(level);
+    expect(h.view.state.doc.child(0).textContent).toBe("Title");
+  });
+
+  // Milkdown stepped the level down one per press, so an H3 took four to reach the line above
+  it("turns a heading into a paragraph with one Backspace at its start", async () => {
+    const h = await mount("first\n\n### Title");
+    h.select("Title");
+    await userEvent.keyboard("{Backspace}");
+
+    expect(h.view.state.doc.child(1).type.name).toBe("paragraph");
+    expect(h.view.state.doc.child(1).textContent).toBe("Title");
+
+    await userEvent.keyboard("{Backspace}");
+    expect(h.view.state.doc.child(0).textContent).toBe("firstTitle");
+  });
+
+  it("gives `## ` back with a Backspace right after it made a heading", async () => {
+    const h = await mount("");
+    h.view.focus();
+    await userEvent.keyboard("## {Backspace}");
+
+    expect(h.view.state.doc.child(0).type.name).toBe("paragraph");
+    expect(h.view.state.doc.child(0).textContent).toBe("## ");
+  });
+});
