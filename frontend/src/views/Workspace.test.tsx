@@ -130,6 +130,15 @@ let refused: Set<string>;
 let readsWithoutRevision: boolean;
 /** What core's backlink scan finds for each note: the records whose body points at it. */
 let backlinkHits: Map<string, SearchHit[]>;
+/** Makes `create_from_template` refuse the way core does, as a `CommandError`. */
+let templateRefused: boolean;
+
+/** The one template on this device. The ring's template sheet lists it. */
+const TEMPLATE = { filename: "日報.md", name: "日報", tags: [], preview: "# 日報" };
+/** The note a template makes, and what core writes into it. */
+const FILE_T = "20260904_090000.md";
+const TITLE_T = "日報";
+const BODY_T = `# ${TITLE_T}\n\n今日やったこと`;
 
 /** The body's revision. The test checks "write with the revision you read" the way core does. */
 const revisionOf = (body: string): string => `rev:${body}`;
@@ -170,7 +179,14 @@ const saveError = (kind: string, message: string): Error =>
 
 const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
   list_notes: () => [...disk.keys()].map((filename) => summaryOf(filename)),
-  list_templates: () => [],
+  list_templates: () => [TEMPLATE],
+  create_from_template: () => {
+    if (templateRefused) {
+      throw saveError("missing", `template not found: ${TEMPLATE.filename}`);
+    }
+    disk.set(FILE_T, BODY_T);
+    return { filename: FILE_T };
+  },
   find_backlinks: ({ filename }) => backlinkHits.get(String(filename)) ?? [],
   read_note: async ({ filename }) => {
     await readGate;
@@ -621,6 +637,7 @@ async function setupWorkspace(): Promise<void> {
   refused = new Set();
   readsWithoutRevision = false;
   backlinkHits = new Map();
+  templateRefused = false;
   calls = [];
   shell = undefined;
   navigateTo = undefined;
@@ -3274,5 +3291,43 @@ describe("Workspace › シェルに渡す段", () => {
 
     await waitFor(() => expect(shell?.lastNote().note).toBe(FILE_A));
     expect(shell?.lastNote().codex).toBeUndefined();
+  });
+});
+
+describe("Workspace › テンプレートから作る", () => {
+  beforeEach(setupWorkspace);
+  afterEach(teardownWorkspace);
+
+  /** The ring's template petal, then the template's row in the sheet. */
+  async function pickTemplate(): Promise<void> {
+    renderWorkspace();
+    await rowOf(TITLE_A);
+    await chooseFromRing(/テンプレートから/u);
+    fireEvent.click(await screen.findByRole("menuitem", { name: new RegExp(TEMPLATE.name, "u") }));
+  }
+
+  it("makes the note from the template and opens it to write", async () => {
+    await pickTemplate();
+
+    await waitFor(() => expect(titleInput().value).toBe(TITLE_T));
+    const made = calls.findIndex((c) => c.cmd === "create_from_template");
+    expect(calls[made]?.args.filename).toBe(TEMPLATE.filename);
+    expect(calls[made]?.args.locale).toBe("ja");
+    expect(calls[made]?.args.client).toBeTypeOf("object");
+    // The list is read again after it is made, so the new note has a row to open on
+    expect(calls.slice(made).some((c) => c.cmd === "list_notes")).toBe(true);
+    await rowOf(TITLE_T);
+    await waitFor(() => expect(editorBody().textContent).toBe("今日やったこと"));
+  });
+
+  it("says so when the template is refused", async () => {
+    templateRefused = true;
+
+    await pickTemplate();
+
+    await waitFor(() =>
+      expect(shell?.toast()?.message).toBe("テンプレートから Note を作れませんでした"),
+    );
+    expect(document.querySelector(".note-title-input")).toBeNull();
   });
 });
