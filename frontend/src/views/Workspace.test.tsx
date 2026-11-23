@@ -64,6 +64,17 @@ vi.mock(import("../components/MindmapView"), () => ({
   },
 }));
 
+// The real one drives ProseMirror's keymaps, which the board above does not have. A drop's new
+// line is stood in for by the board's text plus one empty line, the body as the editor would
+// report it with the line still empty. The count is how a test sees that a drop opened one
+let openedLines: number;
+vi.mock(import("../lib/open-line"), () => ({
+  openLineAtCaret: (): string => {
+    openedLines += 1;
+    return `${document.querySelector("[data-testid='editor-body']")?.textContent ?? ""}\n\n`;
+  },
+}));
+
 /** The autosave debounce. Kept in step with `Workspace.tsx`. */
 const SAVE_DEBOUNCE_MS = 1000;
 
@@ -614,6 +625,7 @@ async function setupWorkspace(): Promise<void> {
   shell = undefined;
   navigateTo = undefined;
   here = undefined;
+  openedLines = 0;
   typeInEditor = undefined;
   duringSave = undefined;
   releaseReads();
@@ -2944,5 +2956,140 @@ describe("Workspace › ビューアの下のバックリンク", () => {
     await waitFor(() => expect(countOf("find_backlinks")).toBe(1));
     await sleep(50);
     expect(document.querySelector(".backlinks")).toBeNull();
+  });
+});
+
+/** A point on screen, as the pointer events carry it. */
+interface ScreenPoint {
+  x: number;
+  y: number;
+}
+
+function middleOf(el: Element): ScreenPoint {
+  const box = el.getBoundingClientRect();
+  return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+}
+
+/** Presses `control` and slides to `to` without letting go: the carried thing hovers there. */
+function carryTo(control: HTMLElement, to: ScreenPoint, pointerType: string): void {
+  const from = middleOf(control);
+  fireEvent.pointerDown(control, { pointerType, button: 0, clientX: from.x, clientY: from.y });
+  fireEvent.pointerMove(control, { pointerType, clientX: to.x, clientY: to.y });
+}
+
+/** Lifts the pointer at `at`, and the click the browser sends after it. */
+function letGo(control: HTMLElement, at: ScreenPoint, pointerType: string): void {
+  fireEvent.pointerUp(control, { pointerType, clientX: at.x, clientY: at.y });
+  fireEvent.click(control);
+}
+
+/** The point between the viewer's two paragraphs, where a drop opens a line after the first. */
+async function gapBetweenParagraphs(): Promise<ScreenPoint> {
+  const [first, second] = await waitFor(() => {
+    const found = [...document.querySelectorAll(".detail-body > .markdown-preview > p")];
+    expect(found).toHaveLength(2);
+    return found;
+  });
+  const top = (first as Element).getBoundingClientRect();
+  const bottom = (second as Element).getBoundingClientRect();
+  return { x: top.left + top.width / 2, y: (top.bottom + bottom.top) / 2 };
+}
+
+/** The list's +: pressed it blooms the ring, slid past the ring it is carried. */
+const listPlus = (): HTMLElement => screen.getByRole("button", { name: /新規/u });
+
+/** Carries the list's + onto note B's row and lets go there. */
+async function dropPlusOnRowB(): Promise<void> {
+  disk.set(FILE_B, BODY_B);
+  renderWorkspace();
+  const at = middleOf(await rowOf(TITLE_B));
+  carryTo(listPlus(), at, "mouse");
+  await waitFor(() => expect(document.querySelector(".ring-drop-box")).not.toBeNull());
+  letGo(listPlus(), at, "mouse");
+}
+
+describe("Workspace › ドロップして書く", () => {
+  beforeEach(setupWorkspace);
+  afterEach(teardownWorkspace);
+
+  /** Note A with two paragraphs, so the page has a gap between blocks to drop into. */
+  const BODY_TWO = `${BODY_A}\n\n二段目`;
+
+  // 7: the + let go on a row opens that note to write on a fresh last line
+  it("opens the note a + is let go on, in the writing screen on a fresh line", async () => {
+    await dropPlusOnRowB();
+
+    await waitFor(() => expect(titleInput().value).toBe(TITLE_B));
+    await waitFor(() => expect(openedLines).toBe(1));
+    expect(document.activeElement).toBe(editorBody());
+  });
+
+  // A wide window's page takes the carried + too, at the gap it is let go in
+  it("writes from the gap between two paragraphs the + is let go in", async () => {
+    disk.set(FILE_A, BODY_TWO);
+    await viewNoteA();
+    const at = await gapBetweenParagraphs();
+
+    carryTo(listPlus(), at, "mouse");
+
+    await waitFor(() => expect(document.querySelector(".ring-drop-line")).not.toBeNull());
+    expect(document.querySelector(".ring-caption")?.textContent).toBe("ここから書く");
+
+    letGo(listPlus(), at, "mouse");
+
+    await waitFor(() => expect(document.querySelector(".note-title-input")).not.toBeNull());
+    await waitFor(() => expect(openedLines).toBe(1));
+  });
+
+  // A line nothing has been typed on is not an edit: no save until its first character
+  it("saves nothing for the opened line until its first character", async () => {
+    await dropPlusOnRowB();
+    await waitFor(() => expect(openedLines).toBe(1));
+    const empty = `${String(editorBody().textContent)}\n\n`;
+
+    typeInEditor?.(empty);
+
+    await sleep(SAVE_DEBOUNCE_MS + 400);
+    expect(countOf("update_draft")).toBe(0);
+
+    typeInEditor?.(`${empty}卵`);
+
+    await waitFor(() => expect(writesTo(FILE_B)).toHaveLength(1), { timeout: 3000 });
+    expect(writesTo(FILE_B)[0]?.body).toBe(`# ${TITLE_B}\n\n牛乳\n\n卵`);
+  });
+
+  it("enters the writing screen on a tap of the phone's pencil", async () => {
+    await page.viewport(390, 844);
+    await viewNoteA();
+    const pencil = screen.getByRole("button", { name: "書く" });
+    const at = middleOf(pencil);
+
+    fireEvent.pointerDown(pencil, {
+      pointerType: "touch",
+      button: 0,
+      clientX: at.x,
+      clientY: at.y,
+    });
+    letGo(pencil, at, "touch");
+
+    await waitFor(() => expect(document.querySelector(".note-title-input")).not.toBeNull());
+    expect(openedLines).toBe(0);
+  });
+
+  it("writes from the gap the phone's pencil is carried to", async () => {
+    await page.viewport(390, 844);
+    disk.set(FILE_A, BODY_TWO);
+    await viewNoteA();
+    const at = await gapBetweenParagraphs();
+    const pencil = screen.getByRole("button", { name: "書く" });
+
+    carryTo(pencil, at, "touch");
+
+    await waitFor(() => expect(document.querySelector(".ring-drop-line")).not.toBeNull());
+
+    letGo(pencil, at, "touch");
+
+    await waitFor(() => expect(document.querySelector(".note-title-input")).not.toBeNull());
+    await waitFor(() => expect(openedLines).toBe(1));
   });
 });
