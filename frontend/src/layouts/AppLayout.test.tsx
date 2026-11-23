@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, waitFor } from "@solidjs/testing-library";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import type { Mock } from "vitest";
+import { render, screen, fireEvent, cleanup, waitFor, within } from "@solidjs/testing-library";
 import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
 import { page } from "vitest/browser";
 import { MemoryRouter, Route, useLocation, useNavigate } from "@solidjs/router";
@@ -38,6 +39,14 @@ function here(): string {
     throw new Error("the location was not captured");
   }
   return `${location.pathname}${location.search}`;
+}
+
+/** A pause for seeing something not happen. `waitFor` waits until it does, so it is no use. */
+function sleep(ms: number): Promise<void> {
+  // oxlint-disable-next-line promise/avoid-new
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 /** The ID `create_draft` answers with: the bare filename, as core returns it. */
@@ -406,5 +415,151 @@ describe("AppLayout › スマホの部品が出る条件", () => {
     expect(document.querySelector(".palm-slim-words")?.textContent).toBe(
       `${t().common.saved} · ${t().sync.synced}`,
     );
+  });
+});
+
+/** A wide window's rail row for one place. */
+function railRow(name: string): HTMLElement {
+  const rail = document.querySelector<HTMLElement>(".library");
+  if (!rail) {
+    throw new Error("the rail is not mounted");
+  }
+  return within(rail).getByRole("button", { name });
+}
+
+/**
+ * Hands the shell a list beside the page, the way Workspace does on a wide window. The grip is
+ * portalled onto `edge`, so it has to be a real element on the page.
+ */
+function listBeside(tucked: boolean): Mock<(tucked: boolean) => void> {
+  const tuck = vi.fn<(tucked: boolean) => void>();
+  const edge = document.createElement("div");
+  document.body.append(edge);
+  theShell().setPageLevels({
+    out: () => null,
+    cover: () => null,
+    beside: { tucked: () => tucked, tuck, edge },
+  });
+  return tuck;
+}
+
+/** Opens the rail's ring with a press let go where it was made, then taps one of its choices. */
+function chooseFromRing(label: string): void {
+  const plus = document.querySelector<HTMLElement>(".library-ring");
+  if (!plus) {
+    throw new Error("the rail's + is not mounted");
+  }
+  const box = plus.getBoundingClientRect();
+  const at = { clientX: box.left + box.width / 2, clientY: box.top + box.height / 2 };
+  fireEvent.pointerDown(plus, { button: 0, pointerId: 1, ...at });
+  fireEvent.pointerUp(plus, { button: 0, pointerId: 1, ...at });
+  fireEvent.click(screen.getByRole("menuitem", { name: label }));
+}
+
+describe("AppLayout › 場所の移動と作成", () => {
+  beforeEach(setupApp);
+  afterEach(teardownApp);
+
+  // The place you are on, pressed again with its list tucked: the list is what was asked for
+  it("brings the tucked list back instead of moving when the rail's Note is pressed on /notes", async () => {
+    await renderApp("/notes?file=a.md");
+    const tuck = listBeside(true);
+
+    fireEvent.click(railRow("Note"));
+
+    expect(tuck).toHaveBeenCalledExactlyOnceWith(false);
+    // The router commits a move inside a transition, a few ms after the click (the next test
+    // waits for one); give it far longer than that before saying none happened
+    await sleep(150);
+    expect(here()).toBe("/notes?file=a.md");
+  });
+
+  it("moves to /notes when the list beside the page is out", async () => {
+    await renderApp("/notes?file=a.md");
+    const tuck = listBeside(false);
+
+    fireEvent.click(railRow("Note"));
+
+    await waitFor(() => expect(here()).toBe("/notes"));
+    expect(tuck).not.toHaveBeenCalled();
+  });
+
+  it("moves to /notes from another place even with a list tucked", async () => {
+    await renderApp("/codex?file=a.md");
+    const tuck = listBeside(true);
+
+    fireEvent.click(railRow("Note"));
+
+    await waitFor(() => expect(here()).toBe("/notes"));
+    expect(tuck).not.toHaveBeenCalled();
+  });
+
+  it("makes a Codex from the ring and opens it to write", async () => {
+    await renderApp("/notes");
+
+    chooseFromRing(t().reach.newCodex);
+
+    await waitFor(() => expect(here()).toBe(`/codex?file=${NEW_FILE}&edit=1`));
+    expect(createDrafts()).toHaveLength(1);
+    expect(createDrafts()[0].args).toMatchObject({ body: "", tags: [], kind: "codex" });
+  });
+
+  it("makes a Note from the ring with its kind named", async () => {
+    await renderApp("/");
+
+    chooseFromRing(t().reach.newNote);
+
+    await waitFor(() => expect(here()).toBe(`/notes?file=${NEW_FILE}&edit=1`));
+    expect(createDrafts()[0].args).toMatchObject({ kind: "note" });
+  });
+
+  it("says a Codex could not be made when the ring's Codex is refused", async () => {
+    refused.add("create_draft");
+    await renderApp("/notes");
+
+    chooseFromRing(t().reach.newCodex);
+
+    await waitFor(() => expect(theShell().toast()?.message).toBe(t().codex.createFailed));
+    expect(here()).toBe("/notes");
+  });
+
+  it("says a Note could not be made when the ring's Note is refused", async () => {
+    refused.add("create_draft");
+    await renderApp("/notes");
+
+    chooseFromRing(t().reach.newNote);
+
+    await waitFor(() => expect(theShell().toast()?.message).toBe(t().notes.createFailed));
+    expect(here()).toBe("/notes");
+  });
+
+  it("says a Note could not be made when ⌘N is refused", async () => {
+    refused.add("create_draft");
+    await renderApp("/");
+
+    press("n", { metaKey: true });
+
+    await waitFor(() => expect(theShell().toast()?.message).toBe(t().notes.createFailed));
+    expect(here()).toBe("/");
+  });
+
+  // The template sheet hangs from a list's own "new", so from Scrawl the Note list is where it opens
+  it("opens the template sheet over the Note list from Scrawl, a frame later", async () => {
+    await renderApp("/");
+
+    chooseFromRing(t().palm.fromTemplate);
+
+    expect(theShell().popover()).toBeNull();
+    await waitFor(() => expect(here()).toBe("/notes"));
+    await waitFor(() => expect(theShell().popover()).toBe("new-note-menu"));
+  });
+
+  it("opens the template sheet where it is on /codex", async () => {
+    await renderApp("/codex");
+
+    chooseFromRing(t().palm.fromTemplate);
+
+    await waitFor(() => expect(theShell().popover()).toBe("new-note-menu"));
+    expect(here()).toBe("/codex");
   });
 });
