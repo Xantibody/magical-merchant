@@ -122,6 +122,15 @@ async function shoot(
     timeoutMsg: `${scene.name} (${width}) never showed ${ready}`,
   });
   await settle(browser);
+  // WebKit shows focus only in a focused page; the app focuses it on every load (app/src/main.rs)
+  const focused = await browser
+    .waitUntil(() => browser.execute(() => document.hasFocus()), { timeout: 3000, interval: 100 })
+    .catch(() => false);
+  if (!focused) {
+    throw new Error(
+      "the page has no focus, so no focus ring would show; leave the window in front",
+    );
+  }
 
   const name = `${scene.name}.${width}.${language}.${theme}`;
   const tree = await browser.execute(collectTree, await browser.$("body"));

@@ -9,7 +9,7 @@ mod clock;
 
 use std::sync::Arc;
 
-use tauri::{Builder, Wry, plugin};
+use tauri::{Builder, Wry, plugin, webview::PageLoadEvent};
 
 /// What `tests/screens/` sets: the instant every `Date` in the webview reads, in milliseconds
 /// since the epoch. Unset, the clock runs as usual.
@@ -38,6 +38,10 @@ fn keep_login_in_memory() {
 /// The main window cannot be resized by hand: a tiling window manager leaves such a window
 /// floating where it opened instead of fitting it into its layout, and `WebDriver` still sets its
 /// size.
+///
+/// Every page it loads brings the window to the front with the page focused. `WebKit` matches
+/// `:focus` only in a focused page of the key window, so a field shot otherwise has no focus
+/// ring, and two shoots would differ by what the user clicked meanwhile.
 // AIDEV-NOTE: minimizing the window instead was tried and dropped; the page counts as hidden and WebKit stops the animation frames the ring and the mindmap wait on
 fn plugins(builder: Builder<Wry>, now: Option<u64>) -> Builder<Wry> {
     let builder = builder.plugin(tauri_plugin_wdio_webdriver::init()).plugin(
@@ -45,6 +49,12 @@ fn plugins(builder: Builder<Wry>, now: Option<u64>) -> Builder<Wry> {
             .on_window_ready(|window| {
                 if window.label() == "main" {
                     let _ = window.set_resizable(false);
+                }
+            })
+            .on_page_load(|webview, payload| {
+                if webview.label() == "main" && payload.event() == PageLoadEvent::Finished {
+                    let _ = webview.window().set_focus();
+                    let _ = webview.set_focus();
                 }
             })
             .build(),

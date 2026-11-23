@@ -96,6 +96,9 @@ it, then diff.
   so a tiling window manager leaves it floating. If something still sizes
   it, `shoot` stops and says so. (A minimized window would stay out of the
   way, but WebKit stops a hidden page's animation frames.)
+- Every page the app loads brings the window to the front with the page
+  focused, since WebKit shows no focus ring in a page without focus. A shot
+  whose page still lacks focus fails rather than differ from the next take.
 - The phone is a narrow Mac window. WebKit there still reports a mouse, so
   rules on `hover: none` show their desktop side.
 - Shots compare on the machine that took them; fonts and the pixel ratio
