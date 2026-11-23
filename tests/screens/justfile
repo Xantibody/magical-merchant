@@ -1,0 +1,33 @@
+[private]
+default:
+  @just --list
+
+[private]
+setup:
+  pnpm install
+
+check: setup
+  oxlint src/
+  tsc --noEmit
+  pnpm knip
+
+test: setup
+  pnpm test
+
+# The app the shots are taken of: app/, the real app with a WebDriver server added, as a debug
+# build (so MAGICAL_MERCHANT_DATA_DIR is read) with the frontend embedded (no Vite)
+app:
+  pnpm --dir ../../frontend install --frozen-lockfile
+  pnpm --dir ../../frontend build
+  cargo build -p magical-merchant-screens-app --features tauri/custom-protocol
+
+# Name every scene that differs between two shoot directories; exits 1 when there is one
+[no-cd]
+diff before after: setup
+  node {{source_directory()}}/src/diff/main.ts {{before}} {{after}}
+
+# Start the real app over a copy of fixtures/ and write each scene's PNG and tree text into <dir>
+# (`--only <part of a name>` takes fewer scenes)
+[no-cd]
+shoot dir *args: app setup
+  node {{source_directory()}}/src/shoot/main.ts --app {{source_directory()}}/../../target/debug/magical-merchant-screens-app --fixtures {{source_directory()}}/../../fixtures/data {{args}} {{dir}}

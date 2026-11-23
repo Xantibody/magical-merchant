@@ -7,15 +7,24 @@ use tauri_plugin_deep_link::DeepLinkExt as _;
 use crate::shortcut;
 use crate::{commands, links};
 
-// `mobile_entry_point` fixes the signature to `fn run()`, so a failed startup
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    run_with(|builder| builder);
+}
+
+/// The app with plugins added before its own: `tests/screens/app` adds the `WebDriver` server
+/// it drives the app through, so the shipped app carries none of it.
+// `mobile_entry_point` fixes `run`'s signature to `fn run()`, so a failed startup
 // has nowhere to be returned to — panicking is the only way to report it.
 // `generate_context!` embeds every plugin's permission tables in one value;
 // with dialog and fs on board it crosses clippy's stack-frame threshold. It
 // is built once at startup, so the frame size is not a concern.
 #[allow(clippy::expect_used, clippy::large_stack_frames)]
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
-    tauri::Builder::default()
+pub fn run_with<F>(extend: F)
+where
+    F: FnOnce(tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry>,
+{
+    extend(tauri::Builder::default())
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_geolocation::init())
         .plugin(tauri_plugin_opener::init())

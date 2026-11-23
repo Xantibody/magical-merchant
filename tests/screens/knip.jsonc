@@ -1,0 +1,6 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  // Each command is its own entry, run by `node` from the justfile, which knip does not read
+  "entry": ["src/*/main.ts"],
+  "project": ["src/**/*.ts"],
+}

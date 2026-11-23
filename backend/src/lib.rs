@@ -21,4 +21,4 @@ mod test_app;
 // parsing is the part worth testing.
 pub mod widget;
 
-pub use app::run;
+pub use app::{run, run_with};

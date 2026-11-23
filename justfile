@@ -2,6 +2,7 @@ mod rust
 mod frontend
 mod android
 mod worker
+mod screens 'tests/screens'
 
 [private]
 default:
@@ -10,9 +11,9 @@ default:
 fmt:
   nix fmt
 
-check: rust::check frontend::check worker::check comments
+check: rust::check frontend::check worker::check screens::check comments
 
-test: rust::test frontend::test worker::test
+test: rust::test frontend::test worker::test screens::test
 
 verify: fmt check test
 
@@ -20,7 +21,7 @@ verify: fmt check test
 # and spelled right (typos), over the whole tree. CI runs the same recipe
 comments:
   typos
-  vale core cli worker/src frontend/src backend/src
+  vale core cli worker/src frontend/src backend/src tests/screens/src tests/screens/app/src
 
 # 毎日叩くのはこれだけなので root に置く。他は `just frontend::…` を直接呼ぶ
 dev: frontend::dev

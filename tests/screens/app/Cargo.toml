@@ -1,0 +1,19 @@
+[package]
+name = "magical-merchant-screens-app"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "The real app as tests/screens drives it: a WebDriver server added, the clock pinned"
+
+[dependencies]
+# Named after the package: its library is magical_merchant_app_lib, which cargo-machete does not
+# connect with the package and reports as unused
+magical_merchant_app = { package = "magical-merchant-app", path = "../../../backend" }
+# The same keyring core reads the login through, so the store set here is the one core gets
+keyring = "4"
+keyring-core = "1"
+tauri = "2"
+tauri-plugin-wdio-webdriver = "1.5.1"
+
+[lints]
+workspace = true

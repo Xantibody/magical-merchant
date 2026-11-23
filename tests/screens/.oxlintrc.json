@@ -1,0 +1,8 @@
+{
+  "extends": ["../../.oxlintrc.json"],
+  "rules": {
+    // A command run by Node: the file system, child processes and sockets are what it is for.
+    // frontend/ and worker/ keep the rule, since neither runs on Node
+    "import/no-nodejs-modules": "off"
+  }
+}

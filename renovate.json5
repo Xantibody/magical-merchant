@@ -13,6 +13,18 @@
   // nix manager は beta で既定が無効。flake.nix の入力を追うのに要る
   nix: { enabled: true },
 
+  // config:recommended (:ignoreModulesAndTests) は **/tests/** を見ない。tests/screens は
+  // 自前の依存を持つので外す。ignorePaths は足し算ではなく置き換えなので、残りは書き写す
+  ignorePaths: [
+    "**/node_modules/**",
+    "**/bower_components/**",
+    "**/vendor/**",
+    "**/examples/**",
+    "**/__tests__/**",
+    "**/test/**",
+    "**/__fixtures__/**",
+  ],
+
   packageRules: [
     {
       description: "入力は 4 つとも branch 追従なので、個別に出すと毎週 digest bump が 4 本並ぶ",
@@ -70,6 +82,19 @@
       matchManagers: ["cargo"],
       matchUpdateTypes: ["minor", "patch"],
       groupName: "cargo dependencies",
+    },
+    {
+      description: [
+        "tests/screens は本物のアプリの中でスクリプトを走らせる道具なので、待ちを 2 週間にする。",
+        "tests/screens/pnpm-workspace.yaml の minimumReleaseAge と揃える。",
+        "app/ の crate も同じ待ちにする (WebDriver サーバーそのものがここにある)。",
+        "後の規則が勝つので、上の cargo dependencies より後に置く",
+      ],
+      matchManagers: ["npm", "cargo"],
+      matchFileNames: ["tests/screens/**"],
+      groupName: "screens dependencies",
+      minimumReleaseAge: "14 days",
+      internalChecksFilter: "strict",
     },
     {
       matchManagers: ["github-actions"],

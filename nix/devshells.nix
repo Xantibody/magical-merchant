@@ -183,6 +183,11 @@ in
     buildInputs = jsToolchain;
   };
 
+  # tests/screens checks and tests its TypeScript in CI with this; shooting needs the default shell's Rust too
+  screens = pkgs.mkShell {
+    buildInputs = jsToolchain;
+  };
+
   # CI's comment lint: two static binaries, no toolchain
   comments = pkgs.mkShell {
     buildInputs = commentLint ++ [ pkgs.just ];

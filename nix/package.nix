@@ -32,10 +32,11 @@ stdenv.mkDerivation (finalAttrs: {
       ../Cargo.toml
       ../Cargo.lock
       ../core
-      # cli and xtask included for workspace resolution only
+      # cli, xtask and tests/screens/app included for workspace resolution only
       ../cli/Cargo.toml
       ../cli/src
       ../xtask
+      ../tests/screens/app
       ../backend
       ../frontend/src
       ../frontend/package.json

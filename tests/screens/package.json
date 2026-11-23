@@ -1,0 +1,25 @@
+{
+  "name": "magical-merchant-screens",
+  "version": "0.8.1",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "pixelmatch": "^8.0.0",
+    "pngjs": "^7.0.0",
+    "webdriverio": "~9.33.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/pngjs": "^6.0.5",
+    "knip": "^6.31.0",
+    "typescript": "^7.0.0",
+    "vitest": "^5.1.0"
+  },
+  "engines": {
+    "node": ">=22.18"
+  }
+}
