@@ -66,7 +66,7 @@ core/src/
     codex/         version
                    + draft, commit, compare, restore, promote
     scrawl/        entry (one line), day (the day file)
-                   + capture (add a line), journal (read days back), delete, migrate (data/timeline/)
+                   + capture (add a line), journal (read days back, or between two), delete, migrate (data/timeline/)
     templates/     file, variables, today
                    + folder, edit, draft, new_note
     glyphs/        image
@@ -77,7 +77,7 @@ core/src/
     browse.rs      Browse
     backlinks.rs   records pointing here
     device/        context, place
-                   + place_names, current_context
+                   + place_names, current_context, visits
     sync/          diff, rounds, conflict_copy, token, result
                    + run, login, settings, scan, state
   services/        files.rs  worker.rs  keyring.rs  os.rs
@@ -115,9 +115,12 @@ Imports between things inside `domain/`:
   head and each line's tail, and the entry point that wrote it) and
   `place.rs` (how coarsely coordinates count as one place, and the
   per-language lookup of a cached name). Its operations are
-  `place_names.rs` (`places.json`, kept beside `data/` so it never syncs)
-  and `current_context.rs` (asking the OS, behind the `device-probe`
-  feature).
+  `place_names.rs` (`places.json`, kept beside `data/` so it never syncs),
+  `current_context.rs` (asking the OS, behind the `device-probe`
+  feature) and `visits.rs` (every place records were written at, counted
+  by cell over the Scrawl days and the notes, which it reads through
+  `scrawl/` and `note/`; neither of those uses more of `device/` than its
+  rule files).
 - `sync/` is one sync with the Worker. Its rule files are `diff.rs` (what to
   upload, download, delete or keep as a conflict, and the records it
   compares: `LocalFile`, `RemoteFile`, `SyncState`), `rounds.rs` (how many of

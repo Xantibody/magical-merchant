@@ -115,7 +115,10 @@ local scan → diff → `POST /sync/bulk`, repeated until nothing is left over.
 - The login renews itself: past half its lifetime (`exp - iat`, read off the
   token by `renewal_due` in `core/src/domain/sync/token.rs`) the sync entry of
   the app and the CLI trades it at `POST /auth/renew` and stores the fresh one
-  (`renew_if_due` in `core/src/domain/sync/login.rs`). Unreachable server → keep the token in hand;
+  (`renew_if_due` in `core/src/domain/sync/login.rs`). Both entries get their
+  client from `sync_client` there, after `check_login` has decided
+  `notConfigured` / `notAuthenticated` once for both; only the place their words
+  send the reader to ("Settings", "the app's Settings") is the entry's. Unreachable server → keep the token in hand;
   401 → `notAuthenticated`. `auth_time` is carried forward and the Worker
   refuses past `JWT_MAX_SESSION_SECONDS` (180 days). Only a device away for
   the whole lifetime (30 days in `wrangler.toml`) signs out

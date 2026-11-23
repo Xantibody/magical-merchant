@@ -18,8 +18,8 @@ function launch(): { run: ReturnType<typeof createWidgetLaunch>; deps: WidgetLau
 }
 
 /** Core answers the template with the note it made (or found); every other call is a device probe. */
-function stubTemplateCreate(path: string): void {
-  mockIPC((cmd) => (cmd === "create_from_template" ? { path } : null));
+function stubTemplateCreate(filename: string): void {
+  mockIPC((cmd) => (cmd === "create_from_template" ? { filename } : null));
 }
 
 describe("createWidgetLaunch", () => {
@@ -51,7 +51,7 @@ describe("createWidgetLaunch", () => {
   });
 
   it("opens today's note from the template in the writing screen", async () => {
-    stubTemplateCreate("data/notes/20260320_090000.md");
+    stubTemplateCreate("20260320_090000.md");
     const { run, deps } = launch();
 
     run({ name: "template", file: null, template: "日報" });

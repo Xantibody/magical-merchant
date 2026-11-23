@@ -855,7 +855,7 @@ const unifiedDiff = (from, to, fromName, toName) => {
 
   // ---- コマンド実装 ----
 
-  // まだ使われていない名前と、その名前が名乗る時刻。core の `create_draft_note`
+  // まだ使われていない名前と、その名前が名乗る時刻。core の `create_draft`
   // と同じく、同じ秒に 2 本作られたら空いている秒まで 1 秒ずつ進める。
   // ここで潰すと、「+ 新規」を続けて押したときだけモックが実物と違う挙動を見せる
   const freeNoteName = () => {
@@ -1170,7 +1170,7 @@ const unifiedDiff = (from, to, fromName, toName) => {
         body,
         ...(origin ? { origin } : {}),
       });
-      return `/mock/data/${filename}`;
+      return filename;
     },
     // ---- Codex の版。core と同じく Codex にしか効かない ----
     /** @param {{ filename: string, message?: string | null }} args */
@@ -1355,7 +1355,7 @@ const unifiedDiff = (from, to, fromName, toName) => {
         body: resolveVars(template.body, prev, locale),
         template: name,
       });
-      return { path: `/mock/data/${created}` };
+      return { filename: created };
     },
     list_glyphs: () =>
       [...glyphs.entries()]

@@ -1,14 +1,13 @@
-use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as B64;
-use magical_merchant_core::domain::device::{PlaceCache, place_key, place_names};
+use magical_merchant_core::domain::device::{PlaceCache, place_key, place_names, visited_places};
 use magical_merchant_core::utils::clock::Day;
 use magical_merchant_core::utils::frontmatter;
 use magical_merchant_core::{
-    DRAFT, GlyphFormat, GlyphName, NoteFilename, NoteKind, Provenance, Revision, Source,
-    parse_scrawl_entry,
+    DRAFT, GlyphFormat, GlyphName, NoteFilename, NoteKind, OpenedNote, Provenance, Revision,
+    ScrawlEntry, Source, parse_scrawl_entry,
 };
 use rmcp::handler::server::tool::ToolRouter;
 use rmcp::handler::server::wrapper::{Json, Parameters};
@@ -150,6 +149,22 @@ impl McpServer {
             .map(str::to_string)
     }
 
+    /// One entry as an agent reads it, its place named from the cache.
+    fn entry_info(
+        &self,
+        cache: &PlaceCache,
+        date: &str,
+        index: usize,
+        entry: ScrawlEntry,
+    ) -> EntryInfo {
+        let place = entry
+            .context
+            .location
+            .as_ref()
+            .and_then(|l| self.place_name(cache, l.latitude, l.longitude));
+        EntryInfo::new(date, index, entry, place)
+    }
+
     fn day_entries(&self, cache: &PlaceCache, date: Day) -> Result<Vec<EntryInfo>, String> {
         let formatted = date.ymd();
         let lines =
@@ -158,13 +173,7 @@ impl McpServer {
             .iter()
             .enumerate()
             .map(|(index, line)| {
-                let entry = parse_scrawl_entry(line);
-                let place = entry
-                    .context
-                    .location
-                    .as_ref()
-                    .and_then(|l| self.place_name(cache, l.latitude, l.longitude));
-                EntryInfo::new(&formatted, index, entry, place)
+                self.entry_info(cache, &formatted, index, parse_scrawl_entry(line))
             })
             .collect())
     }
@@ -332,12 +341,14 @@ impl McpServer {
         Parameters(param): Parameters<FilenameParam>,
     ) -> Result<Json<NoteOutput>, String> {
         let filename = parse_filename(&param.filename)?;
-        let notes::Read { body, revision } = notes::read(&self.data_dir, &filename).map_err(err)?;
-        let (kind, _) =
-            magical_merchant_core::locate_note(&self.data_dir, &filename).map_err(err)?;
-        // Broken frontmatter still returns the body. The list does the same: metadata that
-        // cannot be read is no reason to hide the body as well.
-        let meta = magical_merchant_core::read_note_meta(&self.data_dir, &filename).ok();
+        // Broken frontmatter still returns the body, with `meta` empty. The list does the
+        // same: metadata that cannot be read is no reason to hide the body as well.
+        let OpenedNote {
+            kind,
+            body,
+            revision,
+            meta,
+        } = magical_merchant_core::open_note(&self.data_dir, &filename).map_err(err)?;
         let cache = self.places();
         let context = meta.as_ref().and_then(|m| m.context.as_ref()).map(|ctx| {
             let place = ctx
@@ -448,42 +459,26 @@ impl McpServer {
         if from > to {
             return Err(format!("'from' ({from}) is after 'to' ({to})"));
         }
-        let limit = param.limit.unwrap_or(DEFAULT_LIMIT);
-        // Callers do not type the exact spelling they saw in the list. The `#` and the case
-        // are ignored
-        let tag = param
-            .tag
-            .map(|t| magical_merchant_core::domain::tags::tag::normalize(&t));
+        // Callers do not type the exact spelling they saw in the list; core ignores the `#`
+        // and the case
+        let read = magical_merchant_core::entries_between(
+            &self.data_dir,
+            from,
+            to,
+            param.tag.as_deref(),
+            param.limit.unwrap_or(DEFAULT_LIMIT),
+        )
+        .map_err(err)?;
         let cache = self.places();
-
-        let mut entries = Vec::new();
-        let mut truncated = false;
-        // Narrow down from the list of dates. Opening every day in the range piles up a
-        // wasted stat for each day that was never written.
-        let mut dates: Vec<Day> = magical_merchant_core::list_scrawl_dates(&self.data_dir)
-            .map_err(err)?
+        let entries = read
+            .entries
             .into_iter()
-            .filter(|d| (from..=to).contains(d))
+            .map(|dated| self.entry_info(&cache, &dated.day.ymd(), dated.index, dated.entry))
             .collect();
-        dates.sort_unstable();
-        'days: for date in dates {
-            for entry in self.day_entries(&cache, date)? {
-                if tag.as_ref().is_some_and(|t| {
-                    !entry
-                        .tags
-                        .iter()
-                        .any(|own| magical_merchant_core::domain::tags::tag::same_tag(own, t))
-                }) {
-                    continue;
-                }
-                if entries.len() >= limit {
-                    truncated = true;
-                    break 'days;
-                }
-                entries.push(entry);
-            }
-        }
-        Ok(Json(ScrawlOutput { entries, truncated }))
+        Ok(Json(ScrawlOutput {
+            entries,
+            truncated: read.truncated,
+        }))
     }
 
     #[tool(
@@ -492,57 +487,22 @@ impl McpServer {
     )]
     fn list_places(&self) -> Result<Json<PlacesOutput>, String> {
         let cache = self.places();
-        let mut cells: BTreeMap<String, PlaceInfo> = BTreeMap::new();
-        let mut visit = |latitude: f64, longitude: f64, date: &str, is_note: bool| {
-            let key = place_key(latitude, longitude);
-            let cell = cells.entry(key.clone()).or_insert_with(|| PlaceInfo {
-                latitude: round_to_key(latitude),
-                longitude: round_to_key(longitude),
-                place: self.place_name(&cache, latitude, longitude),
-                place_key: key,
-                entries: 0,
-                notes: 0,
-                first: date.to_string(),
-                last: date.to_string(),
-            });
-            if is_note {
-                cell.notes += 1;
-            } else {
-                cell.entries += 1;
-            }
-            if date < cell.first.as_str() {
-                cell.first = date.to_string();
-            }
-            if date > cell.last.as_str() {
-                cell.last = date.to_string();
-            }
-        };
-
-        for date in magical_merchant_core::list_scrawl_dates(&self.data_dir).map_err(err)? {
-            let formatted = date.ymd();
-            for line in magical_merchant_core::read_scrawl(&self.data_dir, date).map_err(err)? {
-                if let Some(l) = parse_scrawl_entry(&line).context.location {
-                    visit(l.latitude, l.longitude, &formatted, false);
-                }
-            }
-        }
-        for note in magical_merchant_core::list_notes(&self.data_dir).map_err(err)? {
-            // A note that cannot be read only misses the map. That is no reason to stop the
-            // listing
-            let Ok(filename) = NoteFilename::parse(&note.filename) else {
-                continue;
-            };
-            let Ok(meta) = magical_merchant_core::read_note_meta(&self.data_dir, &filename) else {
-                continue;
-            };
-            if let Some(l) = meta.context.and_then(|c| c.location) {
-                let date = meta.time.day().ymd();
-                visit(l.latitude, l.longitude, &date, true);
-            }
-        }
-
-        let mut places: Vec<PlaceInfo> = cells.into_values().collect();
-        places.sort_by_key(|p| std::cmp::Reverse(p.entries + p.notes));
+        let places = visited_places(&self.data_dir)
+            .map_err(err)?
+            .into_iter()
+            .map(|visit| PlaceInfo {
+                place: cache
+                    .lookup(&self.locale, &visit.place_key)
+                    .map(str::to_string),
+                place_key: visit.place_key,
+                latitude: visit.latitude,
+                longitude: visit.longitude,
+                entries: visit.entries,
+                notes: visit.notes,
+                first: visit.first.ymd(),
+                last: visit.last.ymd(),
+            })
+            .collect();
         Ok(Json(PlacesOutput { places }))
     }
 
@@ -670,9 +630,9 @@ impl McpServer {
             body: frontmatter::strip(&content).to_string(),
             // The revision to pass back when restoring. It is of the note's body as it
             // stands now, not of the saved copy's body
-            revision: notes::read(&self.data_dir, &filename)
+            revision: magical_merchant_core::open_note(&self.data_dir, &filename)
                 .ok()
-                .map(|r| r.revision.to_string()),
+                .map(|opened| opened.revision.to_string()),
         }))
     }
 
@@ -686,7 +646,7 @@ impl McpServer {
     ) -> Result<Json<UpdatedNoteOutput>, String> {
         let filename = parse_filename(&param.filename)?;
         let expected = param.revision.map(Revision::from);
-        let snapshot = magical_merchant_core::restore_note(
+        let restored = magical_merchant_core::restore_note(
             &self.data_dir,
             &filename,
             &param.id,
@@ -695,10 +655,8 @@ impl McpServer {
         .map_err(err)?;
         Ok(Json(UpdatedNoteOutput {
             filename: filename.as_str().to_string(),
-            snapshot: snapshot.map(Into::into),
-            revision: notes::read(&self.data_dir, &filename)
-                .ok()
-                .map(|r| r.revision.to_string()),
+            snapshot: restored.snapshot.map(Into::into),
+            revision: Some(restored.revision.to_string()),
         }))
     }
 
@@ -819,11 +777,6 @@ impl McpServer {
     }
 }
 
-/// The same rounding as `place_key`. The key is a string, so returning a number rounds again.
-fn round_to_key(value: f64) -> f64 {
-    (value * 100.0).round() / 100.0
-}
-
 impl ServerHandler for McpServer {
     fn get_info(&self) -> ServerConfig {
         let mut info = ServerConfig::new(ServerCapabilities::builder().enable_tools().build());
@@ -870,6 +823,7 @@ mod tests {
     use magical_merchant_core::domain::device::{Context, Location};
     use magical_merchant_core::domain::scrawl::entry::format_scrawl_line;
     use magical_merchant_core::utils::clock::WallClock;
+    use std::collections::BTreeMap;
     use std::fs;
     use tempfile::TempDir;
 
@@ -1142,8 +1096,9 @@ mod tests {
             &[(9, "a", &here), (10, "b", &nearby)],
         );
         write_day(tmp.path(), "2026-03-01", &[(9, "c", &far)]);
-        magical_merchant_core::create_draft_note(
+        magical_merchant_core::create_draft(
             tmp.path(),
+            NoteKind::Note,
             "note",
             &[],
             &here,
@@ -1175,8 +1130,9 @@ mod tests {
             "2026-01-15",
             &[(9, "#run 朝", &ctx), (10, "#run 夜 #rest", &ctx)],
         );
-        magical_merchant_core::create_draft_note(
+        magical_merchant_core::create_draft(
             tmp.path(),
+            NoteKind::Note,
             "設計 #rust",
             &[],
             &ctx,
@@ -1204,8 +1160,9 @@ mod tests {
             "2026-01-15",
             &[(9, "また #cognitivebias", &ctx)],
         );
-        magical_merchant_core::create_draft_note(
+        magical_merchant_core::create_draft(
             tmp.path(),
+            NoteKind::Note,
             "歪みを疑う #CognitiveBias",
             &[],
             &ctx,
@@ -1271,8 +1228,9 @@ mod tests {
     #[test]
     fn a_note_comes_back_as_metadata_plus_body() {
         let tmp = TempDir::new().unwrap();
-        let path = magical_merchant_core::create_draft_note(
+        let filename = magical_merchant_core::create_draft(
             tmp.path(),
+            NoteKind::Note,
             "# 題\n本文 #rust",
             &["Memo".to_string()],
             &mac_at_shibuya(),
@@ -1280,7 +1238,7 @@ mod tests {
         )
         .unwrap();
         name_shibuya(tmp.path(), "ja");
-        let filename = path.file_name().unwrap().to_str().unwrap().to_string();
+        let filename = filename.as_str().to_string();
 
         let out = server(tmp.path())
             .read_note(Parameters(FilenameParam { filename }))
@@ -1499,7 +1457,8 @@ mod tests {
             .0;
         // The app typed after the read
         magical_merchant_core::update_note(
-            &tmp.path().join("data/notes").join(&created.filename),
+            tmp.path(),
+            &filename,
             "from the app",
             &Context::default(),
             None,
@@ -1625,7 +1584,8 @@ mod tests {
             .0;
         let filename = NoteFilename::parse(&created.filename).unwrap();
         magical_merchant_core::update_note(
-            &tmp.path().join("data/notes").join(&created.filename),
+            tmp.path(),
+            &filename,
             "from the app",
             &Context::default(),
             None,
@@ -1665,28 +1625,26 @@ mod tests {
         assert!(updated.revision.is_some());
     }
 
-    fn a_codex(base: &Path, body: &str) -> String {
-        let path = magical_merchant_core::create_draft_codex(
+    fn create(base: &Path, kind: NoteKind, body: &str) -> String {
+        magical_merchant_core::create_draft(
             base,
+            kind,
             body,
             &[],
             &mac_at_shibuya(),
             Provenance::default(),
         )
-        .unwrap();
-        path.file_name().unwrap().to_str().unwrap().to_string()
+        .unwrap()
+        .as_str()
+        .to_string()
+    }
+
+    fn a_codex(base: &Path, body: &str) -> String {
+        create(base, NoteKind::Codex, body)
     }
 
     fn a_note(base: &Path, body: &str) -> String {
-        let path = magical_merchant_core::create_draft_note(
-            base,
-            body,
-            &[],
-            &mac_at_shibuya(),
-            Provenance::default(),
-        )
-        .unwrap();
-        path.file_name().unwrap().to_str().unwrap().to_string()
+        create(base, NoteKind::Note, body)
     }
 
     fn commit(base: &Path, filename: &str, message: &str) -> String {
@@ -2221,5 +2179,389 @@ mod tests {
 
             assert_eq!(got.as_deref().map_err(String::as_str), expected, "{text:?}");
         }
+    }
+
+    /// What an agent gets, as the JSON it reads.
+    fn json<T: serde::Serialize>(out: &T) -> serde_json::Value {
+        serde_json::to_value(out).unwrap()
+    }
+
+    fn stem(filename: &str) -> &str {
+        filename.trim_end_matches(".md")
+    }
+
+    /// A note links here by its stem; the note itself, linking to its own stem, is not
+    /// a backlink of itself.
+    #[test]
+    fn backlinks_list_the_notes_and_entries_that_link_here_but_not_the_note_itself() {
+        let tmp = TempDir::new().unwrap();
+        let target = a_note(tmp.path(), "# Target");
+        magical_merchant_core::update_note(
+            tmp.path(),
+            &NoteFilename::parse(&target).unwrap(),
+            &format!("# Target\nme [[{}]]", stem(&target)),
+            &Context::default(),
+            None,
+        )
+        .unwrap();
+        let linking = a_note(tmp.path(), &format!("# Linking\nsee [[{}]]", stem(&target)));
+        a_note(tmp.path(), "# Unrelated");
+        write_day(
+            tmp.path(),
+            "2026-01-15",
+            &[
+                (
+                    9,
+                    &format!("ref [[{}]]", stem(&target)),
+                    &Context::default(),
+                ),
+                (10, "nothing", &Context::default()),
+            ],
+        );
+
+        let out = server(tmp.path())
+            .backlinks(Parameters(FilenameParam { filename: target }))
+            .unwrap()
+            .0;
+
+        let hits: Vec<(String, Option<String>, Option<usize>)> = out
+            .hits
+            .iter()
+            .map(|h| (h.kind.clone(), h.filename.clone(), h.index))
+            .collect();
+        assert_eq!(
+            hits,
+            [
+                ("note".to_string(), Some(linking), None),
+                ("scrawl".to_string(), None, Some(0)),
+            ]
+        );
+    }
+
+    fn note_at(base: &Path, filename: &str, time: &str, body: &str) {
+        let dir = base.join("data/notes");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(
+            dir.join(filename),
+            format!("---\ntime: {time}\n---\n\n{body}"),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn search_ignores_case_and_lists_the_newest_first() {
+        let tmp = TempDir::new().unwrap();
+        note_at(
+            tmp.path(),
+            "20260101_090000.md",
+            "2026-01-01T09:00:00+09:00",
+            "old Rust note",
+        );
+        note_at(
+            tmp.path(),
+            "20260301_090000.md",
+            "2026-03-01T09:00:00+09:00",
+            "new RUST note",
+        );
+        write_day(
+            tmp.path(),
+            "2026-02-01",
+            &[(9, "rust in between", &Context::default())],
+        );
+        note_at(
+            tmp.path(),
+            "20260401_090000.md",
+            "2026-04-01T09:00:00+09:00",
+            "nothing here",
+        );
+
+        let out = server(tmp.path())
+            .search(Parameters(QueryParam {
+                query: "rust".to_string(),
+                tags: vec![],
+            }))
+            .unwrap()
+            .0;
+
+        let dates: Vec<&str> = out.hits.iter().map(|h| h.date.as_str()).collect();
+        assert_eq!(dates, ["2026-03-01", "2026-02-01", "2026-01-01"]);
+    }
+
+    #[test]
+    fn search_with_only_tags_lists_every_record_carrying_them() {
+        let tmp = TempDir::new().unwrap();
+        note_at(
+            tmp.path(),
+            "20260101_090000.md",
+            "2026-01-01T09:00:00+09:00",
+            "a note #memo",
+        );
+        note_at(
+            tmp.path(),
+            "20260102_090000.md",
+            "2026-01-02T09:00:00+09:00",
+            "a note without",
+        );
+        write_day(
+            tmp.path(),
+            "2026-02-01",
+            &[
+                (9, "an entry #Memo", &Context::default()),
+                (10, "an entry without", &Context::default()),
+            ],
+        );
+
+        let out = server(tmp.path())
+            .search(Parameters(QueryParam {
+                query: String::new(),
+                tags: vec!["memo".to_string()],
+            }))
+            .unwrap()
+            .0;
+
+        let hits: Vec<(&str, &str)> = out
+            .hits
+            .iter()
+            .map(|h| (h.kind.as_str(), h.date.as_str()))
+            .collect();
+        assert_eq!(hits, [("scrawl", "2026-02-01"), ("note", "2026-01-01")]);
+    }
+
+    #[test]
+    fn scrawl_dates_come_newest_first_as_days() {
+        let tmp = TempDir::new().unwrap();
+        let ctx = Context::default();
+        write_day(tmp.path(), "2026-01-15", &[(9, "a", &ctx)]);
+        write_day(tmp.path(), "2026-03-01", &[(9, "b", &ctx)]);
+        write_day(tmp.path(), "2025-12-31", &[(9, "c", &ctx)]);
+
+        let out = server(tmp.path()).list_scrawl_dates().unwrap().0;
+
+        assert_eq!(
+            json(&out),
+            serde_json::json!({"dates": ["2026-03-01", "2026-01-15", "2025-12-31"]})
+        );
+    }
+
+    /// An agent sees a template as written. Resolving `{{date}}` here would hand it one
+    /// day's note instead of the template.
+    #[test]
+    fn templates_are_listed_and_read_with_their_variables_unresolved() {
+        let tmp = TempDir::new().unwrap();
+        magical_merchant_core::save_template(
+            tmp.path(),
+            &NoteFilename::parse("daily.md").unwrap(),
+            "# {{date}}\n- ",
+            &["daily".to_string()],
+        )
+        .unwrap();
+        let reader = server(tmp.path());
+
+        let listed = reader.list_templates().unwrap().0;
+        let read = reader
+            .read_template(Parameters(TemplateParam {
+                filename: "daily.md".to_string(),
+            }))
+            .unwrap()
+            .0;
+
+        assert_eq!(
+            json(&listed),
+            serde_json::json!({"templates": [{
+                "filename": "daily.md",
+                "name": "daily",
+                "tags": ["daily"],
+                "preview": "{{date}}",
+            }]})
+        );
+        assert_eq!(
+            json(&read),
+            serde_json::json!({"body": "# {{date}}\n- ", "tags": ["daily"]})
+        );
+    }
+
+    /// Broken frontmatter is no reason to hide the body: it comes back, and the metadata
+    /// that could not be read is left empty.
+    #[test]
+    fn a_note_with_broken_frontmatter_still_reads_with_empty_metadata() {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path().join("data/notes");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(
+            dir.join("20260101_120000.md"),
+            "---\ntime: [broken\n---\nthe body #kept",
+        )
+        .unwrap();
+
+        let out = server(tmp.path())
+            .read_note(Parameters(FilenameParam {
+                filename: "20260101_120000.md".to_string(),
+            }))
+            .unwrap()
+            .0;
+
+        assert_eq!(
+            json(&out),
+            serde_json::json!({
+                "filename": "20260101_120000.md",
+                "kind": "note",
+                "time": null,
+                "updated": null,
+                "tags": ["kept"],
+                "origin": null,
+                "template": null,
+                "view": null,
+                "source": null,
+                "context": null,
+                "revision": Revision::of("the body #kept").to_string(),
+                "body": "the body #kept",
+            })
+        );
+    }
+
+    /// The revision a history read hands back is the note's as it stands now, the one a
+    /// restore is checked against, not the saved copy's.
+    #[test]
+    fn a_history_read_carries_the_revision_of_the_current_body() {
+        let tmp = TempDir::new().unwrap();
+        let server = writable(tmp.path());
+        let created = server
+            .create_note(Parameters(CreateNoteParam {
+                body: "before".to_string(),
+                tags: None,
+            }))
+            .unwrap()
+            .0;
+        let updated = server
+            .update_note(Parameters(UpdateNoteParam {
+                filename: created.filename.clone(),
+                body: "after".to_string(),
+                revision: None,
+            }))
+            .unwrap()
+            .0;
+
+        let out = server
+            .read_note_history(Parameters(HistoryParam {
+                filename: created.filename,
+                id: updated.snapshot.unwrap().id,
+            }))
+            .unwrap()
+            .0;
+
+        assert_eq!(out.body, "before");
+        assert_eq!(out.revision, Some(Revision::of("after").to_string()));
+    }
+
+    #[test]
+    fn a_restore_answers_the_revision_of_the_body_it_brought_back() {
+        let tmp = TempDir::new().unwrap();
+        let server = writable(tmp.path());
+        let created = server
+            .create_note(Parameters(CreateNoteParam {
+                body: "before".to_string(),
+                tags: None,
+            }))
+            .unwrap()
+            .0;
+        let updated = server
+            .update_note(Parameters(UpdateNoteParam {
+                filename: created.filename.clone(),
+                body: "after".to_string(),
+                revision: None,
+            }))
+            .unwrap()
+            .0;
+
+        let out = server
+            .restore_note(Parameters(RestoreNoteParam {
+                filename: created.filename,
+                id: updated.snapshot.unwrap().id,
+                revision: None,
+            }))
+            .unwrap()
+            .0;
+
+        assert_eq!(out.revision, Some(Revision::of("before").to_string()));
+    }
+
+    fn at(latitude: f64, longitude: f64) -> Context {
+        Context {
+            location: Some(Location {
+                latitude,
+                longitude,
+            }),
+            ..Context::default()
+        }
+    }
+
+    /// A Codex counts as a note written there. A note whose metadata cannot be read only
+    /// misses the map; the listing goes on. Places written at as often come in key order.
+    #[test]
+    fn places_count_codexes_skip_unreadable_notes_and_break_ties_by_key() {
+        let tmp = TempDir::new().unwrap();
+        write_day(
+            tmp.path(),
+            "2026-01-15",
+            &[
+                (9, "north", &at(43.06, 141.35)),
+                (10, "west", &at(-33.86, -70.66)),
+            ],
+        );
+        magical_merchant_core::create_draft(
+            tmp.path(),
+            NoteKind::Codex,
+            "# Codex",
+            &[],
+            &at(35.6762, 139.6503),
+            Provenance::default(),
+        )
+        .unwrap();
+        let dir = tmp.path().join("data/notes");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(
+            dir.join("20260101_120000.md"),
+            "---\ntime: [broken\n---\n\nbody",
+        )
+        .unwrap();
+
+        let out = server(tmp.path()).list_places().unwrap().0;
+
+        let today = Day::today_local().ymd();
+        assert_eq!(
+            json(&out),
+            serde_json::json!({"places": [
+                {
+                    "place_key": "-33.86,-70.66",
+                    "latitude": -33.86,
+                    "longitude": -70.66,
+                    "place": null,
+                    "entries": 1,
+                    "notes": 0,
+                    "first": "2026-01-15",
+                    "last": "2026-01-15",
+                },
+                {
+                    "place_key": "35.68,139.65",
+                    "latitude": 35.68,
+                    "longitude": 139.65,
+                    "place": null,
+                    "entries": 0,
+                    "notes": 1,
+                    "first": today,
+                    "last": today,
+                },
+                {
+                    "place_key": "43.06,141.35",
+                    "latitude": 43.06,
+                    "longitude": 141.35,
+                    "place": null,
+                    "entries": 1,
+                    "notes": 0,
+                    "first": "2026-01-15",
+                    "last": "2026-01-15",
+                },
+            ]})
+        );
     }
 }

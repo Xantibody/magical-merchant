@@ -105,22 +105,26 @@ mod tests {
     use super::*;
     use crate::domain::codex::commit_note_version;
     use crate::domain::device::Context;
-    use crate::domain::note::{Provenance, create_draft_codex, update_note};
-    use std::path::PathBuf;
+    use crate::domain::note::{NoteKind, Provenance, create_draft, update_note};
     use tempfile::TempDir;
 
     /// The note to commit versions on. Only a Codex can commit, so the test default is a Codex.
-    fn note(base: &Path, body: &str) -> (PathBuf, NoteFilename) {
-        let path = create_draft_codex(base, body, &[], &Context::default(), Provenance::default())
-            .unwrap();
-        let filename = NoteFilename::parse(path.file_name().unwrap().to_str().unwrap()).unwrap();
-        (path, filename)
+    fn note(base: &Path, body: &str) -> NoteFilename {
+        create_draft(
+            base,
+            NoteKind::Codex,
+            body,
+            &[],
+            &Context::default(),
+            Provenance::default(),
+        )
+        .unwrap()
     }
 
     #[test]
     fn a_note_without_versions_has_none() {
         let tmp = TempDir::new().unwrap();
-        let (_, filename) = note(tmp.path(), "body");
+        let filename = note(tmp.path(), "body");
 
         assert!(
             list_note_versions(tmp.path(), &filename)
@@ -140,9 +144,9 @@ mod tests {
     #[test]
     fn a_changed_body_makes_a_second_version_listed_newest_first() {
         let tmp = TempDir::new().unwrap();
-        let (path, filename) = note(tmp.path(), "one");
+        let filename = note(tmp.path(), "one");
         let first = commit_note_version(tmp.path(), &filename, None).unwrap();
-        update_note(&path, "two", &Context::default(), None).unwrap();
+        update_note(tmp.path(), &filename, "two", &Context::default(), None).unwrap();
 
         let second = commit_note_version(tmp.path(), &filename, None).unwrap();
 
@@ -161,7 +165,7 @@ mod tests {
     #[test]
     fn diff_against_the_draft_is_a_unified_diff_and_empty_when_equal() {
         let tmp = TempDir::new().unwrap();
-        let (path, filename) = note(tmp.path(), "a\nb\nc\n");
+        let filename = note(tmp.path(), "a\nb\nc\n");
         let version = commit_note_version(tmp.path(), &filename, None).unwrap();
 
         assert_eq!(
@@ -170,7 +174,14 @@ mod tests {
             "同じならヘッダも出さない"
         );
 
-        update_note(&path, "a\nB\nc\nd\n", &Context::default(), None).unwrap();
+        update_note(
+            tmp.path(),
+            &filename,
+            "a\nB\nc\nd\n",
+            &Context::default(),
+            None,
+        )
+        .unwrap();
         let diff = diff_note_versions(tmp.path(), &filename, &version.id, None).unwrap();
 
         assert_eq!(
@@ -185,9 +196,9 @@ mod tests {
     #[test]
     fn diff_between_two_versions_names_both() {
         let tmp = TempDir::new().unwrap();
-        let (path, filename) = note(tmp.path(), "x\n");
+        let filename = note(tmp.path(), "x\n");
         let old = commit_note_version(tmp.path(), &filename, None).unwrap();
-        update_note(&path, "y\n", &Context::default(), None).unwrap();
+        update_note(tmp.path(), &filename, "y\n", &Context::default(), None).unwrap();
         let new = commit_note_version(tmp.path(), &filename, None).unwrap();
 
         let diff = diff_note_versions(tmp.path(), &filename, &old.id, Some(&new.id)).unwrap();
@@ -202,9 +213,9 @@ mod tests {
     #[test]
     fn editing_after_a_version_makes_the_draft_dirty() {
         let tmp = TempDir::new().unwrap();
-        let (path, filename) = note(tmp.path(), "one");
+        let filename = note(tmp.path(), "one");
         commit_note_version(tmp.path(), &filename, None).unwrap();
-        update_note(&path, "two", &Context::default(), None).unwrap();
+        update_note(tmp.path(), &filename, "two", &Context::default(), None).unwrap();
 
         assert_eq!(
             note_version_status(tmp.path(), &filename).unwrap(),
@@ -219,7 +230,7 @@ mod tests {
     #[test]
     fn an_id_that_is_not_a_version_name_cannot_leave_the_directory() {
         let tmp = TempDir::new().unwrap();
-        let (_, filename) = note(tmp.path(), "body");
+        let filename = note(tmp.path(), "body");
 
         for id in [
             "../../etc/passwd",
@@ -239,7 +250,7 @@ mod tests {
     #[test]
     fn the_status_measures_the_draft_against_the_latest_version() {
         let tmp = TempDir::new().unwrap();
-        let (path, filename) = note(tmp.path(), "one");
+        let filename = note(tmp.path(), "one");
         assert_eq!(
             note_version_status(tmp.path(), &filename)
                 .unwrap()
@@ -249,12 +260,19 @@ mod tests {
         );
 
         commit_note_version(tmp.path(), &filename, None).unwrap();
-        update_note(&path, "one and more", &Context::default(), None).unwrap();
+        update_note(
+            tmp.path(),
+            &filename,
+            "one and more",
+            &Context::default(),
+            None,
+        )
+        .unwrap();
 
         let status = note_version_status(tmp.path(), &filename).unwrap();
         assert_eq!(status.bytes_delta, 9, "12 バイトから 3 バイトを引いた差");
 
-        update_note(&path, "o", &Context::default(), None).unwrap();
+        update_note(tmp.path(), &filename, "o", &Context::default(), None).unwrap();
         assert_eq!(
             note_version_status(tmp.path(), &filename)
                 .unwrap()

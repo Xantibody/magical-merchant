@@ -69,8 +69,7 @@ mod tests {
     use super::*;
     use crate::domain::device::{Context, Source};
     use crate::domain::note::{
-        Provenance, create_draft_note, read_note, read_note_by_filename, read_note_meta,
-        update_note,
+        NoteKind, Provenance, create_draft, read_note_by_filename, read_note_meta, update_note,
     };
     use std::fs;
     use std::path::PathBuf;
@@ -84,16 +83,19 @@ mod tests {
         }
     }
 
-    /// A plain new note that declares nothing. Every test except those about creation
-    /// itself goes through this, so adding a provenance kind does not rewrite every test.
+    /// A plain new note that declares nothing, and where it was written. Every test except
+    /// those about creation itself goes through this, so adding a provenance kind does not
+    /// rewrite every test.
     fn draft(tmp: &TempDir, body: &str, tags: &[String]) -> Result<PathBuf, CoreError> {
-        create_draft_note(
+        let filename = create_draft(
             tmp.path(),
+            NoteKind::Note,
             body,
             tags,
             &mock_context(),
             Provenance::default(),
-        )
+        )?;
+        Ok(NoteKind::Note.dir(tmp.path()).join(filename.as_str()))
     }
 
     /// Replacing metadata or the view mode does not rewrite the body. Stamping updated here
@@ -116,7 +118,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let path = draft(&tmp, "body", &[]).unwrap();
         let filename = filename_of(&path);
-        update_note(&path, "edited", &mock_context(), None).unwrap();
+        update_note(tmp.path(), &filename, "edited", &mock_context(), None).unwrap();
         let stamped = read_note_meta(tmp.path(), &filename).unwrap().updated;
 
         update_note_meta(tmp.path(), &filename, sample_time(), &[]).unwrap();
@@ -133,8 +135,9 @@ mod tests {
     #[test]
     fn update_note_meta_and_view_do_not_touch_the_source() {
         let tmp = TempDir::new().unwrap();
-        let path = create_draft_note(
+        let filename = create_draft(
             tmp.path(),
+            NoteKind::Note,
             "body",
             &[],
             &mock_context(),
@@ -144,7 +147,6 @@ mod tests {
             },
         )
         .unwrap();
-        let filename = filename_of(&path);
 
         update_note_meta(tmp.path(), &filename, sample_time(), &["log".to_string()]).unwrap();
         update_note_view(tmp.path(), &filename, Some("mindmap")).unwrap();
@@ -186,7 +188,10 @@ mod tests {
 
         update_note_meta(tmp.path(), &filename, sample_time(), &[]).unwrap();
 
-        assert_eq!(read_note(&path).unwrap(), "# Title\nbody");
+        assert_eq!(
+            read_note_by_filename(tmp.path(), &filename).unwrap(),
+            "# Title\nbody"
+        );
         let meta = read_note_meta(tmp.path(), &filename).unwrap();
         assert_eq!(meta.context.unwrap().battery, Some(50));
     }
@@ -243,7 +248,10 @@ mod tests {
 
         update_note_view(tmp.path(), &filename, Some("mindmap")).unwrap();
 
-        assert_eq!(read_note(&path).unwrap(), "# Title\nbody");
+        assert_eq!(
+            read_note_by_filename(tmp.path(), &filename).unwrap(),
+            "# Title\nbody"
+        );
         let meta = read_note_meta(tmp.path(), &filename).unwrap();
         assert_eq!(meta.time, before.time);
         assert_eq!(meta.context.unwrap().battery, Some(50));
@@ -271,15 +279,15 @@ mod tests {
     }
 
     fn promoted_note(tmp: &TempDir) -> NoteFilename {
-        let path = create_draft_note(
+        create_draft(
             tmp.path(),
+            NoteKind::Note,
             "エントリ本文",
             &[],
             &mock_context(),
             promoted_from("2026-08-13T08:30:00"),
         )
-        .unwrap();
-        filename_of(&path)
+        .unwrap()
     }
 
     #[test]

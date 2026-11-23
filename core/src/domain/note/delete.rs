@@ -25,7 +25,7 @@ mod tests {
     use super::*;
     use crate::domain::device::Context;
     use crate::domain::note::{
-        Provenance, create_draft_codex, create_draft_note, read_note_meta, update_note_view,
+        NoteKind, Provenance, create_draft, read_note_meta, update_note_view,
     };
     use std::fs;
     use std::path::PathBuf;
@@ -39,16 +39,19 @@ mod tests {
         }
     }
 
-    /// A plain new note that declares nothing. Every test except those about creation
-    /// itself goes through this, so adding a provenance kind does not rewrite every test.
+    /// A plain new note that declares nothing, and where it was written. Every test except
+    /// those about creation itself goes through this, so adding a provenance kind does not
+    /// rewrite every test.
     fn draft(tmp: &TempDir, body: &str, tags: &[String]) -> Result<PathBuf, CoreError> {
-        create_draft_note(
+        let filename = create_draft(
             tmp.path(),
+            NoteKind::Note,
             body,
             tags,
             &mock_context(),
             Provenance::default(),
-        )
+        )?;
+        Ok(NoteKind::Note.dir(tmp.path()).join(filename.as_str()))
     }
 
     #[test]
@@ -75,15 +78,18 @@ mod tests {
         NoteFilename::parse(path.file_name().unwrap().to_str().unwrap()).unwrap()
     }
 
+    /// Where a new Codex was written.
     fn codex(tmp: &TempDir, body: &str) -> PathBuf {
-        create_draft_codex(
+        let filename = create_draft(
             tmp.path(),
+            NoteKind::Codex,
             body,
             &[],
             &mock_context(),
             Provenance::default(),
         )
-        .unwrap()
+        .unwrap();
+        NoteKind::Codex.dir(tmp.path()).join(filename.as_str())
     }
 
     /// Replacing the frontmatter and deleting reach a Codex by ID alone too.

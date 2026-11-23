@@ -132,9 +132,9 @@ interface GlyphAsset {
   url: string;
 }
 
-/** Result of launching a template. */
+/** Result of launching a template: the new note's ID, the name it is opened by. */
 interface CreatedNote {
-  path: string;
+  filename: string;
 }
 
 /**
@@ -267,6 +267,7 @@ interface CommandMap {
     args: { coordinates: [number, number][]; locale: string };
     result: [string, string][];
   };
+  /** Returns the new note's ID (its filename), the name every note command takes. */
   create_draft: {
     args: { body: string; tags: string[]; origin?: string; kind?: NoteKind } & ClientArgs;
     result: string;

@@ -72,9 +72,7 @@ mod tests {
     use super::*;
     use crate::domain::codex::commit_note_version;
     use crate::domain::device::Context;
-    use crate::domain::note::{
-        NoteFilename, Provenance, create_draft_codex, create_draft_note, update_note,
-    };
+    use crate::domain::note::{Provenance, create_draft, update_note};
     use std::fs;
     use std::path::PathBuf;
     use tempfile::TempDir;
@@ -87,16 +85,19 @@ mod tests {
         }
     }
 
-    /// A plain new note that declares nothing. Every test except those about creation
-    /// itself goes through this, so adding a provenance kind does not rewrite every test.
+    /// A plain new note that declares nothing, and where it was written. Every test except
+    /// those about creation itself goes through this, so adding a provenance kind does not
+    /// rewrite every test.
     fn draft(tmp: &TempDir, body: &str, tags: &[String]) -> Result<PathBuf, CoreError> {
-        create_draft_note(
+        let filename = create_draft(
             tmp.path(),
+            NoteKind::Note,
             body,
             tags,
             &mock_context(),
             Provenance::default(),
-        )
+        )?;
+        Ok(NoteKind::Note.dir(tmp.path()).join(filename.as_str()))
     }
 
     #[test]
@@ -161,15 +162,15 @@ mod tests {
     #[test]
     fn the_list_carries_the_version_count_and_whether_the_draft_moved() {
         let tmp = TempDir::new().unwrap();
-        let path = create_draft_codex(
+        let filename = create_draft(
             tmp.path(),
+            NoteKind::Codex,
             "one",
             &[],
             &Context::default(),
             Provenance::default(),
         )
         .unwrap();
-        let filename = NoteFilename::parse(path.file_name().unwrap().to_str().unwrap()).unwrap();
         let row = |base: &Path| {
             list_notes(base)
                 .unwrap()
@@ -187,7 +188,7 @@ mod tests {
         assert_eq!(clean.version_count, Some(1));
         assert_eq!(clean.dirty, Some(false));
 
-        update_note(&path, "two", &Context::default(), None).unwrap();
+        update_note(tmp.path(), &filename, "two", &Context::default(), None).unwrap();
         let moved = row(tmp.path());
         assert_eq!(moved.version_count, Some(1));
         assert_eq!(moved.dirty, Some(true));
@@ -197,8 +198,9 @@ mod tests {
     #[test]
     fn a_plain_note_row_has_no_version_fields() {
         let tmp = TempDir::new().unwrap();
-        create_draft_note(
+        create_draft(
             tmp.path(),
+            NoteKind::Note,
             "plain",
             &[],
             &Context::default(),

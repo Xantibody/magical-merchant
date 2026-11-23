@@ -27,13 +27,6 @@ pub(crate) fn context() -> Context {
     magical_merchant_core::domain::device::probe()
 }
 
-/// The body that was read, and the revision to pass along when writing it back.
-#[derive(Debug)]
-pub(crate) struct Read {
-    pub(crate) body: String,
-    pub(crate) revision: Revision,
-}
-
 #[derive(Debug)]
 pub(crate) struct Written {
     /// A copy of the whole file as it stood just before the rewrite.
@@ -71,11 +64,8 @@ pub(crate) fn create(
     if body.trim().is_empty() {
         return Ok(None);
     }
-    let create = match kind {
-        NoteKind::Note => magical_merchant_core::create_draft_note,
-        NoteKind::Codex => magical_merchant_core::create_draft_codex,
-    };
-    named(&create(data_dir, body, tags, &context(), provenance)?)
+    magical_merchant_core::create_draft(data_dir, kind, body, tags, &context(), provenance)
+        .map(Some)
 }
 
 /// The variant that takes the time it was written. For a record that came from outside,
@@ -91,29 +81,8 @@ pub(crate) fn create_at(
     if body.trim().is_empty() {
         return Ok(None);
     }
-    named(&magical_merchant_core::create_note_at(
-        data_dir,
-        time,
-        body,
-        tags,
-        &context(),
-        provenance,
-    )?)
-}
-
-/// Reads the written file's path back as an ID. The caller only wants the name.
-fn named(path: &Path) -> Result<Option<NoteFilename>, CoreError> {
-    let name = path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .ok_or_else(|| CoreError::NotFound(path.display().to_string()))?;
-    NoteFilename::parse(name).map(Some)
-}
-
-pub(crate) fn read(data_dir: &Path, filename: &NoteFilename) -> Result<Read, CoreError> {
-    let body = magical_merchant_core::read_note_by_filename(data_dir, filename)?;
-    let revision = Revision::of(&body);
-    Ok(Read { body, revision })
+    magical_merchant_core::create_note_at(data_dir, time, body, tags, &context(), provenance)
+        .map(Some)
 }
 
 /// Replaces the body. The order is fixed: copy, then revision check, then write.
@@ -132,7 +101,7 @@ pub(crate) fn overwrite(
     // Check before taking the copy too. With only core's check, a write that will be
     // refused adds one more copy of the other writer's version. core stays the last line
     if let Some(expected) = expected {
-        let current = read(data_dir, filename)?;
+        let current = magical_merchant_core::open_note(data_dir, filename)?;
         if current.revision != *expected {
             return Err(WriteError::Stale(filename.clone()));
         }
@@ -141,13 +110,13 @@ pub(crate) fn overwrite(
     // core refuses a missing file too, but looking here first lets us say "not found" by name
     let snapshot = magical_merchant_core::snapshot_note(data_dir, filename)?
         .ok_or_else(|| WriteError::NotFound(filename.clone()))?;
-    // Ask core where it lives. A note turned into a Codex is not in `notes/`
-    let (_, path) = magical_merchant_core::locate_note(data_dir, filename)?;
-    let revision = match magical_merchant_core::update_note(&path, body, &context(), expected) {
-        Ok(revision) => revision,
-        Err(CoreError::Stale(_)) => return Err(WriteError::Stale(filename.clone())),
-        Err(e) => return Err(e.into()),
-    };
+    // Core writes it where it lives. A note turned into a Codex is not in `notes/`
+    let revision =
+        match magical_merchant_core::update_note(data_dir, filename, body, &context(), expected) {
+            Ok(revision) => revision,
+            Err(CoreError::Stale(_)) => return Err(WriteError::Stale(filename.clone())),
+            Err(e) => return Err(e.into()),
+        };
     Ok(Written { snapshot, revision })
 }
 
@@ -181,15 +150,15 @@ mod tests {
     }
 
     fn seed(base: &Path, body: &str) -> NoteFilename {
-        let path = magical_merchant_core::create_draft_note(
+        magical_merchant_core::create_draft(
             base,
+            NoteKind::Note,
             body,
             &[],
             &context(),
             Provenance::default(),
         )
-        .unwrap();
-        NoteFilename::parse(path.file_name().unwrap().to_str().unwrap()).unwrap()
+        .unwrap()
     }
 
     fn body_of(base: &Path, filename: &NoteFilename) -> String {
@@ -222,21 +191,10 @@ mod tests {
     }
 
     #[test]
-    fn a_read_carries_the_revision_to_pass_back() {
-        let tmp = TempDir::new().unwrap();
-        let filename = seed(tmp.path(), "hello");
-
-        let read = read(tmp.path(), &filename).unwrap();
-
-        assert_eq!(read.body, "hello");
-        assert_eq!(read.revision, Revision::of("hello"));
-    }
-
-    #[test]
     fn overwriting_with_the_read_revision_writes_and_leaves_a_copy() {
         let tmp = TempDir::new().unwrap();
         let filename = seed(tmp.path(), "before");
-        let read = read(tmp.path(), &filename).unwrap();
+        let read = magical_merchant_core::open_note(tmp.path(), &filename).unwrap();
 
         let written = overwrite(tmp.path(), &filename, "after", Some(&read.revision)).unwrap();
 
@@ -252,7 +210,7 @@ mod tests {
     fn overwriting_a_note_someone_else_changed_is_refused_and_keeps_theirs() {
         let tmp = TempDir::new().unwrap();
         let filename = seed(tmp.path(), "before");
-        let read = read(tmp.path(), &filename).unwrap();
+        let read = magical_merchant_core::open_note(tmp.path(), &filename).unwrap();
         overwrite(tmp.path(), &filename, "theirs", None).unwrap();
 
         let err = overwrite(tmp.path(), &filename, "mine", Some(&read.revision)).unwrap_err();

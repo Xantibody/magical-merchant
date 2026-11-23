@@ -1,6 +1,6 @@
 //! Making a Note from a template.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use serde::Serialize;
 
@@ -12,14 +12,15 @@ use crate::domain::device::Context;
 use crate::domain::note::NoteFilename;
 use crate::domain::note::NoteSummary;
 use crate::domain::note::Provenance;
-use crate::domain::note::{create_draft_note, list_notes};
+use crate::domain::note::{NoteKind, create_draft, list_notes};
 use crate::utils::clock::WallClock;
 use crate::utils::error::CoreError;
 
-/// The result of running a template.
+/// The result of running a template: the ID of the note it made, the name the screen
+/// opens it by.
 #[derive(Debug, Clone, Serialize)]
 pub struct CreatedNote {
-    pub path: PathBuf,
+    pub filename: NoteFilename,
 }
 
 /// Create a note from a template.
@@ -53,8 +54,9 @@ pub fn create_note_from_template(
         .filter(|tag| !tag.trim().is_empty())
         .collect();
 
-    let path = create_draft_note(
+    let filename = create_draft(
         base_dir,
+        NoteKind::Note,
         &resolved,
         &tags,
         context,
@@ -64,7 +66,7 @@ pub fn create_note_from_template(
         },
     )?;
 
-    Ok(CreatedNote { path })
+    Ok(CreatedNote { filename })
 }
 
 /// Every template in name order, resolved against the notes as they are now.
@@ -109,7 +111,7 @@ mod tests {
     use super::*;
     use crate::domain::note::NoteFrontmatter;
     use crate::domain::note::kind::notes_dir;
-    use crate::domain::note::read_note;
+    use crate::domain::note::read_note_by_filename;
     use crate::domain::templates::save_template;
     use crate::utils::clock::{Day, Stamp};
     use crate::utils::frontmatter;
@@ -165,7 +167,7 @@ mod tests {
         )
         .unwrap();
 
-        let body = read_note(&created.path).unwrap();
+        let body = read_note_by_filename(tmp.path(), &created.filename).unwrap();
         let today = Day::today_local().ymd();
         assert!(body.contains(&format!("# Daily {today}")));
         assert!(!body.contains("{{"));
@@ -186,7 +188,11 @@ mod tests {
         )
         .unwrap();
 
-        assert!(!read_note(&created.path).unwrap().contains("前回"));
+        assert!(
+            !read_note_by_filename(tmp.path(), &created.filename)
+                .unwrap()
+                .contains("前回")
+        );
     }
 
     #[test]
@@ -205,7 +211,7 @@ mod tests {
         .unwrap();
 
         assert!(
-            read_note(&created.path)
+            read_note_by_filename(tmp.path(), &created.filename)
                 .unwrap()
                 .contains("前回: [[20260830_090000]]")
         );
@@ -228,7 +234,11 @@ mod tests {
         )
         .unwrap();
 
-        assert!(!read_note(&created.path).unwrap().contains("前回"));
+        assert!(
+            !read_note_by_filename(tmp.path(), &created.filename)
+                .unwrap()
+                .contains("前回")
+        );
     }
 
     #[test]
@@ -291,7 +301,7 @@ mod tests {
         let first = run();
         let second = run();
 
-        assert_ne!(second.path, first.path);
+        assert_ne!(second.filename, first.filename);
         assert_eq!(list_notes(tmp.path()).unwrap().len(), 2);
     }
 
@@ -310,7 +320,7 @@ mod tests {
         )
         .unwrap();
 
-        let body = read_note(&created.path).unwrap();
+        let body = read_note_by_filename(tmp.path(), &created.filename).unwrap();
         assert!(["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].contains(&body.trim()));
     }
 

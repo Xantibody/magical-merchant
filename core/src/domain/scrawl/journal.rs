@@ -7,7 +7,9 @@ use std::path::Path;
 use serde::Serialize;
 
 use super::day::{DayLog, SCRAWL_DIR, day_of_filename, scrawl_file_path};
+use super::entry::{ScrawlEntry, parse_scrawl_entry};
 use crate::domain::data::data_dir;
+use crate::domain::tags::tag;
 use crate::services::files::{entry_names, read_if_present};
 use crate::utils::clock::Day;
 use crate::utils::error::CoreError;
@@ -79,6 +81,73 @@ pub fn read_scrawl_days(
     Ok(ScrawlDays { dates, days })
 }
 
+/// One Scrawl entry with the day it was written on and its place within that day.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DatedEntry {
+    pub day: Day,
+    /// Its position within the day, as `read_scrawl` orders them.
+    pub index: usize,
+    pub entry: ScrawlEntry,
+}
+
+/// What `entries_between` returns.
+#[derive(Debug, Clone, PartialEq)]
+pub struct EntriesBetween {
+    /// Oldest first.
+    pub entries: Vec<DatedEntry>,
+    /// Whether more entries matched than `limit` let through.
+    pub truncated: bool,
+}
+
+/// The entries written from `from` to `to`, both days included, oldest first.
+///
+/// With `tag`, only the entries whose text carries it, matched as the search field
+/// matches: the `#` and the case of the argument do not matter. At most `limit` come
+/// back, and `truncated` says whether more matched: a journal piles up over years, and an
+/// unbounded read lets one call use up a reader's context.
+///
+/// Only the days that have a file are opened. Opening every day in the range piles up a
+/// wasted stat for each day that was never written. Like `read_scrawl` it only reads.
+pub fn entries_between(
+    base_dir: &Path,
+    from: Day,
+    to: Day,
+    tag: Option<&str>,
+    limit: usize,
+) -> Result<EntriesBetween, CoreError> {
+    let tag = tag.map(tag::normalize);
+    let mut days: Vec<Day> = list_scrawl_dates(base_dir)?
+        .into_iter()
+        .filter(|day| (from..=to).contains(day))
+        .collect();
+    days.sort_unstable();
+
+    let mut entries = Vec::new();
+    for day in days {
+        for (index, line) in read_scrawl(base_dir, day)?.iter().enumerate() {
+            let entry = parse_scrawl_entry(line);
+            if tag.as_ref().is_some_and(|wanted| {
+                !tag::parse(&entry.text)
+                    .iter()
+                    .any(|own| tag::same_tag(own, wanted))
+            }) {
+                continue;
+            }
+            if entries.len() >= limit {
+                return Ok(EntriesBetween {
+                    entries,
+                    truncated: true,
+                });
+            }
+            entries.push(DatedEntry { day, index, entry });
+        }
+    }
+    Ok(EntriesBetween {
+        entries,
+        truncated: false,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -86,6 +155,94 @@ mod tests {
     use crate::domain::scrawl::capture::save_scrawl_entry;
     use std::fs;
     use tempfile::TempDir;
+
+    /// The texts and days of a range read, in the order they came.
+    fn read_between(
+        base: &Path,
+        from: &str,
+        to: &str,
+        tag: Option<&str>,
+        limit: usize,
+    ) -> (Vec<(String, usize, String)>, bool) {
+        let read = entries_between(base, ymd(from), ymd(to), tag, limit).unwrap();
+        let entries = read
+            .entries
+            .into_iter()
+            .map(|dated| (dated.day.ymd(), dated.index, dated.entry.text))
+            .collect();
+        (entries, read.truncated)
+    }
+
+    fn day_file(base: &Path, date: &str, lines: &str) {
+        let dir = base.join("data").join("scrawl");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join(format!("{date}.md")), lines).unwrap();
+    }
+
+    #[test]
+    fn a_range_reads_the_days_inside_it_oldest_first() {
+        let tmp = TempDir::new().unwrap();
+        day_file(tmp.path(), "2026-01-14", "- [09:00:00] eve\n");
+        day_file(tmp.path(), "2026-01-15", "- [09:00:00] a\n- [10:00:00] b\n");
+        day_file(tmp.path(), "2026-02-10", "- [09:00:00] c\n");
+        day_file(tmp.path(), "2026-03-01", "- [09:00:00] after\n");
+
+        let (entries, truncated) = read_between(tmp.path(), "2026-01-15", "2026-02-10", None, 500);
+
+        assert_eq!(
+            entries,
+            [
+                ("2026-01-15".to_string(), 0, "a".to_string()),
+                ("2026-01-15".to_string(), 1, "b".to_string()),
+                ("2026-02-10".to_string(), 0, "c".to_string()),
+            ]
+        );
+        assert!(!truncated);
+    }
+
+    /// The `#` and the case of the argument do not matter; the index stays the entry's place
+    /// in its day, not in the result.
+    #[test]
+    fn a_tag_keeps_the_entries_that_carry_it() {
+        let tmp = TempDir::new().unwrap();
+        day_file(
+            tmp.path(),
+            "2026-01-15",
+            "- [09:00:00] rest\n- [10:00:00] ran #CognitiveBias\n",
+        );
+
+        for tag in ["cognitivebias", "#COGNITIVEBIAS"] {
+            let (entries, _) = read_between(tmp.path(), "2026-01-01", "2026-12-31", Some(tag), 500);
+
+            assert_eq!(
+                entries,
+                [(
+                    "2026-01-15".to_string(),
+                    1,
+                    "ran #CognitiveBias".to_string()
+                )],
+                "{tag}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_range_stops_at_the_limit_and_says_so() {
+        let tmp = TempDir::new().unwrap();
+        day_file(
+            tmp.path(),
+            "2026-01-15",
+            "- [09:00:00] a\n- [10:00:00] b\n- [11:00:00] c\n",
+        );
+
+        let (two, truncated) = read_between(tmp.path(), "2026-01-01", "2026-12-31", None, 2);
+        let (three, all) = read_between(tmp.path(), "2026-01-01", "2026-12-31", None, 3);
+
+        assert_eq!(two.len(), 2);
+        assert!(truncated);
+        assert_eq!(three.len(), 3);
+        assert!(!all, "exactly the limit is not more than it");
+    }
 
     fn mock_context() -> Context {
         Context {

@@ -54,7 +54,7 @@ pub(crate) fn list(data_dir: &Path) -> Result<Vec<Row>, CoreError> {
 }
 
 pub(crate) fn show(data_dir: &Path, filename: &NoteFilename) -> Result<String, CoreError> {
-    Ok(notes::read(data_dir, filename)?.body)
+    Ok(magical_merchant_core::open_note(data_dir, filename)?.body)
 }
 
 /// Accepts either `20260320_143045` or `20260320_143045.md`. The newest when omitted.
@@ -107,7 +107,7 @@ pub(crate) fn edit(
     scratch: &Path,
     open: impl FnOnce(&Path) -> Result<(), String>,
 ) -> Result<EditOutcome, EditError> {
-    let before = notes::read(data_dir, filename)?;
+    let before = magical_merchant_core::open_note(data_dir, filename)?;
     let scratch_file = scratch.join(filename.as_str());
     fs::create_dir_all(scratch).map_err(CoreError::from)?;
     fs::write(&scratch_file, &before.body).map_err(CoreError::from)?;
@@ -231,15 +231,15 @@ mod tests {
     use tempfile::TempDir;
 
     fn seed(base: &Path, body: &str) -> NoteFilename {
-        let path = magical_merchant_core::create_draft_note(
+        magical_merchant_core::create_draft(
             base,
+            NoteKind::Note,
             body,
             &[],
             &Context::default(),
             Provenance::default(),
         )
-        .unwrap();
-        NoteFilename::parse(path.file_name().unwrap().to_str().unwrap()).unwrap()
+        .unwrap()
     }
 
     fn body_of(base: &Path, filename: &NoteFilename) -> String {
@@ -325,11 +325,16 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let filename = seed(tmp.path(), "before");
         let scratch = tmp.path().join("scratch");
-        let note_path = tmp.path().join("data/notes").join(filename.as_str());
 
         let err = edit(tmp.path(), &filename, &scratch, |path| {
-            magical_merchant_core::update_note(&note_path, "the app", &Context::default(), None)
-                .unwrap();
+            magical_merchant_core::update_note(
+                tmp.path(),
+                &filename,
+                "the app",
+                &Context::default(),
+                None,
+            )
+            .unwrap();
             fs::write(path, "mine").unwrap();
             Ok(())
         })

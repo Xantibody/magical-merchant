@@ -20,16 +20,18 @@ mod revision;
 mod row;
 
 pub use conflicts::{relocate_conflict_copies, relocate_duplicate_ids};
-pub use create::{create_draft_codex, create_draft_note, create_note_at};
+pub use create::{create_draft, create_note_at};
 pub use delete::delete_note;
 pub use details::{update_note_meta, update_note_origin, update_note_view};
 pub use edit::update_note;
 pub use file::{NoteFrontmatter, Provenance};
-pub use history::{Snapshot, list_note_history, read_note_history, restore_note, snapshot_note};
+pub use history::{
+    RestoredNote, Snapshot, list_note_history, read_note_history, restore_note, snapshot_note,
+};
 pub use id::NoteFilename;
 pub use kind::NoteKind;
 pub use list::list_notes;
-pub use open::{locate_note, read_note, read_note_by_filename, read_note_meta};
+pub use open::{OpenedNote, locate_note, open_note, read_note_by_filename, read_note_meta};
 pub use repair::repair_notes;
 pub use revision::Revision;
 pub use row::Summary as NoteSummary;

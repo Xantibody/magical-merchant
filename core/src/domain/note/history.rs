@@ -25,6 +25,7 @@ use crate::domain::note::{NoteFilename, Revision, locate_note, read_note_by_file
 use crate::services::files::{ensure_dir, exists, list_md_files, read_text, remove, write_atomic};
 use crate::utils::clock::{Stamp, WallClock};
 use crate::utils::error::CoreError;
+use crate::utils::frontmatter;
 
 /// The number of snapshots kept per note. A branch number within the same second counts
 /// as one too.
@@ -192,6 +193,16 @@ pub fn read_note_history(
     read_text(&path)
 }
 
+/// What a restore did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RestoredNote {
+    /// The copy of the whole text the restore replaced, to undo it with. `None` when there
+    /// was nothing to set aside (a deleted note).
+    pub snapshot: Option<Snapshot>,
+    /// The revision of the body brought back: the `expected` for the next write.
+    pub revision: Revision,
+}
+
 /// Write a snapshot's content back into the note. The current whole text is snapshotted
 /// before restoring, so the restore itself can be undone.
 ///
@@ -205,7 +216,7 @@ pub fn restore_note(
     filename: &NoteFilename,
     id: &str,
     expected: Option<&Revision>,
-) -> Result<Option<Snapshot>, CoreError> {
+) -> Result<RestoredNote, CoreError> {
     let content = read_note_history(base_dir, filename, id)?;
     if let Some(expected) = expected {
         // An unreadable (deleted) note is refused as a mismatch too. Holding a revision
@@ -225,9 +236,13 @@ pub fn restore_note(
         Err(CoreError::NotFound(_)) => notes_dir(base_dir).join(filename.as_str()),
         Err(e) => return Err(e),
     };
+    let revision = Revision::of(frontmatter::strip(&content));
     ensure_dir(&target)?;
     write_atomic(&target, content)?;
-    Ok(before)
+    Ok(RestoredNote {
+        snapshot: before,
+        revision,
+    })
 }
 
 #[cfg(test)]
@@ -235,8 +250,9 @@ mod tests {
     use super::*;
     use crate::domain::device::Context;
     use crate::domain::note::{NoteFrontmatter, Provenance};
-    use crate::utils::frontmatter;
-    use crate::{create_draft_note, promote_note_to_codex, read_note_by_filename, update_note};
+    use crate::{
+        NoteKind, create_draft, promote_note_to_codex, read_note_by_filename, update_note,
+    };
     use std::fs;
     use tempfile::TempDir;
 
@@ -250,7 +266,7 @@ mod tests {
         let codex_path = tmp.path().join("data/codex").join(filename.as_str());
 
         let snap = snapshot_note(tmp.path(), &filename).unwrap().unwrap();
-        update_note(&codex_path, "after", &Context::default(), None).unwrap();
+        update_note(tmp.path(), &filename, "after", &Context::default(), None).unwrap();
         restore_note(tmp.path(), &filename, &snap.id, None).unwrap();
 
         assert_eq!(
@@ -262,10 +278,16 @@ mod tests {
     }
 
     fn note(base: &Path, body: &str) -> (PathBuf, NoteFilename) {
-        let path =
-            create_draft_note(base, body, &[], &Context::default(), Provenance::default()).unwrap();
-        let filename = NoteFilename::parse(path.file_name().unwrap().to_str().unwrap()).unwrap();
-        (path, filename)
+        let filename = create_draft(
+            base,
+            NoteKind::Note,
+            body,
+            &[],
+            &Context::default(),
+            Provenance::default(),
+        )
+        .unwrap();
+        (NoteKind::Note.dir(base).join(filename.as_str()), filename)
     }
 
     #[test]
@@ -294,18 +316,19 @@ mod tests {
     #[test]
     fn restoring_brings_the_old_body_back_and_keeps_a_way_back() {
         let tmp = TempDir::new().unwrap();
-        let (path, filename) = note(tmp.path(), "before");
+        let (_, filename) = note(tmp.path(), "before");
         let snap = snapshot_note(tmp.path(), &filename).unwrap().unwrap();
-        update_note(&path, "after", &Context::default(), None).unwrap();
+        update_note(tmp.path(), &filename, "after", &Context::default(), None).unwrap();
 
-        let undo = restore_note(tmp.path(), &filename, &snap.id, None)
-            .unwrap()
-            .unwrap();
+        let restored = restore_note(tmp.path(), &filename, &snap.id, None).unwrap();
+        let undo = restored.snapshot.unwrap();
 
         assert_eq!(
             read_note_by_filename(tmp.path(), &filename).unwrap(),
             "before"
         );
+        // The revision to write on with is the restored body's
+        assert_eq!(restored.revision, Revision::of("before"));
         // The "after" from just before the restore is kept as a snapshot too
         let content = read_note_history(tmp.path(), &filename, &undo.id).unwrap();
         assert!(content.ends_with("after"));
@@ -321,7 +344,9 @@ mod tests {
         crate::delete_note(tmp.path(), &filename).unwrap();
         assert!(!path.exists());
 
-        let undo = restore_note(tmp.path(), &filename, &snap.id, None).unwrap();
+        let undo = restore_note(tmp.path(), &filename, &snap.id, None)
+            .unwrap()
+            .snapshot;
 
         assert_eq!(undo, None, "nothing was there to set aside");
         assert_eq!(
@@ -337,13 +362,13 @@ mod tests {
     #[test]
     fn restoring_over_a_body_that_moved_since_it_was_read_is_refused() {
         let tmp = TempDir::new().unwrap();
-        let (path, filename) = note(tmp.path(), "first");
+        let (_, filename) = note(tmp.path(), "first");
         let snap = snapshot_note(tmp.path(), &filename).unwrap().unwrap();
-        update_note(&path, "second", &Context::default(), None).unwrap();
+        update_note(tmp.path(), &filename, "second", &Context::default(), None).unwrap();
         // This is what the agent read
         let read = Revision::of("second");
         // The app typed after the read
-        update_note(&path, "third", &Context::default(), None).unwrap();
+        update_note(tmp.path(), &filename, "third", &Context::default(), None).unwrap();
 
         let result = restore_note(tmp.path(), &filename, &snap.id, Some(&read));
 
@@ -364,9 +389,9 @@ mod tests {
     #[test]
     fn restoring_with_the_revision_it_read_goes_through() {
         let tmp = TempDir::new().unwrap();
-        let (path, filename) = note(tmp.path(), "first");
+        let (_, filename) = note(tmp.path(), "first");
         let snap = snapshot_note(tmp.path(), &filename).unwrap().unwrap();
-        update_note(&path, "second", &Context::default(), None).unwrap();
+        update_note(tmp.path(), &filename, "second", &Context::default(), None).unwrap();
 
         let undo = restore_note(
             tmp.path(),
@@ -375,6 +400,7 @@ mod tests {
             Some(&Revision::of("second")),
         )
         .unwrap()
+        .snapshot
         .unwrap();
 
         assert_eq!(
@@ -392,10 +418,10 @@ mod tests {
     #[test]
     fn two_snapshots_in_the_same_second_both_survive() {
         let tmp = TempDir::new().unwrap();
-        let (path, filename) = note(tmp.path(), "one");
+        let (_, filename) = note(tmp.path(), "one");
 
         let first = snapshot_note(tmp.path(), &filename).unwrap().unwrap();
-        update_note(&path, "two", &Context::default(), None).unwrap();
+        update_note(tmp.path(), &filename, "two", &Context::default(), None).unwrap();
         let second = snapshot_note(tmp.path(), &filename).unwrap().unwrap();
 
         assert_ne!(first.id, second.id);
@@ -580,7 +606,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let (path, filename) = note(tmp.path(), "before");
         let snap = snapshot_note(tmp.path(), &filename).unwrap().unwrap();
-        update_note(&path, "after", &Context::default(), None).unwrap();
+        update_note(tmp.path(), &filename, "after", &Context::default(), None).unwrap();
 
         restore_note(tmp.path(), &filename, &snap.id, None).unwrap();
 

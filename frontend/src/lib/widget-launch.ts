@@ -40,7 +40,7 @@ export function createWidgetLaunch(deps: WidgetLaunchDeps): (action: WidgetActio
           client: await getDeviceSignals(),
         });
         deps.refreshData();
-        deps.navigate(writeRoute("note", created.path.split("/").at(-1)));
+        deps.navigate(writeRoute("note", created.filename));
       } catch {
         // A widget may still point at a template that was deleted. Rather than
         // nothing happening on tap, open the list and show the reason

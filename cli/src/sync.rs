@@ -1,62 +1,21 @@
 //! `magical-merchant sync`: syncs with Workers/R2 without opening the app.
 //!
-//! The syncing itself is one engine in core (`run::run_with_progress`); what this
-//! does is resolve the config and the token, and turn progress into lines. Signing in
-//! is still the app's job: the CLI only reads the stored JWT (and renews it past half
-//! its lifetime, as the app does), and if it has expired it says to go back to the app.
+//! The syncing itself is one engine in core (`run::run_with_progress`), and so is the
+//! login check (`login::sync_client`); what this does is turn progress into lines.
+//! Signing in is still the app's job: the CLI only reads the stored JWT (and renews it
+//! past half its lifetime, as the app does), and if it has expired it says to go back to
+//! the app.
 
 use std::path::Path;
 
 use magical_merchant_core::SyncError;
 use magical_merchant_core::domain::sync::SyncResult;
+use magical_merchant_core::domain::sync::login;
 use magical_merchant_core::domain::sync::run::{RoundProgress, run_with_progress};
-use magical_merchant_core::domain::sync::settings::SyncConfig;
-use magical_merchant_core::domain::sync::{login, token};
-use magical_merchant_core::services::worker::{HttpClient, desktop_http_client};
+use magical_merchant_core::services::worker::desktop_http_client;
 
-#[derive(Debug)]
-pub(crate) struct Credentials {
-    pub(crate) workers_url: String,
-    pub(crate) token: String,
-}
-
-/// Resolves the config and the token.
-///
-/// The order and the `kind` values match the app's `do_sync`: if the same state got a
-/// different name, fixing only one side would go unnoticed.
-///
-/// The token reader is a parameter so that this can be tried without opening the
-/// Keychain.
-pub(crate) fn credentials<F>(base_dir: &Path, read_token: F) -> Result<Credentials, SyncError>
-where
-    F: Fn(&Path) -> Result<Option<String>, String>,
-{
-    let config = SyncConfig::load(base_dir)?.unwrap_or_default();
-    if !config.is_configured() {
-        return Err(SyncError::new(
-            "notConfigured",
-            "Sync is not set up. Add your Workers URL in the app's Settings.",
-        ));
-    }
-    let token = read_token(base_dir)
-        .map_err(SyncError::other)?
-        .ok_or_else(|| {
-            SyncError::new(
-                "notAuthenticated",
-                "Not logged in. Log in from the app's Settings.",
-            )
-        })?;
-    if !token::is_token_valid(&token) {
-        return Err(SyncError::new(
-            "notAuthenticated",
-            "Login expired. Log in again from the app's Settings.",
-        ));
-    }
-    Ok(Credentials {
-        workers_url: config.workers_url,
-        token,
-    })
-}
+/// Where the CLI's refusals send the reader: signing in happens in the app.
+const SETTINGS_PLACE: &str = "the app's Settings";
 
 /// One line each time a round finishes. Importing 529 files takes 14 round trips, and
 /// with nothing printed it only looks stuck.
@@ -90,24 +49,18 @@ fn summary(result: &SyncResult) -> String {
 
 pub(crate) async fn run(data_dir: &Path) -> anyhow::Result<()> {
     // The repair that runs before the scan is inside the engine, inside the sync lock.
-    // Doing it here first would rewrite the tree while the app is syncing
-    let credentials = credentials(data_dir, login::get_token)?;
-    let client = HttpClient::new(
-        desktop_http_client()?,
-        &credentials.workers_url,
-        &credentials.token,
-    );
-    // Past half its lifetime the login is traded for a fresh one, as the app does at its
-    // entry. The CLI shares the Keychain with the app, so the renewal reaches both
-    let client = match login::renew_if_due(&credentials.token, &client, |fresh| {
-        login::store_token(data_dir, fresh)
-    })
+    // Doing it here first would rewrite the tree while the app is syncing.
+    // A renewed login is stored in the Keychain the CLI shares with the app, so it
+    // reaches both
+    let client = login::sync_client(
+        data_dir,
+        desktop_http_client,
+        SETTINGS_PLACE,
+        || login::get_token(data_dir),
+        |fresh| login::store_token(data_dir, fresh),
+    )
     .await
-    .map_err(|e| describe_failure(&e))?
-    {
-        Some(fresh) => client.with_token(&fresh),
-        None => client,
-    };
+    .map_err(|e| describe_failure(&e))?;
 
     let result = run_with_progress(&client, data_dir, |progress| {
         eprintln!("{}", round_line(&progress));
@@ -141,79 +94,6 @@ fn describe_failure(err: &SyncError) -> anyhow::Error {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use base64::Engine as _;
-    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-    use tempfile::TempDir;
-
-    fn configured() -> TempDir {
-        let dir = TempDir::new().unwrap();
-        SyncConfig {
-            workers_url: "https://example.workers.dev".to_string(),
-            ..SyncConfig::default()
-        }
-        .save(dir.path())
-        .unwrap();
-        dir
-    }
-
-    /// Nobody looks at the signature. `is_token_valid` reads only `exp`, so the three
-    /// parts are built directly (the same trick as the tests in
-    /// `core/src/domain/sync/token.rs`).
-    fn jwt(exp: i64) -> String {
-        let header = URL_SAFE_NO_PAD.encode(r#"{"alg":"HS256","typ":"JWT"}"#);
-        let claims = URL_SAFE_NO_PAD.encode(format!(r#"{{"exp":{exp}}}"#));
-        format!("{header}.{claims}.not-a-real-signature")
-    }
-
-    #[allow(clippy::unnecessary_wraps, reason = "credentials が求める読み手の形")]
-    fn no_token(_: &Path) -> Result<Option<String>, String> {
-        Ok(None)
-    }
-
-    /// Sync is only configured on the app's screen. Letting the CLI type a URL would
-    /// create a sync target that disagrees with the app's setting
-    #[test]
-    fn without_a_workers_url_it_points_at_the_app() {
-        let dir = TempDir::new().unwrap();
-
-        let err = credentials(dir.path(), no_token).unwrap_err();
-
-        assert_eq!(err.kind, "notConfigured");
-        assert!(err.message.contains("Settings"), "{}", err.message);
-    }
-
-    #[test]
-    fn without_a_token_it_asks_for_a_login() {
-        let dir = configured();
-
-        let err = credentials(dir.path(), no_token).unwrap_err();
-
-        assert_eq!(err.kind, "notAuthenticated");
-    }
-
-    /// Going into a sync with an expired token reaches "log in again" only after the
-    /// server refuses it. Look first, and stop with the same words
-    #[test]
-    fn an_expired_token_is_refused_before_the_network() {
-        let dir = configured();
-        let expired = jwt(magical_merchant_core::utils::clock::unix_seconds_now() - 100);
-
-        let err = credentials(dir.path(), |_| Ok(Some(expired.clone()))).unwrap_err();
-
-        assert_eq!(err.kind, "notAuthenticated");
-        assert!(err.message.contains("expired"), "{}", err.message);
-    }
-
-    #[test]
-    fn a_live_token_and_a_url_are_what_the_client_needs() {
-        let dir = configured();
-        let live = jwt(magical_merchant_core::utils::clock::unix_seconds_now() + 3600);
-
-        let ready = credentials(dir.path(), |_| Ok(Some(live.clone()))).unwrap();
-
-        assert_eq!(ready.workers_url, "https://example.workers.dev");
-        assert_eq!(ready.token, live);
-    }
 
     /// The import is verified by counting this line. If the zero entries vanish there
     /// is nothing to match it against

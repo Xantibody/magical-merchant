@@ -8,12 +8,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, PoisonError};
 
 use magical_merchant_core::SyncError;
-use magical_merchant_core::domain::sync::settings::SyncConfig;
-use magical_merchant_core::domain::sync::{SyncResult, login, run, token};
-use magical_merchant_core::services::worker::HttpClient;
+use magical_merchant_core::domain::sync::{SyncResult, login, run};
 use magical_merchant_core::utils::clock::UtcStamp;
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Runtime, State};
 
 const EVENT_SYNC_COMPLETE: &str = "sync-complete";
 const EVENT_SYNC_ERROR: &str = "sync-error";
@@ -160,43 +158,21 @@ pub(crate) fn sync_status(state: State<'_, AppSyncState>) -> SyncStatusInfo {
     }
 }
 
-/// Resolves the config and the token, builds the client, and hands it to core's engine.
-/// `AppHandle` is used only to resolve the base dir and to branch on TLS.
-async fn do_sync(handle: &AppHandle) -> Result<SyncResult, SyncError> {
+/// Has core check the login and build the client, then hands it to core's engine.
+/// `AppHandle` is used only to resolve the base dir; the TLS branch is `http_client`'s.
+async fn do_sync<R: Runtime>(handle: &AppHandle<R>) -> Result<SyncResult, SyncError> {
     let base_dir = crate::app_base_dir(handle).map_err(SyncError::other)?;
     // The repair before the scan is done by the engine inside the lock. That also covers
     // pressing sync after looking only at Scrawl, which never went through the listing's
     // `repair_once`
-    let config = SyncConfig::load(&base_dir)?.unwrap_or_default();
-    if !config.is_configured() {
-        return Err(SyncError::new(
-            "notConfigured",
-            "Sync is not set up. Add your Workers URL in Settings.",
-        ));
-    }
-    let token = login::get_token(&base_dir)
-        .map_err(SyncError::other)?
-        .ok_or_else(|| {
-            SyncError::new("notAuthenticated", "Not logged in. Log in from Settings.")
-        })?;
-    if !token::is_token_valid(&token) {
-        return Err(SyncError::new(
-            "notAuthenticated",
-            "Login expired. Log in again from Settings.",
-        ));
-    }
-
-    let client = HttpClient::new(http_client()?, &config.workers_url, &token);
-    // Past half its lifetime the login is traded for a fresh one, so a device that syncs
-    // never signs out. The CLI does the same at its entry
-    let client = match login::renew_if_due(&token, &client, |fresh| {
-        login::store_token(&base_dir, fresh)
-    })
-    .await?
-    {
-        Some(fresh) => client.with_token(&fresh),
-        None => client,
-    };
+    let client = login::sync_client(
+        &base_dir,
+        http_client,
+        "Settings",
+        || login::get_token(&base_dir),
+        |fresh| login::store_token(&base_dir, fresh),
+    )
+    .await?;
 
     run::run(&client, &base_dir).await
 }
@@ -330,5 +306,24 @@ mod tests {
         assert!(events.borrow().is_empty());
         // The round in flight still owns the flag
         assert!(state.is_syncing.load(Ordering::SeqCst));
+    }
+
+    /// Without a Workers URL the round stops before the token is read, so a device never set
+    /// up does not open the OS keychain
+    #[test]
+    #[allow(
+        clippy::significant_drop_tightening,
+        reason = "a test app holds the data directory until the test ends"
+    )]
+    fn a_sync_with_no_workers_url_is_not_configured() {
+        let app = crate::test_app::test_app();
+
+        let refused = tauri::async_runtime::block_on(do_sync(&app.handle())).unwrap_err();
+
+        assert_eq!(refused.kind, "notConfigured");
+        assert_eq!(
+            refused.message,
+            "Sync is not set up. Add your Workers URL in Settings."
+        );
     }
 }
