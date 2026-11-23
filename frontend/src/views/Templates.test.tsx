@@ -1,9 +1,11 @@
-import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach, onTestFinished } from "vitest";
 import { page } from "vitest/browser";
 import { render, screen, fireEvent, cleanup, waitFor } from "@solidjs/testing-library";
 import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
 import { MemoryRouter, Route } from "@solidjs/router";
-import { ShellProvider } from "../lib/shell";
+import type { JSX } from "solid-js";
+import { ShellProvider, useShell } from "../lib/shell";
+import type { Shell } from "../lib/shell";
 import UndoToast from "../components/UndoToast";
 import Templates from "./Templates";
 
@@ -23,6 +25,21 @@ interface SavedTemplate {
 
 const saved: SavedTemplate[] = [];
 const deleted: string[] = [];
+/** Set to make `delete_template` refuse the way core does, with `{ kind, message }`. */
+let deleteRefusal: Error | undefined;
+/** Every `delete_template` that was refused, by filename. */
+const refusedDeletes: string[] = [];
+/** Rejections no one caught, while a test listens for them. */
+const uncaught: unknown[] = [];
+
+/**
+ * The event is the proof that no one caught the rejection. preventDefault keeps it from
+ * reaching the runner as an error of its own.
+ */
+function holdUncaught(event: PromiseRejectionEvent): void {
+  event.preventDefault();
+  uncaught.push(event.reason);
+}
 /** Drafts as core keeps them, by filename. Seed one to open a template that has a draft. */
 const drafts = new Map<string, { body: string; tags: string[] }>();
 const discardedDrafts: string[] = [];
@@ -45,6 +62,10 @@ function mockCommands(): void {
       return;
     }
     if (cmd === "delete_template") {
+      if (deleteRefusal) {
+        refusedDeletes.push(filename);
+        throw deleteRefusal;
+      }
       deleted.push(filename);
       drafts.delete(filename);
       return;
@@ -81,11 +102,27 @@ function mockCommands(): void {
   });
 }
 
+/** The shell the screen hands its way back to. AppLayout reads it in the app. */
+let shell: Shell | undefined;
+
+function CaptureShell(): JSX.Element {
+  shell = useShell();
+  return null;
+}
+
+function capturedShell(): Shell {
+  if (!shell) {
+    throw new Error("shell not captured");
+  }
+  return shell;
+}
+
 // AppLayout draws the toast. The test should reach as far as reporting the discard, so it
 // lines up the same pair
 function renderTemplates() {
   return render(() => (
     <ShellProvider>
+      <CaptureShell />
       <MemoryRouter>
         <Route path="/" component={Templates} />
       </MemoryRouter>
@@ -148,6 +185,9 @@ describe("Templates", () => {
   beforeEach(() => {
     saved.length = 0;
     deleted.length = 0;
+    deleteRefusal = undefined;
+    refusedDeletes.length = 0;
+    uncaught.length = 0;
     drafts.clear();
     discardedDrafts.length = 0;
     renamed.length = 0;
@@ -547,6 +587,25 @@ describe("Templates", () => {
     expect(deleted).toHaveLength(0);
   });
 
+  // What a refused delete does today: nothing catches the rejection, so the row stays hidden
+  // until the screen is left and no failure is reported. 48 turns this expectation over
+  it("keeps the row hidden when the delete is refused", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    deleteRefusal = Object.assign(new Error("template not found"), { kind: "missing" });
+    globalThis.addEventListener("unhandledrejection", holdUncaught);
+    onTestFinished(() => globalThis.removeEventListener("unhandledrejection", holdUncaught));
+    await openDaily();
+
+    openMenu();
+    fireEvent.click(screen.getByText("削除"));
+    await waitFor(() => expect(screen.getByText("テンプレートを削除しました")).toBeDefined());
+    await vi.advanceTimersByTimeAsync(5000);
+
+    await waitFor(() => expect(uncaught).toStrictEqual([deleteRefusal]));
+    expect(refusedDeletes).toStrictEqual(["daily.md"]);
+    expect(screen.queryByText("daily")).toBeNull();
+  });
+
   it("closes the more menu on Escape", async () => {
     await openDaily();
     openMenu();
@@ -901,6 +960,14 @@ describe("Templates on a wide screen", () => {
       Number(meta?.getBoundingClientRect().top),
     );
   });
+
+  // The list stands beside the template, so there is no level to go back down to
+  it("hands the shell no way back", async () => {
+    await openDaily();
+
+    expect(capturedShell().headerBack()).toBeNull();
+    expect(capturedShell().backStage()).toBeNull();
+  });
 });
 
 /** A phone has room for one of the two at a time; a segmented control switches them. */
@@ -913,6 +980,8 @@ describe("Templates on a phone", () => {
   beforeEach(async () => {
     notes.length = 0;
     drafts.clear();
+    saved.length = 0;
+    shell = undefined;
     mockCommands();
     await page.viewport(390, 844);
   });
@@ -936,5 +1005,71 @@ describe("Templates on a phone", () => {
     fireEvent.click(screen.getByRole("tab", { name: "編集" }));
 
     await waitFor(() => expect(getComputedStyle(preview).display).toBe("none"));
+  });
+
+  // An open template is a level over the list, as a note is: the round way out and a stroke
+  // to the right both come from what the screen hands the shell
+  it("hands the shell a way back once a template is open", async () => {
+    renderTemplates();
+    await waitFor(() => expect(screen.getByText("daily")).toBeDefined());
+    expect(capturedShell().headerBack()).toBeNull();
+    expect(capturedShell().backStage()).toBeNull();
+
+    fireEvent.click(screen.getByText("daily"));
+
+    await waitFor(() => expect(capturedShell().headerBack()).not.toBeNull());
+    expect(capturedShell().backStage()).not.toBeNull();
+  });
+
+  it("goes back to the list from the round way out", async () => {
+    const { container } = await openDaily();
+    const root = container.querySelector(".templates") as HTMLElement;
+    expect(root.classList.contains("workspace--detail")).toBe(true);
+
+    capturedShell().headerBack()?.();
+
+    await waitFor(() => expect(root.classList.contains("workspace--detail")).toBe(false));
+    expect(capturedShell().headerBack()).toBeNull();
+    expect(capturedShell().backStage()).toBeNull();
+  });
+
+  // The stroke moves the template and shows the list through under it
+  it("slides the template over the list", async () => {
+    const { container } = await openDaily();
+    const root = container.querySelector(".templates") as HTMLElement;
+
+    const stage = capturedShell().backStage()?.();
+
+    expect(stage?.page).toBe(container.querySelector(".detail-pane"));
+    expect(stage?.under).toBe(listPane(container));
+    expect(root.classList.contains("workspace--peek")).toBe(true);
+  });
+
+  // Leaving keeps the edit as a draft, the same as the back button does
+  it("goes back to the list on a slide that commits, keeping the edit as a draft", async () => {
+    const { container } = await openDaily();
+    const root = container.querySelector(".templates") as HTMLElement;
+    fireEvent.input(bodyInput(container), { target: { value: "書きかけ" } });
+    const stage = capturedShell().backStage()?.();
+
+    stage?.done(true);
+
+    await waitFor(() => expect(root.classList.contains("workspace--detail")).toBe(false));
+    expect(root.classList.contains("workspace--peek")).toBe(false);
+    expect(capturedShell().headerBack()).toBeNull();
+    await waitFor(() => expect(drafts.get("daily.md")?.body).toBe("# Daily {{date}}\n\n書きかけ"));
+    expect(saved).toHaveLength(0);
+  });
+
+  it("stays on the template when the slide falls back", async () => {
+    const { container } = await openDaily();
+    const root = container.querySelector(".templates") as HTMLElement;
+    const stage = capturedShell().backStage()?.();
+
+    stage?.done(false);
+
+    expect(root.classList.contains("workspace--peek")).toBe(false);
+    expect(root.classList.contains("workspace--detail")).toBe(true);
+    expect(capturedShell().headerBack()).not.toBeNull();
   });
 });

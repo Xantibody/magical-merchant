@@ -2,14 +2,15 @@ import { describe, it, expect, beforeEach, afterEach, onTestFinished, vi } from 
 import { render, screen, fireEvent, cleanup, waitFor, within } from "@solidjs/testing-library";
 import { mockIPC, mockWindows, clearMocks } from "@tauri-apps/api/mocks";
 import { page, userEvent } from "vitest/browser";
-import { MemoryRouter, Route, useNavigate } from "@solidjs/router";
+import { MemoryRouter, Route, useLocation, useNavigate } from "@solidjs/router";
 import { createEffect, onCleanup } from "solid-js";
 import type { JSX } from "solid-js";
 import type { Editor } from "@milkdown/kit/core";
-import type { TagUsage } from "../lib/commands";
+import type { SearchHit, TagUsage } from "../lib/commands";
 import { ShellProvider, useShell } from "../lib/shell";
 import type { Shell } from "../lib/shell";
 import { shortcutLabel } from "../lib/shortcuts";
+import { setExamplesShown } from "../lib/template-examples";
 import Workspace from "./Workspace";
 
 // The real Milkdown drags in all of ProseMirror. What matters here is only the decision of
@@ -26,6 +27,7 @@ vi.mock(import("../components/MilkdownEditor"), () => ({
     onChange?: (markdown: string) => void;
     onEditorReady?: (editor?: Editor) => void;
     noteLinks?: () => { id: string }[];
+    examples?: () => ReadonlyMap<string, string[]>;
   }): JSX.Element => {
     typeInEditor = props.onChange;
     const el = document.createElement("div");
@@ -33,6 +35,11 @@ vi.mock(import("../components/MilkdownEditor"), () => ({
     el.textContent = props.defaultValue ?? "";
     // The real editor looks `[[` completions up while typing. The board just lists the IDs
     el.dataset.noteLinks = (props.noteLinks?.() ?? []).map((t) => t.id).join(",");
+    // The real editor draws a template's examples faint under their headings. The board says
+    // how many headings it was handed examples for
+    createEffect(() => {
+      el.dataset.examples = String(props.examples?.().size ?? 0);
+    });
     const ready = setTimeout(() => {
       el.className = "ProseMirror";
       el.contentEditable = "true";
@@ -64,6 +71,17 @@ vi.mock(import("../components/MindmapView"), () => ({
   },
 }));
 
+// The real one drives ProseMirror's keymaps, which the board above does not have. A drop's new
+// line is stood in for by the board's text plus one empty line, the body as the editor would
+// report it with the line still empty. The count is how a test sees that a drop opened one
+let openedLines: number;
+vi.mock(import("../lib/open-line"), () => ({
+  openLineAtCaret: (): string => {
+    openedLines += 1;
+    return `${document.querySelector("[data-testid='editor-body']")?.textContent ?? ""}\n\n`;
+  },
+}));
+
 /** The autosave debounce. Kept in step with `Workspace.tsx`. */
 const SAVE_DEBOUNCE_MS = 1000;
 
@@ -83,7 +101,7 @@ let disk: Map<string, string>;
  * The part of the frontmatter the list and detail read. A note without it keeps the defaults.
  * `bodyTags` are the body's `#tag`s: the list merges them in, the frontmatter does not have them.
  */
-let meta: Map<string, { tags?: string[]; bodyTags?: string[]; view?: string }>;
+let meta: Map<string, { tags?: string[]; bodyTags?: string[]; view?: string; template?: string }>;
 /** Every tag in use, as core counts it. What the suggestions read. */
 let usedTags: TagUsage[];
 /** Which directory it lives in. A note with no entry is a Note. */
@@ -117,6 +135,17 @@ let refused: Set<string>;
  * screen without one today; this stands in for whichever path someday would.
  */
 let readsWithoutRevision: boolean;
+/** What core's backlink scan finds for each note: the records whose body points at it. */
+let backlinkHits: Map<string, SearchHit[]>;
+/** Makes `create_from_template` refuse the way core does, as a `CommandError`. */
+let templateRefused: boolean;
+
+/** The one template on this device. The ring's template sheet lists it. */
+const TEMPLATE = { filename: "日報.md", name: "日報", tags: [], preview: "# 日報" };
+/** The note a template makes, and what core writes into it. */
+const FILE_T = "20260904_090000.md";
+const TITLE_T = "日報";
+const BODY_T = `# ${TITLE_T}\n\n今日やったこと`;
 
 /** The body's revision. The test checks "write with the revision you read" the way core does. */
 const revisionOf = (body: string): string => `rev:${body}`;
@@ -140,6 +169,8 @@ const summaryOf = (filename: string): Record<string, unknown> => ({
   // core drops a key that was not written. This matches the shape where the list reader
   // sees undefined
   ...(meta.get(filename)?.view ? { view: meta.get(filename)?.view } : {}),
+  // Only a note born from a template names it
+  ...(meta.get(filename)?.template ? { template: meta.get(filename)?.template } : {}),
   // Only a Codex row carries the version count and whether it has moved on
   ...(kinds.get(filename) === "codex"
     ? {
@@ -157,8 +188,20 @@ const saveError = (kind: string, message: string): Error =>
 
 const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
   list_notes: () => [...disk.keys()].map((filename) => summaryOf(filename)),
-  list_templates: () => [],
-  find_backlinks: () => [],
+  list_templates: () => [TEMPLATE],
+  // The template as written, examples and all. A note made from it never holds them
+  read_template: () => ({
+    body: `# ${TITLE_T}\n\n## やったこと\n{{eg: 資料を作った}}\n`,
+    tags: [],
+  }),
+  create_from_template: () => {
+    if (templateRefused) {
+      throw saveError("missing", `template not found: ${TEMPLATE.filename}`);
+    }
+    disk.set(FILE_T, BODY_T);
+    return { filename: FILE_T };
+  },
+  find_backlinks: ({ filename }) => backlinkHits.get(String(filename)) ?? [],
   read_note: async ({ filename }) => {
     await readGate;
     // A file that does not read as text is refused at the read step. Reopening loads no body
@@ -182,9 +225,10 @@ const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
   },
   // The tag suggestions read core's count as it comes
   count_tags: () => usedTags,
+  // The new note's ID, the bare filename, as core returns it
   create_draft: () => {
     disk.set(FILE_B, "");
-    return `/data/notes/${FILE_B}`;
+    return FILE_B;
   },
   update_draft: async ({ filename, body, revision }) => {
     duringSave?.();
@@ -304,9 +348,20 @@ const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
 
 let shell: Shell | undefined;
 let navigateTo: ((to: string) => void) | undefined;
+/** Where the router stands now. What a move to another surface or to Scrawl is read from. */
+let here: { pathname: string; search: string } | undefined;
 
 function CaptureShell(): JSX.Element {
   shell = useShell();
+  return null;
+}
+
+/** Records the router's pathname and search as they change. */
+function LocationProbe(): JSX.Element {
+  const location = useLocation();
+  createEffect(() => {
+    here = { pathname: location.pathname, search: location.search };
+  });
   return null;
 }
 
@@ -314,14 +369,24 @@ function CaptureShell(): JSX.Element {
 function WorkspaceRoute(): JSX.Element {
   const navigate = useNavigate();
   navigateTo = (to) => navigate(to);
-  return <Workspace />;
+  return (
+    <>
+      <LocationProbe />
+      <Workspace />
+    </>
+  );
 }
 
 /** The Codex surface of the same view. What sits at `/codex` has the same shape as in `App.tsx`. */
 function CodexRoute(): JSX.Element {
   const navigate = useNavigate();
   navigateTo = (to) => navigate(to);
-  return <Workspace kind="codex" />;
+  return (
+    <>
+      <LocationProbe />
+      <Workspace kind="codex" />
+    </>
+  );
 }
 
 /** Renders the list alone. Nothing is opened, so what is visible is the rows themselves. */
@@ -503,6 +568,14 @@ async function startTagEditing(): Promise<HTMLInputElement> {
   return input;
 }
 
+/** A `[[link]]` peek's own open button. It exists only while a peek is up. */
+const peekOpen = (): HTMLElement | null => document.querySelector(".link-peek-open");
+
+/** The rows under the viewer's body, each a record that points at the note. */
+const backlinkRows = (): HTMLElement[] => [
+  ...document.querySelectorAll<HTMLElement>(".backlinks .backlink-row"),
+];
+
 /** The history tab's body. It exists only while the tab is open. */
 const historyShown = (): boolean => document.querySelector(".history-panel") !== null;
 
@@ -578,9 +651,13 @@ async function setupWorkspace(): Promise<void> {
   readFails = false;
   refused = new Set();
   readsWithoutRevision = false;
+  backlinkHits = new Map();
+  templateRefused = false;
   calls = [];
   shell = undefined;
   navigateTo = undefined;
+  here = undefined;
+  openedLines = 0;
   typeInEditor = undefined;
   duringSave = undefined;
   releaseReads();
@@ -2732,5 +2809,805 @@ describe("Workspace › 通らなかった操作", () => {
     await chooseFromRing(/Codex を作る/u);
 
     await waitFor(() => expect(shell?.toast()?.message).toBe("Codex を作れませんでした"));
+  });
+});
+
+describe("Workspace › リンク先の覗き見", () => {
+  beforeEach(setupWorkspace);
+  afterEach(teardownWorkspace);
+
+  const ID_B = FILE_B.replace(/\.md$/u, "");
+
+  /** Note A, its body pointing at note B, open in the viewer with the link drawn. */
+  async function viewLinkingNote(): Promise<HTMLElement> {
+    disk.set(FILE_A, `${BODY_A}\n\n[[${ID_B}]]`);
+    disk.set(FILE_B, BODY_B);
+    await viewNoteA();
+    return waitFor(() => {
+      const link = document.querySelector<HTMLElement>(`a.note-link[data-file="${FILE_B}"]`);
+      expect(link).not.toBeNull();
+      return link as HTMLElement;
+    });
+  }
+
+  const readsOf = (filename: string): number =>
+    calls.filter((c) => c.cmd === "read_note" && c.args.filename === filename).length;
+
+  // 88: following a reference does not lose the place. The linked note is lifted beside this
+  // one, which stays as it was
+  it("lifts the linked note beside the one being read, without reopening it", async () => {
+    const link = await viewLinkingNote();
+    const readsBefore = readsOf(FILE_A);
+
+    fireEvent.click(link);
+
+    const card = await waitFor(() => {
+      const found = document.querySelector<HTMLElement>(".link-peek-card");
+      expect(found).not.toBeNull();
+      return found as HTMLElement;
+    });
+    await waitFor(() => expect(within(card).getByText("牛乳")).toBeDefined());
+    expect(card.querySelector(".link-peek-title")?.textContent).toBe(TITLE_B);
+    expect(viewerTitle()).toBe(TITLE_A);
+    expect(readsOf(FILE_A)).toBe(readsBefore);
+    // A press on a link is not the one tap that writes
+    expect(screen.queryByTestId("editor-body")).toBeNull();
+  });
+
+  it("puts the peek away on Escape", async () => {
+    fireEvent.click(await viewLinkingNote());
+    await waitFor(() => expect(peekOpen()).not.toBeNull());
+
+    fireEvent.keyDown(globalThis, { key: "Escape" });
+
+    await waitFor(() => expect(peekOpen()).toBeNull());
+    expect(viewerTitle()).toBe(TITLE_A);
+  });
+
+  it("opens the linked note in place from the peek's open button", async () => {
+    fireEvent.click(await viewLinkingNote());
+    const open = await waitFor(() => {
+      const found = peekOpen();
+      expect(found).not.toBeNull();
+      return found as HTMLElement;
+    });
+
+    fireEvent.click(open);
+
+    await waitFor(() => expect(viewerTitle()).toBe(TITLE_B));
+    expect(peekOpen()).toBeNull();
+  });
+
+  // A link knows only the ID. A target that lives on the other surface is opened there
+  it("sends a linked Codex to the Codex surface", async () => {
+    kinds.set(FILE_B, "codex");
+    fireEvent.click(await viewLinkingNote());
+    const open = await waitFor(() => {
+      const found = peekOpen();
+      expect(found).not.toBeNull();
+      return found as HTMLElement;
+    });
+
+    fireEvent.click(open);
+
+    await waitFor(() => expect(here?.pathname).toBe("/codex"));
+    expect(here?.search).toBe(`?file=${FILE_B}`);
+    await waitFor(() => expect(viewerTitle()).toBe(TITLE_B));
+  });
+
+  // On a phone the peek is a level over the page, and over the writing screen too: one back
+  // puts it away first, the next ends the writing, the last goes to the list
+  it("peels the peek before the writing screen on a phone's back", async () => {
+    await page.viewport(390, 844);
+    fireEvent.click(await viewLinkingNote());
+    await waitFor(() => expect(peekOpen()).not.toBeNull());
+    fireEvent.keyDown(document.body, { key: "e" });
+    await waitFor(() => expect(document.querySelector(".note-title-input")).not.toBeNull());
+
+    shell?.headerBack()?.();
+
+    await waitFor(() => expect(peekOpen()).toBeNull());
+    expect(document.querySelector(".note-title-input")).not.toBeNull();
+
+    shell?.headerBack()?.();
+
+    await waitFor(() => expect(document.querySelector(".note-title-input")).toBeNull());
+    expect(document.querySelector(".workspace--detail")).not.toBeNull();
+
+    shell?.headerBack()?.();
+
+    await waitFor(() => expect(document.querySelector(".workspace--detail")).toBeNull());
+  });
+});
+
+describe("Workspace › ビューアの下のバックリンク", () => {
+  beforeEach(setupWorkspace);
+  afterEach(teardownWorkspace);
+
+  const NOTE_HIT: SearchHit = {
+    kind: "note",
+    title: TITLE_B,
+    snippet: `[[${FILE_A.replace(/\.md$/u, "")}]] を見て`,
+    date: "2026-09-03",
+    filename: FILE_B,
+    index: null,
+    tags: [],
+  };
+  const SCRAWL_HIT: SearchHit = {
+    kind: "scrawl",
+    title: "",
+    snippet: "朝に書いた一行",
+    date: "2026-09-01",
+    filename: null,
+    index: 0,
+    tags: [],
+  };
+
+  /** Note A in the viewer, with the given records pointing at it. */
+  async function viewPointedNote(hits: SearchHit[]): Promise<void> {
+    disk.set(FILE_B, BODY_B);
+    backlinkHits.set(FILE_A, hits);
+    await viewNoteA();
+    await waitFor(() => expect(backlinkRows()).toHaveLength(hits.length));
+  }
+
+  it("lists what points at the note under its body, a title or else the snippet", async () => {
+    await viewPointedNote([NOTE_HIT, SCRAWL_HIT]);
+
+    const [noteRow, scrawlRow] = backlinkRows();
+    expect(noteRow?.querySelector(".backlink-title")?.textContent).toBe(TITLE_B);
+    expect(noteRow?.querySelector(".backlink-date")?.textContent).toBe("09/03");
+    expect(scrawlRow?.querySelector(".backlink-title")?.textContent).toBe("朝に書いた一行");
+    expect(scrawlRow?.querySelector(".backlink-date")?.textContent).toBe("09/01");
+    expect(calls.find((c) => c.cmd === "find_backlinks")?.args).toStrictEqual({
+      filename: FILE_A,
+    });
+  });
+
+  it("opens a Note that points here in place", async () => {
+    await viewPointedNote([NOTE_HIT]);
+
+    fireEvent.click(backlinkRows()[0] as HTMLElement);
+
+    await waitFor(() => expect(viewerTitle()).toBe(TITLE_B));
+  });
+
+  // A Scrawl entry has no note of its own to open: its day on Scrawl is where it lives
+  it("goes to the day on Scrawl for an entry that points here", async () => {
+    await viewPointedNote([SCRAWL_HIT]);
+
+    fireEvent.click(backlinkRows()[0] as HTMLElement);
+
+    await waitFor(() => expect(here?.search).toBe("?day=2026-09-01"));
+    expect(here?.pathname).toBe("/");
+  });
+
+  it("leaves the whole section out when nothing points here", async () => {
+    await viewNoteA();
+
+    await waitFor(() => expect(countOf("find_backlinks")).toBe(1));
+    await sleep(50);
+    expect(document.querySelector(".backlinks")).toBeNull();
+  });
+});
+
+/** A point on screen, as the pointer events carry it. */
+interface ScreenPoint {
+  x: number;
+  y: number;
+}
+
+function middleOf(el: Element): ScreenPoint {
+  const box = el.getBoundingClientRect();
+  return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+}
+
+/** Presses `control` and slides to `to` without letting go: the carried thing hovers there. */
+function carryTo(control: HTMLElement, to: ScreenPoint, pointerType: string): void {
+  const from = middleOf(control);
+  fireEvent.pointerDown(control, { pointerType, button: 0, clientX: from.x, clientY: from.y });
+  fireEvent.pointerMove(control, { pointerType, clientX: to.x, clientY: to.y });
+}
+
+/** Lifts the pointer at `at`, and the click the browser sends after it. */
+function letGo(control: HTMLElement, at: ScreenPoint, pointerType: string): void {
+  fireEvent.pointerUp(control, { pointerType, clientX: at.x, clientY: at.y });
+  fireEvent.click(control);
+}
+
+/** The point between the viewer's two paragraphs, where a drop opens a line after the first. */
+async function gapBetweenParagraphs(): Promise<ScreenPoint> {
+  const [first, second] = await waitFor(() => {
+    const found = [...document.querySelectorAll(".detail-body > .markdown-preview > p")];
+    expect(found).toHaveLength(2);
+    return found;
+  });
+  const top = (first as Element).getBoundingClientRect();
+  const bottom = (second as Element).getBoundingClientRect();
+  return { x: top.left + top.width / 2, y: (top.bottom + bottom.top) / 2 };
+}
+
+/** The list's +: pressed it blooms the ring, slid past the ring it is carried. */
+const listPlus = (): HTMLElement => screen.getByRole("button", { name: /新規/u });
+
+/** Carries the list's + onto note B's row and lets go there. */
+async function dropPlusOnRowB(): Promise<void> {
+  disk.set(FILE_B, BODY_B);
+  renderWorkspace();
+  const at = middleOf(await rowOf(TITLE_B));
+  carryTo(listPlus(), at, "mouse");
+  await waitFor(() => expect(document.querySelector(".ring-drop-box")).not.toBeNull());
+  letGo(listPlus(), at, "mouse");
+}
+
+describe("Workspace › ドロップして書く", () => {
+  beforeEach(setupWorkspace);
+  afterEach(teardownWorkspace);
+
+  /** Note A with two paragraphs, so the page has a gap between blocks to drop into. */
+  const BODY_TWO = `${BODY_A}\n\n二段目`;
+
+  // 7: the + let go on a row opens that note to write on a fresh last line
+  it("opens the note a + is let go on, in the writing screen on a fresh line", async () => {
+    await dropPlusOnRowB();
+
+    await waitFor(() => expect(titleInput().value).toBe(TITLE_B));
+    await waitFor(() => expect(openedLines).toBe(1));
+    expect(document.activeElement).toBe(editorBody());
+  });
+
+  // A wide window's page takes the carried + too, at the gap it is let go in
+  it("writes from the gap between two paragraphs the + is let go in", async () => {
+    disk.set(FILE_A, BODY_TWO);
+    await viewNoteA();
+    const at = await gapBetweenParagraphs();
+
+    carryTo(listPlus(), at, "mouse");
+
+    await waitFor(() => expect(document.querySelector(".ring-drop-line")).not.toBeNull());
+    expect(document.querySelector(".ring-caption")?.textContent).toBe("ここから書く");
+
+    letGo(listPlus(), at, "mouse");
+
+    await waitFor(() => expect(document.querySelector(".note-title-input")).not.toBeNull());
+    await waitFor(() => expect(openedLines).toBe(1));
+  });
+
+  // A line nothing has been typed on is not an edit: no save until its first character
+  it("saves nothing for the opened line until its first character", async () => {
+    await dropPlusOnRowB();
+    await waitFor(() => expect(openedLines).toBe(1));
+    const empty = `${String(editorBody().textContent)}\n\n`;
+
+    typeInEditor?.(empty);
+
+    await sleep(SAVE_DEBOUNCE_MS + 400);
+    expect(countOf("update_draft")).toBe(0);
+
+    typeInEditor?.(`${empty}卵`);
+
+    await waitFor(() => expect(writesTo(FILE_B)).toHaveLength(1), { timeout: 3000 });
+    expect(writesTo(FILE_B)[0]?.body).toBe(`# ${TITLE_B}\n\n牛乳\n\n卵`);
+  });
+
+  it("enters the writing screen on a tap of the phone's pencil", async () => {
+    await page.viewport(390, 844);
+    await viewNoteA();
+    const pencil = screen.getByRole("button", { name: "書く" });
+    const at = middleOf(pencil);
+
+    fireEvent.pointerDown(pencil, {
+      pointerType: "touch",
+      button: 0,
+      clientX: at.x,
+      clientY: at.y,
+    });
+    letGo(pencil, at, "touch");
+
+    await waitFor(() => expect(document.querySelector(".note-title-input")).not.toBeNull());
+    expect(openedLines).toBe(0);
+  });
+
+  it("writes from the gap the phone's pencil is carried to", async () => {
+    await page.viewport(390, 844);
+    disk.set(FILE_A, BODY_TWO);
+    await viewNoteA();
+    const at = await gapBetweenParagraphs();
+    const pencil = screen.getByRole("button", { name: "書く" });
+
+    carryTo(pencil, at, "touch");
+
+    await waitFor(() => expect(document.querySelector(".ring-drop-line")).not.toBeNull());
+
+    letGo(pencil, at, "touch");
+
+    await waitFor(() => expect(document.querySelector(".note-title-input")).not.toBeNull());
+    await waitFor(() => expect(openedLines).toBe(1));
+  });
+});
+
+/** The phone's note sheet (the panel), told apart from a link peek's sheet. */
+const panelSheet = (): Element | null =>
+  document.querySelector(".note-sheet:not(.link-peek-sheet)");
+
+const writingShown = (): boolean => document.querySelector(".note-title-input") !== null;
+
+/** Whether a phone shows the note rather than the list. */
+const detailShown = (): boolean => document.querySelector(".workspace--detail") !== null;
+
+describe("Workspace › シェルに渡す段", () => {
+  beforeEach(setupWorkspace);
+  afterEach(teardownWorkspace);
+
+  it("hands a phone's note its way back, and none to the list or a wide window", async () => {
+    await page.viewport(390, 844);
+    renderWorkspace();
+    fireEvent.click(await rowOf(TITLE_A));
+    await screen.findByText(TEXT_A);
+
+    expect(shell?.headerBack()).toBeTypeOf("function");
+
+    shell?.headerBack()?.();
+
+    await waitFor(() => expect(detailShown()).toBe(false));
+    expect(shell?.headerBack()).toBeNull();
+
+    teardownWorkspace();
+    await setupWorkspace();
+    await viewNoteA();
+    expect(shell?.headerBack()).toBeNull();
+  });
+
+  // 60: the stroke to the right slides the note away with its list showing through under it
+  it("slides the read note over its list, and only a full stroke goes back", async () => {
+    await page.viewport(390, 844);
+    await viewNoteA();
+
+    const stage = shell?.backStage()?.();
+
+    expect(stage?.page).toBe(document.querySelector(".detail-pane"));
+    expect(stage?.under).toBe(document.querySelector(".list-pane"));
+    expect(document.querySelector(".workspace--peek")).not.toBeNull();
+
+    stage?.done(false);
+
+    expect(document.querySelector(".workspace--peek")).toBeNull();
+    await sleep(50);
+    expect(detailShown()).toBe(true);
+    expect(viewerTitle()).toBe(TITLE_A);
+
+    shell?.backStage()?.()?.done(true);
+
+    await waitFor(() => expect(detailShown()).toBe(false));
+  });
+
+  // 61: writing slides away with the same note, to be read, under it
+  it("slides the writing page over the same note read, and only a full stroke ends it", async () => {
+    await page.viewport(390, 844);
+    await viewNoteA();
+    fireEvent.keyDown(document.body, { key: "e" });
+    await waitFor(() => expect(writingShown()).toBe(true));
+
+    const stage = shell?.backStage()?.();
+
+    const peek = document.querySelector(".detail-peek");
+    expect(peek).not.toBeNull();
+    expect(stage?.under).toBe(peek);
+    expect(stage?.page).toBe(document.querySelector(".detail-pane"));
+    expect(peek?.querySelector(".note-title-view")?.textContent).toBe(TITLE_A);
+
+    stage?.done(false);
+
+    await waitFor(() => expect(document.querySelector(".detail-peek")).toBeNull());
+    expect(writingShown()).toBe(true);
+
+    shell?.backStage()?.()?.done(true);
+
+    await waitFor(() => expect(writingShown()).toBe(false));
+    expect(detailShown()).toBe(true);
+  });
+
+  // The sheet and a peek are layers over the page: the stroke has nothing to slide under them
+  it("has no stage to slide while the sheet or a peek is up", async () => {
+    await page.viewport(390, 844);
+    disk.set(FILE_A, `${BODY_A}\n\n[[${FILE_B.replace(/\.md$/u, "")}]]`);
+    disk.set(FILE_B, BODY_B);
+    await viewNoteA();
+
+    fireEvent.click(screen.getByRole("button", { name: "この Note" }));
+    await waitFor(() => expect(panelSheet()).not.toBeNull());
+    expect(shell?.backStage()?.()).toBeNull();
+
+    shell?.headerBack()?.();
+    await waitFor(() => expect(panelSheet()).toBeNull());
+    fireEvent.click(document.querySelector("a.note-link") as HTMLElement);
+    await waitFor(() => expect(peekOpen()).not.toBeNull());
+    expect(shell?.backStage()?.()).toBeNull();
+  });
+
+  // One level out at a time: the sheet, then the peek, then the writing, then the list
+  it("peels a phone's levels one back at a time", async () => {
+    await page.viewport(390, 844);
+    disk.set(FILE_A, `${BODY_A}\n\n[[${FILE_B.replace(/\.md$/u, "")}]]`);
+    disk.set(FILE_B, BODY_B);
+    await viewNoteA();
+    fireEvent.click(await waitFor(() => document.querySelector("a.note-link") as HTMLElement));
+    await waitFor(() => expect(peekOpen()).not.toBeNull());
+    fireEvent.click(screen.getByRole("button", { name: "この Note" }));
+    await waitFor(() => expect(panelSheet()).not.toBeNull());
+
+    shell?.headerBack()?.();
+
+    await waitFor(() => expect(panelSheet()).toBeNull());
+    expect(peekOpen()).not.toBeNull();
+
+    shell?.headerBack()?.();
+
+    await waitFor(() => expect(peekOpen()).toBeNull());
+    expect(detailShown()).toBe(true);
+
+    fireEvent.keyDown(document.body, { key: "e" });
+    await waitFor(() => expect(writingShown()).toBe(true));
+
+    shell?.headerBack()?.();
+
+    await waitFor(() => expect(writingShown()).toBe(false));
+    expect(detailShown()).toBe(true);
+
+    shell?.headerBack()?.();
+
+    await waitFor(() => expect(detailShown()).toBe(false));
+  });
+
+  // A wide window's two-finger strokes: out ends the writing first, then brings a tucked list
+  // back; cover tucks the list under the note, and the tuck is remembered on this device
+  it("steps a wide window's levels: writing, then the list beside the note", async () => {
+    await openNoteA();
+    const levels = shell?.pageLevels();
+    expect(levels?.beside?.edge).toBe(document.querySelector(".sheet-grip-host"));
+
+    shell?.pageLevels()?.out()?.();
+
+    await waitFor(() => expect(writingShown()).toBe(false));
+    expect(shell?.pageLevels()?.out()).toBeNull();
+
+    shell?.pageLevels()?.cover()?.();
+
+    expect(shell?.listTucked()).toBe(true);
+    expect(shell?.pageLevels()?.beside?.tucked()).toBe(true);
+    expect(localStorage.getItem("list-tucked")).toBe("tucked");
+    await waitFor(() => expect(document.querySelector(".workspace--tucked")).not.toBeNull());
+    expect(shell?.pageLevels()?.cover()).toBeNull();
+
+    shell?.pageLevels()?.out()?.();
+
+    expect(shell?.listTucked()).toBe(false);
+    expect(localStorage.getItem("list-tucked")).toBeNull();
+    await waitFor(() => expect(document.querySelector(".workspace--tucked")).toBeNull());
+  });
+
+  it("has no levels to hand over on a phone", async () => {
+    await page.viewport(390, 844);
+    await viewNoteA();
+
+    expect(shell?.pageLevels()).toBeNull();
+  });
+
+  // 93: the place pill's Note goes straight back to the note last opened here. A phone's
+  // list is not an opening; the note has to be on screen
+  it("remembers the Note last opened, once it is on screen", async () => {
+    await page.viewport(390, 844);
+    renderWorkspace();
+    await rowOf(TITLE_A);
+    await sleep(50);
+    expect(shell?.lastNote().note).toBeUndefined();
+
+    fireEvent.click(await rowOf(TITLE_A));
+
+    await waitFor(() => expect(shell?.lastNote().note).toBe(FILE_A));
+    expect(shell?.lastNote().codex).toBeUndefined();
+  });
+});
+
+describe("Workspace › テンプレートから作る", () => {
+  beforeEach(setupWorkspace);
+  afterEach(teardownWorkspace);
+
+  /** The ring's template petal, then the template's row in the sheet. */
+  async function pickTemplate(): Promise<void> {
+    renderWorkspace();
+    await rowOf(TITLE_A);
+    await chooseFromRing(/テンプレートから/u);
+    fireEvent.click(await screen.findByRole("menuitem", { name: new RegExp(TEMPLATE.name, "u") }));
+  }
+
+  it("makes the note from the template and opens it to write", async () => {
+    await pickTemplate();
+
+    await waitFor(() => expect(titleInput().value).toBe(TITLE_T));
+    const made = calls.findIndex((c) => c.cmd === "create_from_template");
+    expect(calls[made]?.args.filename).toBe(TEMPLATE.filename);
+    expect(calls[made]?.args.locale).toBe("ja");
+    expect(calls[made]?.args.client).toBeTypeOf("object");
+    // The list is read again after it is made, so the new note has a row to open on
+    expect(calls.slice(made).some((c) => c.cmd === "list_notes")).toBe(true);
+    await rowOf(TITLE_T);
+    await waitFor(() => expect(editorBody().textContent).toBe("今日やったこと"));
+  });
+
+  it("says so when the template is refused", async () => {
+    templateRefused = true;
+
+    await pickTemplate();
+
+    await waitFor(() =>
+      expect(shell?.toast()?.message).toBe("テンプレートから Note を作れませんでした"),
+    );
+    expect(document.querySelector(".note-title-input")).toBeNull();
+  });
+});
+
+/** How many headings the editor board was handed template examples for. */
+const editorExamples = (): string | undefined => editorBody().dataset.examples;
+
+describe("Workspace › 記入例のスイッチ", () => {
+  // The switch is a module signal: it outlives a test unless it is put back
+  beforeEach(async () => {
+    await setupWorkspace();
+    setExamplesShown(true);
+  });
+  afterEach(() => {
+    setExamplesShown(true);
+    teardownWorkspace();
+  });
+
+  const readsOfTemplate = (): Record<string, unknown>[] =>
+    calls.filter((c) => c.cmd === "read_template").map((c) => c.args);
+
+  /** Back on the writing screen from the viewer, with the editor up. */
+  async function writeAgain(): Promise<void> {
+    await startWriting();
+    await waitFor(() => expect(editorBody().isContentEditable).toBe(true));
+  }
+
+  it("hands a template's examples to the editor and folds them from the panel", async () => {
+    meta.set(FILE_A, { template: TITLE_T });
+    await openNoteA();
+
+    await waitFor(() => expect(editorExamples()).toBe("1"));
+    expect(readsOfTemplate()).toStrictEqual([{ filename: TEMPLATE.filename }]);
+    expect(shell?.noteState()?.examples).toBe(true);
+
+    await flipSwitch("記入例");
+
+    await waitFor(() => expect(shell?.noteState()?.examples).toBe(false));
+    await writeAgain();
+    await waitFor(() => expect(editorExamples()).toBe("0"));
+    // Folded, the template is not read at all
+    expect(readsOfTemplate()).toHaveLength(1);
+
+    await flipSwitch("記入例");
+
+    await waitFor(() => expect(shell?.noteState()?.examples).toBe(true));
+    await writeAgain();
+    await waitFor(() => expect(editorExamples()).toBe("1"));
+    expect(readsOfTemplate()).toHaveLength(2);
+  });
+
+  it("reads no template while the examples are folded", async () => {
+    setExamplesShown(false);
+    meta.set(FILE_A, { template: TITLE_T });
+    await openNoteA();
+
+    await sleep(100);
+    expect(readsOfTemplate()).toHaveLength(0);
+    expect(editorExamples()).toBe("0");
+    expect(shell?.noteState()?.examples).toBe(false);
+  });
+
+  // A switch that changes nothing would only ask to be pressed
+  it("reads nothing and offers no switch for a note not made from a template", async () => {
+    await openNoteA();
+    const panel = await openPanel();
+
+    expect(within(panel).queryByRole("switch", { name: "記入例" })).toBeNull();
+    expect(readsOfTemplate()).toHaveLength(0);
+    expect(shell?.noteState()?.examples).toBe(false);
+  });
+});
+
+/** The phone's reading hand: the sheet's … and the pencil, low on the right. */
+const palmActions = (): HTMLElement | null => document.querySelector(".palm-actions");
+
+describe("Workspace › スマホの読む手", () => {
+  beforeEach(setupWorkspace);
+  afterEach(teardownWorkspace);
+
+  // 63: the note's sheet and the pencil, opposite the place pill
+  it("offers the sheet's … and the pencil while a phone reads a note", async () => {
+    await page.viewport(390, 844);
+    await viewNoteA();
+
+    const hand = palmActions() as HTMLElement;
+    expect(hand).not.toBeNull();
+    expect(within(hand).getByRole("button", { name: "この Note" })).toBeDefined();
+    expect(within(hand).getByRole("button", { name: "書く" })).toBeDefined();
+  });
+
+  it("raises the sheet from the …, and steps away while the sheet is up", async () => {
+    await page.viewport(390, 844);
+    await viewNoteA();
+
+    fireEvent.click(
+      within(palmActions() as HTMLElement).getByRole("button", { name: "この Note" }),
+    );
+
+    await waitFor(() => expect(panelSheet()).not.toBeNull());
+    expect(palmActions()).toBeNull();
+
+    shell?.headerBack()?.();
+
+    await waitFor(() => expect(palmActions()).not.toBeNull());
+  });
+
+  it("enters the writing screen from the pencil, and steps away while writing", async () => {
+    await page.viewport(390, 844);
+    await viewNoteA();
+
+    fireEvent.click(within(palmActions() as HTMLElement).getByRole("button", { name: "書く" }));
+
+    await waitFor(() => expect(writingShown()).toBe(true));
+    expect(palmActions()).toBeNull();
+
+    shell?.headerBack()?.();
+
+    await waitFor(() => expect(palmActions()).not.toBeNull());
+  });
+
+  // The compare bar stands at the foot in its place, with its own ways back
+  it("steps away while the compare bar is up", async () => {
+    await page.viewport(390, 844);
+    const FILE_C = "20260903_140000.md";
+    const TEXT_C = "書き足していく";
+    disk.set(FILE_C, `# 育てる文書\n\n${TEXT_C}`);
+    kinds.set(FILE_C, "codex");
+    versions.set(FILE_C, [{ id: "v1", message: null, body: "# 育てる文書\n\n最初の一行" }]);
+    renderWorkspace();
+    navigateTo?.("/codex");
+    fireEvent.click(await rowOf("育てる文書"));
+    await screen.findByText(TEXT_C);
+    await openHistoryTab();
+    await waitFor(() => expect(historyShown()).toBe(true));
+
+    // The sheet goes down, the comparison stays
+    shell?.headerBack()?.();
+
+    await waitFor(() => expect(document.querySelector(".compare-bar")).not.toBeNull());
+    expect(palmActions()).toBeNull();
+  });
+
+  it("slims with the bar while the page is read down", async () => {
+    await page.viewport(390, 844);
+    await viewNoteA();
+
+    shell?.setSlim(true);
+
+    await waitFor(() => expect(palmActions()?.classList).toContain("palm-actions--slim"));
+  });
+
+  it("has no reading hand on a wide window", async () => {
+    await viewNoteA();
+
+    expect(palmActions()).toBeNull();
+  });
+});
+
+describe("Workspace › ステータスの詳細に渡す状態", () => {
+  beforeEach(setupWorkspace);
+  afterEach(teardownWorkspace);
+
+  const FILE_C = "20260903_140000.md";
+  const TITLE_C = "育てる文書";
+  const TEXT_C = "書き足していく";
+  const BODY_C = `# ${TITLE_C}\n\n${TEXT_C}`;
+
+  /** A Codex with the given versions, open in the viewer. */
+  async function viewCodexC(own: { id: string; message: null; body: string }[]): Promise<void> {
+    disk.set(FILE_C, BODY_C);
+    kinds.set(FILE_C, "codex");
+    versions.set(FILE_C, own);
+    renderWorkspace();
+    navigateTo?.("/codex");
+    fireEvent.click(await rowOf(TITLE_C));
+    await screen.findByText(TEXT_C);
+  }
+
+  it("hands over a plain Note's state with nothing on", async () => {
+    await viewNoteA();
+
+    await waitFor(() => expect(shell?.noteState()?.title).toBe(TITLE_A));
+    expect(shell?.noteState()).toMatchObject({
+      version: undefined,
+      comparing: undefined,
+      map: false,
+      examples: false,
+      canCommit: false,
+      canRevert: false,
+    });
+  });
+
+  it("names a note with no heading as untitled", async () => {
+    disk.set(FILE_B, "牛乳だけ");
+    renderWorkspace();
+    await rowOf(TITLE_A);
+
+    navigateTo?.(`/?file=${FILE_B}`);
+
+    await waitFor(() => expect(shell?.noteState()?.title).toBe("(空の Note)"));
+  });
+
+  it("says when the map is laid alongside", async () => {
+    await viewNoteA();
+
+    await flipSwitch("マップ");
+
+    await waitFor(() => expect(shell?.noteState()?.map).toBe(true));
+  });
+
+  // The status details' revert is the panel's revert: the same write, the same revision
+  it("offers revert once there is a backup, and reverts as the panel does", async () => {
+    const before = `# ${TITLE_A}\n\n前の本文`;
+    localStorage.setItem(`note-backup:${FILE_A}`, before);
+    await viewNoteA();
+    await waitFor(() => expect(shell?.noteState()?.canRevert).toBe(true));
+
+    shell?.noteState()?.revert();
+
+    await waitFor(() => expect(disk.get(FILE_A)).toBe(before));
+    const write = calls.find((c) => c.cmd === "update_draft")?.args;
+    expect(write?.filename).toBe(FILE_A);
+    expect(write?.body).toBe(before);
+    expect(write?.revision).toBe(revisionOf(BODY_A));
+  });
+
+  // Committing from the details is the panel's commit: at once, with no message
+  it("offers a commit while a Codex has no version, and commits as the panel does", async () => {
+    await viewCodexC([]);
+    await waitFor(() => expect(shell?.noteState()?.canCommit).toBe(true));
+    expect(shell?.noteState()?.version).toBe("版なし");
+
+    shell?.noteState()?.commit();
+
+    await waitFor(() => expect(countOf("commit_note_version")).toBe(1));
+    expect(calls.find((c) => c.cmd === "commit_note_version")?.args).toStrictEqual({
+      filename: FILE_C,
+      message: null,
+    });
+    await waitFor(() => expect(shell?.noteState()?.canCommit).toBe(false));
+    expect(shell?.noteState()?.version).toBe("版 1");
+  });
+
+  it("opens the history from the details and says what is compared", async () => {
+    await viewCodexC([{ id: "v1", message: null, body: `# ${TITLE_C}\n\n最初の一行` }]);
+    await waitFor(() => expect(shell?.noteState()?.comparing).toBeUndefined());
+
+    shell?.noteState()?.openHistory();
+
+    await waitFor(() => expect(historyShown()).toBe(true));
+    expect(openedPanel()).not.toBeNull();
+    await waitFor(() =>
+      expect(shell?.noteState()?.comparing).toBe(
+        "版 1 と比較中 · 3 行追加 · 3 行削除 · 読み取り専用",
+      ),
+    );
+  });
+
+  it("clears the state when the view goes away", async () => {
+    await viewNoteA();
+    await waitFor(() => expect(shell?.noteState()).not.toBeNull());
+
+    cleanup();
+
+    expect(shell?.noteState()).toBeNull();
   });
 });
