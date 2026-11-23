@@ -12,6 +12,20 @@ import { NO_FILTER } from "../lib/browse";
 import { t } from "../lib/i18n";
 import AppLayout from "./AppLayout";
 
+// Android's back: AppLayout imports the app module on demand, and only when the user agent says
+// Android. The handler it registers is kept so a test can press the key itself
+const android = vi.hoisted(() => ({
+  press: undefined as ((payload: { canGoBack: boolean }) => void) | undefined,
+  exit: vi.fn<(code?: number) => Promise<void>>(),
+}));
+vi.mock(import("@tauri-apps/api/app"), () => ({
+  onBackButtonPress: (handler: (payload: { canGoBack: boolean }) => void) => {
+    android.press = handler;
+    return Promise.resolve({ unregister: () => Promise.resolve() });
+  },
+  exit: android.exit,
+}));
+
 // AppLayout owns its ShellProvider, so the shell and the URL are read from inside a route. Every
 // route mounts the same probe: what matters here is the chrome around it, not the page itself
 let shell: Shell | undefined;
@@ -561,5 +575,87 @@ describe("AppLayout › 場所の移動と作成", () => {
 
     await waitFor(() => expect(theShell().popover()).toBe("new-note-menu"));
     expect(here()).toBe("/codex");
+  });
+});
+
+const ANDROID_UA =
+  "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36";
+
+/** Opens the rail's ring and leaves it standing for a tap, as a press let go in place does. */
+function standRing(): void {
+  const plus = document.querySelector<HTMLElement>(".library-ring");
+  if (!plus) {
+    throw new Error("the rail's + is not mounted");
+  }
+  fireEvent.pointerDown(plus, { button: 0, pointerId: 1 });
+  fireEvent.pointerUp(plus, { button: 0, pointerId: 1 });
+}
+
+/** One press of Android's back, the WebView saying whether it has history behind it. */
+function pressBack(canGoBack = false): void {
+  if (!android.press) {
+    throw new Error("no back handler was registered");
+  }
+  android.press({ canGoBack });
+}
+
+describe("AppLayout › Android の戻る", () => {
+  beforeEach(async () => {
+    await setupApp();
+    // Read once, when the chrome mounts. The instance property shadows the prototype's getter
+    Object.defineProperty(navigator, "userAgent", { value: ANDROID_UA, configurable: true });
+    android.press = undefined;
+    android.exit.mockClear();
+  });
+  afterEach(() => {
+    teardownApp();
+    Reflect.deleteProperty(navigator, "userAgent");
+    vi.restoreAllMocks();
+  });
+
+  it("peels one layer per press, the topmost first, then leaves the app", async () => {
+    const historyBack = vi.spyOn(globalThis.history, "back").mockImplementation(nothing);
+    const headerBack = vi.fn<() => void>();
+    await renderApp("/notes");
+    await waitFor(() => expect(android.press).toBeDefined());
+    theShell().setHeaderBack(headerBack);
+    theShell().setPaper(true);
+    theShell().setQuickJot(true);
+    theShell().openSearch();
+    standRing();
+    await waitFor(() => expect(screen.getByRole("menu", { name: t().reach.ring })).toBeDefined());
+
+    pressBack();
+    await waitFor(() => expect(screen.queryByRole("menu", { name: t().reach.ring })).toBeNull());
+    expect(theShell().quickJot()).toBe(true);
+
+    pressBack();
+    expect(theShell().quickJot()).toBe(false);
+    expect(theShell().searchSeed()).not.toBeNull();
+
+    pressBack();
+    expect(theShell().searchSeed()).toBeNull();
+    expect(theShell().paper()).toBe(true);
+
+    // The palette and the search field never stand together; the palette sits under the field
+    theShell().openPalette();
+    pressBack();
+    expect(theShell().paletteOpen()).toBe(false);
+    expect(theShell().paper()).toBe(true);
+
+    pressBack();
+    expect(theShell().paper()).toBe(false);
+    expect(headerBack).not.toHaveBeenCalled();
+
+    pressBack();
+    expect(headerBack).toHaveBeenCalledTimes(1);
+
+    theShell().setHeaderBack(null);
+    pressBack(true);
+    expect(historyBack).toHaveBeenCalledTimes(1);
+    expect(android.exit).not.toHaveBeenCalled();
+
+    pressBack(false);
+    expect(android.exit).toHaveBeenCalledExactlyOnceWith(0);
   });
 });
