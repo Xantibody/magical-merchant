@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach, onTestFinished } from "vitest";
 import { page } from "vitest/browser";
 import { render, screen, fireEvent, cleanup, waitFor } from "@solidjs/testing-library";
 import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
@@ -25,6 +25,21 @@ interface SavedTemplate {
 
 const saved: SavedTemplate[] = [];
 const deleted: string[] = [];
+/** Set to make `delete_template` refuse the way core does, with `{ kind, message }`. */
+let deleteRefusal: Error | undefined;
+/** Every `delete_template` that was refused, by filename. */
+const refusedDeletes: string[] = [];
+/** Rejections no one caught, while a test listens for them. */
+const uncaught: unknown[] = [];
+
+/**
+ * The event is the proof that no one caught the rejection. preventDefault keeps it from
+ * reaching the runner as an error of its own.
+ */
+function holdUncaught(event: PromiseRejectionEvent): void {
+  event.preventDefault();
+  uncaught.push(event.reason);
+}
 /** Drafts as core keeps them, by filename. Seed one to open a template that has a draft. */
 const drafts = new Map<string, { body: string; tags: string[] }>();
 const discardedDrafts: string[] = [];
@@ -47,6 +62,10 @@ function mockCommands(): void {
       return;
     }
     if (cmd === "delete_template") {
+      if (deleteRefusal) {
+        refusedDeletes.push(filename);
+        throw deleteRefusal;
+      }
       deleted.push(filename);
       drafts.delete(filename);
       return;
@@ -166,6 +185,9 @@ describe("Templates", () => {
   beforeEach(() => {
     saved.length = 0;
     deleted.length = 0;
+    deleteRefusal = undefined;
+    refusedDeletes.length = 0;
+    uncaught.length = 0;
     drafts.clear();
     discardedDrafts.length = 0;
     renamed.length = 0;
@@ -563,6 +585,25 @@ describe("Templates", () => {
     await waitFor(() => expect(screen.getByText("daily")).toBeDefined());
     await vi.advanceTimersByTimeAsync(5000);
     expect(deleted).toHaveLength(0);
+  });
+
+  // What a refused delete does today: nothing catches the rejection, so the row stays hidden
+  // until the screen is left and no failure is reported. 48 turns this expectation over
+  it("keeps the row hidden when the delete is refused", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    deleteRefusal = Object.assign(new Error("template not found"), { kind: "missing" });
+    globalThis.addEventListener("unhandledrejection", holdUncaught);
+    onTestFinished(() => globalThis.removeEventListener("unhandledrejection", holdUncaught));
+    await openDaily();
+
+    openMenu();
+    fireEvent.click(screen.getByText("削除"));
+    await waitFor(() => expect(screen.getByText("テンプレートを削除しました")).toBeDefined());
+    await vi.advanceTimersByTimeAsync(5000);
+
+    await waitFor(() => expect(uncaught).toStrictEqual([deleteRefusal]));
+    expect(refusedDeletes).toStrictEqual(["daily.md"]);
+    expect(screen.queryByText("daily")).toBeNull();
   });
 
   it("closes the more menu on Escape", async () => {
