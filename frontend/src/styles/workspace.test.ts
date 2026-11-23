@@ -201,6 +201,20 @@ describe("note body: preview and editor draw the same page", () => {
     );
   });
 
+  // A URL broke at its first hyphen and left the rest of that line empty, since a soft break
+  // wins over breaking inside a word. A link runs to the end of the line instead
+  it.each([
+    ["preview", preview],
+    ["editor", editor],
+  ])("fills the line before breaking a long link (%s)", async (_name, surface) => {
+    await page.viewport(414, 896);
+    const url = `https://example.com/magical-${"m".repeat(80)}`;
+    const root = blockRoot(mountDetail(surface(`<p><a href="${url}">${url}</a></p>`)));
+    const [firstLine] = element("a", root).getClientRects();
+
+    expect(root.getBoundingClientRect().right - firstLine.right).toBeLessThan(24);
+  });
+
   // A tap on the viewer's page writes at that spot (R3), so it shows the I-beam that says so
   it("gives the viewer's page the I-beam of a place to write", async () => {
     await page.viewport(1280, 800);

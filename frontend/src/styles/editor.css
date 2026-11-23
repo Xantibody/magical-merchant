@@ -300,9 +300,12 @@
   pointer-events: none;
 }
 
+/* A long URL would break at its first hyphen or slash and leave the rest of the line empty.
+   A link may break between any two letters, so it runs to the end of the line first */
 .milkdown-editor a {
   color: var(--app-accent);
   text-decoration: underline;
+  word-break: break-all;
 }
 
 .milkdown-editor hr {

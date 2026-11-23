@@ -156,9 +156,11 @@
   pointer-events: none;
 }
 
+/* Breaks anywhere, as in editor.css (the reason is there too) */
 .markdown-preview a {
   color: var(--app-accent);
   text-decoration: underline;
+  word-break: break-all;
 }
 
 .markdown-preview hr {
