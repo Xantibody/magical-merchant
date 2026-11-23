@@ -3,8 +3,8 @@
 Where code goes and which way imports point. The
 [architecture overview](introduction.md) describes what the parts do; this
 page is the map to read before adding a file. It records the layout that was
-decided, not a snapshot of the tree: where a part of the tree still predates
-it, the rules here win and the code moves when it is next reworked.
+decided. `core/src` stands that way now; where another part of the tree still
+predates it, the rules here win and the code moves when it is next reworked.
 
 Other guides: [Feature tour](features.md) ·
 [Development](development.md) · [Install](install.md) ·
@@ -44,31 +44,44 @@ utils  <-  services  <-  domain  <-  backend, cli
   `keyring.rs` (the OS keyring), `os.rs` (the device probe and decoding what
   the OS answers).
 - **`utils/`** knows nothing about this app; a file could be carried to
-  another project as it is: `frontmatter.rs` (the generic `---` split,
-  parse and render), `clock/`, `diff.rs` (line diff), `text.rs` (snippets,
-  highlight spans, fast lowercase), `error.rs`.
+  another project as it is: `clock/` (every time the app prints, parses or
+  takes), `diff.rs` (line diff), `error.rs` (`CoreError`, `SyncError`,
+  `describe`), `frontmatter.rs` (the generic `---` split, parse and render),
+  `text.rs` (snippets, highlight spans, fast lowercase). Nothing else goes
+  here.
 - **`domain/`** is this app's rules and the operations that apply them. The
   app, the CLI, the MCP server and the widget all share it, which is what
   earns a domain layer here.
 
+The tree as it stands, each thing's rule files first and its operation files
+after:
+
 ```
 core/src/
-  lib.rs
+  lib.rs           the three layers, then the re-exported names (utils, then domain)
   domain/
     data.rs        where data/ is; each kind's directory hangs off it
-    note/          file, id, kind, title, row, revision + operations, history, conflicts
-    codex/         version + operations (draft, commit, compare)
-    scrawl/        entry (one line), day (the day file) + operations
-    templates/     file, variables, today + operations
-    glyphs/        image + operations
-    tags/          tag (the #tag rules), usage (counting over all records)
+    note/          file, id, kind, revision, row
+                   + create, open, list, edit, details, delete, history, conflicts, repair
+    codex/         version
+                   + draft, commit, compare, restore, promote
+    scrawl/        entry (one line), day (the day file)
+                   + capture (add a line), journal (read days back), delete, migrate (data/timeline/)
+    templates/     file, variables, today
+                   + folder, edit, draft, new_note
+    glyphs/        image
+                   + register, lookup
+    tags/          tag (the #tag rules)
+                   + usage (counting over all records)
     search.rs      the search field
     browse.rs      Browse
     backlinks.rs   records pointing here
-    device/        context, place, place_names, current_context: where and with what a record was written
-    sync/          run, diff, rounds, conflict copy, token, login, settings, scan, state
+    device/        context, place
+                   + place_names, current_context
+    sync/          diff, rounds, conflict_copy, token, result
+                   + run, login, settings, scan, state
   services/        files.rs  worker.rs  keyring.rs  os.rs
-  utils/           frontmatter.rs  clock/  diff.rs  text.rs  error.rs
+  utils/           clock/  diff.rs  error.rs  frontmatter.rs  text.rs
 ```
 
 Inside `domain/`:
@@ -82,6 +95,47 @@ Inside `domain/`:
   passed in, so a test never touches them; the file system is used for real
   over a temporary directory.
 
+Imports between things inside `domain/`:
+
+- A rule file imports only rule files, its own thing's or another's.
+- An operation file may import another thing's rule files, and another
+  thing's operations in one direction only. A Codex's operations open and
+  save its draft through `note/`; `note/` uses nothing of `codex/` but the
+  rule file `version.rs` (the list row's version mark, where a Codex keeps
+  its versions).
+- No cycle between files. Two things may still lean on each other, as
+  `note/` and `codex/` do, while every file-level edge points one way.
+- `browse.rs` and `backlinks.rs` walk the Scrawl days and title their rows
+  through `search.rs`; `search.rs` imports neither. The `#tag` rules are
+  the rule file `tags/tag.rs`, which the note list row uses; the counting in
+  `tags/usage.rs` scans every note, which is why `tags/` is a directory
+  rather than one file.
+- `device/` is where and with what a record was written. Its rule files are
+  `context.rs` (the device block a record keeps, split into the day file's
+  head and each line's tail, and the entry point that wrote it) and
+  `place.rs` (how coarsely coordinates count as one place, and the
+  per-language lookup of a cached name). Its operations are
+  `place_names.rs` (`places.json`, kept beside `data/` so it never syncs)
+  and `current_context.rs` (asking the OS, behind the `device-probe`
+  feature).
+- `sync/` is one sync with the Worker. Its rule files are `diff.rs` (what to
+  upload, download, delete or keep as a conflict, and the records it
+  compares: `LocalFile`, `RemoteFile`, `SyncState`), `rounds.rs` (how many of
+  those fit one bulk), `conflict_copy.rs` (a conflict copy's name),
+  `token.rs` (a login's expiry and when to renew it) and `result.rs` (what
+  one sync reports, `SyncResult` and `SyncIssue`). Its operations are
+  `run.rs` (one sync: the lock, the rounds, the bulk and applying the reply;
+  kept as one file), `scan.rs` (walking `data/` with its hash cache),
+  `state.rs` (`SyncState` to and from `.sync-state.json`), `settings.rs` (`sync-config.json`) and `login.rs` (storing,
+  reading and renewing the login). Only the parts that speak HTTP sit behind
+  the `sync-client` feature; `diff`, `scan`, `state`, `conflict_copy` and
+  `result` build without it, for the widget and the MCP-only CLI.
+- `note/` and `sync/` lean on each other at the file level in one direction
+  each: `note/conflicts.rs` names copies with the rule file
+  `sync/conflict_copy.rs`, and `sync/run.rs` calls the note repair and
+  relocation operations before it scans. The naming rule stays in `sync/`
+  because day files, templates and Codex versions get conflict copies too.
+
 Names:
 
 - A first-level name is the same thing in every layer; the layer directory
@@ -93,9 +147,20 @@ Names:
 - `lib.rs` re-exports keep their public names. Callers in `backend/` and
   `cli/` import the real path; there are no compatibility aliases.
 
-One exception: `utils/clock/zone.rs` asks the OS for the time zone. It stays
-in `clock`, with a one-line anchor saying why: threading a zone through every
-"now" would cost more than it gains.
+Two exceptions, each with a one-line anchor at the top of its file:
+
+- `utils/error.rs` names this app's errors (`CoreError::Stale`, `NotCodex`).
+  Services and domain both return them, and services may not import domain,
+  so the types sit below both.
+- `utils/clock/zone.rs` asks the OS for the time zone. It stays in `clock`:
+  threading a zone through every "now" would cost more than it gains.
+
+Two tests hold the tree to this page. `core/tests/layers.rs` reads the
+sources and fails on an import against the direction above, on code in an
+entry file and on a rule file that names a service; its list of allowed
+exceptions is empty, and a test keeps it so. It also pins `utils/` to its
+five modules. `core/tests/public_api.rs` touches every name `lib.rs`
+re-exports, so a name dropped in a move fails even when no caller uses it.
 
 ## `backend/src`
 

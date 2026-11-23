@@ -13,7 +13,7 @@ type TextHandler = NonNullable<NonNullable<StringifyOptions["handlers"]>["text"]
  * A note link is not Markdown, so the editor holds it as plain text, and the serializer
  * escapes plain text: `[[20260920_120000]]` came out as `\[\[20260920\_120000]]`. It reads
  * back the same, but the file no longer says `[[ID`, which is what the backlink search
- * (`core/src/search.rs`) and every other Markdown tool look for. The link is written raw;
+ * (`core/src/domain/backlinks.rs`) and every other Markdown tool look for. The link is written raw;
  * only the alias after `|` goes through the escaping, because that part is free text.
  */
 export function noteLinkText(

@@ -35,7 +35,7 @@ path turned back into the note's ID) and overwrites (snapshot, revision
 check, core `update_note`) — used by `new` / `import` / `edit` and the MCP
 `create_note` / `update_note` tools; never write a note from the CLI or MCP
 any other way. Each caller names its own `Source`, and the `Context` it
-records comes from core's `utils::device::probe` — the same probe the app
+records comes from core's `domain::device::probe` — the same probe the app
 runs, so the terminal and the app say the same things about the machine.
 Only the coordinate is missing there; see `notes.rs::context`. `import`
 additionally carries the creation time (core `create_note_at`): a note's
@@ -52,7 +52,7 @@ no revision. Entry editing by index is deliberately absent — an index
 shifts under a concurrent append.
 
 `sync.rs` is the `sync` subcommand: resolve `sync-config.json` + the stored
-JWT, then core's `engine::run_with_progress`. It only ever **reads** the
+JWT, then core's `domain::sync::run::run_with_progress`. It only ever **reads** the
 config and the token — setting the server up and logging in stay in the app,
 so there is one place either can be changed. The `kind`s it produces
 (`notConfigured` / `notAuthenticated`) match the app's `do_sync`; keep them
@@ -87,28 +87,33 @@ Write tools (`create_note`, `create_codex`, `promote_to_codex`, `update_note`,
 `--allow-write` and are removed from the router otherwise — never
 listed-but-refused (`WRITE_TOOLS` in `server.rs`; extend it when adding
 one). Every note overwrite goes through `snapshot_note` first
-(`core/src/note/history.rs`, `<base>/history/<stem>/<id>.md`, outside the
+(`core/src/domain/note/history.rs`, `<base>/history/<stem>/<id>.md`, outside the
 synced `data/`), and writes always use core's note functions so the
 frontmatter stays compliant. No delete tool; do not add one without
 discussion. Packaged as `nix run .#cli` (`nix/cli.nix`); `.#mcp` wraps it.
 
-Notes come in two kinds (`core/src/note/kind.rs`, `NoteKind`), decided by
+Notes come in two kinds (`core/src/domain/note/kind.rs`, `NoteKind`), decided by
 directory alone: `data/notes/` is a Note, `data/codex/` is a Codex. The
-repository (`note/repository.rs`) lists both, `Notes::locate` finds an ID in
-either (Codex first), and `promote_note_to_codex` is a bare `rename`. Do not
+list (`domain/note/list.rs`) reads both, `locate_note` (`domain/note/open.rs`)
+finds an ID in either (Codex first), and `promote_note_to_codex`
+(`domain/codex/promote.rs`) is a bare `rename`. Each operation of `domain/note/` is one file named after what a person
+does (`create`, `open`, `list`, `edit`, `details`, `delete`), and the save's
+decisions live in `file.rs` as plain functions (`rewrite`, `edit_record`). Do not
 encode the kind in frontmatter — a build that does not know the key drops it
 on save. `relocate_duplicate_ids` handles the one way an ID can end up in
 both directories (promotion on one device, offline edit on another).
 `create_draft_codex` is a separate entry point so the CLI/MCP/template callers
 of `create_draft_note` stay untouched.
 
-Codex versions (`core/src/note/version.rs`) are not `history.rs`: history is
+Codex versions (`core/src/domain/codex/`: the rules in `version.rs`, the
+operations in `draft.rs`, `commit.rs`, `compare.rs` and `restore.rs`) are not
+`history.rs`: history is
 a machine-taken, local-only safety copy before an MCP/CLI overwrite; a version
 is committed by a person, lives at `data/codex/<stem>/<YYYYMMDD_HHMMSS-<8 hex
 of the body's SHA-256>>.md` with `time`/`message` frontmatter and the body
 only, and syncs as part of the document. Nothing commits automatically.
 `commit_note_version` / `list_note_versions` / `read_note_version` /
-`diff_note_versions` (unified diff via `similar`, Myers) /
+`diff_note_versions` (unified diff via `utils/diff.rs`: `similar`, Myers) /
 `restore_note_version` (revision-guarded, commits a `before restore` version
 first) / `note_version_status` (count, dirty, `bytes_delta`) /
 `delete_note_version` (only for the app's undo toast right after a commit)
@@ -119,10 +124,16 @@ versions and never makes them: list, read, diff and status are exposed, and
 `commit_note_version` / `restore_note_version` / `delete_note_version` are not,
 `--allow-write` included, because committing is a person's decision.
 
-Glyphs (`core/src/glyph.rs`): user images under `data/glyphs/<name>.<png|svg>`
-that `:name:` renders inline. `GlyphName` (`utils/validated.rs`) fixes the
+Glyphs (`core/src/domain/glyphs/`: rules in `image.rs`, operations in
+`register.rs` and `lookup.rs`): user images under `data/glyphs/<name>.<png|svg>`
+that `:name:` renders inline. `GlyphName` (`image.rs`) fixes the
 charset — the same regex lives in `lib/glyphs.ts`; fix both. Only registered
 names resolve, so the tokenizer never touches `12:30:45`.
+
+Scrawl (`core/src/domain/scrawl/`: rules in `entry.rs` (one line) and `day.rs`
+(the day file, its name, `expect_same_entry`), operations in `capture.rs`,
+`delete.rs`, `journal.rs` and `migrate.rs`). Search and the tag count read
+days through `journal::{list_scrawl_dates, read_raw}`.
 
 ## Verification
 

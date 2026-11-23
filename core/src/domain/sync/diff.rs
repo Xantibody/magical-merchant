@@ -1,0 +1,475 @@
+use std::collections::{HashMap, HashSet};
+
+use serde::{Deserialize, Serialize};
+
+use crate::utils::clock::UtcStamp;
+
+/// A file under `data/` as the scan found it (`scan.rs` walks the tree).
+#[derive(Debug, Clone)]
+pub struct LocalFile {
+    pub key: String,
+    pub last_modified: UtcStamp,
+    pub content_hash: String,
+}
+
+/// What the last sync left behind, the base both sides are compared against.
+/// `state.rs` keeps it in `.sync-state.json`.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct SyncState {
+    pub files: HashMap<String, FileSyncRecord>,
+    pub last_sync: Option<UtcStamp>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileSyncRecord {
+    pub last_synced_modified: UtcStamp,
+    pub content_hash: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct RemoteFile {
+    pub key: String,
+    pub last_modified: UtcStamp,
+    pub content_hash: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SyncAction {
+    UploadNew { key: String },
+    UploadModified { key: String },
+    DownloadNew { key: String },
+    DownloadModified { key: String },
+    DeleteRemote { key: String },
+    DeleteLocal { key: String },
+    Conflict { key: String },
+}
+
+impl SyncAction {
+    /// Every action is about one file, and the key is its name.
+    #[must_use]
+    pub fn key(&self) -> &str {
+        match self {
+            Self::UploadNew { key }
+            | Self::UploadModified { key }
+            | Self::DownloadNew { key }
+            | Self::DownloadModified { key }
+            | Self::DeleteRemote { key }
+            | Self::DeleteLocal { key }
+            | Self::Conflict { key } => key,
+        }
+    }
+}
+
+#[must_use]
+pub fn compute(
+    local_files: &[LocalFile],
+    remote_files: &[RemoteFile],
+    state: &SyncState,
+) -> Vec<SyncAction> {
+    let mut actions = Vec::new();
+
+    let local_keys: HashSet<&str> = local_files.iter().map(|f| f.key.as_str()).collect();
+    let remote_keys: HashSet<&str> = remote_files.iter().map(|f| f.key.as_str()).collect();
+
+    let local_map: HashMap<&str, &LocalFile> =
+        local_files.iter().map(|f| (f.key.as_str(), f)).collect();
+    let remote_map: HashMap<&str, &RemoteFile> =
+        remote_files.iter().map(|f| (f.key.as_str(), f)).collect();
+
+    let all_keys: HashSet<&str> = local_keys.union(&remote_keys).copied().collect();
+
+    // Keys that were previously synced but are now missing from both
+    // (handled implicitly - if not in local or remote, nothing to do)
+
+    for key in &all_keys {
+        let in_local = local_map.get(key);
+        let in_remote = remote_map.get(key);
+        let in_state = state.files.get(*key);
+
+        match (in_local, in_remote, in_state) {
+            // Both exist, previously synced
+            (Some(local), Some(remote), Some(record)) => {
+                let local_changed = local.content_hash != record.content_hash;
+                let remote_changed = remote.last_modified != record.last_synced_modified;
+
+                match (local_changed, remote_changed) {
+                    // Both moved, but to the same content: nothing to transfer, and
+                    // `save_local_state` adopts the server's record. Same rule as the
+                    // no-state arm below
+                    (true, true) if local.content_hash == remote.content_hash => {}
+                    (true, true) => actions.push(SyncAction::Conflict {
+                        key: key.to_string(),
+                    }),
+                    (true, false) => actions.push(SyncAction::UploadModified {
+                        key: key.to_string(),
+                    }),
+                    (false, true) => actions.push(SyncAction::DownloadModified {
+                        key: key.to_string(),
+                    }),
+                    (false, false) => {} // No change
+                }
+            }
+
+            // Both exist, never synced (first sync with data on both sides)
+            // Same content means nothing to transfer. Making this a conflict would let the
+            // recovery procedure (delete `.sync-state.json` and resync) split even
+            // matching files into conflict copies. `save_local_state` records the state
+            // again from the new_state the server returns
+            (Some(local), Some(remote), None) => {
+                if local.content_hash != remote.content_hash {
+                    actions.push(SyncAction::Conflict {
+                        key: key.to_string(),
+                    });
+                }
+            }
+
+            // Local only, never synced → upload
+            (Some(_), None, None) => {
+                actions.push(SyncAction::UploadNew {
+                    key: key.to_string(),
+                });
+            }
+
+            // Remote only, never synced → download
+            (None, Some(_), None) => {
+                actions.push(SyncAction::DownloadNew {
+                    key: key.to_string(),
+                });
+            }
+
+            // Local exists, remote gone, was synced → remote deleted it
+            // An unsynced local change, though, wins over the delete and revives the file
+            (Some(local), None, Some(record)) => {
+                if local.content_hash == record.content_hash {
+                    actions.push(SyncAction::DeleteLocal {
+                        key: key.to_string(),
+                    });
+                } else {
+                    actions.push(SyncAction::UploadModified {
+                        key: key.to_string(),
+                    });
+                }
+            }
+
+            // Remote exists, local gone, was synced → local deleted it
+            // An unfetched remote change, though, wins over the delete and revives the file
+            (None, Some(remote), Some(record)) => {
+                if remote.last_modified == record.last_synced_modified {
+                    actions.push(SyncAction::DeleteRemote {
+                        key: key.to_string(),
+                    });
+                } else {
+                    actions.push(SyncAction::DownloadModified {
+                        key: key.to_string(),
+                    });
+                }
+            }
+
+            // Neither exists (shouldn't happen since we iterate all_keys)
+            (None, None, _) => {}
+        }
+    }
+
+    // Sort for deterministic output
+    actions.sort_by(|a, b| a.key().cmp(b.key()));
+    actions
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn local(key: &str, hash: &str) -> LocalFile {
+        LocalFile {
+            key: key.to_string(),
+            last_modified: UtcStamp::new(2026, 4, 22, 12, 0, 0).unwrap(),
+            content_hash: hash.to_string(),
+        }
+    }
+
+    fn remote(key: &str, modified: &str) -> RemoteFile {
+        remote_hashed(key, modified, "remote_hash")
+    }
+
+    fn remote_hashed(key: &str, modified: &str, hash: &str) -> RemoteFile {
+        RemoteFile {
+            key: key.to_string(),
+            last_modified: modified.parse().unwrap(),
+            content_hash: hash.to_string(),
+        }
+    }
+
+    fn record(hash: &str, modified: &str) -> FileSyncRecord {
+        FileSyncRecord {
+            last_synced_modified: modified.parse().unwrap(),
+            content_hash: hash.to_string(),
+        }
+    }
+
+    #[test]
+    fn empty_local_and_remote() {
+        let actions = compute(&[], &[], &SyncState::default());
+        assert!(actions.is_empty());
+    }
+
+    /// The first sync after `data/timeline/` moved to `data/scrawl/`
+    /// (`domain/scrawl/migrate.rs`). Local has only the new keys; remote and state have only
+    /// the old ones. Sending one side and deleting the other completes the move. If this
+    /// turned into a conflict or a re-download, the migration would keep the same day twice.
+    #[test]
+    fn a_renamed_directory_uploads_the_new_keys_and_deletes_the_old_ones() {
+        let local_files = vec![local("scrawl/2026-03-20.md", "hash_day")];
+        let remote_files = vec![remote("timeline/2026-03-20.md", "2026-04-22T10:00:00Z")];
+        let mut state = SyncState::default();
+        state.files.insert(
+            "timeline/2026-03-20.md".into(),
+            record("remote_hash", "2026-04-22T10:00:00Z"),
+        );
+
+        let actions = compute(&local_files, &remote_files, &state);
+
+        assert_eq!(
+            actions,
+            vec![
+                SyncAction::UploadNew {
+                    key: "scrawl/2026-03-20.md".into()
+                },
+                SyncAction::DeleteRemote {
+                    key: "timeline/2026-03-20.md".into()
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn local_only_no_state_uploads() {
+        let local_files = vec![local("notes/a.md", "hash_a")];
+        let actions = compute(&local_files, &[], &SyncState::default());
+        assert_eq!(
+            actions,
+            vec![SyncAction::UploadNew {
+                key: "notes/a.md".into()
+            }]
+        );
+    }
+
+    #[test]
+    fn remote_only_no_state_downloads() {
+        let remote_files = vec![remote("notes/b.md", "2026-04-22T10:00:00Z")];
+        let actions = compute(&[], &remote_files, &SyncState::default());
+        assert_eq!(
+            actions,
+            vec![SyncAction::DownloadNew {
+                key: "notes/b.md".into()
+            }]
+        );
+    }
+
+    #[test]
+    fn both_exist_no_state_different_hash_conflicts() {
+        let local_files = vec![local("notes/c.md", "local_hash")];
+        let remote_files = vec![remote_hashed(
+            "notes/c.md",
+            "2026-04-22T10:00:00Z",
+            "remote_hash",
+        )];
+        let actions = compute(&local_files, &remote_files, &SyncState::default());
+        assert_eq!(
+            actions,
+            vec![SyncAction::Conflict {
+                key: "notes/c.md".into()
+            }]
+        );
+    }
+
+    /// In the recovery procedure (delete `.sync-state.json` and resync), treating files with
+    /// matching content as conflicts creates a `.sync-conflict-*.md` per note on both sides
+    #[test]
+    fn both_exist_no_state_same_hash_needs_no_transfer() {
+        let local_files = vec![local("notes/c.md", "same_hash")];
+        let remote_files = vec![remote_hashed(
+            "notes/c.md",
+            "2026-04-22T10:00:00Z",
+            "same_hash",
+        )];
+        let actions = compute(&local_files, &remote_files, &SyncState::default());
+        assert!(actions.is_empty());
+    }
+
+    #[test]
+    fn both_unchanged_no_action() {
+        let local_files = vec![local("notes/d.md", "hash_d")];
+        let remote_files = vec![remote("notes/d.md", "2026-04-22T10:00:00Z")];
+        let mut state = SyncState::default();
+        state.files.insert(
+            "notes/d.md".to_string(),
+            record("hash_d", "2026-04-22T10:00:00Z"),
+        );
+        let actions = compute(&local_files, &remote_files, &state);
+        assert!(actions.is_empty());
+    }
+
+    #[test]
+    fn local_modified_uploads() {
+        let local_files = vec![local("notes/e.md", "new_hash")];
+        let remote_files = vec![remote("notes/e.md", "2026-04-22T10:00:00Z")];
+        let mut state = SyncState::default();
+        state.files.insert(
+            "notes/e.md".to_string(),
+            record("old_hash", "2026-04-22T10:00:00Z"),
+        );
+        let actions = compute(&local_files, &remote_files, &state);
+        assert_eq!(
+            actions,
+            vec![SyncAction::UploadModified {
+                key: "notes/e.md".into()
+            }]
+        );
+    }
+
+    #[test]
+    fn remote_modified_downloads() {
+        let local_files = vec![local("notes/f.md", "hash_f")];
+        let remote_files = vec![remote("notes/f.md", "2026-04-22T14:00:00Z")];
+        let mut state = SyncState::default();
+        state.files.insert(
+            "notes/f.md".to_string(),
+            record("hash_f", "2026-04-22T10:00:00Z"),
+        );
+        let actions = compute(&local_files, &remote_files, &state);
+        assert_eq!(
+            actions,
+            vec![SyncAction::DownloadModified {
+                key: "notes/f.md".into()
+            }]
+        );
+    }
+
+    #[test]
+    fn both_modified_conflict() {
+        let local_files = vec![local("notes/g.md", "new_hash")];
+        let remote_files = vec![remote("notes/g.md", "2026-04-22T14:00:00Z")];
+        let mut state = SyncState::default();
+        state.files.insert(
+            "notes/g.md".to_string(),
+            record("old_hash", "2026-04-22T10:00:00Z"),
+        );
+        let actions = compute(&local_files, &remote_files, &state);
+        assert_eq!(
+            actions,
+            vec![SyncAction::Conflict {
+                key: "notes/g.md".into()
+            }]
+        );
+    }
+
+    /// The round that sent this content reached the Worker, but its reply never came
+    /// back (a dropped connection, the app killed on leave), so the state still holds
+    /// the old record. Both sides now differ from it, yet they agree with each other:
+    /// a conflict copy here would be an identical duplicate on every device
+    #[test]
+    fn both_modified_to_the_same_content_needs_no_transfer() {
+        let local_files = vec![local("notes/g.md", "same_hash")];
+        let remote_files = vec![remote_hashed(
+            "notes/g.md",
+            "2026-04-22T14:00:00Z",
+            "same_hash",
+        )];
+        let mut state = SyncState::default();
+        state.files.insert(
+            "notes/g.md".to_string(),
+            record("old_hash", "2026-04-22T10:00:00Z"),
+        );
+        let actions = compute(&local_files, &remote_files, &state);
+        assert!(actions.is_empty());
+    }
+
+    #[test]
+    fn local_deleted_deletes_remote() {
+        let remote_files = vec![remote("notes/h.md", "2026-04-22T10:00:00Z")];
+        let mut state = SyncState::default();
+        state.files.insert(
+            "notes/h.md".to_string(),
+            record("hash_h", "2026-04-22T10:00:00Z"),
+        );
+        let actions = compute(&[], &remote_files, &state);
+        assert_eq!(
+            actions,
+            vec![SyncAction::DeleteRemote {
+                key: "notes/h.md".into()
+            }]
+        );
+    }
+
+    #[test]
+    fn remote_deleted_deletes_local() {
+        let local_files = vec![local("notes/i.md", "hash_i")];
+        let mut state = SyncState::default();
+        state.files.insert(
+            "notes/i.md".to_string(),
+            record("hash_i", "2026-04-22T10:00:00Z"),
+        );
+        let actions = compute(&local_files, &[], &state);
+        assert_eq!(
+            actions,
+            vec![SyncAction::DeleteLocal {
+                key: "notes/i.md".into()
+            }]
+        );
+    }
+
+    #[test]
+    fn remote_deleted_but_local_modified_uploads_instead_of_deleting() {
+        // Deleted on remote, but local has an unsynced change: the change wins and revives it
+        let local_files = vec![local("notes/j.md", "new_hash")];
+        let mut state = SyncState::default();
+        state.files.insert(
+            "notes/j.md".to_string(),
+            record("old_hash", "2026-04-22T10:00:00Z"),
+        );
+        let actions = compute(&local_files, &[], &state);
+        assert_eq!(
+            actions,
+            vec![SyncAction::UploadModified {
+                key: "notes/j.md".into()
+            }]
+        );
+    }
+
+    #[test]
+    fn local_deleted_but_remote_modified_downloads_instead_of_deleting() {
+        // Deleted locally, but remote has an unfetched change: the change wins and revives it
+        let remote_files = vec![remote("notes/k.md", "2026-04-22T14:00:00Z")];
+        let mut state = SyncState::default();
+        state.files.insert(
+            "notes/k.md".to_string(),
+            record("hash_k", "2026-04-22T10:00:00Z"),
+        );
+        let actions = compute(&[], &remote_files, &state);
+        assert_eq!(
+            actions,
+            vec![SyncAction::DownloadModified {
+                key: "notes/k.md".into()
+            }]
+        );
+    }
+
+    #[test]
+    fn multiple_actions_sorted_by_key() {
+        let local_files = vec![local("notes/z.md", "hash_z"), local("notes/a.md", "hash_a")];
+        let actions = compute(&local_files, &[], &SyncState::default());
+        assert_eq!(actions.len(), 2);
+        assert_eq!(
+            actions[0],
+            SyncAction::UploadNew {
+                key: "notes/a.md".into()
+            }
+        );
+        assert_eq!(
+            actions[1],
+            SyncAction::UploadNew {
+                key: "notes/z.md".into()
+            }
+        );
+    }
+}

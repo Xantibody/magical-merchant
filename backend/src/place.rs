@@ -7,8 +7,7 @@
 //! No place-name data of our own ships with the app. A dictionary of a few MB would only be
 //! a worse copy of what the OS already has, and an address is worded differently by country.
 
-use magical_merchant_core::utils::paths::place_cache_path;
-use magical_merchant_core::utils::place::{PlaceCache, cache_key, place_key};
+use magical_merchant_core::domain::device::{cache_key, place_key, place_names};
 use std::path::Path;
 
 /// Returns only the coordinates whose place name is known, each with its [`place_key`].
@@ -23,8 +22,7 @@ pub(crate) fn resolve(
     coordinates: &[(f64, f64)],
     locale: &str,
 ) -> Vec<(String, String)> {
-    let path = place_cache_path(base_dir);
-    let mut cache = PlaceCache::load(&path);
+    let mut cache = place_names::load(base_dir);
     let mut resolved = Vec::new();
     let mut asked = false;
 
@@ -53,7 +51,7 @@ pub(crate) fn resolve(
     if asked {
         // The names that were resolved are returned even if the write fails. The cost is
         // only asking again the next time it is opened.
-        let _ = cache.save(&path);
+        let _ = place_names::save(base_dir, &cache);
     }
     resolved
 }

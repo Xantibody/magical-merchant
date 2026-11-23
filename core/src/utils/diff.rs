@@ -1,0 +1,47 @@
+//! A line diff between two texts, in the unified format.
+
+use similar::{Algorithm, TextDiff};
+
+/// Histogram in 3.x is extremely slow on large input (seconds at 100,000 lines). Myers is
+/// fast enough at note sizes, and has a linear-time path even for two unrelated texts.
+#[must_use]
+pub fn unified_diff(old: &str, new: &str, old_name: &str, new_name: &str) -> String {
+    if old == new {
+        return String::new();
+    }
+    TextDiff::configure()
+        .algorithm(Algorithm::Myers)
+        .diff_lines(old, new)
+        .unified_diff()
+        .context_radius(3)
+        .header(old_name, new_name)
+        .to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn equal_texts_have_an_empty_diff_without_a_header() {
+        assert_eq!(unified_diff("a\nb\n", "a\nb\n", "old", "new"), "");
+    }
+
+    #[test]
+    fn the_header_carries_both_names() {
+        let diff = unified_diff("x\n", "y\n", "20260917_140300-0123abcd", "draft");
+
+        assert!(
+            diff.starts_with("--- 20260917_140300-0123abcd\n+++ draft\n"),
+            "{diff}"
+        );
+    }
+
+    #[test]
+    fn a_change_and_an_addition_make_one_hunk() {
+        assert_eq!(
+            unified_diff("a\nb\nc\n", "a\nB\nc\nd\n", "old", "new"),
+            "--- old\n+++ new\n@@ -1,3 +1,4 @@\n a\n-b\n+B\n c\n+d\n"
+        );
+    }
+}

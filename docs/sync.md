@@ -50,10 +50,10 @@ race repeats the attempt rather than starting a new round, up to three times:
 > compare-and-swap, and the client retries a losing race automatically.
 
 A bulk call carries at most **40 R2 operations** (`BULK_OPERATION_BUDGET` in
-[`core/src/sync/round.rs`](../core/src/sync/round.rs)); what does not fit is
+[`core/src/domain/sync/rounds.rs`](../core/src/domain/sync/rounds.rs)); what does not fit is
 left for the next round, and rounds repeat until one leaves nothing over, at
 most **200** of them (`MAX_ROUNDS` in
-[`core/src/sync/engine.rs`](../core/src/sync/engine.rs)). The budget counts
+[`core/src/domain/sync/run.rs`](../core/src/domain/sync/run.rs)). The budget counts
 operations, not files: an upload or a download costs one, a conflict three
 (read the remote copy, keep it aside, store the winner), any number of remote
 deletions costs one together, and a local deletion costs nothing.

@@ -145,7 +145,7 @@ const revisionOf = (body) => {
 const placeKey = (lat, lon) => `${lat.toFixed(2)},${lon.toFixed(2)}`;
 
 /**
- * 本流(core)の utils::tags::fold_tag と同じ規則: 同一性は ASCII の大小を見ない。
+ * 本流(core)の domain::tags::tag::fold_tag と同じ規則: 同一性は ASCII の大小を見ない。
  * 綴りは畳まずに持ち回るので、これを使うのは突き合わせのときだけ。
  * @param {string} tag
  */
@@ -166,7 +166,7 @@ const charCount = (text) => [...text].length;
 const entryText = (raw) => raw.replace(/^- \[\d\d:\d\d:\d\d\] /u, "").replace(/ \{.*\}$/u, "");
 
 /**
- * 絞り込みの無い一覧の抜粋。本流(core)の `search::head` と同じで、本文の
+ * 絞り込みの無い一覧の抜粋。本流(core)の `utils::text::head` と同じで、本文の
  * 先頭 40 字と、超えた分の省略記号だけ — 一致が無いので光らせる場所も無い。
  * @param {string} text
  */
@@ -181,7 +181,7 @@ const TAG = /(?<![\p{L}\p{N}_-])#(?<tag>[\p{L}\p{N}_-]+)/gu;
 
 /**
  * 大小を無視して重複を落とす。残るのは先に出たほうで、綴りは打たれたまま。
- * 本流(core)の `utils::tags::fold_unique` と同じ。
+ * 本流(core)の `domain::tags::tag::fold_unique` と同じ。
  * @param {Iterable<string>} tags
  */
 const foldUnique = (tags) => {
@@ -855,7 +855,7 @@ const unifiedDiff = (from, to, fromName, toName) => {
 
   // ---- コマンド実装 ----
 
-  // まだ使われていない名前と、その名前が名乗る時刻。core の `Notes::create`
+  // まだ使われていない名前と、その名前が名乗る時刻。core の `create_draft_note`
   // と同じく、同じ秒に 2 本作られたら空いている秒まで 1 秒ずつ進める。
   // ここで潰すと、「+ 新規」を続けて押したときだけモックが実物と違う挙動を見せる
   const freeNoteName = () => {
@@ -920,7 +920,7 @@ const unifiedDiff = (from, to, fromName, toName) => {
     /** @param {{ query: string, tags: string[], filter: { kind?: string | null, from?: string | null, to?: string | null } }} args */
     search_records: ({ query, tags, filter }) => {
       const needle = query.trim().toLowerCase();
-      // 本流(core)の utils::tags と同じ規則: `#` の有無と ASCII の大小は見ない
+      // 本流(core)の domain::tags::tag と同じ規則: `#` の有無と ASCII の大小は見ない
       const scope = tags
         .map((tag) => foldTag(tag.trim().replace(/^#/u, "")))
         .filter((tag) => tag.length > 0);

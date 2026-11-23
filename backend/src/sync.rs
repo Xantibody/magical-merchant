@@ -1,15 +1,16 @@
 //! The Tauri side of sync.
 //!
-//! The engine itself is in core (`magical_merchant_core::sync::engine`); what stays here is
+//! The engine itself is in core (`magical_merchant_core::domain::sync::run`); what stays here is
 //! only the commands, the in-progress state, the events, and building the HTTP client.
 
 use std::future::Future;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, PoisonError};
 
-use magical_merchant_core::sync::client::HttpClient;
-use magical_merchant_core::sync::config::SyncConfig;
-use magical_merchant_core::sync::{SyncError, SyncResult, engine, token};
+use magical_merchant_core::SyncError;
+use magical_merchant_core::domain::sync::settings::SyncConfig;
+use magical_merchant_core::domain::sync::{SyncResult, login, run, token};
+use magical_merchant_core::services::worker::HttpClient;
 use magical_merchant_core::utils::clock::UtcStamp;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, State};
@@ -45,12 +46,12 @@ impl Default for AppSyncState {
 /// The desktop build uses core's as it is. The CLI's `sync` builds from the same entry, so
 /// the TLS defaults do not drift apart between the app and the CLI
 #[cfg(not(target_os = "android"))]
-use magical_merchant_core::sync::client::desktop_http_client as http_client;
+use magical_merchant_core::services::worker::desktop_http_client as http_client;
 
 /// Only Android bypasses the device's verifier. The reason is in `android_tls::sync_tls_config`
 #[cfg(target_os = "android")]
 fn http_client() -> Result<reqwest::Client, SyncError> {
-    use magical_merchant_core::sync::client::describe;
+    use magical_merchant_core::describe;
 
     let tls = crate::android_tls::sync_tls_config()
         .map_err(|e| SyncError::other(format!("TLS setup failed: {e}")))?;
@@ -173,7 +174,7 @@ async fn do_sync(handle: &AppHandle) -> Result<SyncResult, SyncError> {
             "Sync is not set up. Add your Workers URL in Settings.",
         ));
     }
-    let token = token::get_token(&base_dir)
+    let token = login::get_token(&base_dir)
         .map_err(SyncError::other)?
         .ok_or_else(|| {
             SyncError::new("notAuthenticated", "Not logged in. Log in from Settings.")
@@ -188,8 +189,8 @@ async fn do_sync(handle: &AppHandle) -> Result<SyncResult, SyncError> {
     let client = HttpClient::new(http_client()?, &config.workers_url, &token);
     // Past half its lifetime the login is traded for a fresh one, so a device that syncs
     // never signs out. The CLI does the same at its entry
-    let client = match token::renew_if_due(&token, &client, |fresh| {
-        token::store_token(&base_dir, fresh)
+    let client = match login::renew_if_due(&token, &client, |fresh| {
+        login::store_token(&base_dir, fresh)
     })
     .await?
     {
@@ -197,7 +198,7 @@ async fn do_sync(handle: &AppHandle) -> Result<SyncResult, SyncError> {
         None => client,
     };
 
-    engine::run(&client, &base_dir).await
+    run::run(&client, &base_dir).await
 }
 
 #[cfg(test)]

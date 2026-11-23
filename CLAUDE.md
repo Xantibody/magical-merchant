@@ -192,7 +192,7 @@ ready to record the moment it opens (widgets exist for exactly this).
   `i18n.test.ts` fails on a translated name
 - A tree written before the rename carries `data/timeline/`. **Every entry that
   can write a day file migrates it first** (`migrate_scrawl_dir`, called from
-  the sync lock, app start, the widget's read and core `save_entry`) — after the
+  the sync lock, app start, the widget's read and core `save_scrawl_entry`) — after the
   scan it would be too late, and the sync would carry both spellings. A command
   that only reads never migrates, so a read-only MCP stays read-only
 - Keep the DOM small; never re-render whole documents via innerHTML

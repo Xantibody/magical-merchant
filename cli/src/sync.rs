@@ -1,17 +1,18 @@
 //! `magical-merchant sync`: syncs with Workers/R2 without opening the app.
 //!
-//! The syncing itself is one engine in core (`engine::run_with_progress`); what this
+//! The syncing itself is one engine in core (`run::run_with_progress`); what this
 //! does is resolve the config and the token, and turn progress into lines. Signing in
 //! is still the app's job: the CLI only reads the stored JWT (and renews it past half
 //! its lifetime, as the app does), and if it has expired it says to go back to the app.
 
 use std::path::Path;
 
-use magical_merchant_core::sync::client::{HttpClient, desktop_http_client};
-use magical_merchant_core::sync::config::SyncConfig;
-use magical_merchant_core::sync::engine::{self, RoundProgress};
-use magical_merchant_core::sync::token;
-use magical_merchant_core::sync::{SyncError, SyncResult};
+use magical_merchant_core::SyncError;
+use magical_merchant_core::domain::sync::SyncResult;
+use magical_merchant_core::domain::sync::run::{RoundProgress, run_with_progress};
+use magical_merchant_core::domain::sync::settings::SyncConfig;
+use magical_merchant_core::domain::sync::{login, token};
+use magical_merchant_core::services::worker::{HttpClient, desktop_http_client};
 
 #[derive(Debug)]
 pub(crate) struct Credentials {
@@ -90,7 +91,7 @@ fn summary(result: &SyncResult) -> String {
 pub(crate) async fn run(data_dir: &Path) -> anyhow::Result<()> {
     // The repair that runs before the scan is inside the engine, inside the sync lock.
     // Doing it here first would rewrite the tree while the app is syncing
-    let credentials = credentials(data_dir, token::get_token)?;
+    let credentials = credentials(data_dir, login::get_token)?;
     let client = HttpClient::new(
         desktop_http_client()?,
         &credentials.workers_url,
@@ -98,8 +99,8 @@ pub(crate) async fn run(data_dir: &Path) -> anyhow::Result<()> {
     );
     // Past half its lifetime the login is traded for a fresh one, as the app does at its
     // entry. The CLI shares the Keychain with the app, so the renewal reaches both
-    let client = match token::renew_if_due(&credentials.token, &client, |fresh| {
-        token::store_token(data_dir, fresh)
+    let client = match login::renew_if_due(&credentials.token, &client, |fresh| {
+        login::store_token(data_dir, fresh)
     })
     .await
     .map_err(|e| describe_failure(&e))?
@@ -108,7 +109,7 @@ pub(crate) async fn run(data_dir: &Path) -> anyhow::Result<()> {
         None => client,
     };
 
-    let result = engine::run_with_progress(&client, data_dir, |progress| {
+    let result = run_with_progress(&client, data_dir, |progress| {
         eprintln!("{}", round_line(&progress));
     })
     .await
@@ -157,7 +158,7 @@ mod tests {
 
     /// Nobody looks at the signature. `is_token_valid` reads only `exp`, so the three
     /// parts are built directly (the same trick as the tests in
-    /// `core/src/sync/token.rs`).
+    /// `core/src/domain/sync/token.rs`).
     fn jwt(exp: i64) -> String {
         let header = URL_SAFE_NO_PAD.encode(r#"{"alg":"HS256","typ":"JWT"}"#);
         let claims = URL_SAFE_NO_PAD.encode(format!(r#"{{"exp":{exp}}}"#));

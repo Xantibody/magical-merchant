@@ -21,7 +21,7 @@ description: Note/Scrawl storage invariants, sync protocol, widgets and deep lin
   are printed and parsed by `core::utils::clock` only, never by jiff's own
   printers, parsers or serde: their bytes are chrono's and must not drift
 - **`updated`** (optional frontmatter): when the body was last rewritten.
-  Stamped only by `Notes::update` — metadata edits and view toggles are not
+  Stamped only by `update_note` — metadata edits and view toggles are not
   rewrites. Absent until the first edit, like `view`
 - **`view`** (optional frontmatter): per-note display mode (`mindmap`,
   `preview`). A preference, not a record — omitted unless set so untouched
@@ -37,7 +37,7 @@ description: Note/Scrawl storage invariants, sync protocol, widgets and deep lin
   No writer watches the filesystem — this guard is the only protection
 - **Tags** come from the body's `#記法`. Identity is the ASCII-lowercased form
   (`#Rust` = `#rust`; Japanese is left alone) and code — fences and spans — is
-  not scanned. The same rule lives twice: `core/src/utils/tags.rs` and
+  not scanned. The same rule lives twice: `core/src/domain/tags/tag.rs` and
   `lib/tags.ts`; fix both
 - **Place names** (`places.json`, outside `data/`): derived geocoder cache,
   display-only. The recorded `location` stays the raw coordinate. Keyed by
@@ -61,7 +61,7 @@ local scan → diff → `POST /sync/bulk`, repeated until nothing is left over.
 
 - The client **never sends its own state** (would read undownloaded keys as
   deletions and erase notes everywhere)
-- **A bulk is capped at 40 R2 operations** (`core/src/sync/round.rs`), because
+- **A bulk is capped at 40 R2 operations** (`core/src/domain/sync/rounds.rs`), because
   Workers Free allows 50 subrequests per invocation and the Worker touches R2
   once per file (three times per conflict, once for all remote deletes). The
   engine loops rounds until nothing is deferred; the Worker refuses more than
@@ -70,14 +70,14 @@ local scan → diff → `POST /sync/bulk`, repeated until nothing is left over.
   look like a local edit, and the next round uploads it over the newer remote
   one. `kind: "stalled"` means a round sent nothing while work remained
 - Writes use `expected_etag` compare-and-swap; losing races retry
-- **One sync per data directory**: `engine::run` takes an exclusive lock on
-  `<base>/.sync.lock` at its entry (`core/src/sync/lock.rs`) and fails with
+- **One sync per data directory**: `run::run` takes an exclusive lock on
+  `<base>/.sync.lock` at its entry (`SyncLock` in `core/src/domain/sync/run.rs`) and fails with
   `kind: "busy"` if another process holds it. The app's `AtomicBool` only
   drives the "syncing" indicator; the file lock is the authority. Both the
   app and `magical-merchant sync` start syncs, so the loser really does get
   `busy` — the CLI says so and exits 1, the app stays quiet
 - **Repair runs under that lock**, never outside it: `repair_tree` in
-  `engine.rs` (the `data/timeline/` → `data/scrawl/` move, malformed notes,
+  `run.rs` (the `data/timeline/` → `data/scrawl/` move, malformed notes,
   legacy conflict copies, duplicate IDs) fires right after the lock is taken
   and before the first scan, and the duplicate-ID pass runs again before a
   successful sync returns. A caller cannot take the lock on the engine's
@@ -86,7 +86,7 @@ local scan → diff → `POST /sync/bulk`, repeated until nothing is left over.
 - **`data/timeline/` is the pre-rename name of `data/scrawl/`.**
   `migrate_scrawl_dir` moves it, and every entry that can write a day file
   calls it before reading: the sync lock, app start, the widget's read, core
-  `save_entry`. The remote sees the move as `UploadNew` on the new keys plus
+  `save_scrawl_entry`. The remote sees the move as `UploadNew` on the new keys plus
   `DeleteRemote` on the old ones, so one sync finishes it — but a device still
   on an older build then loses its `data/timeline/` to that delete and shows an
   empty Scrawl until it is updated. Same-named days are left in the old
@@ -94,10 +94,10 @@ local scan → diff → `POST /sync/bulk`, repeated until nothing is left over.
 - Conflicts keep the loser as `….sync-conflict-<ts>.md` in R2, and on disk
   as `conflicts/<key minus extension>/<ts>.md` — outside `data/`, same shape
   as `history/`, so it neither syncs back nor lands in the notes list.
-  The name is built and read back in `core/src/sync/conflict.rs` only.
+  The name is built and read back in `core/src/domain/sync/conflict_copy.rs` only.
   `<ts>` is precise to the second, so two copies of one key can want the same
   name: a relocation never overwrites, the second takes `<ts>-2.md`
-  (`rename_without_clobber` in `core/src/utils/fs.rs`)
+  (`rename_without_clobber` in `core/src/services/files.rs`)
 - Auto sync runs a few seconds after any successful write, and at once when the
   user leaves the app with something unsent (`sync.leave()`; the mark is
   `dirtiedAt > lastStartedAt`). A `syncNow` during a round is kept as one
@@ -113,9 +113,9 @@ local scan → diff → `POST /sync/bulk`, repeated until nothing is left over.
   itself (ADR 0011). Its "Sign in" goes to
   `settingsPage("sync")` (`/settings?page=sync`), which Settings reads at open
 - The login renews itself: past half its lifetime (`exp - iat`, read off the
-  token by `renewal_due`) the sync entry of the app and the CLI trades it at
-  `POST /auth/renew` and stores the fresh one (`renew_if_due` in
-  `core/src/sync/token.rs`). Unreachable server → keep the token in hand;
+  token by `renewal_due` in `core/src/domain/sync/token.rs`) the sync entry of
+  the app and the CLI trades it at `POST /auth/renew` and stores the fresh one
+  (`renew_if_due` in `core/src/domain/sync/login.rs`). Unreachable server → keep the token in hand;
   401 → `notAuthenticated`. `auth_time` is carried forward and the Worker
   refuses past `JWT_MAX_SESSION_SECONDS` (180 days). Only a device away for
   the whole lifetime (30 days in `wrangler.toml`) signs out

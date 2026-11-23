@@ -1,10 +1,5 @@
 pub mod clock;
-pub mod device;
+pub mod diff;
+pub mod error;
 pub mod frontmatter;
-pub mod fs;
-pub mod markdown;
-pub mod paths;
-pub mod place;
-pub mod tags;
 pub mod text;
-pub mod validated;

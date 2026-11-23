@@ -3,10 +3,9 @@ use std::path::{Path, PathBuf};
 
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as B64;
+use magical_merchant_core::domain::device::{PlaceCache, place_key, place_names};
 use magical_merchant_core::utils::clock::Day;
 use magical_merchant_core::utils::frontmatter;
-use magical_merchant_core::utils::paths::place_cache_path;
-use magical_merchant_core::utils::place::{PlaceCache, place_key};
 use magical_merchant_core::{
     DRAFT, GlyphFormat, GlyphName, NoteFilename, NoteKind, Provenance, Revision, Source,
     parse_scrawl_entry,
@@ -142,7 +141,7 @@ impl McpServer {
     }
 
     fn places(&self) -> PlaceCache {
-        PlaceCache::load(&place_cache_path(&self.data_dir))
+        place_names::load(&self.data_dir)
     }
 
     fn place_name(&self, cache: &PlaceCache, latitude: f64, longitude: f64) -> Option<String> {
@@ -368,7 +367,7 @@ impl McpServer {
             updated,
             // Merge by the same rule as the list. Showing only the frontmatter tags or only
             // the body tags makes one note claim different tags in the list and on its own.
-            tags: magical_merchant_core::utils::tags::merge(tags, &body),
+            tags: magical_merchant_core::domain::tags::tag::merge(tags, &body),
             origin,
             template,
             view,
@@ -454,7 +453,7 @@ impl McpServer {
         // are ignored
         let tag = param
             .tag
-            .map(|t| magical_merchant_core::utils::tags::normalize(&t));
+            .map(|t| magical_merchant_core::domain::tags::tag::normalize(&t));
         let cache = self.places();
 
         let mut entries = Vec::new();
@@ -473,7 +472,7 @@ impl McpServer {
                     !entry
                         .tags
                         .iter()
-                        .any(|own| magical_merchant_core::utils::tags::same_tag(own, t))
+                        .any(|own| magical_merchant_core::domain::tags::tag::same_tag(own, t))
                 }) {
                     continue;
                 }
@@ -867,10 +866,10 @@ pub(crate) fn exists_or_hint(data_dir: &Path) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use magical_merchant_core::domain::device::cache_key;
+    use magical_merchant_core::domain::device::{Context, Location};
+    use magical_merchant_core::domain::scrawl::entry::format_scrawl_line;
     use magical_merchant_core::utils::clock::WallClock;
-    use magical_merchant_core::utils::device::{Context, Location};
-    use magical_merchant_core::utils::markdown::format_scrawl_line;
-    use magical_merchant_core::utils::place::cache_key;
     use std::fs;
     use tempfile::TempDir;
 
@@ -913,7 +912,7 @@ mod tests {
             cache_key(locale, &place_key(35.6762, 139.6503)),
             "渋谷区".to_string(),
         );
-        cache.save(&place_cache_path(base)).unwrap();
+        place_names::save(base, &cache).unwrap();
     }
 
     fn server(base: &Path) -> McpServer {

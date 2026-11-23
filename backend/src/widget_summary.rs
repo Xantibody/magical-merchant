@@ -12,9 +12,9 @@
 use std::path::Path;
 
 use magical_merchant_core::VarLocale;
+use magical_merchant_core::domain::scrawl::entry::{scrawl_entry_time, strip_scrawl_prefix};
+use magical_merchant_core::domain::tags::tag;
 use magical_merchant_core::utils::clock::Day;
-use magical_merchant_core::utils::markdown::{scrawl_entry_time, strip_scrawl_prefix};
-use magical_merchant_core::utils::tags;
 use serde::Serialize;
 
 /// How many rows fit in the `4x2` Note widget.
@@ -127,11 +127,11 @@ fn top_tags(entries: &[String]) -> Vec<String> {
     let mut counts: Vec<(String, usize)> = Vec::new();
     for tag in entries
         .iter()
-        .flat_map(|entry| tags::parse(strip_scrawl_prefix(entry)))
+        .flat_map(|entry| tag::parse(strip_scrawl_prefix(entry)))
     {
         match counts
             .iter_mut()
-            .find(|(name, _)| tags::same_tag(name, &tag))
+            .find(|(name, _)| tag::same_tag(name, &tag))
         {
             Some((_, count)) => *count += 1,
             None => counts.push((tag, 1)),

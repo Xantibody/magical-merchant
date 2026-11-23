@@ -4,7 +4,7 @@
 //! schemars, and because the outward names and the internal names have to be free
 //! to change separately.
 
-use magical_merchant_core::utils::device::{Context, NetworkType};
+use magical_merchant_core::domain::device::{Context, NetworkType};
 use magical_merchant_core::{
     GlyphSummary, NoteSummary, ScrawlEntry, SearchHit, Snapshot, TemplateSummary, Version,
 };
@@ -212,7 +212,7 @@ impl ContextInfo {
         let location = ctx.location.as_ref().map(|l| LocationInfo {
             latitude: l.latitude,
             longitude: l.longitude,
-            place_key: magical_merchant_core::utils::place::place_key(l.latitude, l.longitude),
+            place_key: magical_merchant_core::domain::device::place_key(l.latitude, l.longitude),
             place,
         });
         // Do not emit `device: {}` for an entry that carries no device fields at
@@ -249,7 +249,7 @@ impl EntryInfo {
             index,
             time,
             datetime,
-            tags: magical_merchant_core::utils::tags::parse(&entry.text),
+            tags: magical_merchant_core::domain::tags::tag::parse(&entry.text),
             text: entry.text,
             source: entry.source,
             context: ContextInfo::from_context(&entry.context, place),

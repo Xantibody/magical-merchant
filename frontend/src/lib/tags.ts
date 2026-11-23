@@ -4,7 +4,7 @@
  * Managing tags in a separate pane stops the writing hand and turns it into filing work.
  * Written mixed into the body, a tag can be left behind with the momentum of writing.
  *
- * The same rules exist in `core/src/utils/tags.rs`. That side has to read the whole text
+ * The same rules exist in `core/src/domain/tags/tag.rs`. That side has to read the whole text
  * to build the note list (the list summary only holds the first 100 characters); this side
  * interprets the body as it is on screen. Fix one and fix the other.
  *
@@ -41,7 +41,7 @@ export interface TagSegment {
  *
  * A difference in case is the same tag to the writer, so only ASCII is folded to lower
  * case (Japanese has no case, and no locale-dependent conversion is brought in).
- * The same rule exists as `fold_tag` in `core/src/utils/tags.rs`.
+ * The same rule exists as `fold_tag` in `core/src/domain/tags/tag.rs`.
  */
 function foldTag(tag: string): string {
   return tag.replaceAll(/[A-Z]/gu, (c) => c.toLowerCase());

@@ -1,15 +1,16 @@
 //! Entry point for signing in. The config file and token storage live in core
-//! (`magical_merchant_core::sync::{config, token}`); what stays here is the in-app
+//! (`magical_merchant_core::domain::sync::{settings, login}`); what stays here is the in-app
 //! sign-in window and the Tauri commands called from it.
 
 #[cfg(not(target_os = "android"))]
 use std::path::Path;
 
-use magical_merchant_core::sync::SyncError;
-use magical_merchant_core::sync::config::{SyncConfig, normalize_workers_url};
+use magical_merchant_core::SyncError;
 #[cfg(not(target_os = "android"))]
-use magical_merchant_core::sync::token::store_token;
-use magical_merchant_core::sync::token::{clear_token, get_token, is_token_valid};
+use magical_merchant_core::domain::sync::login::store_token;
+use magical_merchant_core::domain::sync::login::{clear_token, get_token};
+use magical_merchant_core::domain::sync::settings::{SyncConfig, normalize_workers_url};
+use magical_merchant_core::domain::sync::token::is_token_valid;
 use tauri::AppHandle;
 // Only the desktop build looks up or creates a sign-in window. Android hands the URL
 // to the default browser, so nothing there uses this trait
@@ -242,7 +243,7 @@ mod tests {
 
     const CALLBACK_PATH: &str = "/callback/11111111-2222-3333-4444-555555555555";
 
-    /// Nobody looks at the signature (same reason as `sync::token::is_token_valid`), so
+    /// Nobody looks at the signature (same reason as `domain::sync::token::is_token_valid`), so
     /// the three parts are built directly
     fn jwt(expires_in: i64) -> String {
         let header = URL_SAFE_NO_PAD.encode(r#"{"alg":"HS256","typ":"JWT"}"#);
