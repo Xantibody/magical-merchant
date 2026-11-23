@@ -225,9 +225,10 @@ const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
   },
   // The tag suggestions read core's count as it comes
   count_tags: () => usedTags,
+  // The new note's ID, the bare filename, as core returns it
   create_draft: () => {
     disk.set(FILE_B, "");
-    return `/data/notes/${FILE_B}`;
+    return FILE_B;
   },
   update_draft: async ({ filename, body, revision }) => {
     duringSave?.();
