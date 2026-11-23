@@ -5,6 +5,9 @@
   /* Japanese body text reads best at about 1.7 (Open Props steps from 1.5 to 1.75) */
   line-height: 1.7;
   color: var(--app-text);
+  /* The editor gets this from the browser, which sets it on anything contenteditable. Without
+     it here a long URL runs past the page, and wraps at another point than in the editor */
+  overflow-wrap: break-word;
 }
 
 .markdown-preview > * + * {
@@ -103,7 +106,9 @@
   color: var(--app-text-muted);
 }
 
+/* The column may shrink below the longest word, as in editor.css (the reason is there too) */
 .markdown-preview blockquote {
+  grid-template-columns: minmax(0, 1fr);
   border-left: 3px solid var(--app-border);
   padding-left: var(--size-3);
   color: var(--app-text-muted);
@@ -151,9 +156,11 @@
   pointer-events: none;
 }
 
+/* Breaks anywhere, as in editor.css (the reason is there too) */
 .markdown-preview a {
   color: var(--app-accent);
   text-decoration: underline;
+  word-break: break-all;
 }
 
 .markdown-preview hr {

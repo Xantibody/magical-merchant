@@ -51,11 +51,12 @@ function preview(blocks: string): string {
   return `<div class="markdown-preview">${blocks}</div>`;
 }
 
+/** ProseMirror writes its blocks with no whitespace between them, unlike markdown-it */
 function editor(blocks: string): string {
   return `
     <div class="milkdown-editor">
       <div class="milkdown">
-        <div class="ProseMirror editor" contenteditable="true">${blocks}</div>
+        <div class="ProseMirror editor" contenteditable="true">${blocks.trim().replaceAll(/>\s+</gu, "><")}</div>
       </div>
     </div>`;
 }
@@ -179,6 +180,39 @@ describe("note body: preview and editor draw the same page", () => {
     expect(line / parseFloat(getComputedStyle(first).fontSize)).toBeCloseTo(1.7);
     expect(step - line).toBeGreaterThan(0);
     expect(step - line).toBeLessThanOrEqual(line / 3);
+  });
+
+  // A URL ran past the page on a phone instead of wrapping. The editor breaks a long word
+  // because the browser does so in anything contenteditable; the viewer has to ask for it. In a
+  // quote, normalize's grid also kept the line as wide as its longest word
+  it.each([
+    ["preview", "paragraph", preview, (url: string) => `<p>${url}</p>`],
+    ["editor", "paragraph", editor, (url: string) => `<p>${url}</p>`],
+    ["preview", "quote", preview, (url: string) => `<blockquote><p>${url}</p></blockquote>`],
+    ["editor", "quote", editor, (url: string) => `<blockquote><p>${url}</p></blockquote>`],
+  ])("wraps a long unbroken word (%s, %s)", async (_name, _block, surface, block) => {
+    await page.viewport(414, 896);
+    const root = blockRoot(mountDetail(surface(block(`https://example.com/${"1".repeat(80)}`))));
+    const text = document.createRange();
+    text.selectNodeContents(element("p", root));
+
+    expect(text.getBoundingClientRect().right).toBeLessThanOrEqual(
+      root.getBoundingClientRect().right,
+    );
+  });
+
+  // A URL broke at its first hyphen and left the rest of that line empty, since a soft break
+  // wins over breaking inside a word. A link runs to the end of the line instead
+  it.each([
+    ["preview", preview],
+    ["editor", editor],
+  ])("fills the line before breaking a long link (%s)", async (_name, surface) => {
+    await page.viewport(414, 896);
+    const url = `https://example.com/magical-${"m".repeat(80)}`;
+    const root = blockRoot(mountDetail(surface(`<p><a href="${url}">${url}</a></p>`)));
+    const [firstLine] = element("a", root).getClientRects();
+
+    expect(root.getBoundingClientRect().right - firstLine.right).toBeLessThan(24);
   });
 
   // A tap on the viewer's page writes at that spot (R3), so it shows the I-beam that says so

@@ -193,6 +193,19 @@ describe("Note table editing and inline decorations", () => {
     expect(h.view.state.doc.child(1).childCount).toBe(1);
   });
 
+  // Under white-space: normal the browser keeps a run of typed spaces visible by turning every
+  // other one into U+00A0, and ProseMirror reads that DOM back into the document and the file
+  it("keeps typed spaces as plain spaces in the saved Markdown", async () => {
+    const h = await mount("first");
+    h.select("first", true);
+
+    await userEvent.keyboard("a   b");
+
+    await expect.poll(() => h.changes.at(-1)).toContain("firsta");
+    expect(h.markdown()).not.toContain("\u00A0");
+    expect(h.view.state.doc.textContent).toBe("firsta   b");
+  });
+
   it("still reads a pasted <br> as a line break", async () => {
     const h = await mount("first");
     h.select("first", true);
@@ -418,9 +431,7 @@ describe("Note list input rules", () => {
     expect(h.container.querySelectorAll("li")).toHaveLength(0);
     expect(h.view.state.doc.childCount).toBe(1);
     expect(h.view.state.doc.child(0).type.name).toBe("paragraph");
-    // Chromium types a space at the end of a block as a no-break space, and the
-    // rule hands back the text it was given
-    expect(h.view.state.doc.child(0).textContent.replaceAll("\u00A0", " ")).toBe(marker);
+    expect(h.view.state.doc.child(0).textContent).toBe(marker);
   });
 
   it("keeps an empty paragraph after a list the input rule made", async () => {
