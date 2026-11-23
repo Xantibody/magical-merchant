@@ -5,7 +5,7 @@ use tauri_plugin_deep_link::DeepLinkExt as _;
 
 #[cfg(desktop)]
 use crate::shortcut;
-use crate::{commands, links, services};
+use crate::{commands, links};
 
 // `mobile_entry_point` fixes the signature to `fn run()`, so a failed startup
 // has nowhere to be returned to — panicking is the only way to report it.
@@ -65,13 +65,13 @@ pub fn run() {
             // There is a gap between starting to locate and the first fix coming
             // back. Asking on every save is too late, so start receiving at launch.
             #[cfg(target_os = "macos")]
-            services::core_location::start(app.handle());
+            crate::services::core_location::start(app.handle());
 
             // The geocoder and the certificate verifier need a Context. The Activity
             // can be destroyed, so hold an Application Context of our own while one
             // is alive.
             #[cfg(target_os = "android")]
-            if let Err(e) = services::android::init() {
+            if let Err(e) = crate::services::android::init() {
                 log::error!("android context init failed: {e}");
             }
 
@@ -80,7 +80,7 @@ pub fn run() {
             // goes around it today (`services::android_tls::sync_tls_config`); the wiring
             // stays so it works again once upstream #221 is fixed.
             #[cfg(target_os = "android")]
-            services::android_tls::init();
+            crate::services::android_tls::init();
 
             Ok(())
         })

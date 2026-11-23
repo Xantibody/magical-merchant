@@ -115,7 +115,7 @@ pub(crate) fn start(app: &AppHandle) {
     });
 }
 
-/// No CoreLocation off macOS, so no fix to hand over.
+/// No `CoreLocation` off macOS, so no fix to hand over.
 #[cfg(not(target_os = "macos"))]
 pub(crate) const fn latest() -> Option<Location> {
     None
