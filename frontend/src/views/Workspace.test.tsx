@@ -6,7 +6,7 @@ import { MemoryRouter, Route, useLocation, useNavigate } from "@solidjs/router";
 import { createEffect, onCleanup } from "solid-js";
 import type { JSX } from "solid-js";
 import type { Editor } from "@milkdown/kit/core";
-import type { TagUsage } from "../lib/commands";
+import type { SearchHit, TagUsage } from "../lib/commands";
 import { ShellProvider, useShell } from "../lib/shell";
 import type { Shell } from "../lib/shell";
 import { shortcutLabel } from "../lib/shortcuts";
@@ -117,6 +117,8 @@ let refused: Set<string>;
  * screen without one today; this stands in for whichever path someday would.
  */
 let readsWithoutRevision: boolean;
+/** What core's backlink scan finds for each note: the records whose body points at it. */
+let backlinkHits: Map<string, SearchHit[]>;
 
 /** The body's revision. The test checks "write with the revision you read" the way core does. */
 const revisionOf = (body: string): string => `rev:${body}`;
@@ -158,7 +160,7 @@ const saveError = (kind: string, message: string): Error =>
 const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
   list_notes: () => [...disk.keys()].map((filename) => summaryOf(filename)),
   list_templates: () => [],
-  find_backlinks: () => [],
+  find_backlinks: ({ filename }) => backlinkHits.get(String(filename)) ?? [],
   read_note: async ({ filename }) => {
     await readGate;
     // A file that does not read as text is refused at the read step. Reopening loads no body
@@ -527,6 +529,11 @@ async function startTagEditing(): Promise<HTMLInputElement> {
 /** A `[[link]]` peek's own open button. It exists only while a peek is up. */
 const peekOpen = (): HTMLElement | null => document.querySelector(".link-peek-open");
 
+/** The rows under the viewer's body, each a record that points at the note. */
+const backlinkRows = (): HTMLElement[] => [
+  ...document.querySelectorAll<HTMLElement>(".backlinks .backlink-row"),
+];
+
 /** The history tab's body. It exists only while the tab is open. */
 const historyShown = (): boolean => document.querySelector(".history-panel") !== null;
 
@@ -602,6 +609,7 @@ async function setupWorkspace(): Promise<void> {
   readFails = false;
   refused = new Set();
   readsWithoutRevision = false;
+  backlinkHits = new Map();
   calls = [];
   shell = undefined;
   navigateTo = undefined;
@@ -2865,5 +2873,76 @@ describe("Workspace › リンク先の覗き見", () => {
     shell?.headerBack()?.();
 
     await waitFor(() => expect(document.querySelector(".workspace--detail")).toBeNull());
+  });
+});
+
+describe("Workspace › ビューアの下のバックリンク", () => {
+  beforeEach(setupWorkspace);
+  afterEach(teardownWorkspace);
+
+  const NOTE_HIT: SearchHit = {
+    kind: "note",
+    title: TITLE_B,
+    snippet: `[[${FILE_A.replace(/\.md$/u, "")}]] を見て`,
+    date: "2026-09-03",
+    filename: FILE_B,
+    index: null,
+    tags: [],
+  };
+  const SCRAWL_HIT: SearchHit = {
+    kind: "scrawl",
+    title: "",
+    snippet: "朝に書いた一行",
+    date: "2026-09-01",
+    filename: null,
+    index: 0,
+    tags: [],
+  };
+
+  /** Note A in the viewer, with the given records pointing at it. */
+  async function viewPointedNote(hits: SearchHit[]): Promise<void> {
+    disk.set(FILE_B, BODY_B);
+    backlinkHits.set(FILE_A, hits);
+    await viewNoteA();
+    await waitFor(() => expect(backlinkRows()).toHaveLength(hits.length));
+  }
+
+  it("lists what points at the note under its body, a title or else the snippet", async () => {
+    await viewPointedNote([NOTE_HIT, SCRAWL_HIT]);
+
+    const [noteRow, scrawlRow] = backlinkRows();
+    expect(noteRow?.querySelector(".backlink-title")?.textContent).toBe(TITLE_B);
+    expect(noteRow?.querySelector(".backlink-date")?.textContent).toBe("09/03");
+    expect(scrawlRow?.querySelector(".backlink-title")?.textContent).toBe("朝に書いた一行");
+    expect(scrawlRow?.querySelector(".backlink-date")?.textContent).toBe("09/01");
+    expect(calls.find((c) => c.cmd === "find_backlinks")?.args).toStrictEqual({
+      filename: FILE_A,
+    });
+  });
+
+  it("opens a Note that points here in place", async () => {
+    await viewPointedNote([NOTE_HIT]);
+
+    fireEvent.click(backlinkRows()[0] as HTMLElement);
+
+    await waitFor(() => expect(viewerTitle()).toBe(TITLE_B));
+  });
+
+  // A Scrawl entry has no note of its own to open: its day on Scrawl is where it lives
+  it("goes to the day on Scrawl for an entry that points here", async () => {
+    await viewPointedNote([SCRAWL_HIT]);
+
+    fireEvent.click(backlinkRows()[0] as HTMLElement);
+
+    await waitFor(() => expect(here?.search).toBe("?day=2026-09-01"));
+    expect(here?.pathname).toBe("/");
+  });
+
+  it("leaves the whole section out when nothing points here", async () => {
+    await viewNoteA();
+
+    await waitFor(() => expect(countOf("find_backlinks")).toBe(1));
+    await sleep(50);
+    expect(document.querySelector(".backlinks")).toBeNull();
   });
 });
