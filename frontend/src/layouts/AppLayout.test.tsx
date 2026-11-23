@@ -242,3 +242,169 @@ describe("AppLayout › キーの振り分け", () => {
     expect(theShell().paper()).toBe(false);
   });
 });
+
+/** Which of a phone's four pieces of chrome stand right now. */
+function phoneChrome(): { places: boolean; out: boolean; slim: boolean; dot: boolean } {
+  return {
+    places: document.querySelector(".place-switch") !== null,
+    out: document.querySelector(".palm-out") !== null,
+    slim: document.querySelector(".palm-slim") !== null,
+    dot: document.querySelector(".palm-dot") !== null,
+  };
+}
+
+const nothing = (): void => {
+  // The folded bar reads the title alone; no action of the note is pressed
+};
+
+/** A note's part of the status details, as Workspace hands it over. Only the title is read here. */
+function noteStateTitled(title: string): Parameters<Shell["setNoteState"]>[0] {
+  return {
+    title,
+    map: false,
+    examples: false,
+    canCommit: false,
+    canRevert: false,
+    commit: nothing,
+    revert: nothing,
+    openSettings: nothing,
+    openHistory: nothing,
+  };
+}
+
+const back = (): void => {
+  // A level's way out. Only whether one is set decides what stands
+};
+
+describe("AppLayout › スマホの部品が出る条件", () => {
+  beforeEach(async () => {
+    await setupApp();
+    await page.viewport(390, 844);
+  });
+  afterEach(teardownApp);
+
+  it("stands the pill and the dot at the top of a surface", async () => {
+    await renderApp("/notes");
+
+    expect(phoneChrome()).toStrictEqual({ places: true, out: false, slim: false, dot: true });
+  });
+
+  it("stands none of them on a wide window, where the rail is", async () => {
+    await page.viewport(1280, 800);
+    await renderApp("/notes");
+
+    expect(phoneChrome()).toStrictEqual({ places: false, out: false, slim: false, dot: false });
+    expect(document.querySelector(".library")).not.toBeNull();
+  });
+
+  it("adds the round way out on a level", async () => {
+    await renderApp("/notes");
+
+    theShell().setHeaderBack(back);
+
+    await waitFor(() =>
+      expect(phoneChrome()).toStrictEqual({ places: true, out: true, slim: false, dot: true }),
+    );
+  });
+
+  it("folds the pill and the way out into the line of words while reading down", async () => {
+    await renderApp("/notes");
+    theShell().setHeaderBack(back);
+
+    theShell().setSlim(true);
+
+    await waitFor(() =>
+      expect(phoneChrome()).toStrictEqual({ places: true, out: true, slim: true, dot: true }),
+    );
+    expect(document.querySelector(".place-switch")?.classList).toContain("place-switch--slim");
+    expect(document.querySelector(".palm-out")?.classList).toContain("palm-out--slim");
+  });
+
+  it("takes everything away for the page alone", async () => {
+    await renderApp("/notes");
+    theShell().setHeaderBack(back);
+    theShell().setSlim(true);
+
+    theShell().setPaper(true);
+
+    await waitFor(() =>
+      expect(phoneChrome()).toStrictEqual({ places: false, out: false, slim: false, dot: false }),
+    );
+  });
+
+  it("gives the foot to the one-line window and keeps the dot", async () => {
+    await renderApp("/notes");
+    theShell().setHeaderBack(back);
+    theShell().setSlim(true);
+
+    theShell().setQuickJot(true);
+
+    await waitFor(() =>
+      expect(phoneChrome()).toStrictEqual({ places: false, out: false, slim: false, dot: true }),
+    );
+  });
+
+  it("gives the foot to the writing screen and keeps the dot", async () => {
+    await renderApp("/notes?file=a.md&edit=1");
+    theShell().setHeaderBack(back);
+    theShell().setSlim(true);
+
+    await waitFor(() => expect(theShell().slim()).toBe(true));
+    expect(phoneChrome()).toStrictEqual({ places: false, out: false, slim: false, dot: true });
+  });
+
+  // A template open in its editor is a form like writing, and its own bar says its state
+  it("gives a template's editor the foot and the top corner", async () => {
+    await renderApp("/templates");
+    expect(phoneChrome()).toStrictEqual({ places: true, out: false, slim: false, dot: true });
+
+    theShell().setHeaderBack(back);
+
+    await waitFor(() =>
+      expect(phoneChrome()).toStrictEqual({ places: false, out: false, slim: false, dot: false }),
+    );
+  });
+
+  // Beside a title the folded line has room for one half: the save, while all is well
+  it("says only the save beside a note's title while all is well", async () => {
+    await renderApp("/notes");
+    theShell().setHeaderBack(back);
+    theShell().setNoteState(noteStateTitled("献立"));
+
+    theShell().setSlim(true);
+
+    await waitFor(() =>
+      expect(document.querySelector(".palm-slim-place")?.textContent).toBe("献立"),
+    );
+    expect(document.querySelector(".palm-slim-words")?.textContent).toBe(t().common.saved);
+  });
+
+  it("says the whole state beside a note's title once something is wrong", async () => {
+    await renderApp("/notes");
+    theShell().setHeaderBack(back);
+    theShell().setNoteState(noteStateTitled("献立"));
+    theShell().setSaveState({ status: "failed", at: "" });
+
+    theShell().setSlim(true);
+
+    await waitFor(() =>
+      expect(document.querySelector(".palm-slim-words")?.textContent).toBe(
+        `${t().status.saveFailed} · ${t().sync.synced}`,
+      ),
+    );
+  });
+
+  // At the top of a surface there is no title to name, so the place is named and all is said
+  it("says the whole state beside the place's name with no note open", async () => {
+    await renderApp("/notes");
+
+    theShell().setSlim(true);
+
+    await waitFor(() =>
+      expect(document.querySelector(".palm-slim-place")?.textContent).toBe("Note"),
+    );
+    expect(document.querySelector(".palm-slim-words")?.textContent).toBe(
+      `${t().common.saved} · ${t().sync.synced}`,
+    );
+  });
+});
