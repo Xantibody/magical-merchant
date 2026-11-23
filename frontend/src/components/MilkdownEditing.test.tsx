@@ -449,4 +449,79 @@ describe("Note list input rules", () => {
     await userEvent.keyboard("- a{Backspace}");
     expect(h.container.querySelectorAll("li")).toHaveLength(1);
   });
+
+  // A blank line under a list used to make `- ` start a list of its own, whose first item
+  // Tab could not indent under the item above
+  it("continues the list above when `- ` follows a blank line under it", async () => {
+    const h = await mount("- a");
+    h.select("a", true);
+    await userEvent.keyboard("{Enter}{Enter}{Enter}- b");
+
+    const list = h.view.state.doc.child(0);
+    expect(list.type.name).toBe("bullet_list");
+    expect(list.childCount).toBe(2);
+
+    await userEvent.keyboard("{Tab}");
+    expect(h.container.querySelectorAll("li li")).toHaveLength(1);
+  });
+
+  it("gives `- ` and the blank line back with a Backspace right after joining", async () => {
+    const h = await mount("- a");
+    h.select("a", true);
+    await userEvent.keyboard("{Enter}{Enter}{Enter}- {Backspace}");
+
+    expect(h.view.state.doc.child(0).childCount).toBe(1);
+    expect(h.view.state.doc.child(1).content.size).toBe(0);
+    expect(h.view.state.doc.child(2).textContent).toBe("- ");
+  });
+
+  it("starts a list of its own when a written paragraph stands between", async () => {
+    const h = await mount("- a\n\nbetween\n\nlast");
+    h.select("last", true);
+    await userEvent.keyboard("{Enter}- b");
+
+    expect(h.view.state.doc.child(0).childCount).toBe(1);
+    expect(h.view.state.doc.child(1).textContent).toBe("between");
+    expect(h.view.state.doc.child(3).type.name).toBe("bullet_list");
+  });
+});
+
+describe("Note heading keys", () => {
+  afterEach(cleanup);
+
+  // Markdown says the number of `#` is the level. Milkdown added it to the level already there
+  it.each([
+    ["# ", 1],
+    ["## ", 2],
+  ])("makes `%s` at the start of a heading that level", async (marker, level) => {
+    const h = await mount("### Title");
+    h.select("Title");
+    await userEvent.keyboard(marker);
+
+    expect(h.view.state.doc.child(0).type.name).toBe("heading");
+    expect(h.view.state.doc.child(0).attrs.level).toBe(level);
+    expect(h.view.state.doc.child(0).textContent).toBe("Title");
+  });
+
+  // Milkdown stepped the level down one per press, so an H3 took four to reach the line above
+  it("turns a heading into a paragraph with one Backspace at its start", async () => {
+    const h = await mount("first\n\n### Title");
+    h.select("Title");
+    await userEvent.keyboard("{Backspace}");
+
+    expect(h.view.state.doc.child(1).type.name).toBe("paragraph");
+    expect(h.view.state.doc.child(1).textContent).toBe("Title");
+
+    await userEvent.keyboard("{Backspace}");
+    expect(h.view.state.doc.child(0).textContent).toBe("firstTitle");
+  });
+
+  it("gives `## ` back with a Backspace right after it made a heading", async () => {
+    const h = await mount("");
+    h.view.focus();
+    await userEvent.keyboard("## {Backspace}");
+
+    expect(h.view.state.doc.child(0).type.name).toBe("paragraph");
+    expect(h.view.state.doc.child(0).textContent).toBe("## ");
+  });
 });
