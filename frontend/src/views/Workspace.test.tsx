@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, onTestFinished, vi } from 
 import { render, screen, fireEvent, cleanup, waitFor, within } from "@solidjs/testing-library";
 import { mockIPC, mockWindows, clearMocks } from "@tauri-apps/api/mocks";
 import { page, userEvent } from "vitest/browser";
-import { MemoryRouter, Route, useNavigate } from "@solidjs/router";
+import { MemoryRouter, Route, useLocation, useNavigate } from "@solidjs/router";
 import { createEffect, onCleanup } from "solid-js";
 import type { JSX } from "solid-js";
 import type { Editor } from "@milkdown/kit/core";
@@ -304,9 +304,20 @@ const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
 
 let shell: Shell | undefined;
 let navigateTo: ((to: string) => void) | undefined;
+/** Where the router stands now. What a move to another surface or to Scrawl is read from. */
+let here: { pathname: string; search: string } | undefined;
 
 function CaptureShell(): JSX.Element {
   shell = useShell();
+  return null;
+}
+
+/** Records the router's pathname and search as they change. */
+function LocationProbe(): JSX.Element {
+  const location = useLocation();
+  createEffect(() => {
+    here = { pathname: location.pathname, search: location.search };
+  });
   return null;
 }
 
@@ -314,14 +325,24 @@ function CaptureShell(): JSX.Element {
 function WorkspaceRoute(): JSX.Element {
   const navigate = useNavigate();
   navigateTo = (to) => navigate(to);
-  return <Workspace />;
+  return (
+    <>
+      <LocationProbe />
+      <Workspace />
+    </>
+  );
 }
 
 /** The Codex surface of the same view. What sits at `/codex` has the same shape as in `App.tsx`. */
 function CodexRoute(): JSX.Element {
   const navigate = useNavigate();
   navigateTo = (to) => navigate(to);
-  return <Workspace kind="codex" />;
+  return (
+    <>
+      <LocationProbe />
+      <Workspace kind="codex" />
+    </>
+  );
 }
 
 /** Renders the list alone. Nothing is opened, so what is visible is the rows themselves. */
@@ -503,6 +524,9 @@ async function startTagEditing(): Promise<HTMLInputElement> {
   return input;
 }
 
+/** A `[[link]]` peek's own open button. It exists only while a peek is up. */
+const peekOpen = (): HTMLElement | null => document.querySelector(".link-peek-open");
+
 /** The history tab's body. It exists only while the tab is open. */
 const historyShown = (): boolean => document.querySelector(".history-panel") !== null;
 
@@ -581,6 +605,7 @@ async function setupWorkspace(): Promise<void> {
   calls = [];
   shell = undefined;
   navigateTo = undefined;
+  here = undefined;
   typeInEditor = undefined;
   duringSave = undefined;
   releaseReads();
@@ -2732,5 +2757,113 @@ describe("Workspace › 通らなかった操作", () => {
     await chooseFromRing(/Codex を作る/u);
 
     await waitFor(() => expect(shell?.toast()?.message).toBe("Codex を作れませんでした"));
+  });
+});
+
+describe("Workspace › リンク先の覗き見", () => {
+  beforeEach(setupWorkspace);
+  afterEach(teardownWorkspace);
+
+  const ID_B = FILE_B.replace(/\.md$/u, "");
+
+  /** Note A, its body pointing at note B, open in the viewer with the link drawn. */
+  async function viewLinkingNote(): Promise<HTMLElement> {
+    disk.set(FILE_A, `${BODY_A}\n\n[[${ID_B}]]`);
+    disk.set(FILE_B, BODY_B);
+    await viewNoteA();
+    return waitFor(() => {
+      const link = document.querySelector<HTMLElement>(`a.note-link[data-file="${FILE_B}"]`);
+      expect(link).not.toBeNull();
+      return link as HTMLElement;
+    });
+  }
+
+  const readsOf = (filename: string): number =>
+    calls.filter((c) => c.cmd === "read_note" && c.args.filename === filename).length;
+
+  // 88: following a reference does not lose the place. The linked note is lifted beside this
+  // one, which stays as it was
+  it("lifts the linked note beside the one being read, without reopening it", async () => {
+    const link = await viewLinkingNote();
+    const readsBefore = readsOf(FILE_A);
+
+    fireEvent.click(link);
+
+    const card = await waitFor(() => {
+      const found = document.querySelector<HTMLElement>(".link-peek-card");
+      expect(found).not.toBeNull();
+      return found as HTMLElement;
+    });
+    await waitFor(() => expect(within(card).getByText("牛乳")).toBeDefined());
+    expect(card.querySelector(".link-peek-title")?.textContent).toBe(TITLE_B);
+    expect(viewerTitle()).toBe(TITLE_A);
+    expect(readsOf(FILE_A)).toBe(readsBefore);
+    // A press on a link is not the one tap that writes
+    expect(screen.queryByTestId("editor-body")).toBeNull();
+  });
+
+  it("puts the peek away on Escape", async () => {
+    fireEvent.click(await viewLinkingNote());
+    await waitFor(() => expect(peekOpen()).not.toBeNull());
+
+    fireEvent.keyDown(globalThis, { key: "Escape" });
+
+    await waitFor(() => expect(peekOpen()).toBeNull());
+    expect(viewerTitle()).toBe(TITLE_A);
+  });
+
+  it("opens the linked note in place from the peek's open button", async () => {
+    fireEvent.click(await viewLinkingNote());
+    const open = await waitFor(() => {
+      const found = peekOpen();
+      expect(found).not.toBeNull();
+      return found as HTMLElement;
+    });
+
+    fireEvent.click(open);
+
+    await waitFor(() => expect(viewerTitle()).toBe(TITLE_B));
+    expect(peekOpen()).toBeNull();
+  });
+
+  // A link knows only the ID. A target that lives on the other surface is opened there
+  it("sends a linked Codex to the Codex surface", async () => {
+    kinds.set(FILE_B, "codex");
+    fireEvent.click(await viewLinkingNote());
+    const open = await waitFor(() => {
+      const found = peekOpen();
+      expect(found).not.toBeNull();
+      return found as HTMLElement;
+    });
+
+    fireEvent.click(open);
+
+    await waitFor(() => expect(here?.pathname).toBe("/codex"));
+    expect(here?.search).toBe(`?file=${FILE_B}`);
+    await waitFor(() => expect(viewerTitle()).toBe(TITLE_B));
+  });
+
+  // On a phone the peek is a level over the page, and over the writing screen too: one back
+  // puts it away first, the next ends the writing, the last goes to the list
+  it("peels the peek before the writing screen on a phone's back", async () => {
+    await page.viewport(390, 844);
+    fireEvent.click(await viewLinkingNote());
+    await waitFor(() => expect(peekOpen()).not.toBeNull());
+    fireEvent.keyDown(document.body, { key: "e" });
+    await waitFor(() => expect(document.querySelector(".note-title-input")).not.toBeNull());
+
+    shell?.headerBack()?.();
+
+    await waitFor(() => expect(peekOpen()).toBeNull());
+    expect(document.querySelector(".note-title-input")).not.toBeNull();
+
+    shell?.headerBack()?.();
+
+    await waitFor(() => expect(document.querySelector(".note-title-input")).toBeNull());
+    expect(document.querySelector(".workspace--detail")).not.toBeNull();
+
+    shell?.headerBack()?.();
+
+    await waitFor(() => expect(document.querySelector(".workspace--detail")).toBeNull());
   });
 });
