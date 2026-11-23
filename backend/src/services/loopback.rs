@@ -1,89 +1,11 @@
-//! Entry point for signing in. The config file and token storage live in core
-//! (`magical_merchant_core::domain::sync::{settings, login}`); what stays here is the in-app
-//! sign-in window and the Tauri commands called from it.
+//! The sign-in callback, waited for on 127.0.0.1: accepting connections, reading each one,
+//! taking the token out of the request and answering the browser.
 
-#[cfg(not(target_os = "android"))]
-use std::path::Path;
-
-use magical_merchant_core::SyncError;
-#[cfg(not(target_os = "android"))]
-use magical_merchant_core::domain::sync::login::store_token;
-use magical_merchant_core::domain::sync::login::{clear_token, get_token};
-use magical_merchant_core::domain::sync::settings::{SyncConfig, normalize_workers_url};
 use magical_merchant_core::domain::sync::token::is_token_valid;
-use tauri::{AppHandle, Runtime};
-// Only the desktop build looks up or creates a sign-in window. Android hands the URL
-// to the default browser, so nothing there uses this trait
-#[cfg(not(target_os = "android"))]
-use tauri::Manager;
-#[cfg(target_os = "android")]
-use tauri_plugin_opener::OpenerExt;
-#[cfg(not(target_os = "android"))]
 use url::Url;
-
-fn build_auth_url(workers_url: &str, app_redirect: &str) -> String {
-    format!(
-        "{}/auth/google?app_redirect={}",
-        workers_url.trim_end_matches('/'),
-        urlencoding::encode(app_redirect)
-    )
-}
-
-/// The in-app window that shows the sign-in page.
-///
-/// It keeps a single label, and from the second time on the same window is sent to the
-/// next URL: `close()` goes through the event loop, so rebuilding with the same label
-/// right after closing can collide.
-#[cfg(not(target_os = "android"))]
-const AUTH_WINDOW_LABEL: &str = "auth";
-
-/// Keeps sign-in inside the app.
-///
-/// Handing it to an external browser puts the app behind, and after approval the user
-/// has to come back on their own. Authentication ends where it started.
-#[cfg(not(target_os = "android"))]
-fn open_auth_window(handle: &AppHandle, auth_url: &str) -> Result<tauri::WebviewWindow, String> {
-    let url = Url::parse(auth_url).map_err(|e| format!("Invalid auth URL: {e}"))?;
-
-    if let Some(existing) = handle.get_webview_window(AUTH_WINDOW_LABEL) {
-        existing
-            .navigate(url)
-            .map_err(|e| format!("Failed to open the sign-in window: {e}"))?;
-        let _ = existing.set_focus();
-        return Ok(existing);
-    }
-
-    tauri::WebviewWindowBuilder::new(handle, AUTH_WINDOW_LABEL, tauri::WebviewUrl::External(url))
-        .title("Sign in")
-        .inner_size(520.0, 700.0)
-        .center()
-        .build()
-        .map_err(|e| format!("Failed to open the sign-in window: {e}"))
-}
-
-/// A one-shot receiver that reports the window being closed.
-///
-/// Waiting on after it is closed would hold a user who meant to stop until the
-/// 5-minute timeout.
-#[cfg(not(target_os = "android"))]
-fn closed_signal(window: &tauri::WebviewWindow) -> tokio::sync::oneshot::Receiver<()> {
-    let (tx, rx) = tokio::sync::oneshot::channel();
-    // `on_window_event` wants an `Fn`, so the one-shot sender is wrapped and taken out
-    let tx = std::sync::Mutex::new(Some(tx));
-    window.on_window_event(move |event| {
-        if !matches!(event, tauri::WindowEvent::Destroyed) {
-            return;
-        }
-        if let Some(tx) = tx.lock().ok().and_then(|mut slot| slot.take()) {
-            let _ = tx.send(());
-        }
-    });
-    rx
-}
 
 /// The only page returned to the browser. The app closes the window right after, so it
 /// carries nothing but a note.
-#[cfg(not(target_os = "android"))]
 const CALLBACK_RESPONSE: &str = concat!(
     "HTTP/1.1 200 OK\r\n",
     "Content-Type: text/html; charset=utf-8\r\n",
@@ -92,7 +14,6 @@ const CALLBACK_RESPONSE: &str = concat!(
 );
 
 /// The reply to a request that arrives while waiting and is not the callback.
-#[cfg(not(target_os = "android"))]
 const NOT_FOUND_RESPONSE: &str = "HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n";
 
 /// Reads out of a raw HTTP request only a token that may be stored.
@@ -101,7 +22,6 @@ const NOT_FOUND_RESPONSE: &str = "HTTP/1.1 404 Not Found\r\nConnection: close\r\
 /// it. The nonce in the path is the only proof that this is the return of the sign-in
 /// started from this window, and the JWT expiry is the minimum check that its contents
 /// are usable.
-#[cfg(not(target_os = "android"))]
 fn callback_token(request_text: &str, callback_path: &str) -> Option<String> {
     let target = request_text.lines().next()?.split_whitespace().nth(1)?;
     // AIDEV-NOTE: drop request targets in absolute URL form. `join` replaces the host too, so the path alone could be made to match
@@ -123,12 +43,10 @@ fn callback_token(request_text: &str, callback_path: &str) -> Option<String> {
 /// A browser sends its request right after it connects, so this is enough for the real
 /// one. Reads run in parallel, so raising this limit does not delay accepting the
 /// callback; it only moves when a silent connection is dropped.
-#[cfg(not(target_os = "android"))]
-const CONNECTION_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+pub(crate) const CONNECTION_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 
 /// Reads one accepted connection and returns only a token that may be stored. A reply
 /// is written either way: the note for the real one, 404 for everything else.
-#[cfg(not(target_os = "android"))]
 async fn read_callback_token(
     mut stream: tokio::net::TcpStream,
     callback_path: &str,
@@ -163,8 +81,7 @@ async fn read_callback_token(
 /// force, so a local process can open as many connections as it likes.
 ///
 /// AIDEV-NOTE: connections are read in parallel. Reading them in order was rejected: 60 silent connections alone could eat the whole 300-second window
-#[cfg(not(target_os = "android"))]
-async fn accept_callback_token(
+pub(crate) async fn accept_callback_token(
     listener: &tokio::net::TcpListener,
     callback_path: &str,
     read_timeout: std::time::Duration,
@@ -193,49 +110,7 @@ async fn accept_callback_token(
     }
 }
 
-#[cfg(not(target_os = "android"))]
-async fn login_with_loopback(
-    handle: &AppHandle,
-    base_dir: &Path,
-    config: &SyncConfig,
-) -> Result<(), String> {
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
-        .await
-        .map_err(|e| format!("Failed to bind loopback: {e}"))?;
-    let port = listener.local_addr().map_err(|e| e.to_string())?.port();
-
-    // The return target belongs to this one sign-in. The port can be found by brute
-    // force, but the nonce cannot be guessed, so only a token that arrives here can be
-    // called ours
-    let callback_path = format!("/callback/{}", uuid::Uuid::new_v4());
-    let app_redirect = format!("http://127.0.0.1:{port}{callback_path}");
-    let auth_url = build_auth_url(&config.workers_url, &app_redirect);
-
-    let window = open_auth_window(handle, &auth_url)?;
-    let closed = closed_signal(&window);
-
-    let accepted = tokio::select! {
-        result = tokio::time::timeout(std::time::Duration::from_secs(300), accept_callback_token(&listener, &callback_path, CONNECTION_READ_TIMEOUT)) => result,
-        _ = closed => return Err("Login was cancelled.".to_string()),
-    };
-
-    let outcome = accepted
-        .map_err(|_| "Login timed out. Please try again.".to_string())
-        .and_then(|token| token)
-        .and_then(|token| store_token(base_dir, &token))
-        // Notify so `SyncButton` and the like can reflect the auth state at once
-        .inspect(|()| {
-            let _ = tauri::Emitter::emit(handle, "auth-success", ());
-        });
-
-    // The window is closed whatever the result. The settings screen reports success or
-    // failure, so there is no reason to leave the callback page in front of the app
-    let _ = window.close();
-
-    outcome
-}
-
-#[cfg(all(test, not(target_os = "android")))]
+#[cfg(test)]
 mod tests {
     use super::*;
     use base64::Engine as _;
@@ -423,127 +298,5 @@ mod tests {
 
         assert_eq!(accepted, Ok(token));
         drop(impostors);
-    }
-}
-
-// Tauri commands
-
-#[tauri::command]
-pub(crate) async fn auth_login(handle: AppHandle) -> Result<(), String> {
-    let base_dir = crate::app_base_dir(&handle)?;
-    let config = SyncConfig::load(&base_dir)
-        .map_err(|e| e.message)?
-        .unwrap_or_default();
-
-    if !config.is_configured() {
-        return Err("Sync not configured".to_string());
-    }
-
-    #[cfg(not(target_os = "android"))]
-    {
-        login_with_loopback(&handle, &base_dir, &config).await
-    }
-
-    #[cfg(target_os = "android")]
-    {
-        let auth_url = build_auth_url(&config.workers_url, "magical-merchant://auth/callback");
-        handle
-            .opener()
-            .open_url(&auth_url, None::<&str>)
-            .map_err(|e| format!("Failed to open browser: {e}"))?;
-        Ok(())
-    }
-}
-
-#[tauri::command]
-pub(crate) fn auth_status(handle: AppHandle) -> Result<bool, String> {
-    let base_dir = crate::app_base_dir(&handle)?;
-    Ok(get_token(&base_dir)?.is_some_and(|token| is_token_valid(&token)))
-}
-
-#[tauri::command]
-pub(crate) fn auth_logout(handle: AppHandle) -> Result<(), String> {
-    let base_dir = crate::app_base_dir(&handle)?;
-    clear_token(&base_dir)
-}
-
-/// A config that could not be read comes back as `kind: "configCorrupt"`.
-///
-/// Substituting the default would open the settings screen blank, and the re-entered
-/// URL would then overwrite the broken file
-#[tauri::command]
-pub(crate) fn get_sync_config<R: Runtime>(handle: AppHandle<R>) -> Result<SyncConfig, SyncError> {
-    let base_dir = crate::app_base_dir(&handle).map_err(SyncError::other)?;
-    Ok(SyncConfig::load(&base_dir)?.unwrap_or_default())
-}
-
-#[tauri::command]
-pub(crate) fn save_sync_config<R: Runtime>(
-    handle: AppHandle<R>,
-    config: SyncConfig,
-) -> Result<(), String> {
-    let base_dir = crate::app_base_dir(&handle)?;
-    let config = SyncConfig {
-        workers_url: normalize_workers_url(&config.workers_url)?,
-        ..config
-    };
-    config.save(&base_dir)
-}
-
-#[tauri::command]
-pub(crate) fn is_sync_config_editable<R: Runtime>(handle: AppHandle<R>) -> Result<bool, String> {
-    let base_dir = crate::app_base_dir(&handle)?;
-    Ok(SyncConfig::is_editable(&base_dir))
-}
-
-/// What the sync settings commands answer, called through a mock app over a temporary
-/// data directory.
-#[cfg(test)]
-#[allow(
-    clippy::significant_drop_tightening,
-    reason = "a test app holds the data directory until the test ends"
-)]
-mod command_tests {
-    use super::*;
-    use crate::test_app::test_app;
-
-    fn with_url(workers_url: &str) -> SyncConfig {
-        SyncConfig {
-            workers_url: workers_url.to_string(),
-            ..SyncConfig::default()
-        }
-    }
-
-    #[test]
-    fn save_sync_config_drops_the_trailing_slash_and_the_spaces_around() {
-        let app = test_app();
-
-        save_sync_config(app.handle(), with_url("  https://example.workers.dev/  ")).unwrap();
-
-        let saved = get_sync_config(app.handle()).unwrap();
-        assert_eq!(saved.workers_url, "https://example.workers.dev");
-    }
-
-    #[test]
-    fn save_sync_config_refuses_a_url_that_is_not_http_in_words() {
-        let app = test_app();
-
-        let refused = save_sync_config(app.handle(), with_url("ftp://example.com"));
-
-        assert_eq!(
-            refused,
-            Err("URL must start with https:// or http://".to_string())
-        );
-        assert!(!app.base().join("sync-config.json").exists());
-    }
-
-    #[test]
-    fn get_sync_config_of_a_broken_file_is_config_corrupt() {
-        let app = test_app();
-        std::fs::write(app.base().join("sync-config.json"), "{ not json").unwrap();
-
-        let refused = get_sync_config(app.handle()).unwrap_err();
-
-        assert_eq!(refused.kind, "configCorrupt");
     }
 }

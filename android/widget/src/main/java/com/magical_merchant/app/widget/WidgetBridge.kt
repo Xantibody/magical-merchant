@@ -32,7 +32,7 @@ internal data class CaptureData(
  * The Rust side of the widgets.
  *
  * The library name is the `[lib] name` in backend/Cargo.toml, and the symbols
- * behind the `external fun`s are spelled out in backend/src/widget_bridge.rs —
+ * behind the `external fun`s are spelled out in backend/src/widget/bridge.rs —
  * renaming this object or its package breaks the link at the first tap, not at
  * build time.
  *
@@ -121,7 +121,7 @@ internal object WidgetBridge {
             false
         }
 
-        // Rust answers false for every kind of refusal (`widget_bridge.rs` folds
+        // Rust answers false for every kind of refusal (`widget/bridge.rs` folds
         // the Err into a bool), so say at least that the call was reached.
         if (!saved) {
             WidgetLog.warn("scrawl entry not written (${text.length} chars); the sheet stays open")

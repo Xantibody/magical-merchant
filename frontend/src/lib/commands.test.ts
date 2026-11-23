@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, beforeEach, afterAll, afterEach, vi } 
 import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
 import { listen } from "@tauri-apps/api/event";
 import type { ClientContext } from "./client-context";
-import { isStaleSave, onLocalMutation, typedInvoke } from "./commands";
+import { errorText, isStaleSave, onLocalMutation, typedInvoke } from "./commands";
 import { describeSyncResult } from "./sync-status";
 import type { SyncResultPayload } from "./sync-status";
 // There is no node:fs in browser mode. Vite's `?raw` hands the source over as a string.
@@ -163,5 +163,21 @@ describe("isStaleSave", () => {
     expect(isStaleSave({ kind: "other", message: "disk full" })).toBe(false);
     expect(isStaleSave(new Error("stale"))).toBe(false);
     expect(isStaleSave("stale")).toBe(false);
+  });
+});
+
+describe("errorText", () => {
+  // Most commands refuse with a bare string. Those words are what the person reads
+  it("passes a string through as it is", () => {
+    expect(errorText("URL must start with https:// or http://")).toBe(
+      "URL must start with https:// or http://",
+    );
+  });
+
+  // A refusal with a kind is an object: String() of it printed `[object Object]`
+  it("reads the message of a refusal that carries a kind", () => {
+    expect(
+      errorText({ kind: "configCorrupt", message: "Could not read sync-config.json: bad" }),
+    ).toBe("Could not read sync-config.json: bad");
   });
 });

@@ -21,7 +21,7 @@ import org.json.JSONObject
  * no SystemConfiguration. Without this, a widget entry carries only `os` and
  * `arch` while an in-app entry carries battery, network and place.
  *
- * The JSON keys are the ones `ClientContext` (backend/src/device.rs)
+ * The JSON keys are the ones `ClientContext` (core/src/domain/device/context.rs)
  * deserializes, so this and the WebView speak the same shape. `networkType` is
  * an externally tagged enum there: the string has to be one of WiFi, Ethernet,
  * Mobile, Offline or the whole object fails to parse.

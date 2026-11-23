@@ -13,6 +13,8 @@ use magical_merchant_core::utils::clock::UtcStamp;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Runtime, State};
 
+use crate::commands::error::CommandError;
+
 const EVENT_SYNC_COMPLETE: &str = "sync-complete";
 const EVENT_SYNC_ERROR: &str = "sync-error";
 
@@ -46,12 +48,12 @@ impl Default for AppSyncState {
 #[cfg(not(target_os = "android"))]
 use magical_merchant_core::services::worker::desktop_http_client as http_client;
 
-/// Only Android bypasses the device's verifier. The reason is in `android_tls::sync_tls_config`
+/// Only Android bypasses the device's verifier. The reason is in `services::android_tls::sync_tls_config`
 #[cfg(target_os = "android")]
 fn http_client() -> Result<reqwest::Client, SyncError> {
     use magical_merchant_core::describe;
 
-    let tls = crate::android_tls::sync_tls_config()
+    let tls = crate::services::android_tls::sync_tls_config()
         .map_err(|e| SyncError::other(format!("TLS setup failed: {e}")))?;
     reqwest::Client::builder()
         .tls_backend_preconfigured(tls)
@@ -86,7 +88,7 @@ enum RoundEnd<'a> {
 pub(crate) async fn sync_start(
     handle: AppHandle,
     state: State<'_, AppSyncState>,
-) -> Result<(), SyncError> {
+) -> Result<(), CommandError> {
     // `do_sync` is an async fn, so building its future here runs nothing: a start the guard
     // refuses never reads the config or touches the network
     run_round(state.inner(), do_sync(&handle), |end| {
@@ -97,6 +99,7 @@ pub(crate) async fn sync_start(
         };
     })
     .await
+    .map_err(CommandError::from)
 }
 
 /// `sync_start` with the round and the events passed in, so it runs in a test with neither a
@@ -161,7 +164,7 @@ pub(crate) fn sync_status(state: State<'_, AppSyncState>) -> SyncStatusInfo {
 /// Has core check the login and build the client, then hands it to core's engine.
 /// `AppHandle` is used only to resolve the base dir; the TLS branch is `http_client`'s.
 async fn do_sync<R: Runtime>(handle: &AppHandle<R>) -> Result<SyncResult, SyncError> {
-    let base_dir = crate::app_base_dir(handle).map_err(SyncError::other)?;
+    let base_dir = crate::services::tauri::app_base_dir(handle).map_err(SyncError::other)?;
     // The repair before the scan is done by the engine inside the lock. That also covers
     // pressing sync after looking only at Scrawl, which never went through the listing's
     // `repair_once`
@@ -306,6 +309,22 @@ mod tests {
         assert!(events.borrow().is_empty());
         // The round in flight still owns the flag
         assert!(state.is_syncing.load(Ordering::SeqCst));
+    }
+
+    /// The webview reads the busy refusal as a kind and a message, nothing more
+    #[tokio::test]
+    async fn a_busy_refusal_crosses_as_its_kind_and_message() {
+        let state = AppSyncState::default();
+        state.is_syncing.store(true, Ordering::SeqCst);
+
+        let refused = run_round(&state, async { Ok(SyncResult::default()) }, |_| {})
+            .await
+            .unwrap_err();
+
+        assert_eq!(
+            serde_json::to_value(&refused).unwrap(),
+            serde_json::json!({ "kind": "busy", "message": "Sync already in progress" })
+        );
     }
 
     /// Without a Workers URL the round stops before the token is read, so a device never set

@@ -169,5 +169,5 @@ local scan → diff → `POST /sync/bulk`, repeated until nothing is left over.
   `templates_today` (same helpers as `create_note_from_template`); Kotlin
   never resolves a variable. A template button remembers only the template's
   name per `appWidgetId`. The app redraws template widgets after writing a
-  template or a note made from one (`widget_updates.rs`), and can pin a button
+  template or a note made from one (`backend/src/services/widgets.rs`), and can pin a button
   (`pin_template_widget`)

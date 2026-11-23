@@ -3,20 +3,30 @@
 //! `tauri-plugin-geolocation` is a stub on desktop and returns
 //! `Position::default()` as is. It does not even ask for permission, so records
 //! written on a Mac never carried coordinates. Call `CoreLocation` directly.
+//!
+//! Elsewhere there is nothing to ask here: the Android geolocation plugin answers on
+//! the front-end side, so [`latest`] is always `None` there.
 
+#[cfg(target_os = "macos")]
 use std::cell::OnceCell;
+#[cfg(target_os = "macos")]
 use std::sync::Mutex;
+#[cfg(target_os = "macos")]
 use std::time::Duration;
 
 use magical_merchant_core::domain::device::Location;
+#[cfg(target_os = "macos")]
 use objc2::rc::Retained;
+#[cfg(target_os = "macos")]
 use objc2_core_location::{CLLocationManager, kCLLocationAccuracyHundredMeters};
+#[cfg(target_os = "macos")]
 use tauri::AppHandle;
 
 /// The most recent fix.
 ///
 /// `CLLocationManager` is bound to the main thread and is not `Send`, so the
 /// recording side talks to it through this slot.
+#[cfg(target_os = "macos")]
 static LAST_FIX: Mutex<Option<Location>> = Mutex::new(None);
 
 /// How far the device must move before the next update arrives.
@@ -24,6 +34,7 @@ static LAST_FIX: Mutex<Option<Location>> = Mutex::new(None);
 /// Knowing where a record was written is enough; there is no need to pin down the
 /// street address. A finer filter only keeps the GPS running longer and adds
 /// nothing to reading records back.
+#[cfg(target_os = "macos")]
 const DISTANCE_FILTER_METERS: f64 = 50.0;
 
 /// How often the coordinates are copied into the slot.
@@ -31,8 +42,10 @@ const DISTANCE_FILTER_METERS: f64 = 50.0;
 /// The OS already thins the updates by distance, so this interval only changes how
 /// stale the local copy can become. The first record after startup should carry
 /// coordinates too, so it does not stretch to minutes.
+#[cfg(target_os = "macos")]
 const POLL_INTERVAL: Duration = Duration::from_secs(10);
 
+#[cfg(target_os = "macos")]
 thread_local! {
     /// Only the main thread touches this. Dropping it silently stops updates, so hold it.
     static MANAGER: OnceCell<Retained<CLLocationManager>> = const { OnceCell::new() };
@@ -43,6 +56,7 @@ thread_local! {
 /// # Panics
 ///
 /// It does not. Without permission `location` returns `None` and this returns too.
+#[cfg(target_os = "macos")]
 fn refresh() {
     MANAGER.with(|cell| {
         let manager = cell.get_or_init(|| {
@@ -81,6 +95,7 @@ fn refresh() {
 }
 
 /// The coordinates to put on a record, or `None` before the first fix.
+#[cfg(target_os = "macos")]
 pub(crate) fn latest() -> Option<Location> {
     LAST_FIX.lock().ok().and_then(|fix| fix.clone())
 }
@@ -89,6 +104,7 @@ pub(crate) fn latest() -> Option<Location> {
 ///
 /// Waiting for the main thread on every save hangs when the waiter is the main
 /// thread itself. Keep copying in the background so a save only reads the slot.
+#[cfg(target_os = "macos")]
 pub(crate) fn start(app: &AppHandle) {
     let handle = app.clone();
     std::thread::spawn(move || {
@@ -97,4 +113,10 @@ pub(crate) fn start(app: &AppHandle) {
             std::thread::sleep(POLL_INTERVAL);
         }
     });
+}
+
+/// No `CoreLocation` off macOS, so no fix to hand over.
+#[cfg(not(target_os = "macos"))]
+pub(crate) const fn latest() -> Option<Location> {
+    None
 }

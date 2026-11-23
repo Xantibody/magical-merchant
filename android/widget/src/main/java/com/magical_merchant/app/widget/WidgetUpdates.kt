@@ -11,7 +11,7 @@ import androidx.annotation.Keep
 /**
  * What the app (Rust, through JNI) asks of the widgets while it runs.
  *
- * Called from `backend/src/widget_updates.rs` by class and method name, and
+ * Called from `backend/src/services/widgets.rs` by class and method name, and
  * nothing in Kotlin calls it, so R8 would strip it from a release build; `@Keep`
  * is what the default ProGuard file honours to prevent that. Renaming anything
  * here breaks the Rust side at run time, not at build time.
@@ -19,7 +19,7 @@ import androidx.annotation.Keep
  * Nothing here may throw into the caller: a failure is one logged line and a
  * widget that catches up on its next 30-minute poll.
  */
-// AIDEV-NOTE: looked up by name from widget_updates.rs; @Keep and the names are load-bearing.
+// AIDEV-NOTE: looked up by name from backend/src/services/widgets.rs; @Keep and the names are load-bearing.
 @Keep
 object WidgetUpdates {
     /**

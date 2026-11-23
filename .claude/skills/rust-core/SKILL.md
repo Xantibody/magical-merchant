@@ -19,11 +19,20 @@ description: Rust core crate conventions, Tauri command plumbing, MCP CLI, and t
 ## Adding a Tauri command — checklist
 
 1. Core logic + unit tests in `core/`
-2. Command in `backend`
-3. Types in `lib/commands.ts` (`typedInvoke`)
-4. **Handler in `frontend/dev/ipc-mock.js`** — unknown commands throw in the
-   browser harness so the gap is visible
-5. If it reads/writes notes: respect storage invariants (sync-storage skill)
+2. Command in `backend/src/commands/<thing>.rs`, the file named after the
+   thing in `core/src/domain` it acts on (`note`, `codex`, `scrawl`,
+   `templates`, `sync/…`), with a test through `test_app()` beside it
+3. Add its path (`commands::note::create_draft`) to the one
+   `generate_handler!` list in `backend/src/app.rs`, in that thing's group
+4. Refuse with `CommandError` (`commands/error.rs`): a `CoreError` or
+   `SyncError` keeps its kind through `?`, plain words become `other`. Never
+   `map_err(|e| e.to_string())` a core error: the kind is what the screen
+   branches on
+5. Types in `lib/commands.ts` (`typedInvoke`)
+6. **Handler in `frontend/dev/ipc-mock.js`** — unknown commands throw in the
+   browser harness so the gap is visible; a failure path throws
+   `commandError(kind, message)`
+7. If it reads/writes notes: respect storage invariants (sync-storage skill)
 
 ## CLI (`cli/`, binary `magical-merchant`)
 

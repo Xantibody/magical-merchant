@@ -12,6 +12,8 @@ use tauri::AppHandle;
 use tauri_plugin_dialog::DialogExt as _;
 use tauri_plugin_fs::{FsExt as _, OpenOptions};
 
+use super::error::CommandError;
+
 #[derive(serde::Serialize)]
 pub(crate) struct ExportOutcome {
     /// false means the dialog was cancelled. It is not a failure.
@@ -35,7 +37,7 @@ pub(crate) async fn save_export(
     handle: AppHandle,
     suggested_name: String,
     data_base64: String,
-) -> Result<ExportOutcome, String> {
+) -> Result<ExportOutcome, CommandError> {
     let bytes = B64.decode(data_base64).map_err(|e| e.to_string())?;
     let extension = extension_of(&suggested_name)
         .ok_or_else(|| format!("export name has no extension: {suggested_name}"))?

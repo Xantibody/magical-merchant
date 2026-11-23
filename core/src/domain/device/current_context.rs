@@ -1,6 +1,6 @@
 //! The device state of right now, asked of the OS.
 
-use super::context::{Context, NetworkType};
+use super::context::{ClientContext, Context, Location, NetworkType, fill_from_client};
 use crate::services::os::{self, Link, Reading};
 
 /// A [`Context`] filled with only what the device can be asked about.
@@ -11,6 +11,20 @@ use crate::services::os::{self, Link, Reading};
 #[must_use]
 pub fn probe() -> Context {
     context_from(os::read())
+}
+
+/// What the device says of itself right now, with the gaps filled from what the `WebView`
+/// (or the widget) could read; see [`fill_from_client`].
+///
+/// How the values are measured lives here rather than in the app, so that writes from
+/// the CLI and MCP leave the same content. `fallback_location` is asked for coordinates
+/// only when the client has none: the app passes the last macOS fix.
+#[must_use]
+pub fn probe_with_client<F>(client: ClientContext, fallback_location: F) -> Context
+where
+    F: FnOnce() -> Option<Location>,
+{
+    fill_from_client(probe(), client, fallback_location)
 }
 
 /// What a record keeps of an OS reading. The location is never in it: positioning
@@ -114,6 +128,27 @@ mod tests {
     #[test]
     fn leaves_the_location_to_the_caller() {
         assert!(probe().location.is_none());
+    }
+
+    /// The machine comes from the probe, the coordinates from the client.
+    #[test]
+    fn a_probe_with_the_client_keeps_the_machine_and_takes_the_coordinates() {
+        let client = ClientContext {
+            latitude: Some(35.68),
+            longitude: Some(139.76),
+            ..ClientContext::default()
+        };
+
+        let context = probe_with_client(client, || None);
+
+        assert_eq!(context.os, std::env::consts::OS);
+        assert_eq!(
+            context.location,
+            Some(Location {
+                latitude: 35.68,
+                longitude: 139.76
+            })
+        );
     }
 
     /// macOS has `sw_vers`, so it can name the version too.

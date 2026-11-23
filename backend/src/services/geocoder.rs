@@ -1,60 +1,10 @@
-//! Looks a place name up from coordinates.
+//! The OS reverse geocoder: `CLGeocoder` on macOS, `android.location.Geocoder` on Android.
 //!
-//! What the record keeps is the coordinates; this is a rewording used only for reading.
 //! The municipality is enough, so the street number and the building name are dropped and
 //! the answer falls back to the wider administrative area.
 //!
 //! No place-name data of our own ships with the app. A dictionary of a few MB would only be
 //! a worse copy of what the OS already has, and an address is worded differently by country.
-
-use magical_merchant_core::domain::device::{cache_key, place_key, place_names};
-use std::path::Path;
-
-/// Returns only the coordinates whose place name is known, each with its [`place_key`].
-///
-/// A coordinate that could not be resolved does not appear in the result. The caller shows
-/// it as coordinates.
-///
-/// `locale` is the language the UI uses right now (`ja` / `en`). The OS returns a different
-/// name per language, so the cache is kept per language as well.
-pub(crate) fn resolve(
-    base_dir: &Path,
-    coordinates: &[(f64, f64)],
-    locale: &str,
-) -> Vec<(String, String)> {
-    let mut cache = place_names::load(base_dir);
-    let mut resolved = Vec::new();
-    let mut asked = false;
-
-    for &(latitude, longitude) in coordinates {
-        let key = place_key(latitude, longitude);
-        if resolved.iter().any(|(k, _): &(String, String)| *k == key) {
-            continue;
-        }
-        // What is returned is the coordinates-only key. That is what the UI looks up, and
-        // mixing the language in is kept inside the cache
-        let cached = cache_key(locale, &key);
-        if let Some(place) = cache.get(&cached) {
-            resolved.push((key, place.to_string()));
-            continue;
-        }
-        // Off the network they all fail. Do not put 30 coordinates through what the first
-        // one already showed.
-        let Some(place) = geocode(latitude, longitude, locale) else {
-            break;
-        };
-        cache.insert(cached, place.clone());
-        asked = true;
-        resolved.push((key, place));
-    }
-
-    if asked {
-        // The names that were resolved are returned even if the write fails. The cost is
-        // only asking again the next time it is opened.
-        let _ = place_names::save(base_dir, &cache);
-    }
-    resolved
-}
 
 /// Picks the finest address level that can still be pointed at on a map.
 ///
@@ -114,7 +64,7 @@ mod platform {
     /// Do not call this from the main thread. `CLGeocoder` puts the completion block on the
     /// main queue, so waiting there blocks its own answer and the timeout always fires.
     /// That is why the caller `resolve_places` is `async`.
-    pub(super) fn geocode(latitude: f64, longitude: f64, locale: &str) -> Option<String> {
+    pub(crate) fn geocode(latitude: f64, longitude: f64, locale: &str) -> Option<String> {
         // SAFETY: both are plain object creations and carry no thread constraint.
         let (location, geocoder) = unsafe {
             (
@@ -174,10 +124,10 @@ mod platform {
 
     /// `Geocoder` is tied to the device Context, so it cannot be built bare from Rust.
     /// It borrows the VM and Application Context taken at startup and calls into Java.
-    pub(super) fn geocode(latitude: f64, longitude: f64, locale: &str) -> Option<String> {
+    pub(crate) fn geocode(latitude: f64, longitude: f64, locale: &str) -> Option<String> {
         // The attach in jni 0.22 exposes `Env` only inside the closure. The borrowed
         // lifetime is pinned to one stretch of the stack and cannot escape after detach
-        crate::android_context::with_context(|env, context| {
+        crate::services::android::with_context(|env, context| {
             let name = lookup(env, &context, latitude, longitude, locale);
             if name.is_none() {
                 // Off the network `getFromLocation` throws IOException. Left pending, an
@@ -278,12 +228,12 @@ mod platform {
 /// dependency. Showing the coordinates as they are is still open, so this gives up quietly.
 #[cfg(not(any(target_os = "macos", target_os = "android")))]
 mod platform {
-    pub(super) const fn geocode(_latitude: f64, _longitude: f64, _locale: &str) -> Option<String> {
+    pub(crate) const fn geocode(_latitude: f64, _longitude: f64, _locale: &str) -> Option<String> {
         None
     }
 }
 
-use platform::geocode;
+pub(crate) use platform::geocode;
 
 #[cfg(test)]
 mod tests {

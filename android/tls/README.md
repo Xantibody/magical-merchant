@@ -10,7 +10,7 @@ have to be arranged before the first HTTPS request.
 | Half   | Where                                               | What it does                                                     |
 | ------ | --------------------------------------------------- | ---------------------------------------------------------------- |
 | Kotlin | `apply-tls.go` → `gen/android/app/build.gradle.kts` | Puts `org.rustls.platformverifier` on the app's classpath        |
-| Rust   | `backend/src/android_tls.rs`                        | Hands the crate the process' `JavaVM` and the activity `Context` |
+| Rust   | `backend/src/services/android_tls.rs`               | Hands the crate the process' `JavaVM` and the activity `Context` |
 
 Neither half fails the build when it is missing. Without the Kotlin side the
 JNI lookup finds no class; without the Rust side the verifier has no `Context`.
