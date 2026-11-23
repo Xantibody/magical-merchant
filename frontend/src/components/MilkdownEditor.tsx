@@ -9,7 +9,11 @@ import {
   remarkStringifyOptionsCtx,
 } from "@milkdown/kit/core";
 import { Selection, TextSelection } from "@milkdown/kit/prose/state";
-import { commonmark, wrapInHeadingInputRule } from "@milkdown/kit/preset/commonmark";
+import {
+  commonmark,
+  wrapInBulletListInputRule,
+  wrapInHeadingInputRule,
+} from "@milkdown/kit/preset/commonmark";
 import { gfm } from "@milkdown/kit/preset/gfm";
 import { listener, listenerCtx } from "@milkdown/kit/plugin/listener";
 import { cursor } from "@milkdown/kit/plugin/cursor";
@@ -30,6 +34,7 @@ import { hardbreakLiveDomSchema } from "../lib/hardbreak-schema";
 import { imeKeyPlugin } from "../lib/ime-key-plugin";
 import { listKeymapPlugin } from "../lib/list-keymap-plugin";
 import { headingInputRule, headingKeymapPlugin } from "../lib/heading-plugin";
+import { bulletListInputRule } from "../lib/bullet-list-input-rule";
 import { inputRuleUndoPlugin } from "../lib/input-rule-undo-plugin";
 import { tabKeymapPlugin } from "../lib/tab-keymap-plugin";
 import { hrSelectionPlugin } from "../lib/hr-selection-plugin";
@@ -227,9 +232,13 @@ export default function MilkdownEditor(props: MilkdownEditorProps): JSX.Element 
           });
         }
       })
-      // The heading rule is replaced by ours (heading-plugin)
-      .use(commonmark.filter((plugin) => plugin !== wrapInHeadingInputRule))
-      .use(headingInputRule)
+      // The heading and bullet list rules are replaced by ours (heading-plugin, bullet-list-input-rule)
+      .use(
+        commonmark.filter(
+          (plugin) => plugin !== wrapInHeadingInputRule && plugin !== wrapInBulletListInputRule,
+        ),
+      )
+      .use([headingInputRule, bulletListInputRule])
       .use(hardbreakLiveDomSchema)
       // The preview (markdown-it) draws tables and strikethrough by default. Now
       // that the editor is always open, without them here a note collapses into

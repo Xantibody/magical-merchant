@@ -449,6 +449,41 @@ describe("Note list input rules", () => {
     await userEvent.keyboard("- a{Backspace}");
     expect(h.container.querySelectorAll("li")).toHaveLength(1);
   });
+
+  // A blank line under a list used to make `- ` start a list of its own, whose first item
+  // Tab could not indent under the item above
+  it("continues the list above when `- ` follows a blank line under it", async () => {
+    const h = await mount("- a");
+    h.select("a", true);
+    await userEvent.keyboard("{Enter}{Enter}{Enter}- b");
+
+    const list = h.view.state.doc.child(0);
+    expect(list.type.name).toBe("bullet_list");
+    expect(list.childCount).toBe(2);
+
+    await userEvent.keyboard("{Tab}");
+    expect(h.container.querySelectorAll("li li")).toHaveLength(1);
+  });
+
+  it("gives `- ` and the blank line back with a Backspace right after joining", async () => {
+    const h = await mount("- a");
+    h.select("a", true);
+    await userEvent.keyboard("{Enter}{Enter}{Enter}- {Backspace}");
+
+    expect(h.view.state.doc.child(0).childCount).toBe(1);
+    expect(h.view.state.doc.child(1).content.size).toBe(0);
+    expect(h.view.state.doc.child(2).textContent).toBe("- ");
+  });
+
+  it("starts a list of its own when a written paragraph stands between", async () => {
+    const h = await mount("- a\n\nbetween\n\nlast");
+    h.select("last", true);
+    await userEvent.keyboard("{Enter}- b");
+
+    expect(h.view.state.doc.child(0).childCount).toBe(1);
+    expect(h.view.state.doc.child(1).textContent).toBe("between");
+    expect(h.view.state.doc.child(3).type.name).toBe("bullet_list");
+  });
 });
 
 describe("Note heading keys", () => {
