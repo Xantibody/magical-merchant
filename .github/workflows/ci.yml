@@ -37,6 +37,7 @@ jobs:
       rust: ${{ steps.filter.outputs.rust || 'true' }}
       frontend: ${{ steps.filter.outputs.frontend || 'true' }}
       worker: ${{ steps.filter.outputs.worker || 'true' }}
+      screens: ${{ steps.filter.outputs.screens || 'true' }}
       nix-package: ${{ steps.filter.outputs.nix-package || 'true' }}
       desktop-package: ${{ steps.filter.outputs.desktop-package || 'true' }}
       nixos-module: ${{ steps.filter.outputs.nixos-module || 'true' }}
@@ -72,6 +73,8 @@ jobs:
               - 'flake.lock'
               - 'justfile'
               - 'rust/justfile'
+              # A workspace member: the app tests/screens drives
+              - 'tests/screens/app/**'
             # frontend/ は丸ごと 1 行で見る。中のファイルを並べていた頃は、
             # knip.jsonc のような 1 つを漏らすとジョブが飛び、落ちるのは merge 後の
             # main だった。外から足すのは共有の入力だけ
@@ -83,6 +86,12 @@ jobs:
               - 'flake.lock'
             worker:
               - 'worker/**'
+              - '.oxlintrc.json'
+              - 'flake.nix'
+              - 'nix/devshells.nix'
+              - 'flake.lock'
+            screens:
+              - 'tests/screens/**'
               - '.oxlintrc.json'
               - 'flake.nix'
               - 'nix/devshells.nix'
@@ -103,6 +112,7 @@ jobs:
               - 'core/**'
               - 'cli/**'
               - 'xtask/**'
+              - 'tests/screens/app/**'
               - 'frontend/src/**'
               - 'backend/**'
               - 'frontend/index.html'
@@ -308,6 +318,42 @@ jobs:
           path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
           key: ${{ steps.pnpm-store.outputs.cache-primary-key }}
 
+  # The TypeScript only: taking the shots needs macOS and a window, and the app it drives
+  # (tests/screens/app) is checked and tested in rust
+  screens:
+    needs: [changes, lint]
+    if: needs.changes.outputs.screens == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-nix
+        with:
+          name: screens
+          hash: ${{ hashFiles('flake.lock', 'flake.nix', 'nix/devshells.nix') }}
+          max-store-size: 2G
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        run: echo "STORE_PATH=$(nix develop .#screens --command pnpm store path)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@v6
+        id: pnpm-store
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: pnpm-screens-${{ runner.os }}-${{ hashFiles('tests/screens/pnpm-lock.yaml') }}
+          restore-keys: |
+            pnpm-screens-${{ runner.os }}-
+      - name: check
+        run: nix develop .#screens --command just screens::check
+      - name: test
+        run: nix develop .#screens --command just screens::test
+      - uses: actions/cache/save@v6
+        if: github.ref == 'refs/heads/main' && steps.pnpm-store.outputs.cache-hit != 'true'
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ steps.pnpm-store.outputs.cache-primary-key }}
+
   # ホーム画面ウィジェットの Kotlin とレイアウトは、ここでしか壊れが分からない。
   # `R.id.*` の解決も、apply-widget.go が書き込んだマニフェストが通るかも、
   # APK を組んで初めて確かめられる。無かった間は「実機に入れるまで気付かない」
@@ -447,6 +493,7 @@ jobs:
       - rust
       - frontend
       - worker
+      - screens
       - android
       - nixos-module
       - nix-package
