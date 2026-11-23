@@ -36,7 +36,7 @@ jobs:
       # 手で回すのは「filter を信用したくないとき」なので、そこだけは全部走らせる
       rust: ${{ steps.filter.outputs.rust || 'true' }}
       frontend: ${{ steps.filter.outputs.frontend || 'true' }}
-      workers: ${{ steps.filter.outputs.workers || 'true' }}
+      worker: ${{ steps.filter.outputs.worker || 'true' }}
       nix-package: ${{ steps.filter.outputs.nix-package || 'true' }}
       desktop-package: ${{ steps.filter.outputs.desktop-package || 'true' }}
       nixos-module: ${{ steps.filter.outputs.nixos-module || 'true' }}
@@ -62,7 +62,7 @@ jobs:
             rust:
               - '.github/actions/**'
               - 'core/**'
-              - 'tauri-app/src-tauri/**'
+              - 'backend/**'
               - 'cli/**'
               - 'Cargo.toml'
               - 'Cargo.lock'
@@ -72,36 +72,24 @@ jobs:
               - 'flake.lock'
               - 'justfile'
               - 'rust/justfile'
-            # tauri_app::check が読むものは漏らさず並べる (tauri-app/justfile:9-14)。
-            # knip.jsonc だけを直した PR でジョブが飛ぶと、落ちるのは merge 後の main
+            # frontend/ は丸ごと 1 行で見る。中のファイルを並べていた頃は、
+            # knip.jsonc のような 1 つを漏らすとジョブが飛び、落ちるのは merge 後の
+            # main だった。外から足すのは共有の入力だけ
             frontend:
-              - 'tauri-app/src/**'
-              - 'tauri-app/dev/**'
-              - 'tauri-app/index.html'
-              - 'tauri-app/public/**'
+              - 'frontend/**'
               - '.oxlintrc.json'
-              - 'tauri-app/.oxlintrc.json'
-              - 'tauri-app/knip.jsonc'
-              - 'tauri-app/package.json'
-              - 'tauri-app/pnpm-lock.yaml'
-              - 'tauri-app/pnpm-workspace.yaml'
-              - 'tauri-app/tsconfig.json'
-              - 'tauri-app/tsconfig.dev.json'
-              - 'tauri-app/vite.config.ts'
-              - 'tauri-app/vitest.config.ts'
-              - 'tauri-app/justfile'
               - 'flake.nix'
               - 'nix/devshells.nix'
               - 'flake.lock'
-            workers:
-              - 'workers/**'
+            worker:
+              - 'worker/**'
               - '.oxlintrc.json'
               - 'flake.nix'
               - 'nix/devshells.nix'
               - 'flake.lock'
             nix-package:
-              - 'tauri-app/pnpm-lock.yaml'
-              - 'tauri-app/package.json'
+              - 'frontend/pnpm-lock.yaml'
+              - 'frontend/package.json'
               - 'nix/package.nix'
               - 'flake.nix'
               - 'flake.lock'
@@ -115,14 +103,14 @@ jobs:
               - 'core/**'
               - 'cli/**'
               - 'xtask/**'
-              - 'tauri-app/src/**'
-              - 'tauri-app/src-tauri/**'
-              - 'tauri-app/index.html'
-              - 'tauri-app/capture.html'
-              - 'tauri-app/package.json'
-              - 'tauri-app/pnpm-lock.yaml'
-              - 'tauri-app/vite.config.ts'
-              - 'tauri-app/tsconfig.json'
+              - 'frontend/src/**'
+              - 'backend/**'
+              - 'frontend/index.html'
+              - 'frontend/capture.html'
+              - 'frontend/package.json'
+              - 'frontend/pnpm-lock.yaml'
+              - 'frontend/vite.config.ts'
+              - 'frontend/tsconfig.json'
               - 'Cargo.toml'
               - 'Cargo.lock'
               - 'nix/package.nix'
@@ -139,17 +127,19 @@ jobs:
               - 'flake.lock'
             # core/** はここに入れない。core が壊れれば rust ジョブが先に落ちるし、
             # 15 分のビルドを core の変更のたびに足すと待ち時間だけが増える。
-            # android 限定でコンパイルされる widget_bridge.rs は src-tauri なので拾える
+            # android 限定でコンパイルされる widget_bridge.rs は backend なので拾える
             # このジョブの定義そのものを変えたときは workflow_dispatch で回す。
             # 手動実行だけは filter を通さないので全ジョブが走る。
             # ci.yml をここに入れると、フロントのジョブを 1 行直しただけで
             # 12 分の APK ビルドが乗る
             android:
-              - 'tauri-app/android-widget/**'
-              # android-build-debug は android-setup 経由で apply-tls.go も回す
-              - 'tauri-app/android-tls/**'
-              - 'tauri-app/src-tauri/**'
-              - 'tauri-app/justfile'
+              - 'android/widget/**'
+              # android::build-debug は android::setup 経由で apply-tls.go も回す
+              - 'android/tls/**'
+              - 'backend/**'
+              - 'android/justfile'
+              # android::init は frontend::icons を呼ぶ
+              - 'frontend/justfile'
               - 'Cargo.lock'
               - 'flake.nix'
               - 'nix/devshells.nix'
@@ -181,7 +171,7 @@ jobs:
   # the patterns that leak (credentials left behind, an expression expanded
   # straight into run). Those two do not go through the nix devshell: adding
   # them to flake.nix would make paths-filter count it as an input of rust,
-  # frontend, workers and android, and a workflow lint change would bring the
+  # frontend, worker and android, and a workflow lint change would bring the
   # 45-minute APK build with it.
   #
   # Source comments are English and spelled right (justfile: comments), over
@@ -271,22 +261,22 @@ jobs:
         id: pnpm-store
         with:
           path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
-          key: pnpm-${{ runner.os }}-${{ hashFiles('tauri-app/pnpm-lock.yaml') }}
+          key: pnpm-${{ runner.os }}-${{ hashFiles('frontend/pnpm-lock.yaml') }}
           restore-keys: |
             pnpm-${{ runner.os }}-
       - name: check
-        run: nix develop .#frontend --command just tauri_app::check
+        run: nix develop .#frontend --command just frontend::check
       - name: test
-        run: nix develop .#frontend --command just tauri_app::test
+        run: nix develop .#frontend --command just frontend::test
       - uses: actions/cache/save@v6
         if: github.ref == 'refs/heads/main' && steps.pnpm-store.outputs.cache-hit != 'true'
         with:
           path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
           key: ${{ steps.pnpm-store.outputs.cache-primary-key }}
 
-  workers:
+  worker:
     needs: [changes, lint]
-    if: needs.changes.outputs.workers == 'true'
+    if: needs.changes.outputs.worker == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -295,23 +285,23 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup-nix
         with:
-          name: workers
+          name: worker
           hash: ${{ hashFiles('flake.lock', 'flake.nix', 'nix/devshells.nix') }}
           max-store-size: 2G
       - name: Get pnpm store directory
         id: pnpm-cache
-        run: echo "STORE_PATH=$(nix develop .#workers --command pnpm store path)" >> "$GITHUB_OUTPUT"
+        run: echo "STORE_PATH=$(nix develop .#worker --command pnpm store path)" >> "$GITHUB_OUTPUT"
       - uses: actions/cache/restore@v6
         id: pnpm-store
         with:
           path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
-          key: pnpm-workers-${{ runner.os }}-${{ hashFiles('workers/pnpm-lock.yaml') }}
+          key: pnpm-worker-${{ runner.os }}-${{ hashFiles('worker/pnpm-lock.yaml') }}
           restore-keys: |
-            pnpm-workers-${{ runner.os }}-
+            pnpm-worker-${{ runner.os }}-
       - name: check
-        run: nix develop .#workers --command just workers::check
+        run: nix develop .#worker --command just worker::check
       - name: test
-        run: nix develop .#workers --command just workers::test
+        run: nix develop .#worker --command just worker::test
       - uses: actions/cache/save@v6
         if: github.ref == 'refs/heads/main' && steps.pnpm-store.outputs.cache-hit != 'true'
         with:
@@ -364,10 +354,10 @@ jobs:
       # 上の rm がその実体を消すまでの間だけ起きるので、負けると落ちて勝つと
       # 通るレースになっていた。env を消すほうが待つより確実
       - name: Generate the Android project
-        run: env -u ANDROID_SDK_ROOT nix develop .#android --command just tauri_app::android-init
-      # android-setup を含む。ウィジェットのソースを入れた状態で組む
+        run: env -u ANDROID_SDK_ROOT nix develop .#android --command just android::init
+      # android::setup を含む。ウィジェットのソースを入れた状態で組む
       - name: The debug APK builds
-        run: env -u ANDROID_SDK_ROOT nix develop .#android --command just tauri_app::android-build-debug
+        run: env -u ANDROID_SDK_ROOT nix develop .#android --command just android::build-debug
       - uses: actions/cache/save@v6
         if: github.ref == 'refs/heads/main' && steps.cargo-cache.outputs.cache-hit != 'true'
         with:
@@ -456,7 +446,7 @@ jobs:
       - changes
       - rust
       - frontend
-      - workers
+      - worker
       - android
       - nixos-module
       - nix-package

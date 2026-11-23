@@ -1,0 +1,46 @@
+# AIDEV-NOTE: the Tauri CLI looks for tauri.conf.json below the cwd only; the crate is a sibling, so every `pnpm tauri` is told where it is
+export TAURI_APP_PATH := source_directory() / ".." / "backend"
+
+[private]
+default:
+  @just --list
+
+[private]
+setup:
+  pnpm install
+
+check: setup
+  oxlint src/ dev/
+  tsc -b --noEmit
+  # dev/ は素の JS。tsconfig.json の include(src) の外なので別に走らせる
+  tsc --noEmit -p tsconfig.dev.json
+  pnpm knip
+
+test: setup
+  pnpm test
+
+dev: setup
+  pnpm tauri dev
+
+# Tauri なしのブラウザ検証 (agent-browser 用)。IPC は dev/ipc-mock.js が受ける
+dev-browser: setup
+  pnpm run dev:browser
+
+# 出力は 2 か所に分かれる: ../backend/icons/ (デスクトップ・iOS、git 管理下) と
+# gen/android の mipmap。後者は gitignore なので init のたびに入れ直す。
+# PNG は同じ内容で書き直されるが icon.icns だけは毎回バイト列が変わるので、
+# 用が無いときに走らせると差分だけが残る。ビルドの依存には入れない。
+
+# アイコンを SVG から全部作り直す
+icons: setup
+  pnpm tauri icon ../backend/icons/icons.json
+  cp ../backend/icons/icon.svg public/icon.svg
+
+# --- macOS ---
+
+# 出来上がりは ../target/release/bundle/macos/Magical Merchant.app。
+# 手元へ入れるのは nix 側 (docs/install.md)
+
+# 配信する .app を建てる
+build:
+  pnpm tauri build --bundles app

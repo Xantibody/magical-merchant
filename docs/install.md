@@ -183,7 +183,7 @@ on macOS — taking over any copy the app wrote when sync was set up by hand.
 
 ```sh
 # Build the .app bundle
-just tauri_app::build
+just frontend::build
 
 # Copy to Applications
 cp -r "target/release/bundle/macos/Magical Merchant.app" /Applications/
@@ -201,7 +201,7 @@ release is signed with the same key, a new APK installs over the previous one
 as an update.
 
 Tagging `vX.Y.Z` (matching `version` in
-`tauri-app/src-tauri/tauri.conf.json`) runs
+`backend/tauri.conf.json`) runs
 `.github/workflows/release.yml`, which builds and attaches the APK. The
 workflow needs these repository secrets:
 
@@ -213,7 +213,7 @@ workflow needs these repository secrets:
 | `ANDROID_KEY_PASSWORD`      | Key password                                     |
 
 See
-[`tauri-app/android-signing/README.md`](../tauri-app/android-signing/README.md)
+[`android/signing/README.md`](../android/signing/README.md)
 for creating the keystore and for building locally.
 
 ## Android — home screen widgets
@@ -224,6 +224,6 @@ call into `magical_merchant_core` — the app is never started. The "new note"
 bar (4×1), the recent notes list (4×2), the templates grid (4×2) and the
 single-template button (2×1 / 1×1, its template chosen when it is placed)
 open the app on `magical-merchant://widget/…` deep links. Sources live in
-[`tauri-app/android-widget/`](../tauri-app/android-widget/README.md) and are
+[`android/widget/`](../android/widget/README.md) and are
 injected into the generated Gradle project by
-`just tauri_app::android-setup`, which the build recipes run for you.
+`just android::setup`, which the build recipes run for you.

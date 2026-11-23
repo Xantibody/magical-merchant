@@ -3,7 +3,7 @@
 //! Managing tags in a separate field stops the writing hand and turns it into
 //! classification work. Written inline in the body, they stay at the pace of writing.
 //!
-//! The same rules live in `tauri-app/src/lib/tags.ts`. That side has to interpret
+//! The same rules live in `frontend/src/lib/tags.ts`. That side has to interpret
 //! the body as is on screen (completion and coloring); this side has to read the
 //! whole note to build the list. Fix one and fix the other.
 //!
@@ -20,7 +20,7 @@ fn is_tag_char(c: char) -> bool {
 ///
 /// A difference in case is the same tag to the writer. Only ASCII is lowercased
 /// (Japanese has no case, and no locale-dependent conversion is brought in).
-/// The same rule lives in `foldTag` in `tauri-app/src/lib/tags.ts`.
+/// The same rule lives in `foldTag` in `frontend/src/lib/tags.ts`.
 #[must_use]
 pub fn fold_tag(tag: &str) -> String {
     tag.to_ascii_lowercase()
@@ -41,7 +41,7 @@ pub const fn same_tag(a: &str, b: &str) -> bool {
 /// the body or coming from the frontmatter, a different answer would show different
 /// letters on each screen. `collect_span` drops by the same rule while picking, so
 /// that a discarded spelling is never allocated. The same rule lives in `foldUnique`
-/// in `tauri-app/src/lib/tags.ts`.
+/// in `frontend/src/lib/tags.ts`.
 ///
 /// AIDEV-NOTE: A linear scan, not a keyed Map. A note has a few tags, and not adding allocations is what helps the list load.
 fn fold_unique(tags: impl IntoIterator<Item = String>) -> Vec<String> {

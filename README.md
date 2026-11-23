@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="tauri-app/src-tauri/icons/icon.svg" width="128" height="128" alt="Magical Merchant">
+  <img src="backend/icons/icon.svg" width="128" height="128" alt="Magical Merchant">
   <h1>Magical Merchant</h1>
   <p>A local-first journal and Markdown workspace — quick capture in Scrawl, Notes that grow out of it. Rust core, Tauri 2 + SolidJS, minimal UI.</p>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License"></a>
@@ -83,7 +83,7 @@ nix profile install github:Xantibody/magical-merchant
 git clone https://github.com/Xantibody/magical-merchant.git
 cd magical-merchant
 direnv allow                       # or: nix develop
-cd tauri-app && pnpm install && cd ..
+cd frontend && pnpm install && cd ..
 just dev
 ```
 
@@ -104,19 +104,21 @@ More options (nix-darwin module, manual build, Android APK) are in
 
 Rust core (`core/`) shared by the Tauri 2 app, a CLI + MCP server (`cli/`),
 and benchmarks · SolidJS + Milkdown frontend · Open Props design tokens ·
-Cloudflare Workers + R2 sync (`workers/`) · Nix flake for dev/CI/packaging.
+Cloudflare Workers + R2 sync (`worker/`) · Nix flake for dev/CI/packaging.
 
 ```
 magical-merchant/
 ├── core/           # Rust core library (framework-independent business logic)
 ├── cli/            # Terminal client ($EDITOR editing) + MCP server
-├── tauri-app/
-│   ├── src/        # SolidJS frontend (TypeScript)
-│   └── src-tauri/  # Tauri 2 backend (Rust)
-├── workers/        # Cloudflare Workers (R2 sync backend)
+├── frontend/       # SolidJS frontend (TypeScript)
+├── backend/        # Tauri 2 backend (Rust)
+├── android/        # Patchers for the generated Android project (widgets, TLS, signing)
+├── worker/         # Cloudflare Workers (R2 sync backend)
 ├── fixtures/       # Sample data: one of every surface, read by the core's tests
 ├── xtask/          # `cargo xtask sandbox …`, the app over a copy of fixtures/
 ├── docs/           # Documentation
 ├── rust/           # Shared Rust just recipes
 └── nix/            # Nix configuration helpers
 ```
+
+Where a file goes and which way imports point: [docs/architecture.md](docs/architecture.md).
