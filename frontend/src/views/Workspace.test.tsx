@@ -10,6 +10,7 @@ import type { SearchHit, TagUsage } from "../lib/commands";
 import { ShellProvider, useShell } from "../lib/shell";
 import type { Shell } from "../lib/shell";
 import { shortcutLabel } from "../lib/shortcuts";
+import { setExamplesShown } from "../lib/template-examples";
 import Workspace from "./Workspace";
 
 // The real Milkdown drags in all of ProseMirror. What matters here is only the decision of
@@ -26,6 +27,7 @@ vi.mock(import("../components/MilkdownEditor"), () => ({
     onChange?: (markdown: string) => void;
     onEditorReady?: (editor?: Editor) => void;
     noteLinks?: () => { id: string }[];
+    examples?: () => ReadonlyMap<string, string[]>;
   }): JSX.Element => {
     typeInEditor = props.onChange;
     const el = document.createElement("div");
@@ -33,6 +35,11 @@ vi.mock(import("../components/MilkdownEditor"), () => ({
     el.textContent = props.defaultValue ?? "";
     // The real editor looks `[[` completions up while typing. The board just lists the IDs
     el.dataset.noteLinks = (props.noteLinks?.() ?? []).map((t) => t.id).join(",");
+    // The real editor draws a template's examples faint under their headings. The board says
+    // how many headings it was handed examples for
+    createEffect(() => {
+      el.dataset.examples = String(props.examples?.().size ?? 0);
+    });
     const ready = setTimeout(() => {
       el.className = "ProseMirror";
       el.contentEditable = "true";
@@ -94,7 +101,7 @@ let disk: Map<string, string>;
  * The part of the frontmatter the list and detail read. A note without it keeps the defaults.
  * `bodyTags` are the body's `#tag`s: the list merges them in, the frontmatter does not have them.
  */
-let meta: Map<string, { tags?: string[]; bodyTags?: string[]; view?: string }>;
+let meta: Map<string, { tags?: string[]; bodyTags?: string[]; view?: string; template?: string }>;
 /** Every tag in use, as core counts it. What the suggestions read. */
 let usedTags: TagUsage[];
 /** Which directory it lives in. A note with no entry is a Note. */
@@ -162,6 +169,8 @@ const summaryOf = (filename: string): Record<string, unknown> => ({
   // core drops a key that was not written. This matches the shape where the list reader
   // sees undefined
   ...(meta.get(filename)?.view ? { view: meta.get(filename)?.view } : {}),
+  // Only a note born from a template names it
+  ...(meta.get(filename)?.template ? { template: meta.get(filename)?.template } : {}),
   // Only a Codex row carries the version count and whether it has moved on
   ...(kinds.get(filename) === "codex"
     ? {
@@ -180,6 +189,11 @@ const saveError = (kind: string, message: string): Error =>
 const HANDLERS: Record<string, (args: Record<string, unknown>) => unknown> = {
   list_notes: () => [...disk.keys()].map((filename) => summaryOf(filename)),
   list_templates: () => [TEMPLATE],
+  // The template as written, examples and all. A note made from it never holds them
+  read_template: () => ({
+    body: `# ${TITLE_T}\n\n## やったこと\n{{eg: 資料を作った}}\n`,
+    tags: [],
+  }),
   create_from_template: () => {
     if (templateRefused) {
       throw saveError("missing", `template not found: ${TEMPLATE.filename}`);
@@ -3329,5 +3343,74 @@ describe("Workspace › テンプレートから作る", () => {
       expect(shell?.toast()?.message).toBe("テンプレートから Note を作れませんでした"),
     );
     expect(document.querySelector(".note-title-input")).toBeNull();
+  });
+});
+
+/** How many headings the editor board was handed template examples for. */
+const editorExamples = (): string | undefined => editorBody().dataset.examples;
+
+describe("Workspace › 記入例のスイッチ", () => {
+  // The switch is a module signal: it outlives a test unless it is put back
+  beforeEach(async () => {
+    await setupWorkspace();
+    setExamplesShown(true);
+  });
+  afterEach(() => {
+    setExamplesShown(true);
+    teardownWorkspace();
+  });
+
+  const readsOfTemplate = (): Record<string, unknown>[] =>
+    calls.filter((c) => c.cmd === "read_template").map((c) => c.args);
+
+  /** Back on the writing screen from the viewer, with the editor up. */
+  async function writeAgain(): Promise<void> {
+    await startWriting();
+    await waitFor(() => expect(editorBody().isContentEditable).toBe(true));
+  }
+
+  it("hands a template's examples to the editor and folds them from the panel", async () => {
+    meta.set(FILE_A, { template: TITLE_T });
+    await openNoteA();
+
+    await waitFor(() => expect(editorExamples()).toBe("1"));
+    expect(readsOfTemplate()).toStrictEqual([{ filename: TEMPLATE.filename }]);
+    expect(shell?.noteState()?.examples).toBe(true);
+
+    await flipSwitch("記入例");
+
+    await waitFor(() => expect(shell?.noteState()?.examples).toBe(false));
+    await writeAgain();
+    await waitFor(() => expect(editorExamples()).toBe("0"));
+    // Folded, the template is not read at all
+    expect(readsOfTemplate()).toHaveLength(1);
+
+    await flipSwitch("記入例");
+
+    await waitFor(() => expect(shell?.noteState()?.examples).toBe(true));
+    await writeAgain();
+    await waitFor(() => expect(editorExamples()).toBe("1"));
+    expect(readsOfTemplate()).toHaveLength(2);
+  });
+
+  it("reads no template while the examples are folded", async () => {
+    setExamplesShown(false);
+    meta.set(FILE_A, { template: TITLE_T });
+    await openNoteA();
+
+    await sleep(100);
+    expect(readsOfTemplate()).toHaveLength(0);
+    expect(editorExamples()).toBe("0");
+    expect(shell?.noteState()?.examples).toBe(false);
+  });
+
+  // A switch that changes nothing would only ask to be pressed
+  it("reads nothing and offers no switch for a note not made from a template", async () => {
+    await openNoteA();
+    const panel = await openPanel();
+
+    expect(within(panel).queryByRole("switch", { name: "記入例" })).toBeNull();
+    expect(readsOfTemplate()).toHaveLength(0);
+    expect(shell?.noteState()?.examples).toBe(false);
   });
 });
