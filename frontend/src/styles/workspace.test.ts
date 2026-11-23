@@ -51,11 +51,12 @@ function preview(blocks: string): string {
   return `<div class="markdown-preview">${blocks}</div>`;
 }
 
+/** ProseMirror writes its blocks with no whitespace between them, unlike markdown-it */
 function editor(blocks: string): string {
   return `
     <div class="milkdown-editor">
       <div class="milkdown">
-        <div class="ProseMirror editor" contenteditable="true">${blocks}</div>
+        <div class="ProseMirror editor" contenteditable="true">${blocks.trim().replaceAll(/>\s+</gu, "><")}</div>
       </div>
     </div>`;
 }
