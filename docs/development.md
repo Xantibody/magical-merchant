@@ -68,6 +68,46 @@ The recipes are one line each because the work is in `cargo xtask sandbox …`,
 where this machine's data directory and the app identifier already have
 answers in Rust.
 
+## Screens
+
+`just screens::shoot <dir>` takes every screen of the real app, not the
+browser harness: a debug build over a fresh copy of `fixtures/`, driven
+through a WebDriver server inside it. For every scene in
+`tests/screens/src/shoot/scenes.ts` (the surfaces and states of the UI
+Architecture) at each width (wide 1280×800 as in the feature tour, phone
+390×844), language and theme, it writes
+`<scene>.<width>.<language>.<theme>.png` and `.txt` (the accessibility tree
+as text), and a `manifest.json` of what the shots depend on. `<dir>` has to
+be new or empty, so no shot from an earlier run passes for this one's.
+`just screens::diff <before> <after>` names every scene whose picture or
+tree changed, or that only one side has. It exits 0 when nothing differs, 1
+when something does, and 2 when it could not compare (an unreadable file,
+a scene missing its picture or its tree). Shoot before a change and after
+it, then diff.
+
+- The app is `tests/screens/app` (`just screens::app`, run by `shoot`): the
+  real app's `run_with()` with a WebDriver server added. The shipped app
+  carries none of it, and the crate refuses a release build: the server runs
+  whatever script it is sent.
+- Every `Date` reads 2026-08-07 12:00 +09:00 (`MAGICAL_MERCHANT_NOW_MS`,
+  read by that crate only), so "today" is the same in every take. The time
+  zone is the machine's; `manifest.json` records it.
+- The window stays on screen while shooting and cannot be resized by hand,
+  so a tiling window manager leaves it floating. If something still sizes
+  it, `shoot` stops and says so. (A minimized window would stay out of the
+  way, but WebKit stops a hidden page's animation frames.)
+- The phone is a narrow Mac window. WebKit there still reports a mouse, so
+  rules on `hover: none` show their desktop side.
+- Shots compare on the machine that took them; fonts and the pixel ratio
+  are the machine's.
+- The app keeps its sync login in memory (keyring's mock store), never in
+  this machine's keychain, so every shoot starts signed out and no keychain
+  prompt stops it.
+- Stopping `shoot` (Ctrl-C, SIGTERM, SIGHUP) stops the app with it.
+- A scene that cannot be reached is listed at the end and fails the run;
+  the other scenes keep their shots. `just screens::shoot <dir> --only note`
+  takes only the scenes whose name holds `note`.
+
 ## DevShell
 
 | Category | Tools                                            |
@@ -87,25 +127,26 @@ fetch what they need:
 | `.#rust`     | Rust + clippy + just                 | CI (`rust`)       |
 | `.#frontend` | Node toolchain + Playwright browsers | CI (`frontend`)   |
 | `.#worker`   | Node toolchain                       | CI (`worker`)     |
+| `.#screens`  | Node toolchain                       | CI (`screens`)    |
 | `.#android`  | `.#default` minus browser automation | Release APK build |
 
 ## Task runner (just)
 
 ### Root recipes
 
-| Command         | Description                                                    | CI  |
-| --------------- | -------------------------------------------------------------- | --- |
-| `just fmt`      | Format all files (`nix fmt`)                                   | ✓   |
-| `just check`    | The three module checks + `comments`                           | ✓   |
-| `just comments` | Vale (English only, the proper nouns, proselint) and typos     | ✓   |
-| `just test`     | `rust::test` + `frontend::test` + `worker::test`               | ✓   |
-| `just verify`   | `fmt` → `check` → `test`. Run it before calling something done |     |
-| `just dev`      | `frontend::dev` — the one recipe worth a short name            |     |
-| `just sandbox`  | The app over a copy of `fixtures/` (see [Sandbox](#sandbox))   |     |
+| Command         | Description                                                        | CI  |
+| --------------- | ------------------------------------------------------------------ | --- |
+| `just fmt`      | Format all files (`nix fmt`)                                       | ✓   |
+| `just check`    | The four module checks + `comments`                                | ✓   |
+| `just comments` | Vale (English only, the proper nouns, proselint) and typos         | ✓   |
+| `just test`     | `rust::test` + `frontend::test` + `worker::test` + `screens::test` | ✓   |
+| `just verify`   | `fmt` → `check` → `test`. Run it before calling something done     |     |
+| `just dev`      | `frontend::dev` — the one recipe worth a short name                |     |
+| `just sandbox`  | The app over a copy of `fixtures/` (see [Sandbox](#sandbox))       |     |
 
 Everything else is reached through its module — `just frontend::…`,
-`just rust::…`, `just android::…`, `just worker::…`. Run `just --list <module>` to see them.
-CI does not call `verify`; it calls the three module recipes directly, in
+`just rust::…`, `just android::…`, `just worker::…`, `just screens::…`. Run `just --list <module>` to see them.
+CI does not call `verify`; it calls the module recipes directly, in
 jobs that a path filter can skip.
 
 ### Rust recipes (`rust::`)
@@ -113,7 +154,7 @@ jobs that a path filter can skip.
 | Command                   | Description                                             | CI  |
 | ------------------------- | ------------------------------------------------------- | --- |
 | `just rust::check`        | `check-rustls`, clippy, `cargo machete`, `cargo deny`   | ✓   |
-| `just rust::test`         | `cargo test --workspace`                                | ✓   |
+| `just rust::test`         | `cargo test --workspace`, and `tests/screens/app`       | ✓   |
 | `just rust::check-rustls` | Fails unless `Cargo.lock` resolves exactly one `rustls` | ✓   |
 
 Scope a single crate with cargo directly (`cargo test -p magical-merchant-cli`).
@@ -141,6 +182,16 @@ every sync with `UnknownPreconfigured`.
 | -------------------- | ------------------- | --- |
 | `just worker::check` | oxlint + tsc + knip | ✓   |
 | `just worker::test`  | Vitest              | ✓   |
+
+### Screens recipes (`screens::`)
+
+| Command                               | Description                                                                  | CI  |
+| ------------------------------------- | ---------------------------------------------------------------------------- | --- |
+| `just screens::check`                 | oxlint + tsc + knip                                                          | ✓   |
+| `just screens::test`                  | Vitest                                                                       | ✓   |
+| `just screens::app`                   | The debug app with the WebDriver server (`tests/screens/app`)                |     |
+| `just screens::shoot <dir>`           | Every scene of the real app into `<dir>` (see [Screens](#screens))           |     |
+| `just screens::diff <before> <after>` | The scenes that differ; exits 1 when there are any, 2 when it cannot compare |     |
 
 ### Android recipes (`android::`)
 

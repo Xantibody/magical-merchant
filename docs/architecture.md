@@ -24,6 +24,7 @@ needs by where it is.
 | `cli/`      | `magical-merchant-cli`: the terminal client and the MCP server                                          |
 | `android/`  | The Go patchers applied to the generated `backend/gen/android` (widget, TLS, signing) and their recipes |
 | `worker/`   | The Cloudflare Worker that syncs through R2                                                             |
+| `tests/`    | Tools that test the whole app from outside it: `screens/` (every screen as pictures and trees, diffed)  |
 | `xtask/`    | `cargo xtask sandbox …`                                                                                 |
 | `fixtures/` | One record of every surface, read by the core's tests                                                   |
 | `nix/`      | Packages, modules and the devshells                                                                     |
@@ -177,8 +178,9 @@ entries share is core's.
 ```
 backend/src/
   main.rs          calls run()
-  lib.rs           module lines and `pub use app::run`
-  app.rs           run(): the plugins, setup, the managed state, the one generate_handler! list
+  lib.rs           module lines and `pub use app::{run, run_with}`
+  app.rs           run(): the plugins, setup, the managed state, the one generate_handler! list;
+                   run_with(), the same with plugins added first (tests/screens/app)
   commands/        what the webview calls, one file per thing in core/src/domain's words
     note.rs  codex.rs  scrawl.rs  templates.rs  glyphs.rs  search.rs  browse.rs
     tags.rs  backlinks.rs  device.rs  markdown.rs (the diagram export)
@@ -224,6 +226,36 @@ backend/src/
   `configCorrupt`, …), anything else is `other`. `broken` means something
   only for a body save. The frontend writes the shape once in
   `lib/commands.ts` and reads the words with `errorText`.
+
+## `tests/screens`
+
+A test tool, not part of the app: the shipped app carries none of it. A Node
+package of its own (`tests/screens/package.json`), so its dependencies never
+touch the frontend's lockfile or the nix build, and `app/`, the app it drives.
+
+```
+tests/screens/
+  src/
+    shoot/     entry main.ts; scenes.ts, the scene table; still.ts, stopping motion and
+               waiting for the page to settle before a shot
+    diff/      entry main.ts; pair.ts, which scenes two directories share
+    services/  app.ts: the debug app as a process, and its WebDriver session
+    utils/     png.ts (pixel count), tree.ts (the accessibility tree and its text),
+               order.ts (steps one after another)
+  app/         magical-merchant-screens-app: backend's run_with() with the WebDriver server,
+               a window nobody resizes, an in-memory keychain and the pinned clock
+               (clock.rs); debug builds only
+```
+
+- `app/` is a member of the root workspace, like `xtask/`, so `rust::check`
+  and `rust::test` cover it. It changes nothing in backend or core: what it
+  adds goes in through `run_with()`, and the keychain is swapped in keyring's
+  default store before the app starts.
+- Each command is its own entry, run by `node` from `tests/screens/justfile`;
+  there is no dispatcher.
+- Code that runs inside the page (`collectTree`, the callbacks given to
+  `browser.execute`) refers to nothing outside itself: WebDriver sends its
+  source text.
 
 ## `frontend/src`
 

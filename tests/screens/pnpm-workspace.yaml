@@ -1,0 +1,8 @@
+# Two weeks, for direct and transitive packages alike: a tool that runs a script inside the app
+# gets a longer cooldown than the other packages' one day.
+minimumReleaseAge: 20160
+# webdriverio pulls these in for browsers it can download; screens/ drives the app's own server.
+allowBuilds:
+  edgedriver: false
+  geckodriver: false
+  safaridriver: false

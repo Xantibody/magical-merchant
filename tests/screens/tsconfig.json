@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "allowUnreachableCode": false,
+    "allowUnusedLabels": false,
+    // Node runs the sources as they are, stripping the types, so only erasable syntax and
+    // imports that name the .ts file
+    "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true,
+    "allowImportingTsExtensions": true,
+    "moduleDetection": "force",
+    "noUncheckedSideEffectImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "noErrorTruncation": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "module": "nodenext",
+    "target": "esnext",
+    // DOM for the functions that run inside the page
+    "lib": ["esnext", "dom"],
+    "types": ["node"]
+  },
+  "include": ["src"]
+}
